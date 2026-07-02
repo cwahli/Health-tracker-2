@@ -1,0 +1,664 @@
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { X, Copy, Check, Terminal, ShieldAlert, BookOpen, BrainCircuit, Edit2, RotateCcw, Save } from 'lucide-react';
+
+interface FullScreenInstructionViewerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  agentType: string;
+  profile?: any;
+  biomarkerHistory?: any[];
+  agentPrompt?: string;
+  outOfRangeBiomarkers?: any[];
+  remainingAllowance?: any;
+  activeMeal?: any;
+  location?: { lat: number; lng: number } | null;
+  recentMeals?: string[];
+  budget?: string;
+  currency?: string;
+  maxDistance?: number;
+}
+
+export default function FullScreenInstructionViewer({
+  isOpen,
+  onClose,
+  agentType,
+  profile,
+  biomarkerHistory,
+  agentPrompt,
+  outOfRangeBiomarkers,
+  remainingAllowance,
+  activeMeal,
+  location,
+  recentMeals,
+  budget,
+  currency,
+  maxDistance
+}: FullScreenInstructionViewerProps) {
+  const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [sysInstruction, setSysInstruction] = useState('');
+  const [variableDataText, setVariableDataText] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Map the agent type
+  const resolvedKey = agentType;
+  const maxMetrics = 50;
+
+  const getInstructionParts = (key: string) => {
+    let defaultSystemInstruction = '';
+    let defaultVariableData = '';
+    let title = '';
+    let subtitle = '';
+    let icon = Terminal;
+
+    const defaultVarData = `EXISTING BIOMARKER LOGS:
+${JSON.stringify(biomarkerHistory || [], null, 2)}
+
+USER PROFILE:
+${JSON.stringify({
+  age: profile?.age || 'Not provided',
+  gender: profile?.gender || 'Not provided',
+  ethnicity: profile?.ethnicity || 'Not provided',
+  bloodType: profile?.bloodType || 'Not provided',
+  weight: profile?.weight || 'Not provided',
+  height: profile?.height || 'Not provided'
+}, null, 2)}`;
+
+    if (key === 'agent1') {
+      title = "Clinical Data Parser (Agent 1)";
+      subtitle = "Parses raw unstructured clinical text, images, or PDFs into standardized YAML schema.";
+      icon = Terminal;
+      defaultSystemInstruction = `You are a clinical data parser and conversational health assistant (Step 1: Clinical Triage).
+Your tasks:
+1. Parse raw health reports/text and extract biomarker readings into a flat YAML array.
+2. Handle conversational questions, updates, requests to go back, or requests to continue/submit from the user.
+
+CHUNKED PROCESSING RULE (Max ${maxMetrics}):
+If the user's raw data/text contains more than ${maxMetrics} biomarker readings, you MUST split the processing into chunks:
+- Extract ONLY the first ${maxMetrics} biomarker entries in this chunk.
+- CRITICAL: If you reach the limit of ${maxMetrics} extracted biomarkers in this chunk, you MUST set "hasMoreMarkers" to true in your JSON response.
+- Copy any remaining unparsed report text/context into "remainingText" in your JSON response.
+- In "text", friendly inform the user that you have extracted the first ${maxMetrics} biomarkers and ask if they would like to continue.
+- If the total amount of biomarkers in the text is ${maxMetrics} or fewer, or if you are processing the final chunk of remaining text and finishing, set "hasMoreMarkers" to false and "remainingText" to "".
+
+You MUST respond with a JSON object containing the following keys:
+- "text": A friendly, clinical-grade conversational response to the user.
+- "extractedYaml": The flat YAML array representing the current state of extracted biomarkers.
+- "hasMoreMarkers": boolean (true if there are more than ${maxMetrics} biomarkers and you chunked them, false otherwise).
+- "remainingText": string (the remaining unparsed raw report text for the next chunk, or empty string if done).
+- "estimatedTotalMarkers": number (the total estimated number of biomarker readings present in the original input text, e.g., 60).
+
+YAML Schema for "extractedYaml" field (must be a single string containing valid YAML):
+- biomarker: string
+  date: YYYY-MM-DD
+  value: number
+  unit: string
+
+Rules for handling user inputs:
+- INITIAL/RAW DATA extraction: If the user provided a health report, extract biomarkers from the USER RAW DATA section ONLY. Do NOT extract data from the EXISTING BIOMARKER LOGS section into your YAML (that is just for context). If there are more than ${maxMetrics}, extract ONLY the first ${maxMetrics} entries and apply the chunking rule. If multiple readings of the same marker on the same date exist under slightly different names, merge them. Output the flat YAML in "extractedYaml", and set "text" to "I have extracted the first ${maxMetrics} biomarkers. There are more biomarkers left in your report. Would you like to continue?" Count the total estimated biomarker readings in the input and set "estimatedTotalMarkers" accordingly (CRITICAL: Do NOT limit this count to the first ${maxMetrics} - this must be the grand total of all markers across the entire raw report).
+- CONTINUE EXTRACTING: If the user requests to "continue", "continue extracting", or similar (they may pass the original text again), take the previous "extractedYaml" and append/extract the next chunk of up to ${maxMetrics} biomarkers from the original raw text that are NOT ALREADY in the previous YAML. Output the COMBINED, COMPLETE flat YAML (the previous entries plus the new ones) in "extractedYaml". Set "hasMoreMarkers" and "remainingText" accordingly. Make sure to keep the correct "estimatedTotalMarkers" value (the total for the whole document).
+- UPDATE DATA: If the user asks to edit, add, or delete a biomarker or value (e.g., "Change ALT on 2026-06-01 to 45"), perform that update on the YAML and return the updated "extractedYaml" string, explaining the change in "text". DO NOT delete locked biomarkers (bmi, weight, height) - they can only be updated/renamed, never deleted.
+- START A CONVERSATION: If the user asks general or clinical questions about the biomarkers or their values (e.g., "What does ALT mean?"), answer the question in "text" with precise clinical detail, and return the unmodified YAML in "extractedYaml".
+- GO BACK / CONTINUE / SUBMIT: If the user asks to go back or continue, explain the current step in "text" (we are currently on Step 1: Data Extraction. They can click "Continue to Map Data" when ready, or we can discuss/update the extracted readings first).
+
+Make sure your entire output is valid JSON, containing "text", "extractedYaml", "hasMoreMarkers", "remainingText", and "estimatedTotalMarkers".`;
+      defaultVariableData = defaultVarData;
+    } else if (key === 'agent2') {
+      title = "Clinical Ontologist (Agent 2)";
+      subtitle = "Maps clean biomarkers to established medical risk groupings, ontologies, and condition taxonomies.";
+      icon = BrainCircuit;
+      defaultSystemInstruction = `You are an expert Clinical Ontologist and conversational health assistant (Medical Ontology Mapping).
+
+Your tasks:
+1. Identify all unique biomarkers in the YAML list and categorize them by associating:
+   - "riskCategories": An array of matching risk categories (e.g. Cardiovascular, Kidney, Metabolic, Liver, Hematology).
+   - "standardMedicalGrouping": The main medical division.
+   - "potentialMedicalConditions": Broad diagnostic associations.`;
+      defaultVariableData = defaultVarData;
+    } else if (key === 'agent3') {
+      title = "Clinical Data Coordinator (Agent 3)";
+      subtitle = "Assembles clinical buckets with complete chronological historical trends and system rationales.";
+      icon = Terminal;
+      defaultSystemInstruction = `You are a clinical data coordinator and conversational health assistant (Data Assembly).
+
+Your tasks:
+1. Group every extracted biomarker log entry into their assigned clinical buckets based on the mapping.
+2. Calculate longitudinal trends or status states (e.g. HIGH, LOW, NORMAL) using established clinical reference ranges.
+3. Formulate a cohesive clinical explanation for why each biomarker is placed under its respective clinical system.`;
+      defaultVariableData = defaultVarData;
+    } else if (key === 'agent4') {
+      title = "Clinical Classification, Prognostic, and Risk Triage Engine (Agent 4)";
+      subtitle = "Sorts risk tiers, models multi-year prognostic timelines, and runs zero-data-loss integrity checks.";
+      icon = ShieldAlert;
+      defaultSystemInstruction = `You are an advanced Clinical Classification, Prognostic, and Risk Triage Engine.
+Your objective is to dynamically group EVERY biomarker into logical clinical conditions, calculate prognostic timelines, and output a strict, zero-data-loss JSON payload.
+
+=== CRITICAL DIRECTIVES ===
+1. CONVERSATION & CORRECTIONS: Override previous values with any user corrections and completely regenerate.
+2. INVENTORY PARITY RULE (Zero Data Loss): Total number of unique biomarkers in the incoming YAML must exactly match the number of unique biomarkers processed.
+3. SEMANTIC TAXONOMY ANCHORS: Group biomarkers dynamically into conditions (Cardiovascular/Lipid, Renal/Metabolic, Hepatic/Liver, Hematology/Immune, Screening/Other).
+4. FAIR ASSESSMENT: Do not invent pathology.
+5. PROGNOSTIC TIMELINES: Project progression over 2, 5, and 10 years.`;
+      defaultVariableData = defaultVarData;
+    } else if (key === 'agent5') {
+      title = "Clinical Education AI / Biomarker Contextualizer (Agent 5)";
+      subtitle = "Calibrates normal biomarker ranges and risk warnings to user's exact age, gender, and ethnicity.";
+      icon = BookOpen;
+      defaultSystemInstruction = `You are a Clinical Education AI (Biomarker Contextualizer). Your job is to generate highly personalized educational content, adjusted normal reference ranges, and specific risk explanations based on the user's demographics and previous diagnostic assessment.
+
+=== DIRECTIVES ===
+1. DEMOGRAPHICALLY ADJUSTED NORMAL RANGES: Provide a profile-adjusted normal range and explain why this range was adjusted based on their age, gender, or ethnicity.
+2. EDUCATIONAL DESCRIPTIONS: Provide a clear 2-sentence description of each biomarker's physiological role.
+3. SPECIFIC RISK CONTEXT: For any marker identified as at-risk, write a personalized 3-4 sentence explanation of why this specific value is critical or dangerous for this specific user demographic profile.
+4. ZERO DATA LOSS INVENTORY RULE: Ensure every single biomarker submitted is calibrated and accounted for under "contextualizedBiomarkers" without omissions.`;
+      defaultVariableData = defaultVarData;
+    } else if (key === 'agent6') {
+      title = "Precision Medicine & Lifestyle Coaching AI (Agent 6)";
+      subtitle = "Translates biological risk levels into trackable dietary goals, step counts, and cardiac habits.";
+      icon = BrainCircuit;
+      defaultSystemInstruction = `You are a Precision Medicine & Lifestyle Coaching AI (Precision Intervention Agent). Translate the user's clinical biomarkers and risk assessment into a strict, trackable daily protocol.
+
+=== DIRECTIVES ===
+1. NUTRITION TARGETS: Generate strict daily targets for calories, protein, carbs, fats, saturated fat, fibre, sodium, and sugar.
+   - For EACH recommended allowance, provide the targeted value, unit, the clinical reason for focusing on it, and the target duration (how long to focus on it).
+2. ACTIVITY HABITS: Provide 2-3 highly specific daily habits.
+3. MATHEMATICAL PROJECTIONS: Provide biological time-to-goal estimates based on metabolic/physiological math (e.g. weight reduction timelines, lipid improvement periods).`;
+      defaultVariableData = defaultVarData;
+    } else if (key === 'agent7') {
+      title = "Medical Literature Research AI (Agent 7)";
+      subtitle = "Retrieves scholarly guideline citations (AHA, ESC, ADA, KDIGO) and latest academic trials.";
+      icon = BookOpen;
+      defaultSystemInstruction = `You are a Medical Literature Research AI (Medical Literature Agent). Summarize the latest peer-reviewed scientific consensus, clinical debates, and clinical trials relevant to this user's profile and biological risk markers.
+
+=== DIRECTIVES ===
+1. HIGHLIGHT SCHOLARLY TOPICS: Detail emerging consensus or clinical debates (e.g. ApoB vs LDL-C tracking, cardiovascular risk algorithms).
+2. NO PRESCRIPTIONS: Present findings as a literature synthesis, citing primary medical guidelines (AHA, ESC, ADA, KDIGO).
+3. DETAILED BULLETS: Provide 3-4 distinct scholarly insights with bold titles, summaries, and relevant citation links.`;
+      defaultVariableData = defaultVarData;
+    } else if (key === 'food') {
+      title = "Clinical Dietitian AI (Meal Analysis Agent)";
+      subtitle = "Parses, calculates, and estimates macronutrients, micronutrients, health impacts, benefits, and warnings.";
+      icon = BrainCircuit;
+
+      const biomarkersList = outOfRangeBiomarkers && outOfRangeBiomarkers.length > 0
+        ? outOfRangeBiomarkers.map((b: any) => `• ${b.name} is ${String(b.status).toUpperCase()} (${b.value} ${b.unit}, normal range: ${b.normalRange})`).join("\n")
+        : "• None";
+
+      const targetLimits = remainingAllowance
+        ? `• Calories: ${remainingAllowance.calories} kcal remaining | Saturated Fat: ${remainingAllowance.saturatedFat}g remaining | Sodium: ${remainingAllowance.sodium}mg remaining`
+        : "• Calories: 2000 kcal remaining | Saturated Fat: 20g remaining | Sodium: 2300mg remaining";
+
+      const mealStr = activeMeal ? JSON.stringify(activeMeal, null, 2) : "None";
+
+      defaultSystemInstruction = `You are an expert clinical dietitian and nutritional LLM analyzer. Your response must be an exact single JSON object matching the requested structure. Never add markdown formatting or wrappers like \`\`\`json.
+
+- If LDL-C/cholesterol is HIGH, any food high in saturated fat is EXTREMELY harmful. Rate as "bad" and warn in "risks".
+- If Blood Pressure/Sodium is HIGH, any food high in sodium is EXTREMELY harmful. Rate as "bad".
+
+=== MODE ROUTING DIRECTIVE (CRITICAL) ===
+You operate in three distinct modes based on the user's input:
+
+MODE A: NEW FOOD LOGGING (Triggered if a NEW image or new food text is provided)
+- Analyze the new food. Provide precise metrics and the full 30-nutrient breakdown.
+- Set "mode": "new_log". Provide the full "foodData" object.
+
+MODE B: DISCUSSION (Triggered if the user asks a general question, like "Why is this bad?" or "Why does it have so much fat?")
+- Answer conversationally based on standard clinical values and the CURRENT_ACTIVE_MEAL_STATE provided in the prompt.
+- Set "mode": "discussion". Leave "foodData" and "modificationCommand" as null.
+
+MODE C: MODIFICATION COMMAND (Triggered if the user asks to change, add, or remove an item)
+- DO NOT CALCULATE THE NEW NUTRIENT NUMBERS YOURSELF.
+- Instead, inspect the CURRENT_ACTIVE_MEAL_STATE and output a command telling the backend system exactly what the user wants to change.
+- Set "mode": "modify". Leave "foodData" as null. Fill out the "modificationCommand" array.
+
+JSON SCHEMA STRICT REQUIREMENT:
+Respond ONLY with a structured JSON format matching this schema exactly:
+{
+  "mode": "new_log" | "discussion" | "modify",
+  "message": "Conversational response explaining the clinical impact, breakdown, or acknowledging the adjustment.",
+  "modificationCommand": [
+    {
+      "action": "update_weight" | "remove_item" | "add_item",
+      "itemName": "Literal name of the item from the active state to change (e.g., 'Beef Steak')",
+      "newWeightGrams": number
+    }
+  ],
+  "foodData": {
+    "date": "YYYY-MM-DD",
+    "name": "Literal food name",
+    "composition": "Short summary of main ingredients",
+    "weightGrams": number,
+    "quantity": "1 serving",
+    "benefits": "Clinical benefits",
+    "risks": "Clinical warnings tied to biomarkers",
+    "healthImpact": "Impact on remaining daily targets",
+    "recommendation": "good" | "bad" | "neutral",
+    "itemsBreakdown": [
+      {
+        "name": "individual item name",
+        "weightGrams": number,
+        "calories": number,
+        "saturatedFat": number,
+        "sodium": number
+      }
+    ],
+    "nutrients": {
+      "calories": number, "protein": number, "totalFat": number, "saturatedFat": number, "unsaturatedFat": number, "omega3": number, "carbohydrates": number, "addedSugar": number, "totalFibre": number, "solubleFibre": number, "sodium": number, "potassium": number, "magnesium": number, "calcium": number, "iron": number, "zinc": number, "selenium": number, "iodine": number, "phosphorus": number, "vitaminD": number, "vitaminB12": number, "folate": number, "vitaminC": number, "vitaminE": number, "vitaminK": number, "vitaminA": number, "vitaminB6": number, "thiamine": number, "riboflavin": number, "niacin": number
+    }
+  }
+}
+If mode is not "new_log", leave foodData as null. If mode is not "modify", leave modificationCommand as null. Return ONLY raw JSON.`;
+
+      defaultVariableData = `CURRENT_ACTIVE_MEAL_STATE: ${mealStr}
+
+CRITICAL PATIENT BIOMARKER WARNINGS:
+${biomarkersList}
+
+TODAY'S REMAINING NUTRITIONAL TARGET LIMITS:
+${targetLimits}`;
+    } else if (key === 'food_idea') {
+      title = "Precision Meal Planning Companion (AI Dietitian)";
+      subtitle = "Formulates personalized preventative recipes and tailored dietary suggestions based on user blood biomarkers.";
+      icon = BookOpen;
+
+      const userCtx = profile ? `User Profile: Age ${profile.age || 'Unknown'}, Ethnicity: ${profile.ethnicity || 'Unknown'}, Weight: ${profile.weight || 'Unknown'}kg, Height: ${profile.height || 'Unknown'}cm.` : "User profile is unknown.";
+      const userTimezone = profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const userLocalTime = new Date().toLocaleString('en-US', { timeZone: userTimezone });
+      
+      const locCtx = location ? `User Location: Latitude ${location.lat}, Longitude ${location.lng}.\nUser Local Time: ${userLocalTime}` : `User Local Time: ${userLocalTime}`;
+      const addressCtx = "User Human-Readable Address / Neighborhood: Not resolved yet.";
+      const nearbyCtx = ""; // Omit nearby text in pre-request overview as it's fetched asynchronously
+      const mealsCtx = recentMeals && recentMeals.length > 0 ? `Recent Meals: ${recentMeals.join(', ')}.` : "No recent meals recorded.";
+      const budgetValue = budget || "100000";
+      const currencyValue = currency || "IDR";
+      const maxDistanceValue = maxDistance || 3;
+      const budgetCtx = `Max Budget Limit: ${budgetValue} ${currencyValue}. Suggested meals/dishes MUST fit within this price!`;
+      const distanceCtx = `Max Distance Limit: ${maxDistanceValue} km. All suggested venues must be within ${maxDistanceValue} km of the user's current location!`;
+
+      const biomarkersList = outOfRangeBiomarkers && outOfRangeBiomarkers.length > 0
+        ? outOfRangeBiomarkers.map((b: any) => `• ${b.name} is ${String(b.status).toUpperCase()} (${b.value} ${b.unit}, normal range: ${b.normalRange})`).join("\n")
+        : "• None";
+
+      defaultSystemInstruction = `You are a world-class AI dietitian. Your response must be an exact JSON matching the requested schema. Never add markdown wrappers.`;
+
+      defaultVariableData = `You are a personalized AI Dietitian.
+${userCtx}
+${locCtx}
+${addressCtx}
+${mealsCtx}
+${budgetCtx}
+${distanceCtx}
+${nearbyCtx}
+
+CRITICAL PATIENT BIOMARKER WARNINGS:
+${biomarkersList}
+
+Current User Input: "{User Input Chat Message}"
+
+CRITICAL SYSTEM REQUIREMENTS FOR VERACITY & LOGICAL ACCURACY:
+1. VENUE SELECTION FROM PROVIDED LIST: You MUST ONLY select restaurants from the provided list of nearby REAL restaurants if it is provided. Do NOT invent or search for other restaurants. Use EXACTLY the lat and lng coordinates from the list. Do not modify the coordinates.
+2. STRICT GEOGRAPHIC RADIUS ENFORCEMENT: If you must suggest a venue not on the list, it MUST be located within exactly ${maxDistanceValue} km of the user's location. Do not hallucinate coordinates.
+3. SEARCH GROUNDING CONTEXT: Use Google Search Grounding ONLY to verify the selected restaurant's hours, reviews, or social media pages. Do not use it to find random new restaurants far away.
+4. MAPS LINK PRECISION & ERROR HANDLING RULE: When you have a restaurant, call the \`get_google_maps_place_id\` tool EXACTLY ONCE per restaurant using the restaurant name and coordinates.
+   - If the tool returns a valid place_id, construct the "locationLink" URL exactly like this: \`https://www.google.com/maps/search/?api=1&query={URL_ENCODED_NAME}&query_place_id={PLACE_ID}\`.
+   - If the tool returns "NOT_FOUND", "ERROR_API_FAILED", or includes a "STOP TOOL USE" instruction, DO NOT call the tool again under any circumstances. Immediately construct the "locationLink" URL using the street address/name: \`https://www.google.com/maps/search/?api=1&query={URL_ENCODED_NAME}+{URL_ENCODED_STREET_NAME}\` or coordinate-based query if street name is unavailable. Do NOT retry or call the tool for other items if you hit a failure.
+5. STRICT OPENING HOURS ENFORCEMENT: The user's current local time is ${userLocalTime}. You MUST capture the exact opening and closing time and add it to the result for the recommended place in the 'openingHours' field. You MUST use Google Search Grounding to actively search for the opening hours of the specific restaurant you recommend. Never use '--' unless you genuinely cannot find it online. You should only recommend places that are STILL OPEN 1 HOUR from the current local time!
+6. REFERENCE LINK: For the 'menuLink' field, you MUST provide a direct, high-quality, real web link to the restaurant's actual official website, Instagram/Facebook page, TripAdvisor page, Yelp page, or specific Google Maps business page. DO NOT use generic Google Search query pages (like 'google.com/search?q=...') or generic placeholders, as this is unacceptable. Use Google Search Grounding to locate their actual website or profile!
+7. ZERO-FIND FALLBACK & STRICT RADIUS: If no verified physical restaurants are found within the exact ${maxDistanceValue} km radius of the user's coordinates, YOU MUST NOT SUGGEST ANY PLACES. In this case, you MUST only suggest generic healthy dishes to cook at home (do not include placeName, address, lat, lng, locationLink, menuLink, or distanceKm). Clearly explain in your text response that no verified venues were found within ${maxDistanceValue} km, and suggest increasing the search radius. NEVER hallucinate places far away or fake coordinates.
+
+Include a short conversational response (text), and a list of between 3 and 5 distinct, diverse structured food ideas (ideas) that meet the constraints. Under no circumstances should you return only 1 idea.
+Each idea should have:
+- name: string (A general, common healthy food category they serve, e.g. "Grilled Chicken Salad" or "Sushi". DO NOT hallucinate exact menu items unless verified.)
+- placeName: string (Optional. The verified, real-world restaurant name. Omit if suggesting a home-cooked meal.)
+- address: string (Optional. The verified, exact physical street address.)
+- lat: number (Optional. The latitude of the suggested place. Omit if no place is found within the radius.)
+- lng: number (Optional. The longitude of the suggested place. Omit if no place is found within the radius.)
+- locationLink: string (Optional. Google Maps Search URL)
+- menuLink: string (Optional. A URL to ANY relevant webpage about the restaurant, such as Google Maps, Yelp, Instagram, or their website. DO NOT use recipe search links!)
+- distanceKm: number (Optional. The straight-line physical distance in km. This MUST be strictly <= ${maxDistanceValue} km! Omit if home-cooked.)
+- estimatedBudget: string (The estimated price of this suggested dish, formatted nicely with the currency symbol, e.g., "Rp 45,000" or "£3.50". This MUST be within the maximum budget of ${budgetValue} ${currencyValue}!)
+- dishImageUrl: string (A valid, beautiful, and relevant Unsplash food image URL showing this specific type of dish, e.g., "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80" for a salad, or a suitable search query image URL from Unsplash.)
+- benefitExplanation: string (Why this is good for the user's profile)
+- tags: array of strings (e.g. ["High Protein", "Low Carb"])
+- openingHours: string (The opening hours of the restaurant. E.g., "10:00 AM - 10:00 PM". Search for it actively!)
+
+Respond with a structured JSON format matching this schema exactly:
+{
+  "text": "Your conversational response here",
+  "ideas": [
+    {
+      "name": "Food Name",
+      "placeName": "Restaurant or Place Name",
+      "address": "123 Main St, City, State",
+      "lat": -6.2088,
+      "lng": 106.8456,
+      "locationLink": "https://www.google.com/maps/search/?api=1&query=HokBen&query_place_id=ChIJKZ1Uh-P1aS4R61b3Rsx8mSU",
+      "menuLink": "https://www.hokben.co.id/",
+      "distanceKm": 1.2,
+      "estimatedBudget": "Rp 45,000",
+      "dishImageUrl": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80",
+      "benefitExplanation": "Why this is good...",
+      "tags": ["tag1", "tag2"],
+      "openingHours": "10:00 AM - 10:00 PM"
+    }
+  ]
+}`;
+    } else if (key === 'data_review') {
+      title = "Clinical Data Review & Calibration Agent";
+      subtitle = "Classifies biomarkers, estimates demographics-adjusted reference ranges, and models user risk.";
+      icon = BrainCircuit;
+      defaultSystemInstruction = `You are an expert Clinical Data Review & Reference Range Calibration Agent.
+You will receive user demographics and a list of biomarkers in the user's current batch.
+
+=== DEMOGRAPHIC CALIBRATION MANDATE ===
+You MUST customize the reference ranges and risk context precisely for the user's specific age, gender, and ethnicity found in the USER PROFILE.
+CRITICAL: Never output boilerplate text stating that demographic details are not available. They are always provided. Even if any values are missing, dynamically assume a standard reference profile (e.g., 35-year-old female of Caucasian ethnicity) and calibrate all reference ranges for that profile.
+
+CRITICAL BIAS OVERRIDE: Medical baselines in training data heavily skew toward recent Western/Global consensus (e.g., KDIGO, WHO global). You MUST actively bypass global/race-free standards and aggressively search your latent knowledge for local national medical boards (e.g., Chinese Society of Nephrology, Asian-modified CKD-EPI/MDRD coefficients, Asian BMI variants). If a regional coefficient or localized threshold exists historically or currently for the user's \`ethnicity\`, you MUST prioritize and apply it over Western defaults.
+
+=== TASK A: CLASSIFICATION ===
+For each biomarker in the input list, analyze and map it to:
+- "riskCategories": Matching physiological risk categories. (Cardiovascular, Kidney, Metabolic, Liver, Hematology, Biometric, Other)
+- "standardMedicalGrouping": Exactly ONE main medical division ('Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Other').
+- "potentialMedicalConditions": Broad diagnostic associations.
+
+=== TASK B: PERSONALISED HEALTH RISK ESTIMATION ===
+For each biomarker, follow a strict logical funnel to determine the correct ranges and status:
+- "_demographicAudit": A mandatory internal reasoning object where you actively contrast Western global standards with regional/ethnic guidelines. 
+- "profileAdjustedNormalRange": The final calibrated range based on your audit. 
+- "rangeBrackets": List each range bracket with its naming and value ranges, adjusted to match your demographic audit. CRITICAL: The brackets MUST be continuous (no numerical gaps or missing values between brackets) and must fully map out the bounds of the \`profileAdjustedNormalRange\`. Include bounds for each bracket.
+- "description": A clear 2-sentence description of the physiological role.
+- "_statusReasoning": A 1-sentence strict mathematical comparison of the \`userValue\` against the \`profileAdjustedNormalRange\`.
+- "status": Assign 'Healthy' or 'At Risk'. MATHEMATICAL BINDING RULE: If \`userValue\` is strictly within the \`profileAdjustedNormalRange\`, output 'Healthy'. If outside (even slightly), output 'At Risk'. If user is within normal range but is borderline normal, also put it ‘At Risk’. Do not use clinical leniency.
+- "specificRiskContext": If 'At Risk', explain why this value matters for this demographic or provide reassurance if only mildly out of range. If 'Healthy', describe why this signifies optimal homeostasis.
+
+=== CRITICAL REQUIREMENTS ===
+1. You MUST include an analysis for EVERY biomarker in the input list.
+2. Ensure output is STRICTLY valid JSON matching the exact abstract structure and placeholder instructions below.
+
+{
+  "message": "<string: Conversational summary of clinical range adjustments and review findings for this batch.>",
+  "reviewedBiomarkers": [
+    {
+      "key": "<string: Exact key from the input data>",
+      "name": "<string: Standard clinical name of the biomarker>",
+      "userValue": <number: Exact value from the input data>,
+      "unit": "<string: Exact unit from the input data>",
+      "riskCategories": ["<string>", "<string>"],
+      "standardMedicalGrouping": "<string: Must be one of the approved categories in Task A>",
+      "potentialMedicalConditions": ["<string>", "<string>"],
+      "_demographicAudit": {
+        "standardWesternBaseline": "<string: The textbook global/Western range>",
+        "knownEthnicOrRegionalVariances": "<string: CRITICAL STEP. You MUST actively prioritize local national medical board guidelines (e.g., Chinese/Japanese Societies of Nephrology) or ethnic-modified formulas over global/race-free standards. State the exact regional variant and the society it comes from. If absolutely none exist, state 'None'>",
+        "ageAndGenderShifts": "<string: How age and gender naturally alter the baseline>",
+        "finalAppliedAdjustments": "<string: The synthesis of how you are modifying the bounds for this specific user>"
+      },
+      "profileAdjustedNormalRange": "<string: The final range, appending the demographic reason in parentheses if altered from global baseline>",
+      "rangeBrackets": [
+        { 
+          "name": "<string: Bracket name (e.g., Optimal, Elevated, Mildly Decreased)>", 
+          "range": "<string: Mathematical bounds (e.g., >= 90, 60-89). Must be continuous with no gaps.>" 
+        }
+      ],
+      "description": "<string: 2-sentence physiological role>",
+      "_statusReasoning": "<string: 1-sentence mathematical evaluation comparing userValue to profileAdjustedNormalRange bounds>",
+      "status": "<string: Strictly 'Healthy' or 'At Risk' based on _statusReasoning>",
+      "specificRiskContext": "<string: 3-4 sentence personalized clinical context based on the final status>"
+    }
+  ]
+}`;
+      defaultVariableData = defaultVarData;
+    } else if (key === 'biomarker_review') {
+      title = "Clinical Biomarker Assistant (Review Dialogue Agent)";
+      subtitle = "Discusses biological context, analyzes ranges, and calibrates values/units with high mathematical precision.";
+      icon = BrainCircuit;
+      defaultSystemInstruction = `You are an expert AI medical and nutritional assistant. The user is reviewing a specific health biomarker from their records.
+Your tasks:
+1. Explain the physiological role and clinical importance of the biomarker in detail.
+2. Carefully analyze the standard reference range versus the user's age, gender, and ethnicity.
+3. Formulate precise proposals to update, convert, or correct the logged value and reference range, strictly respecting unit scales (e.g., preventing mmol/L vs. mg/dL conversions and unit mix-ups).`;
+      defaultVariableData = defaultVarData;
+    } else {
+      title = "AI Agent System Instructions";
+      subtitle = "System prompts and constraints executing for this module";
+      icon = Terminal;
+      defaultSystemInstruction = `No instructions found for agent type: ${key}`;
+      defaultVariableData = '';
+    }
+
+    return { title, subtitle, icon, defaultSystemInstruction, defaultVariableData };
+  };
+
+  const parts = getInstructionParts(resolvedKey);
+  const IconComponent = parts.icon;
+
+  // Initialize from localStorage or defaults on open/mount
+  useEffect(() => {
+    if (isOpen) {
+      const customSys = localStorage.getItem(`custom_system_instruction_${resolvedKey}`);
+      const customVar = localStorage.getItem(`custom_variable_data_${resolvedKey}`);
+      
+      setSysInstruction(customSys !== null ? customSys : parts.defaultSystemInstruction);
+      setVariableDataText(customVar !== null ? customVar : parts.defaultVariableData);
+      setIsEditing(false);
+      setSaveSuccess(false);
+    }
+  }, [isOpen, resolvedKey, agentPrompt]);
+
+  if (!isOpen) return null;
+
+  const handleSave = () => {
+    localStorage.setItem(`custom_system_instruction_${resolvedKey}`, sysInstruction);
+    localStorage.setItem(`custom_variable_data_${resolvedKey}`, variableDataText);
+    setSaveSuccess(true);
+    setIsEditing(false);
+    setTimeout(() => setSaveSuccess(false), 2500);
+  };
+
+  const handleReset = () => {
+    if (window.confirm("Are you sure you want to revert to the default system instructions and variables for this agent?")) {
+      localStorage.removeItem(`custom_system_instruction_${resolvedKey}`);
+      localStorage.removeItem(`custom_variable_data_${resolvedKey}`);
+      setSysInstruction(parts.defaultSystemInstruction);
+      setVariableDataText(parts.defaultVariableData);
+      setIsEditing(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    }
+  };
+
+  const handleCopy = async () => {
+    try {
+      const combinedPrompt = `SYSTEM INSTRUCTION:\n${sysInstruction}\n\nVARIABLE DATA / CONTEXT:\n${variableDataText}`;
+      await navigator.clipboard.writeText(combinedPrompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy instructions:', err);
+    }
+  };
+
+  return createPortal(
+    <div id="full-screen-instruction-viewer" className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in w-full h-full text-slate-200 font-sans">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-slate-800/60 flex items-center justify-between bg-slate-950 font-sans">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+            <IconComponent className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider font-mono">
+                {parts.title}
+              </h2>
+              {localStorage.getItem(`custom_system_instruction_${resolvedKey}`) !== null && (
+                <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-400 text-[9px] font-bold rounded uppercase tracking-wider font-mono border border-amber-500/20">
+                  Customized
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {parts.subtitle}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {!isEditing ? (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-slate-700/60"
+            >
+              <Edit2 className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Edit Prompt</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSave}
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/10"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Apply & Save</span>
+              </button>
+              <button
+                onClick={handleReset}
+                className="p-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-slate-100 rounded-xl transition-all cursor-pointer border border-slate-700/50"
+                title="Reset to defaults"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  const customSys = localStorage.getItem(`custom_system_instruction_${resolvedKey}`);
+                  const customVar = localStorage.getItem(`custom_variable_data_${resolvedKey}`);
+                  setSysInstruction(customSys !== null ? customSys : parts.defaultSystemInstruction);
+                  setVariableDataText(customVar !== null ? customVar : parts.defaultVariableData);
+                  setIsEditing(false);
+                }}
+                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700/60"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl hover:bg-slate-800/80 text-slate-400 hover:text-slate-100 transition-colors cursor-pointer ml-1"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-auto bg-slate-950 px-6 py-6">
+        <div className="max-w-7xl mx-auto h-full flex flex-col">
+          {saveSuccess && (
+            <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold font-mono animate-pulse flex items-center gap-2">
+              <Check className="w-4 h-4" />
+              <span>Prompt instructions updated successfully in the application. Future queries will run this version.</span>
+            </div>
+          )}
+
+          {isEditing ? (
+            <div className="flex flex-col gap-6 flex-1">
+              {/* Top Column: System Instructions */}
+              <div className="flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider font-mono">
+                    System Instruction / Core Role Prompt
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {sysInstruction.length} chars
+                  </span>
+                </div>
+                <textarea
+                  value={sysInstruction}
+                  onChange={(e) => setSysInstruction(e.target.value)}
+                  className="w-full bg-slate-900/60 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl p-4 font-mono text-sm text-slate-200 outline-none transition-all resize-none leading-relaxed h-[350px] focus:ring-1 focus:ring-indigo-500"
+                  placeholder="Enter system instructions..."
+                />
+              </div>
+
+              {/* Bottom Column: Variable Data Inputs */}
+              <div className="flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider font-mono">
+                    Variable Context / Inputted Data
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {variableDataText.length} chars
+                  </span>
+                </div>
+                <textarea
+                  value={variableDataText}
+                  onChange={(e) => setVariableDataText(e.target.value)}
+                  className="w-full bg-slate-900/60 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl p-4 font-mono text-sm text-slate-200 outline-none transition-all resize-none leading-relaxed h-[350px] focus:ring-1 focus:ring-indigo-500"
+                  placeholder="Enter custom variable data or parameters..."
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-6">
+              {/* Top View: System Instructions */}
+              <div className="bg-slate-900/30 border border-slate-800/50 rounded-xl p-5 flex flex-col">
+                <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider block mb-3 font-mono">
+                  System Instruction / Core Role Prompt
+                </span>
+                <pre className="text-slate-300 font-mono text-xs whitespace-pre-wrap leading-relaxed select-text">
+                  {sysInstruction || "No System Instruction set."}
+                </pre>
+              </div>
+
+              {/* Bottom View: Variable Data Context */}
+              <div className="bg-slate-900/30 border border-slate-800/50 rounded-xl p-5 flex flex-col">
+                <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider block mb-3 font-mono">
+                  Variable Context / Inputted Data
+                </span>
+                <pre className="text-slate-300 font-mono text-xs whitespace-pre-wrap leading-relaxed select-text">
+                  {variableDataText || "No Context Variables available."}
+                </pre>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="px-6 py-4 border-t border-slate-800/60 flex items-center justify-between bg-slate-950 font-sans">
+        <span className="text-xs text-slate-500 font-mono">
+          Model Directives (Clinical LLM Registry v1.3)
+        </span>
+        <div className="flex items-center gap-3">
+          {localStorage.getItem(`custom_system_instruction_${resolvedKey}`) !== null && (
+            <button
+              onClick={handleReset}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+              <span>Reset to System Defaults</span>
+            </button>
+          )}
+          <button
+            onClick={handleCopy}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-indigo-600/10"
+          >
+            {copied ? (
+              <>
+                <Check className="w-4 h-4 text-emerald-300" />
+                <span>Copied Prompt!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                <span>Copy Full Prompt</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
