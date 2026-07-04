@@ -517,10 +517,10 @@ export default function HomeTab({
   }, []);
 
   return (
-    <div className="space-y-6 pb-24 animation-fade-in max-w-md mx-auto px-4 mt-4 font-sans text-slate-900">
+    <div className="space-y-6 pb-24 animation-fade-in max-w-md mx-auto px-[15px] mt-4 font-sans text-slate-900">
       
       {/* Single Most Important Next Step */}
-      <div id="primary-action-card" className="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-500/10 rounded-2xl p-4 shadow-sm">
+      <div id="primary-action-card" className="p-2">
         <div className="flex gap-3">
           <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
           <div className="space-y-1">
@@ -552,7 +552,7 @@ export default function HomeTab({
       </div>
 
       {/* Nutrition Allowance Tracker Dashboard (MOVED UP just above Health Status & BMI) */}
-      <div id="dashboard-nutrition-targets" className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-[32px] p-6 shadow-sm space-y-4">
+      <div id="dashboard-nutrition-targets" className="space-y-4">
         <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800/50">
           <h3 className="font-bold text-slate-950 dark:text-slate-100 text-sm flex items-center gap-2">
             <Heart className="w-4 h-4 text-indigo-600" />
@@ -662,7 +662,7 @@ export default function HomeTab({
             </div>
 
             {showAllTargets && (
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs py-2 bg-slate-50 dark:bg-slate-900/40 rounded-2xl px-2.5 animation-slide-down">
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs py-2 animation-slide-down">
                 {Object.entries(report?.dailyNutrientTargets || {}).map(([key, val]) => {
                   if (['calories', 'saturatedFat', 'sodium', 'steps'].includes(key)) return null;
                   
@@ -688,7 +688,7 @@ export default function HomeTab({
                   const formattedActual = formatValue(actual);
 
                   return (
-                    <div key={key} className="flex flex-col p-2.5 bg-white dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/60 rounded-2xl space-y-1 shadow-sm">
+                    <div key={key} className="flex flex-col py-2 border-b border-slate-100 dark:border-slate-800/50 space-y-1">
                       <div className="flex justify-between items-start text-[10px] leading-tight">
                         <span className="text-slate-500 dark:text-slate-400 font-bold capitalize truncate max-w-[80px]">
                           {key.replace(/([A-Z])/g, ' $1').trim()}
@@ -835,7 +835,7 @@ export default function HomeTab({
       )}
 
       {/* Food Ideas Section */}
-      <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-4">
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-indigo-500" />
@@ -855,13 +855,13 @@ export default function HomeTab({
               <div key={idea.id} className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
                 <button
                   onClick={() => setExpandedKey(expandedKey === idea.id ? null : idea.id)}
-                  className="w-full flex items-center justify-between p-3 text-left bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
+                  className="w-full flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-800/50 last:border-0 text-left hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
                 >
                   <span className="font-bold text-sm text-slate-800 dark:text-slate-200">{idea.name}</span>
                   {expandedKey === idea.id ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                 </button>
                 {expandedKey === idea.id && (
-                  <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 space-y-4 animation-fade-in text-xs">
+                  <div className="py-4 space-y-4 animation-fade-in text-xs">
                     <p className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{idea.benefitExplanation}</p>
                     
                      {idea.locationLink && (
@@ -913,7 +913,7 @@ export default function HomeTab({
       </div>
 
       {/* Health status to improve (Previously Health & BMI Summary) */}
-      <div id="health-summary-section" className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-[32px] p-6 shadow-sm space-y-5">
+      <div id="health-summary-section" className="space-y-5">
         <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800/50">
           <h3 className="font-bold text-slate-950 dark:text-slate-100 text-sm flex items-center gap-2 font-display">
             <Heart className="w-4.5 h-4.5 text-indigo-600" />
@@ -974,8 +974,8 @@ export default function HomeTab({
                       </div>
 
                       {expandedInChunk && (
-                        <div id={`biomarker-expanded-${expandedInChunk.key}`} className="bg-slate-50 dark:bg-slate-950 rounded-2xl border border-indigo-100 dark:border-indigo-950/40 overflow-hidden animation-fade-in mt-1">
-                          <div className="p-4 border-b border-slate-100 dark:border-slate-800/30 flex items-center justify-between bg-white dark:bg-slate-900">
+                        <div id={`biomarker-expanded-${expandedInChunk.key}`} className="overflow-hidden animation-fade-in mt-1">
+                          <div className="py-4 border-b border-slate-100 dark:border-slate-800/30 flex items-center justify-between">
                             <div>
                               <div className="flex items-center gap-1.5">
                                 <span className="font-size-body-small font-bold text-slate-800 dark:text-slate-200">
@@ -1027,7 +1027,7 @@ export default function HomeTab({
 
       {/* Target Compliance score meters */}
       {distinctDaysOfData >= 7 && (
-        <div id="compliance-card" className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-[32px] p-6 shadow-sm grid grid-cols-2 gap-4">
+        <div id="compliance-card" className="grid grid-cols-2 gap-4">
           <div className="border-r border-slate-100 dark:border-slate-800/50 pr-2 flex flex-col justify-between">
             <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">7-Day Compliance</span>
             <div className="flex items-baseline gap-1 mt-1">
@@ -1052,7 +1052,7 @@ export default function HomeTab({
       )}
 
       {/* Clinical Action Steps checklist */}
-      <div id="actions-checklist-section" className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-[32px] p-6 shadow-sm space-y-4">
+      <div id="actions-checklist-section" className="space-y-4">
         <div>
           <h3 className="font-bold text-slate-950 dark:text-slate-100 text-sm">
             Clinical Action Recommendations
@@ -1097,7 +1097,7 @@ export default function HomeTab({
       </div>
 
       {/* Daily Benefit tasks checkoff */}
-      <div id="benefits-checklist-section" className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-[32px] p-6 shadow-sm space-y-4">
+      <div id="benefits-checklist-section" className="space-y-4">
         <div>
           <h3 className="font-bold text-slate-950 dark:text-slate-100 text-sm">
             {t.dailyBenefits}
@@ -1113,7 +1113,7 @@ export default function HomeTab({
               key={ben.id}
               id={`benefit-item-${ben.id}`}
               onClick={() => toggleBenefit(ben.id)}
-              className="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-800/50 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/20 cursor-pointer transition-all group"
+              className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-800/50 last:border-0 cursor-pointer transition-all group"
             >
               <div className="flex items-center gap-3">
                 <button className="text-slate-400 dark:text-slate-500 cursor-pointer">

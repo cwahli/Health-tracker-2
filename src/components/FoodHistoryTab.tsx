@@ -94,6 +94,7 @@ export default function FoodHistoryTab({
     composition: '',
     weightGrams: 150,
     quantity: '1 serving',
+    consumedAmount: 1,
     benefits: 'Custom manually logged food.',
     risks: 'None reported.',
     healthImpact: 'Supports daily nutritional goals.',
@@ -143,10 +144,10 @@ export default function FoodHistoryTab({
 
     let updatedLog = { ...editLogState, [field]: value };
 
-    if (field === 'quantity') {
-      const oldNum = parseNum(editLogState.quantity) || 1;
-      const newNum = parseNum(value);
-      if (newNum !== null && newNum > 0 && oldNum > 0 && oldNum !== newNum) {
+    if (field === 'consumedAmount') {
+      const oldNum = editLogState.consumedAmount || 1;
+      const newNum = Number(value) || 1;
+      if (newNum > 0 && oldNum > 0 && oldNum !== newNum) {
         const scale = newNum / oldNum;
         const newNutrients = { ...(editLogState.nutrients || {}) };
         Object.keys(newNutrients).forEach(k => {
@@ -165,10 +166,6 @@ export default function FoodHistoryTab({
           newNutrients[k as keyof NutrientBreakdown] = Number(((newNutrients[k as keyof NutrientBreakdown] || 0) * scale).toFixed(2));
         });
         updatedLog.nutrients = newNutrients as NutrientBreakdown;
-        const qNum = parseNum(editLogState.quantity);
-        if (qNum !== null) {
-          updatedLog.quantity = (editLogState.quantity || '').replace(/[\d.]+/, Number((qNum * scale).toFixed(2)).toString());
-        }
       }
     }
 
@@ -183,10 +180,10 @@ export default function FoodHistoryTab({
     };
     let updatedLog = { ...manualLog, [field]: value };
 
-    if (field === 'quantity') {
-      const oldNum = parseNum(manualLog.quantity) || 1;
-      const newNum = parseNum(value);
-      if (newNum !== null && newNum > 0 && oldNum > 0 && oldNum !== newNum) {
+    if (field === 'consumedAmount') {
+      const oldNum = manualLog.consumedAmount || 1;
+      const newNum = Number(value) || 1;
+      if (newNum > 0 && oldNum > 0 && oldNum !== newNum) {
         const scale = newNum / oldNum;
         const newNutrients = { ...(manualLog.nutrients || {}) };
         Object.keys(newNutrients).forEach(k => {
@@ -205,10 +202,6 @@ export default function FoodHistoryTab({
           newNutrients[k as keyof NutrientBreakdown] = Number(((newNutrients[k as keyof NutrientBreakdown] || 0) * scale).toFixed(2));
         });
         updatedLog.nutrients = newNutrients as NutrientBreakdown;
-        const qNum = parseNum(manualLog.quantity);
-        if (qNum !== null) {
-          updatedLog.quantity = (manualLog.quantity || '').replace(/[\d.]+/, Number((qNum * scale).toFixed(2)).toString());
-        }
       }
     }
 
@@ -318,6 +311,7 @@ export default function FoodHistoryTab({
         composition: manualLog.composition || 'Manually logged ingredients',
         weightGrams: Number(manualLog.weightGrams) || 100,
         quantity: manualLog.quantity || '1 serving',
+        consumedAmount: manualLog.consumedAmount || 1,
         benefits: manualLog.benefits || 'Manually logged food benefits.',
         risks: manualLog.risks || 'No reported risks.',
         healthImpact: manualLog.healthImpact || 'Supports biomarker balances.',
@@ -425,7 +419,7 @@ export default function FoodHistoryTab({
 
             {/* Modal Body */}
             <div className="p-5 space-y-4 text-left">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Food Name *</label>
                   <input
@@ -448,7 +442,7 @@ export default function FoodHistoryTab({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Weight (grams)</label>
                   <input
@@ -460,12 +454,24 @@ export default function FoodHistoryTab({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Quantity / Portion</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Serving Size</label>
                   <input
                     type="text"
                     placeholder="e.g. 1 plate, 1 slice"
                     value={manualLog.quantity || ''}
                     onChange={(e) => updateManualField('quantity', e.target.value)}
+                    className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Consumed Amount</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="e.g. 1, 1.5, 2"
+                    value={manualLog.consumedAmount || ''}
+                    onChange={(e) => updateManualField('consumedAmount', Number(e.target.value) || 0)}
                     className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
                   />
                 </div>
@@ -724,7 +730,7 @@ export default function FoodHistoryTab({
 
                       {/* Basic details */}
                       <div className="space-y-3 text-left">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           <div>
                             <label className="text-[10px] font-bold text-slate-400 block mb-1">Food Name</label>
                             <input
@@ -745,7 +751,7 @@ export default function FoodHistoryTab({
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           <div>
                             <label className="text-[10px] font-bold text-slate-400 block mb-1">Weight (grams)</label>
                             <input
@@ -756,11 +762,22 @@ export default function FoodHistoryTab({
                             />
                           </div>
                           <div>
-                            <label className="text-[10px] font-bold text-slate-400 block mb-1">Portion / Quantity</label>
+                            <label className="text-[10px] font-bold text-slate-400 block mb-1">Serving Size</label>
                             <input
                               type="text"
                               value={editLogState?.quantity || ''}
                               onChange={(e) => updateField('quantity', e.target.value)}
+                              className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 block mb-1">Consumed Amount</label>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={editLogState?.consumedAmount || ''}
+                              onChange={(e) => updateField('consumedAmount', Number(e.target.value) || 0)}
                               className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white"
                             />
                           </div>
@@ -1094,8 +1111,15 @@ export default function FoodHistoryTab({
                             {log.quantity && (
                               <>
                                 <span className="text-slate-300 dark:text-slate-700">|</span>
-                                <span className="text-slate-500 dark:text-slate-400 font-medium">Portion/Quantity:</span>
+                                <span className="text-slate-500 dark:text-slate-400 font-medium">Serving Size:</span>
                                 <span className="font-semibold text-slate-850 dark:text-slate-200">{log.quantity}</span>
+                              </>
+                            )}
+                            {log.consumedAmount && log.consumedAmount !== 1 && (
+                              <>
+                                <span className="text-slate-300 dark:text-slate-700">|</span>
+                                <span className="text-slate-500 dark:text-slate-400 font-medium">Consumed:</span>
+                                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{log.consumedAmount}x</span>
                               </>
                             )}
                           </div>

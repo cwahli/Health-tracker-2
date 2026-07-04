@@ -540,7 +540,7 @@ export default function App() {
             const analysesSnap = await getDocs(collection(db, 'users', uid, 'agentAnalyses'));
             const analyses = analysesSnap.docs.map(d => d.data());
             if (analyses.length > 0) {
-              cloudProfile.agentAnalyses = analyses;
+              cloudProfile.agentAnalyses = analyses as any;
             } else if (localProfile?.agentAnalyses) {
               cloudProfile.agentAnalyses = localProfile.agentAnalyses;
             }
@@ -1722,7 +1722,7 @@ export default function App() {
     const recomputedBiomarkers: { [key: string]: number | string } = {};
     [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
-        recomputedBiomarkers[k] = v;
+        recomputedBiomarkers[k] = v as string | number;
       });
     });
 

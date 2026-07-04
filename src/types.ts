@@ -118,6 +118,7 @@ export interface FoodLog {
   composition: string;
   weightGrams: number;
   quantity: string;
+  consumedAmount?: number;
   benefits: string;
   risks: string;
   healthImpact: string;
