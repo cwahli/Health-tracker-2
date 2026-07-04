@@ -1,3 +1,4 @@
+import { ErrorBoundary } from './ErrorBoundary';
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage, FoodLog, UserProfile, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
@@ -397,7 +398,7 @@ export default function LogChat({
 
   useEffect(() => {
     if (lastSentPayload) {
-      sessionStorage.setItem(payloadStorageKey, JSON.stringify(lastSentPayload));
+      try { sessionStorage.setItem(payloadStorageKey, JSON.stringify(lastSentPayload)); } catch (e) { console.warn("Quota exceeded"); }
     } else {
       sessionStorage.removeItem(payloadStorageKey);
     }
@@ -443,7 +444,7 @@ export default function LogChat({
   });
 
   useEffect(() => {
-    sessionStorage.setItem(chatStorageKey, JSON.stringify(messages));
+    try { sessionStorage.setItem(chatStorageKey, JSON.stringify(messages)); } catch (e) { console.warn("Quota exceeded"); }
   }, [messages, chatStorageKey]);
 
   useEffect(() => {
@@ -486,7 +487,8 @@ export default function LogChat({
                       ? 'Hello! I am the Lifestyle Precision Intervention agent. I translate diagnostic risk into strict dietary and movement targets.'
                       : agentType === 'agent7'
                         ? 'Hello! I am the Medical Literature Consensus agent. I scan PubMed and clinical trials to bring recent scientific debate to your context.'
-                        : 'Hello! Let me know what you want to do.'
+                        : 'Hello! Let me know what you want to do.',
+          timestamp: new Date().toISOString()
         }
       ]);
     } else {
@@ -582,18 +584,29 @@ export default function LogChat({
 
   useEffect(() => {
     if (isOpen) {
-      setMessages(prev => {
-        const lastMsg = prev[prev.length - 1];
-        if (lastMsg) {
-          const msSinceLast = Date.now() - new Date(lastMsg.timestamp).getTime();
-          if (msSinceLast > 5 * 60 * 1000) {
-            setSessionStartTime(Date.now());
+      const saved = sessionStorage.getItem(chatStorageKey);
+      let lastMsg: ChatMessage | null = null;
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.length > 0) {
+            lastMsg = parsed[parsed.length - 1];
           }
-        } else {
+        } catch (e) {}
+      }
+
+      if (lastMsg && lastMsg.timestamp) {
+        const msSinceLast = Date.now() - new Date(lastMsg.timestamp).getTime();
+        if (msSinceLast > 5 * 60 * 1000) {
           setSessionStartTime(Date.now());
         }
+      } else {
+        setSessionStartTime(Date.now());
+      }
 
-        if (lastMsg && !lastMsg.id.startsWith('welcome_')) {
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last && !last.id.startsWith('welcome_')) {
           return [...prev, {
             id: `welcome_${type}_${Date.now()}`,
             role: 'assistant',
@@ -609,7 +622,7 @@ export default function LogChat({
       });
       setShowPastDiscussion(false);
     }
-  }, [isOpen, type]);
+  }, [isOpen, type, chatStorageKey]);
 
   useEffect(() => {
     // Eagerly fetch user location only when food idea chat is active
@@ -635,7 +648,7 @@ export default function LogChat({
   const outOfRangeBiomarkers = React.useMemo(() => {
     if (!biomarkers) return [];
     const list: { key: string; name: string; value: any; status: string; normalRange: string; unit: string }[] = [];
-    Object.entries(biomarkers).forEach(([key, val]) => {
+    Object.entries(biomarkers || {}).forEach(([key, val]) => {
       const def = biomarkerDefinitions.find(d => d.key === key);
       const customDef = profile?.customBiomarkers?.[key];
       if (!def && !customDef) return;
@@ -883,7 +896,7 @@ export default function LogChat({
         };
       } else if (type === 'food_idea') {
         bodyData.location = loc;
-        bodyData.recentMeals = foodLogs.slice(-20).map(f => f.name);
+        bodyData.recentMeals = (foodLogs || []).slice(-20).map(f => f.name);
         bodyData.budget = budget;
         bodyData.currency = currency;
         bodyData.maxDistance = maxDistance;
@@ -927,8 +940,12 @@ export default function LogChat({
         if (agentType) {
           let currentStep = 'agent1_step1';
           if (agentType === 'agent1') {
-            // New user-typed text queries must ALWAYS start fresh at Step 1
-            currentStep = 'agent1_step1';
+            if (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined) {
+              currentStep = 'agent1';
+            } else {
+              // New user-typed text queries must ALWAYS start fresh at Step 1
+              currentStep = 'agent1_step1';
+            }
             
             // Also find and attach extractedYaml and bucketMapping if available
             const yamlMsg = [...messages].reverse().find(m => m.agentResult?.extractedYaml || m.extractedYaml);
@@ -947,10 +964,10 @@ export default function LogChat({
           bodyData.agentType = currentStep;
           bodyData.biomarkerHistory = biomarkerHistory || [];
           bodyData.biomarkers = biomarkers || {};
-          bodyData.recentMeals = foodLogs ? foodLogs.slice(-20).map(f => f.name) : [];
+          bodyData.recentMeals = foodLogs ? (foodLogs || []).slice(-20).map(f => f.name) : [];
           bodyData.agentDiagnosticSummary = profile?.agentDiagnosticSummary || '';
 
-          if (currentStep === 'data_review' && dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined) {
+          if ((currentStep === 'data_review' || currentStep === 'agent1') && dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined) {
             const markerKeysList = Object.keys(biomarkers || {}).filter(k => biomarkers?.[k] !== undefined && biomarkers?.[k] !== null && biomarkers?.[k] !== '');
             const bSize = batchSize || 20;
             const batchRes: string[][] = [];
@@ -1000,6 +1017,10 @@ export default function LogChat({
 
       const resData = await response.json();
       if (resData.error) throw new Error(resData.error);
+
+      if (bodyData.batchBiomarkers && !resData.batchBiomarkers) {
+        resData.batchBiomarkers = bodyData.batchBiomarkers;
+      }
 
       const assistantMsg: ChatMessage = {
         id: `msg_${Date.now() + 1}`,
@@ -1479,7 +1500,7 @@ export default function LogChat({
                       <div className="bg-slate-100/50 dark:bg-slate-950/20 p-2 rounded-xl border border-slate-150 dark:border-slate-800/30 font-size-xs">
                         <span className="text-slate-400 dark:text-slate-500 font-bold block font-size-xs uppercase tracking-wider mb-0.5">Last 20 Meals</span>
                         <span className="font-bold text-slate-700 dark:text-slate-200 max-h-20 overflow-y-auto block whitespace-pre-wrap">
-                          {foodLogs.slice(-20).map(f => f.name).join(', ') || 'No meals logged yet'}
+                          {(foodLogs || []).slice(-20).map(f => f.name).join(', ') || 'No meals logged yet'}
                         </span>
                       </div>
                     </>
@@ -1504,7 +1525,7 @@ export default function LogChat({
                         <span className="text-slate-400 dark:text-slate-500 font-bold block font-size-xs uppercase tracking-wider mb-1.5">Checked Biomarker Values ({biomarkers ? Object.keys(biomarkers).length : 0})</span>
                         {biomarkers && Object.keys(biomarkers).length > 0 ? (
                           <div className="flex flex-wrap gap-1.5 mt-1 max-h-32 overflow-y-auto">
-                            {Object.entries(biomarkers).map(([key, value]) => {
+                            {Object.entries(biomarkers || {}).map(([key, value]) => {
                               const def = (profile?.customBiomarkers && profile.customBiomarkers[key]) || biomarkerDefinitions[key] || { name: key, unit: '' };
                               return (
                                 <span key={key} className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded text-[10px] font-mono text-slate-700 dark:text-slate-300">
@@ -1702,7 +1723,7 @@ export default function LogChat({
                         <img src={msg.imageUrl} alt="Attached meal" className="w-full h-full object-cover" />
                       </div>
                     ) : null}
-                    <p className="whitespace-pre-line break-words">{msg.content}</p>
+                    <p className="whitespace-pre-line break-words">{typeof msg.content === 'object' ? JSON.stringify(msg.content) : msg.content}</p>
 
                     {msg.agentUnavailable && (
                       <div className="mt-3">
@@ -1819,7 +1840,7 @@ export default function LogChat({
                       </div>
 
                       {/* Individual Items Contribution Breakdown Table */}
-                      {msg.pendingFoodLog.itemsBreakdown && msg.pendingFoodLog.itemsBreakdown.length > 0 && (
+                      {msg.pendingFoodLog.itemsBreakdown && Array.isArray(msg.pendingFoodLog.itemsBreakdown) && msg.pendingFoodLog.itemsBreakdown.length > 0 && (
                         <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/30 dark:bg-slate-900/10">
                           <div className="px-3 py-1.5 bg-slate-100/70 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                             <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -1838,7 +1859,7 @@ export default function LogChat({
                                 </tr>
                               </thead>
                               <tbody>
-                                {msg.pendingFoodLog.itemsBreakdown.map((item, itemIdx) => (
+                                {(msg.pendingFoodLog.itemsBreakdown || []).map((item, itemIdx) => (
                                   <tr 
                                     key={itemIdx} 
                                     className="border-b last:border-b-0 border-slate-100 dark:border-slate-800/40 text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-50 dark:hover:bg-slate-850/20 transition-colors"
@@ -1955,6 +1976,7 @@ export default function LogChat({
 
                       {/* Content details based on Agent type */}
                       {['agent1', 'agent2', 'agent3', 'agent4', 'data_review'].includes(msg.agentType || '') && msg.agentResult && (
+                        <ErrorBoundary>
                         <AgentResultTable
                           agentType={
                             msg.agentTypeStep === 'agent1_step2' ? 'agent2' :
@@ -1970,6 +1992,13 @@ export default function LogChat({
                               .reverse()
                               .find(m => m.role === 'user');
                             return precedingUserMsg?.content || '';
+                          })()}
+                          precedingAgent1Result={(() => {
+                            const precedingStep1Msg = messages
+                              .slice(0, idx)
+                              .reverse()
+                              .find(m => m.agentTypeStep === 'agent1_step1' || m.agentType === 'agent1');
+                            return precedingStep1Msg?.agentResult;
                           })()}
                           onContinueToNextStep={
                             (msg.agentResult?.hasMoreMarkers || msg.agentResult?.hasMore || msg.agentResult?.needsContinuation || msg.agentResult?.status === 'needs_continuation') ? undefined :
@@ -1990,6 +2019,7 @@ export default function LogChat({
                             }
                           }}
                         />
+                        </ErrorBoundary>
                       )}
 
                       {msg.agentType === 'agent5' && msg.agentResult && (
@@ -2031,7 +2061,7 @@ export default function LogChat({
                   )}
 
                   {/* Render extracted Pending Medical info */}
-                  {type === 'medical' && !loggedMessageIds.includes(msg.id) && (((msg.pendingBiomarkerEntries && msg.pendingBiomarkerEntries.length > 0) || (msg.pendingBiomarkers && Object.keys(msg.pendingBiomarkers).length > 0)) || (msg.pendingProfile && Object.keys(msg.pendingProfile).length > 0) || (msg.mode === 'modify' && msg.modificationCommand && msg.modificationCommand.length > 0)) && (
+                  {type === 'medical' && !loggedMessageIds.includes(msg.id) && (((msg.pendingBiomarkerEntries && Array.isArray(msg.pendingBiomarkerEntries) && msg.pendingBiomarkerEntries.length > 0) || (msg.pendingBiomarkers && typeof msg.pendingBiomarkers === 'object' && Object.keys(msg.pendingBiomarkers).length > 0)) || (msg.pendingProfile && typeof msg.pendingProfile === 'object' && Object.keys(msg.pendingProfile).length > 0) || (msg.mode === 'modify' && msg.modificationCommand && Array.isArray(msg.modificationCommand) && msg.modificationCommand.length > 0)) && (
                     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-md space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden">
                       <div className="border-b border-slate-100 dark:border-slate-800/50 pb-2">
                         <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs tracking-wider uppercase font-display">
@@ -2040,7 +2070,7 @@ export default function LogChat({
                       </div>
 
                       <div className="space-y-4">
-                        {msg.mode === 'modify' && msg.modificationCommand && msg.modificationCommand.length > 0 ? (
+                        {msg.mode === 'modify' && msg.modificationCommand && Array.isArray(msg.modificationCommand) && msg.modificationCommand.length > 0 ? (
                           <div className="space-y-1">
                             {msg.modificationCommand.map((cmd, idx) => (
                               <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-800/20 text-xs px-2">
@@ -2048,7 +2078,7 @@ export default function LogChat({
                                   {cmd.action === 'remove_biomarker' ? 'Remove' : 'Update'} {cmd.keyName} {cmd.date ? `(${cmd.date})` : ''}
                                 </span>
                                 <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                                  {cmd.action === 'remove_biomarker' ? 'DELETED' : cmd.newValue}
+                                  {cmd.action === 'remove_biomarker' ? 'DELETED' : (typeof cmd.newValue === 'object' ? JSON.stringify(cmd.newValue) : String(cmd.newValue))}
                                 </span>
                               </div>
                             ))}
@@ -2093,13 +2123,13 @@ export default function LogChat({
                               </div>
                             )}
 
-                            {(msg.pendingBiomarkerEntries && msg.pendingBiomarkerEntries.length > 0 ? msg.pendingBiomarkerEntries : (msg.pendingBiomarkers && Object.keys(msg.pendingBiomarkers).length > 0 ? [{ date: msg.pendingDate || null, biomarkers: msg.pendingBiomarkers }] : [])).map((entry, idx) => (
+                            {(msg.pendingBiomarkerEntries && Array.isArray(msg.pendingBiomarkerEntries) && msg.pendingBiomarkerEntries.length > 0 ? msg.pendingBiomarkerEntries : (msg.pendingBiomarkers && typeof msg.pendingBiomarkers === 'object' && Object.keys(msg.pendingBiomarkers).length > 0 ? [{ date: msg.pendingDate || null, biomarkers: msg.pendingBiomarkers }] : [])).map((entry, idx) => (
                               <div key={idx} className="space-y-1">
                                 <div className="flex items-center justify-between py-1 bg-slate-50 dark:bg-slate-800/50 px-2 rounded-md mb-2">
                                   <span className="text-slate-500 dark:text-slate-400 font-bold text-[10px] uppercase">Record Date</span>
                                   <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">{entry.date || 'Unknown Date'}</span>
                                 </div>
-                                {Object.entries(entry.biomarkers).map(([key, val]) => {
+                                {entry.biomarkers && typeof entry.biomarkers === 'object' && Object.entries(entry.biomarkers).map(([key, val]) => {
                                   const def = biomarkerDefinitions.find(d => d.key === key);
                                   const customDef = msg.pendingProfile?.customBiomarkers?.[key] || profile?.customBiomarkers?.[key];
                                   const name = def?.name || customDef?.name || key;
@@ -2186,22 +2216,22 @@ export default function LogChat({
                           <img src={msg.imageUrl} alt="Attached meal" className="w-full h-full object-cover" />
                         </div>
                       ) : null}
-                      {msg.content.includes('Here is the suggestion:\n\n') ? (
+                      {String(msg.content).includes('Here is the suggestion:\n\n') ? (
                         <div className="whitespace-pre-line break-words text-sm">
-                          {msg.content.split('Here is the suggestion:\n\n')[0]}
+                          {String(msg.content).split('Here is the suggestion:\n\n')[0]}
                           Here is the suggestion:
                           <div className="mt-2 mb-2 p-2 bg-indigo-700/30 rounded border border-indigo-400/30 font-mono text-xs overflow-hidden h-10 relative cursor-pointer"
                                onClick={() => {
-                                  const jsonStr = msg.content.split('Here is the suggestion:\n\n')[1].split('\n\nCould you please')[0];
+                                  const jsonStr = String(msg.content).split('Here is the suggestion:\n\n')[1].split('\n\nCould you please')[0];
                                   setFullScreenJson(jsonStr);
                                }}
                           >
                             <span className="text-indigo-200 hover:text-white underline">(previous review)</span>
                           </div>
-                          {msg.content.split('\n\nCould you please')[1] ? 'Could you please' + msg.content.split('\n\nCould you please')[1] : ''}
+                          {String(msg.content).split('\n\nCould you please')[1] ? 'Could you please' + String(msg.content).split('\n\nCould you please')[1] : ''}
                         </div>
                       ) : (
-                        <p className="whitespace-pre-line break-words">{msg.content}</p>
+                        <p className="whitespace-pre-line break-words">{typeof msg.content === 'object' ? JSON.stringify(msg.content) : msg.content}</p>
                       )}
                     </div>
                   </div>

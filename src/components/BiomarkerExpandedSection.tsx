@@ -12,6 +12,7 @@ interface BiomarkerExpandedSectionProps {
   biomarkers: { [key: string]: number | string };
   onEditBiomarkerLog?: (id: string, key: string, value: string | number, newDate?: string) => void;
   onDeleteBiomarkerLog?: (id: string) => void;
+  onDeleteBiomarker?: (key: string) => void;
   onOpenAiReview: (key: string) => void;
   onCombineBiomarker?: (key: string) => void;
   onApplyCalculation?: (updates: {
@@ -32,6 +33,7 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
   biomarkers,
   onEditBiomarkerLog,
   onDeleteBiomarkerLog,
+  onDeleteBiomarker,
   onOpenAiReview,
   onCombineBiomarker,
   onApplyCalculation,
@@ -41,6 +43,7 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
 }) => {
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editDate, setEditDate] = useState<string>('');
 
   const historyData = biomarkerHistory
@@ -130,6 +133,41 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
             </svg>
             Combine
           </button>
+        )}
+        {onDeleteBiomarker && !showDeleteConfirm && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDeleteConfirm(true);
+            }}
+            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400 font-bold text-xs rounded-xl border border-rose-100 dark:border-rose-800/50 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete
+          </button>
+        )}
+        {onDeleteBiomarker && showDeleteConfirm && (
+          <div className="flex-1 flex gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteBiomarker(def.key);
+                setShowDeleteConfirm(false);
+              }}
+              className="flex-1 py-2 px-3 bg-rose-600 text-white font-bold text-xs rounded-xl hover:bg-rose-700 transition-colors cursor-pointer"
+            >
+              Confirm
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDeleteConfirm(false);
+              }}
+              className="flex-1 py-2 px-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
         )}
       </div>
 

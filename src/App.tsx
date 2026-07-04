@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { UserProfile, FoodLog, BiomarkerLog, HealthAction, DailyBenefit, RecommendationReport, DbInteraction, QuotaData, FoodIdea } from './types';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
@@ -12,21 +13,18 @@ import LogChat from './components/LogChat';
 import { translations } from './utils/translations';
 import { AVAILABLE_LLMS } from './utils/llm';
 import { getLocalFallbackReport } from './utils/fallbackReport';
-import { Plus, HeartHandshake, RefreshCw, Sparkles, Stethoscope, Utensils, Loader } from 'lucide-react';
+import { Plus, HeartHandshake, RefreshCw, Sparkles, Stethoscope, Utensils, Loader, CloudLightning } from 'lucide-react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, getDocFromServer, getDocsFromServer, onSnapshot, getDocsFromCache } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, getDocFromServer, getDocsFromServer, onSnapshot, getDocsFromCache, writeBatch } from 'firebase/firestore';
 import { getCurrentDateInTimezone } from './utils/dateUtils';
 import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint } from './utils/biomarkers';
 import { get, set } from 'idb-keyval';
-
 const LOCAL_STORAGE_KEY = 'health_cockpit_app_data';
 const QUOTA_STORAGE_KEY = 'health_cockpit_quota_data';
-
 const getQuotaKey = () => {
   return new Date().toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' });
 };
-
 const getDynamicStyles = (profile: any) => {
   if (!profile) return '';
   const p = profile.themePalette || {};
@@ -60,7 +58,6 @@ const getDynamicStyles = (profile: any) => {
       :root, html { font-size: 24px !important; }
     `;
   }
-
   const sizeMap = {
     tiny: '12px',
     small: '14px',
@@ -73,7 +70,6 @@ const getDynamicStyles = (profile: any) => {
     '5xl': '48px',
     '6xl': '60px'
   };
-
   const titleSize = profile.fontSizeTitle ? sizeMap[profile.fontSizeTitle as keyof typeof sizeMap] : '';
   const subtitleSize = profile.fontSizeSubtitle ? sizeMap[profile.fontSizeSubtitle as keyof typeof sizeMap] : '';
   const descSize = profile.fontSizeDescription ? sizeMap[profile.fontSizeDescription as keyof typeof sizeMap] : '';
@@ -82,7 +78,6 @@ const getDynamicStyles = (profile: any) => {
   const keyMetricSize = profile.fontSizeKeyMetric ? sizeMap[profile.fontSizeKeyMetric as keyof typeof sizeMap] : '36px';
   const xsSize = profile.fontSizeXS ? sizeMap[profile.fontSizeXS as keyof typeof sizeMap] : '10px';
   const bodySize = profile.fontSizeBody ? sizeMap[profile.fontSizeBody as keyof typeof sizeMap] : '16px';
-
   fontSizeCss += `
     .font-size-title { font-size: ${titleSize || '24px'} !important; }
     .font-size-subtitle { font-size: ${subtitleSize || '18px'} !important; }
@@ -92,7 +87,6 @@ const getDynamicStyles = (profile: any) => {
     .font-size-key-metric { font-size: ${keyMetricSize} !important; }
     .font-size-xs { font-size: ${xsSize} !important; }
   `;
-
   if (titleSize || subtitleSize || descSize || smallSize) {
     fontSizeCss += `
       ${titleSize ? `h1, h2, h3, .font-display, .text-xl, .text-2xl, .text-3xl, .text-4xl, .text-5xl { font-size: ${titleSize} !important; line-height: 1.3 !important; }` : ''}
@@ -101,7 +95,6 @@ const getDynamicStyles = (profile: any) => {
       ${smallSize ? `small, .text-sm, .text-xs, .text-[11px], .text-[10px], .text-[9px], .body-small { font-size: ${smallSize} !important; line-height: 1.5 !important; }` : ''}
     `;
   }
-
   let fontCss = `
     :root {
       --font-sans: "${fontFamily}", ui-sans-serif, system-ui, sans-serif !important;
@@ -112,12 +105,10 @@ const getDynamicStyles = (profile: any) => {
       font-family: var(--font-sans) !important;
     }
   `;
-
   let colorCss = '';
   colorCss += `
     :root {
   `;
-
   if (p.button) {
     colorCss += `
       --color-indigo-500: ${p.button} !important;
@@ -127,28 +118,24 @@ const getDynamicStyles = (profile: any) => {
       --color-indigo-950: ${p.button}25 !important;
     `;
   }
-
   if (p.background) {
     colorCss += `
       --color-slate-50: ${p.background} !important;
       --color-slate-950: ${p.background} !important;
     `;
   }
-
   if (p.bgApp) {
     colorCss += `
       --color-slate-50: ${p.bgApp} !important;
       --color-slate-950: ${p.bgApp} !important;
     `;
   }
-
   if (p.bgCard) {
     colorCss += `
       --color-white: ${p.bgCard} !important;
       --color-slate-900: ${p.bgCard} !important;
     `;
   }
-
   if (p.border) {
     colorCss += `
       --color-slate-100: ${p.border}88 !important;
@@ -157,7 +144,6 @@ const getDynamicStyles = (profile: any) => {
       --color-slate-800: ${p.border} !important;
     `;
   }
-
   if (p.warning) {
     colorCss += `
       --color-rose-500: ${p.warning} !important;
@@ -167,7 +153,6 @@ const getDynamicStyles = (profile: any) => {
       --color-rose-100: ${p.warning}22 !important;
     `;
   }
-
   if (p.caution) {
     colorCss += `
       --color-amber-500: ${p.caution} !important;
@@ -175,7 +160,6 @@ const getDynamicStyles = (profile: any) => {
       --color-amber-50: ${p.caution}12 !important;
     `;
   }
-
   if (p.success) {
     colorCss += `
       --color-emerald-500: ${p.success} !important;
@@ -183,7 +167,6 @@ const getDynamicStyles = (profile: any) => {
       --color-emerald-50: ${p.success}12 !important;
     `;
   }
-
   if (p.text) {
     colorCss += `
       --color-slate-900: ${p.text} !important;
@@ -191,7 +174,6 @@ const getDynamicStyles = (profile: any) => {
       --color-slate-800: ${p.text} !important;
     `;
   }
-
   if (p.textSecondary) {
     colorCss += `
       --color-slate-500: ${p.textSecondary} !important;
@@ -199,32 +181,27 @@ const getDynamicStyles = (profile: any) => {
       --color-slate-400: ${p.textSecondary}aa !important;
     `;
   }
-
   if (p.neutralSetting) {
     colorCss += `
       --color-slate-700: ${p.neutralSetting} !important;
       --color-slate-300: ${p.neutralSetting}dd !important;
     `;
   }
-
   colorCss += `
     }
   `;
-
   return `
     ${fontSizeCss}
     ${fontCss}
     ${colorCss}
   `;
 };
-
 function cleanData<T>(obj: T): T {
   if (obj === null || obj === undefined) return obj;
   return JSON.parse(JSON.stringify(obj, (key, value) => {
     return value === undefined ? null : value;
   }));
 }
-
 const safeSaveToLocalStorage = async (key: string, bundle: any) => {
   try {
     await set(key, bundle);
@@ -232,7 +209,6 @@ const safeSaveToLocalStorage = async (key: string, bundle: any) => {
     console.error("Failed to save to IndexedDB:", e);
   }
 };
-
 export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [dismissedBmiAlerts, setDismissedBmiAlerts] = useState<{[key: string]: boolean}>(() => {
@@ -243,7 +219,6 @@ export default function App() {
       return {};
     }
   });
-
   const handleDismissBmiAlert = () => {
     if (!profile) return;
     const fingerprint = getProfileFingerprint(profile);
@@ -251,14 +226,28 @@ export default function App() {
     setDismissedBmiAlerts(updated);
     localStorage.setItem('dismissedBmiAlerts', JSON.stringify(updated));
   };
-
   const [activeTab, setActiveTab] = useState<'home' | 'insights' | 'food' | 'medical' | 'trends'>('home');
   const [syncState, setSyncState] = useState<'synced' | 'syncing' | 'local'>('local');
+  const [isFirestoreQuotaExceeded, setIsFirestoreQuotaExceeded] = useState<boolean>(() => {
+    return localStorage.getItem('firestore_quota_exceeded') === 'true';
+  });
+  const handleFirestoreError = (err: any) => {
+    if (!err) return;
+    const msg = String(err.message || err.code || err || '').toLowerCase();
+    if (
+      msg.includes('resource-exhausted') || 
+      msg.includes('quota') || 
+      msg.includes('limit exceeded') ||
+      err.code === 'resource-exhausted'
+    ) {
+      setIsFirestoreQuotaExceeded(true);
+      localStorage.setItem('firestore_quota_exceeded', 'true');
+      setSyncState('local');
+    }
+  };
   const [hideSensitive, setHideSensitive] = useState<boolean>(false);
-
   // DB Transaction tracker state for spinning loader click analytics
   const [dbInteractions, setDbInteractions] = useState<DbInteraction[]>([]);
-
   // Daily Quota Tracking (resets at midnight PT)
   const [quota, setQuota] = useState<QuotaData>(() => {
     const saved = localStorage.getItem(QUOTA_STORAGE_KEY);
@@ -271,11 +260,9 @@ export default function App() {
     }
     return { date: currentKey, reads: 0, writes: 0, deletes: 0 };
   });
-
   useEffect(() => {
     localStorage.setItem(QUOTA_STORAGE_KEY, JSON.stringify(quota));
   }, [quota]);
-
   const updateQuota = (type: 'upload' | 'download' | 'delete' | 'sync', docCount: number = 1) => {
     if (type === 'sync' || docCount === 0) return;
     setQuota(prev => {
@@ -293,7 +280,6 @@ export default function App() {
       return newQuota;
     });
   };
-
   const logInteraction = (type: 'upload' | 'download' | 'delete' | 'sync', path: string, data: any, docCount: number = 1) => {
     const sizeBytes = data ? (typeof data === 'string' ? data.length : JSON.stringify(data).length) : 0;
     const newOp: DbInteraction = {
@@ -309,7 +295,6 @@ export default function App() {
     setDbInteractions(prev => [newOp, ...prev].slice(0, 100));
     return newOp.id;
   };
-
   const completeInteraction = (id: string, success: boolean, sizeBytes?: number, errorMsg?: string, finalDocCount?: number) => {
     setDbInteractions(prev => {
       const op = prev.find(item => item.id === id);
@@ -331,7 +316,18 @@ export default function App() {
       });
     });
   };
-
+  const withTimeout = <T,>(promise: Promise<T> | T, timeoutMs: number, label: string): Promise<T | void> => {
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise<void>((resolve) => {
+        setTimeout(() => {
+          console.warn(`[Firestore Sync Timeout] ${label} took more than ${timeoutMs}ms. Continuing in background/offline cache.`);
+          setSyncState('local');
+          resolve();
+        }, timeoutMs);
+      })
+    ]);
+  };
   // Core logs and targets states
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [biomarkers, setBiomarkers] = useState<{ [key: string]: number | string }>({});
@@ -341,7 +337,6 @@ export default function App() {
   const [foodIdeas, setFoodIdeas] = useState<FoodIdea[]>([]);
   const [report, setReport] = useState<RecommendationReport | null>(null);
   const [draftReport, setDraftReport] = useState<RecommendationReport | null>(null);
-
   // Chat window visibility modals
   const [isFoodChatOpen, setIsFoodChatOpen] = useState(false);
   const [isManualFoodLogOpen, setIsManualFoodLogOpen] = useState(false);
@@ -360,7 +355,6 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEditingFoodLog, setIsEditingFoodLog] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
-
   // Sync state with HTML5 History API to support browser back button navigation without quitting
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
@@ -374,14 +368,12 @@ export default function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
-
   useEffect(() => {
     const currentState = window.history.state;
     const isDifferent = !currentState ||
       currentState.tab !== activeTab ||
       currentState.isFoodOpen !== isFoodChatOpen ||
       currentState.isMedicalOpen !== isMedicalChatOpen;
-
     if (isDifferent) {
       window.history.pushState({
         tab: activeTab,
@@ -390,7 +382,6 @@ export default function App() {
       }, '');
     }
   }, [activeTab, isFoodChatOpen, isMedicalChatOpen]);
-
   // Initialize from Firebase Auth and Firestore on mount
   // Check of changes in profile and other info on the database (and pull latest changes)
   const checkForDbChanges = async (forceUserId?: string) => {
@@ -399,10 +390,8 @@ export default function App() {
       setSyncState('local');
       return;
     }
-
     // Load local storage first so we don't wipe it on page load
     const parsedLocal = await get(LOCAL_STORAGE_KEY) || {};
-
     // Snapshot of current local state (from storage or memory) for safe merge
     const localProfile = profile || parsedLocal.profile;
     const localFoods = foodLogs.length > 0 ? [...foodLogs] : (parsedLocal.foodLogs || []);
@@ -410,7 +399,6 @@ export default function App() {
     const localActions = actions.length > 0 ? [...actions] : (parsedLocal.actions || []);
     const localBenefits = dailyBenefits.length > 0 ? [...dailyBenefits] : (parsedLocal.dailyBenefits || []);
     const localReport = report || parsedLocal.report;
-
     // Immediately populate state from local storage so the UI is responsive
     if (parsedLocal && !profile) {
       if (parsedLocal.profile) setProfile(parsedLocal.profile);
@@ -421,43 +409,60 @@ export default function App() {
       if (parsedLocal.dailyBenefits) setDailyBenefits(parsedLocal.dailyBenefits);
       if (parsedLocal.report) setReport(parsedLocal.report);
     }
-
+    if (isFirestoreQuotaExceeded) {
+      if (parsedLocal) {
+        if (parsedLocal.foodLogs) setFoodLogs(parsedLocal.foodLogs);
+        if (parsedLocal.profile) setProfile(parsedLocal.profile);
+        if (parsedLocal.biomarkers) setBiomarkers(parsedLocal.biomarkers);
+        if (parsedLocal.biomarkerHistory) setBiomarkerHistory(parsedLocal.biomarkerHistory);
+        if (parsedLocal.actions) setActions(parsedLocal.actions);
+        if (parsedLocal.dailyBenefits) setDailyBenefits(parsedLocal.dailyBenefits);
+        if (parsedLocal.report) setReport(parsedLocal.report);
+      }
+      setSyncState('local');
+      return;
+    }
     setSyncState('syncing');
     const syncRootId = logInteraction('sync', `users/${uid} (Full Check)`, null);
-
     let tProfileId = '';
     let tFoodsId = '';
     let tBioId = '';
     let tActsId = '';
     let tBensId = '';
     let tRepId = '';
-
     try {
       const userDocRef = doc(db, 'users', uid);
       let userDoc;
       tProfileId = logInteraction('download', `users/${uid} (Profile)`, null);
       try {
-        userDoc = await getDocFromServer(userDocRef);
+        const docResult = await withTimeout(getDocFromServer(userDocRef), 2000, 'getDocFromServer (Profile)');
+        if (docResult) {
+          userDoc = docResult;
+        } else {
+          throw new Error("getDocFromServer timed out");
+        }
         completeInteraction(tProfileId, true, userDoc.exists() ? JSON.stringify(userDoc.data()).length : 0);
       } catch (err) {
-        console.warn("getDocFromServer failed, falling back to local/cached getDoc:", err);
-        userDoc = await getDoc(userDocRef);
+        console.warn("getDocFromServer failed or timed out, falling back to local/cached getDoc:", err);
+        const docResult = await withTimeout(getDoc(userDocRef), 2000, 'getDoc (Profile)');
+        if (docResult) {
+          userDoc = docResult;
+        } else {
+          userDoc = { exists: () => false, data: () => undefined } as any;
+        }
         completeInteraction(tProfileId, true, userDoc.exists() ? JSON.stringify(userDoc.data()).length : 0);
       }
-
       if (userDoc.exists()) {
         const cloudProfile = userDoc.data() as UserProfile;
         
         const cloudTime = cloudProfile.lastUpdatedAt || 0;
         const localTime = localProfile?.lastUpdatedAt || 0;
-
         let mergedProfile: UserProfile;
         let foods: FoodLog[] = [];
         let bioHistory: BiomarkerLog[] = [];
         let acts: HealthAction[] = [];
         let bens: DailyBenefit[] = [];
         let cloudReport: RecommendationReport | null = null;
-
         // Optimization: if cloud lastUpdatedAt matches local lastUpdatedAt and we have local data, we skip subcollection reads
         const canSkipFetch = !!(
           localProfile &&
@@ -467,10 +472,12 @@ export default function App() {
           parsedLocal.foodLogs &&
           parsedLocal.biomarkerHistory
         );
-
         if (canSkipFetch) {
           console.log("[Sync] Local data is fully up-to-date with cloud timestamp:", cloudProfile.lastUpdatedAt);
           mergedProfile = cloudProfile;
+          if (localProfile?.agentAnalyses) {
+            mergedProfile.agentAnalyses = localProfile.agentAnalyses;
+          }
           foods = localFoods;
           bioHistory = localBioHistory;
           acts = localActions;
@@ -482,13 +489,11 @@ export default function App() {
           tActsId = logInteraction('download', `users/${uid}/actions`, null);
           tBensId = logInteraction('download', `users/${uid}/dailyBenefits`, null);
           tRepId = logInteraction('download', `users/${uid}/reports/latest`, null);
-
           // By using getDocs and getDoc (not FromServer), Firestore can utilize its local cache if configured,
           // and won't throw if offline, gracefully degrading to cached data.
           // Note: foodLogs is now managed by onSnapshot listener to save reads/bandwidth
           foods = []; // Handled by onSnapshot
           completeInteraction(tFoodsId, true, 0);
-
           // 1. Fetch biomarker history robustly
           try {
             const bioHistorySnap = await getDocs(collection(db, 'users', uid, 'biomarkerHistory'));
@@ -499,7 +504,6 @@ export default function App() {
             bioHistory = localBioHistory; // Fallback to local
             completeInteraction(tBioId, false, 0, bioErr.message || String(bioErr));
           }
-
           // 2. Fetch dashboard metadata robustly
           try {
             const dashboardDoc = await getDoc(doc(db, 'users', uid, 'metadata', 'dashboard'));
@@ -521,7 +525,6 @@ export default function App() {
             completeInteraction(tActsId, false, 0, dashErr.message || String(dashErr));
             completeInteraction(tBensId, false, 0, dashErr.message || String(dashErr));
           }
-
           // 3. Fetch reports robustly
           try {
             const latestReportDoc = await getDoc(doc(db, 'users', uid, 'reports', 'latest'));
@@ -531,6 +534,21 @@ export default function App() {
             console.warn("Failed to fetch reports:", repErr);
             cloudReport = localReport;
             completeInteraction(tRepId, false, 0, repErr.message || String(repErr));
+          }
+          // 4. Fetch agentAnalyses
+          try {
+            const analysesSnap = await getDocs(collection(db, 'users', uid, 'agentAnalyses'));
+            const analyses = analysesSnap.docs.map(d => d.data());
+            if (analyses.length > 0) {
+              cloudProfile.agentAnalyses = analyses;
+            } else if (localProfile?.agentAnalyses) {
+              cloudProfile.agentAnalyses = localProfile.agentAnalyses;
+            }
+          } catch (err) {
+            console.warn("Failed to fetch agentAnalyses:", err);
+            if (localProfile?.agentAnalyses) {
+              cloudProfile.agentAnalyses = localProfile.agentAnalyses;
+            }
           }
 
           if (cloudTime >= localTime) {
@@ -544,14 +562,12 @@ export default function App() {
             acts = localActions;
             bens = localBenefits;
             cloudReport = localReport;
-
-            // Trigger background save and sync
+            // Trigger background save and sync - lightweight multi-doc sync instead of heavy fullPush of subcollections to save write quota
             setTimeout(() => {
-              saveAndSync(localProfile, localFoods, biomarkers, localBioHistory, localActions, localBenefits, localReport);
+              saveAndSync(localProfile, localFoods, biomarkers, localBioHistory, localActions, localBenefits, localReport, { type: 'multi' });
             }, 50);
           }
         }
-
         // Apply loaded values merged with local state to React states
         const mergedFoods = [...foods];
         localFoods.forEach(localFood => {
@@ -568,7 +584,6 @@ export default function App() {
             };
           }
         });
-
         const mergedBioHistory = [...bioHistory];
         localBioHistory.forEach(localLog => {
           const existingCloudIndex = mergedBioHistory.findIndex(b => b.id === localLog.id);
@@ -578,7 +593,6 @@ export default function App() {
             mergedBioHistory[existingCloudIndex] = { ...mergedBioHistory[existingCloudIndex], ...localLog };
           }
         });
-
         const mergedActions = [...acts];
         localActions.forEach(localAct => {
           const existingCloudIndex = mergedActions.findIndex(a => a.id === localAct.id);
@@ -588,7 +602,6 @@ export default function App() {
             mergedActions[existingCloudIndex] = { ...mergedActions[existingCloudIndex], ...localAct };
           }
         });
-
         const mergedBenefits = [...bens];
         localBenefits.forEach(localBen => {
           const existingCloudIndex = mergedBenefits.findIndex(b => b.id === localBen.id);
@@ -598,14 +611,12 @@ export default function App() {
             mergedBenefits[existingCloudIndex] = { ...mergedBenefits[existingCloudIndex], ...localBen };
           }
         });
-
         setProfile(mergedProfile);
         setFoodLogs(mergedFoods);
         setBiomarkerHistory(mergedBioHistory);
         setActions(mergedActions);
         setDailyBenefits(mergedBenefits);
         setReport(cloudReport);
-
         // Recompute active biomarkers (sorted ascending so that newer logs overwrite older values)
         const computedBiomarkers: { [key: string]: number | string } = {};
         [...mergedBioHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
@@ -614,7 +625,6 @@ export default function App() {
           });
         });
         setBiomarkers(computedBiomarkers);
-
         // Write bundle back to local storage
         const bundle = {
           profile: mergedProfile,
@@ -648,7 +658,6 @@ export default function App() {
           });
         });
         setBiomarkers(computedBiomarkers);
-
         const bundle = {
           profile: localProfile,
           foodLogs: localFoods,
@@ -659,13 +668,13 @@ export default function App() {
           report: localReport
         };
         safeSaveToLocalStorage(LOCAL_STORAGE_KEY, bundle);
-
         // Try syncing profile to cloud in background
         const tNewProfileId = logInteraction('upload', `users/${uid} (Restore Profile)`, localProfile);
-        setDoc(userDocRef, cleanData(localProfile), { merge: true })
+        const localProfileForCloud = { ...localProfile };
+        delete localProfileForCloud.agentAnalyses;
+        setDoc(userDocRef, cleanData(localProfileForCloud), { merge: true })
           .then(() => completeInteraction(tNewProfileId, true, JSON.stringify(localProfile).length))
           .catch(err => { completeInteraction(tNewProfileId, false, 0, err.message); console.error(err); });
-
         await new Promise(resolve => setTimeout(resolve, 800));
         setSyncState('synced');
         completeInteraction(syncRootId, true, 0);
@@ -685,17 +694,14 @@ export default function App() {
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           language: 'en'
         };
-
         const tNewProfileId = logInteraction('upload', `users/${uid} (Create Profile)`, newProfile);
-        setDoc(userDocRef, cleanData(newProfile))
+        setDoc(userDocRef, cleanData(newProfile), { merge: true })
           .then(() => completeInteraction(tNewProfileId, true, JSON.stringify(newProfile).length))
           .catch(err => { completeInteraction(tNewProfileId, false, 0, err.message); console.error(err); });
         
         setProfile(newProfile);
-
         let initialActions: HealthAction[] = [];
         let initialBenefits: DailyBenefit[] = [];
-
         if (isDemoUser) {
           initialActions = [
             {
@@ -715,12 +721,10 @@ export default function App() {
               type: 'test'
             }
           ];
-
           initialBenefits = [
             { id: 'init_ben_1', activity: 'Walk briskly for 30 minutes', target: 'Daily', completed: false },
             { id: 'init_ben_2', activity: 'Add high-fiber foods to your breakfast', target: 'Daily', completed: false }
           ];
-
           // Write to Firestore dashboard document to prevent multiple writes
           const tDashId = logInteraction('upload', `users/${uid}/metadata/dashboard`, null);
           setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), {
@@ -730,14 +734,12 @@ export default function App() {
             .then(() => completeInteraction(tDashId, true, JSON.stringify({ actions: initialActions, dailyBenefits: initialBenefits }).length))
             .catch(err => { completeInteraction(tDashId, false, 0, err.message); console.error(err); });
         }
-
         setFoodLogs([]);
         setBiomarkers({});
         setBiomarkerHistory([]);
         setActions(initialActions);
         setDailyBenefits(initialBenefits);
         setReport(null);
-
         // Local storage cache
         const bundle = {
           profile: newProfile,
@@ -753,11 +755,11 @@ export default function App() {
         await new Promise(resolve => setTimeout(resolve, 800));
         setSyncState('synced');
         completeInteraction(syncRootId, true, 0);
-
         setActiveTab('medical');
       }
     } catch (err: any) {
       console.error("Error checking or syncing database changes:", err);
+      handleFirestoreError(err);
       setSyncState('local');
       completeInteraction(syncRootId, false, 0, err.message || 'Database error');
       if (tProfileId) completeInteraction(tProfileId, false, 0, err.message);
@@ -779,7 +781,6 @@ export default function App() {
       }
     }
   };
-
   // Initialize from Firebase Auth and Firestore on mount
   useEffect(() => {
     let unsubs: (() => void)[] = [];
@@ -806,9 +807,9 @@ export default function App() {
             },
             (error) => {
               console.warn("Firestore profile onSnapshot error:", error);
+              handleFirestoreError(error);
             }
           ));
-
           // Listen to foodLogs natively via Firestore to prevent large collection reads (14k read quota issue)
           // and to ensure images are loaded perfectly from the local IndexedDB cache.
           unsubs.push(onSnapshot(
@@ -819,8 +820,16 @@ export default function App() {
                 const merged = [...cloudFoods];
                 prevFoods.forEach(localFood => {
                   if (localFood && localFood.id) {
-                    const exists = merged.some(f => f.id === localFood.id);
-                    if (!exists && (localFood.id.startsWith('food_') || localFood.id.startsWith('food_manual_'))) {
+                    const existingCloudIndex = merged.findIndex(f => f.id === localFood.id);
+                    if (existingCloudIndex >= 0) {
+                      // Preserve local image if cloud is missing it during upload phase
+                      const cloudFood = merged[existingCloudIndex];
+                      merged[existingCloudIndex] = {
+                        ...cloudFood,
+                        imageUrl: localFood.imageUrl || cloudFood.imageUrl,
+                        imageUrls: (localFood.imageUrls && localFood.imageUrls.length > 0) ? localFood.imageUrls : cloudFood.imageUrls
+                      };
+                    } else if (localFood.id.startsWith('food_') || localFood.id.startsWith('food_manual_')) {
                       merged.push(localFood);
                     }
                   }
@@ -830,6 +839,7 @@ export default function App() {
             },
             (error) => {
               console.warn("Firestore onSnapshot error (likely quota):", error);
+              handleFirestoreError(error);
               // Fallback to reading from local IndexedDB cache if quota exceeded
               getDocsFromCache(collection(db, 'users', user.uid, 'foodLogs'))
                 .then(cacheSnap => {
@@ -852,7 +862,6 @@ export default function App() {
                 });
             }
           ));
-
           // Real-time Firestore listener for biomarkerHistory to keep medical history synced across devices
           unsubs.push(onSnapshot(
             collection(db, 'users', user.uid, 'biomarkerHistory'),
@@ -871,6 +880,7 @@ export default function App() {
             },
             (error) => {
               console.warn("Firestore biomarkerHistory onSnapshot error (likely quota):", error);
+              handleFirestoreError(error);
               // Fallback to reading from local IndexedDB cache if snapshot fails
               getDocsFromCache(collection(db, 'users', user.uid, 'biomarkerHistory'))
                 .then(cacheSnap => {
@@ -890,7 +900,6 @@ export default function App() {
                 });
             }
           ));
-
           const parsedLocal = await get(LOCAL_STORAGE_KEY);
           let hasLocal = false;
           if (parsedLocal) {
@@ -944,10 +953,8 @@ export default function App() {
         setIsAuthChecking(false);
       }
     });
-
     return () => unsubscribe();
   }, []);
-
   // Keep localStorage updated with React states so that hasLocal and canSkipFetch work flawlessly!
   useEffect(() => {
     if (!profile) return;
@@ -963,29 +970,28 @@ export default function App() {
     };
     safeSaveToLocalStorage(LOCAL_STORAGE_KEY, bundle);
   }, [profile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, foodIdeas, report]);
-
   // Automatically log BMI on initial load if profile has height/weight but BMI is missing from history or biomarkers
   useEffect(() => {
     if (profile && profile.weight && profile.height) {
       const hasBmiInHistory = biomarkerHistory.some(h => h.biomarkers && h.biomarkers.bmi !== undefined);
       const hasBmiInBiomarkers = biomarkers.bmi !== undefined;
-
       if (!hasBmiInHistory || !hasBmiInBiomarkers) {
         const heightInMeters = Number(profile.height) / 100;
         const bmiScore = Number(profile.weight) / (heightInMeters * heightInMeters);
         const roundedBmi = parseFloat(bmiScore.toFixed(1));
         const recordDate = getCurrentDateInTimezone(profile.timezone);
-
+        const logId = `med_log_bmi_init_${Date.now()}`;
         setBiomarkers(prev => {
           if (prev.bmi === roundedBmi) return prev;
           return { ...prev, bmi: roundedBmi };
         });
-
         setBiomarkerHistory(prev => {
           const updatedHistory = [...prev];
           const existingLogIndex = updatedHistory.findIndex(h => h.date === recordDate);
           
+          let targetIdToSave = logId;
           if (existingLogIndex >= 0) {
+            targetIdToSave = updatedHistory[existingLogIndex].id;
             if (updatedHistory[existingLogIndex].biomarkers?.bmi === roundedBmi) {
               return prev; // no change
             }
@@ -998,7 +1004,7 @@ export default function App() {
             };
           } else {
             updatedHistory.push({
-              id: `med_log_bmi_init_${Date.now()}`,
+              id: logId,
               date: recordDate,
               biomarkers: {
                 bmi: roundedBmi
@@ -1007,19 +1013,16 @@ export default function App() {
             });
           }
           updatedHistory.sort((a, b) => b.date.localeCompare(a.date));
-
           // Trigger saveAndSync in background
           setTimeout(() => {
             const updatedBiomarkers = { ...biomarkers, bmi: roundedBmi };
-            saveAndSync(profile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog', targetId: `med_log_bmi_init_${Date.now()}` });
+            saveAndSync(profile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog', targetId: targetIdToSave });
           }, 0);
-
           return updatedHistory;
         });
       }
     }
   }, [profile?.weight, profile?.height, biomarkerHistory.length, biomarkers.bmi]);
-
   // Auto-restore missing food images from chat history
   useEffect(() => {
     if (foodLogs.length === 0) return;
@@ -1044,24 +1047,37 @@ export default function App() {
           }
           return log;
         });
-
-        if (updated) {
-          console.log(`Restoring ${updateCount} lost images from chat history`);
+        if (updated && auth.currentUser) {
+          const uid = auth.currentUser.uid;
+          console.log(`Restoring ${updateCount} lost images from chat history via batched transaction`);
           setFoodLogs(newFoodLogs);
-          // Fire individual saves for the newly restored logs to ensure cloud sync catches them
+          
+          // Write to Firestore in a single atomic batch to prevent excessive separate write operations
+          const batch = writeBatch(db);
+          let addedToBatch = false;
           newFoodLogs.forEach(f => {
             const oldLog = foodLogs.find(old => old.id === f.id);
             if (!oldLog?.imageUrl && f.imageUrl) {
-               saveAndSync(profile, newFoodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'foodLog', targetId: f.id });
+              const docRef = doc(db, 'users', uid, 'foodLogs', f.id);
+              batch.set(docRef, cleanData(f));
+              addedToBatch = true;
             }
           });
+          if (addedToBatch) {
+            const trackId = logInteraction('upload', `users/${uid}/foodLogs (Batch Restore)`, null, updateCount);
+            batch.commit()
+              .then(() => completeInteraction(trackId, true, 0))
+              .catch(err => {
+                completeInteraction(trackId, false, 0, err?.message || String(err));
+                console.error("Failed to commit batch image restore:", err);
+              });
+          }
         }
       }
     } catch (e) {
       console.warn("Failed to auto-restore images:", e);
     }
   }, [foodLogs.length]);
-
   // Save changes to local storage and sync to Server cloud database
   const saveAndSync = async (
     currProfile: UserProfile | null,
@@ -1072,7 +1088,7 @@ export default function App() {
     currBenefits: DailyBenefit[],
     currReport: RecommendationReport | null,
     specificUpdate?: {
-      type: 'profile' | 'foodLog' | 'biomarkerLog' | 'actions' | 'dailyBenefits' | 'foodIdeas' | 'report' | 'deleteFood' | 'deleteBiomarker';
+      type: 'profile' | 'foodLog' | 'biomarkerLog' | 'actions' | 'dailyBenefits' | 'foodIdeas' | 'report' | 'deleteFood' | 'deleteBiomarker' | 'multi' | 'fullPush' | 'analysis' | 'deleteAnalysis';
       targetId?: string;
     },
     currFoodIdeas: FoodIdea[] = foodIdeas
@@ -1087,7 +1103,6 @@ export default function App() {
       // Keep local state in sync immediately with the timestamped profile
       setProfile(updatedProfile);
     }
-
     // Save to Local Storage first (Local Save before Upload)
     const bundle = {
       profile: updatedProfile,
@@ -1101,125 +1116,224 @@ export default function App() {
     };
     safeSaveToLocalStorage(LOCAL_STORAGE_KEY, bundle);
 
+    const profileForCloud = updatedProfile ? { ...updatedProfile } : null;
+    if (profileForCloud && profileForCloud.agentAnalyses) {
+      delete profileForCloud.agentAnalyses;
+    }
+
     if (!updatedProfile || !auth.currentUser) {
       setSyncState('local');
       return;
     }
-
+    if (isFirestoreQuotaExceeded) {
+      setSyncState('local');
+      return;
+    }
     setSyncState('syncing');
     const uid = auth.currentUser.uid;
     const syncRootId = logInteraction('sync', `users/${uid} (${specificUpdate ? specificUpdate.type : 'Save changes'})`, null);
-
     try {
-      if (specificUpdate) {
-        // For non-profile updates, we also trigger a quick setDoc on profile to bump lastUpdatedAt in the cloud
-        if (specificUpdate.type !== 'profile') {
+      if (specificUpdate && specificUpdate.type !== 'multi' && specificUpdate.type !== 'fullPush') {
+        // Only touch profile timestamp for critical metadata changes, never for high-frequency logs like foodLog or biomarkerLog
+        if (specificUpdate.type !== 'profile' && specificUpdate.type !== 'foodLog' && specificUpdate.type !== 'biomarkerLog') {
           setDoc(doc(db, 'users', uid), { lastUpdatedAt: now }, { merge: true }).catch(err => {
             console.warn("Failed to touch lastUpdatedAt timestamp in cloud:", err);
           });
         }
-
-        if (specificUpdate.type === 'profile') {
+        if (specificUpdate.type === 'analysis' && specificUpdate.targetId) {
+          const analysis = updatedProfile?.agentAnalyses?.find(a => a.id === specificUpdate.targetId);
+          if (analysis) {
+            const itemTrackId = logInteraction('upload', `users/${uid}/agentAnalyses/${analysis.id}`, analysis);
+            await withTimeout(
+              setDoc(doc(db, 'users', uid, 'agentAnalyses', analysis.id), cleanData(analysis))
+                .then(() => completeInteraction(itemTrackId, true, JSON.stringify(analysis).length))
+                .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+              2000,
+              'Analysis write'
+            );
+          }
+        } else if (specificUpdate.type === 'deleteAnalysis' && specificUpdate.targetId) {
+          const delTrackId = logInteraction('delete', `users/${uid}/agentAnalyses/${specificUpdate.targetId}`, null);
+          await withTimeout(
+            deleteDoc(doc(db, 'users', uid, 'agentAnalyses', specificUpdate.targetId))
+              .then(() => completeInteraction(delTrackId, true, 0))
+              .catch(err => { completeInteraction(delTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+            2000,
+            'Delete analysis'
+          );
+        } else if (specificUpdate.type === 'profile') {
           const pId = logInteraction('upload', `users/${uid} (Profile)`, updatedProfile);
-          await setDoc(doc(db, 'users', uid), cleanData(updatedProfile), { merge: true })
-            .then(() => completeInteraction(pId, true, JSON.stringify(updatedProfile).length))
-            .catch(err => { completeInteraction(pId, false, 0, err.message); console.error(err); });
+          await withTimeout(
+            setDoc(doc(db, 'users', uid), cleanData(profileForCloud))
+              .then(() => completeInteraction(pId, true, JSON.stringify(updatedProfile).length))
+              .catch(err => { completeInteraction(pId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+            2000,
+            'Profile write'
+          );
         } else if (specificUpdate.type === 'foodLog' && specificUpdate.targetId) {
           const f = currFoods.find(item => item.id === specificUpdate.targetId);
           if (f) {
             const itemTrackId = logInteraction('upload', `users/${uid}/foodLogs/${f.id}`, f);
-            await setDoc(doc(db, 'users', uid, 'foodLogs', f.id), cleanData(f))
-              .then(() => completeInteraction(itemTrackId, true, JSON.stringify(f).length))
-              .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); console.error(err); });
+            await withTimeout(
+              setDoc(doc(db, 'users', uid, 'foodLogs', f.id), cleanData(f))
+                .then(() => completeInteraction(itemTrackId, true, JSON.stringify(f).length))
+                .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+              2000,
+              'FoodLog write'
+            );
           }
         } else if (specificUpdate.type === 'biomarkerLog' && specificUpdate.targetId) {
           const b = currBioHistory.find(item => item.id === specificUpdate.targetId);
           if (b) {
             const itemTrackId = logInteraction('upload', `users/${uid}/biomarkerHistory/${b.id}`, b);
-            await setDoc(doc(db, 'users', uid, 'biomarkerHistory', b.id), cleanData(b))
-              .then(() => completeInteraction(itemTrackId, true, JSON.stringify(b).length))
-              .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); console.error(err); });
+            await withTimeout(
+              setDoc(doc(db, 'users', uid, 'biomarkerHistory', b.id), cleanData(b))
+                .then(() => completeInteraction(itemTrackId, true, JSON.stringify(b).length))
+                .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+              2000,
+              'BiomarkerLog write'
+            );
           }
         } else if (specificUpdate.type === 'actions') {
           const itemTrackId = logInteraction('upload', `users/${uid}/metadata/dashboard (Actions)`, null);
-          await setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), { actions: currActions.map(cleanData) }, { merge: true })
-            .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currActions).length))
-            .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); console.error(err); });
+          await withTimeout(
+            setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), { actions: currActions.map(cleanData) }, { merge: true })
+              .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currActions).length))
+              .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+            2000,
+            'Actions write'
+          );
         } else if (specificUpdate.type === 'dailyBenefits') {
           const itemTrackId = logInteraction('upload', `users/${uid}/metadata/dashboard (Benefits)`, null);
-          await setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), { dailyBenefits: currBenefits.map(cleanData) }, { merge: true })
-            .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currBenefits).length))
-            .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); console.error(err); });
+          await withTimeout(
+            setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), { dailyBenefits: currBenefits.map(cleanData) }, { merge: true })
+              .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currBenefits).length))
+              .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+            2000,
+            'DailyBenefits write'
+          );
         } else if (specificUpdate.type === 'foodIdeas') {
           const itemTrackId = logInteraction('upload', `users/${uid}/metadata/dashboard (FoodIdeas)`, null);
-          await setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), { foodIdeas: currFoodIdeas.map(cleanData) }, { merge: true })
-            .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currFoodIdeas).length))
-            .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); console.error(err); });
+          await withTimeout(
+            setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), { foodIdeas: currFoodIdeas.map(cleanData) }, { merge: true })
+              .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currFoodIdeas).length))
+              .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+            2000,
+            'FoodIdeas write'
+          );
         } else if (specificUpdate.type === 'report' && currReport) {
           const itemTrackId = logInteraction('upload', `users/${uid}/reports/latest`, currReport);
-          await setDoc(doc(db, 'users', uid, 'reports', 'latest'), cleanData(currReport))
-            .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currReport).length))
-            .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); console.error(err); });
+          await withTimeout(
+            setDoc(doc(db, 'users', uid, 'reports', 'latest'), cleanData(currReport))
+              .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currReport).length))
+              .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+            2000,
+            'Report write'
+          );
           
           const dashTrackId = logInteraction('upload', `users/${uid}/metadata/dashboard (Report Update)`, null);
-          await setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), {
-            actions: currActions.map(cleanData),
-            dailyBenefits: currBenefits.map(cleanData)
-          }, { merge: true }).catch(console.error);
+          await withTimeout(
+            setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), {
+              actions: currActions.map(cleanData),
+              dailyBenefits: currBenefits.map(cleanData)
+            }).catch(console.error),
+            2000,
+            'Dashboard report sync'
+          );
         } else if (specificUpdate.type === 'deleteFood' && specificUpdate.targetId) {
           const delTrackId = logInteraction('delete', `users/${uid}/foodLogs/${specificUpdate.targetId}`, null);
-          await deleteDoc(doc(db, 'users', uid, 'foodLogs', specificUpdate.targetId))
-            .then(() => completeInteraction(delTrackId, true, 0))
-            .catch(err => { completeInteraction(delTrackId, false, 0, err.message); console.error(err); });
+          await withTimeout(
+            deleteDoc(doc(db, 'users', uid, 'foodLogs', specificUpdate.targetId))
+              .then(() => completeInteraction(delTrackId, true, 0))
+              .catch(err => { completeInteraction(delTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+            2000,
+            'Delete foodLog'
+          );
         } else if (specificUpdate.type === 'deleteBiomarker' && specificUpdate.targetId) {
           const delTrackId = logInteraction('delete', `users/${uid}/biomarkerHistory/${specificUpdate.targetId}`, null);
-          await deleteDoc(doc(db, 'users', uid, 'biomarkerHistory', specificUpdate.targetId))
-            .then(() => completeInteraction(delTrackId, true, 0))
-            .catch(err => { completeInteraction(delTrackId, false, 0, err.message); console.error(err); });
+          await withTimeout(
+            deleteDoc(doc(db, 'users', uid, 'biomarkerHistory', specificUpdate.targetId))
+              .then(() => completeInteraction(delTrackId, true, 0))
+              .catch(err => { completeInteraction(delTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+            2000,
+            'Delete biomarkerHistory'
+          );
         }
-      } else {
+      } else if (specificUpdate && specificUpdate.type === 'fullPush') {
         const pId = logInteraction('upload', `users/${uid} (Profile)`, currProfile);
-        const profilePromise = setDoc(doc(db, 'users', uid), cleanData(currProfile), { merge: true })
+        const profilePromise = setDoc(doc(db, 'users', uid), cleanData(profileForCloud))
           .then(() => completeInteraction(pId, true, JSON.stringify(currProfile).length))
-          .catch(err => completeInteraction(pId, false, 0, err.message));
+          .catch(err => { completeInteraction(pId, false, 0, err.message); handleFirestoreError(err); });
         
-        // DANGEROUS: Do NOT mass-overwrite foodLogs and biomarkerHistory here.
-        // They are synced granularly via specificUpdate. Mass overwriting from local state
-        // risks permanently deleting images/fields if the local React state was stale.
-        
+        const foodPromises = currFoods.map(f => 
+          setDoc(doc(db, 'users', uid, 'foodLogs', f.id), cleanData(f)).catch(err => { handleFirestoreError(err); console.error(err); })
+        );
+        const bioPromises = currBioHistory.map(b => 
+          setDoc(doc(db, 'users', uid, 'biomarkerHistory', b.id), cleanData(b)).catch(err => { handleFirestoreError(err); console.error(err); })
+        );
         const dashboardPromise = setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), {
           actions: currActions.map(cleanData),
           dailyBenefits: currBenefits.map(cleanData),
           foodIdeas: currFoodIdeas.map(cleanData)
-        }, { merge: true });
-        
+        }, { merge: true }).catch(err => { handleFirestoreError(err); console.error(err); });
         let reportPromise = Promise.resolve();
         if (currReport) {
           const itemTrackId = logInteraction('upload', `users/${uid}/reports/latest`, currReport);
           reportPromise = setDoc(doc(db, 'users', uid, 'reports', 'latest'), cleanData(currReport))
             .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currReport).length))
-            .catch(err => completeInteraction(itemTrackId, false, 0, err.message));
+            .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); });
         }
-
-        // Await these promises so data is not lost on reload
-        await Promise.all([
-          profilePromise,
-          dashboardPromise,
-          reportPromise
-        ]).catch(err => console.warn('Background sync warning:', err));
+        await withTimeout(
+          Promise.all([
+            profilePromise,
+            dashboardPromise,
+            reportPromise,
+            ...foodPromises,
+            ...bioPromises
+          ]),
+          3000,
+          'FullPush sync'
+        ).catch(err => console.warn('Background sync warning:', err));
+      } else {
+        // Multi-document sync (default when no specific update provided)
+        const pId = logInteraction('upload', `users/${uid} (Profile)`, currProfile);
+        const profilePromise = setDoc(doc(db, 'users', uid), cleanData(profileForCloud))
+          .then(() => completeInteraction(pId, true, JSON.stringify(currProfile).length))
+          .catch(err => { completeInteraction(pId, false, 0, err.message); handleFirestoreError(err); });
+        
+        const dashboardPromise = setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), {
+          actions: currActions.map(cleanData),
+          dailyBenefits: currBenefits.map(cleanData),
+          foodIdeas: currFoodIdeas.map(cleanData)
+        }, { merge: true }).catch(err => { handleFirestoreError(err); console.error(err); });
+        let reportPromise = Promise.resolve();
+        if (currReport) {
+          const itemTrackId = logInteraction('upload', `users/${uid}/reports/latest`, currReport);
+          reportPromise = setDoc(doc(db, 'users', uid, 'reports', 'latest'), cleanData(currReport))
+            .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currReport).length))
+            .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); });
+        }
+        await withTimeout(
+          Promise.all([
+            profilePromise,
+            dashboardPromise,
+            reportPromise
+          ]),
+          3000,
+          'Multi sync'
+        ).catch(err => console.warn('Background sync warning:', err));
       }
-
       // Artificially enforce a minimum rotation time of 800ms so the user gets clear visual confirmation
       await new Promise(resolve => setTimeout(resolve, 800));
       setSyncState('synced');
       completeInteraction(syncRootId, true, 0);
     } catch (e: any) {
       console.error("[Sync Save Fail]", e);
+      handleFirestoreError(e);
       setSyncState('local');
       completeInteraction(syncRootId, false, 0, e.message || 'Save error');
     }
   };
-
   // Sync Check on Login / Fetch user record if existing on server
   const handleLogin = async (loggedProfile: UserProfile) => {
     setProfile(loggedProfile);
@@ -1229,7 +1343,6 @@ export default function App() {
       setSyncState('synced');
     }
   };
-
   const handleSignOut = async () => {
     try {
       await fbSignOut(auth);
@@ -1239,7 +1352,6 @@ export default function App() {
       console.error("Failed to sign out from Firebase:", e);
     }
   };
-
   // Selected LLM Engine shared across sections - highest RPD model is the default, and we persist the user selection
   const [selectedModelId, setSelectedModelIdState] = useState<string>(() => {
     const saved = localStorage.getItem('selectedModelId');
@@ -1247,12 +1359,10 @@ export default function App() {
     // Default is the one with the highest RPD
     return AVAILABLE_LLMS[0]?.id || 'gemini-3.1-flash-lite';
   });
-
   const setSelectedModelId = (id: string) => {
     setSelectedModelIdState(id);
     localStorage.setItem('selectedModelId', id);
   };
-
   // Add / Edit logs handlers
   const handleLogFood = async (food: FoodLog) => {
     const updatedFoods = [...foodLogs, food];
@@ -1261,19 +1371,16 @@ export default function App() {
     setActiveTab('home');
     await saveAndSync(profile, updatedFoods, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'foodLog', targetId: food.id });
   };
-
   const handleUpdateFoodLog = async (updatedLog: FoodLog) => {
     const updatedFoods = foodLogs.map(f => f.id === updatedLog.id ? updatedLog : f);
     setFoodLogs(updatedFoods);
     await saveAndSync(profile, updatedFoods, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'foodLog', targetId: updatedLog.id });
   };
-
   const handleDeleteFoodLog = async (id: string) => {
     const updatedFoods = foodLogs.filter(f => f.id !== id);
     setFoodLogs(updatedFoods);
     await saveAndSync(profile, updatedFoods, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'deleteFood', targetId: id });
   };
-
   const logBmiIfProfileWeightHeightChanged = (
     prev: UserProfile | null,
     next: UserProfile,
@@ -1283,18 +1390,14 @@ export default function App() {
     const weightChanged = !prev || next.weight !== prev.weight;
     const heightChanged = !prev || next.height !== prev.height;
     const hasNoBmi = !biomarks.bmi || !history.some(h => h.biomarkers && h.biomarkers.bmi !== undefined);
-
     let updatedHistory = [...history];
     let updatedBiomarkers = { ...biomarks };
-
     if ((weightChanged || heightChanged || hasNoBmi) && next.weight && next.height) {
       const heightInMeters = Number(next.height) / 100;
       const bmiScore = Number(next.weight) / (heightInMeters * heightInMeters);
       const roundedBmi = parseFloat(bmiScore.toFixed(1));
-
       const recordDate = getCurrentDateInTimezone(next.timezone || (prev && prev.timezone));
       const existingLogIndex = updatedHistory.findIndex(h => h.date === recordDate);
-
       if (existingLogIndex >= 0) {
         updatedHistory[existingLogIndex] = {
           ...updatedHistory[existingLogIndex],
@@ -1316,10 +1419,8 @@ export default function App() {
       updatedHistory.sort((a, b) => b.date.localeCompare(a.date));
       updatedBiomarkers.bmi = roundedBmi;
     }
-
     return { updatedHistory, updatedBiomarkers, changed: weightChanged || heightChanged || hasNoBmi };
   };
-
   const handleLogMedical = async (
     extractedBiomarkers: { [key: string]: number | string }, 
     profileUpdates?: Partial<UserProfile>, 
@@ -1330,25 +1431,18 @@ export default function App() {
     let currentProfile = profile;
     let updatedHistory = [...biomarkerHistory];
     let updatedBiomarkers = { ...biomarkers };
-
     // Standardize and normalize extracted biomarkers and custom definitions
     let finalExtracted = { ...extractedBiomarkers };
     let finalProfileUpdates = profileUpdates ? { ...profileUpdates } : undefined;
-
     const cleanName = (n: string): string => n.split('(')[0].split('[')[0].trim();
-
     const keyMapping: { [key: string]: string } = {};
-
     if (finalProfileUpdates && finalProfileUpdates.customBiomarkers && Object.keys(finalProfileUpdates.customBiomarkers).length > 0) {
       const currentCustoms = { ...(profile?.customBiomarkers || {}) };
       const nextCustomDefs: { [key: string]: any } = {};
-
       Object.entries(finalProfileUpdates.customBiomarkers).forEach(([rawKey, def]) => {
         const rawName = def.name || rawKey;
         const cleaned = cleanName(rawName);
-
         const normalizeUnit = (u: string) => (u || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
         // Check standard match
         const stdMatch = biomarkerDefinitions.find(d => {
           const nameMatch = d.name.toLowerCase() === cleaned.toLowerCase() || d.key.toLowerCase() === cleaned.toLowerCase() || cleanName(d.name).toLowerCase() === cleaned.toLowerCase();
@@ -1359,14 +1453,12 @@ export default function App() {
           keyMapping[rawKey] = stdMatch.key;
           return; // Map to standard key, drop custom def
         }
-
         // Check existing custom match
         const existingKey = Object.keys(currentCustoms).find(k => {
           const nameMatch = cleanName(currentCustoms[k]?.name || '').toLowerCase() === cleaned.toLowerCase();
           const keyMatch = k.toLowerCase() === cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
           return nameMatch || keyMatch;
         });
-
         if (existingKey) {
           keyMapping[rawKey] = existingKey;
           currentCustoms[existingKey] = {
@@ -1376,7 +1468,6 @@ export default function App() {
           };
           return;
         }
-
         // Create new safe key
         const safeKey = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
         let targetKey = safeKey || rawKey;
@@ -1393,20 +1484,16 @@ export default function App() {
           name: cleaned
         };
       });
-
       finalProfileUpdates.customBiomarkers = {
         ...currentCustoms,
         ...nextCustomDefs
       };
     }
-
     const entriesToProcess = entries && entries.length > 0
       ? entries
       : [{ date: date || null, biomarkers: finalExtracted }];
-
     let hasNewBiomarkers = false;
     let targetId: string | undefined = undefined;
-
     if (modificationCommand && modificationCommand.length > 0) {
       let madeChanges = false;
       modificationCommand.forEach(cmd => {
@@ -1447,14 +1534,12 @@ export default function App() {
         entriesToProcess.length = 0; // Skip
       }
     }
-
     entriesToProcess.forEach(entry => {
       // Standardize extracted keys
       const mappedExtracted: { [key: string]: number | string } = {};
       Object.entries(entry.biomarkers || {}).forEach(([rawKey, val]) => {
         // Ignore age, height, weight from extracted biomarkers
         if (rawKey === 'weight' || rawKey === 'height' || rawKey === 'age') return;
-
         if (biomarkerDefinitions.some(d => d.key === rawKey)) {
           mappedExtracted[rawKey] = val;
           return;
@@ -1463,7 +1548,6 @@ export default function App() {
           mappedExtracted[keyMapping[rawKey]] = val;
           return;
         }
-
         // Check name match directly
         const cleaned = cleanName(rawKey.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '));
         const stdMatch = biomarkerDefinitions.find(d => d.name.toLowerCase() === cleaned.toLowerCase() || cleanName(d.name).toLowerCase() === cleaned.toLowerCase());
@@ -1471,19 +1555,16 @@ export default function App() {
           mappedExtracted[stdMatch.key] = val;
           return;
         }
-
         const existingCustoms = { ...(profile?.customBiomarkers || {}) };
         const custMatchKey = Object.keys(existingCustoms).find(k => cleanName(existingCustoms[k]?.name || '').toLowerCase() === cleaned.toLowerCase());
         if (custMatchKey) {
           mappedExtracted[custMatchKey] = val;
           return;
         }
-
         const safeKey = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
         const finalKey = safeKey || rawKey;
         mappedExtracted[finalKey] = val;
       });
-
       if (Object.keys(mappedExtracted).length > 0) {
         hasNewBiomarkers = true;
         const recordDate = entry.date || getCurrentDateInTimezone(profile?.timezone);
@@ -1506,7 +1587,6 @@ export default function App() {
         }
       }
     });
-
     if (finalProfileUpdates && Object.keys(finalProfileUpdates).length > 0) {
       if (typeof finalProfileUpdates.age === 'string') finalProfileUpdates.age = parseFloat(finalProfileUpdates.age) || finalProfileUpdates.age;
       if (typeof finalProfileUpdates.weight === 'string') finalProfileUpdates.weight = parseFloat(finalProfileUpdates.weight) || finalProfileUpdates.weight;
@@ -1520,13 +1600,10 @@ export default function App() {
       setBiomarkerHistory(updatedHistory);
       setBiomarkers(updatedBiomarkers);
     }
-
     if (hasNewBiomarkers) {
       // Sort history by date descending
       updatedHistory.sort((a, b) => b.date.localeCompare(a.date));
-
       setBiomarkerHistory(updatedHistory);
-
       // Recompute the latest biomarkers from history so they reflect the latest dates (sorted ascending)
       const recomputedBiomarkers: { [key: string]: number | string } = {};
       [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
@@ -1535,10 +1612,8 @@ export default function App() {
         });
       });
       setBiomarkers(recomputedBiomarkers);
-
       setIsMedicalChatOpen(false);
       setActiveTab('home');
-
       await saveAndSync(currentProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog', targetId });
     } else {
       setIsMedicalChatOpen(false);
@@ -1546,11 +1621,165 @@ export default function App() {
       await saveAndSync(currentProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
     }
   };
+  const handleDeleteBiomarker = async (key: string) => {
+    const updatedBiomarkers = { ...biomarkers };
+    delete updatedBiomarkers[key];
+    
+    const logsToDelete: string[] = [];
+    let updatedHistory = biomarkerHistory.map(log => {
+      const cleanBiomarkers = { ...log.biomarkers };
+      if (cleanBiomarkers[key] !== undefined) {
+        delete cleanBiomarkers[key];
+        if (Object.keys(cleanBiomarkers).length === 0 && !log.note) {
+          logsToDelete.push(log.id);
+        }
+      }
+      return { ...log, biomarkers: cleanBiomarkers };
+    });
+    
+    updatedHistory = updatedHistory.filter(log => !logsToDelete.includes(log.id));
+    setBiomarkers(updatedBiomarkers);
+    setBiomarkerHistory(updatedHistory);
+    let updatedProfile = { ...profile } as UserProfile;
+    if (updatedProfile.customBiomarkers && updatedProfile.customBiomarkers[key]) {
+      const newCustoms = { ...updatedProfile.customBiomarkers };
+      delete newCustoms[key];
+      updatedProfile.customBiomarkers = newCustoms;
+      setProfile(updatedProfile);
+    }
+    if (auth.currentUser) {
+      const uid = auth.currentUser.uid;
+      try {
+        for (const logId of logsToDelete) {
+          await deleteDoc(doc(db, 'users', uid, 'biomarkerHistory', logId));
+        }
+        const logsToUpdate = updatedHistory.filter(log => biomarkerHistory.find(old => old.id === log.id)?.biomarkers[key] !== undefined);
+        for (const log of logsToUpdate) {
+          await setDoc(doc(db, 'users', uid, 'biomarkerHistory', log.id), cleanData(log));
+        }
+      } catch (err) {
+        console.error("Failed to delete biomarker from Firestore:", err);
+      }
+    }
+    await saveAndSync(updatedProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
+  };
+  const handleDeleteEmptyBiomarkers = async () => {
+    let updatedProfile = { ...profile } as UserProfile;
+    let modifiedProfile = false;
+    let modifiedBiomarkers = false;
 
+    const logsToDelete: string[] = [];
+    const logsToUpdate: BiomarkerLog[] = [];
+
+    // 1. Clean history: remove empty values from logs.
+    let updatedHistory = biomarkerHistory.map(log => {
+      const cleanBiomarkers = { ...log.biomarkers };
+      let logChanged = false;
+
+      Object.keys(cleanBiomarkers).forEach(key => {
+        const val = cleanBiomarkers[key];
+        // Delete if it has no useful value
+        if (val === undefined || val === null || val === '' || Number.isNaN(val) || (typeof val === 'string' && val.trim() === '')) {
+          delete cleanBiomarkers[key];
+          logChanged = true;
+        }
+      });
+
+      if (logChanged) {
+        if (Object.keys(cleanBiomarkers).length === 0 && !log.note) {
+          logsToDelete.push(log.id);
+        } else {
+          logsToUpdate.push({ ...log, biomarkers: cleanBiomarkers });
+        }
+        return { ...log, biomarkers: cleanBiomarkers };
+      }
+      return log;
+    });
+
+    updatedHistory = updatedHistory.filter(log => !logsToDelete.includes(log.id));
+
+    // 2. Determine which keys actually have data remaining
+    const usedKeys = new Set<string>();
+    updatedHistory.forEach(log => {
+      Object.keys(log.biomarkers).forEach(key => usedKeys.add(key));
+    });
+
+    // 3. Clean customBiomarkers
+    if (updatedProfile.customBiomarkers) {
+      const newCustoms = { ...updatedProfile.customBiomarkers };
+      Object.keys(newCustoms).forEach(key => {
+        if (!usedKeys.has(key)) {
+          delete newCustoms[key];
+          modifiedProfile = true;
+        }
+      });
+      if (modifiedProfile) {
+        updatedProfile.customBiomarkers = newCustoms;
+      }
+    }
+
+    // 4. Recompute the biomarkers state
+    const recomputedBiomarkers: { [key: string]: number | string } = {};
+    [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+      Object.entries(log.biomarkers).forEach(([k, v]) => {
+        recomputedBiomarkers[k] = v;
+      });
+    });
+
+    // Detect if current biomarkers state changed
+    const currentKeys = Object.keys(biomarkers);
+    const newKeys = Object.keys(recomputedBiomarkers);
+    if (currentKeys.length !== newKeys.length || currentKeys.some(k => biomarkers[k] !== recomputedBiomarkers[k])) {
+      modifiedBiomarkers = true;
+    }
+
+    if (logsToDelete.length === 0 && logsToUpdate.length === 0 && !modifiedProfile && !modifiedBiomarkers) {
+      return; // Nothing to change
+    }
+
+    if (modifiedProfile) setProfile(updatedProfile);
+    if (modifiedBiomarkers) setBiomarkers(recomputedBiomarkers);
+    setBiomarkerHistory(updatedHistory);
+
+    if (auth.currentUser) {
+      const uid = auth.currentUser.uid;
+      try {
+        let batch = writeBatch(db);
+        let opCount = 0;
+
+        for (const logId of logsToDelete) {
+          batch.delete(doc(db, 'users', uid, 'biomarkerHistory', logId));
+          opCount++;
+          if (opCount === 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
+        }
+
+        for (const log of logsToUpdate) {
+          batch.set(doc(db, 'users', uid, 'biomarkerHistory', log.id), cleanData(log));
+          opCount++;
+          if (opCount === 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
+        }
+
+        if (opCount > 0) {
+          await batch.commit();
+        }
+      } catch (err) {
+        console.error("Failed to delete empty biomarkers from Firestore:", err);
+      }
+    }
+
+    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
+  };
   const handleDeleteBiomarkerLog = async (id: string) => {
     const updatedHistory = biomarkerHistory.filter(b => b.id !== id);
     setBiomarkerHistory(updatedHistory);
-
     const recomputedBiomarkers: { [key: string]: number | string } = {};
     [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
@@ -1558,10 +1787,8 @@ export default function App() {
       });
     });
     setBiomarkers(recomputedBiomarkers);
-
     await saveAndSync(profile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'deleteBiomarker', targetId: id });
   };
-
   const handleEditBiomarkerLog = async (id: string, key: string, value: string | number, newDate?: string) => {
     const updatedHistory = biomarkerHistory.map(log => {
       if (log.id === id) {
@@ -1577,11 +1804,8 @@ export default function App() {
       }
       return log;
     });
-
     updatedHistory.sort((a, b) => b.date.localeCompare(a.date));
-
     setBiomarkerHistory(updatedHistory);
-
     const recomputedBiomarkers: { [key: string]: number | string } = {};
     [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
@@ -1589,10 +1813,8 @@ export default function App() {
       });
     });
     setBiomarkers(recomputedBiomarkers);
-
     await saveAndSync(profile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog', targetId: id });
   };
-
   const handleCombineBiomarkers = async (
     targetKey: string,
     targetDef: { name: string; unit: string; normalRange: string; description: string },
@@ -1604,7 +1826,6 @@ export default function App() {
     sourceKeysToDelete.forEach(k => {
       delete updatedCustomBiomarkers[k];
     });
-
     const isStandard = biomarkerDefinitions.some(d => d.key === targetKey);
     if (!isStandard) {
       updatedCustomBiomarkers[targetKey] = {
@@ -1615,12 +1836,10 @@ export default function App() {
         benefitRisk: ''
       };
     }
-
     const updatedProfile: UserProfile = {
       ...profile,
       customBiomarkers: updatedCustomBiomarkers
     };
-
     // 2. Remove old keys from history and merge the consolidated logs
     let updatedHistory = biomarkerHistory.map(log => {
       const cleanBiomarkers = { ...log.biomarkers };
@@ -1632,7 +1851,6 @@ export default function App() {
         biomarkers: cleanBiomarkers
       };
     });
-
     // Merge Consolidated
     mergedLogs.forEach(ml => {
       let existingIndex = -1;
@@ -1642,7 +1860,6 @@ export default function App() {
       if (existingIndex < 0) {
         existingIndex = updatedHistory.findIndex(h => h.date === ml.date);
       }
-
       if (existingIndex >= 0) {
         updatedHistory[existingIndex] = {
           ...updatedHistory[existingIndex],
@@ -1661,11 +1878,9 @@ export default function App() {
         });
       }
     });
-
     // Clean completely empty history logs
     updatedHistory = updatedHistory.filter(h => Object.keys(h.biomarkers).length > 0);
     updatedHistory.sort((a, b) => b.date.localeCompare(a.date));
-
     // 3. Recompute latest biomarkers
     const recomputedBiomarkers: { [key: string]: number | string } = {};
     [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
@@ -1673,14 +1888,11 @@ export default function App() {
         recomputedBiomarkers[k] = v as string | number;
       });
     });
-
     setProfile(updatedProfile);
     setBiomarkerHistory(updatedHistory);
     setBiomarkers(recomputedBiomarkers);
-
     await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
   };
-
   const handleApplyCalculation = async (updates: {
     targetCalories?: number;
     targetWeight?: number;
@@ -1703,7 +1915,6 @@ export default function App() {
         setDailyBenefits(updatedBenefits);
       }
     }
-
     let updatedReport = report ? { ...report } : getLocalFallbackReport(profile);
     if (updates.targetCalories && updatedReport) {
       updatedReport = {
@@ -1715,7 +1926,6 @@ export default function App() {
       };
       setReport(updatedReport);
     }
-
     let updatedHistory = [...biomarkerHistory];
     const latestBmiLogIndex = updatedHistory.findIndex(h => h.biomarkers.bmi !== undefined);
     if (latestBmiLogIndex >= 0 && updates.descriptionExplain) {
@@ -1724,8 +1934,9 @@ export default function App() {
         note: updates.descriptionExplain
       };
       setBiomarkerHistory(updatedHistory);
+      // Quickly save this log since multi-sync skips collections
+      saveAndSync(profile, foodLogs, biomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog', targetId: updatedHistory[latestBmiLogIndex].id }).catch(console.error);
     }
-
     let updatedProfile = { ...profile };
     const isAsian = isAsianEthnicity(updatedProfile.ethnicity);
     const gender = (updatedProfile.gender || 'male').toLowerCase();
@@ -1733,7 +1944,6 @@ export default function App() {
     const targetBmi = isAsian ? 21.0 : (isMale ? 22.5 : 21.7);
     const targetRange = isAsian ? '18.5 - 22.9' : '18.5 - 24.9';
     const targetWeight = updates.targetWeight || Math.round(targetBmi * Math.pow((updatedProfile.height || 170) / 100, 2) * 10) / 10;
-
     if (targetWeight) {
       if (!updatedProfile.customBiomarkers) {
         updatedProfile.customBiomarkers = {};
@@ -1755,10 +1965,8 @@ export default function App() {
       }
       setProfile(updatedProfile);
     }
-
     await saveAndSync(updatedProfile, foodLogs, biomarkers, updatedHistory, actions, updatedBenefits, updatedReport);
   };
-
   // Accept and apply recommendations to active dashboard targets
   const handleAcceptReport = async (acceptedReport: RecommendationReport) => {
     setReport(acceptedReport);
@@ -1781,11 +1989,9 @@ export default function App() {
     // Auto-navigate to dashboard for glorious preview of newly updated targets
     setActiveTab('home');
   };
-
   const handleRejectReport = () => {
     setDraftReport(null);
   };
-
   // Run On-demand Insights Totality analysis with LLM Selection
   const handleGenerateReport = async (modelId: string, refinement?: { message: string, chatHistory: any[] }) => {
     setIsGenerating(true);
@@ -1793,7 +1999,6 @@ export default function App() {
     const timeoutId = setTimeout(() => {
       controller.abort();
     }, 18000); // 18-second robust timeout
-
     try {
       const response = await fetch('/api/gemini/insight-analyze', {
         method: 'POST',
@@ -1807,11 +2012,9 @@ export default function App() {
         }),
         signal: controller.signal
       });
-
       clearTimeout(timeoutId);
       const resData = await response.json();
       if (resData.error) throw new Error(resData.error);
-
       if (resData.report) {
         setDraftReport(resData.report);
       }
@@ -1831,7 +2034,6 @@ export default function App() {
       setIsGenerating(false);
     }
   };
-
   // Render Screens based on active tab
   if (isAuthChecking) {
     return (
@@ -1843,16 +2045,13 @@ export default function App() {
       </div>
     );
   }
-
   if (!profile) {
     return <AuthScreen onLogin={handleLogin} />;
   }
-
   // Floating Action Button (FAB) rules:
   // - Home, Food, Trends tabs show '+' for adding food log.
   // - Medical, Insights tabs show 'Medical icon' for adding medical records chat logs.
   const isMedicalTabFAB = ['medical', 'insights'].includes(activeTab);
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col transition-colors duration-200">
       <style dangerouslySetInnerHTML={{ __html: getDynamicStyles(profile) }} />
@@ -1895,7 +2094,46 @@ export default function App() {
         foodLogs={foodLogs}
         activeTab={activeTab}
       />
-
+      {isFirestoreQuotaExceeded && (
+        <div className="bg-amber-500 text-white py-2 px-4 shadow-md transition-all duration-300 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left z-20 border-b border-amber-600/20">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-1.5 rounded-lg shrink-0">
+              <CloudLightning className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-xs font-bold leading-normal text-left">
+                Cloud Sync Limit Exceeded (Offline Mode Active)
+              </p>
+              <p className="text-[10px] text-white/90 text-left">
+                You reached your daily free Firestore write limit. Don't worry! Your clinical data, logs, and preferences are fully saved locally in your browser.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                // Clear the mock/quota flag and retry sync
+                localStorage.removeItem('firestore_quota_exceeded');
+                setIsFirestoreQuotaExceeded(false);
+                setSyncState('syncing');
+                await checkForDbChanges();
+              }}
+              className="px-3 py-1 bg-white hover:bg-slate-100 text-amber-700 font-bold text-[10px] rounded-lg transition-all shadow-sm shrink-0 cursor-pointer"
+            >
+              Retry Sync
+            </button>
+            <button
+              onClick={() => {
+                setIsFirestoreQuotaExceeded(false);
+              }}
+              className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] rounded-lg transition-all shrink-0 cursor-pointer"
+              title="Dismiss warning bar"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
       {/* Main Viewport Container */}
       <main className="flex-1 overflow-x-hidden">
         {activeTab === 'home' && (
@@ -1937,7 +2175,6 @@ export default function App() {
             onApplyCalculation={handleApplyCalculation}
           />
         )}
-
         {activeTab === 'insights' && (
           <InsightsTab
             profile={profile}
@@ -1953,7 +2190,41 @@ export default function App() {
             onGenerateReport={handleGenerateReport}
             isGenerating={isGenerating}
             onNavigateToTab={setActiveTab}
-            onOpenMedicalChat={() => setIsMedicalChatOpen(true)}
+                        onOpenMedicalChat={() => setIsMedicalChatOpen(true)}
+            onUpdateProfile={async (updatedProfile) => {
+              setProfile(updatedProfile);
+              await saveAndSync(updatedProfile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report);
+            }}
+            onUpdateHistory={async (updatedHistory, newBiomarkers, updatedProfileArg) => {
+              setBiomarkerHistory(updatedHistory);
+              setBiomarkers(newBiomarkers);
+              if (updatedProfileArg) setProfile(updatedProfileArg);
+              
+              // Diff history to find what changed to save writes
+              const changedLogs = updatedHistory.filter(newLog => {
+                const oldLog = biomarkerHistory.find(old => old.id === newLog.id);
+                if (!oldLog) return true; // new log
+                return JSON.stringify(oldLog) !== JSON.stringify(newLog); // changed log
+              });
+              
+              if (changedLogs.length > 0 && auth.currentUser) {
+                const uid = auth.currentUser.uid;
+                let batch = writeBatch(db);
+                let opCount = 0;
+                for (const log of changedLogs) {
+                  batch.set(doc(db, 'users', uid, 'biomarkerHistory', log.id), cleanData(log));
+                  opCount++;
+                  if (opCount === 450) {
+                    await batch.commit();
+                    batch = writeBatch(db);
+                    opCount = 0;
+                  }
+                }
+                if (opCount > 0) await batch.commit();
+              }
+              
+              await saveAndSync(updatedProfileArg || profile, foodLogs, newBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'multi' });
+            }}
             batchSize={batchSize}
             onChangeBatchSize={(size) => {
               setBatchSize(size);
@@ -1974,7 +2245,7 @@ export default function App() {
                   agentAnalyses: profile.agentAnalyses.filter(a => a.id !== id)
                 };
                 setProfile(updatedProfile);
-                await saveAndSync(updatedProfile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report);
+                await saveAndSync(updatedProfile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'deleteAnalysis', targetId: id });
               }
             }}
             onArchiveAnalysis={async (id) => {
@@ -1984,12 +2255,11 @@ export default function App() {
                   agentAnalyses: profile.agentAnalyses.map(a => a.id === id ? { ...a, archived: true } : a)
                 };
                 setProfile(updatedProfile);
-                await saveAndSync(updatedProfile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report);
+                await saveAndSync(updatedProfile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'analysis', targetId: id });
               }
             }}
           />
         )}
-
         {activeTab === 'food' && (
           <FoodHistoryTab
             profile={profile}
@@ -2002,16 +2272,17 @@ export default function App() {
             onManualEntryOpenChange={setIsManualFoodLogOpen}
           />
         )}
-
         {activeTab === 'medical' && (
           <MedicalHistoryTab
             profile={profile}
             biomarkers={biomarkers}
             biomarkerHistory={biomarkerHistory}
             hideSensitive={hideSensitive}
-            onDeleteBiomarkerLog={handleDeleteBiomarkerLog}
+            onDeleteEmptyBiomarkers={handleDeleteEmptyBiomarkers}
             onEditBiomarkerLog={handleEditBiomarkerLog}
             onLogMedical={handleLogMedical}
+            onDeleteBiomarker={handleDeleteBiomarker}
+            onDeleteBiomarkerLog={handleDeleteBiomarkerLog}
             onCombineBiomarkers={handleCombineBiomarkers}
             onApplyCalculation={handleApplyCalculation}
             selectedModelId={selectedModelId}
@@ -2020,7 +2291,6 @@ export default function App() {
             onDismissBmiAlert={handleDismissBmiAlert}
           />
         )}
-
         {activeTab === 'trends' && (
           <TrendsTab
             profile={profile}
@@ -2031,7 +2301,6 @@ export default function App() {
           />
         )}
       </main>
-
       {/* Floating Action Button (FAB) Dock */}
       {!isEditingFoodLog && (
         <div className="fixed bottom-24 right-5 z-40">
@@ -2056,13 +2325,10 @@ export default function App() {
           )}
         </div>
       )}
-
       {/* Bottom Material Tab Bar (Icons only) */}
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-
       {/* Slide-over interactive dialogs */}
-      <LogChat
-        type="food"
+      <ErrorBoundary><LogChat type="food"
         profile={profile}
         isOpen={isFoodChatOpen}
         selectedModelId={selectedModelId}
@@ -2078,10 +2344,8 @@ export default function App() {
           setActiveTab('food');
           setIsManualFoodLogOpen(true);
         }}
-      />
-
-      <LogChat
-        key={`medical_${activeAgentType || 'general'}`}
+      /></ErrorBoundary>
+      <ErrorBoundary><LogChat key={`medical_${activeAgentType || 'general'}`}
         type="medical"
         profile={profile}
         isOpen={isMedicalChatOpen}
@@ -2103,86 +2367,104 @@ export default function App() {
         dataReviewBatchIdx={activeDataReviewBatchIdx}
         batchSize={batchSize}
         onAgentAnalysisSaved={async (agentType, agentResult) => {
+          const newId = `analysis_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
           const updatedProfile = { ...profile };
           if (!updatedProfile.agentAnalyses) {
             updatedProfile.agentAnalyses = [];
           }
           updatedProfile.agentAnalyses.push({
-            id: `analysis_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            id: newId,
             agentType: agentType,
             date: new Date().toISOString(),
             result: agentResult
           });
           setProfile(updatedProfile);
-          await saveAndSync(updatedProfile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report);
+          await saveAndSync(updatedProfile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'analysis', targetId: newId });
         }}
         onAgentFinish={async (agentType, agentResult) => {
           const updatedProfile = { ...profile };
           
           let currentHistory = [...biomarkerHistory];
-
           if (agentType === 'agent1') {
-            updatedProfile.agentTriageSummary = "Data extraction completed.";
-            
-            // Parse extractedYaml and merge into biomarkerHistory
-            const yamlText = agentResult.extractedYaml || agentResult;
-            if (typeof yamlText === 'string') {
-              const lines = yamlText.split('\n');
-              let currentEntry: any = {};
-              const entries: any[] = [];
+            const batchIdx = agentResult.batchIdx !== undefined && agentResult.batchIdx !== null 
+              ? agentResult.batchIdx 
+              : activeDataReviewBatchIdx;
+            if (batchIdx !== undefined && batchIdx !== null) {
+              // This is the batch-by-batch Data Cleaning!
+              // Store the raw YAML/JSON returned under agent1_batch_results
+              const savedResults = localStorage.getItem('agent1_batch_results');
+              let results: any = {};
+              try {
+                if (savedResults) results = JSON.parse(savedResults);
+              } catch (e) {}
               
-              for (let line of lines) {
-                line = line.trim();
-                if (line.startsWith('-') || line.startsWith('biomarker:')) {
-                  if (currentEntry.biomarker) entries.push(currentEntry);
-                  currentEntry = {};
-                }
-                const bioMatch = line.match(/(?:-\s+)?biomarker:\s*(.*)/i);
-                if (bioMatch) { currentEntry.biomarker = bioMatch[1].replace(/['"]/g, '').trim(); continue; }
-                const dateMatch = line.match(/date:\s*([\d-]+)/i);
-                if (dateMatch) { currentEntry.date = dateMatch[1].trim(); continue; }
-                const valMatch = line.match(/value:\s*([\d.]+)/i);
-                if (valMatch) { currentEntry.value = parseFloat(valMatch[1]); continue; }
-                const unitMatch = line.match(/unit:\s*(.*)/i);
-                if (unitMatch) { currentEntry.unit = unitMatch[1].replace(/['"]/g, '').trim(); continue; }
-              }
-              if (currentEntry.biomarker) entries.push(currentEntry);
+              const minimalResult = { ...agentResult };
+              delete minimalResult.agentPrompt;
+              results[batchIdx] = minimalResult;
+              try { localStorage.setItem('agent1_batch_results', JSON.stringify(results)); } catch(e){ console.warn("Quota exceeded agent1"); }
+            } else {
+              updatedProfile.agentTriageSummary = "Data extraction completed.";
               
-              entries.forEach(entry => {
-                const bioName = entry.biomarker.toLowerCase().replace(/[^a-z0-9]/g, '_');
-                let existingLogIndex = currentHistory.findIndex(h => h.date === entry.date);
-                if (existingLogIndex >= 0) {
-                  currentHistory[existingLogIndex].biomarkers[bioName] = entry.value;
-                } else {
-                  currentHistory.push({
-                    id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-                    date: entry.date,
-                    biomarkers: { [bioName]: entry.value },
-                    note: "Extracted by Clinical Data Parser"
-                  });
-                }
+              // Parse extractedYaml and merge into biomarkerHistory
+              const yamlText = agentResult.extractedYaml || agentResult;
+              if (typeof yamlText === 'string') {
+                const lines = yamlText.split('\n');
+                let currentEntry: any = {};
+                const entries: any[] = [];
                 
-                if (!updatedProfile.customBiomarkers) updatedProfile.customBiomarkers = {};
-                if (!updatedProfile.customBiomarkers[bioName]) {
-                  updatedProfile.customBiomarkers[bioName] = {
-                    name: entry.biomarker,
-                    unit: entry.unit || '',
-                    normalRange: 'Unknown',
-                    description: ''
-                  };
+                for (let line of lines) {
+                  line = line.trim();
+                  if (line.startsWith('-') || line.startsWith('biomarker:')) {
+                    if (currentEntry.biomarker) entries.push(currentEntry);
+                    currentEntry = {};
+                  }
+                  const bioMatch = line.match(/(?:-\s+)?biomarker:\s*(.*)/i);
+                  if (bioMatch) { currentEntry.biomarker = bioMatch[1].replace(/['"]/g, '').trim(); continue; }
+                  const dateMatch = line.match(/date:\s*([\d-]+)/i);
+                  if (dateMatch) { currentEntry.date = dateMatch[1].trim(); continue; }
+                  const valMatch = line.match(/value:\s*([\d.]+)/i);
+                  if (valMatch) { currentEntry.value = parseFloat(valMatch[1]); continue; }
+                  const unitMatch = line.match(/unit:\s*(.*)/i);
+                  if (unitMatch) { currentEntry.unit = unitMatch[1].replace(/['"]/g, '').trim(); continue; }
                 }
-              });
-              
-              currentHistory.sort((a, b) => b.date.localeCompare(a.date));
-              setBiomarkerHistory(currentHistory);
-              
-              const recomputedBiomarkers: { [key: string]: number | string } = {};
-              [...currentHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
-                Object.entries(log.biomarkers).forEach(([k, v]) => {
-                  recomputedBiomarkers[k] = v as string | number;
+                if (currentEntry.biomarker) entries.push(currentEntry);
+                
+                entries.forEach(entry => {
+                  const bioName = entry.biomarker.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                  let existingLogIndex = currentHistory.findIndex(h => h.date === entry.date);
+                  if (existingLogIndex >= 0) {
+                    currentHistory[existingLogIndex].biomarkers[bioName] = entry.value;
+                  } else {
+                    currentHistory.push({
+                      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                      date: entry.date,
+                      biomarkers: { [bioName]: entry.value },
+                      note: "Extracted by Clinical Data Parser"
+                    });
+                  }
+                  
+                  if (!updatedProfile.customBiomarkers) updatedProfile.customBiomarkers = {};
+                  if (!updatedProfile.customBiomarkers[bioName]) {
+                    updatedProfile.customBiomarkers[bioName] = {
+                      name: entry.biomarker,
+                      unit: entry.unit || '',
+                      normalRange: 'Unknown',
+                      description: ''
+                    };
+                  }
                 });
-              });
-              setBiomarkers(recomputedBiomarkers);
+                
+                currentHistory.sort((a, b) => b.date.localeCompare(a.date));
+                setBiomarkerHistory(currentHistory);
+                
+                const recomputedBiomarkers: { [key: string]: number | string } = {};
+                [...currentHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+                  Object.entries(log.biomarkers).forEach(([k, v]) => {
+                    recomputedBiomarkers[k] = v as string | number;
+                  });
+                });
+                setBiomarkers(recomputedBiomarkers);
+              }
             }
           } else if (agentType === 'agent2') {
              // Agent 2: Clinical Ontologist (Mapping)
@@ -2247,7 +2529,7 @@ export default function App() {
                 if (saved) approved = JSON.parse(saved);
               } catch (e) {}
               approved[batchIdx] = true;
-              localStorage.setItem('approved_data_review_batches', JSON.stringify(approved));
+              try { localStorage.setItem('approved_data_review_batches', JSON.stringify(approved)); } catch(e){ console.warn("Quota exceeded approved_data"); }
               
               // Also store the analysis result so the InsightsTab can display the result immediately!
               const savedResults = localStorage.getItem('batch_analysis_results');
@@ -2255,16 +2537,17 @@ export default function App() {
               try {
                 if (savedResults) results = JSON.parse(savedResults);
               } catch (e) {}
-              results[batchIdx] = agentResult;
-              localStorage.setItem('batch_analysis_results', JSON.stringify(results));
+              const minimalResult = { ...agentResult };
+              delete minimalResult.agentPrompt;
+              results[batchIdx] = minimalResult;
+              try { localStorage.setItem('batch_analysis_results', JSON.stringify(results)); } catch(e){ console.warn("Quota exceeded batch_analysis"); }
             }
           }
           
           setProfile(updatedProfile);
           await saveAndSync(updatedProfile, foodLogs, biomarkers, currentHistory, actions, dailyBenefits, report);
         }}
-      />
-
+      /></ErrorBoundary>
     </div>
   );
 }

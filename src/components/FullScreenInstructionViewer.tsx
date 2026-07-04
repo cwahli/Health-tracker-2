@@ -37,6 +37,7 @@ export default function FullScreenInstructionViewer({
 }: FullScreenInstructionViewerProps) {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [sysInstruction, setSysInstruction] = useState('');
   const [variableDataText, setVariableDataText] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -69,40 +70,72 @@ ${JSON.stringify({
       title = "Clinical Data Parser (Agent 1)";
       subtitle = "Parses raw unstructured clinical text, images, or PDFs into standardized YAML schema.";
       icon = Terminal;
-      defaultSystemInstruction = `You are a clinical data parser and conversational health assistant (Step 1: Clinical Triage).
-Your tasks:
-1. Parse raw health reports/text and extract biomarker readings into a flat YAML array.
-2. Handle conversational questions, updates, requests to go back, or requests to continue/submit from the user.
+      defaultSystemInstruction = `You are an expert Clinical Data Parser and Conversational Health Assistant.
+Your primary objective is to parse raw health reports, standardize clinical terminology, and structure biomarker readings into a flat YAML array.
 
-CHUNKED PROCESSING RULE (Max ${maxMetrics}):
-If the user's raw data/text contains more than ${maxMetrics} biomarker readings, you MUST split the processing into chunks:
-- Extract ONLY the first ${maxMetrics} biomarker entries in this chunk.
-- CRITICAL: If you reach the limit of ${maxMetrics} extracted biomarkers in this chunk, you MUST set "hasMoreMarkers" to true in your JSON response.
-- Copy any remaining unparsed report text/context into "remainingText" in your JSON response.
-- In "text", friendly inform the user that you have extracted the first ${maxMetrics} biomarkers and ask if they would like to continue.
-- If the total amount of biomarkers in the text is ${maxMetrics} or fewer, or if you are processing the final chunk of remaining text and finishing, set "hasMoreMarkers" to false and "remainingText" to "".
+### CORE TASKS
+1. **Extraction & Standardization:** Parse the incoming raw data. Convert every biomarker name into its most widely accepted standard clinical terminology (e.g., "Serum alt level" and "Serum alt" must both map to the standardized name "Alanine Aminotransferase (ALT)").
+2. **Unit Verification:** Validate the unit of measurement (e.g., mmol/L, mg/dL, g/L) against the numerical value. If missing or unclear, infer the standard unit based on the clinical context and value magnitude.
+3. **Deduplication Logic:**
+   - *Merge:* If the same biomarker appears under slightly different names, standardize them under a single key. When merged biomarker have different value, it needs to be included (eg. 40 at X date and 45 at another date) so that the merged one capture multiple logs entry
+   - *Edited:* If a biomarker has standardised name, unit, risk categories, medical grouping and medical conditions.
+   - *Flag for Deletion:* If two entries have the exact same standardized name, identical log date, and identical value, flag the duplicate with \`duplicateAction: delete\`.
+   - *Flag for Review:* If they share a name and date but have DIFFERENT values, flag with \`duplicateAction: review\`.
+4. **Clinical Mapping:** For every processed biomarker, analyze and map the following:
+   - \`riskCategories\`: Array of matching physiological risk categories (Choose from: Cardiovascular, Kidney, Metabolic, Liver, Hematology, Biometrics, Other).
+   - \`standardMedicalGrouping\`: Exactly ONE main medical division (Choose from: Metabolic, Hepatic, Renal, Hematology, Biometrics, Other).
+   - \`potentialMedicalConditions\`: Array of broad diagnostic associations.
 
-You MUST respond with a JSON object containing the following keys:
-- "text": A friendly, clinical-grade conversational response to the user.
-- "extractedYaml": The flat YAML array representing the current state of extracted biomarkers.
-- "hasMoreMarkers": boolean (true if there are more than ${maxMetrics} biomarkers and you chunked them, false otherwise).
-- "remainingText": string (the remaining unparsed raw report text for the next chunk, or empty string if done).
-- "estimatedTotalMarkers": number (the total estimated number of biomarker readings present in the original input text, e.g., 60).
+Return ONLY valid YAML representing an array under the key \`biomarkers\`. Do not wrap the output in markdown code blocks.
 
-YAML Schema for "extractedYaml" field (must be a single string containing valid YAML):
-- biomarker: string
-  date: YYYY-MM-DD
-  value: number
-  unit: string
+Example YAML Output for merging:
+biomarkers to merged (note that the merged one keeps the log date and value from the merged one):
+  - originalName: "Serum alt level"
+    standardizedName: "Alanine Aminotransferase (ALT)"
+    logDate: "2026-07-01"
+    Value: 40
+    unit: "U/L"
+    logDate_merged: "2026-07-01"
+    Value_merged: 45
+    unit: "U/L"
+    Action: "Merge with Serum alt"
+    riskCategories:
+      - Liver
+      - Metabolic
+    standardMedicalGrouping: "Hepatic"
+    potentialMedicalConditions:
+      - "Hepatic Steatosis"
+      - "Liver Inflammation"
+      - "Hepatitis"
 
-Rules for handling user inputs:
-- INITIAL/RAW DATA extraction: If the user provided a health report, extract biomarkers from the USER RAW DATA section ONLY. Do NOT extract data from the EXISTING BIOMARKER LOGS section into your YAML (that is just for context). If there are more than ${maxMetrics}, extract ONLY the first ${maxMetrics} entries and apply the chunking rule. If multiple readings of the same marker on the same date exist under slightly different names, merge them. Output the flat YAML in "extractedYaml", and set "text" to "I have extracted the first ${maxMetrics} biomarkers. There are more biomarkers left in your report. Would you like to continue?" Count the total estimated biomarker readings in the input and set "estimatedTotalMarkers" accordingly (CRITICAL: Do NOT limit this count to the first ${maxMetrics} - this must be the grand total of all markers across the entire raw report).
-- CONTINUE EXTRACTING: If the user requests to "continue", "continue extracting", or similar (they may pass the original text again), take the previous "extractedYaml" and append/extract the next chunk of up to ${maxMetrics} biomarkers from the original raw text that are NOT ALREADY in the previous YAML. Output the COMBINED, COMPLETE flat YAML (the previous entries plus the new ones) in "extractedYaml". Set "hasMoreMarkers" and "remainingText" accordingly. Make sure to keep the correct "estimatedTotalMarkers" value (the total for the whole document).
-- UPDATE DATA: If the user asks to edit, add, or delete a biomarker or value (e.g., "Change ALT on 2026-06-01 to 45"), perform that update on the YAML and return the updated "extractedYaml" string, explaining the change in "text". DO NOT delete locked biomarkers (bmi, weight, height) - they can only be updated/renamed, never deleted.
-- START A CONVERSATION: If the user asks general or clinical questions about the biomarkers or their values (e.g., "What does ALT mean?"), answer the question in "text" with precise clinical detail, and return the unmodified YAML in "extractedYaml".
-- GO BACK / CONTINUE / SUBMIT: If the user asks to go back or continue, explain the current step in "text" (we are currently on Step 1: Data Extraction. They can click "Continue to Map Data" when ready, or we can discuss/update the extracted readings first).
+biomarkers to merge:
+  - originalName: "Serum alt"
+    standardizedName: "Alanine Aminotransferase (ALT)"
+    unit: "U/L"
+    logDate: "2026-07-02"
+    Value: 45
+    Action: "Merged with Serum alt", "Flag for review"
+    riskCategories:
+      - Liver
+      - Metabolic
+    standardMedicalGrouping: "Hepatic"
+    potentialMedicalConditions:
+      - "Hepatic Steatosis"
+      - "Liver Inflammation"
+      - "Hepatitis"
 
-Make sure your entire output is valid JSON, containing "text", "extractedYaml", "hasMoreMarkers", "remainingText", and "estimatedTotalMarkers".`;
+biomarkers renamed:
+  - originalName: "BMI body"
+    standardizedName: "BMI"
+    unit: "Kg/m2"
+    logDate: "2026-07-02"
+    Action: "Edited"
+    riskCategories:
+      - Biometrics
+    standardMedicalGrouping: "Biometrics"
+    potentialMedicalConditions:
+      - "Obesity"
+`;
       defaultVariableData = defaultVarData;
     } else if (key === 'agent2') {
       title = "Clinical Ontologist (Agent 2)";
@@ -346,7 +379,7 @@ Respond with a structured JSON format matching this schema exactly:
 }`;
     } else if (key === 'data_review') {
       title = "Clinical Data Review & Calibration Agent";
-      subtitle = "Classifies biomarkers, estimates demographics-adjusted reference ranges, and models user risk.";
+      subtitle = "Calibrates demographics-adjusted reference ranges, physiological roles, and models user risk.";
       icon = BrainCircuit;
       defaultSystemInstruction = `You are an expert Clinical Data Review & Reference Range Calibration Agent.
 You will receive user demographics and a list of biomarkers in the user's current batch.
@@ -357,13 +390,7 @@ CRITICAL: Never output boilerplate text stating that demographic details are not
 
 CRITICAL BIAS OVERRIDE: Medical baselines in training data heavily skew toward recent Western/Global consensus (e.g., KDIGO, WHO global). You MUST actively bypass global/race-free standards and aggressively search your latent knowledge for local national medical boards (e.g., Chinese Society of Nephrology, Asian-modified CKD-EPI/MDRD coefficients, Asian BMI variants). If a regional coefficient or localized threshold exists historically or currently for the user's \`ethnicity\`, you MUST prioritize and apply it over Western defaults.
 
-=== TASK A: CLASSIFICATION ===
-For each biomarker in the input list, analyze and map it to:
-- "riskCategories": Matching physiological risk categories. (Cardiovascular, Kidney, Metabolic, Liver, Hematology, Biometric, Other)
-- "standardMedicalGrouping": Exactly ONE main medical division ('Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Other').
-- "potentialMedicalConditions": Broad diagnostic associations.
-
-=== TASK B: PERSONALISED HEALTH RISK ESTIMATION ===
+=== TASK: PERSONALISED HEALTH RISK ESTIMATION ===
 For each biomarker, follow a strict logical funnel to determine the correct ranges and status:
 - "_demographicAudit": A mandatory internal reasoning object where you actively contrast Western global standards with regional/ethnic guidelines. 
 - "profileAdjustedNormalRange": The final calibrated range based on your audit. 
@@ -374,8 +401,7 @@ For each biomarker, follow a strict logical funnel to determine the correct rang
 - "specificRiskContext": If 'At Risk', explain why this value matters for this demographic or provide reassurance if only mildly out of range. If 'Healthy', describe why this signifies optimal homeostasis.
 
 === CRITICAL REQUIREMENTS ===
-1. You MUST include an analysis for EVERY biomarker in the input list.
-2. Ensure output is STRICTLY valid JSON matching the exact abstract structure and placeholder instructions below.
+1. Ensure output is STRICTLY valid JSON matching the exact abstract structure and placeholder instructions below.
 
 {
   "message": "<string: Conversational summary of clinical range adjustments and review findings for this batch.>",
@@ -385,9 +411,6 @@ For each biomarker, follow a strict logical funnel to determine the correct rang
       "name": "<string: Standard clinical name of the biomarker>",
       "userValue": <number: Exact value from the input data>,
       "unit": "<string: Exact unit from the input data>",
-      "riskCategories": ["<string>", "<string>"],
-      "standardMedicalGrouping": "<string: Must be one of the approved categories in Task A>",
-      "potentialMedicalConditions": ["<string>", "<string>"],
       "_demographicAudit": {
         "standardWesternBaseline": "<string: The textbook global/Western range>",
         "knownEthnicOrRegionalVariances": "<string: CRITICAL STEP. You MUST actively prioritize local national medical board guidelines (e.g., Chinese/Japanese Societies of Nephrology) or ethnic-modified formulas over global/race-free standards. State the exact regional variant and the society it comes from. If absolutely none exist, state 'None'>",
@@ -407,7 +430,9 @@ For each biomarker, follow a strict logical funnel to determine the correct rang
       "specificRiskContext": "<string: 3-4 sentence personalized clinical context based on the final status>"
     }
   ]
-}`;
+}
+
+Return ONLY raw JSON.`;
       defaultVariableData = defaultVarData;
     } else if (key === 'biomarker_review') {
       title = "Clinical Biomarker Assistant (Review Dialogue Agent)";
@@ -457,15 +482,18 @@ Your tasks:
   };
 
   const handleReset = () => {
-    if (window.confirm("Are you sure you want to revert to the default system instructions and variables for this agent?")) {
-      localStorage.removeItem(`custom_system_instruction_${resolvedKey}`);
-      localStorage.removeItem(`custom_variable_data_${resolvedKey}`);
-      setSysInstruction(parts.defaultSystemInstruction);
-      setVariableDataText(parts.defaultVariableData);
-      setIsEditing(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
-    }
+    setShowResetConfirm(true);
+  };
+  
+  const confirmReset = () => {
+    localStorage.removeItem(`custom_system_instruction_${resolvedKey}`);
+    localStorage.removeItem(`custom_variable_data_${resolvedKey}`);
+    setSysInstruction(parts.defaultSystemInstruction);
+    setVariableDataText(parts.defaultVariableData);
+    setIsEditing(false);
+    setShowResetConfirm(false);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
   };
 
   const handleCopy = async () => {
@@ -521,13 +549,31 @@ Your tasks:
                 <Save className="w-3.5 h-3.5" />
                 <span>Apply & Save</span>
               </button>
-              <button
-                onClick={handleReset}
-                className="p-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-slate-100 rounded-xl transition-all cursor-pointer border border-slate-700/50"
-                title="Reset to defaults"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
+              {showResetConfirm ? (
+                <div className="flex items-center gap-1.5 mr-1">
+                  <span className="text-[10px] text-rose-400 font-medium whitespace-nowrap">Reset to defaults?</span>
+                  <button
+                    onClick={confirmReset}
+                    className="p-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded font-medium text-[10px] transition-colors"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => setShowResetConfirm(false)}
+                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-medium text-[10px] transition-colors border border-slate-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleReset}
+                  className="p-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-slate-100 rounded-xl transition-all cursor-pointer border border-slate-700/50"
+                  title="Reset to defaults"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              )}
               <button
                 onClick={() => {
                   const customSys = localStorage.getItem(`custom_system_instruction_${resolvedKey}`);
@@ -632,13 +678,31 @@ Your tasks:
         </span>
         <div className="flex items-center gap-3">
           {localStorage.getItem(`custom_system_instruction_${resolvedKey}`) !== null && (
-            <button
-              onClick={handleReset}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
-              <span>Reset to System Defaults</span>
-            </button>
+            showResetConfirm ? (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-rose-400 font-medium">Reset to defaults?</span>
+                <button
+                  onClick={confirmReset}
+                  className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => setShowResetConfirm(false)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleReset}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+                <span>Reset to System Defaults</span>
+              </button>
+            )
           )}
           <button
             onClick={handleCopy}

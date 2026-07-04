@@ -52,6 +52,9 @@ service cloud.firestore {
       match /reports/{reportId} {
         allow read, write: if isOwner(userId);
       }
+      match /agentAnalyses/{analysisId} {
+        allow read, write: if isOwner(userId);
+      }
     }
   }
 }

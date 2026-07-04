@@ -13,6 +13,8 @@ interface MedicalHistoryTabProps {
   biomarkerHistory: BiomarkerLog[];
   hideSensitive: boolean;
   onDeleteBiomarkerLog: (id: string) => void;
+  onDeleteBiomarker?: (key: string) => void;
+  onDeleteEmptyBiomarkers?: () => void;
   onEditBiomarkerLog: (id: string, key: string, value: string | number, newDate?: string) => void;
   onLogMedical?: (biomarkers: { [key: string]: number | string }, profileUpdates?: Partial<UserProfile>, date?: string, entries?: { date: string | null; biomarkers: { [key: string]: number | string } }[]) => void;
   onCombineBiomarkers?: (
@@ -39,6 +41,8 @@ export default function MedicalHistoryTab({
   biomarkerHistory,
   hideSensitive,
   onDeleteBiomarkerLog,
+  onDeleteBiomarker,
+  onDeleteEmptyBiomarkers,
   onEditBiomarkerLog,
   onLogMedical,
   onCombineBiomarkers,
@@ -76,7 +80,8 @@ export default function MedicalHistoryTab({
   // Combine definitions with dynamic ones from `biomarkers` object and profile.customBiomarkers
   const allDefinitions = useMemo(() => {
     // Clone biomarkerDefinitions so we don't mutate the original static array
-    const combined = biomarkerDefinitions.map(d => {
+    // ONLY show standard definitions if they have data!
+    const combined = biomarkerDefinitions.filter(d => biomarkers[d.key] !== undefined).map(d => {
       if (d.key === 'bmi') {
         const isAsian = isAsianEthnicity(profile.ethnicity);
         const gender = (profile.gender || 'male').toLowerCase();
@@ -536,6 +541,7 @@ export default function MedicalHistoryTab({
                               biomarkers={biomarkers}
                               onEditBiomarkerLog={onEditBiomarkerLog}
                               onDeleteBiomarkerLog={onDeleteBiomarkerLog}
+                              onDeleteBiomarker={onDeleteBiomarker}
                               onOpenAiReview={setReviewingBiomarkerKey}
                               onCombineBiomarker={setCombineBiomarkerKey}
                               onApplyCalculation={onApplyCalculation}
@@ -556,6 +562,20 @@ export default function MedicalHistoryTab({
           );
         })}
       </div>
+
+      {onDeleteEmptyBiomarkers && (
+        <div className="mt-6 flex justify-center pb-4">
+          <button
+            onClick={() => {
+              onDeleteEmptyBiomarkers();
+            }}
+            className="px-4 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 font-bold text-xs rounded-xl border border-rose-100 dark:border-rose-800/50 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors cursor-pointer flex items-center gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete Empty Biomarkers
+          </button>
+        </div>
+      )}
       
       {reviewingBiomarkerKey && (
         <ReviewBiomarkerModal

@@ -68,6 +68,8 @@ export default function FoodHistoryTab({
   // Editing states
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [editLogState, setEditLogState] = useState<FoodLog | null>(null);
+  const [manualMultiplier, setManualMultiplier] = useState<string>('1');
+  const [editMultiplier, setEditMultiplier] = useState<string>('1');
 
   useEffect(() => {
     if (onEditingActiveChange) {
@@ -133,10 +135,84 @@ export default function FoodHistoryTab({
 
   const updateField = (field: keyof FoodLog, value: any) => {
     if (!editLogState) return;
-    setEditLogState({
-      ...editLogState,
-      [field]: value
-    });
+    const parseNum = (str: string | undefined) => {
+      if (!str) return null;
+      const match = String(str).match(/[\d.]+/);
+      return match ? parseFloat(match[0]) : null;
+    };
+
+    let updatedLog = { ...editLogState, [field]: value };
+
+    if (field === 'quantity') {
+      const oldNum = parseNum(editLogState.quantity) || 1;
+      const newNum = parseNum(value);
+      if (newNum !== null && newNum > 0 && oldNum > 0 && oldNum !== newNum) {
+        const scale = newNum / oldNum;
+        const newNutrients = { ...(editLogState.nutrients || {}) };
+        Object.keys(newNutrients).forEach(k => {
+          newNutrients[k as keyof NutrientBreakdown] = Number(((newNutrients[k as keyof NutrientBreakdown] || 0) * scale).toFixed(2));
+        });
+        updatedLog.nutrients = newNutrients as NutrientBreakdown;
+        updatedLog.weightGrams = Number(((editLogState.weightGrams || 0) * scale).toFixed(1));
+      }
+    } else if (field === 'weightGrams') {
+      const oldWeight = editLogState.weightGrams || 1;
+      const newWeight = Number(value) || 0;
+      if (newWeight > 0 && oldWeight > 0 && oldWeight !== newWeight) {
+        const scale = newWeight / oldWeight;
+        const newNutrients = { ...(editLogState.nutrients || {}) };
+        Object.keys(newNutrients).forEach(k => {
+          newNutrients[k as keyof NutrientBreakdown] = Number(((newNutrients[k as keyof NutrientBreakdown] || 0) * scale).toFixed(2));
+        });
+        updatedLog.nutrients = newNutrients as NutrientBreakdown;
+        const qNum = parseNum(editLogState.quantity);
+        if (qNum !== null) {
+          updatedLog.quantity = (editLogState.quantity || '').replace(/[\d.]+/, Number((qNum * scale).toFixed(2)).toString());
+        }
+      }
+    }
+
+    setEditLogState(updatedLog);
+  };
+
+  const updateManualField = (field: keyof FoodLog, value: any) => {
+    const parseNum = (str: string | undefined) => {
+      if (!str) return null;
+      const match = String(str).match(/[\d.]+/);
+      return match ? parseFloat(match[0]) : null;
+    };
+    let updatedLog = { ...manualLog, [field]: value };
+
+    if (field === 'quantity') {
+      const oldNum = parseNum(manualLog.quantity) || 1;
+      const newNum = parseNum(value);
+      if (newNum !== null && newNum > 0 && oldNum > 0 && oldNum !== newNum) {
+        const scale = newNum / oldNum;
+        const newNutrients = { ...(manualLog.nutrients || {}) };
+        Object.keys(newNutrients).forEach(k => {
+          newNutrients[k as keyof NutrientBreakdown] = Number(((newNutrients[k as keyof NutrientBreakdown] || 0) * scale).toFixed(2));
+        });
+        updatedLog.nutrients = newNutrients as NutrientBreakdown;
+        updatedLog.weightGrams = Number(((manualLog.weightGrams || 0) * scale).toFixed(1));
+      }
+    } else if (field === 'weightGrams') {
+      const oldWeight = manualLog.weightGrams || 1;
+      const newWeight = Number(value) || 0;
+      if (newWeight > 0 && oldWeight > 0 && oldWeight !== newWeight) {
+        const scale = newWeight / oldWeight;
+        const newNutrients = { ...(manualLog.nutrients || {}) };
+        Object.keys(newNutrients).forEach(k => {
+          newNutrients[k as keyof NutrientBreakdown] = Number(((newNutrients[k as keyof NutrientBreakdown] || 0) * scale).toFixed(2));
+        });
+        updatedLog.nutrients = newNutrients as NutrientBreakdown;
+        const qNum = parseNum(manualLog.quantity);
+        if (qNum !== null) {
+          updatedLog.quantity = (manualLog.quantity || '').replace(/[\d.]+/, Number((qNum * scale).toFixed(2)).toString());
+        }
+      }
+    }
+
+    setManualLog(updatedLog);
   };
 
   const updateNutrient = (nutrientKey: keyof NutrientBreakdown, value: number) => {
@@ -379,7 +455,7 @@ export default function FoodHistoryTab({
                     type="number"
                     placeholder="e.g. 150"
                     value={manualLog.weightGrams || ''}
-                    onChange={(e) => setManualLog({ ...manualLog, weightGrams: Number(e.target.value) || 0 })}
+                    onChange={(e) => updateManualField('weightGrams', Number(e.target.value) || 0)}
                     className="w-full text-xs font-mono bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
                   />
                 </div>
@@ -389,7 +465,7 @@ export default function FoodHistoryTab({
                     type="text"
                     placeholder="e.g. 1 plate, 1 slice"
                     value={manualLog.quantity || ''}
-                    onChange={(e) => setManualLog({ ...manualLog, quantity: e.target.value })}
+                    onChange={(e) => updateManualField('quantity', e.target.value)}
                     className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
                   />
                 </div>
@@ -517,6 +593,40 @@ export default function FoodHistoryTab({
 
               {/* Core 30 Nutrients editing inside Manual Entry */}
               <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/30">
+                <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-white dark:bg-slate-950">
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Scale Portion:</label>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-slate-400 font-mono">x</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.01"
+                      value={manualMultiplier}
+                      onChange={(e) => setManualMultiplier(e.target.value)}
+                      className="w-16 text-right px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const m = parseFloat(manualMultiplier);
+                        if (isNaN(m) || m <= 0 || m === 1) return;
+                        const newNutrients = { ...(manualLog.nutrients || {}) };
+                        Object.keys(newNutrients).forEach(k => {
+                          newNutrients[k as keyof NutrientBreakdown] = Number(((newNutrients[k as keyof NutrientBreakdown] || 0) * m).toFixed(2));
+                        });
+                        setManualLog({
+                          ...manualLog,
+                          weightGrams: Number(((manualLog.weightGrams || 0) * m).toFixed(1)),
+                          nutrients: newNutrients as NutrientBreakdown
+                        });
+                        setManualMultiplier('1');
+                      }}
+                      className="ml-1 px-3 py-1 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 rounded-lg text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
                 <div className="p-3 bg-slate-100/50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-850">
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Nutrients (30 Core Nutrients)</span>
                 </div>
@@ -815,7 +925,40 @@ export default function FoodHistoryTab({
 
                       {/* Nutrients editable list */}
                       <div className="space-y-2 text-left">
-                        <label className="text-[10px] font-bold text-slate-400 block">Edit Core 30 Nutrients</label>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-400 block">Edit Core 30 Nutrients</label>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-slate-400 font-mono">Scale x</span>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0.01"
+                              value={editMultiplier}
+                              onChange={(e) => setEditMultiplier(e.target.value)}
+                              className="w-14 text-right px-1 py-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const m = parseFloat(editMultiplier);
+                                if (isNaN(m) || m <= 0 || m === 1 || !editLogState) return;
+                                const newNutrients = { ...(editLogState.nutrients || {}) };
+                                Object.keys(newNutrients).forEach(k => {
+                                  newNutrients[k as keyof NutrientBreakdown] = Number(((newNutrients[k as keyof NutrientBreakdown] || 0) * m).toFixed(2));
+                                });
+                                setEditLogState({
+                                  ...editLogState,
+                                  weightGrams: Number(((editLogState.weightGrams || 0) * m).toFixed(1)),
+                                  nutrients: newNutrients as NutrientBreakdown
+                                });
+                                setEditMultiplier('1');
+                              }}
+                              className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 rounded text-[10px] font-bold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
+                            >
+                              Apply
+                            </button>
+                          </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-3 rounded-2xl border border-slate-200/50 dark:border-slate-800 max-h-60 overflow-y-auto">
                           {nutrientDefinitions.map((nut) => {
                             const val = editLogState?.nutrients ? editLogState.nutrients[nut.key] : 0;

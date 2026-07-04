@@ -22,6 +22,7 @@ interface AgentResultTableProps {
   onApplyChanges?: () => Promise<void>;
   onContinueToNextStep?: () => Promise<void>;
   isApplying?: boolean;
+  precedingAgent1Result?: any;
 }
 
 // Robust helper to extract potential biomarker names and values from raw clinical text
@@ -64,6 +65,52 @@ export function getInitialMarkersFromText(text: string): string[] {
   return Array.from(new Set(markers)); // unique list
 }
 
+export function getInitialMarkerDetails(text: string): { biomarker: string; value: string; unit: string; date: string }[] {
+  const markerNames = getInitialMarkersFromText(text);
+  if (markerNames.length === 0) return [];
+
+  // Try to find a date in the overall text
+  let detectedDate = '';
+  const dateRegex = /\b(\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/;
+  const dateMatch = text.match(dateRegex);
+  if (dateMatch) {
+    detectedDate = dateMatch[1];
+  } else {
+    detectedDate = new Date().toISOString().split('T')[0];
+  }
+
+  return markerNames.map(name => {
+    // Search for the line containing this name to extract value and unit
+    const lines = text.split(/[\n;\r]/);
+    let value = 'N/A';
+    let unit = '';
+
+    for (let line of lines) {
+      if (line.toLowerCase().includes(name.toLowerCase())) {
+        // Try to extract numeric value from the rest of the line or the line itself
+        const numericMatch = line.match(/[\s:]\+?(-?[\d.]+)/) || line.match(/([\d.]+)/);
+        if (numericMatch) {
+          value = numericMatch[1];
+          // Try to extract unit following the number
+          const afterNumber = line.substring(numericMatch.index! + numericMatch[0].length).trim();
+          const unitMatch = afterNumber.match(/^([a-zA-Z\/%]+)/);
+          if (unitMatch) {
+            unit = unitMatch[1];
+          }
+          break;
+        }
+      }
+    }
+
+    return {
+      biomarker: name,
+      value,
+      unit,
+      date: detectedDate
+    };
+  });
+}
+
 export const AgentResultTable: React.FC<AgentResultTableProps> = ({
   agentType,
   agentResult,
@@ -72,15 +119,136 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
   initialRawText = '',
   onApplyChanges,
   onContinueToNextStep,
-  isApplying = false
+  isApplying = false,
+  precedingAgent1Result
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sortField, setSortField] = useState<string>('default');
   const [sortAsc, setSortAsc] = useState<boolean>(true);
-  const [statusSortCategory, setStatusSortCategory] = useState<'atRisk' | 'isNew' | 'changed' | 'synced' | null>(null);
+  const [statusSortCategory, setStatusSortCategory] = useState<'atRisk' | 'isNew' | 'changed' | 'synced' | 'merged' | 'toDelete' | null>(null);
 
   const isMultiphaseActive = !!(agentResult?.status === 'needs_continuation' || agentResult?.needsContinuation || agentResult?.hasMore || agentResult?.hasMoreMarkers);
   const totalEstimated = agentResult?.estimatedTotalMarkers || agentResult?.planningDetails?.estimatedTotalMetrics || (isMultiphaseActive ? 60 : 0);
+
+  // Helper to identify if a biomarker in Step 2 was merged from other markers in Step 1
+  const mergedInfoForStep2 = useMemo(() => {
+    if (agentType !== 'agent2' || !precedingAgent1Result) return {};
+    
+    // Let's run a simplified version of Step 1 parsing and matching to see what merged where.
+    let parsedRows: any[] = [];
+    const text = precedingAgent1Result.extractedYaml || precedingAgent1Result.text || '';
+    if (text && typeof text === 'string') {
+      let cleanText = text;
+      if (text.includes('```yaml')) {
+        cleanText = text.split('```yaml')[1].split('```')[0].trim();
+      } else if (text.includes('```')) {
+        cleanText = text.split('```')[1].split('```')[0].trim();
+      }
+      try {
+        const parsed = parse(cleanText);
+        if (Array.isArray(parsed)) {
+          parsedRows = parsed;
+        } else if (parsed && typeof parsed === 'object') {
+          const possibleArray = parsed.biomarkers || parsed.extracted || parsed.data || parsed.metrics || parsed.results;
+          if (Array.isArray(possibleArray)) {
+            parsedRows = possibleArray;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // If no parsedRows, check if batchBiomarkers exists
+    const rawItems = precedingAgent1Result.batchBiomarkers || [];
+    if (parsedRows.length === 0 || rawItems.length === 0) return {};
+
+    // Run same alignment
+    const parsedToRawGroup: { [idx: number]: any[] } = {};
+    rawItems.forEach((raw: any) => {
+      const rawKey = String(raw.key || '').toLowerCase();
+      const rawName = String(raw.name || '').toLowerCase();
+      
+      let bestParsedIdx = -1;
+      let bestScore = -1;
+      
+      parsedRows.forEach((parsed: any, idx: number) => {
+        const parsedKey = String(parsed.key || parsed.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const parsedName = String(parsed.name || parsed.biomarker || '').toLowerCase();
+        const explanation = String(parsed.explanation || parsed.changeReason || parsed.description || '').toLowerCase();
+        
+        let score = 0;
+        const cleanRawKey = rawKey.replace(/[^a-z0-9]/g, '');
+        const cleanParsedKey = parsedKey.replace(/[^a-z0-9]/g, '');
+        const cleanRawName = rawName.replace(/[^a-z0-9]/g, '');
+        const cleanParsedName = parsedName.replace(/[^a-z0-9]/g, '');
+        
+        if (cleanRawKey === cleanParsedKey || cleanRawName === cleanParsedName) {
+          score += 100;
+        } else if (cleanRawKey.includes(cleanParsedKey) || cleanParsedKey.includes(cleanRawKey)) {
+          score += 40;
+        } else if (cleanRawName.includes(cleanParsedName) || cleanParsedName.includes(cleanRawName)) {
+          score += 40;
+        }
+        if (explanation.includes(rawKey) || explanation.includes(rawName)) {
+          score += 80;
+        }
+        const rawKeyPart = rawKey.replace(/_10_9_l|_g_l|_umol_l|_10_12_l/g, '');
+        if (rawKeyPart && rawKeyPart.length > 3 && parsedKey.includes(rawKeyPart)) {
+          score += 30;
+        }
+        if (raw.value !== undefined && parsed.value !== undefined && Number(raw.value) === Number(parsed.value)) {
+          if (cleanRawName.slice(0, 5) === cleanParsedName.slice(0, 5)) {
+            score += 50;
+          }
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestParsedIdx = idx;
+        }
+      });
+
+      if (bestScore > 15 && bestParsedIdx !== -1) {
+        if (!parsedToRawGroup[bestParsedIdx]) {
+          parsedToRawGroup[bestParsedIdx] = [];
+        }
+        parsedToRawGroup[bestParsedIdx].push({ raw });
+      }
+    });
+
+    // Now, build a map from standard biomarker name to its mergedFrom list
+    const mergeMap: { [key: string]: { isMerged: boolean, mergedFrom: string[] } } = {};
+    parsedRows.forEach((parsed, idx) => {
+      const matches = parsedToRawGroup[idx] || [];
+      if (matches.length > 1) {
+        const parsedName = parsed.name || parsed.biomarker || '';
+        const key = parsedName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        
+        // Primary raw item (closest value)
+        let primaryMatch = matches[0];
+        let minDiff = Infinity;
+        matches.forEach((m: any) => {
+          if (m.raw.value !== undefined && parsed.value !== undefined) {
+            const diff = Math.abs(Number(m.raw.value) - Number(parsed.value));
+            if (diff < minDiff) {
+              minDiff = diff;
+              primaryMatch = m;
+            }
+          }
+        });
+
+        const otherMatches = matches.filter((m: any) => m.raw.key !== primaryMatch.raw.key);
+        const mergedFrom = otherMatches.map((m: any) => m.raw.name || m.raw.key);
+        
+        if (mergedFrom.length > 0) {
+          mergeMap[key] = {
+            isMerged: true,
+            mergedFrom
+          };
+        }
+      }
+    });
+
+    return mergeMap;
+  }, [agentType, precedingAgent1Result]);
 
   // 1. Parse and extract rows depending on agentType
   const tableData = useMemo(() => {
@@ -93,12 +261,32 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       
       if (Array.isArray(yamlText)) {
         parsedRows = yamlText;
+      } else if (yamlText && typeof yamlText === 'object') {
+        const possibleArray = yamlText.extractedBiomarkers || yamlText.biomarkers || yamlText.extracted || yamlText.data || yamlText.metrics || yamlText.results || yamlText.calibratedBiomarkers;
+        if (Array.isArray(possibleArray)) {
+          parsedRows = possibleArray;
+        } else {
+          const arrays = Object.values(yamlText).filter(v => Array.isArray(v));
+          if (arrays.length > 0) {
+            parsedRows = arrays[0] as any[];
+          }
+        }
       } else if (typeof yamlText === 'string') {
         const cleanText = yamlText.replace(/```(?:yaml|json)?/gi, '').trim();
         try {
           const parsed = parse(cleanText);
           if (Array.isArray(parsed)) {
             parsedRows = parsed;
+          } else if (parsed && typeof parsed === 'object') {
+            const possibleArray = parsed.biomarkers || parsed.extracted || parsed.data || parsed.metrics || parsed.results;
+            if (Array.isArray(possibleArray)) {
+              parsedRows = possibleArray;
+            } else {
+              const arrays = Object.values(parsed).filter(v => Array.isArray(v));
+              if (arrays.length > 0) {
+                parsedRows = arrays[0] as any[];
+              }
+            }
           }
         } catch (e) {
           // Robust line-by-line regex fallback parser if YAML parser errors out
@@ -123,10 +311,358 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
         }
       }
 
+      if (parsedRows.length === 0) {
+        if (initialRawText) {
+          const details = getInitialMarkerDetails(initialRawText);
+          parsedRows = Array.isArray(details) ? details.map(d => ({
+
+            biomarker: d.biomarker,
+            date: d.date,
+            value: d.value,
+            unit: d.unit,
+            noChangeNeeded: true
+          
+          })) : [];
+        } else if (biomarkerHistory && biomarkerHistory.length > 0) {
+          // Collect all unique biomarker keys and their latest entries from history
+          const latestEntries: { [key: string]: { value: any, date: string } } = {};
+          [...biomarkerHistory].filter(log => log && log.date).sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach(log => {
+            Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
+              latestEntries[k] = { value: v, date: log.date };
+            });
+          });
+
+          parsedRows = Object.entries(latestEntries).map(([k, entry]) => {
+            const customDef = profile?.customBiomarkers?.[k];
+            const name = customDef?.name || k.replace(/_/g, ' ').toUpperCase();
+            const unit = customDef?.unit || '';
+            return {
+              biomarker: name,
+              date: entry.date,
+              value: entry.value,
+              unit,
+              noChangeNeeded: true
+            };
+          });
+        }
+      }
+
+      parsedRows = parsedRows.filter((p: any) => p && typeof p === 'object');
+      // Advanced alignment mapping with raw batch input (if available)
+      if (agentResult?.batchBiomarkers && Array.isArray(agentResult.batchBiomarkers) && agentResult.batchBiomarkers.length > 0) {
+        const rawItems = agentResult.batchBiomarkers;
+        
+        // 1. Map each raw item to parsedRows by finding the highest matching score
+        const rawMatches = rawItems.map((raw: any) => {
+          const rawKey = String(raw.key || '').toLowerCase();
+          const rawName = String(raw.name || '').toLowerCase();
+          
+          let bestParsedIdx = -1;
+          let bestScore = -1;
+          
+          parsedRows.forEach((parsed: any, idx: number) => {
+            const parsedKey = String(parsed.key || parsed.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+            const parsedName = String(parsed.name || parsed.biomarker || '').toLowerCase();
+            const explanation = String(parsed.explanation || parsed.changeReason || parsed.description || '').toLowerCase();
+            
+            let score = 0;
+            
+            // Text comparison scores
+            const cleanRawKey = rawKey.replace(/[^a-z0-9]/g, '');
+            const cleanParsedKey = parsedKey.replace(/[^a-z0-9]/g, '');
+            const cleanRawName = rawName.replace(/[^a-z0-9]/g, '');
+            const cleanParsedName = parsedName.replace(/[^a-z0-9]/g, '');
+            
+            if (cleanRawKey === cleanParsedKey || cleanRawName === cleanParsedName) {
+              score += 100;
+            } else if (cleanRawKey.includes(cleanParsedKey) || cleanParsedKey.includes(cleanRawKey)) {
+              score += 40;
+            } else if (cleanRawName.includes(cleanParsedName) || cleanParsedName.includes(cleanRawName)) {
+              score += 40;
+            }
+            
+            // Substring or explanation search
+            if (explanation.includes(rawKey) || explanation.includes(rawName)) {
+              score += 80;
+            }
+            const rawKeyPart = rawKey.replace(/_10_9_l|_g_l|_umol_l|_10_12_l/g, '');
+            if (rawKeyPart && rawKeyPart.length > 3 && parsedKey.includes(rawKeyPart)) {
+              score += 30;
+            }
+            
+            if (raw.value !== undefined && parsed.value !== undefined && Number(raw.value) === Number(parsed.value)) {
+              if (cleanRawName.slice(0, 5) === cleanParsedName.slice(0, 5)) {
+                score += 50;
+              }
+            }
+            
+            if (score > bestScore) {
+              bestScore = score;
+              bestParsedIdx = idx;
+            }
+          });
+          
+          return {
+            raw,
+            parsedIdx: bestScore > 15 ? bestParsedIdx : -1,
+            score: bestScore
+          };
+        });
+
+        // 2. For each parsed row, identify its associated raw items
+        const parsedToRawGroup: { [idx: number]: any[] } = {};
+        rawMatches.forEach((match: any) => {
+          if (match.parsedIdx !== -1) {
+            if (!parsedToRawGroup[match.parsedIdx]) {
+              parsedToRawGroup[match.parsedIdx] = [];
+            }
+            parsedToRawGroup[match.parsedIdx].push(match);
+          }
+        });
+
+        // For each parsed row, decide which raw item is the "primary" (kept) and which are "secondary" (merged/discarded)
+        const parsedPrimaryRaw: { [idx: number]: any } = {};
+        const secondaryRawMatches: any[] = [];
+        
+        Object.entries(parsedToRawGroup).forEach(([idxStr, matches]) => {
+          const idx = parseInt(idxStr);
+          const parsed = parsedRows[idx];
+          
+          // Match primary raw item (closest value)
+          let primaryMatch = matches[0];
+          let minDiff = Infinity;
+          matches.forEach((m: any) => {
+            if (m.raw.value !== undefined && parsed.value !== undefined) {
+              const diff = Math.abs(Number(m.raw.value) - Number(parsed.value));
+              if (diff < minDiff) {
+                minDiff = diff;
+                primaryMatch = m;
+              }
+            }
+          });
+          
+          parsedPrimaryRaw[idx] = primaryMatch.raw;
+          
+          // The other matches are secondary/merged
+          matches.forEach((m: any) => {
+            if (m.raw.key !== primaryMatch.raw.key) {
+              secondaryRawMatches.push({
+                raw: m.raw,
+                parsedIdx: idx,
+                parentParsed: parsed
+              });
+            }
+          });
+        });
+
+        const unmappedRawMatches = rawMatches.filter((m: any) => m.parsedIdx === -1);
+
+        // 3. Construct the table rows for each parsed row
+        const primaryRows = parsedRows.map((parsed: any, idx: number) => {
+          const raw = parsedPrimaryRaw[idx];
+          const rawName = raw ? raw.name : '';
+          const rawKey = raw ? raw.key : '';
+          const rawUnit = raw ? (raw.unit || raw.metric || '') : '';
+          
+          const biomarkerName = parsed.standardizedName || parsed.name || parsed.biomarker || 'Unknown';
+          const key = String(parsed.key || biomarkerName).toLowerCase().replace(/[^a-z0-9]/g, '_');
+          
+          const existingEntries = (biomarkerHistory || []).filter((h: any) => h.biomarkers?.[key] !== undefined);
+          const customDef = profile?.customBiomarkers?.[key];
+          const normalRange = customDef?.normalRange || '';
+          const valueNum = parseFloat(parsed.value);
+          
+          let isAtRisk = false;
+          if (!isNaN(valueNum) && normalRange) {
+            const rangeMatch = normalRange.match(/([\d.]+)\s*-\s*([\d.]+)/);
+            if (rangeMatch) {
+              const min = parseFloat(rangeMatch[1]);
+              const max = parseFloat(rangeMatch[2]);
+              if (valueNum < min || valueNum > max) {
+                isAtRisk = true;
+              }
+            }
+          }
+
+          const isRenamed = (rawName && rawName !== biomarkerName) || (parsed.originalName && parsed.originalName !== parsed.standardizedName);
+          const rowUnit = parsed.unit || parsed.metric || '';
+          const isUnitChanged = rawUnit && rawUnit !== rowUnit;
+          
+          const newGroup = parsed.standardMedicalGrouping || 'Other';
+          const oldGroup = customDef?.standardMedicalGrouping || 'Other';
+          const isGroupChanged = !!customDef && newGroup !== oldGroup;
+          const oldRiskCategories = customDef?.riskCategories || [];
+          const isRiskChanged = !!customDef && JSON.stringify([...(parsed.riskCategories || [])].sort()) !== JSON.stringify([...oldRiskCategories].sort());
+          const oldConditions = customDef?.potentialMedicalConditions || [];
+          const isConditionsChanged = !!customDef && JSON.stringify([...(parsed.potentialMedicalConditions || [])].sort()) !== JSON.stringify([...oldConditions].sort());
+          
+          const isNewInHistory = existingEntries.length === 0;
+          const isRenamedOrUnitOrGroupChanged = isRenamed || isUnitChanged || isGroupChanged;
+          
+          const isMerged = parsedToRawGroup[idx] && parsedToRawGroup[idx].length > 1;
+          const otherMatches = parsedToRawGroup[idx]?.filter((m: any) => m.raw.key !== rawKey) || [];
+          const mergedFrom = otherMatches.map((m: any) => m.raw.name || m.raw.key);
+
+          // CRITICAL: status shouldn't be new if it's a name change or unit change or grouping change. It should just be "Changed", or if it's merged it's "Merged"
+          const isNew = isNewInHistory && !isRenamedOrUnitOrGroupChanged && !isMerged;
+          const isChanged = (isRenamedOrUnitOrGroupChanged || (!isNewInHistory && existingEntries.length > 0)) && !isMerged;
+          
+          let changeReason = parsed.changeReason || parsed.explanation || '';
+          if (!changeReason) {
+            if (isRenamed && isUnitChanged && isGroupChanged) {
+              changeReason = `Standardized from raw '${rawName}', unit mapped to '${rowUnit}', and medical grouping changed from '${oldGroup}' to '${newGroup}'.`;
+            } else if (isRenamed && isGroupChanged) {
+              changeReason = `Standardized from raw '${rawName}' and medical grouping changed from '${oldGroup}' to '${newGroup}'.`;
+            } else if (isUnitChanged && isGroupChanged) {
+              changeReason = `Standardized unit to '${rowUnit}' and medical grouping changed from '${oldGroup}' to '${newGroup}'.`;
+            } else if (isGroupChanged) {
+              changeReason = `Medical grouping changed from '${oldGroup}' to '${newGroup}'.`;
+            } else if (isRenamed && isUnitChanged) {
+              changeReason = `Standardized from raw '${rawName}' and unit mapped to '${rowUnit}'.`;
+            } else if (isRenamed) {
+              changeReason = `Standardized from raw '${rawName}'.`;
+            } else if (isUnitChanged) {
+              changeReason = `Standardized unit to '${rowUnit}'.`;
+            } else {
+              changeReason = `Extracted new biomarker reading.`;
+            }
+          }
+
+          if (isMerged && mergedFrom.length > 0) {
+            changeReason = `Merged from ${mergedFrom.join(', ')}. ${changeReason}`;
+          }
+
+          const explanation = parsed.explanation || parsed.changeReason || parsed.description || '';
+
+          // Look up raw date if available
+          let resolvedDate = parsed.date || 'N/A';
+          if (rawKey) {
+            const historyDates = biomarkerHistory
+              .filter((h: any) => h.biomarkers?.[rawKey] !== undefined)
+              .map((h: any) => h.date);
+            if (historyDates.length > 0) {
+              resolvedDate = historyDates[0];
+            }
+          }
+
+          return {
+            key,
+            biomarker: biomarkerName,
+            oldName: rawName,
+            isRenamed,
+            isUnitChanged,
+            oldUnit: rawUnit,
+            date: resolvedDate,
+            value: parsed.value ?? 'N/A',
+            unit: rowUnit,
+            isNew,
+            isChanged,
+            isAtRisk,
+            isMerged,
+            mergedFrom,
+            isPrimary: true,
+            severity: isAtRisk ? 1 : 0,
+            normalRange,
+            changeReason,
+            riskReason: isAtRisk ? `Value ${parsed.value} ${rowUnit} is outside normal range (${normalRange})` : '',
+            description: explanation,
+            standardMedicalGrouping: parsed.standardMedicalGrouping || 'Other',
+            isGroupChanged,
+            oldGroup,
+            riskCategories: parsed.riskCategories || [],
+            oldRiskCategories,
+            isRiskChanged,
+            potentialMedicalConditions: parsed.potentialMedicalConditions || [],
+            oldConditions,
+            isConditionsChanged
+          };
+        });
+
+        // 4. Construct secondary/merged (discarded) items
+        const secondaryRows = secondaryRawMatches.map((m: any) => {
+          const raw = m.raw;
+          const parentParsed = m.parentParsed;
+          const parentBiomarkerName = parentParsed.name || parentParsed.biomarker || 'Unknown';
+          
+          let resolvedDate = parentParsed.date || 'N/A';
+          const historyDates = biomarkerHistory
+            .filter((h: any) => h.biomarkers?.[raw.key] !== undefined)
+            .map((h: any) => h.date);
+          if (historyDates.length > 0) {
+            resolvedDate = historyDates[0];
+          }
+
+          const hasDifferentDate = resolvedDate !== 'N/A' && parentParsed.date && resolvedDate !== parentParsed.date;
+
+          return {
+            key: raw.key,
+            biomarker: parentBiomarkerName,
+            oldName: raw.name,
+            isRenamed: true,
+            isUnitChanged: false,
+            oldUnit: raw.unit || '',
+            date: resolvedDate,
+            value: raw.value ?? 'N/A',
+            unit: parentParsed.metric || parentParsed.unit || '',
+            isNew: false,
+            isChanged: hasDifferentDate,
+            isAtRisk: false,
+            isSecondary: true,
+            // If the dates are different, keep it as "Changed" (Merged Kept), otherwise "To Delete"
+            status: hasDifferentDate ? 'Changed' : 'To Delete',
+            severity: 0,
+            normalRange: '',
+            changeReason: hasDifferentDate 
+              ? `Logged on different date (${resolvedDate}) under standardized key '${parentBiomarkerName}'.`
+              : `Merged into '${parentBiomarkerName}' and discarded.`,
+            riskReason: '',
+            description: hasDifferentDate 
+              ? `Deduplicated raw reading kept on separate date ${resolvedDate}.`
+              : `Deduplicated raw reading. Merged with value ${parentParsed.value}.`,
+            standardMedicalGrouping: parentParsed.standardMedicalGrouping || 'Other',
+            riskCategories: parentParsed.riskCategories || [],
+            potentialMedicalConditions: parentParsed.potentialMedicalConditions || []
+          };
+        });
+
+        // 5. Construct unmapped items as "To Delete"
+        const unmappedRows = unmappedRawMatches.map((m: any) => {
+          const raw = m.raw;
+          return {
+            key: raw.key,
+            biomarker: raw.name,
+            oldName: raw.name,
+            isRenamed: false,
+            isUnitChanged: false,
+            oldUnit: raw.unit || '',
+            date: 'N/A',
+            value: raw.value ?? 'N/A',
+            unit: raw.unit || '',
+            isNew: false,
+            isChanged: false,
+            isAtRisk: false,
+            isSecondary: true,
+            status: 'To Delete',
+            severity: 0,
+            normalRange: '',
+            changeReason: `Discarded during clinical standardization.`,
+            riskReason: '',
+            description: `Unmapped raw reading.`,
+            standardMedicalGrouping: 'Other',
+            riskCategories: [],
+            potentialMedicalConditions: []
+          };
+        });
+
+        return [...primaryRows, ...secondaryRows, ...unmappedRows];
+      }
+
+      // Fallback standard mapping when batchBiomarkers is not available
       return parsedRows.map((row: any) => {
-        const key = (row.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
-        const existingEntries = biomarkerHistory.filter((h: any) => h.biomarkers[key] !== undefined);
-        const isNew = existingEntries.length === 0;
+        const biomarkerName = row.biomarker || row.name || row.key || 'Unknown';
+        const key = String(biomarkerName).toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const existingEntries = (biomarkerHistory || []).filter((h: any) => h.biomarkers?.[key] !== undefined);
+        const isNew = row.noChangeNeeded ? false : (existingEntries.length === 0);
         
         // Determine severity of biomarker if clinical context is available in customBiomarkers
         const customDef = profile?.customBiomarkers?.[key];
@@ -145,32 +681,44 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           }
         }
 
-        let changeReason = `Extracted new ${row.biomarker || 'reading'}: ${row.value} ${row.unit || ''}`;
+        const rowUnit = row.unit || row.metric || '';
+        const newGroup = row.standardMedicalGrouping || 'Other';
+        const oldGroup = customDef?.standardMedicalGrouping || 'Other';
+        const isGroupChanged = !!customDef && newGroup !== oldGroup;
+
+        let changeReason = row.noChangeNeeded 
+          ? `No changes needed. Entry is already up-to-date.` 
+          : `Extracted new ${biomarkerName}: ${typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value || '')} ${rowUnit}`;
         let oldValue: any = undefined;
-        let isChanged = false;
-        if (!isNew && existingEntries.length > 0) {
+        let isChanged = isGroupChanged;
+        if (!row.noChangeNeeded && !isNew && existingEntries.length > 0) {
           const sortedHistory = [...existingEntries].sort((a, b) => b.date.localeCompare(a.date));
           const latestVal = sortedHistory[0].biomarkers[key];
           if (latestVal !== undefined) {
             if (String(latestVal) !== String(row.value)) {
               oldValue = latestVal;
               isChanged = true;
-              changeReason = `Value changed from ${latestVal} to ${row.value}`;
+              changeReason = `Value changed from ${latestVal} to ${typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value || '')}`;
+            } else if (isGroupChanged) {
+              changeReason = `Medical grouping changed from '${oldGroup}' to '${newGroup}'`;
             } else {
-              changeReason = `New reading of ${row.value} logged on ${row.date}`;
+              changeReason = `New reading of ${typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value || '')} logged on ${typeof row.date === 'object' ? JSON.stringify(row.date) : String(row.date || '')}`;
             }
           }
         }
 
         const riskReason = isAtRisk 
-          ? `Value ${row.value} ${row.unit || ''} is outside normal range (${normalRange})` 
+          ? `Value ${typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value || '')} ${rowUnit} is outside normal range (${normalRange})` 
           : '';
 
+        const explanation = row.explanation || row.changeReason || row.description || '';
+
         return {
-          biomarker: row.biomarker || 'Unknown',
+          key,
+          biomarker: biomarkerName,
           date: row.date || 'N/A',
           value: row.value ?? 'N/A',
-          unit: row.unit || '',
+          unit: rowUnit,
           isNew,
           isChanged,
           oldValue,
@@ -178,7 +726,13 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           severity: isAtRisk ? 1 : 0,
           normalRange,
           changeReason,
-          riskReason
+          riskReason,
+          description: explanation,
+          standardMedicalGrouping: row.standardMedicalGrouping || 'Other',
+          isGroupChanged,
+          oldGroup,
+          riskCategories: row.riskCategories || [],
+          potentialMedicalConditions: row.potentialMedicalConditions || []
         };
       });
     }
@@ -188,26 +742,32 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       const mapping = agentResult.bucketMapping || agentResult || {};
       const entries = Object.entries(mapping).filter(([k]) => k !== 'text' && k !== 'extractedYaml');
       
-      return entries.map(([bioName, mapData]: [string, any]) => {
-        const key = bioName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      return entries.filter((e: any) => e && typeof e === 'object').map(([bioName, mapData]: [string, any]) => {
+        const key = String(bioName).toLowerCase().replace(/[^a-z0-9]/g, '_');
         const existingDef = profile?.customBiomarkers?.[key];
         const newGroup = mapData.standardMedicalGrouping || 'Other';
         const oldGroup = existingDef?.standardMedicalGrouping || 'Other';
         const isGroupChanged = newGroup !== oldGroup;
-        const newCategories = (mapData.riskCategories || []).join(', ');
-        const oldCategories = (existingDef?.riskCategories || []).join(', ');
+        const newCategories = (Array.isArray(mapData.riskCategories) ? mapData.riskCategories : []).join(', ');
+        const oldCategories = (Array.isArray(existingDef?.riskCategories) ? existingDef?.riskCategories : []).join(', ');
         const isCategoryChanged = newCategories !== oldCategories;
         const isChanged = isGroupChanged || isCategoryChanged;
-        const isNew = !existingDef;
+        
+        const mergeInfo = mergedInfoForStep2[key];
+        const isMerged = !!mergeInfo?.isMerged;
+        const mergedFrom = mergeInfo?.mergedFrom || [];
+        const isNew = !existingDef && !isMerged;
 
         let changeReason = "";
-        if (isNew) {
+        if (isMerged) {
+          changeReason = `Merged from: ${mergedFrom.join(', ')}. Mapped ${bioName} to ${newGroup}`;
+        } else if (isNew) {
           changeReason = `Mapped ${bioName} to ${newGroup}`;
         }
 
         const hasRisk = mapData.riskCategories && mapData.riskCategories.length > 0;
         const riskReason = hasRisk 
-          ? `Associated with risk categories: ${mapData.riskCategories.join(', ')}` 
+          ? `Associated with risk categories: ${(Array.isArray(mapData.riskCategories) ? mapData.riskCategories : []).join(', ')}` 
           : "";
 
         return {
@@ -220,6 +780,8 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           isCategoryChanged,
           isNew,
           isChanged,
+          isMerged,
+          mergedFrom,
           severity: isCategoryChanged || isGroupChanged ? 1 : 0,
           changeReason,
           riskReason,
@@ -232,8 +794,8 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       // Step 3: Clinical Data Coordinator (Assembly)
       const buckets = Array.isArray(agentResult.buckets) ? agentResult.buckets : [];
       const allBiomarkers = buckets.flatMap((bucket: any) => {
-        return (bucket.biomarkers || []).map((b: any) => {
-          const key = (b.name || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+        return (bucket.biomarkers || []).filter((b: any) => b && typeof b === 'object').map((b: any) => {
+          const key = String(b.name || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
           const existingDef = profile?.customBiomarkers?.[key];
           const oldGroup = existingDef?.standardMedicalGrouping || 'Other';
           const isGroupChanged = bucket.systemName && bucket.systemName !== oldGroup;
@@ -244,7 +806,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
             if (!existingDef) {
               hasNewReadings = true;
             } else {
-              const existingDates = biomarkerHistory.filter((h: any) => h.biomarkers[key] !== undefined).map((h: any) => h.date);
+              const existingDates = (biomarkerHistory || []).filter((h: any) => h.biomarkers?.[key] !== undefined).map((h: any) => h.date);
               const newDates = b.history.filter((h: any) => h && h.date && !existingDates.includes(h.date));
               if (newDates.length > 0) {
                 hasNewReadings = true;
@@ -262,7 +824,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           const customDef = profile?.customBiomarkers?.[key];
           const hasRisk = customDef?.riskCategories && customDef.riskCategories.length > 0;
           const riskReason = hasRisk 
-            ? `Associated with risk categories: ${customDef.riskCategories.join(', ')}` 
+            ? `Associated with risk categories: ${(Array.isArray(customDef.riskCategories) ? customDef.riskCategories : []).join(', ')}` 
             : "";
 
           return {
@@ -290,7 +852,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       const conditions = Array.isArray(agentResult.prioritizedConditions) ? agentResult.prioritizedConditions : [];
       return conditions.flatMap((cond: any) => {
         return (Array.isArray(cond.biomarkers) ? cond.biomarkers : []).map((b: any) => {
-          const key = (b.key || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const key = String(b.key || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
           const existingDef = profile?.customBiomarkers?.[key];
           const oldGroup = existingDef?.standardMedicalGrouping || 'Other';
           const isGroupChanged = cond.conditionName && cond.conditionName !== oldGroup;
@@ -324,10 +886,10 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
 
     if (agentType === 'data_review') {
       const reviewed = Array.isArray(agentResult?.reviewedBiomarkers) ? agentResult.reviewedBiomarkers : [];
-      return reviewed.map((bm: any) => {
+      return reviewed.filter((r: any) => r && typeof r === 'object').map((bm: any) => {
         const isAtRisk = bm.status === 'At Risk' || bm.status === 'high' || bm.status === 'critical';
         return {
-          biomarker: bm.name || bm.key?.replace(/_/g, ' ').toUpperCase() || 'Unknown',
+          biomarker: bm.name || (bm.key ? String(bm.key).replace(/_/g, ' ').toUpperCase() : '') || 'Unknown',
           key: bm.key,
           value: bm.userValue !== undefined ? bm.userValue : '',
           unit: bm.unit || '',
@@ -357,13 +919,20 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
     let isNew = 0;
     let changed = 0;
     let synced = 0;
+    let toDelete = 0;
+    let merged = 0;
     tableData.forEach(row => {
-      if (row.isAtRisk) atRisk++;
-      if (row.isNew) isNew++;
-      else if (row.isChanged) changed++;
-      else synced++;
+      if (row.isSecondary && row.status === 'To Delete') {
+        toDelete++;
+      } else {
+        if (row.isAtRisk) atRisk++;
+        if (row.isMerged) merged++;
+        else if (row.isNew) isNew++;
+        else if (row.isChanged || row.isRenamed || row.isUnitChanged) changed++;
+        else synced++;
+      }
     });
-    return { atRisk, isNew, changed, synced };
+    return { atRisk, isNew, changed, synced, toDelete, merged };
   }, [tableData]);
 
   // 2. Perform sorting
@@ -375,30 +944,39 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       return data.sort((a, b) => {
         const isA = statusSortCategory === 'atRisk' ? a.isAtRisk 
                    : statusSortCategory === 'isNew' ? a.isNew
-                   : statusSortCategory === 'changed' ? (!a.isNew && a.isChanged)
-                   : (!a.isNew && !a.isChanged && !a.isAtRisk); // synced
+                   : statusSortCategory === 'changed' ? (!a.isNew && (a.isChanged || a.isRenamed || a.isUnitChanged) && !a.isMerged && !(a.isSecondary && a.status === 'To Delete'))
+                   : statusSortCategory === 'toDelete' ? (a.isSecondary && a.status === 'To Delete')
+                   : statusSortCategory === 'merged' ? a.isMerged
+                   : (!a.isNew && !a.isChanged && !a.isRenamed && !a.isUnitChanged && !a.isAtRisk && !a.isSecondary && !a.isMerged); // synced
         const isB = statusSortCategory === 'atRisk' ? b.isAtRisk 
                    : statusSortCategory === 'isNew' ? b.isNew
-                   : statusSortCategory === 'changed' ? (!b.isNew && b.isChanged)
-                   : (!b.isNew && !b.isChanged && !b.isAtRisk); // synced
+                   : statusSortCategory === 'changed' ? (!b.isNew && (b.isChanged || b.isRenamed || b.isUnitChanged) && !b.isMerged && !(b.isSecondary && b.status === 'To Delete'))
+                   : statusSortCategory === 'toDelete' ? (b.isSecondary && b.status === 'To Delete')
+                   : statusSortCategory === 'merged' ? b.isMerged
+                   : (!b.isNew && !b.isChanged && !b.isRenamed && !b.isUnitChanged && !b.isAtRisk && !b.isSecondary && !b.isMerged); // synced
         
         if (isA && !isB) return -1;
         if (!isA && isB) return 1;
         
         // Secondary fallback
-        const aChange = (a.isNew || a.isChanged) ? 1 : 0;
-        const bChange = (b.isNew || b.isChanged) ? 1 : 0;
+        const aChange = (a.isNew || a.isChanged || a.isMerged) ? 1 : 0;
+        const bChange = (b.isNew || b.isChanged || b.isMerged) ? 1 : 0;
         if (aChange !== bChange) return bChange - aChange;
         return (b.severity || 0) - (a.severity || 0);
       });
     }
     
     if (sortField === 'default') {
-      // Default: Sort by changes (isChanged/isNew first) or severity descending
+      // Default: Sort by changes (isChanged/isNew/isMerged first) or severity descending
       return data.sort((a, b) => {
-        // Primary: isNew or isChanged
-        const aChange = (a.isNew || a.isChanged) ? 1 : 0;
-        const bChange = (b.isNew || b.isChanged) ? 1 : 0;
+        // "To Delete" goes to bottom
+        const aDel = (a.isSecondary && a.status === 'To Delete') ? 1 : 0;
+        const bDel = (b.isSecondary && b.status === 'To Delete') ? 1 : 0;
+        if (aDel !== bDel) return aDel - bDel;
+
+        // Primary: isNew or isChanged or isMerged
+        const aChange = (a.isNew || a.isChanged || a.isRenamed || a.isUnitChanged || a.isMerged) ? 1 : 0;
+        const bChange = (b.isNew || b.isChanged || b.isRenamed || b.isUnitChanged || b.isMerged) ? 1 : 0;
         if (aChange !== bChange) return bChange - aChange;
         
         // Secondary: Severity
@@ -408,9 +986,11 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
 
     if (sortField === 'isNew') {
       const getStatusPriority = (row: any) => {
+        if (row.isSecondary && row.status === 'To Delete') return 0;
         if (row.isAtRisk) return 4;
+        if (row.isMerged) return 3.5;
         if (row.isNew) return 3;
-        if (row.isChanged) return 2;
+        if (row.isChanged || row.isRenamed || row.isUnitChanged) return 2;
         return 1; // Synced
       };
       return data.sort((a, b) => {
@@ -438,10 +1018,20 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
   const hasUpdateContent = useMemo(() => {
     return sortedData.some((row: any) => {
       const hasRisk = row.isAtRisk && row.riskReason;
-      const hasChange = row.isNew && row.changeReason;
-      return hasRisk || hasChange;
+      const hasChange = (row.isNew || row.isChanged || row.isRenamed || row.isUnitChanged) && row.changeReason;
+      const hasExplanation = !!row.description;
+      return hasRisk || hasChange || hasExplanation;
     });
   }, [sortedData]);
+
+  // Check if there are any new or changed entries to actually approve
+  const hasAnythingToApprove = useMemo(() => {
+    if (tableData.length === 0) return false;
+    if (agentType === 'agent1' || agentType === 'agent2' || agentType === 'agent3' || agentType === 'agent4') {
+      return counts.isNew > 0 || counts.changed > 0 || counts.toDelete > 0;
+    }
+    return tableData.length > 0;
+  }, [tableData, agentType, counts]);
 
   // 3. Verification calculation
   const verification = useMemo(() => {
@@ -451,17 +1041,49 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
     let differenceMsg = '';
 
     if (agentType === 'agent1') {
-      const initialMarkers = getInitialMarkersFromText(initialRawText);
-      initialCount = Math.max(initialMarkers.length, tableData.length);
-      
-      // Match missing
-      missingList = initialMarkers.filter(initName => {
-        const cleanInit = initName.toLowerCase().replace(/[^a-z0-9]/g, '');
-        return !tableData.some(row => {
-          const cleanRow = (row.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-          return cleanRow.includes(cleanInit) || cleanInit.includes(cleanRow);
+      if (agentResult?.batchBiomarkers && Array.isArray(agentResult.batchBiomarkers) && agentResult.batchBiomarkers.length > 0) {
+        initialCount = agentResult.batchBiomarkers.length;
+        // GeneratedCount shows the active primary table rows (excluding secondary duplicates)
+        generatedCount = tableData.filter(row => !row.isSecondary).length;
+        
+        // Find raw names that are not mapped/matched at all
+        const initialNames = (agentResult?.batchBiomarkers || []).map((b: any) => b.name || b.key || '');
+        missingList = initialNames.filter((initName: string) => {
+          if (!initName) return false;
+          const cleanInit = String(initName).toLowerCase().replace(/[^a-z0-9]/g, '');
+          
+          // Must not be in any primary row as biomarker or oldName
+          const existsInPrimary = tableData.some(row => {
+            if (row.isSecondary) return false;
+            const cleanRow = String(row.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const cleanOld = String(row.oldName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return cleanRow === cleanInit || cleanOld === cleanInit;
+          });
+          
+          if (existsInPrimary) return false;
+
+          // Must not be in any secondary row as oldName
+          const existsInSecondary = tableData.some(row => {
+            if (!row.isSecondary) return false;
+            const cleanOld = String(row.oldName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return cleanOld === cleanInit;
+          });
+
+          return !existsInSecondary;
         });
-      });
+      } else {
+        const initialMarkers = getInitialMarkersFromText(initialRawText);
+        initialCount = Math.max(initialMarkers.length, tableData.length);
+        
+        // Match missing
+        missingList = initialMarkers.filter(initName => {
+          const cleanInit = String(initName).toLowerCase().replace(/[^a-z0-9]/g, '');
+          return !tableData.some(row => {
+            const cleanRow = String(row.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return cleanRow.includes(cleanInit) || cleanInit.includes(cleanRow);
+          });
+        });
+      }
     } else if (agentType === 'agent2' || agentType === 'agent3') {
       // Count unique markers in preceding agent1 yaml
       const yamlMsg = [...(biomarkerHistory || [])]; // we can approximate or find inside raw YAML if supplied
@@ -484,7 +1106,12 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       } else if (generatedCount > initialCount) {
         differenceMsg = `Agent generated ${generatedCount - initialCount} additional rows or broken-down entries.`;
       } else {
-        differenceMsg = `Mismatch detected: Raw count was ${initialCount}, table has ${generatedCount}.`;
+        const mergeCount = tableData.filter(row => row.isSecondary && row.status === 'To Delete').length;
+        if (mergeCount > 0) {
+          differenceMsg = `${mergeCount} biomarkers were merged into standardized entries and marked as 'To Delete' to prevent duplication.`;
+        } else {
+          differenceMsg = `Mismatch detected: Raw count was ${initialCount}, table has ${generatedCount}.`;
+        }
       }
     }
 
@@ -529,7 +1156,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           {agentType === 'agent1' && tableHeader('Unit', 'unit')}
           {agentType === 'data_review' && tableHeader('User Value', 'value')}
           {agentType === 'data_review' && tableHeader('Calibrated Normal Range', 'normalRange')}
-          {(agentType === 'agent2' || agentType === 'agent3' || agentType === 'data_review') && tableHeader('Medical Grouping', 'group')}
+          {(agentType === 'agent1' || agentType === 'agent2' || agentType === 'agent3') && tableHeader('Medical Grouping', 'group')}
           {agentType === 'agent2' && tableHeader('Risk Categories', 'categories')}
           {agentType === 'agent3' && tableHeader('Total Readings', 'totalReadings')}
           {agentType === 'agent4' && tableHeader('Condition Association', 'condition')}
@@ -540,44 +1167,76 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
               {tableHeader('Medical Insight', 'insight')}
             </>
           ) : (
-            hasUpdateContent && tableHeader('Medical Insights', 'description')
+            hasUpdateContent && tableHeader('Description', 'description')
           )}
         </tr>
       </thead>
       <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
         {sortedData.map((row: any, idx: number) => {
-          const isRowHighlighted = row.isNew || row.isChanged || row.isAtRisk;
-          const bgClass = row.isAtRisk 
-            ? 'bg-rose-50/30 dark:bg-rose-950/10' 
-            : row.isNew 
-              ? 'bg-emerald-50/30 dark:bg-emerald-950/10' 
-              : row.isChanged 
-                ? 'bg-amber-50/30 dark:bg-amber-900/10' 
-                : 'bg-white dark:bg-slate-950';
+          const isRowHighlighted = row.isNew || row.isChanged || row.isAtRisk || row.isMerged || (row.isSecondary && row.status === 'To Delete');
+          const isToDelete = row.isSecondary && row.status === 'To Delete';
+          const bgClass = isToDelete
+            ? 'bg-rose-600 text-white dark:bg-rose-900'
+            : row.isAtRisk 
+              ? 'bg-rose-50/30 dark:bg-rose-950/10' 
+              : row.isMerged
+                ? 'bg-indigo-50/30 dark:bg-indigo-950/10'
+                : row.isNew 
+                  ? 'bg-emerald-50/30 dark:bg-emerald-950/10' 
+                  : row.isChanged || row.isRenamed || row.isUnitChanged
+                    ? 'bg-amber-50/30 dark:bg-amber-900/10' 
+                    : 'bg-white dark:bg-slate-950';
 
           return (
             <tr key={idx} className={`${bgClass} hover:bg-slate-50/50 dark:hover:bg-slate-900/40 transition-colors`}>
-              <td className="px-3 py-2 font-semibold text-slate-900 dark:text-slate-100">
-                {row.biomarker}
+              <td className="px-3 py-2 font-semibold">
+                <div className="flex flex-col gap-0.5">
+                  {row.isRenamed && row.oldName ? (
+                    <>
+                      <span className={`text-[10px] line-through leading-tight ${isToDelete ? 'text-rose-100/80 decoration-white' : 'text-slate-400 dark:text-slate-500 decoration-slate-400'}`}>
+                        {row.oldName}
+                      </span>
+                      <span className={`font-semibold leading-normal ${isToDelete ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>
+                        {row.biomarker}
+                      </span>
+                    </>
+                  ) : (
+                    <span className={`font-semibold ${isToDelete ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>
+                      {row.biomarker}
+                    </span>
+                  )}
+                  {row.isMerged && row.mergedFrom && row.mergedFrom.length > 0 && (
+                    <span className={`text-[9px] font-semibold mt-0.5 ${isToDelete ? 'text-rose-100' : 'text-indigo-600 dark:text-indigo-400'}`}>
+                      Merged from: {row.mergedFrom.join(', ')}
+                    </span>
+                  )}
+                </div>
               </td>
               
               {agentType === 'agent1' && (
                 <>
-                  <td className="px-3 py-2 text-slate-600 dark:text-slate-300 font-mono">
-                    {row.date}
+                  <td className={`px-3 py-2 font-mono ${isToDelete ? 'text-white' : 'text-slate-600 dark:text-slate-300'}`}>
+                    {typeof row.date === 'object' ? JSON.stringify(row.date) : String(row.date || '')}
                   </td>
                   <td className="px-3 py-2 font-mono">
                     {row.isChanged && row.oldValue !== undefined ? (
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-amber-600 dark:text-amber-400 font-bold leading-none">{row.value}</span>
-                        <span className="text-[9px] text-slate-400 line-through leading-none">{row.oldValue}</span>
+                        <span className={`font-bold leading-none ${isToDelete ? 'text-white' : 'text-amber-650 dark:text-amber-400'}`}>{typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value)}</span>
+                        <span className={`text-[9px] line-through leading-none ${isToDelete ? 'text-rose-100/80' : 'text-slate-400'}`}>{typeof row.oldValue === 'object' ? JSON.stringify(row.oldValue) : String(row.oldValue)}</span>
                       </div>
                     ) : (
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{row.value}</span>
+                      <span className={`font-bold ${isToDelete ? 'text-white' : 'text-slate-800 dark:text-slate-200'}`}>{typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value)}</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-slate-500 dark:text-slate-400">
-                    {row.unit}
+                  <td className="px-3 py-2">
+                    {row.isUnitChanged && row.oldUnit ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className={`text-[9px] line-through leading-none ${isToDelete ? 'text-rose-100/80' : 'text-slate-400'}`}>{row.oldUnit}</span>
+                        <span className={`font-bold leading-none ${isToDelete ? 'text-white' : 'text-slate-700 dark:text-slate-300'}`}>{typeof row.unit === 'object' ? JSON.stringify(row.unit) : String(row.unit)}</span>
+                      </div>
+                    ) : (
+                      <span className={`font-bold ${isToDelete ? 'text-white' : 'text-slate-700 dark:text-slate-300'}`}>{typeof row.unit === 'object' ? JSON.stringify(row.unit) : String(row.unit)}</span>
+                    )}
                   </td>
                 </>
               )}
@@ -585,7 +1244,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
               {agentType === 'data_review' && (
                 <>
                   <td className="px-3 py-2 font-mono text-slate-800 dark:text-slate-200 font-bold">
-                    {row.value} <span className="text-slate-500 font-normal text-[9.5px]">{row.unit}</span>
+                    {typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value || '')} <span className="text-slate-500 font-normal text-[9.5px]">{typeof row.unit === 'object' ? JSON.stringify(row.unit) : String(row.unit)}</span>
                   </td>
                   <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
                     <div className="flex flex-col gap-1.5 py-1">
@@ -607,7 +1266,70 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                 </>
               )}
 
-              {(agentType === 'agent2' || agentType === 'agent3' || agentType === 'data_review') && (
+              {agentType === 'agent1' && (
+                <td className="px-3 py-2">
+                  <div className="flex flex-col gap-1 py-1 max-w-[200px]">
+                    {row.isGroupChanged && row.oldGroup ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className={`font-bold leading-normal ${isToDelete ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`}>{row.standardMedicalGrouping}</span>
+                        <span className={`text-[8.5px] line-through leading-none ${isToDelete ? 'text-rose-100/80 decoration-white' : 'text-slate-400'}`}>{row.oldGroup}</span>
+                      </div>
+                    ) : (
+                      row.standardMedicalGrouping && (
+                        <span className={`font-semibold ${isToDelete ? 'text-white' : 'text-slate-800 dark:text-slate-200'}`}>
+                          {row.standardMedicalGrouping}
+                        </span>
+                      )
+                    )}
+                    {row.isRiskChanged && row.oldRiskCategories ? (
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex flex-wrap gap-1">
+                          {row.riskCategories.map((cat: string, catIdx: number) => (
+                            <span key={catIdx} className={`text-[8.5px] font-semibold px-1.5 py-0.5 rounded border ${isToDelete ? 'text-white bg-rose-700/50 border-rose-400/40' : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-200/20'}`}>
+                              {cat}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-1 opacity-60">
+                          {row.oldRiskCategories.map((cat: string, catIdx: number) => (
+                            <span key={catIdx} className={`text-[8.5px] line-through px-1.5 py-0.5 rounded border ${isToDelete ? 'text-rose-100/80 border-rose-400/20' : 'text-slate-400 border-slate-200 dark:border-slate-800'}`}>
+                              {cat}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      row.riskCategories && row.riskCategories.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {row.riskCategories.map((cat: string, catIdx: number) => (
+                            <span key={catIdx} className={`text-[8.5px] font-semibold px-1.5 py-0.5 rounded border ${isToDelete ? 'text-white bg-rose-700/50 border-rose-400/40' : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-200/20'}`}>
+                              {cat}
+                            </span>
+                          ))}
+                        </div>
+                      )
+                    )}
+                    {row.isConditionsChanged && row.oldConditions ? (
+                      <div className="flex flex-col gap-0.5">
+                        <div className={`text-[8.5px] leading-tight break-words ${isToDelete ? 'text-white' : 'text-amber-600 dark:text-amber-400 font-medium'}`}>
+                          <span className={`font-semibold ${isToDelete ? 'text-white' : 'text-amber-700 dark:text-amber-500'}`}>Conditions:</span> {(Array.isArray(row.potentialMedicalConditions) ? row.potentialMedicalConditions : []).join(', ')}
+                        </div>
+                        <div className={`text-[8.5px] leading-tight break-words line-through opacity-70 ${isToDelete ? 'text-rose-100/80' : 'text-slate-400'}`}>
+                          <span className="font-semibold">Old:</span> {(Array.isArray(row.oldConditions) ? row.oldConditions : []).join(', ')}
+                        </div>
+                      </div>
+                    ) : (
+                      row.potentialMedicalConditions && row.potentialMedicalConditions.length > 0 && (
+                        <div className={`text-[8.5px] leading-tight break-words ${isToDelete ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`}>
+                          <span className={`font-semibold ${isToDelete ? 'text-white animate-pulse' : 'text-slate-400'}`}>Conditions:</span> {(Array.isArray(row.potentialMedicalConditions) ? row.potentialMedicalConditions : []).join(', ')}
+                        </div>
+                      )
+                    )}
+                  </div>
+                </td>
+              )}
+
+              {(agentType === 'agent2' || agentType === 'agent3') && (
                 <td className="px-3 py-2">
                   {row.isGroupChanged ? (
                     <div className="flex flex-col gap-0.5">
@@ -617,24 +1339,6 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                   ) : (
                     <div className="flex flex-col gap-1.5 py-1">
                       <span className="font-semibold text-slate-900 dark:text-slate-100">{row.group}</span>
-                      {agentType === 'data_review' && (
-                        <>
-                          {row.riskCategories && row.riskCategories.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {row.riskCategories.map((cat: string, catIdx: number) => (
-                                <span key={catIdx} className="text-[9px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 px-1 py-0.5 rounded border border-amber-200/20">
-                                  {cat}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {row.potentialMedicalConditions && row.potentialMedicalConditions.length > 0 && (
-                            <div className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight">
-                              <span className="font-medium text-slate-450 dark:text-slate-500">Potential:</span> {row.potentialMedicalConditions.join(', ')}
-                            </div>
-                          )}
-                        </>
-                      )}
                     </div>
                   )}
                 </td>
@@ -675,13 +1379,17 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
               <td className="px-3 py-2 font-mono">
                 <div className="flex flex-col gap-0.5">
                   {row.isAtRisk && (
-                    <span className="text-rose-600 dark:text-rose-400 font-bold">At Risk</span>
+                    <span className={`${isToDelete ? 'text-white' : 'text-rose-600 dark:text-rose-400'} font-bold`}>At Risk</span>
                   )}
-                  {agentType === 'data_review' ? (
+                  {isToDelete ? (
+                    <span className="text-white font-bold decoration-white line-through">To Delete</span>
+                  ) : row.isMerged ? (
+                    <span className="text-indigo-600 dark:text-indigo-400 font-bold">Merged</span>
+                  ) : agentType === 'data_review' ? (
                     !row.isAtRisk && <span className="text-emerald-600 dark:text-emerald-400 font-bold">Optimal</span>
                   ) : row.isNew ? (
                     <span className="text-emerald-600 dark:text-emerald-400 font-bold">New</span>
-                  ) : row.isChanged ? (
+                  ) : row.isChanged || row.isRenamed || row.isUnitChanged || row.isGroupChanged ? (
                     <span className="text-amber-600 dark:text-amber-400 font-bold">Changed</span>
                   ) : (
                     <span className="text-slate-400 dark:text-slate-500">Synced</span>
@@ -692,7 +1400,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
               {agentType === 'data_review' ? (
                 <>
                   <td className="px-3 py-2 text-[11px] max-w-[200px] text-slate-900 dark:text-slate-100 break-words leading-relaxed">
-                    {row.description}
+                    {typeof row.description === 'object' ? JSON.stringify(row.description) : String(row.description || '')}
                   </td>
                   <td className="px-3 py-2 text-[11px] max-w-[240px] text-slate-900 dark:text-slate-100 break-words">
                     <div className="flex flex-col gap-1">
@@ -702,30 +1410,30 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                         </span>
                       )}
                       {row.insight && (
-                        <span className="leading-relaxed">{row.insight}</span>
+                        <span className="leading-relaxed">{typeof row.insight === 'object' ? JSON.stringify(row.insight) : String(row.insight || '')}</span>
                       )}
                     </div>
                   </td>
                 </>
               ) : (
                 hasUpdateContent && (
-                  <td className="px-3 py-2 text-[11px] max-w-[220px] text-slate-900 dark:text-slate-100 break-words">
+                  <td className="px-3 py-2 text-[11px] max-w-[220px] break-words">
                     <div className="flex flex-col gap-1">
                       {row.specificRiskContext && (
-                        <span className="leading-relaxed font-medium">
+                        <span className={`leading-relaxed font-medium text-[9.5px] ${isToDelete ? 'text-rose-100' : 'text-slate-800 dark:text-slate-200'}`}>
                           {row.specificRiskContext}
                         </span>
                       )}
                       {row.description && (
-                        <span className="leading-relaxed">{row.description}</span>
+                        <span className={`leading-relaxed ${isToDelete ? 'text-white' : 'text-slate-600 dark:text-slate-350'}`}>{typeof row.description === 'object' ? JSON.stringify(row.description) : String(row.description || '')}</span>
                       )}
                       {row.isAtRisk && row.riskReason && (
-                        <span className="text-rose-600 dark:text-rose-400 font-bold">
+                        <span className={`font-bold text-[9px] ${isToDelete ? 'text-white' : 'text-rose-600 dark:text-rose-400'}`}>
                           {row.riskReason}
                         </span>
                       )}
-                      {row.isNew && row.changeReason && (
-                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                      {(row.isNew || row.isChanged || row.isRenamed || row.isUnitChanged || row.isGroupChanged) && row.changeReason && (
+                        <span className={`font-bold text-[9px] leading-tight ${isToDelete ? 'text-white' : 'text-emerald-650 dark:text-emerald-400'}`}>
                           {row.changeReason}
                         </span>
                       )}
@@ -753,39 +1461,71 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       >
         Total: {tableData.length}
       </button>
-      <button
-        type="button"
-        onClick={() => setStatusSortCategory('atRisk')}
-        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
-          statusSortCategory === 'atRisk'
-            ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-300'
-            : 'bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 border-rose-200/20 hover:bg-rose-100/50'
-        }`}
-      >
-        At Risk: {counts.atRisk}
-      </button>
-      <button
-        type="button"
-        onClick={() => setStatusSortCategory('isNew')}
-        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
-          statusSortCategory === 'isNew'
-            ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300'
-            : 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-200/20 hover:bg-emerald-100/50'
-        }`}
-      >
-        New: {counts.isNew}
-      </button>
-      <button
-        type="button"
-        onClick={() => setStatusSortCategory('changed')}
-        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
-          statusSortCategory === 'changed'
-            ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-300'
-            : 'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200/20 hover:bg-amber-100/50'
-        }`}
-      >
-        Changed: {counts.changed}
-      </button>
+      {counts.atRisk > 0 && (
+        <button
+          type="button"
+          onClick={() => setStatusSortCategory('atRisk')}
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+            statusSortCategory === 'atRisk'
+              ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-300'
+              : 'bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 border-rose-200/20 hover:bg-rose-100/50'
+          }`}
+        >
+          At Risk: {counts.atRisk}
+        </button>
+      )}
+      {counts.isNew > 0 && (
+        <button
+          type="button"
+          onClick={() => setStatusSortCategory('isNew')}
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+            statusSortCategory === 'isNew'
+              ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300'
+              : 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-200/20 hover:bg-emerald-100/50'
+          }`}
+        >
+          New: {counts.isNew}
+        </button>
+      )}
+      {counts.changed > 0 && (
+        <button
+          type="button"
+          onClick={() => setStatusSortCategory('changed')}
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+            statusSortCategory === 'changed'
+              ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-300'
+              : 'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200/20 hover:bg-amber-100/50'
+          }`}
+        >
+          Changed: {counts.changed}
+        </button>
+      )}
+      {counts.merged > 0 && (
+        <button
+          type="button"
+          onClick={() => setStatusSortCategory('merged')}
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+            statusSortCategory === 'merged'
+              ? 'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-300'
+              : 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border-indigo-200/20 hover:bg-indigo-100/50'
+          }`}
+        >
+          Merged: {counts.merged}
+        </button>
+      )}
+      {counts.toDelete > 0 && (
+        <button
+          type="button"
+          onClick={() => setStatusSortCategory('toDelete' as any)}
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+            statusSortCategory === 'toDelete'
+              ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-300'
+              : 'bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 border-rose-200/20 hover:bg-rose-100/50'
+          }`}
+        >
+          To Delete: {counts.toDelete}
+        </button>
+      )}
       <button
         type="button"
         onClick={() => setStatusSortCategory('synced')}
@@ -882,7 +1622,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
 
       {/* Apply Changes Button or "No changes" info */}
       <div className="pt-1 space-y-2">
-        {!hasChanges && (
+        {!hasAnythingToApprove && (
           <div className="w-full py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 rounded-xl text-center text-xs text-slate-500 italic">
             No changes to apply. All biomarker entries are already up-to-date.
           </div>
@@ -898,7 +1638,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
             <ArrowRight className="w-4 h-4" />
             Continue to next step
           </button>
-        ) : onApplyChanges ? (
+        ) : (onApplyChanges && hasAnythingToApprove) ? (
           <button
             type="button"
             disabled={isApplying}
@@ -1015,7 +1755,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                 >
                   Close Explorer
                 </button>
-                {hasChanges && onApplyChanges && (
+                {hasAnythingToApprove && onApplyChanges && (
                   <button
                     type="button"
                     disabled={isApplying}

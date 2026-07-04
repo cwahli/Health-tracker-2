@@ -8,6 +8,7 @@ import {
 import LLMSelector from './LLMSelector';
 import { Agent5View, Agent6View, Agent7View } from './AgentResultViews';
 import { AgentResultTable } from './AgentResultTable';
+import { parse } from 'yaml';
 import { biomarkerDefinitions } from '../utils/biomarkers';
 
 interface InsightsTabProps {
@@ -32,6 +33,7 @@ interface InsightsTabProps {
   onDeleteAnalysis?: (id: string) => Promise<void>;
   onArchiveAnalysis?: (id: string) => Promise<void>;
   onUpdateProfile?: (profile: UserProfile) => Promise<void>;
+  onUpdateHistory?: (history: any[], biomarkers: { [key: string]: number | string }, updatedProfile?: UserProfile) => Promise<void>;
   batchSize?: number;
   onChangeBatchSize?: (size: number) => void;
 }
@@ -55,6 +57,7 @@ export default function InsightsTab({
   onArchiveAnalysis,
   biomarkerHistory,
   onUpdateProfile,
+  onUpdateHistory,
   batchSize = 20,
   onChangeBatchSize
 }: InsightsTabProps) {
@@ -128,6 +131,75 @@ export default function InsightsTab({
     });
   };
 
+  const hasStepSomethingToApprove = (step: any, latestAnalysis: any) => {
+    if (!latestAnalysis || !latestAnalysis.result) return false;
+    
+    if (step.id === 'data_review') {
+      return batches.some((_, bIdx) => !approvedBatches[bIdx] && batchAnalysisResults[bIdx]);
+    }
+    
+    if (step.agentType === 'agent1') {
+      const yamlText = latestAnalysis.result.extractedYaml || latestAnalysis.result;
+      let parsedRows: any[] = [];
+      if (Array.isArray(yamlText)) {
+        parsedRows = yamlText;
+      } else if (typeof yamlText === 'string') {
+        const cleanText = yamlText.replace(/```(?:yaml|json)?/gi, '').trim();
+        try {
+          const parsed = parse(cleanText);
+          if (Array.isArray(parsed)) parsedRows = parsed;
+          else if (parsed?.biomarkers && Array.isArray(parsed.biomarkers)) parsedRows = parsed.biomarkers;
+        } catch (e) {}
+      }
+      if (parsedRows.length === 0) return false;
+      
+      return parsedRows.some((row: any) => {
+        const key = (row.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+        if (!key) return false;
+        const existingEntries = (biomarkerHistory || []).filter((h: any) => h.biomarkers[key] !== undefined);
+        const isNew = existingEntries.length === 0;
+        if (isNew) return true;
+        
+        const sortedHistory = [...existingEntries].sort((a, b) => b.date.localeCompare(a.date));
+        const latestVal = sortedHistory[0].biomarkers[key];
+        if (latestVal !== undefined && String(latestVal) !== String(row.value)) {
+          return true;
+        }
+        return false;
+      });
+    }
+    
+    if (step.agentType === 'agent2') {
+      const mapping = latestAnalysis.result.bucketMapping || latestAnalysis.result || {};
+      const entries = Object.entries(mapping).filter(([k]) => k !== 'text' && k !== 'extractedYaml');
+      if (entries.length === 0) return false;
+      
+      return entries.some(([bioName, mapData]: [string, any]) => {
+        const key = bioName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const existingDef = profile?.customBiomarkers?.[key];
+        if (!existingDef) return true;
+        const newGroup = mapData.standardMedicalGrouping || 'Other';
+        const oldGroup = existingDef?.standardMedicalGrouping || 'Other';
+        if (newGroup !== oldGroup) return true;
+        const newCategories = (mapData.riskCategories || []).join(', ');
+        const oldCategories = (existingDef?.riskCategories || []).join(', ');
+        if (newCategories !== oldCategories) return true;
+        return false;
+      });
+    }
+    
+    if (step.agentType === 'agent3') {
+      return true;
+    }
+    
+    if (step.agentType === 'agent4') {
+      const conditions = Array.isArray(latestAnalysis.result.prioritizedConditions) ? latestAnalysis.result.prioritizedConditions : [];
+      return conditions.length > 0;
+    }
+    
+    return true;
+  };
+
   // Batch keys and splitting
   const markerKeys = React.useMemo(() => {
     return Object.keys(biomarkers).filter(k => biomarkers[k] !== undefined && biomarkers[k] !== null && biomarkers[k] !== '');
@@ -176,6 +248,51 @@ export default function InsightsTab({
   const [expandedBatches, setExpandedBatches] = useState<Record<number, boolean>>({});
   const [fullscreenBatchIndex, setFullscreenBatchIndex] = useState<number | null>(null);
 
+  const [approvedAgent1Batches, setApprovedAgent1Batches] = useState<Record<number, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('approved_agent1_batches');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {};
+  });
+
+  const [isAnalyzingAgent1Batch, setIsAnalyzingAgent1Batch] = useState<Record<number, boolean>>({});
+  const [agent1BatchResults, setAgent1BatchResults] = useState<Record<number, any>>(() => {
+    try {
+      const saved = localStorage.getItem('agent1_batch_results');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  const [expandedAgent1Batches, setExpandedAgent1Batches] = useState<Record<number, boolean>>({});
+
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      const checkAndSet = (key, setter) => {
+        try {
+          const saved = localStorage.getItem(key);
+          if (saved) {
+            setter(prev => {
+              if (JSON.stringify(prev) !== saved) {
+                return JSON.parse(saved);
+              }
+              return prev;
+            });
+          }
+        } catch (e) {}
+      };
+
+      checkAndSet('agent1_batch_results', setAgent1BatchResults);
+      checkAndSet('approved_agent1_batches', setApprovedAgent1Batches);
+      checkAndSet('batch_analysis_results', setBatchAnalysisResults);
+      checkAndSet('approved_data_review_batches', setApprovedBatches);
+    }, 1500);
+    return () => clearInterval(interval);
+  }, []);
+
   // Biomarkers grouped dynamically by risk categories
   const groupedBiomarkers = React.useMemo<Record<string, Array<{ key: string; name: string; present: boolean }>>>(() => {
     const groups: Record<string, Array<{ key: string; name: string; present: boolean }>> = {};
@@ -189,11 +306,14 @@ export default function InsightsTab({
     // Gather standard ones
     biomarkerDefinitions.forEach(def => {
       const present = isPresent(def.key);
-      const risks = def.riskCategories || ['Uncategorized'];
-      risks.forEach(cat => {
+      const customDef = profile?.customBiomarkers?.[def.key] as any;
+      let risks = (customDef && customDef.riskCategories) ? customDef.riskCategories : (def.riskCategories || ['Uncategorized']);
+      if (!Array.isArray(risks)) risks = [risks];
+      if (risks.length === 0) risks = ['Uncategorized'];
+      risks.forEach((cat: string) => {
         if (!groups[cat]) groups[cat] = [];
         if (!groups[cat].some(item => item.key === def.key)) {
-          groups[cat].push({ key: def.key, name: def.name, present });
+          groups[cat].push({ key: def.key, name: customDef?.name || def.name, present });
         }
       });
     });
@@ -201,8 +321,13 @@ export default function InsightsTab({
     // Custom/User ones in profile
     if (profile?.customBiomarkers) {
       Object.entries(profile.customBiomarkers).forEach(([key, def]) => {
+        // Skip if it's already a standard biomarker (handled above)
+        if (biomarkerDefinitions.some(d => d.key === key)) return;
+        
         const present = isPresent(key);
-        const risks = (def as any).riskCategories || ['Uncategorized'];
+        let risks = (def as any).riskCategories || ['Uncategorized'];
+        if (!Array.isArray(risks)) risks = [risks];
+        if (risks.length === 0) risks = ['Uncategorized'];
         risks.forEach((cat: string) => {
           if (!groups[cat]) groups[cat] = [];
           if (!groups[cat].some(item => item.key === key)) {
@@ -933,6 +1058,419 @@ export default function InsightsTab({
                           </button>
                         )}
                       </div>
+                    ) : step.id === 'agent1' ? (
+                      /* Interactive Data Cleaning / Standardization Batch-by-Batch UI */
+                      <div className="space-y-4">
+                        {batches.length === 0 ? (
+                          <div className="p-4 text-center bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 text-slate-500 text-xs">
+                            No biomarkers available. Please add some health data first in Step 1.
+                          </div>
+                        ) : (
+                          <div className="space-y-4 text-left">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/60 pb-3 mb-2">
+                              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                Biomarker Standardization Batches ({batchSize} items max)
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-medium text-slate-500">Items per batch:</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="100"
+                                  value={batchSizeInput}
+                                  onChange={(e) => {
+                                    const valStr = e.target.value;
+                                    setBatchSizeInput(valStr);
+                                    if (valStr !== '') {
+                                      const val = parseInt(valStr, 10);
+                                      if (!isNaN(val) && val > 0 && onChangeBatchSize) {
+                                        onChangeBatchSize(val);
+                                      }
+                                    }
+                                  }}
+                                  className="w-16 text-[10px] font-bold bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg px-2 py-1 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-text"
+                                />
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-3">
+                              {batches.map((batchKeys, bIdx) => {
+                                const isApproved = approvedAgent1Batches[bIdx];
+                                const isAnalyzing = isAnalyzingAgent1Batch[bIdx];
+                                const result = agent1BatchResults[bIdx];
+                                const isCurrentUnlocked = true;
+                                const isExpanded = expandedAgent1Batches[bIdx] ?? (!isApproved || !result);
+
+                                return (
+                                  <div 
+                                    key={bIdx} 
+                                    className={`p-4 rounded-2xl border transition-all ${
+                                      isApproved 
+                                        ? 'bg-emerald-50/10 border-emerald-500/20' 
+                                        : result 
+                                        ? 'bg-indigo-50/5 border-indigo-500/20'
+                                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-xl ${
+                                          isApproved 
+                                            ? 'bg-emerald-500/10 text-emerald-600' 
+                                            : result 
+                                            ? 'bg-indigo-500/10 text-indigo-600'
+                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                                        }`}>
+                                          <Database className="w-4 h-4" />
+                                        </div>
+                                        <div className="text-left">
+                                          <h5 className="text-[12px] font-bold text-slate-900 dark:text-white">
+                                            Batch {bIdx + 1}
+                                          </h5>
+                                          <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                                            {batchKeys.length} biomarkers assigned
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2">
+                                        {/* Status badge */}
+                                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider ${
+                                          isApproved 
+                                            ? 'bg-emerald-500/10 text-emerald-600' 
+                                            : result 
+                                            ? 'bg-indigo-500/10 text-indigo-600'
+                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                                        }`}>
+                                          {isApproved ? 'Approved & Logged' : result ? 'Cleaned' : 'Not Cleaned'}
+                                        </span>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setExpandedAgent1Batches(prev => ({ ...prev, [bIdx]: !isExpanded }));
+                                          }}
+                                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                                        >
+                                          {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Expanded Batch Details */}
+                                    {isExpanded && (
+                                      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/60 space-y-3">
+                                        {/* Biomarkers in this batch */}
+                                        <div>
+                                          <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                            Biomarkers in Batch {bIdx + 1}
+                                          </span>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {batchKeys.map((key) => {
+                                              const value = biomarkers[key];
+                                              const unit = profile?.customBiomarkers?.[key]?.unit || '';
+                                              return (
+                                                <div 
+                                                  key={key}
+                                                  className="px-2.5 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 rounded-lg text-[10px] font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
+                                                >
+                                                  <span className="font-bold text-slate-900 dark:text-white">
+                                                    {(key ? String(key).replace(/_/g, ' ').toUpperCase() : '')}
+                                                  </span>
+                                                  <span className="font-mono text-[9px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">
+                                                    {value} {unit}
+                                                  </span>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+
+                                        {/* Cleaning Result rendering */}
+                                        {result && (
+                                          <div className="space-y-2">
+                                            <span className="block text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                                              Standardized Extracted Clinical Terminology
+                                            </span>
+                                            
+                                            <div className="border border-slate-150 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm mt-2">
+                                              <AgentResultTable
+                                                agentType="agent1"
+                                                agentResult={result}
+                                                profile={profile}
+                                                biomarkerHistory={biomarkerHistory}
+                                                initialRawText={""}
+                                              />
+                                            </div>
+
+                                            <div className="bg-blue-50/40 dark:bg-blue-950/10 border border-blue-500/10 rounded-xl p-2.5 flex gap-2">
+                                              <Sparkles className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                                              <p className="text-[10px] text-blue-800 dark:text-blue-300 leading-relaxed">
+                                                Review the standardized terminologies, key matching, and metrics before approving the batch.
+                                              </p>
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* Action controls */}
+                                        {isCurrentUnlocked && (
+                                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-50 dark:border-slate-800/20">
+                                            <div className="flex gap-2">
+                                              {result && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setAgent1BatchResults(prev => {
+                                                      const updated = { ...prev };
+                                                      delete updated[bIdx];
+                                                      localStorage.setItem('agent1_batch_results', JSON.stringify(updated));
+                                                      return updated;
+                                                    });
+                                                    setApprovedAgent1Batches(prev => {
+                                                      const updated = { ...prev };
+                                                      delete updated[bIdx];
+                                                      localStorage.setItem('approved_agent1_batches', JSON.stringify(updated));
+                                                      return updated;
+                                                    });
+                                                  }}
+                                                  className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/20 dark:hover:bg-red-950/30 rounded-xl text-xs font-bold transition-all cursor-pointer border border-red-200/20"
+                                                >
+                                                  Reset Result
+                                                </button>
+                                              )}
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  if (onOpenAgentChat) {
+                                                    onOpenAgentChat('agent1', {
+                                                      dataReviewBatchIdx: bIdx,
+                                                      prefillMessage: `Clean and standardize Batch ${bIdx + 1} biomarkers`
+                                                    });
+                                                  }
+                                                }}
+                                                className="py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/25 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-150 dark:border-indigo-900/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                                title="Chat with Agent to calibrate or clean further"
+                                              >
+                                                <Send className="w-3.5 h-3.5" />
+                                                <span>Clean with Agent</span>
+                                              </button>
+                                              
+                                              {/* Approve Button / Checked state */}
+                                              {isApproved ? (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setApprovedAgent1Batches(prev => {
+                                                      const updated = { ...prev };
+                                                      delete updated[bIdx];
+                                                      localStorage.setItem('approved_agent1_batches', JSON.stringify(updated));
+                                                      return updated;
+                                                    });
+                                                  }}
+                                                  className="w-full py-2 bg-emerald-100 dark:bg-emerald-950/40 hover:bg-emerald-200 dark:hover:bg-emerald-900/60 transition-colors text-emerald-700 dark:text-emerald-400 border border-emerald-200/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                                                >
+                                                  <Check className="w-3.5 h-3.5" />
+                                                  <span>Approved (Undo)</span>
+                                                </button>
+                                              ) : (() => {
+                                                const yamlText = result ? (result.extractedYaml || result) : '';
+                                                let parsedRows: any[] = [];
+                                                if (typeof yamlText === 'string' && yamlText.trim() !== '') {
+                                                  try {
+                                                    const cleanText = yamlText.replace(/```(?:yaml|json)?/gi, '').trim();
+                                                    const parsed = parse(cleanText);
+                                                    parsedRows = Array.isArray(parsed) ? parsed : (parsed?.biomarkers || []);
+                                                  } catch (e) {}
+                                                } else if (Array.isArray(yamlText)) {
+                                                  parsedRows = yamlText;
+                                                }
+                                                const hasBatchToApprove = parsedRows.length > 0;
+                                                if (!hasBatchToApprove) return null;
+
+                                                return (
+                                                  <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                      // Parse the cleaned YAML
+                                                      const yamlText = result ? (result.extractedYaml || result) : '';
+                                                      let parsedRows: any[] = [];
+                                                      if (typeof yamlText === 'string' && yamlText.trim() !== '') {
+                                                        try {
+                                                          const cleanText = yamlText.replace(/```(?:yaml|json)?/gi, '').trim();
+                                                          const parsed = parse(cleanText);
+                                                          parsedRows = Array.isArray(parsed) ? parsed : (parsed?.biomarkers || []);
+                                                        } catch (e) {
+                                                          console.error("Failed to parse approved agent1 YAML", e);
+                                                        }
+                                                      } else if (Array.isArray(yamlText)) {
+                                                        parsedRows = yamlText;
+                                                      }
+
+                                                      // Save customBiomarkers to user profile and history
+                                                      const updatedCustoms = { ...(profile.customBiomarkers || {}) };
+                                                      let currentHistory = biomarkerHistory ? biomarkerHistory.map((h: any) => ({
+                                                        ...h,
+                                                        biomarkers: { ...h.biomarkers }
+                                                      })) : [];
+
+                                                      // 1. Identify which unstandardized raw keys were mapped to what standardized keys and migrate/delete
+                                                      if (result?.batchBiomarkers && Array.isArray(result.batchBiomarkers)) {
+                                                        result.batchBiomarkers.forEach((raw: any) => {
+                                                          const rawKey = raw.key;
+                                                          if (!rawKey) return;
+
+                                                          // Find best matched parsed row in the parsedRows output
+                                                          let bestParsedIdx = -1;
+                                                          let bestScore = -1;
+                                                          parsedRows.forEach((parsed: any, idx: number) => {
+                                                            if (parsed.originalName) {
+                                                              const cleanRawName = raw.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                              const cleanParsedOrigName = parsed.originalName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                              if (cleanRawName === cleanParsedOrigName || parsed.originalName === raw.name) {
+                                                                bestParsedIdx = idx;
+                                                              }
+                                                            }
+                                                            if (parsed.originalName) {
+                                                              const cleanRawName = raw.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                              const cleanParsedOrigName = parsed.originalName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                              if (cleanRawName === cleanParsedOrigName || parsed.originalName === raw.name) {
+                                                                bestParsedIdx = idx;
+                                                                return;
+                                                              }
+                                                            }
+                                                            const parsedKey = (parsed.key || parsed.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+                                                            const parsedName = (parsed.name || parsed.biomarker || '').toLowerCase();
+                                                            const explanation = (parsed.explanation || parsed.changeReason || parsed.description || '').toLowerCase();
+                                                            
+                                                            let score = 0;
+                                                            const cleanRawKey = rawKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                            const cleanParsedKey = parsedKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                            
+                                                            if (cleanRawKey === cleanParsedKey) {
+                                                              score += 100;
+                                                            } else if (cleanRawKey.includes(cleanParsedKey) || cleanParsedKey.includes(cleanRawKey)) {
+                                                              score += 40;
+                                                            }
+                                                            if (explanation.includes(rawKey.toLowerCase())) {
+                                                              score += 80;
+                                                            }
+                                                            if (score > bestScore) {
+                                                              bestScore = score;
+                                                              bestParsedIdx = idx;
+                                                            }
+                                                          });
+
+                                                          if (bestParsedIdx !== -1) {
+                                                            const parsedRow = parsedRows[bestParsedIdx];
+                                                            const stdKey = (parsedRow.standardizedName || parsedRow.key || parsedRow.name || parsedRow.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+                                                            const action = String(parsedRow.Action || parsedRow.action || '').toLowerCase();
+                                                            
+                                                            if (action.includes('delete')) {
+                                                              currentHistory.forEach((log: any) => {
+                                                                if (log.biomarkers && log.biomarkers[rawKey] !== undefined) {
+                                                                  delete log.biomarkers[rawKey];
+                                                                }
+                                                              });
+                                                              delete updatedCustoms[rawKey];
+                                                            } else if (stdKey && rawKey !== stdKey) {
+                                                              // Migrate existing values from rawKey to stdKey across all historical logs, then delete rawKey
+                                                              currentHistory.forEach((log: any) => {
+                                                                if (log.biomarkers && log.biomarkers[rawKey] !== undefined) {
+                                                                  const valueToMigrate = log.biomarkers[rawKey];
+                                                                  log.biomarkers[stdKey] = valueToMigrate;
+                                                                  delete log.biomarkers[rawKey];
+                                                                }
+                                                              });
+
+                                                              // Delete from customBiomarkers list
+                                                              delete updatedCustoms[rawKey];
+                                                            }
+                                                          } else {
+                                                            // Completely unmapped/deleted raw item: delete from all historical logs and custom definitions
+                                                            currentHistory.forEach((log: any) => {
+                                                              if (log.biomarkers && log.biomarkers[rawKey] !== undefined) {
+                                                                delete log.biomarkers[rawKey];
+                                                              }
+                                                            });
+                                                            delete updatedCustoms[rawKey];
+                                                          }
+                                                        });
+                                                      }
+
+                                                      // 2. Apply newly cleaned/standardized readings from parsedRows
+                                                      parsedRows.forEach((row: any) => {
+                                                        const key = row.key || (row.name || row.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+                                                        if (!key) return;
+
+                                                        const name = row.name || row.biomarker || 'Unknown';
+                                                        const unit = row.metric || row.unit || '';
+                                                        const value = row.value !== undefined ? parseFloat(row.value) : undefined;
+                                                        const date = row.date || new Date().toISOString().split('T')[0];
+
+                                                        // Update customBiomarker definition
+                                                        updatedCustoms[key] = {
+                                                          ...(updatedCustoms[key] || {}),
+                                                          name,
+                                                          unit,
+                                                          riskCategories: row.riskCategories || [],
+                                                          standardMedicalGrouping: row.standardMedicalGrouping || 'Other',
+                                                          potentialMedicalConditions: row.potentialMedicalConditions || []
+                                                        } as any;
+
+                                                        // Not overriding or duplicating values in history here because we simply map keys for data cleaning.
+                                                      });
+
+                                                      currentHistory.sort((a, b) => b.date.localeCompare(a.date));
+
+                                                      // Recompute biomarkers list
+                                                      const recomputedBiomarkers: { [key: string]: number | string } = {};
+                                                      [...currentHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+                                                        Object.entries(log.biomarkers).forEach(([k, v]) => {
+                                                          recomputedBiomarkers[k] = v as string | number;
+                                                        });
+                                                      });
+
+                                                      const updatedProfile = {
+                                                        ...profile,
+                                                        customBiomarkers: updatedCustoms
+                                                      };
+
+                                                      if (onUpdateProfile) {
+                                                        await onUpdateProfile(updatedProfile);
+                                                      }
+                                                      if (onUpdateHistory) {
+                                                        await onUpdateHistory(currentHistory, recomputedBiomarkers, updatedProfile);
+                                                      }
+
+                                                      // Mark as approved
+                                                      setApprovedAgent1Batches(prev => {
+                                                        const updated = { ...prev, [bIdx]: true };
+                                                        localStorage.setItem('approved_agent1_batches', JSON.stringify(updated));
+                                                        return updated;
+                                                      });
+                                                    }}
+                                                    className="py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-md shadow-emerald-600/10 cursor-pointer"
+                                                  >
+                                                    <Check className="w-3.5 h-3.5" />
+                                                    <span>Approve</span>
+                                                  </button>
+                                                );
+                                              })()}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ) : step.id === 'data_review' ? (
                       /* Interactive Data Review / Calibration Batch-by-Batch UI */
                       <div className="space-y-4">
@@ -1005,7 +1543,7 @@ export default function InsightsTab({
                                           </span>
                                         </h5>
                                         <div className={`text-[10px] text-slate-400 mt-0.5 font-medium ${isExpanded ? '' : 'line-clamp-2'}`}>
-                                          {batchKeys.map(k => k.replace(/_/g, ' ').toLowerCase()).join(', ')}
+                                          {batchKeys.map(k => (k ? String(k).replace(/_/g, ' ').toLowerCase() : '')).join(', ')}
                                         </div>
                                       </div>
                                       
@@ -1114,53 +1652,70 @@ export default function InsightsTab({
                                               
                                               {/* Approve Button / Checked state */}
                                               {isApproved ? (
-                                                <div className="py-2 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1 select-none">
-                                                  <Check className="w-3.5 h-3.5" />
-                                                  <span>Approved</span>
-                                                </div>
-                                              ) : (
                                                 <button
                                                   type="button"
-                                                  onClick={async () => {
-                                                    // Save customBiomarkers to user profile
-                                                    const updatedCustoms = { ...(profile.customBiomarkers || {}) };
-                                                    result.reviewedBiomarkers?.forEach((bm: any) => {
-                                                      updatedCustoms[bm.key] = {
-                                                        name: bm.name,
-                                                        unit: bm.unit,
-                                                        normalRange: bm.profileAdjustedNormalRange || '',
-                                                        description: bm.description || '',
-                                                        riskCategories: bm.riskCategories || [],
-                                                        standardMedicalGrouping: bm.standardMedicalGrouping || 'Other',
-                                                        potentialMedicalConditions: bm.potentialMedicalConditions || [],
-                                                        specificRiskContext: bm.specificRiskContext || '',
-                                                        status: bm.status || 'Healthy',
-                                                        rangeBrackets: bm.rangeBrackets || []
-                                                      } as any;
-                                                    });
-
-                                                    const updatedProfile = {
-                                                      ...profile,
-                                                      customBiomarkers: updatedCustoms
-                                                    };
-
-                                                    if (onUpdateProfile) {
-                                                      await onUpdateProfile(updatedProfile);
-                                                    }
-
-                                                    // Mark as approved
+                                                  onClick={() => {
                                                     setApprovedBatches(prev => {
-                                                      const updated = { ...prev, [bIdx]: true };
+                                                      const updated = { ...prev };
+                                                      delete updated[bIdx];
                                                       localStorage.setItem('approved_data_review_batches', JSON.stringify(updated));
                                                       return updated;
                                                     });
                                                   }}
-                                                  className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer shadow-md shadow-emerald-600/10"
+                                                  className="w-full py-2 bg-emerald-100 dark:bg-emerald-950/40 hover:bg-emerald-200 dark:hover:bg-emerald-900/60 transition-colors text-emerald-700 dark:text-emerald-400 border border-emerald-200/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
                                                 >
                                                   <Check className="w-3.5 h-3.5" />
-                                                  <span>Approve</span>
+                                                  <span>Approved (Undo)</span>
                                                 </button>
-                                              )}
+                                              ) : (() => {
+                                                const reviewed = Array.isArray(result?.reviewedBiomarkers) ? result.reviewedBiomarkers : [];
+                                                const hasCalibrationToApprove = reviewed.length > 0;
+                                                if (!hasCalibrationToApprove) return null;
+
+                                                return (
+                                                  <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                      // Save customBiomarkers to user profile
+                                                      const updatedCustoms = { ...(profile.customBiomarkers || {}) };
+                                                      result.reviewedBiomarkers?.forEach((bm: any) => {
+                                                        updatedCustoms[bm.key] = {
+                                                          name: bm.name,
+                                                          unit: bm.unit,
+                                                          normalRange: bm.profileAdjustedNormalRange || '',
+                                                          description: bm.description || '',
+                                                          riskCategories: bm.riskCategories || [],
+                                                          standardMedicalGrouping: bm.standardMedicalGrouping || 'Other',
+                                                          potentialMedicalConditions: bm.potentialMedicalConditions || [],
+                                                          specificRiskContext: bm.specificRiskContext || '',
+                                                          status: bm.status || 'Healthy',
+                                                          rangeBrackets: bm.rangeBrackets || []
+                                                        } as any;
+                                                      });
+
+                                                      const updatedProfile = {
+                                                        ...profile,
+                                                        customBiomarkers: updatedCustoms
+                                                      };
+
+                                                      if (onUpdateProfile) {
+                                                        await onUpdateProfile(updatedProfile);
+                                                      }
+
+                                                      // Mark as approved
+                                                      setApprovedBatches(prev => {
+                                                        const updated = { ...prev, [bIdx]: true };
+                                                        localStorage.setItem('approved_data_review_batches', JSON.stringify(updated));
+                                                        return updated;
+                                                      });
+                                                    }}
+                                                    className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer shadow-md shadow-emerald-600/10"
+                                                  >
+                                                    <Check className="w-3.5 h-3.5" />
+                                                    <span>Approve</span>
+                                                  </button>
+                                                );
+                                              })()}
                                             </div>
                                           </div>
                                         )}
@@ -1264,7 +1819,7 @@ export default function InsightsTab({
                             </div>
 
                             {status === 'To review' && (
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1">
+                              <div className={`grid grid-cols-1 ${hasStepSomethingToApprove(step, latestAnalysis) ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-2 pt-1`}>
                                 <button
                                   onClick={() => onArchiveAnalysis?.(latestAnalysis.id)}
                                   className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
@@ -1286,13 +1841,15 @@ export default function InsightsTab({
                                   <Send className="w-3.5 h-3.5 text-slate-400" />
                                   Review
                                 </button>
-                                <button
-                                  onClick={() => handleApproveStep(index)}
-                                  className="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/10"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                  Approve
-                                </button>
+                                {hasStepSomethingToApprove(step, latestAnalysis) && (
+                                  <button
+                                    onClick={() => handleApproveStep(index)}
+                                    className="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/10"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    Approve
+                                  </button>
+                                )}
                               </div>
                             )}
 

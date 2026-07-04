@@ -1307,7 +1307,7 @@ app.post("/api/gemini/medical-analyze", async (req, res) => {
       let mockData: any = {};
       let fullPromptSent = "";
 
-      if (agentType === "agent1" || agentType === "agent1_step1") {
+      if (agentType === "agent1_step1") {
         const isFlashLite = engine && (engine.includes("lite") || engine.includes("flash-lite"));
         const maxMetrics = isFlashLite ? 50 : 100;
         systemInstruction = `You are a clinical data parser and conversational health assistant (Step 1: Clinical Triage).
@@ -1335,15 +1335,51 @@ YAML Schema for "extractedYaml" field (must be a single string containing valid 
   date: YYYY-MM-DD
   value: number
   unit: string
+  explanation: string # Detailed explanation of why you standardized, changed, merged or corrected this entry
 
 Rules for handling user inputs:
-- INITIAL/RAW DATA extraction: If the user provided a health report, extract biomarkers from the USER RAW DATA section ONLY. Do NOT extract data from the EXISTING BIOMARKER LOGS section into your YAML (that is just for context). If there are more than ${maxMetrics}, extract ONLY the first ${maxMetrics} entries and apply the chunking rule. If multiple readings of the same marker on the same date exist under slightly different names, merge them. Output the flat YAML in "extractedYaml", and set "text" to "I have extracted the first ${maxMetrics} biomarkers. There are more biomarkers left in your report. Would you like to continue?" Count the total estimated biomarker readings in the input and set "estimatedTotalMarkers" accordingly (CRITICAL: Do NOT limit this count to the first ${maxMetrics} - this must be the grand total of all markers across the entire raw report).
-- CONTINUE EXTRACTING: If the user requests to "continue", "continue extracting", or similar (they may pass the original text again), take the previous "extractedYaml" and append/extract the next chunk of up to ${maxMetrics} biomarkers from the original raw text that are NOT ALREADY in the previous YAML. Output the COMBINED, COMPLETE flat YAML (the previous entries plus the new ones) in "extractedYaml". Set "hasMoreMarkers" and "remainingText" accordingly. Make sure to keep the correct "estimatedTotalMarkers" value (the total for the whole document).
+- INITIAL/RAW DATA extraction: If the user provided a health report, extract biomarkers from the USER RAW DATA section ONLY. Do NOT extract data from the EXISTING BIOMARKER LOGS section into your YAML (that is just for context). If there are more than ${maxMetrics}, extract ONLY the first ${maxMetrics} entries and apply the chunking rule. If multiple readings of the same marker on the same date exist under slightly different names, merge them. Output the flat YAML in "extractedYaml", and set "text" to "I have extracted the first ${maxMetrics} biomarkers. There are more biomarkers left in your report. Would you like to continue?" Count the total estimated biomarker readings in the input and set "estimatedTotalMarkers" accordingly (CRITICAL: Do NOT limit this count to the first ${maxMetrics} - this must be the grand total of all markers across the entire raw report). For every standardized, renamed, merged or corrected entry, you MUST provide a detailed explanation of what was changed and why in the 'explanation' field.
+- CONTINUE EXTRACTING: If the user requests to "continue", "continue extracting", or similar (they may pass the original text again), take the previous "extractedYaml" and append/extract the next chunk of up to ${maxMetrics} biomarkers from the original raw text that are NOT ALREADY in the previous YAML. Output the COMBINED, COMPLETE flat YAML (the previous entries plus the new ones) in "extractedYaml". Set "hasMoreMarkers" and "remainingText" accordingly. Make sure to keep the correct "estimatedTotalMarkers" value (the total for the whole document). Ensure you provide a detailed explanation of why any name or unit was standardized in the 'explanation' field.
 - UPDATE DATA: If the user asks to edit, add, or delete a biomarker or value (e.g., "Change ALT on 2026-06-01 to 45"), perform that update on the YAML and return the updated "extractedYaml" string, explaining the change in "text". DO NOT delete locked biomarkers (bmi, weight, height) - they can only be updated/renamed, never deleted.
 - START A CONVERSATION: If the user asks general or clinical questions about the biomarkers or their values (e.g., "What does ALT mean?"), answer the question in "text" with precise clinical detail, and return the unmodified YAML in "extractedYaml".
 - GO BACK / CONTINUE / SUBMIT: If the user asks to go back or continue, explain the current step in "text" (we are currently on Step 1: Data Extraction. They can click "Continue to Map Data" when ready, or we can discuss/update the extracted readings first).
 
 Make sure your entire output is valid JSON, containing "text", "extractedYaml", "hasMoreMarkers", "remainingText", and "estimatedTotalMarkers".`;
+        mockData = {};
+      } else if (agentType === "agent1") {
+        systemInstruction = `You are an expert Clinical Data Parser and Conversational Health Assistant.
+Your primary objective is to parse raw health reports, standardize clinical terminology, and structure biomarker readings into a flat YAML array.
+
+=== CORE TASKS ===
+1. Extraction & Standardization: Convert every biomarker name into its most widely accepted standard clinical terminology (e.g., "Serum alt level" and "Serum alt" must both map to the standardized name "Alanine Aminotransferase (ALT)").
+2. Unit Verification: Validate the unit of measurement (e.g. mmol/L, g/L, %, g/dL). If the incoming unit is standard, keep it. If a unit is missing or non-standard, translate/re-map to the most standard clinical unit based on typical physiological scales. Do not perform conversions, keep the raw numeric value intact but label it with the correct standard unit.
+3. Deduplication Logic:
+   - Merge: If multiple entries for the same biomarker have the exact same log date, keep only the latest reading (by sequence or state) and discard duplicates.
+   - Flag for Deletion: If a record is explicitly marked for deletion, do not include it.
+   - Flag for Review: If a value is biologically impossible/highly anomalous, flag it by adding a comment in YAML (e.g. '# Flagged: anomalous value').
+4. Clinical Mapping: For each biomarker, map it to:
+   - riskCategories: Physiological risk categories (e.g., 'Cardiovascular', 'Kidney & hydration', 'Metabolic & glycemic', 'Liver & hepatitis stress', 'Hematology', 'Biometrics', 'Other').
+   - standardMedicalGrouping: Main clinical division ('Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Other').
+   - potentialMedicalConditions: Broad diagnostic associations.
+5. Explanation of Changes (CRITICAL): For each biomarker, if you standardized, changed, merged, or corrected its name, value, or unit, you MUST provide a detailed explanation of why you made this change in the 'explanation' field of the YAML object. Be highly professional and detailed (e.g., "Standardized raw name 'HAEMOGLOBIN ESTIMATION' to standard 'Hemoglobin' and validated metric as g/L").
+
+=== FORMAT & SYSTEM RESTRICTIONS ===
+Your output MUST be ONLY valid YAML under the key 'biomarkers'. No markdown code blocks, no backticks, no JSON wrappers. Just return plain YAML.
+
+The flat YAML structure for each item MUST be:
+- key: 'alanine_aminotransferase_alt' # snake_case unique ID
+  name: 'Alanine Aminotransferase (ALT)'
+  metric: 'U/L'
+  value: 45
+  date: '2026-06-01'
+  riskCategories:
+    - 'Liver & hepatitis stress'
+  standardMedicalGrouping: 'Hepatic'
+  potentialMedicalConditions:
+    - 'Fatty Liver'
+    - 'Hepatitis Stress'
+  explanation: 'Standardized from raw alt level and validated metric as U/L.'
+  # Comment if anomalous`;
         mockData = {};
       } else if (agentType === "agent2" || agentType === "agent1_step2") {
         systemInstruction = `You are an expert Clinical Ontologist and conversational health assistant (Step 2: Category Mapping).
@@ -1732,13 +1768,7 @@ CRITICAL: Never output boilerplate text stating that demographic details are not
 
 CRITICAL BIAS OVERRIDE: Medical baselines in training data heavily skew toward recent Western/Global consensus (e.g., KDIGO, WHO global). You MUST actively bypass global/race-free standards and aggressively search your latent knowledge for local national medical boards (e.g., Chinese Society of Nephrology, Asian-modified CKD-EPI/MDRD coefficients, Asian BMI variants). If a regional coefficient or localized threshold exists historically or currently for the user's \`ethnicity\`, you MUST prioritize and apply it over Western defaults.
 
-=== TASK A: CLASSIFICATION ===
-For each biomarker in the input list, analyze and map it to:
-- "riskCategories": Matching physiological risk categories. (Cardiovascular, Kidney, Metabolic, Liver, Hematology, Biometric, Other)
-- "standardMedicalGrouping": Exactly ONE main medical division ('Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Other').
-- "potentialMedicalConditions": Broad diagnostic associations.
-
-=== TASK B: PERSONALISED HEALTH RISK ESTIMATION ===
+=== TASK: PERSONALISED HEALTH RISK ESTIMATION ===
 For each biomarker, follow a strict logical funnel to determine the correct ranges and status:
 - "_demographicAudit": A mandatory internal reasoning object where you actively contrast Western global standards with regional/ethnic guidelines. 
 - "profileAdjustedNormalRange": The final calibrated range based on your audit. 
@@ -1749,8 +1779,7 @@ For each biomarker, follow a strict logical funnel to determine the correct rang
 - "specificRiskContext": If 'At Risk', explain why this value matters for this demographic or provide reassurance if only mildly out of range. If 'Healthy', describe why this signifies optimal homeostasis.
 
 === CRITICAL REQUIREMENTS ===
-1. You MUST include an analysis for EVERY biomarker in the input list.
-2. Ensure output is STRICTLY valid JSON matching the exact abstract structure and placeholder instructions below.
+1. Ensure output is STRICTLY valid JSON matching the exact abstract structure and placeholder instructions below.
 
 {
   "message": "<string: Conversational summary of clinical range adjustments and review findings for this batch.>",
@@ -1760,9 +1789,6 @@ For each biomarker, follow a strict logical funnel to determine the correct rang
       "name": "<string: Standard clinical name of the biomarker>",
       "userValue": <number: Exact value from the input data>,
       "unit": "<string: Exact unit from the input data>",
-      "riskCategories": ["<string>", "<string>"],
-      "standardMedicalGrouping": "<string: Must be one of the approved categories in Task A>",
-      "potentialMedicalConditions": ["<string>", "<string>"],
       "_demographicAudit": {
         "standardWesternBaseline": "<string: The textbook global/Western range>",
         "knownEthnicOrRegionalVariances": "<string: CRITICAL STEP. You MUST actively prioritize local national medical board guidelines (e.g., Chinese/Japanese Societies of Nephrology) or ethnic-modified formulas over global/race-free standards. State the exact regional variant and the society it comes from. If absolutely none exist, state 'None'>",
@@ -1867,6 +1893,10 @@ Return ONLY raw JSON.`;
           const batchData = req.body.batchBiomarkers || [];
           const baseData = customVariableData ? `\n\n${customVariableData}\n` : `\n\nUSER PROFILE:\n${JSON.stringify(cleanProfile, null, 2)}\n`;
           dataContext = `${baseData}\n\nBIOMARKERS BATCH FOR REVIEW:\n${JSON.stringify(batchData, null, 2)}\n`;
+        } else if (agentType === "agent1") {
+          const batchData = req.body.batchBiomarkers || [];
+          const baseData = customVariableData ? `\n\n${customVariableData}\n` : `\n\nUSER PROFILE:\n${JSON.stringify(cleanProfile, null, 2)}\n`;
+          dataContext = `${baseData}\n\nBIOMARKERS BATCH FOR CLEANING:\n${JSON.stringify(batchData, null, 2)}\n`;
         } else {
           const yamlData = jsToYaml(cleanedPayload);
           const baseData = customVariableData ? `\n\n${customVariableData}\n` : "";
@@ -1880,7 +1910,7 @@ Return ONLY raw JSON.`;
         let promptText = `Chat History:\n${historyText}\n${imageCtx}\nUser message: "${message}"${dataContext}`;
         fullPromptSent = `System Instruction:\n${systemInstruction}\n\n${promptText}`;
 
-        let isYaml = false;
+        let isYaml = (agentType === "agent1");
         
         let maxRetries = agentType === "agent1_step3" ? 3 : 1;
         let attempt = 0;
@@ -1976,6 +2006,18 @@ Return ONLY raw JSON.`;
         });
       }
 
+      if (agentType === "agent1") {
+        let cleanYaml = textOutput.replace(/```(?:yaml)?/gi, "").trim();
+        return res.json({
+          text: "I have cleaned and standardized your batch of biomarkers with clinical precision.",
+          agentType,
+          extractedYaml: cleanYaml,
+          agentPrompt: fullPromptSent,
+          batchIdx: req.body.batchIdx !== undefined ? req.body.batchIdx : undefined,
+          batchBiomarkers: req.body.batchBiomarkers || []
+        });
+      }
+
       if (agentType === "agent1_step2") {
         let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
         let text = "I have categorized the biomarkers. Please review the mapping.";
@@ -2007,7 +2049,8 @@ Return ONLY raw JSON.`;
           text,
           agentType,
           bucketMapping,
-          agentPrompt: fullPromptSent
+          agentPrompt: fullPromptSent,
+          batchBiomarkers: req.body.batchBiomarkers || []
         });
       }
 
@@ -2022,6 +2065,7 @@ Return ONLY raw JSON.`;
         text: parsedData.message || 'Analysis generated.',
         agentType,
         agentPrompt: fullPromptSent,
+        batchBiomarkers: req.body.batchBiomarkers || [],
         ...parsedData
       });
     }
