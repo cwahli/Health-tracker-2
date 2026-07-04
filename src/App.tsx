@@ -17,7 +17,7 @@ import { Plus, HeartHandshake, RefreshCw, Sparkles, Stethoscope, Utensils, Loade
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, getDocFromServer, getDocsFromServer, onSnapshot, getDocsFromCache, writeBatch } from 'firebase/firestore';
-import { getCurrentDateInTimezone } from './utils/dateUtils';
+import { getCurrentDateInTimezone, normalizeBiomarkerHistory } from './utils/dateUtils';
 import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint } from './utils/biomarkers';
 import { get, set } from 'idb-keyval';
 const LOCAL_STORAGE_KEY = 'health_cockpit_app_data';
@@ -227,6 +227,7 @@ export default function App() {
     localStorage.setItem('dismissedBmiAlerts', JSON.stringify(updated));
   };
   const [activeTab, setActiveTab] = useState<'home' | 'insights' | 'food' | 'medical' | 'trends'>('home');
+  const [initiallyExpandedFoodId, setInitiallyExpandedFoodId] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<'synced' | 'syncing' | 'local'>('local');
   const [isFirestoreQuotaExceeded, setIsFirestoreQuotaExceeded] = useState<boolean>(() => {
     return localStorage.getItem('firestore_quota_exceeded') === 'true';
@@ -331,7 +332,15 @@ export default function App() {
   // Core logs and targets states
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [biomarkers, setBiomarkers] = useState<{ [key: string]: number | string }>({});
-  const [biomarkerHistory, setBiomarkerHistory] = useState<BiomarkerLog[]>([]);
+  const [biomarkerHistoryRaw, setBiomarkerHistoryRaw] = useState<BiomarkerLog[]>([]);
+  const setBiomarkerHistory = (val: BiomarkerLog[] | ((prev: BiomarkerLog[]) => BiomarkerLog[])) => {
+    if (typeof val === 'function') {
+      setBiomarkerHistoryRaw(prev => normalizeBiomarkerHistory(val(prev)));
+    } else {
+      setBiomarkerHistoryRaw(normalizeBiomarkerHistory(val));
+    }
+  };
+  const biomarkerHistory = biomarkerHistoryRaw;
   const [actions, setActions] = useState<HealthAction[]>([]);
   const [dailyBenefits, setDailyBenefits] = useState<DailyBenefit[]>([]);
   const [foodIdeas, setFoodIdeas] = useState<FoodIdea[]>([]);
@@ -342,7 +351,7 @@ export default function App() {
   const [isManualFoodLogOpen, setIsManualFoodLogOpen] = useState(false);
   const [isMedicalChatOpen, setIsMedicalChatOpen] = useState(false);
   const [activeAgentType, setActiveAgentType] = useState<'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent6' | 'agent7' | 'data_review' | null>(null);
-  const [activeDataReviewBatchIdx, setActiveDataReviewBatchIdx] = useState<number | null>(null);
+  const [activeDataReviewBatchIdx, setActiveDataReviewBatchIdx] = useState<number | string | null>(null);
   const [batchSize, setBatchSize] = useState<number>(() => {
     try {
       const saved = localStorage.getItem('biomarker_batch_size');
@@ -1426,7 +1435,8 @@ export default function App() {
     profileUpdates?: Partial<UserProfile>, 
     date?: string, 
     entries?: { date: string | null; biomarkers: { [key: string]: number | string } }[],
-    modificationCommand?: { action: 'update_biomarker' | 'update_profile' | 'remove_biomarker'; keyName: string; newValue?: string | number; date?: string }[]
+    modificationCommand?: { action: 'update_biomarker' | 'update_profile' | 'remove_biomarker'; keyName: string; newValue?: string | number; date?: string }[],
+    skipClose?: boolean
   ) => {
     let currentProfile = profile;
     let updatedHistory = [...biomarkerHistory];
@@ -1612,12 +1622,16 @@ export default function App() {
         });
       });
       setBiomarkers(recomputedBiomarkers);
-      setIsMedicalChatOpen(false);
-      setActiveTab('home');
+      if (!skipClose) {
+        setIsMedicalChatOpen(false);
+        setActiveTab('home');
+      }
       await saveAndSync(currentProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog', targetId });
     } else {
-      setIsMedicalChatOpen(false);
-      setActiveTab('home');
+      if (!skipClose) {
+        setIsMedicalChatOpen(false);
+        setActiveTab('home');
+      }
       await saveAndSync(currentProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
     }
   };
@@ -2232,7 +2246,7 @@ export default function App() {
                 localStorage.setItem('biomarker_batch_size', size.toString());
               } catch (e) {}
             }}
-            onOpenAgentChat={(agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent6' | 'agent7' | 'data_review', options?: { prefillMessage?: string; dataReviewBatchIdx?: number }) => {
+            onOpenAgentChat={(agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent6' | 'agent7' | 'data_review', options?: { prefillMessage?: string; dataReviewBatchIdx?: number | string }) => {
               setActiveAgentType(agentType);
               setPrefillMessage(options?.prefillMessage || null);
               setActiveDataReviewBatchIdx(options?.dataReviewBatchIdx !== undefined ? options.dataReviewBatchIdx : null);
@@ -2270,6 +2284,9 @@ export default function App() {
             onEditingActiveChange={setIsEditingFoodLog}
             isManualEntryOpen={isManualFoodLogOpen}
             onManualEntryOpenChange={setIsManualFoodLogOpen}
+            report={report}
+            initiallyExpandedFoodId={initiallyExpandedFoodId}
+            onClearInitiallyExpandedFoodId={() => setInitiallyExpandedFoodId(null)}
           />
         )}
         {activeTab === 'medical' && (
@@ -2298,6 +2315,10 @@ export default function App() {
             biomarkerHistory={biomarkerHistory}
             hideSensitive={hideSensitive}
             report={report}
+            onSelectFood={(id) => {
+              setInitiallyExpandedFoodId(id);
+              setActiveTab('food');
+            }}
           />
         )}
       </main>

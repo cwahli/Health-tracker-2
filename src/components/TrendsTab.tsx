@@ -11,6 +11,7 @@ interface TrendsTabProps {
   biomarkerHistory: BiomarkerLog[];
   hideSensitive: boolean;
   report: RecommendationReport | null;
+  onSelectFood?: (foodId: string) => void;
 }
 
 export default function TrendsTab({
@@ -18,7 +19,8 @@ export default function TrendsTab({
   foodLogs,
   biomarkerHistory,
   hideSensitive,
-  report
+  report,
+  onSelectFood
 }: TrendsTabProps) {
   const t = translations[profile.language] || translations.en;
   const [selectedMetric, setSelectedMetric] = useState<string>('calories');
@@ -236,16 +238,25 @@ export default function TrendsTab({
                 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   {chartData.length > 0 && (() => {
-  const avg = chartData.reduce((sum, d) => sum + d.value, 0) / chartData.length;
-  return (
-    <ReferenceLine 
-      y={avg} 
-      stroke="#94a3b8" 
-      strokeDasharray="3 3" 
-      label={{ position: 'insideTopLeft', value: `Avg: ${avg.toFixed(1)}`, fill: '#94a3b8', fontSize: 10 }}
-    />
-  );
-})()}
+                    // Find the last index where a value has been entered (i.e. value > 0)
+                    let lastActiveIndex = -1;
+                    for (let i = chartData.length - 1; i >= 0; i--) {
+                      if (chartData[i].value > 0) {
+                        lastActiveIndex = i;
+                        break;
+                      }
+                    }
+                    const dataForAvg = lastActiveIndex >= 0 ? chartData.slice(0, lastActiveIndex + 1) : chartData;
+                    const avg = dataForAvg.length > 0 ? dataForAvg.reduce((sum, d) => sum + d.value, 0) / dataForAvg.length : 0;
+                    return (
+                      <ReferenceLine 
+                        y={avg} 
+                        stroke="#94a3b8" 
+                        strokeDasharray="3 3" 
+                        label={{ position: 'insideTopLeft', value: `Avg: ${avg.toFixed(1)}`, fill: '#94a3b8', fontSize: 10 }}
+                      />
+                    );
+                  })()}
                   <XAxis 
                     dataKey="date" 
                     stroke="#94a3b8" 
@@ -365,7 +376,13 @@ export default function TrendsTab({
                       return (
                         <div key={f.id} className="flex justify-between items-center py-1.5">
                           <div className="flex items-baseline gap-2 truncate pr-3 flex-1">
-                            <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{f.name}</span>
+                            <span 
+                              onClick={() => onSelectFood?.(f.id)}
+                              className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline transition-colors"
+                              title="Click to view details in Food Log"
+                            >
+                              {f.name}
+                            </span>
                             {(f.consumedAmount !== undefined && f.consumedAmount !== 1) && (
                               <span className="text-[10px] font-bold text-slate-400 flex-shrink-0">({f.consumedAmount}x)</span>
                             )}

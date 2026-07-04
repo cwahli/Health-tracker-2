@@ -122,9 +122,26 @@ export default function CombineBiomarkersModal({
       });
     });
 
-    // Sort logs descending by date
-    combinedLogs.sort((a, b) => b.date.localeCompare(a.date));
-    setLogsToKeep(combinedLogs);
+    // Sort logs descending by date, but prefer initialKey for same dates
+    combinedLogs.sort((a, b) => {
+      if (a.date === b.date) {
+        if (a.originalKey === initialKey) return -1;
+        if (b.originalKey === initialKey) return 1;
+        return 0;
+      }
+      return b.date.localeCompare(a.date);
+    });
+    
+    const uniqueLogs: typeof combinedLogs = [];
+    const seenDates = new Set<string>();
+    for (const log of combinedLogs) {
+      if (!seenDates.has(log.date)) {
+        seenDates.add(log.date);
+        uniqueLogs.push(log);
+      }
+    }
+
+    setLogsToKeep(uniqueLogs);
     setStep(2);
   };
 

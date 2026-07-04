@@ -3,7 +3,7 @@ import { UserProfile, FoodLog, RecommendationReport } from '../types';
 import { translations } from '../utils/translations';
 import { 
   Brain, Sparkles, AlertCircle, TrendingDown, BookOpen, Clock, Heart, 
-  CheckCircle, HelpCircle, Loader, ShieldCheck, Database, Check, X, ArrowRight, Activity, Send, ChevronDown, ChevronUp, Trash2, Lock, Archive
+  CheckCircle, HelpCircle, Loader, ShieldCheck, Database, Check, X, ArrowRight, Activity, Send, ChevronDown, ChevronUp, Trash2, Lock, Archive, Search
 } from 'lucide-react';
 import LLMSelector from './LLMSelector';
 import { Agent5View, Agent6View, Agent7View } from './AgentResultViews';
@@ -72,6 +72,14 @@ export default function InsightsTab({
   const [activeStepIndex, setActiveStepIndex] = useState<number | null>(0);
 
   const [batchSizeInput, setBatchSizeInput] = useState<string>(batchSize.toString());
+  const [customBatchKeys, setCustomBatchKeys] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('agent1_custom_batch_keys');
+      return saved ? JSON.parse(saved) : [];
+    } catch(e) { return []; }
+  });
+  const [showCustomBatchModal, setShowCustomBatchModal] = useState(false);
+  const [customBatchSearch, setCustomBatchSearch] = useState('');
   
   React.useEffect(() => {
     setBatchSizeInput(batchSize.toString());
@@ -200,21 +208,7 @@ export default function InsightsTab({
     return true;
   };
 
-  // Batch keys and splitting
-  const markerKeys = React.useMemo(() => {
-    return Object.keys(biomarkers).filter(k => biomarkers[k] !== undefined && biomarkers[k] !== null && biomarkers[k] !== '');
-  }, [biomarkers]);
-
-  const batches = React.useMemo(() => {
-    const size = batchSize || 20;
-    const res: string[][] = [];
-    for (let i = 0; i < markerKeys.length; i += size) {
-      res.push(markerKeys.slice(i, i + size));
-    }
-    return res;
-  }, [markerKeys, batchSize]);
-
-  const [approvedBatches, setApprovedBatches] = useState<Record<number, boolean>>(() => {
+  const [approvedBatches, setApprovedBatches] = useState<Record<string, boolean>>(() => {
     try {
       const saved = localStorage.getItem('approved_data_review_batches');
       if (saved) return JSON.parse(saved);
@@ -235,8 +229,8 @@ export default function InsightsTab({
     return initial;
   });
 
-  const [isAnalyzingBatch, setIsAnalyzingBatch] = useState<Record<number, boolean>>({});
-  const [batchAnalysisResults, setBatchAnalysisResults] = useState<Record<number, any>>(() => {
+  const [isAnalyzingBatch, setIsAnalyzingBatch] = useState<Record<string, boolean>>({});
+  const [batchAnalysisResults, setBatchAnalysisResults] = useState<Record<string, any>>(() => {
     try {
       const saved = localStorage.getItem('batch_analysis_results');
       return saved ? JSON.parse(saved) : {};
@@ -245,10 +239,10 @@ export default function InsightsTab({
     }
   });
 
-  const [expandedBatches, setExpandedBatches] = useState<Record<number, boolean>>({});
+  const [expandedBatches, setExpandedBatches] = useState<Record<string, boolean>>({});
   const [fullscreenBatchIndex, setFullscreenBatchIndex] = useState<number | null>(null);
 
-  const [approvedAgent1Batches, setApprovedAgent1Batches] = useState<Record<number, boolean>>(() => {
+  const [approvedAgent1Batches, setApprovedAgent1Batches] = useState<Record<string, boolean>>(() => {
     try {
       const saved = localStorage.getItem('approved_agent1_batches');
       if (saved) return JSON.parse(saved);
@@ -256,8 +250,8 @@ export default function InsightsTab({
     return {};
   });
 
-  const [isAnalyzingAgent1Batch, setIsAnalyzingAgent1Batch] = useState<Record<number, boolean>>({});
-  const [agent1BatchResults, setAgent1BatchResults] = useState<Record<number, any>>(() => {
+  const [isAnalyzingAgent1Batch, setIsAnalyzingAgent1Batch] = useState<Record<string, boolean>>({});
+  const [agent1BatchResults, setAgent1BatchResults] = useState<Record<string, any>>(() => {
     try {
       const saved = localStorage.getItem('agent1_batch_results');
       return saved ? JSON.parse(saved) : {};
@@ -266,7 +260,50 @@ export default function InsightsTab({
     }
   });
 
-  const [expandedAgent1Batches, setExpandedAgent1Batches] = useState<Record<number, boolean>>({});
+  const [expandedAgent1Batches, setExpandedAgent1Batches] = useState<Record<string, boolean>>({});
+
+  const [excludeStandardized, setExcludeStandardized] = useState<boolean>(() => {
+    return localStorage.getItem('agent1_exclude_standardized') === 'true';
+  });
+
+  const clearCustomBatchResults = () => {
+    setApprovedAgent1Batches(prev => {
+      const updated = { ...prev };
+      delete updated['custom'];
+      localStorage.setItem('approved_agent1_batches', JSON.stringify(updated));
+      return updated;
+    });
+    setAgent1BatchResults(prev => {
+      const updated = { ...prev };
+      delete updated['custom'];
+      localStorage.setItem('agent1_batch_results', JSON.stringify(updated));
+      return updated;
+    });
+    try {
+      sessionStorage.removeItem('chat_messages_medical_agent1_custom');
+      sessionStorage.removeItem('last_sent_payload_medical_agent1_custom');
+    } catch (err) {}
+  };
+
+  // Batch keys and splitting
+  const markerKeys = React.useMemo(() => {
+    return Object.keys(biomarkers).filter(k => {
+      if (biomarkers[k] === undefined || biomarkers[k] === null || biomarkers[k] === '') return false;
+      if (excludeStandardized) {
+        if (profile.customBiomarkers?.[k]?.standardMedicalGrouping !== undefined) return false;
+      }
+      return true;
+    });
+  }, [biomarkers, excludeStandardized, profile.customBiomarkers]);
+
+  const batches = React.useMemo(() => {
+    const size = batchSize || 20;
+    const res: string[][] = [];
+    for (let i = 0; i < markerKeys.length; i += size) {
+      res.push(markerKeys.slice(i, i + size));
+    }
+    return res;
+  }, [markerKeys, batchSize]);
 
 
   React.useEffect(() => {
@@ -342,6 +379,38 @@ export default function InsightsTab({
 
   const toggleAgentHistory = (agentType: string) => {
     setExpandedAgentHistory(prev => ({ ...prev, [agentType]: !prev[agentType] }));
+  };
+
+  const handleRefineDataCleaning = () => {
+    // 1. Set excludeStandardized to true to hide already standardized biomarkers
+    setExcludeStandardized(true);
+    localStorage.setItem('agent1_exclude_standardized', 'true');
+
+    // 2. Reset approved agent 1 batches
+    setApprovedAgent1Batches({});
+    localStorage.removeItem('approved_agent1_batches');
+
+    // 3. Clear agent 1 batch results
+    setAgent1BatchResults({});
+    localStorage.removeItem('agent1_batch_results');
+
+    // 4. Clear session storage chat messages & payloads for all agent1 batches
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && (key.includes('chat_messages_medical_agent1') || key.includes('last_sent_payload_medical_agent1'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(k => sessionStorage.removeItem(k));
+    } catch (e) {
+      console.warn("Failed to clear session storage during refine:", e);
+    }
+    
+    // Also clear custom batch
+    setCustomBatchKeys([]);
+    localStorage.removeItem('agent1_custom_batch_keys');
   };
 
   const renderAgentHistory = (agentType: string) => {
@@ -1094,7 +1163,51 @@ export default function InsightsTab({
                             </div>
                             
                             <div className="space-y-3">
-                              {batches.map((batchKeys, bIdx) => {
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-100 dark:border-slate-800/80 mb-2">
+                                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium flex flex-wrap items-center gap-2">
+                                  <span>Standardized: <span className="font-bold text-indigo-600 dark:text-indigo-400">{Object.keys(approvedAgent1Batches).filter(k => approvedAgent1Batches[k]).length}</span> of <span className="font-bold text-slate-700 dark:text-slate-300">{batches.length}</span> batches.</span>
+                                  {excludeStandardized && (
+                                    <span className="bg-amber-100 dark:bg-amber-950/40 text-amber-850 dark:text-amber-300 px-2 py-0.5 rounded-full text-[9px] font-semibold border border-amber-200/30 flex items-center gap-1">
+                                      Refinement Active
+                                      <button 
+                                        onClick={() => {
+                                          setExcludeStandardized(false);
+                                          localStorage.setItem('agent1_exclude_standardized', 'false');
+                                        }} 
+                                        className="text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-100 ml-1 font-bold cursor-pointer underline"
+                                        title="Show All Biomarkers"
+                                      >
+                                        Show All
+                                      </button>
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      const next = !excludeStandardized;
+                                      setExcludeStandardized(next);
+                                      localStorage.setItem('agent1_exclude_standardized', String(next));
+                                    }}
+                                    className={`px-3 py-1.5 text-[10px] font-bold rounded-lg border transition-colors cursor-pointer ${excludeStandardized ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300' : 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                                    title={excludeStandardized ? "Showing only unstandardized biomarkers. Click to show all." : "Showing all biomarkers. Click to hide already standardized ones."}
+                                  >
+                                    {excludeStandardized ? 'Filter: Unstandardized Only' : 'Filter: Show All'}
+                                  </button>
+                                  <button
+                                    onClick={handleRefineDataCleaning}
+                                    className="px-3 py-1.5 text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 dark:text-amber-400 dark:bg-amber-950/20 dark:hover:bg-amber-950/35 rounded-lg transition-colors flex items-center gap-1 border border-amber-200/40 cursor-pointer"
+                                    title="Keep currently saved standardizations but reset the batch list & cached responses to run a fresh pass over remaining biomarkers"
+                                  >
+                                    <Sparkles className="w-3 h-3 text-amber-500" />
+                                    Refine Data Cleaning
+                                  </button>
+                                  <button onClick={() => setShowCustomBatchModal(true)} className="px-3 py-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 dark:text-indigo-400 dark:bg-indigo-950/20 dark:hover:bg-indigo-950/35 rounded-lg transition-colors cursor-pointer">
+                                    + Test Custom Batch
+                                  </button>
+                                </div>
+                              </div>
+                              {[...batches.map((b, i) => ({ keys: b, idx: i.toString(), isCustom: false })), ...(customBatchKeys.length > 0 ? [{ keys: customBatchKeys, idx: 'custom', isCustom: true }] : [])].map(({ keys: batchKeys, idx: bIdx, isCustom }) => {
                                 const isApproved = approvedAgent1Batches[bIdx];
                                 const isAnalyzing = isAnalyzingAgent1Batch[bIdx];
                                 const result = agent1BatchResults[bIdx];
@@ -1124,8 +1237,31 @@ export default function InsightsTab({
                                           <Database className="w-4 h-4" />
                                         </div>
                                         <div className="text-left">
-                                          <h5 className="text-[12px] font-bold text-slate-900 dark:text-white">
-                                            Batch {bIdx + 1}
+                                          <h5 className="text-[12px] font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                            {isCustom ? 'Custom Test Batch' : `Batch ${parseInt(bIdx as string) + 1}`}
+                                            {isCustom && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setCustomBatchKeys([]);
+                                                  localStorage.removeItem('agent1_custom_batch_keys');
+                                                  setAgent1BatchResults(prev => {
+                                                    const updated = { ...prev };
+                                                    delete updated['custom'];
+                                                    localStorage.setItem('agent1_batch_results', JSON.stringify(updated));
+                                                    return updated;
+                                                  });
+                                                  try {
+                                                    sessionStorage.removeItem('chat_messages_medical_agent1_custom');
+                                                    sessionStorage.removeItem('last_sent_payload_medical_agent1_custom');
+                                                  } catch(err) {}
+                                                }}
+                                                className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 p-1 rounded-full transition-colors"
+                                                title="Delete Custom Batch"
+                                              >
+                                                <X className="w-3.5 h-3.5" />
+                                              </button>
+                                            )}
                                           </h5>
                                           <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
                                             {batchKeys.length} biomarkers assigned
@@ -1163,7 +1299,7 @@ export default function InsightsTab({
                                         {/* Biomarkers in this batch */}
                                         <div>
                                           <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                                            Biomarkers in Batch {bIdx + 1}
+                                            Biomarkers in {isCustom ? 'Custom Test Batch' : `Batch ${parseInt(bIdx as string) + 1}`}
                                           </span>
                                           <div className="flex flex-wrap gap-1.5">
                                             {batchKeys.map((key) => {
@@ -1247,7 +1383,7 @@ export default function InsightsTab({
                                                   if (onOpenAgentChat) {
                                                     onOpenAgentChat('agent1', {
                                                       dataReviewBatchIdx: bIdx,
-                                                      prefillMessage: `Clean and standardize Batch ${bIdx + 1} biomarkers`
+                                                      prefillMessage: `Clean and standardize ${isCustom ? 'Custom Test Batch' : 'Batch ' + (parseInt(bIdx as string) + 1)} biomarkers`
                                                     });
                                                   }
                                                 }}
@@ -1513,6 +1649,7 @@ export default function InsightsTab({
                                 const result = batchAnalysisResults[bIdx];
                                 const isCurrentUnlocked = true;
                                 const isExpanded = expandedBatches[bIdx] ?? (!isApproved || !result);
+                                const isCustom = false;
 
                                 return (
                                   <div 
@@ -1537,7 +1674,7 @@ export default function InsightsTab({
                                     >
                                       <div className="min-w-0 flex-1">
                                         <h5 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                                          <span>Batch {bIdx + 1}</span>
+                                          <span>{isCustom ? 'Custom Test Batch' : `Batch ${parseInt(bIdx as string) + 1}`}</span>
                                           <span className="text-[10px] font-mono text-slate-400 font-normal">
                                             ({batchKeys.length} biomarkers)
                                           </span>
@@ -2141,6 +2278,88 @@ export default function InsightsTab({
                 className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
               >
                 Close Fullscreen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Batch Builder Modal */}
+      {showCustomBatchModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animation-fade-in font-sans">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-950 rounded-2xl shadow-xl flex flex-col border border-slate-200 dark:border-slate-800 overflow-hidden max-h-[80vh]">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Test Custom Batch</h3>
+                  <p className="text-[10px] text-slate-500">Pick any biomarker to test data cleaning</p>
+                </div>
+                <button onClick={() => setShowCustomBatchModal(false)} className="text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full p-1 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search biomarkers..."
+                  value={customBatchSearch}
+                  onChange={e => setCustomBatchSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {markerKeys.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-4">No biomarkers available.</p>
+              ) : (
+                markerKeys.filter(k => k.toLowerCase().includes(customBatchSearch.toLowerCase())).map(key => {
+                  const isSelected = customBatchKeys.includes(key);
+                  return (
+                    <div 
+                      key={key} 
+                      onClick={() => {
+                        clearCustomBatchResults();
+                        setCustomBatchKeys(prev => {
+                          const updated = isSelected ? prev.filter(k => k !== key) : [...prev, key];
+                          localStorage.setItem('agent1_custom_batch_keys', JSON.stringify(updated));
+                          return updated;
+                        });
+                      }}
+                      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50/30 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-700'}`}>
+                          {isSelected && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{key}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400">{biomarkers[key]}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex justify-end gap-2">
+              <button 
+                type="button" 
+                onClick={() => {
+                  clearCustomBatchResults();
+                  setCustomBatchKeys([]);
+                  localStorage.removeItem('agent1_custom_batch_keys');
+                }} 
+                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors"
+              >
+                Clear
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setShowCustomBatchModal(false)} 
+                className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/10 rounded-xl transition-colors"
+              >
+                Done ({customBatchKeys.length})
               </button>
             </div>
           </div>

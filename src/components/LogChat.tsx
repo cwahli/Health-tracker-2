@@ -18,6 +18,7 @@ import { auth } from '../firebase';
 import { Agent5View, Agent6View, Agent7View } from './AgentResultViews';
 import { AgentResultTable } from './AgentResultTable';
 import { resolveFoodImage } from '../utils/imageResolver';
+import { NutrientPieChart } from './NutrientPieChart';
 
 interface BiomarkerEntry {
   biomarker: string;
@@ -291,7 +292,8 @@ interface LogChatProps {
     profileUpdates?: Partial<UserProfile>, 
     date?: string, 
     entries?: { date: string | null; biomarkers: { [key: string]: number | string } }[],
-    modificationCommand?: { action: 'update_biomarker' | 'update_profile' | 'remove_biomarker'; keyName: string; newValue?: string | number; date?: string }[]
+    modificationCommand?: { action: 'update_biomarker' | 'update_profile' | 'remove_biomarker'; keyName: string; newValue?: string | number; date?: string }[],
+    skipClose?: boolean
   ) => void;
   biomarkers?: { [key: string]: number | string };
   foodLogs?: FoodLog[];
@@ -302,7 +304,7 @@ interface LogChatProps {
   onAgentAnalysisSaved?: (agentType: string, agentResult: any) => Promise<void>;
   onGoToManualEdit?: () => void;
   autoSendMessage?: string | null;
-  dataReviewBatchIdx?: number | null;
+  dataReviewBatchIdx?: number | string | null;
   batchSize?: number;
 }
 
@@ -384,8 +386,8 @@ export default function LogChat({
     }
   };
 
-  const payloadStorageKey = agentType ? `last_sent_payload_${type}_${agentType}` : `last_sent_payload_${type}`;
-  const chatStorageKey = agentType ? `chat_messages_${type}_${agentType}` : `chat_messages_${type}`;
+  const payloadStorageKey = agentType ? `last_sent_payload_${type}_${agentType}_${dataReviewBatchIdx ?? 'none'}` : `last_sent_payload_${type}`;
+  const chatStorageKey = agentType ? `chat_messages_${type}_${agentType}_${dataReviewBatchIdx ?? 'none'}` : `chat_messages_${type}`;
 
   const [lastSentPayload, setLastSentPayload] = useState<any>(() => {
     try {
@@ -436,7 +438,7 @@ export default function LogChat({
                         : agentType === 'agent7'
                           ? 'Hello! I am the Medical Literature Consensus agent. I scan PubMed and clinical trials to bring recent scientific debate to your context.'
                           : agentType === 'data_review'
-                            ? `Hello! I am your Clinical Calibration Agent. Here is what is about to happen: I will analyze Batch ${dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined ? dataReviewBatchIdx + 1 : 1} containing your raw biomarker readings. I will automatically recognize your demographic parameters (age, gender, ethnicity) and calibrate all reference ranges precisely to your profile. I will then map each biomarker to its standard physiological grouping, potential medical conditions, and break down each medical range clinically (such as Borderline High or Optimal zones) with clear, actionable insights—all without repeating boilerplate demographic lines. Let's start the calibration!`
+                            ? `Hello! I am your Clinical Calibration Agent. Here is what is about to happen: I will analyze ${dataReviewBatchIdx === 'custom' ? 'Custom Test Batch' : 'Batch ' + (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined ? (dataReviewBatchIdx as number) + 1 : 1)} containing your raw biomarker readings. I will automatically recognize your demographic parameters (age, gender, ethnicity) and calibrate all reference ranges precisely to your profile. I will then map each biomarker to its standard physiological grouping, potential medical conditions, and break down each medical range clinically (such as Borderline High or Optimal zones) with clear, actionable insights—all without repeating boilerplate demographic lines. Let's start the calibration!`
                             : 'Hello! I can help you parse blood report photos, medical test charts, or manual body logs to build a comprehensive profile of your biomarkers. What information would you like to enter today?',
         timestamp: new Date().toISOString()
       }
@@ -595,32 +597,9 @@ export default function LogChat({
         } catch (e) {}
       }
 
-      if (lastMsg && lastMsg.timestamp) {
-        const msSinceLast = Date.now() - new Date(lastMsg.timestamp).getTime();
-        if (msSinceLast > 5 * 60 * 1000) {
-          setSessionStartTime(Date.now());
-        }
-      } else {
-        setSessionStartTime(Date.now());
-      }
+      // Removed session start time resetting
 
-      setMessages(prev => {
-        const last = prev[prev.length - 1];
-        if (last && !last.id.startsWith('welcome_')) {
-          return [...prev, {
-            id: `welcome_${type}_${Date.now()}`,
-            role: 'assistant',
-            content: type === 'food' 
-              ? 'Hello! Tell me or upload a photo of what you are planning to eat, and I will analyze its health benefits, risk factors, and full 30 nutrient breakdown based on your profile.'
-              : type === 'food_idea'
-                ? 'Hello! Do you have any specific food preferences or cravings today? I will need your location to find the best dining options matching your biomarker goals.'
-                : 'Hello! I can help you parse blood report photos, medical test charts, or manual body logs to build a comprehensive profile of your biomarkers. What information would you like to enter today?',
-            timestamp: new Date().toISOString()
-          }];
-        }
-        return prev;
-      });
-      setShowPastDiscussion(false);
+      // Removed forced welcome message append and hiding of past discussion
     }
   }, [isOpen, type, chatStorageKey]);
 
@@ -853,13 +832,16 @@ export default function LogChat({
         delete lightProfile.language;
       }
 
+      const lastWelcomeIndex = messages.length - 1 - [...messages].reverse().findIndex(m => m.id.startsWith('welcome_'));
+      const activeSessionIdx = lastWelcomeIndex >= 0 ? lastWelcomeIndex : 0;
+      
       const bodyData: any = {
         userId: auth.currentUser?.uid || undefined,
         message: userMsg.content,
         image: tempImages[0] || undefined,
         images: tempImages.length > 0 ? tempImages : undefined,
         imageDates: tempDates.length > 0 ? tempDates : undefined,
-        history: messages.filter(m => new Date(m.timestamp).getTime() >= sessionStartTime && !m.id.startsWith('welcome_')).slice(-10).map(m => {
+        history: messages.slice(activeSessionIdx).filter(m => !m.id.startsWith('welcome_')).slice(-10).map(m => {
           let extra = "";
           if (m.role === 'assistant') {
             if (m.pendingBiomarkers) extra += `\n[Extracted Biomarkers: ${JSON.stringify(m.pendingBiomarkers)}]`;
@@ -968,19 +950,31 @@ export default function LogChat({
           bodyData.agentDiagnosticSummary = profile?.agentDiagnosticSummary || '';
 
           if ((currentStep === 'data_review' || currentStep === 'agent1') && dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined) {
-            const markerKeysList = Object.keys(biomarkers || {}).filter(k => biomarkers?.[k] !== undefined && biomarkers?.[k] !== null && biomarkers?.[k] !== '');
-            const bSize = batchSize || 20;
-            const batchRes: string[][] = [];
-            for (let i = 0; i < markerKeysList.length; i += bSize) {
-              batchRes.push(markerKeysList.slice(i, i + bSize));
+            let batchKeys: string[] = [];
+            if (dataReviewBatchIdx === 'custom') {
+              try {
+                batchKeys = JSON.parse(localStorage.getItem('agent1_custom_batch_keys') || '[]');
+              } catch(e) {}
+            } else {
+              const markerKeysList = Object.keys(biomarkers || {}).filter(k => biomarkers?.[k] !== undefined && biomarkers?.[k] !== null && biomarkers?.[k] !== '');
+              const bSize = batchSize || 20;
+              const batchRes: string[][] = [];
+              for (let i = 0; i < markerKeysList.length; i += bSize) {
+                batchRes.push(markerKeysList.slice(i, i + bSize));
+              }
+              batchKeys = batchRes[dataReviewBatchIdx as number] || [];
             }
-            const batchKeys = batchRes[dataReviewBatchIdx] || [];
-            bodyData.batchBiomarkers = batchKeys.map(k => ({
-              key: k,
-              name: k.replace(/_/g, ' ').toUpperCase(),
-              value: biomarkers?.[k],
-              unit: profile?.customBiomarkers?.[k]?.unit || ''
-            }));
+            bodyData.batchBiomarkers = batchKeys.map(k => {
+              const customDef = profile?.customBiomarkers?.[k];
+              const stdDef = biomarkerDefinitions.find(d => d.key === k);
+              const displayName = customDef?.name || stdDef?.name || k.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+              return {
+                key: k,
+                name: displayName,
+                value: biomarkers?.[k],
+                unit: customDef?.unit || stdDef?.unit || ''
+              };
+            });
             bodyData.batchIdx = dataReviewBatchIdx;
           }
         }
@@ -1342,7 +1336,7 @@ export default function LogChat({
                                 : agentType === 'agent7' 
                                   ? 'Medical Literature Consensus' 
                                   : agentType === 'data_review'
-                                    ? `Batch ${dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined ? dataReviewBatchIdx + 1 : 1}`
+                                    ? `${dataReviewBatchIdx === 'custom' ? 'Custom Test Batch' : 'Batch ' + (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined ? (dataReviewBatchIdx as number) + 1 : 1)}`
                                     : t.addMedical}
               </h2>
               <button
@@ -1888,21 +1882,78 @@ export default function LogChat({
                       )}
 
                       {/* Top Nutrients Badge */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] font-extrabold text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 px-2 py-0.5 rounded-lg border border-orange-100/40 dark:border-orange-900/30">
-                          {(msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.calories) || 0} kcal
-                        </span>
-                        {msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.saturatedFat !== undefined && (
-                          <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-lg">
-                            Sat Fat: {msg.pendingFoodLog.nutrients.saturatedFat}g
-                          </span>
-                        )}
-                        {msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.sodium !== undefined && (
-                          <span className="text-[11px] font-bold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/30 px-2 py-0.5 rounded-lg">
-                            Sodium: {msg.pendingFoodLog.nutrients.sodium}mg
-                          </span>
-                        )}
-                      </div>
+                      {(() => {
+                        const parseTarget = (val: any, fallback: number) => {
+                          if (val === null || val === undefined) return fallback;
+                          const cleanStr = String(val).replace(/,/g, '');
+                          const matches = cleanStr.match(/\d+(\.\d+)?/g);
+                          if (!matches || matches.length === 0) return fallback;
+                          const parsed = parseFloat(matches[0]);
+                          return isNaN(parsed) ? fallback : parsed;
+                        };
+
+                        const caloriesTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.calories, 1700) : 1800;
+                        const satFatTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.saturatedFat, 15) : 15;
+                        const sodiumTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.sodium, 1200) : 1200;
+
+                        const logDate = msg.pendingFoodLog.date;
+                        const dayLogs = foodLogs ? foodLogs.filter(f => f.date === logDate) : [];
+
+                        const caloriesConsumedToday = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.calories || 0), 0);
+                        const satFatConsumedToday = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.saturatedFat || 0), 0);
+                        const sodiumConsumedToday = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.sodium || 0), 0);
+
+                        const caloriesInMeal = (msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.calories) || 0;
+                        const satFatInMeal = (msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.saturatedFat) || 0;
+                        const sodiumInMeal = (msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.sodium) || 0;
+
+                        return (
+                          <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex items-center gap-1.5">
+                              <NutrientPieChart
+                                allowance={caloriesTarget}
+                                alreadyConsumed={caloriesConsumedToday}
+                                mealValue={caloriesInMeal}
+                                nutrientKey="calories"
+                                size="sm"
+                              />
+                              <span className="text-[11px] font-extrabold" style={{ color: 'rgb(249, 115, 22)' }}>
+                                {caloriesInMeal} kcal
+                              </span>
+                            </div>
+
+                            {msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.saturatedFat !== undefined && (
+                              <div className="flex items-center gap-1.5">
+                                <NutrientPieChart
+                                  allowance={satFatTarget}
+                                  alreadyConsumed={satFatConsumedToday}
+                                  mealValue={satFatInMeal}
+                                  nutrientKey="saturatedFat"
+                                  size="sm"
+                                />
+                                <span className="text-[11px] font-bold" style={{ color: 'rgb(234, 179, 8)' }}>
+                                  Sat Fat: {satFatInMeal}g
+                                </span>
+                              </div>
+                            )}
+
+                            {msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.sodium !== undefined && (
+                              <div className="flex items-center gap-1.5">
+                                <NutrientPieChart
+                                  allowance={sodiumTarget}
+                                  alreadyConsumed={sodiumConsumedToday}
+                                  mealValue={sodiumInMeal}
+                                  nutrientKey="sodium"
+                                  size="sm"
+                                />
+                                <span className="text-[11px] font-bold" style={{ color: 'rgb(34, 197, 94)' }}>
+                                  Sodium: {sodiumInMeal}mg
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Display Nutrients - Accordion Style */}
                       <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/30">
@@ -2014,7 +2065,6 @@ export default function LogChat({
                               } else {
                                 await onAgentFinish(msg.agentType!, msg.agentResult);
                                 setLoggedMessageIds(prev => [...prev, msg.id]);
-                                onClose();
                               }
                             }
                           }}
@@ -2047,8 +2097,7 @@ export default function LogChat({
                           onClick={async () => {
                             if (onAgentFinish) {
                               await onAgentFinish(msg.agentType!, msg.agentResult);
-                              setLoggedMessageIds(prev => [...prev, msg.id]);
-                              onClose();
+                                setLoggedMessageIds(prev => [...prev, msg.id]);
                             }
                           }}
                           className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer mt-3"
@@ -2156,13 +2205,11 @@ export default function LogChat({
                           <button
                             onClick={() => {
                               if (onLogMedical) {
-                                onLogMedical(msg.pendingBiomarkers || {}, msg.pendingProfile || {}, msg.pendingDate, msg.pendingBiomarkerEntries, msg.modificationCommand);
-                                setLoggedMessageIds(prev => [...prev, msg.id]);
                                 const isContinuation = !!(msg.status === 'needs_continuation' || msg.agentResult?.status === 'needs_continuation' || msg.agentResult?.hasMore || msg.agentResult?.hasMoreMarkers || msg.agentResult?.needsContinuation);
+                                onLogMedical(msg.pendingBiomarkers || {}, msg.pendingProfile || {}, msg.pendingDate, msg.pendingBiomarkerEntries, msg.modificationCommand, isContinuation);
+                                setLoggedMessageIds(prev => [...prev, msg.id]);
                                 if (isContinuation) {
                                   handleSend("Proceed with extraction.");
-                                } else {
-                                  onClose();
                                 }
                               }
                             }}

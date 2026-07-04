@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UserProfile, FoodLog, NutrientBreakdown } from '../types';
+import { UserProfile, FoodLog, NutrientBreakdown, RecommendationReport } from '../types';
 import { translations } from '../utils/translations';
 import { Edit2, Trash2, Calendar, Search, ChevronDown, ChevronUp, Image as ImageIcon, Save, Check, Plus, Loader, X, Camera } from 'lucide-react';
 import { nutrientDefinitions } from '../utils/nutrition';
@@ -9,6 +9,7 @@ import { compressMultipleImages } from '../utils/imageCompressor';
 import { getCurrentDateInTimezone } from '../utils/dateUtils';
 import ImageSlider from './ImageSlider';
 import { resolveFoodImage, resolveFoodImages } from '../utils/imageResolver';
+import { NutrientPieChart } from './NutrientPieChart';
 
 interface FoodHistoryTabProps {
   profile: UserProfile;
@@ -19,6 +20,9 @@ interface FoodHistoryTabProps {
   onEditingActiveChange?: (active: boolean) => void;
   isManualEntryOpen?: boolean;
   onManualEntryOpenChange?: (open: boolean) => void;
+  report?: RecommendationReport | null;
+  initiallyExpandedFoodId?: string | null;
+  onClearInitiallyExpandedFoodId?: () => void;
 }
 
 function cleanData<T>(obj: T): T {
@@ -52,11 +56,29 @@ export default function FoodHistoryTab({
   onLogFood,
   onEditingActiveChange,
   isManualEntryOpen: propIsManualEntryOpen,
-  onManualEntryOpenChange
+  onManualEntryOpenChange,
+  report,
+  initiallyExpandedFoodId,
+  onClearInitiallyExpandedFoodId
 }: FoodHistoryTabProps) {
   const t = translations[profile.language] || translations.en;
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initiallyExpandedFoodId) {
+      setExpandedLogId(initiallyExpandedFoodId);
+      onClearInitiallyExpandedFoodId?.();
+      
+      // Auto-scroll to the specific element with a slight delay for rendering
+      setTimeout(() => {
+        const el = document.getElementById(`food-log-item-${initiallyExpandedFoodId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 200);
+    }
+  }, [initiallyExpandedFoodId, onClearInitiallyExpandedFoodId]);
   
   // Photo and compression states inside card edit
   const [cardCompressingLogId, setCardCompressingLogId] = useState<string | null>(null);
@@ -1075,21 +1097,82 @@ export default function FoodHistoryTab({
 
                       {/* Calories Badge & Top Targets & Expand Indicator */}
                       <div className="flex flex-wrap items-center justify-between pt-1 gap-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] font-extrabold text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 px-2 py-0.5 rounded-lg border border-orange-100/40 dark:border-orange-900/30">
-                            {(log.nutrients && log.nutrients.calories) || 0} kcal
-                          </span>
-                          {log.nutrients && log.nutrients.saturatedFat !== undefined && (
-                            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-lg">
-                              Sat Fat: {log.nutrients.saturatedFat}g
-                            </span>
-                          )}
-                          {log.nutrients && log.nutrients.sodium !== undefined && (
-                            <span className="text-[11px] font-bold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/30 px-2 py-0.5 rounded-lg">
-                              Sodium: {log.nutrients.sodium}mg
-                            </span>
-                          )}
-                        </div>
+                        {(() => {
+                          const parseTarget = (val: any, fallback: number) => {
+                            if (val === null || val === undefined) return fallback;
+                            const cleanStr = String(val).replace(/,/g, '');
+                            const matches = cleanStr.match(/\d+(\.\d+)?/g);
+                            if (!matches || matches.length === 0) return fallback;
+                            const parsed = parseFloat(matches[0]);
+                            return isNaN(parsed) ? fallback : parsed;
+                          };
+
+                          const caloriesTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.calories, 1700) : 1800;
+                          const satFatTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.saturatedFat, 15) : 15;
+                          const sodiumTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.sodium, 1200) : 1200;
+
+                          const logDate = log.date;
+                          const dayLogs = foodLogs ? foodLogs.filter(f => f.date === logDate) : [];
+
+                          const totalCaloriesOnDay = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.calories || 0), 0);
+                          const totalSatFatOnDay = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.saturatedFat || 0), 0);
+                          const totalSodiumOnDay = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.sodium || 0), 0);
+
+                          const caloriesInMeal = (log.nutrients && log.nutrients.calories) || 0;
+                          const satFatInMeal = (log.nutrients && log.nutrients.saturatedFat) || 0;
+                          const sodiumInMeal = (log.nutrients && log.nutrients.sodium) || 0;
+
+                          const caloriesConsumedBefore = Math.max(0, totalCaloriesOnDay - caloriesInMeal);
+                          const satFatConsumedBefore = Math.max(0, totalSatFatOnDay - satFatInMeal);
+                          const sodiumConsumedBefore = Math.max(0, totalSodiumOnDay - sodiumInMeal);
+
+                          return (
+                            <div className="flex flex-wrap items-center gap-3">
+                              <div className="flex items-center gap-1.5">
+                                <NutrientPieChart
+                                  allowance={caloriesTarget}
+                                  alreadyConsumed={caloriesConsumedBefore}
+                                  mealValue={caloriesInMeal}
+                                  nutrientKey="calories"
+                                  size="sm"
+                                />
+                                <span className="text-[11px] font-extrabold" style={{ color: 'rgb(249, 115, 22)' }}>
+                                  {caloriesInMeal} kcal
+                                </span>
+                              </div>
+
+                              {log.nutrients && log.nutrients.saturatedFat !== undefined && (
+                                <div className="flex items-center gap-1.5">
+                                  <NutrientPieChart
+                                    allowance={satFatTarget}
+                                    alreadyConsumed={satFatConsumedBefore}
+                                    mealValue={satFatInMeal}
+                                    nutrientKey="saturatedFat"
+                                    size="sm"
+                                  />
+                                  <span className="text-[11px] font-bold" style={{ color: 'rgb(234, 179, 8)' }}>
+                                    Sat Fat: {satFatInMeal}g
+                                  </span>
+                                </div>
+                              )}
+
+                              {log.nutrients && log.nutrients.sodium !== undefined && (
+                                <div className="flex items-center gap-1.5">
+                                  <NutrientPieChart
+                                    allowance={sodiumTarget}
+                                    alreadyConsumed={sodiumConsumedBefore}
+                                    mealValue={sodiumInMeal}
+                                    nutrientKey="sodium"
+                                    size="sm"
+                                  />
+                                  <span className="text-[11px] font-bold" style={{ color: 'rgb(34, 197, 94)' }}>
+                                    Sodium: {sodiumInMeal}mg
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         
                         <button
                           type="button"

@@ -75,11 +75,30 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
     }
   }
 
+  const toInputDateFormat = (d: string) => {
+    const pts = d.split('-');
+    if (pts.length === 3) {
+      if (pts[0].length === 4) return d; // already yyyy-mm-dd
+      return `${pts[2]}-${pts[1]}-${pts[0]}`; // dd-mm-yyyy -> yyyy-mm-dd
+    }
+    return d;
+  };
+
+  const fromInputDateFormat = (d: string) => {
+    const pts = d.split('-');
+    if (pts.length === 3) {
+      if (pts[2].length === 4) return d; // already dd-mm-yyyy
+      return `${pts[2]}-${pts[1]}-${pts[0]}`; // yyyy-mm-dd -> dd-mm-yyyy
+    }
+    return d;
+  };
+
   const handleSaveEdit = (logId: string) => {
     if (editValue && !isNaN(Number(editValue))) {
       const log = biomarkerHistory.find(h => h.id === logId);
       if (log && onEditBiomarkerLog) {
-        onEditBiomarkerLog(logId, def.key, editValue, editDate || log.date);
+        const finalDate = editDate ? fromInputDateFormat(editDate) : log.date;
+        onEditBiomarkerLog(logId, def.key, editValue, finalDate);
       }
     }
     setEditingLogId(null);
@@ -230,7 +249,7 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
                           onClick={(e) => { 
                             e.stopPropagation(); 
                             setEditValue(String(h.originalVal)); 
-                            setEditDate(h.date);
+                            setEditDate(toInputDateFormat(h.date));
                             setEditingLogId(h.logId); 
                           }}
                           className="text-indigo-400 hover:text-indigo-600 cursor-pointer"

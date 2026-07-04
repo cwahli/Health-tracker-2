@@ -74,6 +74,25 @@ export default function MedicalHistoryTab({
     }));
   };
 
+  const hasEmptyBiomarkers = useMemo(() => {
+    const hasEmptyVal = biomarkerHistory.some(log => {
+      return Object.values(log.biomarkers).some(val => 
+        val === undefined || val === null || val === '' || Number.isNaN(val) || (typeof val === 'string' && val.trim() === '')
+      );
+    });
+    if (hasEmptyVal) return true;
+
+    if (profile?.customBiomarkers) {
+      const usedKeys = new Set<string>();
+      biomarkerHistory.forEach(log => {
+        Object.keys(log.biomarkers).forEach(key => usedKeys.add(key));
+      });
+      const hasUnusedCustom = Object.keys(profile.customBiomarkers).some(key => !usedKeys.has(key));
+      if (hasUnusedCustom) return true;
+    }
+    return false;
+  }, [biomarkerHistory, profile?.customBiomarkers]);
+
   // Important/highlighted biomarkers for user cardiovascular/kidney health
   const highlightKeys = ['ldl', 'apob', 'hba1c', 'egfr', 'hscrp'];
 
@@ -563,7 +582,20 @@ export default function MedicalHistoryTab({
         })}
       </div>
 
-      {onDeleteEmptyBiomarkers && (
+      <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 px-4">
+        <div className="flex flex-wrap items-center gap-6 text-xs text-slate-500 dark:text-slate-400 font-medium">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="w-4 h-4 text-indigo-500" />
+            <span>Total Unique Biomarkers: <strong className="text-slate-800 dark:text-slate-200 font-bold">{Object.keys(biomarkers).length}</strong></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <BrainCircuit className="w-4 h-4 text-indigo-500" />
+            <span>Total Log Entries: <strong className="text-slate-800 dark:text-slate-200 font-bold">{biomarkerHistory.reduce((sum, h) => sum + Object.keys(h.biomarkers).length, 0)}</strong></span>
+          </div>
+        </div>
+      </div>
+
+      {onDeleteEmptyBiomarkers && hasEmptyBiomarkers && (
         <div className="mt-6 flex justify-center pb-4">
           <button
             onClick={() => {
