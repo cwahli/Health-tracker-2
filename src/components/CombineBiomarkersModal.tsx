@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { UserProfile, BiomarkerLog } from '../types';
-import { BiomarkerDefinition } from '../utils/biomarkers';
-import { X, Trash2, Search, ArrowRight, Merge, Info } from 'lucide-react';
+import { BiomarkerDefinition, getBiomarkerMetadata, getPhysiologicalBucket, BIOMARKER_GROUPING_OPTIONS } from '../utils/biomarkers';
+import { X, Trash2, Search, ArrowRight, Merge, Info, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 
 interface CombineBiomarkersModalProps {
   profile: UserProfile;
@@ -17,6 +17,7 @@ interface CombineBiomarkersModalProps {
     mergedLogs: { date: string; value: number | string; originalLogId?: string }[],
     sourceKeysToDelete: string[]
   ) => void;
+  onReviewWithAgent?: (keys: string[]) => void;
 }
 
 export default function CombineBiomarkersModal({
@@ -28,10 +29,13 @@ export default function CombineBiomarkersModal({
   biomarkerHistory,
   allDefinitions,
   onSaveCombine,
+  onReviewWithAgent,
 }: CombineBiomarkersModalProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([initialKey]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [groupType, setGroupType] = useState<'risk' | 'practice' | 'condition'>('risk');
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   // Fields for Step 2
   const [editedName, setEditedName] = useState('');
@@ -208,9 +212,14 @@ export default function CombineBiomarkersModal({
             <div className="space-y-4">
               <div className="bg-indigo-600 dark:bg-indigo-950/40 p-3.5 border border-indigo-500/30 dark:border-indigo-800/20 rounded-2xl flex gap-3">
                 <Info className="w-5 h-5 text-indigo-100 dark:text-indigo-400 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-white dark:text-indigo-100 font-medium leading-relaxed">
-                  Select other similar or duplicate biomarkers to combine with <strong>{initialDef?.name || initialKey}</strong>. All historic logs will be merged under a single consolidated marker.
-                </p>
+                <div className="flex-1">
+                  <p className="text-xs text-white dark:text-indigo-100 font-medium leading-relaxed mb-1.5">
+                    Select other similar or duplicate biomarkers to combine with <strong>{initialDef?.name || initialKey}</strong>. All historic logs will be merged under a single consolidated marker.
+                  </p>
+                  <span className="inline-block text-[10px] font-extrabold bg-white/20 dark:bg-indigo-950 text-white dark:text-indigo-300 px-2 py-0.5 rounded-md">
+                    {selectedKeys.length} biomarkers selected
+                  </span>
+                </div>
               </div>
 
               {/* Search */}
@@ -225,37 +234,117 @@ export default function CombineBiomarkersModal({
                 />
               </div>
 
-              {/* Checklist */}
-              <div className="border border-slate-150 dark:border-slate-800/80 rounded-2xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800/60 max-h-60 overflow-y-auto">
-                {otherBiomarkers.length === 0 ? (
-                  <p className="p-4 text-center text-xs text-slate-400">No other active biomarkers found matching filter.</p>
-                ) : (
-                  otherBiomarkers.map((ob) => {
-                    const isSelected = selectedKeys.includes(ob.key);
+              {/* Group By Selector */}
+              <div className="flex items-center justify-between gap-2 border-t border-b border-slate-100 dark:border-slate-800 py-3">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Group By:</span>
+                <select
+                  value={groupType}
+                  onChange={(e) => setGroupType(e.target.value as any)}
+                  className="px-2.5 py-1 text-xs font-semibold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-sm"
+                >
+                  {BIOMARKER_GROUPING_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Checklist / Accordion */}
+              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                {(() => {
+                  if (otherBiomarkers.length === 0) {
+                    return <p className="text-center text-xs text-slate-400 py-4">No other active biomarkers found matching filter.</p>;
+                  }
+
+                  // Group items
+                  const groups: Record<string, typeof otherBiomarkers> = {};
+                  otherBiomarkers.forEach(ob => {
+                    const meta = getBiomarkerMetadata(ob.key, profile.customBiomarkers?.[ob.key]);
+                    if (groupType === 'risk') {
+                      const cats = meta.riskCategories && meta.riskCategories.length > 0 ? meta.riskCategories : ['General Health'];
+                      cats.forEach(c => {
+                        if (!groups[c]) groups[c] = [];
+                        groups[c].push(ob);
+                      });
+                    } else if (groupType === 'practice') {
+                      const practice = meta.standardMedicalGrouping || 'Other';
+                      if (!groups[practice]) groups[practice] = [];
+                      groups[practice].push(ob);
+                    } else if (groupType === 'condition') {
+                      const conditions = meta.potentialMedicalConditions && meta.potentialMedicalConditions.length > 0 ? meta.potentialMedicalConditions : ['General Health'];
+                      conditions.forEach(c => {
+                        if (!groups[c]) groups[c] = [];
+                        groups[c].push(ob);
+                      });
+                    }
+                  });
+
+                  const groupNames = Object.keys(groups).sort();
+
+                  return groupNames.map(groupName => {
+                    const itemsInGroup = groups[groupName];
+                    const selectedInGroup = itemsInGroup.filter(ob => selectedKeys.includes(ob.key));
+                    const isExpanded = expandedGroups[groupName] !== false;
+
+                    const toggleGroup = () => {
+                      setExpandedGroups(prev => ({
+                        ...prev,
+                        [groupName]: !isExpanded
+                      }));
+                    };
+
                     return (
-                      <div
-                        key={ob.key}
-                        onClick={() => toggleSelectKey(ob.key)}
-                        className={`p-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-900/40 cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50/20 dark:bg-indigo-950/10' : ''}`}
-                      >
-                        <div className="min-w-0 pr-3">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">
-                            {ob.name}
-                          </span>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider font-mono">
-                            {ob.category} {ob.unit ? `(${ob.unit})` : ''}
-                          </span>
+                      <div key={groupName} className="border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden bg-slate-50/20 dark:bg-slate-900/10">
+                        <div 
+                          onClick={toggleGroup}
+                          className="flex items-center justify-between p-3.5 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 cursor-pointer select-none transition-colors border-b border-slate-100 dark:border-slate-800"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{groupName}</span>
+                            <span className="text-[10px] bg-slate-200/60 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full font-bold">
+                              {itemsInGroup.length}
+                            </span>
+                            {selectedInGroup.length > 0 && (
+                              <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded-full font-bold">
+                                {selectedInGroup.length} selected
+                              </span>
+                            )}
+                          </div>
+                          {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                         </div>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => {}} // handled by div click
-                          className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
-                        />
+
+                        {isExpanded && (
+                          <div className="p-3 space-y-2 bg-white dark:bg-slate-950 divide-y divide-slate-100 dark:divide-slate-805">
+                            {itemsInGroup.map(ob => {
+                              const isSelected = selectedKeys.includes(ob.key);
+                              return (
+                                <div
+                                  key={ob.key}
+                                  onClick={() => toggleSelectKey(ob.key)}
+                                  className={`p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-900/40 cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50/20 dark:bg-indigo-950/10' : ''}`}
+                                >
+                                  <div className="min-w-0 pr-3">
+                                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">
+                                      {ob.name}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-mono">
+                                      {ob.category} {ob.unit ? `(${ob.unit})` : ''}
+                                    </span>
+                                  </div>
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => {}} // handled by div click
+                                    className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
-                  })
-                )}
+                  });
+                })()}
               </div>
             </div>
           ) : (
@@ -355,6 +444,20 @@ export default function CombineBiomarkersModal({
         <div className="bg-slate-50 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800/80 px-5 py-4 flex gap-3 justify-end">
           {step === 1 ? (
             <>
+              {onReviewWithAgent && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onReviewWithAgent(selectedKeys);
+                    onClose();
+                  }}
+                  className="mr-auto px-3 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  title="Review with Agent"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Review with Agent</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onClose}

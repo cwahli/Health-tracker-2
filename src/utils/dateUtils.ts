@@ -132,3 +132,52 @@ export function normalizeBiomarkerHistory<T extends MinimalBiomarkerLog>(history
     return toYmd(b.date).localeCompare(toYmd(a.date));
   });
 }
+
+export function toYYYYMMDD(dateStr: string): string {
+  if (!dateStr) return '';
+  const trimmed = dateStr.trim();
+  
+  // 1. If already YYYY-MM-DD (e.g. 2026-07-04)
+  const yyyymmddMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (yyyymmddMatch) {
+    const year = yyyymmddMatch[1];
+    const month = yyyymmddMatch[2].padStart(2, '0');
+    const day = yyyymmddMatch[3].padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  // 2. If DD-MM-YYYY (e.g. 04-07-2026)
+  const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (ddmmyyyyMatch) {
+    const day = ddmmyyyyMatch[1].padStart(2, '0');
+    const month = ddmmyyyyMatch[2].padStart(2, '0');
+    const year = ddmmyyyyMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  // Fallback: try parsing with Date
+  try {
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) {
+      const year = String(d.getFullYear());
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch (e) {}
+
+  return trimmed;
+}
+
+export function formatTimelineDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const ymd = toYYYYMMDD(dateStr);
+  const parts = ymd.split('-');
+  if (parts.length === 3) {
+    const month = parts[1];
+    const day = parts[2];
+    return `${day}-${month}`;
+  }
+  return dateStr;
+}
+

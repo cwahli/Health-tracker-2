@@ -4,6 +4,7 @@ import { nutrientDefinitions } from '../utils/nutrition';
 import { translations } from '../utils/translations';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { TrendingUp, BarChart2, Calendar, EyeOff } from 'lucide-react';
+import { toYYYYMMDD, formatTimelineDate } from '../utils/dateUtils';
 
 interface TrendsTabProps {
   profile: UserProfile;
@@ -23,9 +24,16 @@ export default function TrendsTab({
   onSelectFood
 }: TrendsTabProps) {
   const t = translations[profile.language] || translations.en;
-  const [selectedMetric, setSelectedMetric] = useState<string>('calories');
+  const [selectedMetric, setSelectedMetric] = useState<string>(() => {
+    return localStorage.getItem('trends_selected_metric') || 'calories';
+  });
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [rollingPeriod, setRollingPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+
+  const handleMetricChange = (metric: string) => {
+    setSelectedMetric(metric);
+    localStorage.setItem('trends_selected_metric', metric);
+  };
 
   const parseTarget = (val: any, fallback: number) => {
     if (val === null || val === undefined) return fallback;
@@ -38,10 +46,10 @@ export default function TrendsTab({
 
   // Generate continuous or logged timeline data for the chart
   const getChartData = () => {
-    // Collect all unique dates from both logs
+    // Collect all unique dates from both logs normalized to YYYY-MM-DD
     const datesSet = new Set<string>();
-    foodLogs.forEach(f => datesSet.add(f.date));
-    biomarkerHistory.forEach(b => datesSet.add(b.date));
+    foodLogs.forEach(f => datesSet.add(toYYYYMMDD(f.date)));
+    biomarkerHistory.forEach(b => datesSet.add(toYYYYMMDD(b.date)));
     
     let stepsHistory: { date: string, value: number }[] = [];
     if (selectedMetric === 'steps') {
@@ -49,7 +57,7 @@ export default function TrendsTab({
       if (historyStr) {
         try {
           stepsHistory = JSON.parse(historyStr);
-          stepsHistory.forEach(h => datesSet.add(h.date));
+          stepsHistory.forEach(h => datesSet.add(toYYYYMMDD(h.date)));
         } catch (e) {}
       }
       const today = new Date().toISOString().split('T')[0];
@@ -59,24 +67,12 @@ export default function TrendsTab({
     // Sort dates chronologically
     const sortedDates = Array.from(datesSet).sort();
 
-    // If there is zero data, pre-populate dummy points to allow beautiful visual rendering
-    if (sortedDates.length === 0) {
-      return [
-        { date: '2026-06-20', value: 0 },
-        { date: '2026-06-21', value: 0 },
-        { date: '2026-06-22', value: 0 },
-      ];
-    }
-
     const compiled = sortedDates.map(dateStr => {
       // Aggregate foods for this day
-      const daysFoods = foodLogs.filter(f => f.date === dateStr);
-      const totalCalories = daysFoods.reduce((acc, f) => acc + ((f.nutrients && f.nutrients.calories) || 0), 0);
-      const totalSatFat = daysFoods.reduce((acc, f) => acc + ((f.nutrients && f.nutrients.saturatedFat) || 0), 0);
-      const totalProtein = daysFoods.reduce((acc, f) => acc + ((f.nutrients && f.nutrients.protein) || 0), 0);
+      const daysFoods = foodLogs.filter(f => toYYYYMMDD(f.date) === dateStr);
 
       // Extract biomarker if logged on this day
-      const dayBio = biomarkerHistory.find(b => b.date === dateStr);
+      const dayBio = biomarkerHistory.find(b => toYYYYMMDD(b.date) === dateStr);
       const ldlVal = dayBio?.biomarkers.ldl;
       const hba1cVal = dayBio?.biomarkers.hba1c;
       const egfrVal = dayBio?.biomarkers.egfr;
@@ -93,9 +89,9 @@ export default function TrendsTab({
         const today = new Date().toISOString().split('T')[0];
         if (dateStr === today) {
           const todaySteps = localStorage.getItem('googleSteps');
-          value = todaySteps ? parseInt(todaySteps, 10) : (stepsHistory.find(h => h.date === dateStr)?.value || 0);
+          value = todaySteps ? parseInt(todaySteps, 10) : (stepsHistory.find(h => toYYYYMMDD(h.date) === dateStr)?.value || 0);
         } else {
-          value = stepsHistory.find(h => h.date === dateStr)?.value || 0;
+          value = stepsHistory.find(h => toYYYYMMDD(h.date) === dateStr)?.value || 0;
         }
       }
 
@@ -105,11 +101,23 @@ export default function TrendsTab({
       };
     });
 
+    // Data points in the past that are empty (value <= 0) are excluded for the chart so that the timeline better represents the data
+    const activeCompiled = compiled.filter(item => item.value > 0);
+
+    // If there is zero data, pre-populate dummy points to allow beautiful visual rendering
+    if (activeCompiled.length === 0) {
+      return [
+        { date: '2026-06-20', value: 0 },
+        { date: '2026-06-21', value: 0 },
+        { date: '2026-06-22', value: 0 },
+      ];
+    }
+
     // Handle rolling aggregate depending on selection
     if (rollingPeriod === 'weekly') {
       // Group by weeks
       const grouped: { [key: string]: number[] } = {};
-      compiled.forEach(item => {
+      activeCompiled.forEach(item => {
         // Simple approximate week identifier (first 8 chars or custom week bracket)
         const weekKey = item.date.substring(0, 7) + "-W";
         if (!grouped[weekKey]) grouped[weekKey] = [];
@@ -121,7 +129,7 @@ export default function TrendsTab({
       }));
     } else if (rollingPeriod === 'monthly') {
       const grouped: { [key: string]: number[] } = {};
-      compiled.forEach(item => {
+      activeCompiled.forEach(item => {
         const monthKey = item.date.substring(0, 7);
         if (!grouped[monthKey]) grouped[monthKey] = [];
         grouped[monthKey].push(item.value);
@@ -132,7 +140,7 @@ export default function TrendsTab({
       }));
     }
 
-    return compiled;
+    return activeCompiled;
   };
 
   const chartData = getChartData();
@@ -166,7 +174,7 @@ export default function TrendsTab({
           <select
             id="trend-metric-selector"
             value={selectedMetric}
-            onChange={(e) => setSelectedMetric(e.target.value as any)}
+            onChange={(e) => handleMetricChange(e.target.value)}
             className="w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-xl px-2.5 py-2.5 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           >
             <option value="steps">Daily Steps</option>
@@ -262,6 +270,7 @@ export default function TrendsTab({
                     stroke="#94a3b8" 
                     fontSize={9}
                     tickLine={false}
+                    tickFormatter={formatTimelineDate}
                   />
                   <YAxis 
                     stroke="#94a3b8" 
@@ -273,6 +282,7 @@ export default function TrendsTab({
                   <Tooltip 
                     contentStyle={{ background: '#0f172a', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '11px' }}
                     labelStyle={{ fontWeight: 'bold' }}
+                    labelFormatter={formatTimelineDate}
                   />
                   {/* Target reference boundary guideline line */}
                   <ReferenceLine 
@@ -286,8 +296,44 @@ export default function TrendsTab({
                     dataKey="value" 
                     stroke={metricMeta.color} 
                     strokeWidth={3}
-                    dot={{ r: 4, strokeWidth: 1 }}
-                    activeDot={{ r: 6 }}
+                    dot={(dotProps: any) => {
+                      const { cx, cy, payload } = dotProps;
+                      if (!cx || !cy || !payload) return null;
+                      const isSelected = selectedDate === payload.date;
+                      return (
+                        <g 
+                          key={`dot-${payload.date}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (selectedDate === payload.date) {
+                              setSelectedDate(null);
+                            } else {
+                              setSelectedDate(payload.date);
+                            }
+                          }}
+                          className="cursor-pointer"
+                        >
+                          {/* Invisible large touch target of 30px diameter (15px radius) */}
+                          <circle 
+                            cx={cx} 
+                            cy={cy} 
+                            r={15} 
+                            fill="transparent" 
+                            pointerEvents="all" 
+                          />
+                          {/* Visible small elegant dot */}
+                          <circle 
+                            cx={cx} 
+                            cy={cy} 
+                            r={isSelected ? 6 : 4} 
+                            fill={isSelected ? '#ffffff' : metricMeta.color} 
+                            stroke={isSelected ? metricMeta.color : '#ffffff'} 
+                            strokeWidth={isSelected ? 2.5 : 1.5} 
+                          />
+                        </g>
+                      );
+                    }}
+                    activeDot={false}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -304,7 +350,7 @@ export default function TrendsTab({
               : chartData.map(c => c.date).sort((a, b) => b.localeCompare(a));
             
             return datesToShow.map(dateStr => {
-              const dayFoods = foodLogs.filter(f => f.date.substring(0, 10) === dateStr);
+              const dayFoods = foodLogs.filter(f => toYYYYMMDD(f.date) === toYYYYMMDD(dateStr));
               if (dayFoods.length === 0) return null;
 
               const totalValue = dayFoods.reduce((acc, f) => acc + (f.nutrients?.[selectedMetric as keyof NutrientBreakdown] || 0), 0);
@@ -339,7 +385,7 @@ export default function TrendsTab({
                 <div key={dateStr} className="">
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide font-mono">
-                      Food Consumed on {dateStr}
+                      Food Consumed on {formatTimelineDate(dateStr)}
                     </span>
                     <div className="flex items-center gap-2">
                       <span className={`text-xs font-bold ${totalValue > targetVal ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>

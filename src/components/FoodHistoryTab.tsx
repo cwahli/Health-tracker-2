@@ -394,10 +394,10 @@ export default function FoodHistoryTab({
 
 
   return (
-    <div className="space-y-4 pb-24 animation-fade-in max-w-md mx-auto px-4 mt-4 font-sans text-slate-900">
+    <div className="space-y-4 pb-24 animation-fade-in max-w-md mx-auto px-0 mt-4 font-sans text-slate-900">
       
       {/* Search Input and Manual Entry Link */}
-      <div className="space-y-2">
+      <div className="space-y-2 px-[15px]">
         <div className="relative">
           <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
           <input
@@ -712,7 +712,7 @@ export default function FoodHistoryTab({
       )}
 
       {filteredLogs.length === 0 ? (
-        <div id="food-history-empty" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-[32px] p-8 text-center shadow-sm">
+        <div id="food-history-empty" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-[32px] p-8 text-center shadow-sm mx-[15px]">
           <ImageIcon className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
             {t.emptyHistory}
@@ -730,7 +730,7 @@ export default function FoodHistoryTab({
               <div
                 key={log.id}
                 id={`food-log-item-${log.id}`}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-[32px] overflow-hidden shadow-sm transition-all"
+                className="overflow-hidden transition-all border-b border-slate-200 dark:border-slate-800 pb-4 mb-4"
               >
                 {/* Large visual rendering of attached meal images */}
                 {(resolvedImgs.length > 0 || resolvedImg) ? (
@@ -743,7 +743,7 @@ export default function FoodHistoryTab({
                   </div>
                 ) : null}
 
-                <div className="p-5 space-y-3">
+                <div className="pt-4 space-y-3 px-[15px]">
                   {isEditing ? (
                     <div className="space-y-4">
                       <div className="border-b border-slate-100 dark:border-slate-800 pb-2">
@@ -1114,17 +1114,18 @@ export default function FoodHistoryTab({
                           const logDate = log.date;
                           const dayLogs = foodLogs ? foodLogs.filter(f => f.date === logDate) : [];
 
-                          const totalCaloriesOnDay = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.calories || 0), 0);
-                          const totalSatFatOnDay = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.saturatedFat || 0), 0);
-                          const totalSodiumOnDay = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.sodium || 0), 0);
+                          // Sort day logs chronologically (by id or timestamp) so we can compute correct running sum
+                          const dayLogsChronological = [...dayLogs].sort((a, b) => a.id.localeCompare(b.id));
+                          const currentIndex = dayLogsChronological.findIndex(f => f.id === log.id);
+                          const logsBefore = currentIndex !== -1 ? dayLogsChronological.slice(0, currentIndex) : [];
 
                           const caloriesInMeal = (log.nutrients && log.nutrients.calories) || 0;
                           const satFatInMeal = (log.nutrients && log.nutrients.saturatedFat) || 0;
                           const sodiumInMeal = (log.nutrients && log.nutrients.sodium) || 0;
 
-                          const caloriesConsumedBefore = Math.max(0, totalCaloriesOnDay - caloriesInMeal);
-                          const satFatConsumedBefore = Math.max(0, totalSatFatOnDay - satFatInMeal);
-                          const sodiumConsumedBefore = Math.max(0, totalSodiumOnDay - sodiumInMeal);
+                          const caloriesConsumedBefore = logsBefore.reduce((acc, curr) => acc + (curr.nutrients?.calories || 0), 0);
+                          const satFatConsumedBefore = logsBefore.reduce((acc, curr) => acc + (curr.nutrients?.saturatedFat || 0), 0);
+                          const sodiumConsumedBefore = logsBefore.reduce((acc, curr) => acc + (curr.nutrients?.sodium || 0), 0);
 
                           return (
                             <div className="flex flex-wrap items-center gap-3">
@@ -1177,10 +1178,10 @@ export default function FoodHistoryTab({
                         <button
                           type="button"
                           onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
-                          className="text-xs text-slate-400 hover:text-indigo-600 flex items-center gap-1 font-bold"
+                          className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
+                          title={isExpanded ? "Collapse details" : "Expand details"}
                         >
-                          <span>{isExpanded ? 'Hide' : 'View all'}</span>
-                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                         </button>
                       </div>
 

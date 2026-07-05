@@ -9,7 +9,7 @@ import LLMSelector from './LLMSelector';
 import { Agent5View, Agent6View, Agent7View } from './AgentResultViews';
 import { AgentResultTable } from './AgentResultTable';
 import { parse } from 'yaml';
-import { biomarkerDefinitions } from '../utils/biomarkers';
+import { biomarkerDefinitions, getBiomarkerMetadata, getPhysiologicalBucket, BIOMARKER_GROUPING_OPTIONS } from '../utils/biomarkers';
 
 interface InsightsTabProps {
   profile: UserProfile;
@@ -36,6 +36,8 @@ interface InsightsTabProps {
   onUpdateHistory?: (history: any[], biomarkers: { [key: string]: number | string }, updatedProfile?: UserProfile) => Promise<void>;
   batchSize?: number;
   onChangeBatchSize?: (size: number) => void;
+  calibratingBatchIdx?: number | null;
+  calibratingAgentType?: string | null;
 }
 
 export default function InsightsTab({
@@ -59,7 +61,9 @@ export default function InsightsTab({
   onUpdateProfile,
   onUpdateHistory,
   batchSize = 20,
-  onChangeBatchSize
+  onChangeBatchSize,
+  calibratingBatchIdx = null,
+  calibratingAgentType = null
 }: InsightsTabProps) {
   const t = translations[profile.language] || translations.en;
   const [isApplying, setIsApplying] = useState(false);
@@ -80,10 +84,44 @@ export default function InsightsTab({
   });
   const [showCustomBatchModal, setShowCustomBatchModal] = useState(false);
   const [customBatchSearch, setCustomBatchSearch] = useState('');
+  const [batchGroupType, setBatchGroupType] = useState<'risk' | 'practice' | 'condition'>('risk');
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   
   React.useEffect(() => {
     setBatchSizeInput(batchSize.toString());
   }, [batchSize]);
+
+  React.useEffect(() => {
+    try {
+      const savedApprovedData = localStorage.getItem('approved_data_review_batches');
+      if (savedApprovedData) setApprovedBatches(JSON.parse(savedApprovedData));
+      
+      const savedAnalysisResults = localStorage.getItem('batch_analysis_results');
+      if (savedAnalysisResults) setBatchAnalysisResults(JSON.parse(savedAnalysisResults));
+
+      const savedApprovedAgent1 = localStorage.getItem('approved_agent1_batches');
+      if (savedApprovedAgent1) setApprovedAgent1Batches(JSON.parse(savedApprovedAgent1));
+
+      const savedAgent1Results = localStorage.getItem('agent1_batch_results');
+      if (savedAgent1Results) setAgent1BatchResults(JSON.parse(savedAgent1Results));
+    } catch (e) {
+      console.warn("Failed to sync localStorage in InsightsTab useEffect", e);
+    }
+  }, [profile]);
+
+  React.useEffect(() => {
+    if (sessionStorage.getItem('auto_open_custom_batch_modal') === 'true') {
+      sessionStorage.removeItem('auto_open_custom_batch_modal');
+      setShowCustomBatchModal(true);
+      // Reload keys from localStorage to ensure we have the prefilled keys
+      try {
+        const saved = localStorage.getItem('agent1_custom_batch_keys');
+        if (saved) {
+          setCustomBatchKeys(JSON.parse(saved));
+        }
+      } catch (e) {}
+    }
+  }, []);
 
   // Accordion approved steps state
   const [approvedSteps, setApprovedSteps] = useState<Record<string, boolean>>(() => {
@@ -296,14 +334,84 @@ export default function InsightsTab({
     });
   }, [biomarkers, excludeStandardized, profile.customBiomarkers]);
 
-  const batches = React.useMemo(() => {
-    const size = batchSize || 20;
-    const res: string[][] = [];
-    for (let i = 0; i < markerKeys.length; i += size) {
-      res.push(markerKeys.slice(i, i + size));
+  const [biomarkerBatches, setBiomarkerBatches] = React.useState<string[][]>(() => {
+    try {
+      const saved = localStorage.getItem('biomarker_batches_custom');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [];
+  });
+
+  const [selectedMissingKeysToMove, setSelectedMissingKeysToMove] = React.useState<Record<number, string[]>>({});
+
+  const batches = biomarkerBatches;
+
+  React.useEffect(() => {
+    localStorage.setItem('biomarker_batch_size', String(batchSize || 20));
+  }, [batchSize]);
+
+  React.useEffect(() => {
+    const activeKeys = [...markerKeys];
+    if (activeKeys.length === 0) {
+      if (biomarkerBatches.length > 0) {
+        setBiomarkerBatches([]);
+        localStorage.setItem('biomarker_batches_custom', JSON.stringify([]));
+      }
+      return;
     }
-    return res;
-  }, [markerKeys, batchSize]);
+
+    let currentBatches: string[][] = [];
+    try {
+      const saved = localStorage.getItem('biomarker_batches_custom');
+      if (saved) currentBatches = JSON.parse(saved);
+    } catch (e) {}
+
+    currentBatches = currentBatches.map(batch => 
+      batch.filter(key => activeKeys.includes(key))
+    );
+
+    const keysInBatches = new Set(currentBatches.flat());
+    const missingKeys = activeKeys.filter(k => !keysInBatches.has(k));
+
+    if (missingKeys.length > 0 || currentBatches.length === 0) {
+      const size = batchSize || 20;
+      if (currentBatches.length === 0) {
+        const res: string[][] = [];
+        for (let i = 0; i < activeKeys.length; i += size) {
+          res.push(activeKeys.slice(i, i + size));
+        }
+        currentBatches = res;
+      } else {
+        missingKeys.forEach(key => {
+          let placed = false;
+          for (let i = 0; i < currentBatches.length; i++) {
+            const batch = currentBatches[i];
+            const isApproved = approvedBatches[i];
+            const hasResult = batchAnalysisResults[i];
+            if (batch.length < size && !isApproved && !hasResult) {
+              batch.push(key);
+              placed = true;
+              break;
+            }
+          }
+          if (!placed) {
+            currentBatches.push([key]);
+          }
+        });
+      }
+    }
+
+    currentBatches = currentBatches.filter((batch, idx) => 
+      batch.length > 0 || idx === 0 || approvedBatches[idx] || batchAnalysisResults[idx]
+    );
+
+    const currentStr = JSON.stringify(currentBatches);
+    const stateStr = JSON.stringify(biomarkerBatches);
+    if (currentStr !== stateStr) {
+      setBiomarkerBatches(currentBatches);
+      localStorage.setItem('biomarker_batches_custom', JSON.stringify(currentBatches));
+    }
+  }, [markerKeys, batchSize, approvedBatches, batchAnalysisResults, biomarkerBatches]);
 
 
   React.useEffect(() => {
@@ -329,6 +437,82 @@ export default function InsightsTab({
     }, 1500);
     return () => clearInterval(interval);
   }, []);
+
+  React.useEffect(() => {
+    const checkAndSet = (key, setter) => {
+      try {
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          setter(prev => {
+            if (JSON.stringify(prev) !== saved) {
+              return JSON.parse(saved);
+            }
+            return prev;
+          });
+        }
+      } catch (e) {}
+    };
+    checkAndSet('agent1_batch_results', setAgent1BatchResults);
+    checkAndSet('approved_agent1_batches', setApprovedAgent1Batches);
+    checkAndSet('batch_analysis_results', setBatchAnalysisResults);
+    checkAndSet('approved_data_review_batches', setApprovedBatches);
+  }, [profile, calibratingBatchIdx]);
+
+  const handleMoveMissingBiomarkers = (bIdx: number, missingKeysToMove: string[]) => {
+    if (!missingKeysToMove || missingKeysToMove.length === 0) return;
+
+    let currentBatches = [...biomarkerBatches];
+
+    missingKeysToMove.forEach(key => {
+      // 1. Remove from current batch
+      currentBatches[bIdx] = currentBatches[bIdx].filter(k => k !== key);
+
+      // 2. Find the first subsequent unapproved & uncalibrated batch with space
+      let placed = false;
+      const size = batchSize || 20;
+
+      for (let i = bIdx + 1; i < currentBatches.length; i++) {
+        const isApproved = approvedBatches[i];
+        const hasResult = batchAnalysisResults[i];
+        const batchKeys = currentBatches[i];
+
+        if (!isApproved && !hasResult && batchKeys.length < size) {
+          batchKeys.push(key);
+          placed = true;
+          break;
+        }
+      }
+
+      if (!placed) {
+        // Find any subsequent unapproved & uncalibrated batch (even if full), and append it
+        for (let i = bIdx + 1; i < currentBatches.length; i++) {
+          const isApproved = approvedBatches[i];
+          const hasResult = batchAnalysisResults[i];
+          const batchKeys = currentBatches[i];
+
+          if (!isApproved && !hasResult) {
+            batchKeys.push(key);
+            placed = true;
+            break;
+          }
+        }
+      }
+
+      if (!placed) {
+        // If there's no unapproved & uncalibrated subsequent batch, create a new batch at the end!
+        currentBatches.push([key]);
+      }
+    });
+
+    // Clean up empty batches
+    currentBatches = currentBatches.filter((batch, idx) => 
+      batch.length > 0 || idx === 0 || approvedBatches[idx] || batchAnalysisResults[idx]
+    );
+
+    // Save batches to state and localStorage
+    setBiomarkerBatches(currentBatches);
+    localStorage.setItem('biomarker_batches_custom', JSON.stringify(currentBatches));
+  };
 
   // Biomarkers grouped dynamically by risk categories
   const groupedBiomarkers = React.useMemo<Record<string, Array<{ key: string; name: string; present: boolean }>>>(() => {
@@ -1239,29 +1423,6 @@ export default function InsightsTab({
                                         <div className="text-left">
                                           <h5 className="text-[12px] font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                             {isCustom ? 'Custom Test Batch' : `Batch ${parseInt(bIdx as string) + 1}`}
-                                            {isCustom && (
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setCustomBatchKeys([]);
-                                                  localStorage.removeItem('agent1_custom_batch_keys');
-                                                  setAgent1BatchResults(prev => {
-                                                    const updated = { ...prev };
-                                                    delete updated['custom'];
-                                                    localStorage.setItem('agent1_batch_results', JSON.stringify(updated));
-                                                    return updated;
-                                                  });
-                                                  try {
-                                                    sessionStorage.removeItem('chat_messages_medical_agent1_custom');
-                                                    sessionStorage.removeItem('last_sent_payload_medical_agent1_custom');
-                                                  } catch(err) {}
-                                                }}
-                                                className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 p-1 rounded-full transition-colors"
-                                                title="Delete Custom Batch"
-                                              >
-                                                <X className="w-3.5 h-3.5" />
-                                              </button>
-                                            )}
                                           </h5>
                                           <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
                                             {batchKeys.length} biomarkers assigned
@@ -1547,13 +1708,14 @@ export default function InsightsTab({
                                                         const date = row.date || new Date().toISOString().split('T')[0];
 
                                                         // Update customBiomarker definition
+                                                        const existing: any = updatedCustoms[key] || {};
                                                         updatedCustoms[key] = {
-                                                          ...(updatedCustoms[key] || {}),
+                                                          ...existing,
                                                           name,
                                                           unit,
-                                                          riskCategories: row.riskCategories || [],
-                                                          standardMedicalGrouping: row.standardMedicalGrouping || 'Other',
-                                                          potentialMedicalConditions: row.potentialMedicalConditions || []
+                                                          riskCategories: (existing.riskCategories && existing.riskCategories.length > 0) ? existing.riskCategories : (row.riskCategories || []),
+                                                          standardMedicalGrouping: (existing.standardMedicalGrouping && existing.standardMedicalGrouping !== 'Other') ? existing.standardMedicalGrouping : (row.standardMedicalGrouping || 'Other'),
+                                                          potentialMedicalConditions: row.potentialMedicalConditions || existing.potentialMedicalConditions || []
                                                         } as any;
 
                                                         // Not overriding or duplicating values in history here because we simply map keys for data cleaning.
@@ -1598,6 +1760,33 @@ export default function InsightsTab({
                                             </div>
                                           </div>
                                         )}
+                                      </div>
+                                    )}
+                                    {isCustom && (
+                                      <div className="mt-3 pt-2.5 border-t border-slate-150 dark:border-slate-800/60 flex items-center justify-between">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCustomBatchKeys([]);
+                                            localStorage.removeItem('agent1_custom_batch_keys');
+                                            setAgent1BatchResults(prev => {
+                                              const updated = { ...prev };
+                                              delete updated['custom'];
+                                              localStorage.setItem('agent1_batch_results', JSON.stringify(updated));
+                                              return updated;
+                                            });
+                                            try {
+                                              sessionStorage.removeItem('chat_messages_medical_agent1_custom');
+                                              sessionStorage.removeItem('last_sent_payload_medical_agent1_custom');
+                                            } catch(err) {}
+                                          }}
+                                          className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 font-bold text-[10px] cursor-pointer text-left"
+                                          title="Delete Custom Batch"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                          <span>Delete Custom Batch</span>
+                                        </button>
                                       </div>
                                     )}
                                   </div>
@@ -1654,6 +1843,7 @@ export default function InsightsTab({
                                 return (
                                   <div 
                                     key={bIdx} 
+                                    id={`batch-card-${bIdx}`}
                                     className={`p-4 rounded-2xl border transition-all ${
                                       isApproved 
                                         ? 'bg-emerald-50/10 border-emerald-500/20' 
@@ -1740,6 +1930,8 @@ export default function InsightsTab({
                                                 agentResult={result}
                                                 profile={profile}
                                                 biomarkerHistory={biomarkerHistory}
+                                                selectedMissingKeys={selectedMissingKeysToMove[bIdx] || []}
+                                                onChangeSelectedMissingKeys={(keys) => setSelectedMissingKeysToMove(prev => ({ ...prev, [bIdx]: keys }))}
                                               />
                                             </div>
 
@@ -1772,6 +1964,7 @@ export default function InsightsTab({
                                               {/* Review with Agent (Chat with Agent) Button */}
                                               <button
                                                 type="button"
+                                                disabled={calibratingBatchIdx === bIdx}
                                                 onClick={() => {
                                                   if (onOpenAgentChat) {
                                                     onOpenAgentChat('data_review', {
@@ -1780,7 +1973,7 @@ export default function InsightsTab({
                                                     });
                                                   }
                                                 }}
-                                                className="py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/25 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-150 dark:border-indigo-900/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                                className={`py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/25 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-150 dark:border-indigo-900/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${calibratingBatchIdx === bIdx ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                 title="Chat with Agent to calibrate further"
                                               >
                                                 <Send className="w-3.5 h-3.5" />
@@ -1788,7 +1981,16 @@ export default function InsightsTab({
                                               </button>
                                               
                                               {/* Approve Button / Checked state */}
-                                              {isApproved ? (
+                                              {calibratingBatchIdx === bIdx ? (
+                                                <button
+                                                  type="button"
+                                                  disabled
+                                                  className="w-full py-2 bg-emerald-600/50 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-not-allowed opacity-75"
+                                                >
+                                                  <Loader className="w-3.5 h-3.5 animate-spin" />
+                                                  <span>Approving & Saving...</span>
+                                                </button>
+                                              ) : isApproved ? (
                                                 <button
                                                   type="button"
                                                   onClick={() => {
@@ -1816,17 +2018,19 @@ export default function InsightsTab({
                                                       // Save customBiomarkers to user profile
                                                       const updatedCustoms = { ...(profile.customBiomarkers || {}) };
                                                       result.reviewedBiomarkers?.forEach((bm: any) => {
+                                                        const existing: any = updatedCustoms[bm.key] || {};
                                                         updatedCustoms[bm.key] = {
-                                                          name: bm.name,
-                                                          unit: bm.unit,
-                                                          normalRange: bm.profileAdjustedNormalRange || '',
-                                                          description: bm.description || '',
-                                                          riskCategories: bm.riskCategories || [],
-                                                          standardMedicalGrouping: bm.standardMedicalGrouping || 'Other',
-                                                          potentialMedicalConditions: bm.potentialMedicalConditions || [],
-                                                          specificRiskContext: bm.specificRiskContext || '',
-                                                          status: bm.status || 'Healthy',
-                                                          rangeBrackets: bm.rangeBrackets || []
+                                                          ...existing,
+                                                          name: bm.name || existing.name,
+                                                          unit: bm.unit || existing.unit,
+                                                          normalRange: bm.profileAdjustedNormalRange || existing.normalRange || '',
+                                                          description: bm.description || existing.description || '',
+                                                          riskCategories: (existing.riskCategories && existing.riskCategories.length > 0) ? existing.riskCategories : (bm.riskCategories || []),
+                                                          standardMedicalGrouping: (existing.standardMedicalGrouping && existing.standardMedicalGrouping !== 'Other') ? existing.standardMedicalGrouping : (bm.standardMedicalGrouping || 'Other'),
+                                                          potentialMedicalConditions: bm.potentialMedicalConditions || existing.potentialMedicalConditions || [],
+                                                          specificRiskContext: bm.specificRiskContext || existing.specificRiskContext || '',
+                                                          status: bm.status || existing.status || 'Healthy',
+                                                          rangeBrackets: bm.rangeBrackets || existing.rangeBrackets || []
                                                         } as any;
                                                       });
 
@@ -1837,6 +2041,12 @@ export default function InsightsTab({
 
                                                       if (onUpdateProfile) {
                                                         await onUpdateProfile(updatedProfile);
+                                                      }
+
+                                                      // Move missing biomarkers to future batches if selected
+                                                      const keysToMove = selectedMissingKeysToMove[bIdx] || [];
+                                                      if (keysToMove.length > 0) {
+                                                        handleMoveMissingBiomarkers(bIdx, keysToMove);
                                                       }
 
                                                       // Mark as approved
@@ -1979,13 +2189,24 @@ export default function InsightsTab({
                                   Review
                                 </button>
                                 {hasStepSomethingToApprove(step, latestAnalysis) && (
-                                  <button
-                                    onClick={() => handleApproveStep(index)}
-                                    className="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/10"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                    Approve
-                                  </button>
+                                  calibratingAgentType === step.agentType ? (
+                                    <button
+                                      type="button"
+                                      disabled
+                                      className="py-2.5 px-3 bg-indigo-400 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-not-allowed opacity-75"
+                                    >
+                                      <Loader className="w-3.5 h-3.5 animate-spin" />
+                                      Approving...
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleApproveStep(index)}
+                                      className="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/10"
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                      Approve
+                                    </button>
+                                  )
                                 )}
                               </div>
                             )}
@@ -2268,6 +2489,8 @@ export default function InsightsTab({
                 agentResult={batchAnalysisResults[fullscreenBatchIndex]}
                 profile={profile}
                 biomarkerHistory={biomarkerHistory}
+                selectedMissingKeys={selectedMissingKeysToMove[fullscreenBatchIndex] || []}
+                onChangeSelectedMissingKeys={(keys) => setSelectedMissingKeysToMove(prev => ({ ...prev, [fullscreenBatchIndex]: keys }))}
               />
             </div>
             
@@ -2292,7 +2515,12 @@ export default function InsightsTab({
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Test Custom Batch</h3>
-                  <p className="text-[10px] text-slate-500">Pick any biomarker to test data cleaning</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-slate-500">Pick any biomarker to test data cleaning</span>
+                    <span className="text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.25 rounded-md">
+                      {customBatchKeys.length} selected
+                    </span>
+                  </div>
                 </div>
                 <button onClick={() => setShowCustomBatchModal(false)} className="text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full p-1 transition-colors">
                   <X className="w-5 h-5" />
@@ -2308,38 +2536,120 @@ export default function InsightsTab({
                   className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
+
+              {/* Group By Selector */}
+              <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-150 dark:border-slate-800">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Group By:</span>
+                <select
+                  value={batchGroupType}
+                  onChange={(e) => setBatchGroupType(e.target.value as any)}
+                  className="px-2.5 py-1 text-xs font-semibold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-sm"
+                >
+                  {BIOMARKER_GROUPING_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {markerKeys.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-4">No biomarkers available.</p>
-              ) : (
-                markerKeys.filter(k => k.toLowerCase().includes(customBatchSearch.toLowerCase())).map(key => {
-                  const isSelected = customBatchKeys.includes(key);
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {(() => {
+                const filtered = markerKeys.filter(k => k.toLowerCase().includes(customBatchSearch.toLowerCase()));
+                if (filtered.length === 0) {
+                  return <p className="text-xs text-slate-500 text-center py-4">No biomarkers available.</p>;
+                }
+
+                // Compute groups
+                const groups: Record<string, string[]> = {};
+                filtered.forEach(key => {
+                  const meta = getBiomarkerMetadata(key, profile.customBiomarkers?.[key]);
+                  
+                  if (batchGroupType === 'risk') {
+                    const cats = meta.riskCategories && meta.riskCategories.length > 0 ? meta.riskCategories : ['General Health'];
+                    cats.forEach(c => {
+                      if (!groups[c]) groups[c] = [];
+                      groups[c].push(key);
+                    });
+                  } else if (batchGroupType === 'practice') {
+                    const practice = meta.standardMedicalGrouping || 'Other';
+                    if (!groups[practice]) groups[practice] = [];
+                    groups[practice].push(key);
+                  } else if (batchGroupType === 'condition') {
+                    const conditions = meta.potentialMedicalConditions && meta.potentialMedicalConditions.length > 0 ? meta.potentialMedicalConditions : ['General Health'];
+                    conditions.forEach(c => {
+                      if (!groups[c]) groups[c] = [];
+                      groups[c].push(key);
+                    });
+                  }
+                });
+
+                const groupNames = Object.keys(groups).sort();
+
+                return groupNames.map(groupName => {
+                  const keysInGroup = groups[groupName];
+                  const selectedInGroup = keysInGroup.filter(k => customBatchKeys.includes(k));
+                  const isExpanded = expandedGroups[groupName] !== false;
+
+                  const toggleGroup = () => {
+                    setExpandedGroups(prev => ({
+                      ...prev,
+                      [groupName]: !isExpanded
+                    }));
+                  };
+
                   return (
-                    <div 
-                      key={key} 
-                      onClick={() => {
-                        clearCustomBatchResults();
-                        setCustomBatchKeys(prev => {
-                          const updated = isSelected ? prev.filter(k => k !== key) : [...prev, key];
-                          localStorage.setItem('agent1_custom_batch_keys', JSON.stringify(updated));
-                          return updated;
-                        });
-                      }}
-                      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50/30 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60'}`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-700'}`}>
-                          {isSelected && <Check className="w-3 h-3 text-white" />}
+                    <div key={groupName} className="border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/20 dark:bg-slate-900/10">
+                      <div 
+                        onClick={toggleGroup}
+                        className="flex items-center justify-between p-3 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 cursor-pointer select-none transition-colors border-b border-slate-100 dark:border-slate-800"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{groupName}</span>
+                          <span className="text-[10px] bg-slate-200/60 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full font-bold">
+                            {keysInGroup.length}
+                          </span>
+                          {selectedInGroup.length > 0 && (
+                            <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded-full font-bold">
+                              {selectedInGroup.length} selected
+                            </span>
+                          )}
                         </div>
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{key}</span>
+                        {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                       </div>
-                      <span className="text-[10px] text-slate-400">{biomarkers[key]}</span>
+
+                      {isExpanded && (
+                        <div className="p-3 space-y-2 bg-white dark:bg-slate-950">
+                          {keysInGroup.map(key => {
+                            const isSelected = customBatchKeys.includes(key);
+                            return (
+                              <div 
+                                key={key} 
+                                onClick={() => {
+                                  clearCustomBatchResults();
+                                  setCustomBatchKeys(prev => {
+                                    const updated = isSelected ? prev.filter(k => k !== key) : [...prev, key];
+                                    localStorage.setItem('agent1_custom_batch_keys', JSON.stringify(updated));
+                                    return updated;
+                                  });
+                                }}
+                                className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50/30 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-850 hover:bg-slate-50 dark:hover:bg-slate-800/60'}`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-700'}`}>
+                                    {isSelected && <Check className="w-3 h-3 text-white" />}
+                                  </div>
+                                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{key}</span>
+                                </div>
+                                <span className="text-[10px] text-slate-400 font-medium">{biomarkers[key]}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
-                })
-              )}
+                });
+              })()}
             </div>
             
             <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex justify-end gap-2">

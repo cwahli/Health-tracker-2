@@ -569,13 +569,32 @@ export default function HomeTab({
           <div className="space-y-1">
             <div className="flex justify-between text-xs font-semibold">
               <span className="text-slate-700 dark:text-slate-300">Calories Allowed</span>
-              <span className="text-slate-500 font-mono">{activeTargets.calories} / {activeTargets.caloriesTarget} kcal</span>
+              {activeTargets.calories > activeTargets.caloriesTarget ? (
+                <span className="text-rose-500 font-bold font-mono">
+                  {Math.ceil(activeTargets.calories - activeTargets.caloriesTarget)} cal over {activeTargets.caloriesTarget} daily
+                </span>
+              ) : (
+                <span className="text-slate-500 font-mono">{activeTargets.calories} / {activeTargets.caloriesTarget} kcal</span>
+              )}
             </div>
-            <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-indigo-600 rounded-full transition-all duration-500" 
-                style={{ width: `${Math.min(100, (activeTargets.calories / activeTargets.caloriesTarget) * 100)}%` }}
-              />
+            <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+              {activeTargets.calories > activeTargets.caloriesTarget ? (
+                <>
+                  <div 
+                    className="h-full bg-indigo-600 transition-all duration-500" 
+                    style={{ width: `${(activeTargets.caloriesTarget / activeTargets.calories) * 100}%` }}
+                  />
+                  <div 
+                    className="h-full bg-rose-500 transition-all duration-500" 
+                    style={{ width: `${((activeTargets.calories - activeTargets.caloriesTarget) / activeTargets.calories) * 100}%` }}
+                  />
+                </>
+              ) : (
+                <div 
+                  className="h-full bg-indigo-600 rounded-full transition-all duration-500" 
+                  style={{ width: `${(activeTargets.calories / activeTargets.caloriesTarget) * 100}%` }}
+                />
+              )}
             </div>
           </div>
 
@@ -583,15 +602,32 @@ export default function HomeTab({
           <div className="space-y-1">
             <div className="flex justify-between text-xs font-semibold">
               <span className="text-slate-700 dark:text-slate-300">Saturated Fat Limit</span>
-              <span className={`font-mono ${activeTargets.satFat > activeTargets.satFatTarget ? 'text-rose-500 font-bold' : 'text-slate-500'}`}>
-                {activeTargets.satFat}g / {activeTargets.satFatTarget}g
-              </span>
+              {activeTargets.satFat > activeTargets.satFatTarget ? (
+                <span className="text-rose-500 font-bold font-mono">
+                  {(activeTargets.satFat - activeTargets.satFatTarget).toFixed(1)}g over {activeTargets.satFatTarget}g daily
+                </span>
+              ) : (
+                <span className="text-slate-500 font-mono">{activeTargets.satFat}g / {activeTargets.satFatTarget}g</span>
+              )}
             </div>
-            <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-              <div 
-                className={`h-full rounded-full transition-all duration-500 ${activeTargets.satFat > activeTargets.satFatTarget ? 'bg-rose-500' : 'bg-indigo-600'}`} 
-                style={{ width: `${Math.min(100, (activeTargets.satFat / activeTargets.satFatTarget) * 100)}%` }}
-              />
+            <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+              {activeTargets.satFat > activeTargets.satFatTarget ? (
+                <>
+                  <div 
+                    className="h-full bg-indigo-600 transition-all duration-500" 
+                    style={{ width: `${(activeTargets.satFatTarget / activeTargets.satFat) * 100}%` }}
+                  />
+                  <div 
+                    className="h-full bg-rose-500 transition-all duration-500" 
+                    style={{ width: `${((activeTargets.satFat - activeTargets.satFatTarget) / activeTargets.satFat) * 100}%` }}
+                  />
+                </>
+              ) : (
+                <div 
+                  className="h-full bg-indigo-600 rounded-full transition-all duration-500" 
+                  style={{ width: `${(activeTargets.satFat / activeTargets.satFatTarget) * 100}%` }}
+                />
+              )}
             </div>
           </div>
 
@@ -599,15 +635,32 @@ export default function HomeTab({
           <div className="space-y-1">
             <div className="flex justify-between text-xs font-semibold">
               <span className="text-slate-700 dark:text-slate-300">Sodium Guard</span>
-              <span className={`font-mono ${activeTargets.sodium > activeTargets.sodiumTarget ? 'text-rose-500 font-bold' : 'text-slate-500'}`}>
-                {activeTargets.sodium}mg / {activeTargets.sodiumTarget}mg
-              </span>
+              {activeTargets.sodium > activeTargets.sodiumTarget ? (
+                <span className="text-rose-500 font-bold font-mono">
+                  {(activeTargets.sodium - activeTargets.sodiumTarget).toFixed(0)}mg over {activeTargets.sodiumTarget}mg daily
+                </span>
+              ) : (
+                <span className="text-slate-500 font-mono">{activeTargets.sodium}mg / {activeTargets.sodiumTarget}mg</span>
+              )}
             </div>
-            <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-              <div 
-                className={`h-full rounded-full transition-all duration-500 ${activeTargets.sodium > activeTargets.sodiumTarget ? 'bg-rose-500' : 'bg-indigo-600'}`} 
-                style={{ width: `${Math.min(100, (activeTargets.sodium / activeTargets.sodiumTarget) * 100)}%` }}
-              />
+            <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+              {activeTargets.sodium > activeTargets.sodiumTarget ? (
+                <>
+                  <div 
+                    className="h-full bg-indigo-600 transition-all duration-500" 
+                    style={{ width: `${(activeTargets.sodiumTarget / activeTargets.sodium) * 100}%` }}
+                  />
+                  <div 
+                    className="h-full bg-rose-500 transition-all duration-500" 
+                    style={{ width: `${((activeTargets.sodium - activeTargets.sodiumTarget) / activeTargets.sodium) * 100}%` }}
+                  />
+                </>
+              ) : (
+                <div 
+                  className="h-full bg-indigo-600 rounded-full transition-all duration-500" 
+                  style={{ width: `${(activeTargets.sodium / activeTargets.sodiumTarget) * 100}%` }}
+                />
+              )}
             </div>
           </div>
 
@@ -1183,21 +1236,23 @@ export default function HomeTab({
       )}
 
       {/* Food Idea Agent Modal */}
-      <LogChat 
-        type="food_idea"
-        isOpen={isFoodIdeaChatOpen}
-        onClose={() => setIsFoodIdeaChatOpen(false)}
-        profile={profile}
-        foodLogs={foodLogs}
-        biomarkers={biomarkers}
-        biomarkerHistory={biomarkerHistory}
-        selectedModelId={selectedModelId}
-        onChangeModelId={onChangeModelId}
-        onLogFoodIdeas={(ideas) => {
-          setFoodIdeas([...foodIdeas, ...ideas]);
-          setIsFoodIdeaChatOpen(false);
-        }}
-      />
+      {isFoodIdeaChatOpen && (
+        <LogChat 
+          type="food_idea"
+          isOpen={isFoodIdeaChatOpen}
+          onClose={() => setIsFoodIdeaChatOpen(false)}
+          profile={profile}
+          foodLogs={foodLogs}
+          biomarkers={biomarkers}
+          biomarkerHistory={biomarkerHistory}
+          selectedModelId={selectedModelId}
+          onChangeModelId={onChangeModelId}
+          onLogFoodIdeas={(ideas) => {
+            setFoodIdeas([...foodIdeas, ...ideas]);
+            setIsFoodIdeaChatOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

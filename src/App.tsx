@@ -20,7 +20,10 @@ import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, getDocFromServer, 
 import { getCurrentDateInTimezone, normalizeBiomarkerHistory } from './utils/dateUtils';
 import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint } from './utils/biomarkers';
 import { get, set } from 'idb-keyval';
-const LOCAL_STORAGE_KEY = 'health_cockpit_app_data';
+const getStorageKey = (email?: string | null) => {
+  const norm = (email || auth.currentUser?.email || 'guest').toLowerCase().trim();
+  return `health_cockpit_app_data_${norm}`;
+};
 const QUOTA_STORAGE_KEY = 'health_cockpit_quota_data';
 const getQuotaKey = () => {
   return new Date().toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' });
@@ -352,6 +355,8 @@ export default function App() {
   const [isMedicalChatOpen, setIsMedicalChatOpen] = useState(false);
   const [activeAgentType, setActiveAgentType] = useState<'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent6' | 'agent7' | 'data_review' | null>(null);
   const [activeDataReviewBatchIdx, setActiveDataReviewBatchIdx] = useState<number | string | null>(null);
+  const [calibratingBatchIdx, setCalibratingBatchIdx] = useState<number | null>(null);
+  const [calibratingAgentType, setCalibratingAgentType] = useState<string | null>(null);
   const [batchSize, setBatchSize] = useState<number>(() => {
     try {
       const saved = localStorage.getItem('biomarker_batch_size');
@@ -400,7 +405,7 @@ export default function App() {
       return;
     }
     // Load local storage first so we don't wipe it on page load
-    const parsedLocal = await get(LOCAL_STORAGE_KEY) || {};
+    const parsedLocal = await get(getStorageKey()) || {};
     // Snapshot of current local state (from storage or memory) for safe merge
     const localProfile = profile || parsedLocal.profile;
     const localFoods = foodLogs.length > 0 ? [...foodLogs] : (parsedLocal.foodLogs || []);
@@ -500,9 +505,15 @@ export default function App() {
           tRepId = logInteraction('download', `users/${uid}/reports/latest`, null);
           // By using getDocs and getDoc (not FromServer), Firestore can utilize its local cache if configured,
           // and won't throw if offline, gracefully degrading to cached data.
-          // Note: foodLogs is now managed by onSnapshot listener to save reads/bandwidth
-          foods = []; // Handled by onSnapshot
-          completeInteraction(tFoodsId, true, 0);
+          try {
+            const foodLogsSnap = await getDocs(collection(db, 'users', uid, 'foodLogs'));
+            foods = foodLogsSnap.docs.map(d => d.data() as FoodLog);
+            completeInteraction(tFoodsId, true, foodLogsSnap.docs.reduce((acc, d) => acc + JSON.stringify(d.data()).length, 0), undefined, foodLogsSnap.size);
+          } catch (foodErr: any) {
+            console.warn("Failed to fetch foodLogs:", foodErr);
+            foods = localFoods; // Fallback to local
+            completeInteraction(tFoodsId, false, 0, foodErr.message || String(foodErr));
+          }
           // 1. Fetch biomarker history robustly
           try {
             const bioHistorySnap = await getDocs(collection(db, 'users', uid, 'biomarkerHistory'));
@@ -573,7 +584,7 @@ export default function App() {
             cloudReport = localReport;
             // Trigger background save and sync - lightweight multi-doc sync instead of heavy fullPush of subcollections to save write quota
             setTimeout(() => {
-              saveAndSync(localProfile, localFoods, biomarkers, localBioHistory, localActions, localBenefits, localReport, { type: 'multi' });
+              saveAndSync(localProfile, localFoods, biomarkers, localBioHistory, localActions, localBenefits, localReport, { type: 'multi' }, undefined, true);
             }, 50);
           }
         }
@@ -644,7 +655,7 @@ export default function App() {
           dailyBenefits: mergedBenefits,
           report: cloudReport
         };
-        safeSaveToLocalStorage(LOCAL_STORAGE_KEY, bundle);
+        safeSaveToLocalStorage(getStorageKey(), bundle);
         // Add a small delay for delightful visual feedback
         await new Promise(resolve => setTimeout(resolve, 800));
         setSyncState('synced');
@@ -676,7 +687,7 @@ export default function App() {
           dailyBenefits: localBenefits,
           report: localReport
         };
-        safeSaveToLocalStorage(LOCAL_STORAGE_KEY, bundle);
+        safeSaveToLocalStorage(getStorageKey(), bundle);
         // Try syncing profile to cloud in background
         const tNewProfileId = logInteraction('upload', `users/${uid} (Restore Profile)`, localProfile);
         const localProfileForCloud = { ...localProfile };
@@ -759,7 +770,7 @@ export default function App() {
           dailyBenefits: initialBenefits,
           report: null
         };
-        safeSaveToLocalStorage(LOCAL_STORAGE_KEY, bundle);
+        safeSaveToLocalStorage(getStorageKey(), bundle);
         // Add a small delay for delightful visual feedback
         await new Promise(resolve => setTimeout(resolve, 800));
         setSyncState('synced');
@@ -800,139 +811,112 @@ export default function App() {
       
       try {
         if (user) {
-          // Real-time Firestore listener for profile to sync nickname, weight, etc. across devices
-          unsubs.push(onSnapshot(
-            doc(db, 'users', user.uid),
-            (docSnap) => {
-              if (docSnap.exists()) {
-                const cloudProfile = docSnap.data() as UserProfile;
-                setProfile(prev => {
-                  if (!prev || !prev.lastUpdatedAt || !cloudProfile.lastUpdatedAt || cloudProfile.lastUpdatedAt > prev.lastUpdatedAt) {
-                    return cloudProfile;
-                  }
-                  return prev;
-                });
-              }
-            },
-            (error) => {
-              console.warn("Firestore profile onSnapshot error:", error);
-              handleFirestoreError(error);
-            }
-          ));
-          // Listen to foodLogs natively via Firestore to prevent large collection reads (14k read quota issue)
-          // and to ensure images are loaded perfectly from the local IndexedDB cache.
-          unsubs.push(onSnapshot(
-            collection(db, 'users', user.uid, 'foodLogs'),
-            (snap) => {
-              const cloudFoods = snap.docs.map(d => d.data() as FoodLog);
-              setFoodLogs(prevFoods => {
-                const merged = [...cloudFoods];
-                prevFoods.forEach(localFood => {
-                  if (localFood && localFood.id) {
-                    const existingCloudIndex = merged.findIndex(f => f.id === localFood.id);
-                    if (existingCloudIndex >= 0) {
-                      // Preserve local image if cloud is missing it during upload phase
-                      const cloudFood = merged[existingCloudIndex];
-                      merged[existingCloudIndex] = {
-                        ...cloudFood,
-                        imageUrl: localFood.imageUrl || cloudFood.imageUrl,
-                        imageUrls: (localFood.imageUrls && localFood.imageUrls.length > 0) ? localFood.imageUrls : cloudFood.imageUrls
-                      };
-                    } else if (localFood.id.startsWith('food_') || localFood.id.startsWith('food_manual_')) {
-                      merged.push(localFood);
-                    }
-                  }
-                });
-                return merged;
-              });
-            },
-            (error) => {
-              console.warn("Firestore onSnapshot error (likely quota):", error);
-              handleFirestoreError(error);
-              // Fallback to reading from local IndexedDB cache if quota exceeded
-              getDocsFromCache(collection(db, 'users', user.uid, 'foodLogs'))
-                .then(cacheSnap => {
-                  const cloudFoods = cacheSnap.docs.map(d => d.data() as FoodLog);
-                  setFoodLogs(prevFoods => {
-                    const merged = [...cloudFoods];
-                    prevFoods.forEach(localFood => {
-                      if (localFood && localFood.id) {
-                        const exists = merged.some(f => f.id === localFood.id);
-                        if (!exists && (localFood.id.startsWith('food_') || localFood.id.startsWith('food_manual_'))) {
-                          merged.push(localFood);
-                        }
-                      }
-                    });
-                    return merged;
-                  });
-                })
-                .catch(cacheErr => {
-                  console.warn("Failed to read from cache after snapshot error:", cacheErr);
-                });
-            }
-          ));
-          // Real-time Firestore listener for biomarkerHistory to keep medical history synced across devices
-          unsubs.push(onSnapshot(
-            collection(db, 'users', user.uid, 'biomarkerHistory'),
-            (snap) => {
-              const updatedHistory = snap.docs.map(d => d.data() as BiomarkerLog);
-              setBiomarkerHistory(updatedHistory);
-              
-              // Recompute active biomarkers in real-time
-              const computedBiomarkers: { [key: string]: number | string } = {};
-              [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
-                Object.entries(log.biomarkers).forEach(([k, v]) => {
-                  computedBiomarkers[k] = v;
-                });
-              });
-              setBiomarkers(computedBiomarkers);
-            },
-            (error) => {
-              console.warn("Firestore biomarkerHistory onSnapshot error (likely quota):", error);
-              handleFirestoreError(error);
-              // Fallback to reading from local IndexedDB cache if snapshot fails
-              getDocsFromCache(collection(db, 'users', user.uid, 'biomarkerHistory'))
-                .then(cacheSnap => {
-                  const updatedHistory = cacheSnap.docs.map(d => d.data() as BiomarkerLog);
-                  setBiomarkerHistory(updatedHistory);
-                  
-                  const computedBiomarkers: { [key: string]: number | string } = {};
-                  [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
-                    Object.entries(log.biomarkers).forEach(([k, v]) => {
-                      computedBiomarkers[k] = v;
-                    });
-                  });
-                  setBiomarkers(computedBiomarkers);
-                })
-                .catch(cacheErr => {
-                  console.warn("Failed to read biomarker history from cache after snapshot error:", cacheErr);
-                });
-            }
-          ));
-          const parsedLocal = await get(LOCAL_STORAGE_KEY);
-          let hasLocal = false;
-          if (parsedLocal) {
-            try {
-              // Ensure the cached profile matches the logged-in user
-              if (parsedLocal.profile && (parsedLocal.profile.email === user.email || !user.email)) {
-                hasLocal = true;
-                if (parsedLocal.profile) setProfile(parsedLocal.profile);
-                if (parsedLocal.foodLogs) setFoodLogs(parsedLocal.foodLogs);
-                if (parsedLocal.biomarkerHistory) setBiomarkerHistory(parsedLocal.biomarkerHistory);
-                if (parsedLocal.biomarkers) setBiomarkers(parsedLocal.biomarkers);
-                if (parsedLocal.actions) setActions(parsedLocal.actions);
-                if (parsedLocal.dailyBenefits) setDailyBenefits(parsedLocal.dailyBenefits);
-                if (parsedLocal.report) setReport(parsedLocal.report);
-                setSyncState('synced');
-              }
-            } catch (e) {}
-          }
+          const newEmail = user.email?.toLowerCase().trim() || '';
+          const storageKey = getStorageKey(newEmail);
           
-          // Always fetch and merge the latest changes from the database in the background to ensure synchronization
+          // Get previous in-memory state before loading new user data
+          // so we can carry over / keep the targets and food logs if needed!
+          const prevTargetWeight = (profile as any)?.targetWeight;
+          const prevDailyCaloricTarget = (profile as any)?.dailyCaloricTarget;
+          const prevDailyWaterTarget = (profile as any)?.dailyWaterTarget;
+          const prevDailySleepTarget = (profile as any)?.dailySleepTarget;
+          const prevDailyStepsTarget = (profile as any)?.dailyStepsTarget;
+          const prevFoodLogs = foodLogs.length > 0 ? [...foodLogs] : [];
+
+          const parsedLocal = await get(storageKey);
+          
+          let loadedProfile: UserProfile | null = null;
+          let loadedFoods: FoodLog[] = [];
+          let loadedBiomarkers = {};
+          let loadedHistory: BiomarkerLog[] = [];
+          let loadedActions: HealthAction[] = [];
+          let loadedBenefits: DailyBenefit[] = [];
+          let loadedReport: RecommendationReport | null = null;
+
+          if (parsedLocal) {
+            loadedProfile = parsedLocal.profile || null;
+            loadedFoods = parsedLocal.foodLogs || [];
+            loadedBiomarkers = parsedLocal.biomarkers || {};
+            loadedHistory = parsedLocal.biomarkerHistory || [];
+            loadedActions = parsedLocal.actions || [];
+            loadedBenefits = parsedLocal.dailyBenefits || [];
+            loadedReport = parsedLocal.report || null;
+          }
+
+          if (!loadedProfile) {
+            loadedProfile = {
+              nickname: user.displayName || '',
+              photoUrl: user.photoURL || '',
+              email: user.email || '',
+              age: '' as any,
+              ethnicity: 'Unknown',
+              weight: '' as any,
+              height: '' as any,
+              gender: 'Unknown',
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              language: 'en'
+            };
+          }
+
+          // Keep target and food logs carried over if not set for the new account
+          loadedProfile.email = user.email || '';
+          if (prevTargetWeight !== undefined && (loadedProfile as any).targetWeight === undefined) {
+            (loadedProfile as any).targetWeight = prevTargetWeight;
+          }
+          if (prevDailyCaloricTarget !== undefined && (loadedProfile as any).dailyCaloricTarget === undefined) {
+            (loadedProfile as any).dailyCaloricTarget = prevDailyCaloricTarget;
+          }
+          if (prevDailyWaterTarget !== undefined && (loadedProfile as any).dailyWaterTarget === undefined) {
+            (loadedProfile as any).dailyWaterTarget = prevDailyWaterTarget;
+          }
+          if (prevDailySleepTarget !== undefined && (loadedProfile as any).dailySleepTarget === undefined) {
+            (loadedProfile as any).dailySleepTarget = prevDailySleepTarget;
+          }
+          if (prevDailyStepsTarget !== undefined && (loadedProfile as any).dailyStepsTarget === undefined) {
+            (loadedProfile as any).dailyStepsTarget = prevDailyStepsTarget;
+          }
+
+          if (loadedFoods.length === 0 && prevFoodLogs.length > 0) {
+            loadedFoods = prevFoodLogs;
+          }
+
+          // "Reset to blank the data of all the other email account except for the account cwah.liu@gmail.com"
+          if (newEmail !== 'cwah.liu@gmail.com') {
+            loadedBiomarkers = {};
+            loadedHistory = [];
+            loadedActions = [];
+            loadedBenefits = [];
+            loadedReport = null;
+          }
+
+          // Save the initialized/reset state to local storage immediately
+          const bundle = {
+            profile: loadedProfile,
+            foodLogs: loadedFoods,
+            biomarkers: loadedBiomarkers,
+            biomarkerHistory: loadedHistory,
+            actions: loadedActions,
+            dailyBenefits: loadedBenefits,
+            foodIdeas,
+            report: loadedReport
+          };
+          await set(storageKey, bundle);
+
+          // Update React states
+          setProfile(loadedProfile);
+          setFoodLogs(loadedFoods);
+          setBiomarkers(loadedBiomarkers);
+          setBiomarkerHistory(loadedHistory);
+          setActions(loadedActions);
+          setDailyBenefits(loadedBenefits);
+          setReport(loadedReport);
+          
+          // Automatically fetch the latest database data on login/load to restore the account data
           checkForDbChanges(user.uid);
         } else {
-          // Not signed in, fall back to localStorage if available
-          const parsedLocal = await get(LOCAL_STORAGE_KEY);
+          // Not signed in, fall back to guest storage if available
+          const storageKey = getStorageKey('guest');
+          const parsedLocal = await get(storageKey);
           if (parsedLocal) {
             try {
               if (parsedLocal.profile) setProfile(parsedLocal.profile);
@@ -977,7 +961,7 @@ export default function App() {
       foodIdeas,
       report
     };
-    safeSaveToLocalStorage(LOCAL_STORAGE_KEY, bundle);
+    safeSaveToLocalStorage(getStorageKey(), bundle);
   }, [profile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, foodIdeas, report]);
   // Automatically log BMI on initial load if profile has height/weight but BMI is missing from history or biomarkers
   useEffect(() => {
@@ -1100,7 +1084,8 @@ export default function App() {
       type: 'profile' | 'foodLog' | 'biomarkerLog' | 'actions' | 'dailyBenefits' | 'foodIdeas' | 'report' | 'deleteFood' | 'deleteBiomarker' | 'multi' | 'fullPush' | 'analysis' | 'deleteAnalysis';
       targetId?: string;
     },
-    currFoodIdeas: FoodIdea[] = foodIdeas
+    currFoodIdeas: FoodIdea[] = foodIdeas,
+    isManualSync: boolean = false
   ) => {
     const now = Date.now();
     let updatedProfile = currProfile;
@@ -1123,7 +1108,14 @@ export default function App() {
       foodIdeas: currFoodIdeas,
       report: currReport
     };
-    safeSaveToLocalStorage(LOCAL_STORAGE_KEY, bundle);
+    safeSaveToLocalStorage(getStorageKey(), bundle);
+
+    // Only do the sync when user explicitly clicks on the sync icon.
+    // Otherwise, all edits remain local in IndexedDB.
+    if (!isManualSync) {
+      setSyncState('local');
+      return;
+    }
 
     const profileForCloud = updatedProfile ? { ...updatedProfile } : null;
     if (profileForCloud && profileForCloud.agentAnalyses) {
@@ -2084,7 +2076,7 @@ export default function App() {
             dailyBenefits,
             report
           };
-          safeSaveToLocalStorage(LOCAL_STORAGE_KEY, bundle);
+          safeSaveToLocalStorage(getStorageKey(), bundle);
         }}
         onSaveProfile={async (p) => {
           const updatedProfile = { ...p };
@@ -2195,6 +2187,8 @@ export default function App() {
             foodLogs={foodLogs}
             biomarkers={biomarkers}
             biomarkerHistory={biomarkerHistory}
+            calibratingBatchIdx={calibratingBatchIdx}
+            calibratingAgentType={calibratingAgentType}
             report={report}
             draftReport={draftReport}
             onAcceptReport={handleAcceptReport}
@@ -2301,6 +2295,11 @@ export default function App() {
             onDeleteBiomarker={handleDeleteBiomarker}
             onDeleteBiomarkerLog={handleDeleteBiomarkerLog}
             onCombineBiomarkers={handleCombineBiomarkers}
+            onReviewWithAgent={(keys) => {
+              localStorage.setItem('agent1_custom_batch_keys', JSON.stringify(keys));
+              sessionStorage.setItem('auto_open_custom_batch_modal', 'true');
+              setActiveTab('insights');
+            }}
             onApplyCalculation={handleApplyCalculation}
             selectedModelId={selectedModelId}
             onChangeModelId={setSelectedModelId}
@@ -2403,6 +2402,8 @@ export default function App() {
           await saveAndSync(updatedProfile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'analysis', targetId: newId });
         }}
         onAgentFinish={async (agentType, agentResult) => {
+          setIsMedicalChatOpen(false);
+          setCalibratingAgentType(agentType);
           const updatedProfile = { ...profile };
           
           let currentHistory = [...biomarkerHistory];
@@ -2522,21 +2523,28 @@ export default function App() {
             updatedProfile.agentLiteratureSummary = agentResult.message;
           } else if (agentType === 'data_review') {
             const batchIdx = agentResult.batchIdx !== undefined && agentResult.batchIdx !== null ? agentResult.batchIdx : activeDataReviewBatchIdx;
+            if (batchIdx !== undefined && batchIdx !== null) {
+              setCalibratingBatchIdx(Number(batchIdx));
+            }
+            setIsMedicalChatOpen(false);
+
             const updatedCustoms = { ...(updatedProfile.customBiomarkers || {}) };
             
             if (agentResult.reviewedBiomarkers && Array.isArray(agentResult.reviewedBiomarkers)) {
               agentResult.reviewedBiomarkers.forEach((bm: any) => {
+                const existing = updatedCustoms[bm.key] || {};
                 updatedCustoms[bm.key] = {
-                  name: bm.name,
-                  unit: bm.unit,
-                  normalRange: bm.profileAdjustedNormalRange || '',
-                  description: bm.description || '',
-                  riskCategories: bm.riskCategories || [],
-                  standardMedicalGrouping: bm.standardMedicalGrouping || 'Other',
-                  potentialMedicalConditions: bm.potentialMedicalConditions || [],
-                  specificRiskContext: bm.specificRiskContext || '',
-                  status: bm.status || 'Healthy',
-                  rangeBrackets: bm.rangeBrackets || []
+                  ...existing,
+                  name: bm.name || existing.name,
+                  unit: bm.unit || existing.unit,
+                  normalRange: bm.profileAdjustedNormalRange || existing.normalRange || '',
+                  description: bm.description || existing.description || '',
+                  riskCategories: (existing.riskCategories && existing.riskCategories.length > 0) ? existing.riskCategories : (bm.riskCategories || []),
+                  standardMedicalGrouping: (existing.standardMedicalGrouping && existing.standardMedicalGrouping !== 'Other') ? existing.standardMedicalGrouping : (bm.standardMedicalGrouping || 'Other'),
+                  potentialMedicalConditions: bm.potentialMedicalConditions || existing.potentialMedicalConditions || [],
+                  specificRiskContext: bm.specificRiskContext || existing.specificRiskContext || '',
+                  status: bm.status || existing.status || 'Healthy',
+                  rangeBrackets: bm.rangeBrackets || existing.rangeBrackets || []
                 } as any;
               });
             }
@@ -2562,11 +2570,124 @@ export default function App() {
               delete minimalResult.agentPrompt;
               results[batchIdx] = minimalResult;
               try { localStorage.setItem('batch_analysis_results', JSON.stringify(results)); } catch(e){ console.warn("Quota exceeded batch_analysis"); }
+
+              // Perform missing biomarker movement if any keys are marked to move
+              try {
+                const keysToMoveSaved = localStorage.getItem(`batch_${batchIdx}_missing_keys_to_move`);
+                if (keysToMoveSaved) {
+                  const keysToMove: string[] = JSON.parse(keysToMoveSaved);
+                  if (Array.isArray(keysToMove) && keysToMove.length > 0) {
+                    const batchesSaved = localStorage.getItem('biomarker_batches_custom');
+                    if (batchesSaved) {
+                      let currentBatches: string[][] = JSON.parse(batchesSaved);
+                      const sizeSaved = localStorage.getItem('biomarker_batch_size');
+                      const batchSizeNum = sizeSaved ? Number(sizeSaved) : 20;
+
+                      keysToMove.forEach(key => {
+                        // Remove from current batch
+                        if (currentBatches[batchIdx]) {
+                          currentBatches[batchIdx] = currentBatches[batchIdx].filter(k => k !== key);
+                        }
+
+                        // Place in first subsequent unapproved/uncalibrated batch with space
+                        let placed = false;
+                        for (let i = batchIdx + 1; i < currentBatches.length; i++) {
+                          if (!approved[i] && !results[i] && currentBatches[i].length < batchSizeNum) {
+                            currentBatches[i].push(key);
+                            placed = true;
+                            break;
+                          }
+                        }
+
+                        if (!placed) {
+                          for (let i = batchIdx + 1; i < currentBatches.length; i++) {
+                            if (!approved[i] && !results[i]) {
+                              currentBatches[i].push(key);
+                              placed = true;
+                              break;
+                            }
+                          }
+                        }
+
+                        if (!placed) {
+                          currentBatches.push([key]);
+                        }
+                      });
+
+                      // Clean up empty batches
+                      currentBatches = currentBatches.filter((batch, idx) => 
+                        batch.length > 0 || idx === 0 || approved[idx] || results[idx]
+                      );
+
+                      localStorage.setItem('biomarker_batches_custom', JSON.stringify(currentBatches));
+                    }
+                  }
+                  // Clear the missing keys list for this batch since they are now moved
+                  localStorage.removeItem(`batch_${batchIdx}_missing_keys_to_move`);
+                }
+              } catch (e) {
+                console.error("Error moving missing biomarkers on clinical calibration finish:", e);
+              }
             }
           }
           
           setProfile(updatedProfile);
-          await saveAndSync(updatedProfile, foodLogs, biomarkers, currentHistory, actions, dailyBenefits, report);
+          try {
+            // Auto-approve the step if it's one of the main agent types
+            const latestAnalysis = (updatedProfile.agentAnalyses || [])
+              .filter(a => a.agentType === agentType)
+              .sort((a, b) => b.date.localeCompare(a.date))[0];
+            
+            if (latestAnalysis) {
+              try {
+                const savedIds = localStorage.getItem('approvedAnalysisIds');
+                let approvedIds: any = {};
+                if (savedIds) approvedIds = JSON.parse(savedIds);
+                approvedIds[agentType] = latestAnalysis.id;
+                localStorage.setItem('approvedAnalysisIds', JSON.stringify(approvedIds));
+              } catch (e) {
+                console.warn("Failed to auto-approve analysis in localStorage", e);
+              }
+            }
+
+            await saveAndSync(updatedProfile, foodLogs, biomarkers, currentHistory, actions, dailyBenefits, report);
+          } finally {
+            setCalibratingBatchIdx(null);
+            setCalibratingAgentType(null);
+            
+            const isBatch = agentType === 'data_review';
+            if (isBatch) {
+              const batchIdx = agentResult?.batchIdx !== undefined && agentResult?.batchIdx !== null 
+                ? agentResult.batchIdx 
+                : activeDataReviewBatchIdx;
+              if (batchIdx !== undefined && batchIdx !== null) {
+                setTimeout(() => {
+                  const element = document.getElementById(`batch-card-${batchIdx}`);
+                  if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                }, 150);
+              }
+            } else {
+              const getStepIndexForAgent = (aType: string) => {
+                if (aType === 'agent1') return 1;
+                if (aType === 'data_review') return 2;
+                if (aType === 'agent6') return 3;
+                if (aType === 'agent4') return 4;
+                if (aType === 'agent7') return 5;
+                return -1;
+              };
+              const stepIdx = getStepIndexForAgent(agentType);
+              if (stepIdx !== -1) {
+                setTimeout(() => {
+                  const element = document.getElementById(`accordion-step-${stepIdx}`);
+                  if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                }, 150);
+              }
+            }
+          }
         }}
       /></ErrorBoundary>
     </div>

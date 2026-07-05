@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { parse } from 'yaml';
 import { 
   Maximize2, 
@@ -23,6 +23,8 @@ interface AgentResultTableProps {
   onContinueToNextStep?: () => Promise<void>;
   isApplying?: boolean;
   precedingAgent1Result?: any;
+  selectedMissingKeys?: string[];
+  onChangeSelectedMissingKeys?: (keys: string[]) => void;
 }
 
 // Robust helper to extract potential biomarker names and values from raw clinical text
@@ -120,12 +122,47 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
   onApplyChanges,
   onContinueToNextStep,
   isApplying = false,
-  precedingAgent1Result
+  precedingAgent1Result,
+  selectedMissingKeys,
+  onChangeSelectedMissingKeys
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sortField, setSortField] = useState<string>('default');
   const [sortAsc, setSortAsc] = useState<boolean>(true);
   const [statusSortCategory, setStatusSortCategory] = useState<'atRisk' | 'isNew' | 'changed' | 'synced' | 'merged' | 'toDelete' | null>(null);
+
+  const [localSelectedMissingKeys, setLocalSelectedMissingKeys] = useState<string[]>(() => {
+    if (selectedMissingKeys) return selectedMissingKeys;
+    try {
+      const batchIdx = agentResult?.batchIdx;
+      if (batchIdx !== undefined && batchIdx !== null) {
+        const saved = localStorage.getItem(`batch_${batchIdx}_missing_keys_to_move`);
+        if (saved) return JSON.parse(saved);
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const effectiveSelectedMissingKeys = selectedMissingKeys !== undefined ? selectedMissingKeys : localSelectedMissingKeys;
+
+  const handleSelectedMissingKeysChange = (newKeys: string[]) => {
+    setLocalSelectedMissingKeys(newKeys);
+    if (onChangeSelectedMissingKeys) {
+      onChangeSelectedMissingKeys(newKeys);
+    }
+    try {
+      const batchIdx = agentResult?.batchIdx;
+      if (batchIdx !== undefined && batchIdx !== null) {
+        localStorage.setItem(`batch_${batchIdx}_missing_keys_to_move`, JSON.stringify(newKeys));
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    if (selectedMissingKeys !== undefined) {
+      setLocalSelectedMissingKeys(selectedMissingKeys);
+    }
+  }, [selectedMissingKeys]);
 
   const isMultiphaseActive = !!(agentResult?.status === 'needs_continuation' || agentResult?.needsContinuation || agentResult?.hasMore || agentResult?.hasMoreMarkers);
   const totalEstimated = agentResult?.estimatedTotalMarkers || agentResult?.planningDetails?.estimatedTotalMetrics || (isMultiphaseActive ? 60 : 0);
@@ -654,11 +691,60 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           };
         });
 
-        return [...primaryRows, ...secondaryRows, ...unmappedRows];
+        const finalRows = [...primaryRows, ...secondaryRows, ...unmappedRows];
+
+        // Identify the missing items and append directly to tableData!
+        if (agentResult?.batchBiomarkers && Array.isArray(agentResult.batchBiomarkers)) {
+          const initialNames = agentResult.batchBiomarkers.map((b: any) => b.name || b.key || '');
+          const missingItems = agentResult.batchBiomarkers.filter((bm: any) => {
+            const initName = bm.name || bm.key || '';
+            if (!initName) return false;
+            const cleanInit = String(initName).toLowerCase().replace(/[^a-z0-9]/g, '');
+            
+            // Not in any finalRows
+            return !finalRows.some(row => {
+              const cleanRow = String(row.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+              const cleanOld = String(row.oldName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+              const cleanKey = String(row.key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+              return cleanRow === cleanInit || cleanOld === cleanInit || cleanKey === cleanInit;
+            });
+          });
+
+          missingItems.forEach((bm: any) => {
+            const key = bm.key || bm.name?.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'unknown_biomarker';
+            finalRows.push({
+              key,
+              biomarker: bm.name || bm.key || 'Unknown',
+              oldName: bm.name || bm.key || 'Unknown',
+              isRenamed: false,
+              isUnitChanged: false,
+              oldUnit: bm.unit || '',
+              date: 'N/A',
+              value: bm.value ?? 'N/A',
+              unit: bm.unit || '',
+              isNew: false,
+              isChanged: false,
+              isAtRisk: false,
+              isSecondary: false,
+              isMissing: true, // Mark as missing!
+              status: 'Missing',
+              severity: 0,
+              normalRange: '',
+              changeReason: `Omitted during extraction. Select checkbox to move to next batch.`,
+              riskReason: '',
+              description: `Missing raw reading from source text.`,
+              standardMedicalGrouping: 'Other',
+              riskCategories: [],
+              potentialMedicalConditions: []
+            });
+          });
+        }
+
+        return finalRows;
       }
 
       // Fallback standard mapping when batchBiomarkers is not available
-      return parsedRows.map((row: any) => {
+      const finalRowsFallback = parsedRows.map((row: any) => {
         const biomarkerName = row.biomarker || row.name || row.key || 'Unknown';
         const key = String(biomarkerName).toLowerCase().replace(/[^a-z0-9]/g, '_');
         const existingEntries = (biomarkerHistory || []).filter((h: any) => h.biomarkers?.[key] !== undefined);
@@ -735,6 +821,48 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           potentialMedicalConditions: row.potentialMedicalConditions || []
         };
       });
+
+      // Find missing biomarkers if fallback
+      const initialMarkers = getInitialMarkersFromText(initialRawText);
+      const missingList = initialMarkers.filter(initName => {
+        const cleanInit = String(initName).toLowerCase().replace(/[^a-z0-9]/g, '');
+        return !finalRowsFallback.some((row: any) => {
+          const cleanRow = String(row.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const cleanOld = String(row.oldName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          return cleanRow === cleanInit || cleanOld === cleanInit;
+        });
+      });
+      
+      missingList.forEach(name => {
+        const key = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        (finalRowsFallback as any[]).push({
+          key,
+          biomarker: name,
+          oldName: name,
+          isRenamed: false,
+          isUnitChanged: false,
+          oldUnit: '',
+          date: 'N/A',
+          value: 'N/A',
+          unit: '',
+          isNew: false,
+          isChanged: false,
+          isAtRisk: false,
+          isSecondary: false,
+          isMissing: true,
+          status: 'Missing',
+          severity: 0,
+          normalRange: '',
+          changeReason: `Omitted during extraction. Select checkbox to move to next batch.`,
+          riskReason: '',
+          description: `Missing raw reading from source text.`,
+          standardMedicalGrouping: 'Other',
+          riskCategories: [],
+          potentialMedicalConditions: []
+        });
+      });
+      
+      return finalRowsFallback;
     }
 
     if (agentType === 'agent2') {
@@ -921,8 +1049,11 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
     let synced = 0;
     let toDelete = 0;
     let merged = 0;
+    let isMissing = 0;
     tableData.forEach(row => {
-      if (row.isSecondary && row.status === 'To Delete') {
+      if (row.isMissing) {
+        isMissing++;
+      } else if (row.isSecondary && row.status === 'To Delete') {
         toDelete++;
       } else {
         if (row.isAtRisk) atRisk++;
@@ -932,7 +1063,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
         else synced++;
       }
     });
-    return { atRisk, isNew, changed, synced, toDelete, merged };
+    return { atRisk, isNew, changed, synced, toDelete, merged, isMissing };
   }, [tableData]);
 
   // 2. Perform sorting
@@ -944,35 +1075,42 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       return data.sort((a, b) => {
         const isA = statusSortCategory === 'atRisk' ? a.isAtRisk 
                    : statusSortCategory === 'isNew' ? a.isNew
-                   : statusSortCategory === 'changed' ? (!a.isNew && (a.isChanged || a.isRenamed || a.isUnitChanged) && !a.isMerged && !(a.isSecondary && a.status === 'To Delete'))
+                   : statusSortCategory === 'changed' ? (!a.isNew && (a.isChanged || a.isRenamed || a.isUnitChanged) && !a.isMerged && !a.isMissing && !(a.isSecondary && a.status === 'To Delete'))
                    : statusSortCategory === 'toDelete' ? (a.isSecondary && a.status === 'To Delete')
                    : statusSortCategory === 'merged' ? a.isMerged
-                   : (!a.isNew && !a.isChanged && !a.isRenamed && !a.isUnitChanged && !a.isAtRisk && !a.isSecondary && !a.isMerged); // synced
+                   : statusSortCategory === 'isMissing' ? a.isMissing
+                   : (!a.isNew && !a.isChanged && !a.isRenamed && !a.isUnitChanged && !a.isAtRisk && !a.isSecondary && !a.isMerged && !a.isMissing); // synced
         const isB = statusSortCategory === 'atRisk' ? b.isAtRisk 
                    : statusSortCategory === 'isNew' ? b.isNew
-                   : statusSortCategory === 'changed' ? (!b.isNew && (b.isChanged || b.isRenamed || b.isUnitChanged) && !b.isMerged && !(b.isSecondary && b.status === 'To Delete'))
+                   : statusSortCategory === 'changed' ? (!b.isNew && (b.isChanged || b.isRenamed || b.isUnitChanged) && !b.isMerged && !b.isMissing && !(b.isSecondary && b.status === 'To Delete'))
                    : statusSortCategory === 'toDelete' ? (b.isSecondary && b.status === 'To Delete')
                    : statusSortCategory === 'merged' ? b.isMerged
-                   : (!b.isNew && !b.isChanged && !b.isRenamed && !b.isUnitChanged && !b.isAtRisk && !b.isSecondary && !b.isMerged); // synced
+                   : statusSortCategory === 'isMissing' ? b.isMissing
+                   : (!b.isNew && !b.isChanged && !b.isRenamed && !b.isUnitChanged && !b.isAtRisk && !b.isSecondary && !b.isMerged && !b.isMissing); // synced
         
         if (isA && !isB) return -1;
         if (!isA && isB) return 1;
         
         // Secondary fallback
-        const aChange = (a.isNew || a.isChanged || a.isMerged) ? 1 : 0;
-        const bChange = (b.isNew || b.isChanged || b.isMerged) ? 1 : 0;
+        const aChange = (a.isNew || a.isChanged || a.isMerged || a.isMissing) ? 1 : 0;
+        const bChange = (b.isNew || b.isChanged || b.isMerged || b.isMissing) ? 1 : 0;
         if (aChange !== bChange) return bChange - aChange;
         return (b.severity || 0) - (a.severity || 0);
       });
     }
     
     if (sortField === 'default') {
-      // Default: Sort by changes (isChanged/isNew/isMerged first) or severity descending
+      // Default: Sort by changes (isChanged/isNew/isMerged/isMissing first) or severity descending
       return data.sort((a, b) => {
         // "To Delete" goes to bottom
         const aDel = (a.isSecondary && a.status === 'To Delete') ? 1 : 0;
         const bDel = (b.isSecondary && b.status === 'To Delete') ? 1 : 0;
         if (aDel !== bDel) return aDel - bDel;
+
+        // Missing/Omitted should rank at the very top of the table to flag them prominently
+        const aMiss = a.isMissing ? 1 : 0;
+        const bMiss = b.isMissing ? 1 : 0;
+        if (aMiss !== bMiss) return bMiss - aMiss;
 
         // Primary: isNew or isChanged or isMerged
         const aChange = (a.isNew || a.isChanged || a.isRenamed || a.isUnitChanged || a.isMerged) ? 1 : 0;
@@ -987,6 +1125,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
     if (sortField === 'isNew') {
       const getStatusPriority = (row: any) => {
         if (row.isSecondary && row.status === 'To Delete') return 0;
+        if (row.isMissing) return 5;
         if (row.isAtRisk) return 4;
         if (row.isMerged) return 3.5;
         if (row.isNew) return 3;
@@ -1040,7 +1179,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
     let missingList: string[] = [];
     let differenceMsg = '';
 
-    if (agentType === 'agent1') {
+    if (agentType === 'agent1' || agentType === 'data_review') {
       if (agentResult?.batchBiomarkers && Array.isArray(agentResult.batchBiomarkers) && agentResult.batchBiomarkers.length > 0) {
         initialCount = agentResult.batchBiomarkers.length;
         // GeneratedCount shows the active primary table rows (excluding secondary duplicates)
@@ -1054,31 +1193,34 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           
           // Must not be in any primary row as biomarker or oldName
           const existsInPrimary = tableData.some(row => {
-            if (row.isSecondary) return false;
+            if (row.isSecondary || row.isMissing) return false;
             const cleanRow = String(row.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '');
             const cleanOld = String(row.oldName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            return cleanRow === cleanInit || cleanOld === cleanInit;
+            const cleanKey = String(row.key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return cleanRow === cleanInit || cleanOld === cleanInit || cleanKey === cleanInit;
           });
           
           if (existsInPrimary) return false;
 
           // Must not be in any secondary row as oldName
           const existsInSecondary = tableData.some(row => {
-            if (!row.isSecondary) return false;
+            if (!row.isSecondary || row.isMissing) return false;
             const cleanOld = String(row.oldName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            return cleanOld === cleanInit;
+            const cleanKey = String(row.key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return cleanOld === cleanInit || cleanKey === cleanInit;
           });
 
           return !existsInSecondary;
         });
       } else {
         const initialMarkers = getInitialMarkersFromText(initialRawText);
-        initialCount = Math.max(initialMarkers.length, tableData.length);
+        initialCount = Math.max(initialMarkers.length, tableData.filter(row => !row.isMissing).length);
         
         // Match missing
         missingList = initialMarkers.filter(initName => {
           const cleanInit = String(initName).toLowerCase().replace(/[^a-z0-9]/g, '');
           return !tableData.some(row => {
+            if (row.isMissing) return false;
             const cleanRow = String(row.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '');
             return cleanRow.includes(cleanInit) || cleanInit.includes(cleanRow);
           });
@@ -1115,13 +1257,52 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       }
     }
 
+    // Map missingList to keys and names
+    const missingBiomarkers: { key: string; name: string }[] = [];
+    if (agentResult?.batchBiomarkers && Array.isArray(agentResult.batchBiomarkers)) {
+      missingList.forEach(name => {
+        const found = agentResult.batchBiomarkers.find((b: any) => (b.name || b.key) === name);
+        if (found) {
+          const key = found.key || found.name?.toLowerCase().replace(/[^a-z0-9]/g, '_') || name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+          missingBiomarkers.push({ key, name: found.name || found.key || name });
+        } else {
+          const key = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+          missingBiomarkers.push({ key, name });
+        }
+      });
+    } else {
+      missingList.forEach(name => {
+        const key = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        missingBiomarkers.push({ key, name });
+      });
+    }
+
     return {
       initialCount,
       generatedCount,
       differenceMsg,
-      hasMismatch: initialCount !== generatedCount
+      hasMismatch: initialCount !== generatedCount,
+      missingBiomarkers
     };
   }, [tableData, agentType, initialRawText, agentResult, biomarkerHistory]);
+
+  // Auto-initialize selectedMissingKeys to all missing keys as default
+  useEffect(() => {
+    if (verification.missingBiomarkers && verification.missingBiomarkers.length > 0) {
+      const batchIdx = agentResult?.batchIdx;
+      if (batchIdx !== undefined && batchIdx !== null) {
+        const saved = localStorage.getItem(`batch_${batchIdx}_missing_keys_to_move`);
+        if (!saved) {
+          const allKeys = verification.missingBiomarkers.map(bm => bm.key);
+          handleSelectedMissingKeysChange(allKeys);
+        }
+      }
+    }
+  }, [verification.missingBiomarkers, agentResult?.batchIdx]);
+
+  const renderCoverageDiagnostics = () => {
+    return null;
+  };
 
   const toggleSort = (field: string) => {
     if (sortField === field) {
@@ -1173,43 +1354,61 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       </thead>
       <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
         {sortedData.map((row: any, idx: number) => {
-          const isRowHighlighted = row.isNew || row.isChanged || row.isAtRisk || row.isMerged || (row.isSecondary && row.status === 'To Delete');
+          const isRowHighlighted = row.isNew || row.isChanged || row.isAtRisk || row.isMerged || (row.isSecondary && row.status === 'To Delete') || row.isMissing;
           const isToDelete = row.isSecondary && row.status === 'To Delete';
           const bgClass = isToDelete
             ? 'bg-rose-600 text-white dark:bg-rose-900'
-            : row.isAtRisk 
-              ? 'bg-rose-50/30 dark:bg-rose-950/10' 
-              : row.isMerged
-                ? 'bg-indigo-50/30 dark:bg-indigo-950/10'
-                : row.isNew 
-                  ? 'bg-emerald-50/30 dark:bg-emerald-950/10' 
-                  : row.isChanged || row.isRenamed || row.isUnitChanged
-                    ? 'bg-amber-50/30 dark:bg-amber-900/10' 
-                    : 'bg-white dark:bg-slate-950';
+            : row.isMissing
+              ? 'bg-amber-500/5 text-slate-850 dark:bg-amber-500/10 border-l-2 border-l-amber-550'
+              : row.isAtRisk 
+                ? 'bg-rose-50/30 dark:bg-rose-950/10' 
+                : row.isMerged
+                  ? 'bg-indigo-50/30 dark:bg-indigo-950/10'
+                  : row.isNew 
+                    ? 'bg-emerald-50/30 dark:bg-emerald-950/10' 
+                    : row.isChanged || row.isRenamed || row.isUnitChanged
+                      ? 'bg-amber-50/30 dark:bg-amber-900/10' 
+                      : 'bg-white dark:bg-slate-950';
 
           return (
             <tr key={idx} className={`${bgClass} hover:bg-slate-50/50 dark:hover:bg-slate-900/40 transition-colors`}>
               <td className="px-3 py-2 font-semibold">
-                <div className="flex flex-col gap-0.5">
-                  {row.isRenamed && row.oldName ? (
-                    <>
-                      <span className={`text-[10px] line-through leading-tight ${isToDelete ? 'text-rose-100/80 decoration-white' : 'text-slate-400 dark:text-slate-500 decoration-slate-400'}`}>
-                        {row.oldName}
-                      </span>
-                      <span className={`font-semibold leading-normal ${isToDelete ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>
+                <div className="flex items-center gap-2">
+                  {row.isMissing && (
+                    <input
+                      type="checkbox"
+                      checked={effectiveSelectedMissingKeys.includes(row.key)}
+                      onChange={() => {
+                        const isChecked = effectiveSelectedMissingKeys.includes(row.key);
+                        const newKeys = isChecked
+                          ? effectiveSelectedMissingKeys.filter(k => k !== row.key)
+                          : [...effectiveSelectedMissingKeys, row.key];
+                        handleSelectedMissingKeysChange(newKeys);
+                      }}
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-amber-600 focus:ring-amber-500 shrink-0 cursor-pointer"
+                    />
+                  )}
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    {row.isRenamed && row.oldName ? (
+                      <>
+                        <span className={`text-[10px] line-through leading-tight ${isToDelete ? 'text-rose-100/80 decoration-white' : 'text-slate-400 dark:text-slate-500 decoration-slate-400'}`}>
+                          {row.oldName}
+                        </span>
+                        <span className={`font-semibold leading-normal ${isToDelete ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>
+                          {row.biomarker}
+                        </span>
+                      </>
+                    ) : (
+                      <span className={`font-semibold ${row.isMissing ? 'text-amber-800 dark:text-amber-400 font-bold' : isToDelete ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>
                         {row.biomarker}
                       </span>
-                    </>
-                  ) : (
-                    <span className={`font-semibold ${isToDelete ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>
-                      {row.biomarker}
-                    </span>
-                  )}
-                  {row.isMerged && row.mergedFrom && row.mergedFrom.length > 0 && (
-                    <span className={`text-[9px] font-semibold mt-0.5 ${isToDelete ? 'text-rose-100' : 'text-indigo-600 dark:text-indigo-400'}`}>
-                      Merged from: {row.mergedFrom.join(', ')}
-                    </span>
-                  )}
+                    )}
+                    {row.isMerged && row.mergedFrom && row.mergedFrom.length > 0 && (
+                      <span className={`text-[9px] font-semibold mt-0.5 ${isToDelete ? 'text-rose-100' : 'text-indigo-600 dark:text-indigo-400'}`}>
+                        Merged from: {row.mergedFrom.join(', ')}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </td>
               
@@ -1378,21 +1577,27 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
 
               <td className="px-3 py-2 font-mono">
                 <div className="flex flex-col gap-0.5">
-                  {row.isAtRisk && (
-                    <span className={`${isToDelete ? 'text-white' : 'text-rose-600 dark:text-rose-400'} font-bold`}>At Risk</span>
-                  )}
-                  {isToDelete ? (
-                    <span className="text-white font-bold decoration-white line-through">To Delete</span>
-                  ) : row.isMerged ? (
-                    <span className="text-indigo-600 dark:text-indigo-400 font-bold">Merged</span>
-                  ) : agentType === 'data_review' ? (
-                    !row.isAtRisk && <span className="text-emerald-600 dark:text-emerald-400 font-bold">Optimal</span>
-                  ) : row.isNew ? (
-                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">New</span>
-                  ) : row.isChanged || row.isRenamed || row.isUnitChanged || row.isGroupChanged ? (
-                    <span className="text-amber-600 dark:text-amber-400 font-bold">Changed</span>
+                  {row.isMissing ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-extrabold uppercase tracking-wider text-[9px] bg-amber-100/50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200/20 w-fit">Missing</span>
                   ) : (
-                    <span className="text-slate-400 dark:text-slate-500">Synced</span>
+                    <>
+                      {row.isAtRisk && (
+                        <span className={`${isToDelete ? 'text-white' : 'text-rose-600 dark:text-rose-400'} font-bold`}>At Risk</span>
+                      )}
+                      {isToDelete ? (
+                        <span className="text-white font-bold decoration-white line-through">To Delete</span>
+                      ) : row.isMerged ? (
+                        <span className="text-indigo-600 dark:text-indigo-400 font-bold">Merged</span>
+                      ) : agentType === 'data_review' ? (
+                        !row.isAtRisk && <span className="text-emerald-600 dark:text-emerald-400 font-bold">Optimal</span>
+                      ) : row.isNew ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">New</span>
+                      ) : row.isChanged || row.isRenamed || row.isUnitChanged || row.isGroupChanged ? (
+                        <span className="text-amber-600 dark:text-amber-400 font-bold">Changed</span>
+                      ) : (
+                        <span className="text-slate-400 dark:text-slate-500">Synced</span>
+                      )}
+                    </>
                   )}
                 </div>
               </td>
@@ -1526,6 +1731,19 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           To Delete: {counts.toDelete}
         </button>
       )}
+      {counts.isMissing > 0 && (
+        <button
+          type="button"
+          onClick={() => setStatusSortCategory('isMissing' as any)}
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+            statusSortCategory === 'isMissing'
+              ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-300 animate-pulse'
+              : 'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200/20 hover:bg-amber-100/50'
+          }`}
+        >
+          Omitted/Missing: {counts.isMissing}
+        </button>
+      )}
       <button
         type="button"
         onClick={() => setStatusSortCategory('synced')}
@@ -1571,6 +1789,9 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       <div className="overflow-x-auto border border-slate-150 dark:border-slate-800 rounded-xl max-h-[550px] overflow-y-auto bg-white dark:bg-slate-950">
         {renderTableContent()}
       </div>
+
+      {/* Coverage Auditing Diagnostics */}
+      {renderCoverageDiagnostics()}
 
       {/* Verification footer */}
       <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800/80 rounded-xl space-y-1.5">
@@ -1703,13 +1924,14 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
             </div>
 
             {/* Modal Table content */}
-            <div className="flex-1 flex flex-col overflow-hidden p-6 bg-slate-50/30 dark:bg-slate-950/20">
+            <div className="flex-1 flex flex-col overflow-hidden p-6 bg-slate-50/30 dark:bg-slate-950/20 space-y-4">
               <div className="mb-4">
                 {renderFilterTags()}
               </div>
               <div className="flex-1 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-950 overflow-auto shadow-md">
                 {renderTableContent()}
               </div>
+              {renderCoverageDiagnostics()}
             </div>
 
             {/* Modal Footer */}

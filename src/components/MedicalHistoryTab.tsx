@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { UserProfile, BiomarkerLog, ChatMessage } from '../types';
 import { translations } from '../utils/translations';
 import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart as LineChartIcon, BrainCircuit, AlertCircle } from 'lucide-react';
-import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata } from '../utils/biomarkers';
+import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS } from '../utils/biomarkers';
 import ReviewBiomarkerModal from './ReviewBiomarkerModal';
 import { BiomarkerExpandedSection } from './BiomarkerExpandedSection';
 import CombineBiomarkersModal from './CombineBiomarkersModal';
@@ -23,6 +23,7 @@ interface MedicalHistoryTabProps {
     mergedLogs: { date: string; value: number | string }[],
     sourceKeysToDelete: string[]
   ) => void;
+  onReviewWithAgent?: (keys: string[]) => void;
   onApplyCalculation?: (updates: {
     targetCalories?: number;
     targetWeight?: number;
@@ -46,6 +47,7 @@ export default function MedicalHistoryTab({
   onEditBiomarkerLog,
   onLogMedical,
   onCombineBiomarkers,
+  onReviewWithAgent,
   onApplyCalculation,
   selectedModelId,
   onChangeModelId,
@@ -428,9 +430,9 @@ export default function MedicalHistoryTab({
             }}
             className="w-full px-2.5 py-1.5 text-xs font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none transition-all cursor-pointer shadow-sm"
           >
-            <option value="risk">By Risk Categories</option>
-            <option value="condition">By Medical Conditions</option>
-            <option value="practice">By Medical Practice</option>
+            {BIOMARKER_GROUPING_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
           </select>
         </div>
 
@@ -674,6 +676,7 @@ export default function MedicalHistoryTab({
           allDefinitions={allDefinitions}
           onClose={() => setCombineBiomarkerKey(null)}
           onSaveCombine={onCombineBiomarkers}
+          onReviewWithAgent={onReviewWithAgent}
         />
       )}
     </div>

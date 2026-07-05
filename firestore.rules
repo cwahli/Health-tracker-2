@@ -15,6 +15,10 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isSignedIn() && ('email' in request.auth.token) && (request.auth.token.email.lower() == 'cwah.liu@gmail.com');
+    }
+
     // Connection test document
     match /test/connection {
       allow read: if true;
@@ -27,33 +31,33 @@ service cloud.firestore {
 
     // User profile and subcollections
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read, write: if isOwner(userId) || isAdmin();
 
       match /foodLogs/{foodLogId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isAdmin();
       }
 
       match /biomarkerHistory/{historyId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isAdmin();
       }
 
       match /actions/{actionId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isAdmin();
       }
 
       match /dailyBenefits/{benefitId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isAdmin();
       }
 
       match /metadata/{metadataId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isAdmin();
       }
 
       match /reports/{reportId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isAdmin();
       }
       match /agentAnalyses/{analysisId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if isOwner(userId) || isAdmin();
       }
     }
   }

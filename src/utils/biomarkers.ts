@@ -640,5 +640,11 @@ function getFallbackMedicalConditions(key: string): string[] {
   return ['General Health'];
 }
 
+export const BIOMARKER_GROUPING_OPTIONS = [
+  { value: 'risk', label: 'By Risk Categories' },
+  { value: 'practice', label: 'By Medical Practice' },
+  { value: 'condition', label: 'By Medical Conditions' }
+] as const;
+
 
 
