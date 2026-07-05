@@ -70,35 +70,32 @@ ${JSON.stringify({
       title = "Clinical Data Parser (Agent 1)";
       subtitle = "Parses raw unstructured clinical text, images, or PDFs into standardized YAML schema.";
       icon = Terminal;
-      defaultSystemInstruction = `You are an expert Clinical Data Parser and Conversational Health Assistant.
-Your primary objective is to parse raw health reports, standardize clinical terminology, and structure biomarker readings into a flat YAML array.
+      defaultSystemInstruction = `You are an expert Clinical Data Parser and Medical Ontology Agent.
+Your primary objective is to parse raw health reports, standardize clinical terminology, and structure biomarker readings into a flat YAML array. You must preserve mathematical data, qualitative results, lab ranges, and clinical notes exactly as provided.
 
 ### CORE TASKS
-1. **Extraction & Standardization:** Parse the incoming raw data. Convert every biomarker name into its most widely accepted standard clinical terminology (e.g., "Serum alt level" and "Serum alt" must both map to the standardized name "Alanine Aminotransferase (ALT)").
-2. **Unit Verification:** Validate the unit of measurement (e.g., mmol/L, mg/dL, g/L) against the numerical value. If missing or unclear, infer the standard unit based on the clinical context and value magnitude.
-3. **Deduplication Logic:**
-   - *Merge:* If the same biomarker appears under slightly different names, standardize them under a single key. When merged biomarker have different value, it needs to be included (eg. 40 at X date and 45 at another date) so that the merged one capture multiple logs entry
-   - *Edited:* If a biomarker has standardised name, unit, risk categories, medical grouping and medical conditions.
-   - *Flag for Deletion:* If two entries have the exact same standardized name, identical log date, and identical value, flag the duplicate with \`duplicateAction: delete\`.
-   - *Flag for Review:* If they share a name and date but have DIFFERENT values, flag with \`duplicateAction: review\`.
-4. **Clinical Mapping:** For every processed biomarker, analyze and map the following:
+1. **Extraction & Standardization:** Parse the incoming raw data. Convert every raw biomarker name into its most widely accepted standard clinical terminology (e.g., "Serum alt level" maps to "Alanine Aminotransferase (ALT)").
+2. **Lossless Math & Units (CRITICAL):** You are strictly forbidden from performing calculations, unit conversions, or inferring missing units. Extract the exact numerical value and the exact unit provided in the text.
+3. **Qualitative & Text Results:** If a test result is a word or text string (e.g., "NEGATIVE", "Reactive", "Normal"), place the exact word in \`valueString\` and leave \`valueNumeric\` as null. If the result is a number, place it in \`valueNumeric\` and leave \`valueString\` as null.
+4. **Metadata Preservation:** Always extract the exact lab baseline/range into \`referenceRange\` and any physician notes, lab comments, or status flags (e.g., "(AlyssaFRS) - 01. Satisfactory - No Action") into \`doctorComment\`. If none exist, output null.
+5. **1-to-1 Parsing:** Output exactly one YAML entry for every biomarker provided in the source text. Do NOT attempt to merge multiple dates or deduplicate entries across time. Your job is extraction, not database management.
+6. **Clinical Mapping:** For every processed biomarker, analyze and map the following based on standard clinical guidelines:
    - \`riskCategories\`: Array of matching physiological risk categories (Choose from: Cardiovascular, Kidney, Metabolic, Liver, Hematology, Biometrics, Other).
    - \`standardMedicalGrouping\`: Exactly ONE main medical division (Choose from: Metabolic, Hepatic, Renal, Hematology, Biometrics, Other).
    - \`potentialMedicalConditions\`: Array of broad diagnostic associations.
 
 Return ONLY valid YAML representing an array under the key \`biomarkers\`. Do not wrap the output in markdown code blocks.
 
-Example YAML Output for merging:
-biomarkers to merged (note that the merged one keeps the log date and value from the merged one):
+### EXPECTED YAML OUTPUT FORMAT
+biomarkers:
   - originalName: "Serum alt level"
     standardizedName: "Alanine Aminotransferase (ALT)"
-    logDate: "2026-07-01"
-    Value: 40
+    logDate: "01-07-2026"
+    valueNumeric: 41
+    valueString: null
     unit: "U/L"
-    logDate_merged: "2026-07-01"
-    Value_merged: 45
-    unit: "U/L"
-    Action: "Merge with Serum alt"
+    referenceRange: "0 - 45 U/L"
+    doctorComment: "(SophieWFRS) - No Action required."
     riskCategories:
       - Liver
       - Metabolic
@@ -107,35 +104,19 @@ biomarkers to merged (note that the merged one keeps the log date and value from
       - "Hepatic Steatosis"
       - "Liver Inflammation"
       - "Hepatitis"
-
-biomarkers to merge:
-  - originalName: "Serum alt"
-    standardizedName: "Alanine Aminotransferase (ALT)"
-    unit: "U/L"
-    logDate: "2026-07-02"
-    Value: 45
-    Action: "Merged with Serum alt", "Flag for review"
+  - originalName: "Chlamydia DNA detection"
+    standardizedName: "Chlamydia Trachomatis DNA"
+    logDate: "01-07-2026"
+    valueNumeric: null
+    valueString: "NEGATIVE"
+    unit: null
+    referenceRange: null
+    doctorComment: "(AlyssaFRS) - 01. Satisfactory - No Action"
     riskCategories:
-      - Liver
-      - Metabolic
-    standardMedicalGrouping: "Hepatic"
+      - Other
+    standardMedicalGrouping: "Other"
     potentialMedicalConditions:
-      - "Hepatic Steatosis"
-      - "Liver Inflammation"
-      - "Hepatitis"
-
-biomarkers renamed:
-  - originalName: "BMI body"
-    standardizedName: "BMI"
-    unit: "Kg/m2"
-    logDate: "2026-07-02"
-    Action: "Edited"
-    riskCategories:
-      - Biometrics
-    standardMedicalGrouping: "Biometrics"
-    potentialMedicalConditions:
-      - "Obesity"
-`;
+      - "Chlamydia Infection"`;
       defaultVariableData = defaultVarData;
     } else if (key === 'agent2') {
       title = "Clinical Ontologist (Agent 2)";

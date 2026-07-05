@@ -40,6 +40,8 @@ interface InsightsTabProps {
   calibratingAgentType?: string | null;
 }
 
+const STABLE_EMPTY_ARRAY: string[] = [];
+
 export default function InsightsTab({
   profile,
   foodLogs,
@@ -370,39 +372,61 @@ export default function InsightsTab({
       batch.filter(key => activeKeys.includes(key))
     );
 
-    const keysInBatches = new Set(currentBatches.flat());
-    const missingKeys = activeKeys.filter(k => !keysInBatches.has(k));
+    // Keep completed batches exactly as they are. Re-chunk all uncompleted batches and any missing keys.
+    const preservedBatches: string[][] = [];
+    const keysToRechunk: string[] = [];
 
-    if (missingKeys.length > 0 || currentBatches.length === 0) {
-      const size = batchSize || 20;
-      if (currentBatches.length === 0) {
-        const res: string[][] = [];
-        for (let i = 0; i < activeKeys.length; i += size) {
-          res.push(activeKeys.slice(i, i + size));
-        }
-        currentBatches = res;
+    currentBatches.forEach((batch, idx) => {
+      const isApprovedStep2 = approvedAgent1Batches[idx];
+      const hasResultStep2 = agent1BatchResults[idx];
+      const isApprovedStep3 = approvedBatches[idx];
+      const hasResultStep3 = batchAnalysisResults[idx];
+      const isCompleted = isApprovedStep2 || hasResultStep2 || isApprovedStep3 || hasResultStep3;
+
+      if (isCompleted) {
+        preservedBatches.push(batch);
       } else {
-        missingKeys.forEach(key => {
-          let placed = false;
-          for (let i = 0; i < currentBatches.length; i++) {
-            const batch = currentBatches[i];
-            const isApproved = approvedBatches[i];
-            const hasResult = batchAnalysisResults[i];
-            if (batch.length < size && !isApproved && !hasResult) {
-              batch.push(key);
-              placed = true;
-              break;
-            }
-          }
-          if (!placed) {
-            currentBatches.push([key]);
+        batch.forEach(key => {
+          if (!keysToRechunk.includes(key)) {
+            keysToRechunk.push(key);
           }
         });
       }
+    });
+
+    // Gather any active keys not present in any batch
+    const keysInBatches = new Set([
+      ...preservedBatches.flat(),
+      ...keysToRechunk
+    ]);
+    const missingKeys = activeKeys.filter(k => !keysInBatches.has(k));
+    missingKeys.forEach(key => {
+      if (!keysToRechunk.includes(key)) {
+        keysToRechunk.push(key);
+      }
+    });
+
+    // Re-chunk the keysToRechunk into optimal chunks of size batchSize
+    const size = batchSize || 20;
+    let finalBatches = [...preservedBatches];
+
+    if (keysToRechunk.length > 0) {
+      for (let i = 0; i < keysToRechunk.length; i += size) {
+        finalBatches.push(keysToRechunk.slice(i, i + size));
+      }
     }
 
-    currentBatches = currentBatches.filter((batch, idx) => 
-      batch.length > 0 || idx === 0 || approvedBatches[idx] || batchAnalysisResults[idx]
+    // Fallback if we have absolutely empty batches but have active keys
+    if (finalBatches.length === 0 && activeKeys.length > 0) {
+      for (let i = 0; i < activeKeys.length; i += size) {
+        finalBatches.push(activeKeys.slice(i, i + size));
+      }
+    }
+
+    localStorage.setItem('biomarker_batch_size_last', String(batchSize || 20));
+
+    currentBatches = finalBatches.filter((batch, idx) => 
+      batch.length > 0 || idx === 0 || approvedBatches[idx] || batchAnalysisResults[idx] || approvedAgent1Batches[idx] || agent1BatchResults[idx]
     );
 
     const currentStr = JSON.stringify(currentBatches);
@@ -411,7 +435,7 @@ export default function InsightsTab({
       setBiomarkerBatches(currentBatches);
       localStorage.setItem('biomarker_batches_custom', JSON.stringify(currentBatches));
     }
-  }, [markerKeys, batchSize, approvedBatches, batchAnalysisResults, biomarkerBatches]);
+  }, [markerKeys, batchSize, approvedBatches, batchAnalysisResults, approvedAgent1Batches, agent1BatchResults]);
 
 
   React.useEffect(() => {
@@ -563,6 +587,168 @@ export default function InsightsTab({
 
   const toggleAgentHistory = (agentType: string) => {
     setExpandedAgentHistory(prev => ({ ...prev, [agentType]: !prev[agentType] }));
+  };
+
+  const handleApproveBatchStep1 = async (bIdx: number, result: any) => {
+    // Parse the cleaned YAML
+    const yamlText = result ? (result.extractedYaml || result) : '';
+    let parsedRows: any[] = [];
+    if (typeof yamlText === 'string' && yamlText.trim() !== '') {
+      try {
+        const cleanText = yamlText.replace(/```(?:yaml|json)?/gi, '').trim();
+        const parsed = parse(cleanText);
+        parsedRows = Array.isArray(parsed) ? parsed : (parsed?.biomarkers || []);
+      } catch (e) {
+        console.error("Failed to parse approved agent1 YAML", e);
+      }
+    } else if (Array.isArray(yamlText)) {
+      parsedRows = yamlText;
+    }
+
+    // Save customBiomarkers to user profile and history
+    const updatedCustoms = { ...(profile.customBiomarkers || {}) };
+    let currentHistory = biomarkerHistory ? biomarkerHistory.map((h: any) => ({
+      ...h,
+      biomarkers: { ...h.biomarkers }
+    })) : [];
+
+    // 1. Identify which unstandardized raw keys were mapped to what standardized keys and migrate/delete
+    if (result?.batchBiomarkers && Array.isArray(result.batchBiomarkers)) {
+      result.batchBiomarkers.forEach((raw: any) => {
+        const rawKey = raw.key;
+        if (!rawKey) return;
+
+        // Find best matched parsed row in the parsedRows output
+        let bestParsedIdx = -1;
+        parsedRows.forEach((parsed: any, idx: number) => {
+          if (parsed.originalName) {
+            const cleanRawName = raw.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const cleanParsedOrigName = parsed.originalName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (cleanRawName === cleanParsedOrigName || parsed.originalName === raw.name) {
+              bestParsedIdx = idx;
+            }
+          }
+        });
+
+        if (bestParsedIdx !== -1) {
+          const matched = parsedRows[bestParsedIdx];
+          const stdKey = (matched.key || matched.biomarker || matched.standardizedName || matched.name || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+          if (stdKey && rawKey !== stdKey) {
+            // Migrate existing values from rawKey to stdKey across all historical logs, then delete rawKey
+            currentHistory.forEach((log: any) => {
+              if (log.biomarkers && log.biomarkers[rawKey] !== undefined) {
+                const valueToMigrate = log.biomarkers[rawKey];
+                log.biomarkers[stdKey] = valueToMigrate;
+                delete log.biomarkers[rawKey];
+              }
+            });
+
+            // Delete from customBiomarkers list
+            delete updatedCustoms[rawKey];
+          }
+        } else {
+          // Completely unmapped/deleted raw item: delete from all historical logs and custom definitions
+          currentHistory.forEach((log: any) => {
+            if (log.biomarkers && log.biomarkers[rawKey] !== undefined) {
+              delete log.biomarkers[rawKey];
+            }
+          });
+          delete updatedCustoms[rawKey];
+        }
+      });
+    }
+
+    // 2. Apply newly cleaned/standardized readings from parsedRows
+    parsedRows.forEach((row: any) => {
+      const key = row.key || (row.name || row.biomarker || row.standardizedName || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+      if (!key) return;
+
+      const name = row.name || row.biomarker || row.standardizedName || 'Unknown';
+      const unit = row.metric || row.unit || '';
+
+      // Update customBiomarker definition
+      const existing: any = updatedCustoms[key] || {};
+      updatedCustoms[key] = {
+        ...existing,
+        name,
+        unit,
+        riskCategories: (existing.riskCategories && existing.riskCategories.length > 0) ? existing.riskCategories : (row.riskCategories || []),
+        standardMedicalGrouping: (existing.standardMedicalGrouping && existing.standardMedicalGrouping !== 'Other') ? existing.standardMedicalGrouping : (row.standardMedicalGrouping || 'Other'),
+        potentialMedicalConditions: row.potentialMedicalConditions || existing.potentialMedicalConditions || []
+      } as any;
+    });
+
+    currentHistory.sort((a, b) => b.date.localeCompare(a.date));
+
+    // Recompute biomarkers list
+    const recomputedBiomarkers: { [key: string]: number | string } = {};
+    [...currentHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+      Object.entries(log.biomarkers).forEach(([k, v]) => {
+        recomputedBiomarkers[k] = v as string | number;
+      });
+    });
+
+    const updatedProfile = {
+      ...profile,
+      customBiomarkers: updatedCustoms
+    };
+
+    if (onUpdateProfile) {
+      await onUpdateProfile(updatedProfile);
+    }
+    if (onUpdateHistory) {
+      await onUpdateHistory(currentHistory, recomputedBiomarkers, updatedProfile);
+    }
+
+    // Mark as approved
+    setApprovedAgent1Batches(prev => {
+      const updated = { ...prev, [bIdx]: true };
+      localStorage.setItem('approved_agent1_batches', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleApproveBatchStep2 = async (bIdx: number, result: any) => {
+    // Save customBiomarkers to user profile
+    const updatedCustoms = { ...(profile.customBiomarkers || {}) };
+    result.reviewedBiomarkers?.forEach((bm: any) => {
+      const existing: any = updatedCustoms[bm.key] || {};
+      updatedCustoms[bm.key] = {
+        ...existing,
+        name: bm.name || existing.name,
+        unit: bm.unit || existing.unit,
+        normalRange: bm.profileAdjustedNormalRange || existing.normalRange || '',
+        description: bm.description || existing.description || '',
+        riskCategories: (existing.riskCategories && existing.riskCategories.length > 0) ? existing.riskCategories : (bm.riskCategories || []),
+        standardMedicalGrouping: (existing.standardMedicalGrouping && existing.standardMedicalGrouping !== 'Other') ? existing.standardMedicalGrouping : (bm.standardMedicalGrouping || 'Other'),
+        potentialMedicalConditions: bm.potentialMedicalConditions || existing.potentialMedicalConditions || [],
+        specificRiskContext: bm.specificRiskContext || existing.specificRiskContext || '',
+        status: bm.status || existing.status || 'Healthy',
+        rangeBrackets: bm.rangeBrackets || existing.rangeBrackets || []
+      } as any;
+    });
+
+    const updatedProfile = {
+      ...profile,
+      customBiomarkers: updatedCustoms
+    };
+
+    if (onUpdateProfile) {
+      await onUpdateProfile(updatedProfile);
+    }
+
+    // Move missing biomarkers to future batches if selected
+    const keysToMove = selectedMissingKeysToMove[bIdx] || [];
+    if (keysToMove.length > 0) {
+      handleMoveMissingBiomarkers(bIdx, keysToMove);
+    }
+
+    // Mark as approved
+    setApprovedBatches(prev => {
+      const updated = { ...prev, [bIdx]: true };
+      localStorage.setItem('approved_data_review_batches', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const handleRefineDataCleaning = () => {
@@ -1424,7 +1610,10 @@ export default function InsightsTab({
                                           <h5 className="text-[12px] font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                             {isCustom ? 'Custom Test Batch' : `Batch ${parseInt(bIdx as string) + 1}`}
                                           </h5>
-                                          <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                                          <p 
+                                            className="text-[10px] text-slate-400 dark:text-slate-500 font-medium"
+                                            style={{ fontVariant: 'small-caps' }}
+                                          >
                                             {batchKeys.length} biomarkers assigned
                                           </p>
                                         </div>
@@ -1463,12 +1652,12 @@ export default function InsightsTab({
                                             Biomarkers in {isCustom ? 'Custom Test Batch' : `Batch ${parseInt(bIdx as string) + 1}`}
                                           </span>
                                           <div className="flex flex-wrap gap-1.5">
-                                            {batchKeys.map((key) => {
+                                            {batchKeys.map((key, kIdx) => {
                                               const value = biomarkers[key];
                                               const unit = profile?.customBiomarkers?.[key]?.unit || '';
                                               return (
                                                 <div 
-                                                  key={key}
+                                                  key={`${key}_${kIdx}`}
                                                   className="px-2.5 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 rounded-lg text-[10px] font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
                                                 >
                                                   <span className="font-bold text-slate-900 dark:text-white">
@@ -1497,6 +1686,9 @@ export default function InsightsTab({
                                                 profile={profile}
                                                 biomarkerHistory={biomarkerHistory}
                                                 initialRawText={""}
+                                                onApplyChanges={async () => {
+                                                  await handleApproveBatchStep1(bIdx, result);
+                                                }}
                                               />
                                             </div>
 
@@ -1865,7 +2057,10 @@ export default function InsightsTab({
                                       <div className="min-w-0 flex-1">
                                         <h5 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                                           <span>{isCustom ? 'Custom Test Batch' : `Batch ${parseInt(bIdx as string) + 1}`}</span>
-                                          <span className="text-[10px] font-mono text-slate-400 font-normal">
+                                          <span 
+                                            className="text-[10px] font-mono text-slate-400 font-normal"
+                                            style={{ fontVariant: 'small-caps' }}
+                                          >
                                             ({batchKeys.length} biomarkers)
                                           </span>
                                         </h5>
@@ -1930,8 +2125,11 @@ export default function InsightsTab({
                                                 agentResult={result}
                                                 profile={profile}
                                                 biomarkerHistory={biomarkerHistory}
-                                                selectedMissingKeys={selectedMissingKeysToMove[bIdx] || []}
+                                                selectedMissingKeys={selectedMissingKeysToMove[bIdx] || STABLE_EMPTY_ARRAY}
                                                 onChangeSelectedMissingKeys={(keys) => setSelectedMissingKeysToMove(prev => ({ ...prev, [bIdx]: keys }))}
+                                                onApplyChanges={async () => {
+                                                  await handleApproveBatchStep2(bIdx, result);
+                                                }}
                                               />
                                             </div>
 
@@ -2489,8 +2687,12 @@ export default function InsightsTab({
                 agentResult={batchAnalysisResults[fullscreenBatchIndex]}
                 profile={profile}
                 biomarkerHistory={biomarkerHistory}
-                selectedMissingKeys={selectedMissingKeysToMove[fullscreenBatchIndex] || []}
+                selectedMissingKeys={selectedMissingKeysToMove[fullscreenBatchIndex] || STABLE_EMPTY_ARRAY}
                 onChangeSelectedMissingKeys={(keys) => setSelectedMissingKeysToMove(prev => ({ ...prev, [fullscreenBatchIndex]: keys }))}
+                onApplyChanges={async () => {
+                  await handleApproveBatchStep2(fullscreenBatchIndex, batchAnalysisResults[fullscreenBatchIndex]);
+                  setFullscreenBatchIndex(null);
+                }}
               />
             </div>
             

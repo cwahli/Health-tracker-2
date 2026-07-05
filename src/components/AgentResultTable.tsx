@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parse } from 'yaml';
 import { 
   Maximize2, 
@@ -132,7 +132,6 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
   const [statusSortCategory, setStatusSortCategory] = useState<'atRisk' | 'isNew' | 'changed' | 'synced' | 'merged' | 'toDelete' | null>(null);
 
   const [localSelectedMissingKeys, setLocalSelectedMissingKeys] = useState<string[]>(() => {
-    if (selectedMissingKeys) return selectedMissingKeys;
     try {
       const batchIdx = agentResult?.batchIdx;
       if (batchIdx !== undefined && batchIdx !== null) {
@@ -143,10 +142,13 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
     return [];
   });
 
-  const effectiveSelectedMissingKeys = selectedMissingKeys !== undefined ? selectedMissingKeys : localSelectedMissingKeys;
+  const isControlled = selectedMissingKeys !== undefined;
+  const effectiveSelectedMissingKeys = isControlled ? selectedMissingKeys : localSelectedMissingKeys;
 
   const handleSelectedMissingKeysChange = (newKeys: string[]) => {
-    setLocalSelectedMissingKeys(newKeys);
+    if (!isControlled) {
+      setLocalSelectedMissingKeys(newKeys);
+    }
     if (onChangeSelectedMissingKeys) {
       onChangeSelectedMissingKeys(newKeys);
     }
@@ -157,12 +159,6 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       }
     } catch (e) {}
   };
-
-  useEffect(() => {
-    if (selectedMissingKeys !== undefined) {
-      setLocalSelectedMissingKeys(selectedMissingKeys);
-    }
-  }, [selectedMissingKeys]);
 
   const isMultiphaseActive = !!(agentResult?.status === 'needs_continuation' || agentResult?.needsContinuation || agentResult?.hasMore || agentResult?.hasMoreMarkers);
   const totalEstimated = agentResult?.estimatedTotalMarkers || agentResult?.planningDetails?.estimatedTotalMetrics || (isMultiphaseActive ? 60 : 0);
@@ -1242,15 +1238,27 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       initialCount = tableData.length;
     }
 
+    let mergeCount = tableData.filter(row => row.isSecondary).length;
+    if (mergeCount === 0) {
+      tableData.forEach(row => {
+        if (row.isMerged && Array.isArray(row.mergedFrom) && row.mergedFrom.length > 1) {
+          mergeCount += (row.mergedFrom.length - 1);
+        }
+      });
+    }
+    let hasMismatch = initialCount !== generatedCount;
+
     if (initialCount !== generatedCount) {
       if (missingList.length > 0) {
         differenceMsg = `${missingList.length} biomarkers were present in raw input but omitted during extraction: ${missingList.join(', ')}.`;
       } else if (generatedCount > initialCount) {
         differenceMsg = `Agent generated ${generatedCount - initialCount} additional rows or broken-down entries.`;
       } else {
-        const mergeCount = tableData.filter(row => row.isSecondary && row.status === 'To Delete').length;
-        if (mergeCount > 0) {
-          differenceMsg = `${mergeCount} biomarkers were merged into standardized entries and marked as 'To Delete' to prevent duplication.`;
+        if (generatedCount + mergeCount === initialCount) {
+          differenceMsg = `Raw count was ${initialCount}, table has ${generatedCount} (${mergeCount} merged rows detected). All entries successfully consolidated.`;
+          hasMismatch = false;
+        } else if (mergeCount > 0) {
+          differenceMsg = `Mismatch remains: Raw count was ${initialCount}, table has ${generatedCount} with ${mergeCount} merged rows.`;
         } else {
           differenceMsg = `Mismatch detected: Raw count was ${initialCount}, table has ${generatedCount}.`;
         }
@@ -1281,24 +1289,37 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       initialCount,
       generatedCount,
       differenceMsg,
-      hasMismatch: initialCount !== generatedCount,
+      hasMismatch,
       missingBiomarkers
     };
   }, [tableData, agentType, initialRawText, agentResult, biomarkerHistory]);
 
+  const missingBiomarkersSerialized = useMemo(() => {
+    return (verification.missingBiomarkers || []).map(bm => bm.key).sort().join(',');
+  }, [verification.missingBiomarkers]);
+
+  const hasInitializedMissingKeys = useRef(false);
+
   // Auto-initialize selectedMissingKeys to all missing keys as default
   useEffect(() => {
+    if (hasInitializedMissingKeys.current) return;
+    
     if (verification.missingBiomarkers && verification.missingBiomarkers.length > 0) {
       const batchIdx = agentResult?.batchIdx;
       if (batchIdx !== undefined && batchIdx !== null) {
         const saved = localStorage.getItem(`batch_${batchIdx}_missing_keys_to_move`);
         if (!saved) {
           const allKeys = verification.missingBiomarkers.map(bm => bm.key);
-          handleSelectedMissingKeysChange(allKeys);
+          const currentKeys = effectiveSelectedMissingKeys || [];
+          const isIdentical = allKeys.length === currentKeys.length && allKeys.every(k => currentKeys.includes(k));
+          if (!isIdentical) {
+            handleSelectedMissingKeysChange(allKeys);
+            hasInitializedMissingKeys.current = true;
+          }
         }
       }
     }
-  }, [verification.missingBiomarkers, agentResult?.batchIdx]);
+  }, [missingBiomarkersSerialized, agentResult?.batchIdx, effectiveSelectedMissingKeys]);
 
   const renderCoverageDiagnostics = () => {
     return null;

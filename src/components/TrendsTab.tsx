@@ -47,13 +47,14 @@ export default function TrendsTab({
   // Generate continuous or logged timeline data for the chart
   const getChartData = () => {
     // Collect all unique dates from both logs normalized to YYYY-MM-DD
+    const emailSuffix = profile?.email ? `_${profile.email.toLowerCase().trim()}` : '_guest';
     const datesSet = new Set<string>();
     foodLogs.forEach(f => datesSet.add(toYYYYMMDD(f.date)));
     biomarkerHistory.forEach(b => datesSet.add(toYYYYMMDD(b.date)));
     
     let stepsHistory: { date: string, value: number }[] = [];
     if (selectedMetric === 'steps') {
-      const historyStr = localStorage.getItem('googleStepsHistory');
+      const historyStr = localStorage.getItem(`googleStepsHistory${emailSuffix}`);
       if (historyStr) {
         try {
           stepsHistory = JSON.parse(historyStr);
@@ -88,7 +89,7 @@ export default function TrendsTab({
       else if (selectedMetric === 'steps') {
         const today = new Date().toISOString().split('T')[0];
         if (dateStr === today) {
-          const todaySteps = localStorage.getItem('googleSteps');
+          const todaySteps = localStorage.getItem(`googleSteps${emailSuffix}`);
           value = todaySteps ? parseInt(todaySteps, 10) : (stepsHistory.find(h => toYYYYMMDD(h.date) === dateStr)?.value || 0);
         } else {
           value = stepsHistory.find(h => toYYYYMMDD(h.date) === dateStr)?.value || 0;

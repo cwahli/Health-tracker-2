@@ -447,31 +447,34 @@ export default function HomeTab({
     return "You have provided enough information. Please go to Insights and run a health analysis!";
   };
 
-  const [googleSteps, setGoogleSteps] = React.useState<number | null>(() => {
-    const saved = localStorage.getItem('googleSteps');
-    return saved ? parseInt(saved, 10) : null;
-  });
+  const emailSuffix = React.useMemo(() => {
+    return profile?.email ? `_${profile.email.toLowerCase().trim()}` : '_guest';
+  }, [profile?.email]);
 
-  const [googleStepsAverage, setGoogleStepsAverage] = React.useState<number | null>(() => {
-    const saved = localStorage.getItem('googleStepsAverage');
-    return saved ? parseInt(saved, 10) : null;
-  });
+  const [googleSteps, setGoogleSteps] = React.useState<number | null>(null);
+  const [googleStepsAverage, setGoogleStepsAverage] = React.useState<number | null>(null);
+  const [lastActiveDaySteps, setLastActiveDaySteps] = React.useState<number | null>(null);
+  const [lastActiveDayTimestamp, setLastActiveDayTimestamp] = React.useState<string | null>(null);
 
-  const [lastActiveDaySteps, setLastActiveDaySteps] = React.useState<number | null>(() => {
-    const saved = localStorage.getItem('lastActiveDaySteps');
-    return saved ? parseInt(saved, 10) : null;
-  });
-
-  const [lastActiveDayTimestamp, setLastActiveDayTimestamp] = React.useState<string | null>(() => {
-    return localStorage.getItem('lastActiveDayTimestamp');
-  });
+  React.useEffect(() => {
+    const gs = localStorage.getItem(`googleSteps${emailSuffix}`);
+    setGoogleSteps(gs ? parseInt(gs, 10) : null);
+    
+    const gsa = localStorage.getItem(`googleStepsAverage${emailSuffix}`);
+    setGoogleStepsAverage(gsa ? parseInt(gsa, 10) : null);
+    
+    const lads = localStorage.getItem(`lastActiveDaySteps${emailSuffix}`);
+    setLastActiveDaySteps(lads ? parseInt(lads, 10) : null);
+    
+    setLastActiveDayTimestamp(localStorage.getItem(`lastActiveDayTimestamp${emailSuffix}`));
+  }, [emailSuffix]);
 
   const currentStepsValue = React.useMemo(() => {
     const days = parseInt(viewTimeframe, 10);
     if (days <= 1) {
       return googleSteps || 0;
     }
-    const historyStr = localStorage.getItem('googleStepsHistory');
+    const historyStr = localStorage.getItem(`googleStepsHistory${emailSuffix}`);
     if (historyStr) {
       try {
         const history: { date: string; value: number }[] = JSON.parse(historyStr);
@@ -496,25 +499,25 @@ export default function HomeTab({
       }
     }
     return googleStepsAverage || 0;
-  }, [viewTimeframe, googleSteps, googleStepsAverage, todayStr]);
+  }, [viewTimeframe, googleSteps, googleStepsAverage, todayStr, emailSuffix]);
 
   React.useEffect(() => {
     const handleGoogleUpdate = () => {
-      const gs = localStorage.getItem('googleSteps');
+      const gs = localStorage.getItem(`googleSteps${emailSuffix}`);
       setGoogleSteps(gs ? parseInt(gs, 10) : null);
       
-      const gsa = localStorage.getItem('googleStepsAverage');
+      const gsa = localStorage.getItem(`googleStepsAverage${emailSuffix}`);
       setGoogleStepsAverage(gsa ? parseInt(gsa, 10) : null);
       
-      const lads = localStorage.getItem('lastActiveDaySteps');
+      const lads = localStorage.getItem(`lastActiveDaySteps${emailSuffix}`);
       setLastActiveDaySteps(lads ? parseInt(lads, 10) : null);
       
-      setLastActiveDayTimestamp(localStorage.getItem('lastActiveDayTimestamp'));
+      setLastActiveDayTimestamp(localStorage.getItem(`lastActiveDayTimestamp${emailSuffix}`));
     };
     
     window.addEventListener('googleStepsUpdated', handleGoogleUpdate);
     return () => window.removeEventListener('googleStepsUpdated', handleGoogleUpdate);
-  }, []);
+  }, [emailSuffix]);
 
   return (
     <div className="space-y-6 pb-24 animation-fade-in max-w-md mx-auto px-[15px] mt-4 font-sans text-slate-900">

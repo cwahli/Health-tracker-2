@@ -1,0 +1,50 @@
+      app.post("/api/gemini/route-biomarker", async (req, res) => {
+        try {
+          const { key, originalName, allApprovedKeys } = req.body;
+          const systemInstruction = `You are an automated Medical Ontology and Database Router. Your critical task is to map a newly discovered, unmapped biomarker key to a structured list of approved Master Database Keys, OR dynamically mint an entirely new standard definition if a clinical mismatch occurs.
+
+=== DIRECTIVES ===
+1. ANALYSIS: Evaluate the incoming INPUT_KEY and INPUT_ORIGINAL_NAME. 
+2. MATCH ALIAS: If the incoming item is clearly an abbreviation, synonym, or alternate naming convention for a metric inside the === CURRENT MASTER DATABASE KEYS === array, select that key and set isNew to false.
+3. ONTOLOGY EXPANSION (CREATE NEW): If the incoming item represents a clinical test completely absent from the current master list, generate a clean, standardized, universal lowercase snake_case database key. Set isNew to true.
+4. CLINICAL DATA SCHEMA: If creating a new key (isNew: true), you must populate standard human-readable naming, medical groupings, and associations based on strict clinical guidelines. If mapping to an existing key, leave these fields as null.
+
+INPUT_KEY: "${key}"
+INPUT_ORIGINAL_NAME: "${originalName}"
+
+=== VALID MEDICAL GROUPINGS ===
+Choose from exactly one: ['Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Cardiovascular', 'Immune', 'Other']
+
+=== VALID RISK CATEGORIES ===
+Choose an array from: ['Cardiovascular', 'Kidney & hydration', 'Metabolic & glycemic', 'Liver & hepatitis stress', 'Hematology', 'Biometrics', 'Other']
+
+=== CURRENT MASTER DATABASE KEYS ===
+[${allApprovedKeys.join(', ')}]
+
+=== SYSTEM CONSTRAINTS ===
+Return ONLY a valid, minified JSON object. Do not provide explanations, markdown blocks, formatting wrappers, or text outside the JSON boundaries.
+
+=== MANDATED JSON OUTPUT SCHEMA ===
+{
+  "mappedKey": "The existing matched key, OR the newly generated snake_case key string",
+  "isNew": boolean,
+  "standardName": "Clean Title Case Human Readable Name (Only if isNew is true, else null)",
+  "standardMedicalGrouping": "String matching valid groupings (Only if isNew is true, else null)",
+  "riskCategories": ["Array of strings matching valid risk categories"] (Only if isNew is true, else null),
+  "potentialMedicalConditions": ["Array of broad diagnostic associations"] (Only if isNew is true, else null)
+}`;
+          
+          const textOutput = await callUnifiedLLM({
+            modelId: "gemini-3.5-flash",
+            systemInstruction,
+            promptText: "Please map the biomarker.",
+            responseMimeType: "application/json"
+          });
+          
+          let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+          res.json(JSON.parse(cleanJson));
+        } catch (e) {
+          console.error(e);
+          res.status(500).json({ error: "Failed to route biomarker" });
+        }
+      });

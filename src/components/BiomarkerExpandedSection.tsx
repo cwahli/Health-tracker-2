@@ -217,59 +217,86 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
         <div>
           <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Historical Logs</h4>
           <div className="space-y-2">
-            {historyData.slice().reverse().map(h => (
-              <div key={h.logId} className="flex flex-col bg-white dark:bg-slate-900 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800">
-                <div className="flex items-center justify-between">
-                  {editingLogId === h.logId ? (
-                    <input 
-                      type="date" 
-                      value={editDate}
-                      onChange={(e) => setEditDate(e.target.value)}
-                      className="form-input-styled text-xs font-mono w-28 text-slate-800 dark:text-slate-100"
-                    />
-                  ) : (
-                    <span className="text-xs font-mono text-slate-500">{h.date}</span>
-                  )}
-                  <div className="flex items-center gap-3">
+            {historyData.slice().reverse().map(h => {
+              const fullLog = biomarkerHistory.find(log => log.id === h.logId);
+              const testDetail = fullLog?.tests?.find(t => t.key === def.key);
+              
+              return (
+                <div key={h.logId} className="flex flex-col bg-white dark:bg-slate-900 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 space-y-1.5">
+                  <div className="flex items-center justify-between">
                     {editingLogId === h.logId ? (
-                      <div className="flex items-center gap-2">
-                        <input 
-                          type="number" 
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          className="form-input-styled w-16 text-xs text-slate-800 dark:text-slate-100"
-                        />
-                        <button onClick={() => handleSaveEdit(h.logId)} className="text-indigo-600 font-bold text-xs cursor-pointer">Save</button>
-                        <button onClick={() => setEditingLogId(null)} className="text-slate-400 font-bold text-xs cursor-pointer">Cancel</button>
-                      </div>
+                      <input 
+                        type="date" 
+                        value={editDate}
+                        onChange={(e) => setEditDate(e.target.value)}
+                        className="form-input-styled text-xs font-mono w-28 text-slate-800 dark:text-slate-100"
+                      />
                     ) : (
-                      <>
-                        <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{hideSensitive ? '***' : h.originalVal} {def.unit}</span>
-                        <button 
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
-                            setEditValue(String(h.originalVal)); 
-                            setEditDate(toInputDateFormat(h.date));
-                            setEditingLogId(h.logId); 
-                          }}
-                          className="text-indigo-400 hover:text-indigo-600 cursor-pointer"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                        </button>
-                        {onDeleteBiomarkerLog && (
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); onDeleteBiomarkerLog(h.logId); }}
-                            className="text-slate-400 hover:text-rose-500 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </>
+                      <span className="text-xs font-mono text-slate-500">{h.date}</span>
                     )}
+                    <div className="flex items-center gap-3">
+                      {editingLogId === h.logId ? (
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="number" 
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            className="form-input-styled w-16 text-xs text-slate-800 dark:text-slate-100"
+                          />
+                          <button onClick={() => handleSaveEdit(h.logId)} className="text-indigo-600 font-bold text-xs cursor-pointer">Save</button>
+                          <button onClick={() => setEditingLogId(null)} className="text-slate-400 font-bold text-xs cursor-pointer">Cancel</button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{hideSensitive ? '***' : h.originalVal} {def.unit}</span>
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setEditValue(String(h.originalVal)); 
+                              setEditDate(toInputDateFormat(h.date));
+                              setEditingLogId(h.logId); 
+                            }}
+                            className="text-indigo-400 hover:text-indigo-600 cursor-pointer"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                          </button>
+                          {onDeleteBiomarkerLog && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); onDeleteBiomarkerLog(h.logId); }}
+                              className="text-slate-400 hover:text-rose-500 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
+                  
+                  {/* Additional extracted test fields if present */}
+                  {testDetail && (
+                    <div className="text-[10px] space-y-1 text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800/40">
+                      {testDetail.originalTestName && testDetail.originalTestName !== def.name && (
+                        <div>
+                          <span className="font-medium">Original Name:</span> <span className="italic">{testDetail.originalTestName}</span>
+                        </div>
+                      )}
+                      {testDetail.normalRange && (
+                        <div>
+                          <span className="font-medium">Extracted Range:</span> <span className="font-mono">{testDetail.normalRange}</span>
+                        </div>
+                      )}
+                      {testDetail.doctorComment && (
+                        <div className="bg-indigo-50/40 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 p-1.5 rounded border border-indigo-100/30 mt-1 leading-relaxed">
+                          <span className="font-bold uppercase text-[8px] tracking-wider block mb-0.5">Doctor/Lab Comment</span>
+                          {testDetail.doctorComment}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

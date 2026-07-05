@@ -139,12 +139,23 @@ export interface BiomarkerValue {
   timestamp: string; // ISO string
 }
 
+export interface ExtractedTestDetail {
+  key: string;
+  originalTestName?: string;
+  valueNumeric?: number | null;
+  valueString?: string | null;
+  unit?: string;
+  normalRange?: string;
+  doctorComment?: string;
+}
+
 export interface BiomarkerLog {
   id: string;
   date: string; // YYYY-MM-DD
   biomarkers: { [key: string]: number | string };
   note?: string;
   summary?: string;
+  tests?: ExtractedTestDetail[];
 }
 
 export interface HealthAction {

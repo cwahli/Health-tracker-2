@@ -6,6 +6,7 @@ import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomark
 import ReviewBiomarkerModal from './ReviewBiomarkerModal';
 import { BiomarkerExpandedSection } from './BiomarkerExpandedSection';
 import CombineBiomarkersModal from './CombineBiomarkersModal';
+import BiomarkerDictionaryModal from './BiomarkerDictionaryModal';
 
 interface MedicalHistoryTabProps {
   profile: UserProfile;
@@ -23,6 +24,7 @@ interface MedicalHistoryTabProps {
     mergedLogs: { date: string; value: number | string }[],
     sourceKeysToDelete: string[]
   ) => void;
+  onBatchConsolidate?: (mapping: { [key: string]: string }) => void;
   onReviewWithAgent?: (keys: string[]) => void;
   onApplyCalculation?: (updates: {
     targetCalories?: number;
@@ -47,6 +49,7 @@ export default function MedicalHistoryTab({
   onEditBiomarkerLog,
   onLogMedical,
   onCombineBiomarkers,
+  onBatchConsolidate,
   onReviewWithAgent,
   onApplyCalculation,
   selectedModelId,
@@ -68,6 +71,7 @@ export default function MedicalHistoryTab({
   const [searchQuery, setSearchQuery] = useState('');
   const [reviewHistories, setReviewHistories] = useState<{[key: string]: ChatMessage[]}>({});
   const [openSubCategories, setOpenSubCategories] = useState<{ [category: string]: boolean }>({});
+  const [showDictionaryModal, setShowDictionaryModal] = useState(false);
 
   const toggleSubCategory = (cat: string) => {
     setOpenSubCategories(prev => ({
@@ -597,8 +601,15 @@ export default function MedicalHistoryTab({
         </div>
       </div>
 
-      {onDeleteEmptyBiomarkers && hasEmptyBiomarkers && (
-        <div className="mt-6 flex justify-center pb-4">
+      <div className="mt-6 flex flex-col items-center gap-3 pb-8">
+        <button
+          onClick={() => setShowDictionaryModal(true)}
+          className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold text-xs rounded-xl border border-indigo-100 dark:border-indigo-800/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors cursor-pointer flex items-center gap-2"
+        >
+          <ClipboardList className="w-4 h-4" />
+          Open Biomarker Dictionary
+        </button>
+        {onDeleteEmptyBiomarkers && hasEmptyBiomarkers && (
           <button
             onClick={() => {
               onDeleteEmptyBiomarkers();
@@ -608,8 +619,8 @@ export default function MedicalHistoryTab({
             <Trash2 className="w-4 h-4" />
             Delete Empty Biomarkers
           </button>
-        </div>
-      )}
+        )}
+      </div>
       
       {reviewingBiomarkerKey && (
         <ReviewBiomarkerModal
@@ -677,6 +688,18 @@ export default function MedicalHistoryTab({
           onClose={() => setCombineBiomarkerKey(null)}
           onSaveCombine={onCombineBiomarkers}
           onReviewWithAgent={onReviewWithAgent}
+        />
+      )}
+
+      {showDictionaryModal && onLogMedical && (
+        <BiomarkerDictionaryModal
+          profile={profile}
+          biomarkers={biomarkers}
+          biomarkerHistory={biomarkerHistory}
+          onClose={() => setShowDictionaryModal(false)}
+          onUpdateProfile={(updates) => onLogMedical({}, updates)}
+          onCombineBiomarkers={onCombineBiomarkers!}
+          onBatchConsolidate={onBatchConsolidate}
         />
       )}
     </div>

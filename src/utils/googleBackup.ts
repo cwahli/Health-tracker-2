@@ -195,10 +195,30 @@ export async function createGoogleSheet(accessToken: string, title: string): Pro
 }
 
 /**
+ * Retrieves the name of the first sheet inside a spreadsheet to avoid localization issues (e.g., Hoja1, Sheet1, Feuille1).
+ */
+export async function getFirstSheetName(accessToken: string, spreadsheetId: string): Promise<string> {
+  try {
+    const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) return 'Sheet1';
+    const result = await response.json();
+    if (result.sheets && result.sheets.length > 0) {
+      return result.sheets[0].properties.title || 'Sheet1';
+    }
+  } catch (e) {
+    console.error('getFirstSheetName error:', e);
+  }
+  return 'Sheet1';
+}
+
+/**
  * Initializes the header columns of the master backup sheet registry.
  */
 export async function initializeSheetHeaders(accessToken: string, spreadsheetId: string) {
-  const range = 'Sheet1!A1:H1';
+  const sheetName = await getFirstSheetName(accessToken, spreadsheetId);
+  const range = `${sheetName}!A1:H1`;
   await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`,
     {
@@ -229,7 +249,8 @@ export async function initializeSheetHeaders(accessToken: string, spreadsheetId:
  * Appends a row log entry to the Google Sheet.
  */
 export async function appendBackupLogToSheet(accessToken: string, spreadsheetId: string, rowData: any[]) {
-  const range = 'Sheet1!A:H';
+  const sheetName = await getFirstSheetName(accessToken, spreadsheetId);
+  const range = `${sheetName}!A:H`;
   const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED`,
     {

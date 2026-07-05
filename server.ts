@@ -4,6 +4,7 @@ import fs from "fs";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { AsyncLocalStorage } from "async_hooks";
+import { biomarkerDefinitions } from "./src/utils/biomarkers";
 
 // Simple and robust custom JS object-to-YAML stringifier
 function jsToYaml(val: any, indent: number = 0): string {
@@ -1310,10 +1311,19 @@ app.post("/api/gemini/medical-analyze", async (req, res) => {
       if (agentType === "agent1_step1") {
         const isFlashLite = engine && (engine.includes("lite") || engine.includes("flash-lite"));
         const maxMetrics = isFlashLite ? 50 : 100;
-        systemInstruction = `You are a clinical data parser and conversational health assistant (Step 1: Clinical Triage).
-Your tasks:
-1. Parse raw health reports/text and extract biomarker readings into a flat YAML array.
-2. Handle conversational questions, updates, requests to go back, or requests to continue/submit from the user.
+        systemInstruction = `You are an expert Clinical Data Extractor. Your sole objective is to parse raw health text/reports, isolate distinct biomarker measurements, and structure them into the mandated format. You act as a lossless data conduit.
+
+=== CRITICAL EXTRACTION DIRECTIVES ===
+1. ZERO MATH & VERBATIM EXTRACTION: You are strictly forbidden from performing any calculations, normalizations, or unit conversions. Extract the exact numerical value and the exact unit provided in the text.
+2. VERBATIM QUALITATIVE DATA: If a result is qualitative (e.g., "Negative", "Trace", "High"), extract it exactly as written.
+3. DICTIONARY MAPPING (MANDATORY): You MUST attempt to map the extracted biomarker name to an existing key within the === EXISTING DATABASE KEYS === list. If a direct synonym or clear clinical equivalent exists in the database keys, use that existing key.
+4. NEW KEYS (FALLBACK): ONLY if the biomarker represents a test completely absent from the === EXISTING DATABASE KEYS ===, you may generate a clean, lowercase snake_case key for it.
+
+=== MODE ROUTING DIRECTIVE ===
+If the user provides raw clinical text, photos, or data to be extracted, YOU MUST process the data, extract the biomarkers, and output the required YAML block format inside "extractedYaml". YOU MUST NOT fall back to conversational mode if data is present. ONLY use conversational mode if the user asks a direct question unrelated to data extraction.
+
+=== EXISTING DATABASE KEYS ===
+[${Object.keys(biomarkerDefinitions).join(', ')}]
 
 CHUNKED PROCESSING RULE (Max ${maxMetrics}):
 If the user's raw data/text contains more than ${maxMetrics} biomarker readings, you MUST split the processing into chunks:
@@ -1331,43 +1341,43 @@ You MUST respond with a JSON object containing the following keys:
 - "estimatedTotalMarkers": number (the total estimated number of biomarker readings present in the original input text, e.g., 60).
 
 YAML Schema for "extractedYaml" field (must be a single string containing valid YAML):
-- biomarker: string
+- biomarker: string (use existing database keys if possible)
   date: YYYY-MM-DD
-  value: number
+  value: number (or string if qualitative)
   unit: string
-  explanation: string # Detailed explanation of why you standardized, changed, merged or corrected this entry
+  explanation: string # Detail how it was mapped to the dictionary or if it is a new key
 
 Rules for handling user inputs:
-- INITIAL/RAW DATA extraction: If the user provided a health report, extract biomarkers from the USER RAW DATA section ONLY. Do NOT extract data from the EXISTING BIOMARKER LOGS section into your YAML (that is just for context). If there are more than ${maxMetrics}, extract ONLY the first ${maxMetrics} entries and apply the chunking rule. If multiple readings of the same marker on the same date exist under slightly different names, merge them. Output the flat YAML in "extractedYaml", and set "text" to "I have extracted the first ${maxMetrics} biomarkers. There are more biomarkers left in your report. Would you like to continue?" Count the total estimated biomarker readings in the input and set "estimatedTotalMarkers" accordingly (CRITICAL: Do NOT limit this count to the first ${maxMetrics} - this must be the grand total of all markers across the entire raw report). For every standardized, renamed, merged or corrected entry, you MUST provide a detailed explanation of what was changed and why in the 'explanation' field.
-- CONTINUE EXTRACTING: If the user requests to "continue", "continue extracting", or similar (they may pass the original text again), take the previous "extractedYaml" and append/extract the next chunk of up to ${maxMetrics} biomarkers from the original raw text that are NOT ALREADY in the previous YAML. Output the COMBINED, COMPLETE flat YAML (the previous entries plus the new ones) in "extractedYaml". Set "hasMoreMarkers" and "remainingText" accordingly. Make sure to keep the correct "estimatedTotalMarkers" value (the total for the whole document). Ensure you provide a detailed explanation of why any name or unit was standardized in the 'explanation' field.
-- UPDATE DATA: If the user asks to edit, add, or delete a biomarker or value (e.g., "Change ALT on 2026-06-01 to 45"), perform that update on the YAML and return the updated "extractedYaml" string, explaining the change in "text". DO NOT delete locked biomarkers (bmi, weight, height) - they can only be updated/renamed, never deleted.
-- START A CONVERSATION: If the user asks general or clinical questions about the biomarkers or their values (e.g., "What does ALT mean?"), answer the question in "text" with precise clinical detail, and return the unmodified YAML in "extractedYaml".
-- GO BACK / CONTINUE / SUBMIT: If the user asks to go back or continue, explain the current step in "text" (we are currently on Step 1: Data Extraction. They can click "Continue to Map Data" when ready, or we can discuss/update the extracted readings first).
+- INITIAL/RAW DATA extraction: If the user provided a health report, extract biomarkers from the USER RAW DATA section ONLY. Do NOT extract data from the EXISTING BIOMARKER LOGS section. Apply chunking.
+- CONTINUE EXTRACTING: If the user requests to continue, take the previous "extractedYaml" and append/extract the next chunk of up to ${maxMetrics} biomarkers. Output the COMBINED, COMPLETE flat YAML.
+- UPDATE DATA: If the user asks to edit, add, or delete a biomarker, perform that update on the YAML and return the updated "extractedYaml". DO NOT delete locked biomarkers (bmi, weight, height).
+- START A CONVERSATION: If the user asks general or clinical questions about the biomarkers, answer the question in "text" with precise clinical detail, and return the unmodified YAML.
 
 Make sure your entire output is valid JSON, containing "text", "extractedYaml", "hasMoreMarkers", "remainingText", and "estimatedTotalMarkers".`;
         mockData = {};
       } else if (agentType === "agent1") {
-        systemInstruction = `You are an expert Clinical Data Parser and Conversational Health Assistant.
-Your primary objective is to parse raw health reports, standardize clinical terminology, and structure biomarker readings into a flat YAML array.
+        systemInstruction = `You are an expert Clinical Data Parser and Medical Ontology Agent.
+Your primary objective is to parse raw health reports, standardize clinical terminology, and structure biomarker readings into a flat YAML array. You must preserve mathematical data, qualitative results, lab ranges, and clinical notes exactly as provided.
 
 === CORE TASKS ===
-1. Extraction & Standardization: Convert every biomarker name into its most widely accepted standard clinical terminology (e.g., "Serum alt level" and "Serum alt" must both map to the standardized name "Alanine Aminotransferase (ALT)").
-2. Unit Verification: Validate the unit of measurement (e.g. mmol/L, g/L, %, g/dL). If the incoming unit is standard, keep it. If a unit is missing or non-standard, translate/re-map to the most standard clinical unit based on typical physiological scales. Do not perform conversions, keep the raw numeric value intact but label it with the correct standard unit.
-3. Deduplication Logic:
-   - Merge: If multiple entries for the same biomarker have the exact same log date, keep only the latest reading (by sequence or state) and discard duplicates.
-   - Flag for Deletion: If a record is explicitly marked for deletion, do not include it.
-   - Flag for Review: If a value is biologically impossible/highly anomalous, flag it by adding a comment in YAML (e.g. '# Flagged: anomalous value').
-4. Clinical Mapping: For each biomarker, map it to:
+1. Extraction & Standardization: Parse the incoming raw data. Convert every raw biomarker name into its most widely accepted standard clinical terminology (e.g., "Serum alt level" maps to "Alanine Aminotransferase (ALT)").
+2. Lossless Math & Units (CRITICAL): You are strictly forbidden from performing calculations, unit conversions, or inferring missing units. Extract the exact numerical value and the exact unit provided in the text.
+3. Qualitative Data (CRITICAL): If a result is qualitative (e.g., "Negative", "Trace", "High"), extract it exactly as written.
+4. Dictionary Mapping (MANDATORY): You MUST attempt to map the extracted biomarker name to an existing key within the === EXISTING DATABASE KEYS === list. If a direct synonym or clear clinical equivalent exists in the database keys, use that existing key. ONLY if absent, you may generate a clean snake_case key.
+5. Clinical Mapping: For each biomarker, map it to:
    - riskCategories: Physiological risk categories (e.g., 'Cardiovascular', 'Kidney & hydration', 'Metabolic & glycemic', 'Liver & hepatitis stress', 'Hematology', 'Biometrics', 'Other').
    - standardMedicalGrouping: Main clinical division ('Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Other').
    - potentialMedicalConditions: Broad diagnostic associations.
-5. Explanation of Changes (CRITICAL): For each biomarker, if you standardized, changed, merged, or corrected its name, value, or unit, you MUST provide a detailed explanation of why you made this change in the 'explanation' field of the YAML object. Be highly professional and detailed (e.g., "Standardized raw name 'HAEMOGLOBIN ESTIMATION' to standard 'Hemoglobin' and validated metric as g/L").
+6. Explanation of Changes (CRITICAL): For each biomarker, if you standardized, changed, merged, or corrected its name, value, or unit, you MUST provide a detailed explanation of why you made this change in the 'explanation' field of the YAML object.
+
+=== EXISTING DATABASE KEYS ===
+[${Object.keys(biomarkerDefinitions).join(', ')}]
 
 === FORMAT & SYSTEM RESTRICTIONS ===
 Your output MUST be ONLY valid YAML under the key 'biomarkers'. No markdown code blocks, no backticks, no JSON wrappers. Just return plain YAML.
 
 The flat YAML structure for each item MUST be:
-- key: 'alanine_aminotransferase_alt' # snake_case unique ID
+- key: 'alanine_aminotransferase_alt' # snake_case unique ID (prefer existing database key if possible)
   name: 'Alanine Aminotransferase (ALT)'
   metric: 'U/L'
   value: 45
@@ -1378,7 +1388,7 @@ The flat YAML structure for each item MUST be:
   potentialMedicalConditions:
     - 'Fatty Liver'
     - 'Hepatitis Stress'
-  explanation: 'Standardized from raw alt level and validated metric as U/L.'
+  explanation: 'Standardized from raw alt level and mapped to dictionary key.'
   # Comment if anomalous`;
         mockData = {};
       } else if (agentType === "agent2" || agentType === "agent1_step2") {
@@ -2122,13 +2132,16 @@ Return ONLY raw JSON.`;
     const existingKeys = existingBiomarkers && existingBiomarkers.length > 0 ? existingBiomarkers : [];
     
     let resumeCtx = "";
-    if (req.body.lastProcessedItem) {
-      resumeCtx = `\nPREVIOUS EXTRACTION STATE:\nYou previously stopped at: "${req.body.lastProcessedItem}".\nYou MUST start your next extraction chunk immediately AFTER this item in the user's data.\n`;
+    const lastItem = req.body.lastProcessedRawRow || req.body.lastProcessedItem;
+    if (lastItem) {
+      resumeCtx = `\nPREVIOUS EXTRACTION STATE:\nYou previously stopped at: "${lastItem}".\nYou MUST start your next extraction chunk immediately AFTER this item in the user's data.\n`;
     }
 
     const promptText = `Chat History:\n${historyText}\n${imageCtx}\nUser message: "${message}"${resumeCtx}`;
 
-    const systemInstruction = `You are an expert clinical laboratory data extraction agent. You extract blood biomarker numbers and personal profile data with extreme accuracy. Your response must be an exact single JSON object matching the requested structure. Never add markdown formatting or wrappers like \`\`\`json.
+    const systemInstruction = `You are an expert clinical data parsing agent. Your sole objective is to extract raw, unstructured medical data into a strict JSON schema with absolute, zero-loss accuracy. You are a parser, not an interpreter; do not alter the medical reality of the data.
+
+Never add markdown formatting or wrappers like \`\`\`json.
 
 CURRENT USER PROFILE:
 - Age: ${userProfile?.age || 'Not provided'}
@@ -2141,34 +2154,30 @@ CURRENT USER PROFILE:
 EXISTING DATABASE KEYS ALREADY IN USE: 
 [${existingKeys.join(', ')}]
 
-=== CRITICAL MEDICAL DATA EXTRACTION DIRECTIVE ===
-1. STRICT VERBATIM VALUES: You must extract the exact NUMERIC VALUE provided in the source text. NEVER convert international units to US units (e.g., if the text says 6.5 mmol/L, output exactly 6.5). DO NOT do math.
-2. HANDLING UNITS & NEW KEYS: You MUST ALWAYS append the exact unit from the document to your snake_case key (e.g., "total_cholesterol_mmol_l", "wbc_10_9_l") UNLESS the biomarker semantically matches a key in "EXISTING DATABASE KEYS ALREADY IN USE" AND the unit matches exactly. If the unit differs from an existing key or you don't know the existing key's unit, create a NEW key with the unit appended. DO NOT use generic keys like "total_cholesterol" without a unit appended.
-3. CUSTOM DEFINITIONS: Any time you create a new key, you MUST define it in the 'customBiomarkerDefs' object.
-4. PRESERVE SCALES: If a score is presented as a fraction (e.g., "8 /12"), convert it to the decimal or numerator if the schema requires a number, but note the scale in the customBiomarkerDefs description.
+=== CRITICAL EXTRACTION DIRECTIVES ===
+1. ZERO MATH & STRICT VERBATIM VALUES (CRITICAL): You are strictly forbidden from performing any calculations. NEVER convert international SI units to US units. You must extract the exact numeric digits provided in the source text into \`valueNumeric\`.
+2. LOSSLESS PRESERVATION: You must capture the exact raw string of the test in \`originalTestName\`. You must capture the exact physician or lab note in \`doctorComment\`. You must capture the exact reference range in \`normalRange\`. DO NOT summarize or truncate these fields.
+3. QUALITATIVE DATA: If a result is text (e.g., "NEGATIVE"), place the exact word in \`valueString\` and leave \`valueNumeric\` null.
+4. UNIT ISOLATION: Output the unit in the \`unit\` field. Standardize the typography (e.g., format "mmol" as "mmol/L" if applicable), but NEVER change the fundamental metric.
+5. KEY GENERATION: To prevent database duplicates, generate a clean, concise snake_case \`key\` representing the standard medical name of the test, appending the unit (e.g., "hemoglobin_a1c_mmol_mol"). Prioritize matching an exact key from the "EXISTING DATABASE KEYS" list if applicable.
+6. DATE FORMAT: Convert all dates to strictly "DD-MM-YYYY".
 
-=== MODE ROUTING DIRECTIVE (CRITICAL FOR LONG DATA) ===
-You operate in distinct modes based on the user's input:
+=== MODE ROUTING DIRECTIVE ===
+MODE A: PLAN_EXTRACTION (User uploads new data)
+- Do not extract data yet. Count the total rows/tests. Calculate batches (Max 50 tests per batch).
+- Set mode: "plan", status: "waiting_for_user".
 
-MODE A: PLAN_EXTRACTION (Triggered when user uploads new data)
-- DO NOT extract the data into the 'entries' array yet.
-- Scan the text and estimate the total number of individual biomarker results.
-- Calculate batches required. The MAXIMUM limit is 50 metrics per batch.
-- Set "mode": "plan", "status": "waiting_for_user". Tell the user the plan and ask to proceed.
+MODE B: EXTRACT_CHUNK (User says "Proceed")
+- Extract exactly up to 50 tests into the \`entries\` array. 
+- To maintain your place, record the EXACT raw string of the last row you processed in \`lastProcessedRawRow\`. 
+- Set mode: "extract_chunk".
+- Set status to "needs_continuation" if more rows exist, or "completed" if finished.
 
-MODE B: EXTRACT_CHUNK (Triggered when user says "Proceed" or "Continue" after a plan)
-- Extract data, but STOP exactly when you hit 50 metrics.
-- To avoid losing your place, note the EXACT name and date of the last test extracted in the 'lastProcessedItem' field. On the next turn, you will start immediately AFTER this item.
-- Set "mode": "extract_chunk".
-- If more metrics remain in the document, set "status": "needs_continuation". If you have extracted the very last metric, set "status": "completed".
+MODE C: DISCUSSION / MODIFY
+- Answer questions or output a modificationCommand. Do not extract new chunks. 
+- CRITICAL: If not fully extracted yet, you MUST preserve the "status" as "needs_continuation" and pass the exact same "lastProcessedRawRow" back.
 
-MODE C: DISCUSSION / MODIFY (Triggered if the user asks a question, corrects a mistake midway, or updates profile info)
-- Answer the question or output a modificationCommand array (e.g., changing weight, removing a mistaken log).
-- DO NOT extract new chunk data in this mode.
-- CRITICAL: If the document is not fully extracted yet, you MUST preserve the "status" as "needs_continuation" and pass the exact same "lastProcessedItem" back in your JSON so you don't lose your place for the next turn.
-
-=== JSON SCHEMA STRICT REQUIREMENT ===
-Respond ONLY with a structured JSON format matching this schema exactly. 
+=== STRICT JSON SCHEMA OUTPUT ===
 {
   "mode": "plan" | "extract_chunk" | "discussion" | "modify",
   "status": "completed" | "needs_continuation" | "waiting_for_user",
@@ -2176,37 +2185,33 @@ Respond ONLY with a structured JSON format matching this schema exactly.
   
   "planningDetails": {
     "estimatedTotalMetrics": number | null,
-    "batchesRequired": number | null,
-    "maxMetricsPerBatch": 50
+    "batchesRequired": number | null
   },
   
-  "lastProcessedItem": "String: The Date and Test Name of the last item extracted (e.g., '05-Jun-2026 HbA1c'). Preserve this if chatting midway. Leave null if in plan mode.",
+  "lastProcessedRawRow": "The exact raw text of the 50th item you processed so you know where to resume. Null if planning.",
   
-  "modificationCommand": [
-    {
-      "action": "update_biomarker" | "update_profile" | "remove_biomarker",
-      "keyName": "Literal name of the key (e.g., 'weight', 'ldl', 'serum_sodium_mmol_l')",
-      "newValue": "The new numeric value or string",
-      "date": "YYYY-MM-DD (Only required if updating a biomarker)"
-    }
-  ],
-  "profileUpdates": {
-     "age": 0, "weight": 0, "height": 0, "ethnicity": "string", "bloodType": "string", "gender": "string"
-  },
+  "modificationCommand": [],
+  "profileUpdates": {},
+  
   "entries": [
     {
-      "date": "YYYY-MM-DD string",
-      "biomarkers": {
-        "ldl": 4.3,
-        "serum_sodium_mmol_l": 143
-      }
+      "date": "DD-MM-YYYY",
+      "tests": [
+        {
+          "key": "hemoglobin_a1c_mmol_mol",
+          "originalTestName": "HbA1c levl - IFCC standardised",
+          "valueNumeric": 40,
+          "valueString": null,
+          "unit": "mmol/mol",
+          "normalRange": "20 - 41 mmol/mol",
+          "doctorComment": "(AlyssaFRS) - 01. Satisfactory - No Action"
+        }
+      ]
     }
   ],
   "customBiomarkerDefs": {
-    "new_custom_key_mmol_l": {
+    "key_name": {
       "name": "Human Readable Name",
-      "unit": "Exact unit from text",
-      "normalRange": "Extracted range, or 'Unknown'",
       "description": "Short medical explanation."
     }
   }
@@ -2230,7 +2235,35 @@ Note: If mode is not "extract_chunk", leave 'entries' and 'customBiomarkerDefs' 
       throw parseErr;
     }
 
-    // Backward compatibility: If the AI returns old single date format, map it to entries
+    const localToYYYYMMDD = (dateStr: string): string => {
+      if (!dateStr) return '';
+      const trimmed = dateStr.trim();
+      const yyyymmddMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (yyyymmddMatch) {
+        const year = yyyymmddMatch[1];
+        const month = yyyymmddMatch[2].padStart(2, '0');
+        const day = yyyymmddMatch[3].padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+      if (ddmmyyyyMatch) {
+        const day = ddmmyyyyMatch[1].padStart(2, '0');
+        const month = ddmmyyyyMatch[2].padStart(2, '0');
+        const year = ddmmyyyyMatch[3];
+        return `${year}-${month}-${day}`;
+      }
+      try {
+        const d = new Date(trimmed);
+        if (!isNaN(d.getTime())) {
+          const year = String(d.getFullYear());
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+      } catch (e) {}
+      return trimmed;
+    };
+
     let finalEntries = parsedData.entries || [];
     if (finalEntries.length === 0 && parsedData.biomarkers && Object.keys(parsedData.biomarkers).length > 0) {
       finalEntries = [{
@@ -2239,12 +2272,35 @@ Note: If mode is not "extract_chunk", leave 'entries' and 'customBiomarkerDefs' 
       }];
     }
 
+    finalEntries = finalEntries.map((entry: any) => {
+      const formattedDate = entry.date ? localToYYYYMMDD(entry.date) : null;
+      if (entry.tests && Array.isArray(entry.tests)) {
+        const biomarkersObj: { [key: string]: number | string } = {};
+        entry.tests.forEach((t: any) => {
+          if (t.key) {
+            biomarkersObj[t.key] = t.valueNumeric !== null && t.valueNumeric !== undefined ? t.valueNumeric : (t.valueString || "");
+          }
+        });
+        return {
+          ...entry,
+          date: formattedDate,
+          originalDate: entry.date,
+          biomarkers: biomarkersObj
+        };
+      }
+      return {
+        ...entry,
+        date: formattedDate
+      };
+    });
+
     res.json({
       text: parsedData.message || parsedData.summary || 'Extraction generated.',
       mode: parsedData.mode || 'new_log',
       status: parsedData.status,
       planningDetails: parsedData.planningDetails,
-      lastProcessedItem: parsedData.lastProcessedItem,
+      lastProcessedItem: parsedData.lastProcessedRawRow || parsedData.lastProcessedItem || null,
+      lastProcessedRawRow: parsedData.lastProcessedRawRow || parsedData.lastProcessedItem || null,
       modificationCommand: parsedData.modificationCommand || [],
       entries: finalEntries,
       profile: parsedData.profileUpdates || parsedData.profile || {},
@@ -2657,6 +2713,102 @@ app.post("/api/gemini/insight-analyze", async (req, res) => {
 });
 
 // Gemini Food Idea Endpoint
+      app.post("/api/gemini/route-biomarker", async (req, res) => {
+        try {
+          const { key, originalName, allApprovedKeys } = req.body;
+          const systemInstruction = `You are an automated Medical Ontology and Database Router. Your critical task is to map a newly discovered, unmapped biomarker key to a structured list of approved Master Database Keys, OR dynamically mint an entirely new standard definition if a clinical mismatch occurs.
+
+=== DIRECTIVES ===
+1. ANALYSIS: Evaluate the incoming INPUT_KEY and INPUT_ORIGINAL_NAME. 
+2. MATCH ALIAS: If the incoming item is clearly an abbreviation, synonym, or alternate naming convention for a metric inside the === CURRENT MASTER DATABASE KEYS === array, select that key and set isNew to false.
+3. ONTOLOGY EXPANSION (CREATE NEW): If the incoming item represents a clinical test completely absent from the current master list, generate a clean, standardized, universal lowercase snake_case database key. Set isNew to true.
+4. CLINICAL DATA SCHEMA: If creating a new key (isNew: true), you must populate standard human-readable naming, medical groupings, and associations based on strict clinical guidelines. If mapping to an existing key, leave these fields as null.
+
+INPUT_KEY: "${key}"
+INPUT_ORIGINAL_NAME: "${originalName}"
+
+=== VALID MEDICAL GROUPINGS ===
+Choose from exactly one: ['Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Cardiovascular', 'Immune', 'Other']
+
+=== VALID RISK CATEGORIES ===
+Choose an array from: ['Cardiovascular', 'Kidney & hydration', 'Metabolic & glycemic', 'Liver & hepatitis stress', 'Hematology', 'Biometrics', 'Other']
+
+=== CURRENT MASTER DATABASE KEYS ===
+[${allApprovedKeys.join(', ')}]
+
+=== SYSTEM CONSTRAINTS ===
+Return ONLY a valid, minified JSON object. Do not provide explanations, markdown blocks, formatting wrappers, or text outside the JSON boundaries.
+
+=== MANDATED JSON OUTPUT SCHEMA ===
+{
+  "mappedKey": "The existing matched key, OR the newly generated snake_case key string",
+  "isNew": boolean,
+  "standardName": "Clean Title Case Human Readable Name (Only if isNew is true, else null)",
+  "standardMedicalGrouping": "String matching valid groupings (Only if isNew is true, else null)",
+  "riskCategories": ["Array of strings matching valid risk categories"] (Only if isNew is true, else null),
+  "potentialMedicalConditions": ["Array of broad diagnostic associations"] (Only if isNew is true, else null)
+}`;
+          
+          const textOutput = await callUnifiedLLM({
+            modelId: "gemini-3.5-flash",
+            systemInstruction,
+            promptText: "Please map the biomarker.",
+            responseMimeType: "application/json"
+          });
+          
+          let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+          res.json(JSON.parse(cleanJson));
+        } catch (e) {
+          console.error(e);
+          res.status(500).json({ error: "Failed to route biomarker" });
+        }
+      });
+
+      app.post("/api/gemini/route-chat", async (req, res) => {
+        try {
+          const { messages, selectedBiomarkers, allApprovedKeys } = req.body;
+          const systemInstruction = `You are the Medical Ontology Route Agent, an expert clinical data and database architect.
+Your task is to chat with the user to help them map their newly extracted biomarkers (unmapped) to the existing Master Database Keys, or decide if they should be added as new standard keys.
+
+=== MASTER DATABASE KEYS ===
+[${allApprovedKeys.join(', ')}]
+
+=== CHOSEN BIOMARKERS TO DISCUSS ===
+${JSON.stringify(selectedBiomarkers, null, 2)}
+
+=== YOUR OBJECTIVES ===
+1. Be clinical, friendly, and expert. Explain synonyms clearly (e.g. why "HbA1c" matches "hemoglobin_a1c").
+2. Guide the user in consolidating their biomarkers.
+3. If you can suggest a mapping for any or all of the chosen biomarkers, include a 'suggestedMapping' object in your JSON output. The keys of this object should be the chosen biomarker keys/names, and the values should be the target master keys (existing or newly proposed clean snake_case keys).
+
+=== RESPONSE FORMAT ===
+You MUST return a JSON object with the following schema:
+{
+  "text": "Your conversational response here (supports markdown formatting). Explain your reasoning clearly.",
+  "suggestedMapping": { "source_key": "target_key" } // (Optional) set this when you are recommending a specific mapping/consolidation.
+}`;
+
+          const lastMessage = messages[messages.length - 1];
+          const historyText = messages.slice(0, messages.length - 1)
+            .map((m: any) => `${m.role === 'user' ? 'User' : 'Model'}: ${m.content}`)
+            .join('\n');
+
+          const promptText = `Chat History:\n${historyText}\n\nUser's latest message: "${lastMessage.content}"`;
+
+          const textOutput = await callUnifiedLLM({
+            modelId: "gemini-2.5-flash",
+            systemInstruction,
+            promptText,
+            responseMimeType: "application/json"
+          });
+
+          let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+          res.json(JSON.parse(cleanJson));
+        } catch (e) {
+          console.error(e);
+          res.status(500).json({ error: "Failed to process route chat" });
+        }
+      });
 app.post("/api/gemini/food-idea", async (req, res) => {
   addDebugLog(`[FoodIdea] Starting food-idea suggestion process.`);
   try {

@@ -2178,22 +2178,58 @@ export default function LogChat({
                                   <span className="text-slate-500 dark:text-slate-400 font-bold text-[10px] uppercase">Record Date</span>
                                   <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">{entry.date || 'Unknown Date'}</span>
                                 </div>
-                                {entry.biomarkers && typeof entry.biomarkers === 'object' && Object.entries(entry.biomarkers).map(([key, val]) => {
-                                  const def = biomarkerDefinitions.find(d => d.key === key);
-                                  const customDef = msg.pendingProfile?.customBiomarkers?.[key] || profile?.customBiomarkers?.[key];
-                                  const name = def?.name || customDef?.name || key;
-                                  const unit = def?.unit || customDef?.unit || '';
-                                  return (
-                                    <div key={key} className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-800/20 text-xs px-2">
-                                      <span className="text-slate-600 dark:text-slate-400 font-medium">
-                                        {name}
-                                      </span>
-                                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                                        {val} {String(val).includes(unit) ? '' : unit}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
+                                {entry.tests && Array.isArray(entry.tests) ? (
+                                  entry.tests.map((test: any, tIdx: number) => {
+                                    const def = biomarkerDefinitions.find(d => d.key === test.key);
+                                    const customDef = msg.pendingProfile?.customBiomarkers?.[test.key] || profile?.customBiomarkers?.[test.key];
+                                    const name = def?.name || customDef?.name || test.key;
+                                    const displayValue = test.valueNumeric !== null && test.valueNumeric !== undefined ? test.valueNumeric : (test.valueString || "");
+                                    return (
+                                      <div key={`${test.key || 'test'}_${tIdx}`} className="border-b border-slate-100 dark:border-slate-800/30 py-2 text-xs px-2 space-y-1">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-slate-700 dark:text-slate-300 font-semibold">{name}</span>
+                                          <span className="font-mono font-bold text-slate-950 dark:text-slate-50">
+                                            {displayValue} {test.unit || ""}
+                                          </span>
+                                        </div>
+                                        {test.originalTestName && test.originalTestName !== name && (
+                                          <div className="text-[10px] text-slate-400 dark:text-slate-500">
+                                            Original name: <span className="italic">{test.originalTestName}</span>
+                                          </div>
+                                        )}
+                                        {test.normalRange && (
+                                          <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                            <span className="font-medium">Ref Range:</span>
+                                            <span className="font-mono">{test.normalRange}</span>
+                                          </div>
+                                        )}
+                                        {test.doctorComment && (
+                                          <div className="text-[10px] bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 p-1.5 rounded mt-1 border border-indigo-100/30 leading-relaxed">
+                                            <span className="font-bold uppercase tracking-wider text-[8px] mr-1">Note:</span>
+                                            {test.doctorComment}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })
+                                ) : (
+                                  entry.biomarkers && typeof entry.biomarkers === 'object' && Object.entries(entry.biomarkers).map(([key, val]) => {
+                                    const def = biomarkerDefinitions.find(d => d.key === key);
+                                    const customDef = msg.pendingProfile?.customBiomarkers?.[key] || profile?.customBiomarkers?.[key];
+                                    const name = def?.name || customDef?.name || key;
+                                    const unit = def?.unit || customDef?.unit || '';
+                                    return (
+                                      <div key={key} className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-800/20 text-xs px-2">
+                                        <span className="text-slate-600 dark:text-slate-400 font-medium">
+                                          {name}
+                                        </span>
+                                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                                          {val} {String(val).includes(unit) ? '' : unit}
+                                        </span>
+                                      </div>
+                                    );
+                                  })
+                                )}
                               </div>
                             ))}
                           </>

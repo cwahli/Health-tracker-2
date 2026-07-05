@@ -1,34 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { UserProfile } from '../types';
 
-export default function GoogleHealthIntegration() {
+interface GoogleHealthProps {
+  profile?: UserProfile | null;
+}
+
+export default function GoogleHealthIntegration({ profile }: GoogleHealthProps) {
   const [googleSteps, setGoogleSteps] = useState<number | null>(null);
   const [healthApiStatus, setHealthApiStatus] = useState<string>('');
 
+  const emailSuffix = profile?.email ? `_${profile.email.toLowerCase().trim()}` : '_guest';
+
   useEffect(() => {
-    const saved = localStorage.getItem('googleSteps');
+    const saved = localStorage.getItem(`googleSteps${emailSuffix}`);
     if (saved) setGoogleSteps(parseInt(saved, 10));
+    else setGoogleSteps(null);
     
     const handleUpdate = () => {
-      const updated = localStorage.getItem('googleSteps');
+      const updated = localStorage.getItem(`googleSteps${emailSuffix}`);
       if (updated) setGoogleSteps(parseInt(updated, 10));
       else setGoogleSteps(null);
     };
     window.addEventListener('googleStepsUpdated', handleUpdate);
 
     // Auto-fetch steps if token exists
-    const token = localStorage.getItem('ghealth_access_token');
+    const token = localStorage.getItem(`ghealth_access_token${emailSuffix}`);
     if (token) {
        fetchSteps(token);
+    } else {
+       setHealthApiStatus('');
     }
 
     return () => window.removeEventListener('googleStepsUpdated', handleUpdate);
-  }, []);
+  }, [emailSuffix]);
 
   const fetchSteps = async (accessToken?: string, isRetry = false) => {
     try {
       if (!isRetry) setHealthApiStatus("Syncing steps...");
-      const token = accessToken || localStorage.getItem('ghealth_access_token');
+      const token = accessToken || localStorage.getItem(`ghealth_access_token${emailSuffix}`);
       if (!token) throw new Error("No access token found.");
 
       const localNow = new Date();
@@ -50,7 +60,7 @@ export default function GoogleHealthIntegration() {
       if (!res.ok) {
         if (res.status === 401 || (stepsData.error && String(stepsData.error).includes('invalid_token'))) {
           if (!isRetry) {
-            const refreshToken = localStorage.getItem('ghealth_refresh_token');
+            const refreshToken = localStorage.getItem(`ghealth_refresh_token${emailSuffix}`);
             if (refreshToken) {
               setHealthApiStatus("Refreshing token...");
               const refreshRes = await fetch('/api/health-connect/refresh', {
@@ -60,16 +70,16 @@ export default function GoogleHealthIntegration() {
               });
               const refreshData = await refreshRes.json();
               if (refreshRes.ok && refreshData.access_token) {
-                localStorage.setItem('ghealth_access_token', refreshData.access_token);
+                localStorage.setItem(`ghealth_access_token${emailSuffix}`, refreshData.access_token);
                 if (refreshData.refresh_token) {
-                  localStorage.setItem('ghealth_refresh_token', refreshData.refresh_token);
+                  localStorage.setItem(`ghealth_refresh_token${emailSuffix}`, refreshData.refresh_token);
                 }
                 return fetchSteps(refreshData.access_token, true);
               }
             }
           }
           // If retry failed or no refresh token, log out
-          localStorage.removeItem('ghealth_access_token');
+          localStorage.removeItem(`ghealth_access_token${emailSuffix}`);
           throw new Error("Session expired. Please reconnect.");
         }
         throw new Error(stepsData.error || "Failed to fetch steps from Google Fit");
@@ -77,19 +87,19 @@ export default function GoogleHealthIntegration() {
 
       if (stepsData.steps !== undefined) {
         setGoogleSteps(stepsData.steps);
-        localStorage.setItem('googleSteps', String(stepsData.steps));
+        localStorage.setItem(`googleSteps${emailSuffix}`, String(stepsData.steps));
         window.dispatchEvent(new Event('googleStepsUpdated'));
         if (stepsData.sevenDayAverage !== undefined) {
-          localStorage.setItem('googleStepsAverage', String(stepsData.sevenDayAverage));
+          localStorage.setItem(`googleStepsAverage${emailSuffix}`, String(stepsData.sevenDayAverage));
         }
         if (stepsData.lastActiveDaySteps !== undefined) {
-          localStorage.setItem('lastActiveDaySteps', String(stepsData.lastActiveDaySteps));
+          localStorage.setItem(`lastActiveDaySteps${emailSuffix}`, String(stepsData.lastActiveDaySteps));
         }
         if (stepsData.lastActiveDayTimestamp !== undefined) {
-          localStorage.setItem('lastActiveDayTimestamp', stepsData.lastActiveDayTimestamp);
+          localStorage.setItem(`lastActiveDayTimestamp${emailSuffix}`, stepsData.lastActiveDayTimestamp);
         }
         if (stepsData.history) {
-          localStorage.setItem('googleStepsHistory', JSON.stringify(stepsData.history));
+          localStorage.setItem(`googleStepsHistory${emailSuffix}`, JSON.stringify(stepsData.history));
         }
         setHealthApiStatus("Successfully connected and synced steps!");
       }
@@ -108,17 +118,17 @@ export default function GoogleHealthIntegration() {
     };
 
     const fetchStepsWithToken = async (tokens: any) => {
-      localStorage.setItem('ghealth_access_token', tokens.access_token);
+      localStorage.setItem(`ghealth_access_token${emailSuffix}`, tokens.access_token);
       if (tokens.refresh_token) {
-        localStorage.setItem('ghealth_refresh_token', tokens.refresh_token);
+        localStorage.setItem(`ghealth_refresh_token${emailSuffix}`, tokens.refresh_token);
       }
       await fetchSteps(tokens.access_token);
       cleanup();
     };
 
     try {
-      localStorage.removeItem('ghealth_auth_status');
-      localStorage.removeItem('ghealth_tokens');
+      localStorage.removeItem(`ghealth_auth_status${emailSuffix}`);
+      localStorage.removeItem(`ghealth_tokens${emailSuffix}`);
 
       setHealthApiStatus("Initiating OAuth consent flow...");
       const res = await fetch('/api/health-connect/url');
@@ -140,11 +150,11 @@ export default function GoogleHealthIntegration() {
       window.addEventListener('message', messageListener);
 
       pollTimer = setInterval(async () => {
-        const status = localStorage.getItem('ghealth_auth_status');
+        const status = localStorage.getItem(`ghealth_auth_status${emailSuffix}`);
         if (status === 'SUCCESS') {
-          localStorage.removeItem('ghealth_auth_status');
-          const tokensStr = localStorage.getItem('ghealth_tokens');
-          localStorage.removeItem('ghealth_tokens');
+          localStorage.removeItem(`ghealth_auth_status${emailSuffix}`);
+          const tokensStr = localStorage.getItem(`ghealth_tokens${emailSuffix}`);
+          localStorage.removeItem(`ghealth_tokens${emailSuffix}`);
           if (tokensStr) {
             try {
               const tokens = JSON.parse(tokensStr);
@@ -211,8 +221,12 @@ export default function GoogleHealthIntegration() {
             <button
               onClick={() => {
                 setGoogleSteps(null);
-                localStorage.removeItem('googleSteps');
-                localStorage.removeItem('ghealth_access_token');
+                localStorage.removeItem(`googleSteps${emailSuffix}`);
+                localStorage.removeItem(`googleStepsAverage${emailSuffix}`);
+                localStorage.removeItem(`lastActiveDaySteps${emailSuffix}`);
+                localStorage.removeItem(`lastActiveDayTimestamp${emailSuffix}`);
+                localStorage.removeItem(`googleStepsHistory${emailSuffix}`);
+                localStorage.removeItem(`ghealth_access_token${emailSuffix}`);
                 setHealthApiStatus("");
                 window.dispatchEvent(new Event('googleStepsUpdated'));
               }}

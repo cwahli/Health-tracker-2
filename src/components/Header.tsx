@@ -125,6 +125,27 @@ export default function Header({
   const [logsSendStatus, setLogsSendStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [showFullScreenDebugLogs, setShowFullScreenDebugLogs] = useState(false);
 
+  // Keep track of last sync time in local state
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(() => {
+    const email = profile?.email?.toLowerCase().trim() || 'guest';
+    return localStorage.getItem(`ghealth_${email}_last_sync`);
+  });
+
+  // Whenever syncState changes to 'synced', update last sync time to now
+  useEffect(() => {
+    if (syncState === 'synced') {
+      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const email = profile?.email?.toLowerCase().trim() || 'guest';
+      localStorage.setItem(`ghealth_${email}_last_sync`, nowStr);
+      setLastSyncTime(nowStr);
+    }
+  }, [syncState, profile?.email]);
+
+  useEffect(() => {
+    const email = profile?.email?.toLowerCase().trim() || 'guest';
+    setLastSyncTime(localStorage.getItem(`ghealth_${email}_last_sync`));
+  }, [profile?.email]);
+
   // Google Drive & Sheets Backup / Restore States
   const [googleAuthorized, setGoogleAuthorized] = useState(() => hasGoogleToken());
   const [showBackupModal, setShowBackupModal] = useState(false);
@@ -437,13 +458,27 @@ export default function Header({
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          {lastSyncTime && (
+            <span
+              onClick={() => setShowDbInteractionsOverlay(true)}
+              className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 cursor-pointer hover:underline hover:text-indigo-600 transition-colors"
+              title="Click to view detailed database sync log"
+            >
+              Sync: {lastSyncTime}
+            </span>
+          )}
+
           {/* Sync Status Icon Indicator */}
           <button
             id="cloud-sync-btn"
-            onClick={() => setShowDbInteractionsOverlay(true)}
+            onClick={async () => {
+              if (onCloudSync) {
+                await onCloudSync();
+              }
+            }}
             className="flex items-center p-2 rounded-xl text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer relative"
-            title="View database synchronization & diagnostics"
+            title="Click to manually synchronize data with cloud database"
           >
             {syncState === 'syncing' && (
               <RefreshCw className="w-5 h-5 text-indigo-600 animate-spin" />
@@ -646,7 +681,7 @@ export default function Header({
             {/* Preferences & Session */}
             <div className="col-span-2 border-t border-slate-100 dark:border-slate-800/85 mt-2 pt-3 text-left">
               <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Google Health Integration</span>
-              <GoogleHealthIntegration />
+              <GoogleHealthIntegration profile={profile} />
               
               <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4">Preferences & Session</span>
               <div className="grid grid-cols-2 gap-3 mb-4">
