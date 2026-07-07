@@ -279,7 +279,7 @@ function detectBiomarkersInText(text: string): string[] {
 
 interface LogChatProps {
   key?: string;
-  type: 'food' | 'medical' | 'food_idea';
+  type: 'food' | 'medical' | 'food_idea' | 'daily_recommendation';
   profile?: UserProfile | null;
   isOpen: boolean;
   selectedModelId: string;
@@ -298,11 +298,13 @@ interface LogChatProps {
   biomarkers?: { [key: string]: number | string };
   foodLogs?: FoodLog[];
   report?: any;
+  actions?: any[];
+  googleSteps?: number | null;
   agentType?: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent6' | 'agent7' | 'data_review' | null;
   biomarkerHistory?: any[];
   onAgentFinish?: (agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent6' | 'agent7' | 'data_review', agentResult: any) => Promise<void>;
   onAgentAnalysisSaved?: (agentType: string, agentResult: any) => Promise<void>;
-  onGoToManualEdit?: () => void;
+  onGoToManualEdit?: (errorMsg?: string) => void;
   autoSendMessage?: string | null;
   dataReviewBatchIdx?: number | string | null;
   batchSize?: number;
@@ -331,6 +333,8 @@ export default function LogChat({
   biomarkers,
   foodLogs,
   report,
+  actions = [],
+  googleSteps = null,
   agentType = null,
   biomarkerHistory = [],
   onAgentFinish,
@@ -423,7 +427,9 @@ export default function LogChat({
           ? 'Hello! Tell me or upload a photo of what you are planning to eat, and I will analyze its health benefits, risk factors, and full 30 nutrient breakdown based on your profile.'
           : type === 'food_idea'
             ? 'Hello! Do you have any specific food preferences or cravings today? I will need your location to find the best dining options matching your biomarker goals.'
-            : agentType === 'agent1'
+            : type === 'daily_recommendation'
+              ? 'Hello! I am your AI Health Coach. Let me look at your clinical biomarkers, daily steps, and latest dietary intake to give you a customized, comprehensive health recommendation today.'
+              : agentType === 'agent1'
               ? 'Hello! I am the Clinical Data Parser. I extract biomarkers and readings from raw text or reports into a structured format.'
               : agentType === 'agent2'
                 ? 'Hello! I am the Clinical Ontologist. I map extracted biomarkers to clinical conditions and physiological risk categories.'
@@ -636,7 +642,7 @@ export default function LogChat({
       const unit = customDef?.unit || def?.unit || '';
       const name = customDef?.name || def?.name || key;
       
-      const status = getBiomarkerStatus(key, val, normalRange);
+      const status = getBiomarkerStatus(key, val, normalRange, customDef || def, profile);
       if (status === 'high' || status === 'low' || status === 'critical') {
         list.push({
           key,
@@ -816,6 +822,7 @@ export default function LogChat({
       let endpoint = '';
       if (type === 'food') endpoint = '/api/gemini/food-analyze';
       else if (type === 'food_idea') endpoint = '/api/gemini/food-idea';
+      else if (type === 'daily_recommendation') endpoint = '/api/gemini/daily-recommendation-chat';
       else endpoint = '/api/gemini/medical-analyze';
 
       const lightProfile = profile ? { ...profile } as any : null;
@@ -832,7 +839,8 @@ export default function LogChat({
         delete lightProfile.language;
       }
 
-      const lastWelcomeIndex = messages.length - 1 - [...messages].reverse().findIndex(m => m.id.startsWith('welcome_'));
+      const revIdx = [...messages].reverse().findIndex(m => m.id.startsWith('welcome_'));
+      const lastWelcomeIndex = revIdx >= 0 ? messages.length - 1 - revIdx : -1;
       const activeSessionIdx = lastWelcomeIndex >= 0 ? lastWelcomeIndex : 0;
       
       const bodyData: any = {
@@ -867,7 +875,7 @@ export default function LogChat({
         if (lastFoodLog) {
           bodyData.activeMeal = lastFoodLog;
         }
-        bodyData.biomarkersNeedingImprovement = outOfRangeBiomarkers.map(b => `${b.name} is ${getBiomarkerStatusLabel(b.key, b.status, profile?.customBiomarkers?.[b.key], b.value).toUpperCase()} (${b.value} ${b.unit}, normal range: ${b.normalRange})`);
+        bodyData.biomarkersNeedingImprovement = outOfRangeBiomarkers.map(b => `${b.name} is ${getBiomarkerStatusLabel(b.key, b.status, profile?.customBiomarkers?.[b.key], b.value, profile).toUpperCase()} (${b.value} ${b.unit}, normal range: ${b.normalRange})`);
         bodyData.remainingAllowance = {
           calories: remainingAllowance.calories,
           caloriesTarget: remainingAllowance.caloriesTarget,
@@ -876,6 +884,58 @@ export default function LogChat({
           sodium: remainingAllowance.sodium,
           sodiumTarget: remainingAllowance.sodiumTarget,
         };
+      } else if (type === 'daily_recommendation') {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+        const monthPrefix = `${currentYear}-${currentMonth}`;
+
+        // Filter food logs for this month
+        const thisMonthFoodLogs = (foodLogs || []).filter(f => f.date && f.date.startsWith(monthPrefix));
+
+        // Group by day
+        const dailyNutrientIntake: { [date: string]: { [nutrient: string]: number } } = {};
+        thisMonthFoodLogs.forEach(log => {
+          const d = log.date;
+          if (!dailyNutrientIntake[d]) {
+            dailyNutrientIntake[d] = {
+              calories: 0,
+              protein: 0,
+              saturatedFat: 0,
+              sodium: 0,
+              carbohydrates: 0,
+              totalFat: 0
+            };
+          }
+          const nut = (log.nutrients || {}) as any;
+          dailyNutrientIntake[d].calories += Number(nut.calories || 0);
+          dailyNutrientIntake[d].protein += Number(nut.protein || 0);
+          dailyNutrientIntake[d].saturatedFat += Number(nut.saturatedFat || 0);
+          dailyNutrientIntake[d].sodium += Number(nut.sodium || 0);
+          dailyNutrientIntake[d].carbohydrates += Number(nut.carbohydrates || 0);
+          dailyNutrientIntake[d].totalFat += Number(nut.totalFat || 0);
+        });
+
+        const emailSuffix = profile?.email ? `_${profile.email.toLowerCase().trim()}` : '_guest';
+        const stepsHistoryStr = localStorage.getItem(`googleStepsHistory${emailSuffix}`);
+        let stepsHistory: { date: string, value: number }[] = [];
+        if (stepsHistoryStr) {
+          try {
+            stepsHistory = JSON.parse(stepsHistoryStr);
+          } catch (e) {}
+        }
+        const thisMonthSteps = stepsHistory.filter(h => h.date && h.date.startsWith(monthPrefix));
+
+        bodyData.foodLogs = (foodLogs || []).map(f => ({ name: f.name, date: f.date, nutrients: f.nutrients }));
+        bodyData.biomarkers = biomarkers;
+        bodyData.report = report;
+        bodyData.actions = actions;
+        bodyData.steps = googleSteps;
+        bodyData.location = loc;
+        bodyData.thisMonthTrends = {
+          dailyNutrientIntake,
+          stepsHistory: thisMonthSteps
+        };
       } else if (type === 'food_idea') {
         bodyData.location = loc;
         bodyData.recentMeals = (foodLogs || []).slice(-20).map(f => f.name);
@@ -883,7 +943,7 @@ export default function LogChat({
         bodyData.currency = currency;
         bodyData.maxDistance = maxDistance;
         bodyData.outOfRangeBiomarkers = outOfRangeBiomarkers;
-        bodyData.biomarkersNeedingImprovement = outOfRangeBiomarkers.map(b => `${b.name} is ${getBiomarkerStatusLabel(b.key, b.status, profile?.customBiomarkers?.[b.key], b.value).toUpperCase()} (${b.value} ${b.unit}, normal range: ${b.normalRange})`);
+        bodyData.biomarkersNeedingImprovement = outOfRangeBiomarkers.map(b => `${b.name} is ${getBiomarkerStatusLabel(b.key, b.status, profile?.customBiomarkers?.[b.key], b.value, profile).toUpperCase()} (${b.value} ${b.unit}, normal range: ${b.normalRange})`);
         
         // Fetch real places from Overpass API (client-side bypasses container blocks)
         if (loc) {
@@ -976,6 +1036,15 @@ export default function LogChat({
               };
             });
             bodyData.batchIdx = dataReviewBatchIdx;
+
+            // Unit Enforcement Check
+            if (currentStep === 'data_review') {
+              const missing = bodyData.batchBiomarkers.filter((bm: any) => !bm.unit || bm.unit.trim() === '');
+              if (missing.length > 0) {
+                const names = missing.map((bm: any) => bm.name).join(', ');
+                throw new Error(`The following biomarkers in this batch are missing clinical units: ${names}. Please configure their units in the Reference Ranges / Calibration tab under Insights before executing calibration.`);
+              }
+            }
           }
         }
       }
@@ -1088,7 +1157,7 @@ export default function LogChat({
         ]);
         if (onGoToManualEdit) {
           setTimeout(() => {
-            onGoToManualEdit();
+            onGoToManualEdit("The AI agent is not available. Please enter the food details manually.");
           }, 800);
         }
       } else {
@@ -1109,7 +1178,7 @@ export default function LogChat({
   };
 
   useEffect(() => {
-    if (isOpen && autoSendMessage && type === 'medical') {
+    if (isOpen && autoSendMessage && (type === 'medical' || type === 'daily_recommendation')) {
       if (agentType === 'data_review') {
         setInputText(autoSendMessage);
         return;
@@ -1545,7 +1614,7 @@ export default function LogChat({
                             <div key={b.key} className="flex items-center justify-between font-size-xs font-mono bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-950/30 px-2 py-1 rounded-lg">
                               <span className="font-sans font-bold text-slate-700 dark:text-slate-300">{b.name}</span>
                               <span className="text-rose-600 dark:text-rose-450 font-black">
-                                {b.value} {b.unit} ({getBiomarkerStatusLabel(b.key, b.status, profile?.customBiomarkers?.[b.key], b.value).toUpperCase()})
+                                {b.value} {b.unit} ({getBiomarkerStatusLabel(b.key, b.status, profile?.customBiomarkers?.[b.key], b.value, profile).toUpperCase()})
                               </span>
                             </div>
                           ))}
@@ -1642,7 +1711,8 @@ export default function LogChat({
           )}
 
           {(() => {
-            const lastWelcomeIndex = messages.length - 1 - [...messages].reverse().findIndex(m => m.id.startsWith('welcome_'));
+            const revIdx = [...messages].reverse().findIndex(m => m.id.startsWith('welcome_'));
+            const lastWelcomeIndex = revIdx >= 0 ? messages.length - 1 - revIdx : -1;
             const sessionStartIdx = lastWelcomeIndex >= 0 ? lastWelcomeIndex : 0;
             const pastCount = sessionStartIdx;
             const hasPastMessages = pastCount > 0;
@@ -1667,12 +1737,7 @@ export default function LogChat({
                           <button 
                             type="button"
                             onClick={() => {
-                              const lastWelcome = messages.findLast(m => m.id.startsWith('welcome_'));
-                              if (lastWelcome) {
-                                setMessages([lastWelcome]);
-                              } else {
-                                setMessages([messages[messages.length - 1]]);
-                              }
+                              setMessages(messages.slice(sessionStartIdx));
                               setShowPastDiscussion(false);
                             }}
                             className="p-1.5 rounded-xl bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-slate-800/40 hover:bg-rose-100 dark:hover:bg-rose-900/30 text-rose-500 hover:text-rose-600 transition-colors"
@@ -1709,11 +1774,11 @@ export default function LogChat({
                   )}
                   <div className="w-full leading-relaxed font-size-body text-slate-850 dark:text-slate-100 font-medium break-words overflow-x-hidden bg-transparent border-none shadow-none">
                     {msg.imageUrls && msg.imageUrls.length > 0 ? (
-                      <div className="mb-2 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700/30 max-w-full">
+                      <div className="mb-2 overflow-hidden border-y sm:border border-slate-200 dark:border-slate-700/30 w-[calc(100%+2.5rem)] -mx-5 sm:mx-0 sm:w-full sm:rounded-xl">
                         <ImageSlider images={msg.imageUrls} altText="Attached meal pictures" />
                       </div>
                     ) : msg.imageUrl ? (
-                      <div className="mb-2 rounded-lg overflow-hidden border border-white/10 max-h-40 max-w-full">
+                      <div className="mb-2 overflow-hidden border-y sm:border border-slate-200 dark:border-slate-700/30 max-h-40 w-[calc(100%+2.5rem)] -mx-5 sm:mx-0 sm:w-full sm:rounded-xl">
                         <img src={msg.imageUrl} alt="Attached meal" className="w-full h-full object-cover" />
                       </div>
                     ) : null}
@@ -1725,7 +1790,7 @@ export default function LogChat({
                           type="button"
                           onClick={() => {
                             if (onGoToManualEdit) {
-                              onGoToManualEdit();
+                              onGoToManualEdit("The AI agent is not available. Please enter the food details manually.");
                             }
                           }}
                           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md flex items-center gap-1.5"
@@ -1776,6 +1841,18 @@ export default function LogChat({
                         </button>
                       </div>
                     )}
+                    {msg.id.startsWith('welcome_') && type === 'daily_recommendation' && (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() => handleSend("What's up today?")}
+                          disabled={isAnalyzing}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md flex items-center gap-1.5"
+                        >
+                          What's up today?
+                        </button>
+                      </div>
+                    )}
                     {msg.id.startsWith('welcome_') && agentType && (
                       <div className="mt-3">
                         <button
@@ -1808,7 +1885,7 @@ export default function LogChat({
                   {type === 'food' && msg.pendingFoodLog && !loggedMessageIds.includes(msg.id) && (
                     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-md space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden">
                       {msg.pendingFoodLog.imageUrls && msg.pendingFoodLog.imageUrls.length > 0 && (
-                        <div className="rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-700/50 shadow-sm mb-3 max-w-full">
+                        <div className="overflow-hidden border-y sm:border border-slate-100 dark:border-slate-700/50 shadow-sm mb-3 w-[calc(100%+2rem)] -mx-4 sm:mx-0 sm:w-full sm:rounded-2xl">
                           <ImageSlider images={msg.pendingFoodLog.imageUrls} altText={msg.pendingFoodLog.name || "Pending meal"} />
                         </div>
                       )}
@@ -2291,11 +2368,11 @@ export default function LogChat({
                         <X className="w-3.5 h-3.5" />
                       </button>
                       {msg.imageUrls && msg.imageUrls.length > 0 ? (
-                        <div className="mb-2 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700/30 max-w-full">
+                        <div className="mb-2 overflow-hidden sm:rounded-xl border-y sm:border border-slate-200 dark:border-slate-700/30 w-[calc(100%+1.75rem)] -mx-[0.875rem] sm:mx-0 sm:w-full">
                           <ImageSlider images={msg.imageUrls} altText="Attached meal pictures" />
                         </div>
                       ) : msg.imageUrl ? (
-                        <div className="mb-2 rounded-lg overflow-hidden border border-white/10 max-h-40 max-w-full">
+                        <div className="mb-2 overflow-hidden sm:rounded-lg border-y sm:border border-white/10 max-h-40 w-[calc(100%+1.75rem)] -mx-[0.875rem] sm:mx-0 sm:w-full">
                           <img src={msg.imageUrl} alt="Attached meal" className="w-full h-full object-cover" />
                         </div>
                       ) : null}

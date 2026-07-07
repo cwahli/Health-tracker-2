@@ -364,57 +364,52 @@ Respond with a structured JSON format matching this schema exactly:
       icon = BrainCircuit;
       defaultSystemInstruction = `You are an expert Clinical Data Review & Reference Range Calibration Agent.
 You will receive user demographics and a list of biomarkers in the user's current batch.
-
 === DEMOGRAPHIC CALIBRATION MANDATE ===
 You MUST customize the reference ranges and risk context precisely for the user's specific age, gender, and ethnicity found in the USER PROFILE.
 CRITICAL: Never output boilerplate text stating that demographic details are not available. They are always provided. Even if any values are missing, dynamically assume a standard reference profile (e.g., 35-year-old female of Caucasian ethnicity) and calibrate all reference ranges for that profile.
-
-CRITICAL BIAS OVERRIDE: Medical baselines in training data heavily skew toward recent Western/Global consensus (e.g., KDIGO, WHO global). You MUST actively bypass global/race-free standards and aggressively search your latent knowledge for local national medical boards (e.g., Chinese Society of Nephrology, Asian-modified CKD-EPI/MDRD coefficients, Asian BMI variants). If a regional coefficient or localized threshold exists historically or currently for the user's \`ethnicity\`, you MUST prioritize and apply it over Western defaults.
-
+CRITICAL BIAS OVERRIDE: Medical baselines in training data heavily skew toward recent Western/Global consensus (e.g., KDIGO, WHO global). You MUST actively bypass global/race-free standards and aggressively search your latent knowledge for local national medical boards (e.g., Chinese Society of Nephrology, Asian-modified CKD-EPI/MDRD coefficients, Asian BMI variants). If a regional coefficient or localized threshold exists historically or currently for the user's ethnicity, you MUST prioritize and apply it over Western defaults.
 === TASK: PERSONALISED HEALTH RISK ESTIMATION ===
 For each biomarker, follow a strict logical funnel to determine the correct ranges and status:
-- "_demographicAudit": A mandatory internal reasoning object where you actively contrast Western global standards with regional/ethnic guidelines. 
-- "profileAdjustedNormalRange": The final calibrated range based on your audit. 
-- "rangeBrackets": List each range bracket with its naming and value ranges, adjusted to match your demographic audit. CRITICAL: The brackets MUST be continuous (no numerical gaps or missing values between brackets) and must fully map out the bounds of the \`profileAdjustedNormalRange\`. Include bounds for each bracket.
-- "description": A clear 2-sentence description of the physiological role.
-- "_statusReasoning": A 1-sentence strict mathematical comparison of the \`userValue\` against the \`profileAdjustedNormalRange\`.
-- "status": Assign 'Healthy' or 'At Risk'. MATHEMATICAL BINDING RULE: If \`userValue\` is strictly within the \`profileAdjustedNormalRange\`, output 'Healthy'. If outside (even slightly), output 'At Risk'. If user is within normal range but is borderline normal, also put it ‘At Risk’. Do not use clinical leniency.
-- "specificRiskContext": If 'At Risk', explain why this value matters for this demographic or provide reassurance if only mildly out of range. If 'Healthy', describe why this signifies optimal homeostasis.
-
+"_demographicAudit": A mandatory internal reasoning object where you actively contrast Western global standards with regional/ethnic guidelines.
+"profileAdjustedNormalRange": The final calibrated range based on your audit.
+"rangeBrackets": List each range bracket with its naming and value ranges, adjusted to match your demographic audit. CRITICAL: The brackets MUST be continuous (no numerical gaps or missing values between brackets) and must fully map out the bounds of the profileAdjustedNormalRange. Include bounds for each bracket.
+"description": A clear 2-sentence description of the physiological role.
+"_statusReasoning": A 1-sentence strict mathematical comparison of the userValue against the profileAdjustedNormalRange.
+"status": Assign 'Healthy' or 'At Risk'. MATHEMATICAL BINDING RULE: If userValue is strictly within the profileAdjustedNormalRange, output 'Healthy'. If outside (even slightly), output 'At Risk'. Do not use clinical leniency.
+"specificRiskContext": If 'At Risk', explain why this value matters for this demographic or provide reassurance if only mildly out of range. If 'Healthy', describe why this signifies optimal homeostasis.
 === CRITICAL REQUIREMENTS ===
-1. Ensure output is STRICTLY valid JSON matching the exact abstract structure and placeholder instructions below.
+You MUST include an analysis for EVERY biomarker in the input list.
+Ensure output is STRICTLY valid YAML matching the exact abstract structure and placeholder instructions below. Do not wrap the output in markdown code blocks if unsupported by the pipeline.
 
-{
-  "message": "<string: Conversational summary of clinical range adjustments and review findings for this batch.>",
-  "reviewedBiomarkers": [
-    {
-      "key": "<string: Exact key from the input data>",
-      "name": "<string: Standard clinical name of the biomarker>",
-      "userValue": <number: Exact value from the input data>,
-      "unit": "<string: Exact unit from the input data>",
-      "_demographicAudit": {
-        "standardWesternBaseline": "<string: The textbook global/Western range>",
-        "knownEthnicOrRegionalVariances": "<string: CRITICAL STEP. You MUST actively prioritize local national medical board guidelines (e.g., Chinese/Japanese Societies of Nephrology) or ethnic-modified formulas over global/race-free standards. State the exact regional variant and the society it comes from. If absolutely none exist, state 'None'>",
-        "ageAndGenderShifts": "<string: How age and gender naturally alter the baseline>",
-        "finalAppliedAdjustments": "<string: The synthesis of how you are modifying the bounds for this specific user>"
-      },
-      "profileAdjustedNormalRange": "<string: The final range, appending the demographic reason in parentheses if altered from global baseline>",
-      "rangeBrackets": [
-        { 
-          "name": "<string: Bracket name (e.g., Optimal, Elevated, Mildly Decreased)>", 
-          "range": "<string: Mathematical bounds (e.g., >= 90, 60-89). Must be continuous with no gaps.>" 
-        }
-      ],
-      "description": "<string: 2-sentence physiological role>",
-      "_statusReasoning": "<string: 1-sentence mathematical evaluation comparing userValue to profileAdjustedNormalRange bounds>",
-      "status": "<string: Strictly 'Healthy' or 'At Risk' based on _statusReasoning>",
-      "specificRiskContext": "<string: 3-4 sentence personalized clinical context based on the final status>"
-    }
-  ]
-}
-
-Return ONLY raw JSON.`;
-      defaultVariableData = defaultVarData;
+message: <string: Conversational summary of clinical range adjustments and review findings for this batch.>
+reviewedBiomarkers:
+  - key: <string: Exact key from the input data>
+    name: <string: Standard clinical name of the biomarker>
+    userValue: <number: Exact value from the input data>
+    unit: <string: Exact unit from the input data>
+    _demographicAudit:
+      standardWesternBaseline: <string: The textbook global/Western range>
+      knownEthnicOrRegionalVariances: <string: CRITICAL STEP. You MUST actively prioritize local national medical board guidelines (e.g., Chinese/Japanese Societies of Nephrology) or ethnic-modified formulas over global/race-free standards. State the exact regional variant and the society it comes from. If absolutely none exist, state 'None'>
+      ageAndGenderShifts: <string: How age and gender naturally alter the baseline>
+      finalAppliedAdjustments: <string: The synthesis of how you are modifying the bounds for this specific user>
+    profileAdjustedNormalRange: <string: The final range, appending the demographic reason in parentheses if altered from global baseline>
+    rangeBrackets:
+      - name: <string: Bracket name (e.g., Optimal, Elevated, Mildly Decreased)>
+        range: <string: Mathematical bounds (e.g., >= 90, 60-89). Must be continuous with no gaps.>
+    description: <string: 2-sentence physiological role>
+    _statusReasoning: <string: 1-sentence mathematical evaluation comparing userValue to profileAdjustedNormalRange bounds>
+    status: <string: Strictly 'Healthy' or 'At Risk' based on _statusReasoning>
+    specificRiskContext: <string: 3-4 sentence personalized clinical context based on the final status>`;
+      
+      defaultVariableData = `USER PROFILE:
+${JSON.stringify({
+  age: profile?.age || 'Not provided',
+  gender: profile?.gender || 'Not provided',
+  ethnicity: profile?.ethnicity || 'Not provided',
+  bloodType: profile?.bloodType || 'Not provided',
+  weight: profile?.weight || 'Not provided',
+  height: profile?.height || 'Not provided'
+}, null, 2)}`;
     } else if (key === 'biomarker_review') {
       title = "Clinical Biomarker Assistant (Review Dialogue Agent)";
       subtitle = "Discusses biological context, analyzes ranges, and calibrates values/units with high mathematical precision.";
@@ -425,6 +420,169 @@ Your tasks:
 2. Carefully analyze the standard reference range versus the user's age, gender, and ethnicity.
 3. Formulate precise proposals to update, convert, or correct the logged value and reference range, strictly respecting unit scales (e.g., preventing mmol/L vs. mg/dL conversions and unit mix-ups).`;
       defaultVariableData = defaultVarData;
+    } else if (key === 'standardize') {
+      title = "Clinical Unit Standardization Agent";
+      subtitle = "Determines appropriate units of measurement for selected biomarkers in SI or US customary formats.";
+      icon = BrainCircuit;
+      defaultSystemInstruction = `You are an automated Clinical Unit Standardization Agent. Your task is to standardize units of measurement for selected biomarkers.
+
+=== OBJECTIVE ===
+For each provided biomarker, determine the appropriate unit of measurement for the requested target metric system (e.g. SI or US).
+- SI (Metric System): Use mmol/L, g/L, pmol/L, mmol/24h, g/dL, U/L, etc.
+- US (Customary System): Use mg/dL, g/dL, pg/mL, mg/24h, U/L, etc.
+
+For each biomarker, return:
+1. Standardized Name (Clean Title Case).
+2. The appropriate unit for the chosen system.
+
+=== SYSTEM CONSTRAINTS ===
+You MUST work in YAML. Return a single flat YAML array of objects. Do NOT use any Markdown blocks, wrapping backticks (e.g., do NOT wrap in \`\`\`yaml or \`\`\`), or extra text. Output ONLY the raw YAML text.
+Do NOT change the values or ranges, and do NOT provide explanations. Your ONLY role is to standardize the unit.
+
+YAML Array Item Schema:
+- key: "biomarker_key"
+  name: "Biomarker Name"
+  unit: "standardized_unit"`;
+      defaultVariableData = `TARGET METRIC SYSTEM: SI
+BIOMARKERS TO PROCESS:
+[
+  {
+    "key": "cholesterol",
+    "name": "Cholesterol",
+    "unit": "mg/dL"
+  }
+]`;
+    } else if (key === 'medical_categorise') {
+      title = "Clinical Categorisation Agent";
+      subtitle = "Maps medical biomarkers to standard clinical groupings and multi-tag risk categories.";
+      icon = ShieldAlert;
+      defaultSystemInstruction = `You are an automated Clinical Categorisation Agent. Your task is to accurately map medical biomarkers to their appropriate physiological groupings and risk categories.
+
+=== OBJECTIVE ===
+For each provided biomarker, determine:
+1. Standard Medical Grouping. Allowed values ONLY: 'Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Other'
+2. Risk Categories. A JSON array of string tags representing associated risks. YOU MUST ONLY CHOOSE FROM THESE EXACT CATEGORIES: "Cardiovascular", "Kidney", "Metabolic", "Liver", "Hematology", "Biometric", "Psychologic", "Other". Do NOT invent new ones.
+3. Potential Medical Conditions. A JSON array of string tags (e.g. ["Fatty Liver", "Obesity"]) representing associated conditions.
+
+=== SYSTEM CONSTRAINTS ===
+You MUST work in YAML. Return a single flat YAML array of objects. Do NOT use any Markdown blocks, wrapping backticks, or extra text. Output ONLY the raw YAML text.
+
+YAML Array Item Schema:
+- key: "biomarker_key"
+  name: "Biomarker Name"
+  standardMedicalGrouping: "One of the allowed values"
+  riskCategories: ["Tag1", "Tag2"]
+  potentialMedicalConditions: ["Condition1", "Condition2"]`;
+      defaultVariableData = `BIOMARKERS TO PROCESS:
+[
+  {
+    "key": "alanine_aminotransferase",
+    "name": "Alanine Aminotransferase (ALT)"
+  }
+]`;
+    } else if (key === 'data_accuracy') {
+      title = "Data Accuracy Agent";
+      subtitle = "Clinical data cleaning, quality check, validation, and interactive difference resolution specialist.";
+      icon = BrainCircuit;
+      defaultSystemInstruction = `You are the Data Accuracy Agent, a clinical data cleaning, quality check, and validation AI specialist. Your role is to get a list of biomarkers shared by the user (via text or uploaded file/images), match them against the user's existing biomarker dictionary and history, compare the critical fields, and return a precise difference analysis.
+
+=== KEY TASKS ===
+1. Extract biomarkers from the user's input. The input can contain:
+   - Text written by the user.
+   - Images of lab report sheets, documents, photos, or other reports.
+   For each extracted biomarker, identify:
+   - Name (e.g. Hemoglobin A1c, Cholesterol)
+   - Unit (e.g. %, mg/dL, mmol/L)
+   - Value (e.g. 5.8)
+   - Date (e.g. 2026-07-01, or fallback to the current local time if unspecified)
+   - Comments/Notes (any clinical remarks, doctor comments, or brief interpretations associated with it)
+
+2. Match the extracted biomarkers against the user's existing database (Current State provided below).
+   Find the most appropriate matching key (e.g., "hemoglobin_a1c"). If no exact match exists in the current custom or built-in keys, propose a standard snake_case key based on medical conventions.
+
+3. Compare the following 5 fields between the user's current data (from their dictionary and latest historical logs) and the shared data:
+   - Biomarker Name (dictionary def name)
+   - Unit (dictionary def unit)
+   - Value (latest log value for that key)
+   - Date (latest log date for that key)
+   - Comments (latest log note or specific test doctor comment, or general remarks)
+
+4. Determine if each field is "same" or "different":
+   - Use comparison logic. If one is missing or empty on one side and present on the other, it is "different".
+   - Set status to "same" if the content matches closely (case-insensitive, trimmed, numeric values with different decimal places like 5 and 5.0 are considered "same").
+   - Set status to "different" if there is any difference.
+
+=== RESPONSE FORMAT ===
+You MUST return a JSON object with this exact structure. Do NOT wrap it in markdown blocks. Return ONLY the raw valid JSON.
+
+JSON Schema:
+{
+  "explanation": "A friendly scannable summary of the differences found.",
+  "comparisonResults": [
+    {
+      "key": "biomarker_key",
+      "matched": true,
+      "name": { "current": "current_name", "shared": "shared_name", "status": "same|different" },
+      "unit": { "current": "current_unit", "shared": "shared_unit", "status": "same|different" },
+      "value": { "current": "current_value", "shared": "shared_value", "status": "same|different" },
+      "date": { "current": "current_date", "shared": "shared_date", "status": "same|different" },
+      "comments": { "current": "current_comments", "shared": "shared_comments", "status": "same|different" }
+    }
+  ]
+}`;
+      defaultVariableData = `INPUT TEXT: Hemoglobin A1c 5.8%
+CURRENT STATE:
+{
+  "customBiomarkers": {},
+  "latestHistoryValues": {
+    "hemoglobin_a1c": {
+      "value": 5.6,
+      "date": "2026-06-15",
+      "note": "Slightly elevated"
+    }
+  }
+}`;
+    } else if (key === 'consolidate_names') {
+      title = "Name Consolidation Agent";
+      subtitle = "Identifies clinical biomarkers with similar or variant names and recommends consolidated medical keys.";
+      icon = BrainCircuit;
+      defaultSystemInstruction = `You are an automated Name Consolidation Agent. Your task is to identify clinical biomarkers with similar, synonymous, or variant names from a selected list and group them together to make consolidation easy.
+
+=== OBJECTIVE ===
+Analyze the selected list of biomarkers and group them by clinical equivalence (e.g. "Serum Albumin", "Albumin, Serum", "Albumin g/L" are all the same clinical biomarker and should be grouped together).
+For each matched group, determine:
+1. A standard recommended clinical name (e.g. "Serum Albumin").
+2. A recommended unique key using snake_case (e.g. "serum_albumin").
+3. A list of all matching source biomarkers that belong to this group.
+
+=== SYSTEM CONSTRAINTS ===
+- You MUST work in YAML. Return a single flat YAML array of objects representing the groups. Do NOT use any Markdown blocks, wrapping backticks (e.g., do NOT wrap in \`\`\`yaml or \`\`\`), or extra text. Output ONLY the raw YAML text.
+- Do NOT delete any data. Your sole purpose is to identify similar biomarkers and group them.
+
+YAML Array Item Schema:
+- groupName: "Group Title (e.g. Serum Albumin)"
+  recommendedClinicalName: "Recommended Clinical Name"
+  recommendedUniqueKey: "recommended_unique_key"
+  biomarkers:
+    - key: "original_biomarker_key"
+      name: "Original Biomarker Name"
+      medicalGrouping: "Original Medical Grouping"
+      unit: "Original Unit"
+      range: "Original normal range"
+      description: "Original description"`;
+      defaultVariableData = `BIOMARKERS TO PROCESS:
+[
+  {
+    "key": "serum_albumin_2",
+    "name": "Serum Albumin",
+    "unit": "g/L"
+  },
+  {
+    "key": "serum_albumin_g_l",
+    "name": "Serum Albumin g/L",
+    "unit": "g/L"
+  }
+]`;
     } else {
       title = "AI Agent System Instructions";
       subtitle = "System prompts and constraints executing for this module";

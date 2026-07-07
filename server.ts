@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import YAML from "yaml";
 import { AsyncLocalStorage } from "async_hooks";
 import { biomarkerDefinitions } from "./src/utils/biomarkers";
 
@@ -130,11 +131,23 @@ interface DebugLog {
 let globalDebugLogs: DebugLog[] = [];
 let sessionDebugLogs: { [sessionId: string]: DebugLog[] } = {};
 
-function addDebugLog(msg: string) {
+function addDebugLog(msg: string, explicitSessionId?: string) {
   const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
-  console.log(`[LLM DEBUG ${timestamp}]: ${msg}`);
   
-  const sessionId = logSessionStorage.getStore() || "global";
+  // Keep the container stdout clean by truncating huge multiline logs in console.log
+  if (msg && msg.length > 500) {
+    const lines = msg.split('\n');
+    if (lines.length > 25) {
+      const truncatedConsoleMsg = lines.slice(0, 25).join('\n') + `\n... [Truncated ${lines.length - 25} lines from container console.log. Full detailed payload is saved in session memory and visible via the Full-Screen Diagnostic Log Viewer UI] ...`;
+      console.log(`[LLM DEBUG ${timestamp}]: ${truncatedConsoleMsg}`);
+    } else {
+      console.log(`[LLM DEBUG ${timestamp}]: ${msg}`);
+    }
+  } else {
+    console.log(`[LLM DEBUG ${timestamp}]: ${msg}`);
+  }
+  
+  const sessionId = explicitSessionId || logSessionStorage.getStore() || "global";
   if (!sessionDebugLogs[sessionId]) {
     sessionDebugLogs[sessionId] = [];
   }
@@ -208,7 +221,8 @@ function robustParseJson(cleanJson: string): any {
       while (lastIdx > firstBrace) {
         try {
           return JSON.parse(cleanJson.substring(firstBrace, lastIdx + 1));
-        } catch (e) {
+        } catch (e: any) {
+          addDebugLog(`[RouteAgent Chat] Error: ${e.message}`);
           lastIdx = cleanJson.lastIndexOf("}", lastIdx - 1);
         }
       }
@@ -1031,7 +1045,8 @@ ${imageCtx}
 Current User Input: "${message}"`;
 
     const fullPromptSent = `System Instruction:\n${finalSystemInstruction}\n\n${promptText}`;
-    const textOutput = await callUnifiedLLM({
+    addDebugLog(`[RouteAgent Chat] Sending request to Gemini...`);
+          const textOutput = await callUnifiedLLM({
       modelId: engine || "gemini-2.5-flash",
       systemInstruction: finalSystemInstruction,
       promptText,
@@ -1039,7 +1054,8 @@ Current User Input: "${message}"`;
       responseMimeType: "application/json"
     });
 
-    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+    addDebugLog(`[RouteAgent Chat] Received response from Gemini. Length: ${textOutput.length} chars.`);
+          let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
     let rawParsed;
     try {
       rawParsed = JSON.parse(cleanJson);
@@ -1771,61 +1787,44 @@ Return ONLY raw JSON.`;
       } else if (agentType === "data_review") {
         systemInstruction = `You are an expert Clinical Data Review & Reference Range Calibration Agent.
 You will receive user demographics and a list of biomarkers in the user's current batch.
-
 === DEMOGRAPHIC CALIBRATION MANDATE ===
 You MUST customize the reference ranges and risk context precisely for the user's specific age, gender, and ethnicity found in the USER PROFILE.
 CRITICAL: Never output boilerplate text stating that demographic details are not available. They are always provided. Even if any values are missing, dynamically assume a standard reference profile (e.g., 35-year-old female of Caucasian ethnicity) and calibrate all reference ranges for that profile.
-
-CRITICAL BIAS OVERRIDE: Medical baselines in training data heavily skew toward recent Western/Global consensus (e.g., KDIGO, WHO global). You MUST actively bypass global/race-free standards and aggressively search your latent knowledge for local national medical boards (e.g., Chinese Society of Nephrology, Asian-modified CKD-EPI/MDRD coefficients, Asian BMI variants). If a regional coefficient or localized threshold exists historically or currently for the user's \`ethnicity\`, you MUST prioritize and apply it over Western defaults.
-
+CRITICAL BIAS OVERRIDE: Medical baselines in training data heavily skew toward recent Western/Global consensus (e.g., KDIGO, WHO global). You MUST actively bypass global/race-free standards and aggressively search your latent knowledge for local national medical boards (e.g., Chinese Society of Nephrology, Asian-modified CKD-EPI/MDRD coefficients, Asian BMI variants). If a regional coefficient or localized threshold exists historically or currently for the user's ethnicity, you MUST prioritize and apply it over Western defaults.
 === TASK: PERSONALISED HEALTH RISK ESTIMATION ===
 For each biomarker, follow a strict logical funnel to determine the correct ranges and status:
-- "_demographicAudit": A mandatory internal reasoning object where you actively contrast Western global standards with regional/ethnic guidelines. 
-- "profileAdjustedNormalRange": The final calibrated range based on your audit. 
-- "rangeBrackets": List each range bracket with its naming and value ranges, adjusted to match your demographic audit. CRITICAL: The brackets MUST be continuous (no numerical gaps or missing values between brackets) and must fully map out the bounds of the \`profileAdjustedNormalRange\`. Include bounds for each bracket.
-- "description": A clear 2-sentence description of the physiological role.
-- "_statusReasoning": A 1-sentence strict mathematical comparison of the \`userValue\` against the \`profileAdjustedNormalRange\`.
-- "status": Assign 'Healthy' or 'At Risk'. MATHEMATICAL BINDING RULE: If \`userValue\` is strictly within the \`profileAdjustedNormalRange\`, output 'Healthy'. If outside (even slightly), output 'At Risk'. If user is within normal range but is borderline normal, also put it ‘At Risk’. Do not use clinical leniency.
-- "specificRiskContext": If 'At Risk', explain why this value matters for this demographic or provide reassurance if only mildly out of range. If 'Healthy', describe why this signifies optimal homeostasis.
-
+"_demographicAudit": A mandatory internal reasoning object where you actively contrast Western global standards with regional/ethnic guidelines.
+"profileAdjustedNormalRange": The final calibrated range based on your audit.
+"rangeBrackets": List each range bracket with its naming and value ranges, adjusted to match your demographic audit. CRITICAL: The brackets MUST be continuous (no numerical gaps or missing values between brackets) and must fully map out the bounds of the profileAdjustedNormalRange. Include bounds for each bracket.
+"description": A clear 2-sentence description of the physiological role.
+"_statusReasoning": A 1-sentence strict mathematical comparison of the userValue against the profileAdjustedNormalRange.
+"status": Assign 'Healthy' or 'At Risk'. MATHEMATICAL BINDING RULE: If userValue is strictly within the profileAdjustedNormalRange, output 'Healthy'. If outside (even slightly), output 'At Risk'. Do not use clinical leniency.
+"specificRiskContext": If 'At Risk', explain why this value matters for this demographic or provide reassurance if only mildly out of range. If 'Healthy', describe why this signifies optimal homeostasis.
 === CRITICAL REQUIREMENTS ===
-1. Ensure output is STRICTLY valid JSON matching the exact abstract structure and placeholder instructions below.
+You MUST include an analysis for EVERY biomarker in the input list.
+Ensure output is STRICTLY valid YAML matching the exact abstract structure and placeholder instructions below. Do not wrap the output in markdown code blocks if unsupported by the pipeline.
 
-{
-  "message": "<string: Conversational summary of clinical range adjustments and review findings for this batch.>",
-  "reviewedBiomarkers": [
-    {
-      "key": "<string: Exact key from the input data>",
-      "name": "<string: Standard clinical name of the biomarker>",
-      "userValue": <number: Exact value from the input data>,
-      "unit": "<string: Exact unit from the input data>",
-      "_demographicAudit": {
-        "standardWesternBaseline": "<string: The textbook global/Western range>",
-        "knownEthnicOrRegionalVariances": "<string: CRITICAL STEP. You MUST actively prioritize local national medical board guidelines (e.g., Chinese/Japanese Societies of Nephrology) or ethnic-modified formulas over global/race-free standards. State the exact regional variant and the society it comes from. If absolutely none exist, state 'None'>",
-        "ageAndGenderShifts": "<string: How age and gender naturally alter the baseline>",
-        "finalAppliedAdjustments": "<string: The synthesis of how you are modifying the bounds for this specific user>"
-      },
-      "profileAdjustedNormalRange": "<string: The final range, appending the demographic reason in parentheses if altered from global baseline>",
-      "rangeBrackets": [
-        { 
-          "name": "<string: Bracket name (e.g., Optimal, Elevated, Mildly Decreased)>", 
-          "range": "<string: Mathematical bounds (e.g., >= 90, 60-89). Must be continuous with no gaps.>" 
-        }
-      ],
-      "description": "<string: 2-sentence physiological role>",
-      "_statusReasoning": "<string: 1-sentence mathematical evaluation comparing userValue to profileAdjustedNormalRange bounds>",
-      "status": "<string: Strictly 'Healthy' or 'At Risk' based on _statusReasoning>",
-      "specificRiskContext": "<string: 3-4 sentence personalized clinical context based on the final status>"
-    }
-  ]
-}
-
-Return ONLY raw JSON.`;
-
-        mockData = {
-          message: "I have calibrated the reference ranges for your current batch of biomarkers to your precise age, gender, and ethnicity.",
-          reviewedBiomarkers: []
-        };
+message: <string: Conversational summary of clinical range adjustments and review findings for this batch.>
+reviewedBiomarkers:
+  - key: <string: Exact key from the input data>
+    name: <string: Standard clinical name of the biomarker>
+    userValue: <number: Exact value from the input data>
+    unit: <string: Exact unit from the input data>
+    _demographicAudit:
+      standardWesternBaseline: <string: The textbook global/Western range>
+      knownEthnicOrRegionalVariances: <string: CRITICAL STEP. You MUST actively prioritize local national medical board guidelines (e.g., Chinese/Japanese Societies of Nephrology) or ethnic-modified formulas over global/race-free standards. State the exact regional variant and the society it comes from. If absolutely none exist, state 'None'>
+      ageAndGenderShifts: <string: How age and gender naturally alter the baseline>
+      finalAppliedAdjustments: <string: The synthesis of how you are modifying the bounds for this specific user>
+    profileAdjustedNormalRange: <string: The final range, appending the demographic reason in parentheses if altered from global baseline>
+    rangeBrackets:
+      - name: <string: Bracket name (e.g., Optimal, Elevated, Mildly Decreased)>
+        range: <string: Mathematical bounds (e.g., >= 90, 60-89). Must be continuous with no gaps.>
+    description: <string: 2-sentence physiological role>
+    _statusReasoning: <string: 1-sentence mathematical evaluation comparing userValue to profileAdjustedNormalRange bounds>
+    status: <string: Strictly 'Healthy' or 'At Risk' based on _statusReasoning>
+    specificRiskContext: <string: 3-4 sentence personalized clinical context based on the final status>`;
+        mockData = `message: Completed clinical review.
+reviewedBiomarkers: []`;
       }
 
       let textOutput = "";
@@ -1851,7 +1850,6 @@ Return ONLY raw JSON.`;
           const base64Data = image.split(",")[1];
           imagePayload = { mimeType, data: base64Data };
         }
-
         const imageCtx = imageDates && imageDates.length > 0 ? `The attached images were taken on these dates: ${imageDates.join(", ")}.` : "";
         
         const cleanProfile: any = {
@@ -2064,6 +2062,74 @@ Return ONLY raw JSON.`;
         });
       }
 
+      if (agentType === "data_review") {
+        let parsedYaml: any = {};
+        try {
+          // Clean textOutput of markdown markers
+          let cleanYaml = textOutput.replace(/```(?:yaml)?/gi, "").trim();
+          parsedYaml = YAML.parse(cleanYaml);
+        } catch (err: any) {
+          console.error("YAML parsing failed, trying robust JSON parser fallback:", err);
+          try {
+            parsedYaml = robustParseJson(textOutput);
+          } catch (jsonErr) {
+            console.error("JSON fallback also failed:", jsonErr);
+          }
+        }
+
+        // Map the parsed YAML object fields back to the structure the client-side expects
+        const systemicConclusion = parsedYaml.systemicConclusion || {};
+        const defaultMessage = `Health Trajectory: ${systemicConclusion.trajectory || 'Stable'}\n\nPrimary Critical Biomarker: ${systemicConclusion.primaryCriticalBiomarker || 'None'}\n\nClinical Next Steps: ${systemicConclusion.clinicalNextSteps || 'None'}`;
+        const message = parsedYaml.message || defaultMessage;
+        
+        const inputBiomarkers = req.body.batchBiomarkers || [];
+        const reviewedBiomarkers = (parsedYaml.reviewedBiomarkers || []).map((item: any) => {
+          // Match by key, or fallback to name matching (case-insensitive and white-space free)
+          const inputBm = inputBiomarkers.find((b: any) => 
+            (b.key && item.key && String(b.key).toLowerCase() === String(item.key).toLowerCase()) ||
+            (b.name && item.name && String(b.name).toLowerCase().replace(/\s/g, '') === String(item.name).toLowerCase().replace(/\s/g, ''))
+          ) || {};
+          
+          const key = item.key || inputBm.key || '';
+          const name = item.name || item.displayName || inputBm.name || key;
+          const userValue = item.userValue !== undefined ? item.userValue : (item.currentValue !== undefined ? item.currentValue : inputBm.value);
+          const unit = item.unit !== undefined ? item.unit : (inputBm.unit || '');
+          const profileAdjustedNormalRange = item.profileAdjustedNormalRange || '';
+          
+          // Map status: standardizing 'Healthy' vs 'At Risk'
+          const status = item.status || ((item.alignmentState === "HIGH" || item.alignmentState === "LOW") ? "At Risk" : "Healthy");
+          
+          return {
+            key,
+            name,
+            userValue,
+            unit,
+            profileAdjustedNormalRange,
+            status,
+            description: item.description || item.findings || '',
+            _statusReasoning: item._statusReasoning || '',
+            _demographicAudit: item._demographicAudit || {},
+            specificRiskContext: item.specificRiskContext || item.findings || '',
+            potentialMedicalConditions: item.potentialMedicalConditions || [],
+            riskCategories: item.riskCategories || [],
+            standardMedicalGrouping: item.standardMedicalGrouping || 'Other',
+            rangeBrackets: item.rangeBrackets || [],
+            unitsFlagged: !!item.unitsFlagged
+          };
+        });
+
+        return res.json({
+          text: message,
+          message,
+          agentType,
+          agentPrompt: fullPromptSent,
+          batchIdx: req.body.batchIdx !== undefined ? req.body.batchIdx : undefined,
+          batchBiomarkers: inputBiomarkers,
+          reviewedBiomarkers,
+          demographicsApplied: parsedYaml.demographicsApplied || {}
+        });
+      }
+
       let parsedData;
       try {
         parsedData = robustParseJson(textOutput);
@@ -2265,6 +2331,7 @@ Note: If mode is not "extract_chunk", leave 'entries' and 'customBiomarkerDefs' 
     };
 
     let finalEntries = parsedData.entries || [];
+    if (!Array.isArray(finalEntries)) finalEntries = [finalEntries];
     if (finalEntries.length === 0 && parsedData.biomarkers && Object.keys(parsedData.biomarkers).length > 0) {
       finalEntries = [{
         date: parsedData.date || null,
@@ -2715,6 +2782,7 @@ app.post("/api/gemini/insight-analyze", async (req, res) => {
 // Gemini Food Idea Endpoint
       app.post("/api/gemini/route-biomarker", async (req, res) => {
         try {
+          addDebugLog(`[RouteAgent Direct] Received route request for ${req.body?.key}`);
           const { key, originalName, allApprovedKeys } = req.body;
           const systemInstruction = `You are an automated Medical Ontology and Database Router. Your critical task is to map a newly discovered, unmapped biomarker key to a structured list of approved Master Database Keys, OR dynamically mint an entirely new standard definition if a clinical mismatch occurs.
 
@@ -2809,6 +2877,397 @@ You MUST return a JSON object with the following schema:
           res.status(500).json({ error: "Failed to process route chat" });
         }
       });
+
+app.post("/api/gemini/standardize-units", async (req, res) => {
+  try {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    const { selectedBiomarkers, metricSystem, engine, customSystemInstruction } = req.body;
+    const modelId = engine || "gemini-3.1-flash-lite";
+    addDebugLog(`[Standardize Units Agent] Request received to standardize ${selectedBiomarkers?.length} biomarkers to ${metricSystem} using model: ${modelId}.`, explicitSessionId);
+
+    let systemInstruction = `You are an automated Clinical Unit Standardization Agent. Your task is to standardize units of measurement for selected biomarkers.
+
+=== OBJECTIVE ===
+For each provided biomarker, determine the appropriate unit of measurement for the requested target metric system (${metricSystem.toUpperCase()}).
+- SI (Metric System): Use mmol/L, g/L, pmol/L, mmol/24h, g/dL, U/L, etc.
+- US (Customary System): Use mg/dL, g/dL, pg/mL, mg/24h, U/L, etc.
+
+For each biomarker, return:
+1. Standardized Name (Clean Title Case).
+2. The appropriate unit for the chosen system (${metricSystem.toUpperCase()}).
+
+=== SYSTEM CONSTRAINTS ===
+You MUST work in YAML. Return a single flat YAML array of objects. Do NOT use any Markdown blocks, wrapping backticks (e.g., do NOT wrap in \`\`\`yaml or \`\`\`), or extra text. Output ONLY the raw YAML text.
+Do NOT change the values or ranges, and do NOT provide explanations. Your ONLY role is to standardize the unit.
+
+YAML Array Item Schema:
+- key: "biomarker_key"
+  name: "Biomarker Name"
+  unit: "standardized_unit"
+
+Biomarkers to process:
+${JSON.stringify(selectedBiomarkers, null, 2)}`;
+
+    if (customSystemInstruction) {
+      addDebugLog(`[Standardize Units Agent] Overriding system instruction with custom version (${customSystemInstruction.length} chars).`, explicitSessionId);
+      systemInstruction = customSystemInstruction;
+    }
+
+    addDebugLog(`[Standardize Units Agent] Dispatched System Instruction:\n${systemInstruction}`, explicitSessionId);
+    addDebugLog(`[Standardize Units Agent] Dispatched Model ID: ${modelId}`, explicitSessionId);
+
+    const textOutput = await callUnifiedLLM({
+      modelId,
+      systemInstruction,
+      promptText: "Please output the standardized units in YAML format according to the requested schema. Output ONLY raw YAML.",
+      responseMimeType: "text/plain"
+    });
+
+    let cleanYaml = textOutput.replace(/```(?:yaml|json)?/gi, "").trim();
+    addDebugLog(`[Standardize Units Agent] Agent output payload:\n${cleanYaml}`, explicitSessionId);
+    res.json({ yamlText: cleanYaml });
+  } catch (error: any) {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    addDebugLog(`[Standardize Units Agent] Error: ${error.message}`, explicitSessionId);
+    console.error("[Standardize Units Agent Error]:", error);
+    res.status(500).json({ error: "Failed to standardize units: " + error.message });
+  }
+});
+
+app.post("/api/gemini/medical-categorise", async (req, res) => {
+  try {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    const { selectedBiomarkers, engine, customSystemInstruction } = req.body;
+    const modelId = engine || "gemini-3.1-flash-lite";
+    addDebugLog(`[Medical Categorisation Agent] Request received to categorise ${selectedBiomarkers?.length} biomarkers using model: ${modelId}.`, explicitSessionId);
+
+    let systemInstruction = `You are an automated Clinical Categorisation Agent. Your task is to accurately map medical biomarkers to their appropriate physiological groupings and risk categories.
+
+=== OBJECTIVE ===
+For each provided biomarker, determine:
+1. Standard Medical Grouping. Allowed values ONLY: 'Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Other'
+2. Risk Categories. A JSON array of string tags representing associated risks. YOU MUST ONLY CHOOSE FROM THESE EXACT CATEGORIES: "Cardiovascular", "Kidney", "Metabolic", "Liver", "Hematology", "Biometric", "Psychologic", "Other". Do NOT invent new ones.
+3. Potential Medical Conditions. A JSON array of string tags (e.g. ["Fatty Liver", "Obesity"]) representing associated conditions.
+
+=== SYSTEM CONSTRAINTS ===
+You MUST work in YAML. Return a single flat YAML array of objects. Do NOT use any Markdown blocks, wrapping backticks, or extra text. Output ONLY the raw YAML text.
+
+YAML Array Item Schema:
+- key: "biomarker_key"
+  name: "Biomarker Name"
+  standardMedicalGrouping: "One of the allowed values"
+  riskCategories: ["Tag1", "Tag2"]
+  potentialMedicalConditions: ["Condition1", "Condition2"]
+
+Biomarkers to process:
+${JSON.stringify(selectedBiomarkers, null, 2)}`;
+
+    if (customSystemInstruction) {
+      addDebugLog(`[Medical Categorisation Agent] Overriding system instruction with custom version (${customSystemInstruction.length} chars).`, explicitSessionId);
+      systemInstruction = customSystemInstruction;
+    }
+
+    addDebugLog(`[Medical Categorisation Agent] Dispatched System Instruction:\n${systemInstruction}`, explicitSessionId);
+    addDebugLog(`[Medical Categorisation Agent] Dispatched Model ID: ${modelId}`, explicitSessionId);
+
+    const textOutput = await callUnifiedLLM({
+      modelId,
+      systemInstruction,
+      promptText: "Please output the categorisation in YAML format according to the requested schema. Output ONLY raw YAML.",
+      responseMimeType: "text/plain"
+    });
+
+    let cleanYaml = textOutput.replace(/```(?:yaml|json)?/gi, "").trim();
+    addDebugLog(`[Medical Categorisation Agent] Agent output payload:\n${cleanYaml}`, explicitSessionId);
+    res.json({ yamlText: cleanYaml });
+  } catch (error: any) {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    addDebugLog(`[Medical Categorisation Agent] Error: ${error.message}`, explicitSessionId);
+    console.error("[Medical Categorisation Agent Error]:", error);
+    res.status(500).json({ error: "Failed to categorise biomarkers: " + error.message });
+  }
+});
+
+app.post("/api/gemini/consolidate-names", async (req, res) => {
+  try {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    const { inputText, selectedBiomarkers, engine, customSystemInstruction } = req.body;
+    const modelId = engine || "gemini-3.1-flash-lite";
+    addDebugLog(`[Name Consolidation Agent] Request received using model: ${modelId}. Text length: ${inputText?.length || 0}. Biomarkers count: ${selectedBiomarkers?.length || 0}`, explicitSessionId);
+
+    if (inputText) {
+      addDebugLog(`[Name Consolidation Agent] User Prompt:\n${inputText}`, explicitSessionId);
+    }
+
+    let systemInstruction = `You are an automated Name Consolidation Agent. Your task is to identify clinical biomarkers with similar, synonymous, or variant names from a selected list and group them together to make consolidation easy.
+
+=== OBJECTIVE ===
+Analyze the selected list of biomarkers and group them by clinical equivalence (e.g. "Serum Albumin", "Albumin, Serum", "Albumin g/L" are all the same clinical biomarker and should be grouped together).
+For each matched group, determine:
+1. A standard recommended clinical name (e.g. "Serum Albumin").
+2. A recommended unique key using snake_case (e.g. "serum_albumin").
+3. A list of all matching source biomarkers that belong to this group.
+
+=== SYSTEM CONSTRAINTS ===
+- You MUST return a JSON object with this exact structure. Do NOT wrap it in markdown blocks. Return ONLY the raw valid JSON.
+
+JSON Schema:
+{
+  "explanation": "A friendly conversational summary answering the user's prompt or explaining the proposed groupings.",
+  "groups": [
+    {
+      "groupName": "Group Title (e.g. Serum Albumin)",
+      "recommendedClinicalName": "Recommended Clinical Name",
+      "recommendedUniqueKey": "recommended_unique_key",
+      "biomarkers": [
+        {
+          "key": "original_biomarker_key",
+          "name": "Original Biomarker Name",
+          "medicalGrouping": "Original Medical Grouping",
+          "unit": "Original Unit",
+          "range": "Original normal range",
+          "description": "Original description"
+        }
+      ]
+    }
+  ]
+}
+
+Biomarkers to process:
+${JSON.stringify(selectedBiomarkers, null, 2)}`;
+
+    if (customSystemInstruction) {
+      addDebugLog(`[Name Consolidation Agent] Overriding system instruction with custom version (${customSystemInstruction.length} chars).`, explicitSessionId);
+      systemInstruction = customSystemInstruction;
+    }
+
+    const dynamicPromptText = `USER DATA / CONVERSATION TEXT:
+\"\"\"${inputText || "Please identify the duplicates from the provided list and consolidate them."}\"\"\"
+
+Please output a valid JSON object matching the requested schema.`;
+
+    addDebugLog(`[Name Consolidation Agent] Dispatched Model ID: ${modelId}`, explicitSessionId);
+
+    const textOutput = await callUnifiedLLM({
+      modelId,
+      systemInstruction,
+      promptText: dynamicPromptText,
+      responseMimeType: "application/json"
+    });
+
+    let cleanJson = textOutput.trim();
+    addDebugLog(`[Name Consolidation Agent] Agent output payload:\n${cleanJson}`, explicitSessionId);
+    
+    if (cleanJson.includes("```")) {
+      const match = cleanJson.match(/```(?:json)?([\s\S]*?)```/);
+      if (match) {
+        cleanJson = match[1].trim();
+      } else {
+        cleanJson = cleanJson.replace(/```(?:json)?/gi, "").trim();
+      }
+    }
+    const firstBrace = cleanJson.indexOf('{');
+    const lastBrace = cleanJson.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
+    }
+
+    const parsed = JSON.parse(cleanJson);
+    
+    if (parsed.explanation) {
+      addDebugLog(`[Name Consolidation Agent] Agent Explanation:\n${parsed.explanation}`, explicitSessionId);
+    }
+
+    res.json(parsed);
+  } catch (error: any) {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    addDebugLog(`[Name Consolidation Agent] Error: ${error.message}`, explicitSessionId);
+    console.error("[Name Consolidation Agent Error]:", error);
+    res.status(500).json({ error: "Failed to consolidate biomarker names: " + error.message });
+  }
+});
+
+app.post("/api/gemini/data-accuracy", async (req, res) => {
+  try {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    const { inputText, currentState, images, currentLocalTime, engine, customSystemInstruction } = req.body;
+    const modelId = engine || "gemini-3.1-flash-lite";
+    addDebugLog(`[Data Accuracy Agent] Request received using model: ${modelId}. Text length: ${inputText?.length || 0}. Images count: ${images?.length || 0}`, explicitSessionId);
+    if (inputText) {
+      addDebugLog(`[Data Accuracy Agent] User Prompt Content:\n${inputText}`, explicitSessionId);
+    }
+
+    let imagesPayload: { mimeType: string, data: string }[] | undefined = undefined;
+    if (images && images.length > 0) {
+      imagesPayload = images.map((img: string) => {
+        const mimeType = img.split(";")[0].split(":")[1] || "image/jpeg";
+        const base64Data = img.split(",")[1];
+        return { mimeType, data: base64Data };
+      });
+    }
+
+    let systemInstruction = `You are the Data Accuracy Agent, a clinical data cleaning, quality check, and validation AI specialist. Your role is to get a list of biomarkers shared by the user (via text or uploaded file/images), match them against the user's existing biomarker dictionary and history, compare the critical fields, and return a precise difference analysis.
+
+=== KEY TASKS ===
+1. Extract biomarkers from the user's input. The input can contain:
+   - Text written by the user.
+   - Images of lab report sheets, documents, photos, or other reports.
+   For each extracted biomarker, identify:
+   - Name (e.g. Hemoglobin A1c, Cholesterol)
+   - Unit (e.g. %, mg/dL, mmol/L)
+   - Value (e.g. 5.8)
+   - Date (e.g. 2026-07-01, or fallback to the current local time if unspecified: ${currentLocalTime || '2026-07-07'})
+   - Comments/Notes (any clinical remarks, doctor comments, or brief interpretations associated with it)
+
+2. Match the extracted biomarkers against the user's existing database (Current State provided below).
+   Find the most appropriate matching key (e.g., "hemoglobin_a1c"). If no exact match exists in the current custom or built-in keys, propose a standard snake_case key based on medical conventions.
+
+3. Compare the following 5 fields between the user's current data (from their dictionary and historical logs) and the shared data:
+   - Biomarker Name (dictionary def name)
+   - Unit (dictionary def unit)
+   - Value (historical log value for that key on the matching date, or latest)
+   - Date (historical log date for that key)
+   - Comments (historical log note or specific test doctor comment)
+   Match the date of the shared data with the historical logs to find the exact existing log. If no exact date match exists, compare against null or mark as a new log.
+
+4. Determine if each field is "same" or "different":
+   - Use comparison logic. If one is missing or empty on one side and present on the other, it is "different".
+   - Set status to "same" if the content matches closely (case-insensitive, trimmed, numeric values with different decimal places like 5 and 5.0 are considered "same").
+   - Set status to "different" if there is any difference.
+
+5. IMPORTANT: Handling Multiple Entries for the Same Biomarker:
+   - If the user's input contains multiple log entries for the SAME biomarker (e.g., tests taken on multiple different dates, or multiple values), you MUST create and return a SEPARATE object in the "comparisonResults" array for EACH distinct instance or date. Do not combine or skip them.
+
+=== RESPONSE FORMAT ===
+You MUST return a JSON object with this exact structure. Do NOT wrap it in markdown blocks. Return ONLY the raw valid JSON.
+
+JSON Schema:
+{
+  "explanation": "A friendly scannable summary of the differences found.",
+  "comparisonResults": [
+    {
+      "key": "biomarker_key",
+      "matched": true,
+      "name": { "current": "current_name", "shared": "shared_name", "status": "same|different" },
+      "unit": { "current": "current_unit", "shared": "shared_unit", "status": "same|different" },
+      "value": { "current": "current_value", "shared": "shared_value", "status": "same|different" },
+      "date": { "current": "current_date", "shared": "shared_date", "status": "same|different" },
+      "comments": { "current": "current_comments", "shared": "shared_comments", "status": "same|different" }
+    }
+  ]
+}
+
+=== USER'S CURRENT STATE ===
+${JSON.stringify(currentState, null, 2)}
+`;
+
+    if (customSystemInstruction) {
+      addDebugLog(`[Data Accuracy Agent] Overriding system instruction with custom version (${customSystemInstruction.length} chars).`, explicitSessionId);
+      systemInstruction = customSystemInstruction;
+    }
+
+    addDebugLog(`[Data Accuracy Agent - Payload Sent] Model ID: ${modelId}
+- User Prompt Content: ${inputText || "(no text content)"}
+- Images Uploaded: ${images?.length || 0}
+- Current State Reference Data Sent:
+${JSON.stringify(currentState, null, 2)}`, explicitSessionId);
+
+    const dynamicPromptText = `USER DATA / LAB REPORT INPUT TEXT:
+"""
+${inputText || "(no text content provided)"}
+"""
+
+Please extract the shared biomarkers and compare them with the user's current state. Return ONLY a valid JSON object matching the JSON schema. Ensure there are no markdown backticks.`;
+
+    const textOutput = await callUnifiedLLM({
+      modelId,
+      systemInstruction,
+      promptText: dynamicPromptText,
+      imagePayloads: imagesPayload,
+      responseMimeType: "application/json"
+    });
+
+    let cleanJson = textOutput.trim();
+    addDebugLog(`[Data Accuracy Agent - Response Received] Raw Output from Agent:\n${cleanJson}`, explicitSessionId);
+
+    // Robust markdown removal & JSON extraction
+    if (cleanJson.includes("```")) {
+      const match = cleanJson.match(/```(?:json)?([\s\S]*?)```/);
+      if (match) {
+        cleanJson = match[1].trim();
+      } else {
+        cleanJson = cleanJson.replace(/```(?:json)?/gi, "").trim();
+      }
+    }
+
+    const firstBrace = cleanJson.indexOf('{');
+    const lastBrace = cleanJson.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
+    }
+
+    addDebugLog(`[Data Accuracy Agent - Response Received] Parsed and Cleaned JSON:\n${cleanJson}`, explicitSessionId);
+    
+    // Parse to verify valid JSON
+    const parsed = JSON.parse(cleanJson);
+    if (parsed.explanation) {
+      addDebugLog(`[Data Accuracy Agent] Agent Explanation Response:\n${parsed.explanation}`, explicitSessionId);
+    }
+    res.json(parsed);
+  } catch (error: any) {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    addDebugLog(`[Data Accuracy Agent] Error: ${error.message}`, explicitSessionId);
+    console.error("[Data Accuracy Agent Error]:", error);
+    res.status(500).json({ error: "Failed to compare and validate biomarkers: " + error.message });
+  }
+});
+
+app.post("/api/gemini/daily-recommendation-chat", async (req, res) => {
+  addDebugLog('[DailyRecommendation] Starting daily recommendation chat process.');
+  try {
+    const { message, userProfile, engine, history, foodLogs, biomarkers, report, actions, steps, location, thisMonthTrends } = req.body;
+    
+    const systemInstruction = `You are a personalized AI Health Coach. 
+Your goal is to look at the user's data (biomarkers, food logs, goals, daily steps, etc.) and provide an actionable, friendly, and clinical daily recommendation or answer their questions.
+
+### User Data Context
+Profile: ${JSON.stringify(userProfile)}
+Report/Nutrient Targets: ${JSON.stringify(report?.dailyNutrientTargets || {})}
+Biomarkers: ${JSON.stringify(biomarkers || {})}
+Clinical Actions: ${JSON.stringify(actions || {})}
+Recent Food Logs (titles & dates): ${JSON.stringify((foodLogs || []).slice(-15).map((f) => ({name: f.name, date: f.date})))}
+Today's Steps: ${steps || 'Unknown'}
+Location: ${JSON.stringify(location || 'Unknown')}
+This Month Trends (Daily Nutrient Intakes and Steps): ${JSON.stringify(thisMonthTrends || {})}
+
+### Guidelines
+1. Be encouraging, precise, friendly, and clinically sound.
+2. If this is the start of the chat (e.g. user says "What's up today?"), analyze their performance trends for top nutrients (calories, protein, saturated fat, sodium, carbs, total fat) this month and their daily steps. Tell them what they have achieved so far and give 1-2 highly practical, personalized recommendations for today based on their goals and biomarkers.
+3. If the user asks a question, answer it professionally and warmly, drawing on their real dietary trends and health logs.
+4. Use markdown formatting (bolding, lists, headers) to make the coach recommendation beautifully readable.
+5. Do NOT output JSON. Output pure markdown text.`;
+
+    let historyText = "";
+    if (history && Array.isArray(history)) {
+      historyText = history.map((m) => `${m.role === 'user' ? 'User' : 'Model'}: ${m.content}`).join('\n');
+    }
+    
+    const promptText = `Chat History:\n${historyText}\n\nUser's latest message: "${message}"`;
+    
+    const textOutput = await callUnifiedLLM({
+      modelId: engine,
+      systemInstruction,
+      promptText,
+      responseMimeType: "text/plain"
+    });
+    
+    res.json({ text: textOutput.trim() });
+  } catch (error) {
+    console.error("[Daily Recommendation Error]:", error);
+    res.status(500).json({ error: "Failed to generate recommendation: " + error.message });
+  }
+});
+
 app.post("/api/gemini/food-idea", async (req, res) => {
   addDebugLog(`[FoodIdea] Starting food-idea suggestion process.`);
   try {

@@ -1,3 +1,58 @@
+
+export function evaluateStructuredRange(num: number, customDef: any, profile?: any): { label: string, severity: string } | null {
+  if (!customDef) return null;
+  const { rangeConfig, customRanges } = customDef;
+  
+  if (!rangeConfig && (!customRanges || customRanges.length === 0)) return null;
+
+  let activeRange = rangeConfig;
+
+  // Check custom ranges first (they override)
+  if (customRanges && customRanges.length > 0) {
+    for (const cr of customRanges) {
+      let match = true;
+      if (profile && cr.filters) {
+        if (cr.filters.gender && profile.gender && cr.filters.gender.toLowerCase() !== profile.gender.toLowerCase()) match = false;
+        if (cr.filters.ethnicity && profile.ethnicity) {
+          const t = cr.filters.ethnicity.toLowerCase();
+          const p = profile.ethnicity.toLowerCase();
+          if (!p.includes(t) && !t.includes(p)) match = false;
+        }
+        if (cr.filters.minAge !== undefined && cr.filters.minAge !== '' && profile.age && profile.age < Number(cr.filters.minAge)) match = false;
+        if (cr.filters.maxAge !== undefined && cr.filters.maxAge !== '' && profile.age && profile.age > Number(cr.filters.maxAge)) match = false;
+      }
+      if (match) {
+        activeRange = cr.range;
+        break;
+      }
+    }
+  }
+
+  if (!activeRange) return null;
+
+  if (activeRange.type === 'simple') {
+    for (const cond of activeRange.conditions) {
+      let isMatch = false;
+      switch (cond.operator) {
+        case '>=': isMatch = num >= cond.value; break;
+        case '<=': isMatch = num <= cond.value; break;
+        case '>': isMatch = num > cond.value; break;
+        case '<': isMatch = num < cond.value; break;
+      }
+      if (isMatch) return { label: cond.alias, severity: cond.severity };
+    }
+  } else if (activeRange.type === 'bracket') {
+    for (const br of activeRange.brackets) {
+      let isMatch = true;
+      if (br.min !== null && num < br.min) isMatch = false;
+      if (br.max !== null && num >= br.max) isMatch = false;
+      if (isMatch) return { label: br.alias, severity: br.severity };
+    }
+  }
+
+  return null;
+}
+
 import { UserProfile } from '../types';
 
 export interface BiomarkerDefinition {
@@ -6,6 +61,7 @@ export interface BiomarkerDefinition {
   category: 'hematology' | 'blood_sugar' | 'lipids' | 'inflammation' | 'thyroid' | 'liver' | 'kidneys' | 'hormones' | 'vitamins' | 'other';
   unit: string;
   normalRange: string;
+  structuredRanges?: any[];
   descriptions: { [lang: string]: string };
   benefitRisk?: string;
   riskCategories?: string[];
@@ -19,8 +75,8 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     key: 'hba1c',
     name: 'HbA1c',
     category: 'blood_sugar',
-    unit: '%',
-    normalRange: '4.0 - 5.6',
+    unit: 'mmol/mol',
+    normalRange: '20 - 41',
     descriptions: {
       en: 'Average blood glucose levels over the past 2-3 months.',
       fr: 'Moyenne de la glycémie sur les 2-3 derniers mois.',
@@ -86,8 +142,8 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     key: 'total_cholesterol',
     name: 'Total Cholesterol',
     category: 'lipids',
-    unit: 'mg/dL',
-    normalRange: '125 - 200',
+    unit: 'mmol/L',
+    normalRange: 'Aim under 5.0',
     descriptions: {
       en: 'Total amount of cholesterol in the blood.',
       fr: 'Quantité totale de cholestérol dans le sang.',
@@ -99,8 +155,8 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     key: 'hdl',
     name: 'HDL-C',
     category: 'lipids',
-    unit: 'mg/dL',
-    normalRange: 'over 40',
+    unit: 'mmol/L',
+    normalRange: '0.9 - 1.7',
     descriptions: {
       en: 'High-Density Lipoprotein, the "good" cholesterol removing excess lipids.',
       fr: 'Cholestérol HDL, dit "bon" cholestérol favorisant le retour des lipides.',
@@ -136,19 +192,7 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
       id: 'Laju Filtrasi Glomerulus Estimasi, menunjukkan fungsi penyaringan ginjal.'
     }
   },
-  {
-    key: 'creatinine',
-    name: 'Creatinine',
-    category: 'kidneys',
-    unit: 'mg/dL',
-    normalRange: '0.6 - 1.2',
-    descriptions: {
-      en: 'Waste product from muscle wear, filtered out by kidneys.',
-      fr: 'Déchet musculaire éliminé par les reins.',
-      zh: '肌肉代谢废物，由肾脏过滤排出。',
-      id: 'Produk sisa otot yang disaring dan dibuang oleh ginjal.'
-    }
-  },
+
   {
     key: 'bun',
     name: 'BUN (Blood Urea Nitrogen)',
@@ -164,19 +208,7 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
   },
 
   // Hematology
-  {
-    key: 'hgb',
-    name: 'Hemoglobin (Hgb)',
-    category: 'hematology',
-    unit: 'g/dL',
-    normalRange: '13.5 - 17.5',
-    descriptions: {
-      en: 'Iron-containing protein in red blood cells carrying oxygen.',
-      fr: 'Protéine transporteuse d\'oxygène dans les globules rouges.',
-      zh: '红细胞中富含铁的氧气运输蛋白。',
-      id: 'Protein pengikat zat besi dalam sel darah merah yang membawa oksigen.'
-    }
-  },
+
   {
     key: 'rbc',
     name: 'Red Blood Cell (RBC)',
@@ -190,19 +222,7 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
       id: 'Jumlah sel darah merah yang membawa oksigen ke seluruh tubuh.'
     }
   },
-  {
-    key: 'wbc',
-    name: 'White Blood Cell (WBC)',
-    category: 'hematology',
-    unit: 'K/uL',
-    normalRange: '4.5 - 11.0',
-    descriptions: {
-      en: 'Immune cells protecting against infections.',
-      fr: 'Globules blancs, acteurs clés de l\'immunité.',
-      zh: '白细胞总数，反映机体免疫和炎症防守状态。',
-      id: 'Sel darah putih, agen utama sistem imun.'
-    }
-  },
+
   {
     key: 'platelets',
     name: 'Platelets',
@@ -286,8 +306,90 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
       zh: '基于身高和体重的身体质量指数。',
       id: 'Ukuran lemak tubuh berdasarkan tinggi dan berat badan.'
     }
+  },
+  {
+    key: 'creatinine',
+    name: 'Creatinine',
+    category: 'kidneys',
+    unit: 'umol/L',
+    normalRange: '44 - 106',
+    descriptions: {
+      en: 'A waste product from muscle breakdown, filtered by kidneys.',
+      fr: 'Déchet de l\'activité musculaire éliminé par les reins.',
+      zh: '肌肉代谢产生并由肾脏滤过排出的代谢废物。',
+      id: 'Produk sisa dari pemecahan otot, disaring oleh ginjal.'
+    }
+  },
+  {
+    key: 'hematocrit',
+    name: 'Hematocrit',
+    category: 'hematology',
+    unit: '%',
+    normalRange: '36 - 50',
+    descriptions: {
+      en: 'The proportion of blood made up of red blood cells.',
+      fr: 'Proportion de globules rouges dans le sang.',
+      zh: '血液中红细胞所占的体积百分比（血细胞比容）。',
+      id: 'Proporsi darah yang terdiri dari sel darah merah.'
+    }
+  },
+  {
+    key: 'total_protein',
+    name: 'Total Protein',
+    category: 'other',
+    unit: 'g/L',
+    normalRange: '60 - 80',
+    descriptions: {
+      en: 'Measures the total amount of protein in your blood.',
+      fr: 'Mesure la quantité totale de protéines dans le sang.',
+      zh: '测定血液中的总蛋白质含量。',
+      id: 'Mengukur jumlah total protein dalam darah.'
+    }
+  },
+  {
+    key: 'audit_total_score',
+    name: 'AUDIT Total Score',
+    category: 'other',
+    unit: 'points',
+    normalRange: '0 - 7',
+    descriptions: {
+      en: 'Alcohol Use Disorders Identification Test total score.',
+      fr: 'Score total du test d\'identification des troubles liés à l\'usage d\'alcool.',
+      zh: '酒精使用障碍筛查量表总分。',
+      id: 'Skor total Tes Identifikasi Gangguan Penggunaan Alkohol.'
+    }
   }
 ];
+
+export function getMappedBiomarkerKey(rawKey: string): string {
+  if (!rawKey) return '';
+  const clean = rawKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+  
+  if (clean === 'egfrmlmin173m2' || clean === 'egfr' || clean === 'egfrmlmin173' || clean.includes('egfr')) return 'egfr';
+  if (clean === 'ldl' || clean === 'ldlcholesterol' || clean === 'calculatedldlcholesterol' || clean === 'calculatedldl' || clean === 'ldlc' || clean.includes('ldl')) return 'ldl';
+  if (clean === 'hba1c' || clean === 'hba1cc' || clean === 'glycatedhaemoglobin' || clean.includes('hba1c')) return 'hba1c';
+  if (clean === 'fastingglucose' || clean === 'fastingbloodglucose' || clean === 'bloodglucose' || clean === 'glucosefasting') return 'fasting_glucose';
+  if (clean === 'fastinginsulin' || clean === 'insulinfasting' || clean === 'insulin') return 'fasting_insulin';
+  if (clean === 'apob' || clean === 'apolipoproteinb') return 'apob';
+  if (clean === 'totalcholesterol' || clean === 'serumtotalcholesterol' || (clean.includes('cholesterol') && clean.includes('total'))) return 'total_cholesterol';
+  if (clean === 'hdl' || clean === 'hdlcholesterol' || clean === 'hdlc' || clean.includes('hdl')) return 'hdl';
+  if (clean === 'triglycerides' || clean === 'trig' || clean.includes('triglycerides')) return 'triglycerides';
+  if (clean === 'bun' || clean === 'bloodureanitrogen' || clean === 'ureanitrogen') return 'bun';
+  if (clean === 'rbc' || clean === 'redbloodcell' || clean === 'redbloodcells' || clean === 'redbloodcellcount' || clean.includes('redbloodcell')) return 'rbc';
+  if (clean === 'platelets' || clean === 'plateletcount' || clean === 'platelet' || clean.includes('platelet')) return 'platelets';
+  if (clean === 'hscrp' || clean === 'crp' || clean === 'creactiveprotein' || clean.includes('hscrp') || clean.includes('creactive')) return 'hscrp';
+  if (clean === 'testosterone' || clean === 'totaltestosterone' || clean.includes('testosterone')) return 'testosterone';
+  if (clean === 'vitamind' || clean === 'vitamind25oh' || clean === '25ohvitamind' || clean.includes('vitamind')) return 'vitamin_d';
+  if (clean === 'vitaminb12' || clean === 'b12' || clean.includes('b12')) return 'vitamin_b12';
+  if (clean === 'bmi' || clean === 'bodymassindex') return 'bmi';
+  if (clean === 'creatinine' || clean === 'serumcreatinine' || clean === 'serumcreatinineumoll' || clean.includes('creatinine')) return 'creatinine';
+  if (clean === 'hematocrit' || clean === 'hematocritll' || clean === 'hct' || clean.includes('hematocrit')) return 'hematocrit';
+  if (clean === 'totalprotein' || clean === 'serumtotalprotein' || clean === 'serumtotalproteingl' || clean.includes('totalprotein')) return 'total_protein';
+  if (clean === 'audittotalscore' || clean === 'auditscore' || clean.includes('audittotal')) return 'audit_total_score';
+
+  return rawKey;
+}
+
 export const categoryLabels: { [key: string]: { [lang: string]: string } } = {
   blood_sugar: { en: 'Blood Sugar', fr: 'Glycémie', zh: '血糖管理', id: 'Gula Darah' },
   lipids: { en: 'Cardiovascular Lipids', fr: 'Lipides & Cardiovasculaire', zh: '心血管与血脂', id: 'Profil Lipid' },
@@ -297,9 +399,63 @@ export const categoryLabels: { [key: string]: { [lang: string]: string } } = {
   hormones: { en: 'Endocrine Hormones', fr: 'Hormones Endocriniennes', zh: '内分泌与激素', id: 'Hormon Endokrin' },
   vitamins: { en: 'Vitamins & Micronutrients', fr: 'Vitamines & Micronutriments', zh: '维生素与微量元素', id: 'Vitamin & Mikro' }
 };
-export const getBiomarkerStatus = (key: string, val: number | string, normalRangeStr?: string): 'normal' | 'low' | 'high' | 'critical' | 'unknown' => {
+export const getBiomarkerStatus = (key: string, val: number | string, normalRangeStr?: string, customDef?: any, profile?: any): 'normal' | 'low' | 'high' | 'critical' | 'unknown' => {
+
   const num = typeof val === 'string' ? parseFloat(val) : val;
   if (isNaN(num)) return 'unknown';
+
+  if (customDef?.structuredRanges?.length > 0) {
+    const ranges = customDef.structuredRanges;
+    let matchedRange = null;
+    
+    // Evaluate matching
+    for (const r of ranges) {
+      // Evaluate profile constraints if any
+      let profileMatch = true;
+      if (profile) {
+        if (r.targetGender && profile.gender && r.targetGender.toLowerCase() !== profile.gender.toLowerCase()) {
+          profileMatch = false;
+        }
+        if (r.targetEthnicity && profile.ethnicity) {
+          const targetEth = r.targetEthnicity.toLowerCase();
+          const pEth = profile.ethnicity.toLowerCase();
+          if (!pEth.includes(targetEth) && !targetEth.includes(pEth)) {
+            profileMatch = false;
+          }
+        }
+        if (r.targetAgeMin !== undefined && r.targetAgeMin !== '' && profile.age && profile.age < Number(r.targetAgeMin)) profileMatch = false;
+        if (r.targetAgeMax !== undefined && r.targetAgeMax !== '' && profile.age && profile.age > Number(r.targetAgeMax)) profileMatch = false;
+      }
+      
+      if (!profileMatch) continue;
+
+      // Evaluate value constraints
+      let valMatch = true;
+      if (r.min !== undefined && r.min !== '') {
+        if (num < Number(r.min)) valMatch = false;
+      }
+      if (r.max !== undefined && r.max !== '') {
+        if (num >= Number(r.max)) valMatch = false;
+      }
+      
+      if (valMatch) {
+        matchedRange = r;
+        break;
+      }
+    }
+
+    if (matchedRange) {
+      if (matchedRange.isNormal) return 'normal';
+      // If not normal, guess based on value? 
+      // A simple heuristic: if it has a max but no min, it's likely "low". If min but no max, "high". 
+      // But actually, we don't have isNormal flag working perfectly yet unless we set it.
+      // We added isNormal: false in the UI. 
+      // If it's Obese (high), we can return 'high' or 'critical'. 
+      // Let's just return 'high' for anything not normal for now, to ensure it shows as out of range.
+      return 'high';
+    }
+  }
+
 
   let rangeStr = normalRangeStr;
   if (!rangeStr) {
@@ -404,10 +560,44 @@ export const getBiomarkerBorderColor = (status: 'normal' | 'low' | 'high' | 'cri
   }
 };
 
-export const getCustomStatusLabel = (key: string, value: number | string, customDef: any): string | null => {
+export const getCustomStatusLabel = (key: string, value: number | string, customDef: any, profile?: any): string | null => {
   if (!customDef) return null;
   const num = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(num)) return null;
+
+  const res = evaluateStructuredRange(num, customDef, profile);
+  if (res) return res.label;
+
+  if (customDef.structuredRanges && customDef.structuredRanges.length > 0) {
+    for (const r of customDef.structuredRanges) {
+      let profileMatch = true;
+      if (profile) {
+        if (r.targetGender && profile.gender && r.targetGender.toLowerCase() !== profile.gender.toLowerCase()) profileMatch = false;
+        if (r.targetEthnicity && profile.ethnicity) {
+          const targetEth = r.targetEthnicity.toLowerCase();
+          const pEth = profile.ethnicity.toLowerCase();
+          if (!pEth.includes(targetEth) && !targetEth.includes(pEth)) profileMatch = false;
+        }
+        if (r.targetAgeMin !== undefined && r.targetAgeMin !== '' && profile.age && profile.age < Number(r.targetAgeMin)) profileMatch = false;
+        if (r.targetAgeMax !== undefined && r.targetAgeMax !== '' && profile.age && profile.age > Number(r.targetAgeMax)) profileMatch = false;
+      }
+      
+      if (!profileMatch) continue;
+
+      let valMatch = true;
+      if (r.min !== undefined && r.min !== '') {
+        if (num < Number(r.min)) valMatch = false;
+      }
+      if (r.max !== undefined && r.max !== '') {
+        if (num >= Number(r.max)) valMatch = false;
+      }
+      
+      if (valMatch) {
+        return r.name; // Use terminology (e.g. Overweight)
+      }
+    }
+  }
+
 
   // If there are range brackets, parse them to find the matching one
   const brackets = customDef.rangeBrackets;
@@ -457,10 +647,10 @@ export const getCustomStatusLabel = (key: string, value: number | string, custom
   return customDef.status || null;
 };
 
-export const getBiomarkerRiskTag = (key: string, status: string, customDef?: any, userValue?: number | string): string | null => {
+export const getBiomarkerRiskTag = (key: string, status: string, customDef?: any, userValue?: number | string, profile?: any): string | null => {
   let label = status;
   if (customDef && userValue !== undefined) {
-    const customLabel = getCustomStatusLabel(key, userValue, customDef);
+    const customLabel = getCustomStatusLabel(key, userValue, customDef, profile);
     if (customLabel) label = customLabel;
   }
   const match = label.match(/\(\s*(at risk|healthy|stage.*?)\s*\)/i);
@@ -468,10 +658,10 @@ export const getBiomarkerRiskTag = (key: string, status: string, customDef?: any
   return null;
 };
 
-export const getBiomarkerStatusLabel = (key: string, status: string, customDef?: any, userValue?: number | string): string => {
+export const getBiomarkerStatusLabel = (key: string, status: string, customDef?: any, userValue?: number | string, profile?: any): string => {
   let label = status;
   if (customDef && userValue !== undefined) {
-    const customLabel = getCustomStatusLabel(key, userValue, customDef);
+    const customLabel = getCustomStatusLabel(key, userValue, customDef, profile);
     if (customLabel) label = customLabel;
   }
   if (key === 'bmi') {
@@ -560,18 +750,25 @@ export function getPhysiologicalBucket(category: string, key?: string): 'metabol
 export function getBiomarkerMetadata(key: string, customDef?: any) {
   const k = key.toLowerCase();
   
-  if (customDef) {
-    return {
-      riskCategories: customDef.riskCategories || getFallbackRiskCategories(k),
-      standardMedicalGrouping: customDef.standardMedicalGrouping || getFallbackMedicalGrouping(k),
-      potentialMedicalConditions: customDef.potentialMedicalConditions || getFallbackMedicalConditions(k)
-    };
+  let risks = getFallbackRiskCategories(k);
+  if (customDef && customDef.riskCategories && customDef.riskCategories.length > 0) {
+    risks = customDef.riskCategories;
+  }
+  
+  let group = getFallbackMedicalGrouping(k);
+  if (customDef && customDef.standardMedicalGrouping && customDef.standardMedicalGrouping.trim() !== '') {
+    group = customDef.standardMedicalGrouping;
+  }
+  
+  let conditions = getFallbackMedicalConditions(k);
+  if (customDef && customDef.potentialMedicalConditions && customDef.potentialMedicalConditions.length > 0) {
+    conditions = customDef.potentialMedicalConditions;
   }
 
   return {
-    riskCategories: getFallbackRiskCategories(k),
-    standardMedicalGrouping: getFallbackMedicalGrouping(k),
-    potentialMedicalConditions: getFallbackMedicalConditions(k)
+    riskCategories: risks,
+    standardMedicalGrouping: group,
+    potentialMedicalConditions: conditions
   };
 }
 

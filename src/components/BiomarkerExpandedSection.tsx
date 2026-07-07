@@ -3,6 +3,7 @@ import { ResponsiveContainer, LineChart, XAxis, YAxis, Tooltip, ReferenceLine, L
 import { BrainCircuit, LineChart as LineChartIcon, Trash2 } from 'lucide-react';
 import { BiomarkerLog, UserProfile } from '../types';
 import { BiomarkerDefinition } from '../utils/biomarkers';
+import { reverseStandardizeUnit, formatNormalRange, CONVERSION_FACTORS, standardizeUnit } from '../utils/unitConversion';
 import BiomarkerCalculationPanel from './BiomarkerCalculationPanel';
 
 interface BiomarkerExpandedSectionProps {
@@ -12,6 +13,7 @@ interface BiomarkerExpandedSectionProps {
   biomarkers: { [key: string]: number | string };
   onEditBiomarkerLog?: (id: string, key: string, value: string | number, newDate?: string) => void;
   onDeleteBiomarkerLog?: (id: string) => void;
+  onDeleteBiomarkerFromLog?: (id: string, key: string) => void;
   onDeleteBiomarker?: (key: string) => void;
   onOpenAiReview: (key: string) => void;
   onCombineBiomarker?: (key: string) => void;
@@ -24,6 +26,7 @@ interface BiomarkerExpandedSectionProps {
   hasPendingAlert?: boolean;
   onDismissAlert?: () => void;
   hideSensitive: boolean;
+  onEditBiomarkerDef?: (key: string, normalRange: string, unit: string) => void;
 }
 
 export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> = ({
@@ -33,6 +36,7 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
   biomarkers,
   onEditBiomarkerLog,
   onDeleteBiomarkerLog,
+  onDeleteBiomarkerFromLog,
   onDeleteBiomarker,
   onOpenAiReview,
   onCombineBiomarker,
@@ -40,20 +44,37 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
   hasPendingAlert,
   onDismissAlert,
   hideSensitive,
+  onEditBiomarkerDef,
 }) => {
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isEditingDef, setIsEditingDef] = useState(false);
+  const [editDefRange, setEditDefRange] = useState('');
+  const [editDefUnit, setEditDefUnit] = useState('');
   const [editDate, setEditDate] = useState<string>('');
 
   const historyData = biomarkerHistory
     .filter(h => h.biomarkers[def.key] !== undefined)
-    .map(h => ({
-      date: h.date,
-      value: typeof h.biomarkers[def.key] === 'string' ? parseFloat(h.biomarkers[def.key] as string) : Number(h.biomarkers[def.key]),
-      originalVal: h.biomarkers[def.key],
-      logId: h.id
-    }))
+    .map(h => {
+      let rawVal = h.biomarkers[def.key];
+      let val = typeof rawVal === 'string' ? parseFloat(rawVal) : Number(rawVal);
+      let dispUnit = def.unit || '';
+      let displayRange = def.normalRange;
+      
+      if (profile.unitPreference === 'US' && !isNaN(val)) {
+         const reversed = reverseStandardizeUnit(def.key, val, dispUnit);
+         dispUnit = reversed.newUnit || dispUnit;
+         val = Number(reversed.newValue);
+      }
+      return {
+        date: h.date,
+        value: val,
+        originalVal: rawVal,
+        unit: dispUnit,
+        logId: h.id
+      };
+    })
     .sort((a, b) => a.date.localeCompare(b.date)); // oldest to newest for chart
 
   const description = def.descriptions[profile.language as keyof typeof def.descriptions] || def.descriptions.en;
@@ -98,7 +119,21 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
       const log = biomarkerHistory.find(h => h.id === logId);
       if (log && onEditBiomarkerLog) {
         const finalDate = editDate ? fromInputDateFormat(editDate) : log.date;
-        onEditBiomarkerLog(logId, def.key, editValue, finalDate);
+        let valueToSave: string | number = Number(editValue);
+        
+        if (profile.unitPreference === 'US') {
+          // If preference is US, the user entered a US value. Convert it to standard (SI) before saving
+          // We can use the imported standardizeUnit
+          
+          const conv = CONVERSION_FACTORS[def.key.toLowerCase()];
+          if (conv) {
+             
+             const res = standardizeUnit(def.key, valueToSave, conv.from);
+             valueToSave = res.newValue;
+          }
+        }
+        
+        onEditBiomarkerLog(logId, def.key, valueToSave, finalDate);
       }
     }
     setEditingLogId(null);
@@ -126,6 +161,7 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
         onApplyRecommendations={onApplyCalculation}
         hasPendingAlert={hasPendingAlert}
         onDismissAlert={onDismissAlert}
+        onEditBiomarkerDef={onEditBiomarkerDef}
       />
 
       <div className="mt-4 flex gap-2.5 mb-5">
@@ -214,9 +250,12 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
       )}
 
       {historyData.length > 0 && (
-        <div>
-          <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Historical Logs</h4>
-          <div className="space-y-2">
+        <div className="flex flex-col max-h-[300px]">
+          <div className="flex items-center justify-between mb-2 shrink-0">
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Historical Logs</h4>
+
+          </div>
+          <div className="space-y-2 overflow-y-auto flex-1 pr-1 pb-1">
             {historyData.slice().reverse().map(h => {
               const fullLog = biomarkerHistory.find(log => log.id === h.logId);
               const testDetail = fullLog?.tests?.find(t => t.key === def.key);
@@ -248,7 +287,7 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
                         </div>
                       ) : (
                         <>
-                          <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{hideSensitive ? '***' : h.originalVal} {def.unit}</span>
+                          <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{hideSensitive ? '***' : h.value} {h.unit}</span>
                           <button 
                             onClick={(e) => { 
                               e.stopPropagation(); 
@@ -260,9 +299,16 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                           </button>
-                          {onDeleteBiomarkerLog && (
+                          {(onDeleteBiomarkerFromLog || onDeleteBiomarkerLog) && (
                             <button 
-                              onClick={(e) => { e.stopPropagation(); onDeleteBiomarkerLog(h.logId); }}
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                if (onDeleteBiomarkerFromLog) {
+                                  onDeleteBiomarkerFromLog(h.logId, def.key);
+                                } else if (onDeleteBiomarkerLog) {
+                                  onDeleteBiomarkerLog(h.logId);
+                                }
+                              }}
                               className="text-slate-400 hover:text-rose-500 cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

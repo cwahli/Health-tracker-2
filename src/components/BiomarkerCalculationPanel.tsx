@@ -15,6 +15,7 @@ interface BiomarkerCalculationPanelProps {
   }) => void;
   hasPendingAlert?: boolean;
   onDismissAlert?: () => void;
+  onEditBiomarkerDef?: (key: string, normalRange: string, unit: string) => void;
 }
 
 const getBmiPercentage = (bmi: number, isAsian: boolean): number => {
@@ -56,6 +57,7 @@ export default function BiomarkerCalculationPanel({
   onApplyRecommendations,
   hasPendingAlert,
   onDismissAlert,
+  onEditBiomarkerDef,
 }: BiomarkerCalculationPanelProps) {
   const isBmi = biomarkerKey === 'bmi';
 
@@ -69,6 +71,8 @@ export default function BiomarkerCalculationPanel({
   const isAsianUser = isAsianEthnicity(ethnicity);
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(!!hasPendingAlert);
   const [applied, setApplied] = useState(false);
+  const [isEditingRange, setIsEditingRange] = useState(false);
+  const [editRangeValue, setEditRangeValue] = useState(profile.customBiomarkers?.[biomarkerKey]?.normalRange || '');
 
   const agentCalibration = React.useMemo(() => {
     try {
@@ -228,9 +232,53 @@ export default function BiomarkerCalculationPanel({
             </p>
           </div>
         ) : (
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-            Uses static reference ranges from clinical guidelines. Custom normal range: <strong className="text-slate-700 dark:text-slate-300 font-mono">{profile.customBiomarkers?.[biomarkerKey]?.normalRange || 'Standard reference'}</strong>.
-          </p>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            <p className="mb-1">Uses static reference ranges from clinical guidelines.</p>
+            {isEditingRange ? (
+              <div className="flex items-center gap-2 mt-2">
+                <input 
+                  type="text" 
+                  value={editRangeValue} 
+                  onChange={(e) => setEditRangeValue(e.target.value)}
+                  placeholder="e.g. 20 - 41 mmol/mol"
+                  className="form-input-styled text-xs font-mono py-1 px-2 w-48"
+                />
+                <button 
+                  onClick={() => {
+                    if (onEditBiomarkerDef) {
+                      onEditBiomarkerDef(biomarkerKey, editRangeValue, profile.customBiomarkers?.[biomarkerKey]?.unit || '');
+                    }
+                    setIsEditingRange(false);
+                  }}
+                  className="px-2 py-1 bg-indigo-600 text-white rounded text-[10px] font-bold"
+                >
+                  Save
+                </button>
+                <button 
+                  onClick={() => setIsEditingRange(false)}
+                  className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-[10px] font-bold"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <p className="flex items-center gap-2 mt-1">
+                Custom normal range: 
+                <strong className="text-slate-700 dark:text-slate-300 font-mono">{profile.customBiomarkers?.[biomarkerKey]?.normalRange || 'Standard reference'}</strong>
+                {onEditBiomarkerDef && (
+                  <button 
+                    onClick={() => {
+                      setEditRangeValue(profile.customBiomarkers?.[biomarkerKey]?.normalRange || '');
+                      setIsEditingRange(true);
+                    }}
+                    className="text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-[10px] font-bold uppercase tracking-wider"
+                  >
+                    Edit
+                  </button>
+                )}
+              </p>
+            )}
+          </div>
         )}
 
         {isDetailsExpanded && (

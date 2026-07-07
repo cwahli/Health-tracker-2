@@ -4,6 +4,7 @@ import { translations } from '../utils/translations';
 import { CheckCircle2, Circle, AlertCircle, Heart, ChevronDown, ChevronUp, Calendar, MapPin, Search, Sparkles, Trash2, RefreshCw, Clock, Settings, X, TrendingUp, Activity } from 'lucide-react';
 import { getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity } from '../utils/biomarkers';
 import { getCurrentDateInTimezone } from '../utils/dateUtils';
+import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { BiomarkerExpandedSection } from './BiomarkerExpandedSection';
 import ReviewBiomarkerModal from './ReviewBiomarkerModal';
 import LogChat from './LogChat';
@@ -23,6 +24,7 @@ interface HomeTabProps {
   onNavigateToTab: (tab: 'home' | 'insights' | 'food' | 'medical' | 'trends') => void;
   onEditBiomarkerLog: (id: string, key: string, value: string | number, newDate?: string) => void;
   onDeleteBiomarkerLog: (id: string) => void;
+  onDeleteBiomarkerFromLog?: (id: string, key: string) => void;
   onLogMedical?: (biomarkers: { [key: string]: number | string }, profileUpdates?: Partial<UserProfile>, date?: string, entries?: { date: string | null; biomarkers: { [key: string]: number | string } }[]) => void;
   onOpenAgentChat?: (agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5', options?: { prefillMessage?: string }) => void;
   hideSensitive: boolean;
@@ -30,6 +32,7 @@ interface HomeTabProps {
   onChangeModelId: (id: string) => void;
   hasBmiAlert?: boolean;
   onDismissBmiAlert?: () => void;
+  onUpdateReport?: (report: any) => void;
   onApplyCalculation?: (updates: {
     targetCalories?: number;
     targetWeight?: number;
@@ -53,6 +56,7 @@ export default function HomeTab({
   onNavigateToTab,
   onEditBiomarkerLog,
   onDeleteBiomarkerLog,
+  onDeleteBiomarkerFromLog,
   onLogMedical,
   onOpenAgentChat,
   hideSensitive,
@@ -61,6 +65,7 @@ export default function HomeTab({
   hasBmiAlert,
   onDismissBmiAlert,
   onApplyCalculation,
+  onUpdateReport,
 }: HomeTabProps) {
   const t = translations[profile.language] || translations.en;
   const [showAllTargets, setShowAllTargets] = React.useState(false);
@@ -68,6 +73,7 @@ export default function HomeTab({
   const [reviewingBiomarkerKey, setReviewingBiomarkerKey] = React.useState<string | null>(null);
   const [reviewHistories, setReviewHistories] = React.useState<{[key: string]: ChatMessage[]}>({});
   const [isFoodIdeaChatOpen, setIsFoodIdeaChatOpen] = React.useState(false);
+  const [isDailyRecommendationChatOpen, setIsDailyRecommendationChatOpen] = React.useState(false);
   const [showHealthDiagnostics, setShowHealthDiagnostics] = React.useState(false);
   const [healthApiStatus, setHealthApiStatus] = React.useState<string>("Success (No API payload cached)");
   const [lastApiPayload, setLastApiPayload] = React.useState<any>(null);
@@ -89,6 +95,7 @@ export default function HomeTab({
     return localStorage.getItem('targetViewTimeframe') || '1';
   });
   const [isSettingsModalOpen, setIsSettingsModalOpen] = React.useState<boolean>(false);
+  const [isTargetsExpanded, setIsTargetsExpanded] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     localStorage.setItem('targetViewTimeframe', viewTimeframe);
@@ -192,12 +199,23 @@ export default function HomeTab({
       .map(([key, val]) => {
         const def = allDefinitions.find(d => d.key === key);
         if (!def) return null;
-        const status = getBiomarkerStatus(key, val as string | number, def.normalRange);
+        const status = getBiomarkerStatus(key, val as string | number, def.normalRange, def, profile);
+        
+        let displayValue = val;
+        let displayUnit = def.unit || '';
+        if (profile.unitPreference === 'US' && typeof val === 'number') {
+           const reversed = reverseStandardizeUnit(key, val, displayUnit);
+           displayValue = reversed.newValue;
+           displayUnit = reversed.newUnit || displayUnit;
+        }
+
         return {
           key,
-          value: val,
+          value: displayValue,
+          unit: displayUnit,
+          originalValue: val,
           status,
-          def
+          def: { ...def, unit: displayUnit, normalRange: formatNormalRange(key, def.normalRange || '', def.unit || '', profile.unitPreference as 'SI' | 'US') }
         };
       })
       .filter((b): b is NonNullable<typeof b> => {
@@ -346,12 +364,11 @@ export default function HomeTab({
     return dotIndex === -1 ? 0 : str.length - dotIndex - 1;
   };
 
-  const getAdjustedTarget = React.useCallback((key: string, baseTarget: number): number => {
-    if (!rollingEnabled) return baseTarget;
+  const getRollingBreakdown = React.useCallback((key: string, baseTarget: number) => {
+    if (!rollingEnabled) return null;
     
     const numPrevDays = rollingDays - 1;
-    if (numPrevDays <= 0) return baseTarget;
-
+    if (numPrevDays <= 0) return null;
     let totalPrevIntake = 0;
     
     for (let d = 1; d <= numPrevDays; d++) {
@@ -372,11 +389,9 @@ export default function HomeTab({
         }, 0);
         totalPrevIntake += dayTotal;
       } else {
-        // If no logs, assume they consumed exactly the target (deficit contribution is 0)
         totalPrevIntake += baseTarget;
       }
     }
-
     const totalPrevTarget = numPrevDays * baseTarget;
     const deficit = totalPrevTarget - totalPrevIntake;
     
@@ -386,8 +401,22 @@ export default function HomeTab({
     
     const decimals = getDecimalPlaces(baseTarget);
     const factor = Math.pow(10, decimals);
-    return Math.ceil(adjustedValue * factor) / factor;
+    
+    return {
+      totalPrevTarget: Math.ceil(totalPrevTarget * factor) / factor,
+      totalPrevIntake: Math.ceil(totalPrevIntake * factor) / factor,
+      maxAdjustment: Math.ceil(maxAdjustment * factor) / factor,
+      adjustment: Math.ceil(adjustment * factor) / factor,
+      adjustedValue: Math.ceil(adjustedValue * factor) / factor,
+      numPrevDays
+    };
   }, [rollingEnabled, rollingDays, rollingAllowance, todayStr, foodLogs]);
+
+  const getAdjustedTarget = React.useCallback((key: string, baseTarget: number): number => {
+    const breakdown = getRollingBreakdown(key, baseTarget);
+    if (!breakdown) return baseTarget;
+    return breakdown.adjustedValue;
+  }, [getRollingBreakdown]);
 
   const baseCaloriesTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.calories, 1700) : 1800;
   const baseSatFatTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.saturatedFat, 15) : 15;
@@ -522,35 +551,24 @@ export default function HomeTab({
   return (
     <div className="space-y-6 pb-24 animation-fade-in max-w-md mx-auto px-[15px] mt-4 font-sans text-slate-900">
       
-      {/* Single Most Important Next Step */}
+      {/* Daily Recommendation */}
       <div id="primary-action-card" className="p-2">
-        <div className="flex gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+        <div className="flex items-center justify-between bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-2xl border border-indigo-100 dark:border-indigo-800/50 shadow-sm">
           <div className="space-y-1">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-              {t.singleNextStep}
+            <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-100 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-500" />
+              Daily Recommendation
             </h3>
-            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
-              {getDynamicNextStep()}
+            <p className="text-xs text-indigo-700 dark:text-indigo-300">
+              Get personalized insights on your progress and today's goals.
             </p>
-            {!report && getMissingDataStatus().length > 0 && (
-              <button
-                id="home-navigate-medical-btn"
-                onClick={() => onNavigateToTab('medical')}
-                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 mt-2 block cursor-pointer"
-              >
-                Add body information &rarr;
-              </button>
-            )}
-            {!report && getMissingDataStatus().length === 0 && (
-              <button
-                onClick={() => onNavigateToTab('insights')}
-                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 mt-2 block cursor-pointer"
-              >
-                Run Health Analysis &rarr;
-              </button>
-            )}
           </div>
+          <button
+            onClick={() => setIsDailyRecommendationChatOpen(true)}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer whitespace-nowrap"
+          >
+            What's up today?
+          </button>
         </div>
       </div>
 
@@ -771,7 +789,7 @@ export default function HomeTab({
       {/* Settings Modal */}
       {isSettingsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-xl space-y-5">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-xl space-y-5 max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800/50">
               <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm flex items-center gap-2">
@@ -787,11 +805,34 @@ export default function HomeTab({
             </div>
 
             {/* Explanation card */}
-            <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-500/10 rounded-2xl text-xs text-indigo-950 dark:text-indigo-200/90 leading-relaxed space-y-1">
+            <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-500/10 rounded-2xl text-xs text-indigo-950 dark:text-indigo-200/90 leading-relaxed space-y-2">
               <span className="font-bold block text-indigo-900 dark:text-indigo-300">How Rolling Budget Works</span>
-              <p>
-                Adjusts your target today based on your previous days' averages. Over-consuming reduces today's allowance, while under-consuming increases it, up to your authorized limit.
-              </p>
+              {(() => {
+                const calBD = getRollingBreakdown('calories', baseCaloriesTarget);
+                const proBD = getRollingBreakdown('protein', baseProteinTarget);
+                const fatBD = getRollingBreakdown('saturatedFat', baseSatFatTarget);
+                
+                if (!calBD || !proBD || !fatBD) return <p>Adjusts your target today based on your previous days' averages.</p>;
+                
+                return (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-1 gap-1.5 text-[10px] font-mono">
+                      <div className="flex flex-col">
+                        <span className="font-bold">Calories:</span>
+                        <span className="text-indigo-600 dark:text-indigo-400">({calBD.totalPrevIntake} kcal / {calBD.numPrevDays} days) ± {rollingAllowance}% allowance = {calBD.adjustedValue} kcal</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-bold">Protein:</span>
+                        <span className="text-indigo-600 dark:text-indigo-400">({proBD.totalPrevIntake} g / {proBD.numPrevDays} days) ± {rollingAllowance}% allowance = {proBD.adjustedValue} g</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-bold">Sat. Fat:</span>
+                        <span className="text-indigo-600 dark:text-indigo-400">({fatBD.totalPrevIntake} g / {fatBD.numPrevDays} days) ± {rollingAllowance}% allowance = {fatBD.adjustedValue} g</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Form Fields */}
@@ -855,6 +896,112 @@ export default function HomeTab({
                 </>
               )}
 
+              {/* Targets Section */}
+              <div className="space-y-3 border-t border-slate-100 dark:border-slate-800/50 pt-3">
+                <button
+                  onClick={() => setIsTargetsExpanded(!isTargetsExpanded)}
+                  className="flex items-center justify-between w-full text-xs font-bold text-slate-850 dark:text-slate-250 cursor-pointer"
+                >
+                  <span>Manual Targets Override</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${isTargetsExpanded ? 'rotate-180' : ''}`} />
+                </button>
+                {isTargetsExpanded && (
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500">Calories (kcal)</label>
+                    <input 
+                      type="number"
+                      value={baseCaloriesTarget}
+                      onChange={(e) => {
+                         if (onUpdateReport && report) {
+                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, calories: `${e.target.value} kcal`}})
+                         }
+                      }}
+                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500">Protein (g)</label>
+                    <input 
+                      type="number"
+                      value={baseProteinTarget}
+                      onChange={(e) => {
+                         if (onUpdateReport && report) {
+                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, protein: `${e.target.value} g`}})
+                         }
+                      }}
+                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500">Sat. Fat (g)</label>
+                    <input 
+                      type="number"
+                      value={baseSatFatTarget}
+                      onChange={(e) => {
+                         if (onUpdateReport && report) {
+                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, saturatedFat: `${e.target.value} g`}})
+                         }
+                      }}
+                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500">Sodium (mg)</label>
+                    <input 
+                      type="number"
+                      value={baseSodiumTarget}
+                      onChange={(e) => {
+                         if (onUpdateReport && report) {
+                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, sodium: `${e.target.value} mg`}})
+                         }
+                      }}
+                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500">Steps</label>
+                    <input 
+                      type="number"
+                      value={report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.steps, 3000) : 3000}
+                      onChange={(e) => {
+                         if (onUpdateReport && report) {
+                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, steps: `${e.target.value} steps`}})
+                         }
+                      }}
+                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500">Carbs (g)</label>
+                    <input 
+                      type="number"
+                      value={report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.carbohydrates, 200) : 200}
+                      onChange={(e) => {
+                         if (onUpdateReport && report) {
+                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, carbohydrates: `${e.target.value} g`}})
+                         }
+                      }}
+                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500">Total Fat (g)</label>
+                    <input 
+                      type="number"
+                      value={report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.totalFat, 60) : 60}
+                      onChange={(e) => {
+                         if (onUpdateReport && report) {
+                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, totalFat: `${e.target.value} g`}})
+                         }
+                      }}
+                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
+                    />
+                  </div>
+                </div>
+                )}
+              </div>
+              
               {/* View Timeframe Selection */}
               <div className="space-y-1.5 border-t border-slate-100 dark:border-slate-800/50 pt-3">
                 <div className="flex justify-between text-xs font-bold text-slate-850 dark:text-slate-250">
@@ -1021,7 +1168,7 @@ export default function HomeTab({
                                   {hideSensitive ? '***' : b.value}
                                 </span>
                                 <span className={`font-size-subtitle-small font-bold uppercase tracking-tight ${colorClass}`}>
-                                  {getBiomarkerStatusLabel(b.key, b.status, profile.customBiomarkers?.[b.key], b.value)}
+                                  {getBiomarkerStatusLabel(b.key, b.status, profile.customBiomarkers?.[b.key], b.value, profile)}
                                 </span>
                               </div>
                             </button>
@@ -1048,7 +1195,7 @@ export default function HomeTab({
                                 {hideSensitive ? '***' : expandedInChunk.value}
                               </span>
                                <span className={`font-size-xs font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider ${getBiomarkerColor(expandedInChunk.status)} bg-current/10`}>
-                                {getBiomarkerStatusLabel(expandedInChunk.key, expandedInChunk.status, profile.customBiomarkers?.[expandedInChunk.key], expandedInChunk.value)}
+                                {getBiomarkerStatusLabel(expandedInChunk.key, expandedInChunk.status, profile.customBiomarkers?.[expandedInChunk.key], expandedInChunk.value, profile)}
                               </span>
                             </div>
                           </div>
@@ -1060,6 +1207,7 @@ export default function HomeTab({
                             biomarkers={resolvedBiomarkers}
                             onEditBiomarkerLog={onEditBiomarkerLog}
                             onDeleteBiomarkerLog={onDeleteBiomarkerLog}
+                            onDeleteBiomarkerFromLog={onDeleteBiomarkerFromLog}
                             onOpenAiReview={setReviewingBiomarkerKey}
                             onApplyCalculation={onApplyCalculation}
                             hasPendingAlert={expandedInChunk.key === 'bmi' ? hasBmiAlert : false}
@@ -1254,6 +1402,24 @@ export default function HomeTab({
             setFoodIdeas([...foodIdeas, ...ideas]);
             setIsFoodIdeaChatOpen(false);
           }}
+        />
+      )}
+
+      {isDailyRecommendationChatOpen && (
+        <LogChat 
+          type="daily_recommendation"
+          isOpen={isDailyRecommendationChatOpen}
+          onClose={() => setIsDailyRecommendationChatOpen(false)}
+          profile={profile}
+          foodLogs={foodLogs}
+          biomarkers={biomarkers}
+          biomarkerHistory={biomarkerHistory}
+          report={report}
+          actions={actions}
+          googleSteps={googleSteps}
+          selectedModelId={selectedModelId}
+          onChangeModelId={onChangeModelId}
+          autoSendMessage="What's up today?"
         />
       )}
     </div>

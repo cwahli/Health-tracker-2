@@ -1,3 +1,44 @@
+export type Severity = 'Normal' | 'Borderline at risk' | 'At risk';
+
+export interface SimpleRangeCondition {
+  operator: '>=' | '<=' | '>' | '<';
+  value: number;
+  alias: string;
+  severity: Severity;
+}
+
+export interface SimpleRange {
+  type: 'simple';
+  conditions: [SimpleRangeCondition, SimpleRangeCondition];
+}
+
+export interface BracketRangeCondition {
+  min: number | null;
+  max: number | null;
+  alias: string;
+  severity: Severity;
+}
+
+export interface BracketRange {
+  type: 'bracket';
+  brackets: BracketRangeCondition[];
+}
+
+export type RangeConfig = SimpleRange | BracketRange;
+
+export interface CustomRangeFilter {
+  ethnicity?: string;
+  gender?: string;
+  minAge?: number | '';
+  maxAge?: number | '';
+}
+
+export interface CustomRangeDef {
+  id: string;
+  filters: CustomRangeFilter;
+  range: RangeConfig;
+}
+
 export interface AgentAnalysis {
   id: string;
   agentType: string;
@@ -13,6 +54,7 @@ export interface UserProfile {
   age: number | '';
   ethnicity: string;
   weight: number | ''; // kg
+  unitPreference?: 'SI' | 'US';
   height: number | ''; // cm
   bloodType?: string;
   gender?: string;
@@ -47,6 +89,22 @@ export interface UserProfile {
       name: string;
       unit: string;
       normalRange: string;
+      rangeConfig?: RangeConfig;
+      customRanges?: CustomRangeDef[];
+      structuredRanges?: {
+        id: string;
+        name: string;
+        min?: number | '';
+        max?: number | '';
+        isNormal?: boolean;
+        targetGender?: string;
+        targetAgeMin?: number | '';
+        targetAgeMax?: number | '';
+        targetEthnicity?: string;
+        targetBiomarkerKey?: string;
+        targetBiomarkerMin?: number | '';
+        targetBiomarkerMax?: number | '';
+      }[];
       description: string;
       benefitRisk?: string;
       riskCategories?: string[];
@@ -68,6 +126,8 @@ export interface UserProfile {
   };
   agent2GapTasks?: string[];
   agent4Projections?: string[];
+  deletedFoodLogIds?: string[];
+  deletedBiomarkerLogIds?: string[];
 }
 
 export interface NutrientBreakdown {

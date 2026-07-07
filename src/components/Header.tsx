@@ -73,7 +73,7 @@ interface HeaderProps {
   setHideSensitive: (h: boolean) => void;
   syncState: 'synced' | 'syncing' | 'local';
   onSignOut: () => void;
-  onCloudSync?: () => Promise<void>;
+  onCloudSync,
   dbInteractions?: DbInteraction[];
   quota?: QuotaData;
   foodLogs?: FoodLog[];
@@ -114,6 +114,7 @@ export default function Header({
   const [height, setHeight] = useState<number | string>(profile.height);
   const [bloodType, setBloodType] = useState<string>(profile.bloodType || '');
   const [gender, setGender] = useState<string>(profile.gender || 'Unknown');
+  const [unitPreference, setUnitPreference] = useState<string>(profile.unitPreference || 'SI');
   const [timezone, setTimezone] = useState<string>(profile.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [now, setNow] = useState(Date.now());
   const t = translations[profile.language] || translations.en;
@@ -403,6 +404,7 @@ export default function Header({
     setHeight(profile.height);
     setBloodType(profile.bloodType || '');
     setGender(profile.gender || 'Unknown');
+    setUnitPreference(profile.unitPreference || 'SI');
     setTimezone(profile.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
   }, [profile]);
 
@@ -416,6 +418,7 @@ export default function Header({
       height: Number(height) || 0,
       bloodType,
       gender,
+      unitPreference: unitPreference as 'SI' | 'US',
       timezone
     };
     if (onSaveProfile) {
@@ -661,6 +664,17 @@ export default function Header({
                 <option value="Other">Other</option>
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Unit Preference</label>
+              <select
+                value={unitPreference}
+                onChange={(e) => setUnitPreference(e.target.value)}
+                className="w-full text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+              >
+                <option value="SI">SI Units (International)</option>
+                <option value="US">US Units</option>
+              </select>
+            </div>
             <div className="col-span-2">
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Timezone</label>
               <select
@@ -715,6 +729,8 @@ export default function Header({
                   </button>
                 </div>
               </div>
+
+
 
               {/* Logout button */}
               <div className="mt-4 border-t border-slate-100 dark:border-slate-800/85 pt-3">

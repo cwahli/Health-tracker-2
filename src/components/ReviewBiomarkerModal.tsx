@@ -86,7 +86,7 @@ export default function ReviewBiomarkerModal({
   }, [profile.customBiomarkers]);
 
   const def = allDefinitions.find(d => d.key === biomarkerKey);
-  const status = getBiomarkerStatus(biomarkerKey, currentValue, def?.normalRange || '');
+  const status = getBiomarkerStatus(biomarkerKey, currentValue, def?.normalRange || '', def, profile);
   const descriptionText = def ? (def.descriptions[profile.language] || def.descriptions.en) : '';
 
   useEffect(() => {

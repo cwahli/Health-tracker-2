@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { UserProfile, BiomarkerLog, ChatMessage } from '../types';
 import { translations } from '../utils/translations';
 import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart as LineChartIcon, BrainCircuit, AlertCircle } from 'lucide-react';
+import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS } from '../utils/biomarkers';
 import ReviewBiomarkerModal from './ReviewBiomarkerModal';
 import { BiomarkerExpandedSection } from './BiomarkerExpandedSection';
@@ -14,10 +15,14 @@ interface MedicalHistoryTabProps {
   biomarkerHistory: BiomarkerLog[];
   hideSensitive: boolean;
   onDeleteBiomarkerLog: (id: string) => void;
+  onBatchCombineBiomarkers?: (combinations: {targetKey: string, targetDef: any, mergedLogs: any[], sourceKeysToDelete: string[]}[]) => Promise<void>;
+  onDeleteBiomarkerFromLog?: (id: string, key: string) => void;
   onDeleteBiomarker?: (key: string) => void;
   onDeleteEmptyBiomarkers?: () => void;
+  onStandardizeUnits?: (updates: { [key: string]: { unit: string; normalRange: string; name: string } }) => Promise<void>;
+  onUpdateProfile?: (updates: Partial<UserProfile>) => void;
   onEditBiomarkerLog: (id: string, key: string, value: string | number, newDate?: string) => void;
-  onLogMedical?: (biomarkers: { [key: string]: number | string }, profileUpdates?: Partial<UserProfile>, date?: string, entries?: { date: string | null; biomarkers: { [key: string]: number | string } }[]) => void;
+  onLogMedical?: (biomarkers: { [key: string]: number | string }, profileUpdates?: Partial<UserProfile>, date?: string, entries?: any, modificationCommand?: any, skipClose?: boolean) => void;
   onCombineBiomarkers?: (
     targetKey: string,
     targetDef: { name: string; unit: string; normalRange: string; description: string },
@@ -36,6 +41,8 @@ interface MedicalHistoryTabProps {
   onChangeModelId: (id: string) => void;
   hasBmiAlert?: boolean;
   onDismissBmiAlert?: () => void;
+  onAgentAnalysisSaved?: (agentType: string, agentResult: any) => Promise<void>;
+  onDeleteAnalysis?: (id: string) => Promise<void>;
 }
 
 export default function MedicalHistoryTab({
@@ -44,11 +51,13 @@ export default function MedicalHistoryTab({
   biomarkerHistory,
   hideSensitive,
   onDeleteBiomarkerLog,
+  onDeleteBiomarkerFromLog,
   onDeleteBiomarker,
   onDeleteEmptyBiomarkers,
   onEditBiomarkerLog,
   onLogMedical,
   onCombineBiomarkers,
+  onBatchCombineBiomarkers,
   onBatchConsolidate,
   onReviewWithAgent,
   onApplyCalculation,
@@ -56,6 +65,10 @@ export default function MedicalHistoryTab({
   onChangeModelId,
   hasBmiAlert,
   onDismissBmiAlert,
+  onUpdateProfile,
+  onStandardizeUnits,
+  onAgentAnalysisSaved,
+  onDeleteAnalysis,
 }: MedicalHistoryTabProps) {
   const t = translations[profile.language] || translations.en;
   const [viewType, setViewType] = useState<'risk' | 'condition' | 'practice'>('risk');
@@ -144,9 +157,11 @@ export default function MedicalHistoryTab({
               ...existing.descriptions,
               en: 'A measure of body fat based on height and weight.'
             };
+            existing.structuredRanges = def.structuredRanges || existing.structuredRanges;
           } else {
-            existing.normalRange = def.normalRange || existing.normalRange;
-            existing.unit = def.unit || existing.unit;
+            existing.name = def.name || existing.name; existing.normalRange = def.normalRange || existing.normalRange;
+            existing.structuredRanges = def.structuredRanges || existing.structuredRanges;
+            existing.unit = def.unit || existing.unit; existing.standardMedicalGrouping = def.standardMedicalGrouping || existing.standardMedicalGrouping; existing.potentialMedicalConditions = def.potentialMedicalConditions || existing.potentialMedicalConditions; existing.riskCategories = def.riskCategories || existing.riskCategories;
             if (def.description) {
               existing.descriptions = { ...existing.descriptions, en: def.description };
             }
@@ -221,6 +236,8 @@ export default function MedicalHistoryTab({
       allDefinitions.forEach(def => {
         if (def.standardMedicalGrouping) {
           allPractices.add(def.standardMedicalGrouping);
+        } else {
+          allPractices.add('Other');
         }
       });
       return ['all', ...Array.from(allPractices).sort()];
@@ -260,7 +277,7 @@ export default function MedicalHistoryTab({
         if (val === undefined) return -1;
         
         const def = allDefinitions.find(d => d.key === key);
-        const status = getBiomarkerStatus(key, val, def?.normalRange);
+        const status = getBiomarkerStatus(key, val, def?.normalRange, def, profile);
         
         if (status === 'critical') return 4;
         if (status === 'high' || status === 'low') return 3;
@@ -300,8 +317,11 @@ export default function MedicalHistoryTab({
       } else if (viewType === 'condition') {
         return def.potentialMedicalConditions?.includes(cat);
       } else {
-        const grouping = def.standardMedicalGrouping || 'Other';
-        return grouping === cat;
+        let groupName = def.standardMedicalGrouping;
+        if (!groupName || groupName === 'Other') {
+           groupName = getPhysiologicalBucket(def.key, def.name);
+        }
+        return groupName === cat;
       }
     });
   };
@@ -316,7 +336,7 @@ export default function MedicalHistoryTab({
     groupMarkers.forEach(def => {
       const val = biomarkers[def.key];
       if (val !== undefined) {
-        const status = getBiomarkerStatus(def.key, val, def.normalRange);
+        const status = getBiomarkerStatus(def.key, val, def.normalRange, def, profile);
         let score = 0;
         if (status === 'critical') score = 4;
         else if (status === 'high' || status === 'low') score = 3;
@@ -326,7 +346,7 @@ export default function MedicalHistoryTab({
         if (score > maxScore) {
           maxScore = score;
           worstMarkerName = def.name;
-          worstMarkerStatusLabel = getBiomarkerStatusLabel(def.key, status, profile.customBiomarkers?.[def.key], val);
+          worstMarkerStatusLabel = getBiomarkerStatusLabel(def.key, status, profile.customBiomarkers?.[def.key], val, profile);
         }
       }
     });
@@ -350,7 +370,7 @@ export default function MedicalHistoryTab({
         groupMarkers.forEach(def => {
           const val = biomarkers[def.key];
           if (val !== undefined) {
-            const status = getBiomarkerStatus(def.key, val, def.normalRange);
+            const status = getBiomarkerStatus(def.key, val, def.normalRange, def, profile);
             if (status === 'critical') maxScore = Math.max(maxScore, 4);
             else if (status === 'high' || status === 'low') maxScore = Math.max(maxScore, 3);
             else if (status === 'normal') maxScore = Math.max(maxScore, 2);
@@ -379,7 +399,7 @@ export default function MedicalHistoryTab({
         const val = biomarkers[key];
         if (val === undefined) return -1;
         const def = allDefinitions.find(d => d.key === key);
-        const status = getBiomarkerStatus(key, val, def?.normalRange);
+        const status = getBiomarkerStatus(key, val, def?.normalRange, def, profile);
         if (status === 'critical') return 4;
         if (status === 'high' || status === 'low') return 3;
         if (status === 'normal') return 2;
@@ -486,12 +506,24 @@ export default function MedicalHistoryTab({
                 <div className="divide-y divide-slate-100 dark:divide-slate-800/40 bg-white dark:bg-slate-900">
                   {markers.length > 0 ? (
                     markers.map((def) => {
-                      const val = biomarkers[def.key];
+                      let val = biomarkers[def.key];
+                      const originalVal = val;
                       const hasVal = val !== undefined;
-                      const status = hasVal ? getBiomarkerStatus(def.key, val, def.normalRange) : 'unknown';
+                      const status = hasVal ? getBiomarkerStatus(def.key, val, def.normalRange, def, profile) : 'unknown';
                       const colorClass = getBiomarkerColor(status);
                       const isExpanded = expandedKey === def.key;
-                      const riskTag = hasVal ? getBiomarkerRiskTag(def.key, status, profile.customBiomarkers?.[def.key], val) : null;
+                      const riskTag = hasVal ? getBiomarkerRiskTag(def.key, status, profile.customBiomarkers?.[def.key], val, profile) : null;
+                      
+                      let displayUnit = def.unit || '';
+                      if (profile.unitPreference === 'US' && typeof val === 'number') {
+                        const reversed = reverseStandardizeUnit(def.key, val, displayUnit);
+                        val = reversed.newValue;
+                        displayUnit = reversed.newUnit || displayUnit;
+                      }
+                      
+                      // Clone def so we can safely update the unit
+                      const displayRange = formatNormalRange(def.key, def.normalRange || '', def.unit || '', profile.unitPreference as 'SI' | 'US');
+                      const displayDef = { ...def, unit: displayUnit, normalRange: displayRange };
 
                       return (
                         <div 
@@ -515,10 +547,10 @@ export default function MedicalHistoryTab({
                                 {def.key === 'bmi' && hasBmiAlert && (
                                   <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 animate-pulse" />
                                 )}
-                                <span className="text-[10px] font-mono text-slate-400">({def.unit})</span>
+                                <span className="text-[10px] font-mono text-slate-400">({displayUnit})</span>
                               </div>
                               <p className="text-[10px] text-slate-400 mt-0.5">
-                                Normal range: {def.normalRange}
+                                Normal range: {displayDef.normalRange}
                               </p>
                               
                               {/* Associated Metadata Badges */}
@@ -548,7 +580,7 @@ export default function MedicalHistoryTab({
                                 </span>
                                 {hasVal && (
                                   <span className={`text-[9px] font-bold uppercase tracking-wider ${colorClass}`}>
-                                    {getBiomarkerStatusLabel(def.key, status, profile.customBiomarkers?.[def.key], val)}
+                                    {getBiomarkerStatusLabel(def.key, status, profile.customBiomarkers?.[def.key], val, profile)}
                                   </span>
                                 )}
                               </div>
@@ -566,6 +598,7 @@ export default function MedicalHistoryTab({
                               biomarkers={biomarkers}
                               onEditBiomarkerLog={onEditBiomarkerLog}
                               onDeleteBiomarkerLog={onDeleteBiomarkerLog}
+                              onDeleteBiomarkerFromLog={onDeleteBiomarkerFromLog}
                               onDeleteBiomarker={onDeleteBiomarker}
                               onOpenAiReview={setReviewingBiomarkerKey}
                               onCombineBiomarker={setCombineBiomarkerKey}
@@ -573,6 +606,14 @@ export default function MedicalHistoryTab({
                               hasPendingAlert={def.key === 'bmi' ? hasBmiAlert : false}
                               onDismissAlert={def.key === 'bmi' ? onDismissBmiAlert : undefined}
                               hideSensitive={hideSensitive}
+                              onEditBiomarkerDef={(key, range, unit) => {
+                                const newCustom = { ...profile.customBiomarkers };
+                                const existing = newCustom[key] || { name: key, unit: unit, normalRange: range, description: '' };
+                                newCustom[key] = { ...existing, normalRange: range, unit: unit };
+                                if (onUpdateProfile) {
+                                  onUpdateProfile({ customBiomarkers: newCustom });
+                                }
+                              }}
                             />
                           )}
                         </div>
@@ -609,6 +650,7 @@ export default function MedicalHistoryTab({
           <ClipboardList className="w-4 h-4" />
           Open Biomarker Dictionary
         </button>
+        
         {onDeleteEmptyBiomarkers && hasEmptyBiomarkers && (
           <button
             onClick={() => {
@@ -651,7 +693,10 @@ export default function MedicalHistoryTab({
                   }
                 };
               }
-              onLogMedical({ [key]: val }, profileUpdates, new Date().toISOString().split('T')[0]);
+              if (profileUpdates.customBiomarkers && onUpdateProfile) {
+                onUpdateProfile(profileUpdates);
+              }
+              onLogMedical({ [key]: val }, undefined, new Date().toISOString().split('T')[0]);
               
               // Close modal
               setReviewingBiomarkerKey(null);
@@ -697,9 +742,14 @@ export default function MedicalHistoryTab({
           biomarkers={biomarkers}
           biomarkerHistory={biomarkerHistory}
           onClose={() => setShowDictionaryModal(false)}
-          onUpdateProfile={(updates) => onLogMedical({}, updates)}
+          onUpdateProfile={onUpdateProfile ? (updates) => onUpdateProfile(updates) : (updates) => onLogMedical({}, updates, undefined, undefined, undefined, true)}
           onCombineBiomarkers={onCombineBiomarkers!}
+          onBatchCombineBiomarkers={onBatchCombineBiomarkers}
           onBatchConsolidate={onBatchConsolidate}
+          onStandardizeUnits={onStandardizeUnits}
+          onLogMedical={onLogMedical}
+          onAgentAnalysisSaved={onAgentAnalysisSaved}
+          onDeleteAnalysis={onDeleteAnalysis}
         />
       )}
     </div>

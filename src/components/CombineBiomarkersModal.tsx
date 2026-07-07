@@ -7,7 +7,8 @@ interface CombineBiomarkersModalProps {
   profile: UserProfile;
   isOpen: boolean;
   onClose: () => void;
-  initialKey: string;
+  initialKey?: string;
+  initialSelectedKeys?: string[];
   biomarkers: { [key: string]: number | string };
   biomarkerHistory: BiomarkerLog[];
   allDefinitions: BiomarkerDefinition[];
@@ -25,6 +26,7 @@ export default function CombineBiomarkersModal({
   isOpen,
   onClose,
   initialKey,
+  initialSelectedKeys,
   biomarkers,
   biomarkerHistory,
   allDefinitions,
@@ -32,12 +34,13 @@ export default function CombineBiomarkersModal({
   onReviewWithAgent,
 }: CombineBiomarkersModalProps) {
   const [step, setStep] = useState<1 | 2>(1);
-  const [selectedKeys, setSelectedKeys] = useState<string[]>([initialKey]);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>(initialSelectedKeys || (initialKey ? [initialKey] : []));
   const [searchQuery, setSearchQuery] = useState('');
   const [groupType, setGroupType] = useState<'risk' | 'practice' | 'condition'>('risk');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   // Fields for Step 2
+  const [editedKey, setEditedKey] = useState('');
   const [editedName, setEditedName] = useState('');
   const [editedUnit, setEditedUnit] = useState('');
   const [editedRange, setEditedRange] = useState('');
@@ -88,7 +91,7 @@ export default function CombineBiomarkersModal({
     if (selectedKeys.length <= 1) return;
 
     // Determine base key with the most log data points in history
-    let baseKey = initialKey;
+    let baseKey = initialKey || selectedKeys[0];
     let maxLogsCount = 0;
 
     selectedKeys.forEach(k => {
@@ -100,7 +103,7 @@ export default function CombineBiomarkersModal({
     });
 
     const baseDef = allDefinitions.find(d => d.key === baseKey);
-    const baseName = baseDef?.name || baseKey.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const baseName = baseDef?.name || baseKey?.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     
     // Strip brackets/parentheses from pre-populated name
     const simpleName = baseName.split('(')[0].split('[')[0].trim();
@@ -197,7 +200,7 @@ export default function CombineBiomarkersModal({
                 Combine Duplicate Biomarkers
               </h3>
               <p className="text-[10px] text-slate-400 font-mono">
-                Source: {initialDef?.name || initialKey}
+                Source: {initialDef?.name || initialKey || selectedKeys[0]}
               </p>
             </div>
           </div>
@@ -214,7 +217,7 @@ export default function CombineBiomarkersModal({
                 <Info className="w-5 h-5 text-indigo-100 dark:text-indigo-400 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-xs text-white dark:text-indigo-100 font-medium leading-relaxed mb-1.5">
-                    Select other similar or duplicate biomarkers to combine with <strong>{initialDef?.name || initialKey}</strong>. All historic logs will be merged under a single consolidated marker.
+                    Select other similar or duplicate biomarkers to combine with <strong>{initialDef?.name || initialKey || selectedKeys[0]}</strong>. All historic logs will be merged under a single consolidated marker.
                   </p>
                   <span className="inline-block text-[10px] font-extrabold bg-white/20 dark:bg-indigo-950 text-white dark:text-indigo-300 px-2 py-0.5 rounded-md">
                     {selectedKeys.length} biomarkers selected
@@ -358,17 +361,31 @@ export default function CombineBiomarkersModal({
 
               {/* Form fields */}
               <div className="bg-slate-50 dark:bg-slate-900/40 p-4 border border-slate-150 dark:border-slate-800 rounded-2xl space-y-3.5">
-                <div>
-                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
-                    Consolidated Biomarker Name
-                  </label>
-                  <input
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
+                      Consolidated Biomarker Key (snake_case)
+                    </label>
+                    <input
+                      type="text"
+                      value={editedKey}
+                      onChange={(e) => setEditedKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 rounded-xl text-xs font-mono font-semibold focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
+                      placeholder="e.g. hemoglobin_a1c"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
+                      Consolidated Biomarker Name
+                    </label>
+                    <input
                     type="text"
                     value={editedName}
                     onChange={(e) => setEditedName(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 rounded-xl text-xs font-semibold focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
                     placeholder="e.g. HbA1c"
                   />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

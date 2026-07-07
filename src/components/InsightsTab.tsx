@@ -9,7 +9,8 @@ import LLMSelector from './LLMSelector';
 import { Agent5View, Agent6View, Agent7View } from './AgentResultViews';
 import { AgentResultTable } from './AgentResultTable';
 import { parse } from 'yaml';
-import { biomarkerDefinitions, getBiomarkerMetadata, getPhysiologicalBucket, BIOMARKER_GROUPING_OPTIONS } from '../utils/biomarkers';
+import { biomarkerDefinitions, getBiomarkerMetadata, getPhysiologicalBucket, BIOMARKER_GROUPING_OPTIONS, getMappedBiomarkerKey } from '../utils/biomarkers';
+import BiomarkerDictionaryModal from './BiomarkerDictionaryModal';
 
 interface InsightsTabProps {
   profile: UserProfile;
@@ -38,6 +39,14 @@ interface InsightsTabProps {
   onChangeBatchSize?: (size: number) => void;
   calibratingBatchIdx?: number | null;
   calibratingAgentType?: string | null;
+  onCombineBiomarkers?: (
+    targetKey: string,
+    targetDef: any,
+    mergedLogs: any[],
+    sourceKeysToDelete: string[]
+  ) => void;
+  onBatchConsolidate?: (mapping: { [key: string]: string }) => void;
+  onAgentAnalysisSaved?: (agentType: string, agentResult: any) => Promise<void>;
 }
 
 const STABLE_EMPTY_ARRAY: string[] = [];
@@ -65,13 +74,18 @@ export default function InsightsTab({
   batchSize = 20,
   onChangeBatchSize,
   calibratingBatchIdx = null,
-  calibratingAgentType = null
+  calibratingAgentType = null,
+  onCombineBiomarkers,
+  onBatchConsolidate,
+  onAgentAnalysisSaved
 }: InsightsTabProps) {
   const t = translations[profile.language] || translations.en;
   const [isApplying, setIsApplying] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [refinementText, setRefinementText] = useState("");
   const [chatHistory, setChatHistory] = useState<any[]>([]);
+  const [showDictionaryModal, setShowDictionaryModal] = useState(false);
+  const [dictionaryPreFillKey, setDictionaryPreFillKey] = useState<string | null>(null);
   const [expandedAgentHistory, setExpandedAgentHistory] = useState<Record<string, boolean>>({});
 
   // Accordion active step index
@@ -425,9 +439,66 @@ export default function InsightsTab({
 
     localStorage.setItem('biomarker_batch_size_last', String(batchSize || 20));
 
-    currentBatches = finalBatches.filter((batch, idx) => 
-      batch.length > 0 || idx === 0 || approvedBatches[idx] || batchAnalysisResults[idx] || approvedAgent1Batches[idx] || agent1BatchResults[idx]
-    );
+    // Filter out absolutely any empty batch to completely avoid empty batches and shift indices of associated metadata
+    const nonEmptyBatches: string[][] = [];
+    const indexMapping: Record<number, number> = {};
+
+    finalBatches.forEach((batch, oldIdx) => {
+      if (batch.length > 0) {
+        const newIdx = nonEmptyBatches.length;
+        indexMapping[newIdx] = oldIdx;
+        nonEmptyBatches.push(batch);
+      }
+    });
+
+    let indicesShifted = false;
+    const nextApprovedBatches: Record<string, boolean> = {};
+    const nextBatchAnalysisResults: Record<string, any> = {};
+    const nextApprovedAgent1Batches: Record<string, boolean> = {};
+    const nextAgent1BatchResults: Record<string, any> = {};
+
+    nonEmptyBatches.forEach((batch, newIdx) => {
+      const oldIdx = indexMapping[newIdx];
+      if (oldIdx !== undefined) {
+        if (oldIdx !== newIdx) {
+          indicesShifted = true;
+        }
+        if (approvedBatches[oldIdx] !== undefined) nextApprovedBatches[newIdx] = approvedBatches[oldIdx];
+        if (batchAnalysisResults[oldIdx] !== undefined) nextBatchAnalysisResults[newIdx] = batchAnalysisResults[oldIdx];
+        if (approvedAgent1Batches[oldIdx] !== undefined) nextApprovedAgent1Batches[newIdx] = approvedAgent1Batches[oldIdx];
+        if (agent1BatchResults[oldIdx] !== undefined) nextAgent1BatchResults[newIdx] = agent1BatchResults[oldIdx];
+      }
+    });
+
+    // Also preserve non-numeric keys like 'custom' if they exist in the record
+    Object.keys(approvedBatches).forEach(k => {
+      if (isNaN(Number(k))) nextApprovedBatches[k] = approvedBatches[k];
+    });
+    Object.keys(batchAnalysisResults).forEach(k => {
+      if (isNaN(Number(k))) nextBatchAnalysisResults[k] = batchAnalysisResults[k];
+    });
+    Object.keys(approvedAgent1Batches).forEach(k => {
+      if (isNaN(Number(k))) nextApprovedAgent1Batches[k] = approvedAgent1Batches[k];
+    });
+    Object.keys(agent1BatchResults).forEach(k => {
+      if (isNaN(Number(k))) nextAgent1BatchResults[k] = agent1BatchResults[k];
+    });
+
+    if (indicesShifted) {
+      setApprovedBatches(nextApprovedBatches);
+      localStorage.setItem('approved_data_review_batches', JSON.stringify(nextApprovedBatches));
+
+      setBatchAnalysisResults(nextBatchAnalysisResults);
+      localStorage.setItem('batch_analysis_results', JSON.stringify(nextBatchAnalysisResults));
+
+      setApprovedAgent1Batches(nextApprovedAgent1Batches);
+      localStorage.setItem('approved_agent1_batches', JSON.stringify(nextApprovedAgent1Batches));
+
+      setAgent1BatchResults(nextAgent1BatchResults);
+      localStorage.setItem('agent1_batch_results', JSON.stringify(nextAgent1BatchResults));
+    }
+
+    currentBatches = nonEmptyBatches;
 
     const currentStr = JSON.stringify(currentBatches);
     const stateStr = JSON.stringify(biomarkerBatches);
@@ -716,7 +787,7 @@ export default function InsightsTab({
       updatedCustoms[bm.key] = {
         ...existing,
         name: bm.name || existing.name,
-        unit: bm.unit || existing.unit,
+        unit: existing.unit || bm.unit || '',
         normalRange: bm.profileAdjustedNormalRange || existing.normalRange || '',
         description: bm.description || existing.description || '',
         riskCategories: (existing.riskCategories && existing.riskCategories.length > 0) ? existing.riskCategories : (bm.riskCategories || []),
@@ -789,8 +860,9 @@ export default function InsightsTab({
       .sort((a, b) => b.date.localeCompare(a.date));
     
     // Exclude the currently displayed active one
-    const latestActive = history.filter(a => !a.archived)[0];
-    const prevAnalyses = history.filter(a => a.id !== latestActive?.id);
+    const isDataAccuracy = agentType === 'data_accuracy';
+    const latestActive = isDataAccuracy ? null : history.filter(a => !a.archived)[0];
+    const prevAnalyses = isDataAccuracy ? history : history.filter(a => a.id !== latestActive?.id);
     
     if (prevAnalyses.length === 0) return null;
     
@@ -838,6 +910,17 @@ export default function InsightsTab({
                 ) : agentType === 'agent7' ? (
                   <div className="mt-2">
                     <Agent7View rawResult={item.result} />
+                  </div>
+                ) : agentType === 'data_accuracy' ? (
+                  <div className="mt-2 space-y-2 text-xs text-left">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-lg">
+                      <p className="font-semibold text-slate-500 dark:text-slate-400">User Input:</p>
+                      <p className="text-slate-800 dark:text-slate-200 mt-1 italic whitespace-pre-wrap">"{item.result?.inputText}"</p>
+                    </div>
+                    <div className="bg-indigo-50/50 dark:bg-indigo-950/15 border border-indigo-100/50 dark:border-indigo-900/30 p-2.5 rounded-lg text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                      <p className="font-semibold text-indigo-800 dark:text-indigo-400 mb-1">Agent Explanation:</p>
+                      {item.result?.explanation}
+                    </div>
                   </div>
                 ) : (
                   <div className={`text-[10px] text-slate-700 dark:text-slate-300 font-mono overflow-auto ${agentType === 'agent1' ? 'max-h-96' : 'max-h-32'}`}>
@@ -2095,20 +2178,87 @@ export default function InsightsTab({
                                     {isExpanded && (
                                       <div className="mt-3.5 pt-3.5 border-t border-slate-150 dark:border-slate-800/60 space-y-3 animation-fade-in">
                                         {!result ? (
-                                          <button
-                                            onClick={() => {
-                                              if (onOpenAgentChat) {
-                                                onOpenAgentChat('data_review', {
-                                                  dataReviewBatchIdx: bIdx,
-                                                  prefillMessage: `Calibrate Batch ${bIdx + 1}`
-                                                });
-                                              }
-                                            }}
-                                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/10 transition-all"
-                                          >
-                                            <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                                            <span>Calibrate with Agent</span>
-                                          </button>
+                                          (() => {
+                                            const batchBiomarkersInfo = batchKeys.map(k => {
+                                              const mappedKey = getMappedBiomarkerKey(k);
+                                              const customDef = profile?.customBiomarkers?.[mappedKey] || profile?.customBiomarkers?.[k];
+                                              const stdDef = biomarkerDefinitions.find(d => d.key === mappedKey) || biomarkerDefinitions.find(d => d.key === k);
+                                              const displayName = customDef?.name || stdDef?.name || k.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                                              const unit = customDef?.unit || stdDef?.unit || '';
+                                              return {
+                                                key: k,
+                                                mappedKey,
+                                                name: displayName,
+                                                unit
+                                              };
+                                            });
+
+                                            const missingUnitBiomarkers = batchBiomarkersInfo.filter(b => !b.unit || b.unit.trim() === '');
+
+                                            return (
+                                              <div className="space-y-3">
+                                                {missingUnitBiomarkers.length > 0 ? (
+                                                  <>
+                                                    <div className="p-3.5 bg-amber-50/70 dark:bg-amber-950/10 border border-amber-200/20 dark:border-amber-950/20 rounded-xl text-left space-y-2.5">
+                                                      <div className="flex items-start gap-2 text-amber-800 dark:text-amber-400">
+                                                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                                                        <div>
+                                                          <h6 className="text-[11px] font-bold">Calibration Blocked: Missing Units</h6>
+                                                          <p className="text-[10px] text-amber-700/90 dark:text-amber-500/90 leading-normal">
+                                                            The biomarkers below do not have clinical units configured. Updates must be completed directly in the Biomarker Dictionary to ensure reference consistency.
+                                                          </p>
+                                                        </div>
+                                                      </div>
+
+                                                      <div className="space-y-1.5 bg-white/60 dark:bg-slate-900/40 p-2 rounded-lg border border-amber-100/30 dark:border-amber-950/20 max-h-[160px] overflow-y-auto">
+                                                        {missingUnitBiomarkers.map(bm => (
+                                                          <div key={bm.key} className="flex items-center justify-between gap-2 text-[11px] py-1 border-b border-dashed border-amber-100/50 last:border-0">
+                                                            <div className="flex flex-col min-w-0">
+                                                              <span className="font-bold text-slate-700 dark:text-slate-300 truncate max-w-[150px]" title={bm.name}>{bm.name}</span>
+                                                              <span className="text-[9px] font-mono text-slate-400">Key: {bm.mappedKey || bm.key}</span>
+                                                            </div>
+                                                            <button
+                                                              onClick={() => {
+                                                                setDictionaryPreFillKey(bm.mappedKey || bm.key);
+                                                                setShowDictionaryModal(true);
+                                                              }}
+                                                              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[9px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-sm shrink-0"
+                                                            >
+                                                              <BookOpen className="w-3 h-3" />
+                                                              Update in Dictionary
+                                                            </button>
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    </div>
+
+                                                    <button
+                                                      disabled
+                                                      className="w-full py-2 bg-slate-100 dark:bg-slate-900/60 text-slate-400 dark:text-slate-500 border border-slate-200/20 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-not-allowed"
+                                                    >
+                                                      <Sparkles className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                                                      <span>Calibration Locked (Missing Units)</span>
+                                                    </button>
+                                                  </>
+                                                ) : (
+                                                  <button
+                                                    onClick={() => {
+                                                      if (onOpenAgentChat) {
+                                                        onOpenAgentChat('data_review', {
+                                                          dataReviewBatchIdx: bIdx,
+                                                          prefillMessage: `Calibrate Batch ${bIdx + 1}`
+                                                        });
+                                                      }
+                                                    }}
+                                                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/10 transition-all"
+                                                  >
+                                                    <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                                                    <span>Calibrate with Agent</span>
+                                                  </button>
+                                                )}
+                                              </div>
+                                            );
+                                          })()
                                         ) : (
                                           <div className="space-y-4">
                                             {/* Summary message */}
@@ -2876,6 +3026,28 @@ export default function InsightsTab({
             </div>
           </div>
         </div>
+      )}
+
+      {showDictionaryModal && (
+        <BiomarkerDictionaryModal
+          profile={profile}
+          biomarkers={biomarkers}
+          biomarkerHistory={biomarkerHistory || []}
+          onClose={() => {
+            setShowDictionaryModal(false);
+            setDictionaryPreFillKey(null);
+          }}
+          initialSearchQuery={dictionaryPreFillKey || undefined}
+          onUpdateProfile={async (updates) => {
+            if (onUpdateProfile) {
+              await onUpdateProfile({ ...profile, ...updates });
+            }
+          }}
+          onCombineBiomarkers={onCombineBiomarkers || (() => {})}
+          onBatchConsolidate={onBatchConsolidate}
+          onAgentAnalysisSaved={onAgentAnalysisSaved}
+          onDeleteAnalysis={onDeleteAnalysis}
+        />
       )}
     </div>
   );

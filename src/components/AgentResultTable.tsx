@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parse } from 'yaml';
+import { biomarkerDefinitions } from '../utils/biomarkers';
 import { 
   Maximize2, 
   Minimize2, 
@@ -1016,7 +1017,11 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           biomarker: bm.name || (bm.key ? String(bm.key).replace(/_/g, ' ').toUpperCase() : '') || 'Unknown',
           key: bm.key,
           value: bm.userValue !== undefined ? bm.userValue : '',
-          unit: bm.unit || '',
+          unit: (() => {
+            const dictDef = profile?.customBiomarkers?.[bm.key] || biomarkerDefinitions.find((d: any) => d.key === bm.key);
+            const dictUnit = dictDef?.unit || '';
+            return (dictUnit && dictUnit.trim() !== '') ? dictUnit : (bm.unit || '');
+          })(),
           group: bm.standardMedicalGrouping || 'Other',
           normalRange: bm.profileAdjustedNormalRange || '',
           description: bm.description || '',

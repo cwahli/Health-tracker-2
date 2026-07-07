@@ -285,7 +285,7 @@ export default function ImageSlider({ images = [], singleImage, altText }: Image
         onMouseLeave={handleMouseLeave}
         onMouseUp={handleMouseUp}
         onMouseMove={handleMouseMove}
-        className="w-full flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-none p-1.5 bg-slate-50 dark:bg-slate-950/30 rounded-2xl scroll-smooth cursor-grab active:cursor-grabbing select-none"
+        className="w-full flex overflow-x-auto snap-x snap-mandatory scrollbar-none bg-slate-50 dark:bg-slate-950/30 scroll-smooth cursor-grab active:cursor-grabbing select-none"
       >
         {allImages.map((img, idx) => {
           const orientation = orientations[img] || 'landscape';
@@ -300,7 +300,7 @@ export default function ImageSlider({ images = [], singleImage, altText }: Image
                   setViewerIndex(idx);
                 }
               }}
-              className={`snap-start snap-always shrink-0 overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-900 flex flex-col items-center justify-center relative transition-all duration-300 min-h-[200px] ${
+              className={`snap-start snap-always shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900 flex flex-col items-center justify-center relative transition-all duration-300 min-h-[200px] ${
                 isBroken ? '' : 'cursor-zoom-in'
               } ${
                 allImages.length === 1 

@@ -20,6 +20,8 @@ interface FoodHistoryTabProps {
   onEditingActiveChange?: (active: boolean) => void;
   isManualEntryOpen?: boolean;
   onManualEntryOpenChange?: (open: boolean) => void;
+  manualEntryAlert?: string | null;
+  onClearManualEntryAlert?: () => void;
   report?: RecommendationReport | null;
   initiallyExpandedFoodId?: string | null;
   onClearInitiallyExpandedFoodId?: () => void;
@@ -57,6 +59,8 @@ export default function FoodHistoryTab({
   onEditingActiveChange,
   isManualEntryOpen: propIsManualEntryOpen,
   onManualEntryOpenChange,
+  manualEntryAlert,
+  onClearManualEntryAlert,
   report,
   initiallyExpandedFoodId,
   onClearInitiallyExpandedFoodId
@@ -106,6 +110,9 @@ export default function FoodHistoryTab({
     setLocalManualEntryOpen(val);
     if (onManualEntryOpenChange) {
       onManualEntryOpenChange(val);
+    }
+    if (!val && onClearManualEntryAlert) {
+      onClearManualEntryAlert();
     }
   };
   const [manualCompressing, setManualCompressing] = useState(false);
@@ -423,20 +430,28 @@ export default function FoodHistoryTab({
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animation-fade-in">
           <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[32px] sm:rounded-[32px] max-h-[90vh] overflow-y-auto flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800">
             {/* Modal Header */}
-            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-600">
-                  <Edit2 className="w-4 h-4" />
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-3 sticky top-0 bg-white dark:bg-slate-900 z-10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-600">
+                    <Edit2 className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">Manual Food Entry</h3>
                 </div>
-                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">Manual Food Entry</h3>
+                <button
+                  type="button"
+                  onClick={() => setIsManualEntryOpen(false)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsManualEntryOpen(false)}
-                className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              {manualEntryAlert && (
+                <div className="px-3 py-2 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-xs font-medium rounded-lg border border-rose-100 dark:border-rose-800 flex items-center gap-2">
+                  <X className="w-3.5 h-3.5" />
+                  {manualEntryAlert}
+                </div>
+              )}
             </div>
 
             {/* Modal Body */}
