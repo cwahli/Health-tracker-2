@@ -706,17 +706,18 @@ export default function MedicalHistoryTab({
               [reviewingBiomarkerKey]: msgs
             }));
           }}
-          onUpdateBiomarker={(key, val, proposal) => {
+          onUpdateBiomarker={(key, val, proposal, fieldsToKeep) => {
             if (onLogMedical) {
               const profileUpdates: Partial<UserProfile> = {};
               if (proposal) {
+                const currentDef = profile.customBiomarkers?.[key] || {};
                 profileUpdates.customBiomarkers = {
                   ...(profile.customBiomarkers || {}),
                   [key]: {
                     name: proposal.name || key,
-                    unit: proposal.metric || '',
-                    normalRange: proposal.range || 'Unknown',
-                    description: proposal.description || '',
+                    unit: fieldsToKeep?.unit ? proposal.metric : (currentDef.unit || ''),
+                    normalRange: fieldsToKeep?.range ? proposal.range : (currentDef.normalRange || 'Unknown'),
+                    description: fieldsToKeep?.description ? proposal.description : (currentDef.description || ''),
                     benefitRisk: proposal.benefitRisk || ''
                   }
                 };
