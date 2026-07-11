@@ -183,6 +183,16 @@ export default function ReviewBiomarkerModal({
   const [inputText, setInputText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isEngineSelectorOpen, setIsEngineSelectorOpen] = useState(false);
+  const [fieldsToKeep, setFieldsToKeep] = useState({
+    description: true,
+    range: true,
+    value: true,
+    unit: true
+  });
+  
+  const toggleField = (field: keyof typeof fieldsToKeep) => {
+    setFieldsToKeep(prev => ({ ...prev, [field]: !prev[field] }));
+  };
   const [showDataUsed, setShowDataUsed] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [showFullScreenConv, setShowFullScreenConv] = useState(false);
@@ -565,6 +575,18 @@ export default function ReviewBiomarkerModal({
                     )}
                   </div>
 
+                  <div className="mt-3 bg-slate-50 dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Merge Fields to Keep:</p>
+                    <div className="flex flex-wrap gap-3">
+                      {['description', 'range', 'value', 'unit'].map(field => (
+                         <label key={field} className="flex items-center gap-1.5 cursor-pointer">
+                           <input type="checkbox" checked={fieldsToKeep[field as keyof typeof fieldsToKeep]} onChange={() => toggleField(field as keyof typeof fieldsToKeep)} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                           <span className="text-[11px] text-slate-700 dark:text-slate-200 capitalize">{field}</span>
+                         </label>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="mt-4 flex flex-wrap gap-2 justify-end pt-3 border-t border-indigo-100/30 dark:border-slate-700/30">
                     <button
                       onClick={onClose}
@@ -585,11 +607,12 @@ export default function ReviewBiomarkerModal({
                     </button>
                     <button
                       onClick={() => {
+                        console.log("Approve & Replace clicked", {biomarkerKey, valToUse, msg});
                         const valToUse = msg.pendingBiomarkers && msg.pendingBiomarkers[biomarkerKey] !== undefined
                           ? msg.pendingBiomarkers[biomarkerKey]
                           : (msg.proposal?.value !== undefined ? msg.proposal.value : currentValue);
                         if (valToUse !== undefined) {
-                          onUpdateBiomarker(biomarkerKey, valToUse, msg.proposal);
+                          onUpdateBiomarker(biomarkerKey, valToUse, msg.proposal, fieldsToKeep);
                         }
                       }}
                       className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm shadow-indigo-600/10 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"

@@ -104,7 +104,7 @@ function extractBalancedJson(text: string): string {
   }
   return cleaned;
 }
-\nconst app = express();
+const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const SERVER_START_TIME = Date.now();
 
@@ -248,7 +248,6 @@ function robustParseJson(cleanJson: string): any {
   }
   
   return JSON.parse(extractBalancedJson(cleaned));
-}
 }
 
 // Unified Multi-Provider LLM Router with automatic fallbacks & simulation modes
