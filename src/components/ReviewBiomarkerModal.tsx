@@ -607,7 +607,6 @@ export default function ReviewBiomarkerModal({
                     </button>
                     <button
                       onClick={() => {
-                        console.log("Approve & Replace clicked", {biomarkerKey, valToUse, msg});
                         const valToUse = msg.pendingBiomarkers && msg.pendingBiomarkers[biomarkerKey] !== undefined
                           ? msg.pendingBiomarkers[biomarkerKey]
                           : (msg.proposal?.value !== undefined ? msg.proposal.value : currentValue);
