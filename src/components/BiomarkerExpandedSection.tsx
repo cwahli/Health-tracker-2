@@ -1,3 +1,4 @@
+import { toYYYYMMDD } from "../utils/dateUtils";
 import React, { useState } from 'react';
 import { ResponsiveContainer, LineChart, XAxis, YAxis, Tooltip, ReferenceLine, Line } from 'recharts';
 import { BrainCircuit, LineChart as LineChartIcon, Trash2 } from 'lucide-react';
@@ -5,6 +6,7 @@ import { BiomarkerLog, UserProfile } from '../types';
 import { BiomarkerDefinition } from '../utils/biomarkers';
 import { reverseStandardizeUnit, formatNormalRange, CONVERSION_FACTORS, standardizeUnit } from '../utils/unitConversion';
 import BiomarkerCalculationPanel from './BiomarkerCalculationPanel';
+import { getAgentCalibration } from '../utils/agentCalibration';
 
 interface BiomarkerExpandedSectionProps {
   def: BiomarkerDefinition;
@@ -75,9 +77,11 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
         logId: h.id
       };
     })
-    .sort((a, b) => a.date.localeCompare(b.date)); // oldest to newest for chart
+    .sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))); // oldest to newest for chart
 
   const description = def.descriptions[profile.language as keyof typeof def.descriptions] || def.descriptions.en;
+  const agentCalibration = React.useMemo(() => getAgentCalibration(def.key), [def.key]);
+  const insightText = agentCalibration?.specificRiskContext || agentCalibration?.description;
 
   let normalMin: number | undefined;
   let normalMax: number | undefined;
@@ -141,10 +145,6 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
 
   return (
     <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800/60 text-sm">
-      <p className="text-slate-600 dark:text-slate-300 text-xs mb-3 leading-relaxed font-medium">
-        {description}
-      </p>
-
       {def.benefitRisk && (
         <div className="mb-4 p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/40 dark:border-indigo-800/20 rounded-xl">
           <span className="block font-size-subtitle-small text-indigo-500 font-bold uppercase tracking-wider mb-1">Risk Assessment & Benefits</span>
@@ -158,6 +158,7 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
         biomarkerKey={def.key}
         profile={profile}
         currentValue={biomarkers[def.key]}
+        baseDescription={description}
         onApplyRecommendations={onApplyCalculation}
         hasPendingAlert={hasPendingAlert}
         onDismissAlert={onDismissAlert}

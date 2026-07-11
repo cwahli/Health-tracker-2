@@ -3,8 +3,96 @@ import { UserProfile, FoodLog, BiomarkerLog, RecommendationReport, NutrientBreak
 import { nutrientDefinitions } from '../utils/nutrition';
 import { translations } from '../utils/translations';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { TrendingUp, BarChart2, Calendar, EyeOff } from 'lucide-react';
+import { TrendingUp, BarChart2, Calendar, EyeOff, Copy, Check } from 'lucide-react';
 import { toYYYYMMDD, formatTimelineDate } from '../utils/dateUtils';
+import { getBiomarkerStatus, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity } from '../utils/biomarkers';
+const parseTargetBounds = (targetStr: string | undefined, nutrientKey: string, defaultMin: number = 0, defaultMax: number = Infinity) => {
+  if (!targetStr) return { min: defaultMin, max: defaultMax };
+  const lowerStr = targetStr.toLowerCase().replace(/,/g, '');
+  if (lowerStr.includes('under') || lowerStr.includes('less') || lowerStr.includes('<') || lowerStr.includes('max')) {
+    const nums = lowerStr.match(/\d+(\.\d+)?/g);
+    if (nums) return { min: 0, max: parseFloat(nums[0]) };
+  }
+  if (lowerStr.includes('over') || lowerStr.includes('more') || lowerStr.includes('>')) {
+    const nums = lowerStr.match(/\d+(\.\d+)?/g);
+    if (nums) return { min: parseFloat(nums[0]), max: Infinity };
+  }
+  const nums = lowerStr.match(/\d+(\.\d+)?/g);
+  if (nums && nums.length >= 2) {
+    return { min: parseFloat(nums[0]), max: parseFloat(nums[1]) };
+  }
+  if (nums && nums.length === 1) {
+    const val = parseFloat(nums[0]);
+    const limitMaxKeys = ['calories', 'totalFat', 'saturatedFat', 'addedSugar', 'sodium'];
+    if (limitMaxKeys.includes(nutrientKey)) {
+       return { min: 0, max: val };
+    }
+    return { min: val, max: Infinity };
+  }
+  return { min: defaultMin, max: defaultMax };
+};
+
+const getBiomarkerTargetBounds = (key: string, report: any) => {
+  if (key === 'ldl') return { min: 0, max: 100 };
+  if (key === 'hba1c') return { min: 0, max: 5.7 };
+  if (key === 'egfr') return { min: 90, max: Infinity };
+  if (key === 'steps') {
+    const stepsStr = report?.dailyNutrientTargets?.steps;
+    const nums = stepsStr ? String(stepsStr).replace(/,/g, '').match(/\d+/) : null;
+    return { min: nums ? parseInt(nums[0], 10) : 3000, max: Infinity };
+  }
+  return { min: 0, max: Infinity };
+};
+
+const evaluateNutrientStatus = (value: number, bounds: { min: number, max: number }, nutrientKey?: string) => {
+  if (bounds.min === 0 && bounds.max === Infinity) return { color: 'bg-slate-300 dark:bg-slate-600', text: 'No Target' };
+
+  const betterLowKeys = ['calories', 'totalFat', 'saturatedFat', 'addedSugar', 'sodium', 'sugar', 'cholesterol', 'transFat', 'carbohydrates'];
+  
+  if (nutrientKey && betterLowKeys.includes(nutrientKey)) {
+    // For these, being under bounds.max is optimal (green)
+    const maxLimit = bounds.max !== Infinity ? bounds.max : (bounds.min !== 0 ? bounds.min : Infinity);
+    if (maxLimit === Infinity) return { color: 'bg-slate-300 dark:bg-slate-600', text: 'No Target' };
+    
+    if (value <= maxLimit) {
+      return { color: 'bg-emerald-500', text: 'On Target' };
+    } else {
+      const diff = value - maxLimit;
+      if (diff <= maxLimit * 0.10) return { color: 'bg-amber-500', text: '<10% Over' };
+      return { color: 'bg-rose-500', text: '>10% Over' };
+    }
+  }
+
+  // Standard evaluation for other nutrients
+  if (bounds.max === Infinity) { // Target is "over X"
+    if (value >= bounds.min) return { color: 'bg-emerald-500', text: 'On Target' };
+    const diff = bounds.min - value;
+    if (diff <= bounds.min * 0.10) return { color: 'bg-amber-500', text: '<10% Under' };
+    return { color: 'bg-rose-500', text: '>10% Under' };
+  }
+  
+  if (bounds.min === 0) { // Target is "under Y"
+    if (value <= bounds.max) return { color: 'bg-emerald-500', text: 'On Target' };
+    const diff = value - bounds.max;
+    if (diff <= bounds.max * 0.10) return { color: 'bg-amber-500', text: '<10% Over' };
+    return { color: 'bg-rose-500', text: '>10% Over' };
+  }
+
+  // Range
+  if (value >= bounds.min && value <= bounds.max) return { color: 'bg-emerald-500', text: 'On Target' };
+  if (value < bounds.min) {
+    const diff = bounds.min - value;
+    if (diff <= bounds.min * 0.10) return { color: 'bg-amber-500', text: '<10% Under' };
+    return { color: 'bg-rose-500', text: '>10% Under' };
+  }
+  if (value > bounds.max) {
+    const diff = value - bounds.max;
+    if (diff <= bounds.max * 0.10) return { color: 'bg-amber-500', text: '<10% Over' };
+    return { color: 'bg-rose-500', text: '>10% Over' };
+  }
+  
+  return { color: 'bg-slate-300 dark:bg-slate-600', text: 'Unknown' };
+};
 
 interface TrendsTabProps {
   profile: UserProfile;
@@ -27,6 +115,10 @@ export default function TrendsTab({
   const [selectedMetric, setSelectedMetric] = useState<string>(() => {
     return localStorage.getItem('trends_selected_metric') || 'calories';
   });
+  const [activeSubTab, setActiveSubTab] = useState<'trends' | 'summary'>('trends');
+  const [summaryDays, setSummaryDays] = useState<number | ''>(7);
+  const [selectedDot, setSelectedDot] = useState<any>(null);
+  const [hoveredDot, setHoveredDot] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [rollingPeriod, setRollingPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
@@ -165,8 +257,271 @@ export default function TrendsTab({
   };
   const metricMeta = getMetricMeta();
 
+  const getSummaryData = () => {
+    const days = typeof summaryDays === 'number' ? summaryDays : 7;
+    const dateStrs: string[] = [];
+    const today = new Date();
+    for (let i = 0; i < days; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      dateStrs.push(toYYYYMMDD(d.toISOString()));
+    }
+    
+    const nutrientAverages: { [key: string]: number } = {};
+    const dayFoodSums: { [date: string]: { [key: string]: number } } = {};
+    dateStrs.forEach(d => dayFoodSums[d] = {});
+    
+    let daysWithFood = 0;
+    dateStrs.forEach(dStr => {
+      const dFoods = foodLogs.filter(f => toYYYYMMDD(f.date) === dStr);
+      if (dFoods.length > 0) daysWithFood++;
+      nutrientDefinitions.forEach(nut => {
+        const sum = dFoods.reduce((acc, f) => acc + (f.nutrients?.[nut.key] || 0), 0);
+        dayFoodSums[dStr][nut.key] = sum;
+      });
+    });
+    
+    const divFood = Math.max(1, daysWithFood);
+    nutrientDefinitions.forEach(nut => {
+      const total = dateStrs.reduce((acc, dStr) => acc + dayFoodSums[dStr][nut.key], 0);
+      nutrientAverages[nut.key] = total / divFood;
+    });
+    
+    const bioAverages: { [key: string]: number } = {};
+    const allBioKeys = new Set<string>(['ldl', 'hba1c', 'egfr']);
+    biomarkerHistory.forEach(b => {
+      Object.keys(b.biomarkers).forEach(k => allBioKeys.add(k));
+    });
+    
+    const sortedHistory = [...biomarkerHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    Array.from(allBioKeys).forEach(k => {
+      for (const log of sortedHistory) {
+        const v = log.biomarkers[k];
+        if (v !== undefined) {
+          if (typeof v === 'number') {
+             bioAverages[k] = v;
+             break;
+          } else if (typeof v === 'string') {
+             const parsed = parseFloat(v);
+             if (!isNaN(parsed)) {
+               bioAverages[k] = parsed;
+               break;
+             }
+          }
+        }
+      }
+    });
+    
+    const emailSuffix = profile?.email ? `_${profile.email.toLowerCase().trim()}` : '_guest';
+    let stepsHistory: { date: string, value: number }[] = [];
+    try { stepsHistory = JSON.parse(localStorage.getItem(`googleStepsHistory${emailSuffix}`) || '[]'); } catch (e) {}
+    
+    const todayStr = toYYYYMMDD(new Date().toISOString());
+    const todaySteps = localStorage.getItem(`googleSteps${emailSuffix}`);
+    
+    if (todaySteps) {
+      bioAverages['steps'] = parseInt(todaySteps, 10);
+    } else if (stepsHistory.length > 0) {
+      const latestStep = [...stepsHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+      bioAverages['steps'] = latestStep.value;
+    } else {
+      bioAverages['steps'] = 0;
+    }
+    
+    allBioKeys.add('steps');
+    
+    return { nutrientAverages, bioAverages, allBioKeys: Array.from(allBioKeys) };
+  };
+  const summaryData = activeSubTab === 'summary' ? getSummaryData() : null;
+  const nutrientDots = summaryData ? nutrientDefinitions.map(nut => {
+    const value = summaryData.nutrientAverages[nut.key] || 0;
+    const targetStr = report?.dailyNutrientTargets?.[nut.key as any];
+    const bounds = parseTargetBounds(targetStr, nut.key);
+    const status = evaluateNutrientStatus(value, bounds);
+    return { name: nut.labels[profile.language] || nut.labels.en, value: value.toFixed(1), unit: nut.unit, target: targetStr || 'No target', bounds, statusText: status.text, color: status.color, key: nut.key };
+  }) : [];
+  const biomarkerDots = summaryData ? summaryData.allBioKeys.map(key => {
+    const value = summaryData.bioAverages[key] || 0;
+    const bStatus = getBiomarkerStatus(key, value, undefined, profile?.customBiomarkers?.[key], profile);
+    let color = 'bg-slate-300 dark:bg-slate-600';
+    let text = 'Unknown';
+    if (bStatus === 'normal') { color = 'bg-emerald-500'; text = 'Normal'; }
+    else if (bStatus === 'low' || bStatus === 'high') { color = 'bg-amber-500'; text = 'At Risk'; }
+    else if (bStatus === 'critical') { color = 'bg-rose-500'; text = 'Critical'; }
+    
+    // Override text with precise dictionary label if available
+    text = getBiomarkerStatusLabel(key, text, profile?.customBiomarkers?.[key], value, profile);
+
+
+    let label = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    let targetText = 'No target';
+    let unit = '';
+    
+    if (key === 'bmi') {
+      const isAsian = isAsianEthnicity(profile.ethnicity);
+      targetText = isAsian ? '18.5 - 22.9' : '18.5 - 24.9';
+      label = 'BMI';
+      unit = 'kg/m²';
+    } else if (key === 'steps') {
+      label = 'Steps';
+      unit = '';
+      const stepsStr = report?.dailyNutrientTargets?.steps;
+      if (stepsStr) {
+        targetText = `> ${String(stepsStr).replace(/,/g, '').match(/\d+/)?.[0] || '3000'}`;
+      } else {
+        targetText = '> 3000';
+      }
+    } else {
+      const def = biomarkerDefinitions.find(d => d.key === key);
+      const customDef = profile?.customBiomarkers?.[key];
+      if (customDef) {
+        targetText = customDef.normalRange || 'Unknown';
+        label = customDef.name || key;
+        unit = customDef.unit || '';
+      } else if (def) {
+        targetText = def.normalRange;
+        label = def.name;
+        unit = def.unit || '';
+      }
+    }
+
+    return { name: label, value: value.toFixed(1), unit: unit, target: targetText, bounds: { min: 0, max: Infinity }, statusText: text, color, key };
+  }) : [];
   return (
     <div className="space-y-5 pb-24 animation-fade-in max-w-md mx-auto px-[15px] mt-4 font-sans text-slate-900">
+      <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mb-4">
+        <button onClick={() => setActiveSubTab('trends')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeSubTab === 'trends' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}>Trends</button>
+        <button onClick={() => setActiveSubTab('summary')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeSubTab === 'summary' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}>Summary</button>
+      </div>
+      
+      {activeSubTab === 'summary' && (
+        <div className="space-y-6" onClick={() => setSelectedDot(null)}>
+          <div className="flex justify-between items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 p-3 rounded-xl relative">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide font-mono">Aggregated Time Period</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-950 dark:text-slate-200">Last</span>
+              <input 
+                type="number" 
+                value={summaryDays} 
+                onChange={e => setSummaryDays(e.target.value === '' ? '' : parseInt(e.target.value, 10))} 
+                className="w-12 text-center text-xs font-bold text-white bg-slate-800 dark:bg-slate-800 rounded-lg py-1 border-none focus:ring-2 focus:ring-indigo-500/20"
+              />
+              <span className="text-xs font-bold text-slate-950 dark:text-slate-200">days</span>
+            </div>
+            
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                const text = `Nutrients (Last ${summaryDays} Days):\n` + 
+                  nutrientDots.map(d => `- ${d.name}: ${d.value} ${d.unit} (Target: ${d.target}) - ${d.statusText}`).join('\n') + 
+                  '\n\nBiomarkers (Latest):\n' + 
+                  biomarkerDots.map(d => `- ${d.name}: ${d.value} ${d.unit} (Target: ${d.target}) - ${d.statusText}`).join('\n');
+                navigator.clipboard.writeText(text);
+                const btn = document.getElementById('copy-summary-btn');
+                if (btn) {
+                  btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-500"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                  setTimeout(() => {
+                    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-500 hover:text-indigo-600"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>';
+                  }, 2000);
+                }
+              }}
+              id="copy-summary-btn"
+              className="absolute -top-3 -right-2 p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm hover:scale-105 transition-all"
+              title="Copy all data"
+            >
+              <Copy className="w-3.5 h-3.5 text-slate-500 hover:text-indigo-600 transition-colors" />
+            </button>
+          </div>
+          
+          <div>
+            <h3 className="text-xs font-bold text-slate-950 dark:text-slate-200 mb-3 font-display uppercase tracking-wider">Nutrients (Last {summaryDays} Days)</h3>
+            <div className="grid grid-cols-10 gap-x-1 gap-y-3 justify-items-center">
+              {nutrientDots.map((dot, i) => (
+                <div 
+                  key={i} 
+                  className="relative flex items-center justify-center cursor-pointer group"
+                  style={{ width: '35px', height: '35px' }}
+                  onMouseEnter={() => setHoveredDot(dot)}
+                  onMouseLeave={() => setHoveredDot(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedDot(selectedDot?.key === dot.key ? null : dot);
+                  }}
+                >
+                  <div className={`rounded-full ${dot.color} transition-all duration-300 ${selectedDot?.key === dot.key || hoveredDot?.key === dot.key ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-slate-950 scale-110' : ''}`} style={{ width: '25px', height: '25px' }} />
+                  
+                  {/* Tooltip */}
+                  <div className={`absolute bottom-full mb-2 ${i % 10 < 2 ? 'left-0' : i % 10 > 7 ? 'right-0' : 'left-1/2 -translate-x-1/2'} w-48 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 transition-all duration-200 pointer-events-none ${selectedDot?.key === dot.key || hoveredDot?.key === dot.key ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`w-2.5 h-2.5 rounded-full ${dot.color}`} />
+                      <h4 className="text-xs font-bold text-slate-950 dark:text-white capitalize truncate">{dot.name}</h4>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <div>
+                        <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wide font-mono mb-0.5">Value</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-200">{dot.value} {dot.unit}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wide font-mono mb-0.5">Target</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-200 block truncate">{dot.target}</span>
+                      </div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                      <span className={`text-[10px] font-bold ${dot.color.replace('bg-', 'text-')}`}>{dot.statusText}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div>
+            <h3 className="text-xs font-bold text-slate-950 dark:text-slate-200 mb-3 font-display uppercase tracking-wider mt-6">Biomarkers (Latest Value)</h3>
+            <div className="grid grid-cols-10 gap-x-1 gap-y-3 justify-items-center">
+              {biomarkerDots.map((dot, i) => (
+                <div 
+                  key={i} 
+                  className="relative flex items-center justify-center cursor-pointer group"
+                  style={{ width: '35px', height: '35px' }}
+                  onMouseEnter={() => setHoveredDot(dot)}
+                  onMouseLeave={() => setHoveredDot(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedDot(selectedDot?.key === dot.key ? null : dot);
+                  }}
+                >
+                  <div className={`rounded-full ${dot.color} transition-all duration-300 ${selectedDot?.key === dot.key || hoveredDot?.key === dot.key ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-slate-950 scale-110' : ''}`} style={{ width: '25px', height: '25px' }} />
+                  
+                  {/* Tooltip */}
+                  <div className={`absolute bottom-full mb-2 ${i % 10 < 2 ? 'left-0' : i % 10 > 7 ? 'right-0' : 'left-1/2 -translate-x-1/2'} w-48 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 transition-all duration-200 pointer-events-none ${selectedDot?.key === dot.key || hoveredDot?.key === dot.key ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`w-2.5 h-2.5 rounded-full ${dot.color}`} />
+                      <h4 className="text-xs font-bold text-slate-950 dark:text-white capitalize truncate">{dot.name}</h4>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <div>
+                        <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wide font-mono mb-0.5">Value</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-200">{dot.value} {dot.unit}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[8px] font-bold text-slate-400 uppercase tracking-wide font-mono mb-0.5">Target</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-200 block truncate">{dot.target}</span>
+                      </div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                      <span className={`text-[10px] font-bold ${dot.color.replace('bg-', 'text-')}`}>{dot.statusText}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {activeSubTab === 'trends' && (
+        <>
       
       {/* Select Controls Grid */}
       <div className="grid grid-cols-2 gap-3">
@@ -453,7 +808,8 @@ export default function TrendsTab({
           })()}
         </div>
       )}
-
+      </>
+      )}
     </div>
   );
 }

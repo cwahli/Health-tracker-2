@@ -1,3 +1,4 @@
+import { toYYYYMMDD } from "../utils/dateUtils";
 import React, { useState, useMemo } from 'react';
 import { UserProfile, BiomarkerLog } from '../types';
 import { BiomarkerDefinition, getBiomarkerMetadata, getPhysiologicalBucket, BIOMARKER_GROUPING_OPTIONS } from '../utils/biomarkers';
@@ -136,7 +137,7 @@ export default function CombineBiomarkersModal({
         if (b.originalKey === initialKey) return 1;
         return 0;
       }
-      return b.date.localeCompare(a.date);
+      return toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date));
     });
     
     const uniqueLogs: typeof combinedLogs = [];
@@ -177,7 +178,7 @@ export default function CombineBiomarkersModal({
       date: log.date,
       value: log.value,
       originalLogId: log.originalLogId
-    })).sort((a, b) => b.date.localeCompare(a.date));
+    })).sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
 
     onSaveCombine(targetKey, targetDef, finalLogs, selectedKeys);
     onClose();
@@ -371,7 +372,7 @@ export default function CombineBiomarkersModal({
                       value={editedKey}
                       onChange={(e) => setEditedKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                       className="w-full px-3 py-2 border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 rounded-xl text-xs font-mono font-semibold focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
-                      placeholder="e.g. hemoglobin_a1c"
+                      placeholder="e.g. hba1c"
                     />
                   </div>
                   <div>

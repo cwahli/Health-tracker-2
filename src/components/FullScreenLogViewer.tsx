@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Copy, Send, Check, AlertTriangle } from 'lucide-react';
+import { X, Copy, Send, Check, AlertTriangle, Search } from 'lucide-react';
 
 interface FullScreenLogViewerProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
   logsText: string;
+  logsArray?: string[];
   onSendToAdmin?: () => Promise<void>;
   isSendingLogs?: boolean;
   logsSendStatus?: 'idle' | 'success' | 'error';
@@ -19,47 +20,111 @@ export default function FullScreenLogViewer({
   onClose,
   title,
   logsText,
+  logsArray,
   onSendToAdmin,
   isSendingLogs = false,
   logsSendStatus = 'idle',
   onClearLogs,
   eventsCount
 }: FullScreenLogViewerProps) {
-  const [copied, setCopied] = useState(false);
+  const [copiedAll, setCopiedAll] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const chunks = useMemo(() => {
+    if (logsArray && logsArray.length > 0) return logsArray;
+    return logsText ? [logsText] : [];
+  }, [logsText, logsArray]);
+
+  const filteredChunks = useMemo(() => {
+    if (!searchTerm) return chunks;
+    const lowerSearch = searchTerm.toLowerCase();
+    return chunks.filter(chunk => chunk.toLowerCase().includes(lowerSearch));
+  }, [chunks, searchTerm]);
 
   if (!isOpen) return null;
 
-  const handleCopy = async () => {
+  const handleCopyAll = async () => {
     try {
       await navigator.clipboard.writeText(logsText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 2000);
     } catch (err) {
       console.error('Failed to copy logs:', err);
     }
   };
 
+  const handleCopyChunk = async (text: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy chunk:', err);
+    }
+  };
+
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in w-full h-full text-slate-200">
+    <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-fade-in w-full h-[100dvh] text-slate-200">
       {/* Header */}
       <div className="px-4 py-3 border-b border-slate-800/60 flex items-center justify-between bg-slate-950">
-        <div className="flex items-center gap-2.5">
-          <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-          <h2 className="text-xs font-bold text-slate-100 uppercase tracking-wider font-mono">
-            {title}
-          </h2>
+        <div className="flex items-center gap-4 flex-1">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+            <h2 className="text-xs font-bold text-slate-100 uppercase tracking-wider font-mono">
+              {title}
+            </h2>
+          </div>
+          {chunks.length > 0 && (
+            <div className="relative max-w-sm flex-1 ml-4 hidden sm:block">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search logs..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-indigo-500/50 transition-colors"
+              />
+            </div>
+          )}
         </div>
+        
         <button
           onClick={onClose}
-          className="p-1.5 rounded-xl hover:bg-slate-800/80 text-slate-400 hover:text-slate-100 transition-colors cursor-pointer"
+          className="p-1.5 rounded-xl hover:bg-slate-800/80 text-slate-400 hover:text-slate-100 transition-colors cursor-pointer ml-4"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Content Area - Truly fullscreen with 10px margins on the left/right */}
-      <div className="flex-1 overflow-auto mx-[10px] py-4 font-mono text-xs text-slate-300 leading-relaxed select-all whitespace-pre-wrap bg-transparent">
-        {logsText || <span className="text-slate-500 italic">No logs recorded yet.</span>}
+      {chunks.length > 0 && (
+        <div className="px-4 py-2 bg-slate-950 border-b border-slate-800/60 sm:hidden">
+          <div className="relative w-full">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search logs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs font-mono text-slate-200 outline-none focus:border-indigo-500/50 transition-colors"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Content Area */}
+      <div className="flex-1 mx-[10px] py-4 bg-transparent flex flex-col min-h-0">
+        {filteredChunks.length === 0 ? (
+          <span className="text-slate-500 italic font-mono text-xs px-2">
+            {chunks.length === 0 ? 'No logs recorded yet.' : 'No matches found.'}
+          </span>
+        ) : (
+          <textarea
+            readOnly
+            value={filteredChunks.join('\n\n')}
+            className="flex-1 w-full bg-slate-900/50 border border-slate-800/80 rounded-xl p-4 font-mono text-[11px] text-slate-300 leading-relaxed outline-none resize-none overflow-y-auto select-text focus:outline-none"
+          />
+        )}
       </div>
 
       {/* Footer Actions */}
@@ -71,6 +136,7 @@ export default function FullScreenLogViewer({
             <span>{logsText ? `${logsText.length} characters` : 'Empty log'}</span>
           )}
         </div>
+
         <div className="flex items-center gap-2">
           {onClearLogs && (
             <button
@@ -80,24 +146,22 @@ export default function FullScreenLogViewer({
               Clear Log
             </button>
           )}
-
           <button
-            onClick={handleCopy}
+            onClick={handleCopyAll}
             className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-850 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            {copied ? (
+            {copiedAll ? (
               <>
                 <Check className="w-4 h-4 text-emerald-400" />
-                <span>Copied!</span>
+                <span>Copied All!</span>
               </>
             ) : (
               <>
                 <Copy className="w-4 h-4" />
-                <span>Copy Logs</span>
+                <span>Copy All</span>
               </>
             )}
           </button>
-
           {onSendToAdmin && (
             <button
               onClick={onSendToAdmin}

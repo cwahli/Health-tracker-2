@@ -1,8 +1,9 @@
 import React from 'react';
 import { UserProfile, FoodLog, HealthAction, DailyBenefit, RecommendationReport, BiomarkerLog, ChatMessage, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
-import { CheckCircle2, Circle, AlertCircle, Heart, ChevronDown, ChevronUp, Calendar, MapPin, Search, Sparkles, Trash2, RefreshCw, Clock, Settings, X, TrendingUp, Activity } from 'lucide-react';
-import { getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity } from '../utils/biomarkers';
+import { CheckCircle2, Circle, AlertCircle, Heart, ChevronDown, ChevronUp, Calendar, MapPin, Search, Sparkles, Trash2, RefreshCw, Clock, Settings, X, TrendingUp, Activity, Copy } from 'lucide-react';
+import { getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity, getBiomarkerMetadata } from '../utils/biomarkers';
+import { getAgentCalibration } from '../utils/agentCalibration';
 import { getCurrentDateInTimezone } from '../utils/dateUtils';
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { BiomarkerExpandedSection } from './BiomarkerExpandedSection';
@@ -185,14 +186,37 @@ export default function HomeTab({
 
   // Compute resolvedBiomarkers including BMI from profile if not explicitly defined in historical log
   const resolvedBiomarkers = React.useMemo(() => {
-    const res = { ...biomarkers };
+    // Collect all keys from history + biomarkers
+    const keys = new Set<string>();
+    (biomarkerHistory || []).forEach(h => {
+      if (h.biomarkers) {
+        Object.keys(h.biomarkers).forEach(k => keys.add(k));
+      }
+    });
+    if (biomarkers) {
+      Object.keys(biomarkers).forEach(k => keys.add(k));
+    }
+
+    // Derive the latest value for each key from history, fallback to biomarkers
+    const res: Record<string, number | string> = {};
+    keys.forEach(key => {
+      const relevantLogs = (biomarkerHistory || [])
+        .filter(h => h.biomarkers && h.biomarkers[key] !== undefined && h.biomarkers[key] !== null && h.biomarkers[key] !== '')
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      if (relevantLogs.length > 0) {
+        res[key] = relevantLogs[0].biomarkers[key];
+      } else if (biomarkers && biomarkers[key] !== undefined) {
+        res[key] = biomarkers[key];
+      }
+    });
+
     if (res.bmi === undefined && profile.weight && profile.height) {
       const heightInMeters = Number(profile.height) / 100;
       const bmiScore = Number(profile.weight) / (heightInMeters * heightInMeters);
       res.bmi = parseFloat(bmiScore.toFixed(1));
     }
     return res;
-  }, [biomarkers, profile.weight, profile.height]);
+  }, [biomarkers, biomarkerHistory, profile.weight, profile.height]);
 
   const problematicBiomarkers = React.useMemo(() => {
     const list = Object.entries(resolvedBiomarkers)
@@ -548,6 +572,87 @@ export default function HomeTab({
     return () => window.removeEventListener('googleStepsUpdated', handleGoogleUpdate);
   }, [emailSuffix]);
 
+  const hasNoData = foodLogs.length === 0 && biomarkerHistory.length === 0;
+
+  if (hasNoData) {
+    return (
+      <div className="space-y-6 pb-24 animation-fade-in max-w-md mx-auto px-[15px] mt-4 font-sans text-slate-900">
+        <div className="text-center py-8 space-y-3">
+          <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+            <Sparkles className="w-8 h-8" />
+          </div>
+          <div className="space-y-1">
+            <h2 id="empty-state-title" className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+              Welcome to Your Health Portal
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
+              Your dashboard is ready! Log some records to calibrate your metabolic targets, nutrition recommendations, and biomarker risk assessments.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {/* Option 1: Complete Profile */}
+          <div id="empty-state-profile-card" className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-150 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0">
+                <Settings className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  Complete Your Profile
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">
+                  Add details like age, weight, height, ethnicity, and gender. This calibrates our medical and AI engines to calculate custom daily targets specifically for you.
+                </p>
+              </div>
+            </div>
+            <button
+              id="empty-state-profile-btn"
+              onClick={() => {
+                document.getElementById('avatar-edit-btn')?.click();
+              }}
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+            >
+              Configure Profile
+            </button>
+          </div>
+
+          {/* Option 2: Log Food */}
+          <div id="empty-state-food-card" className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-150 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl shrink-0">
+                <Heart className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  Log a Food or Meal
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">
+                  Type what you ate or speak naturally to get an automatic clinical breakdown, nutrient calculations, and personalized health recommendations.
+                </p>
+              </div>
+            </div>
+            <button
+              id="empty-state-food-btn"
+              onClick={() => {
+                const foodFab = document.getElementById('fab-food-btn');
+                if (foodFab) {
+                  foodFab.click();
+                } else {
+                  onNavigateToTab('food');
+                }
+              }}
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+            >
+              Add Your First Food Log
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-24 animation-fade-in max-w-md mx-auto px-[15px] mt-4 font-sans text-slate-900">
       
@@ -861,7 +966,7 @@ export default function HomeTab({
                 <>
                   {/* Rolling Days */}
                   <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-bold text-slate-850 dark:text-slate-250">
+                    <div className="flex justify-between text-xs font-bold text-slate-900 dark:text-slate-100">
                       <span>Rolling Timeframe</span>
                       <span className="text-indigo-650 dark:text-indigo-400 font-mono">{rollingDays} Days</span>
                     </div>
@@ -878,7 +983,7 @@ export default function HomeTab({
 
                   {/* Authorization Limit % */}
                   <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-bold text-slate-850 dark:text-slate-250">
+                    <div className="flex justify-between text-xs font-bold text-slate-900 dark:text-slate-100">
                       <span>Maximum Adjustment Limit</span>
                       <span className="text-indigo-650 dark:text-indigo-400 font-mono">{rollingAllowance}%</span>
                     </div>
@@ -900,111 +1005,35 @@ export default function HomeTab({
               <div className="space-y-3 border-t border-slate-100 dark:border-slate-800/50 pt-3">
                 <button
                   onClick={() => setIsTargetsExpanded(!isTargetsExpanded)}
-                  className="flex items-center justify-between w-full text-xs font-bold text-slate-850 dark:text-slate-250 cursor-pointer"
+                  className="flex items-center justify-between w-full text-xs font-bold text-slate-900 dark:text-slate-100 cursor-pointer"
                 >
-                  <span>Manual Targets Override</span>
+                  <span>Edit Nutrient Targets</span>
                   <ChevronDown className={`w-4 h-4 transition-transform ${isTargetsExpanded ? 'rotate-180' : ''}`} />
                 </button>
-                {isTargetsExpanded && (
-                  <div className="grid grid-cols-2 gap-3 pt-2">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500">Calories (kcal)</label>
-                    <input 
-                      type="number"
-                      value={baseCaloriesTarget}
-                      onChange={(e) => {
-                         if (onUpdateReport && report) {
-                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, calories: `${e.target.value} kcal`}})
-                         }
-                      }}
-                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
-                    />
+                                {isTargetsExpanded && (
+                  <div className="grid grid-cols-2 gap-3 pt-2 max-h-[300px] overflow-y-auto pr-1">
+                    {[{"key":"calories","label":"Calories","unit":"kcal","default":1800},{"key":"protein","label":"Protein","unit":"g","default":70},{"key":"carbohydrates","label":"Carbs","unit":"g","default":200},{"key":"totalFat","label":"Total Fat","unit":"g","default":60},{"key":"saturatedFat","label":"Sat. Fat","unit":"g","default":20},{"key":"unsaturatedFat","label":"Unsat. Fat","unit":"g","default":40},{"key":"omega3","label":"Omega 3","unit":"g","default":1.1},{"key":"addedSugar","label":"Added Sugar","unit":"g","default":25},{"key":"totalFibre","label":"Fibre","unit":"g","default":25},{"key":"solubleFibre","label":"Soluble Fibre","unit":"g","default":5},{"key":"sodium","label":"Sodium","unit":"mg","default":1500},{"key":"potassium","label":"Potassium","unit":"mg","default":3500},{"key":"magnesium","label":"Magnesium","unit":"mg","default":310},{"key":"calcium","label":"Calcium","unit":"mg","default":1000},{"key":"iron","label":"Iron","unit":"mg","default":18},{"key":"zinc","label":"Zinc","unit":"mg","default":8},{"key":"selenium","label":"Selenium","unit":"mcg","default":55},{"key":"iodine","label":"Iodine","unit":"mcg","default":150},{"key":"phosphorus","label":"Phosphorus","unit":"mg","default":700},{"key":"vitaminD","label":"Vitamin D","unit":"IU","default":600},{"key":"vitaminB12","label":"Vitamin B12","unit":"mcg","default":2.4},{"key":"folate","label":"Folate","unit":"mcg","default":400},{"key":"vitaminC","label":"Vitamin C","unit":"mg","default":75},{"key":"vitaminE","label":"Vitamin E","unit":"mg","default":15},{"key":"vitaminK","label":"Vitamin K","unit":"mcg","default":90},{"key":"vitaminA","label":"Vitamin A","unit":"mcg","default":700},{"key":"vitaminB6","label":"Vitamin B6","unit":"mg","default":1.3},{"key":"thiamine","label":"Thiamine","unit":"mg","default":1.1},{"key":"riboflavin","label":"Riboflavin","unit":"mg","default":1.1},{"key":"niacin","label":"Niacin","unit":"mg","default":14},{"key":"steps","label":"Steps","unit":"steps","default":3000}].map(t => (
+                      <div className="space-y-1" key={t.key}>
+                        <label className="text-[10px] font-bold text-slate-500">{t.label} ({t.unit})</label>
+                        <input 
+                          type="number"
+                          value={report && report.dailyNutrientTargets ? parseTarget((report.dailyNutrientTargets as any)[t.key], t.default) : t.default}
+                          onChange={(e) => {
+                             if (onUpdateReport && report) {
+                               onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, [t.key]: `${e.target.value} ${t.unit}`}})
+                             }
+                          }}
+                          className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
+                        />
+                      </div>
+                    ))}
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500">Protein (g)</label>
-                    <input 
-                      type="number"
-                      value={baseProteinTarget}
-                      onChange={(e) => {
-                         if (onUpdateReport && report) {
-                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, protein: `${e.target.value} g`}})
-                         }
-                      }}
-                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500">Sat. Fat (g)</label>
-                    <input 
-                      type="number"
-                      value={baseSatFatTarget}
-                      onChange={(e) => {
-                         if (onUpdateReport && report) {
-                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, saturatedFat: `${e.target.value} g`}})
-                         }
-                      }}
-                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500">Sodium (mg)</label>
-                    <input 
-                      type="number"
-                      value={baseSodiumTarget}
-                      onChange={(e) => {
-                         if (onUpdateReport && report) {
-                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, sodium: `${e.target.value} mg`}})
-                         }
-                      }}
-                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500">Steps</label>
-                    <input 
-                      type="number"
-                      value={report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.steps, 3000) : 3000}
-                      onChange={(e) => {
-                         if (onUpdateReport && report) {
-                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, steps: `${e.target.value} steps`}})
-                         }
-                      }}
-                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500">Carbs (g)</label>
-                    <input 
-                      type="number"
-                      value={report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.carbohydrates, 200) : 200}
-                      onChange={(e) => {
-                         if (onUpdateReport && report) {
-                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, carbohydrates: `${e.target.value} g`}})
-                         }
-                      }}
-                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500">Total Fat (g)</label>
-                    <input 
-                      type="number"
-                      value={report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.totalFat, 60) : 60}
-                      onChange={(e) => {
-                         if (onUpdateReport && report) {
-                           onUpdateReport({...report, dailyNutrientTargets: {...report.dailyNutrientTargets, totalFat: `${e.target.value} g`}})
-                         }
-                      }}
-                      className="w-full bg-slate-50 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none"
-                    />
-                  </div>
-                </div>
                 )}
               </div>
               
               {/* View Timeframe Selection */}
               <div className="space-y-1.5 border-t border-slate-100 dark:border-slate-800/50 pt-3">
-                <div className="flex justify-between text-xs font-bold text-slate-850 dark:text-slate-250">
+                <div className="flex justify-between text-xs font-bold text-slate-900 dark:text-slate-100">
                   <span>Display View Timeframe</span>
                   <span className="text-indigo-650 dark:text-indigo-400 font-mono">
                     {viewTimeframe === '1' ? 'Today' : `Last ${viewTimeframe} Days`}
@@ -1122,6 +1151,24 @@ export default function HomeTab({
             <Heart className="w-4.5 h-4.5 text-indigo-600" />
             Health status to improve
           </h3>
+          {problematicBiomarkers.length > 0 && (
+            <button
+              onClick={() => {
+                const textToCopy = problematicBiomarkers.map(b => {
+                  const rating = getBiomarkerStatusLabel(b.key, b.status, profile.customBiomarkers?.[b.key], b.value, profile);
+                  const calibration = getAgentCalibration(b.key);
+                  const insight = calibration?.specificRiskContext || calibration?.description || b.def.benefitRisk || '';
+                  return `${b.def.name}: ${b.value} ${b.def.unit || ''} (${rating})\n${insight}`.trim();
+                }).join('\n\n');
+                navigator.clipboard.writeText(textToCopy);
+                alert('Copied to clipboard!');
+              }}
+              className="text-xs font-bold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-1.5 transition-colors bg-slate-100 dark:bg-slate-800/50 px-2.5 py-1.5 rounded-lg"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              Copy All
+            </button>
+          )}
         </div>
 
         {/* Problematic Biomarkers list (rendered in 2 columns as expandable tabs/cards) */}
@@ -1129,15 +1176,29 @@ export default function HomeTab({
           {problematicBiomarkers.length > 0 ? (
             <div className="space-y-4">
               {(() => {
-                const chunks: typeof problematicBiomarkers[] = [];
-                for (let i = 0; i < problematicBiomarkers.length; i += 2) {
-                  chunks.push(problematicBiomarkers.slice(i, i + 2));
-                }
-                return chunks.map((chunk, chunkIdx) => {
-                  const expandedInChunk = chunk.find(b => expandedKey === b.key);
+                const groups: Record<string, typeof problematicBiomarkers> = {};
+                problematicBiomarkers.forEach(b => {
+                  const meta = getBiomarkerMetadata(b.key, profile.customBiomarkers?.[b.key] || b.def);
+                  const cat = (meta.riskCategories && meta.riskCategories.length > 0) ? meta.riskCategories[0] : 'Uncategorized';
+                  if (!groups[cat]) groups[cat] = [];
+                  groups[cat].push(b);
+                });
+
+                return Object.entries(groups).map(([category, items]) => {
+                  const chunks: typeof problematicBiomarkers[] = [];
+                  for (let i = 0; i < items.length; i += 2) {
+                    chunks.push(items.slice(i, i + 2));
+                  }
+                  
                   return (
-                    <div key={chunkIdx} className="space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
+                    <div key={category} className="space-y-4 mb-6 last:mb-0">
+                      <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1 border-b border-slate-100 dark:border-slate-800 pb-2">{category}</h4>
+                      <div className="space-y-4">
+                        {chunks.map((chunk, chunkIdx) => {
+                          const expandedInChunk = chunk.find(b => expandedKey === b.key);
+                          return (
+                            <div key={chunkIdx} className="space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
                         {chunk.map((b) => {
                           const colorClass = getBiomarkerColor(b.status);
                           const isExpanded = expandedKey === b.key;
@@ -1218,8 +1279,12 @@ export default function HomeTab({
                       )}
                     </div>
                   );
-                });
-              })()}
+                })}
+              </div>
+            </div>
+          );
+        });
+      })()}
             </div>
           ) : (
             <div className="p-4 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 text-center">
@@ -1356,6 +1421,7 @@ export default function HomeTab({
           biomarkerKey={reviewingBiomarkerKey}
           currentValue={resolvedBiomarkers[reviewingBiomarkerKey]}
           onClose={() => setReviewingBiomarkerKey(null)}
+          biomarkerHistory={biomarkerHistory}
           initialMessages={reviewHistories[reviewingBiomarkerKey] || []}
           onUpdateMessages={(msgs) => {
             setReviewHistories(prev => ({

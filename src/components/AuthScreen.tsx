@@ -29,7 +29,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [nickname]);
 
   const handleSuccessfulLogin = (user: User) => {
     const resolvedNickname = nickname || user.displayName || user.email?.split('@')[0] || 'User';
@@ -37,10 +37,10 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       nickname: resolvedNickname,
       photoUrl: user.photoURL || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120",
       email: user.email || '',
-      age: 30,
+      age: '' as unknown as number,
       ethnicity: 'Unknown',
-      weight: 70,
-      height: 170,
+      weight: '' as unknown as number,
+      height: '' as unknown as number,
       language
     };
     onLogin(profile);
@@ -55,13 +55,23 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     try {
       if (isSignUp) {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await sendEmailVerification(userCredential.user);
+        const lastSent = localStorage.getItem('email_verification_sent_at');
+        const now = Date.now();
+        if (!lastSent || now - parseInt(lastSent) > 60000) {
+          await sendEmailVerification(userCredential.user);
+          localStorage.setItem('email_verification_sent_at', String(now));
+        }
         setStatus('pending_verification');
       } else {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         if (!userCredential.user.emailVerified) {
           setStatus('pending_verification');
-          await sendEmailVerification(userCredential.user);
+          const lastSent = localStorage.getItem('email_verification_sent_at');
+          const now = Date.now();
+          if (!lastSent || now - parseInt(lastSent) > 60000) {
+            await sendEmailVerification(userCredential.user);
+            localStorage.setItem('email_verification_sent_at', String(now));
+          }
         } else {
           handleSuccessfulLogin(userCredential.user);
         }
@@ -99,7 +109,11 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       }
     } catch (err: any) {
       console.error(`${provider} Sign-In Error:`, err);
-      setErrorMsg(`${provider} Sign-In failed: ` + err.message);
+      let errMsg = err.message;
+      if (err.code === 'auth/operation-not-allowed' || (err.message && err.message.includes('auth/operation-not-allowed'))) {
+        errMsg = `The ${provider} provider is currently disabled in your Firebase project Console. To use ${provider} Sign-In, please go to Firebase Console -> Authentication -> Sign-in method, click "Add new provider" under Sign-in providers, and enable "${provider}".`;
+      }
+      setErrorMsg(`${provider} Sign-In failed: ` + errMsg);
       setStatus('idle');
     }
   };

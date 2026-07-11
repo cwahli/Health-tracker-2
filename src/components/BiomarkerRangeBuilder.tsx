@@ -31,7 +31,7 @@ const defaultBracketRange: BracketRange = {
 
 
 
-const parseNormalRangeStr = (val: string | undefined, type: 'simple' | 'bracket'): RangeConfig => {
+export const parseNormalRangeStr = (val: string | undefined, type: 'simple' | 'bracket'): RangeConfig => {
     if (!val) return type === 'simple' ? defaultSimpleRange : defaultBracketRange;
     val = val.trim().toLowerCase();
     
@@ -207,6 +207,20 @@ export const BiomarkerRangeBuilder: React.FC<BiomarkerRangeBuilderProps> = ({ ra
                 </div>
                 
                 <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Range Name / Source</label>
+                    <input
+                      type="text"
+                      value={cr.name || ''}
+                      onChange={e => {
+                        const next = [...customRanges];
+                        next[idx].name = e.target.value;
+                        updateCustomRanges(next);
+                      }}
+                      className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1.5 text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
+                      placeholder="e.g. Chinese Lipid Guidelines"
+                    />
+                  </div>
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Gender</label>
                     <select

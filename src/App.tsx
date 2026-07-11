@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { UserProfile, FoodLog, BiomarkerLog, HealthAction, DailyBenefit, RecommendationReport, DbInteraction, QuotaData, FoodIdea } from './types';
 import Header from './components/Header';
@@ -9,23 +9,99 @@ import InsightsTab from './components/InsightsTab';
 import FoodHistoryTab from './components/FoodHistoryTab';
 import MedicalHistoryTab from './components/MedicalHistoryTab';
 import TrendsTab from './components/TrendsTab';
+import ConflictResolutionModal from './components/ConflictResolutionModal';
 import LogChat from './components/LogChat';
 import { translations } from './utils/translations';
 import { AVAILABLE_LLMS } from './utils/llm';
 import { getLocalFallbackReport } from './utils/fallbackReport';
-import { Plus, HeartHandshake, RefreshCw, Sparkles, Stethoscope, Utensils, Loader, CloudLightning } from 'lucide-react';
+import { Plus, HeartHandshake, RefreshCw, Sparkles, Stethoscope, Utensils, Loader, CloudLightning, AlertTriangle } from 'lucide-react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, getDocFromServer, getDocsFromServer, onSnapshot, getDocsFromCache, writeBatch } from 'firebase/firestore';
-import { getCurrentDateInTimezone, normalizeBiomarkerHistory } from './utils/dateUtils';
+import { getCurrentDateInTimezone, toYYYYMMDD, normalizeBiomarkerHistory } from './utils/dateUtils';
 import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint } from './utils/biomarkers';
 import { standardizeUnit, CONVERSION_FACTORS } from './utils/unitConversion';
 import { get, set } from 'idb-keyval';
 import { parse } from 'yaml';
 import { runCleanupMigration } from './utils/migrationTask';
+import { syncLogsWithTimeBuckets, fetchAllConsolidatedLogs } from "./utils/syncUtils";
+import { compressImage } from "./utils/imageCompressor";
 const getStorageKey = (email?: string | null) => {
   const norm = (email || auth.currentUser?.email || 'guest').toLowerCase().trim();
   return `health_cockpit_app_data_${norm}`;
+};
+
+const MAX_SNAPSHOTS = 5;
+
+const getSnapshotKey = (email?: string | null) => {
+  const norm = (email || auth.currentUser?.email || 'guest').toLowerCase().trim();
+  return `health_cockpit_snapshots_${norm}`;
+};
+
+/** Save a named snapshot of all current data to localStorage. */
+const saveLocalSnapshot = (
+  label: string,
+  email: string | null | undefined,
+  bundle: {
+    profile: any;
+    foodLogs: any[];
+    biomarkers: Record<string, any>;
+    biomarkerHistory: any[];
+    actions?: any[];
+    dailyBenefits?: any[];
+    report?: any;
+  }
+) => {
+  try {
+    const key = getSnapshotKey(email);
+    const existing: any[] = (() => {
+      try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; }
+    })();
+
+    // Strip base64 images from food logs to keep snapshot small
+    const lightFoodLogs = (bundle.foodLogs || []).map((f: any) => {
+      if (!f.imageUrl || !f.imageUrl.startsWith('data:image/')) return f;
+      return { ...f, imageUrl: '[image_removed_for_snapshot]' };
+    });
+
+    const snapshot = {
+      id: `snap_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      label,
+      data: {
+        profile: bundle.profile,
+        foodLogs: lightFoodLogs,
+        biomarkers: bundle.biomarkers,
+        biomarkerHistory: bundle.biomarkerHistory,
+        actions: bundle.actions || [],
+        dailyBenefits: bundle.dailyBenefits || [],
+        report: bundle.report || null
+      }
+    };
+
+    const updated = [snapshot, ...existing].slice(0, MAX_SNAPSHOTS);
+    localStorage.setItem(key, JSON.stringify(updated));
+    return true;
+  } catch (e) {
+    console.warn('[Snapshot] Could not save snapshot:', e);
+    return false;
+  }
+};
+
+/** Load all snapshots for the current user. */
+const loadLocalSnapshots = (email?: string | null): any[] => {
+  try {
+    return JSON.parse(localStorage.getItem(getSnapshotKey(email)) || '[]');
+  } catch { return []; }
+};
+
+/** Delete a specific snapshot by id. */
+const deleteLocalSnapshot = (email: string | null | undefined, id: string) => {
+  try {
+    const key = getSnapshotKey(email);
+    const existing = loadLocalSnapshots(email);
+    localStorage.setItem(key, JSON.stringify(existing.filter((s: any) => s.id !== id)));
+  } catch (e) {}
 };
 const QUOTA_STORAGE_KEY = 'health_cockpit_quota_data';
 const getQuotaKey = () => {
@@ -208,23 +284,53 @@ function cleanData<T>(obj: T): T {
     return value === undefined ? null : value;
   }));
 }
+function isDeepEqual(obj1: any, obj2: any): boolean {
+  if (obj1 === obj2) return true;
+  if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) {
+    return false;
+  }
+  const keys1 = Object.keys(obj1);
+  const keys2 = Object.keys(obj2);
+  
+  // Filter out undefined and null values to avoid breaking equality checks on missing or null properties
+  const activeKeys1 = keys1.filter(k => obj1[k] !== undefined && obj1[k] !== null);
+  const activeKeys2 = keys2.filter(k => obj2[k] !== undefined && obj2[k] !== null);
+
+  if (activeKeys1.length !== activeKeys2.length) return false;
+  for (const key of activeKeys1) {
+    if (!activeKeys2.includes(key)) return false;
+    if (!isDeepEqual(obj1[key], obj2[key])) return false;
+  }
+  return true;
+}
 const safeSaveToLocalStorage = async (key: string, bundle: any) => {
   try {
-    await set(key, bundle);
+    const existing = await get(key) || {};
+    const mergedBundle = {
+      ...bundle,
+      lastSyncedAt: bundle.lastSyncedAt !== undefined ? bundle.lastSyncedAt : existing.lastSyncedAt
+    };
+    await set(key, mergedBundle);
   } catch (e) {
     console.error("Failed to save to IndexedDB:", e);
   }
 };
 export default function App() {
+  const [snapshots, setSnapshots] = useState<any[]>([]);
+  const [showSnapshotPanel, setShowSnapshotPanel] = useState(false);
+  const [lastSnapshotLabel, setLastSnapshotLabel] = useState<string | null>(null);
   // One-time prompt reset to clean up stale localStorage for data_review
-  if (typeof window !== 'undefined' && localStorage.getItem('migration_july06_prompts_cleaned_v2') !== 'true') {
-    localStorage.removeItem('custom_system_instruction_data_review');
-    localStorage.removeItem('custom_variable_data_data_review');
-    localStorage.setItem('migration_july06_prompts_cleaned_v2', 'true');
-    console.log("Stale custom prompts for data_review successfully cleared.");
-  }
+  useEffect(() => {
+    if (typeof window !== 'undefined' && localStorage.getItem('migration_july06_prompts_cleaned_v2') !== 'true') {
+      localStorage.removeItem('custom_system_instruction_data_review');
+      localStorage.removeItem('custom_variable_data_data_review');
+      localStorage.setItem('migration_july06_prompts_cleaned_v2', 'true');
+      console.log("Stale custom prompts for data_review successfully cleared.");
+    }
+  }, []);
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const hasRunImageCompression = useRef(false);
   const [dismissedBmiAlerts, setDismissedBmiAlerts] = useState<{[key: string]: boolean}>(() => {
     try {
       const saved = localStorage.getItem('dismissedBmiAlerts');
@@ -241,10 +347,50 @@ export default function App() {
     localStorage.setItem('dismissedBmiAlerts', JSON.stringify(updated));
   };
   const [activeTab, setActiveTab] = useState<'home' | 'insights' | 'food' | 'medical' | 'trends'>('home');
+
+  useEffect(() => {
+    const handleSwitchTab = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.tab) {
+        setActiveTab(customEvent.detail.tab);
+      }
+    };
+    window.addEventListener('switch-tab', handleSwitchTab);
+    return () => window.removeEventListener('switch-tab', handleSwitchTab);
+  }, []);
   const [initiallyExpandedFoodId, setInitiallyExpandedFoodId] = useState<string | null>(null);
-  const [syncState, setSyncState] = useState<'synced' | 'syncing' | 'local'>('local');
+  const [syncState, setSyncState] = useState<'synced' | 'syncing' | 'local' | 'conflict'>('local');
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+  const [conflictData, setConflictData] = useState<{
+    localProfile: UserProfile;
+    cloudProfile: UserProfile;
+    localFoods: FoodLog[];
+    cloudFoods: FoodLog[];
+    localBioHistory: BiomarkerLog[];
+    cloudBioHistory: BiomarkerLog[];
+    localActions: HealthAction[];
+    cloudActions: HealthAction[];
+    localBenefits: DailyBenefit[];
+    cloudBenefits: DailyBenefit[];
+    cloudReport: RecommendationReport | null;
+    localReport: RecommendationReport | null;
+  } | null>(null);
   const [isFirestoreQuotaExceeded, setIsFirestoreQuotaExceeded] = useState<boolean>(() => {
-    return localStorage.getItem('firestore_quota_exceeded') === 'true';
+    const exceeded = localStorage.getItem('firestore_quota_exceeded') === 'true';
+    if (exceeded) {
+      const saved = localStorage.getItem(QUOTA_STORAGE_KEY);
+      const currentKey = getQuotaKey();
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.date !== currentKey) {
+            localStorage.removeItem('firestore_quota_exceeded');
+            return false;
+          }
+        } catch (e) {}
+      }
+    }
+    return exceeded;
   });
   const handleFirestoreError = (err: any) => {
     if (!err) return;
@@ -262,7 +408,64 @@ export default function App() {
   };
   const [hideSensitive, setHideSensitive] = useState<boolean>(false);
   // DB Transaction tracker state for spinning loader click analytics
-  const [dbInteractions, setDbInteractions] = useState<DbInteraction[]>([]);
+  const [dbInteractions, setDbInteractions] = useState<DbInteraction[]>(() => {
+    try {
+      const saved = localStorage.getItem('dbInteractions_history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.map((op: any) => ({
+          ...op,
+          status: op.status === 'pending' ? 'error' : op.status,
+          errorMessage: op.status === 'pending' ? 'Interrupted by page reload' : op.errorMessage
+        }));
+      }
+    } catch (e) {}
+    return [];
+  });
+  
+  useEffect(() => {
+    localStorage.setItem('dbInteractions_history', JSON.stringify(dbInteractions));
+  }, [dbInteractions]);
+
+  useEffect(() => {
+    if (profile?.email) {
+      setSnapshots(loadLocalSnapshots(profile.email));
+    }
+  }, [profile?.email]);
+
+  const handleRestoreSnapshot = async (snapshot: any) => {
+    if (!snapshot?.data) return;
+    const { profile: snapProfile, foodLogs: snapFoods, biomarkers: snapBiomarkers,
+            biomarkerHistory: snapBioHistory, actions: snapActions,
+            dailyBenefits: snapBenefits, report: snapReport } = snapshot.data;
+
+    if (snapProfile) setProfile(snapProfile);
+    if (snapFoods) setFoodLogs(snapFoods);
+    if (snapBiomarkers) setBiomarkers(snapBiomarkers);
+    if (snapBioHistory) setBiomarkerHistory(snapBioHistory);
+    if (snapActions) setActions(snapActions);
+    if (snapBenefits) setDailyBenefits(snapBenefits);
+    if (snapReport) setReport(snapReport);
+
+    const restoredBundle = {
+      profile: snapProfile,
+      foodLogs: snapFoods,
+      biomarkers: snapBiomarkers,
+      biomarkerHistory: snapBioHistory,
+      actions: snapActions || [],
+      dailyBenefits: snapBenefits || [],
+      foodIdeas: foodIdeas,
+      report: snapReport
+    };
+    safeSaveToLocalStorage(
+      getStorageKey(snapProfile?.email || profile?.email),
+      restoredBundle
+    );
+
+    setShowSnapshotPanel(false);
+    alert(`✅ Restored to: "${snapshot.label}"\n\nYour data has been reverted to this point. Click the Sync button to upload if you wish.`);
+  };
+
   // Daily Quota Tracking (resets at midnight PT)
   const [quota, setQuota] = useState<QuotaData>(() => {
     const saved = localStorage.getItem(QUOTA_STORAGE_KEY);
@@ -332,10 +535,17 @@ export default function App() {
     });
   };
   const withTimeout = <T,>(promise: Promise<T> | T, timeoutMs: number, label: string): Promise<T | void> => {
+    let timeoutId: any;
     return Promise.race([
-      Promise.resolve(promise),
+      Promise.resolve(promise).then(res => {
+        clearTimeout(timeoutId);
+        return res;
+      }).catch(err => {
+        clearTimeout(timeoutId);
+        throw err;
+      }),
       new Promise<void>((resolve) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           console.warn(`[Firestore Sync Timeout] ${label} took more than ${timeoutMs}ms. Continuing in background/offline cache.`);
           setSyncState('local');
           resolve();
@@ -367,6 +577,7 @@ export default function App() {
   const [isMedicalChatOpen, setIsMedicalChatOpen] = useState(false);
   const [activeAgentType, setActiveAgentType] = useState<'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent6' | 'agent7' | 'data_review' | null>(null);
   const [activeDataReviewBatchIdx, setActiveDataReviewBatchIdx] = useState<number | string | null>(null);
+  const [activeDataReviewBatchKeys, setActiveDataReviewBatchKeys] = useState<string[]>([]);
   const [calibratingBatchIdx, setCalibratingBatchIdx] = useState<number | null>(null);
   const [calibratingAgentType, setCalibratingAgentType] = useState<string | null>(null);
   const [batchSize, setBatchSize] = useState<number>(() => {
@@ -399,6 +610,23 @@ export default function App() {
       localStorage.removeItem('custom_system_instruction_agent1');
     } catch (e) {}
   }, []);
+
+  // Synchronize batch approvals from cloud profile back to local storage
+  useEffect(() => {
+    if (profile) {
+      if (profile.approved_agent1_batches) {
+        try {
+          localStorage.setItem('approved_agent1_batches', JSON.stringify(profile.approved_agent1_batches));
+        } catch (e) {}
+      }
+      if (profile.approved_data_review_batches) {
+        try {
+          localStorage.setItem('approved_data_review_batches', JSON.stringify(profile.approved_data_review_batches));
+        } catch (e) {}
+      }
+    }
+  }, [profile]);
+
   // Synchronize Google steps count to the actual daily biomarker logs when updated
   useEffect(() => {
     const handleGoogleStepsUpdated = async () => {
@@ -426,6 +654,8 @@ export default function App() {
         if (!log.note || !log.note.includes('Google Fit')) {
           log.note = log.note ? `${log.note} | Auto-synced from Google Fit` : 'Auto-synced from Google Fit';
         }
+        log.sync_state = 'update';
+        log.updated_at = Date.now();
         updatedHistory[todayLogIndex] = log;
       } else {
         const newLog: BiomarkerLog = {
@@ -433,13 +663,15 @@ export default function App() {
           date: todayStr,
           biomarkers: { steps: stepsVal },
           note: 'Auto-synced from Google Fit',
-          summary: `Synced ${stepsVal} steps from Google Fit`
+          summary: `Synced ${stepsVal} steps from Google Fit`,
+          sync_state: 'new',
+          updated_at: Date.now()
         };
         updatedHistory.unshift(newLog);
       }
 
       const recomputedBiomarkers: { [key: string]: number | string } = {};
-      [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+      [...updatedHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
         Object.entries(log.biomarkers).forEach(([k, v]) => {
           recomputedBiomarkers[k] = v as string | number;
         });
@@ -448,7 +680,7 @@ export default function App() {
       setBiomarkerHistory(updatedHistory);
       setBiomarkers(recomputedBiomarkers);
       if (profile) {
-        await saveAndSync(profile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
+        await saveAndSync(profile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'googleSteps', isAutoLog: true });
       }
     };
 
@@ -471,25 +703,34 @@ export default function App() {
   }, [activeTab, isFoodChatOpen, isMedicalChatOpen]);
   // Initialize from Firebase Auth and Firestore on mount
   // Check of changes in profile and other info on the database (and pull latest changes)
-  const checkForDbChanges = async (forceUserId?: string, forcePull?: boolean) => {
+  const checkForDbChanges = async (forceUserId?: string, forcePull?: boolean, forceReplaceLocal?: boolean) => {
     const uid = forceUserId || auth.currentUser?.uid;
+    console.log("Checking DB changes for UID:", uid);
     if (!uid) {
       setSyncState('local');
       return;
     }
     // Load local storage first so we don't wipe it on page load
-    const parsedLocal = await get(getStorageKey()) || {};
+    const parsedLocal = await get(getStorageKey(auth.currentUser?.email)) || {};
     // Snapshot of current local state (from storage or memory) for safe merge
     const currentEmail = auth.currentUser?.email?.toLowerCase().trim() || 'guest';
     const profileEmail = profile?.email?.toLowerCase().trim();
     const isSameUser = profileEmail === currentEmail;
 
-    const localProfile = isSameUser ? (profile || parsedLocal.profile) : parsedLocal.profile;
-    const localFoods = isSameUser ? (foodLogs.length > 0 ? [...foodLogs] : (parsedLocal.foodLogs || [])) : (parsedLocal.foodLogs || []);
-    const localBioHistory = isSameUser ? (biomarkerHistory.length > 0 ? [...biomarkerHistory] : (parsedLocal.biomarkerHistory || [])) : (parsedLocal.biomarkerHistory || []);
-    const localActions = isSameUser ? (actions.length > 0 ? [...actions] : (parsedLocal.actions || [])) : (parsedLocal.actions || []);
-    const localBenefits = isSameUser ? (dailyBenefits.length > 0 ? [...dailyBenefits] : (parsedLocal.dailyBenefits || [])) : (parsedLocal.dailyBenefits || []);
-    const localReport = isSameUser ? (report || parsedLocal.report) : parsedLocal.report;
+    let localProfile = isSameUser ? (profile || parsedLocal.profile) : parsedLocal.profile;
+    let localFoods = isSameUser ? (foodLogs.length > 0 ? [...foodLogs] : (parsedLocal.foodLogs || [])) : (parsedLocal.foodLogs || []);
+    let localBioHistory = isSameUser ? (biomarkerHistory.length > 0 ? [...biomarkerHistory] : (parsedLocal.biomarkerHistory || [])) : (parsedLocal.biomarkerHistory || []);
+    let localActions = isSameUser ? (actions.length > 0 ? [...actions] : (parsedLocal.actions || [])) : (parsedLocal.actions || []);
+    let localBenefits = isSameUser ? (dailyBenefits.length > 0 ? [...dailyBenefits] : (parsedLocal.dailyBenefits || [])) : (parsedLocal.dailyBenefits || []);
+    let localReport = isSameUser ? (report || parsedLocal.report) : parsedLocal.report;
+
+    if (forceReplaceLocal) {
+      if (localProfile) localProfile.lastUpdatedAt = 0;
+      localFoods = [];
+      localBioHistory = [];
+      localActions = [];
+      localBenefits = [];
+    }
     // Immediately populate state from local storage so the UI is responsive
     if (parsedLocal && (!profile || !isSameUser)) {
       if (parsedLocal.profile) setProfile(parsedLocal.profile);
@@ -500,7 +741,7 @@ export default function App() {
       if (parsedLocal.dailyBenefits) setDailyBenefits(parsedLocal.dailyBenefits);
       if (parsedLocal.report) setReport(parsedLocal.report);
     }
-    if (isFirestoreQuotaExceeded) {
+    const abortWithLocalFallback = () => {
       if (parsedLocal) {
         if (parsedLocal.foodLogs) setFoodLogs(parsedLocal.foodLogs);
         if (parsedLocal.profile) setProfile(parsedLocal.profile);
@@ -511,22 +752,27 @@ export default function App() {
         if (parsedLocal.report) setReport(parsedLocal.report);
       }
       setSyncState('local');
+    };
+
+    if (isFirestoreQuotaExceeded || localStorage.getItem('firestore_quota_exceeded') === 'true') {
+      abortWithLocalFallback();
       return;
     }
     setSyncState('syncing');
-    const syncRootId = logInteraction('sync', `users/${uid} (Full Check)`, null);
+    const syncRootId = logInteraction('sync', `users/${uid} (Full Check${forceReplaceLocal ? ' - Force Pull' : ''})`, null);
     let tProfileId = '';
     let tFoodsId = '';
     let tBioId = '';
     let tActsId = '';
     let tBensId = '';
     let tRepId = '';
+    let hasUnsynced = false;
     try {
       const userDocRef = doc(db, 'users', uid);
       let userDoc;
       tProfileId = logInteraction('download', `users/${uid} (Profile)`, null);
       try {
-        const docResult = await withTimeout(getDocFromServer(userDocRef), 2000, 'getDocFromServer (Profile)');
+        const docResult = await withTimeout(getDocFromServer(userDocRef), 15000, 'getDocFromServer (Profile)');
         if (docResult) {
           userDoc = docResult;
         } else {
@@ -535,7 +781,19 @@ export default function App() {
         completeInteraction(tProfileId, true, userDoc.exists() ? JSON.stringify(userDoc.data()).length : 0);
       } catch (err) {
         console.warn("getDocFromServer failed or timed out, falling back to local/cached getDoc:", err);
-        const docResult = await withTimeout(getDoc(userDocRef), 2000, 'getDoc (Profile)');
+        handleFirestoreError(err);
+        if (localStorage.getItem('firestore_quota_exceeded') === 'true') {
+          abortWithLocalFallback();
+          return;
+        }
+        const docResult = await withTimeout(getDoc(userDocRef), 15000, 'getDoc (Profile)').catch(gErr => {
+          handleFirestoreError(gErr);
+          return null;
+        });
+        if (localStorage.getItem('firestore_quota_exceeded') === 'true') {
+          abortWithLocalFallback();
+          return;
+        }
         if (docResult) {
           userDoc = docResult;
         } else {
@@ -558,50 +816,222 @@ export default function App() {
         let mergedBioHistory: BiomarkerLog[] = [];
         let mergedActions: HealthAction[] = [];
         let mergedBenefits: DailyBenefit[] = [];
-        // Optimization: if cloud lastUpdatedAt matches local lastUpdatedAt and we have local data, we skip subcollection reads
-        const canSkipFetch = !forcePull && !!(
+
+        // Pre-compute deleted sets for robust merging
+        const deletedFoods = new Set<string>([
+          ...(cloudProfile?.deletedFoodLogIds || []),
+          ...(localProfile?.deletedFoodLogIds || [])
+        ]);
+        const deletedBioLogs = new Set<string>([
+          ...(cloudProfile?.deletedBiomarkerLogIds || []),
+          ...(localProfile?.deletedBiomarkerLogIds || [])
+        ]);
+        const deletedCustomKeys = new Set<string>([
+          ...(cloudProfile?.deletedCustomBiomarkerKeys || []),
+          ...(localProfile?.deletedCustomBiomarkerKeys || [])
+        ]);
+
+        // Pre-compute merged custom biomarkers
+        const mergedCustomBiomarkers = {
+          ...(cloudProfile?.customBiomarkers || {}),
+          ...(localProfile?.customBiomarkers || {})
+        };
+        deletedCustomKeys.forEach(k => {
+          delete mergedCustomBiomarkers[k];
+        });
+
+        // Optimization: if local data is in exact sync with cloud, we skip fetching subcollections
+        // However, if the user explicitly clicks "Sync" (forcePull is true), we MUST perform a full bidirectional merge.
+        const canSkipFetch = !forcePull && !forceReplaceLocal && !!(
           localProfile &&
           localProfile.lastUpdatedAt &&
           cloudProfile.lastUpdatedAt &&
-          cloudProfile.lastUpdatedAt === localProfile.lastUpdatedAt &&
+          localProfile.lastUpdatedAt === cloudProfile.lastUpdatedAt &&
           parsedLocal.foodLogs &&
           parsedLocal.biomarkerHistory
         );
+        hasUnsynced = false;
+
+        const sanitizeAndCleanLogs = (logsList: BiomarkerLog[]): BiomarkerLog[] => {
+          return logsList.map(log => {
+            if (!log.biomarkers) return log;
+            const cleanedBiomarkers = { ...log.biomarkers };
+            let logChanged = false;
+            Object.keys(cleanedBiomarkers).forEach(k => {
+              const val = cleanedBiomarkers[k];
+              const isDeleted = deletedCustomKeys.has(k);
+              const isEmpty = val === undefined || val === null || val === '' || Number.isNaN(val) || (typeof val === 'string' && val.trim() === '');
+              if (isDeleted || isEmpty) {
+                delete cleanedBiomarkers[k];
+                logChanged = true;
+              }
+            });
+            if (logChanged) {
+              if (Object.keys(cleanedBiomarkers).length === 0 && !log.note) {
+                deletedBioLogs.add(log.id);
+              }
+              return { ...log, biomarkers: cleanedBiomarkers };
+            }
+            return log;
+          });
+        };
+
         if (canSkipFetch) {
-          console.log("[Sync] Local data is fully up-to-date with cloud timestamp:", cloudProfile.lastUpdatedAt);
-          mergedProfile = cloudProfile;
+          console.log("[Sync] Local data is fully up-to-date or newer. Skipping subcollection downloads.");
+          mergedProfile = {
+            ...(localTime >= cloudTime ? cloudProfile : localProfile),
+            ...(localTime >= cloudTime ? localProfile : cloudProfile),
+            customBiomarkers: mergedCustomBiomarkers,
+            deletedFoodLogIds: Array.from(deletedFoods),
+            deletedBiomarkerLogIds: Array.from(deletedBioLogs),
+            deletedCustomBiomarkerKeys: Array.from(deletedCustomKeys),
+          } as UserProfile;
+
           if (localProfile?.agentAnalyses) {
             mergedProfile.agentAnalyses = localProfile.agentAnalyses;
           }
           foods = localFoods;
-          bioHistory = localBioHistory;
+          const sanitizedLocal = sanitizeAndCleanLogs(localBioHistory).filter(b => !deletedBioLogs.has(b.id));
+          bioHistory = sanitizedLocal;
           acts = localActions;
           bens = localBenefits;
           cloudReport = localReport;
           mergedFoods = localFoods;
-          mergedBioHistory = localBioHistory;
+          mergedBioHistory = sanitizedLocal;
           mergedActions = localActions;
           mergedBenefits = localBenefits;
+          hasUnsynced = localTime > cloudTime;
         } else {
+          if (forcePull) {
+            console.log("[Sync] Force pull (Manual Sync) active. Pushing local unsynced logs first.");
+            await syncLogsWithTimeBuckets(db, uid, localFoods, localBioHistory, (sf, sb) => {
+              localFoods = sf;
+              localBioHistory = sb;
+            });
+          }
           tFoodsId = logInteraction('download', `users/${uid}/foodLogs`, null);
           tBioId = logInteraction('download', `users/${uid}/biomarkerHistory`, null);
           tActsId = logInteraction('download', `users/${uid}/actions`, null);
           tBensId = logInteraction('download', `users/${uid}/dailyBenefits`, null);
           tRepId = logInteraction('download', `users/${uid}/reports/latest`, null);
+          // Migrate to Time-Bucketing sync architecture
+          let v2Foods: FoodLog[] = [];
+          let v2Logs: BiomarkerLog[] = [];
           // By using getDocs and getDoc (not FromServer), Firestore can utilize its local cache if configured,
           // and won't throw if offline, gracefully degrading to cached data.
           try {
-            const foodLogsSnap = forcePull
-              ? await withTimeout(getDocsFromServer(collection(db, 'users', uid, 'foodLogs')), 4000, 'getDocsFromServer (foodLogs)')
-              : await getDocs(collection(db, 'users', uid, 'foodLogs'));
-            if (foodLogsSnap) {
-              foods = foodLogsSnap.docs.map(d => d.data() as FoodLog);
-              completeInteraction(tFoodsId, true, foodLogsSnap.docs.reduce((acc, d) => acc + JSON.stringify(d.data()).length, 0), undefined, foodLogsSnap.size);
+            if (localStorage.getItem('firestore_quota_exceeded') === 'true') {
+              abortWithLocalFallback();
+              return;
+            }
+            try {
+              const { serverFoods, serverBiomarkers } = await fetchAllConsolidatedLogs(db, uid);
+              v2Foods = serverFoods;
+              v2Logs = serverBiomarkers;
+              
+              // We must still load images
+              if (v2Foods.length > 0) {
+                const imagesSnap = await getDocs(collection(db, 'users', uid, 'foodImages'));
+                const shouldCompress = !hasRunImageCompression.current;
+                if (shouldCompress) hasRunImageCompression.current = true;
+                const imageMap: Record<string, any> = {};
+                const updatesToPush: { id: string; imageUrl?: string; imageUrls?: string[] }[] = [];
+
+                for (const d of imagesSnap.docs) {
+                  const data = d.data();
+                  let imageUrl = data.imageUrl;
+                  let imageUrls = data.imageUrls || [];
+                  let needsUpdate = false;
+
+                  if (shouldCompress && imageUrl && imageUrl.startsWith('data:image/') && imageUrl.length > 25000) {
+                    try {
+                      imageUrl = await compressImage(imageUrl, 400, 400, 0.5);
+                      needsUpdate = true;
+                    } catch (e) {
+                      console.warn("Auto-recompression failed for imageUrl:", d.id, e);
+                    }
+                  }
+
+                  if (imageUrls && imageUrls.length > 0) {
+                    const newUrls = [];
+                    for (const url of imageUrls) {
+                      if (shouldCompress && url && url.startsWith('data:image/') && url.length > 25000) {
+                        try {
+                          const compressed = await compressImage(url, 400, 400, 0.5);
+                          newUrls.push(compressed);
+                          needsUpdate = true;
+                        } catch (e) {
+                          newUrls.push(url);
+                          console.warn("Auto-recompression failed for imageUrl inside list:", d.id, e);
+                        }
+                      } else {
+                        newUrls.push(url);
+                      }
+                    }
+                    imageUrls = newUrls;
+                  }
+
+                  if (needsUpdate) {
+                    updatesToPush.push({ id: d.id, imageUrl, imageUrls });
+                  }
+
+                  imageMap[d.id] = { imageUrl, imageUrls };
+                }
+
+                if (updatesToPush.length > 0) {
+                  console.log(`[Auto-Recompress] Re-compressed ${updatesToPush.length} legacy large images on-the-fly. Syncing back to database...`);
+                  updatesToPush.forEach(up => {
+                    setDoc(doc(db, 'users', uid, 'foodImages', up.id), {
+                      imageUrl: up.imageUrl || null,
+                      imageUrls: up.imageUrls || []
+                    }).catch(err => console.error("Auto-sync back error:", err));
+                  });
+                }
+
+                v2Foods = v2Foods.map(f => ({ ...f, ...imageMap[f.id] }));
+              }
+            } catch (err) {
+              console.error("Failed to fetch consolidated logs", err);
+            }
+            
+            if (v2Foods.length === 0) {
+              console.log("Fetching foodLogs...");
+              const foodLogsSnap = await withTimeout(getDocs(collection(db, 'users', uid, 'foodLogs')), 15000, 'getDocs (foodLogs)');
+              if (foodLogsSnap) {
+                const subcolFoods = foodLogsSnap.docs.map(d => d.data() as FoodLog);
+                const mergedMap = new Map<string, FoodLog>();
+                v2Foods.forEach(f => mergedMap.set(f.id, f));
+                subcolFoods.forEach(f => {
+                  const existing = mergedMap.get(f.id);
+                  if (existing) {
+                    const existingTime = existing.updated_at || 0;
+                    const legacyTime = f.updated_at || 0;
+                    if (legacyTime >= existingTime) {
+                      mergedMap.set(f.id, { ...existing, ...f });
+                    }
+                  } else {
+                    mergedMap.set(f.id, f);
+                  }
+                });
+                foods = Array.from(mergedMap.values());
+                completeInteraction(tFoodsId, true, foodLogsSnap.docs.reduce((acc, d) => acc + JSON.stringify(d.data()).length, 0), undefined, foodLogsSnap.size);
+              } else if (v2Foods.length === 0) {
+                throw new Error("getDocs (foodLogs) timed out");
+              } else {
+                foods = v2Foods;
+                completeInteraction(tFoodsId, true, 0, undefined, 0);
+              }
             } else {
-              throw new Error("getDocsFromServer (foodLogs) timed out");
+              foods = v2Foods;
+              completeInteraction(tFoodsId, true, 0, undefined, 0);
             }
           } catch (foodErr: any) {
             console.warn("Failed to fetch foodLogs:", foodErr);
+            handleFirestoreError(foodErr);
+            if (localStorage.getItem('firestore_quota_exceeded') === 'true') {
+              abortWithLocalFallback();
+              return;
+            }
             try {
               const cacheSnap = await getDocs(collection(db, 'users', uid, 'foodLogs'));
               foods = cacheSnap.docs.map(d => d.data() as FoodLog);
@@ -612,17 +1042,53 @@ export default function App() {
           }
           // 1. Fetch biomarker history robustly
           try {
-            const bioHistorySnap = forcePull
-              ? await withTimeout(getDocsFromServer(collection(db, 'users', uid, 'biomarkerHistory')), 4000, 'getDocsFromServer (biomarkerHistory)')
-              : await getDocs(collection(db, 'users', uid, 'biomarkerHistory'));
-            if (bioHistorySnap) {
-              bioHistory = bioHistorySnap.docs.map(d => d.data() as BiomarkerLog);
-              completeInteraction(tBioId, true, bioHistorySnap.docs.reduce((acc, d) => acc + JSON.stringify(d.data()).length, 0), undefined, bioHistorySnap.size);
+            if (localStorage.getItem('firestore_quota_exceeded') === 'true') {
+              abortWithLocalFallback();
+              return;
+            }
+            // v2Logs is already populated from fetchAllConsolidatedLogs
+            
+            // If v2Logs is empty, fetch the subcollection to ensure we don't miss anything
+            if (v2Logs.length === 0) {
+              const bioHistorySnap = await withTimeout(getDocs(collection(db, 'users', uid, 'biomarkerHistory')), 15000, 'getDocs (biomarkerHistory)');
+              if (bioHistorySnap) {
+                const subcolLogs = bioHistorySnap.docs.map(d => d.data() as BiomarkerLog);
+                
+                // Merge v2Logs and subcolLogs
+                const mergedMap = new Map<string, BiomarkerLog>();
+                v2Logs.forEach(l => mergedMap.set(l.id, l));
+                subcolLogs.forEach(l => {
+                  const existing = mergedMap.get(l.id);
+                  if (existing) {
+                    const existingTime = existing.updated_at || 0;
+                    const legacyTime = l.updated_at || 0;
+                    if (legacyTime >= existingTime) {
+                      mergedMap.set(l.id, { ...existing, ...l, biomarkers: { ...existing.biomarkers, ...l.biomarkers } });
+                    }
+                  } else {
+                    mergedMap.set(l.id, l);
+                  }
+                });
+                bioHistory = Array.from(mergedMap.values());
+                
+                completeInteraction(tBioId, true, bioHistorySnap.docs.reduce((acc, d) => acc + JSON.stringify(d.data()).length, 0), undefined, bioHistorySnap.size);
+              } else if (v2Logs.length === 0) {
+                throw new Error("getDocs (biomarkerHistory) timed out");
+              } else {
+                bioHistory = v2Logs;
+                completeInteraction(tBioId, true, 0, undefined, 0);
+              }
             } else {
-              throw new Error("getDocsFromServer (biomarkerHistory) timed out");
+              bioHistory = v2Logs;
+              completeInteraction(tBioId, true, 0, undefined, 0);
             }
           } catch (bioErr: any) {
             console.warn("Failed to fetch biomarkerHistory:", bioErr);
+            handleFirestoreError(bioErr);
+            if (localStorage.getItem('firestore_quota_exceeded') === 'true') {
+              abortWithLocalFallback();
+              return;
+            }
             try {
               const cacheSnap = await getDocs(collection(db, 'users', uid, 'biomarkerHistory'));
               bioHistory = cacheSnap.docs.map(d => d.data() as BiomarkerLog);
@@ -633,6 +1099,10 @@ export default function App() {
           }
           // 2. Fetch dashboard metadata robustly
           try {
+            if (localStorage.getItem('firestore_quota_exceeded') === 'true') {
+              abortWithLocalFallback();
+              return;
+            }
             const dashboardDoc = await getDoc(doc(db, 'users', uid, 'metadata', 'dashboard'));
             if (dashboardDoc.exists()) {
               const data = dashboardDoc.data();
@@ -647,6 +1117,11 @@ export default function App() {
             completeInteraction(tBensId, true, JSON.stringify(bens).length);
           } catch (dashErr: any) {
             console.warn("Failed to fetch dashboard metadata:", dashErr);
+            handleFirestoreError(dashErr);
+            if (localStorage.getItem('firestore_quota_exceeded') === 'true') {
+              abortWithLocalFallback();
+              return;
+            }
             acts = localActions;
             bens = localBenefits;
             completeInteraction(tActsId, false, 0, dashErr.message || String(dashErr));
@@ -654,16 +1129,29 @@ export default function App() {
           }
           // 3. Fetch reports robustly
           try {
+            if (localStorage.getItem('firestore_quota_exceeded') === 'true') {
+              abortWithLocalFallback();
+              return;
+            }
             const latestReportDoc = await getDoc(doc(db, 'users', uid, 'reports', 'latest'));
             cloudReport = latestReportDoc.exists() ? (latestReportDoc.data() as RecommendationReport) : null;
             completeInteraction(tRepId, true, latestReportDoc.exists() ? JSON.stringify(latestReportDoc.data()).length : 0);
           } catch (repErr: any) {
             console.warn("Failed to fetch reports:", repErr);
+            handleFirestoreError(repErr);
+            if (localStorage.getItem('firestore_quota_exceeded') === 'true') {
+              abortWithLocalFallback();
+              return;
+            }
             cloudReport = localReport;
             completeInteraction(tRepId, false, 0, repErr.message || String(repErr));
           }
           // 4. Fetch agentAnalyses
           try {
+            if (localStorage.getItem('firestore_quota_exceeded') === 'true') {
+              abortWithLocalFallback();
+              return;
+            }
             const analysesSnap = await getDocs(collection(db, 'users', uid, 'agentAnalyses'));
             const analyses = analysesSnap.docs.map(d => d.data());
             if (analyses.length > 0) {
@@ -673,129 +1161,267 @@ export default function App() {
             }
           } catch (err) {
             console.warn("Failed to fetch agentAnalyses:", err);
+            handleFirestoreError(err);
+            if (localStorage.getItem('firestore_quota_exceeded') === 'true') {
+              abortWithLocalFallback();
+              return;
+            }
             if (localProfile?.agentAnalyses) {
               cloudProfile.agentAnalyses = localProfile.agentAnalyses;
             }
           }
 
-          // Merge deleted ID lists to ensure we filter deleted items robustly
-          const deletedFoods = new Set<string>([
-            ...(cloudProfile?.deletedFoodLogIds || []),
-            ...(localProfile?.deletedFoodLogIds || [])
-          ]);
-          const deletedBioLogs = new Set<string>([
-            ...(cloudProfile?.deletedBiomarkerLogIds || []),
-            ...(localProfile?.deletedBiomarkerLogIds || [])
-          ]);
+          // Sanitize both cloud and local histories
+          const sanitizedBioHistory = sanitizeAndCleanLogs(bioHistory);
+          const sanitizedLocalBioHistory = sanitizeAndCleanLogs(localBioHistory);
 
           // Filter out deleted items from cloud and local lists
           const filteredFoods = foods.filter(f => !deletedFoods.has(f.id));
           const filteredLocalFoods = localFoods.filter(f => !deletedFoods.has(f.id));
 
-          const filteredBioHistory = bioHistory.filter(b => !deletedBioLogs.has(b.id));
-          const filteredLocalBioHistory = localBioHistory.filter(b => !deletedBioLogs.has(b.id));
+          const filteredBioHistory = sanitizedBioHistory.filter(b => !deletedBioLogs.has(b.id));
+          const filteredLocalBioHistory = sanitizedLocalBioHistory.filter(b => !deletedBioLogs.has(b.id));
 
-          // Merge profile fields based on newest timestamp
-          if (forcePull || cloudTime >= localTime) {
-            console.log("[Sync] Cloud profile is newer or equal. Merging local custom biomarkers with cloud profile.");
-            mergedProfile = {
-              ...localProfile,
-              ...cloudProfile,
-              deletedFoodLogIds: Array.from(deletedFoods),
-              deletedBiomarkerLogIds: Array.from(deletedBioLogs)
-            } as UserProfile;
-          } else {
-            console.log("[Sync] Local profile is newer. Merging cloud profile into local.");
-            mergedProfile = {
-              ...cloudProfile,
-              ...localProfile,
-              deletedFoodLogIds: Array.from(deletedFoods),
-              deletedBiomarkerLogIds: Array.from(deletedBioLogs)
-            } as UserProfile;
+          // Conflict Detection
+          const lastSyncedAt = parsedLocal.lastSyncedAt || 0;
+
+          const hasNewLocalFoods = filteredLocalFoods.some(lf => !filteredFoods.some(cf => cf.id === lf.id));
+          const hasNewLocalBioHistory = filteredLocalBioHistory.some(lh => !filteredBioHistory.some(ch => ch.id === lh.id));
+          const hasNewLocalActions = localActions.some(la => !acts.some(ca => ca.id === la.id));
+          const hasNewLocalBenefits = localBenefits.some(lb => !bens.some(cb => cb.id === lb.id));
+
+          const hasModifiedLocalFoods = filteredLocalFoods.some(lf => {
+            const cf = filteredFoods.find(c => c.id === lf.id);
+            return cf && JSON.stringify(lf) !== JSON.stringify(cf);
+          });
+          const hasModifiedLocalBioHistory = filteredLocalBioHistory.some(lh => {
+            const ch = filteredBioHistory.find(c => c.id === lh.id);
+            return ch && JSON.stringify(lh) !== JSON.stringify(ch);
+          });
+
+          const localProfileHasEdits = !!(localProfile?.lastUpdatedAt && (!lastSyncedAt || localProfile.lastUpdatedAt > lastSyncedAt + 2000));
+          const localHasEdits = localProfileHasEdits || hasNewLocalFoods || hasNewLocalBioHistory || hasNewLocalActions || hasNewLocalBenefits || hasModifiedLocalFoods || hasModifiedLocalBioHistory;
+
+          const hasNewCloudFoods = filteredFoods.some(cf => !filteredLocalFoods.some(lf => lf.id === cf.id));
+          const hasNewCloudBioHistory = filteredBioHistory.some(ch => !filteredLocalBioHistory.some(lh => lh.id === ch.id));
+          const hasNewCloudActions = acts.some(ca => !localActions.some(la => la.id === ca.id));
+          const hasNewCloudBenefits = bens.some(cb => !localBenefits.some(lb => lb.id === cb.id));
+
+          const hasModifiedCloudFoods = filteredFoods.some(cf => {
+            const lf = filteredLocalFoods.find(l => l.id === cf.id);
+            return lf && JSON.stringify(cf) !== JSON.stringify(lf);
+          });
+          const hasModifiedCloudBioHistory = filteredBioHistory.some(ch => {
+            const lh = filteredLocalBioHistory.find(l => l.id === ch.id);
+            return lh && JSON.stringify(ch) !== JSON.stringify(lh);
+          });
+
+          const cloudProfileHasEdits = !!(cloudProfile?.lastUpdatedAt && (!lastSyncedAt || cloudProfile.lastUpdatedAt > lastSyncedAt + 2000));
+          const cloudHasEdits = cloudProfileHasEdits || hasNewCloudFoods || hasNewCloudBioHistory || hasNewCloudActions || hasNewCloudBenefits || hasModifiedCloudFoods || hasModifiedCloudBioHistory;
+
+          const hasDifferentFoods = localFoods.length !== foods.length || !localFoods.every(lf => foods.some(cf => cf.id === lf.id));
+          const hasDifferentBioHistory = localBioHistory.length !== bioHistory.length || !localBioHistory.every(lh => bioHistory.some(ch => ch.id === lh.id));
+          const hasDifferentActions = localActions.length !== acts.length || !localActions.every(la => acts.some(ca => ca.id === la.id));
+          const hasDifferentBenefits = localBenefits.length !== bens.length || !localBenefits.every(lb => bens.some(cb => cb.id === lb.id));
+
+          // Show the conflict panel if BOTH cloud and local have independent edits that might conflict
+          // AND there's an actual difference in the data lengths.
+          // Otherwise, we rely on the bidirectional merge below.
+          const isConflict = false; // localHasEdits && cloudHasEdits && (hasDifferentFoods || hasDifferentBioHistory || hasDifferentActions || hasDifferentBenefits);
+
+          if (isConflict) {
+            console.log("[Sync] Sync conflict detected. Pausing automatic sync to let user choose.");
+            setConflictData({
+              localProfile: localProfile || { email: currentEmail } as UserProfile,
+              cloudProfile,
+              localFoods,
+              cloudFoods: foods,
+              localBioHistory,
+              cloudBioHistory: bioHistory,
+              localActions,
+              cloudActions: acts,
+              localBenefits,
+              cloudBenefits: bens,
+              cloudReport,
+              localReport
+            });
+            setSyncState('conflict');
+            completeInteraction(syncRootId, true, 0);
+            return;
           }
 
-          // Bidirectionally merge food logs
-          mergedFoods = [...filteredFoods];
-          filteredLocalFoods.forEach(localFood => {
-            const existingCloudIndex = mergedFoods.findIndex(f => f.id === localFood.id);
-            if (existingCloudIndex === -1) {
-              mergedFoods.push(localFood);
-            } else {
-              const cloudFood = mergedFoods[existingCloudIndex];
-              mergedFoods[existingCloudIndex] = {
-                ...cloudFood,
-                ...localFood,
-                imageUrl: localFood.imageUrl || cloudFood.imageUrl,
-                imageUrls: (localFood.imageUrls && localFood.imageUrls.length > 0) ? localFood.imageUrls : cloudFood.imageUrls,
-              };
-            }
-          });
+          // Merge logic
+          if (!localHasEdits) {
+            console.log("[Sync] Local device has no new edits since last sync. Taking cloud data as truth.");
+            mergedProfile = {
+              ...cloudProfile,
+              customBiomarkers: mergedCustomBiomarkers,
+              deletedFoodLogIds: Array.from(deletedFoods),
+              deletedBiomarkerLogIds: Array.from(deletedBioLogs),
+              deletedCustomBiomarkerKeys: Array.from(deletedCustomKeys)
+            } as UserProfile;
+            
+            // Union merge: start from server, add any local item not on server and not deleted
+            // (do NOT just use filteredFoods — that drops local items the server doesn't have yet)
+            const foodUnionMap = new Map(filteredFoods.map(f => [f.id, f]));
+            filteredLocalFoods.forEach(localItem => {
+              if (!foodUnionMap.has(localItem.id)) {
+                foodUnionMap.set(localItem.id, localItem);
+              }
+            });
+            mergedFoods = Array.from(foodUnionMap.values());
 
-          // Bidirectionally merge biomarker history
-          mergedBioHistory = [...filteredBioHistory];
-          filteredLocalBioHistory.forEach(localLog => {
-            const existingCloudIndex = mergedBioHistory.findIndex(b => b.id === localLog.id);
-            if (existingCloudIndex === -1) {
-              mergedBioHistory.push(localLog);
+            const bioUnionMap = new Map(filteredBioHistory.map(b => [b.id, b]));
+            filteredLocalBioHistory.forEach(localItem => {
+              if (!bioUnionMap.has(localItem.id)) {
+                bioUnionMap.set(localItem.id, localItem);
+              }
+            });
+            mergedBioHistory = Array.from(bioUnionMap.values());
+
+            mergedActions = [...acts];
+            mergedBenefits = [...bens];
+            
+          } else {
+            console.log("[Sync] Local device has edits. Merging bidirectionally.");
+            const isLocalProfileNewer = localTime >= cloudTime;
+            if (isLocalProfileNewer) {
+              mergedProfile = {
+                ...cloudProfile,
+                ...localProfile,
+                customBiomarkers: mergedCustomBiomarkers,
+                deletedFoodLogIds: Array.from(deletedFoods),
+                deletedBiomarkerLogIds: Array.from(deletedBioLogs),
+                deletedCustomBiomarkerKeys: Array.from(deletedCustomKeys)
+              } as UserProfile;
             } else {
-              mergedBioHistory[existingCloudIndex] = {
-                ...mergedBioHistory[existingCloudIndex],
-                ...localLog,
-                biomarkers: {
-                  ...mergedBioHistory[existingCloudIndex].biomarkers,
-                  ...localLog.biomarkers
+              mergedProfile = {
+                ...localProfile,
+                ...cloudProfile,
+                customBiomarkers: mergedCustomBiomarkers,
+                deletedFoodLogIds: Array.from(deletedFoods),
+                deletedBiomarkerLogIds: Array.from(deletedBioLogs),
+                deletedCustomBiomarkerKeys: Array.from(deletedCustomKeys)
+              } as UserProfile;
+            }
+
+            // Bidirectional merge for food logs: server is the source of truth for synced items,
+            // local unsynced items are preserved and will be pushed in the next step.
+            const localUnsyncedFoods = filteredLocalFoods.filter(f => f.sync_state && f.sync_state !== 'synced');
+            // Start from all server items (covers items added on other devices)
+            mergedFoods = [...filteredFoods];
+            // Add or update with local unsynced items (not yet pushed to server)
+            localUnsyncedFoods.forEach(localItem => {
+              const existingIdx = mergedFoods.findIndex(m => m.id === localItem.id);
+              if (existingIdx >= 0) {
+                // Keep whichever is newer
+                if ((localItem.updated_at || 0) >= (mergedFoods[existingIdx].updated_at || 0)) {
+                  mergedFoods[existingIdx] = {
+                    ...mergedFoods[existingIdx],
+                    ...localItem,
+                    imageUrl: localItem.imageUrl || mergedFoods[existingIdx].imageUrl,
+                    imageUrls: (localItem.imageUrls && localItem.imageUrls.length > 0) ? localItem.imageUrls : mergedFoods[existingIdx].imageUrls,
+                  };
                 }
-              };
-            }
-          });
+              } else {
+                // Local item not on server yet — keep it
+                mergedFoods.push(localItem);
+              }
+            });
 
-          // Bidirectionally merge actions
-          mergedActions = [...acts];
-          localActions.forEach(localAct => {
-            const existingCloudIndex = mergedActions.findIndex(a => a.id === localAct.id);
-            if (existingCloudIndex === -1) {
-              mergedActions.push(localAct);
-            } else {
-              mergedActions[existingCloudIndex] = { ...mergedActions[existingCloudIndex], ...localAct };
-            }
-          });
+            // Fallback safety net: preserve local synced items if they are missing from server (and not deleted)
+            filteredLocalFoods.forEach(localItem => {
+              const onServer = mergedFoods.some(m => m.id === localItem.id);
+              if (!onServer) {
+                console.log(`[Sync] Preserving local food log ${localItem.id} not found on server to prevent loss.`);
+                mergedFoods.push(localItem);
+              }
+            });
 
-          // Bidirectionally merge daily benefits
-          mergedBenefits = [...bens];
-          localBenefits.forEach(localBen => {
-            const existingCloudIndex = mergedBenefits.findIndex(b => b.id === localBen.id);
-            if (existingCloudIndex === -1) {
-              mergedBenefits.push(localBen);
-            } else {
-              mergedBenefits[existingCloudIndex] = { ...mergedBenefits[existingCloudIndex], ...localBen };
-            }
-          });
+            // Bidirectional merge for biomarker history: server is the source of truth for synced items,
+            // local unsynced items are preserved and will be pushed in the next step.
+            const localUnsyncedBioHistory = filteredLocalBioHistory.filter(b => b.sync_state && b.sync_state !== 'synced');
+            // Start from all server items (covers items added on other devices)
+            mergedBioHistory = [...filteredBioHistory];
+            // Add or update with local unsynced items (not yet pushed to server)
+            localUnsyncedBioHistory.forEach(localItem => {
+              const existingIdx = mergedBioHistory.findIndex(m => m.id === localItem.id);
+              if (existingIdx >= 0) {
+                // Keep whichever is newer
+                if ((localItem.updated_at || 0) >= (mergedBioHistory[existingIdx].updated_at || 0)) {
+                  mergedBioHistory[existingIdx] = {
+                    ...mergedBioHistory[existingIdx],
+                    ...localItem,
+                    biomarkers: { ...mergedBioHistory[existingIdx].biomarkers, ...localItem.biomarkers }
+                  };
+                }
+              } else {
+                // Local item not on server yet — keep it
+                mergedBioHistory.push(localItem);
+              }
+            });
 
-          // Determine if we need to write changes back to the cloud
+            // Fallback safety net: preserve local synced items if they are missing from server (and not deleted)
+            filteredLocalBioHistory.forEach(localItem => {
+              const onServer = mergedBioHistory.some(m => m.id === localItem.id);
+              if (!onServer) {
+                console.log(`[Sync] Preserving local biomarker log ${localItem.id} not found on server to prevent loss.`);
+                mergedBioHistory.push(localItem);
+              }
+            });
+
+            mergedActions = [...acts];
+            localActions.forEach(localAct => {
+              const existingCloudIndex = mergedActions.findIndex(a => a.id === localAct.id);
+              if (existingCloudIndex === -1) {
+                mergedActions.push(localAct);
+              } else {
+                if (localTime >= cloudTime) {
+                  mergedActions[existingCloudIndex] = { ...mergedActions[existingCloudIndex], ...localAct };
+                }
+              }
+            });
+
+            mergedBenefits = [...bens];
+            localBenefits.forEach(localBen => {
+              const existingCloudIndex = mergedBenefits.findIndex(b => b.id === localBen.id);
+              if (existingCloudIndex === -1) {
+                mergedBenefits.push(localBen);
+              } else {
+                if (localTime >= cloudTime) {
+                  mergedBenefits[existingCloudIndex] = { ...mergedBenefits[existingCloudIndex], ...localBen };
+                }
+              }
+            });
+          }
+
+          // Determine if we need to write changes back to the cloud by deep-comparing merged vs cloud records
           const hasLocalAdditions = 
-            mergedFoods.some(f => !filteredFoods.some(cf => cf.id === f.id)) ||
-            mergedBioHistory.some(b => !filteredBioHistory.some(cb => cb.id === b.id)) ||
+            mergedFoods.some(f => {
+              const cf = filteredFoods.find(c => c.id === f.id);
+              return !cf || !isDeepEqual(cleanData(f), cleanData(cf));
+            }) ||
+            mergedBioHistory.some(b => {
+              const cb = filteredBioHistory.find(c => c.id === b.id);
+              return !cb || !isDeepEqual(cleanData(b), cleanData(cb));
+            }) ||
             mergedActions.some(a => !acts.some(ca => ca.id === a.id)) ||
             mergedBenefits.some(b => !bens.some(cb => cb.id === b.id));
 
-          if (hasLocalAdditions || forcePull || localTime > cloudTime) {
-            console.log("[Sync] Local data additions or cloud sync trigger. Pushing merged result to cloud.");
-            const tempBiomarkers: { [key: string]: number | string } = {};
-            [...mergedBioHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
-              Object.entries(log.biomarkers).forEach(([k, v]) => {
-                tempBiomarkers[k] = v as string | number;
-              });
-            });
-            setTimeout(() => {
-              saveAndSync(mergedProfile, mergedFoods, tempBiomarkers, mergedBioHistory, mergedActions, mergedBenefits, cloudReport || localReport, { 
-                type: 'fullPush',
-                cloudFoods: filteredFoods,
-                cloudBioHistory: filteredBioHistory
-              } as any);
-            }, 50);
-          }
+          hasUnsynced = hasLocalAdditions || localTime > cloudTime;
         }
         
+        // Save merged profile to Firestore (profile doc only, not food logs)
+        if (forcePull && hasUnsynced) {
+          const tempBiomarkers: { [key: string]: number | string } = {};
+          [...mergedBioHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
+            Object.entries(log.biomarkers).forEach(([k, v]) => {
+              tempBiomarkers[k] = v as string | number;
+            });
+          });
+          await saveAndSync(mergedProfile, mergedFoods, tempBiomarkers, mergedBioHistory, mergedActions, mergedBenefits, cloudReport || localReport, { type: 'profile' });
+        }
+
         setProfile(mergedProfile);
         setFoodLogs(mergedFoods);
         setBiomarkerHistory(mergedBioHistory);
@@ -804,7 +1430,7 @@ export default function App() {
         setReport(cloudReport);
         // Recompute active biomarkers (sorted ascending so that newer logs overwrite older values)
         const computedBiomarkers: { [key: string]: number | string } = {};
-        [...mergedBioHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+        [...mergedBioHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
           Object.entries(log.biomarkers).forEach(([k, v]) => {
             computedBiomarkers[k] = v as string | number;
           });
@@ -818,12 +1444,13 @@ export default function App() {
           biomarkerHistory: mergedBioHistory,
           actions: mergedActions,
           dailyBenefits: mergedBenefits,
-          report: cloudReport
+          report: cloudReport,
+          lastSyncedAt: Date.now()
         };
-        safeSaveToLocalStorage(getStorageKey(), bundle);
+        safeSaveToLocalStorage(getStorageKey(mergedProfile?.email || profile?.email || auth.currentUser?.email), bundle);
         // Add a small delay for delightful visual feedback
         await new Promise(resolve => setTimeout(resolve, 800));
-        setSyncState('synced');
+        setSyncState((hasUnsynced && !forcePull) ? 'local' : 'synced');
         completeInteraction(syncRootId, true, 0);
       } else if (localProfile && Object.keys(localProfile).length > 0) {
         // Cloud doc is empty, but we have local data! Cloud save probably failed earlier.
@@ -837,7 +1464,7 @@ export default function App() {
         
         // Recompute active biomarkers (sorted ascending so that newer logs overwrite older values)
         const computedBiomarkers: { [key: string]: number | string } = {};
-        [...localBioHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach((log: BiomarkerLog) => {
+        [...localBioHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach((log: BiomarkerLog) => {
           Object.entries(log.biomarkers).forEach(([k, v]) => {
             computedBiomarkers[k] = v as string | number;
           });
@@ -852,7 +1479,7 @@ export default function App() {
           dailyBenefits: localBenefits,
           report: localReport
         };
-        safeSaveToLocalStorage(getStorageKey(), bundle);
+        safeSaveToLocalStorage(getStorageKey(localProfile?.email || profile?.email || auth.currentUser?.email), bundle);
         // Try syncing profile to cloud in background
         const tNewProfileId = logInteraction('upload', `users/${uid} (Restore Profile)`, localProfile);
         const localProfileForCloud = { ...localProfile };
@@ -935,7 +1562,7 @@ export default function App() {
           dailyBenefits: initialBenefits,
           report: null
         };
-        safeSaveToLocalStorage(getStorageKey(), bundle);
+        safeSaveToLocalStorage(getStorageKey(newProfile?.email || profile?.email || auth.currentUser?.email), bundle);
         // Add a small delay for delightful visual feedback
         await new Promise(resolve => setTimeout(resolve, 800));
         setSyncState('synced');
@@ -1049,8 +1676,9 @@ export default function App() {
           setDailyBenefits(loadedBenefits);
           setReport(loadedReport);
           
-          // Automatically fetch the latest database data on login/load to restore the account data
-          checkForDbChanges(user.uid);
+          // Load only from local cache on initial load/session load to prevent automatic Firebase calls.
+          // Firestore checks will happen ONLY when the user manually clicks "Sync Now" in the header.
+          setSyncState('local');
         } else {
           // Not signed in, fall back to guest storage if available
           const storageKey = getStorageKey('guest');
@@ -1099,11 +1727,12 @@ export default function App() {
       foodIdeas,
       report
     };
-    safeSaveToLocalStorage(getStorageKey(), bundle);
+    safeSaveToLocalStorage(getStorageKey(profile?.email), bundle);
   }, [profile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, foodIdeas, report]);
   // Automatically log BMI on initial load if profile has height/weight but BMI is missing from history or biomarkers
   useEffect(() => {
-    if (profile && profile.weight && profile.height) {
+    if (isAuthChecking || syncState === 'syncing' || syncState === 'conflict') return;
+    if (profile && profile.weight && profile.height && !profile.bmiAutoLogged) {
       const hasBmiInHistory = biomarkerHistory.some(h => h.biomarkers && h.biomarkers.bmi !== undefined);
       const hasBmiInBiomarkers = biomarkers.bmi !== undefined;
       if (!hasBmiInHistory || !hasBmiInBiomarkers) {
@@ -1113,6 +1742,13 @@ export default function App() {
         const roundedBmi = parseFloat(bmiScore.toFixed(1));
         const recordDate = getCurrentDateInTimezone(profile.timezone);
         const logId = `med_log_bmi_init_${Date.now()}`;
+        
+        const updatedProfile: UserProfile = {
+          ...profile,
+          bmiAutoLogged: true
+        };
+        setProfile(updatedProfile);
+        
         setBiomarkers(prev => {
           if (prev.bmi === roundedBmi) return prev;
           return { ...prev, bmi: roundedBmi };
@@ -1144,17 +1780,21 @@ export default function App() {
               note: `Auto-logged default BMI: ${profile.weight} kg, ${profile.height} cm.`
             });
           }
-          updatedHistory.sort((a, b) => b.date.localeCompare(a.date));
-          // Trigger saveAndSync in background
+          updatedHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
+          // Trigger saveAndSync in background (safely flagged as an auto log)
           setTimeout(() => {
             const updatedBiomarkers = { ...biomarkers, bmi: roundedBmi };
-            saveAndSync(profile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog', targetId: targetIdToSave });
+            saveAndSync(updatedProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { 
+              type: 'biomarkerLog', 
+              targetId: targetIdToSave,
+              isAutoLog: true 
+            });
           }, 0);
           return updatedHistory;
         });
       }
     }
-  }, [profile?.weight, profile?.height, biomarkerHistory.length, biomarkers.bmi]);
+  }, [isAuthChecking, syncState, profile?.weight, profile?.height, profile?.bmiAutoLogged, biomarkerHistory.length, biomarkers.bmi]);
   // Auto-restore missing food images from chat history
   useEffect(() => {
     if (foodLogs.length === 0) return;
@@ -1184,26 +1824,7 @@ export default function App() {
           console.log(`Restoring ${updateCount} lost images from chat history via batched transaction`);
           setFoodLogs(newFoodLogs);
           
-          // Write to Firestore in a single atomic batch to prevent excessive separate write operations
-          const batch = writeBatch(db);
-          let addedToBatch = false;
-          newFoodLogs.forEach(f => {
-            const oldLog = foodLogs.find(old => old.id === f.id);
-            if (!oldLog?.imageUrl && f.imageUrl) {
-              const docRef = doc(db, 'users', uid, 'foodLogs', f.id);
-              batch.set(docRef, cleanData(f));
-              addedToBatch = true;
-            }
-          });
-          if (addedToBatch) {
-            const trackId = logInteraction('upload', `users/${uid}/foodLogs (Batch Restore)`, null, updateCount);
-            batch.commit()
-              .then(() => completeInteraction(trackId, true, 0))
-              .catch(err => {
-                completeInteraction(trackId, false, 0, err?.message || String(err));
-                console.error("Failed to commit batch image restore:", err);
-              });
-          }
+// Deferred to manual sync
         }
       }
     } catch (e) {
@@ -1220,21 +1841,49 @@ export default function App() {
     currBenefits: DailyBenefit[],
     currReport: RecommendationReport | null,
     specificUpdate?: {
-      type: 'profile' | 'foodLog' | 'biomarkerLog' | 'actions' | 'dailyBenefits' | 'foodIdeas' | 'report' | 'deleteFood' | 'deleteBiomarker' | 'multi' | 'fullPush' | 'analysis' | 'deleteAnalysis';
+      type: 'profile' | 'foodLog' | 'biomarkerLog' | 'biomarkerLogsBatch' | 'actions' | 'dailyBenefits' | 'foodIdeas' | 'report' | 'deleteFood' | 'deleteBiomarker' | 'multi' | 'fullPush' | 'analysis' | 'deleteAnalysis' | 'googleSteps';
       targetId?: string;
+      targetIds?: string[];
+      deletedIds?: string[];
+      isAutoLog?: boolean;
     },
     currFoodIdeas: FoodIdea[] = foodIdeas
   ) => {
     const now = Date.now();
+    const isAutoLog = !!(specificUpdate?.isAutoLog || 
+      (specificUpdate?.type === 'biomarkerLog' && String(specificUpdate.targetId).startsWith('med_log_bmi_init_')) ||
+      specificUpdate?.type === 'googleSteps');
+
     let updatedProfile = currProfile;
     if (currProfile) {
       updatedProfile = {
         ...currProfile,
-        lastUpdatedAt: now
+        approved_agent1_batches: (() => {
+          try {
+            const saved = localStorage.getItem('approved_agent1_batches');
+            return saved ? JSON.parse(saved) : null;
+          } catch (e) { return null; }
+        })(),
+        approved_data_review_batches: (() => {
+          try {
+            const saved = localStorage.getItem('approved_data_review_batches');
+            return saved ? JSON.parse(saved) : null;
+          } catch (e) { return null; }
+        })(),
+        lastUpdatedAt: isAutoLog ? (currProfile.lastUpdatedAt || now) : now
       };
       // Keep local state in sync immediately with the timestamped profile
       setProfile(updatedProfile);
     }
+    
+    // Ensure all other React states are updated to match what is being synced
+    setFoodLogs(currFoods);
+    setBiomarkers(currBiomarkers);
+    setBiomarkerHistory(currBioHistory);
+    setActions(currActions);
+    setDailyBenefits(currBenefits);
+    setReport(currReport);
+
     // Save to Local Storage first (Local Save before Upload)
     const bundle = {
       profile: updatedProfile,
@@ -1246,7 +1895,7 @@ export default function App() {
       foodIdeas: currFoodIdeas,
       report: currReport
     };
-    safeSaveToLocalStorage(getStorageKey(), bundle);
+    safeSaveToLocalStorage(getStorageKey(updatedProfile?.email || profile?.email || auth.currentUser?.email), bundle);
 
 
 
@@ -1263,16 +1912,38 @@ export default function App() {
       setSyncState('local');
       return;
     }
+    
+    // We allow user-triggered specific updates to write to the cloud even if the sync state was 'local' (offline),
+    // which helps the app automatically sync and transition back to 'synced' state on any user action.
+    // We only block background/automatic updates or if the database quota is explicitly exceeded.
+    const isUserTriggered = specificUpdate && 
+      specificUpdate.type !== 'googleSteps' && 
+      !specificUpdate.isAutoLog &&
+      !(specificUpdate.type === 'biomarkerLog' && String(specificUpdate.targetId).startsWith('med_log_bmi_init_'));
+
+    if (syncState === 'local' && specificUpdate?.type !== 'fullPush' && !isUserTriggered) {
+      return;
+    }
+    
+    // To minimize database writes and protect against quota exhaustion, 
+    // we prevent automatic system updates (such as BMI auto-logging or Google Steps sync)
+    // from writing to the cloud in the background. They are kept as local/unsynced state.
+    if (isAutoLog) {
+      setSyncState('local');
+      return;
+    }
+
     setSyncState('syncing');
     const uid = auth.currentUser.uid;
     const syncRootId = logInteraction('sync', `users/${uid} (${specificUpdate ? specificUpdate.type : 'Save changes'})`, null);
     try {
-      if (specificUpdate && specificUpdate.type !== 'multi' && specificUpdate.type !== 'fullPush') {
+      if (specificUpdate && specificUpdate.type !== 'fullPush') {
         // ALWAYS touch profile timestamp and push deleted IDs tracking so other devices pull correctly
         setDoc(doc(db, 'users', uid), {
           lastUpdatedAt: now,
           deletedFoodLogIds: updatedProfile?.deletedFoodLogIds || [],
-          deletedBiomarkerLogIds: updatedProfile?.deletedBiomarkerLogIds || []
+          deletedBiomarkerLogIds: updatedProfile?.deletedBiomarkerLogIds || [],
+          deletedCustomBiomarkerKeys: updatedProfile?.deletedCustomBiomarkerKeys || []
         }, { merge: true }).catch(err => {
           console.warn("Failed to touch lastUpdatedAt timestamp in cloud:", err);
         });
@@ -1307,29 +1978,27 @@ export default function App() {
             'Profile write'
           );
         } else if (specificUpdate.type === 'foodLog' && specificUpdate.targetId) {
+          await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, (sf, sb) => {
+            setFoodLogs(sf);
+            setBiomarkerHistory(sb);
+          });
           const f = currFoods.find(item => item.id === specificUpdate.targetId);
-          if (f) {
-            const itemTrackId = logInteraction('upload', `users/${uid}/foodLogs/${f.id}`, f);
-            await withTimeout(
-              setDoc(doc(db, 'users', uid, 'foodLogs', f.id), cleanData(f))
-                .then(() => completeInteraction(itemTrackId, true, JSON.stringify(f).length))
-                .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
-              2000,
-              'FoodLog write'
-            );
+          if (f && (f.imageUrl || (f.imageUrls && f.imageUrls.length > 0))) {
+            await setDoc(doc(db, 'users', uid, 'foodImages', f.id), {
+              imageUrl: f.imageUrl || null,
+              imageUrls: f.imageUrls || []
+            }).catch(err => console.error(err));
           }
         } else if (specificUpdate.type === 'biomarkerLog' && specificUpdate.targetId) {
-          const b = currBioHistory.find(item => item.id === specificUpdate.targetId);
-          if (b) {
-            const itemTrackId = logInteraction('upload', `users/${uid}/biomarkerHistory/${b.id}`, b);
-            await withTimeout(
-              setDoc(doc(db, 'users', uid, 'biomarkerHistory', b.id), cleanData(b))
-                .then(() => completeInteraction(itemTrackId, true, JSON.stringify(b).length))
-                .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
-              2000,
-              'BiomarkerLog write'
-            );
-          }
+          await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, (sf, sb) => {
+            setFoodLogs(sf); setBiomarkerHistory(sb);
+          });
+        } else if (specificUpdate.type === 'biomarkerLogsBatch' && (specificUpdate.targetIds || specificUpdate.deletedIds)) {
+          await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, (sf, sb) => {
+            setFoodLogs(sf); setBiomarkerHistory(sb);
+          });
+          const profilePromise = setDoc(doc(db, 'users', uid), cleanData(profileForCloud)).catch(err => handleFirestoreError(err));
+          await withTimeout(profilePromise, 3000, 'biomarkerLogsBatch');
         } else if (specificUpdate.type === 'actions') {
           const itemTrackId = logInteraction('upload', `users/${uid}/metadata/dashboard (Actions)`, null);
           await withTimeout(
@@ -1377,23 +2046,15 @@ export default function App() {
             'Dashboard report sync'
           );
         } else if (specificUpdate.type === 'deleteFood' && specificUpdate.targetId) {
-          const delTrackId = logInteraction('delete', `users/${uid}/foodLogs/${specificUpdate.targetId}`, null);
-          await withTimeout(
-            deleteDoc(doc(db, 'users', uid, 'foodLogs', specificUpdate.targetId))
-              .then(() => completeInteraction(delTrackId, true, 0))
-              .catch(err => { completeInteraction(delTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
-            2000,
-            'Delete foodLog'
-          );
+          await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, (sf, sb) => {
+            setFoodLogs(sf); setBiomarkerHistory(sb);
+          });
+          deleteDoc(doc(db, 'users', uid, 'foodLogs', specificUpdate.targetId)).catch(() => {});
         } else if (specificUpdate.type === 'deleteBiomarker' && specificUpdate.targetId) {
-          const delTrackId = logInteraction('delete', `users/${uid}/biomarkerHistory/${specificUpdate.targetId}`, null);
-          await withTimeout(
-            deleteDoc(doc(db, 'users', uid, 'biomarkerHistory', specificUpdate.targetId))
-              .then(() => completeInteraction(delTrackId, true, 0))
-              .catch(err => { completeInteraction(delTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
-            2000,
-            'Delete biomarkerHistory'
-          );
+          await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, (sf, sb) => {
+            setFoodLogs(sf); setBiomarkerHistory(sb);
+          });
+          deleteDoc(doc(db, 'users', uid, 'biomarkerHistory', specificUpdate.targetId)).catch(() => {});
         }
       } else if (specificUpdate && specificUpdate.type === 'fullPush') {
         const pId = logInteraction('upload', `users/${uid} (Profile)`, currProfile);
@@ -1405,26 +2066,35 @@ export default function App() {
         const cloudFoods = (specificUpdate as any).cloudFoods || [];
         const cloudBioHistory = (specificUpdate as any).cloudBioHistory || [];
 
-        // Filter out food logs that are already in the cloud with identical fields to optimize writes
-        const foodLogsToUpload = currFoods.filter(f => {
-          const cloudF = cloudFoods.find((cf: any) => cf.id === f.id);
-          if (!cloudF) return true; // New log, must save
-          return JSON.stringify(cleanData(f)) !== JSON.stringify(cleanData(cloudF));
+        // V2 bulk sync
+        await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, (sf, sb) => {
+          setFoodLogs(sf); setBiomarkerHistory(sb);
         });
 
-        // Filter out biomarker logs that are already in the cloud with identical fields to optimize writes
-        const bioLogsToUpload = currBioHistory.filter(b => {
-          const cloudB = cloudBioHistory.find((cb: any) => cb.id === b.id);
-          if (!cloudB) return true; // New log, must save
-          return JSON.stringify(cleanData(b)) !== JSON.stringify(cleanData(cloudB));
-        });
+        // Run promises in small sequential batches of 5 to avoid exhausting the Firestore write stream
+        const chunkPromises = async (tasks: (() => Promise<any>)[], chunkSize: number) => {
+          for (let i = 0; i < tasks.length; i += chunkSize) {
+            const chunk = tasks.slice(i, i + chunkSize);
+            await Promise.all(chunk.map(task => task()));
+          }
+        };
 
-        const foodPromises = foodLogsToUpload.map(f => 
-          setDoc(doc(db, 'users', uid, 'foodLogs', f.id), cleanData(f)).catch(err => { handleFirestoreError(err); console.error(err); })
-        );
-        const bioPromises = bioLogsToUpload.map(b => 
-          setDoc(doc(db, 'users', uid, 'biomarkerHistory', b.id), cleanData(b)).catch(err => { handleFirestoreError(err); console.error(err); })
-        );
+        const foodImageTasks = currFoods
+          .filter(f => f.sync_state !== 'synced' && (f.imageUrl || (f.imageUrls && f.imageUrls.length > 0)))
+          .map(f => {
+            const cloudF = cloudFoods.find((cf: any) => cf.id === f.id);
+            if (!cloudF || cloudF.imageUrl !== f.imageUrl || JSON.stringify(cloudF.imageUrls) !== JSON.stringify(f.imageUrls)) {
+              return () => setDoc(doc(db, 'users', uid, 'foodImages', f.id), {
+                imageUrl: f.imageUrl || null,
+                imageUrls: f.imageUrls || []
+              }).catch(err => console.error("Food image sync error:", err));
+            }
+            return null;
+          })
+          .filter((t): t is () => Promise<void> => t !== null);
+
+        const foodImagePromise = chunkPromises(foodImageTasks, 5);
+
         const dashboardPromise = setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), {
           actions: currActions.map(cleanData),
           dailyBenefits: currBenefits.map(cleanData),
@@ -1442,8 +2112,7 @@ export default function App() {
             profilePromise,
             dashboardPromise,
             reportPromise,
-            ...foodPromises,
-            ...bioPromises
+            foodImagePromise
           ]),
           3000,
           'FullPush sync'
@@ -1454,7 +2123,7 @@ export default function App() {
         const profilePromise = setDoc(doc(db, 'users', uid), cleanData(profileForCloud))
           .then(() => completeInteraction(pId, true, JSON.stringify(currProfile).length))
           .catch(err => { completeInteraction(pId, false, 0, err.message); handleFirestoreError(err); });
-        
+          
         const dashboardPromise = setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), {
           actions: currActions.map(cleanData),
           dailyBenefits: currBenefits.map(cleanData),
@@ -1467,11 +2136,28 @@ export default function App() {
             .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currReport).length))
             .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); });
         }
+        
+        // V2 bulk sync
+        await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, (sf, sb) => {
+          setFoodLogs(sf); setBiomarkerHistory(sb);
+        });
+
+        const foodImagePromises = currFoods.map(f => {
+          if ((f.imageUrl || (f.imageUrls && f.imageUrls.length > 0)) && (f.sync_state === 'new' || f.sync_state === 'update')) {
+            // Optimized image write: only write if newly added or updated
+            return setDoc(doc(db, 'users', uid, 'foodImages', f.id), {
+              imageUrl: f.imageUrl || null,
+              imageUrls: f.imageUrls || []
+            }).catch(err => console.error(err));
+          }
+          return Promise.resolve();
+        });
         await withTimeout(
           Promise.all([
             profilePromise,
             dashboardPromise,
-            reportPromise
+            reportPromise,
+            ...foodImagePromises
           ]),
           3000,
           'Multi sync'
@@ -1479,6 +2165,18 @@ export default function App() {
       }
       // Artificially enforce a minimum rotation time of 800ms so the user gets clear visual confirmation
       await new Promise(resolve => setTimeout(resolve, 800));
+      const finalBundle = {
+        profile: updatedProfile,
+        foodLogs: currFoods,
+        biomarkers: currBiomarkers,
+        biomarkerHistory: currBioHistory,
+        actions: currActions,
+        dailyBenefits: currBenefits,
+        foodIdeas: currFoodIdeas,
+        report: currReport,
+        lastSyncedAt: Date.now()
+      };
+      safeSaveToLocalStorage(getStorageKey(updatedProfile?.email || profile?.email || auth.currentUser?.email), finalBundle);
       setSyncState('synced');
       completeInteraction(syncRootId, true, 0);
     } catch (e: any) {
@@ -1488,20 +2186,107 @@ export default function App() {
       completeInteraction(syncRootId, false, 0, e.message || 'Save error');
     }
   };
+
+  const handleResolveConflict = async (biomarkerSource: 'local' | 'cloud', foodSource: 'local' | 'cloud') => {
+    if (!conflictData || !auth.currentUser) return;
+    setSyncState('syncing');
+
+    const uid = auth.currentUser.uid;
+    const now = Date.now();
+
+    // 1. Resolve Profile & Biomarkers
+    let resolvedProfile: UserProfile;
+    let resolvedBioHistory: BiomarkerLog[];
+    let resolvedActions: HealthAction[];
+    let resolvedBenefits: DailyBenefit[];
+    let resolvedReport: RecommendationReport | null;
+
+    if (biomarkerSource === 'local') {
+      resolvedProfile = { ...conflictData.localProfile, lastUpdatedAt: now };
+      resolvedBioHistory = [...conflictData.localBioHistory];
+      resolvedActions = [...conflictData.localActions];
+      resolvedBenefits = [...conflictData.localBenefits];
+      resolvedReport = conflictData.localReport;
+    } else {
+      resolvedProfile = { ...conflictData.cloudProfile, lastUpdatedAt: now };
+      resolvedBioHistory = [...conflictData.cloudBioHistory];
+      resolvedActions = [...conflictData.cloudActions];
+      resolvedBenefits = [...conflictData.cloudBenefits];
+      resolvedReport = conflictData.cloudReport;
+    }
+
+    // 2. Resolve Food Log
+    let resolvedFoods: FoodLog[];
+    if (foodSource === 'local') {
+      resolvedFoods = [...conflictData.localFoods];
+    } else {
+      resolvedFoods = [...conflictData.cloudFoods];
+    }
+
+    // 3. Compute active biomarkers
+    const computedBiomarkers: { [key: string]: number | string } = {};
+    [...resolvedBioHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
+      Object.entries(log.biomarkers).forEach(([k, v]) => {
+        computedBiomarkers[k] = v as string | number;
+      });
+    });
+
+    // 4. Update state variables immediately
+    setProfile(resolvedProfile);
+    setFoodLogs(resolvedFoods);
+    setBiomarkerHistory(resolvedBioHistory);
+    setBiomarkers(computedBiomarkers);
+    setActions(resolvedActions);
+    setDailyBenefits(resolvedBenefits);
+    if (resolvedReport) setReport(resolvedReport);
+
+    // 5. Write to local storage with new sync timestamp
+    const bundle = {
+      profile: resolvedProfile,
+      foodLogs: resolvedFoods,
+      biomarkers: computedBiomarkers,
+      biomarkerHistory: resolvedBioHistory,
+      actions: resolvedActions,
+      dailyBenefits: resolvedBenefits,
+      report: resolvedReport,
+      lastSyncedAt: now
+    };
+    safeSaveToLocalStorage(getStorageKey(resolvedProfile?.email || profile?.email || auth.currentUser?.email), bundle);
+
+    // 6. Push fully resolved bundle to Cloud Firestore (full push)
+    try {
+      await saveAndSync(resolvedProfile, resolvedFoods, computedBiomarkers, resolvedBioHistory, resolvedActions, resolvedBenefits, resolvedReport, { 
+        type: 'fullPush',
+        cloudFoods: conflictData.cloudFoods,
+        cloudBioHistory: conflictData.cloudBioHistory
+      } as any);
+      setConflictData(null);
+      setSyncState('synced');
+    } catch (err) {
+      console.error("Failed to push resolved sync state:", err);
+      setSyncState('local');
+    }
+  };
+
   // Sync Check on Login / Fetch user record if existing on server
   const handleLogin = async (loggedProfile: UserProfile) => {
     setProfile(loggedProfile);
-    if (auth.currentUser) {
-      await checkForDbChanges(auth.currentUser.uid);
-    } else {
-      setSyncState('synced');
-    }
+    setSyncState('local');
   };
   const handleSignOut = async () => {
     try {
-      await fbSignOut(auth);
+      // Clear all React state immediately so no glimpse of user data after sign-out
       setProfile(null);
-      // Removed localStorage clear to preserve data in case cloud sync is out of quota
+      setFoodLogs([]);
+      setBiomarkers({});
+      setBiomarkerHistory([]);
+      setActions([]);
+      setDailyBenefits([]);
+      setReport(null);
+      setSyncState('local');
+      await fbSignOut(auth);
+      // Note: Do NOT clear localStorage — user data is preserved per-email key
+      // and will load correctly when the correct user signs back in.
     } catch (e) {
       console.error("Failed to sign out from Firebase:", e);
     }
@@ -1519,19 +2304,20 @@ export default function App() {
   };
   // Add / Edit logs handlers
   const handleLogFood = async (food: FoodLog) => {
-    const updatedFoods = [...foodLogs, food];
+    const newFood = { ...food, sync_state: 'new' as const, updated_at: Date.now() };
+    const updatedFoods = [...foodLogs, newFood];
     setFoodLogs(updatedFoods);
-    setIsFoodChatOpen(false);
-    setActiveTab('home');
-    await saveAndSync(profile, updatedFoods, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'foodLog', targetId: food.id });
+    await saveAndSync(profile, updatedFoods, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'foodLog', targetId: newFood.id });
   };
   const handleUpdateFoodLog = async (updatedLog: FoodLog) => {
-    const updatedFoods = foodLogs.map(f => f.id === updatedLog.id ? updatedLog : f);
+    const logWithSync = { ...updatedLog, sync_state: 'update' as const, updated_at: Date.now() };
+    const updatedFoods = foodLogs.map(f => f.id === updatedLog.id ? logWithSync : f);
     setFoodLogs(updatedFoods);
     await saveAndSync(profile, updatedFoods, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'foodLog', targetId: updatedLog.id });
   };
   const handleDeleteFoodLog = async (id: string) => {
-    const updatedFoods = foodLogs.filter(f => f.id !== id);
+    // Keep it in array but mark as delete so syncUtils can process it
+    const updatedFoods = foodLogs.map(f => f.id === id ? { ...f, sync_state: 'delete' as const, updated_at: Date.now() } : f);
     setFoodLogs(updatedFoods);
     
     let updatedProfile = profile ? {
@@ -1578,13 +2364,14 @@ export default function App() {
           note: `Auto-logged BMI update based on profile change: ${next.weight} kg, ${next.height} cm.`
         });
       }
-      updatedHistory.sort((a, b) => b.date.localeCompare(a.date));
+      updatedHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
       updatedBiomarkers.bmi = roundedBmi;
     }
     return { updatedHistory, updatedBiomarkers, changed: weightChanged || heightChanged || hasNoBmi };
   };
 
   const handleAgentAnalysisSaved = async (agentType: string, agentResult: any) => {
+    if (!profile) return;
     const newId = `analysis_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const updatedAnalyses = profile.agentAnalyses ? [...profile.agentAnalyses] : [];
     updatedAnalyses.push({
@@ -1602,6 +2389,7 @@ export default function App() {
   };
 
   const handleDeleteAnalysis = async (id: string) => {
+    if (!profile) return;
     if (profile.agentAnalyses) {
       const updatedProfile = {
         ...profile,
@@ -1626,6 +2414,40 @@ export default function App() {
     // Standardize and normalize extracted biomarkers and custom definitions
     let finalExtracted = { ...extractedBiomarkers };
     let finalProfileUpdates = profileUpdates ? { ...profileUpdates } : undefined;
+
+    // Filter out invalid/empty biomarkers
+    const isValidValue = (v: unknown): boolean => v !== null && v !== undefined && v !== '' && v !== 'N/A' && v !== 'null';
+    Object.keys(finalExtracted).forEach(k => {
+      if (!isValidValue(finalExtracted[k])) delete finalExtracted[k];
+    });
+    if (entries) {
+      entries.forEach(e => {
+        if (e.biomarkers) {
+          Object.keys(e.biomarkers).forEach(k => {
+            if (!isValidValue(e.biomarkers[k])) delete e.biomarkers[k];
+          });
+        }
+      });
+    }
+
+    // Filter customBiomarkers to only include those that are actually being saved
+    if (finalProfileUpdates && finalProfileUpdates.customBiomarkers) {
+      const activeKeys = new Set<string>(Object.keys(finalExtracted));
+      if (entries) {
+        entries.forEach(e => {
+          if (e.biomarkers) Object.keys(e.biomarkers).forEach(k => activeKeys.add(k));
+        });
+      }
+      
+      const filteredCustoms: { [key: string]: any } = {};
+      Object.entries(finalProfileUpdates.customBiomarkers).forEach(([k, v]) => {
+        if (activeKeys.has(k)) {
+          filteredCustoms[k] = v;
+        }
+      });
+      finalProfileUpdates.customBiomarkers = filteredCustoms;
+    }
+
     const cleanName = (n: string): string => n.split('(')[0].split('[')[0].trim();
     const keyMapping: { [key: string]: string } = {};
     if (finalProfileUpdates && finalProfileUpdates.customBiomarkers && Object.keys(finalProfileUpdates.customBiomarkers).length > 0) {
@@ -1635,22 +2457,43 @@ export default function App() {
         const rawName = def.name || rawKey;
         const cleaned = cleanName(rawName);
         const normalizeUnit = (u: string) => (u || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        // Check standard match
-        const stdMatch = biomarkerDefinitions.find(d => {
+        
+        const cleanDef = { ...def };
+        if (!cleanDef.unit || cleanDef.unit.trim() === '-' || cleanDef.unit.trim() === '') delete cleanDef.unit;
+        if (!cleanDef.normalRange || cleanDef.normalRange.trim() === '-' || cleanDef.normalRange.trim() === '') delete cleanDef.normalRange;
+        if (!cleanDef.standardMedicalGrouping || cleanDef.standardMedicalGrouping === 'Other') delete cleanDef.standardMedicalGrouping;
+        if (!cleanDef.riskCategories || cleanDef.riskCategories.length === 0) delete cleanDef.riskCategories;
+        // If the key is already actively tracked by the user, we MUST NOT change its key to avoid breaking history
+        if (biomarkers[rawKey]) {
+          keyMapping[rawKey] = rawKey;
+          currentCustoms[rawKey] = {
+            ...(currentCustoms[rawKey] || {}),
+            ...cleanDef,
+            name: cleaned
+          };
+          return;
+        }
+
+        // Check standard match (skip if rawKey is already an explicitly established custom key)
+        const stdMatch = !currentCustoms[rawKey] ? biomarkerDefinitions.find(d => {
           const nameMatch = d.name.toLowerCase() === cleaned.toLowerCase() || d.key.toLowerCase() === cleaned.toLowerCase() || cleanName(d.name).toLowerCase() === cleaned.toLowerCase();
           const unitMatch = !def.unit || !d.unit || normalizeUnit(d.unit) === normalizeUnit(def.unit);
           return nameMatch && unitMatch;
-        });
+        }) : null;
         if (stdMatch) {
           keyMapping[rawKey] = stdMatch.key;
           return; // Map to standard key, drop custom def
         }
         // Check existing custom match
-        const existingKey = Object.keys(currentCustoms).find(k => {
+        let existingKey = Object.keys(currentCustoms).find(k => {
           const nameMatch = cleanName(currentCustoms[k]?.name || '').toLowerCase() === cleaned.toLowerCase();
           const keyMatch = k.toLowerCase() === cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
           return nameMatch || keyMatch;
         });
+        // Always fallback to rawKey if it already exists as a known key
+        if (!existingKey && currentCustoms[rawKey]) {
+          existingKey = rawKey;
+        }
         if (existingKey) {
           keyMapping[rawKey] = existingKey;
           currentCustoms[existingKey] = {
@@ -1685,7 +2528,7 @@ export default function App() {
       ? entries
       : [{ date: date || null, biomarkers: finalExtracted }];
     let hasNewBiomarkers = false;
-    let targetId: string | undefined = undefined;
+    const modifiedLogIds: string[] = [];
     if (modificationCommand && modificationCommand.length > 0) {
       let madeChanges = false;
       modificationCommand.forEach(cmd => {
@@ -1697,6 +2540,7 @@ export default function App() {
               ...updatedHistory[logIdx].biomarkers,
               [cmd.keyName]: cmd.newValue
             };
+            modifiedLogIds.push(updatedHistory[logIdx].id);
             madeChanges = true;
             hasNewBiomarkers = true;
           }
@@ -1712,6 +2556,7 @@ export default function App() {
             const newBiomarkers = { ...updatedHistory[logIdx].biomarkers };
             delete newBiomarkers[cmd.keyName];
             updatedHistory[logIdx].biomarkers = newBiomarkers;
+            modifiedLogIds.push(updatedHistory[logIdx].id);
             madeChanges = true;
             hasNewBiomarkers = true;
           }
@@ -1821,18 +2666,22 @@ export default function App() {
           updatedHistory[existingLogIndex] = {
             ...updatedHistory[existingLogIndex],
             biomarkers: { ...updatedHistory[existingLogIndex].biomarkers, ...mappedExtracted },
-            tests: mergedTests
+            tests: mergedTests,
+            sync_state: 'update',
+            updated_at: Date.now()
           };
-          targetId = updatedHistory[existingLogIndex].id;
+          modifiedLogIds.push(updatedHistory[existingLogIndex].id);
         } else {
           const datedLog: BiomarkerLog = {
             id: `med_log_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             date: recordDate,
             biomarkers: mappedExtracted,
-            tests: entryTests
+            tests: entryTests,
+            sync_state: 'new',
+            updated_at: Date.now()
           };
           updatedHistory.push(datedLog);
-          targetId = datedLog.id;
+          modifiedLogIds.push(datedLog.id);
         }
       }
     });
@@ -1851,11 +2700,11 @@ export default function App() {
     }
     if (hasNewBiomarkers) {
       // Sort history by date descending
-      updatedHistory.sort((a, b) => b.date.localeCompare(a.date));
+      updatedHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
       setBiomarkerHistory(updatedHistory);
       // Recompute the latest biomarkers from history so they reflect the latest dates (sorted ascending)
       const recomputedBiomarkers: { [key: string]: number | string } = {};
-      [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+      [...updatedHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
         Object.entries(log.biomarkers).forEach(([k, v]) => {
           recomputedBiomarkers[k] = v as string | number;
         });
@@ -1865,7 +2714,10 @@ export default function App() {
         setIsMedicalChatOpen(false);
         setActiveTab('home');
       }
-      await saveAndSync(currentProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog', targetId });
+
+// Sync deferred to manual button click
+      
+      await saveAndSync(currentProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
     } else {
       if (!skipClose) {
         setIsMedicalChatOpen(false);
@@ -1874,17 +2726,75 @@ export default function App() {
       await saveAndSync(currentProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
     }
   };
+  const handleDeleteMultipleBiomarkers = async (keys: string[]) => {
+    const updatedBiomarkers = { ...biomarkers };
+    keys.forEach(key => delete updatedBiomarkers[key]);
+    
+    const logsToDelete: string[] = [];
+    const logsToUpdate: string[] = [];
+    let updatedHistory = biomarkerHistory.map(log => {
+      const cleanBiomarkers = { ...log.biomarkers };
+      let changed = false;
+      keys.forEach(key => {
+        if (cleanBiomarkers[key] !== undefined) {
+          delete cleanBiomarkers[key];
+          changed = true;
+        }
+      });
+      if (changed) {
+        if (Object.keys(cleanBiomarkers).length === 0 && !log.note) {
+          logsToDelete.push(log.id);
+        } else {
+          logsToUpdate.push(log.id);
+        }
+      }
+      return changed ? { ...log, biomarkers: cleanBiomarkers } : log;
+    });
+    
+    updatedHistory = updatedHistory.filter(log => !logsToDelete.includes(log.id));
+    setBiomarkers(updatedBiomarkers);
+    setBiomarkerHistory(updatedHistory);
+    
+    let updatedProfile = { ...profile } as UserProfile;
+    if (logsToDelete.length > 0) {
+      updatedProfile.deletedBiomarkerLogIds = [
+        ...(updatedProfile.deletedBiomarkerLogIds || []),
+        ...logsToDelete
+      ];
+    }
+    if (updatedProfile.customBiomarkers) {
+      const newCustoms = { ...updatedProfile.customBiomarkers };
+      keys.forEach(key => delete newCustoms[key]);
+      updatedProfile.customBiomarkers = newCustoms;
+    }
+    updatedProfile.deletedCustomBiomarkerKeys = [
+      ...(updatedProfile.deletedCustomBiomarkerKeys || []),
+      ...keys
+    ];
+    setProfile(updatedProfile);
+    if (logsToUpdate.length > 0) {
+      await saveAndSync(updatedProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: logsToUpdate, deletedIds: logsToDelete });
+    } else if (logsToDelete.length > 0) {
+      await saveAndSync(updatedProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: [], deletedIds: logsToDelete });
+    } else {
+      await saveAndSync(updatedProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
+    }
+  };
+
   const handleDeleteBiomarker = async (key: string) => {
     const updatedBiomarkers = { ...biomarkers };
     delete updatedBiomarkers[key];
     
     const logsToDelete: string[] = [];
+    const logsToUpdate: string[] = [];
     let updatedHistory = biomarkerHistory.map(log => {
       const cleanBiomarkers = { ...log.biomarkers };
       if (cleanBiomarkers[key] !== undefined) {
         delete cleanBiomarkers[key];
         if (Object.keys(cleanBiomarkers).length === 0 && !log.note) {
           logsToDelete.push(log.id);
+        } else {
+          logsToUpdate.push(log.id);
         }
       }
       return { ...log, biomarkers: cleanBiomarkers };
@@ -1905,22 +2815,19 @@ export default function App() {
       delete newCustoms[key];
       updatedProfile.customBiomarkers = newCustoms;
     }
+    updatedProfile.deletedCustomBiomarkerKeys = [
+      ...(updatedProfile.deletedCustomBiomarkerKeys || []),
+      key
+    ];
     setProfile(updatedProfile);
-    if (auth.currentUser) {
-      const uid = auth.currentUser.uid;
-      try {
-        for (const logId of logsToDelete) {
-          await deleteDoc(doc(db, 'users', uid, 'biomarkerHistory', logId));
-        }
-        const logsToUpdate = updatedHistory.filter(log => biomarkerHistory.find(old => old.id === log.id)?.biomarkers[key] !== undefined);
-        for (const log of logsToUpdate) {
-          await setDoc(doc(db, 'users', uid, 'biomarkerHistory', log.id), cleanData(log));
-        }
-      } catch (err) {
-        console.error("Failed to delete biomarker from Firestore:", err);
-      }
+// Sync deferred to manual button click
+    if (logsToUpdate.length > 0) {
+      await saveAndSync(updatedProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: logsToUpdate, deletedIds: logsToDelete });
+    } else if (logsToDelete.length > 0) {
+      await saveAndSync(updatedProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: [], deletedIds: logsToDelete });
+    } else {
+      await saveAndSync(updatedProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
     }
-    await saveAndSync(updatedProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
   };
   const handleDeleteEmptyBiomarkers = async () => {
     let updatedProfile = { ...profile } as UserProfile;
@@ -1947,19 +2854,20 @@ export default function App() {
       if (logChanged) {
         if (Object.keys(cleanBiomarkers).length === 0 && !log.note) {
           logsToDelete.push(log.id);
+          return { ...log, biomarkers: cleanBiomarkers, sync_state: 'delete' as const, updated_at: Date.now() };
         } else {
-          logsToUpdate.push({ ...log, biomarkers: cleanBiomarkers });
+          const updatedLog = { ...log, biomarkers: cleanBiomarkers, sync_state: 'update' as const, updated_at: Date.now() };
+          logsToUpdate.push(updatedLog);
+          return updatedLog;
         }
-        return { ...log, biomarkers: cleanBiomarkers };
       }
       return log;
     });
 
-    updatedHistory = updatedHistory.filter(log => !logsToDelete.includes(log.id));
-
-    // 2. Determine which keys actually have data remaining
+    // We do NOT filter out logsToDelete, syncUtils handles it
+    // But for local calculations of usedKeys, we ignore deleted logs
     const usedKeys = new Set<string>();
-    updatedHistory.forEach(log => {
+    updatedHistory.filter(l => l.sync_state !== 'delete').forEach(log => {
       Object.keys(log.biomarkers).forEach(key => usedKeys.add(key));
     });
 
@@ -1972,11 +2880,13 @@ export default function App() {
     }
 
     // 3. Clean customBiomarkers
+    const deletedKeys: string[] = [];
     if (updatedProfile.customBiomarkers) {
       const newCustoms = { ...updatedProfile.customBiomarkers };
       Object.keys(newCustoms).forEach(key => {
         if (!usedKeys.has(key)) {
           delete newCustoms[key];
+          deletedKeys.push(key);
           modifiedProfile = true;
         }
       });
@@ -1984,10 +2894,16 @@ export default function App() {
         updatedProfile.customBiomarkers = newCustoms;
       }
     }
+    if (deletedKeys.length > 0) {
+      updatedProfile.deletedCustomBiomarkerKeys = [
+        ...(updatedProfile.deletedCustomBiomarkerKeys || []),
+        ...deletedKeys
+      ];
+    }
 
     // 4. Recompute the biomarkers state
     const recomputedBiomarkers: { [key: string]: number | string } = {};
-    [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+    [...updatedHistory].filter(b => b.sync_state !== 'delete').sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
         recomputedBiomarkers[k] = v as string | number;
       });
@@ -2008,47 +2924,23 @@ export default function App() {
     if (modifiedBiomarkers) setBiomarkers(recomputedBiomarkers);
     setBiomarkerHistory(updatedHistory);
 
-    if (auth.currentUser) {
-      const uid = auth.currentUser.uid;
-      try {
-        let batch = writeBatch(db);
-        let opCount = 0;
-
-        for (const logId of logsToDelete) {
-          batch.delete(doc(db, 'users', uid, 'biomarkerHistory', logId));
-          opCount++;
-          if (opCount === 450) {
-            await batch.commit();
-            batch = writeBatch(db);
-            opCount = 0;
-          }
-        }
-
-        for (const log of logsToUpdate) {
-          batch.set(doc(db, 'users', uid, 'biomarkerHistory', log.id), cleanData(log));
-          opCount++;
-          if (opCount === 450) {
-            await batch.commit();
-            batch = writeBatch(db);
-            opCount = 0;
-          }
-        }
-
-        if (opCount > 0) {
-          await batch.commit();
-        }
-      } catch (err) {
-        console.error("Failed to delete empty biomarkers from Firestore:", err);
-      }
+// Sync deferred to manual button click
+    if (logsToUpdate.length > 0) {
+      await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: logsToUpdate.map(l => l.id), deletedIds: logsToDelete });
+    } else if (logsToDelete.length > 0) {
+      await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: [], deletedIds: logsToDelete });
+    } else {
+      await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
     }
-
-    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
   };
   const handleDeleteBiomarkerLog = async (id: string) => {
-    const updatedHistory = biomarkerHistory.filter(b => b.id !== id);
+    // Keep it in array but mark as delete so syncUtils can process it
+    const updatedHistory = biomarkerHistory.map(b => b.id === id ? { ...b, sync_state: 'delete' as const, updated_at: Date.now() } : b);
     setBiomarkerHistory(updatedHistory);
+    
+    // We filter it out for the recomputed local state map
     const recomputedBiomarkers: { [key: string]: number | string } = {};
-    [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+    [...updatedHistory].filter(b => b.sync_state !== 'delete').sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
         recomputedBiomarkers[k] = v as string | number;
       });
@@ -2077,7 +2969,9 @@ export default function App() {
           delete newBiomarkers[key];
           return {
             ...log,
-            biomarkers: newBiomarkers
+            biomarkers: newBiomarkers,
+            sync_state: 'update' as const,
+            updated_at: Date.now()
           };
         }
         return log;
@@ -2085,7 +2979,7 @@ export default function App() {
       setBiomarkerHistory(updatedHistory);
       
       const recomputedBiomarkers: { [key: string]: number | string } = {};
-      [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+      [...updatedHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
         Object.entries(log.biomarkers).forEach(([k, v]) => {
           recomputedBiomarkers[k] = v as string | number;
         });
@@ -2107,15 +3001,17 @@ export default function App() {
           biomarkers: {
             ...log.biomarkers,
             [key]: isNaN(numValue) ? value : numValue
-          }
+          },
+          sync_state: 'update' as const,
+          updated_at: Date.now()
         };
       }
       return log;
     });
-    updatedHistory.sort((a, b) => b.date.localeCompare(a.date));
+    updatedHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
     setBiomarkerHistory(updatedHistory);
     const recomputedBiomarkers: { [key: string]: number | string } = {};
-    [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+    [...updatedHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
         recomputedBiomarkers[k] = v as string | number;
       });
@@ -2222,7 +3118,7 @@ export default function App() {
     });
 
     updatedHistory = updatedHistory.filter(h => Object.keys(h.biomarkers).length > 0);
-    updatedHistory.sort((a, b) => b.date.localeCompare(a.date));
+    updatedHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
 
     const updatedProfile: UserProfile = {
       ...profile as any,
@@ -2230,7 +3126,7 @@ export default function App() {
     };
 
     const recomputedBiomarkers: { [key: string]: number | string } = {};
-    [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+    [...updatedHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
         recomputedBiomarkers[k] = v as string | number;
       });
@@ -2239,7 +3135,10 @@ export default function App() {
     setProfile(updatedProfile);
     setBiomarkerHistory(updatedHistory);
     setBiomarkers(recomputedBiomarkers);
-    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'multi' });
+
+// Deferred to manual sync
+    const changedLogIds = updatedHistory.map(l => l.id);
+    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: changedLogIds });
   };
 
 
@@ -2314,10 +3213,10 @@ export default function App() {
     });
     // Clean completely empty history logs
     updatedHistory = updatedHistory.filter(h => Object.keys(h.biomarkers).length > 0);
-    updatedHistory.sort((a, b) => b.date.localeCompare(a.date));
+    updatedHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
     // 3. Recompute latest biomarkers
     const recomputedBiomarkers: { [key: string]: number | string } = {};
-    [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+    [...updatedHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
         recomputedBiomarkers[k] = v as string | number;
       });
@@ -2325,7 +3224,10 @@ export default function App() {
     setProfile(updatedProfile);
     setBiomarkerHistory(updatedHistory);
     setBiomarkers(recomputedBiomarkers);
-    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
+
+// Sync deferred to manual button click
+    const changedLogIds = updatedHistory.map(l => l.id);
+    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: changedLogIds });
   };
   const handleBatchConsolidate = async (mapping: { [key: string]: string }) => {
     const targetGroups: { [targetKey: string]: string[] } = {};
@@ -2441,10 +3343,10 @@ export default function App() {
     });
 
     updatedHistory = updatedHistory.filter(h => Object.keys(h.biomarkers).length > 0);
-    updatedHistory.sort((a, b) => b.date.localeCompare(a.date));
+    updatedHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
 
     const recomputedBiomarkers: { [key: string]: number | string } = {};
-    [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+    [...updatedHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
         recomputedBiomarkers[k] = v as string | number;
       });
@@ -2458,7 +3360,10 @@ export default function App() {
     setProfile(updatedProfile);
     setBiomarkerHistory(updatedHistory);
     setBiomarkers(recomputedBiomarkers);
-    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
+
+// Sync deferred to manual button click
+    const changedLogIds = updatedHistory.map(l => l.id);
+    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: changedLogIds });
   };
   const handleApplyCalculation = async (updates: {
     targetCalories?: number;
@@ -2601,6 +3506,16 @@ export default function App() {
       setIsGenerating(false);
     }
   };
+  // Lock body scroll when modals are open
+  useEffect(() => {
+    if (isFoodChatOpen || isMedicalChatOpen || isManualFoodLogOpen || isConflictModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isFoodChatOpen, isMedicalChatOpen, isManualFoodLogOpen, isConflictModalOpen]);
+
   // Render Screens based on active tab
   if (isAuthChecking) {
     return (
@@ -2620,7 +3535,7 @@ export default function App() {
   // - Medical, Insights tabs show 'Medical icon' for adding medical records chat logs.
   const isMedicalTabFAB = ['medical', 'insights'].includes(activeTab);
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col transition-colors duration-200">
+    <div className="h-[100dvh] overflow-hidden bg-slate-50 dark:bg-slate-950 flex flex-col transition-colors duration-200">
       <style dangerouslySetInnerHTML={{ __html: getDynamicStyles(profile) }} />
       
       {/* Header Profile Section */}
@@ -2637,7 +3552,7 @@ export default function App() {
             dailyBenefits,
             report
           };
-          safeSaveToLocalStorage(getStorageKey(), bundle);
+          safeSaveToLocalStorage(getStorageKey(p?.email || profile?.email || auth.currentUser?.email), bundle);
         }}
         onSaveProfile={async (p) => {
           const updatedProfile = { ...p };
@@ -2656,6 +3571,8 @@ export default function App() {
         syncState={syncState}
         onSignOut={handleSignOut}
         onCloudSync={() => checkForDbChanges(undefined, true)}
+        onForcePush={() => saveAndSync(profile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'fullPush', cloudFoods: [], cloudBioHistory: [] } as any)}
+        onForcePull={() => checkForDbChanges(undefined, true, true)}
         dbInteractions={dbInteractions}
         quota={quota}
         foodLogs={foodLogs}
@@ -2701,8 +3618,41 @@ export default function App() {
           </div>
         </div>
       )}
+      {syncState === 'conflict' && conflictData && (
+        <div className="bg-indigo-600 text-white py-2 px-4 shadow-md transition-all duration-300 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left z-20 border-b border-indigo-700/30">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-1.5 rounded-lg shrink-0">
+              <RefreshCw className="w-4 h-4 text-white animate-spin" />
+            </div>
+            <div>
+              <p className="text-xs font-bold leading-normal text-left">
+                Data Out of Sync / Conflict Detected
+              </p>
+              <p className="text-[10px] text-white/90 text-left">
+                Your local device data and cloud database have both been modified separately. Click "Resolve Conflict" to choose which data to keep.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setIsConflictModalOpen(true);
+              }}
+              className="px-3 py-1 bg-white hover:bg-slate-100 text-indigo-700 font-bold text-[10px] rounded-lg transition-all shadow-sm shrink-0 cursor-pointer"
+            >
+              Resolve Conflict
+            </button>
+          </div>
+        </div>
+      )}
+      <ConflictResolutionModal
+        isOpen={isConflictModalOpen}
+        onClose={() => setIsConflictModalOpen(false)}
+        conflictData={conflictData}
+        onResolve={handleResolveConflict}
+      />
       {/* Main Viewport Container */}
-      <main className="flex-1 overflow-x-hidden">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden" id="main-scroll-container">
         {activeTab === 'home' && (
           <HomeTab
             profile={profile}
@@ -2753,6 +3703,8 @@ export default function App() {
             foodLogs={foodLogs}
             biomarkers={biomarkers}
             biomarkerHistory={biomarkerHistory}
+            onDeleteBiomarker={handleDeleteBiomarker}
+            onDeleteMultipleBiomarkers={handleDeleteMultipleBiomarkers}
             calibratingBatchIdx={calibratingBatchIdx}
             calibratingAgentType={calibratingAgentType}
             report={report}
@@ -2781,23 +3733,9 @@ export default function App() {
                 return JSON.stringify(oldLog) !== JSON.stringify(newLog); // changed log
               });
               
-              if (changedLogs.length > 0 && auth.currentUser) {
-                const uid = auth.currentUser.uid;
-                let batch = writeBatch(db);
-                let opCount = 0;
-                for (const log of changedLogs) {
-                  batch.set(doc(db, 'users', uid, 'biomarkerHistory', log.id), cleanData(log));
-                  opCount++;
-                  if (opCount === 450) {
-                    await batch.commit();
-                    batch = writeBatch(db);
-                    opCount = 0;
-                  }
-                }
-                if (opCount > 0) await batch.commit();
-              }
+// Sync deferred to manual button click
               
-              await saveAndSync(updatedProfileArg || profile, foodLogs, newBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'multi' });
+              await saveAndSync(updatedProfileArg || profile, foodLogs, newBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
             }}
             batchSize={batchSize}
             onChangeBatchSize={(size) => {
@@ -2806,10 +3744,11 @@ export default function App() {
                 localStorage.setItem('biomarker_batch_size', size.toString());
               } catch (e) {}
             }}
-            onOpenAgentChat={(agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent6' | 'agent7' | 'data_review', options?: { prefillMessage?: string; dataReviewBatchIdx?: number | string }) => {
+            onOpenAgentChat={(agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent6' | 'agent7' | 'data_review', options?: { prefillMessage?: string; dataReviewBatchIdx?: number | string; dataReviewBatchKeys?: string[] }) => {
               setActiveAgentType(agentType);
               setPrefillMessage(options?.prefillMessage || null);
               setActiveDataReviewBatchIdx(options?.dataReviewBatchIdx !== undefined ? options.dataReviewBatchIdx : null);
+              setActiveDataReviewBatchKeys(options?.dataReviewBatchKeys || []);
               setIsMedicalChatOpen(true);
             }}
             onDeleteAnalysis={handleDeleteAnalysis}
@@ -2858,6 +3797,7 @@ export default function App() {
             onEditBiomarkerLog={handleEditBiomarkerLog}
             onLogMedical={handleLogMedical}
             onDeleteBiomarker={handleDeleteBiomarker}
+            onDeleteMultipleBiomarkers={handleDeleteMultipleBiomarkers}
             onDeleteBiomarkerLog={handleDeleteBiomarkerLog}
             onDeleteBiomarkerFromLog={handleDeleteBiomarkerFromLog}
             onStandardizeUnits={handleStandardizeBiomarkerUnits}
@@ -2865,7 +3805,8 @@ export default function App() {
             onBatchCombineBiomarkers={handleBatchCombineBiomarkers}
             onBatchConsolidate={handleBatchConsolidate}
             onReviewWithAgent={(keys) => {
-              localStorage.setItem('agent1_custom_batch_keys', JSON.stringify(keys));
+              const userIdentifier = profile?.email?.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'guest';
+              localStorage.setItem(`agent1_custom_batch_keys_${userIdentifier}`, JSON.stringify(keys));
               sessionStorage.setItem('auto_open_custom_batch_modal', 'true');
               setActiveTab('insights');
             }}
@@ -2959,6 +3900,7 @@ export default function App() {
         report={report}
         agentType={activeAgentType}
         dataReviewBatchIdx={activeDataReviewBatchIdx}
+        dataReviewBatchKeys={activeDataReviewBatchKeys}
         batchSize={batchSize}
         onAgentAnalysisSaved={async (agentType, agentResult) => {
           const newId = `analysis_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -2977,6 +3919,22 @@ export default function App() {
           await saveAndSync(updatedProfile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'analysis', targetId: newId });
         }}
         onAgentFinish={async (agentType, agentResult) => {
+          // ─── SNAPSHOT BEFORE ANY CHANGE (FIX-8) ──────────────────────────
+          const snapLabel = `Before ${agentType} approval (${new Date().toLocaleTimeString()})`;
+          saveLocalSnapshot(snapLabel, profile?.email, {
+            profile,
+            foodLogs,
+            biomarkers,
+            biomarkerHistory,
+            actions,
+            dailyBenefits,
+            report
+          });
+          if (profile?.email) {
+            setSnapshots(loadLocalSnapshots(profile.email));
+          }
+          setLastSnapshotLabel(snapLabel);
+          // ───────────────────────────────────────────────────────────────
           setIsMedicalChatOpen(false);
           setCalibratingAgentType(agentType);
           const updatedProfile = { ...profile };
@@ -3015,6 +3973,13 @@ export default function App() {
               } else if (Array.isArray(yamlText)) {
                 parsedRows = yamlText;
               }
+              const unselected = agentResult.unselectedRowKeys || [];
+              if (unselected.length > 0) {
+                 parsedRows = parsedRows.filter(row => {
+                   const key = String(row.biomarker || row.name || row.key || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+                   return !unselected.includes(key);
+                 });
+              }
 
               // Save customBiomarkers to user profile and history
               const updatedCustoms = { ...(updatedProfile.customBiomarkers || {}) };
@@ -3023,6 +3988,7 @@ export default function App() {
                 biomarkers: { ...h.biomarkers }
               })) : [];
 
+              const deletedKeysToSync: string[] = [];
               // 1. Identify which unstandardized raw keys were mapped to what standardized keys and migrate/delete
               if (agentResult?.batchBiomarkers && Array.isArray(agentResult.batchBiomarkers)) {
                 agentResult.batchBiomarkers.forEach((raw: any) => {
@@ -3058,13 +4024,13 @@ export default function App() {
                     
                     if (cleanRawKey === cleanParsedKey) {
                       score += 100;
-                    } else if (cleanRawKey.includes(cleanParsedKey) || cleanParsedKey.includes(cleanRawKey)) {
+                    } else if (cleanParsedKey.length >= 4 && cleanRawKey.length >= 4 && (cleanRawKey.includes(cleanParsedKey) || cleanParsedKey.includes(cleanRawKey))) {
                       score += 40;
                     }
                     if (explanation.includes(rawKey.toLowerCase())) {
                       score += 80;
                     }
-                    if (score > bestScore) {
+                    if (score > bestScore && score >= 40) {
                       bestScore = score;
                       bestParsedIdx = idx;
                     }
@@ -3082,6 +4048,7 @@ export default function App() {
                         }
                       });
                       delete updatedCustoms[rawKey];
+                      deletedKeysToSync.push(rawKey);
                     } else if (stdKey && rawKey !== stdKey) {
                       // Migrate existing values from rawKey to stdKey across all historical logs, then delete rawKey
                       hHistory.forEach((log: any) => {
@@ -3094,15 +4061,12 @@ export default function App() {
 
                       // Delete from customBiomarkers list
                       delete updatedCustoms[rawKey];
+                      deletedKeysToSync.push(rawKey);
                     }
                   } else {
-                    // Completely unmapped/deleted raw item: delete from all historical logs and custom definitions
-                    hHistory.forEach((log: any) => {
-                      if (log.biomarkers && log.biomarkers[rawKey] !== undefined) {
-                        delete log.biomarkers[rawKey];
-                      }
-                    });
-                    delete updatedCustoms[rawKey];
+                    // No confident match found — leave this key untouched (FIX-7B).
+                    // Do NOT delete data that wasn't explicitly handled in this batch's output.
+                    console.log(`[Agent Approval] No confident match for raw key "${rawKey}" — skipping deletion.`);
                   }
                 });
               }
@@ -3127,15 +4091,22 @@ export default function App() {
                 } as any;
               });
 
-              hHistory.sort((a, b) => b.date.localeCompare(a.date));
+              hHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
 
               // Recompute biomarkers list
               const recomputedBiomarkers: { [key: string]: number | string } = {};
-              [...hHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+              [...hHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
                 Object.entries(log.biomarkers).forEach(([k, v]) => {
                   recomputedBiomarkers[k] = v as string | number;
                 });
               });
+              
+              if (deletedKeysToSync.length > 0) {
+                updatedProfile.deletedCustomBiomarkerKeys = [
+                  ...(updatedProfile.deletedCustomBiomarkerKeys || []),
+                  ...deletedKeysToSync
+                ];
+              }
 
               updatedProfile.customBiomarkers = updatedCustoms;
               currentHistory = hHistory;
@@ -3171,17 +4142,24 @@ export default function App() {
                   if (bioMatch) { currentEntry.biomarker = bioMatch[1].replace(/['"]/g, '').trim(); continue; }
                   const dateMatch = line.match(/date:\s*([\d-]+)/i);
                   if (dateMatch) { currentEntry.date = dateMatch[1].trim(); continue; }
-                  const valMatch = line.match(/value:\s*([\d.]+)/i);
-                  if (valMatch) { currentEntry.value = parseFloat(valMatch[1]); continue; }
+                  const valMatch = line.match(/value:\s*(.*)/i);
+                  if (valMatch) { 
+                    const rawVal = valMatch[1].replace(/['"]/g, '').trim(); 
+                    currentEntry.value = isNaN(Number(rawVal)) ? rawVal : parseFloat(rawVal);
+                    continue; 
+                  }
                   const unitMatch = line.match(/unit:\s*(.*)/i);
                   if (unitMatch) { currentEntry.unit = unitMatch[1].replace(/['"]/g, '').trim(); continue; }
+                  const refMatch = line.match(/referenceRange:\s*(.*)/i);
+                  if (refMatch) { currentEntry.referenceRange = refMatch[1].replace(/['"]/g, '').trim(); continue; }
                 }
                 if (currentEntry.biomarker) entries.push(currentEntry);
                 
                 entries.forEach(entry => {
                   const bioName = entry.biomarker.toLowerCase().replace(/[^a-z0-9]/g, '_');
                   let finalValue = entry.value;
-                  let finalUnit = entry.unit || '';
+                  let finalUnit = (entry.unit || '').replace(/µ/g, 'u');
+                  let finalRange = (entry.referenceRange || '').replace(/µ/g, 'u');
 
                   // No math middleware: raw values only
 
@@ -3202,19 +4180,24 @@ export default function App() {
                     updatedProfile.customBiomarkers[bioName] = {
                       name: entry.biomarker,
                       unit: finalUnit,
-                      normalRange: 'Unknown',
+                      normalRange: finalRange || 'Unknown',
                       description: ''
                     };
-                  } else if (finalUnit && !updatedProfile.customBiomarkers[bioName].unit) {
-                    updatedProfile.customBiomarkers[bioName].unit = finalUnit;
+                  } else {
+                    if (finalUnit && !updatedProfile.customBiomarkers[bioName].unit) {
+                      updatedProfile.customBiomarkers[bioName].unit = finalUnit;
+                    }
+                    if (finalRange && (!updatedProfile.customBiomarkers[bioName].normalRange || updatedProfile.customBiomarkers[bioName].normalRange === 'Unknown')) {
+                      updatedProfile.customBiomarkers[bioName].normalRange = finalRange;
+                    }
                   }
                 });
                 
-                currentHistory.sort((a, b) => b.date.localeCompare(a.date));
+                currentHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
                 setBiomarkerHistory(currentHistory);
                 
                 const recomputedBiomarkers: { [key: string]: number | string } = {};
-                [...currentHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+                [...currentHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
                   Object.entries(log.biomarkers).forEach(([k, v]) => {
                     recomputedBiomarkers[k] = v as string | number;
                   });
@@ -3370,7 +4353,7 @@ export default function App() {
             // Auto-approve the step if it's one of the main agent types
             const latestAnalysis = (updatedProfile.agentAnalyses || [])
               .filter(a => a.agentType === agentType)
-              .sort((a, b) => b.date.localeCompare(a.date))[0];
+              .sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)))[0];
             
             if (latestAnalysis) {
               try {
@@ -3423,7 +4406,69 @@ export default function App() {
             }
           }
         }}
-      /></ErrorBoundary>
+      />
+
+      {/* Undo/Snapshot button — shown when at least one snapshot exists */}
+      {snapshots.length > 0 && (
+        <button
+          onClick={() => setShowSnapshotPanel(true)}
+          className="fixed bottom-28 left-4 z-40 flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+          title="Restore a previous snapshot"
+        >
+          <span>↩</span> Undo
+        </button>
+      )}
+
+      {/* Snapshot/Undo Panel */}
+      {showSnapshotPanel && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50" onClick={() => setShowSnapshotPanel(false)}>
+          <div className="bg-white dark:bg-slate-900 rounded-t-2xl w-full max-w-lg p-5 pb-8 shadow-2xl animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>🕐</span> Restore a Snapshot
+              </h2>
+              <button onClick={() => setShowSnapshotPanel(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+            </div>
+            {snapshots.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-6">No snapshots yet. Snapshots are created automatically before each agent approval.</p>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {snapshots.map((snap: any) => (
+                  <div key={snap.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-xl px-4 py-3">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{snap.label}</p>
+                      <p className="text-[10px] text-slate-400">{new Date(snap.timestamp).toLocaleString()}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        {snap.data?.biomarkerHistory?.length ?? 0} biomarker logs · {snap.data?.foodLogs?.length ?? 0} food logs
+                      </p>
+                    </div>
+                    <div className="flex gap-2 ml-4">
+                      <button
+                        onClick={() => handleRestoreSnapshot(snap)}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                      >
+                        Restore
+                      </button>
+                      <button
+                        onClick={() => {
+                          deleteLocalSnapshot(profile?.email, snap.id);
+                          setSnapshots(loadLocalSnapshots(profile?.email));
+                        }}
+                        className="px-3 py-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-[10px] text-slate-400 text-center mt-4">Snapshots are stored locally on this device only. Up to 5 are kept.</p>
+          </div>
+        </div>
+      )}
+
+      </ErrorBoundary>
     </div>
   );
 }

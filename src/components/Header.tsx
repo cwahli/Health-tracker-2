@@ -5,7 +5,7 @@ import { translations } from '../utils/translations';
 import {
   Eye, EyeOff, CloudLightning, CloudCheck, RefreshCw, LogOut, Check, ShieldCheck,
   Archive, FileSpreadsheet, KeyRound, Lock, Unlock, FileDown, FileUp, AlertTriangle,
-  CloudUpload, CloudDownload, HelpCircle
+  CloudUpload, CloudDownload, HelpCircle, Terminal, User
 } from 'lucide-react';
 import { db, auth } from '../firebase';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
@@ -21,6 +21,7 @@ import {
   restoreAccountToFirestore,
   clearGoogleToken
 } from '../utils/googleBackup';
+import { compressImage } from '../utils/imageCompressor';
 
 const ColorPickerField = ({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) => (
   <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-150 dark:border-slate-800 gap-2">
@@ -73,7 +74,9 @@ interface HeaderProps {
   setHideSensitive: (h: boolean) => void;
   syncState: 'synced' | 'syncing' | 'local';
   onSignOut: () => void;
-  onCloudSync,
+  onCloudSync?: () => Promise<void>;
+  onForcePush?: () => Promise<void>;
+  onForcePull?: () => Promise<void>;
   dbInteractions?: DbInteraction[];
   quota?: QuotaData;
   foodLogs?: FoodLog[];
@@ -99,6 +102,8 @@ export default function Header({
   syncState,
   onSignOut,
   onCloudSync,
+  onForcePush,
+  onForcePull,
   dbInteractions = [],
   quota,
   foodLogs = [],
@@ -107,6 +112,15 @@ export default function Header({
   const [isEditing, setIsEditing] = useState(false);
   const [showThemeScreen, setShowThemeScreen] = useState(false);
   const [showDbInteractionsOverlay, setShowDbInteractionsOverlay] = useState(false);
+  const [dbOverlayViewMode, setDbOverlayViewMode] = useState<'admin' | 'user'>(() => {
+    if (profile?.email?.toLowerCase().trim() !== 'cwah.liu@gmail.com') return 'user';
+    const saved = localStorage.getItem('health_cockpit_admin_mode');
+    if (saved) return saved as 'admin' | 'user';
+    return 'admin';
+  });
+  const [showAgentLogs, setShowAgentLogs] = useState(false);
+  const [agentLogs, setAgentLogs] = useState<{ timestamp: string, message: string }[]>([]);
+  const [isFetchingLogs, setIsFetchingLogs] = useState(false);
   const [nickname, setNickname] = useState(profile.nickname);
   const [age, setAge] = useState<number | string>(profile.age);
   const [ethnicity, setEthnicity] = useState(profile.ethnicity);
@@ -118,13 +132,40 @@ export default function Header({
   const [timezone, setTimezone] = useState<string>(profile.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [now, setNow] = useState(Date.now());
   const t = translations[profile.language] || translations.en;
+  useEffect(() => {
+    let interval: any;
+    if (showAgentLogs) {
+      const fetchLogs = async () => {
+        try {
+          const res = await fetch('/api/gemini/debug-logs', {
+            headers: { 'X-Session-ID': 'global' }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && Array.isArray(data.logs)) {
+              setAgentLogs(data.logs);
+            }
+          }
+        } catch (e) {}
+      };
+      fetchLogs();
+      interval = setInterval(fetchLogs, 1500);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [showAgentLogs]);
+
+  const handleClearAgentLogs = async () => {
+    try {
+      await fetch('/api/gemini/clear-debug-logs', { method: 'POST', headers: { 'X-Session-ID': 'global' } });
+      setAgentLogs([]);
+    } catch (e) {}
+  };
+
 
   const [debugMode, setDebugMode] = useState(() => localStorage.getItem('agent_debug_mode') === 'true');
-  const [debugLogs, setDebugLogs] = useState<{ timestamp: string, message: string }[]>([]);
   const [serverStartTime, setServerStartTime] = useState<number | null>(null);
-  const [isSendingLogs, setIsSendingLogs] = useState(false);
-  const [logsSendStatus, setLogsSendStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [showFullScreenDebugLogs, setShowFullScreenDebugLogs] = useState(false);
 
   // Keep track of last sync time in local state
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(() => {
@@ -293,57 +334,6 @@ export default function Header({
     localStorage.setItem('agent_debug_mode', enabled ? 'true' : 'false');
   };
 
-  const handleClearDebugLogs = async () => {
-    try {
-      const res = await fetch('/api/gemini/clear-debug-logs', { 
-        method: 'POST',
-        headers: {
-          'X-Session-ID': getSessionId()
-        }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setDebugLogs(data.logs || []);
-      }
-    } catch (err) {
-      console.error("Error clearing debug logs:", err);
-    }
-  };
-
-  const handleSendLogToAdmin = async () => {
-    setIsSendingLogs(true);
-    setLogsSendStatus('idle');
-    try {
-      const logsText = debugLogs.map(l => `[${l.timestamp}] ${l.message}`).join('\n');
-      const sessionId = getSessionId();
-      
-      const res = await fetch('/api/gemini/send-logs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Session-ID': sessionId
-        },
-        body: JSON.stringify({ logsText })
-      });
-      
-      if (res.ok) {
-        setLogsSendStatus('success');
-        
-        // Native mailto link fallback
-        const subject = encodeURIComponent(`Healthy App Debug Logs - Session ${sessionId}`);
-        const body = encodeURIComponent(`Hello Admin,\n\nHere is the compiled log history for session ${sessionId}:\n\n${logsText}`);
-        window.open(`mailto:cwah.liu@gmail.com?subject=${subject}&body=${body}`, '_blank');
-      } else {
-        setLogsSendStatus('error');
-      }
-    } catch (err) {
-      console.error("Error sending logs:", err);
-      setLogsSendStatus('error');
-    } finally {
-      setIsSendingLogs(false);
-      setTimeout(() => setLogsSendStatus('idle'), 4000);
-    }
-  };
 
   // Fetch real server start time
   useEffect(() => {
@@ -367,34 +357,6 @@ export default function Header({
     };
   }, [showDbInteractionsOverlay]);
 
-  useEffect(() => {
-    let interval: any;
-    if (showDbInteractionsOverlay) {
-      const fetchLogs = async () => {
-        try {
-          const res = await fetch('/api/gemini/debug-logs', {
-            headers: {
-              'X-Session-ID': getSessionId()
-            }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data && Array.isArray(data.logs)) {
-              setDebugLogs(data.logs);
-            }
-          }
-        } catch (err) {
-          console.error("Error fetching debug logs:", err);
-        }
-      };
-      
-      fetchLogs(); // initial fetch
-      interval = setInterval(fetchLogs, 1500); // poll every 1.5s
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [showDbInteractionsOverlay]);
 
   useEffect(() => {
     setNickname(profile.nickname);
@@ -473,32 +435,57 @@ export default function Header({
           )}
 
           {/* Sync Status Icon Indicator */}
-          <button
-            id="cloud-sync-btn"
-            onClick={async () => {
-              if (onCloudSync) {
-                await onCloudSync();
-              }
-            }}
-            className="flex items-center p-2 rounded-xl text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer relative"
-            title="Click to manually synchronize data with cloud database"
-          >
-            {syncState === 'syncing' && (
-              <RefreshCw className="w-5 h-5 text-indigo-600 animate-spin" />
-            )}
-            {syncState === 'synced' && (
-              <CloudCheck className="w-5.5 h-5.5 text-slate-400 dark:text-slate-500" />
-            )}
-            {syncState === 'local' && (
-              <CloudLightning className="w-5 h-5 text-amber-500 animate-pulse" />
-            )}
-            {dbInteractions.some(o => o.status === 'pending') && (
-              <span className="absolute top-1 right-1 w-2 h-2 bg-indigo-600 rounded-full animate-ping" />
-            )}
-          </button>
+          {(() => {
+            const isAttentionNeeded = syncState === 'syncing' || dbInteractions.some(o => o.status === 'pending') || localStorage.getItem('firestore_quota_exceeded') === 'true';
+            return (
+              <button
+                id="cloud-sync-btn"
+                onClick={async () => {
+                  if (onCloudSync) {
+                    await onCloudSync();
+                  }
+                }}
+                className={`flex items-center p-2 rounded-xl transition-colors cursor-pointer relative ${
+                  isAttentionNeeded 
+                    ? 'text-amber-500 hover:bg-amber-500/10' 
+                    : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+                title="Click to manually synchronize data with cloud database"
+              >
+                {syncState === 'syncing' && (
+                  <RefreshCw className="w-5 h-5 text-amber-500 animate-spin" />
+                )}
+                {syncState === 'synced' && (
+                  <CloudCheck className="w-5.5 h-5.5 text-slate-400 dark:text-slate-500" />
+                )}
+                {syncState === 'local' && (
+                  localStorage.getItem('firestore_quota_exceeded') === 'true' ? (
+                    <CloudLightning className="w-5 h-5 text-amber-500 animate-pulse" title="Firestore Quota Exceeded - Offline Mode Only" />
+                  ) : (
+                    <CloudLightning className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                  )
+                )}
+                {dbInteractions.some(o => o.status === 'pending') && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-amber-500 rounded-full animate-ping" />
+                )}
+              </button>
+            );
+          })()}
         </div>
       </div>
+    
+      {/* AI Agent Full Screen Logs */}
+      <FullScreenLogViewer
+        isOpen={showAgentLogs}
+        onClose={() => setShowAgentLogs(false)}
+        title="AI Agent Diagnostic Log History"
+        logsText={agentLogs.map(l => `[${l.timestamp}] ${l.message}`).join('\n')}
+        logsArray={agentLogs.map(l => `[${l.timestamp}]\n${l.message}`)}
+        onClearLogs={handleClearAgentLogs}
+        eventsCount={agentLogs.length}
+      />
     </header>
+
 
       {/* Editing Dialog Slide-down for Profile Parameters */}
       {isEditing && createPortal((
@@ -561,17 +548,29 @@ export default function Header({
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                      const base64String = reader.result as string;
-                      const updated = { ...profile, photoUrl: base64String };
-                      if (onSaveProfile) {
-                        onSaveProfile(updated);
-                      } else {
-                        setProfile(updated);
-                      }
-                    };
-                    reader.readAsDataURL(file);
+                    compressImage(file, 200, 200, 0.5)
+                      .then((compressedBase64) => {
+                        const updated = { ...profile, photoUrl: compressedBase64 };
+                        if (onSaveProfile) {
+                          onSaveProfile(updated);
+                        } else {
+                          setProfile(updated);
+                        }
+                      })
+                      .catch((err) => {
+                        console.error("Failed to compress profile photo, falling back to raw reader:", err);
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          const base64String = reader.result as string;
+                          const updated = { ...profile, photoUrl: base64String };
+                          if (onSaveProfile) {
+                            onSaveProfile(updated);
+                          } else {
+                            setProfile(updated);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      });
                   }
                 }}
                 className="text-xs text-slate-500 dark:text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-indigo-50 file:text-indigo-600 dark:file:bg-indigo-950/40 dark:file:text-indigo-400 hover:file:bg-indigo-100/50 cursor-pointer w-full"
@@ -1089,7 +1088,7 @@ export default function Header({
               <div className="flex items-center gap-2.5">
                 <ShieldCheck className="w-5 h-5 text-indigo-600" />
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Live Database Operations</h2>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Settings</h2>
                   <span className="text-xs font-normal text-slate-400 block mt-0.5">
                     {(() => {
                       const buildTime = serverStartTime || 1782721085000;
@@ -1100,8 +1099,19 @@ export default function Header({
                   </span>
                 </div>
               </div>
+              
               <div className="flex items-center gap-2">
+                {dbOverlayViewMode === 'admin' && (
+                  <button
+                    onClick={() => setShowAgentLogs(true)}
+                    className="p-1.5 rounded-lg text-indigo-600 bg-indigo-50 dark:text-indigo-400 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
+                    title="View AI Agent Logs"
+                  >
+                    <Terminal className="w-4 h-4" /> View AI Logs
+                  </button>
+                )}
                 {onCloudSync && (
+
                   <button
                     onClick={() => {
                       if (onCloudSync) onCloudSync();
@@ -1124,7 +1134,59 @@ export default function Header({
             {/* Content area */}
             <div className="p-6 overflow-y-auto space-y-6 text-left flex-1">
               
+              {dbOverlayViewMode === 'admin' && (
+                <div className="p-4 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/20 dark:border-amber-800/20 rounded-2xl flex items-start gap-3">
+                  <div className="bg-amber-100 dark:bg-amber-900/40 p-2 rounded-xl text-amber-600 dark:text-amber-400 shrink-0">
+                    <CloudLightning className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                      Offline First Database Mode
+                    </h3>
+                    <p className="text-xs text-amber-605 dark:text-amber-400/80 mt-1 leading-relaxed">
+                      All operations are recorded <strong>offline first</strong> in local secure storage, allowing you to view and interact with your health data instantly even when cloud quotas are temporarily exhausted. Data changes will be automatically queued and safely synchronized with the cloud database.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Admin / User View Toggle */}
               {profile?.email?.toLowerCase().trim() === 'cwah.liu@gmail.com' && (
+                <div className="flex bg-slate-100 dark:bg-slate-850 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDbOverlayViewMode('user');
+                      localStorage.setItem('health_cockpit_admin_mode', 'user');
+                    }}
+                    className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      dbOverlayViewMode === 'user'
+                        ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 shadow-md border border-slate-200/20'
+                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    <User className="w-4 h-4" />
+                    User View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDbOverlayViewMode('admin');
+                      localStorage.setItem('health_cockpit_admin_mode', 'admin');
+                    }}
+                    className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      dbOverlayViewMode === 'admin'
+                        ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 shadow-md border border-slate-200/20'
+                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    Admin View
+                  </button>
+                </div>
+              )}
+
+              {dbOverlayViewMode === 'admin' && (
                 <div className="space-y-4">
                   <div className="p-4 bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200/50 dark:border-rose-800/30 rounded-2xl flex items-center gap-3">
                     <div className="bg-rose-100 dark:bg-rose-900/40 p-2 rounded-xl text-rose-600 dark:text-rose-400">
@@ -1174,144 +1236,81 @@ export default function Header({
               )}
 
               {/* Interaction statistics row */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100/30 rounded-2xl relative overflow-hidden">
-                  <div className="absolute inset-0 bg-indigo-600/5 dark:bg-indigo-400/5 w-full" style={{ width: `${Math.max(2, (dbInteractions.filter(i => i.type === 'upload' && i.status === 'completed').reduce((sum, i) => sum + i.sizeBytes, 0) / Math.max(1, dbInteractions.filter(i => i.type === 'upload').reduce((sum, i) => sum + i.sizeBytes, 0))) * 100)}%` }} />
-                  <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Upload Pipeline</span>
-                  <div className="flex items-end justify-between">
-                    <span className="text-lg font-mono font-semibold text-slate-900 dark:text-slate-100 relative z-10">
-                      {(dbInteractions.filter(i => i.type === 'upload' && i.status === 'completed').reduce((sum, i) => sum + i.sizeBytes, 0) / 1024).toFixed(2)} KB
-                    </span>
-                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-100 dark:bg-indigo-900/40 px-1.5 py-0.5 rounded relative z-10">
-                      {dbInteractions.filter(i => i.type === 'upload' && i.status === 'pending').length} pending
-                    </span>
-                  </div>
-                  <span className="block text-[10px] text-slate-500 mt-1.5 font-medium relative z-10 truncate">
-                    <strong className="text-slate-700 dark:text-slate-300">{(dbInteractions.filter(i => i.type === 'upload' && i.status === 'completed').reduce((sum, i) => sum + i.sizeBytes, 0) / 1024).toFixed(2)} KB</strong> achieved / {(dbInteractions.filter(i => i.type === 'upload').reduce((sum, i) => sum + i.sizeBytes, 0) / 1024).toFixed(2)} KB needed
-                  </span>
-                </div>
-                
-                <div className="p-4 bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-100/30 rounded-2xl relative overflow-hidden">
-                  <div className="absolute inset-0 bg-emerald-600/5 dark:bg-emerald-400/5 w-full" style={{ width: `${Math.max(2, (dbInteractions.filter(i => i.type === 'download' && i.status === 'completed').reduce((sum, i) => sum + (i.sizeBytes || 1024), 0) / Math.max(1, dbInteractions.filter(i => i.type === 'download').reduce((sum, i) => sum + (i.sizeBytes || 1024), 0))) * 100)}%` }} />
-                  <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Download Pipeline</span>
-                  <div className="flex items-end justify-between">
-                    <span className="text-lg font-mono font-semibold text-slate-900 dark:text-slate-100 relative z-10">
-                      {(dbInteractions.filter(i => i.type === 'download' && i.status === 'completed').reduce((sum, i) => sum + i.sizeBytes, 0) / 1024).toFixed(2)} KB
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded relative z-10">
-                      {dbInteractions.filter(i => i.type === 'download' && i.status === 'pending').length} pending
-                    </span>
-                  </div>
-                  <span className="block text-[10px] text-slate-500 mt-1.5 font-medium relative z-10 truncate">
-                    <strong className="text-slate-700 dark:text-slate-300">{(dbInteractions.filter(i => i.type === 'download' && i.status === 'completed').length)}</strong> achieved / {dbInteractions.filter(i => i.type === 'download').length} needed
-                  </span>
-                </div>
-              </div>
-
-              {/* Daily Quota row */}
-              {quota && (
-                <div className="space-y-2 mt-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                      Firebase Quota Usage
-                    </span>
-                    <span className="text-[9px] text-slate-400 dark:text-slate-500 font-medium">
-                      Resets daily at 14:00 (WIB)
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-4 bg-orange-50/40 dark:bg-orange-950/20 border border-orange-100/30 rounded-2xl relative overflow-hidden">
-                      <div className="absolute inset-0 bg-orange-600/5 dark:bg-orange-400/5 w-full" style={{ width: `${Math.min(100, Math.max(2, (quota.reads / 50000) * 100))}%` }} />
-                      <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Daily Reads (Free Tier)</span>
-                      <div className="flex items-end justify-between">
-                        <span className="text-lg font-mono font-semibold text-slate-900 dark:text-slate-100 relative z-10">
-                          {quota.reads.toLocaleString()} <span className="text-xs text-slate-500 font-sans">/ 50K</span>
-                        </span>
-                      </div>
+              {dbOverlayViewMode === 'admin' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100/30 rounded-2xl relative overflow-hidden">
+                    <div className="absolute inset-0 bg-indigo-600/5 dark:bg-indigo-400/5 w-full" style={{ width: `${Math.max(2, (dbInteractions.filter(i => i.type === 'upload' && i.status === 'completed').reduce((sum, i) => sum + i.sizeBytes, 0) / Math.max(1, dbInteractions.filter(i => i.type === 'upload').reduce((sum, i) => sum + i.sizeBytes, 0))) * 100)}%` }} />
+                    <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Upload Pipeline</span>
+                    <div className="flex items-end justify-between">
+                      <span className="text-lg font-mono font-semibold text-slate-900 dark:text-slate-100 relative z-10">
+                        {(dbInteractions.filter(i => i.type === 'upload' && i.status === 'completed').reduce((sum, i) => sum + i.sizeBytes, 0) / 1024).toFixed(2)} KB
+                      </span>
+                      <span className="text-[10px] font-bold text-indigo-600 bg-indigo-100 dark:bg-indigo-900/40 px-1.5 py-0.5 rounded relative z-10">
+                        {dbInteractions.filter(i => i.type === 'upload' && i.status === 'pending').length} pending
+                      </span>
                     </div>
-                    
-                    <div className="p-4 bg-rose-50/40 dark:bg-rose-950/20 border border-rose-100/30 rounded-2xl relative overflow-hidden">
-                      <div className="absolute inset-0 bg-rose-600/5 dark:bg-rose-400/5 w-full" style={{ width: `${Math.min(100, Math.max(2, ((quota.writes + quota.deletes) / 40000) * 100))}%` }} />
-                      <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Daily Writes/Deletes</span>
-                      <div className="flex items-end justify-between">
-                        <span className="text-lg font-mono font-semibold text-slate-900 dark:text-slate-100 relative z-10">
-                          {(quota.writes + quota.deletes).toLocaleString()} <span className="text-xs text-slate-500 font-sans">/ 40K</span>
-                        </span>
-                      </div>
+                    <span className="block text-[10px] text-slate-500 mt-1.5 font-medium relative z-10 truncate">
+                      <strong className="text-slate-700 dark:text-slate-300">{(dbInteractions.filter(i => i.type === 'upload' && i.status === 'completed').reduce((sum, i) => sum + i.sizeBytes, 0) / 1024).toFixed(2)} KB</strong> achieved / {(dbInteractions.filter(i => i.type === 'upload').reduce((sum, i) => sum + i.sizeBytes, 0) / 1024).toFixed(2)} KB needed
+                    </span>
+                  </div>
+                  
+                  <div className="p-4 bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-100/30 rounded-2xl relative overflow-hidden">
+                    <div className="absolute inset-0 bg-emerald-600/5 dark:bg-emerald-400/5 w-full" style={{ width: `${Math.max(2, (dbInteractions.filter(i => i.type === 'download' && i.status === 'completed').reduce((sum, i) => sum + (i.sizeBytes || 1024), 0) / Math.max(1, dbInteractions.filter(i => i.type === 'download').reduce((sum, i) => sum + (i.sizeBytes || 1024), 0))) * 100)}%` }} />
+                    <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Download Pipeline</span>
+                    <div className="flex items-end justify-between">
+                      <span className="text-lg font-mono font-semibold text-slate-900 dark:text-slate-100 relative z-10">
+                        {(dbInteractions.filter(i => i.type === 'download' && i.status === 'completed').reduce((sum, i) => sum + i.sizeBytes, 0) / 1024).toFixed(2)} KB
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded relative z-10">
+                        {dbInteractions.filter(i => i.type === 'download' && i.status === 'pending').length} pending
+                      </span>
                     </div>
+                    <span className="block text-[10px] text-slate-500 mt-1.5 font-medium relative z-10 truncate">
+                      <strong className="text-slate-700 dark:text-slate-300">{(dbInteractions.filter(i => i.type === 'download' && i.status === 'completed').length)}</strong> achieved / {dbInteractions.filter(i => i.type === 'download').length} needed
+                    </span>
                   </div>
                 </div>
               )}
 
               {/* Images Quota */}
-              <div className="p-4 bg-blue-50/40 dark:bg-blue-950/20 border border-blue-100/30 rounded-2xl mt-4">
-                <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Database Images (5GB Limit)</span>
-                <div className="flex items-end justify-between">
-                  <span className="text-lg font-mono font-semibold text-slate-900 dark:text-slate-100 relative z-10">
-                    {foodLogs.reduce((acc, log) => acc + (log.imageUrls?.length || 0) + (log.imageUrl ? 1 : 0), 0)} Images
-                  </span>
-                  <span className="text-xs font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded relative z-10">
-                    {(foodLogs.reduce((acc, log) => acc + (log.imageUrl ? log.imageUrl.length : 0) + (log.imageUrls ? log.imageUrls.reduce((sum, img) => sum + img.length, 0) : 0), 0) / (1024 * 1024)).toFixed(2)} MB
-                  </span>
+              {dbOverlayViewMode === 'admin' && (
+                <div className="p-4 bg-blue-50/40 dark:bg-blue-950/20 border border-blue-100/30 rounded-2xl">
+                  <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-1">Database Images (5GB Limit)</span>
+                  <div className="flex items-end justify-between">
+                    <span className="text-lg font-mono font-semibold text-slate-900 dark:text-slate-100 relative z-10">
+                      {foodLogs.reduce((acc, log) => acc + (log.imageUrls?.length || 0) + (log.imageUrl ? 1 : 0), 0)} Images
+                    </span>
+                    <span className="text-xs font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded relative z-10">
+                      {(foodLogs.reduce((acc, log) => acc + (log.imageUrl ? log.imageUrl.length : 0) + (log.imageUrls ? log.imageUrls.reduce((sum, img) => sum + img.length, 0) : 0), 0) / (1024 * 1024)).toFixed(2)} MB
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* AI Agent Live thinking / Debug Logs section */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-900/40 border border-slate-150 dark:border-slate-800 rounded-2xl mt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider">
-                      🔬 AI Agent Live thinking Process
-                    </span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
-                      View real-time LLM API handshakes & timeouts
-                    </span>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer select-none">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
-                      checked={debugMode}
-                      onChange={(e) => handleToggleDebugMode(e.target.checked)}
-                    />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-750 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
-                  </label>
-                </div>
-
-                {debugMode && (
-                  <div className="space-y-3 pt-1">
-                    <div className="flex items-center justify-between text-xs text-slate-400">
-                      <span>{debugLogs.length} events logged in this session</span>
-                      <button 
-                        onClick={handleClearDebugLogs}
-                        className="px-2.5 py-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl text-[10px] font-bold text-slate-600 dark:text-slate-300 transition-colors"
-                      >
-                        Clear Logs
-                      </button>
+              {dbOverlayViewMode === 'admin' && (
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/40 border border-slate-150 dark:border-slate-800 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <span className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider">
+                        🔬 AI Agent Live thinking Process
+                      </span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                        View real-time LLM API handshakes & timeouts
+                      </span>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowFullScreenDebugLogs(true)}
-                      className="w-full py-3 bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 font-bold rounded-2xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:scale-[1.01]"
-                    >
-                      <span>🔍 Open Full-Screen Diagnostic Log Viewer</span>
-                    </button>
-
-                    <FullScreenLogViewer
-                      isOpen={showFullScreenDebugLogs}
-                      onClose={() => setShowFullScreenDebugLogs(false)}
-                      title="AI Agent Diagnostic Log History"
-                      logsText={debugLogs.map(l => `[${l.timestamp}] ${l.message}`).join('\n')}
-                      onSendToAdmin={handleSendLogToAdmin}
-                      isSendingLogs={isSendingLogs}
-                      logsSendStatus={logsSendStatus}
-                      onClearLogs={handleClearDebugLogs}
-                      eventsCount={debugLogs.length}
-                    />
+                    <label className="relative inline-flex items-center cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={debugMode}
+                        onChange={(e) => handleToggleDebugMode(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-750 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
+                    </label>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* List of transactions */}
               <div className="space-y-2">
@@ -1387,12 +1386,22 @@ export default function Header({
 
             {/* Footer */}
             <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-              <button
-                onClick={onCloudSync}
-                className="px-4 py-2 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200/40 text-xs font-bold rounded-2xl hover:bg-indigo-100/50 cursor-pointer"
-              >
-                Force Pull Cloud Data
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={onForcePull || onCloudSync}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-bold rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                  title="Overwrite local data with cloud data"
+                >
+                  Force Pull
+                </button>
+                <button
+                  onClick={onForcePush}
+                  className="px-4 py-2 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200/40 text-xs font-bold rounded-2xl hover:bg-indigo-100/50 cursor-pointer"
+                  title="Overwrite cloud data with local data"
+                >
+                  Force Push
+                </button>
+              </div>
               <button
                 onClick={() => setShowDbInteractionsOverlay(false)}
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-2xl shadow-sm cursor-pointer transition-all"

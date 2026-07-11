@@ -1,11 +1,149 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ChatMessage, UserProfile, BiomarkerLog } from '../types';
 import { translations } from '../utils/translations';
-import { X, Send, Sparkles, Loader, ChevronDown, ChevronUp } from 'lucide-react';
-import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor } from '../utils/biomarkers';
+import { X, Send, Sparkles, Loader, ChevronDown, ChevronUp, Terminal } from 'lucide-react';
+import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getPhysiologicalBucket, getBiomarkerMetadata } from '../utils/biomarkers';
 import LLMSelector from './LLMSelector';
 import { AVAILABLE_LLMS } from '../utils/llm';
 import FullScreenInstructionViewer from './FullScreenInstructionViewer';
+import FullScreenLogViewer from './FullScreenLogViewer';
+
+function buildYamlContext(
+  biomarkerKey: string,
+  currentValue: number | string,
+  allDefinitions: any[],
+  biomarkerHistory: BiomarkerLog[],
+  profile: UserProfile
+): string {
+  const def = allDefinitions.find(d => d.key === biomarkerKey) || {};
+  
+  // 1. Gathers demographic metadata
+  const age = profile.age || 'unknown';
+  const gender = profile.gender || 'unknown';
+  const ethnicity = profile.ethnicity || 'unknown';
+  const unitPreference = profile.unitPreference || 'SI';
+  
+  // 2. Selected biomarker details
+  const targetMeta = getBiomarkerMetadata(biomarkerKey, profile.customBiomarkers?.[biomarkerKey]);
+  const targetCategories = targetMeta.riskCategories || [];
+  const targetConditions = targetMeta.potentialMedicalConditions || [];
+  const targetGrouping = targetMeta.standardMedicalGrouping || '';
+  
+  // 3. Get full log history for the selected biomarker
+  const sortedLogs = [...(biomarkerHistory || [])].sort((a, b) => b.date.localeCompare(a.date));
+  const selectedHistory = sortedLogs
+    .filter(log => log.biomarkers && log.biomarkers[biomarkerKey] !== undefined && log.biomarkers[biomarkerKey] !== '')
+    .map(log => ({
+      date: log.date,
+      value: log.biomarkers[biomarkerKey],
+      unit: def.unit || ''
+    }));
+
+  // 4. Find all related biomarkers grouped by tags
+  const targetTags = new Set<string>();
+  targetCategories.forEach((c: string) => targetTags.add(c.trim()));
+  targetConditions.forEach((c: string) => targetTags.add(c.trim()));
+  if (targetGrouping) targetTags.add(targetGrouping.trim());
+  if (def.category && def.category.toLowerCase() !== 'other') targetTags.add(def.category.trim());
+  
+  const relatedBiomarkersByTag: Record<string, any[]> = {};
+  
+  targetTags.forEach(tag => {
+    const tagMatches: any[] = [];
+    allDefinitions.forEach(otherDef => {
+      if (otherDef.key === biomarkerKey) return;
+      
+      const otherMeta = getBiomarkerMetadata(otherDef.key, profile.customBiomarkers?.[otherDef.key]);
+      
+      const otherTags = new Set<string>();
+      (otherMeta.riskCategories || []).forEach((c: string) => otherTags.add(c.trim().toLowerCase()));
+      (otherMeta.potentialMedicalConditions || []).forEach((c: string) => otherTags.add(c.trim().toLowerCase()));
+      if (otherMeta.standardMedicalGrouping) otherTags.add(otherMeta.standardMedicalGrouping.trim().toLowerCase());
+      if (otherDef.category && otherDef.category.toLowerCase() !== 'other') otherTags.add(otherDef.category.trim().toLowerCase());
+      
+      if (otherTags.has(tag.toLowerCase())) {
+        // Find latest value in history
+        let latestVal: number | string = 'N/A';
+        let latestDate = 'N/A';
+        for (const log of sortedLogs) {
+          if (log.biomarkers && log.biomarkers[otherDef.key] !== undefined && log.biomarkers[otherDef.key] !== '') {
+            latestVal = log.biomarkers[otherDef.key];
+            latestDate = log.date;
+            break;
+          }
+        }
+        
+        const customDetail = (profile.customBiomarkers?.[otherDef.key] || {}) as any;
+        const medicalInsights = customDetail.specificRiskContext || otherDef.description || otherDef.descriptions?.en || '';
+        
+        tagMatches.push({
+          key: otherDef.key,
+          name: otherDef.name,
+          latest_value: latestVal,
+          unit: otherDef.unit || '',
+          latest_date: latestDate,
+          medical_insights: medicalInsights
+        });
+      }
+    });
+    
+    if (tagMatches.length > 0) {
+      relatedBiomarkersByTag[tag] = tagMatches;
+    }
+  });
+  
+  // Format as clean YAML
+  const lines: string[] = [];
+  lines.push("user_profile:");
+  lines.push(`  age: "${age}"`);
+  lines.push(`  gender: "${gender}"`);
+  lines.push(`  ethnicity: "${ethnicity}"`);
+  lines.push(`  unit_preference: "${unitPreference}"`);
+  lines.push("");
+  lines.push("target_biomarker:");
+  lines.push(`  key: "${biomarkerKey}"`);
+  lines.push(`  name: "${def.name || ''}"`);
+  lines.push(`  current_value: "${currentValue}"`);
+  lines.push(`  unit: "${def.unit || ''}"`);
+  lines.push(`  normal_range: "${def.normalRange || ''}"`);
+  const cleanDesc = (def.descriptions?.[profile.language] || def.descriptions?.en || '').replace(/"/g, '\\"');
+  lines.push(`  description: "${cleanDesc}"`);
+  
+  const targetCustom = (profile.customBiomarkers?.[biomarkerKey] || {}) as any;
+  const targetInsights = (targetCustom.specificRiskContext || '').replace(/"/g, '\\"');
+  lines.push(`  medical_insights: "${targetInsights}"`);
+  lines.push("");
+  lines.push("target_biomarker_history:");
+  if (selectedHistory.length === 0) {
+    lines.push("  []");
+  } else {
+    selectedHistory.forEach(h => {
+      lines.push("  - date: \"" + h.date + "\"");
+      lines.push("    value: \"" + h.value + "\"");
+      lines.push("    unit: \"" + h.unit + "\"");
+    });
+  }
+  lines.push("");
+  lines.push("related_biomarkers_by_tag:");
+  if (Object.keys(relatedBiomarkersByTag).length === 0) {
+    lines.push("  {}");
+  } else {
+    Object.entries(relatedBiomarkersByTag).forEach(([tag, matches]) => {
+      lines.push(`  "${tag}":`);
+      matches.forEach(rb => {
+        lines.push("    - key: \"" + rb.key + "\"");
+        lines.push("      name: \"" + rb.name + "\"");
+        lines.push("      latest_value: \"" + rb.latest_value + "\"");
+        lines.push("      unit: \"" + rb.unit + "\"");
+        lines.push("      latest_date: \"" + rb.latest_date + "\"");
+        const cleanInsights = (rb.medical_insights || '').replace(/"/g, '\\"').replace(/\n/g, ' ');
+        lines.push("      medical_insights: \"" + cleanInsights + "\"");
+      });
+    });
+  }
+  
+  return lines.join("\n");
+}
 
 interface ReviewBiomarkerModalProps {
   profile: UserProfile;
@@ -18,6 +156,7 @@ interface ReviewBiomarkerModalProps {
   onChangeModelId: (id: string) => void;
   initialMessages?: ChatMessage[];
   onUpdateMessages?: (msgs: ChatMessage[]) => void;
+  biomarkerHistory?: BiomarkerLog[];
 }
 
 export default function ReviewBiomarkerModal({ 
@@ -30,7 +169,8 @@ export default function ReviewBiomarkerModal({
   selectedModelId,
   onChangeModelId,
   initialMessages,
-  onUpdateMessages
+  onUpdateMessages,
+  biomarkerHistory = []
 }: ReviewBiomarkerModalProps) {
   const t = translations[profile.language] || translations.en;
   
@@ -45,6 +185,7 @@ export default function ReviewBiomarkerModal({
   const [isEngineSelectorOpen, setIsEngineSelectorOpen] = useState(false);
   const [showDataUsed, setShowDataUsed] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showFullScreenConv, setShowFullScreenConv] = useState(false);
   const [hasLoadedPrevious, setHasLoadedPrevious] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -67,17 +208,29 @@ export default function ReviewBiomarkerModal({
           if (def.benefitRisk) {
             (existing as any).benefitRisk = def.benefitRisk;
           }
+          if (def.riskCategories) {
+            existing.riskCategories = def.riskCategories;
+          }
+          if (def.potentialMedicalConditions) {
+            existing.potentialMedicalConditions = def.potentialMedicalConditions;
+          }
+          if (def.standardMedicalGrouping) {
+            existing.standardMedicalGrouping = def.standardMedicalGrouping;
+          }
         } else {
           combined.push({
             key,
             name: def.name || key,
-            category: 'other',
+            category: (def as any).category || 'other',
             unit: def.unit || '',
             normalRange: def.normalRange || 'Unknown',
             descriptions: {
               en: def.description || ''
             },
-            benefitRisk: def.benefitRisk
+            benefitRisk: def.benefitRisk,
+            riskCategories: def.riskCategories,
+            potentialMedicalConditions: def.potentialMedicalConditions,
+            standardMedicalGrouping: def.standardMedicalGrouping
           } as any);
         }
       });
@@ -137,16 +290,28 @@ export default function ReviewBiomarkerModal({
     try {
       const historyContext = messages.map(m => ({ role: m.role, content: m.content }));
       
+      const yamlContext = buildYamlContext(biomarkerKey, currentValue, allDefinitions, biomarkerHistory, profile);
+
+      const lightweightProfile = {
+        age: profile.age,
+        gender: profile.gender,
+        weight: profile.weight,
+        height: profile.height,
+        ethnicity: profile.ethnicity,
+        unitPreference: profile.unitPreference
+      };
+
       const payload = {
         message: userMsg.content,
         history: historyContext,
-        profile,
+        profile: lightweightProfile,
         biomarkerDef: {
           ...def,
           description: descriptionText
         },
         currentValue,
-        modelId: selectedModelId
+        modelId: selectedModelId,
+        yamlContext
       };
 
       const res = await fetch('/api/gemini/review-biomarker', {
@@ -217,9 +382,18 @@ export default function ReviewBiomarkerModal({
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setShowFullScreenConv(true)}
+              className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-indigo-500 hover:text-indigo-600 dark:text-indigo-400 transition-colors cursor-pointer"
+              title="View Historical Logs"
+            >
+              <Terminal className="w-5 h-5" />
+            </button>
+            <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full transition-colors cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Expandable Model Selector Dropdown */}
@@ -266,13 +440,21 @@ export default function ReviewBiomarkerModal({
               })()} • {profile.ethnicity || 'N/A'}</div>
               <div className="w-full mt-1 pt-1.5 border-t border-slate-150 dark:border-slate-800/40"><strong className="text-slate-800 dark:text-slate-200">Description:</strong> {descriptionText}</div>
               
-              <div className="w-full mt-2 pt-2 border-t border-slate-150 dark:border-slate-800/40">
+              <div className="w-full mt-2 pt-2 border-t border-slate-150 dark:border-slate-800/40 flex justify-between items-center">
                 <button
                   type="button"
                   onClick={() => setShowInstructions(true)}
                   className="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer flex items-center gap-1"
                 >
                   <span>ℹ️ View Programmed Agent Instructions &rarr;</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFullScreenConv(true)}
+                  className="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer flex items-center gap-1.5"
+                >
+                  <Terminal className="w-3 h-3" />
+                  <span>📜 View Log History &rarr;</span>
                 </button>
               </div>
             </div>
@@ -350,6 +532,37 @@ export default function ReviewBiomarkerModal({
                       <span className="text-[10px] text-indigo-600 dark:text-indigo-400 block uppercase font-bold tracking-wide">Profile Benefit & Risk Assessment</span>
                       <p className="text-slate-700 dark:text-slate-200 font-semibold leading-relaxed mt-1 text-[11px]">{msg.proposal.benefitRisk}</p>
                     </div>
+
+                    {msg.proposal.isDuplicate && (
+                      <div className="mt-2.5 p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-xl flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <Terminal className="w-4 h-4 text-amber-500" />
+                          <span className="text-xs font-bold text-amber-800 dark:text-amber-400">Duplicate Recognized</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed font-semibold">
+                          {msg.proposal.duplicateExplanation || `This biomarker is identified as a duplicate of other records in the system. Suggest consolidating.`}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const keysToConsolidate = msg.proposal.duplicateSuggestedKeys && msg.proposal.duplicateSuggestedKeys.length > 0
+                              ? msg.proposal.duplicateSuggestedKeys
+                              : [biomarkerKey];
+                            const uniqueKeys = Array.from(new Set([biomarkerKey, ...keysToConsolidate]));
+                            
+                            localStorage.setItem('consolidation_pending_keys', JSON.stringify(uniqueKeys));
+                            localStorage.setItem('consolidation_pending_note', msg.proposal.duplicateExplanation || `Consolidation request for ${biomarkerKey}`);
+                            
+                            window.dispatchEvent(new CustomEvent('switch-tab', { detail: { tab: 'medical' } }));
+                            window.dispatchEvent(new CustomEvent('open-dictionary-consolidation'));
+                            onClose();
+                          }}
+                          className="mt-1 self-start px-3 py-1.5 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600 text-white text-[11px] font-bold rounded-lg shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                        >
+                          Hand Over to Name Consolidation Agent
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2 justify-end pt-3 border-t border-indigo-100/30 dark:border-slate-700/30">
@@ -374,7 +587,7 @@ export default function ReviewBiomarkerModal({
                       onClick={() => {
                         const valToUse = msg.pendingBiomarkers && msg.pendingBiomarkers[biomarkerKey] !== undefined
                           ? msg.pendingBiomarkers[biomarkerKey]
-                          : msg.proposal?.value;
+                          : (msg.proposal?.value !== undefined ? msg.proposal.value : currentValue);
                         if (valToUse !== undefined) {
                           onUpdateBiomarker(biomarkerKey, valToUse, msg.proposal);
                         }
@@ -406,7 +619,10 @@ export default function ReviewBiomarkerModal({
                     </button>
                     <button 
                       onClick={() => {
-                        onUpdateBiomarker(biomarkerKey, msg.pendingBiomarkers![biomarkerKey]);
+                        const valToUse = (msg.pendingBiomarkers && msg.pendingBiomarkers[biomarkerKey] !== undefined) 
+                          ? msg.pendingBiomarkers[biomarkerKey] 
+                          : (msg.proposal?.value !== undefined ? msg.proposal.value : currentValue);
+                        onUpdateBiomarker(biomarkerKey, valToUse, msg.proposal);
                         onClose();
                       }}
                       className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer"
@@ -461,6 +677,40 @@ export default function ReviewBiomarkerModal({
           agentType="biomarker_review"
           profile={profile}
           agentPrompt={messages.length > 0 ? messages.slice().reverse().find(m => m.agentResult?.agentPrompt)?.agentResult?.agentPrompt : undefined}
+        />
+
+        <FullScreenLogViewer
+          isOpen={showFullScreenConv}
+          onClose={() => setShowFullScreenConv(false)}
+          title="Full Agent Request Payload & Log"
+          logsText={(() => {
+            const arr = messages.map(m => {
+              let text = `[${m.role.toUpperCase()}]\n${m.content}`;
+              if (m.agentResult?.agentPrompt) {
+                text += `\n\n[Agent Prompt / Request]\n${m.agentResult.agentPrompt}`;
+              }
+              return text;
+            });
+            return arr.join('\n\n---\n\n');
+          })()}
+          logsArray={(() => {
+            const arr = messages.map(m => {
+              let text = `[${m.role.toUpperCase()}]\n${m.content}`;
+              if (m.agentResult?.agentPrompt) {
+                text += `\n\n[Agent Prompt / Request]\n${m.agentResult.agentPrompt}`;
+              }
+              return text;
+            });
+            return arr;
+          })()}
+          onClearLogs={() => {
+            setMessages(prev => prev.length > 0 ? [prev[0]] : []);
+            if (onUpdateMessages) {
+              onUpdateMessages(messages.length > 0 ? [messages[0]] : []);
+            }
+            setShowFullScreenConv(false);
+          }}
+          eventsCount={messages.length}
         />
 
       </div>

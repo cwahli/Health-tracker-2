@@ -37,6 +37,7 @@ export interface CustomRangeDef {
   id: string;
   filters: CustomRangeFilter;
   range: RangeConfig;
+  name?: string;
 }
 
 export interface AgentAnalysis {
@@ -89,6 +90,7 @@ export interface UserProfile {
       name: string;
       unit: string;
       normalRange: string;
+      needsApproval?: boolean;
       rangeConfig?: RangeConfig;
       customRanges?: CustomRangeDef[];
       structuredRanges?: {
@@ -128,6 +130,10 @@ export interface UserProfile {
   agent4Projections?: string[];
   deletedFoodLogIds?: string[];
   deletedBiomarkerLogIds?: string[];
+  deletedCustomBiomarkerKeys?: string[];
+  bmiAutoLogged?: boolean;
+  approved_agent1_batches?: { [key: string]: boolean };
+  approved_data_review_batches?: { [key: string]: boolean };
 }
 
 export interface NutrientBreakdown {
@@ -135,6 +141,7 @@ export interface NutrientBreakdown {
   protein: number;         // g
   totalFat: number;        // g
   saturatedFat: number;    // g
+  transFat?: number;       // g
   unsaturatedFat: number;  // g
   omega3: number;          // g
   carbohydrates: number;   // g
@@ -171,6 +178,8 @@ export interface FoodItemBreakdown {
   sodium: number;
 }
 
+export type SyncState = 'synced' | 'new' | 'update' | 'delete';
+
 export interface FoodLog {
   id: string;
   date: string; // ISO string or YYYY-MM-DD
@@ -187,6 +196,9 @@ export interface FoodLog {
   imageUrl?: string;
   imageUrls?: string[];
   itemsBreakdown?: FoodItemBreakdown[];
+  chatTranscript?: { role: 'user' | 'assistant'; content: string; timestamp?: string }[];
+  sync_state?: SyncState;
+  updated_at?: number;
 }
 
 export interface BiomarkerValue {
@@ -216,6 +228,8 @@ export interface BiomarkerLog {
   note?: string;
   summary?: string;
   tests?: ExtractedTestDetail[];
+  sync_state?: SyncState;
+  updated_at?: number;
 }
 
 export interface HealthAction {

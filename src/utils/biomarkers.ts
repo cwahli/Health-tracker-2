@@ -45,7 +45,7 @@ export function evaluateStructuredRange(num: number, customDef: any, profile?: a
     for (const br of activeRange.brackets) {
       let isMatch = true;
       if (br.min !== null && num < br.min) isMatch = false;
-      if (br.max !== null && num >= br.max) isMatch = false;
+      if (br.max !== null && num > br.max) isMatch = false;
       if (isMatch) return { label: br.alias, severity: br.severity };
     }
   }
@@ -298,7 +298,7 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     key: 'bmi',
     name: 'Body Mass Index (BMI)',
     category: 'other',
-    unit: 'kg/m²',
+    unit: 'kg/m2',
     normalRange: '18.5 - 24.9',
     descriptions: {
       en: 'A measure of body fat based on height and weight.',
@@ -459,8 +459,12 @@ export const getBiomarkerStatus = (key: string, val: number | string, normalRang
 
   let rangeStr = normalRangeStr;
   if (!rangeStr) {
-    const def = biomarkerDefinitions.find(d => d.key === key);
-    rangeStr = def?.normalRange;
+    if (customDef?.normalRange) {
+      rangeStr = customDef.normalRange;
+    } else {
+      const def = biomarkerDefinitions.find(d => d.key === key);
+      rangeStr = def?.normalRange;
+    }
   }
 
   const isMmol = rangeStr && rangeStr.toLowerCase().includes('mmol');
@@ -775,7 +779,7 @@ export function getBiomarkerMetadata(key: string, customDef?: any) {
 function getFallbackRiskCategories(key: string): string[] {
   const k = key.toLowerCase();
   if (k === 'bmi' || k === 'weight' || k === 'height' || k.includes('waist') || k.includes('fat')) {
-    return ['Biometric'];
+    return ['Wellness'];
   }
   if (k === 'hba1c' || k === 'fasting_glucose' || k === 'fasting_insulin' || k.includes('glucose') || k.includes('sugar') || k.includes('insulin')) {
     return ['Metabolic'];

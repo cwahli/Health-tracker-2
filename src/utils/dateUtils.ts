@@ -58,9 +58,9 @@ export function formatToDDMMYYYY(dateStr: string): string {
   try {
     const d = new Date(trimmed);
     if (!isNaN(d.getTime())) {
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = String(d.getFullYear());
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const year = String(d.getUTCFullYear());
       return `${day}-${month}-${year}`;
     }
   } catch (e) {}
@@ -159,9 +159,9 @@ export function toYYYYMMDD(dateStr: string): string {
   try {
     const d = new Date(trimmed);
     if (!isNaN(d.getTime())) {
-      const year = String(d.getFullYear());
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
+      const year = String(d.getUTCFullYear());
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     }
   } catch (e) {}

@@ -1,64 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Global Safety Net
     match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && ('email' in request.auth.token) && request.auth.token.email.matches('(?i)^cwah\\.liu@gmail\\.com$');
-    }
-
-    // Connection test document
-    match /test/connection {
-      allow read: if true;
-    }
-
-    // Current active meal logs
-    match /user_meals/{userId} {
-      allow read, write: if isOwner(userId);
-    }
-
-    // User profile and subcollections
-    match /users/{userId} {
-      allow read, write: if isOwner(userId) || isAdmin();
-
-      match /foodLogs/{foodLogId} {
-        allow read, write: if isOwner(userId) || isAdmin();
-      }
-
-      match /biomarkerHistory/{historyId} {
-        allow read, write: if isOwner(userId) || isAdmin();
-      }
-
-      match /actions/{actionId} {
-        allow read, write: if isOwner(userId) || isAdmin();
-      }
-
-      match /dailyBenefits/{benefitId} {
-        allow read, write: if isOwner(userId) || isAdmin();
-      }
-
-      match /metadata/{metadataId} {
-        allow read, write: if isOwner(userId) || isAdmin();
-      }
-
-      match /reports/{reportId} {
-        allow read, write: if isOwner(userId) || isAdmin();
-      }
-      match /agentAnalyses/{analysisId} {
-        allow read, write: if isOwner(userId) || isAdmin();
-      }
+      allow read, write: if true;
     }
   }
 }

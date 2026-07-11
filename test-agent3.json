@@ -1,0 +1,7 @@
+{
+  "message": "My LDL is 100",
+  "engine": "gemini-2.5-flash",
+  "profile": {},
+  "agentType": "agent3",
+  "history": [{ "role": "user", "content": "hi" }]
+}

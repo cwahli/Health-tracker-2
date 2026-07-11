@@ -609,7 +609,7 @@ export default function FoodHistoryTab({
                                 total: progress.totalCount,
                                 percent: progress.percentage
                               });
-                            }, 800, 800, 0.75);
+                            }, 400, 400, 0.5);
                             const currentUrls = manualLog.imageUrls || [];
                             setManualLog({
                               ...manualLog,
@@ -671,36 +671,84 @@ export default function FoodHistoryTab({
                   </div>
                 </div>
                 <div className="p-3 bg-slate-100/50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-850">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Nutrients (30 Core Nutrients)</span>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Nutrients (31 Nutrients)</span>
                 </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs p-3 max-h-60 overflow-y-auto">
-                  {nutrientDefinitions.map((nut) => {
-                    const val = manualLog.nutrients?.[nut.key] || 0;
-                    return (
-                      <div key={nut.key} className="flex items-center justify-between gap-1 py-0.5">
-                        <span className="text-slate-500 font-medium truncate max-w-[95px]" title={nut.labels[profile.language] || nut.labels.en}>
-                          {nut.labels[profile.language] || nut.labels.en}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            step="any"
-                            placeholder="0"
-                            value={val === 0 ? '' : val}
-                            onChange={(e) => {
-                              const updatedNutrients = {
-                                ...(manualLog.nutrients || {}),
-                                [nut.key]: Number(e.target.value) || 0
-                              };
-                              setManualLog({ ...manualLog, nutrients: updatedNutrients as NutrientBreakdown });
-                            }}
-                            className="w-14 text-right px-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs font-mono font-bold text-slate-950 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          />
-                          <span className="text-[10px] text-slate-400 font-mono w-5">{nut.unit}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="p-3 space-y-4 max-h-80 overflow-y-auto">
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 pb-0.5 border-b border-slate-200/50 dark:border-slate-800/50">Core Nutrients (11)</div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                      {(() => {
+                        const coreKeys = ["calories", "protein", "carbohydrates", "totalFat", "saturatedFat", "transFat", "addedSugar", "sodium", "potassium", "totalFibre", "solubleFibre"];
+                        return nutrientDefinitions
+                          .filter(nut => coreKeys.includes(nut.key))
+                          .map((nut) => {
+                            const val = manualLog.nutrients?.[nut.key] || 0;
+                            return (
+                              <div key={nut.key} className="flex items-center justify-between gap-1 py-0.5">
+                                <span className="text-slate-500 font-medium truncate max-w-[95px]" title={nut.labels[profile.language] || nut.labels.en}>
+                                  {nut.labels[profile.language] || nut.labels.en}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    placeholder="0"
+                                    value={val === 0 ? '' : val}
+                                    onChange={(e) => {
+                                      const updatedNutrients = {
+                                        ...(manualLog.nutrients || {}),
+                                        [nut.key]: Number(e.target.value) || 0
+                                      };
+                                      setManualLog({ ...manualLog, nutrients: updatedNutrients as NutrientBreakdown });
+                                    }}
+                                    className="w-14 text-right px-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs font-mono font-bold text-slate-950 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                  />
+                                  <span className="text-[10px] text-slate-400 font-mono w-5">{nut.unit}</span>
+                                </div>
+                              </div>
+                            );
+                          });
+                      })()}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 pb-0.5 border-b border-slate-200/50 dark:border-slate-800/50">Additional Nutrients (20)</div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                      {(() => {
+                        const coreKeys = ["calories", "protein", "carbohydrates", "totalFat", "saturatedFat", "transFat", "addedSugar", "sodium", "potassium", "totalFibre", "solubleFibre"];
+                        return nutrientDefinitions
+                          .filter(nut => !coreKeys.includes(nut.key))
+                          .map((nut) => {
+                            const val = manualLog.nutrients?.[nut.key] || 0;
+                            return (
+                              <div key={nut.key} className="flex items-center justify-between gap-1 py-0.5">
+                                <span className="text-slate-500 font-medium truncate max-w-[95px]" title={nut.labels[profile.language] || nut.labels.en}>
+                                  {nut.labels[profile.language] || nut.labels.en}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    placeholder="0"
+                                    value={val === 0 ? '' : val}
+                                    onChange={(e) => {
+                                      const updatedNutrients = {
+                                        ...(manualLog.nutrients || {}),
+                                        [nut.key]: Number(e.target.value) || 0
+                                      };
+                                      setManualLog({ ...manualLog, nutrients: updatedNutrients as NutrientBreakdown });
+                                    }}
+                                    className="w-14 text-right px-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs font-mono font-bold text-slate-950 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                  />
+                                  <span className="text-[10px] text-slate-400 font-mono w-5">{nut.unit}</span>
+                                </div>
+                              </div>
+                            );
+                          });
+                      })()}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -900,7 +948,7 @@ export default function FoodHistoryTab({
                                           total: progress.totalCount,
                                           percent: progress.percentage
                                         });
-                                      }, 800, 800, 0.75);
+                                      }, 400, 400, 0.5);
                                       const currentUrls = editLogState.imageUrls ? [...editLogState.imageUrls] : (editLogState.imageUrl ? [editLogState.imageUrl] : []);
                                       const updatedUrls = [...currentUrls, ...compressed];
                                       setEditLogState({
@@ -980,7 +1028,7 @@ export default function FoodHistoryTab({
                       {/* Nutrients editable list */}
                       <div className="space-y-2 text-left">
                         <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-bold text-slate-400 block">Edit Core 30 Nutrients</label>
+                          <label className="text-[10px] font-bold text-slate-400 block">Edit Nutrients (31 Nutrients)</label>
                           <div className="flex items-center gap-1">
                             <span className="text-[10px] text-slate-400 font-mono">Scale x</span>
                             <input
@@ -1013,27 +1061,68 @@ export default function FoodHistoryTab({
                             </button>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-3 rounded-2xl border border-slate-200/50 dark:border-slate-800 max-h-60 overflow-y-auto">
-                          {nutrientDefinitions.map((nut) => {
-                            const val = editLogState?.nutrients ? editLogState.nutrients[nut.key] : 0;
-                            return (
-                              <div key={nut.key} className="flex items-center justify-between gap-1 py-0.5">
-                                <span className="text-slate-500 font-medium truncate max-w-[90px]" title={nut.labels[profile.language] || nut.labels.en}>
-                                  {nut.labels[profile.language] || nut.labels.en}
-                                </span>
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="number"
-                                    step="any"
-                                    value={val === 0 ? '' : val}
-                                    onChange={(e) => updateNutrient(nut.key as any, Number(e.target.value) || 0)}
-                                    className="w-14 text-right px-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs font-mono font-bold text-slate-950 dark:text-slate-100"
-                                  />
-                                  <span className="text-[10px] text-slate-400 font-mono w-5">{nut.unit}</span>
-                                </div>
-                              </div>
-                            );
-                          })}
+                        <div className="space-y-4 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-2xl border border-slate-200/50 dark:border-slate-800 max-h-80 overflow-y-auto">
+                          <div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 pb-0.5 border-b border-slate-200/50 dark:border-slate-800/50">Core Nutrients (11)</div>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                              {(() => {
+                                const coreKeys = ["calories", "protein", "carbohydrates", "totalFat", "saturatedFat", "transFat", "addedSugar", "sodium", "potassium", "totalFibre", "solubleFibre"];
+                                return nutrientDefinitions
+                                  .filter(nut => coreKeys.includes(nut.key))
+                                  .map((nut) => {
+                                    const val = editLogState?.nutrients ? editLogState.nutrients[nut.key] : 0;
+                                    return (
+                                      <div key={nut.key} className="flex items-center justify-between gap-1 py-0.5">
+                                        <span className="text-slate-500 font-medium truncate max-w-[90px]" title={nut.labels[profile.language] || nut.labels.en}>
+                                          {nut.labels[profile.language] || nut.labels.en}
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            step="any"
+                                            value={val === 0 ? '' : val}
+                                            onChange={(e) => updateNutrient(nut.key as any, Number(e.target.value) || 0)}
+                                            className="w-14 text-right px-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs font-mono font-bold text-slate-950 dark:text-slate-100"
+                                          />
+                                          <span className="text-[10px] text-slate-400 font-mono w-5">{nut.unit}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  });
+                              })()}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 pb-0.5 border-b border-slate-200/50 dark:border-slate-800/50">Additional Nutrients (20)</div>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                              {(() => {
+                                const coreKeys = ["calories", "protein", "carbohydrates", "totalFat", "saturatedFat", "transFat", "addedSugar", "sodium", "potassium", "totalFibre", "solubleFibre"];
+                                return nutrientDefinitions
+                                  .filter(nut => !coreKeys.includes(nut.key))
+                                  .map((nut) => {
+                                    const val = editLogState?.nutrients ? editLogState.nutrients[nut.key] : 0;
+                                    return (
+                                      <div key={nut.key} className="flex items-center justify-between gap-1 py-0.5">
+                                        <span className="text-slate-500 font-medium truncate max-w-[90px]" title={nut.labels[profile.language] || nut.labels.en}>
+                                          {nut.labels[profile.language] || nut.labels.en}
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            step="any"
+                                            value={val === 0 ? '' : val}
+                                            onChange={(e) => updateNutrient(nut.key as any, Number(e.target.value) || 0)}
+                                            className="w-14 text-right px-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs font-mono font-bold text-slate-950 dark:text-slate-100"
+                                          />
+                                          <span className="text-[10px] text-slate-400 font-mono w-5">{nut.unit}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  });
+                              })()}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
@@ -1266,20 +1355,78 @@ export default function FoodHistoryTab({
                             )}
                           </div>
 
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono py-2 bg-slate-50 dark:bg-slate-900/40 rounded-2xl px-3.5">
-                            {nutrientDefinitions.map((nut) => {
-                              const val = log.nutrients ? log.nutrients[nut.key] : undefined;
-                              return (
-                                <div key={nut.key} className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/20 text-left">
-                                  <span className="text-slate-400 font-medium truncate max-w-[120px]">
-                                    {nut.labels[profile.language] || nut.labels.en}
-                                  </span>
-                                  <span className="font-semibold text-slate-700 dark:text-slate-200">
-                                    {val !== undefined ? `${val} ${nut.unit}` : '--'}
-                                  </span>
-                                </div>
-                              );
-                            })}
+                          {log.chatTranscript && Array.isArray(log.chatTranscript) && log.chatTranscript.length > 0 && (
+                            <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200/50 dark:border-slate-800 text-left space-y-2">
+                              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1">
+                                <span>💬 Chat Context with Agent</span>
+                              </span>
+                              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                                {log.chatTranscript.map((chatMsg, chatIdx) => (
+                                  <div key={chatIdx} className={`space-y-1 text-xs ${chatMsg.role === 'user' ? 'text-right' : 'text-left'}`}>
+                                    <span className="text-[9px] text-slate-400 font-bold uppercase">
+                                      {chatMsg.role === 'user' ? 'You' : 'Agent'}
+                                    </span>
+                                    <div className={`p-2.5 rounded-2xl inline-block max-w-[90%] text-left font-medium ${
+                                      chatMsg.role === 'user' 
+                                        ? 'bg-indigo-600 text-white rounded-tr-none' 
+                                        : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-850 dark:text-slate-200 rounded-tl-none'
+                                    }`}>
+                                      <p className="whitespace-pre-wrap">{chatMsg.content}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="space-y-4 py-2 bg-slate-50 dark:bg-slate-900/40 rounded-2xl px-3.5">
+                            <div>
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 pb-0.5 border-b border-slate-200/50 dark:border-slate-800/50">Core Nutrients (11)</div>
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono">
+                                {(() => {
+                                  const coreKeys = ["calories", "protein", "carbohydrates", "totalFat", "saturatedFat", "transFat", "addedSugar", "sodium", "potassium", "totalFibre", "solubleFibre"];
+                                  return nutrientDefinitions
+                                    .filter(nut => coreKeys.includes(nut.key))
+                                    .map((nut) => {
+                                      const val = log.nutrients ? log.nutrients[nut.key] : undefined;
+                                      return (
+                                        <div key={nut.key} className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/20 text-left">
+                                          <span className="text-slate-400 font-medium truncate max-w-[120px]">
+                                            {nut.labels[profile.language] || nut.labels.en}
+                                          </span>
+                                          <span className="font-semibold text-slate-700 dark:text-slate-200">
+                                            {val !== undefined ? `${val} ${nut.unit}` : '--'}
+                                          </span>
+                                        </div>
+                                      );
+                                    });
+                                })()}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 pb-0.5 border-b border-slate-200/50 dark:border-slate-800/50">Additional Nutrients (20)</div>
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono">
+                                {(() => {
+                                  const coreKeys = ["calories", "protein", "carbohydrates", "totalFat", "saturatedFat", "transFat", "addedSugar", "sodium", "potassium", "totalFibre", "solubleFibre"];
+                                  return nutrientDefinitions
+                                    .filter(nut => !coreKeys.includes(nut.key))
+                                    .map((nut) => {
+                                      const val = log.nutrients ? log.nutrients[nut.key] : undefined;
+                                      return (
+                                        <div key={nut.key} className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/20 text-left">
+                                          <span className="text-slate-400 font-medium truncate max-w-[120px]">
+                                            {nut.labels[profile.language] || nut.labels.en}
+                                          </span>
+                                          <span className="font-semibold text-slate-700 dark:text-slate-200">
+                                            {val !== undefined ? `${val} ${nut.unit}` : '--'}
+                                          </span>
+                                        </div>
+                                      );
+                                    });
+                                })()}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}

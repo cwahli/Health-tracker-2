@@ -7,7 +7,7 @@ const app = initializeApp(firebaseConfig);
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 }, (firebaseConfig as any).firestoreDatabaseId);
-export const auth = getAuth();
+export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const facebookProvider = new FacebookAuthProvider();
 export const twitterProvider = new TwitterAuthProvider();
@@ -68,10 +68,25 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 // Validate connection on boot as requested in skill
 async function testConnection() {
   try {
+    const isExceeded = typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('firestore_quota_exceeded') === 'true';
+    if (isExceeded) {
+      console.warn("Firestore connection test skipped: Quota is marked as exceeded.");
+      return;
+    }
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
+    if (error instanceof Error) {
+      const msg = error.message.toLowerCase();
+      if (msg.includes('resource-exhausted') || msg.includes('quota') || msg.includes('limit exceeded')) {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem('firestore_quota_exceeded', 'true');
+        }
+        console.warn("Firestore connection test: Quota limit exceeded.");
+        return;
+      }
+      if (msg.includes('the client is offline')) {
+        console.error("Please check your Firebase configuration.");
+      }
     }
   }
 }

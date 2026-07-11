@@ -35,6 +35,7 @@ export default function ImageSlider({ images = [], singleImage, altText }: Image
   const viewerScrollLeftRef = useRef(0);
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.nativeEvent as any).pointerType === 'touch') return;
     if (!scrollContainerRef.current) return;
     isDownRef.current = true;
     scrollContainerRef.current.style.scrollBehavior = 'auto'; // Disable snap behavior during drag for smooth feel
@@ -66,6 +67,7 @@ export default function ImageSlider({ images = [], singleImage, altText }: Image
 
   // Fullscreen slider mouse drag handlers
   const handleViewerMouseDown = (e: React.MouseEvent) => {
+    if ((e.nativeEvent as any).pointerType === 'touch') return;
     if (!viewerScrollContainerRef.current) return;
     isViewerDownRef.current = true;
     viewerScrollContainerRef.current.style.scrollBehavior = 'auto';
@@ -319,6 +321,7 @@ export default function ImageSlider({ images = [], singleImage, altText }: Image
                 <img
                   src={img}
                   alt={`${altText} - image ${idx + 1}`}
+                  draggable={false}
                   className="w-full h-full object-cover select-none hover:scale-105 transition-transform duration-300"
                   referrerPolicy="no-referrer"
                   onError={() => handleImageError(img)}

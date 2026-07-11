@@ -2,7 +2,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage, FoodLog, UserProfile, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
-import { X, Send, Image, Camera, MessageSquare, Sparkles, Plus, ChevronDown, ChevronUp, Loader, MapPin, Trash2, Check, Table, RotateCcw, AlertTriangle, ShieldAlert, Edit2 } from 'lucide-react';
+import { X, Send, Image, Camera, MessageSquare, Sparkles, Plus, Terminal, ChevronDown, ChevronUp, Loader, MapPin, Trash2, Check, Table, RotateCcw, AlertTriangle, ShieldAlert, Edit2 } from 'lucide-react';
 import { nutrientDefinitions } from '../utils/nutrition';
 import { biomarkerDefinitions, getBiomarkerStatus, isAsianEthnicity, getBiomarkerStatusLabel } from '../utils/biomarkers';
 import LLMSelector from './LLMSelector';
@@ -307,6 +307,7 @@ interface LogChatProps {
   onGoToManualEdit?: (errorMsg?: string) => void;
   autoSendMessage?: string | null;
   dataReviewBatchIdx?: number | string | null;
+  dataReviewBatchKeys?: string[];
   batchSize?: number;
 }
 
@@ -342,6 +343,7 @@ export default function LogChat({
   onGoToManualEdit,
   autoSendMessage = null,
   dataReviewBatchIdx = null,
+  dataReviewBatchKeys = [],
   batchSize = 20
 }: LogChatProps) {
   const [showDataUsed, setShowDataUsed] = useState(false);
@@ -354,6 +356,115 @@ export default function LogChat({
   const [activeInstructionPrompt, setActiveInstructionPrompt] = useState<string | null>(null);
   const [expandedAudits, setExpandedAudits] = useState<Record<string, boolean>>({});
   const [fullScreenJson, setFullScreenJson] = useState<string | null>(null);
+  const [localBatchSize, setLocalBatchSize] = useState(batchSize || 20);
+  const [numberOfBatches, setNumberOfBatches] = useState<number>(() => {
+    const saved = localStorage.getItem('agent_num_batches');
+    return saved ? parseInt(saved, 10) : 50;
+  });
+
+  const [showFullScreenDebugLogs, setShowFullScreenDebugLogs] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<{ timestamp: string, message: string }[]>([]);
+  const [isDebugSendingLogs, setIsDebugSendingLogs] = useState(false);
+  const [debugLogsSendStatus, setDebugLogsSendStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const fetchDebugLogs = async () => {
+    try {
+      const sessionId = getSessionId();
+      const res = await fetch('/api/gemini/debug-logs', {
+        headers: {
+          'X-Session-ID': sessionId
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.logs)) {
+          setDebugLogs(data.logs);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching debug logs:", err);
+    }
+  };
+
+  const handleClearDebugLogs = async () => {
+    try {
+      const sessionId = getSessionId();
+      const res = await fetch('/api/gemini/clear-debug-logs', { 
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDebugLogs(data.logs || []);
+      }
+    } catch (err) {
+      console.error("Error clearing debug logs:", err);
+    }
+  };
+
+  const handleSendDebugLogsToAdmin = async () => {
+    setIsDebugSendingLogs(true);
+    setDebugLogsSendStatus('idle');
+    try {
+      const logsText = debugLogs.map(l => `[${l.timestamp}] ${l.message}`).join('\n');
+      const sessionId = getSessionId();
+      
+      const res = await fetch('/api/gemini/send-logs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-ID': sessionId
+        },
+        body: JSON.stringify({ logsText })
+      });
+      
+      if (res.ok) {
+        try {
+          const res2 = await fetch('/api/gemini/debug-logs', {
+            headers: {
+              'X-Session-ID': sessionId
+            }
+          });
+          if (res2.ok) {
+            const data = await res2.json();
+            if (data && Array.isArray(data.logs)) {
+              setDebugLogs(data.logs);
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching debug logs:", err);
+        }
+        setDebugLogsSendStatus('success');
+        setTimeout(() => setDebugLogsSendStatus('idle'), 3000);
+      } else {
+        setDebugLogsSendStatus('error');
+        const subject = encodeURIComponent(`Healthy App Debug Logs - Session ${sessionId}`);
+        const body = encodeURIComponent(`Hello Admin,\n\nHere is the compiled log history for session ${sessionId}:\n\n${logsText}`);
+        window.open(`mailto:cwah.liu@gmail.com?subject=${subject}&body=${body}`, '_blank');
+      }
+    } catch (err) {
+      console.error("Error sending logs:", err);
+      setDebugLogsSendStatus('error');
+    } finally {
+      setIsDebugSendingLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    let interval: any;
+    if (showFullScreenDebugLogs) {
+      fetchDebugLogs();
+      interval = setInterval(fetchDebugLogs, 1500);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [showFullScreenDebugLogs]);
+  useEffect(() => {
+    localStorage.setItem('agent_num_batches', String(numberOfBatches));
+  }, [numberOfBatches]);
 
   const handleSendLogToAdmin = async () => {
     setIsSendingLogs(true);
@@ -390,8 +501,10 @@ export default function LogChat({
     }
   };
 
-  const payloadStorageKey = agentType ? `last_sent_payload_${type}_${agentType}_${dataReviewBatchIdx ?? 'none'}` : `last_sent_payload_${type}`;
-  const chatStorageKey = agentType ? `chat_messages_${type}_${agentType}_${dataReviewBatchIdx ?? 'none'}` : `chat_messages_${type}`;
+  const userIdentifier = profile?.email?.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'guest';
+
+  const payloadStorageKey = agentType ? `last_sent_payload_${userIdentifier}_${type}_${agentType}_${dataReviewBatchIdx ?? 'none'}` : `last_sent_payload_${userIdentifier}_${type}`;
+  const chatStorageKey = agentType ? `chat_messages_${userIdentifier}_${type}_${agentType}_${dataReviewBatchIdx ?? 'none'}` : `chat_messages_${userIdentifier}_${type}`;
 
   const [lastSentPayload, setLastSentPayload] = useState<any>(() => {
     try {
@@ -756,7 +869,7 @@ export default function LogChat({
             total: progress.totalCount,
             percent: progress.percentage
           });
-        }, 800, 800, 0.75);
+        }, 400, 400, 0.5);
         const dates = await Promise.all(validFiles.map(async (f: any) => {
           try {
             const exifData = await exifr.parse(f, ['DateTimeOriginal']);
@@ -837,6 +950,15 @@ export default function LogChat({
         delete lightProfile.photoUrl;
         delete lightProfile.timezone;
         delete lightProfile.language;
+        delete lightProfile.deletedBiomarkerLogIds;
+        delete lightProfile.deletedFoodLogIds;
+        delete lightProfile.deletedCustomBiomarkerKeys;
+        delete lightProfile.agentTriageSummary;
+        delete lightProfile.approved_agent1_batches;
+        delete lightProfile.approved_data_review_batches;
+        delete lightProfile.agentAnalyses;
+        delete lightProfile.agentContextualizerSummary;
+        delete lightProfile.stripeSubscriptionId;
       }
 
       const revIdx = [...messages].reverse().findIndex(m => m.id.startsWith('welcome_'));
@@ -974,7 +1096,8 @@ export default function LogChat({
           }
         }
       } else if (type === 'medical') {
-        bodyData.existingBiomarkers = biomarkers ? Object.keys(biomarkers) : [];
+        bodyData.existingBiomarkers = Array.from(new Set([...(biomarkers ? Object.keys(biomarkers) : []), ...Object.keys(profile?.customBiomarkers || {})]));
+        bodyData.numberOfBatches = numberOfBatches;
         const lastMsg = [...messages].reverse().find(m => m.lastProcessedItem !== undefined);
         if (lastMsg && lastMsg.lastProcessedItem) {
           bodyData.lastProcessedItem = lastMsg.lastProcessedItem;
@@ -1004,20 +1127,45 @@ export default function LogChat({
             currentStep = agentType;
           }
           bodyData.agentType = currentStep;
-          bodyData.biomarkerHistory = biomarkerHistory || [];
-          bodyData.biomarkers = biomarkers || {};
-          bodyData.recentMeals = foodLogs ? (foodLogs || []).slice(-20).map(f => f.name) : [];
-          bodyData.agentDiagnosticSummary = profile?.agentDiagnosticSummary || '';
+          if (currentStep === 'agent6') {
+            bodyData.biomarkerHistory = [];
+            bodyData.biomarkers = biomarkers || {};
+            bodyData.recentMeals = [];
+            bodyData.agentDiagnosticSummary = profile?.agentDiagnosticSummary || '';
+            if (bodyData.history && bodyData.history.length > 0) {
+              bodyData.history = bodyData.history.filter((h: any) => {
+                if (!h.content) return false;
+                const lower = h.content.toLowerCase();
+                return !(
+                  lower.includes("food log") || 
+                  lower.includes("[extracted food") || 
+                  lower.includes("active meal") || 
+                  lower.includes("[extracted biomarkers") ||
+                  lower.includes("meal log") ||
+                  lower.includes("banana") ||
+                  lower.includes("pineapple")
+                );
+              });
+            }
+          } else {
+            bodyData.biomarkerHistory = biomarkerHistory || [];
+            bodyData.biomarkers = biomarkers || {};
+            bodyData.recentMeals = foodLogs ? (foodLogs || []).slice(-20).map(f => f.name) : [];
+            bodyData.agentDiagnosticSummary = profile?.agentDiagnosticSummary || '';
+          }
 
           if ((currentStep === 'data_review' || currentStep === 'agent1') && dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined) {
             let batchKeys: string[] = [];
             if (dataReviewBatchIdx === 'custom') {
               try {
-                batchKeys = JSON.parse(localStorage.getItem('agent1_custom_batch_keys') || '[]');
+                const batchKeyName = `agent1_custom_batch_keys_${userIdentifier}`;
+                batchKeys = JSON.parse(localStorage.getItem(batchKeyName) || '[]');
               } catch(e) {}
+            } else if (dataReviewBatchKeys && dataReviewBatchKeys.length > 0) {
+              batchKeys = dataReviewBatchKeys;
             } else {
               const markerKeysList = Object.keys(biomarkers || {}).filter(k => biomarkers?.[k] !== undefined && biomarkers?.[k] !== null && biomarkers?.[k] !== '');
-              const bSize = batchSize || 20;
+              const bSize = localBatchSize || batchSize || 20;
               const batchRes: string[][] = [];
               for (let i = 0; i < markerKeysList.length; i += bSize) {
                 batchRes.push(markerKeysList.slice(i, i + bSize));
@@ -1096,12 +1244,18 @@ export default function LogChat({
       if (type === 'food') {
         if (resData.data) {
           const lastFoodLog = [...messages].reverse().find(m => m.pendingFoodLog)?.pendingFoodLog;
+          const currentTranscript = [...messages, userMsg, assistantMsg].map(m => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+            timestamp: m.timestamp
+          }));
           assistantMsg.pendingFoodLog = {
             ...resData.data,
             date: resData.data.date || lastFoodLog?.date || getCurrentDateInTimezone(profile?.timezone),
             id: `food_${Date.now()}`,
             imageUrl: tempImages.length > 0 ? tempImages[0] : resData.data.imageUrl,
-            imageUrls: tempImages.length > 0 ? tempImages : resData.data.imageUrls
+            imageUrls: tempImages.length > 0 ? tempImages : resData.data.imageUrls,
+            chatTranscript: currentTranscript
           };
         }
       } else if (type === 'food_idea') {
@@ -1132,9 +1286,13 @@ export default function LogChat({
           // Merge custom biomarker definitions into profile if any
           let mergedProfile = { ...resData.profile };
           if (resData.customBiomarkerDefs && Object.keys(resData.customBiomarkerDefs).length > 0) {
+            const defsWithApproval: { [key: string]: any } = {};
+            Object.entries(resData.customBiomarkerDefs).forEach(([k, v]: [string, any]) => {
+              defsWithApproval[k] = { ...v, needsApproval: true };
+            });
             mergedProfile.customBiomarkers = {
               ...(profile?.customBiomarkers || {}),
-              ...resData.customBiomarkerDefs
+              ...defsWithApproval
             };
           }
           assistantMsg.pendingProfile = mergedProfile;
@@ -1205,6 +1363,7 @@ export default function LogChat({
         extractedYaml: msg.agentResult?.extractedYaml || msg.extractedYaml,
         remainingText: msg.agentResult?.remainingText || '',
         estimatedTotalMarkers: msg.agentResult?.estimatedTotalMarkers,
+        numberOfBatches: numberOfBatches,
         engine: selectedModelId
       };
 
@@ -1420,6 +1579,13 @@ export default function LogChat({
           </div>
           
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowFullScreenDebugLogs(true)}
+              className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-indigo-500 hover:text-indigo-600 dark:text-indigo-400 transition-colors"
+              title="View Historical Logs"
+            >
+              <Terminal className="w-5 h-5" />
+            </button>
             <button 
               id="close-food-chat-btn"
               onClick={onClose} 
@@ -1465,34 +1631,44 @@ export default function LogChat({
               
               {showDataUsed && (
                 <div className="mt-2.5 pt-2.5 border-t border-slate-200/50 dark:border-slate-800/50 space-y-3.5 text-slate-600 dark:text-slate-300 font-sans leading-normal">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      let targetAgent = 'agent1';
-                      let targetPrompt = null;
-                      if (type === 'food') {
-                        targetAgent = 'food';
-                        const lastMsgWithStep = [...messages].reverse().find(m => m.agentResult?.agentPrompt);
-                        targetPrompt = lastMsgWithStep?.agentResult?.agentPrompt || null;
-                      }
-                      else if (type === 'food_idea') {
-                        targetAgent = 'food_idea';
-                        const lastMsgWithStep = [...messages].reverse().find(m => m.pendingFoodIdeas && m.agentResult?.agentPrompt);
-                        targetPrompt = lastMsgWithStep?.agentResult?.agentPrompt || null;
-                      }
-                      else {
-                        const lastMsgWithStep = [...messages].reverse().find(m => m.agentTypeStep || m.agentType);
-                        targetAgent = lastMsgWithStep?.agentType || agentType || 'agent1';
-                        targetPrompt = lastMsgWithStep?.agentResult?.agentPrompt || null;
-                      }
-                      
-                      setActiveInstructionAgentType(targetAgent);
-                      setActiveInstructionPrompt(targetPrompt);
-                    }}
-                    className="w-full py-2 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800/30 text-indigo-700 dark:text-indigo-400 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm mb-3"
-                  >
-                    <span>ℹ️ View Programmed Agent Instructions</span>
-                  </button>
+                  <div className="flex gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        let targetAgent = 'agent1';
+                        let targetPrompt = null;
+                        if (type === 'food') {
+                          targetAgent = 'food';
+                          const lastMsgWithStep = [...messages].reverse().find(m => m.agentResult?.agentPrompt);
+                          targetPrompt = lastMsgWithStep?.agentResult?.agentPrompt || null;
+                        }
+                        else if (type === 'food_idea') {
+                          targetAgent = 'food_idea';
+                          const lastMsgWithStep = [...messages].reverse().find(m => m.pendingFoodIdeas && m.agentResult?.agentPrompt);
+                          targetPrompt = lastMsgWithStep?.agentResult?.agentPrompt || null;
+                        }
+                        else {
+                          const lastMsgWithStep = [...messages].reverse().find(m => m.agentTypeStep || m.agentType);
+                          targetAgent = lastMsgWithStep?.agentType || agentType || 'agent1';
+                          targetPrompt = lastMsgWithStep?.agentResult?.agentPrompt || null;
+                        }
+                        
+                        setActiveInstructionAgentType(targetAgent);
+                        setActiveInstructionPrompt(targetPrompt);
+                      }}
+                      className="flex-1 py-2 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800/30 text-indigo-700 dark:text-indigo-400 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <span>ℹ️ View Instructions</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowFullScreenConv(true)}
+                      className="flex-1 py-2 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800/30 text-indigo-700 dark:text-indigo-400 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm text-center"
+                    >
+                      <Terminal className="w-4 h-4 text-indigo-500" />
+                      <span>📜 View Log History</span>
+                    </button>
+                  </div>
                   {/* Profile Stats */}
                   <div className="grid grid-cols-2 gap-2.5 font-size-xs bg-slate-100/50 dark:bg-slate-950/20 p-2 rounded-xl border border-slate-150 dark:border-slate-800/30">
                     <div>
@@ -1504,6 +1680,35 @@ export default function LogChat({
                       <span className="font-bold text-slate-700 dark:text-slate-200">{profile?.weight || 'Unknown'} kg • {profile?.height || 'Unknown'} cm (BMI: {profile?.weight && profile?.height ? (Number(profile.weight) / Math.pow(Number(profile.height) / 100, 2)).toFixed(1) : 'Unknown'})</span>
                     </div>
                   </div>
+                  
+                  {type === 'medical' && (
+                    <div className="grid grid-cols-2 gap-2.5 mt-2.5">
+                      <div className="bg-slate-100/50 dark:bg-slate-950/20 p-2 rounded-xl border border-slate-150 dark:border-slate-800/30 font-size-xs">
+                        <span className="text-slate-400 dark:text-slate-500 font-bold block font-size-xs uppercase tracking-wider mb-0.5">Items per batch</span>
+                        <input 
+                            type="number"
+                            min="1"
+                            max="200"
+                            value={numberOfBatches}
+                            onChange={(e) => setNumberOfBatches(Math.max(1, Number(e.target.value)))}
+                            placeholder="Max items..."
+                            className="w-full bg-transparent font-bold text-slate-700 dark:text-slate-200 outline-none"
+                        />
+                      </div>
+                      {dataReviewBatchIdx !== null && (
+                        <div className="bg-slate-100/50 dark:bg-slate-950/20 p-2 rounded-xl border border-slate-150 dark:border-slate-800/30 font-size-xs">
+                          <span className="text-slate-400 dark:text-slate-500 font-bold block font-size-xs uppercase tracking-wider mb-0.5">Agent Batch Size</span>
+                          <input 
+                              type="number"
+                              value={localBatchSize}
+                              onChange={(e) => setLocalBatchSize(Number(e.target.value))}
+                              placeholder="Number of items per batch..."
+                              className="w-full bg-transparent font-bold text-slate-700 dark:text-slate-200 outline-none"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {type === 'food_idea' && (
                     <>
@@ -1688,19 +1893,32 @@ export default function LogChat({
                       onClose={() => setShowFullScreenConv(false)}
                       title="Full Agent Request Payload & Log"
                       logsText={(() => {
-                        let logTxt = lastSentPayload ? JSON.stringify(lastSentPayload, null, 2) : messages.map(m => `[${m.role.toUpperCase()}]\n${m.content}`).join('\n\n---\n\n');
+                        const msgLog = messages.map(m => `[${m.role.toUpperCase()}]\n${m.content}`).join('\n\n---\n\n');
+                        let logTxt = lastSentPayload ? `=== PAYLOAD ===\n${JSON.stringify(lastSentPayload, null, 2)}\n\n=== CONVERSATION ===\n${msgLog}` : msgLog;
                         if (type === 'medical') {
-                          logTxt = `=== PAYLOAD ===\n` + logTxt;
+                          logTxt += `\n\n[Medical Profile]\n${JSON.stringify(profile, null, 2)}`;
                         }
                         return logTxt;
+                      })()}
+                      logsArray={(() => {
+                        const arr = messages.map(m => `[${m.role.toUpperCase()}]\n${m.content}`);
+                        if (lastSentPayload) {
+                          arr.unshift(`=== PAYLOAD ===\n${JSON.stringify(lastSentPayload, null, 2)}`);
+                        }
+                        if (type === 'medical') {
+                          arr.push(`[Medical Profile]\n${JSON.stringify(profile, null, 2)}`);
+                        }
+                        return arr;
                       })()}
                       onSendToAdmin={handleSendLogToAdmin}
                       isSendingLogs={isSendingLogs}
                       logsSendStatus={logsSendStatus}
                       onClearLogs={() => {
-                        setMessages([]);
+                        setMessages(prev => prev.length > 0 ? [prev[0]] : []);
                         setLastSentPayload(null);
-                        sessionStorage.removeItem(`last_sent_payload_${type}`);
+                        sessionStorage.removeItem(payloadStorageKey);
+                        sessionStorage.removeItem(chatStorageKey);
+                        setShowFullScreenConv(false);
                       }}
                       eventsCount={messages.length}
                     />
@@ -1882,7 +2100,117 @@ export default function LogChat({
                     />
                   )}
 
-                  {type === 'food' && msg.pendingFoodLog && !loggedMessageIds.includes(msg.id) && (
+                  {type === 'food' && msg.agentResult && msg.agentResult.mode === 'evaluation' && msg.agentResult.comparison && (
+                    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-md space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden">
+                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/50 pb-2 gap-2">
+                        <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate min-w-0 flex items-center gap-1.5">
+                          ⚖️ Comparison: <span className="text-indigo-600 dark:text-indigo-400 font-bold">{msg.agentResult.comparison.keyNutrientConcern || 'Nutrients of Concern'}</span>
+                        </h4>
+                      </div>
+
+                      {/* Foods Comparison Cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                        {(msg.agentResult.comparison.foods || []).map((food: any, idx: number) => {
+                          const suitabilityColors: any = {
+                            good: "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40",
+                            moderate: "bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-100 dark:border-amber-900/40",
+                            bad: "bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 border-rose-100 dark:border-rose-900/40",
+                          };
+                          const suitabilityClass = suitabilityColors[food.suitability] || "bg-slate-50 dark:bg-slate-900 text-slate-700 border-slate-100";
+
+                          return (
+                            <div key={idx} className="border border-slate-200 dark:border-slate-700/30 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/30 space-y-2 flex flex-col justify-between">
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between gap-1.5 border-b border-slate-100 dark:border-slate-800/50 pb-1.5">
+                                  <span className="font-bold text-xs text-slate-800 dark:text-slate-200 truncate">{food.name}</span>
+                                  <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded font-mono text-slate-600 dark:text-slate-400 font-bold">{food.weightGrams}g</span>
+                                </div>
+                                <div className="text-[11px] space-y-1 text-slate-600 dark:text-slate-400 font-semibold">
+                                  <div className="flex justify-between">
+                                    <span>Calories:</span>
+                                    <span className="font-mono text-slate-900 dark:text-slate-200">{food.calories} kcal</span>
+                                  </div>
+                                  {food.saturatedFat !== undefined && (
+                                    <div className="flex justify-between">
+                                      <span>Saturated Fat:</span>
+                                      <span className="font-mono text-slate-900 dark:text-slate-200">{food.saturatedFat}g</span>
+                                    </div>
+                                  )}
+                                  {food.sodium !== undefined && (
+                                    <div className="flex justify-between">
+                                      <span>Sodium:</span>
+                                      <span className="font-mono text-slate-900 dark:text-slate-200">{food.sodium}mg</span>
+                                    </div>
+                                  )}
+                                  {food.sugar !== undefined && (
+                                    <div className="flex justify-between">
+                                      <span>Sugar:</span>
+                                      <span className="font-mono text-slate-900 dark:text-slate-200">{food.sugar}g</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="space-y-1.5 pt-2">
+                                <div className={`text-[10px] px-2 py-1 rounded-lg border font-bold text-center ${suitabilityClass}`}>
+                                  Suitability: {String(food.suitability).toUpperCase()}
+                                </div>
+                                {food.pros && (
+                                  <p className="text-[10px] text-slate-600 dark:text-slate-400 leading-normal">
+                                    <strong className="text-emerald-600 dark:text-emerald-400">✓ Pros:</strong> {food.pros}
+                                  </p>
+                                )}
+                                {food.cons && (
+                                  <p className="text-[10px] text-slate-600 dark:text-slate-400 leading-normal">
+                                    <strong className="text-rose-500 dark:text-rose-400">✗ Cons:</strong> {food.cons}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Key Nutrient Comparison Table */}
+                      {(msg.agentResult.comparison.comparisonTableYaml || msg.agentResult.comparison.comparisonTableMarkdown) && (
+                        <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/30 dark:bg-slate-900/10 mt-2">
+                          <div className="px-3 py-1.5 bg-slate-100/70 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                              📊 Side-by-Side Comparison Matrix
+                            </span>
+                          </div>
+                          {msg.agentResult.comparison.comparisonTableYaml ? (
+                            <div className="p-0 overflow-x-auto">
+                              <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+                                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                  <tr>
+                                    {msg.agentResult.comparison.comparisonTableYaml.columns?.map((col: string, idx: number) => (
+                                      <th key={idx} className="px-3 py-2 font-semibold whitespace-nowrap">{col}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                                  {msg.agentResult.comparison.comparisonTableYaml.rows?.map((row: any, idx: number) => (
+                                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                      <td className="px-3 py-2 whitespace-nowrap font-medium text-slate-900 dark:text-slate-100">{row.nutrient}</td>
+                                      <td className="px-3 py-2 whitespace-nowrap">{row.foodA}</td>
+                                      <td className="px-3 py-2 whitespace-nowrap">{row.foodB}</td>
+                                      <td className="px-3 py-2 whitespace-nowrap text-amber-600 dark:text-amber-400 font-medium">{row.target}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <div className="p-3 text-[11px] overflow-x-auto font-mono text-slate-700 dark:text-slate-300 whitespace-pre leading-relaxed">
+                              {msg.agentResult.comparison.comparisonTableMarkdown}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {type === 'food' && msg.pendingFoodLog && (
                     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-md space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden">
                       {msg.pendingFoodLog.imageUrls && msg.pendingFoodLog.imageUrls.length > 0 && (
                         <div className="overflow-hidden border-y sm:border border-slate-100 dark:border-slate-700/50 shadow-sm mb-3 w-[calc(100%+2rem)] -mx-4 sm:mx-0 sm:w-full sm:rounded-2xl">
@@ -2038,38 +2366,79 @@ export default function LogChat({
                           onClick={() => setExpandedNutrients(!expandedNutrients)}
                           className="w-full px-3 py-2 flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100/50"
                         >
-                          <span>Nutrient Breakdown (30 Core Nutrients)</span>
+                          <span>Nutrient Breakdown (31 Nutrients)</span>
                           {expandedNutrients ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
                         
-                        <div className={`px-3 py-2 space-y-1 text-[11px] font-mono border-t border-slate-200 dark:border-slate-800 ${expandedNutrients ? 'block' : 'hidden'}`}>
-                          {nutrientDefinitions.map((nut) => {
-                            const val = msg.pendingFoodLog?.nutrients?.[nut.key];
-                            return (
-                              <div key={nut.key} className="flex justify-between py-0.5 text-slate-600 dark:text-slate-300">
-                                <span className="text-slate-500">{nut.labels[profile?.language || 'en'] || nut.labels.en}:</span>
-                                <span className="font-semibold text-slate-800 dark:text-slate-100">
-                                  {val !== undefined ? `${val} ${nut.unit}` : `--`}
-                                </span>
-                              </div>
-                            );
-                          })}
+                        <div className={`px-3 py-2 space-y-3 text-[11px] font-mono border-t border-slate-200 dark:border-slate-800 ${expandedNutrients ? 'block' : 'hidden'}`}>
+                          {/* Core Nutrients */}
+                          <div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 pb-0.5 border-b border-slate-200/50 dark:border-slate-800/50">Core Nutrients (11)</div>
+                            <div className="space-y-1">
+                              {(() => {
+                                const coreKeys = ["calories", "protein", "carbohydrates", "totalFat", "saturatedFat", "transFat", "addedSugar", "sodium", "potassium", "totalFibre", "solubleFibre"];
+                                return nutrientDefinitions
+                                  .filter(nut => coreKeys.includes(nut.key))
+                                  .map((nut) => {
+                                    const val = msg.pendingFoodLog?.nutrients?.[nut.key];
+                                    return (
+                                      <div key={nut.key} className="flex justify-between py-0.5 text-slate-600 dark:text-slate-300">
+                                        <span className="text-slate-500">{nut.labels[profile?.language || 'en'] || nut.labels.en}:</span>
+                                        <span className="font-semibold text-slate-800 dark:text-slate-100">
+                                          {val !== undefined ? `${val} ${nut.unit}` : `--`}
+                                        </span>
+                                      </div>
+                                    );
+                                  });
+                              })()}
+                            </div>
+                          </div>
+
+                          {/* Additional Nutrients */}
+                          <div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 pb-0.5 border-b border-slate-200/50 dark:border-slate-800/50">Additional Nutrients (20)</div>
+                            <div className="space-y-1">
+                              {(() => {
+                                const coreKeys = ["calories", "protein", "carbohydrates", "totalFat", "saturatedFat", "transFat", "addedSugar", "sodium", "potassium", "totalFibre", "solubleFibre"];
+                                return nutrientDefinitions
+                                  .filter(nut => !coreKeys.includes(nut.key))
+                                  .map((nut) => {
+                                    const val = msg.pendingFoodLog?.nutrients?.[nut.key];
+                                    return (
+                                      <div key={nut.key} className="flex justify-between py-0.5 text-slate-600 dark:text-slate-300">
+                                        <span className="text-slate-500">{nut.labels[profile?.language || 'en'] || nut.labels.en}:</span>
+                                        <span className="font-semibold text-slate-800 dark:text-slate-100">
+                                          {val !== undefined ? `${val} ${nut.unit}` : `--`}
+                                        </span>
+                                      </div>
+                                    );
+                                  });
+                              })()}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
                       {/* Log Action Button */}
-                      <button
-                        onClick={() => {
-                          if (msg.pendingFoodLog && onLogFood) {
-                            onLogFood(msg.pendingFoodLog as FoodLog);
-                            setLoggedMessageIds(prev => [...prev, msg.id]);
-                          }
-                        }}
-                        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4" />
-                        {t.logThisFood}
-                      </button>
+                      {loggedMessageIds.includes(msg.id) ? (
+                        <div className="w-full py-2 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 animation-fade-in">
+                          <Check className="w-4 h-4" />
+                          Saved to History
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            if (msg.pendingFoodLog && onLogFood) {
+                              onLogFood(msg.pendingFoodLog as FoodLog);
+                              setLoggedMessageIds(prev => [...prev, msg.id]);
+                            }
+                          }}
+                          className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          {t.logThisFood}
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -2134,9 +2503,12 @@ export default function LogChat({
                             msg.agentTypeStep === 'agent1_step2' ? async () => { await handleAgent1Step('agent1_step3', msg); } :
                             undefined
                           }
-                          onApplyChanges={async () => {
+                          onApplyChanges={async (filteredKeys) => {
                             if (onAgentFinish) {
                               const isContinuation = !!(msg.agentResult?.hasMoreMarkers || msg.agentResult?.hasMore || msg.agentResult?.needsContinuation || msg.agentResult?.status === 'needs_continuation');
+                              if (filteredKeys && Array.isArray(filteredKeys) && msg.agentResult) {
+                                msg.agentResult.unselectedRowKeys = filteredKeys;
+                              }
                               if (isContinuation) {
                                 await handleContinueExtractionChunk(msg);
                               } else {
@@ -2145,6 +2517,7 @@ export default function LogChat({
                               }
                             }
                           }}
+                          onSendMessage={handleSend}
                         />
                         </ErrorBoundary>
                       )}
@@ -2249,48 +2622,60 @@ export default function LogChat({
                               </div>
                             )}
 
-                            {(msg.pendingBiomarkerEntries && Array.isArray(msg.pendingBiomarkerEntries) && msg.pendingBiomarkerEntries.length > 0 ? msg.pendingBiomarkerEntries : (msg.pendingBiomarkers && typeof msg.pendingBiomarkers === 'object' && Object.keys(msg.pendingBiomarkers).length > 0 ? [{ date: msg.pendingDate || null, biomarkers: msg.pendingBiomarkers }] : [])).map((entry, idx) => (
-                              <div key={idx} className="space-y-1">
-                                <div className="flex items-center justify-between py-1 bg-slate-50 dark:bg-slate-800/50 px-2 rounded-md mb-2">
-                                  <span className="text-slate-500 dark:text-slate-400 font-bold text-[10px] uppercase">Record Date</span>
-                                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">{entry.date || 'Unknown Date'}</span>
-                                </div>
-                                {entry.tests && Array.isArray(entry.tests) ? (
-                                  entry.tests.map((test: any, tIdx: number) => {
-                                    const def = biomarkerDefinitions.find(d => d.key === test.key);
-                                    const customDef = msg.pendingProfile?.customBiomarkers?.[test.key] || profile?.customBiomarkers?.[test.key];
-                                    const name = def?.name || customDef?.name || test.key;
-                                    const displayValue = test.valueNumeric !== null && test.valueNumeric !== undefined ? test.valueNumeric : (test.valueString || "");
-                                    return (
-                                      <div key={`${test.key || 'test'}_${tIdx}`} className="border-b border-slate-100 dark:border-slate-800/30 py-2 text-xs px-2 space-y-1">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-slate-700 dark:text-slate-300 font-semibold">{name}</span>
-                                          <span className="font-mono font-bold text-slate-950 dark:text-slate-50">
-                                            {displayValue} {test.unit || ""}
-                                          </span>
-                                        </div>
-                                        {test.originalTestName && test.originalTestName !== name && (
-                                          <div className="text-[10px] text-slate-400 dark:text-slate-500">
-                                            Original name: <span className="italic">{test.originalTestName}</span>
-                                          </div>
-                                        )}
-                                        {test.normalRange && (
-                                          <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                                            <span className="font-medium">Ref Range:</span>
-                                            <span className="font-mono">{test.normalRange}</span>
-                                          </div>
-                                        )}
-                                        {test.doctorComment && (
-                                          <div className="text-[10px] bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 p-1.5 rounded mt-1 border border-indigo-100/30 leading-relaxed">
-                                            <span className="font-bold uppercase tracking-wider text-[8px] mr-1">Note:</span>
-                                            {test.doctorComment}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })
-                                ) : (
-                                  entry.biomarkers && typeof entry.biomarkers === 'object' && Object.entries(entry.biomarkers).map(([key, val]) => {
+                            {(msg.pendingBiomarkerEntries && Array.isArray(msg.pendingBiomarkerEntries) && msg.pendingBiomarkerEntries.length > 0) ? (
+                              <AgentResultTable
+                                agentType="medical_extract"
+                                agentResult={msg.pendingBiomarkerEntries}
+                                profile={profile}
+                                biomarkerHistory={biomarkerHistory}
+                                onSendMessage={handleSend}
+                                onApplyChanges={async (unselectedKeys) => {
+                                  if (onLogMedical) {
+                                    const isContinuation = !!(msg.status === 'needs_continuation' || msg.agentResult?.status === 'needs_continuation' || msg.agentResult?.hasMore || msg.agentResult?.hasMoreMarkers || msg.agentResult?.needsContinuation);
+                                    
+                                    // Filter pendingBiomarkers
+                                    const filteredBiomarkers = { ...(msg.pendingBiomarkers || {}) };
+                                    if (Array.isArray(unselectedKeys)) {
+                                      unselectedKeys.forEach(k => delete filteredBiomarkers[k]);
+                                    }
+
+                                    // Filter pendingBiomarkerEntries
+                                    let filteredEntries = msg.pendingBiomarkerEntries;
+                                    if (Array.isArray(filteredEntries) && Array.isArray(unselectedKeys)) {
+                                      filteredEntries = filteredEntries.map((entry: any) => {
+                                        const newBiomarkers = { ...(entry.biomarkers || {}) };
+                                        unselectedKeys.forEach(k => delete newBiomarkers[k]);
+                                        const newTests = (entry.tests || []).filter((t: any) => !unselectedKeys.includes(t.key));
+                                        newTests.forEach((t: any) => {
+                                          newBiomarkers[t.key] = t.valueNumeric !== null && t.valueNumeric !== undefined ? t.valueNumeric : t.valueString;
+                                        });
+                                        return { ...entry, biomarkers: newBiomarkers, tests: newTests };
+                                      }).filter((entry: any) => Object.keys(entry.biomarkers).length > 0);
+                                    }
+                                    
+                                    onLogMedical(filteredBiomarkers, msg.pendingProfile || {}, msg.pendingDate, filteredEntries, msg.modificationCommand, isContinuation);
+                                    setLoggedMessageIds(prev => [...prev, msg.id]);
+                                    if (isContinuation) {
+                                      handleSend("Proceed with extraction.");
+                                    }
+                                  }
+                                }}
+                                onCancel={() => {
+                                  setLoggedMessageIds(prev => [...prev, msg.id]);
+                                  const isContinuation = !!(msg.status === 'needs_continuation' || msg.agentResult?.status === 'needs_continuation' || msg.agentResult?.hasMore || msg.agentResult?.hasMoreMarkers || msg.agentResult?.needsContinuation);
+                                  if (isContinuation) {
+                                    handleSend("Cancel extraction.");
+                                  }
+                                }}
+                              />
+                            ) : (
+                              (msg.pendingBiomarkers && typeof msg.pendingBiomarkers === 'object' && Object.keys(msg.pendingBiomarkers).length > 0 ? [{ date: msg.pendingDate || null, biomarkers: msg.pendingBiomarkers }] : []).map((entry, idx) => (
+                                <div key={idx} className="space-y-1">
+                                  <div className="flex items-center justify-between py-1 bg-slate-50 dark:bg-slate-800/50 px-2 rounded-md mb-2">
+                                    <span className="text-slate-500 dark:text-slate-400 font-bold text-[10px] uppercase">Record Date</span>
+                                    <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">{entry.date || 'Unknown Date'}</span>
+                                  </div>
+                                  {entry.biomarkers && typeof entry.biomarkers === 'object' && Object.entries(entry.biomarkers).map(([key, val]) => {
                                     const def = biomarkerDefinitions.find(d => d.key === key);
                                     const customDef = msg.pendingProfile?.customBiomarkers?.[key] || profile?.customBiomarkers?.[key];
                                     const name = def?.name || customDef?.name || key;
@@ -2305,15 +2690,15 @@ export default function LogChat({
                                         </span>
                                       </div>
                                     );
-                                  })
-                                )}
-                              </div>
-                            ))}
+                                  })}
+                                </div>
+                              ))
+                            )}
                           </>
                         )}
                       </div>
 
-                      {msg.mode !== 'plan' && msg.mode !== 'discussion' && (
+                      {msg.mode !== 'plan' && msg.mode !== 'discussion' && !(msg.pendingBiomarkerEntries && Array.isArray(msg.pendingBiomarkerEntries) && msg.pendingBiomarkerEntries.length > 0) && (
                         <div className="pt-2 space-y-2">
                           <button
                             onClick={() => {
@@ -2718,6 +3103,18 @@ export default function LogChat({
         budget={budget}
         currency={currency}
         maxDistance={maxDistance}
+      />
+      <FullScreenLogViewer
+        isOpen={showFullScreenDebugLogs}
+        onClose={() => setShowFullScreenDebugLogs(false)}
+        title="AI Agent Diagnostic Log History"
+        logsText={debugLogs.map(l => `[${l.timestamp}] ${l.message}`).join('\n')}
+        logsArray={debugLogs.map(l => `[${l.timestamp}]\n${l.message}`)}
+        onSendToAdmin={handleSendDebugLogsToAdmin}
+        isSendingLogs={isDebugSendingLogs}
+        logsSendStatus={debugLogsSendStatus}
+        onClearLogs={handleClearDebugLogs}
+        eventsCount={debugLogs.length}
       />
     </div>
   );

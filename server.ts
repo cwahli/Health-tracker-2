@@ -1,7 +1,14 @@
+import { getApps, initializeApp } from 'firebase-admin/app';
+if (getApps().length === 0) {
+  initializeApp();
+}
+import { getAuth as getAdminAuth } from 'firebase-admin/auth';
+const adminAuth = getAdminAuth();
 import express from "express";
 import path from "path";
 import fs from "fs";
 import { GoogleGenAI, Type } from "@google/genai";
+import { getNutrientsForFood } from "./server_food_db";
 import dotenv from "dotenv";
 import YAML from "yaml";
 import { AsyncLocalStorage } from "async_hooks";
@@ -82,8 +89,23 @@ try {
   console.error("[Firebase] Error initializing Firestore on server:", err.message || err);
 }
 
-const app = express();
-const PORT = 3000;
+function extractBalancedJson(text: string): string {
+  let cleaned = text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+  const startIdx = cleaned.indexOf("{");
+  if (startIdx !== -1) {
+    let depth = 0;
+    for (let i = startIdx; i < cleaned.length; i++) {
+      if (cleaned[i] === "{") depth++;
+      else if (cleaned[i] === "}") depth--;
+      if (depth === 0) {
+        return cleaned.substring(startIdx, i + 1);
+      }
+    }
+  }
+  return cleaned;
+}
+\nconst app = express();
+const PORT = parseInt(process.env.PORT || '3000', 10);
 const SERVER_START_TIME = Date.now();
 
 async function startServer() {
@@ -134,29 +156,30 @@ let sessionDebugLogs: { [sessionId: string]: DebugLog[] } = {};
 function addDebugLog(msg: string, explicitSessionId?: string) {
   const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
   
+  // Truncate huge base64 data URLs globally to prevent massive bloating of diagnostic logs
+  let sanitizedMsg = msg || "";
+  if (typeof sanitizedMsg === 'string' && sanitizedMsg.includes("data:image/")) {
+    sanitizedMsg = sanitizedMsg.replace(/(data:image\/[^;]+;base64,)[A-Za-z0-9+/=]{100,}/g, "$1... [truncated base64 image data]");
+  }
+  
   // Keep the container stdout clean by truncating huge multiline logs in console.log
-  if (msg && msg.length > 500) {
-    const lines = msg.split('\n');
-    if (lines.length > 25) {
-      const truncatedConsoleMsg = lines.slice(0, 25).join('\n') + `\n... [Truncated ${lines.length - 25} lines from container console.log. Full detailed payload is saved in session memory and visible via the Full-Screen Diagnostic Log Viewer UI] ...`;
-      console.log(`[LLM DEBUG ${timestamp}]: ${truncatedConsoleMsg}`);
-    } else {
-      console.log(`[LLM DEBUG ${timestamp}]: ${msg}`);
-    }
+  const singleLineLog = sanitizedMsg.replace(/\n/g, '\\n');
+  if (singleLineLog.length > 300) {
+    console.log(`[LLM DEBUG ${timestamp}]: ${singleLineLog.substring(0, 300)}... [Truncated ${singleLineLog.length - 300} chars. Full detailed payload is saved in session memory and visible via the Full-Screen Diagnostic Log Viewer UI]`);
   } else {
-    console.log(`[LLM DEBUG ${timestamp}]: ${msg}`);
+    console.log(`[LLM DEBUG ${timestamp}]: ${singleLineLog}`);
   }
   
   const sessionId = explicitSessionId || logSessionStorage.getStore() || "global";
   if (!sessionDebugLogs[sessionId]) {
     sessionDebugLogs[sessionId] = [];
   }
-  sessionDebugLogs[sessionId].push({ timestamp, message: msg });
+  sessionDebugLogs[sessionId].push({ timestamp, message: sanitizedMsg });
   if (sessionDebugLogs[sessionId].length > 1500) {
     sessionDebugLogs[sessionId].shift();
   }
 
-  globalDebugLogs.push({ timestamp, message: msg });
+  globalDebugLogs.push({ timestamp, message: sanitizedMsg });
   if (globalDebugLogs.length > 2000) {
     globalDebugLogs.shift();
   }
@@ -210,37 +233,22 @@ async function fetchGoogleMapsPlaceId(businessName: string, latitude: string | n
 }
 
 function robustParseJson(cleanJson: string): any {
-  cleanJson = cleanJson.replace(/```(?:json)?/gi, "").trim();
-  try {
-    return JSON.parse(cleanJson);
-  } catch (parseErr) {
-    const firstBrace = cleanJson.indexOf("{");
-    const lastBrace = cleanJson.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      let lastIdx = lastBrace;
-      while (lastIdx > firstBrace) {
-        try {
-          return JSON.parse(cleanJson.substring(firstBrace, lastIdx + 1));
-        } catch (e: any) {
-          addDebugLog(`[RouteAgent Chat] Error: ${e.message}`);
-          lastIdx = cleanJson.lastIndexOf("}", lastIdx - 1);
+  let cleaned = cleanJson.replace(/\`\`\`(?:json)?/gi, "").replace(/\`\`\`/g, "").trim();
+  
+  // Array fallback
+  if (cleaned.startsWith("[")) {
+      let depth = 0;
+      for (let i = 0; i < cleaned.length; i++) {
+        if (cleaned[i] === "[") depth++;
+        else if (cleaned[i] === "]") depth--;
+        if (depth === 0) {
+          return JSON.parse(cleaned.substring(0, i + 1));
         }
       }
-    }
-    const firstBracket = cleanJson.indexOf("[");
-    const lastBracket = cleanJson.lastIndexOf("]");
-    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-      let lastIdx = lastBracket;
-      while (lastIdx > firstBracket) {
-        try {
-          return JSON.parse(cleanJson.substring(firstBracket, lastIdx + 1));
-        } catch (e) {
-          lastIdx = cleanJson.lastIndexOf("]", lastIdx - 1);
-        }
-      }
-    }
-    throw parseErr;
   }
+  
+  return JSON.parse(extractBalancedJson(cleaned));
+}
 }
 
 // Unified Multi-Provider LLM Router with automatic fallbacks & simulation modes
@@ -622,7 +630,7 @@ async function callUnifiedLLM({
     addDebugLog(`[UnifiedLLM-Response] Complete response returned from agent:\n${response.text || "{}"}`);
     return response.text || "{}";
   } catch (err: any) {
-    addDebugLog(`[UnifiedLLM] First generation attempt failed: ${err.message || err}.`);
+    addDebugLog(`[UnifiedLLM] First generation attempt failed: ${err.message || err}. Stack: ${err.stack}`);
     if (googleSearch) {
       addDebugLog(`[UnifiedLLM] Retrying without Google Search Grounding...`);
       const fallbackConfig = { ...configObj };
@@ -740,7 +748,54 @@ async function callUnifiedLLM({
         throw retryErr;
       }
     } else {
-      throw err;
+      addDebugLog(`[UnifiedLLM] No googleSearch fallback available. Attempting REST API fallback to bypass SDK bugs...`);
+      try {
+        const restPayload = {
+          systemInstruction: { parts: [{ text: resolvedInstruction }] },
+          contents: [
+            { role: "user", parts: initialParts }
+          ],
+          generationConfig: {
+            responseMimeType: isJson ? "application/json" : "text/plain"
+          }
+        } as any;
+        
+        if (enablePlaceIdTool) {
+          restPayload.tools = [{
+            functionDeclarations: [
+              {
+                name: "get_google_maps_place_id",
+                description: "Retrieves the exact Google Maps Place ID when given a business name and coordinates.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    business_name: { type: "STRING" },
+                    latitude: { type: "STRING" },
+                    longitude: { type: "STRING" }
+                  },
+                  required: ["business_name", "latitude", "longitude"]
+                }
+              }
+            ]
+          }];
+        }
+        
+        const restRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetGeminiModel}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(restPayload)
+        });
+        if (!restRes.ok) {
+          let errMsg = `API request failed: ${restRes.status}`;
+          try { const errData = await restRes.json(); errMsg = errData.error?.message || errMsg; } catch {}
+          throw new Error(errMsg);
+        }
+        const data = await restRes.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+      } catch (restErr: any) {
+        addDebugLog(`[UnifiedLLM] REST API fallback also failed: ${restErr.message}`);
+        throw err; // Throw the original SDK error if REST fails
+      }
     }
   }
   } catch (err: any) {
@@ -767,8 +822,20 @@ app.get("/api/status", (req, res) => {
 });
 
 // Sync endpoints
-app.post("/api/sync/save", (req, res) => {
+app.post("/api/sync/save", async (req, res) => {
   try {
+    const idToken = req.headers.authorization?.split('Bearer ')[1];
+    if (!idToken) {
+      return res.status(401).json({ error: 'Unauthorized: missing token' });
+    }
+    try {
+      const decoded = await adminAuth.verifyIdToken(idToken);
+      if (decoded.email?.toLowerCase() !== (req.body.email || '').toLowerCase()) {
+        return res.status(403).json({ error: 'Forbidden: email mismatch' });
+      }
+    } catch (e) {
+      return res.status(401).json({ error: 'Unauthorized: invalid token' });
+    }
     const { email, data } = req.body;
     if (!email) {
       return res.status(400).json({ error: "Email is required for syncing" });
@@ -785,8 +852,20 @@ app.post("/api/sync/save", (req, res) => {
   }
 });
 
-app.post("/api/sync/load", (req, res) => {
+app.post("/api/sync/load", async (req, res) => {
   try {
+    const idToken = req.headers.authorization?.split('Bearer ')[1];
+    if (!idToken) {
+      return res.status(401).json({ error: 'Unauthorized: missing token' });
+    }
+    try {
+      const decoded = await adminAuth.verifyIdToken(idToken);
+      if (decoded.email?.toLowerCase() !== (req.body.email || '').toLowerCase()) {
+        return res.status(403).json({ error: 'Forbidden: email mismatch' });
+      }
+    } catch (e) {
+      return res.status(401).json({ error: 'Unauthorized: invalid token' });
+    }
     const { email } = req.body;
     if (!email) {
       return res.status(400).json({ error: "Email is required for syncing" });
@@ -949,6 +1028,10 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
     let imageCtx = "";
     if (imagePayloads && imagePayloads.length > 0) {
       imageCtx = `\n[Context: An image of the meal is uploaded and attached above. Rely heavily on visual cues in the picture for portion sizing, ingredients, and freshness.]\n`;
+      if (imageDates && imageDates.length > 0) {
+        const primaryImageDate = imageDates[0];
+        imageCtx += `\n[CRITICAL DATE OVERRIDE: The uploaded image was taken on ${primaryImageDate}. You MUST use this exact date or its nearest YYYY-MM-DD representation as the "date" field in "foodData", completely overriding the CURRENT TIME CONTEXT, unless the user explicitly asks otherwise.]\n`;
+      }
     }
 
     let historyContext = "";
@@ -966,13 +1049,31 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       ? `• Calories: ${remainingAllowance.calories} kcal remaining | Saturated Fat: ${remainingAllowance.saturatedFat}g remaining | Sodium: ${remainingAllowance.sodium}mg remaining`
       : "• Calories: 2000 kcal remaining | Saturated Fat: 20g remaining | Sodium: 2300mg remaining";
 
-    const mealStr = activeMeal ? JSON.stringify(activeMeal, null, 2) : "None";
+    // Clean activeMeal by replacing huge base64 strings before stringifying to save token costs and prevent logs bloating
+    let sanitizedActiveMeal = null;
+    if (activeMeal) {
+      sanitizedActiveMeal = { ...activeMeal };
+      if (sanitizedActiveMeal.imageUrl && sanitizedActiveMeal.imageUrl.startsWith("data:image/")) {
+        sanitizedActiveMeal.imageUrl = "[base64_image_data_truncated]";
+      }
+      if (sanitizedActiveMeal.imageUrls && Array.isArray(sanitizedActiveMeal.imageUrls)) {
+        sanitizedActiveMeal.imageUrls = sanitizedActiveMeal.imageUrls.map((url: string) => 
+          url && url.startsWith("data:image/") ? "[base64_image_data_truncated]" : url
+        );
+      }
+      if (sanitizedActiveMeal.chatTranscript) {
+        delete sanitizedActiveMeal.chatTranscript;
+      }
+    }
+
+    const mealStr = sanitizedActiveMeal ? JSON.stringify(sanitizedActiveMeal, null, 2) : "None";
 
     const systemInstruction = `CURRENT_ACTIVE_MEAL_STATE: ${mealStr}
 
-You are an expert clinical dietitian and nutritional LLM analyzer. Your response must be an exact single JSON object matching the requested structure. Never add markdown formatting or wrappers like \`\`\`json.
+You are an expert clinical dietitian and nutritional LLM analyzer operating within an automated personalized health ecosystem. Your response must be an exact single YAML object matching the requested structure. Never add markdown formatting wrappers like \`\`\`yaml unless instructed.
 
-CRITICAL PATIENT BIOMARKER WARNINGS:
+=== PATIENT CONTEXT PAYLOAD ===
+CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
 ${biomarkersList}
 - If LDL-C/cholesterol is HIGH, any food high in saturated fat is EXTREMELY harmful. Rate as "bad" and warn in "risks".
 - If Blood Pressure/Sodium is HIGH, any food high in sodium is EXTREMELY harmful. Rate as "bad".
@@ -980,59 +1081,85 @@ ${biomarkersList}
 TODAY'S REMAINING NUTRITIONAL TARGET LIMITS:
 ${targetLimits}
 
-=== MODE ROUTING DIRECTIVE (CRITICAL) ===
-You operate in three distinct modes based on the user's input:
+=== UNIVERSAL HEALTH DIRECTIVE (STRICT) ===
+TRANS FAT AVOIDANCE: Trans fat (partially hydrogenated oils) is universally harmful and must be avoided regardless of the patient's specific biomarkers. Always aggressively flag any food likely to contain trans fats (e.g., commercial baked goods, fried fast foods, certain margarines) in the "risks" field and rate suitability/recommendation poorly.
 
-MODE A: NEW FOOD LOGGING (Triggered if a NEW image or new food text is provided)
-- Analyze the new food. Provide precise metrics and the full 30-nutrient breakdown.
-- Set "mode": "new_log". Provide the full "foodData" object.
+=== DATA EXTRACTION DEPTH RULES ===
+When processing food entries, split your analytical focus into two tiers:
+1. CORE NUTRIENTS (Top 11: Calories, Protein, Carbohydrates, Total Fat, Saturated Fat, Trans Fat, Added Sugar, Sodium, Potassium, Total Fibre, Soluble Fibre): Execute deep reasoning. Analyze the meal description or image for hidden ingredients, preparation methods, and ingredient distribution density to ensure high contextual precision.
+2. SYSTEMIC BASELINES (Other trace vitamins/minerals): Do not waste analytical compute. The backend will apply standard, generic nutritional database averages for these based on your "canonicalDbName" output.
 
-MODE B: DISCUSSION (Triggered if the user asks a general question, like "Why is this bad?" or "Why does it have so much fat?")
-- Answer conversationally based on standard clinical values and the CURRENT_ACTIVE_MEAL_STATE provided in the prompt.
-- Set "mode": "discussion". Leave "foodData" and "modificationCommand" as null.
+=== MODE ROUTING DIRECTIVE ===
+Operate in one of four distinct modes based on current user intent:
 
-MODE C: MODIFICATION COMMAND (Triggered if the user asks to change, add, or remove an item)
-- DO NOT CALCULATE THE NEW NUTRIENT NUMBERS YOURSELF.
-- Instead, inspect the CURRENT_ACTIVE_MEAL_STATE and output a command telling the backend system exactly what the user wants to change.
-- Set "mode": "modify". Leave "foodData" as null. Fill out the "modificationCommand" array.
+MODE A: NEW FOOD LOGGING (Triggered by a new food item description or image)
+- Extract and map ingredients to standard, database-friendly food classifications in "canonicalDbName".
+- Estimate total visual/described item portion weights in "weightGrams".
+- Do NOT output nutrient values directly. The backend database will handle the calculations.
+- Set "mode": "new_log". Provide the "foodData" block.
 
-JSON SCHEMA STRICT REQUIREMENT:
-Respond ONLY with a structured JSON format matching this schema exactly:
-{
-  "mode": "new_log" | "discussion" | "modify",
-  "message": "Conversational response explaining the clinical impact, breakdown, or acknowledging the adjustment.",
-  "modificationCommand": [
-    {
-      "action": "update_weight" | "remove_item" | "add_item",
-      "itemName": "Literal name of the item from the active state to change (e.g., 'Beef Steak')",
-      "newWeightGrams": number
-    }
-  ],
-  "foodData": {
-    "date": "YYYY-MM-DD",
-    "name": "Literal food name",
-    "composition": "Short summary of main ingredients",
-    "weightGrams": number,
-    "quantity": "1 serving",
-    "benefits": "Clinical benefits",
-    "risks": "Clinical warnings tied to biomarkers",
-    "healthImpact": "Impact on remaining daily targets",
-    "recommendation": "good" | "bad" | "neutral",
-    "itemsBreakdown": [
-      {
-        "name": "individual item name",
-        "weightGrams": number,
-        "calories": number,
-        "saturatedFat": number,
-        "sodium": number
-      }
-    ],
-    "nutrients": {
-      "calories": number, "protein": number, "totalFat": number, "saturatedFat": number, "unsaturatedFat": number, "omega3": number, "carbohydrates": number, "addedSugar": number, "totalFibre": number, "solubleFibre": number, "sodium": number, "potassium": number, "magnesium": number, "calcium": number, "iron": number, "zinc": number, "selenium": number, "iodine": number, "phosphorus": number, "vitaminD": number, "vitaminB12": number, "folate": number, "vitaminC": number, "vitaminE": number, "vitaminK": number, "vitaminA": number, "vitaminB6": number, "thiamine": number, "riboflavin": number, "niacin": number
-    }
-  }
-}
-If mode is not "new_log", leave foodData as null. If mode is not "modify", leave modificationCommand as null. Return ONLY raw JSON.`;
+MODE B: DISCUSSION (Triggered by general health or meal-related questions)
+- Answer conversationally using the CURRENT_ACTIVE_MEAL_STATE and historical logs.
+- Set "mode": "discussion". Set structural data objects to null.
+
+MODE C: MODIFICATION COMMAND (Triggered by requests to alter a logged meal state)
+- Output functional instructions to modify ingredients or weights. Do not compute math yourself.
+- Set "mode": "modify". Populate the "modificationCommand" array.
+
+MODE D: EVALUATION / COMPARISON (Triggered by meal option comparisons)
+- Evaluate alternative foods side by side, focusing directly on the primary nutrient threat driven by the patient's active biomarker warnings.
+- Set "mode": "evaluation". Provide the complete "comparison" object.
+
+YAML SCHEMA STRICT REQUIREMENT:
+Respond ONLY with a structured YAML format matching this schema exactly. Values must be dynamically derived from the patient's specific profile conditions and injected directives.
+
+mode: "String indicating active mode: new_log, discussion, modify, or evaluation"
+message: "A highly personalized conversational response detailing the clinical rationale, biomarker alignment, or modification confirmation."
+modificationCommand: null or list of:
+  - action: "update_weight" | "remove_item" | "add_item"
+    itemName: "Literal name of the item from the active state to change"
+    newWeightGrams: number
+foodData: null or:
+  date: "YYYY-MM-DD (Dynamically set based on provided current time context)"
+  name: "Literal food name"
+  composition: "Brief operational summary of food ingredients"
+  weightGrams: number
+  quantity: "Visual descriptive serving size (e.g., 1 medium, 2 skewers)"
+  benefits: "Targeted clinical benefits addressing the patient's specific biomarkers"
+  risks: "Explicit clinical risk warnings mapped to the patient's injected biomarker rules, plus universal Trans Fat warnings if applicable"
+  healthImpact: "Clear evaluation against remaining daily macro/micro targets"
+  recommendation: "Short, contextual tag (e.g., 'Best today', 'Heart-healthy', 'Caution: High Sodium', 'Perfect for target')"
+  itemsBreakdown:
+    - canonicalDbName: "Standardized target food name for local DB query execution"
+      weightGrams: number
+comparison: null or:
+  keyNutrientConcern: "The specific nutrient string causing primary clinical concern for this profile session"
+  foods:
+    - name: "Food option item name"
+      weightGrams: number
+      suitability: "Short, contextual tag (e.g., 'Safest option', 'Moderate risk', 'Avoid')"
+      pros: "Targeted biomarker benefits"
+      cons: "Targeted biomarker risks"
+  comparisonTableYaml:
+    columns: ["Nutrient", "Food A", "Food B", "Target / Warning"]
+    rows:
+      - nutrient: "Calories"
+        foodA: "value"
+        foodB: "value"
+        target: "value"
+      - nutrient: "Top Nutrient 1"
+        foodA: "value"
+        foodB: "value"
+        target: "value"
+      - nutrient: "Top Nutrient 2"
+        foodA: "value"
+        foodB: "value"
+        target: "value"
+      - nutrient: "Top Nutrient 3"
+        foodA: "value"
+        foodB: "value"
+        target: "value"
+`;
 
     const finalSystemInstruction = customSystemInstruction || systemInstruction;
     const promptText = customVariableData 
@@ -1041,30 +1168,30 @@ If mode is not "new_log", leave foodData as null. If mode is not "modify", leave
 ${userCtx}
 ${timeCtx}
 ${imageCtx}
-
+ 
 Current User Input: "${message}"`;
 
     const fullPromptSent = `System Instruction:\n${finalSystemInstruction}\n\n${promptText}`;
     addDebugLog(`[RouteAgent Chat] Sending request to Gemini...`);
-          const textOutput = await callUnifiedLLM({
+    const textOutput = await callUnifiedLLM({
       modelId: engine || "gemini-2.5-flash",
       systemInstruction: finalSystemInstruction,
       promptText,
       imagePayloads,
-      responseMimeType: "application/json"
+      responseMimeType: "text/plain"
     });
 
     addDebugLog(`[RouteAgent Chat] Received response from Gemini. Length: ${textOutput.length} chars.`);
-          let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+    let cleanYaml = textOutput.replace(/```(?:yaml|json)?/gi, "").trim();
     let rawParsed;
     try {
-      rawParsed = JSON.parse(cleanJson);
+      rawParsed = YAML.parse(cleanYaml);
     } catch (parseErr: any) {
-      const firstBrace = cleanJson.indexOf("{");
-      const lastBrace = cleanJson.lastIndexOf("}");
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        rawParsed = JSON.parse(cleanJson.substring(firstBrace, lastBrace + 1));
-      } else {
+      addDebugLog(`[YAML Parse Error] Standard YAML parse failed: ${parseErr.message}. Trying JSON parser...`);
+      try {
+        rawParsed = JSON.parse(cleanYaml);
+      } catch (jsonErr: any) {
+        addDebugLog(`[JSON Parse Error] JSON parse also failed: ${jsonErr.message}.`);
         throw parseErr;
       }
     }
@@ -1075,8 +1202,20 @@ Current User Input: "${message}"`;
     if (mode === "discussion") {
       addDebugLog(`[Mode Routing] DISCUSSION mode triggered (0 database operations).`);
       return res.json({
+        mode: "discussion",
         text: rawParsed.message || "Here is the details on this meal composition.",
         data: null,
+        agentPrompt: fullPromptSent
+      });
+    }
+
+    // CASE D: evaluation mode
+    if (mode === "evaluation") {
+      addDebugLog(`[Mode Routing] EVALUATION mode triggered.`);
+      return res.json({
+        mode: "evaluation",
+        text: rawParsed.message || "Here is the comparison between the options.",
+        comparison: rawParsed.comparison || null,
         agentPrompt: fullPromptSent
       });
     }
@@ -1099,51 +1238,70 @@ Current User Input: "${message}"`;
       parsedData.name = sanitizeString(rawFoodData.name, "Meal Log");
       parsedData.date = sanitizeString(rawFoodData.date, new Date().toISOString().split("T")[0]);
       parsedData.composition = sanitizeString(rawFoodData.composition, "Unspecified ingredients");
-      parsedData.weightGrams = Number(rawFoodData.weightGrams) || 150;
+      
+      const totalWeightGrams = Number(rawFoodData.weightGrams) || 150;
+      parsedData.weightGrams = totalWeightGrams;
       parsedData.quantity = sanitizeString(rawFoodData.quantity, "1 serving");
       parsedData.benefits = sanitizeString(rawFoodData.benefits, "Provides foundational vitamins, minerals, and macronutrients.");
       parsedData.risks = sanitizeString(rawFoodData.risks, "No specific adverse biomarkers flagged for your profile.");
       parsedData.healthImpact = sanitizeString(rawFoodData.healthImpact, "Contributes to daily macro and micronutrient requirements.");
-      
-      const rec = String(rawFoodData.recommendation).toLowerCase();
-      parsedData.recommendation = (rec === "good" || rec === "bad" || rec === "neutral") ? rec : "neutral";
-      
-      const rawNutrients = rawFoodData.nutrients || {};
+      parsedData.recommendation = sanitizeString(rawFoodData.recommendation, "neutral");
+
       const nutrientKeys = [
-        "calories", "protein", "totalFat", "saturatedFat", "unsaturatedFat", "omega3", 
+        "calories", "protein", "totalFat", "saturatedFat", "transFat", "unsaturatedFat", "omega3", 
         "carbohydrates", "addedSugar", "totalFibre", "solubleFibre", "sodium", "potassium", 
         "magnesium", "calcium", "iron", "zinc", "selenium", "iodine", "phosphorus", 
         "vitaminD", "vitaminB12", "folate", "vitaminC", "vitaminE", "vitaminK", 
         "vitaminA", "vitaminB6", "thiamine", "riboflavin", "niacin"
       ];
-      
+
+      // Initialize all nutrients to 0
       parsedData.nutrients = {};
       for (const key of nutrientKeys) {
-        parsedData.nutrients[key] = Number(rawNutrients[key]) || 0;
+        parsedData.nutrients[key] = 0;
       }
 
-      if (rawFoodData.itemsBreakdown && Array.isArray(rawFoodData.itemsBreakdown)) {
-        parsedData.itemsBreakdown = rawFoodData.itemsBreakdown.map((item: any) => ({
-          name: sanitizeString(item.name, "Unspecified Item"),
-          weightGrams: Number(item.weightGrams) || 0,
-          calories: Number(item.calories) || 0,
-          saturatedFat: Number(item.saturatedFat) || 0,
-          sodium: Number(item.sodium) || 0
-        }));
+      // Map and construct itemsBreakdown using the high-precision standard foods database
+      if (rawFoodData.itemsBreakdown && Array.isArray(rawFoodData.itemsBreakdown) && rawFoodData.itemsBreakdown.length > 0) {
+        parsedData.itemsBreakdown = rawFoodData.itemsBreakdown.map((item: any) => {
+          const canonicalName = sanitizeString(item.canonicalDbName || item.name, "Unspecified Item");
+          const itemWeight = Number(item.weightGrams) || Math.round(totalWeightGrams / rawFoodData.itemsBreakdown.length);
+          
+          // Get the precise standard nutrients scaled for this item
+          const itemNutrients = getNutrientsForFood(canonicalName, itemWeight);
+
+          // Add to aggregated nutrients
+          for (const key of nutrientKeys) {
+            parsedData.nutrients[key] = parseFloat((parsedData.nutrients[key] + (itemNutrients[key as keyof typeof itemNutrients] || 0)).toFixed(2));
+          }
+
+          return {
+            name: canonicalName,
+            weightGrams: itemWeight,
+            calories: itemNutrients.calories || 0,
+            saturatedFat: itemNutrients.saturatedFat || 0,
+            sodium: itemNutrients.sodium || 0
+          };
+        });
       } else {
+        // Fallback: look up the whole food name in our high-precision database
+        const itemNutrients = getNutrientsForFood(parsedData.name, totalWeightGrams);
+        for (const key of nutrientKeys) {
+          parsedData.nutrients[key] = itemNutrients[key as keyof typeof itemNutrients] || 0;
+        }
         parsedData.itemsBreakdown = [
           {
             name: parsedData.name,
-            weightGrams: parsedData.weightGrams,
-            calories: parsedData.nutrients.calories,
-            saturatedFat: parsedData.nutrients.saturatedFat,
-            sodium: parsedData.nutrients.sodium
+            weightGrams: totalWeightGrams,
+            calories: itemNutrients.calories || 0,
+            saturatedFat: itemNutrients.saturatedFat || 0,
+            sodium: itemNutrients.sodium || 0
           }
         ];
       }
 
       return res.json({
-        text: rawParsed.message || `I have analyzed the food: **${parsedData.name}** (${parsedData.quantity}). It is recommended as **${parsedData.recommendation}** for your current profile.`,
+        text: rawParsed.message || `I have analyzed the food: **${parsedData.name}** (${parsedData.quantity}).`,
         data: parsedData,
         agentPrompt: fullPromptSent
       });
@@ -1302,7 +1460,8 @@ Current User Input: "${message}"`;
 // Gemini Medical/Biomarkers Analyze Endpoint
 app.post("/api/gemini/medical-analyze", async (req, res) => {
   try {
-    const { 
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "default-session";
+    let { 
       message, 
       image, 
       images, 
@@ -1319,57 +1478,87 @@ app.post("/api/gemini/medical-analyze", async (req, res) => {
       customVariableData
     } = req.body;
 
+    // Isolate Diagnostic Agent Data (agent6):
+    // Ensure agent6 only receives diagnostic-relevant data (biomarkers and profile)
+    // and is not sent other conversation or food log entries.
+    if (agentType === "agent6") {
+      recentMeals = [];
+      biomarkerHistory = [];
+      if (history && history.length > 0) {
+        history = history.filter((h: any) => {
+          if (!h.content) return false;
+          const lower = h.content.toLowerCase();
+          // Exclude food log messages, extracted biomarkers, and other unrelated agent content
+          if (
+            lower.includes("food log") || 
+            lower.includes("[extracted food") || 
+            lower.includes("active meal") || 
+            lower.includes("[extracted biomarkers") ||
+            lower.includes("meal log") ||
+            lower.includes("banana") ||
+            lower.includes("pineapple")
+          ) {
+            return false;
+          }
+          return true;
+        });
+      }
+      addDebugLog(`[Medical Analyze Agent] Diagnostic Agent (agent6) data isolated: other conversations and food log entries removed.`, explicitSessionId);
+    }
+
+    addDebugLog(`[Medical Analyze Agent] Request received for agentType: ${agentType || 'None'}. Message: "${String(message).substring(0, 100)}..."`, explicitSessionId);
+    if (history && history.length > 0) {
+      addDebugLog(`[Medical Analyze Agent] Included conversational history context (${history.length} turns).`, explicitSessionId);
+    }
+
+
     if (agentType) {
       let systemInstruction = "";
       let mockData: any = {};
       let fullPromptSent = "";
 
       if (agentType === "agent1_step1") {
-        const isFlashLite = engine && (engine.includes("lite") || engine.includes("flash-lite"));
-        const maxMetrics = isFlashLite ? 50 : 100;
-        systemInstruction = `You are an expert Clinical Data Extractor. Your sole objective is to parse raw health text/reports, isolate distinct biomarker measurements, and structure them into the mandated format. You act as a lossless data conduit.
-
-=== CRITICAL EXTRACTION DIRECTIVES ===
-1. ZERO MATH & VERBATIM EXTRACTION: You are strictly forbidden from performing any calculations, normalizations, or unit conversions. Extract the exact numerical value and the exact unit provided in the text.
-2. VERBATIM QUALITATIVE DATA: If a result is qualitative (e.g., "Negative", "Trace", "High"), extract it exactly as written.
-3. DICTIONARY MAPPING (MANDATORY): You MUST attempt to map the extracted biomarker name to an existing key within the === EXISTING DATABASE KEYS === list. If a direct synonym or clear clinical equivalent exists in the database keys, use that existing key.
-4. NEW KEYS (FALLBACK): ONLY if the biomarker represents a test completely absent from the === EXISTING DATABASE KEYS ===, you may generate a clean, lowercase snake_case key for it.
-
-=== MODE ROUTING DIRECTIVE ===
-If the user provides raw clinical text, photos, or data to be extracted, YOU MUST process the data, extract the biomarkers, and output the required YAML block format inside "extractedYaml". YOU MUST NOT fall back to conversational mode if data is present. ONLY use conversational mode if the user asks a direct question unrelated to data extraction.
+        const itemsPerBatch = req.body.numberOfBatches || 50;
+        
+        systemInstruction = `agent_profile:
+  role: "Expert Clinical Data Extractor and Lossless Data Conduit"
+  objective: "Parse raw medical reports/text/images, isolate distinct biomarker measurements, and structure them verbatim into standard clinical format."
+critical_extraction_rules:
+  zero_math_verbatim_extraction: "You are strictly forbidden from performing any calculations, normalizations, or unit conversions. Extract the exact numerical value and the exact unit provided in the text."
+  verbatim_qualitative_data: "Qualitative results (e.g., 'Negative', 'Trace', 'High') must be extracted exactly as written."
+  dictionary_mapping: "You MUST attempt to map the extracted biomarker name to an existing key within the === EXISTING DATABASE KEYS === list. If a direct synonym or clear clinical equivalent exists, use that exact existing key (e.g. use 'hba1c' instead of 'hemoglobin_a1c')."
+  fallback_keys: "If completely absent from existing keys, generate a clean, lowercase snake_case key."
+  unit_standardization: "Standardize 'µg/L' and 'ug/L' to always return as 'ug/L' (they are equivalent)."
+mode_routing:
+  priority: "Always prioritize structured data extraction over conversational text when raw medical data/text/photos are present."
+chunked_processing:
+  limit_per_chunk: ${itemsPerBatch}
+  behavior:
+    - "Extract ONLY the first ${itemsPerBatch} biomarker entries in this chunk."
+    - "If you reach the limit of ${itemsPerBatch} extracted biomarkers, set 'hasMoreMarkers' to true in your JSON response."
+    - "Copy any remaining unparsed report text/context into 'remainingText'."
+    - "In the 'text' response, kindly inform the user you have completed this chunk and ask to continue."
+    - "If total biomarkers <= ${itemsPerBatch}, set 'hasMoreMarkers' to false and 'remainingText' to empty string."
+required_output_format:
+  json_schema:
+    text: "string (Friendly clinical conversational message)"
+    extractedYaml: "string (Flat YAML array containing extracted biomarkers)"
+    hasMoreMarkers: "boolean"
+    remainingText: "string"
+    estimatedTotalMarkers: "number (Total estimated biomarker readings in original text)"
+extracted_yaml_schema:
+  - biomarker: "string (standardized name/key from existing keys if possible)"
+    date: "YYYY-MM-DD"
+    value: "number or string (qualitative)"
+    unit: "string (verbatim from text)"
+    explanation: "string (why/how it was mapped or created)"
+rules_for_inputs:
+  raw_data_extraction: "Extract only from raw text/report. Do NOT extract from pre-existing logs."
+  continue_extracting: "Append next chunk of up to ${itemsPerBatch} biomarkers. Combine and return complete combined flat YAML."
+  update_data: "Support editing, adding, or deleting biomarkers in the YAML array."
 
 === EXISTING DATABASE KEYS ===
-[${Object.keys(biomarkerDefinitions).join(', ')}]
-
-CHUNKED PROCESSING RULE (Max ${maxMetrics}):
-If the user's raw data/text contains more than ${maxMetrics} biomarker readings, you MUST split the processing into chunks:
-- Extract ONLY the first ${maxMetrics} biomarker entries in this chunk.
-- CRITICAL: If you reach the limit of ${maxMetrics} extracted biomarkers in this chunk, you MUST set "hasMoreMarkers" to true in your JSON response.
-- Copy any remaining unparsed report text/context into "remainingText" in your JSON response.
-- In "text", friendly inform the user that you have extracted the first ${maxMetrics} biomarkers and ask if they would like to continue.
-- If the total amount of biomarkers in the text is ${maxMetrics} or fewer, or if you are processing the final chunk of remaining text and finishing, set "hasMoreMarkers" to false and "remainingText" to "".
-
-You MUST respond with a JSON object containing the following keys:
-- "text": A friendly, clinical-grade conversational response to the user.
-- "extractedYaml": The flat YAML array representing the current state of extracted biomarkers.
-- "hasMoreMarkers": boolean (true if there are more than ${maxMetrics} biomarkers and you chunked them, false otherwise).
-- "remainingText": string (the remaining unparsed raw report text for the next chunk, or empty string if done).
-- "estimatedTotalMarkers": number (the total estimated number of biomarker readings present in the original input text, e.g., 60).
-
-YAML Schema for "extractedYaml" field (must be a single string containing valid YAML):
-- biomarker: string (use existing database keys if possible)
-  date: YYYY-MM-DD
-  value: number (or string if qualitative)
-  unit: string
-  explanation: string # Detail how it was mapped to the dictionary or if it is a new key
-
-Rules for handling user inputs:
-- INITIAL/RAW DATA extraction: If the user provided a health report, extract biomarkers from the USER RAW DATA section ONLY. Do NOT extract data from the EXISTING BIOMARKER LOGS section. Apply chunking.
-- CONTINUE EXTRACTING: If the user requests to continue, take the previous "extractedYaml" and append/extract the next chunk of up to ${maxMetrics} biomarkers. Output the COMBINED, COMPLETE flat YAML.
-- UPDATE DATA: If the user asks to edit, add, or delete a biomarker, perform that update on the YAML and return the updated "extractedYaml". DO NOT delete locked biomarkers (bmi, weight, height).
-- START A CONVERSATION: If the user asks general or clinical questions about the biomarkers, answer the question in "text" with precise clinical detail, and return the unmodified YAML.
-
-Make sure your entire output is valid JSON, containing "text", "extractedYaml", "hasMoreMarkers", "remainingText", and "estimatedTotalMarkers".`;
+[${Array.from(new Set([...Object.keys(biomarkerDefinitions), ...Object.keys(userProfile?.customBiomarkers || {})])).join(', ')}]`;
         mockData = {};
       } else if (agentType === "agent1") {
         systemInstruction = `You are an expert Clinical Data Parser and Medical Ontology Agent.
@@ -1387,7 +1576,7 @@ Your primary objective is to parse raw health reports, standardize clinical term
 6. Explanation of Changes (CRITICAL): For each biomarker, if you standardized, changed, merged, or corrected its name, value, or unit, you MUST provide a detailed explanation of why you made this change in the 'explanation' field of the YAML object.
 
 === EXISTING DATABASE KEYS ===
-[${Object.keys(biomarkerDefinitions).join(', ')}]
+[${Array.from(new Set([...Object.keys(biomarkerDefinitions), ...Object.keys(userProfile?.customBiomarkers || {})])).join(', ')}]
 
 === FORMAT & SYSTEM RESTRICTIONS ===
 Your output MUST be ONLY valid YAML under the key 'biomarkers'. No markdown code blocks, no backticks, no JSON wrappers. Just return plain YAML.
@@ -1448,12 +1637,26 @@ Make sure your entire output is valid JSON, containing "text" and "bucketMapping
 Your tasks:
 1. Assemble the flat YAML biomarker logs and the bucket mapping dictionary into a structured physiological nested JSON.
 CRITICAL REQUIREMENT: You MUST include EVERY SINGLE BIOMARKER ENTRY from the YAML. Do NOT skip or omit any biomarkers or history entries.
-2. Handle conversational questions, updates, requests to go back, or requests to continue/submit from the user.
+2. EXTREME DIVERGENCE FLAG: If you notice an extreme divergence in a biomarker value (e.g., highly unlikely, physiologically impossible, or a very clear metric unit mismatch like US vs SI), you MUST flag it by adding an array "flaggedAnomalies" to your JSON output. Mention this in your "text" response so the user can verify, confirm, or edit it (which may involve updating the metric unit).
+3. Handle conversational questions, updates, requests to go back, or requests to continue/submit from the user.
 
 You MUST respond with a JSON object containing the following keys:
-- "text": A friendly, clinical-grade conversational response to the user. If this is the initial assembly, write: "Data successfully processed and categorized." (or similar).
+- "text": A friendly, clinical-grade conversational response to the user. If this is the initial assembly and anomalies are found, alert the user here. If no anomalies, write: "Data successfully processed and categorized." (or similar).
 - "entriesCount": Total unique biomarker entries processed.
 - "buckets": An array of buckets matching the schema below.
+- "flaggedAnomalies": (Optional) Array of any extreme value divergences detected.
+
+Nested JSON schema for "flaggedAnomalies":
+[
+  {
+    "key": "biomarker_key",
+    "name": "Biomarker Name",
+    "originalValue": number,
+    "unit": "string",
+    "reason": "Explanation of why this value seems anomalous or if it might be a unit mismatch (US vs SI).",
+    "suggestedAction": "Suggestion for the user (e.g., 'Confirm this value is correct', 'Update value or metric unit')"
+  }
+]
 
 Nested JSON schema for "buckets":
 [
@@ -1804,7 +2007,13 @@ For each biomarker, follow a strict logical funnel to determine the correct rang
 You MUST include an analysis for EVERY biomarker in the input list.
 Ensure output is STRICTLY valid YAML matching the exact abstract structure and placeholder instructions below. Do not wrap the output in markdown code blocks if unsupported by the pipeline.
 
-message: <string: Conversational summary of clinical range adjustments and review findings for this batch.>
+message: <string: Conversational summary of clinical range adjustments and review findings for this batch. If there are extreme divergences, highlight them here.>
+extremeDivergences: <list: Only include this array if you find extreme value or unit divergences (e.g., physiologically impossible values, clear US vs SI metric mixups). Otherwise omit it or leave empty.>
+  - key: <string: Exact key>
+    originalValue: <number>
+    unit: <string>
+    reason: <string: Explain why it seems anomalous or unit mismatched>
+    suggestedAction: <string: Suggestion (e.g. 'Update value' or 'Change metric unit')>
 reviewedBiomarkers:
   - key: <string: Exact key from the input data>
     name: <string: Standard clinical name of the biomarker>
@@ -1924,6 +2133,9 @@ reviewedBiomarkers: []`;
         let attempt = 0;
         let success = false;
         
+        addDebugLog(`[Medical Analyze Agent] Dispatched System Instruction (Length: ${systemInstruction.length})`, explicitSessionId);
+        addDebugLog(`[Medical Analyze Agent] Dispatched Prompt:\n${promptText.substring(0, 500)}... (truncated)`, explicitSessionId);
+
         while (attempt < maxRetries && !success) {
           attempt++;
           textOutput = await callUnifiedLLM({
@@ -1935,6 +2147,8 @@ reviewedBiomarkers: []`;
             responseMimeType: isYaml ? "text/plain" : "application/json"
           });
           
+          addDebugLog(`[Medical Analyze Agent] Response Received:\n${textOutput}`, explicitSessionId);
+
           if (agentType === "agent1_step3") {
             try {
               let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
@@ -2202,11 +2416,9 @@ reviewedBiomarkers: []`;
     if (lastItem) {
       resumeCtx = `\nPREVIOUS EXTRACTION STATE:\nYou previously stopped at: "${lastItem}".\nYou MUST start your next extraction chunk immediately AFTER this item in the user's data.\n`;
     }
-
     const promptText = `Chat History:\n${historyText}\n${imageCtx}\nUser message: "${message}"${resumeCtx}`;
-
+    const itemsPerBatch = req.body.numberOfBatches || 50;
     const systemInstruction = `You are an expert clinical data parsing agent. Your sole objective is to extract raw, unstructured medical data into a strict JSON schema with absolute, zero-loss accuracy. You are a parser, not an interpreter; do not alter the medical reality of the data.
-
 Never add markdown formatting or wrappers like \`\`\`json.
 
 CURRENT USER PROFILE:
@@ -2217,30 +2429,33 @@ CURRENT USER PROFILE:
 - Blood Type: ${userProfile?.bloodType || 'Not provided'}
 - Gender: ${userProfile?.gender || 'Not provided'}
 
-EXISTING DATABASE KEYS ALREADY IN USE: 
-[${existingKeys.join(', ')}]
+EXISTING DATABASE KEYS ALREADY IN USE: [${existingKeys.join(', ')}]
 
 === CRITICAL EXTRACTION DIRECTIVES ===
 1. ZERO MATH & STRICT VERBATIM VALUES (CRITICAL): You are strictly forbidden from performing any calculations. NEVER convert international SI units to US units. You must extract the exact numeric digits provided in the source text into \`valueNumeric\`.
 2. LOSSLESS PRESERVATION: You must capture the exact raw string of the test in \`originalTestName\`. You must capture the exact physician or lab note in \`doctorComment\`. You must capture the exact reference range in \`normalRange\`. DO NOT summarize or truncate these fields.
 3. QUALITATIVE DATA: If a result is text (e.g., "NEGATIVE"), place the exact word in \`valueString\` and leave \`valueNumeric\` null.
 4. UNIT ISOLATION: Output the unit in the \`unit\` field. Standardize the typography (e.g., format "mmol" as "mmol/L" if applicable), but NEVER change the fundamental metric.
-5. KEY GENERATION: To prevent database duplicates, generate a clean, concise snake_case \`key\` representing the standard medical name of the test, appending the unit (e.g., "hemoglobin_a1c_mmol_mol"). Prioritize matching an exact key from the "EXISTING DATABASE KEYS" list if applicable.
+5. KEY GENERATION: To prevent database duplicates, generate a clean, concise snake_case \`key\` representing the standard medical name of the test, using a standardized base name (e.g., "hba1c"). Prioritize matching an exact key from the "EXISTING DATABASE KEYS" list if applicable.
 6. DATE FORMAT: Convert all dates to strictly "DD-MM-YYYY".
+7. UNIT STANDARDIZATION: Standardize "µg/L" and "ug/L" to always return as "ug/L" (they are equivalent). Do this for any other identical units represented with different symbols.
 
 === MODE ROUTING DIRECTIVE ===
-MODE A: PLAN_EXTRACTION (User uploads new data)
-- Do not extract data yet. Count the total rows/tests. Calculate batches (Max 50 tests per batch).
+MODE A: PLAN_EXTRACTION
+- ONLY trigger this mode if the user uploads new data and there are STRICTLY MORE THAN ${itemsPerBatch} biomarkers/tests. 
+- Do not extract data yet. Count the total rows/tests. Calculate batches (Max ${itemsPerBatch} tests per batch).
 - Set mode: "plan", status: "waiting_for_user".
 
-MODE B: EXTRACT_CHUNK (User says "Proceed")
-- Extract exactly up to 50 tests into the \`entries\` array. 
+MODE B: EXTRACT_CHUNK
+- Trigger this mode IMMEDIATELY if the user uploads new data and there are ${itemsPerBatch} or FEWER biomarkers/tests. DO NOT use MODE A in this case. Also use this mode if the user explicitly says "Proceed" to a previous plan.
+- Extract exactly up to ${itemsPerBatch} tests into the \`entries\` array. 
 - To maintain your place, record the EXACT raw string of the last row you processed in \`lastProcessedRawRow\`. 
 - Set mode: "extract_chunk".
 - Set status to "needs_continuation" if more rows exist, or "completed" if finished.
 
 MODE C: DISCUSSION / MODIFY
-- Answer questions or output a modificationCommand. Do not extract new chunks. 
+- Answer questions or output a modificationCommand.
+- If the user asks to correct/convert a specific value from the current extraction, you MAY re-emit the entire updated batch in the \`entries\` array and set mode to "extract_chunk" so the user can save the corrected version.
 - CRITICAL: If not fully extracted yet, you MUST preserve the "status" as "needs_continuation" and pass the exact same "lastProcessedRawRow" back.
 
 === STRICT JSON SCHEMA OUTPUT ===
@@ -2254,7 +2469,8 @@ MODE C: DISCUSSION / MODIFY
     "batchesRequired": number | null
   },
   
-  "lastProcessedRawRow": "The exact raw text of the 50th item you processed so you know where to resume. Null if planning.",
+  "lastProcessedRawRow": "The exact raw text of the ${itemsPerBatch}th item you processed so you know where to resume. Null if planning.",
+lanning.",
   
   "modificationCommand": [],
   "profileUpdates": {},
@@ -2264,7 +2480,7 @@ MODE C: DISCUSSION / MODIFY
       "date": "DD-MM-YYYY",
       "tests": [
         {
-          "key": "hemoglobin_a1c_mmol_mol",
+          "key": "hba1c",
           "originalTestName": "HbA1c levl - IFCC standardised",
           "valueNumeric": 40,
           "valueString": null,
@@ -2278,7 +2494,10 @@ MODE C: DISCUSSION / MODIFY
   "customBiomarkerDefs": {
     "key_name": {
       "name": "Human Readable Name",
-      "description": "Short medical explanation."
+      "description": "Short medical explanation.",
+      "unit": "The unit of measurement extracted, e.g., 'mmol/L', 'g/dL', '%', or '' if none",
+      "standardMedicalGrouping": "String representing the medical group (e.g. 'Lipid Panel', 'Complete Blood Count', 'Kidney Function', 'Liver Function', 'Other')",
+      "riskCategories": ["List of likely associated health risks, e.g., 'Heart Disease', 'Diabetes'"]
     }
   }
 }
@@ -2374,14 +2593,14 @@ Note: If mode is not "extract_chunk", leave 'entries' and 'customBiomarkerDefs' 
       customBiomarkerDefs: parsedData.customBiomarkerDefs || {}
     });
   } catch (error: any) {
-    console.error("[Medical Analyze Error]:", error);
+    console.error("[Medical Analyze Error]:", error, error.stack);
     res.status(500).json({ error: "Failed to extract medical data: " + error.message });
   }
 });
 
 // Gemini Biomarker Review Endpoint
 app.post("/api/gemini/review-biomarker", async (req, res) => {
-  const { message, history, profile, biomarkerDef, currentValue, modelId } = req.body;
+  const { message, history, profile, biomarkerDef, currentValue, modelId, yamlContext } = req.body;
   if (!message) return res.status(400).json({ error: "Missing message" });
 
   try {
@@ -2391,44 +2610,76 @@ app.post("/api/gemini/review-biomarker", async (req, res) => {
         history.map((h: any) => `${h.role === 'user' ? 'User' : 'Assistant'}: ${h.content}`).join("\n") + "\n\n";
     }
 
-    const systemInstruction = `You are an expert AI medical and nutritional assistant. The user is reviewing a specific health biomarker from their records.
-Always consider the user's personal profile summary to deliver precise, context-appropriate responses.
-User Profile: Age ${profile?.age || 'unknown'}, Gender: ${profile?.gender || 'unknown'}, Weight: ${profile?.weight || 'unknown'} kg, Height: ${profile?.height || 'unknown'} cm, Ethnicity: ${profile?.ethnicity || 'unknown'}.
-Biomarker Key: ${biomarkerDef.key}
-Biomarker Name: ${biomarkerDef.name}
-Current Logged Value: ${currentValue} ${biomarkerDef.unit}
-Standard Normal Range: ${biomarkerDef.normalRange}
-Description: ${biomarkerDef.description}
+    const inputsYaml = yamlContext ? yamlContext : `user_profile:
+  age: "${profile?.age || 'unknown'}"
+  gender: "${profile?.gender || 'unknown'}"
+  weight_kg: "${profile?.weight || 'unknown'}"
+  height_cm: "${profile?.height || 'unknown'}"
+  ethnicity: "${profile?.ethnicity || 'unknown'}"
+  unit_preference: "${profile?.unitPreference || 'SI'}" # Values: 'SI' (mmol/L, mmol/mol) or 'US' (mg/dL)
 
-CRITICAL METRIC & UNIT RULES:
-1. Always prefer the International Standard (mmol/L) by default for lipids (LDL, HDL, Total Cholesterol, Triglycerides) and blood sugar (Fasting Glucose) unless the user specifically wants mg/dL.
-2. Double-check that the metric/unit is consistent across the proposed value and the proposed normal range. Do NOT mix them up! (e.g., if value is 5.7, the unit must be mmol/L and range should be "under 3.0 mmol/L" or "under 5.2 mmol/L". If the unit is mg/dL, the value would be around 220 mg/dL and range "125 - 200 mg/dL"). An LDL value of 5.7 mg/dL or a range of "under 3.0 mg/dL" are mathematically impossible / dangerous errors. Always ensure accurate conversions and consistent values!
-3. Ensure the "metric" field in the proposal matches the unit used in "range" and "value" (e.g. 'mmol/L').
+target_biomarker:
+  key: "${biomarkerDef?.key || ''}"
+  name: "${biomarkerDef?.name || ''}"
+  current_value: "${currentValue || ''}"
+  current_unit: "${biomarkerDef?.unit || ''}"
+  current_range: "${biomarkerDef?.normalRange || ''}"
+  description: "${biomarkerDef?.description || ''}"`;
 
-You must carefully review the user's message and the conversation history so far.
-If the user indicates that the logged value is wrong, or if they ask to correct/update it, or if you detect a discrepancy (like a unit mix-up, e.g. 5.7 mmol/L vs 5.7 mg/dL), you should propose a corrected version in the "proposal" field.
-Even if they are just discussing the range or value and you identify a better, more personalized recommendation or correction, or if they ask "is the range correct? it looks way too high", you should propose an updated version of the biomarker log details (value, range, unit, benefit/risk) for their profile.
+    const systemInstruction = `identity:
+  role: "Expert AI medical and nutritional assistant"
+  purpose: "Review or answer questions about a specific user health biomarker."
+  modes:
+    1: "Educate and answer user questions regarding the biomarker."
+    2: "Review logs for anomalies, unit mismatches, or demographic profile updates."
 
-Respond strictly with a JSON object containing:
-{
-  "reply": "Your conversational response to the user. Explain the biomarker, answer their question, or discuss the range. Tell them about your proposed correction if you made one.",
-  "proposal": {
-    "name": "The biomarker name (e.g., 'Total Cholesterol')",
-    "metric": "The unit of measurement (e.g., 'mmol/L' or 'mg/dL')",
-    "value": "The corrected/proposed value (e.g. 5.7 or 220, as a number or string)",
-    "range": "The normal/healthy range (personalized to their profile if possible, e.g., 'under 5.2 mmol/L' or '125-200 mg/dL')",
-    "description": "Short description of what this biomarker measures",
-    "benefitRisk": "Personalized benefit/risk statement based on the user's profile (age, gender, ethnicity, etc.) and this proposed value."
-  },
-  "pendingBiomarkers": {
-    "${biomarkerDef.key}": 123.4
-  }
-}
+inputs:
+${inputsYaml}
 
-Important:
-- If no update or correction is discussed or needed yet, or if they are just asking a general question without any implication of correction or discrepancy, set "proposal" to null and "pendingBiomarkers" to null.
-- If you do include a "proposal", make sure "pendingBiomarkers" contains the key and the numeric value of the proposed value (e.g. if proposed value is 5.7 or 220) so it can be approved and saved to their profile.
-- Do not include markdown blocks like \`\`\`json in your response, just the raw JSON.`;
+rules:
+  clinical_and_nutritional:
+    - "Provide professional, evidence-based educational context regarding the target biomarker."
+    - "CRITICAL: Review precisely the ranges from medical research or clinical guidelines before providing an answer. You must differentiate between 'normal but suboptimal' values, and distinguish nuances like a 'pre-condition' versus an 'actual condition', reflecting this back to the data and proposed range."
+    - "Tailor the explanations and suggestions specifically to the user's demographic profile (age, gender, ethnicity, weight/height/BMI)."
+    - "Explain physiological significance, potential dietary/lifestyle influences, and clinical pathways of the biomarker."
+    - "If the profile shows a different ethnicity than standard (e.g. Chinese or Asian), prioritize demographic-specific clinical insights, guidelines, and reference intervals (e.g., Chinese Society of Hepatology/Nephrology/Diabetes/Dyslipidemia standard thresholds) over Western standard baselines."
+    - "Whenever you mention 'individuals of East Asian descent', 'Chinese descent', or refer to any specific ethnic group, you MUST explicitly cite the specific medical guideline or society you are using (e.g. 'according to the Chinese Society of Hepatology' or 'based on [medical guidelines from XX]')."
+  metric_and_unit:
+    - "Always prefer International Standard (mmol/L, mmol/mol) by default for lipids (LDL, HDL, Total Cholesterol, Triglycerides) and blood sugar (Fasting Glucose) unless the user specifically wants or has logged in US units (mg/dL)."
+    - "Double-check that the metric/unit is consistent across the proposed value and the proposed normal range. Do NOT mix them up! (e.g., if LDL value is 5.7, the unit must be mmol/L and range should be under 3.0 mmol/L. If unit is mg/dL, the value is around 220 and range is 125-200)."
+    - "Ensure the 'metric' field in any proposal exactly matches the unit used in 'range' and 'value'."
+  proposals_and_corrections:
+    - "If you recognize that the target biomarker's current description, medical insights, or range are wrong, incorrect, or sub-optimal for their demographic, prescribe a corrected/new one in the 'proposal' block of your response."
+    - "If the newly proposed range or insight is specific to their ethnicity (e.g., Chinese-adjusted thresholds), set 'isEthnicitySpecific' to true and 'ethnicityTag' to the ethnicity name (e.g. 'Chinese' or 'Asian') so that the database can tag and override the biomarker dictionary correctly."
+    - "If the newly proposed range is a standard global baseline, set 'isEthnicitySpecific' to false and 'ethnicityTag' to null."
+  duplicate_recognition:
+    - "Analyze if the target biomarker is likely a duplicate of another existing biomarker in the dictionary or in the related biomarkers list (e.g. 'hba1c_mmol_mol' vs 'hemoglobin_a1c')."
+    - "If it is a duplicate, set 'isDuplicate' to true, list the synonymous key(s) in 'duplicateSuggestedKeys', and write a clear, concise note explaining why in 'duplicateExplanation'."
+    - "If not a duplicate, set 'isDuplicate' to false, 'duplicateSuggestedKeys' to [], and 'duplicateExplanation' to null."
+    - "When no correction, override, or duplicate is discussed or needed, set 'proposal' and 'pendingBiomarkers' to null."
+
+output_format:
+  type: "JSON"
+  schema:
+    reply: "Conversational, highly polished response explaining the biomarker, answering questions, or explaining proposed corrections/duplicates."
+    proposal:
+      name: "The biomarker name (e.g., 'Total Cholesterol')"
+      metric: "The unit of measurement (e.g., 'mmol/L' or 'mg/dL')"
+      value: "The corrected/proposed value as a number or string"
+      range: "The normal/healthy range personalized to their profile (e.g., 'under 3.0 mmol/L' or '125-200 mg/dL')"
+      description: "Short description of what this biomarker measures"
+      benefitRisk: "Personalized benefit/risk statement based on the user's demographic profile and the proposed value"
+      isEthnicitySpecific: true/false
+      ethnicityTag: "e.g., 'Chinese' or 'Asian' or null"
+      isDuplicate: true/false
+      duplicateSuggestedKeys: ["array of synonymous keys to consolidate, e.g. ['hba1c_mmol_mol'] or []"]
+      duplicateExplanation: "Reasoning for consolidation or null"
+    pendingBiomarkers:
+      "${biomarkerDef?.key || 'key'}": "The proposed value as a number (e.g., 5.7) or null"
+
+instructions:
+  - "Do not include markdown code block wrappers like \`\`\`json in your response. Return raw JSON."
+  - "The JSON response must be well-formed and valid."`;
 
     const fullPromptSent = `System Instruction:\n${systemInstruction}\n\n${historyText}User Message: "${message}"`;
 
@@ -2439,19 +2690,32 @@ Important:
       responseMimeType: "application/json"
     });
 
-    const firstBrace = resultText.indexOf("{");
-    const lastBrace = resultText.lastIndexOf("}");
-    let cleanedText = resultText;
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      cleanedText = resultText.substring(firstBrace, lastBrace + 1);
-    } else {
-      cleanedText = cleanedText.replace(/```json/g, "").replace(/```/g, "").trim();
+    let cleanedText = resultText.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+    // Safely extract the first balanced JSON object to avoid trailing text issues
+    const startIdx = cleanedText.indexOf("{");
+    if (startIdx !== -1) {
+      let depth = 0;
+      for (let i = startIdx; i < cleanedText.length; i++) {
+        if (cleanedText[i] === "{") depth++;
+        else if (cleanedText[i] === "}") depth--;
+        if (depth === 0) {
+          cleanedText = cleanedText.substring(startIdx, i + 1);
+          break;
+        }
+      }
     }
-    const resultJson = JSON.parse(cleanedText);
+    let resultJson;
+    try {
+      resultJson = JSON.parse(cleanedText);
+    } catch (parseErr: any) {
+      console.error("JSON Parse Error in review-biomarker:", parseErr);
+      console.error("Raw response was:", resultText);
+      throw new Error(`Failed to parse AI response as JSON. ${parseErr.message}`);
+    }
     
     // Support either response format mapping
     if (resultJson.proposedValue !== undefined && resultJson.proposedValue !== null && !resultJson.pendingBiomarkers) {
-      resultJson.pendingBiomarkers = { [biomarkerDef.key]: resultJson.proposedValue };
+      resultJson.pendingBiomarkers = { [biomarkerDef?.key || 'key']: resultJson.proposedValue };
     }
     
     resultJson.agentPrompt = fullPromptSent;
@@ -2845,7 +3109,7 @@ Your task is to chat with the user to help them map their newly extracted biomar
 ${JSON.stringify(selectedBiomarkers, null, 2)}
 
 === YOUR OBJECTIVES ===
-1. Be clinical, friendly, and expert. Explain synonyms clearly (e.g. why "HbA1c" matches "hemoglobin_a1c").
+1. Be clinical, friendly, and expert. Explain synonyms clearly (e.g. why "HbA1c" matches "hba1c").
 2. Guide the user in consolidating their biomarkers.
 3. If you can suggest a mapping for any or all of the chosen biomarkers, include a 'suggestedMapping' object in your JSON output. The keys of this object should be the chosen biomarker keys/names, and the values should be the target master keys (existing or newly proposed clean snake_case keys).
 
@@ -2913,7 +3177,7 @@ ${JSON.stringify(selectedBiomarkers, null, 2)}`;
       systemInstruction = customSystemInstruction;
     }
 
-    addDebugLog(`[Standardize Units Agent] Dispatched System Instruction:\n${systemInstruction}`, explicitSessionId);
+    addDebugLog(`[Standardize Units Agent] Dispatched System Instruction (Length: ${systemInstruction.length})`, explicitSessionId);
     addDebugLog(`[Standardize Units Agent] Dispatched Model ID: ${modelId}`, explicitSessionId);
 
     const textOutput = await callUnifiedLLM({
@@ -2946,8 +3210,10 @@ app.post("/api/gemini/medical-categorise", async (req, res) => {
 === OBJECTIVE ===
 For each provided biomarker, determine:
 1. Standard Medical Grouping. Allowed values ONLY: 'Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Other'
-2. Risk Categories. A JSON array of string tags representing associated risks. YOU MUST ONLY CHOOSE FROM THESE EXACT CATEGORIES: "Cardiovascular", "Kidney", "Metabolic", "Liver", "Hematology", "Biometric", "Psychologic", "Other". Do NOT invent new ones.
-3. Potential Medical Conditions. A JSON array of string tags (e.g. ["Fatty Liver", "Obesity"]) representing associated conditions.
+2. Risk Categories. A JSON array of string tags representing associated risks. YOU MUST ONLY CHOOSE FROM THESE EXACT CATEGORIES: "Cardiovascular", "Kidney", "Metabolic", "Liver", "Hematology", "Wellness", "Screenings". Do NOT invent new ones. If none apply, you MUST return an empty array [].
+3. Potential Medical Conditions. A JSON array of string tags (e.g. ["Fatty Liver", "Obesity"]) representing associated conditions. If none apply, you MUST return an empty array [].
+
+CRITICAL: You MUST include all fields (riskCategories and potentialMedicalConditions) in your YAML output. If a biomarker has no risks or conditions, output an empty array []. Do not omit the fields.
 
 === SYSTEM CONSTRAINTS ===
 You MUST work in YAML. Return a single flat YAML array of objects. Do NOT use any Markdown blocks, wrapping backticks, or extra text. Output ONLY the raw YAML text.
@@ -2967,7 +3233,7 @@ ${JSON.stringify(selectedBiomarkers, null, 2)}`;
       systemInstruction = customSystemInstruction;
     }
 
-    addDebugLog(`[Medical Categorisation Agent] Dispatched System Instruction:\n${systemInstruction}`, explicitSessionId);
+    addDebugLog(`[Medical Categorisation Agent] Dispatched System Instruction (Length: ${systemInstruction.length})`, explicitSessionId);
     addDebugLog(`[Medical Categorisation Agent] Dispatched Model ID: ${modelId}`, explicitSessionId);
 
     const textOutput = await callUnifiedLLM({
@@ -3010,6 +3276,7 @@ For each matched group, determine:
 
 === SYSTEM CONSTRAINTS ===
 - You MUST return a JSON object with this exact structure. Do NOT wrap it in markdown blocks. Return ONLY the raw valid JSON.
+- DO NOT perform, input, or output any form of medical categorization, standard medical grouping, or physiological classification. This is entirely handled programmatically by the website, and you must not attempt to modify or determine medical groupings.
 
 JSON Schema:
 {
@@ -3023,7 +3290,6 @@ JSON Schema:
         {
           "key": "original_biomarker_key",
           "name": "Original Biomarker Name",
-          "medicalGrouping": "Original Medical Grouping",
           "unit": "Original Unit",
           "range": "Original normal range",
           "description": "Original description"
@@ -3120,7 +3386,7 @@ app.post("/api/gemini/data-accuracy", async (req, res) => {
    - Comments/Notes (any clinical remarks, doctor comments, or brief interpretations associated with it)
 
 2. Match the extracted biomarkers against the user's existing database (Current State provided below).
-   Find the most appropriate matching key (e.g., "hemoglobin_a1c"). If no exact match exists in the current custom or built-in keys, propose a standard snake_case key based on medical conventions.
+   Find the most appropriate matching key (e.g., "hba1c"). If no exact match exists in the current custom or built-in keys, propose a standard snake_case key based on medical conventions.
 
 3. Compare the following 5 fields between the user's current data (from their dictionary and historical logs) and the shared data:
    - Biomarker Name (dictionary def name)
@@ -3527,15 +3793,22 @@ Respond with a structured JSON format matching this schema exactly:
 // Endpoint to fetch real-time agent thinking process logs
 app.get("/api/gemini/debug-logs", (req, res) => {
   const sessionId = (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || "global";
-  const logs = sessionDebugLogs[sessionId] || [];
+  let logs = globalDebugLogs;
+  if (sessionId !== "global" && sessionDebugLogs[sessionId]) {
+    logs = sessionDebugLogs[sessionId];
+  }
   res.json({ logs });
 });
 
 // Endpoint to clear the backend agent process logs
 app.post("/api/gemini/clear-debug-logs", (req, res) => {
   const sessionId = (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || "global";
-  sessionDebugLogs[sessionId] = [];
-  addDebugLog(`[System] Debug logs cleared by user request.`);
+  if (sessionId !== "global") {
+    sessionDebugLogs[sessionId] = [];
+  } else {
+    globalDebugLogs = [];
+  }
+  addDebugLog(`[System] Debug logs cleared by user request.`, sessionId !== "global" ? sessionId : undefined);
   res.json({ status: "cleared", logs: [] });
 });
 

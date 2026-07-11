@@ -12,9 +12,9 @@ export interface CompressionProgress {
 
 export function compressImage(
   base64OrFile: string | File,
-  maxWidth = 1200,
-  maxHeight = 1200,
-  quality = 0.85
+  maxWidth = 400,
+  maxHeight = 400,
+  quality = 0.5
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     if (base64OrFile instanceof File) {
@@ -128,9 +128,9 @@ export function compressImage(
 export async function compressMultipleImages(
   files: any,
   onProgress?: (progress: CompressionProgress) => void,
-  maxWidth = 1200,
-  maxHeight = 1200,
-  quality = 0.85
+  maxWidth = 400,
+  maxHeight = 400,
+  quality = 0.5
 ): Promise<string[]> {
   const list = Array.from(files) as (File | string)[];
   const results: string[] = [];

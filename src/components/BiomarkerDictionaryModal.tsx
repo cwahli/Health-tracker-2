@@ -1,8 +1,9 @@
+import { toYYYYMMDD } from "../utils/dateUtils";
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { UserProfile, BiomarkerLog } from '../types';
 import { biomarkerDefinitions, BIOMARKER_GROUPING_OPTIONS, getBiomarkerMetadata } from '../utils/biomarkers';
 import { X, CheckCircle, AlertCircle, Edit2, Loader, Save, ArrowRight, CheckSquare, Square, MessageSquare, Send, ChevronLeft, ChevronDown, FileCode, Merge, Copy, Upload, Trash, Paperclip, Calendar, Info, Terminal, BrainCircuit } from 'lucide-react';
-import BiomarkerRangeBuilder from './BiomarkerRangeBuilder';
+import BiomarkerRangeBuilder, { parseNormalRangeStr } from './BiomarkerRangeBuilder';
 import CombineBiomarkersModal from './CombineBiomarkersModal';
 import LLMSelector from './LLMSelector';
 import FullScreenInstructionViewer from './FullScreenInstructionViewer';
@@ -26,6 +27,8 @@ interface BiomarkerDictionaryModalProps {
   onLogMedical?: (biomarkers: { [key: string]: number | string }, profileUpdates?: Partial<UserProfile>, date?: string, entries?: any, modificationCommand?: any, skipClose?: boolean) => void;
   onAgentAnalysisSaved?: (agentType: string, agentResult: any) => Promise<void>;
   onDeleteAnalysis?: (id: string) => Promise<void>;
+  onDeleteBiomarker?: (key: string) => void;
+  onDeleteMultipleBiomarkers?: (keys: string[]) => void;
 }
 
 const getSessionId = (): string => {
@@ -44,6 +47,75 @@ interface ChatMessage {
   content: string;
 }
 
+const ensureCustomRanges = (
+  key: string,
+  normalRangeStr: string,
+  existingCustomRanges: any[]
+): any[] => {
+  if (existingCustomRanges && existingCustomRanges.length > 0) {
+    return existingCustomRanges;
+  }
+
+  // Auto-generate 1 custom override for Asian ethnicity
+  let rangeName = 'Chinese Lipid Guidelines';
+  let cleanRangeStr = normalRangeStr || '';
+
+  if (normalRangeStr) {
+    const parenMatch = normalRangeStr.match(/^(.*?)\s*\(([^)]+)\)$/);
+    if (parenMatch) {
+      cleanRangeStr = parenMatch[1].trim();
+      rangeName = parenMatch[2].trim();
+    }
+  }
+
+  // Fallbacks if cleanRangeStr is empty or not parsed well
+  if (!cleanRangeStr || cleanRangeStr.trim().length === 0) {
+    if (key === 'total_cholesterol') {
+      rangeName = 'Chinese Lipid Guidelines';
+      cleanRangeStr = '< 5.2 mmol/L';
+    } else if (key === 'ldl') {
+      rangeName = 'Chinese Lipid Guidelines';
+      cleanRangeStr = '< 3.4 mmol/L';
+    } else if (key === 'hdl') {
+      rangeName = 'Chinese Lipid Guidelines';
+      cleanRangeStr = '> 1.0 mmol/L';
+    } else if (key === 'triglycerides') {
+      rangeName = 'Chinese Lipid Guidelines';
+      cleanRangeStr = '< 1.7 mmol/L';
+    } else if (key === 'hba1c') {
+      rangeName = 'Asian Diabetes Association Guidelines';
+      cleanRangeStr = '< 5.7%';
+    } else if (key === 'fasting_glucose') {
+      rangeName = 'Asian Diabetes Association Guidelines';
+      cleanRangeStr = '< 5.6 mmol/L';
+    } else {
+      rangeName = 'Asian Clinical Guidelines';
+      cleanRangeStr = normalRangeStr || 'Normal';
+    }
+  }
+
+  // Parse cleanRangeStr into a RangeConfig
+  let type: 'simple' | 'bracket' = 'simple';
+  if (cleanRangeStr.includes('-')) {
+    type = 'bracket';
+  }
+  const parsedRangeConfig = parseNormalRangeStr(cleanRangeStr, type);
+
+  return [
+    {
+      id: 'cr_auto_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      filters: {
+        ethnicity: 'asian',
+        gender: '',
+        minAge: '',
+        maxAge: ''
+      },
+      range: parsedRangeConfig,
+      name: rangeName
+    }
+  ];
+};
+
 const DictionaryItem = ({
   approvalReason,
   itemKey,
@@ -58,6 +130,7 @@ const DictionaryItem = ({
   onToggleSelect,
   onSave,
   onRouteAgent,
+  onTagClick,
   isProcessing
 }: {
   approvalReason?: string;
@@ -73,6 +146,7 @@ const DictionaryItem = ({
   onToggleSelect: () => void;
   onSave: (updates: any) => void;
   onRouteAgent?: () => void;
+  onTagClick?: (tag: string) => void;
   isProcessing?: boolean;
   key?: string | number;
 }) => {
@@ -83,6 +157,7 @@ const DictionaryItem = ({
   const initialGrouping = def.standardMedicalGrouping || '';
   const initialRisk = def.riskCategories ? def.riskCategories.join(', ') : '';
   const initialConditions = def.potentialMedicalConditions ? def.potentialMedicalConditions.join(', ') : '';
+  const displayCustomRanges = customDef?.customRanges || ensureCustomRanges(itemKey, initialNormalRange, []);
   const [isEditing, setIsEditing] = useState(false);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
 
@@ -92,7 +167,7 @@ const DictionaryItem = ({
     unit: initialUnit,
     normalRange: initialNormalRange,
     rangeConfig: customDef?.rangeConfig,
-    customRanges: customDef?.customRanges || [],
+    customRanges: ensureCustomRanges(itemKey, initialNormalRange, customDef?.customRanges || []),
     standardMedicalGrouping: initialGrouping,
     riskCategories: initialRisk,
     potentialMedicalConditions: initialConditions
@@ -273,7 +348,7 @@ const DictionaryItem = ({
                     <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Unit</label>
                     
                     {(() => {
-                      const standardUnits = ["mg/dL", "mmol/L", "umol/L", "g/L", "g/dL", "%", "ng/mL", "pg/mL", "ug/dL", "nmol/L", "pmol/L", "U/L", "IU/L"];
+                      const standardUnits = ["kg/m2", "mg/dL", "mmol/L", "umol/L", "g/L", "g/dL", "%", "ng/mL", "pg/mL", "ug/dL", "nmol/L", "pmol/L", "U/L", "IU/L"];
                       const isCustom = !standardUnits.includes(editState.unit) && editState.unit !== '';
                       return (
                         <div className="flex flex-col gap-1">
@@ -448,7 +523,7 @@ const DictionaryItem = ({
                       unit: initialUnit,
                       normalRange: initialNormalRange,
                       rangeConfig: customDef?.rangeConfig || builtInDef?.rangeConfig,
-                      customRanges: customDef?.customRanges || builtInDef?.customRanges || [],
+                      customRanges: ensureCustomRanges(itemKey, initialNormalRange, customDef?.customRanges || builtInDef?.customRanges || []),
                       standardMedicalGrouping: initialGrouping,
                       riskCategories: initialRisk,
                       potentialMedicalConditions: initialConditions
@@ -468,7 +543,11 @@ const DictionaryItem = ({
                     </span>
                   )}
                   {initialGrouping && (
-                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                    <span 
+                      onClick={() => onTagClick && onTagClick(initialGrouping.trim())}
+                      className={`text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded flex items-center gap-1 ${onTagClick ? 'cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700' : ''}`}
+                    >
+                      <span className="text-[8px] uppercase tracking-wider opacity-70">Medical Practice:</span>
                       {initialGrouping}
                     </span>
                   )}
@@ -483,23 +562,94 @@ const DictionaryItem = ({
                   <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                     <span className="font-semibold text-slate-700 dark:text-slate-300">Unit:</span> {initialUnit} 
                     {initialNormalRange && <span className="ml-2"><span className="font-semibold text-slate-700 dark:text-slate-300">Range:</span> {initialNormalRange}</span>}
-                    {(customDef?.rangeConfig || customDef?.customRanges?.length > 0) && (
+                    {(customDef?.rangeConfig || displayCustomRanges?.length > 0) && (
                       <span className="ml-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">
                         Structured Ranges Active
                       </span>
                     )}
                   </div>
                 )}
+
+                {/* Demographic Overrides List */}
+                {displayCustomRanges && displayCustomRanges.length > 0 && (
+                  <div className="mt-2.5 bg-slate-50 dark:bg-slate-900/40 rounded-lg p-2.5 border border-slate-100 dark:border-slate-800/80 space-y-1.5">
+                    <div className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
+                      Demographic Overrides ({displayCustomRanges.length})
+                    </div>
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800/40">
+                      {displayCustomRanges.map((cr: any, i: number) => {
+                        const filterTexts: string[] = [];
+                        if (cr.filters?.ethnicity) filterTexts.push(`Ethnicity: ${cr.filters.ethnicity.toUpperCase()}`);
+                        if (cr.filters?.gender) filterTexts.push(`Gender: ${cr.filters.gender.toUpperCase()}`);
+                        if (cr.filters?.minAge || cr.filters?.maxAge) {
+                          filterTexts.push(`Age: ${cr.filters.minAge || '0'}-${cr.filters.maxAge || '∞'}`);
+                        }
+                        const filterLabel = filterTexts.length > 0 ? `[${filterTexts.join(', ')}]` : '[Global]';
+                        
+                        // Format range string
+                        let rangeStr = '';
+                        if (cr.range) {
+                          if (cr.range.type === 'bracket') {
+                            const normBracket = cr.range.brackets?.find((b: any) => b.severity === 'Normal' || b.alias === 'Normal');
+                            if (normBracket) {
+                              if (normBracket.min !== null && normBracket.max !== null) rangeStr = `${normBracket.min} - ${normBracket.max}`;
+                              else if (normBracket.min !== null) rangeStr = `>= ${normBracket.min}`;
+                              else if (normBracket.max !== null) rangeStr = `<= ${normBracket.max}`;
+                            }
+                          } else if (cr.range.type === 'simple') {
+                            const normCond = cr.range.conditions?.find((c: any) => c.severity === 'Normal' || c.alias === 'Normal' || c.alias === 'Healthy');
+                            if (normCond) {
+                              rangeStr = `${normCond.operator} ${normCond.value}`;
+                            }
+                          }
+                        }
+                        if (!rangeStr) {
+                          // Fallback to parsed string if range object format is simple
+                          if (cr.name === 'Chinese Lipid Guidelines' && itemKey === 'total_cholesterol') rangeStr = '< 5.2';
+                          else if (cr.name === 'Chinese Lipid Guidelines' && itemKey === 'ldl') rangeStr = '< 3.4';
+                          else if (cr.name === 'Chinese Lipid Guidelines' && itemKey === 'hdl') rangeStr = '> 1.0';
+                          else if (cr.name === 'Chinese Lipid Guidelines' && itemKey === 'triglycerides') rangeStr = '< 1.7';
+                          else if (cr.name === 'Asian Diabetes Association Guidelines' && itemKey === 'hba1c') rangeStr = '< 5.7';
+                          else if (cr.name === 'Asian Diabetes Association Guidelines' && itemKey === 'fasting_glucose') rangeStr = '< 5.6';
+                          else rangeStr = initialNormalRange;
+                        }
+                        
+                        return (
+                          <div key={i} className="py-1 flex items-center justify-between text-[11px] gap-2 first:pt-0 last:pb-0">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold text-slate-700 dark:text-slate-300">{cr.name}</span>
+                              <span className="text-[9px] text-slate-400 dark:text-slate-500 font-mono">{filterLabel}</span>
+                            </div>
+                            <div className="font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20 px-2 py-0.5 rounded border border-indigo-100/30 dark:border-indigo-900/20 font-bold">
+                              {rangeStr} {initialUnit}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 
                 {(initialRisk || initialConditions) && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {initialRisk && initialRisk.split(',').map((r: string, i: number) => (
-                      <span key={i} className="text-[9px] font-bold px-1.5 py-0.5 bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400 rounded-full border border-rose-100 dark:border-rose-900/30">
+                      <span 
+                        key={i} 
+                        onClick={() => onTagClick && onTagClick(r.trim())}
+                        className={`text-[9px] font-bold px-1.5 py-0.5 bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400 rounded-full border border-rose-100 dark:border-rose-900/30 flex items-center gap-1 ${onTagClick ? 'cursor-pointer hover:bg-rose-100 dark:hover:bg-rose-900/40' : ''}`}
+                      >
+                        <span className="text-[7.5px] uppercase tracking-wider opacity-60">Risk:</span>
                         {r.trim()}
                       </span>
                     ))}
                     {initialConditions && initialConditions.split(',').map((c: string, i: number) => (
-                      <span key={i} className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400 rounded-full border border-amber-100 dark:border-amber-900/30">
+                      <span 
+                        key={i} 
+                        onClick={() => onTagClick && onTagClick(c.trim())}
+                        className={`text-[9px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400 rounded-full border border-amber-100 dark:border-amber-900/30 flex items-center gap-1 ${onTagClick ? 'cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40' : ''}`}
+                      >
+                        <span className="text-[7.5px] uppercase tracking-wider opacity-60">Condition:</span>
                         {c.trim()}
                       </span>
                     ))}
@@ -562,7 +712,9 @@ export default function BiomarkerDictionaryModal({
   initialSearchQuery,
   onLogMedical,
   onAgentAnalysisSaved,
-  onDeleteAnalysis
+  onDeleteAnalysis,
+  onDeleteBiomarker,
+  onDeleteMultipleBiomarkers
 }: BiomarkerDictionaryModalProps) {
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<string | null>(null);
@@ -679,7 +831,8 @@ export default function BiomarkerDictionaryModal({
   // Selection states
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery || "");
-  const [showOnlyMissingUnits, setShowOnlyMissingUnits] = useState(false);
+  const [filterOption, setFilterOption] = useState<'all' | 'overrides' | 'missing_units'>('all');
+  const [filterTag, setFilterTag] = useState<string | null>(null);
   
   // Chat States
   const [isChatMode, setIsChatMode] = useState(false);
@@ -694,6 +847,27 @@ export default function BiomarkerDictionaryModal({
   const [pasteError, setPasteError] = useState<string | null>(null);
   const [parsedMapping, setParsedMapping] = useState<{ [key: string]: string } | null>(null);
 
+  useEffect(() => {
+    const pendingKeysStr = localStorage.getItem('consolidation_pending_keys');
+    const pendingNote = localStorage.getItem('consolidation_pending_note');
+    if (pendingKeysStr) {
+      try {
+        const keys = JSON.parse(pendingKeysStr);
+        if (Array.isArray(keys) && keys.length > 0) {
+          setSelectedKeys(keys);
+          setIsNameConsolidationMode(true);
+          if (pendingNote) {
+            setConsolidationInput(pendingNote);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse pending consolidation keys:', e);
+      }
+      localStorage.removeItem('consolidation_pending_keys');
+      localStorage.removeItem('consolidation_pending_note');
+    }
+  }, []);
+
   const builtInKeys = biomarkerDefinitions.map(d => d.key);
   const customKeys = Object.keys(profile.customBiomarkers || {});
   
@@ -707,24 +881,91 @@ export default function BiomarkerDictionaryModal({
     return Array.from(keys);
   }, [biomarkerHistory]);
 
+  const hasActualOverride = React.useCallback((key: string): boolean => {
+    // These keys have auto-generated custom overrides
+    const keysWithAutoOverrides = ['total_cholesterol', 'ldl', 'hdl', 'triglycerides', 'hba1c', 'fasting_glucose'];
+    if (keysWithAutoOverrides.includes(key)) {
+      return true;
+    }
+
+    const custom = profile.customBiomarkers?.[key];
+    if (!custom) return false;
+
+    const builtIn = biomarkerDefinitions.find((d: any) => d.key === key);
+    if (!builtIn) {
+      // Truly custom biomarker is always considered custom
+      return true;
+    }
+
+    // 1. Check for demographic-specific ranges
+    if (custom.customRanges && custom.customRanges.length > 0) return true;
+
+    // 2. Check for structured range overrides
+    if (custom.structuredRanges && custom.structuredRanges.length > 0) return true;
+
+    // 3. Check for custom range builder configuration
+    if (custom.rangeConfig && Object.keys(custom.rangeConfig).length > 0) return true;
+
+    // 4. Check for customized name
+    if (custom.name && custom.name.trim() !== builtIn.name.trim()) return true;
+
+    // 5. Check for customized unit
+    const norm = (str: string) => (str || '').toLowerCase().trim().replace(/\s+/g, '');
+    if (custom.unit && norm(custom.unit) !== norm(builtIn.unit)) return true;
+
+    // 6. Check for customized flat normal range
+    if (custom.normalRange && norm(custom.normalRange) !== norm(builtIn.normalRange)) return true;
+
+    // 7. Check for customized description
+    if (custom.description && custom.description.trim() !== (builtIn.descriptions?.en || '').trim()) return true;
+
+    // 8. Check for customized medical grouping
+    const standardGrouping = getBiomarkerMetadata(key).standardMedicalGrouping;
+    if (custom.standardMedicalGrouping && custom.standardMedicalGrouping.trim().toLowerCase() !== standardGrouping.trim().toLowerCase()) return true;
+
+    return false;
+  }, [profile.customBiomarkers]);
+
   const filterFn = (k: string) => {
     const q = searchQuery.toLowerCase();
     const def = profile.customBiomarkers?.[k] || biomarkerDefinitions.find((d: any) => d.key === k);
     
-    if (showOnlyMissingUnits) {
+    if (filterOption === 'missing_units') {
       const unit = def?.unit || '';
       if (unit && unit.trim() !== '') return false;
+    } else if (filterOption === 'overrides') {
+      if (!hasActualOverride(k)) return false;
+    }
+
+    if (filterTag) {
+      const meta = getBiomarkerMetadata(k, def);
+      const tagLower = filterTag.toLowerCase();
+      const hasTag = meta.standardMedicalGrouping?.toLowerCase() === tagLower ||
+        meta.riskCategories?.some((r: string) => r.toLowerCase() === tagLower) ||
+        meta.potentialMedicalConditions?.some((c: string) => c.toLowerCase() === tagLower) ||
+        (def as any)?.category?.toLowerCase() === tagLower;
+        
+      if (!hasTag) return false;
     }
 
     if (!q) return true;
     if (!def) return k.toLowerCase().includes(q);
-    return k.toLowerCase().includes(q) || (def.name || '').toLowerCase().includes(q);
+    const meta = getBiomarkerMetadata(k, def);
+    const hasTagMatch = meta.standardMedicalGrouping?.toLowerCase().includes(q) ||
+        meta.riskCategories?.some((r: string) => r.toLowerCase().includes(q)) ||
+        meta.potentialMedicalConditions?.some((c: string) => c.toLowerCase().includes(q)) ||
+        (def as any)?.category?.toLowerCase().includes(q);
+    return k.toLowerCase().includes(q) || (def.name || '').toLowerCase().includes(q) || hasTagMatch;
   };
 
   const allApprovedKeysUnfiltered = useMemo(() => {
     const keys = new Set([...builtInKeys]);
     customKeys.forEach(k => {
-      if (profile.customBiomarkers?.[k]?.standardMedicalGrouping) {
+      // If it explicitly needs approval (e.g. extracted from Medical Chat), exclude it from approved list
+      if (profile.customBiomarkers?.[k]?.needsApproval) {
+         return;
+      }
+      if (profile.customBiomarkers?.[k]?.standardMedicalGrouping || profile.customBiomarkers?.[k]?.unit) {
         keys.add(k);
       }
     });
@@ -750,12 +991,12 @@ export default function BiomarkerDictionaryModal({
 
   const allApprovedKeys = useMemo(() => {
     return allApprovedKeysUnfiltered.filter(filterFn);
-  }, [allApprovedKeysUnfiltered, searchQuery, profile.customBiomarkers, showOnlyMissingUnits]);
+  }, [allApprovedKeysUnfiltered, searchQuery, profile.customBiomarkers, filterOption]);
 
   const toApproveKeys = useMemo(() => {
     const keys = new Set([...historyKeys, ...customKeys]);
     return Array.from(keys).filter(k => !allApprovedKeysUnfiltered.includes(k)).filter(filterFn);
-  }, [historyKeys, customKeys, allApprovedKeysUnfiltered, searchQuery, profile.customBiomarkers, showOnlyMissingUnits]);
+  }, [historyKeys, customKeys, allApprovedKeysUnfiltered, searchQuery, profile.customBiomarkers, filterOption]);
 
   const { allGroupings, allRisks, allConditions } = useMemo(() => {
     const groupings = new Set<string>();
@@ -948,7 +1189,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
     try {
       const currentCustomBiomarkers = profile.customBiomarkers || {};
       const latestValues: { [key: string]: { value: any; date: string; note: string; logId: string; }[] } = {};
-      const sortedHistory = [...biomarkerHistory].sort((a, b) => b.date.localeCompare(a.date));
+      const sortedHistory = [...biomarkerHistory].sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
       
       const allKnownKeys = selectedKeys.length > 0
         ? new Set<string>(selectedKeys)
@@ -1384,19 +1625,30 @@ I can analyze these, compare them with our database keys, and find standard mapp
           if (item.normalRange !== undefined) updatesToApply[item.key].normalRange = item.normalRange;
           if (item.standardMedicalGrouping !== undefined) updatesToApply[item.key].standardMedicalGrouping = item.standardMedicalGrouping;
           
+          // Always process riskCategories and potentialMedicalConditions even if undefined
+          // so that non-selected ones are explicitly removed (set to empty array) when accepting categorisation
           if (item.riskCategories !== undefined) {
              try {
                 updatesToApply[item.key].riskCategories = Array.isArray(item.riskCategories) ? item.riskCategories : JSON.parse(item.riskCategories);
              } catch (e) {
-                updatesToApply[item.key].riskCategories = typeof item.riskCategories === 'string' ? item.riskCategories.split(',').map(s=>s.trim()) : [];
+                updatesToApply[item.key].riskCategories = typeof item.riskCategories === 'string' ? item.riskCategories.split(',').map((s: string)=>s.trim()) : [];
              }
+          } else if (isMedicalCategorisationMode) {
+             updatesToApply[item.key].riskCategories = [];
           }
+          if (isMedicalCategorisationMode && updatesToApply[item.key].riskCategories) {
+             const allowedRisks = ["Cardiovascular", "Kidney", "Metabolic", "Liver", "Hematology", "Wellness", "Screenings"];
+             updatesToApply[item.key].riskCategories = updatesToApply[item.key].riskCategories.filter((r: string) => allowedRisks.includes(r));
+          }
+          
           if (item.potentialMedicalConditions !== undefined) {
              try {
                 updatesToApply[item.key].potentialMedicalConditions = Array.isArray(item.potentialMedicalConditions) ? item.potentialMedicalConditions : JSON.parse(item.potentialMedicalConditions);
              } catch (e) {
                 updatesToApply[item.key].potentialMedicalConditions = typeof item.potentialMedicalConditions === 'string' ? item.potentialMedicalConditions.split(',').map(s=>s.trim()) : [];
              }
+          } else if (isMedicalCategorisationMode) {
+             updatesToApply[item.key].potentialMedicalConditions = [];
           }
         }
       });
@@ -1502,11 +1754,16 @@ I can analyze these, compare them with our database keys, and find standard mapp
       const initialEdits: any = {};
       parsed.forEach((group: any, idx: number) => {
         const firstKey = group.biomarkers?.[0]?.key || group.recommendedUniqueKey || '';
+        const masterBio = group.biomarkers?.[0] || {};
+        const origMasterDef = profile.customBiomarkers?.[masterBio.key] || biomarkerDefinitions.find((def: any) => def.key === masterBio.key) || {};
         initialEdits[idx] = {
           recommendedClinicalName: group.recommendedClinicalName || group.groupName || '',
           recommendedUniqueKey: group.recommendedUniqueKey || '',
           masterKey: firstKey,
-          excludedKeys: {}
+          excludedKeys: {},
+          unit: masterBio.unit || origMasterDef.unit || '',
+          normalRange: masterBio.range || origMasterDef.normalRange || '',
+          description: masterBio.description || origMasterDef.description || ''
         };
       });
       setGroupEdits(initialEdits);
@@ -1804,7 +2061,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                   </div>
                   {(profile.agentAnalyses || [])
                     .filter(a => a.agentType === 'data_accuracy')
-                    .sort((a, b) => b.date.localeCompare(a.date))
+                    .sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)))
                     .map(log => (
                       <div key={log.id} className="p-3.5 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl relative group shadow-sm space-y-2.5">
                         <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-1.5">
@@ -2589,6 +2846,51 @@ I can analyze these, compare them with our database keys, and find standard mapp
                             />
                           </div>
                         </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Final Unit</label>
+                            <input
+                              type="text"
+                              className="w-full text-xs font-mono bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                              value={edits.unit !== undefined ? edits.unit : ''}
+                              onChange={(e) => {
+                                setGroupEdits({
+                                  ...groupEdits,
+                                  [groupIdx]: { ...edits, unit: e.target.value }
+                                });
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Final Normal Range</label>
+                            <input
+                              type="text"
+                              className="w-full text-xs font-mono bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                              value={edits.normalRange !== undefined ? edits.normalRange : ''}
+                              onChange={(e) => {
+                                setGroupEdits({
+                                  ...groupEdits,
+                                  [groupIdx]: { ...edits, normalRange: e.target.value }
+                                });
+                              }}
+                            />
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Final Description</label>
+                          <textarea
+                            className="w-full text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 min-h-[60px]"
+                            value={edits.description !== undefined ? edits.description : ''}
+                            onChange={(e) => {
+                              setGroupEdits({
+                                ...groupEdits,
+                                [groupIdx]: { ...edits, description: e.target.value }
+                              });
+                            }}
+                          />
+                        </div>
 
                         <div className="overflow-x-auto border border-slate-100 dark:border-slate-800/50 rounded-lg">
                           <table className="w-full text-left border-collapse">
@@ -3017,7 +3319,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                               <th className="p-3">Biomarker</th>
                               {isMedicalCategorisationMode ? (
                                 <>
-                                  <th className="p-3">Proposed Grouping</th>
+                                  <th className="p-3">Medical Practice</th>
                                   <th className="p-3">Risk Categories</th>
                                   <th className="p-3">Conditions</th>
                                 </>
@@ -3144,8 +3446,8 @@ I can analyze these, compare them with our database keys, and find standard mapp
                   Map a source term to a target snake_case key to combine their logs.</p>
                   <pre className="bg-slate-100 dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-800 font-mono text-[10px]">
 {`{
-  "HbA1c": "hemoglobin_a1c",
-  "0": "hemoglobin_a1c"
+  "HbA1c": "hba1c",
+  "0": "hba1c"
 }`}
                   </pre>
                   
@@ -3153,7 +3455,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                   Pass a list of objects with the <code>key</code> property to update multiple biomarkers at once.</p>
                   <pre className="bg-slate-100 dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-800 font-mono text-[10px]">{JSON.stringify([
   {
-    "key": "hemoglobin_a1c",
+    "key": "hba1c",
     "name": "HbA1c",
     "unit": "mmol/mol",
     "normalRange": "20 - 41"
@@ -3164,7 +3466,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                   <p className="mt-3"><strong>Option 3: Dictionary Map</strong><br/>
                   Update multiple properties using the biomarker key as the property name.</p>
                   <pre className="bg-slate-100 dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-800 font-mono text-[10px]">{JSON.stringify({
-  "hemoglobin_a1c": {
+  "hba1c": {
     "name": "HbA1c",
     "unit": "mmol/mol",
     "normalRange": "20 - 41"
@@ -3196,7 +3498,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                 value={pasteText}
                 onChange={e => handlePasteChange(e.target.value)}
                 rows={10}
-                placeholder={`{\n  "HbA1c": "hemoglobin_a1c",\n  "hemoglobin_a1c": {\n    "normalRange": "20 - 41"\n  }\n}`}
+                placeholder={`{\n  "HbA1c": "hba1c",\n  "hba1c": {\n    "normalRange": "20 - 41"\n  }\n}`}
                 className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 font-mono text-xs outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
 
@@ -3271,19 +3573,37 @@ I can analyze these, compare them with our database keys, and find standard mapp
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs outline-none focus:border-indigo-500 w-48 text-slate-700 dark:text-slate-200"
                 />
-                {(missingUnitsCount > 0 || showOnlyMissingUnits) && (
-                  <button
-                    onClick={() => setShowOnlyMissingUnits(prev => !prev)}
-                    className={`px-3 py-1.5 border rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                      showOnlyMissingUnits 
-                        ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/30 font-extrabold ring-1 ring-rose-500/20' 
-                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                    Missing Units Only ({missingUnitsCount})
-                  </button>
-                )}
+                <select
+                  value={filterOption}
+                  onChange={(e) => setFilterOption(e.target.value as any)}
+                  className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <option value="all">All Approved ({allApprovedKeysUnfiltered.length})</option>
+                  <option value="overrides">Custom Overrides ({allApprovedKeysUnfiltered.filter(hasActualOverride).length})</option>
+                  <option value="missing_units">Missing Units ({missingUnitsCount})</option>
+                </select>
+                <select
+                  value={filterTag || ""}
+                  onChange={(e) => setFilterTag(e.target.value || null)}
+                  className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <option value="">All Tags</option>
+                  <optgroup label="Medical Practice">
+                    {Array.from(allGroupings).sort().map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Risk Categories">
+                    {Array.from(allRisks).sort().map(r => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Conditions">
+                    {Array.from(allConditions).sort().map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </optgroup>
+                </select>
                 <button
                   onClick={() => setIsBatchPasteMode(true)}
                   className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
@@ -3293,15 +3613,29 @@ I can analyze these, compare them with our database keys, and find standard mapp
                 </button>
                 <button
                   onClick={() => {
-                    const filteredKeysToCopy = Array.from(new Set([...toApproveKeys, ...allApprovedKeys]));
-                    const csvContent = filteredKeysToCopy.map(k => {
-                      const d = profile.customBiomarkers?.[k] || biomarkerDefinitions.find(bd => bd.key === k) || { name: k, unit: '' };
-                      const latestValue = biomarkers[k] !== undefined ? biomarkers[k] : 'N/A';
+                    const filteredKeysToCopy = selectedKeys.length > 0 ? selectedKeys : Array.from(new Set([...toApproveKeys, ...allApprovedKeys]));
+                    const textContent = filteredKeysToCopy.map(k => {
+                      const d = (profile.customBiomarkers?.[k] || biomarkerDefinitions.find(bd => bd.key === k) || { name: k, unit: '', normalRange: undefined }) as any;
                       const unit = d.unit || '';
-                      return `${d.name || k} (${k}): ${latestValue} ${unit}`.trim();
-                    }).join('\n');
-                    navigator.clipboard.writeText(csvContent);
-                    alert('Copied ' + filteredKeysToCopy.length + ' biomarkers to clipboard!');
+                      const range = d.normalRange || 'N/A';
+                      
+                      const logsForBiomarker = biomarkerHistory
+                        .filter(log => log.biomarkers[k] !== undefined)
+                        .sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
+                        
+                      let logString = '';
+                      if (logsForBiomarker.length > 0) {
+                        logString = logsForBiomarker.map(log => `  - [${log.date}] ${log.biomarkers[k]} ${unit}`).join('\n');
+                      } else {
+                        const latestValue = biomarkers[k] !== undefined ? biomarkers[k] : 'N/A';
+                        logString = `  - [Latest Value] ${latestValue} ${unit}`;
+                      }
+                      
+                      return `Biomarker: ${d.name || k} (${k})\nReference Range: ${range} ${unit}\nUnit: ${unit}\nLogged History:\n${logString}`;
+                    }).join('\n\n========================================\n\n');
+                    
+                    navigator.clipboard.writeText(textContent);
+                    alert('Copied ' + filteredKeysToCopy.length + ' biomarkers with full history log to clipboard!');
                   }}
                   className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
                 >
@@ -3402,7 +3736,13 @@ I can analyze these, compare them with our database keys, and find standard mapp
                           selectedKeys.forEach(k => {
                             delete newCustomBiomarkers[k];
                           });
-                          onUpdateProfile({ customBiomarkers: newCustomBiomarkers });
+                          if (onDeleteMultipleBiomarkers) {
+                             onDeleteMultipleBiomarkers(selectedKeys);
+                          } else if (onDeleteBiomarker) {
+                             selectedKeys.forEach(k => onDeleteBiomarker(k));
+                          } else {
+                             onUpdateProfile({ customBiomarkers: newCustomBiomarkers });
+                          }
                           setSelectedKeys([]);
                           setShowDeleteSelectedConfirm(false);
                         }}
@@ -3551,7 +3891,8 @@ I can analyze these, compare them with our database keys, and find standard mapp
                               let hasChanges = false;
                               selectedKeys.forEach(k => {
                                 if (toApproveKeys.includes(k)) {
-                                  updatedCustom[k] = { name: k, unit: '', normalRange: '', description: '', standardMedicalGrouping: 'By Medical Practice' };
+                                  updatedCustom[k] = { ...profile.customBiomarkers?.[k], name: k, standardMedicalGrouping: profile.customBiomarkers?.[k]?.standardMedicalGrouping || 'By Medical Practice' };
+                                  delete updatedCustom[k].needsApproval;
                                   hasChanges = true;
                                 }
                               });
@@ -3584,7 +3925,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                       const itemLogs = biomarkerHistory
                         .filter(h => h.biomarkers && h.biomarkers[key] !== undefined)
                         .map(h => ({ date: h.date, value: h.biomarkers[key] }))
-                        .sort((a, b) => b.date.localeCompare(a.date));
+                        .sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
                       const logsCount = itemLogs.length;
                       return (
                         <DictionaryItem
@@ -3599,6 +3940,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                           customDef={def}
                           logsCount={logsCount}
                           isSelected={isSelected}
+                          onTagClick={setFilterTag}
                           allGroupings={allGroupings}
                           allRisks={allRisks}
                           allConditions={allConditions}
@@ -3645,84 +3987,93 @@ I can analyze these, compare them with our database keys, and find standard mapp
               )}
 
               {/* APPROVED DICTIONARY PANEL */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-500" />
-                    Approved Dictionary ({allApprovedKeys.length})
-                  </h3>
-                  {allApprovedKeys.length > 0 && (
+              {allApprovedKeys.length > 0 ? (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-indigo-500" />
+                      {filterOption === 'overrides' && `Custom Overrides (${allApprovedKeys.length})`}
+                      {filterOption === 'missing_units' && `Missing Units (${allApprovedKeys.length})`}
+                      {filterOption === 'all' && `Approved Biomarkers (${allApprovedKeys.length})`}
+                    </h3>
                     <button 
                       onClick={() => handleToggleSelectAll(allApprovedKeys)}
                       className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
                     >
                       {allApprovedKeys.every(k => selectedKeys.includes(k)) ? "Deselect All" : "Select All"}
                     </button>
-                  )}
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                  These standard biomarkers are mapped correctly. You can select them if you want to consolidate multiple approved biomarkers with Route Agent.
-                </p>
-                <div className="space-y-2">
-                  {allApprovedKeys.map(key => {
-                    const builtIn = biomarkerDefinitions.find((d: any) => d.key === key);
-                    const custom = profile.customBiomarkers?.[key];
-                    const isSelected = selectedKeys.includes(key);
-                    const itemLogs = biomarkerHistory
-                      .filter(h => h.biomarkers && h.biomarkers[key] !== undefined)
-                      .map(h => ({ date: h.date, value: h.biomarkers[key] }))
-                      .sort((a, b) => b.date.localeCompare(a.date));
-                    const logsCount = itemLogs.length;
-                    return (
-                      <DictionaryItem
-                        key={key}
-                        itemKey={key}
-                        builtInDef={builtIn}
-                        customDef={custom}
-                        logsCount={logsCount}
-                        isSelected={isSelected}
-                        allGroupings={allGroupings}
-                        allRisks={allRisks}
-                        allConditions={allConditions}
-                        itemLogs={itemLogs}
-                        onToggleSelect={() => handleToggleSelect(key)}
-                        onSave={(updates) => {
-                          const combined = { ...builtIn, ...custom };
-                          const { newKey, ...restUpdates } = updates;
-                          const newCustomBiomarkers = { ...profile.customBiomarkers };
-                          
-                          if (newKey && newKey !== key) {
-                             newCustomBiomarkers[newKey] = { ...combined, ...restUpdates, name: restUpdates.name || newKey };
-                             if (!builtIn) { delete newCustomBiomarkers[key]; }
-                             
-                             let updatedHistory = [...biomarkerHistory];
-                             onCombineBiomarkers(
-                               newKey, 
-                               newCustomBiomarkers[newKey], 
-                               updatedHistory.map(h => {
-                                 if (h.biomarkers[key] !== undefined) {
-                                   return { date: h.date, value: h.biomarkers[key] };
-                                 }
-                                 return null;
-                               }).filter(Boolean) as any[],
-                               [key]
-                             );
-                             return;
-                          } else {
-                             newCustomBiomarkers[key] = { ...combined, ...restUpdates };
-                          }
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                    {filterOption === 'overrides' && "These approved biomarkers have custom reference ranges or demographic-specific overrides defined."}
+                    {filterOption === 'missing_units' && "These approved biomarkers are missing units of measurement. Select or update them to maintain clean data records."}
+                    {filterOption === 'all' && "These approved biomarkers are mapped to your profile. You can select them to consolidate multiple biomarkers using Route Agent, or edit their normal ranges and properties."}
+                  </p>
+                  <div className="space-y-2">
+                    {allApprovedKeys.map(key => {
+                      const builtIn = biomarkerDefinitions.find((d: any) => d.key === key);
+                      const custom = profile.customBiomarkers?.[key];
+                      const isSelected = selectedKeys.includes(key);
+                      const itemLogs = biomarkerHistory
+                        .filter(h => h.biomarkers && h.biomarkers[key] !== undefined)
+                        .map(h => ({ date: h.date, value: h.biomarkers[key] }))
+                        .sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
+                      const logsCount = itemLogs.length;
+                      return (
+                        <DictionaryItem
+                          key={key}
+                          itemKey={key}
+                          builtInDef={builtIn}
+                          customDef={custom}
+                          logsCount={logsCount}
+                          isSelected={isSelected}
+                          onTagClick={setFilterTag}
+                          allGroupings={allGroupings}
+                          allRisks={allRisks}
+                          allConditions={allConditions}
+                          itemLogs={itemLogs}
+                          onToggleSelect={() => handleToggleSelect(key)}
+                          onSave={(updates) => {
+                            const combined = { ...builtIn, ...custom };
+                            const { newKey, ...restUpdates } = updates;
+                            const newCustomBiomarkers = { ...profile.customBiomarkers };
+                              
+                            if (newKey && newKey !== key) {
+                               newCustomBiomarkers[newKey] = { ...combined, ...restUpdates, name: restUpdates.name || newKey };
+                               if (!builtIn) { delete newCustomBiomarkers[key]; }
+                                 
+                               let updatedHistory = [...biomarkerHistory];
+                               onCombineBiomarkers(
+                                 newKey, 
+                                 newCustomBiomarkers[newKey], 
+                                 updatedHistory.map(h => {
+                                   if (h.biomarkers[key] !== undefined) {
+                                     return { date: h.date, value: h.biomarkers[key] };
+                                   }
+                                   return null;
+                                 }).filter(Boolean) as any[],
+                                 [key]
+                                );
+                               return;
+                            } else {
+                               newCustomBiomarkers[key] = { ...combined, ...restUpdates };
+                            }
 
-                          onUpdateProfile({
-                            customBiomarkers: newCustomBiomarkers
-                          });
-                        }}
-                        onRouteAgent={() => handleRouteBiomarker(key)}
-                        isProcessing={isProcessing === key}
-                      />
-                    );
-                  })}
+                            onUpdateProfile({
+                              customBiomarkers: newCustomBiomarkers
+                            });
+                          }}
+                          onRouteAgent={() => handleRouteBiomarker(key)}
+                          isProcessing={isProcessing === key}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-xs">
+                  No biomarkers found matching the filter options.
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -50,6 +50,8 @@ const getBmiPercentage = (bmi: number, isAsian: boolean): number => {
   }
 };
 
+import { getAgentCalibration } from '../utils/agentCalibration';
+
 export default function BiomarkerCalculationPanel({
   biomarkerKey,
   profile,
@@ -58,7 +60,8 @@ export default function BiomarkerCalculationPanel({
   hasPendingAlert,
   onDismissAlert,
   onEditBiomarkerDef,
-}: BiomarkerCalculationPanelProps) {
+  baseDescription,
+}: BiomarkerCalculationPanelProps & { baseDescription?: string }) {
   const isBmi = biomarkerKey === 'bmi';
 
   // Profile fields with defaults
@@ -75,23 +78,7 @@ export default function BiomarkerCalculationPanel({
   const [editRangeValue, setEditRangeValue] = useState(profile.customBiomarkers?.[biomarkerKey]?.normalRange || '');
 
   const agentCalibration = React.useMemo(() => {
-    try {
-      const saved = localStorage.getItem('batch_analysis_results');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const batchKeys = Object.keys(parsed).sort((a, b) => Number(b) - Number(a));
-        for (const bk of batchKeys) {
-          const batch = parsed[bk];
-          if (batch && Array.isArray(batch.reviewedBiomarkers)) {
-            const found = batch.reviewedBiomarkers.find((bm: any) => bm.key === biomarkerKey);
-            if (found) return found;
-          }
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return null;
+    return getAgentCalibration(biomarkerKey);
   }, [biomarkerKey]);
 
   // Auto-expand show logic if alert is active
@@ -176,7 +163,7 @@ export default function BiomarkerCalculationPanel({
       <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-900/40 border border-slate-150 dark:border-slate-800 rounded-2xl space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 uppercase tracking-wider">
-            <Shield className="w-3.5 h-3.5" /> Reference Range & Medical Insights
+            <Shield className="w-3.5 h-3.5" /> Medical Insight
           </span>
           <button
             onClick={() => setIsDetailsExpanded(!isDetailsExpanded)}
@@ -187,51 +174,56 @@ export default function BiomarkerCalculationPanel({
           </button>
         </div>
 
-        {agentCalibration ? (
-          <div className="space-y-3 text-left">
-            {/* Description and specific risk context from the agent */}
-            <div className="space-y-2 text-[11px]">
-              {agentCalibration.specificRiskContext && (
-                <div className="text-slate-900 dark:text-slate-100 font-medium leading-relaxed">
-                  {agentCalibration.specificRiskContext}
-                </div>
-              )}
-              <p className="text-slate-900 dark:text-slate-100 font-medium leading-relaxed">
-                {agentCalibration.description}
-              </p>
-            </div>
+        {agentCalibration && (
+          <div className="text-slate-900 dark:text-slate-100 font-medium leading-relaxed text-[11px] pb-3 border-b border-slate-100 dark:border-slate-800/60">
+            {agentCalibration.specificRiskContext || agentCalibration.description}
+          </div>
+        )}
 
-            {/* Calibrated Range Brackets */}
-            {agentCalibration.rangeBrackets && agentCalibration.rangeBrackets.length > 0 && (
-              <div className="space-y-1.5 pt-1">
-                <span className="block text-[8.5px] text-slate-400 font-bold uppercase tracking-wider">
-                  Threshold{agentCalibration.specificRiskContext?.toLowerCase().includes('asian') ? ' (adjusted for asian population)' : ''}
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {agentCalibration.rangeBrackets.map((br: any, brIdx: number) => {
-                    const isOptimal = br.name.toLowerCase().includes('optimal') || br.name.toLowerCase().includes('healthy') || br.name.toLowerCase().includes('normal');
-                    const isHigh = br.name.toLowerCase().includes('high') || br.name.toLowerCase().includes('critical') || br.name.toLowerCase().includes('risk');
-                    const bgClass = isOptimal 
-                      ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200/40 text-emerald-700 dark:text-emerald-400'
-                      : isHigh
-                        ? 'bg-rose-50 dark:bg-rose-950/20 border-rose-200/40 text-rose-700 dark:text-rose-400'
-                        : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200/40 text-amber-700 dark:text-amber-400';
-                    return (
-                      <div key={brIdx} className={`p-1.5 rounded-lg border text-center ${bgClass}`}>
-                        <span className="block text-[8px] font-bold uppercase opacity-85 truncate" title={br.name}>{br.name}</span>
-                        <span className="font-mono font-bold text-[10px]">{br.range}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+        {isDetailsExpanded && (
+          <div className="pt-2">
+            {baseDescription && (
+              <div className="mb-4">
+                <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Description</span>
+                <p className="text-slate-700 dark:text-slate-300 font-medium leading-relaxed text-[11px]">
+                  {baseDescription}
+                </p>
               </div>
             )}
-            
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-normal pt-1 border-t border-slate-100 dark:border-slate-800/60">
-              * Uses demographically adjusted reference ranges calibrated specifically for your profile. Active Calibrated Range: <strong className="font-mono text-slate-700 dark:text-slate-350">{agentCalibration.profileAdjustedNormalRange}</strong>.
-            </p>
-          </div>
-        ) : (
+
+            {agentCalibration ? (
+              <div className="space-y-3 text-left">
+                {/* Calibrated Range Brackets */}
+                {agentCalibration.rangeBrackets && agentCalibration.rangeBrackets.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <span className="block text-[8.5px] text-slate-400 font-bold uppercase tracking-wider">
+                      Reference Range Thresholds{agentCalibration.specificRiskContext?.toLowerCase().includes('asian') ? ' (adjusted for asian population)' : ''}
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {agentCalibration.rangeBrackets.map((br: any, brIdx: number) => {
+                        const isOptimal = br.name.toLowerCase().includes('optimal') || br.name.toLowerCase().includes('healthy') || br.name.toLowerCase().includes('normal');
+                        const isHigh = br.name.toLowerCase().includes('high') || br.name.toLowerCase().includes('critical') || br.name.toLowerCase().includes('risk');
+                        const bgClass = isOptimal 
+                          ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200/40 text-emerald-700 dark:text-emerald-400'
+                          : isHigh
+                            ? 'bg-rose-50 dark:bg-rose-950/20 border-rose-200/40 text-rose-700 dark:text-rose-400'
+                            : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200/40 text-amber-700 dark:text-amber-400';
+                        return (
+                          <div key={brIdx} className={`p-1.5 rounded-lg border text-center ${bgClass}`}>
+                            <span className="block text-[8px] font-bold uppercase opacity-85 truncate" title={br.name}>{br.name}</span>
+                            <span className="font-mono font-bold text-[10px]">{br.range}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-normal pt-1 border-t border-slate-100 dark:border-slate-800/60">
+                  * Uses demographically adjusted reference ranges calibrated specifically for your profile. Active Calibrated Range: <strong className="font-mono text-slate-700 dark:text-slate-350">{agentCalibration.profileAdjustedNormalRange}</strong>.
+                </p>
+              </div>
+            ) : (
           <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
             <p className="mb-1">Uses static reference ranges from clinical guidelines.</p>
             {isEditingRange ? (
@@ -279,6 +271,8 @@ export default function BiomarkerCalculationPanel({
               </p>
             )}
           </div>
+        )}
+        </div>
         )}
 
         {isDetailsExpanded && (

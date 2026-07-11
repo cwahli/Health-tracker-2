@@ -498,7 +498,7 @@ YAML Array Item Schema:
    - Comments/Notes (any clinical remarks, doctor comments, or brief interpretations associated with it)
 
 2. Match the extracted biomarkers against the user's existing database (Current State provided below).
-   Find the most appropriate matching key (e.g., "hemoglobin_a1c"). If no exact match exists in the current custom or built-in keys, propose a standard snake_case key based on medical conventions.
+   Find the most appropriate matching key (e.g., "hba1c"). If no exact match exists in the current custom or built-in keys, propose a standard snake_case key based on medical conventions.
 
 3. Compare the following 5 fields between the user's current data (from their dictionary and latest historical logs) and the shared data:
    - Biomarker Name (dictionary def name)
@@ -535,7 +535,7 @@ CURRENT STATE:
 {
   "customBiomarkers": {},
   "latestHistoryValues": {
-    "hemoglobin_a1c": {
+    "hba1c": {
       "value": 5.6,
       "date": "2026-06-15",
       "note": "Slightly elevated"
@@ -558,6 +558,7 @@ For each matched group, determine:
 === SYSTEM CONSTRAINTS ===
 - You MUST work in YAML. Return a single flat YAML array of objects representing the groups. Do NOT use any Markdown blocks, wrapping backticks (e.g., do NOT wrap in \`\`\`yaml or \`\`\`), or extra text. Output ONLY the raw YAML text.
 - Do NOT delete any data. Your sole purpose is to identify similar biomarkers and group them.
+- DO NOT perform, input, or output any form of medical categorization, standard medical grouping, or physiological classification. This is entirely handled programmatically by the website, and you must not attempt to modify or determine medical groupings.
 
 YAML Array Item Schema:
 - groupName: "Group Title (e.g. Serum Albumin)"
@@ -566,7 +567,6 @@ YAML Array Item Schema:
   biomarkers:
     - key: "original_biomarker_key"
       name: "Original Biomarker Name"
-      medicalGrouping: "Original Medical Grouping"
       unit: "Original Unit"
       range: "Original normal range"
       description: "Original description"`;

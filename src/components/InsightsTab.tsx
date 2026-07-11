@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { toYYYYMMDD } from "../utils/dateUtils";
+import React, { useState, useEffect } from 'react';
 import { UserProfile, FoodLog, RecommendationReport } from '../types';
 import { translations } from '../utils/translations';
 import { 
@@ -29,10 +30,12 @@ interface InsightsTabProps {
   onOpenMedicalChat?: () => void;
   onOpenAgentChat?: (
     agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent6' | 'agent7' | 'data_review',
-    options?: { prefillMessage?: string; dataReviewBatchIdx?: number }
+    options?: { prefillMessage?: string; dataReviewBatchIdx?: number | string; dataReviewBatchKeys?: string[] }
   ) => void;
   onDeleteAnalysis?: (id: string) => Promise<void>;
   onArchiveAnalysis?: (id: string) => Promise<void>;
+  onDeleteBiomarker?: (key: string) => void;
+  onDeleteMultipleBiomarkers?: (keys: string[]) => void;
   onUpdateProfile?: (profile: UserProfile) => Promise<void>;
   onUpdateHistory?: (history: any[], biomarkers: { [key: string]: number | string }, updatedProfile?: UserProfile) => Promise<void>;
   batchSize?: number;
@@ -68,6 +71,8 @@ export default function InsightsTab({
   onOpenAgentChat,
   onDeleteAnalysis,
   onArchiveAnalysis,
+  onDeleteBiomarker,
+  onDeleteMultipleBiomarkers,
   biomarkerHistory,
   onUpdateProfile,
   onUpdateHistory,
@@ -80,6 +85,7 @@ export default function InsightsTab({
   onAgentAnalysisSaved
 }: InsightsTabProps) {
   const t = translations[profile.language] || translations.en;
+  const userIdentifier = profile?.email?.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'guest';
   const [isApplying, setIsApplying] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [refinementText, setRefinementText] = useState("");
@@ -94,7 +100,8 @@ export default function InsightsTab({
   const [batchSizeInput, setBatchSizeInput] = useState<string>(batchSize.toString());
   const [customBatchKeys, setCustomBatchKeys] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem('agent1_custom_batch_keys');
+      const uId = profile?.email?.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'guest';
+      const saved = localStorage.getItem(`agent1_custom_batch_keys_${uId}`);
       return saved ? JSON.parse(saved) : [];
     } catch(e) { return []; }
   });
@@ -131,7 +138,8 @@ export default function InsightsTab({
       setShowCustomBatchModal(true);
       // Reload keys from localStorage to ensure we have the prefilled keys
       try {
-        const saved = localStorage.getItem('agent1_custom_batch_keys');
+        const uId = profile?.email?.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'guest';
+        const saved = localStorage.getItem(`agent1_custom_batch_keys_${uId}`);
         if (saved) {
           setCustomBatchKeys(JSON.parse(saved));
         }
@@ -143,7 +151,7 @@ export default function InsightsTab({
   const [approvedSteps, setApprovedSteps] = useState<Record<string, boolean>>(() => {
     return {
       agent1: !!profile.agentTriageSummary,
-      agent2: !!(profile.agentAnalyses?.some(a => a.agentType === 'agent2' && profile.customBiomarkers && Object.values(profile.customBiomarkers).some(b => b.riskCategories && b.riskCategories.length > 0))),
+      agent2: !!(profile.agentAnalyses?.some(a => a.agentType === 'agent2' && profile.customBiomarkers && Object.values(profile.customBiomarkers).some(b => b && b.riskCategories && b.riskCategories.length > 0))),
       agent3: !!(profile.agentAnalyses?.some(a => a.agentType === 'agent3')),
       agent4: !!(profile.agentDiagnosticSummary),
       agent5: !!(profile.agentContextualizerSummary),
@@ -151,6 +159,32 @@ export default function InsightsTab({
       agent7: !!(profile.agentLiteratureSummary)
     };
   });
+
+  const [isAdminMode, setIsAdminMode] = useState(() => {
+    const saved = localStorage.getItem('health_cockpit_admin_mode');
+    if (saved) return saved === 'admin';
+    return profile?.email?.toLowerCase().trim() === 'cwah.liu@gmail.com';
+  });
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const saved = localStorage.getItem('health_cockpit_admin_mode');
+      if (saved) {
+        setIsAdminMode(saved === 'admin');
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    const interval = setInterval(() => {
+      const saved = localStorage.getItem('health_cockpit_admin_mode');
+      if (saved) {
+        setIsAdminMode(saved === 'admin');
+      }
+    }, 1000);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Approved analysis ids state, kept across sessions
   const [approvedAnalysisIds, setApprovedAnalysisIdsState] = useState<Record<string, string>>(() => {
@@ -164,7 +198,7 @@ export default function InsightsTab({
     const initialIds: Record<string, string> = {};
     const initialApproved = {
       agent1: !!profile.agentTriageSummary,
-      agent2: !!(profile.agentAnalyses?.some(a => a.agentType === 'agent2' && profile.customBiomarkers && Object.values(profile.customBiomarkers).some(b => b.riskCategories && b.riskCategories.length > 0))),
+      agent2: !!(profile.agentAnalyses?.some(a => a.agentType === 'agent2' && profile.customBiomarkers && Object.values(profile.customBiomarkers).some(b => b && b.riskCategories && b.riskCategories.length > 0))),
       agent3: !!(profile.agentAnalyses?.some(a => a.agentType === 'agent3')),
       agent4: !!(profile.agentDiagnosticSummary),
       agent5: !!(profile.agentContextualizerSummary),
@@ -176,7 +210,7 @@ export default function InsightsTab({
       if (initialApproved[agentType as keyof typeof initialApproved]) {
         const history = (profile.agentAnalyses || [])
           .filter(a => a.agentType === agentType)
-          .sort((a, b) => b.date.localeCompare(a.date));
+          .sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
         if (history.length > 0) {
           initialIds[agentType] = history[0].id;
         }
@@ -222,7 +256,7 @@ export default function InsightsTab({
         const isNew = existingEntries.length === 0;
         if (isNew) return true;
         
-        const sortedHistory = [...existingEntries].sort((a, b) => b.date.localeCompare(a.date));
+        const sortedHistory = [...existingEntries].sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
         const latestVal = sortedHistory[0].biomarkers[key];
         if (latestVal !== undefined && String(latestVal) !== String(row.value)) {
           return true;
@@ -341,14 +375,37 @@ export default function InsightsTab({
 
   // Batch keys and splitting
   const markerKeys = React.useMemo(() => {
-    return Object.keys(biomarkers).filter(k => {
-      if (biomarkers[k] === undefined || biomarkers[k] === null || biomarkers[k] === '') return false;
+    // Derive all known keys from history, not from the flat biomarkers dict
+    const allKnownKeys = new Set<string>();
+    (biomarkerHistory || []).forEach((h: any) => {
+      if (h.biomarkers) {
+        Object.keys(h.biomarkers).forEach(k => {
+          if (h.biomarkers[k] !== undefined && h.biomarkers[k] !== null && h.biomarkers[k] !== '') {
+            allKnownKeys.add(k);
+          }
+        });
+      }
+    });
+
+    // Fallback to flat dict if some keys exist only there
+    if (biomarkers) {
+      Object.keys(biomarkers).forEach(k => {
+        if (biomarkers[k] !== undefined && biomarkers[k] !== null && biomarkers[k] !== '') {
+          allKnownKeys.add(k);
+        }
+      });
+    }
+
+    return Array.from(allKnownKeys).filter(k => {
       if (excludeStandardized) {
         if (profile.customBiomarkers?.[k]?.standardMedicalGrouping !== undefined) return false;
+        // Exclude built-in definitions that are already categorized
+        const builtIn = biomarkerDefinitions.find(d => d.key === k);
+        if (builtIn?.standardMedicalGrouping) return false;
       }
       return true;
     });
-  }, [biomarkers, excludeStandardized, profile.customBiomarkers]);
+  }, [biomarkerHistory, biomarkers, excludeStandardized, profile.customBiomarkers]);
 
   const [biomarkerBatches, setBiomarkerBatches] = React.useState<string[][]>(() => {
     try {
@@ -637,6 +694,7 @@ export default function InsightsTab({
     // Custom/User ones in profile
     if (profile?.customBiomarkers) {
       Object.entries(profile.customBiomarkers).forEach(([key, def]) => {
+        if (!def) return;
         // Skip if it's already a standard biomarker (handled above)
         if (biomarkerDefinitions.some(d => d.key === key)) return;
         
@@ -647,7 +705,7 @@ export default function InsightsTab({
         risks.forEach((cat: string) => {
           if (!groups[cat]) groups[cat] = [];
           if (!groups[cat].some(item => item.key === key)) {
-            groups[cat].push({ key, name: def.name, present });
+            groups[cat].push({ key, name: (def as any).name, present });
           }
         });
       });
@@ -749,11 +807,11 @@ export default function InsightsTab({
       } as any;
     });
 
-    currentHistory.sort((a, b) => b.date.localeCompare(a.date));
+    currentHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
 
     // Recompute biomarkers list
     const recomputedBiomarkers: { [key: string]: number | string } = {};
-    [...currentHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+    [...currentHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
         recomputedBiomarkers[k] = v as string | number;
       });
@@ -851,13 +909,13 @@ export default function InsightsTab({
     
     // Also clear custom batch
     setCustomBatchKeys([]);
-    localStorage.removeItem('agent1_custom_batch_keys');
+    localStorage.removeItem(`agent1_custom_batch_keys_${userIdentifier}`);
   };
 
   const renderAgentHistory = (agentType: string) => {
     const history = (profile.agentAnalyses || [])
       .filter(a => a.agentType === agentType)
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
     
     // Exclude the currently displayed active one
     const isDataAccuracy = agentType === 'data_accuracy';
@@ -986,13 +1044,6 @@ export default function InsightsTab({
       valueProposition: 'Demographics and core biomarkers checklist calibration.'
     },
     {
-      id: 'agent1',
-      title: 'Data cleaning',
-      agentType: 'agent1',
-      description: 'Extracts biomarkers and readings from raw text or reports into a structured flat format.',
-      valueProposition: 'Extracts raw, unstructured medical notes or biomarker data into structured, clean data coordinates.'
-    },
-    {
       id: 'data_review',
       title: 'Data review',
       agentType: 'data_review',
@@ -1023,30 +1074,38 @@ export default function InsightsTab({
   ];
 
   const getStepStatus = (index: number): 'Not ready' | 'To do' | 'To review' | 'Done' => {
+    const step = steps[index];
+    if (!step) return 'Not ready';
+
     if (index === 0) {
       const isDone = criticalMissing.length === 0;
       return isDone ? 'Done' : 'To do';
     }
 
     // Gating check: previous required steps must be Done
-    for (let j = 0; j < index; j++) {
-      if (j === 0) {
-        const isDone = criticalMissing.length === 0;
-        if (!isDone) return 'Not ready';
-      } else {
-        const prevStep = steps[j];
-        if (prevStep.id === 'data_review') {
-          const allApproved = batches.length > 0 && batches.every((_, bIdx) => approvedBatches[bIdx]);
-          if (!allApproved) return 'Not ready';
+    const isProjectOrInsight = step.agentType === 'agent4' || step.agentType === 'agent7';
+
+    if (!isAdminMode || !isProjectOrInsight) {
+      for (let j = 0; j < index; j++) {
+        if (j === 0) {
+          const isDone = criticalMissing.length === 0;
+          if (!isDone) return 'Not ready';
         } else {
-          const prevAgentType = prevStep.agentType!;
-          const prevApproved = approvedSteps[prevAgentType];
-          if (!prevApproved) return 'Not ready';
+          const prevStep = steps[j];
+          if (prevStep.id === 'data_review') {
+            // Do not block subsequent steps if data review is not completed
+            continue;
+          } else if (prevStep.id === 'agent1') {
+            // Do not block if data cleaning is not done
+            continue;
+          } else {
+            const prevAgentType = prevStep.agentType!;
+            const prevApproved = approvedSteps[prevAgentType];
+            if (!prevApproved) return 'Not ready';
+          }
         }
       }
     }
-
-    const step = steps[index];
     if (step.id === 'data_review') {
       if (batches.length === 0) return 'To do';
       const allApproved = batches.every((_, bIdx) => approvedBatches[bIdx]);
@@ -1063,7 +1122,7 @@ export default function InsightsTab({
 
     const latestAnalysis = (profile.agentAnalyses || [])
       .filter(a => a.agentType === agentType && !a.archived)
-      .sort((a, b) => b.date.localeCompare(a.date))[0];
+      .sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)))[0];
 
     const isApproved = approvedSteps[agentType] && (!latestAnalysis || approvedAnalysisIds[agentType] === latestAnalysis.id);
     return isApproved ? 'Done' : 'To review';
@@ -1085,7 +1144,7 @@ export default function InsightsTab({
 
     const latestAnalysis = (profile.agentAnalyses || [])
       .filter(a => a.agentType === step.agentType && !a.archived)
-      .sort((a, b) => b.date.localeCompare(a.date))[0];
+      .sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)))[0];
 
     if (!latestAnalysis) {
       if (status === 'Not ready') return 'Waiting for previous steps';
@@ -1131,7 +1190,7 @@ export default function InsightsTab({
       
       const latestAnalysis = (profile.agentAnalyses || [])
         .filter(a => a.agentType === step.agentType && !a.archived)
-        .sort((a, b) => b.date.localeCompare(a.date))[0];
+        .sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)))[0];
       if (latestAnalysis) {
         setApprovedAnalysisId(step.agentType!, latestAnalysis.id);
       }
@@ -1383,7 +1442,7 @@ export default function InsightsTab({
   }
 
   // Normal view when no draft is generated
-  const completedCount = [0, 1, 2, 3, 4, 5].filter(idx => getStepStatus(idx) === 'Done').length;
+  const completedCount = steps.map((_, idx) => idx).filter(idx => getStepStatus(idx) === 'Done').length;
 
   return (
     <div className="space-y-10 pb-24 animation-fade-in max-w-md mx-auto px-[10px] mt-4 font-sans text-slate-900 dark:text-slate-100">
@@ -1392,12 +1451,12 @@ export default function InsightsTab({
       <div className="space-y-2.5">
         <div className="flex items-center justify-between text-xs font-mono font-bold text-slate-500">
           <span className="text-indigo-600 dark:text-indigo-400">CLINICAL PIPELINE PROGRESS</span>
-          <span>{completedCount} of 6 Steps Completed</span>
+          <span>{completedCount} of {steps.length} Steps Completed</span>
         </div>
         <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-200/20">
           <div 
             className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-full rounded-full transition-all duration-500 ease-out" 
-            style={{ width: `${(completedCount / 6) * 100}%` }}
+            style={{ width: `${(completedCount / steps.length) * 100}%` }}
           />
         </div>
       </div>
@@ -1418,7 +1477,7 @@ export default function InsightsTab({
             const latestAnalysis = step.agentType 
               ? (profile.agentAnalyses || [])
                   .filter(a => a.agentType === step.agentType && !a.archived)
-                  .sort((a, b) => b.date.localeCompare(a.date))[0]
+                  .sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)))[0]
               : null;
 
             return (
@@ -1612,6 +1671,26 @@ export default function InsightsTab({
                                   }}
                                   className="w-16 text-[10px] font-bold bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg px-2 py-1 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-text"
                                 />
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (window.confirm("This will clear all processed batches in Data Cleaning and Data Review, and force a full re-chunking. Proceed?")) {
+                                      setApprovedBatches({});
+                                      setBatchAnalysisResults({});
+                                      setApprovedAgent1Batches({});
+                                      setAgent1BatchResults({});
+                                      localStorage.removeItem('approved_data_review_batches');
+                                      localStorage.removeItem('batch_analysis_results');
+                                      localStorage.removeItem('approved_agent1_batches');
+                                      localStorage.removeItem('agent1_batch_results');
+                                      if (onChangeBatchSize) onChangeBatchSize(parseInt(batchSizeInput) || 20);
+                                    }
+                                  }}
+                                  title="Reset all batch progress to force re-chunk"
+                                  className="ml-2 px-2 py-1 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-bold rounded flex-shrink-0 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                                >
+                                  Reset Batches
+                                </button>
                               </div>
                             </div>
                             
@@ -1819,6 +1898,7 @@ export default function InsightsTab({
                                                   if (onOpenAgentChat) {
                                                     onOpenAgentChat('agent1', {
                                                       dataReviewBatchIdx: bIdx,
+                                                      dataReviewBatchKeys: batchKeys,
                                                       prefillMessage: `Clean and standardize ${isCustom ? 'Custom Test Batch' : 'Batch ' + (parseInt(bIdx as string) + 1)} biomarkers`
                                                     });
                                                   }
@@ -1996,11 +2076,11 @@ export default function InsightsTab({
                                                         // Not overriding or duplicating values in history here because we simply map keys for data cleaning.
                                                       });
 
-                                                      currentHistory.sort((a, b) => b.date.localeCompare(a.date));
+                                                      currentHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
 
                                                       // Recompute biomarkers list
                                                       const recomputedBiomarkers: { [key: string]: number | string } = {};
-                                                      [...currentHistory].sort((a, b) => a.date.localeCompare(b.date)).forEach(log => {
+                                                      [...currentHistory].sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
                                                         Object.entries(log.biomarkers).forEach(([k, v]) => {
                                                           recomputedBiomarkers[k] = v as string | number;
                                                         });
@@ -2044,7 +2124,7 @@ export default function InsightsTab({
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setCustomBatchKeys([]);
-                                            localStorage.removeItem('agent1_custom_batch_keys');
+                                            localStorage.removeItem(`agent1_custom_batch_keys_${userIdentifier}`);
                                             setAgent1BatchResults(prev => {
                                               const updated = { ...prev };
                                               delete updated['custom'];
@@ -2103,6 +2183,26 @@ export default function InsightsTab({
                                   }}
                                   className="w-16 text-[10px] font-bold bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg px-2 py-1 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-text"
                                 />
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (window.confirm("This will clear all processed batches in Data Cleaning and Data Review, and force a full re-chunking. Proceed?")) {
+                                      setApprovedBatches({});
+                                      setBatchAnalysisResults({});
+                                      setApprovedAgent1Batches({});
+                                      setAgent1BatchResults({});
+                                      localStorage.removeItem('approved_data_review_batches');
+                                      localStorage.removeItem('batch_analysis_results');
+                                      localStorage.removeItem('approved_agent1_batches');
+                                      localStorage.removeItem('agent1_batch_results');
+                                      if (onChangeBatchSize) onChangeBatchSize(parseInt(batchSizeInput) || 20);
+                                    }
+                                  }}
+                                  title="Reset all batch progress to force re-chunk"
+                                  className="ml-2 px-2 py-1 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-bold rounded flex-shrink-0 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                                >
+                                  Reset Batches
+                                </button>
                               </div>
                             </div>
                             
@@ -2246,6 +2346,7 @@ export default function InsightsTab({
                                                       if (onOpenAgentChat) {
                                                         onOpenAgentChat('data_review', {
                                                           dataReviewBatchIdx: bIdx,
+                                                          dataReviewBatchKeys: batchKeys,
                                                           prefillMessage: `Calibrate Batch ${bIdx + 1}`
                                                         });
                                                       }
@@ -2317,6 +2418,7 @@ export default function InsightsTab({
                                                   if (onOpenAgentChat) {
                                                     onOpenAgentChat('data_review', {
                                                       dataReviewBatchIdx: bIdx,
+                                                      dataReviewBatchKeys: batchKeys,
                                                       prefillMessage: `Review Batch ${bIdx + 1} calibrate results`
                                                     });
                                                   }
@@ -2980,7 +3082,7 @@ export default function InsightsTab({
                                   clearCustomBatchResults();
                                   setCustomBatchKeys(prev => {
                                     const updated = isSelected ? prev.filter(k => k !== key) : [...prev, key];
-                                    localStorage.setItem('agent1_custom_batch_keys', JSON.stringify(updated));
+                                    localStorage.setItem(`agent1_custom_batch_keys_${userIdentifier}`, JSON.stringify(updated));
                                     return updated;
                                   });
                                 }}
@@ -3010,7 +3112,7 @@ export default function InsightsTab({
                 onClick={() => {
                   clearCustomBatchResults();
                   setCustomBatchKeys([]);
-                  localStorage.removeItem('agent1_custom_batch_keys');
+                  localStorage.removeItem(`agent1_custom_batch_keys_${userIdentifier}`);
                 }} 
                 className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors"
               >
@@ -3038,6 +3140,8 @@ export default function InsightsTab({
             setDictionaryPreFillKey(null);
           }}
           initialSearchQuery={dictionaryPreFillKey || undefined}
+          onDeleteBiomarker={onDeleteBiomarker}
+          onDeleteMultipleBiomarkers={onDeleteMultipleBiomarkers}
           onUpdateProfile={async (updates) => {
             if (onUpdateProfile) {
               await onUpdateProfile({ ...profile, ...updates });

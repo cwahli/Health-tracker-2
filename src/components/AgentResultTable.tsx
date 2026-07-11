@@ -1,3 +1,4 @@
+import { toYYYYMMDD } from "../utils/dateUtils";
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parse } from 'yaml';
 import { biomarkerDefinitions } from '../utils/biomarkers';
@@ -15,17 +16,19 @@ import {
 } from 'lucide-react';
 
 interface AgentResultTableProps {
-  agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'data_review';
+  agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'data_review' | 'medical_extract';
   agentResult: any;
   profile?: any;
   biomarkerHistory?: any[];
   initialRawText?: string;
-  onApplyChanges?: () => Promise<void>;
+  onApplyChanges?: (filteredRows?: any[]) => Promise<void>;
+  onCancel?: () => void;
   onContinueToNextStep?: () => Promise<void>;
   isApplying?: boolean;
   precedingAgent1Result?: any;
   selectedMissingKeys?: string[];
   onChangeSelectedMissingKeys?: (keys: string[]) => void;
+  onSendMessage?: (msg: string) => void;
 }
 
 // Robust helper to extract potential biomarker names and values from raw clinical text
@@ -114,6 +117,42 @@ export function getInitialMarkerDetails(text: string): { biomarker: string; valu
   });
 }
 
+export function generateSafeKey(name: string): string {
+  if (!name) return '';
+  const cleanName = name.split('(')[0].split('[')[0].trim();
+  return cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+
+export const resolveBiomarkerKey = (rawKey: string, rawName: string, profile: any) => {
+  const cleanName = (n: string): string => n.split('(')[0].split('[')[0].trim();
+  const cleaned = cleanName(String(rawName || rawKey));
+  const safeKey = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  let key = rawKey || safeKey;
+  
+  const currentCustoms = profile?.customBiomarkers || {};
+  let targetKey = key;
+  
+  const stdMatch = !currentCustoms[key] ? biomarkerDefinitions.find(d => {
+    const nameMatch = d.name.toLowerCase() === cleaned.toLowerCase() || d.key.toLowerCase() === cleaned.toLowerCase() || cleanName(d.name).toLowerCase() === cleaned.toLowerCase();
+    return nameMatch;
+  }) : null;
+  
+  if (stdMatch) {
+    targetKey = stdMatch.key;
+  } else {
+    let existingKey = Object.keys(currentCustoms).find(k => {
+      const nameMatch = cleanName(currentCustoms[k]?.name || '').toLowerCase() === cleaned.toLowerCase();
+      const keyMatch = k.toLowerCase() === cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      return nameMatch || keyMatch;
+    });
+    if (existingKey) {
+      targetKey = existingKey;
+    }
+  }
+  return targetKey;
+};
+
 export const AgentResultTable: React.FC<AgentResultTableProps> = ({
   agentType,
   agentResult,
@@ -121,17 +160,21 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
   biomarkerHistory = [],
   initialRawText = '',
   onApplyChanges,
+  onCancel,
   onContinueToNextStep,
   isApplying = false,
   precedingAgent1Result,
   selectedMissingKeys,
-  onChangeSelectedMissingKeys
+  onChangeSelectedMissingKeys,
+  onSendMessage
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [diffExpanded, setDiffExpanded] = useState(false);
   const [sortField, setSortField] = useState<string>('default');
   const [sortAsc, setSortAsc] = useState<boolean>(true);
   const [statusSortCategory, setStatusSortCategory] = useState<'atRisk' | 'isNew' | 'changed' | 'synced' | 'merged' | 'toDelete' | null>(null);
 
+  const [unselectedRowKeys, setUnselectedRowKeys] = useState<string[]>([]);
   const [localSelectedMissingKeys, setLocalSelectedMissingKeys] = useState<string[]>(() => {
     try {
       const batchIdx = agentResult?.batchIdx;
@@ -205,7 +248,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       let bestScore = -1;
       
       parsedRows.forEach((parsed: any, idx: number) => {
-        const parsedKey = String(parsed.key || parsed.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const parsedKey = String(parsed.key || parsed.biomarker || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
         const parsedName = String(parsed.name || parsed.biomarker || '').toLowerCase();
         const explanation = String(parsed.explanation || parsed.changeReason || parsed.description || '').toLowerCase();
         
@@ -254,7 +297,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       const matches = parsedToRawGroup[idx] || [];
       if (matches.length > 1) {
         const parsedName = parsed.name || parsed.biomarker || '';
-        const key = parsedName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const key = resolveBiomarkerKey(parsedName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''), parsedName, profile);
         
         // Primary raw item (closest value)
         let primaryMatch = matches[0];
@@ -360,7 +403,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
         } else if (biomarkerHistory && biomarkerHistory.length > 0) {
           // Collect all unique biomarker keys and their latest entries from history
           const latestEntries: { [key: string]: { value: any, date: string } } = {};
-          [...biomarkerHistory].filter(log => log && log.date).sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach(log => {
+          [...biomarkerHistory].filter(log => log && log.date).sort((a, b) => toYYYYMMDD(String(a.date)).localeCompare(toYYYYMMDD(String(b.date)))).forEach(log => {
             Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
               latestEntries[k] = { value: v, date: log.date };
             });
@@ -395,7 +438,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           let bestScore = -1;
           
           parsedRows.forEach((parsed: any, idx: number) => {
-            const parsedKey = String(parsed.key || parsed.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+            const parsedKey = String(parsed.key || parsed.biomarker || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
             const parsedName = String(parsed.name || parsed.biomarker || '').toLowerCase();
             const explanation = String(parsed.explanation || parsed.changeReason || parsed.description || '').toLowerCase();
             
@@ -499,7 +542,10 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           const rawUnit = raw ? (raw.unit || raw.metric || '') : '';
           
           const biomarkerName = parsed.standardizedName || parsed.name || parsed.biomarker || 'Unknown';
-          const key = String(parsed.key || biomarkerName).toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const cleanName = (n: string): string => n.split('(')[0].split('[')[0].trim();
+          const cleaned = cleanName(String(parsed.key || biomarkerName));
+          const safeKey = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+          let key = resolveBiomarkerKey(safeKey || String(parsed.key || biomarkerName), biomarkerName, profile);
           
           const existingEntries = (biomarkerHistory || []).filter((h: any) => h.biomarkers?.[key] !== undefined);
           const customDef = profile?.customBiomarkers?.[key];
@@ -507,7 +553,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           const valueNum = parseFloat(parsed.value);
           
           let isAtRisk = false;
-          if (!isNaN(valueNum) && normalRange) {
+          if (agentType !== 'medical_extract' && agentType !== 'agent1' && !isNaN(valueNum) && normalRange) {
             const rangeMatch = normalRange.match(/([\d.]+)\s*-\s*([\d.]+)/);
             if (rangeMatch) {
               const min = parseFloat(rangeMatch[1]);
@@ -524,7 +570,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           
           const newGroup = parsed.standardMedicalGrouping || 'Other';
           const oldGroup = customDef?.standardMedicalGrouping || 'Other';
-          const isGroupChanged = !!customDef && newGroup !== oldGroup;
+          const isGroupChanged = (agentType === 'agent1' || agentType === 'medical_extract') ? false : (!!customDef && newGroup !== oldGroup);
           const oldRiskCategories = customDef?.riskCategories || [];
           const isRiskChanged = !!customDef && JSON.stringify([...(parsed.riskCategories || [])].sort()) !== JSON.stringify([...oldRiskCategories].sort());
           const oldConditions = customDef?.potentialMedicalConditions || [];
@@ -590,6 +636,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
             value: parsed.value ?? 'N/A',
             unit: rowUnit,
             isNew,
+            isNewBiomarker: isNew && isNewInHistory,
             isChanged,
             isAtRisk,
             isMerged,
@@ -708,7 +755,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           });
 
           missingItems.forEach((bm: any) => {
-            const key = bm.key || bm.name?.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'unknown_biomarker';
+            const key = bm.key || bm.name?.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'unknown_biomarker';
             finalRows.push({
               key,
               biomarker: bm.name || bm.key || 'Unknown',
@@ -743,9 +790,19 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       // Fallback standard mapping when batchBiomarkers is not available
       const finalRowsFallback = parsedRows.map((row: any) => {
         const biomarkerName = row.biomarker || row.name || row.key || 'Unknown';
-        const key = String(biomarkerName).toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const cleanName = (n: string): string => n.split('(')[0].split('[')[0].trim();
+        const cleaned = cleanName(String(biomarkerName));
+        const safeKey = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        let key = resolveBiomarkerKey(safeKey || String(biomarkerName), biomarkerName, profile);
+        
+        // Handle collision exactly like App.tsx does (so we can find standard markers properly)
+        // Wait, standard keys are defined in biomarkerDefinitions. Let's check collision.
+        // We actually just want to see what key is in the customBiomarkers or history.
+        // If it's a standard key but units don't match, App.tsx appends the unit. 
+        // We'll approximate this by checking customDef. If profile?.customBiomarkers?.[key] exists, it's correct.
+        
         const existingEntries = (biomarkerHistory || []).filter((h: any) => h.biomarkers?.[key] !== undefined);
-        const isNew = row.noChangeNeeded ? false : (existingEntries.length === 0);
+        let isNew = row.noChangeNeeded ? false : (existingEntries.length === 0);
         
         // Determine severity of biomarker if clinical context is available in customBiomarkers
         const customDef = profile?.customBiomarkers?.[key];
@@ -753,7 +810,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
         const valueNum = parseFloat(row.value);
         let isAtRisk = false;
         
-        if (!isNaN(valueNum) && normalRange) {
+        if (agentType !== 'medical_extract' && agentType !== 'agent1' && !isNaN(valueNum) && normalRange) {
           const rangeMatch = normalRange.match(/([\d.]+)\s*-\s*([\d.]+)/);
           if (rangeMatch) {
             const min = parseFloat(rangeMatch[1]);
@@ -764,28 +821,75 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           }
         }
 
-        const rowUnit = row.unit || row.metric || '';
+        let rowUnit = row.unit || row.metric || '';
+        const dictUnit = customDef?.unit || '';
+        if (rowUnit.trim() === '' || rowUnit.trim() === '-' || rowUnit.trim().toLowerCase() === 'n/a') {
+            rowUnit = dictUnit;
+        }
         const newGroup = row.standardMedicalGrouping || 'Other';
         const oldGroup = customDef?.standardMedicalGrouping || 'Other';
-        const isGroupChanged = !!customDef && newGroup !== oldGroup;
+        const isGroupChanged = (agentType === 'agent1' || agentType === 'medical_extract') ? false : (!!customDef && newGroup !== oldGroup);
+
+        const isSameUnit = (unit1: string, unit2: string) => {
+          if (!unit1 || !unit2) return unit1 === unit2;
+          // remove x or ×, convert * to ^, remove spaces
+          const norm = (u: string) => u.toLowerCase().replace(/^[a-z]*(?=10)/g, '').replace(/[x×]/g, '').replace(/\*/g, '^').replace(/\s/g, '');
+          return norm(unit1) === norm(unit2);
+        };
+        const normalizeDate = (d: string) => {
+          if (!d) return d;
+          const str = String(d).replace(/\//g, '-').replace(/\./g, '-').trim();
+          const match1 = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+          if (match1) return `${match1[1]}-${match1[2].padStart(2, '0')}-${match1[3].padStart(2, '0')}`;
+          const match2 = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+          if (match2) return `${match2[3]}-${match2[2].padStart(2, '0')}-${match2[1].padStart(2, '0')}`;
+          const match3 = str.match(/^(\d{1,2})\s+([a-zA-Z]{3,})\s+(\d{4})$/);
+          if (match3) {
+            const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+            const m = (months as any)[match3[2].toLowerCase().substring(0,3)] || '01';
+            return `${match3[3]}-${m}-${match3[1].padStart(2, '0')}`;
+          }
+          return str;
+        };
+        const normalizedRowDate = normalizeDate(row.date);
 
         let changeReason = row.noChangeNeeded 
           ? `No changes needed. Entry is already up-to-date.` 
           : `Extracted new ${biomarkerName}: ${typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value || '')} ${rowUnit}`;
         let oldValue: any = undefined;
-        let isChanged = isGroupChanged;
+        let oldUnit: any = undefined;
+        let isChanged = false;
+        let isSynced = false;
+        let isUnitChanged = false;
+
         if (!row.noChangeNeeded && !isNew && existingEntries.length > 0) {
-          const sortedHistory = [...existingEntries].sort((a, b) => b.date.localeCompare(a.date));
-          const latestVal = sortedHistory[0].biomarkers[key];
-          if (latestVal !== undefined) {
-            if (String(latestVal) !== String(row.value)) {
-              oldValue = latestVal;
-              isChanged = true;
-              changeReason = `Value changed from ${latestVal} to ${typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value || '')}`;
-            } else if (isGroupChanged) {
-              changeReason = `Medical grouping changed from '${oldGroup}' to '${newGroup}'`;
+          const exactMatch = existingEntries.find((h: any) => normalizeDate(h.date) === normalizedRowDate && h.biomarkers?.[key] !== undefined);
+          if (exactMatch) {
+            const matchVal = exactMatch.biomarkers[key];
+            const dictUnit = customDef?.unit || '';
+            const numMatchVal = parseFloat(matchVal);
+            const numRowVal = parseFloat(row.value);
+            const isValueMatch = (!isNaN(numMatchVal) && !isNaN(numRowVal) && numMatchVal === numRowVal) || String(matchVal).toLowerCase().trim() === String(row.value).toLowerCase().trim();
+            
+            if (isValueMatch && (!dictUnit || isSameUnit(rowUnit, dictUnit))) {
+              isSynced = true;
+              changeReason = "Already logged";
+            } else if (isValueMatch && dictUnit && !isSameUnit(rowUnit, dictUnit)) {
+              isUnitChanged = true;
+              oldUnit = dictUnit;
+              changeReason = `It looks like you have the wrong metric (${rowUnit}). Would you like to convert it to IS (${dictUnit})?`;
             } else {
-              changeReason = `New reading of ${typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value || '')} logged on ${typeof row.date === 'object' ? JSON.stringify(row.date) : String(row.date || '')}`;
+              oldValue = matchVal;
+              isChanged = true;
+              changeReason = `Value discrepancy for ${row.date}: existing was ${matchVal}, extracted is ${row.value}`;
+            }
+          } else {
+            const sortedHistory = [...existingEntries].sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
+            const latestVal = sortedHistory[0].biomarkers[key];
+            if (latestVal !== undefined) {
+              isNew = true;
+              isChanged = false;
+              changeReason = "New reading";
             }
           }
         }
@@ -803,8 +907,12 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           value: row.value ?? 'N/A',
           unit: rowUnit,
           isNew,
+          isNewBiomarker: isNew && (existingEntries.length === 0),
           isChanged,
+          isSynced,
+          isUnitChanged,
           oldValue,
+          oldUnit,
           isAtRisk,
           severity: isAtRisk ? 1 : 0,
           normalRange,
@@ -831,7 +939,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       });
       
       missingList.forEach(name => {
-        const key = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const key = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
         (finalRowsFallback as any[]).push({
           key,
           biomarker: name,
@@ -862,13 +970,164 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       return finalRowsFallback;
     }
 
+    if (agentType === 'medical_extract') {
+      let parsedRows: any[] = [];
+      const entries = Array.isArray(agentResult) ? agentResult : [];
+      entries.forEach(entry => {
+        if (entry.tests && Array.isArray(entry.tests)) {
+          entry.tests.forEach((test: any) => {
+             parsedRows.push({
+               biomarker: test.originalTestName || test.key || 'Unknown',
+               name: test.originalTestName || test.key || 'Unknown',
+               key: test.key,
+               date: entry.date,
+               value: test.valueNumeric !== null && test.valueNumeric !== undefined ? test.valueNumeric : test.valueString,
+               unit: test.unit,
+               normalRange: test.normalRange,
+               explanation: test.doctorComment
+             });
+          });
+        }
+      });
+
+      const finalRowsFallback = parsedRows.map((row: any) => {
+        const biomarkerName = row.biomarker || row.name || row.key || 'Unknown';
+        const key = resolveBiomarkerKey(row.key || String(biomarkerName).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''), biomarkerName, profile);
+        const existingEntries = (biomarkerHistory || []).filter((h: any) => h.biomarkers?.[key] !== undefined);
+        let isNew = row.noChangeNeeded ? false : (existingEntries.length === 0);
+        
+        const customDef = profile?.customBiomarkers?.[key];
+        const normalRange = row.normalRange || customDef?.normalRange || '';
+        const valueNum = parseFloat(row.value);
+        let isAtRisk = false;
+        
+        if (agentType !== 'medical_extract' && agentType !== 'agent1' && !isNaN(valueNum) && normalRange) {
+          const rangeMatch = normalRange.match(/([\d.]+)\s*-\s*([\d.]+)/);
+          if (rangeMatch) {
+            const min = parseFloat(rangeMatch[1]);
+            const max = parseFloat(rangeMatch[2]);
+            if (valueNum < min || valueNum > max) {
+              isAtRisk = true;
+            }
+          }
+        }
+
+        let rowUnit = row.unit || row.metric || '';
+        const dictUnit = customDef?.unit || '';
+        if (rowUnit.trim() === '' || rowUnit.trim() === '-' || rowUnit.trim().toLowerCase() === 'n/a') {
+            rowUnit = dictUnit;
+        }
+        const newGroup = row.standardMedicalGrouping || 'Other';
+        const oldGroup = customDef?.standardMedicalGrouping || 'Other';
+        const isGroupChanged = (agentType === 'agent1' || agentType === 'medical_extract') ? false : (!!customDef && newGroup !== oldGroup);
+
+        const isSameUnit = (unit1: string, unit2: string) => {
+          if (!unit1 || !unit2) return unit1 === unit2;
+          // remove x or ×, convert * to ^, remove spaces
+          const norm = (u: string) => u.toLowerCase().replace(/^[a-z]*(?=10)/g, '').replace(/[x×]/g, '').replace(/\*/g, '^').replace(/\s/g, '');
+          return norm(unit1) === norm(unit2);
+        };
+        const normalizeDate = (d: string) => {
+          if (!d) return d;
+          const str = String(d).replace(/\//g, '-').replace(/\./g, '-').trim();
+          const match1 = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+          if (match1) return `${match1[1]}-${match1[2].padStart(2, '0')}-${match1[3].padStart(2, '0')}`;
+          const match2 = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+          if (match2) return `${match2[3]}-${match2[2].padStart(2, '0')}-${match2[1].padStart(2, '0')}`;
+          const match3 = str.match(/^(\d{1,2})\s+([a-zA-Z]{3,})\s+(\d{4})$/);
+          if (match3) {
+            const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+            const m = (months as any)[match3[2].toLowerCase().substring(0,3)] || '01';
+            return `${match3[3]}-${m}-${match3[1].padStart(2, '0')}`;
+          }
+          return str;
+        };
+        const normalizedRowDate = normalizeDate(row.date);
+
+        let changeReason = row.noChangeNeeded 
+          ? `No changes needed. Entry is already up-to-date.` 
+          : `Extracted new ${biomarkerName}: ${typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value || '')} ${rowUnit}`;
+        let oldValue: any = undefined;
+        let oldUnit: any = undefined;
+        let isChanged = false;
+        let isSynced = false;
+        let isUnitChanged = false;
+
+        if (!row.noChangeNeeded && !isNew && existingEntries.length > 0) {
+          const exactMatch = existingEntries.find((h: any) => normalizeDate(h.date) === normalizedRowDate && h.biomarkers?.[key] !== undefined);
+          if (exactMatch) {
+            const matchVal = exactMatch.biomarkers[key];
+            const dictUnit = customDef?.unit || '';
+            const numMatchVal = parseFloat(matchVal);
+            const numRowVal = parseFloat(row.value);
+            const isValueMatch = (!isNaN(numMatchVal) && !isNaN(numRowVal) && numMatchVal === numRowVal) || String(matchVal).toLowerCase().trim() === String(row.value).toLowerCase().trim();
+            
+            if (isValueMatch && (!dictUnit || isSameUnit(rowUnit, dictUnit))) {
+              isSynced = true;
+              changeReason = "Already logged";
+            } else if (isValueMatch && dictUnit && !isSameUnit(rowUnit, dictUnit)) {
+              isUnitChanged = true;
+              oldUnit = dictUnit;
+              changeReason = `It looks like you have the wrong metric (${rowUnit}). Would you like to convert it to IS (${dictUnit})?`;
+            } else {
+              oldValue = matchVal;
+              isChanged = true;
+              changeReason = `Value discrepancy for ${row.date}: existing was ${matchVal}, extracted is ${row.value}`;
+            }
+          } else {
+            const sortedHistory = [...existingEntries].sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
+            const latestVal = sortedHistory[0].biomarkers[key];
+            if (latestVal !== undefined) {
+              isNew = true;
+              isChanged = false;
+              changeReason = "New reading";
+            }
+          }
+        }
+
+        const riskReason = isAtRisk 
+          ? `Value ${typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value || '')} ${rowUnit} is outside normal range (${normalRange})` 
+          : '';
+
+        const explanation = row.explanation || row.changeReason || row.description || '';
+
+        return {
+          key,
+          biomarker: biomarkerName,
+          date: row.date || 'N/A',
+          value: row.value ?? 'N/A',
+          unit: rowUnit,
+          isNew,
+          isNewBiomarker: isNew && (existingEntries.length === 0),
+          isChanged,
+          isSynced,
+          isUnitChanged,
+          oldValue,
+          oldUnit,
+          isAtRisk,
+          severity: isAtRisk ? 1 : 0,
+          normalRange,
+          changeReason,
+          riskReason,
+          description: explanation,
+          standardMedicalGrouping: row.standardMedicalGrouping || 'Other',
+          isGroupChanged,
+          oldGroup,
+          riskCategories: row.riskCategories || [],
+          potentialMedicalConditions: row.potentialMedicalConditions || []
+        };
+      });
+
+      return finalRowsFallback;
+    }
+
     if (agentType === 'agent2') {
       // Step 2: Clinical Ontologist (Mapping)
       const mapping = agentResult.bucketMapping || agentResult || {};
       const entries = Object.entries(mapping).filter(([k]) => k !== 'text' && k !== 'extractedYaml');
       
       return entries.filter((e: any) => e && typeof e === 'object').map(([bioName, mapData]: [string, any]) => {
-        const key = String(bioName).toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const key = String(bioName).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
         const existingDef = profile?.customBiomarkers?.[key];
         const newGroup = mapData.standardMedicalGrouping || 'Other';
         const oldGroup = existingDef?.standardMedicalGrouping || 'Other';
@@ -920,7 +1179,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       const buckets = Array.isArray(agentResult.buckets) ? agentResult.buckets : [];
       const allBiomarkers = buckets.flatMap((bucket: any) => {
         return (bucket.biomarkers || []).filter((b: any) => b && typeof b === 'object').map((b: any) => {
-          const key = String(b.name || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const key = String(b.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
           const existingDef = profile?.customBiomarkers?.[key];
           const oldGroup = existingDef?.standardMedicalGrouping || 'Other';
           const isGroupChanged = bucket.systemName && bucket.systemName !== oldGroup;
@@ -977,7 +1236,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       const conditions = Array.isArray(agentResult.prioritizedConditions) ? agentResult.prioritizedConditions : [];
       return conditions.flatMap((cond: any) => {
         return (Array.isArray(cond.biomarkers) ? cond.biomarkers : []).map((b: any) => {
-          const key = String(b.key || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const key = String(b.key || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
           const existingDef = profile?.customBiomarkers?.[key];
           const oldGroup = existingDef?.standardMedicalGrouping || 'Other';
           const isGroupChanged = cond.conditionName && cond.conditionName !== oldGroup;
@@ -1167,7 +1426,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
   // Check if there are any new or changed entries to actually approve
   const hasAnythingToApprove = useMemo(() => {
     if (tableData.length === 0) return false;
-    if (agentType === 'agent1' || agentType === 'agent2' || agentType === 'agent3' || agentType === 'agent4') {
+    if (agentType === 'agent1' || agentType === 'medical_extract' || agentType === 'agent2' || agentType === 'agent3' || agentType === 'agent4') {
       return counts.isNew > 0 || counts.changed > 0 || counts.toDelete > 0;
     }
     return tableData.length > 0;
@@ -1180,7 +1439,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
     let missingList: string[] = [];
     let differenceMsg = '';
 
-    if (agentType === 'agent1' || agentType === 'data_review') {
+    if (agentType === 'agent1' || agentType === 'medical_extract' || agentType === 'data_review') {
       if (agentResult?.batchBiomarkers && Array.isArray(agentResult.batchBiomarkers) && agentResult.batchBiomarkers.length > 0) {
         initialCount = agentResult.batchBiomarkers.length;
         // GeneratedCount shows the active primary table rows (excluding secondary duplicates)
@@ -1276,16 +1535,16 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       missingList.forEach(name => {
         const found = agentResult.batchBiomarkers.find((b: any) => (b.name || b.key) === name);
         if (found) {
-          const key = found.key || found.name?.toLowerCase().replace(/[^a-z0-9]/g, '_') || name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const key = found.key || found.name?.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
           missingBiomarkers.push({ key, name: found.name || found.key || name });
         } else {
-          const key = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const key = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
           missingBiomarkers.push({ key, name });
         }
       });
     } else {
       missingList.forEach(name => {
-        const key = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const key = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
         missingBiomarkers.push({ key, name });
       });
     }
@@ -1358,12 +1617,12 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10 border-b border-slate-100 dark:border-slate-800">
         <tr>
           {tableHeader('Biomarker', 'biomarker')}
-          {agentType === 'agent1' && tableHeader('Log Date', 'date')}
-          {agentType === 'agent1' && tableHeader('Value', 'value')}
-          {agentType === 'agent1' && tableHeader('Unit', 'unit')}
+          {(agentType === 'agent1' || agentType === 'medical_extract') && tableHeader('Log Date', 'date')}
+          {(agentType === 'agent1' || agentType === 'medical_extract') && tableHeader('Value', 'value')}
+          {(agentType === 'agent1' || agentType === 'medical_extract') && tableHeader('Unit', 'unit')}
           {agentType === 'data_review' && tableHeader('User Value', 'value')}
           {agentType === 'data_review' && tableHeader('Calibrated Normal Range', 'normalRange')}
-          {(agentType === 'agent1' || agentType === 'agent2' || agentType === 'agent3') && tableHeader('Medical Grouping', 'group')}
+          {(agentType === 'agent2' || agentType === 'agent3') && tableHeader('Medical Practice', 'group')}
           {agentType === 'agent2' && tableHeader('Risk Categories', 'categories')}
           {agentType === 'agent3' && tableHeader('Total Readings', 'totalReadings')}
           {agentType === 'agent4' && tableHeader('Condition Association', 'condition')}
@@ -1400,7 +1659,30 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
             <tr key={idx} className={`${bgClass} hover:bg-slate-50/50 dark:hover:bg-slate-900/40 transition-colors`}>
               <td className="px-3 py-2 font-semibold">
                 <div className="flex items-center gap-2">
-                  {row.isMissing && (
+                  {(row.isMissing || row.isNew || row.isChanged || row.isRenamed || row.isUnitChanged || row.isGroupChanged) && !isToDelete && !row.isSynced && agentType === 'medical_extract' && (
+                    <input
+                      type="checkbox"
+                      checked={row.isMissing ? effectiveSelectedMissingKeys.includes(row.key) : !unselectedRowKeys.includes(row.key)}
+                      onChange={() => {
+                        if (row.isMissing) {
+                          const isChecked = effectiveSelectedMissingKeys.includes(row.key);
+                          const newKeys = isChecked
+                            ? effectiveSelectedMissingKeys.filter(k => k !== row.key)
+                            : [...effectiveSelectedMissingKeys, row.key];
+                          handleSelectedMissingKeysChange(newKeys);
+                        } else {
+                          const isChecked = !unselectedRowKeys.includes(row.key);
+                          if (isChecked) {
+                            setUnselectedRowKeys(prev => [...prev, row.key]);
+                          } else {
+                            setUnselectedRowKeys(prev => prev.filter(k => k !== row.key));
+                          }
+                        }
+                      }}
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 shrink-0 cursor-pointer"
+                    />
+                  )}
+                  {row.isMissing && agentType !== 'medical_extract' && (
                     <input
                       type="checkbox"
                       checked={effectiveSelectedMissingKeys.includes(row.key)}
@@ -1429,6 +1711,11 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                         {row.biomarker}
                       </span>
                     )}
+                    {row.key && (
+                      <span className={`text-[9px] font-mono opacity-70 ${isToDelete ? 'text-rose-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                        key: {row.key}
+                      </span>
+                    )}
                     {row.isMerged && row.mergedFrom && row.mergedFrom.length > 0 && (
                       <span className={`text-[9px] font-semibold mt-0.5 ${isToDelete ? 'text-rose-100' : 'text-indigo-600 dark:text-indigo-400'}`}>
                         Merged from: {row.mergedFrom.join(', ')}
@@ -1438,7 +1725,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                 </div>
               </td>
               
-              {agentType === 'agent1' && (
+              {(agentType === 'agent1' || agentType === 'medical_extract') && (
                 <>
                   <td className={`px-3 py-2 font-mono ${isToDelete ? 'text-white' : 'text-slate-600 dark:text-slate-300'}`}>
                     {typeof row.date === 'object' ? JSON.stringify(row.date) : String(row.date || '')}
@@ -1489,69 +1776,6 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                     </div>
                   </td>
                 </>
-              )}
-
-              {agentType === 'agent1' && (
-                <td className="px-3 py-2">
-                  <div className="flex flex-col gap-1 py-1 max-w-[200px]">
-                    {row.isGroupChanged && row.oldGroup ? (
-                      <div className="flex flex-col gap-0.5">
-                        <span className={`font-bold leading-normal ${isToDelete ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`}>{row.standardMedicalGrouping}</span>
-                        <span className={`text-[8.5px] line-through leading-none ${isToDelete ? 'text-rose-100/80 decoration-white' : 'text-slate-400'}`}>{row.oldGroup}</span>
-                      </div>
-                    ) : (
-                      row.standardMedicalGrouping && (
-                        <span className={`font-semibold ${isToDelete ? 'text-white' : 'text-slate-800 dark:text-slate-200'}`}>
-                          {row.standardMedicalGrouping}
-                        </span>
-                      )
-                    )}
-                    {row.isRiskChanged && row.oldRiskCategories ? (
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex flex-wrap gap-1">
-                          {row.riskCategories.map((cat: string, catIdx: number) => (
-                            <span key={catIdx} className={`text-[8.5px] font-semibold px-1.5 py-0.5 rounded border ${isToDelete ? 'text-white bg-rose-700/50 border-rose-400/40' : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-200/20'}`}>
-                              {cat}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="flex flex-wrap gap-1 opacity-60">
-                          {row.oldRiskCategories.map((cat: string, catIdx: number) => (
-                            <span key={catIdx} className={`text-[8.5px] line-through px-1.5 py-0.5 rounded border ${isToDelete ? 'text-rose-100/80 border-rose-400/20' : 'text-slate-400 border-slate-200 dark:border-slate-800'}`}>
-                              {cat}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      row.riskCategories && row.riskCategories.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {row.riskCategories.map((cat: string, catIdx: number) => (
-                            <span key={catIdx} className={`text-[8.5px] font-semibold px-1.5 py-0.5 rounded border ${isToDelete ? 'text-white bg-rose-700/50 border-rose-400/40' : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-200/20'}`}>
-                              {cat}
-                            </span>
-                          ))}
-                        </div>
-                      )
-                    )}
-                    {row.isConditionsChanged && row.oldConditions ? (
-                      <div className="flex flex-col gap-0.5">
-                        <div className={`text-[8.5px] leading-tight break-words ${isToDelete ? 'text-white' : 'text-amber-600 dark:text-amber-400 font-medium'}`}>
-                          <span className={`font-semibold ${isToDelete ? 'text-white' : 'text-amber-700 dark:text-amber-500'}`}>Conditions:</span> {(Array.isArray(row.potentialMedicalConditions) ? row.potentialMedicalConditions : []).join(', ')}
-                        </div>
-                        <div className={`text-[8.5px] leading-tight break-words line-through opacity-70 ${isToDelete ? 'text-rose-100/80' : 'text-slate-400'}`}>
-                          <span className="font-semibold">Old:</span> {(Array.isArray(row.oldConditions) ? row.oldConditions : []).join(', ')}
-                        </div>
-                      </div>
-                    ) : (
-                      row.potentialMedicalConditions && row.potentialMedicalConditions.length > 0 && (
-                        <div className={`text-[8.5px] leading-tight break-words ${isToDelete ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`}>
-                          <span className={`font-semibold ${isToDelete ? 'text-white animate-pulse' : 'text-slate-400'}`}>Conditions:</span> {(Array.isArray(row.potentialMedicalConditions) ? row.potentialMedicalConditions : []).join(', ')}
-                        </div>
-                      )
-                    )}
-                  </div>
-                </td>
               )}
 
               {(agentType === 'agent2' || agentType === 'agent3') && (
@@ -1616,12 +1840,16 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                         <span className="text-indigo-600 dark:text-indigo-400 font-bold">Merged</span>
                       ) : agentType === 'data_review' ? (
                         !row.isAtRisk && <span className="text-emerald-600 dark:text-emerald-400 font-bold">Optimal</span>
+                      ) : row.isSynced ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">Match</span>
                       ) : row.isNew ? (
-                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">New</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                          {row.isNewBiomarker ? "New biomarker" : "New log"}
+                        </span>
                       ) : row.isChanged || row.isRenamed || row.isUnitChanged || row.isGroupChanged ? (
                         <span className="text-amber-600 dark:text-amber-400 font-bold">Changed</span>
                       ) : (
-                        <span className="text-slate-400 dark:text-slate-500">Synced</span>
+                        <span className="text-slate-400 dark:text-slate-500">Match</span>
                       )}
                     </>
                   )}
@@ -1647,30 +1875,55 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                   </td>
                 </>
               ) : (
-                hasUpdateContent && (
-                  <td className="px-3 py-2 text-[11px] max-w-[220px] break-words">
-                    <div className="flex flex-col gap-1">
-                      {row.specificRiskContext && (
-                        <span className={`leading-relaxed font-medium text-[9.5px] ${isToDelete ? 'text-rose-100' : 'text-slate-800 dark:text-slate-200'}`}>
-                          {row.specificRiskContext}
-                        </span>
-                      )}
-                      {row.description && (
-                        <span className={`leading-relaxed ${isToDelete ? 'text-white' : 'text-slate-600 dark:text-slate-350'}`}>{typeof row.description === 'object' ? JSON.stringify(row.description) : String(row.description || '')}</span>
-                      )}
-                      {row.isAtRisk && row.riskReason && (
-                        <span className={`font-bold text-[9px] ${isToDelete ? 'text-white' : 'text-rose-600 dark:text-rose-400'}`}>
-                          {row.riskReason}
-                        </span>
-                      )}
-                      {(row.isNew || row.isChanged || row.isRenamed || row.isUnitChanged || row.isGroupChanged) && row.changeReason && (
-                        <span className={`font-bold text-[9px] leading-tight ${isToDelete ? 'text-white' : 'text-emerald-650 dark:text-emerald-400'}`}>
-                          {row.changeReason}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                )
+                hasUpdateContent && (() => {
+                  let cleanDescription = typeof row.description === 'object' ? JSON.stringify(row.description) : String(row.description || '');
+                  if (/new reading of/i.test(cleanDescription) || /logged on/i.test(cleanDescription)) {
+                    cleanDescription = '';
+                  }
+                  
+                  let cleanChangeReason = row.changeReason || '';
+                  if (/new reading of/i.test(cleanChangeReason) || /logged on/i.test(cleanChangeReason)) {
+                    cleanChangeReason = '';
+                  }
+                  
+                  return (
+                    <td className="px-3 py-2 text-[11px] max-w-[220px] break-words text-white">
+                      <div className="flex flex-col gap-1 text-white">
+                        {row.specificRiskContext && (
+                          <span className="leading-relaxed font-medium text-[11px] text-white">
+                            {row.specificRiskContext}
+                          </span>
+                        )}
+                        {cleanDescription && (
+                          <span className="leading-relaxed text-[11px] text-white">
+                            {cleanDescription}
+                          </span>
+                        )}
+                        {row.isAtRisk && row.riskReason && (
+                          <span className="font-bold text-[11px] text-white">
+                            {row.riskReason}
+                          </span>
+                        )}
+                        {(row.isNew || row.isChanged || row.isRenamed || row.isUnitChanged || row.isGroupChanged || row.isSynced) && cleanChangeReason && (
+                          <div className="flex flex-col gap-1 text-white">
+                            <span className="font-bold text-[11px] leading-tight text-white">
+                              {cleanChangeReason}
+                            </span>
+                            {row.isUnitChanged && row.oldUnit && onSendMessage && !isToDelete && (
+                              <button
+                                type="button"
+                                onClick={() => onSendMessage(`Please update the current extraction: mathematically convert the value of ${row.biomarker} from ${row.unit} to ${row.oldUnit}. Return the full updated data in the 'entries' array and set mode to 'extract_chunk'.`)}
+                                className="self-start text-[9px] bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-800/60 text-amber-700 dark:text-amber-300 font-bold py-0.5 px-2 rounded transition-colors"
+                              >
+                                Convert to IS ({row.oldUnit})
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  );
+                })()
               )}
             </tr>
           );
@@ -1779,7 +2032,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
             : 'bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200/10 hover:bg-slate-100'
         }`}
       >
-        Synced: {counts.synced}
+        Match: {counts.synced}
       </button>
     </div>
   );
@@ -1790,7 +2043,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-0.5">
           <span className="text-[10px] uppercase font-mono font-extrabold text-indigo-600 dark:text-indigo-400 tracking-wider">
-            {agentType === 'agent1' && 'Biomarker Extraction Stream'}
+            {(agentType === 'agent1' || agentType === 'medical_extract') && 'Biomarker Extraction Stream'}
             {agentType === 'agent2' && 'Unified Ontology Mapping'}
             {agentType === 'agent3' && 'Data Assembly Diagnostics'}
             {agentType === 'agent4' && 'Prognostic Diagnostics Assessment'}
@@ -1807,6 +2060,42 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           <Maximize2 className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* Extreme Divergence / Anomalies Banner */}
+      {(() => {
+        const anomalies = agentResult?.extremeDivergences || agentResult?.flaggedAnomalies;
+        if (anomalies && Array.isArray(anomalies) && anomalies.length > 0) {
+          return (
+            <div className="p-4 bg-rose-50/80 dark:bg-rose-950/20 border border-rose-200/50 dark:border-rose-900/50 rounded-xl space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                <div>
+                  <h6 className="text-[11px] font-bold text-rose-800 dark:text-rose-300">Extreme Divergence Detected</h6>
+                  <p className="text-[10px] text-rose-600/90 dark:text-rose-400/90 leading-relaxed mt-0.5">
+                    The agent flagged highly improbable values or likely metric unit mismatches (e.g. US vs SI units) in this batch.
+                    Please verify the data. If correct, you may proceed. Otherwise, edit the source data to correct the values or units before continuing.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {anomalies.map((a: any, i: number) => (
+                  <div key={i} className="px-3 py-2 bg-white/60 dark:bg-slate-950/40 rounded-lg border border-rose-100/50 dark:border-rose-900/30 flex flex-col gap-1 text-[10px]">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800 dark:text-slate-200">{a.name || a.key}</span>
+                      <span className="font-mono text-rose-600 dark:text-rose-400 bg-rose-100/50 dark:bg-rose-900/30 px-1.5 py-0.5 rounded font-bold">
+                        {a.originalValue} {a.unit}
+                      </span>
+                    </div>
+                    {a.reason && <p className="text-slate-600 dark:text-slate-400">{a.reason}</p>}
+                    {a.suggestedAction && <p className="text-rose-600 dark:text-rose-400 font-medium mt-1">Suggested: {a.suggestedAction}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* Status Summary Counts Bar */}
       {renderFilterTags()}
@@ -1861,17 +2150,46 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
         </div>
 
         {verification.differenceMsg && !(isMultiphaseActive || totalEstimated > 0) && (
-          <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-relaxed bg-amber-500/5 p-2 rounded-lg border border-amber-500/10 font-sans">
-            {verification.differenceMsg}
-          </p>
+          <div className="relative">
+            <div className={`text-[10px] text-amber-600 dark:text-amber-400 leading-relaxed bg-amber-500/5 p-2 rounded-lg border border-amber-500/10 font-sans ${diffExpanded ? 'max-h-40 overflow-y-auto' : 'line-clamp-2'}`}>
+              {verification.differenceMsg}
+            </div>
+            {verification.differenceMsg.length > 120 && (
+              <button 
+                onClick={() => setDiffExpanded(!diffExpanded)}
+                className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline mt-1 cursor-pointer"
+              >
+                {diffExpanded ? 'Show less' : 'Expand'}
+              </button>
+            )}
+          </div>
         )}
       </div>
 
       {/* Apply Changes Button or "No changes" info */}
       <div className="pt-1 space-y-2">
         {!hasAnythingToApprove && (
-          <div className="w-full py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 rounded-xl text-center text-xs text-slate-500 italic">
-            No changes to apply. All biomarker entries are already up-to-date.
+          <div className="w-full py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 rounded-xl flex flex-col items-center justify-center gap-2">
+            <span className="text-xs text-slate-500 italic">
+              No changes to apply. All biomarker entries are already up-to-date.
+            </span>
+            {onCancel ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="mt-1 px-4 py-1.5 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:hover:bg-indigo-800/60 text-indigo-700 dark:text-indigo-300 font-bold rounded-lg text-[11px] transition-colors cursor-pointer"
+              >
+                That's great
+              </button>
+            ) : onApplyChanges ? (
+              <button
+                type="button"
+                onClick={() => onApplyChanges(unselectedRowKeys)}
+                className="mt-1 px-4 py-1.5 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:hover:bg-indigo-800/60 text-indigo-700 dark:text-indigo-300 font-bold rounded-lg text-[11px] transition-colors cursor-pointer"
+              >
+                Mark as Reviewed
+              </button>
+            ) : null}
           </div>
         )}
 
@@ -1889,7 +2207,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
           <button
             type="button"
             disabled={isApplying}
-            onClick={onApplyChanges}
+            onClick={() => onApplyChanges(unselectedRowKeys)}
             className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
           >
             <CheckCircle2 className="w-4 h-4" />
@@ -1928,7 +2246,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                 <div>
                   <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm font-display">
                     Fullscreen Explorer — 
-                    {agentType === 'agent1' && ' Biomarker Extraction'}
+                    {(agentType === 'agent1' || agentType === 'medical_extract') && ' Biomarker Extraction'}
                     {agentType === 'agent2' && ' Category Mapping'}
                     {agentType === 'agent3' && ' Data Assembly'}
                     {agentType === 'agent4' && ' Prognostic diagnostics'}
@@ -1991,7 +2309,19 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                   )}
                 </div>
                 {verification.differenceMsg && !(isMultiphaseActive || totalEstimated > 0) && (
-                  <p className="text-[10px] text-amber-600 dark:text-amber-400">{verification.differenceMsg}</p>
+                  <div className="relative mt-2">
+                    <div className={`text-[13px] text-amber-500 font-medium ${diffExpanded ? 'max-h-60 overflow-y-auto' : 'line-clamp-2'}`}>
+                      {verification.differenceMsg}
+                    </div>
+                    {verification.differenceMsg.length > 120 && (
+                      <button 
+                        onClick={() => setDiffExpanded(!diffExpanded)}
+                        className="text-[12px] text-amber-500 hover:underline mt-1 cursor-pointer font-bold"
+                      >
+                        {diffExpanded ? 'Show less' : 'Expand'}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -2008,7 +2338,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                     type="button"
                     disabled={isApplying}
                     onClick={async () => {
-                      await onApplyChanges();
+                      await onApplyChanges(unselectedRowKeys);
                       setIsFullscreen(false);
                     }}
                     className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/10 flex items-center gap-1.5 transition-all cursor-pointer"
