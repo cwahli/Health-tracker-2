@@ -466,7 +466,8 @@ async function callUnifiedLLM({
   responseMimeType,
   responseSchema,
   googleSearch,
-  enablePlaceIdTool
+  enablePlaceIdTool,
+  maxOutputTokens
 }: {
   modelId: string;
   systemInstruction: string;
@@ -477,6 +478,7 @@ async function callUnifiedLLM({
   responseSchema?: any;
   googleSearch?: boolean;
   enablePlaceIdTool?: boolean;
+  maxOutputTokens?: number;
 }) {
   try {
     const isJson = responseMimeType === "application/json";
@@ -706,6 +708,10 @@ async function callUnifiedLLM({
   
   if (responseSchema) {
     configObj.responseSchema = responseSchema;
+  }
+  
+  if (maxOutputTokens) {
+    configObj.maxOutputTokens = maxOutputTokens;
   }
   
   if (googleSearch) {
@@ -1689,24 +1695,33 @@ Current User Input: "${message}"`;
 
     const fullPromptSent = `System Instruction:\n${finalSystemInstruction}\n\n${promptText}`;
     addDebugLog(`[RouteAgent Chat] Sending request to Gemini...`);
-    const textOutput = await callUnifiedLLM({
+    async function callAndParseFoodAnalysis(callArgs: any): Promise<{ textOutput: string; rawParsed: any }> {
+      const textOutput = await callUnifiedLLM(callArgs);
+      const cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+      const rawParsed = JSON.parse(extractBalancedJson(cleanJson));
+      return { textOutput, rawParsed };
+    }
+
+    const llmCallArgs = {
       modelId: engine || "gemini-3.1-flash-lite", // Updating to flash-lite as recommended
       systemInstruction: finalSystemInstruction,
       promptText,
       imagePayloads,
       responseMimeType: "application/json",
-      responseSchema: foodAnalyzeSchema
-    });
+      responseSchema: foodAnalyzeSchema,
+      maxOutputTokens: 4096
+    };
 
-    addDebugLog(`[RouteAgent Chat] Received response from Gemini. Length: ${textOutput.length} chars.`);
-    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
-    let rawParsed;
+    let textOutput: string;
+    let rawParsed: any;
     try {
-      rawParsed = JSON.parse(cleanJson);
-    } catch (parseErr: any) {
-      addDebugLog(`[JSON Parse Error] JSON parse failed: ${parseErr.message}.`);
-      throw parseErr;
+      ({ textOutput, rawParsed } = await callAndParseFoodAnalysis(llmCallArgs));
+    } catch (firstErr: any) {
+      addDebugLog(`[JSON Parse Error] First attempt failed: ${firstErr.message}. Retrying once...`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      ({ textOutput, rawParsed } = await callAndParseFoodAnalysis(llmCallArgs));
     }
+    addDebugLog(`[RouteAgent Chat] Received response from Gemini. Length: ${textOutput.length} chars.`);
 
     const mode = rawParsed.mode || "new_log";
 
