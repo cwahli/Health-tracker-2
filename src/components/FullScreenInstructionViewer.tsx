@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Copy, Check, Terminal, ShieldAlert, BookOpen, BrainCircuit, Edit2, RotateCcw, Save, Search, Code, Info, Sparkles, Plus, ChevronRight } from 'lucide-react';
+import { auth } from '../firebase';
 
 interface FullScreenInstructionViewerProps {
   isOpen: boolean;
@@ -66,6 +67,7 @@ export default function FullScreenInstructionViewer({
   const [sysInstruction, setSysInstruction] = useState('');
   const [variableDataText, setVariableDataText] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [loadingInstruction, setLoadingInstruction] = useState(false);
 
   // Autocomplete states
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -665,12 +667,54 @@ YAML Array Item Schema:
       const customSys = localStorage.getItem(`custom_system_instruction_${resolvedKey}`);
       const customVar = localStorage.getItem(`custom_variable_data_${resolvedKey}`);
       
-      setSysInstruction(customSys !== null ? customSys : parts.defaultSystemInstruction);
       setVariableDataText(customVar !== null ? customVar : parts.defaultVariableData);
       setIsEditing(false);
       setSaveSuccess(false);
+
+      if (resolvedKey === 'food') {
+        if (customSys !== null) {
+          setSysInstruction(customSys);
+        } else {
+          setLoadingInstruction(true);
+          const queryParams = new URLSearchParams({
+            agentType: 'food',
+            biomarkersNeedingImprovement: JSON.stringify(outOfRangeBiomarkers ? outOfRangeBiomarkers.map((b: any) => b.name) : []),
+            remainingAllowance: JSON.stringify(remainingAllowance || null),
+            activeMeal: JSON.stringify(activeMeal || null)
+          });
+
+          const fetchInstruction = async () => {
+            try {
+              const headers: any = {};
+              const idToken = await auth.currentUser?.getIdToken();
+              if (idToken) {
+                headers['Authorization'] = `Bearer ${idToken}`;
+              }
+              const res = await fetch(`/api/gemini/instruction-preview?${queryParams.toString()}`, {
+                headers
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.instruction) {
+                  setSysInstruction(data.instruction);
+                }
+              } else {
+                setSysInstruction(parts.defaultSystemInstruction);
+              }
+            } catch (err) {
+              console.error("Failed to fetch instruction preview:", err);
+              setSysInstruction(parts.defaultSystemInstruction);
+            } finally {
+              setLoadingInstruction(false);
+            }
+          };
+          fetchInstruction();
+        }
+      } else {
+        setSysInstruction(customSys !== null ? customSys : parts.defaultSystemInstruction);
+      }
     }
-  }, [isOpen, resolvedKey, agentPrompt]);
+  }, [isOpen, resolvedKey, agentPrompt, outOfRangeBiomarkers, remainingAllowance, activeMeal]);
 
   if (!isOpen) return null;
 
@@ -908,16 +952,17 @@ YAML Array Item Schema:
                       System Instruction / Core Role Prompt
                     </span>
                     <span className="text-[10px] text-slate-500 font-mono">
-                      {sysInstruction.length} chars
+                      {loadingInstruction ? "Loading..." : `${sysInstruction.length} chars`}
                     </span>
                   </div>
                   <textarea
                     ref={systemTextareaRef}
-                    value={sysInstruction}
+                    value={loadingInstruction ? "Loading real-time instructions from Clinical Dietitian agent..." : sysInstruction}
+                    disabled={loadingInstruction}
                     onChange={(e) => handleTextareaInput(e, 'system')}
                     onKeyDown={(e) => handleKeyDown(e, 'system')}
                     onFocus={() => setFocusedTextarea('system')}
-                    className="w-full bg-slate-900/60 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl p-4 font-mono text-sm text-slate-200 outline-none transition-all resize-none leading-relaxed h-[320px] focus:ring-1 focus:ring-indigo-500"
+                    className={`w-full bg-slate-900/60 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl p-4 font-mono text-sm text-slate-200 outline-none transition-all resize-none leading-relaxed h-[320px] focus:ring-1 focus:ring-indigo-500 ${loadingInstruction ? 'opacity-60 cursor-not-allowed select-none' : ''}`}
                     placeholder="Enter system instructions. Type '{' to search and insert steerable variables..."
                   />
 
@@ -1076,12 +1121,20 @@ YAML Array Item Schema:
             <div className="flex flex-col gap-6">
               {/* Top View: System Instructions */}
               <div className="bg-slate-900/30 border border-slate-800/50 rounded-xl p-5 flex flex-col">
-                <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider block mb-3 font-mono">
+                <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider block mb-3 font-mono flex items-center gap-1.5">
                   System Instruction / Core Role Prompt
+                  {loadingInstruction && <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-spin" />}
                 </span>
-                <pre className="text-slate-300 font-mono text-xs whitespace-pre-wrap leading-relaxed select-text">
-                  {sysInstruction || "No System Instruction set."}
-                </pre>
+                {loadingInstruction ? (
+                  <div className="flex items-center gap-2 text-slate-400 font-mono text-xs py-4">
+                    <Sparkles className="w-4 h-4 animate-spin text-indigo-400" />
+                    Fetching latest dynamic instructions...
+                  </div>
+                ) : (
+                  <pre className="text-slate-300 font-mono text-xs whitespace-pre-wrap leading-relaxed select-text">
+                    {sysInstruction || "No System Instruction set."}
+                  </pre>
+                )}
               </div>
 
               {/* Bottom View: Variable Data Context */}

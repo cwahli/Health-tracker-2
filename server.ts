@@ -146,6 +146,170 @@ function extractBalancedJson(text: string): string {
   }
   return cleaned;
 }
+
+export function buildFoodAnalyzeInstruction(context: {
+  biomarkersNeedingImprovement?: any[];
+  remainingAllowance?: {
+    calories?: number | string;
+    saturatedFat?: number | string;
+    sodium?: number | string;
+  } | null;
+  activeMeal?: any;
+}): string {
+  const { biomarkersNeedingImprovement, remainingAllowance, activeMeal } = context;
+
+  const formattedBiomarkers = Array.isArray(biomarkersNeedingImprovement) && biomarkersNeedingImprovement.length > 0
+    ? biomarkersNeedingImprovement.map((b: any) => {
+        if (typeof b === "string") {
+          return `• ${b}`;
+        }
+        if (b && typeof b === "object" && b.name) {
+          const statusStr = b.status ? ` is ${String(b.status).toUpperCase()}` : "";
+          const valStr = b.value !== undefined ? ` (${b.value} ${b.unit || ""}, normal range: ${b.normalRange || ""})` : "";
+          return `• ${b.name}${statusStr}${valStr}`;
+        }
+        return `• ${String(b)}`;
+      }).join("\n")
+    : "• None";
+
+  const biomarkersList = formattedBiomarkers;
+
+  const targetLimits = remainingAllowance
+    ? `• Calories: ${remainingAllowance.calories} kcal remaining | Saturated Fat: ${remainingAllowance.saturatedFat}g remaining | Sodium: ${remainingAllowance.sodium}mg remaining`
+    : "• Calories: 2000 kcal remaining | Saturated Fat: 20g remaining | Sodium: 2300mg remaining";
+
+  // Clean activeMeal by replacing huge base64 strings before stringifying to save token costs and prevent logs bloating
+  let sanitizedActiveMeal = null;
+  if (activeMeal) {
+    sanitizedActiveMeal = { ...activeMeal };
+    if (sanitizedActiveMeal.imageUrl && sanitizedActiveMeal.imageUrl.startsWith("data:image/")) {
+      sanitizedActiveMeal.imageUrl = "[base64_image_data_truncated]";
+    }
+    if (sanitizedActiveMeal.imageUrls && Array.isArray(sanitizedActiveMeal.imageUrls)) {
+      sanitizedActiveMeal.imageUrls = sanitizedActiveMeal.imageUrls.map((url: string) => 
+        url && url.startsWith("data:image/") ? "[base64_image_data_truncated]" : url
+      );
+    }
+    if (sanitizedActiveMeal.chatTranscript) {
+      delete sanitizedActiveMeal.chatTranscript;
+    }
+  }
+
+  const mealStr = sanitizedActiveMeal ? JSON.stringify(sanitizedActiveMeal, null, 2) : "None";
+
+  return `CURRENT_ACTIVE_MEAL_STATE: ${mealStr}
+
+You are an expert clinical dietitian and nutritional LLM analyzer operating within an automated personalized health ecosystem. Your response must be an exact single structured JSON object matching the requested structure. Never add markdown formatting wrappers like \`\`\`json unless instructed.
+
+CONSISTENCY REQUIREMENT: Any specific numeric values you state in "risks", "healthImpact", or "message" must exactly match the values you provide in itemsBreakdown / labelNutrientsPerServing for this same meal. Never restate a different or independently-estimated figure in prose.
+
+=== PATIENT CONTEXT PAYLOAD ===
+CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
+${biomarkersList}
+- If LDL-C/cholesterol is HIGH, any food high in saturated fat is EXTREMELY harmful. Rate as "bad" and warn in "risks".
+- If Blood Pressure/Sodium is HIGH, any food high in sodium is EXTREMELY harmful. Rate as "bad".
+
+TODAY'S REMAINING NUTRITIONAL TARGET LIMITS:
+${targetLimits}
+
+=== UNIVERSAL HEALTH DIRECTIVE (STRICT) ===
+TRANS FAT AVOIDANCE: Trans fat (partially hydrogenated oils) is universally harmful and must be avoided regardless of the patient's specific biomarkers. Always aggressively flag any food likely to contain trans fats (e.g., commercial baked goods, fried fast foods, certain margarines) in the "risks" field and rate suitability/recommendation poorly.
+
+=== DATA EXTRACTION DEPTH RULES ===
+When processing food entries, split your analytical focus into two tiers:
+1. CORE NUTRIENTS (Top 11: Calories, Protein, Carbohydrates, Total Fat, Saturated Fat, Trans Fat, Added Sugar, Sodium, Potassium, Total Fibre, Soluble Fibre): Execute deep reasoning. Analyze the meal description or image for hidden ingredients, preparation methods, and ingredient distribution density to ensure high contextual precision.
+2. SYSTEMIC BASELINES (Other trace vitamins/minerals): Do not waste analytical compute. The backend will apply standard, generic nutritional database averages for these based on your "canonicalDbName" output.
+
+=== MODE ROUTING DIRECTIVE ===
+Operate in one of four distinct modes based on current user intent:
+
+MODE A: NEW FOOD LOGGING (Triggered by a new food item description or image)
+- Extract and map ingredients to standard, database-friendly food classifications in "canonicalDbName".
+- Estimate total visual/described item portion weights in "weightGrams".
+- When databaseMatches is non-empty, select the closest matching entry for each visual/text food component instead of inventing nutrient values from memory. Only fall back to your own estimate if nothing relevant is present in databaseMatches. If a physical nutrition label is visible in the image, the label's stated numbers always take priority over both the database and your own estimate.
+- When you set dbSource to "label" for an item, populate labelNutrientsPerServing with the EXACT printed numbers and serving size from that label — report them verbatim as printed, do not scale or estimate them yourself; the backend will scale them to the actual consumed weight.
+- Set "mode": "new_log". Provide the "foodData" block.
+
+MODE B: DISCUSSION (Triggered by general health or meal-related questions)
+- Answer conversationally using the CURRENT_ACTIVE_MEAL_STATE and historical logs.
+- Set "mode": "discussion". Set structural data objects to null.
+
+MODE C: MODIFICATION COMMAND (Triggered by requests to alter a logged meal state)
+- Output functional instructions to modify ingredients or weights. Do not compute math yourself.
+- Set "mode": "modify". Populate the "modificationCommand" array.
+
+MODE D: EVALUATION / COMPARISON (Triggered by meal option comparisons)
+- Evaluate alternative foods side by side, focusing directly on the primary nutrient threat driven by the patient's active biomarker warnings.
+- Set "mode": "evaluation". Provide the complete "comparison" object.
+
+JSON SCHEMA STRICT REQUIREMENT:
+Respond ONLY with a structured JSON format matching this schema exactly. Values must be dynamically derived from the patient's specific profile conditions and injected directives.
+
+mode: "String indicating active mode: new_log, discussion, modify, or evaluation"
+message: "A highly personalized conversational response detailing the clinical rationale, biomarker alignment, or modification confirmation."
+modificationCommand: null or list of:
+  - action: "update_weight" | "remove_item" | "add_item"
+    itemName: "Literal name of the item from the active state to change"
+    newWeightGrams: number
+    targetDbId: "Optional exact database ID (fdcId or barcode) from the itemsBreakdown list"
+foodData: null or:
+  date: "YYYY-MM-DD (Dynamically set based on provided current time context)"
+  name: "Literal food name"
+  composition: "Brief operational summary of food ingredients"
+  weightGrams: number
+  quantity: "Visual descriptive serving size (e.g., 1 medium, 2 skewers)"
+  benefits: "Targeted clinical benefits addressing the patient's specific biomarkers"
+  risks: "Explicit clinical risk warnings mapped to the patient's injected biomarker rules, plus universal Trans Fat warnings if applicable"
+  healthImpact: "Clear evaluation against remaining daily macro/micro targets"
+  recommendation: "Short, contextual tag (e.g., 'Best today', 'Heart-healthy', 'Caution: High Sodium', 'Perfect for target')"
+  itemsBreakdown:
+    - canonicalDbName: "Standardized target food name for local DB query execution"
+      weightGrams: number
+      dbSource: "usda" | "off" | "estimated" | "label"
+      dbId: "the fdcId or barcode used as the source for this item's numbers, or null if estimated"
+      labelNutrientsPerServing: null or:
+        servingSizeGrams: number
+        calories: number
+        protein: number
+        totalFat: number
+        saturatedFat: number
+        transFat: number
+        carbohydrates: number
+        addedSugar: number
+        sodium: number
+        potassium: number
+        totalFibre: number
+        solubleFibre: number
+comparison: null or:
+  keyNutrientConcern: "The specific nutrient string causing primary clinical concern for this profile session"
+  foods:
+    - name: "Food option item name"
+      weightGrams: number
+      suitability: "Short, contextual tag (e.g., 'Safest option', 'Moderate risk', 'Avoid')"
+      pros: "Targeted biomarker benefits"
+      cons: "Targeted biomarker risks"
+  comparisonTableYaml:
+    columns: ["Nutrient", "Food A", "Food B", "Target / Warning"]
+    rows:
+      - nutrient: "Calories"
+        foodA: "value"
+        foodB: "value"
+        target: "value"
+      - nutrient: "Top Nutrient 1"
+        foodA: "value"
+        foodB: "value"
+        target: "value"
+      - nutrient: "Top Nutrient 2"
+        foodA: "value"
+        foodB: "value"
+        target: "value"
+      - nutrient: "Top Nutrient 3"
+        foodA: "value"
+        foodB: "value"
+        target: "value"
+`;
+}
+
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const SERVER_START_TIME = Date.now();
@@ -935,6 +1099,101 @@ app.post("/api/sync/load", async (req, res) => {
   }
 });
 
+// GET Endpoint for System Instruction Preview
+app.get("/api/gemini/instruction-preview", async (req, res) => {
+  try {
+    const { agentType, biomarkersNeedingImprovement, remainingAllowance, activeMeal } = req.query;
+    if (agentType === 'food') {
+      let parsedBiomarkers: any[] | undefined = undefined;
+      let parsedAllowance: any = undefined;
+      let parsedMeal: any = undefined;
+
+      try {
+        if (biomarkersNeedingImprovement && typeof biomarkersNeedingImprovement === 'string') {
+          parsedBiomarkers = JSON.parse(biomarkersNeedingImprovement);
+        }
+      } catch (e) {}
+
+      try {
+        if (remainingAllowance && typeof remainingAllowance === 'string') {
+          parsedAllowance = JSON.parse(remainingAllowance);
+        }
+      } catch (e) {}
+
+      try {
+        if (activeMeal && typeof activeMeal === 'string') {
+          parsedMeal = JSON.parse(activeMeal);
+        }
+      } catch (e) {}
+
+      // If they are not passed or empty, try to look up the user's synced context
+      if (!parsedBiomarkers || !parsedAllowance) {
+        const idToken = req.headers.authorization?.split('Bearer ')[1];
+        if (idToken) {
+          try {
+            const decoded = await adminAuth.verifyIdToken(idToken);
+            const uid = decoded.uid;
+            
+            if (db) {
+              // Try to fetch reports/latest
+              const reportRef = db.collection('users').doc(uid).collection('reports').doc('latest');
+              const reportSnap = await reportRef.get();
+              if (reportSnap.exists) {
+                const reportData = reportSnap.data();
+                if (reportData && Array.isArray(reportData.biomarkers)) {
+                  parsedBiomarkers = reportData.biomarkers.filter((b: any) => b.status === 'At Risk' || b.status === 'HIGH' || b.status === 'LOW');
+                }
+              }
+
+              // Try to fetch dashboard
+              const dashRef = db.collection('users').doc(uid).collection('metadata').doc('dashboard');
+              const dashSnap = await dashRef.get();
+              if (dashSnap.exists) {
+                const dashData = dashSnap.data();
+                if (dashData) {
+                  if (!parsedAllowance && dashData.remainingAllowance) {
+                    parsedAllowance = dashData.remainingAllowance;
+                  }
+                  if (!parsedMeal && dashData.activeMeal) {
+                    parsedMeal = dashData.activeMeal;
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            console.warn("[instruction-preview] Error loading authenticated user context:", err);
+          }
+        }
+      }
+
+      // Safe placeholder values as fallback
+      if (!parsedBiomarkers) {
+        parsedBiomarkers = [];
+      }
+      if (!parsedAllowance) {
+        parsedAllowance = {
+          calories: 2000,
+          saturatedFat: 20,
+          sodium: 2300
+        };
+      }
+
+      const instruction = buildFoodAnalyzeInstruction({
+        biomarkersNeedingImprovement: parsedBiomarkers,
+        remainingAllowance: parsedAllowance,
+        activeMeal: parsedMeal
+      });
+
+      return res.json({ instruction });
+    }
+
+    return res.status(400).json({ error: "Unsupported agentType" });
+  } catch (error: any) {
+    console.error("[instruction-preview] Error:", error);
+    res.status(500).json({ error: error.message || "Internal server error" });
+  }
+});
+
 // Gemini Food Analyze Endpoint
 app.post("/api/gemini/food-analyze", async (req, res) => {
   try {
@@ -1297,144 +1556,11 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
     }
 
     // 2. Prepend active state to Master System Instructions
-    const biomarkersList = biomarkersNeedingImprovement && Array.isArray(biomarkersNeedingImprovement) && biomarkersNeedingImprovement.length > 0
-      ? biomarkersNeedingImprovement.map((b: string) => `• ${b}`).join("\n")
-      : "• None";
-
-    const targetLimits = remainingAllowance
-      ? `• Calories: ${remainingAllowance.calories} kcal remaining | Saturated Fat: ${remainingAllowance.saturatedFat}g remaining | Sodium: ${remainingAllowance.sodium}mg remaining`
-      : "• Calories: 2000 kcal remaining | Saturated Fat: 20g remaining | Sodium: 2300mg remaining";
-
-    // Clean activeMeal by replacing huge base64 strings before stringifying to save token costs and prevent logs bloating
-    let sanitizedActiveMeal = null;
-    if (activeMeal) {
-      sanitizedActiveMeal = { ...activeMeal };
-      if (sanitizedActiveMeal.imageUrl && sanitizedActiveMeal.imageUrl.startsWith("data:image/")) {
-        sanitizedActiveMeal.imageUrl = "[base64_image_data_truncated]";
-      }
-      if (sanitizedActiveMeal.imageUrls && Array.isArray(sanitizedActiveMeal.imageUrls)) {
-        sanitizedActiveMeal.imageUrls = sanitizedActiveMeal.imageUrls.map((url: string) => 
-          url && url.startsWith("data:image/") ? "[base64_image_data_truncated]" : url
-        );
-      }
-      if (sanitizedActiveMeal.chatTranscript) {
-        delete sanitizedActiveMeal.chatTranscript;
-      }
-    }
-
-    const mealStr = sanitizedActiveMeal ? JSON.stringify(sanitizedActiveMeal, null, 2) : "None";
-
-    const systemInstruction = `CURRENT_ACTIVE_MEAL_STATE: ${mealStr}
-
-You are an expert clinical dietitian and nutritional LLM analyzer operating within an automated personalized health ecosystem. Your response must be an exact single YAML object matching the requested structure. Never add markdown formatting wrappers like \`\`\`yaml unless instructed.
-
-CONSISTENCY REQUIREMENT: Any specific numeric values you state in "risks", "healthImpact", or "message" must exactly match the values you provide in itemsBreakdown / labelNutrientsPerServing for this same meal. Never restate a different or independently-estimated figure in prose.
-
-=== PATIENT CONTEXT PAYLOAD ===
-CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
-${biomarkersList}
-- If LDL-C/cholesterol is HIGH, any food high in saturated fat is EXTREMELY harmful. Rate as "bad" and warn in "risks".
-- If Blood Pressure/Sodium is HIGH, any food high in sodium is EXTREMELY harmful. Rate as "bad".
-
-TODAY'S REMAINING NUTRITIONAL TARGET LIMITS:
-${targetLimits}
-
-=== UNIVERSAL HEALTH DIRECTIVE (STRICT) ===
-TRANS FAT AVOIDANCE: Trans fat (partially hydrogenated oils) is universally harmful and must be avoided regardless of the patient's specific biomarkers. Always aggressively flag any food likely to contain trans fats (e.g., commercial baked goods, fried fast foods, certain margarines) in the "risks" field and rate suitability/recommendation poorly.
-
-=== DATA EXTRACTION DEPTH RULES ===
-When processing food entries, split your analytical focus into two tiers:
-1. CORE NUTRIENTS (Top 11: Calories, Protein, Carbohydrates, Total Fat, Saturated Fat, Trans Fat, Added Sugar, Sodium, Potassium, Total Fibre, Soluble Fibre): Execute deep reasoning. Analyze the meal description or image for hidden ingredients, preparation methods, and ingredient distribution density to ensure high contextual precision.
-2. SYSTEMIC BASELINES (Other trace vitamins/minerals): Do not waste analytical compute. The backend will apply standard, generic nutritional database averages for these based on your "canonicalDbName" output.
-
-=== MODE ROUTING DIRECTIVE ===
-Operate in one of four distinct modes based on current user intent:
-
-MODE A: NEW FOOD LOGGING (Triggered by a new food item description or image)
-- Extract and map ingredients to standard, database-friendly food classifications in "canonicalDbName".
-- Estimate total visual/described item portion weights in "weightGrams".
-- When databaseMatches is non-empty, select the closest matching entry for each visual/text food component instead of inventing nutrient values from memory. Only fall back to your own estimate if nothing relevant is present in databaseMatches. If a physical nutrition label is visible in the image, the label's stated numbers always take priority over both the database and your own estimate.
-- When you set dbSource to "label" for an item, populate labelNutrientsPerServing with the EXACT printed numbers and serving size from that label — report them verbatim as printed, do not scale or estimate them yourself; the backend will scale them to the actual consumed weight.
-- Set "mode": "new_log". Provide the "foodData" block.
-
-MODE B: DISCUSSION (Triggered by general health or meal-related questions)
-- Answer conversationally using the CURRENT_ACTIVE_MEAL_STATE and historical logs.
-- Set "mode": "discussion". Set structural data objects to null.
-
-MODE C: MODIFICATION COMMAND (Triggered by requests to alter a logged meal state)
-- Output functional instructions to modify ingredients or weights. Do not compute math yourself.
-- Set "mode": "modify". Populate the "modificationCommand" array.
-
-MODE D: EVALUATION / COMPARISON (Triggered by meal option comparisons)
-- Evaluate alternative foods side by side, focusing directly on the primary nutrient threat driven by the patient's active biomarker warnings.
-- Set "mode": "evaluation". Provide the complete "comparison" object.
-
-YAML SCHEMA STRICT REQUIREMENT:
-Respond ONLY with a structured YAML format matching this schema exactly. Values must be dynamically derived from the patient's specific profile conditions and injected directives.
-
-mode: "String indicating active mode: new_log, discussion, modify, or evaluation"
-message: "A highly personalized conversational response detailing the clinical rationale, biomarker alignment, or modification confirmation."
-modificationCommand: null or list of:
-  - action: "update_weight" | "remove_item" | "add_item"
-    itemName: "Literal name of the item from the active state to change"
-    newWeightGrams: number
-    targetDbId: "Optional exact database ID (fdcId or barcode) from the itemsBreakdown list"
-foodData: null or:
-  date: "YYYY-MM-DD (Dynamically set based on provided current time context)"
-  name: "Literal food name"
-  composition: "Brief operational summary of food ingredients"
-  weightGrams: number
-  quantity: "Visual descriptive serving size (e.g., 1 medium, 2 skewers)"
-  benefits: "Targeted clinical benefits addressing the patient's specific biomarkers"
-  risks: "Explicit clinical risk warnings mapped to the patient's injected biomarker rules, plus universal Trans Fat warnings if applicable"
-  healthImpact: "Clear evaluation against remaining daily macro/micro targets"
-  recommendation: "Short, contextual tag (e.g., 'Best today', 'Heart-healthy', 'Caution: High Sodium', 'Perfect for target')"
-  itemsBreakdown:
-    - canonicalDbName: "Standardized target food name for local DB query execution"
-      weightGrams: number
-      dbSource: "usda" | "off" | "estimated" | "label"
-      dbId: "the fdcId or barcode used as the source for this item's numbers, or null if estimated"
-      labelNutrientsPerServing: null or:
-        servingSizeGrams: number
-        calories: number
-        protein: number
-        totalFat: number
-        saturatedFat: number
-        transFat: number
-        carbohydrates: number
-        addedSugar: number
-        sodium: number
-        potassium: number
-        totalFibre: number
-        solubleFibre: number
-comparison: null or:
-  keyNutrientConcern: "The specific nutrient string causing primary clinical concern for this profile session"
-  foods:
-    - name: "Food option item name"
-      weightGrams: number
-      suitability: "Short, contextual tag (e.g., 'Safest option', 'Moderate risk', 'Avoid')"
-      pros: "Targeted biomarker benefits"
-      cons: "Targeted biomarker risks"
-  comparisonTableYaml:
-    columns: ["Nutrient", "Food A", "Food B", "Target / Warning"]
-    rows:
-      - nutrient: "Calories"
-        foodA: "value"
-        foodB: "value"
-        target: "value"
-      - nutrient: "Top Nutrient 1"
-        foodA: "value"
-        foodB: "value"
-        target: "value"
-      - nutrient: "Top Nutrient 2"
-        foodA: "value"
-        foodB: "value"
-        target: "value"
-      - nutrient: "Top Nutrient 3"
-        foodA: "value"
-        foodB: "value"
-        target: "value"
-`;
+    const systemInstruction = buildFoodAnalyzeInstruction({
+      biomarkersNeedingImprovement,
+      remainingAllowance,
+      activeMeal
+    });
 
     let databaseMatchesCtx = "";
     if (databaseMatches) {
