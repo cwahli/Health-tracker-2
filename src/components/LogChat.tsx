@@ -1466,7 +1466,26 @@ export default function LogChat({
         }
       }
 
-      setMessages(prev => [...prev, assistantMsg]);
+      setMessages(prev => {
+        if (type === 'food' && resData.mode === 'modify' && resData.data) {
+          let updated = false;
+          const newPrev = [...prev].reverse().map(m => {
+            if (!updated && m.pendingFoodLog) {
+              updated = true;
+              return {
+                ...m,
+                pendingFoodLog: {
+                  ...m.pendingFoodLog,
+                  ...resData.data
+                }
+              };
+            }
+            return m;
+          }).reverse();
+          return [...newPrev, assistantMsg];
+        }
+        return [...prev, assistantMsg];
+      });
     } catch (err: any) {
       console.error(err);
       if (type === 'food') {

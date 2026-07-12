@@ -269,23 +269,11 @@ foodData: null or:
   healthImpact: "Clear evaluation against remaining daily macro/micro targets"
   recommendation: "Short, contextual tag (e.g., 'Best today', 'Heart-healthy', 'Caution: High Sodium', 'Perfect for target')"
   itemsBreakdown:
-    - canonicalDbName: "Standardized target food name for local DB query execution"
-      weightGrams: "A whole INTEGER written as a string with NO decimal points. Round to nearest whole number. e.g. \"120\" or \"350\". NEVER write \"120.0\" or \"300.000...\""
+    - canonicalDbName: "Standardized target food name"
+      weightGrams: "A whole INTEGER string e.g. \"120\". NO decimals."
       dbSource: "usda" | "off" | "estimated" | "label"
-      dbId: "the fdcId or barcode used as the source for this item's numbers, or null if estimated"
-      labelNutrientsPerServing: null or:
-        servingSizeGrams: "a number written as a string, e.g. \"120\""
-        calories: "a number written as a string, e.g. \"120\""
-        protein: "a number written as a string, e.g. \"120\""
-        totalFat: "a number written as a string, e.g. \"120\""
-        saturatedFat: "a number written as a string, e.g. \"120\""
-        transFat: "a number written as a string, e.g. \"120\""
-        carbohydrates: "a number written as a string, e.g. \"120\""
-        addedSugar: "a number written as a string, e.g. \"120\""
-        sodium: "a number written as a string, e.g. \"120\""
-        potassium: "a number written as a string, e.g. \"120\""
-        totalFibre: "a number written as a string, e.g. \"120\""
-        solubleFibre: "a number written as a string, e.g. \"120\""
+      dbId: "the fdcId or barcode, or null if estimated"
+      labelNutrientsPerServing: "(only populate this if dbSource is 'label', otherwise set to null; if populated, must be an object with string values for servingSizeGrams, calories, protein, totalFat, saturatedFat, transFat, carbohydrates, addedSugar, sodium, potassium, totalFibre, solubleFibre)"
 comparison: null or:
   keyNutrientConcern: "The specific nutrient string causing primary clinical concern for this profile session"
   foods:
@@ -755,8 +743,8 @@ async function callUnifiedLLM({
   let finalResponseText = "{}";
   addDebugLog(`[UnifiedLLM] Dispatching prompt to model: "${targetGeminiModel}". Contents turns: ${contents.length}.`);
   addDebugLog(`[UnifiedLLM] Attaching ${imagePayloads?.length || (imagePayload ? 1 : 0)} image part(s) to model "${targetGeminiModel}".`);
-  addDebugLog(`[UnifiedLLM-Prompt] System Instruction:\n${resolvedInstruction}`);
-  addDebugLog(`[UnifiedLLM-Prompt] User Prompt:\n${promptText}`);
+  addDebugLog(`[UnifiedLLM-Prompt] System Instruction:\n${resolvedInstruction.substring(0, 300)}... [truncated, full prompt in memory]`);
+  addDebugLog(`[UnifiedLLM-Prompt] User Prompt:\n${promptText.substring(0, 300)}... [truncated]`);
   try {
     let response = await ai.models.generateContent({
       model: targetGeminiModel,
@@ -1452,37 +1440,34 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       return profile;
     };
 
-    // Detect if this is a simple weight/modification request on an existing active meal
-    const isModificationRequest = !!(
-      activeMeal &&                           // there's an active meal already identified
-      (!imagePayloads || imagePayloads.length === 0) &&  // no new image attached
-      message &&                              // user typed something
-      /\d+\s*g(ram)?s?/i.test(message)       // message contains a gram amount like "300g"
+    // Detect pure weight modification on existing active meal — skip scouting and DB search
+    const isWeightModification = !!(
+      activeMeal &&
+      (!imagePayloads || imagePayloads.length === 0) &&
+      message &&
+      /\d+\s*g(ram)?s?/i.test(message)
     );
 
     let databaseMatches = "";
+    const databaseMatchesArray: any[] = [];
+    let visionScoutItems: any[] = [];
     const dbMatchMap = new Map<string, any>();
     const queriesToSearch: string[] = [];
 
     let visionScoutRanAndReturnedItems = false;
-    const isNewFoodDescription = !activeMeal && message && message.trim() !== "";
 
-    if (isModificationRequest) {
-      addDebugLog(`[Shortcut] Modification request detected. Skipping Vision Scout and DB Search.`);
+    if (isWeightModification) {
+      addDebugLog(`[Shortcut] Weight modification detected on active meal. Skipping Vision Scout and DB Search.`);
     } else {
-      if (isNewFoodDescription) {
-        queriesToSearch.push(message.trim());
-      }
-
-      const isImageOnly = (!message || message.trim() === "") && (imagePayloads && imagePayloads.length > 0);
-      if (isImageOnly) {
-        addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout on image-only request...`);
+      const hasImage = imagePayloads && imagePayloads.length > 0;
+      if (hasImage) {
+        addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout...`);
         const scoutSystemInstruction = `You are a fast visual food identification agent. Look at the image and return a short list of plain-text search keywords for the food items you see (e.g. ['fried chicken', 'white rice', 'sambal']), plus a rough estimated weight in grams for each if visually judgeable. Do not do any nutrition or clinical analysis. Output only: { "items": [{ "keyword": string, "estimatedWeightGrams": number }] }`;
         try {
           const scoutOutput = await callUnifiedLLM({
             modelId: "gemini-3.1-flash-lite",
             systemInstruction: scoutSystemInstruction,
-            promptText: "Analyze this image and list the food items you see.",
+            promptText: message ? `Analyze this image and list the food items you see, taking into consideration the user's message: "${message}"` : "Analyze this image and list the food items you see.",
             imagePayloads,
             responseMimeType: "application/json"
           });
@@ -1494,6 +1479,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
             parsedScout = JSON.parse(extractBalancedJson(scoutOutput));
           }
           if (parsedScout && Array.isArray(parsedScout.items)) {
+            visionScoutItems = parsedScout.items;
             for (const item of parsedScout.items) {
               if (item.keyword) {
                 queriesToSearch.push(item.keyword);
@@ -1507,7 +1493,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       }
     }
 
-    const shouldRunDbSearch = !isModificationRequest && (visionScoutRanAndReturnedItems || isNewFoodDescription);
+    const shouldRunDbSearch = !isWeightModification && visionScoutRanAndReturnedItems;
     if (shouldRunDbSearch && queriesToSearch.length > 0) {
       addDebugLog(`[Database Search] Performing USDA & OFF searches for queries: ${JSON.stringify(queriesToSearch)}`);
       const searchPromises = queriesToSearch.map(async (q) => {
@@ -1527,12 +1513,53 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         resItem.usda.forEach((food: any) => {
           const fdcIdStr = String(food.fdcId);
           dbMatchMap.set(fdcIdStr, extractUSDANutrientsPer100g(food));
+
+          const energyNut = food.foodNutrients?.find((n: any) => (n.nutrientName || "").toLowerCase().includes("energy") || (n.nutrientName || "").toLowerCase().includes("calories"));
+          const kcalVal = energyNut ? energyNut.value : 0;
+          const unit = energyNut ? (energyNut.unitName || "").toLowerCase() : "";
+          const caloriesStr = unit === "kj" ? `${kcalVal}kJ` : String(kcalVal);
+
+          const proteinVal = food.foodNutrients?.find((n: any) => (n.nutrientName || "").toLowerCase() === "protein")?.value || 0;
+          const fatVal = food.foodNutrients?.find((n: any) => (n.nutrientName || "").toLowerCase().includes("total lipid") || (n.nutrientName || "").toLowerCase() === "fat")?.value || 0;
+          const satFatVal = food.foodNutrients?.find((n: any) => (n.nutrientName || "").toLowerCase().includes("saturated fat"))?.value || 0;
+          const sodiumVal = food.foodNutrients?.find((n: any) => (n.nutrientName || "").toLowerCase() === "sodium")?.value || 0;
+
+          databaseMatchesArray.push({
+            id: fdcIdStr,
+            source: "usda",
+            name: food.description || "",
+            calories: caloriesStr,
+            protein: proteinVal,
+            fat: fatVal,
+            saturatedFat: satFatVal,
+            sodium: sodiumVal
+          });
+
           list.push(`- [USDA] ID: ${fdcIdStr} | Name: ${food.description} | Nutrients (per 100g): ${formatUSDANutrients(food.foodNutrients)}`);
         });
         resItem.off.forEach((product: any) => {
           const idStr = String(product.barcode || product.id || product.code || "");
           if (idStr) {
             dbMatchMap.set(idStr, extractOFFNutrientsPer100g(product));
+
+            const n = product.nutriments || {};
+            const caloriesStr = n["energy-kcal_100g"] !== undefined ? String(n["energy-kcal_100g"]) : (n["energy_100g"] !== undefined ? `${n["energy_100g"]}kJ` : "0");
+            const proteinVal = n["proteins_100g"] || 0;
+            const fatVal = n["fat_100g"] || 0;
+            const satFatVal = n["saturated-fat_100g"] || 0;
+            const sodiumVal = (n["sodium_100g"] || 0) * 1000;
+
+            databaseMatchesArray.push({
+              id: idStr,
+              source: "off",
+              name: product.product_name || "",
+              calories: caloriesStr,
+              protein: proteinVal,
+              fat: fatVal,
+              saturatedFat: satFatVal,
+              sodium: sodiumVal
+            });
+
             list.push(`- [OpenFoodFacts] Barcode: ${idStr} | Name: ${product.product_name} (${product.brands || 'No Brand'}) | Nutrients (per 100g): ${formatOFFNutrients(product.nutriments)}`);
           }
         });
@@ -1816,6 +1843,54 @@ Current User Input: "${message}"`;
         throw new Error("No foodData returned by LLM in new_log mode.");
       }
 
+      function nutrientsFromDbMatch(dbMatch: any, weightGrams: number): Record<string, number> {
+        let calVal = 0;
+        if (dbMatch.calories !== undefined && dbMatch.calories !== null) {
+          const calStr = String(dbMatch.calories).trim().toLowerCase();
+          if (calStr.endsWith("kj")) {
+            calVal = parseFloat(calStr) / 4.184;
+          } else {
+            calVal = parseFloat(calStr) || 0;
+          }
+        }
+        const per100 = {
+          calories: calVal,
+          protein: parseFloat(dbMatch.protein) || 0,
+          totalFat: parseFloat(dbMatch.fat) || 0,
+          saturatedFat: parseFloat(dbMatch.saturatedFat) || 0,
+          sodium: parseFloat(dbMatch.sodium) || 0,
+        };
+        
+        const ratio = weightGrams / 100;
+        return {
+          calories: Math.round(per100.calories * ratio),
+          protein: parseFloat((per100.protein * ratio).toFixed(2)),
+          totalFat: parseFloat((per100.totalFat * ratio).toFixed(2)),
+          saturatedFat: parseFloat((per100.saturatedFat * ratio).toFixed(2)),
+          sodium: Math.round(per100.sodium * ratio),
+        };
+      }
+
+      if (!rawFoodData.itemsBreakdown || rawFoodData.itemsBreakdown.length === 0) {
+        // Build itemsBreakdown from Vision Scout output + best DB match per item
+        if (visionScoutItems && visionScoutItems.length > 0) {
+          rawFoodData.itemsBreakdown = visionScoutItems.map((item: any) => {
+            const bestMatch = databaseMatchesArray.find((m: any) => 
+              m.name.toLowerCase().includes(item.keyword.split(' ').pop()) ||
+              item.keyword.toLowerCase().includes(m.name.toLowerCase().split(' ')[0])
+            );
+            return {
+              canonicalDbName: item.keyword,
+              weightGrams: String(Math.round(item.estimatedWeightGrams || 100)),
+              dbSource: bestMatch ? (bestMatch.source === 'usda' ? 'usda' : 'off') : 'estimated',
+              dbId: bestMatch ? bestMatch.id : null,
+              labelNutrientsPerServing: null
+            };
+          });
+          addDebugLog(`[Fallback] Built itemsBreakdown from Vision Scout output (LLM truncated)`);
+        }
+      }
+
       const parsedData: any = {};
       const sanitizeString = (val: any, fallback: string) => {
         if (val === null || val === undefined || String(val).toLowerCase() === "undefined" || String(val).trim() === "") {
@@ -1871,12 +1946,25 @@ Current User Input: "${message}"`;
                 itemNutrients[key] = parseFloat((Number(labelData[key]) * scaleFactor).toFixed(2));
               }
             }
-          } else if (dbId && dbMatchMap.has(dbId)) {
-            const baseNutrientsPer100g = dbMatchMap.get(dbId);
-            itemNutrients = {};
-            const factor = itemWeight / 100;
-            for (const key of nutrientKeys) {
-              itemNutrients[key] = parseFloat((baseNutrientsPer100g[key] * factor).toFixed(2));
+          } else if ((dbSource === "usda" || dbSource === "off") && dbId) {
+            const match = databaseMatchesArray.find((m: any) => m.id === dbId);
+            if (match) {
+              const computed = nutrientsFromDbMatch(match, itemWeight);
+              itemNutrients = getNutrientsForFood(canonicalName, itemWeight);
+              itemNutrients.calories = computed.calories;
+              itemNutrients.protein = computed.protein;
+              itemNutrients.totalFat = computed.totalFat;
+              itemNutrients.saturatedFat = computed.saturatedFat;
+              itemNutrients.sodium = computed.sodium;
+            } else if (dbMatchMap.has(dbId)) {
+              const baseNutrientsPer100g = dbMatchMap.get(dbId);
+              itemNutrients = {};
+              const factor = itemWeight / 100;
+              for (const key of nutrientKeys) {
+                itemNutrients[key] = parseFloat((baseNutrientsPer100g[key] * factor).toFixed(2));
+              }
+            } else {
+              itemNutrients = getNutrientsForFood(canonicalName, itemWeight);
             }
           } else {
             // Get the precise standard nutrients scaled for this item
@@ -2101,6 +2189,7 @@ Current User Input: "${message}"`;
       }
 
       return res.json({
+        mode: "modify",
         text: rawParsed.message || "I have recalculated your meal's metrics with precision based on your instructions.",
         data: activeMeal,
         agentPrompt: fullPromptSent
