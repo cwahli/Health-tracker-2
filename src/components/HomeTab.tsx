@@ -1433,7 +1433,7 @@ export default function HomeTab({
             if (onLogMedical) {
               const profileUpdates: Partial<UserProfile> = {};
               if (proposal) {
-                const currentDef = profile.customBiomarkers?.[key] || {};
+                const currentDef: any = profile.customBiomarkers?.[key] || {};
                 profileUpdates.customBiomarkers = {
                   ...(profile.customBiomarkers || {}),
                   [key]: {
@@ -1446,6 +1446,7 @@ export default function HomeTab({
                 };
               }
               onLogMedical({ [key]: val }, profileUpdates);
+              setReviewingBiomarkerKey(null);
             }
           }}
           selectedModelId={selectedModelId}

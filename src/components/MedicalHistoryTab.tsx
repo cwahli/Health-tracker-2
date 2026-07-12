@@ -710,7 +710,7 @@ export default function MedicalHistoryTab({
             if (onLogMedical) {
               const profileUpdates: Partial<UserProfile> = {};
               if (proposal) {
-                const currentDef = profile.customBiomarkers?.[key] || {};
+                const currentDef: any = profile.customBiomarkers?.[key] || {};
                 profileUpdates.customBiomarkers = {
                   ...(profile.customBiomarkers || {}),
                   [key]: {
