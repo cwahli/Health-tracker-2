@@ -1,5 +1,6 @@
 import { collection, doc, runTransaction, getDocs, Firestore, setDoc } from 'firebase/firestore';
 import { FoodLog, BiomarkerLog, SyncState } from '../types';
+import { sanitizeForFirestore } from '../utils/firestoreUtils';
 
 export const toYYYYMM = (dateStr: string): string => {
   if (!dateStr) return 'unknown';
@@ -68,7 +69,7 @@ export class SyncService {
 
           if (changed) {
             serverData.last_sync_timestamp = Date.now();
-            transaction.set(bucketRef, serverData);
+            transaction.set(bucketRef, sanitizeForFirestore(serverData));
           }
         });
         

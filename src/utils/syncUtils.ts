@@ -1,6 +1,7 @@
 import { doc, getDoc, setDoc, collection, getDocs, Firestore } from 'firebase/firestore';
 import { FoodLog, BiomarkerLog } from '../types';
 import { toYYYYMMDD } from './dateUtils';
+import { sanitizeForFirestore } from './firestoreUtils';
 
 export const toYYYYMM = (dateStr: string): string => {
   if (!dateStr) return 'unknown';
@@ -87,7 +88,7 @@ export const syncLogsWithTimeBuckets = async (
 
       if (changed) {
         serverData.last_sync_timestamp = Date.now();
-        await setDoc(bucketRef, serverData);
+        await setDoc(bucketRef, sanitizeForFirestore(serverData));
       }
       
       // Process food updates: mark synced

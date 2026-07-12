@@ -17,6 +17,7 @@ import { InteractivePlacesMap } from './InteractivePlacesMap';
 import exifr from 'exifr';
 import { auth, db } from '../firebase';
 import { collection, query, where, getDocs, setDoc, doc, deleteDoc, getDoc } from 'firebase/firestore';
+import { sanitizeForFirestore } from '../utils/firestoreUtils';
 import { Agent5View, Agent6View, Agent7View } from './AgentResultViews';
 import { AgentResultTable } from './AgentResultTable';
 import { resolveFoodImage } from '../utils/imageResolver';
@@ -618,7 +619,7 @@ export default function LogChat({
 
     try {
       const docRef = doc(db, 'users', userId, 'conversations', id);
-      await setDoc(docRef, {
+      await setDoc(docRef, sanitizeForFirestore({
         id,
         userId,
         type: type || 'medical',
@@ -630,7 +631,7 @@ export default function LogChat({
         updatedAt: new Date().toISOString(),
         messages: msgs,
         lastSentPayload: payload || null
-      }, { merge: true });
+      }), { merge: true });
     } catch (err) {
       console.error("Error saving conversation to Firestore:", err);
     }

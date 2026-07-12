@@ -18,6 +18,7 @@ import { Plus, HeartHandshake, RefreshCw, Sparkles, Stethoscope, Utensils, Loade
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, getDocFromServer, getDocsFromServer, onSnapshot, getDocsFromCache, writeBatch } from 'firebase/firestore';
+import { sanitizeForFirestore } from './utils/firestoreUtils';
 import { getCurrentDateInTimezone, toYYYYMMDD, normalizeBiomarkerHistory } from './utils/dateUtils';
 import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint } from './utils/biomarkers';
 import { standardizeUnit, CONVERSION_FACTORS } from './utils/unitConversion';
@@ -981,10 +982,10 @@ export default function App() {
                 if (updatesToPush.length > 0) {
                   console.log(`[Auto-Recompress] Re-compressed ${updatesToPush.length} legacy large images on-the-fly. Syncing back to database...`);
                   updatesToPush.forEach(up => {
-                    setDoc(doc(db, 'users', uid, 'foodImages', up.id), {
+                    setDoc(doc(db, 'users', uid, 'foodImages', up.id), sanitizeForFirestore({
                       imageUrl: up.imageUrl || null,
                       imageUrls: up.imageUrls || []
-                    }).catch(err => console.error("Auto-sync back error:", err));
+                    })).catch(err => console.error("Auto-sync back error:", err));
                   });
                 }
 

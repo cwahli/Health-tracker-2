@@ -234,9 +234,15 @@ MODE B: DISCUSSION (Triggered by general health or meal-related questions)
 - Answer conversationally using the CURRENT_ACTIVE_MEAL_STATE and historical logs.
 - Set "mode": "discussion". Set structural data objects to null.
 
-MODE C: MODIFICATION COMMAND (Triggered by requests to alter a logged meal state)
-- Output functional instructions to modify ingredients or weights. Do not compute math yourself.
+MODE C: MODIFICATION COMMAND — HIGHEST PRIORITY ROUTING RULE
+Triggered when:
+- The user states or corrects a weight (e.g. "the ice cream is 300g", "actually it's 200g", "make it 500g")
+- The user asks to add, remove, or change an ingredient in the CURRENT_ACTIVE_MEAL_STATE
+- Any message containing a gram amount (Xg / X grams) when CURRENT_ACTIVE_MEAL_STATE is not None
+CRITICAL: If CURRENT_ACTIVE_MEAL_STATE is set AND the user message contains a gram quantity or modification request, you MUST use mode "modify", NOT "new_log". Do NOT re-log the meal. Only update what changed.
 - Set "mode": "modify". Populate the "modificationCommand" array.
+- For a weight correction: use action "update_weight" with the item name from the active state and the new integer weight.
+- Set foodData to null.
 
 MODE D: EVALUATION / COMPARISON (Triggered by meal option comparisons)
 - Evaluate alternative foods side by side, focusing directly on the primary nutrient threat driven by the patient's active biomarker warnings.
@@ -250,13 +256,13 @@ message: "A highly personalized conversational response detailing the clinical r
 modificationCommand: null or list of:
   - action: "update_weight" | "remove_item" | "add_item"
     itemName: "Literal name of the item from the active state to change"
-    newWeightGrams: "a number written as a string, e.g. \"120\""
+    newWeightGrams: "A whole INTEGER written as a string with NO decimal points. Round to nearest whole number. e.g. \"120\" or \"350\". NEVER write \"120.0\" or \"300.000...\""
     targetDbId: "Optional exact database ID (fdcId or barcode) from the itemsBreakdown list"
 foodData: null or:
   date: "YYYY-MM-DD (Dynamically set based on provided current time context)"
   name: "Literal food name"
   composition: "Brief operational summary of food ingredients"
-  weightGrams: "a number written as a string, e.g. \"120\""
+  weightGrams: "A whole INTEGER written as a string with NO decimal points. Round to nearest whole number. e.g. \"120\" or \"350\". NEVER write \"120.0\" or \"300.000...\""
   quantity: "Visual descriptive serving size (e.g., 1 medium, 2 skewers)"
   benefits: "Targeted clinical benefits addressing the patient's specific biomarkers"
   risks: "Explicit clinical risk warnings mapped to the patient's injected biomarker rules, plus universal Trans Fat warnings if applicable"
@@ -264,7 +270,7 @@ foodData: null or:
   recommendation: "Short, contextual tag (e.g., 'Best today', 'Heart-healthy', 'Caution: High Sodium', 'Perfect for target')"
   itemsBreakdown:
     - canonicalDbName: "Standardized target food name for local DB query execution"
-      weightGrams: "a number written as a string, e.g. \"120\""
+      weightGrams: "A whole INTEGER written as a string with NO decimal points. Round to nearest whole number. e.g. \"120\" or \"350\". NEVER write \"120.0\" or \"300.000...\""
       dbSource: "usda" | "off" | "estimated" | "label"
       dbId: "the fdcId or barcode used as the source for this item's numbers, or null if estimated"
       labelNutrientsPerServing: null or:
@@ -284,7 +290,7 @@ comparison: null or:
   keyNutrientConcern: "The specific nutrient string causing primary clinical concern for this profile session"
   foods:
     - name: "Food option item name"
-      weightGrams: "a number written as a string, e.g. \"120\""
+      weightGrams: "A whole INTEGER written as a string with NO decimal points. Round to nearest whole number. e.g. \"120\" or \"350\". NEVER write \"120.0\" or \"300.000...\""
       suitability: "Short, contextual tag (e.g., 'Safest option', 'Moderate risk', 'Avoid')"
       pros: "Targeted biomarker benefits"
       cons: "Targeted biomarker risks"
@@ -1446,46 +1452,63 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       return profile;
     };
 
+    // Detect if this is a simple weight/modification request on an existing active meal
+    const isModificationRequest = !!(
+      activeMeal &&                           // there's an active meal already identified
+      (!imagePayloads || imagePayloads.length === 0) &&  // no new image attached
+      message &&                              // user typed something
+      /\d+\s*g(ram)?s?/i.test(message)       // message contains a gram amount like "300g"
+    );
+
     let databaseMatches = "";
     const dbMatchMap = new Map<string, any>();
     const queriesToSearch: string[] = [];
 
-    if (message && message.trim() !== "") {
-      queriesToSearch.push(message.trim());
-    }
+    let visionScoutRanAndReturnedItems = false;
+    const isNewFoodDescription = !activeMeal && message && message.trim() !== "";
 
-    const isImageOnly = (!message || message.trim() === "") && (imagePayloads && imagePayloads.length > 0);
-    if (isImageOnly) {
-      addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout on image-only request...`);
-      const scoutSystemInstruction = `You are a fast visual food identification agent. Look at the image and return a short list of plain-text search keywords for the food items you see (e.g. ['fried chicken', 'white rice', 'sambal']), plus a rough estimated weight in grams for each if visually judgeable. Do not do any nutrition or clinical analysis. Output only: { "items": [{ "keyword": string, "estimatedWeightGrams": number }] }`;
-      try {
-        const scoutOutput = await callUnifiedLLM({
-          modelId: "gemini-3.1-flash-lite",
-          systemInstruction: scoutSystemInstruction,
-          promptText: "Analyze this image and list the food items you see.",
-          imagePayloads,
-          responseMimeType: "application/json"
-        });
-        addDebugLog(`[Vision Scout] Output: ${scoutOutput}`);
-        let parsedScout: any = null;
+    if (isModificationRequest) {
+      addDebugLog(`[Shortcut] Modification request detected. Skipping Vision Scout and DB Search.`);
+    } else {
+      if (isNewFoodDescription) {
+        queriesToSearch.push(message.trim());
+      }
+
+      const isImageOnly = (!message || message.trim() === "") && (imagePayloads && imagePayloads.length > 0);
+      if (isImageOnly) {
+        addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout on image-only request...`);
+        const scoutSystemInstruction = `You are a fast visual food identification agent. Look at the image and return a short list of plain-text search keywords for the food items you see (e.g. ['fried chicken', 'white rice', 'sambal']), plus a rough estimated weight in grams for each if visually judgeable. Do not do any nutrition or clinical analysis. Output only: { "items": [{ "keyword": string, "estimatedWeightGrams": number }] }`;
         try {
-          parsedScout = typeof scoutOutput === "string" ? JSON.parse(scoutOutput) : scoutOutput;
-        } catch (e) {
-          parsedScout = JSON.parse(extractBalancedJson(scoutOutput));
-        }
-        if (parsedScout && Array.isArray(parsedScout.items)) {
-          for (const item of parsedScout.items) {
-            if (item.keyword) {
-              queriesToSearch.push(item.keyword);
+          const scoutOutput = await callUnifiedLLM({
+            modelId: "gemini-3.1-flash-lite",
+            systemInstruction: scoutSystemInstruction,
+            promptText: "Analyze this image and list the food items you see.",
+            imagePayloads,
+            responseMimeType: "application/json"
+          });
+          addDebugLog(`[Vision Scout] Output: ${scoutOutput}`);
+          let parsedScout: any = null;
+          try {
+            parsedScout = typeof scoutOutput === "string" ? JSON.parse(scoutOutput) : scoutOutput;
+          } catch (e) {
+            parsedScout = JSON.parse(extractBalancedJson(scoutOutput));
+          }
+          if (parsedScout && Array.isArray(parsedScout.items)) {
+            for (const item of parsedScout.items) {
+              if (item.keyword) {
+                queriesToSearch.push(item.keyword);
+                visionScoutRanAndReturnedItems = true;
+              }
             }
           }
+        } catch (scoutErr: any) {
+          addDebugLog(`[Vision Scout Error] Failed: ${scoutErr.message}`);
         }
-      } catch (scoutErr: any) {
-        addDebugLog(`[Vision Scout Error] Failed: ${scoutErr.message}`);
       }
     }
 
-    if (queriesToSearch.length > 0) {
+    const shouldRunDbSearch = !isModificationRequest && (visionScoutRanAndReturnedItems || isNewFoodDescription);
+    if (shouldRunDbSearch && queriesToSearch.length > 0) {
       addDebugLog(`[Database Search] Performing USDA & OFF searches for queries: ${JSON.stringify(queriesToSearch)}`);
       const searchPromises = queriesToSearch.map(async (q) => {
         try {
@@ -1693,8 +1716,43 @@ Current User Input: "${message}"`;
     addDebugLog(`[RouteAgent Chat] Sending request to Gemini...`);
     async function callAndParseFoodAnalysis(callArgs: any): Promise<{ textOutput: string; rawParsed: any }> {
       const textOutput = await callUnifiedLLM(callArgs);
-      const cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
-      const rawParsed = JSON.parse(extractBalancedJson(cleanJson));
+      let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+
+      // Sanitize pathological weightGrams values like "350.000000...000" → "350"
+      // These are generated by the LLM and inflate JSON size causing truncation errors
+      cleanJson = cleanJson.replace(/"(\d+)\.0{10,}(\d*)"/g, (_, int, tail) => `"${int}${tail ? '.' + tail.replace(/0+$/, '') : ''}"`);
+      cleanJson = cleanJson.replace(/:\s*(\d+)\.0{10,}\d*/g, (_, int) => `: ${int}`);
+      // Robust fallback for any unquoted or quoted decimal with long runaway zeros (e.g. 150.00000000000003g)
+      cleanJson = cleanJson.replace(/(\d+)\.(\d*?)0{10,}(\d*)/g, (match, intPart, midPart, endPart) => {
+        const combinedFrac = (midPart + endPart).replace(/0+$/, '');
+        return combinedFrac ? `${intPart}.${combinedFrac}` : intPart;
+      });
+
+      let rawParsed;
+      try {
+        rawParsed = JSON.parse(extractBalancedJson(cleanJson));
+      } catch (parseErr: any) {
+        addDebugLog(`[JSON Parse Error] JSON parse failed: ${parseErr.message}. Attempting truncation repair...`);
+        try {
+          // Attempt to repair a truncated JSON by closing open structures
+          let repaired = cleanJson;
+          // Truncate at the last complete top-level property if string is unterminated
+          const lastComma = repaired.lastIndexOf(',\n');
+          const lastBrace = repaired.lastIndexOf('}');
+          if (lastComma > lastBrace) {
+            repaired = repaired.substring(0, lastComma);
+          }
+          // Close any open arrays/objects
+          const opens = (repaired.match(/\[/g) || []).length - (repaired.match(/\]/g) || []).length;
+          const openBraces = (repaired.match(/\{/g) || []).length - (repaired.match(/\}/g) || []).length;
+          repaired += ']'.repeat(Math.max(0, opens)) + '}'.repeat(Math.max(0, openBraces));
+          rawParsed = JSON.parse(repaired);
+          addDebugLog(`[JSON Parse Error] Truncation repair succeeded.`);
+        } catch (repairErr: any) {
+          addDebugLog(`[JSON Parse Error] Truncation repair also failed: ${repairErr.message}.`);
+          throw parseErr;
+        }
+      }
       return { textOutput, rawParsed };
     }
 
@@ -1705,7 +1763,7 @@ Current User Input: "${message}"`;
       imagePayloads,
       responseMimeType: "application/json",
       responseSchema: foodAnalyzeSchema,
-      maxOutputTokens: 4096
+      maxOutputTokens: 2048 // Prevent truncation - food log JSON rarely needs more
     };
 
     let textOutput: string;
