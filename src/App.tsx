@@ -2717,13 +2717,13 @@ export default function App() {
 
 // Sync deferred to manual button click
       
-      await saveAndSync(currentProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
+      await saveAndSync(currentProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: modifiedLogIds, deletedIds: [] });
     } else {
       if (!skipClose) {
         setIsMedicalChatOpen(false);
         setActiveTab('home');
       }
-      await saveAndSync(currentProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'profile' });
+      await saveAndSync(currentProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: modifiedLogIds, deletedIds: [] });
     }
   };
   const handleDeleteMultipleBiomarkers = async (keys: string[]) => {
