@@ -721,6 +721,7 @@ export default function LogChat({
   }, []);
 
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [selectedImagesForAnalysis, setSelectedImagesForAnalysis] = useState<string[]>([]);
   const [imageDates, setImageDates] = useState<string[]>([]);
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState({ current: 0, total: 0, percent: 0 });
@@ -927,6 +928,7 @@ export default function LogChat({
             percent: progress.percentage
           });
         }, 400, 400, 0.5);
+        const analysisCompressed = await compressMultipleImages(validFiles, () => {}, 1280, 1280, 0.85);
         const dates = await Promise.all(validFiles.map(async (f: any) => {
           try {
             const exifData = await exifr.parse(f, ['DateTimeOriginal']);
@@ -939,6 +941,7 @@ export default function LogChat({
           return new Date(f.lastModified).toLocaleString();
         }));
         setSelectedImages(prev => [...prev, ...compressed]);
+        setSelectedImagesForAnalysis(prev => [...prev, ...analysisCompressed]);
         setImageDates(prev => [...prev, ...dates]);
       } catch (err) {
         console.error("Error compressing selected images:", err);
@@ -983,8 +986,10 @@ export default function LogChat({
       setInputText('');
     }
     const tempImages = [...selectedImages];
+    const tempAnalysisImages = [...selectedImagesForAnalysis];
     const tempDates = [...imageDates];
     setSelectedImages([]);
+    setSelectedImagesForAnalysis([]);
     setImageDates([]);
     setIsAnalyzing(true);
 
@@ -1025,8 +1030,8 @@ export default function LogChat({
       const bodyData: any = {
         userId: auth.currentUser?.uid || undefined,
         message: userMsg.content,
-        image: tempImages[0] || undefined,
-        images: tempImages.length > 0 ? tempImages : undefined,
+        image: tempAnalysisImages[0] || tempImages[0] || undefined,
+        images: tempAnalysisImages.length > 0 ? tempAnalysisImages : (tempImages.length > 0 ? tempImages : undefined),
         imageDates: tempDates.length > 0 ? tempDates : undefined,
         history: messages.slice(activeSessionIdx).filter(m => !m.id.startsWith('welcome_')).slice(-10).map(m => {
           let extra = "";

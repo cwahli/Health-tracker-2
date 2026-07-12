@@ -572,6 +572,7 @@ async function callUnifiedLLM({
 
   let finalResponseText = "{}";
   addDebugLog(`[UnifiedLLM] Dispatching prompt to model: "${targetGeminiModel}". Contents turns: ${contents.length}.`);
+  addDebugLog(`[UnifiedLLM] Attaching ${imagePayloads?.length || (imagePayload ? 1 : 0)} image part(s) to model "${targetGeminiModel}".`);
   addDebugLog(`[UnifiedLLM-Prompt] System Instruction:\n${resolvedInstruction}`);
   addDebugLog(`[UnifiedLLM-Prompt] User Prompt:\n${promptText}`);
   try {
@@ -1045,6 +1046,8 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       imagePayloads = [{ mimeType, data: base64Data }];
     }
 
+    addDebugLog(`[Image Payload] Received ${imagePayloads ? imagePayloads.length : 0} image(s). Approx sizes (KB): ${imagePayloads ? imagePayloads.map(p => Math.round((p.data.length * 0.75) / 1024) + 'KB').join(', ') : 'none'}.`);
+
     const nutrientKeys = [
       "calories", "protein", "totalFat", "saturatedFat", "transFat", "unsaturatedFat", "omega3", 
       "carbohydrates", "addedSugar", "totalFibre", "solubleFibre", "sodium", "potassium", 
@@ -1270,7 +1273,11 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
 
     let imageCtx = "";
     if (imagePayloads && imagePayloads.length > 0) {
-      imageCtx = `\n[Context: An image of the meal is uploaded and attached above. Rely heavily on visual cues in the picture for portion sizing, ingredients, and freshness.]\n`;
+      if (imagePayloads.length > 1) {
+        imageCtx = `\n[Context: ${imagePayloads.length} images are attached above. One or more may be a close-up photo of a printed Nutrition Facts label rather than the food itself. First determine which image(s), if any, show a nutrition facts/label panel. For any such label image: read its exact printed per-serving values and stated serving size, then mathematically scale those exact numbers to the actual weight/quantity consumed as shown in the other image(s) or described by the user — do not substitute your own estimate when a label is legible. For any remaining image(s) showing the actual food, rely on visual cues for portion sizing, ingredients, and freshness as usual.]\n`;
+      } else {
+        imageCtx = `\n[Context: An image is uploaded and attached above. If it is a close-up of a printed Nutrition Facts label, read its exact printed values and stated serving size, then scale them to the actual weight/quantity consumed; otherwise rely on visual cues for portion sizing, ingredients, and freshness.]\n`;
+      }
       if (imageDates && imageDates.length > 0) {
         const primaryImageDate = imageDates[0];
         imageCtx += `\n[CRITICAL DATE OVERRIDE: The uploaded image was taken on ${primaryImageDate}. You MUST use this exact date or its nearest YYYY-MM-DD representation as the "date" field in "foodData", completely overriding the CURRENT TIME CONTEXT, unless the user explicitly asks otherwise.]\n`;
