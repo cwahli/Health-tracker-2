@@ -68,8 +68,50 @@ function jsToYaml(val: any, indent: number = 0): string {
 }
 import { Firestore } from "@google-cloud/firestore";
 
+// Helper functions for nutritional data lookup
+async function searchUSDA(query: string, maxResults: number = 5): Promise<any[]> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${process.env.USDA_API_KEY}&query=${encodeURIComponent(query)}&pageSize=${maxResults}&dataType=Foundation,SR Legacy,Branded`;
+    
+    const response = await fetch(url, { signal: controller.signal as any });
+    clearTimeout(timeout);
+    
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.foods || [];
+  } catch (error) {
+    console.error("[USDA API] Error:", error);
+    return [];
+  }
+}
+
+async function searchOpenFoodFacts(query: string, maxResults: number = 5): Promise<any[]> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const url = `https://world.openfoodfacts.net/cgi/search.pl?search_terms=${encodeURIComponent(query)}&page_size=${maxResults}&json=true`;
+    
+    const response = await fetch(url, {
+      signal: controller.signal as any,
+      headers: {
+        "User-Agent": "HealthTracker/1.0 (Cwah.Liu@gmail.com)"
+      }
+    });
+    clearTimeout(timeout);
+    
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.products || [];
+  } catch (error) {
+    console.error("[OpenFoodFacts API] Error:", error);
+    return [];
+  }
+}
+
 dotenv.config();
-console.log("Maps Key status at server boot:", process.env.GOOGLE_MAPS_API_KEY ? "DEFINED" : "UNDEFINED");
+// console.log("Maps Key status at server boot:", process.env.GOOGLE_MAPS_API_KEY ? "DEFINED" : "UNDEFINED");
 
 // Initialize Firebase Firestore for server-side calculations using Google Cloud Firestore Node.js SDK (bypasses security rules)
 let db: any = null;
@@ -1003,6 +1045,208 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       imagePayloads = [{ mimeType, data: base64Data }];
     }
 
+    const nutrientKeys = [
+      "calories", "protein", "totalFat", "saturatedFat", "transFat", "unsaturatedFat", "omega3", 
+      "carbohydrates", "addedSugar", "totalFibre", "solubleFibre", "sodium", "potassium", 
+      "magnesium", "calcium", "iron", "zinc", "selenium", "iodine", "phosphorus", 
+      "vitaminD", "vitaminB12", "folate", "vitaminC", "vitaminE", "vitaminK", 
+      "vitaminA", "vitaminB6", "thiamine", "riboflavin", "niacin"
+    ];
+
+    // Helper functions for nutritional data lookup
+    const formatUSDANutrients = (nutrients: any[]): string => {
+      if (!nutrients || !Array.isArray(nutrients)) return "No nutrients available";
+      const mapped: string[] = [];
+      const findNutrient = (namePatterns: string[]) => {
+        const nut = nutrients.find(n => namePatterns.some(p => (n.nutrientName || "").toLowerCase().includes(p)));
+        return nut ? `${nut.value}${nut.unitName || ""}` : null;
+      };
+      const kcal = findNutrient(["energy", "calories"]);
+      const protein = findNutrient(["protein"]);
+      const fat = findNutrient(["total lipid", "fat"]);
+      const satFat = findNutrient(["saturated fat", "fatty acids, total saturated"]);
+      const sodium = findNutrient(["sodium"]);
+      if (kcal) mapped.push(`Calories: ${kcal}`);
+      if (protein) mapped.push(`Protein: ${protein}`);
+      if (fat) mapped.push(`Fat: ${fat}`);
+      if (satFat) mapped.push(`SatFat: ${satFat}`);
+      if (sodium) mapped.push(`Sodium: ${sodium}`);
+      return mapped.join(", ");
+    };
+
+    const formatOFFNutrients = (nutriments: any): string => {
+      if (!nutriments) return "No nutrients available";
+      const mapped: string[] = [];
+      const kcal = nutriments["energy-kcal_100g"] !== undefined ? nutriments["energy-kcal_100g"] : (nutriments["energy_100g"] !== undefined ? Math.round(nutriments["energy_100g"] / 4.184) : null);
+      const protein = nutriments["proteins_100g"];
+      const fat = nutriments["fat_100g"];
+      const satFat = nutriments["saturated-fat_100g"];
+      const sodium = nutriments["sodium_100g"];
+      
+      if (kcal !== null) mapped.push(`Calories: ${kcal}kcal`);
+      if (protein !== undefined) mapped.push(`Protein: ${protein}g`);
+      if (fat !== undefined) mapped.push(`Fat: ${fat}g`);
+      if (satFat !== undefined) mapped.push(`SatFat: ${satFat}g`);
+      if (sodium !== undefined) mapped.push(`Sodium: ${Math.round(sodium * 1000)}mg`);
+      return mapped.join(", ");
+    };
+
+    const extractUSDANutrientsPer100g = (food: any): Record<string, number> => {
+      const profile: Record<string, number> = {};
+      for (const k of nutrientKeys) { profile[k] = 0; }
+      if (!food.foodNutrients) return profile;
+      const findVal = (namePatterns: string[]) => {
+        const nut = food.foodNutrients.find((n: any) => namePatterns.some(p => (n.nutrientName || "").toLowerCase().includes(p)));
+        return nut ? Number(nut.value) || 0 : 0;
+      };
+      profile["calories"] = findVal(["energy", "calories"]);
+      profile["protein"] = findVal(["protein"]);
+      profile["totalFat"] = findVal(["total lipid", "fat"]);
+      profile["saturatedFat"] = findVal(["saturated fat", "fatty acids, total saturated"]);
+      profile["transFat"] = findVal(["trans fat", "fatty acids, total trans"]);
+      profile["unsaturatedFat"] = Math.max(0, profile["totalFat"] - profile["saturatedFat"] - profile["transFat"]);
+      profile["omega3"] = findVal(["omega-3", "omega 3", "n-3 fatty acid"]);
+      profile["carbohydrates"] = findVal(["carbohydrate, by difference"]);
+      profile["addedSugar"] = findVal(["added sugar"]);
+      profile["totalFibre"] = findVal(["fiber, total dietary", "fibre"]);
+      profile["solubleFibre"] = findVal(["fiber, soluble", "soluble fiber"]);
+      profile["sodium"] = findVal(["sodium"]);
+      profile["potassium"] = findVal(["potassium"]);
+      profile["magnesium"] = findVal(["magnesium"]);
+      profile["calcium"] = findVal(["calcium"]);
+      profile["iron"] = findVal(["iron"]);
+      profile["zinc"] = findVal(["zinc"]);
+      profile["selenium"] = findVal(["selenium"]);
+      profile["iodine"] = findVal(["iodine"]);
+      profile["phosphorus"] = findVal(["phosphorus"]);
+      profile["vitaminD"] = findVal(["vitamin d"]);
+      profile["vitaminB12"] = findVal(["vitamin b-12", "vitamin b12"]);
+      profile["folate"] = findVal(["folate"]);
+      profile["vitaminC"] = findVal(["vitamin c", "ascorbic acid"]);
+      profile["vitaminE"] = findVal(["vitamin e", "tocopherol"]);
+      profile["vitaminK"] = findVal(["vitamin k"]);
+      profile["vitaminA"] = findVal(["vitamin a"]);
+      profile["vitaminB6"] = findVal(["vitamin b-6", "vitamin b6"]);
+      profile["thiamine"] = findVal(["thiamine"]);
+      profile["riboflavin"] = findVal(["riboflavin"]);
+      profile["niacin"] = findVal(["niacin"]);
+      return profile;
+    };
+
+    const extractOFFNutrientsPer100g = (product: any): Record<string, number> => {
+      const profile: Record<string, number> = {};
+      for (const k of nutrientKeys) { profile[k] = 0; }
+      const n = product.nutriments;
+      if (!n) return profile;
+      profile["calories"] = n["energy-kcal_100g"] !== undefined ? Number(n["energy-kcal_100g"]) || 0 : (n["energy_100g"] !== undefined ? Math.round(Number(n["energy_100g"]) / 4.184) || 0 : 0);
+      profile["protein"] = Number(n["proteins_100g"]) || 0;
+      profile["totalFat"] = Number(n["fat_100g"]) || 0;
+      profile["saturatedFat"] = Number(n["saturated-fat_100g"]) || 0;
+      profile["transFat"] = Number(n["trans-fat_100g"]) || 0;
+      profile["unsaturatedFat"] = Math.max(0, profile["totalFat"] - profile["saturatedFat"] - profile["transFat"]);
+      profile["omega3"] = Number(n["omega-3_100g"]) || 0;
+      profile["carbohydrates"] = Number(n["carbohydrates_100g"]) || 0;
+      profile["addedSugar"] = Number(n["sugars_100g"]) || 0;
+      profile["totalFibre"] = Number(n["fiber_100g"]) || 0;
+      profile["solubleFibre"] = Number(n["soluble-fiber_100g"]) || 0;
+      profile["sodium"] = (Number(n["sodium_100g"]) || 0) * 1000;
+      profile["potassium"] = (Number(n["potassium_100g"]) || 0) * 1000;
+      profile["magnesium"] = (Number(n["magnesium_100g"]) || 0) * 1000;
+      profile["calcium"] = (Number(n["calcium_100g"]) || 0) * 1000;
+      profile["iron"] = (Number(n["iron_100g"]) || 0) * 1000;
+      profile["zinc"] = (Number(n["zinc_100g"]) || 0) * 1000;
+      profile["selenium"] = Number(n["selenium_100g"]) || 0;
+      profile["iodine"] = Number(n["iodine_100g"]) || 0;
+      profile["phosphorus"] = (Number(n["phosphorus_100g"]) || 0) * 1000;
+      profile["vitaminD"] = Number(n["vitamin-d_100g"]) || 0;
+      profile["vitaminB12"] = Number(n["vitamin-b12_100g"]) || 0;
+      profile["folate"] = Number(n["folate_100g"]) || 0;
+      profile["vitaminC"] = (Number(n["vitamin-c_100g"]) || 0) * 1000;
+      profile["vitaminE"] = (Number(n["vitamin-e_100g"]) || 0) * 1000;
+      profile["vitaminK"] = Number(n["vitamin-k_100g"]) || 0;
+      profile["vitaminA"] = Number(n["vitamin-a_100g"]) || 0;
+      profile["vitaminB6"] = (Number(n["vitamin-b6_100g"]) || 0) * 1000;
+      profile["thiamine"] = (Number(n["thiamine_100g"]) || 0) * 1000;
+      profile["riboflavin"] = (Number(n["riboflavin_100g"]) || 0) * 1000;
+      profile["niacin"] = (Number(n["niacin_100g"]) || 0) * 1000;
+      return profile;
+    };
+
+    let databaseMatches = "";
+    const dbMatchMap = new Map<string, any>();
+    const queriesToSearch: string[] = [];
+
+    if (message && message.trim() !== "") {
+      queriesToSearch.push(message.trim());
+    }
+
+    const isImageOnly = (!message || message.trim() === "") && (imagePayloads && imagePayloads.length > 0);
+    if (isImageOnly) {
+      addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout on image-only request...`);
+      const scoutSystemInstruction = `You are a fast visual food identification agent. Look at the image and return a short list of plain-text search keywords for the food items you see (e.g. ['fried chicken', 'white rice', 'sambal']), plus a rough estimated weight in grams for each if visually judgeable. Do not do any nutrition or clinical analysis. Output only: { "items": [{ "keyword": string, "estimatedWeightGrams": number }] }`;
+      try {
+        const scoutOutput = await callUnifiedLLM({
+          modelId: "gemini-3.1-flash-lite",
+          systemInstruction: scoutSystemInstruction,
+          promptText: "Analyze this image and list the food items you see.",
+          imagePayloads,
+          responseMimeType: "application/json"
+        });
+        addDebugLog(`[Vision Scout] Output: ${scoutOutput}`);
+        let parsedScout: any = null;
+        try {
+          parsedScout = typeof scoutOutput === "string" ? JSON.parse(scoutOutput) : scoutOutput;
+        } catch (e) {
+          parsedScout = JSON.parse(extractBalancedJson(scoutOutput));
+        }
+        if (parsedScout && Array.isArray(parsedScout.items)) {
+          for (const item of parsedScout.items) {
+            if (item.keyword) {
+              queriesToSearch.push(item.keyword);
+            }
+          }
+        }
+      } catch (scoutErr: any) {
+        addDebugLog(`[Vision Scout Error] Failed: ${scoutErr.message}`);
+      }
+    }
+
+    if (queriesToSearch.length > 0) {
+      addDebugLog(`[Database Search] Performing USDA & OFF searches for queries: ${JSON.stringify(queriesToSearch)}`);
+      const searchPromises = queriesToSearch.map(async (q) => {
+        try {
+          const [usda, off] = await Promise.all([
+            searchUSDA(q, 3),
+            searchOpenFoodFacts(q, 3)
+          ]);
+          return { query: q, usda, off };
+        } catch (err) {
+          return { query: q, usda: [], off: [] };
+        }
+      });
+      const searchResultsList = await Promise.all(searchPromises);
+      const list: string[] = [];
+      for (const resItem of searchResultsList) {
+        resItem.usda.forEach((food: any) => {
+          const fdcIdStr = String(food.fdcId);
+          dbMatchMap.set(fdcIdStr, extractUSDANutrientsPer100g(food));
+          list.push(`- [USDA] ID: ${fdcIdStr} | Name: ${food.description} | Nutrients (per 100g): ${formatUSDANutrients(food.foodNutrients)}`);
+        });
+        resItem.off.forEach((product: any) => {
+          const idStr = String(product.barcode || product.id || product.code || "");
+          if (idStr) {
+            dbMatchMap.set(idStr, extractOFFNutrientsPer100g(product));
+            list.push(`- [OpenFoodFacts] Barcode: ${idStr} | Name: ${product.product_name} (${product.brands || 'No Brand'}) | Nutrients (per 100g): ${formatOFFNutrients(product.nutriments)}`);
+          }
+        });
+      }
+      if (list.length > 0) {
+        databaseMatches = list.slice(0, 10).join("\n");
+      } else {
+        databaseMatches = "No matches found in USDA or Open Food Facts databases for these queries.";
+      }
+    }
+
     let userCtx = "";
     if (userProfile) {
       userCtx = `\nUSER DIETARY PROFILE & DEMOGRAPHICS:\n` +
@@ -1094,7 +1338,7 @@ Operate in one of four distinct modes based on current user intent:
 MODE A: NEW FOOD LOGGING (Triggered by a new food item description or image)
 - Extract and map ingredients to standard, database-friendly food classifications in "canonicalDbName".
 - Estimate total visual/described item portion weights in "weightGrams".
-- Do NOT output nutrient values directly. The backend database will handle the calculations.
+- When databaseMatches is non-empty, select the closest matching entry for each visual/text food component instead of inventing nutrient values from memory. Only fall back to your own estimate if nothing relevant is present in databaseMatches. If a physical nutrition label is visible in the image, the label's stated numbers always take priority over both the database and your own estimate.
 - Set "mode": "new_log". Provide the "foodData" block.
 
 MODE B: DISCUSSION (Triggered by general health or meal-related questions)
@@ -1118,6 +1362,7 @@ modificationCommand: null or list of:
   - action: "update_weight" | "remove_item" | "add_item"
     itemName: "Literal name of the item from the active state to change"
     newWeightGrams: number
+    targetDbId: "Optional exact database ID (fdcId or barcode) from the itemsBreakdown list"
 foodData: null or:
   date: "YYYY-MM-DD (Dynamically set based on provided current time context)"
   name: "Literal food name"
@@ -1131,6 +1376,8 @@ foodData: null or:
   itemsBreakdown:
     - canonicalDbName: "Standardized target food name for local DB query execution"
       weightGrams: number
+      dbSource: "usda" | "off" | "estimated"
+      dbId: "the fdcId or barcode used as the source for this item's numbers, or null if estimated"
 comparison: null or:
   keyNutrientConcern: "The specific nutrient string causing primary clinical concern for this profile session"
   foods:
@@ -1160,14 +1407,19 @@ comparison: null or:
         target: "value"
 `;
 
+    let databaseMatchesCtx = "";
+    if (databaseMatches) {
+      databaseMatchesCtx = `\n=== DATABASE MATCHES FOR THE MEAL ===\n${databaseMatches}\n`;
+    }
+
     const finalSystemInstruction = customSystemInstruction || systemInstruction;
     const promptText = customVariableData 
-      ? `${customVariableData}\n\nCurrent User Input: "${message}"`
+      ? `${customVariableData}\n${databaseMatchesCtx}\nCurrent User Input: "${message}"`
       : `${historyContext}Analyze this current food request.
 ${userCtx}
 ${timeCtx}
 ${imageCtx}
- 
+${databaseMatchesCtx}
 Current User Input: "${message}"`;
 
     const fullPromptSent = `System Instruction:\n${finalSystemInstruction}\n\n${promptText}`;
@@ -1265,13 +1517,25 @@ Current User Input: "${message}"`;
         parsedData.itemsBreakdown = rawFoodData.itemsBreakdown.map((item: any) => {
           const canonicalName = sanitizeString(item.canonicalDbName || item.name, "Unspecified Item");
           const itemWeight = Number(item.weightGrams) || Math.round(totalWeightGrams / rawFoodData.itemsBreakdown.length);
+          const dbSource = sanitizeString(item.dbSource, "estimated");
+          const dbId = item.dbId !== undefined && item.dbId !== null ? String(item.dbId) : null;
           
-          // Get the precise standard nutrients scaled for this item
-          const itemNutrients = getNutrientsForFood(canonicalName, itemWeight);
+          let itemNutrients: any = null;
+          if (dbId && dbMatchMap.has(dbId)) {
+            const baseNutrientsPer100g = dbMatchMap.get(dbId);
+            itemNutrients = {};
+            const factor = itemWeight / 100;
+            for (const key of nutrientKeys) {
+              itemNutrients[key] = parseFloat((baseNutrientsPer100g[key] * factor).toFixed(2));
+            }
+          } else {
+            // Get the precise standard nutrients scaled for this item
+            itemNutrients = getNutrientsForFood(canonicalName, itemWeight);
+          }
 
           // Add to aggregated nutrients
           for (const key of nutrientKeys) {
-            parsedData.nutrients[key] = parseFloat((parsedData.nutrients[key] + (itemNutrients[key as keyof typeof itemNutrients] || 0)).toFixed(2));
+            parsedData.nutrients[key] = parseFloat((parsedData.nutrients[key] + (itemNutrients[key] || 0)).toFixed(2));
           }
 
           return {
@@ -1279,7 +1543,9 @@ Current User Input: "${message}"`;
             weightGrams: itemWeight,
             calories: itemNutrients.calories || 0,
             saturatedFat: itemNutrients.saturatedFat || 0,
-            sodium: itemNutrients.sodium || 0
+            sodium: itemNutrients.sodium || 0,
+            dbSource,
+            dbId
           };
         });
       } else {
@@ -1294,7 +1560,9 @@ Current User Input: "${message}"`;
             weightGrams: totalWeightGrams,
             calories: itemNutrients.calories || 0,
             saturatedFat: itemNutrients.saturatedFat || 0,
-            sodium: itemNutrients.sodium || 0
+            sodium: itemNutrients.sodium || 0,
+            dbSource: "estimated",
+            dbId: null
           }
         ];
       }
@@ -1358,7 +1626,15 @@ Current User Input: "${message}"`;
         const newWeight = Number(cmd.newWeightGrams) || 0;
 
         if (action === "update_weight") {
-          const item = activeMeal.itemsBreakdown.find((it: any) => it.name.toLowerCase().includes(itemName.toLowerCase()) || itemName.toLowerCase().includes(it.name.toLowerCase()));
+          const targetDbId = cmd.targetDbId ? String(cmd.targetDbId) : null;
+          let item = null;
+          if (targetDbId) {
+            item = activeMeal.itemsBreakdown.find((it: any) => it.dbId && String(it.dbId) === targetDbId);
+          }
+          if (!item) {
+            item = activeMeal.itemsBreakdown.find((it: any) => it.name.toLowerCase().includes(itemName.toLowerCase()) || itemName.toLowerCase().includes(it.name.toLowerCase()));
+          }
+
           if (item) {
             const oldWeight = Number(item.weightGrams) || 1;
             const R = newWeight / oldWeight;
@@ -1367,27 +1643,35 @@ Current User Input: "${message}"`;
             item.calories = Number((item.calories * R).toFixed(1));
             item.saturatedFat = Number((item.saturatedFat * R).toFixed(2));
             item.sodium = Number((item.sodium * R).toFixed(1));
-
-            addDebugLog(`[Modify Math] update_weight of "${item.name}" from ${oldWeight}g to ${newWeight}g (ratio: ${R.toFixed(3)})`);
+ 
+            addDebugLog(`[Modify Math] update_weight of "${item.name}" (dbId: ${item.dbId}) from ${oldWeight}g to ${newWeight}g (ratio: ${R.toFixed(3)})`);
           } else {
-            addDebugLog(`[Modify Math Warning] Could not find item "${itemName}" to update_weight.`);
+            addDebugLog(`[Modify Math Warning] Could not find item "${itemName}" (targetDbId: ${targetDbId}) to update_weight.`);
           }
         } 
         else if (action === "remove_item") {
-          const idx = activeMeal.itemsBreakdown.findIndex((it: any) => it.name.toLowerCase().includes(itemName.toLowerCase()) || itemName.toLowerCase().includes(it.name.toLowerCase()));
+          const targetDbId = cmd.targetDbId ? String(cmd.targetDbId) : null;
+          let idx = -1;
+          if (targetDbId) {
+            idx = activeMeal.itemsBreakdown.findIndex((it: any) => it.dbId && String(it.dbId) === targetDbId);
+          }
+          if (idx === -1) {
+            idx = activeMeal.itemsBreakdown.findIndex((it: any) => it.name.toLowerCase().includes(itemName.toLowerCase()) || itemName.toLowerCase().includes(it.name.toLowerCase()));
+          }
+
           if (idx !== -1) {
             const removedItem = activeMeal.itemsBreakdown[idx];
             activeMeal.itemsBreakdown.splice(idx, 1);
-            addDebugLog(`[Modify Math] remove_item: Removed "${removedItem.name}"`);
+            addDebugLog(`[Modify Math] remove_item: Removed "${removedItem.name}" (dbId: ${removedItem.dbId})`);
           } else {
-            addDebugLog(`[Modify Math Warning] Could not find item "${itemName}" to remove.`);
+            addDebugLog(`[Modify Math Warning] Could not find item "${itemName}" (targetDbId: ${targetDbId}) to remove.`);
           }
         } 
         else if (action === "add_item") {
           let cFactor = 1.0;
           let fFactor = 0.01;
           let sFactor = 0.5;
-
+ 
           const lowerName = itemName.toLowerCase();
           for (const [key, factors] of Object.entries(standardItems)) {
             if (lowerName.includes(key)) {
@@ -1397,13 +1681,15 @@ Current User Input: "${message}"`;
               break;
             }
           }
-
+ 
           const newItem = {
             name: itemName,
             weightGrams: newWeight,
             calories: Number((newWeight * cFactor).toFixed(1)),
             saturatedFat: Number((newWeight * fFactor).toFixed(2)),
-            sodium: Number((newWeight * sFactor).toFixed(1))
+            sodium: Number((newWeight * sFactor).toFixed(1)),
+            dbSource: "estimated",
+            dbId: null
           };
 
           if (!activeMeal.itemsBreakdown) activeMeal.itemsBreakdown = [];

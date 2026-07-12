@@ -151,7 +151,7 @@ interface ReviewBiomarkerModalProps {
   biomarkerKey: string;
   currentValue: number | string;
   onClose: () => void;
-  onUpdateBiomarker: (key: string, value: string | number, proposal?: any) => void;
+  onUpdateBiomarker: (key: string, value: string | number, proposal?: any, fieldsToKeep?: any) => void;
   selectedModelId: string;
   onChangeModelId: (id: string) => void;
   initialMessages?: ChatMessage[];
