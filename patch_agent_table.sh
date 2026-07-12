@@ -1,5 +1,0 @@
-sed -i 's/const rawKey = (raw.key || '\'''\'').toLowerCase();/const rawKey = String(raw.key || '\'''\'').toLowerCase();/g' src/components/AgentResultTable.tsx
-sed -i 's/const rawName = (raw.name || '\'''\'').toLowerCase();/const rawName = String(raw.name || '\'''\'').toLowerCase();/g' src/components/AgentResultTable.tsx
-sed -i 's/const parsedKey = (parsed.key || parsed.biomarker || '\'''\'').toLowerCase().replace(/const parsedKey = String(parsed.key || parsed.biomarker || '\'''\'').toLowerCase().replace(/g' src/components/AgentResultTable.tsx
-sed -i 's/const parsedName = (parsed.name || parsed.biomarker || '\'''\'').toLowerCase();/const parsedName = String(parsed.name || parsed.biomarker || '\'''\'').toLowerCase();/g' src/components/AgentResultTable.tsx
-sed -i 's/const explanation = (parsed.explanation || parsed.changeReason || parsed.description || '\'''\'').toLowerCase();/const explanation = String(parsed.explanation || parsed.changeReason || parsed.description || '\'''\'').toLowerCase();/g' src/components/AgentResultTable.tsx

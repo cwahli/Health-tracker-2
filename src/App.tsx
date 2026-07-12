@@ -2550,7 +2550,11 @@ export default function App() {
             console.warn(`Prevented deletion of locked biomarker: ${cmd.keyName}`);
             return;
           }
-          const targetDate = cmd.date || getCurrentDateInTimezone(profile?.timezone);
+          if (!cmd.date) {
+            console.warn(`Prevented deletion: remove_biomarker command missing date`);
+            return;
+          }
+          const targetDate = cmd.date;
           const logIdx = updatedHistory.findIndex(h => h.date === targetDate);
           if (logIdx >= 0 && updatedHistory[logIdx].biomarkers[cmd.keyName] !== undefined) {
             const newBiomarkers = { ...updatedHistory[logIdx].biomarkers };
@@ -2727,15 +2731,20 @@ export default function App() {
     }
   };
   const handleDeleteMultipleBiomarkers = async (keys: string[]) => {
+    const safeKeys = keys.filter(k => k !== 'bmi' && k !== 'weight' && k !== 'height');
+    if (safeKeys.length === 0) {
+      console.warn("Prevented deletion of locked biomarkers: weight, height, bmi");
+      return;
+    }
     const updatedBiomarkers = { ...biomarkers };
-    keys.forEach(key => delete updatedBiomarkers[key]);
+    safeKeys.forEach(key => delete updatedBiomarkers[key]);
     
     const logsToDelete: string[] = [];
     const logsToUpdate: string[] = [];
     let updatedHistory = biomarkerHistory.map(log => {
       const cleanBiomarkers = { ...log.biomarkers };
       let changed = false;
-      keys.forEach(key => {
+      safeKeys.forEach(key => {
         if (cleanBiomarkers[key] !== undefined) {
           delete cleanBiomarkers[key];
           changed = true;
@@ -2764,12 +2773,12 @@ export default function App() {
     }
     if (updatedProfile.customBiomarkers) {
       const newCustoms = { ...updatedProfile.customBiomarkers };
-      keys.forEach(key => delete newCustoms[key]);
+      safeKeys.forEach(key => delete newCustoms[key]);
       updatedProfile.customBiomarkers = newCustoms;
     }
     updatedProfile.deletedCustomBiomarkerKeys = [
       ...(updatedProfile.deletedCustomBiomarkerKeys || []),
-      ...keys
+      ...safeKeys
     ];
     setProfile(updatedProfile);
     if (logsToUpdate.length > 0) {
@@ -2782,6 +2791,10 @@ export default function App() {
   };
 
   const handleDeleteBiomarker = async (key: string) => {
+    if (key === 'bmi' || key === 'weight' || key === 'height') {
+      console.warn(`Prevented deletion of locked biomarker: ${key}`);
+      return;
+    }
     const updatedBiomarkers = { ...biomarkers };
     delete updatedBiomarkers[key];
     
@@ -2934,6 +2947,14 @@ export default function App() {
     }
   };
   const handleDeleteBiomarkerLog = async (id: string) => {
+    const targetLog = biomarkerHistory.find(b => b.id === id);
+    if (targetLog) {
+      const hasLocked = Object.keys(targetLog.biomarkers).some(k => k === 'bmi' || k === 'weight' || k === 'height');
+      if (hasLocked) {
+        console.warn(`Prevented deletion of log ${id} containing locked biomarkers`);
+        return;
+      }
+    }
     // Keep it in array but mark as delete so syncUtils can process it
     const updatedHistory = biomarkerHistory.map(b => b.id === id ? { ...b, sync_state: 'delete' as const, updated_at: Date.now() } : b);
     setBiomarkerHistory(updatedHistory);
@@ -2957,6 +2978,10 @@ export default function App() {
     await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'deleteBiomarker', targetId: id });
   };
   const handleDeleteBiomarkerFromLog = async (id: string, key: string) => {
+    if (key === 'bmi' || key === 'weight' || key === 'height') {
+      console.warn(`Prevented deletion of locked biomarker from log: ${key}`);
+      return;
+    }
     const targetLog = biomarkerHistory.find(b => b.id === id);
     if (!targetLog) return;
 
@@ -4128,32 +4153,62 @@ export default function App() {
               // Parse extractedYaml and merge into biomarkerHistory
               const yamlText = agentResult.extractedYaml || agentResult;
               if (typeof yamlText === 'string') {
-                const lines = yamlText.split('\n');
-                let currentEntry: any = {};
                 const entries: any[] = [];
-                
-                for (let line of lines) {
-                  line = line.trim();
-                  if (line.startsWith('-') || line.startsWith('biomarker:')) {
-                    if (currentEntry.biomarker) entries.push(currentEntry);
-                    currentEntry = {};
+                try {
+                  const cleanedText = yamlText.replace(/```(?:yaml|yml)?/gi, '').trim();
+                  const parsed = parse(cleanedText);
+                  const rawList = Array.isArray(parsed) 
+                    ? parsed 
+                    : (parsed?.biomarkers || parsed?.entries || parsed?.data || []);
+                  if (Array.isArray(rawList)) {
+                    rawList.forEach((item: any) => {
+                      if (item && typeof item === 'object') {
+                        const bName = item.biomarker || item.name || item.key;
+                        const bDate = item.date || item.timestamp;
+                        const bVal = item.value !== undefined ? item.value : item.val;
+                        if (bName && bDate) {
+                          entries.push({
+                            biomarker: String(bName),
+                            date: String(bDate),
+                            value: isNaN(Number(bVal)) ? bVal : parseFloat(String(bVal)),
+                            unit: item.unit ? String(item.unit) : '',
+                            referenceRange: item.referenceRange || item.range || ''
+                          });
+                        }
+                      }
+                    });
                   }
-                  const bioMatch = line.match(/(?:-\s+)?biomarker:\s*(.*)/i);
-                  if (bioMatch) { currentEntry.biomarker = bioMatch[1].replace(/['"]/g, '').trim(); continue; }
-                  const dateMatch = line.match(/date:\s*([\d-]+)/i);
-                  if (dateMatch) { currentEntry.date = dateMatch[1].trim(); continue; }
-                  const valMatch = line.match(/value:\s*(.*)/i);
-                  if (valMatch) { 
-                    const rawVal = valMatch[1].replace(/['"]/g, '').trim(); 
-                    currentEntry.value = isNaN(Number(rawVal)) ? rawVal : parseFloat(rawVal);
-                    continue; 
-                  }
-                  const unitMatch = line.match(/unit:\s*(.*)/i);
-                  if (unitMatch) { currentEntry.unit = unitMatch[1].replace(/['"]/g, '').trim(); continue; }
-                  const refMatch = line.match(/referenceRange:\s*(.*)/i);
-                  if (refMatch) { currentEntry.referenceRange = refMatch[1].replace(/['"]/g, '').trim(); continue; }
+                } catch (e) {
+                  console.warn("Standard YAML parser in App.tsx failed, falling back to regex", e);
                 }
-                if (currentEntry.biomarker) entries.push(currentEntry);
+
+                if (entries.length === 0) {
+                  const lines = yamlText.split('\n');
+                  let currentEntry: any = {};
+                  
+                  for (let line of lines) {
+                    line = line.trim();
+                    if (line.startsWith('-') || line.startsWith('biomarker:')) {
+                      if (currentEntry.biomarker) entries.push(currentEntry);
+                      currentEntry = {};
+                    }
+                    const bioMatch = line.match(/(?:-\s+)?biomarker:\s*(.*)/i);
+                    if (bioMatch) { currentEntry.biomarker = bioMatch[1].replace(/['"]/g, '').trim(); continue; }
+                    const dateMatch = line.match(/date:\s*([\d-]+)/i);
+                    if (dateMatch) { currentEntry.date = dateMatch[1].trim(); continue; }
+                    const valMatch = line.match(/value:\s*(.*)/i);
+                    if (valMatch) { 
+                      const rawVal = valMatch[1].replace(/['"]/g, '').trim(); 
+                      currentEntry.value = isNaN(Number(rawVal)) ? rawVal : parseFloat(rawVal);
+                      continue; 
+                    }
+                    const unitMatch = line.match(/unit:\s*(.*)/i);
+                    if (unitMatch) { currentEntry.unit = unitMatch[1].replace(/['"]/g, '').trim(); continue; }
+                    const refMatch = line.match(/referenceRange:\s*(.*)/i);
+                    if (refMatch) { currentEntry.referenceRange = refMatch[1].replace(/['"]/g, '').trim(); continue; }
+                  }
+                  if (currentEntry.biomarker) entries.push(currentEntry);
+                }
                 
                 entries.forEach(entry => {
                   const bioName = entry.biomarker.toLowerCase().replace(/[^a-z0-9]/g, '_');

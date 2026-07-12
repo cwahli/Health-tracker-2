@@ -1,5 +1,6 @@
 import { ErrorBoundary } from './ErrorBoundary';
 import React, { useState, useRef, useEffect } from 'react';
+import { parse } from 'yaml';
 import { ChatMessage, FoodLog, UserProfile, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
 import { X, Send, Image, Camera, MessageSquare, Sparkles, Plus, Terminal, ChevronDown, ChevronUp, Loader, MapPin, Trash2, Check, Table, RotateCcw, AlertTriangle, ShieldAlert, Edit2 } from 'lucide-react';
@@ -31,6 +32,37 @@ function parseYamlOffline(yamlText: string): BiomarkerEntry[] {
   const entries: BiomarkerEntry[] = [];
   if (!yamlText) return entries;
   
+  try {
+    const cleanedText = yamlText.replace(/```(?:yaml|yml)?/gi, '').trim();
+    const parsed = parse(cleanedText);
+    const rawList = Array.isArray(parsed) 
+      ? parsed 
+      : (parsed?.biomarkers || parsed?.entries || parsed?.data || []);
+    if (Array.isArray(rawList)) {
+      rawList.forEach((item: any) => {
+        if (item && typeof item === 'object') {
+          const bName = item.biomarker || item.name || item.key;
+          const bDate = item.date || item.timestamp;
+          const bVal = item.value !== undefined ? item.value : item.val;
+          if (bName && bDate) {
+            entries.push({
+              biomarker: String(bName),
+              date: String(bDate),
+              value: Number(bVal) || 0,
+              unit: item.unit ? String(item.unit) : ''
+            });
+          }
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("parseYamlOffline: standard parser failed, falling back to regex", e);
+  }
+
+  if (entries.length > 0) {
+    return entries;
+  }
+
   const lines = yamlText.split('\n');
   let currentEntry: Partial<BiomarkerEntry> = {};
   
@@ -203,6 +235,31 @@ function performOfflineDataAssembly(yamlText: string, bucketMapping: any) {
 function extractBiomarkerKeysFromYaml(yamlStr: string): string[] {
   if (!yamlStr) return [];
   const keys: string[] = [];
+
+  try {
+    const cleanedText = yamlStr.replace(/```(?:yaml|yml)?/gi, '').trim();
+    const parsed = parse(cleanedText);
+    const rawList = Array.isArray(parsed) 
+      ? parsed 
+      : (parsed?.biomarkers || parsed?.entries || parsed?.data || []);
+    if (Array.isArray(rawList)) {
+      rawList.forEach((item: any) => {
+        if (item && typeof item === 'object') {
+          const bName = item.biomarker || item.name || item.key;
+          if (bName) {
+            keys.push(String(bName));
+          }
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("extractBiomarkerKeysFromYaml: standard parser failed, falling back to regex", e);
+  }
+
+  if (keys.length > 0) {
+    return Array.from(new Set(keys)).filter(Boolean);
+  }
+
   const lines = yamlStr.split("\n");
   lines.forEach(line => {
     const trimmed = line.trim();

@@ -1,7 +1,0 @@
-{
-  "message": "My LDL is 100",
-  "agentType": "data_review",
-  "batchBiomarkers": [{ "key": "ldl", "name": "LDL", "value": 100 }],
-  "history": [{ "role": "user", "content": "hi" }],
-  "profile": { "age": 30, "gender": "male" }
-}

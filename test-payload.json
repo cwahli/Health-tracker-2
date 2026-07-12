@@ -1,9 +1,0 @@
-{
-  "message": "My LDL is 100",
-  "engine": "gemini-2.5-flash",
-  "profile": {},
-  "agentType": "data_review",
-  "batchBiomarkers": [{ "key": "ldl", "name": "LDL", "value": 100 }],
-  "batchIdx": 0,
-  "history": [{ "role": "user", "content": "hi" }]
-}

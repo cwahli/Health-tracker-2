@@ -1620,6 +1620,40 @@ Current User Input: "${message}"`;
         pasta: { calories: 1.3, saturatedFat: 0.0, sodium: 0.01 }
       };
 
+      const findItemIndex = (itemNameStr: string, targetDbId: string | null): number => {
+        if (!activeMeal.itemsBreakdown || !Array.isArray(activeMeal.itemsBreakdown)) return -1;
+        const nameLower = itemNameStr.trim().toLowerCase();
+        if (!nameLower && !targetDbId) return -1;
+
+        // 1. Exact match by dbId
+        if (targetDbId) {
+          const idx = activeMeal.itemsBreakdown.findIndex((it: any) => it.dbId && String(it.dbId) === targetDbId);
+          if (idx !== -1) return idx;
+        }
+
+        // 2. Exact match by item name (case-insensitive)
+        const exactIdx = activeMeal.itemsBreakdown.findIndex((it: any) => it.name && it.name.trim().toLowerCase() === nameLower);
+        if (exactIdx !== -1) return exactIdx;
+
+        // 3. Exact match by canonical name if present
+        const canonicalIdx = activeMeal.itemsBreakdown.findIndex((it: any) => it.canonicalDbName && it.canonicalDbName.trim().toLowerCase() === nameLower);
+        if (canonicalIdx !== -1) return canonicalIdx;
+
+        // 4. Substring prefix/suffix match (e.g. startsWith or endsWith)
+        const wordMatchIdx = activeMeal.itemsBreakdown.findIndex((it: any) => {
+          const itName = (it.name || "").trim().toLowerCase();
+          return itName.startsWith(nameLower) || itName.endsWith(nameLower);
+        });
+        if (wordMatchIdx !== -1) return wordMatchIdx;
+
+        // 5. Classic includes fallback (fuzzy substring, first match wins)
+        const includesIdx = activeMeal.itemsBreakdown.findIndex((it: any) => {
+          const itName = (it.name || "").trim().toLowerCase();
+          return itName.includes(nameLower) || nameLower.includes(itName);
+        });
+        return includesIdx;
+      };
+
       for (const cmd of commands) {
         const action = cmd.action;
         const itemName = cmd.itemName || "";
@@ -1627,13 +1661,8 @@ Current User Input: "${message}"`;
 
         if (action === "update_weight") {
           const targetDbId = cmd.targetDbId ? String(cmd.targetDbId) : null;
-          let item = null;
-          if (targetDbId) {
-            item = activeMeal.itemsBreakdown.find((it: any) => it.dbId && String(it.dbId) === targetDbId);
-          }
-          if (!item) {
-            item = activeMeal.itemsBreakdown.find((it: any) => it.name.toLowerCase().includes(itemName.toLowerCase()) || itemName.toLowerCase().includes(it.name.toLowerCase()));
-          }
+          const idx = findItemIndex(itemName, targetDbId);
+          let item = idx !== -1 ? activeMeal.itemsBreakdown[idx] : null;
 
           if (item) {
             const oldWeight = Number(item.weightGrams) || 1;
@@ -1651,13 +1680,7 @@ Current User Input: "${message}"`;
         } 
         else if (action === "remove_item") {
           const targetDbId = cmd.targetDbId ? String(cmd.targetDbId) : null;
-          let idx = -1;
-          if (targetDbId) {
-            idx = activeMeal.itemsBreakdown.findIndex((it: any) => it.dbId && String(it.dbId) === targetDbId);
-          }
-          if (idx === -1) {
-            idx = activeMeal.itemsBreakdown.findIndex((it: any) => it.name.toLowerCase().includes(itemName.toLowerCase()) || itemName.toLowerCase().includes(it.name.toLowerCase()));
-          }
+          const idx = findItemIndex(itemName, targetDbId);
 
           if (idx !== -1) {
             const removedItem = activeMeal.itemsBreakdown[idx];
@@ -1763,10 +1786,10 @@ app.post("/api/gemini/medical-analyze", async (req, res) => {
       customVariableData
     } = req.body;
 
-    // Isolate Diagnostic Agent Data (agent6):
-    // Ensure agent6 only receives diagnostic-relevant data (biomarkers and profile)
+    // Isolate Diagnostic Agent Data (agent4):
+    // Ensure agent4 only receives diagnostic-relevant data (biomarkers and profile)
     // and is not sent other conversation or food log entries.
-    if (agentType === "agent6") {
+    if (agentType === "agent4") {
       recentMeals = [];
       biomarkerHistory = [];
       if (history && history.length > 0) {
@@ -1788,7 +1811,7 @@ app.post("/api/gemini/medical-analyze", async (req, res) => {
           return true;
         });
       }
-      addDebugLog(`[Medical Analyze Agent] Diagnostic Agent (agent6) data isolated: other conversations and food log entries removed.`, explicitSessionId);
+      addDebugLog(`[Medical Analyze Agent] Diagnostic Agent (agent4) data isolated: other conversations and food log entries removed.`, explicitSessionId);
     }
 
     addDebugLog(`[Medical Analyze Agent] Request received for agentType: ${agentType || 'None'}. Message: "${String(message).substring(0, 100)}..."`, explicitSessionId);
@@ -2459,7 +2482,14 @@ reviewedBiomarkers: []`;
               }
               
               const isChatOrUpdate = req.body.message && req.body.message !== "Continue processing" && req.body.message !== "Assemble JSON" && req.body.message !== "Assemble Data" && req.body.message !== "Assemble data";
-              if (actualCount === expectedCount || attempt === maxRetries || isChatOrUpdate) {
+              const isDeleteQuery = req.body.message && (
+                req.body.message.toLowerCase().includes("delete") ||
+                req.body.message.toLowerCase().includes("remove") ||
+                req.body.message.toLowerCase().includes("exclude") ||
+                req.body.message.toLowerCase().includes("clear")
+              );
+              
+              if (actualCount === expectedCount || attempt === maxRetries || (isChatOrUpdate && isDeleteQuery)) {
                 success = true;
                 textOutput = cleanJson;
               } else {
