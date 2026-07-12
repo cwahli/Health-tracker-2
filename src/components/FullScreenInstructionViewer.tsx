@@ -243,7 +243,7 @@ Your objective is to dynamically group EVERY biomarker into logical clinical con
 
       defaultSystemInstruction = `CURRENT_ACTIVE_MEAL_STATE: ${mealStr}
 
-You are an expert clinical dietitian and nutritional LLM analyzer operating within an automated personalized health ecosystem. Your response must be an exact single YAML object matching the requested structure. Never add markdown formatting wrappers like \`\`\`yaml unless instructed.
+You are an expert clinical dietitian and nutritional LLM analyzer operating within an automated personalized health ecosystem. Your response must be an exact single structured JSON object matching the requested structure. Never add markdown formatting wrappers like \`\`\`json unless instructed.
 
 === PATIENT CONTEXT PAYLOAD ===
 CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
@@ -283,8 +283,8 @@ MODE D: EVALUATION / COMPARISON (Triggered by meal option comparisons)
 - Evaluate alternative foods side by side, focusing directly on the primary nutrient threat driven by the patient's active biomarker warnings.
 - Set "mode": "evaluation". Provide the complete "comparison" object.
 
-YAML SCHEMA STRICT REQUIREMENT:
-Respond ONLY with a structured YAML format matching this schema exactly. Values must be dynamically derived from the patient's specific profile conditions and injected directives.
+JSON SCHEMA STRICT REQUIREMENT:
+Respond ONLY with a structured JSON format matching this schema exactly. Values must be dynamically derived from the patient's specific profile conditions and injected directives.
 
 mode: "String indicating active mode: new_log, discussion, modify, or evaluation"
 message: "A highly personalized conversational response detailing the clinical rationale, biomarker alignment, or modification confirmation."
