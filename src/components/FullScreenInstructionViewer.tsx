@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Copy, Check, Terminal, ShieldAlert, BookOpen, BrainCircuit, Edit2, RotateCcw, Save } from 'lucide-react';
+import { X, Copy, Check, Terminal, ShieldAlert, BookOpen, BrainCircuit, Edit2, RotateCcw, Save, Search, Code, Info, Sparkles, Plus, ChevronRight } from 'lucide-react';
 
 interface FullScreenInstructionViewerProps {
   isOpen: boolean;
@@ -18,6 +18,31 @@ interface FullScreenInstructionViewerProps {
   currency?: string;
   maxDistance?: number;
 }
+
+const AVAILABLE_VARIABLES = [
+  { key: "{profile.nickname}", label: "User Nickname", desc: "The user's nickname or name" },
+  { key: "{profile.age}", label: "User Age", desc: "The user's age in years" },
+  { key: "{profile.gender}", label: "User Gender", desc: "The user's demographic gender" },
+  { key: "{profile.ethnicity}", label: "User Ethnicity", desc: "The user's demographic ethnicity" },
+  { key: "{profile.weight}", label: "User Weight", desc: "User's current weight in kg" },
+  { key: "{profile.height}", label: "User Height", desc: "User's current height in cm" },
+  { key: "{profile.bloodType}", label: "User Blood Type", desc: "User's blood group type" },
+  { key: "{profile.language}", label: "User Language", desc: "User's language preference" },
+  { key: "{profile.targetCalories}", label: "Calorie Target", desc: "Adjusted daily calorie target allowance" },
+  { key: "{profile.targetProtein}", label: "Protein Target", desc: "Adjusted daily protein target allowance" },
+  { key: "{profile.targetCarbs}", label: "Carbs Target", desc: "Adjusted daily carbohydrates target" },
+  { key: "{profile.targetFats}", label: "Fats Target", desc: "Adjusted daily total fat target" },
+  { key: "{profile.targetSaturatedFat}", label: "Sat Fat Limit", desc: "Critical limit for saturated fat intake" },
+  { key: "{profile.targetFibre}", label: "Dietary Fibre Target", desc: "Adjusted daily target for dietary fibre" },
+  { key: "{profile.targetSodium}", label: "Sodium Limit", desc: "Critical limit for daily sodium intake" },
+  { key: "{profile.targetSugar}", label: "Added Sugar Limit", desc: "Critical limit for daily added sugar" },
+  { key: "{biomarkers.list}", label: "Biomarker Values", desc: "Current biomarker names and values list" },
+  { key: "{biomarkers.calibrated_reference_ranges}", label: "Reference Ranges", desc: "Personalized calibrated reference ranges" },
+  { key: "{nutrients.remaining_allowance}", label: "Remaining Allowance", desc: "Remaining daily nutrient allowances" },
+  { key: "{nutrients.today_intake}", label: "Today's Intake", desc: "Total nutrients consumed today" },
+  { key: "{location.lat_lng}", label: "Current Location", desc: "User's coordinate mapping (lat, lng)" },
+  { key: "{recent_meals.list}", label: "Recent Food Logs", desc: "The user's recently logged food compositions" }
+];
 
 export default function FullScreenInstructionViewer({
   isOpen,
@@ -41,6 +66,17 @@ export default function FullScreenInstructionViewer({
   const [sysInstruction, setSysInstruction] = useState('');
   const [variableDataText, setVariableDataText] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Autocomplete states
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionQuery, setSuggestionQuery] = useState('');
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const [suggestionsTriggerIndex, setSuggestionsTriggerIndex] = useState(-1);
+  const [focusedTextarea, setFocusedTextarea] = useState<'system' | 'variable' | null>(null);
+  const [sidebarSearch, setSidebarSearch] = useState('');
+
+  const systemTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const variableTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Map the agent type
   const resolvedKey = agentType;
@@ -638,6 +674,94 @@ YAML Array Item Schema:
 
   if (!isOpen) return null;
 
+  const insertVariable = (variableKey: string) => {
+    const ref = focusedTextarea === 'system' ? systemTextareaRef : variableTextareaRef;
+    if (!ref.current) {
+      const target = focusedTextarea || 'system';
+      if (target === 'system') {
+        setSysInstruction(prev => prev + ' ' + variableKey);
+      } else {
+        setVariableDataText(prev => prev + ' ' + variableKey);
+      }
+      return;
+    }
+    const txt = ref.current;
+    const start = txt.selectionStart;
+    const end = txt.selectionEnd;
+    const text = focusedTextarea === 'system' ? sysInstruction : variableDataText;
+
+    const replaceStart = suggestionsTriggerIndex !== -1 ? suggestionsTriggerIndex : start;
+    const before = text.substring(0, replaceStart);
+    const after = text.substring(end);
+    const newText = before + variableKey + after;
+
+    if (focusedTextarea === 'system') {
+      setSysInstruction(newText);
+    } else {
+      setVariableDataText(newText);
+    }
+
+    setShowSuggestions(false);
+
+    setTimeout(() => {
+      txt.focus();
+      const newCursorPos = replaceStart + variableKey.length;
+      txt.setSelectionRange(newCursorPos, newCursorPos);
+    }, 10);
+  };
+
+  const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>, type: 'system' | 'variable') => {
+    const value = e.target.value;
+    if (type === 'system') {
+      setSysInstruction(value);
+    } else {
+      setVariableDataText(value);
+    }
+
+    const cursor = e.target.selectionStart;
+    const lastOpenBrace = value.lastIndexOf('{', cursor - 1);
+    const lastCloseBrace = value.lastIndexOf('}', cursor - 1);
+
+    if (lastOpenBrace !== -1 && lastOpenBrace > lastCloseBrace) {
+      const query = value.substring(lastOpenBrace + 1, cursor);
+      if (!query.includes(' ') && !query.includes('\n')) {
+        setShowSuggestions(true);
+        setSuggestionQuery(query);
+        setSuggestionsTriggerIndex(lastOpenBrace);
+        setFocusedTextarea(type);
+        setSuggestionIndex(0);
+        return;
+      }
+    }
+    setShowSuggestions(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, type: 'system' | 'variable') => {
+    setFocusedTextarea(type);
+    if (!showSuggestions) return;
+
+    const filtered = AVAILABLE_VARIABLES.filter(v => 
+      v.key.toLowerCase().includes(suggestionQuery.toLowerCase()) || 
+      v.label.toLowerCase().includes(suggestionQuery.toLowerCase())
+    );
+
+    if (filtered.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSuggestionIndex(prev => (prev + 1) % filtered.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSuggestionIndex(prev => (prev - 1 + filtered.length) % filtered.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      insertVariable(filtered[suggestionIndex].key);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowSuggestions(false);
+    }
+  };
+
   const handleSave = () => {
     localStorage.setItem(`custom_system_instruction_${resolvedKey}`, sysInstruction);
     localStorage.setItem(`custom_variable_data_${resolvedKey}`, variableDataText);
@@ -773,41 +897,179 @@ YAML Array Item Schema:
           )}
 
           {isEditing ? (
-            <div className="flex flex-col gap-6 flex-1">
-              {/* Top Column: System Instructions */}
-              <div className="flex flex-col">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider font-mono">
-                    System Instruction / Core Role Prompt
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-mono">
-                    {sysInstruction.length} chars
-                  </span>
+            <div className="flex flex-col lg:flex-row gap-6 flex-1 items-stretch min-h-[700px]">
+              {/* Left Column: Editor Areas */}
+              <div className="flex-1 flex flex-col gap-6">
+                {/* Top Column: System Instructions */}
+                <div className="flex flex-col relative">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider font-mono flex items-center gap-1.5">
+                      <Code className="w-4 h-4" />
+                      System Instruction / Core Role Prompt
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {sysInstruction.length} chars
+                    </span>
+                  </div>
+                  <textarea
+                    ref={systemTextareaRef}
+                    value={sysInstruction}
+                    onChange={(e) => handleTextareaInput(e, 'system')}
+                    onKeyDown={(e) => handleKeyDown(e, 'system')}
+                    onFocus={() => setFocusedTextarea('system')}
+                    className="w-full bg-slate-900/60 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl p-4 font-mono text-sm text-slate-200 outline-none transition-all resize-none leading-relaxed h-[320px] focus:ring-1 focus:ring-indigo-500"
+                    placeholder="Enter system instructions. Type '{' to search and insert steerable variables..."
+                  />
+
+                  {/* Inline Autocomplete Suggestions for System Textarea */}
+                  {showSuggestions && focusedTextarea === 'system' && (
+                    <div className="absolute left-4 right-4 bottom-4 top-12 z-50 bg-slate-900 border border-indigo-500/50 shadow-xl shadow-indigo-950/40 rounded-xl flex flex-col overflow-hidden max-h-[220px]">
+                      <div className="px-3 py-1.5 bg-indigo-950/60 border-b border-indigo-900/40 flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider font-mono flex items-center gap-1">
+                          <Sparkles className="w-3.5 h-3.5 animate-pulse text-indigo-400" />
+                          Variables Suggestion list (Use ↓/↑ to choose, Enter to select)
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-mono">query: "{suggestionQuery}"</span>
+                      </div>
+                      <div className="overflow-y-auto flex-1 divide-y divide-slate-800/60">
+                        {(() => {
+                          const filtered = AVAILABLE_VARIABLES.filter(v => 
+                            v.key.toLowerCase().includes(suggestionQuery.toLowerCase()) || 
+                            v.label.toLowerCase().includes(suggestionQuery.toLowerCase())
+                          );
+                          if (filtered.length === 0) {
+                            return <div className="p-3 text-xs text-slate-500 italic">No variables matching "{suggestionQuery}"</div>;
+                          }
+                          return filtered.map((v, idx) => (
+                            <button
+                              key={v.key}
+                              onClick={() => insertVariable(v.key)}
+                              className={`w-full text-left px-4 py-2.5 flex flex-col gap-0.5 transition-colors ${idx === suggestionIndex ? 'bg-indigo-600/20 text-white' : 'hover:bg-slate-800/40 text-slate-300'}`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono text-xs font-bold text-indigo-300">{v.key}</span>
+                                <span className="text-[10px] font-medium text-slate-400">{v.label}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 font-sans leading-normal">{v.desc}</p>
+                            </button>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <textarea
-                  value={sysInstruction}
-                  onChange={(e) => setSysInstruction(e.target.value)}
-                  className="w-full bg-slate-900/60 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl p-4 font-mono text-sm text-slate-200 outline-none transition-all resize-none leading-relaxed h-[350px] focus:ring-1 focus:ring-indigo-500"
-                  placeholder="Enter system instructions..."
-                />
+
+                {/* Bottom Column: Variable Data Inputs */}
+                <div className="flex flex-col relative">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider font-mono flex items-center gap-1.5">
+                      <Terminal className="w-4 h-4" />
+                      Variable Context / Inputted Data
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {variableDataText.length} chars
+                    </span>
+                  </div>
+                  <textarea
+                    ref={variableTextareaRef}
+                    value={variableDataText}
+                    onChange={(e) => handleTextareaInput(e, 'variable')}
+                    onKeyDown={(e) => handleKeyDown(e, 'variable')}
+                    onFocus={() => setFocusedTextarea('variable')}
+                    className="w-full bg-slate-900/60 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl p-4 font-mono text-sm text-slate-200 outline-none transition-all resize-none leading-relaxed h-[320px] focus:ring-1 focus:ring-indigo-500"
+                    placeholder="Enter custom variable data or parameters. Type '{' to search and insert variables..."
+                  />
+
+                  {/* Inline Autocomplete Suggestions for Variable Textarea */}
+                  {showSuggestions && focusedTextarea === 'variable' && (
+                    <div className="absolute left-4 right-4 bottom-4 top-12 z-50 bg-slate-900 border border-indigo-500/50 shadow-xl shadow-indigo-950/40 rounded-xl flex flex-col overflow-hidden max-h-[220px]">
+                      <div className="px-3 py-1.5 bg-indigo-950/60 border-b border-indigo-900/40 flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider font-mono flex items-center gap-1">
+                          <Sparkles className="w-3.5 h-3.5 animate-pulse text-indigo-400" />
+                          Variables Suggestion list (Use ↓/↑ to choose, Enter to select)
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-mono">query: "{suggestionQuery}"</span>
+                      </div>
+                      <div className="overflow-y-auto flex-1 divide-y divide-slate-800/60">
+                        {(() => {
+                          const filtered = AVAILABLE_VARIABLES.filter(v => 
+                            v.key.toLowerCase().includes(suggestionQuery.toLowerCase()) || 
+                            v.label.toLowerCase().includes(suggestionQuery.toLowerCase())
+                          );
+                          if (filtered.length === 0) {
+                            return <div className="p-3 text-xs text-slate-500 italic">No variables matching "{suggestionQuery}"</div>;
+                          }
+                          return filtered.map((v, idx) => (
+                            <button
+                              key={v.key}
+                              onClick={() => insertVariable(v.key)}
+                              className={`w-full text-left px-4 py-2.5 flex flex-col gap-0.5 transition-colors ${idx === suggestionIndex ? 'bg-indigo-600/20 text-white' : 'hover:bg-slate-800/40 text-slate-300'}`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono text-xs font-bold text-indigo-300">{v.key}</span>
+                                <span className="text-[10px] font-medium text-slate-400">{v.label}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 font-sans leading-normal">{v.desc}</p>
+                            </button>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Bottom Column: Variable Data Inputs */}
-              <div className="flex flex-col">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider font-mono">
-                    Variable Context / Inputted Data
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-mono">
-                    {variableDataText.length} chars
-                  </span>
+              {/* Right Column: Dynamic Variable Reference Sidebar */}
+              <div className="w-full lg:w-[320px] bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col p-4">
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-800">
+                  <Sparkles className="w-4 h-4 text-indigo-400" />
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-100 font-mono">
+                    Steerable Variables Sidebar
+                  </h3>
                 </div>
-                <textarea
-                  value={variableDataText}
-                  onChange={(e) => setVariableDataText(e.target.value)}
-                  className="w-full bg-slate-900/60 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-xl p-4 font-mono text-sm text-slate-200 outline-none transition-all resize-none leading-relaxed h-[350px] focus:ring-1 focus:ring-indigo-500"
-                  placeholder="Enter custom variable data or parameters..."
-                />
+                <p className="text-[11px] text-slate-400 mb-4 leading-normal">
+                  Click any biomarker or user variable below to insert it at your editor's current cursor position. Or, type <code className="text-indigo-400 font-bold bg-indigo-500/10 px-1 py-0.5 rounded font-mono">{"{"}</code> in the code text area.
+                </p>
+
+                {/* Search Bar */}
+                <div className="relative mb-3.5">
+                  <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-500" />
+                  <input
+                    type="text"
+                    value={sidebarSearch}
+                    onChange={(e) => setSidebarSearch(e.target.value)}
+                    placeholder="Search clinical variables..."
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-lg text-xs text-slate-200 outline-none transition-all placeholder:text-slate-500 font-sans"
+                  />
+                </div>
+
+                {/* Variable List */}
+                <div className="flex-1 overflow-y-auto space-y-2 max-h-[500px] pr-1 scrollbar-thin">
+                  {(() => {
+                    const filtered = AVAILABLE_VARIABLES.filter(v => 
+                      v.key.toLowerCase().includes(sidebarSearch.toLowerCase()) || 
+                      v.label.toLowerCase().includes(sidebarSearch.toLowerCase()) || 
+                      v.desc.toLowerCase().includes(sidebarSearch.toLowerCase())
+                    );
+                    if (filtered.length === 0) {
+                      return <div className="text-xs text-slate-500 italic p-2">No variables found.</div>;
+                    }
+                    return filtered.map((v) => (
+                      <button
+                        key={v.key}
+                        onClick={() => insertVariable(v.key)}
+                        className="w-full text-left p-2.5 rounded-lg bg-slate-950/40 hover:bg-slate-950 border border-slate-800/50 hover:border-indigo-500/50 transition-all flex flex-col gap-1 cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[11px] font-bold text-indigo-400 group-hover:text-indigo-300 break-all">{v.key}</span>
+                          <Plus className="w-3 h-3 text-slate-500 group-hover:text-indigo-400 flex-shrink-0 ml-1" />
+                        </div>
+                        <div className="text-[10px] font-bold text-slate-300">{v.label}</div>
+                        <p className="text-[10px] text-slate-500 leading-normal">{v.desc}</p>
+                      </button>
+                    ));
+                  })()}
+                </div>
               </div>
             </div>
           ) : (

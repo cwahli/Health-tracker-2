@@ -15,7 +15,8 @@ import FullScreenLogViewer from './FullScreenLogViewer';
 import FullScreenInstructionViewer from './FullScreenInstructionViewer';
 import { InteractivePlacesMap } from './InteractivePlacesMap';
 import exifr from 'exifr';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { collection, query, where, getDocs, setDoc, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { Agent5View, Agent6View, Agent7View } from './AgentResultViews';
 import { AgentResultTable } from './AgentResultTable';
 import { resolveFoodImage } from '../utils/imageResolver';
@@ -563,95 +564,26 @@ export default function LogChat({
   const payloadStorageKey = agentType ? `last_sent_payload_${userIdentifier}_${type}_${agentType}_${dataReviewBatchIdx ?? 'none'}` : `last_sent_payload_${userIdentifier}_${type}`;
   const chatStorageKey = agentType ? `chat_messages_${userIdentifier}_${type}_${agentType}_${dataReviewBatchIdx ?? 'none'}` : `chat_messages_${userIdentifier}_${type}`;
 
-  const [lastSentPayload, setLastSentPayload] = useState<any>(() => {
-    try {
-      const saved = sessionStorage.getItem(payloadStorageKey);
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
+  const [lastSentPayload, setLastSentPayload] = useState<any>(null);
+  const [messageFormats, setMessageFormats] = useState<Record<string, 'prose' | 'table' | 'card'>>({});
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string>(() => {
+    return `session_${Date.now()}`;
   });
+  const [conversationsList, setConversationsList] = useState<any[]>([]);
+  const [isLoadingConversations, setIsLoadingConversations] = useState<boolean>(false);
 
-  useEffect(() => {
-    if (lastSentPayload) {
-      try { sessionStorage.setItem(payloadStorageKey, JSON.stringify(lastSentPayload)); } catch (e) { console.warn("Quota exceeded"); }
-    } else {
-      sessionStorage.removeItem(payloadStorageKey);
-    }
-  }, [lastSentPayload, payloadStorageKey]);
-
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const saved = sessionStorage.getItem(chatStorageKey);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse saved messages:", e);
-      }
-    }
-    return [
-      {
-        id: `welcome_${type}`,
-        role: 'assistant',
-        content: type === 'food' 
-          ? 'Hello! Tell me or upload a photo of what you are planning to eat, and I will analyze its health benefits, risk factors, and full 30 nutrient breakdown based on your profile.'
-          : type === 'food_idea'
-            ? 'Hello! Do you have any specific food preferences or cravings today? I will need your location to find the best dining options matching your biomarker goals.'
-            : type === 'daily_recommendation'
-              ? 'Hello! I am your AI Health Coach. Let me look at your clinical biomarkers, daily steps, and latest dietary intake to give you a customized, comprehensive health recommendation today.'
-              : agentType === 'agent1'
-              ? 'Hello! I am the Clinical Data Parser. I extract biomarkers and readings from raw text or reports into a structured format.'
-              : agentType === 'agent2'
-                ? 'Hello! I am the Clinical Ontologist. I map extracted biomarkers to clinical conditions and physiological risk categories.'
-                : agentType === 'agent3'
-                  ? 'Hello! I am the Clinical Data Coordinator. I assemble mapped data into clean physiological buckets.'
-                  : agentType === 'agent4'
-                    ? 'Hello! I am the Prognostic Diagnostics Assessment agent. I analyze your biomarker history to project timeline risks and identify testing gaps.'
-                    : agentType === 'agent5'
-                      ? 'Hello! I am the Personalized Reference Ranges agent. I calibrate normal biomarker reference ranges to your exact demographics.'
-                      : agentType === 'agent6'
-                        ? 'Hello! I am the Lifestyle Precision Intervention agent. I translate diagnostic risk into strict dietary and movement targets.'
-                        : agentType === 'agent7'
-                          ? 'Hello! I am the Medical Literature Consensus agent. I scan PubMed and clinical trials to bring recent scientific debate to your context.'
-                          : agentType === 'data_review'
-                            ? `Hello! I am your Clinical Calibration Agent. Here is what is about to happen: I will analyze ${dataReviewBatchIdx === 'custom' ? 'Custom Test Batch' : 'Batch ' + (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined ? (dataReviewBatchIdx as number) + 1 : 1)} containing your raw biomarker readings. I will automatically recognize your demographic parameters (age, gender, ethnicity) and calibrate all reference ranges precisely to your profile. I will then map each biomarker to its standard physiological grouping, potential medical conditions, and break down each medical range clinically (such as Borderline High or Optimal zones) with clear, actionable insights—all without repeating boilerplate demographic lines. Let's start the calibration!`
-                            : 'Hello! I can help you parse blood report photos, medical test charts, or manual body logs to build a comprehensive profile of your biomarkers. What information would you like to enter today?',
-        timestamp: new Date().toISOString()
-      }
-    ];
-  });
-
-  useEffect(() => {
-    try { sessionStorage.setItem(chatStorageKey, JSON.stringify(messages)); } catch (e) { console.warn("Quota exceeded"); }
-  }, [messages, chatStorageKey]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    const savedMessages = sessionStorage.getItem(chatStorageKey);
-    const savedPayload = sessionStorage.getItem(payloadStorageKey);
-
-    if (savedMessages) {
-      try {
-        const parsed = JSON.parse(savedMessages);
-        if (parsed && parsed.length > 0) {
-          setMessages(parsed);
-          setLastSentPayload(savedPayload ? JSON.parse(savedPayload) : null);
-          return;
-        }
-      } catch (e) {
-        console.error("Failed to parse saved messages:", e);
-      }
-    }
-
-    // No saved messages, initialize with fresh welcome message
-    setLastSentPayload(null);
-    if (agentType) {
-      setMessages([
-        {
-          id: `welcome_${type}_${agentType}_${Date.now()}`,
-          role: 'assistant',
-          content: agentType === 'agent1'
+  const getWelcomeMessage = () => {
+    return {
+      id: `welcome_${type}_${agentType || 'default'}_${Date.now()}`,
+      role: 'assistant' as const,
+      content: type === 'food' 
+        ? 'Hello! Tell me or upload a photo of what you are planning to eat, and I will analyze its health benefits, risk factors, and full 30 nutrient breakdown based on your profile.'
+        : type === 'food_idea'
+          ? 'Hello! Do you have any specific food preferences or cravings today? I will need your location to find the best dining options matching your biomarker goals.'
+          : type === 'daily_recommendation'
+            ? 'Hello! I am your AI Health Coach. Let me look at your clinical biomarkers, daily steps, and latest dietary intake to give you a customized, comprehensive health recommendation today.'
+            : agentType === 'agent1'
             ? 'Hello! I am the Clinical Data Parser. I extract biomarkers and readings from raw text or reports into a structured format.'
             : agentType === 'agent2'
               ? 'Hello! I am the Clinical Ontologist. I map extracted biomarkers to clinical conditions and physiological risk categories.'
@@ -665,25 +597,173 @@ export default function LogChat({
                       ? 'Hello! I am the Lifestyle Precision Intervention agent. I translate diagnostic risk into strict dietary and movement targets.'
                       : agentType === 'agent7'
                         ? 'Hello! I am the Medical Literature Consensus agent. I scan PubMed and clinical trials to bring recent scientific debate to your context.'
-                        : 'Hello! Let me know what you want to do.',
-          timestamp: new Date().toISOString()
-        }
-      ]);
-    } else {
-      setMessages([
-        {
-          id: `welcome_${type}_default`,
-          role: 'assistant',
-          content: type === 'food' 
-            ? 'Hello! Tell me or upload a photo of what you are planning to eat, and I will analyze its health benefits, risk factors, and full 30 nutrient breakdown based on your profile.'
-            : type === 'food_idea'
-              ? 'Hello! Do you have any specific food preferences or cravings today? I will need your location to find the best dining options matching your biomarker goals.'
-              : 'Hello! I can help you parse blood report photos, medical test charts, or manual body logs to build a comprehensive profile of your biomarkers. What information would you like to enter today?',
-          timestamp: new Date().toISOString()
-        }
-      ]);
+                        : agentType === 'data_review'
+                          ? `Hello! I am your Clinical Calibration Agent. Here is what is about to happen: I will analyze ${dataReviewBatchIdx === 'custom' ? 'Custom Test Batch' : 'Batch ' + (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined ? (dataReviewBatchIdx as number) + 1 : 1)} containing your raw biomarker readings. I will automatically recognize your demographic parameters (age, gender, ethnicity) and calibrate all reference ranges precisely to your profile. I will then map each biomarker to its standard physiological grouping, potential medical conditions, and break down each medical range clinically (such as Borderline High or Optimal zones) with clear, actionable insights—all without repeating boilerplate demographic lines. Let's start the calibration!`
+                          : 'Hello! I can help you parse blood report photos, medical test charts, or manual body logs to build a comprehensive profile of your biomarkers. What information would you like to enter today?',
+      timestamp: new Date().toISOString()
+    };
+  };
+
+  const saveConversationToFirestore = async (id: string, msgs: ChatMessage[], payload: any) => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) {
+      try {
+        sessionStorage.setItem(chatStorageKey, JSON.stringify(msgs));
+        if (payload) sessionStorage.setItem(payloadStorageKey, JSON.stringify(payload));
+      } catch (e) {
+        console.warn("Quota exceeded in sessionStorage");
+      }
+      return;
     }
-  }, [isOpen, type, agentType, chatStorageKey, payloadStorageKey]);
+
+    try {
+      const docRef = doc(db, 'users', userId, 'conversations', id);
+      await setDoc(docRef, {
+        id,
+        userId,
+        type: type || 'medical',
+        agentType: agentType || null,
+        title: msgs.length > 1 
+          ? (msgs[1].role === 'user' ? msgs[1].content.slice(0, 30) + '...' : `Session - ${new Date(msgs[0].timestamp).toLocaleDateString()}`)
+          : `Session - ${new Date().toLocaleDateString()}`,
+        createdAt: msgs[0]?.timestamp || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messages: msgs,
+        lastSentPayload: payload || null
+      }, { merge: true });
+    } catch (err) {
+      console.error("Error saving conversation to Firestore:", err);
+    }
+  };
+
+  const loadConversationsFromFirestore = async () => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) {
+      const saved = sessionStorage.getItem(chatStorageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setMessages(parsed);
+          const savedPayload = sessionStorage.getItem(payloadStorageKey);
+          setLastSentPayload(savedPayload ? JSON.parse(savedPayload) : null);
+        } catch {}
+      } else {
+        const welcome = getWelcomeMessage();
+        setMessages([welcome]);
+        setLastSentPayload(null);
+      }
+      return;
+    }
+
+    setIsLoadingConversations(true);
+    try {
+      const q = query(
+        collection(db, 'users', userId, 'conversations'),
+        where('type', '==', type || 'medical'),
+        where('agentType', '==', agentType || null)
+      );
+      const snapshot = await getDocs(q);
+      const list: any[] = [];
+      snapshot.forEach(docSnap => {
+        list.push(docSnap.data());
+      });
+
+      list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      setConversationsList(list);
+
+      if (list.length > 0) {
+        const match = list.find(c => c.id === activeConversationId) || list[0];
+        setActiveConversationId(match.id);
+        setMessages(match.messages || []);
+        setLastSentPayload(match.lastSentPayload || null);
+      } else {
+        const newId = `session_${Date.now()}`;
+        setActiveConversationId(newId);
+        const welcome = getWelcomeMessage();
+        setMessages([welcome]);
+        setLastSentPayload(null);
+        await saveConversationToFirestore(newId, [welcome], null);
+        setConversationsList([{
+          id: newId,
+          type: type || 'medical',
+          agentType: agentType || null,
+          title: 'New Session',
+          updatedAt: new Date().toISOString(),
+          messages: [welcome]
+        }]);
+      }
+    } catch (err) {
+      console.error("Error loading conversations from Firestore:", err);
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  };
+
+  const handleNewSession = async () => {
+    const newId = `session_${Date.now()}`;
+    setActiveConversationId(newId);
+    const welcome = getWelcomeMessage();
+    setMessages([welcome]);
+    setLastSentPayload(null);
+    await saveConversationToFirestore(newId, [welcome], null);
+    
+    setConversationsList(prev => [
+      {
+        id: newId,
+        type: type || 'medical',
+        agentType: agentType || null,
+        title: `Session - ${new Date().toLocaleDateString()}`,
+        updatedAt: new Date().toISOString(),
+        messages: [welcome]
+      },
+      ...prev
+    ]);
+  };
+
+  const handleDeleteSession = async (sessId: string) => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+
+    try {
+      await deleteDoc(doc(db, 'users', userId, 'conversations', sessId));
+      const updatedList = conversationsList.filter(c => c.id !== sessId);
+      setConversationsList(updatedList);
+      
+      if (sessId === activeConversationId) {
+        if (updatedList.length > 0) {
+          const nextSess = updatedList[0];
+          setActiveConversationId(nextSess.id);
+          setMessages(nextSess.messages || []);
+          setLastSentPayload(nextSess.lastSentPayload || null);
+        } else {
+          handleNewSession();
+        }
+      }
+    } catch (err) {
+      console.error("Error deleting session:", err);
+    }
+  };
+
+  const handleSwitchSession = (sessId: string) => {
+    const found = conversationsList.find(c => c.id === sessId);
+    if (found) {
+      setActiveConversationId(sessId);
+      setMessages(found.messages || []);
+      setLastSentPayload(found.lastSentPayload || null);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      loadConversationsFromFirestore();
+    }
+  }, [auth.currentUser, type, agentType, isOpen]);
+
+  useEffect(() => {
+    if (activeConversationId && messages && messages.length > 0) {
+      saveConversationToFirestore(activeConversationId, messages, lastSentPayload);
+    }
+  }, [messages, lastSentPayload, activeConversationId]);
 
   const [inputText, setInputText] = useState('');
   const [budget, setBudget] = useState(() => localStorage.getItem('food_budget') || '');
@@ -1696,6 +1776,46 @@ export default function LogChat({
           </div>
         )}
 
+        {/* Session/History Control Bar */}
+        <div className="bg-slate-100/60 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800/80 px-4 py-2 flex items-center justify-between text-xs shrink-0 gap-2">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span className="text-slate-400 dark:text-slate-500 font-medium whitespace-nowrap">Session:</span>
+            {isLoadingConversations ? (
+              <span className="text-slate-400 dark:text-slate-500 font-mono animate-pulse">Loading...</span>
+            ) : (
+              <select
+                value={activeConversationId}
+                onChange={(e) => handleSwitchSession(e.target.value)}
+                className="bg-transparent hover:bg-slate-200/50 dark:hover:bg-slate-850/50 border border-slate-200 dark:border-slate-850 rounded px-2 py-0.5 font-semibold text-slate-700 dark:text-slate-200 outline-none cursor-pointer truncate max-w-[200px] flex-1 text-xs"
+              >
+                {conversationsList.map((conv) => (
+                  <option key={conv.id} value={conv.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+                    {conv.title || 'Untitled Session'}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleNewSession}
+              className="p-1 rounded-lg bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 font-semibold flex items-center justify-center transition-colors shadow-sm cursor-pointer border border-indigo-500/10"
+              title="Start New Session"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDeleteSession(activeConversationId)}
+              className="p-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-semibold flex items-center justify-center transition-colors shadow-sm cursor-pointer border border-rose-500/10"
+              title="Delete Current Session"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
         {/* Chat Message Window */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-slate-900/20">
           
@@ -2061,6 +2181,9 @@ export default function LogChat({
 
                   const isAss = msg.role === 'assistant';
                   if (isAss) {
+                    const currentFormat = messageFormats[msg.id] || 'prose';
+                    const hasFormattingOptions = !!(msg.pendingFoodLog || msg.agentResult || msg.pendingFoodIdeas);
+
                   return (
                 <div
                   key={msg.id}
@@ -2076,17 +2199,61 @@ export default function LogChat({
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
+
+                  {/* Multi-Format Rendering Switcher */}
+                  {hasFormattingOptions && (
+                    <div className="flex items-center gap-1 bg-slate-100/80 dark:bg-slate-800/85 p-1 rounded-xl border border-slate-200/50 dark:border-slate-750/50 w-fit mb-2 text-[10px] font-sans shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setMessageFormats(prev => ({ ...prev, [msg.id]: 'prose' }))}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          currentFormat === 'prose'
+                            ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        📝 Prose
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMessageFormats(prev => ({ ...prev, [msg.id]: 'table' }))}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          currentFormat === 'table'
+                            ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        📊 Table
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMessageFormats(prev => ({ ...prev, [msg.id]: 'card' }))}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          currentFormat === 'card'
+                            ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        📇 Bento Card
+                      </button>
+                    </div>
+                  )}
+
                   <div className="w-full leading-relaxed font-size-body text-slate-850 dark:text-slate-100 font-medium break-words overflow-x-hidden bg-transparent border-none shadow-none">
-                    {msg.imageUrls && msg.imageUrls.length > 0 ? (
-                      <div className="mb-2 overflow-hidden border-y sm:border border-slate-200 dark:border-slate-700/30 w-[calc(100%+2.5rem)] -mx-5 sm:mx-0 sm:w-full sm:rounded-xl">
-                        <ImageSlider images={msg.imageUrls} altText="Attached meal pictures" />
+                    {currentFormat === 'prose' && (
+                      <div className="animation-fade-in">
+                        {msg.imageUrls && msg.imageUrls.length > 0 ? (
+                          <div className="mb-2 overflow-hidden border-y sm:border border-slate-200 dark:border-slate-700/30 w-[calc(100%+2.5rem)] -mx-5 sm:mx-0 sm:w-full sm:rounded-xl">
+                            <ImageSlider images={msg.imageUrls} altText="Attached meal pictures" />
+                          </div>
+                        ) : msg.imageUrl ? (
+                          <div className="mb-2 overflow-hidden border-y sm:border border-slate-200 dark:border-slate-700/30 max-h-40 w-[calc(100%+2.5rem)] -mx-5 sm:mx-0 sm:w-full sm:rounded-xl">
+                            <img src={msg.imageUrl} alt="Attached meal" className="w-full h-full object-cover" />
+                          </div>
+                        ) : null}
+                        <p className="whitespace-pre-line break-words">{typeof msg.content === 'object' ? JSON.stringify(msg.content) : msg.content}</p>
                       </div>
-                    ) : msg.imageUrl ? (
-                      <div className="mb-2 overflow-hidden border-y sm:border border-slate-200 dark:border-slate-700/30 max-h-40 w-[calc(100%+2.5rem)] -mx-5 sm:mx-0 sm:w-full sm:rounded-xl">
-                        <img src={msg.imageUrl} alt="Attached meal" className="w-full h-full object-cover" />
-                      </div>
-                    ) : null}
-                    <p className="whitespace-pre-line break-words">{typeof msg.content === 'object' ? JSON.stringify(msg.content) : msg.content}</p>
+                    )}
 
                     {msg.agentUnavailable && (
                       <div className="mt-3">
@@ -2186,7 +2353,7 @@ export default function LogChat({
                     />
                   )}
 
-                  {type === 'food' && msg.agentResult && msg.agentResult.mode === 'evaluation' && msg.agentResult.comparison && (
+                  {type === 'food' && msg.agentResult && msg.agentResult.mode === 'evaluation' && msg.agentResult.comparison && currentFormat === 'card' && (
                     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-md space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden">
                       <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/50 pb-2 gap-2">
                         <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate min-w-0 flex items-center gap-1.5">
@@ -2255,7 +2422,11 @@ export default function LogChat({
                           );
                         })}
                       </div>
+                    </div>
+                  )}
 
+                  {type === 'food' && msg.agentResult && msg.agentResult.mode === 'evaluation' && msg.agentResult.comparison && currentFormat === 'table' && (
+                    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-md space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden">
                       {/* Key Nutrient Comparison Table */}
                       {(msg.agentResult.comparison.comparisonTableYaml || msg.agentResult.comparison.comparisonTableMarkdown) && (
                         <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/30 dark:bg-slate-900/10 mt-2">
@@ -2296,7 +2467,7 @@ export default function LogChat({
                     </div>
                   )}
 
-                  {type === 'food' && msg.pendingFoodLog && (
+                  {type === 'food' && msg.pendingFoodLog && currentFormat === 'card' && (
                     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-md space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden">
                       {msg.pendingFoodLog.imageUrls && msg.pendingFoodLog.imageUrls.length > 0 && (
                         <div className="overflow-hidden border-y sm:border border-slate-100 dark:border-slate-700/50 shadow-sm mb-3 w-[calc(100%+2rem)] -mx-4 sm:mx-0 sm:w-full sm:rounded-2xl">
@@ -2322,6 +2493,111 @@ export default function LogChat({
                         <p className="text-slate-700 dark:text-slate-200"><strong>{t.benefits}:</strong> {msg.pendingFoodLog.benefits}</p>
                         {msg.pendingFoodLog.risks && <p className="text-slate-700 dark:text-slate-200"><strong>{t.risks}:</strong> {msg.pendingFoodLog.risks}</p>}
                         <p><strong>{t.impact}:</strong> {msg.pendingFoodLog.healthImpact}</p>
+                      </div>
+
+                      {/* Top Nutrients Badge */}
+                      {(() => {
+                        const parseTarget = (val: any, fallback: number) => {
+                          if (val === null || val === undefined) return fallback;
+                          const cleanStr = String(val).replace(/,/g, '');
+                          const matches = cleanStr.match(/\d+(\.\d+)?/g);
+                          if (!matches || matches.length === 0) return fallback;
+                          const parsed = parseFloat(matches[0]);
+                          return isNaN(parsed) ? fallback : parsed;
+                        };
+
+                        const caloriesTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.calories, 1700) : 1800;
+                        const satFatTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.saturatedFat, 15) : 15;
+                        const sodiumTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.sodium, 1200) : 1200;
+
+                        const logDate = msg.pendingFoodLog.date;
+                        const dayLogs = foodLogs ? foodLogs.filter(f => f.date === logDate) : [];
+
+                        const caloriesConsumedToday = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.calories || 0), 0);
+                        const satFatConsumedToday = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.saturatedFat || 0), 0);
+                        const sodiumConsumedToday = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.sodium || 0), 0);
+
+                        const caloriesInMeal = (msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.calories) || 0;
+                        const satFatInMeal = (msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.saturatedFat) || 0;
+                        const sodiumInMeal = (msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.sodium) || 0;
+
+                        return (
+                          <div className="flex flex-wrap items-center gap-3 pt-2">
+                            <div className="flex items-center gap-1.5">
+                              <NutrientPieChart
+                                allowance={caloriesTarget}
+                                alreadyConsumed={caloriesConsumedToday}
+                                mealValue={caloriesInMeal}
+                                nutrientKey="calories"
+                                size="sm"
+                              />
+                              <span className="text-[11px] font-extrabold" style={{ color: 'rgb(249, 115, 22)' }}>
+                                {caloriesInMeal} kcal
+                              </span>
+                            </div>
+
+                            {msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.saturatedFat !== undefined && (
+                              <div className="flex items-center gap-1.5">
+                                <NutrientPieChart
+                                  allowance={satFatTarget}
+                                  alreadyConsumed={satFatConsumedToday}
+                                  mealValue={satFatInMeal}
+                                  nutrientKey="saturatedFat"
+                                  size="sm"
+                                />
+                                <span className="text-[11px] font-bold" style={{ color: 'rgb(234, 179, 8)' }}>
+                                  Sat Fat: {satFatInMeal}g
+                                </span>
+                              </div>
+                            )}
+
+                            {msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.sodium !== undefined && (
+                              <div className="flex items-center gap-1.5">
+                                <NutrientPieChart
+                                  allowance={sodiumTarget}
+                                  alreadyConsumed={sodiumConsumedToday}
+                                  mealValue={sodiumInMeal}
+                                  nutrientKey="sodium"
+                                  size="sm"
+                                />
+                                <span className="text-[11px] font-bold" style={{ color: 'rgb(34, 197, 94)' }}>
+                                  Sodium: {sodiumInMeal}mg
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Log Action Button */}
+                      {loggedMessageIds.includes(msg.id) ? (
+                        <div className="w-full py-2 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 animation-fade-in">
+                          <Check className="w-4 h-4" />
+                          Saved to History
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            if (msg.pendingFoodLog && onLogFood) {
+                              onLogFood(msg.pendingFoodLog as FoodLog);
+                              setLoggedMessageIds(prev => [...prev, msg.id]);
+                            }
+                          }}
+                          className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          {t.logThisFood}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {type === 'food' && msg.pendingFoodLog && currentFormat === 'table' && (
+                    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-md space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden">
+                      <div className="border-b border-slate-100 dark:border-slate-800/50 pb-2">
+                        <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs tracking-wider uppercase font-display">
+                          📊 Nutritional Table Matrix
+                        </h4>
                       </div>
 
                       {/* Individual Items Contribution Breakdown Table */}
@@ -2372,95 +2648,19 @@ export default function LogChat({
                         </div>
                       )}
 
-                      {/* Top Nutrients Badge */}
-                      {(() => {
-                        const parseTarget = (val: any, fallback: number) => {
-                          if (val === null || val === undefined) return fallback;
-                          const cleanStr = String(val).replace(/,/g, '');
-                          const matches = cleanStr.match(/\d+(\.\d+)?/g);
-                          if (!matches || matches.length === 0) return fallback;
-                          const parsed = parseFloat(matches[0]);
-                          return isNaN(parsed) ? fallback : parsed;
-                        };
-
-                        const caloriesTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.calories, 1700) : 1800;
-                        const satFatTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.saturatedFat, 15) : 15;
-                        const sodiumTarget = report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.sodium, 1200) : 1200;
-
-                        const logDate = msg.pendingFoodLog.date;
-                        const dayLogs = foodLogs ? foodLogs.filter(f => f.date === logDate) : [];
-
-                        const caloriesConsumedToday = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.calories || 0), 0);
-                        const satFatConsumedToday = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.saturatedFat || 0), 0);
-                        const sodiumConsumedToday = dayLogs.reduce((acc, curr) => acc + (curr.nutrients?.sodium || 0), 0);
-
-                        const caloriesInMeal = (msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.calories) || 0;
-                        const satFatInMeal = (msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.saturatedFat) || 0;
-                        const sodiumInMeal = (msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.sodium) || 0;
-
-                        return (
-                          <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex items-center gap-1.5">
-                              <NutrientPieChart
-                                allowance={caloriesTarget}
-                                alreadyConsumed={caloriesConsumedToday}
-                                mealValue={caloriesInMeal}
-                                nutrientKey="calories"
-                                size="sm"
-                              />
-                              <span className="text-[11px] font-extrabold" style={{ color: 'rgb(249, 115, 22)' }}>
-                                {caloriesInMeal} kcal
-                              </span>
-                            </div>
-
-                            {msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.saturatedFat !== undefined && (
-                              <div className="flex items-center gap-1.5">
-                                <NutrientPieChart
-                                  allowance={satFatTarget}
-                                  alreadyConsumed={satFatConsumedToday}
-                                  mealValue={satFatInMeal}
-                                  nutrientKey="saturatedFat"
-                                  size="sm"
-                                />
-                                <span className="text-[11px] font-bold" style={{ color: 'rgb(234, 179, 8)' }}>
-                                  Sat Fat: {satFatInMeal}g
-                                </span>
-                              </div>
-                            )}
-
-                            {msg.pendingFoodLog.nutrients && msg.pendingFoodLog.nutrients.sodium !== undefined && (
-                              <div className="flex items-center gap-1.5">
-                                <NutrientPieChart
-                                  allowance={sodiumTarget}
-                                  alreadyConsumed={sodiumConsumedToday}
-                                  mealValue={sodiumInMeal}
-                                  nutrientKey="sodium"
-                                  size="sm"
-                                />
-                                <span className="text-[11px] font-bold" style={{ color: 'rgb(34, 197, 94)' }}>
-                                  Sodium: {sodiumInMeal}mg
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Display Nutrients - Accordion Style */}
+                      {/* Display Nutrients - Spreadsheet Style */}
                       <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/30">
-                        <button
-                          onClick={() => setExpandedNutrients(!expandedNutrients)}
-                          className="w-full px-3 py-2 flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100/50"
-                        >
-                          <span>Nutrient Breakdown (31 Nutrients)</span>
-                          {expandedNutrients ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </button>
+                        <div className="px-3 py-1.5 bg-slate-100/70 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            📋 Comprehensive Nutrient Values (31 Nutrients)
+                          </span>
+                        </div>
                         
-                        <div className={`px-3 py-2 space-y-3 text-[11px] font-mono border-t border-slate-200 dark:border-slate-800 ${expandedNutrients ? 'block' : 'hidden'}`}>
+                        <div className="px-3 py-2 space-y-3 text-[11px] font-mono">
                           {/* Core Nutrients */}
                           <div>
                             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 pb-0.5 border-b border-slate-200/50 dark:border-slate-800/50">Core Nutrients (11)</div>
-                            <div className="space-y-1">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
                               {(() => {
                                 const coreKeys = ["calories", "protein", "carbohydrates", "totalFat", "saturatedFat", "transFat", "addedSugar", "sodium", "potassium", "totalFibre", "solubleFibre"];
                                 return nutrientDefinitions
@@ -2468,7 +2668,7 @@ export default function LogChat({
                                   .map((nut) => {
                                     const val = msg.pendingFoodLog?.nutrients?.[nut.key];
                                     return (
-                                      <div key={nut.key} className="flex justify-between py-0.5 text-slate-600 dark:text-slate-300">
+                                      <div key={nut.key} className="flex justify-between py-0.5 text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800/30 last:border-b-0 sm:even:border-l sm:even:pl-4">
                                         <span className="text-slate-500">{nut.labels[profile?.language || 'en'] || nut.labels.en}:</span>
                                         <span className="font-semibold text-slate-800 dark:text-slate-100">
                                           {val !== undefined ? `${val} ${nut.unit}` : `--`}
@@ -2483,7 +2683,7 @@ export default function LogChat({
                           {/* Additional Nutrients */}
                           <div>
                             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 pb-0.5 border-b border-slate-200/50 dark:border-slate-800/50">Additional Nutrients (20)</div>
-                            <div className="space-y-1">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
                               {(() => {
                                 const coreKeys = ["calories", "protein", "carbohydrates", "totalFat", "saturatedFat", "transFat", "addedSugar", "sodium", "potassium", "totalFibre", "solubleFibre"];
                                 return nutrientDefinitions
@@ -2491,7 +2691,7 @@ export default function LogChat({
                                   .map((nut) => {
                                     const val = msg.pendingFoodLog?.nutrients?.[nut.key];
                                     return (
-                                      <div key={nut.key} className="flex justify-between py-0.5 text-slate-600 dark:text-slate-300">
+                                      <div key={nut.key} className="flex justify-between py-0.5 text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800/30 last:border-b-0 sm:even:border-l sm:even:pl-4">
                                         <span className="text-slate-500">{nut.labels[profile?.language || 'en'] || nut.labels.en}:</span>
                                         <span className="font-semibold text-slate-800 dark:text-slate-100">
                                           {val !== undefined ? `${val} ${nut.unit}` : `--`}
@@ -2529,7 +2729,7 @@ export default function LogChat({
                   )}
 
                   {/* Render Agent Result Blocks */}
-                  {msg.agentType && msg.agentResult && !loggedMessageIds.includes(msg.id) && (
+                  {msg.agentType && msg.agentResult && !loggedMessageIds.includes(msg.id) && currentFormat !== 'prose' && (
                     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-md space-y-4 animation-fade-in w-full max-w-full min-w-0 overflow-hidden">
                       <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-slate-100 dark:border-slate-800/50">
                         <div className="flex items-center gap-1.5">
@@ -2558,7 +2758,7 @@ export default function LogChat({
                       </div>
 
                       {/* Content details based on Agent type */}
-                      {['agent1', 'agent2', 'agent3', 'agent4', 'data_review'].includes(msg.agentType || '') && msg.agentResult && (
+                      {['agent1', 'agent2', 'agent3', 'agent4', 'data_review'].includes(msg.agentType || '') && msg.agentResult && (currentFormat === 'table' || currentFormat === 'card') && (
                         <ErrorBoundary>
                         <AgentResultTable
                           agentType={
@@ -2608,19 +2808,19 @@ export default function LogChat({
                         </ErrorBoundary>
                       )}
 
-                      {msg.agentType === 'agent5' && msg.agentResult && (
+                      {msg.agentType === 'agent5' && msg.agentResult && (currentFormat === 'card' || currentFormat === 'table') && (
                         <div className="space-y-2">
                           <Agent5View rawResult={msg.agentResult} />
                         </div>
                       )}
 
-                      {msg.agentType === 'agent6' && msg.agentResult && (
+                      {msg.agentType === 'agent6' && msg.agentResult && (currentFormat === 'card' || currentFormat === 'table') && (
                         <div className="space-y-2">
                           <Agent6View rawResult={msg.agentResult} />
                         </div>
                       )}
 
-                      {msg.agentType === 'agent7' && msg.agentResult && (
+                      {msg.agentType === 'agent7' && msg.agentResult && (currentFormat === 'card' || currentFormat === 'table') && (
                         <div className="space-y-2">
                           <Agent7View rawResult={msg.agentResult} />
                         </div>

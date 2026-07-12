@@ -1600,8 +1600,16 @@ I can analyze these, compare them with our database keys, and find standard mapp
       if (!res.ok) throw new Error("Failed to contact standardization agent");
       const data = await res.json();
       
-      setStandardizationYaml(data.yamlText);
-      const parsed = parseStandardizationYaml(data.yamlText);
+      
+      const jsonData = typeof data.jsonResponse === 'string' ? JSON.parse(data.jsonResponse) : data.jsonResponse;
+      setStandardizationYaml(JSON.stringify(jsonData, null, 2));
+      let parsed = jsonData.mappedBiomarkers || jsonData.categorisedBiomarkers || [];
+      // Normalize key
+      parsed = parsed.map((item: any) => ({
+        ...item,
+        key: item.originalKey || item.key
+      }));
+
       setStandardizationSummary(parsed);
     } catch (error: any) {
       console.error(error);
@@ -1727,8 +1735,8 @@ I can analyze these, compare them with our database keys, and find standard mapp
       if (!res.ok) throw new Error("Failed to contact name consolidation agent");
       const data = await res.json();
       
-      setConsolidationYaml(JSON.stringify(data.groups, null, 2));
-      const parsed = data.groups || [];
+      setConsolidationYaml(JSON.stringify(parsed, null, 2));
+      const parsed = data.consolidatedGroups || data.groups || [];
       setConsolidationGroups(parsed);
 
       const newAnalysis = {

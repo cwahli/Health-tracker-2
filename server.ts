@@ -300,6 +300,7 @@ async function callUnifiedLLM({
   imagePayload,
   imagePayloads,
   responseMimeType,
+  responseSchema,
   googleSearch,
   enablePlaceIdTool
 }: {
@@ -309,6 +310,7 @@ async function callUnifiedLLM({
   imagePayload?: { mimeType: string; data: string } | null;
   imagePayloads?: { mimeType: string; data: string }[] | null;
   responseMimeType?: "application/json" | "text/plain";
+  responseSchema?: any;
   googleSearch?: boolean;
   enablePlaceIdTool?: boolean;
 }) {
@@ -537,6 +539,10 @@ async function callUnifiedLLM({
     systemInstruction: resolvedInstruction,
     tools: []
   };
+  
+  if (responseSchema) {
+    configObj.responseSchema = responseSchema;
+  }
   
   if (googleSearch) {
     configObj.tools.push({ googleSearch: {} });
@@ -1435,6 +1441,116 @@ comparison: null or:
       databaseMatchesCtx = `\n=== DATABASE MATCHES FOR THE MEAL ===\n${databaseMatches}\n`;
     }
 
+
+    const foodAnalyzeSchema = {
+      type: Type.OBJECT,
+      properties: {
+        scratchpad: {
+          type: Type.STRING,
+          description: "Think step-by-step here first. Identify the food, read the label numbers, and calculate the clinical risks before filling out the fields below."
+        },
+        mode: { type: Type.STRING, description: "String indicating active mode: new_log, discussion, modify, or evaluation" },
+        message: { type: Type.STRING, description: "A highly personalized conversational response detailing the clinical rationale, biomarker alignment, or modification confirmation." },
+        modificationCommand: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              action: { type: Type.STRING, description: "'update_weight' | 'remove_item' | 'add_item'" },
+              itemName: { type: Type.STRING, description: "Literal name of the item from the active state to change" },
+              newWeightGrams: { type: Type.NUMBER },
+              targetDbId: { type: Type.STRING, description: "Optional exact database ID (fdcId or barcode)", nullable: true }
+            }
+          },
+          nullable: true
+        },
+        foodData: {
+          type: Type.OBJECT,
+          properties: {
+            date: { type: Type.STRING, description: "YYYY-MM-DD" },
+            name: { type: Type.STRING },
+            composition: { type: Type.STRING },
+            weightGrams: { type: Type.NUMBER },
+            quantity: { type: Type.STRING },
+            benefits: { type: Type.STRING },
+            risks: { type: Type.STRING },
+            healthImpact: { type: Type.STRING },
+            recommendation: { type: Type.STRING },
+            itemsBreakdown: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  canonicalDbName: { type: Type.STRING },
+                  weightGrams: { type: Type.NUMBER },
+                  dbSource: { type: Type.STRING, description: "'usda' | 'off' | 'estimated' | 'label'" },
+                  dbId: { type: Type.STRING, nullable: true },
+                  labelNutrientsPerServing: {
+                    type: Type.OBJECT,
+                    properties: {
+                      servingSizeGrams: { type: Type.NUMBER },
+                      calories: { type: Type.NUMBER },
+                      protein: { type: Type.NUMBER },
+                      totalFat: { type: Type.NUMBER },
+                      saturatedFat: { type: Type.NUMBER },
+                      transFat: { type: Type.NUMBER },
+                      carbohydrates: { type: Type.NUMBER },
+                      addedSugar: { type: Type.NUMBER },
+                      sodium: { type: Type.NUMBER },
+                      potassium: { type: Type.NUMBER },
+                      totalFibre: { type: Type.NUMBER },
+                      solubleFibre: { type: Type.NUMBER }
+                    },
+                    nullable: true
+                  }
+                }
+              }
+            }
+          },
+          nullable: true
+        },
+        comparison: {
+          type: Type.OBJECT,
+          properties: {
+            keyNutrientConcern: { type: Type.STRING },
+            foods: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  weightGrams: { type: Type.NUMBER },
+                  suitability: { type: Type.STRING },
+                  pros: { type: Type.STRING },
+                  cons: { type: Type.STRING }
+                }
+              }
+            },
+            comparisonTableYaml: {
+              type: Type.OBJECT,
+              properties: {
+                columns: { type: Type.ARRAY, items: { type: Type.STRING } },
+                rows: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      nutrient: { type: Type.STRING },
+                      foodA: { type: Type.STRING },
+                      foodB: { type: Type.STRING },
+                      target: { type: Type.STRING }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          nullable: true
+        }
+      },
+      required: ["scratchpad", "mode", "message"]
+    };
+
     const finalSystemInstruction = customSystemInstruction || systemInstruction;
     const promptText = customVariableData 
       ? `${customVariableData}\n${databaseMatchesCtx}\nCurrent User Input: "${message}"`
@@ -1448,26 +1564,22 @@ Current User Input: "${message}"`;
     const fullPromptSent = `System Instruction:\n${finalSystemInstruction}\n\n${promptText}`;
     addDebugLog(`[RouteAgent Chat] Sending request to Gemini...`);
     const textOutput = await callUnifiedLLM({
-      modelId: engine || "gemini-2.5-flash",
+      modelId: engine || "gemini-3.1-flash-lite", // Updating to flash-lite as recommended
       systemInstruction: finalSystemInstruction,
       promptText,
       imagePayloads,
-      responseMimeType: "text/plain"
+      responseMimeType: "application/json",
+      responseSchema: foodAnalyzeSchema
     });
 
     addDebugLog(`[RouteAgent Chat] Received response from Gemini. Length: ${textOutput.length} chars.`);
-    let cleanYaml = textOutput.replace(/```(?:yaml|json)?/gi, "").trim();
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
     let rawParsed;
     try {
-      rawParsed = YAML.parse(cleanYaml);
+      rawParsed = JSON.parse(cleanJson);
     } catch (parseErr: any) {
-      addDebugLog(`[YAML Parse Error] Standard YAML parse failed: ${parseErr.message}. Trying JSON parser...`);
-      try {
-        rawParsed = JSON.parse(cleanYaml);
-      } catch (jsonErr: any) {
-        addDebugLog(`[JSON Parse Error] JSON parse also failed: ${jsonErr.message}.`);
-        throw parseErr;
-      }
+      addDebugLog(`[JSON Parse Error] JSON parse failed: ${parseErr.message}.`);
+      throw parseErr;
     }
 
     const mode = rawParsed.mode || "new_log";
@@ -2578,968 +2690,113 @@ reviewedBiomarkers: []`;
         });
       }
 
-      if (agentType === "agent1") {
+            if (agentType === "agent1") {
         let cleanYaml = textOutput.replace(/```(?:yaml)?/gi, "").trim();
         return res.json({
-          text: "I have cleaned and standardized your batch of biomarkers with clinical precision.",
+          text: "",
           agentType,
           extractedYaml: cleanYaml,
-          agentPrompt: fullPromptSent,
-          batchIdx: req.body.batchIdx !== undefined ? req.body.batchIdx : undefined,
-          batchBiomarkers: req.body.batchBiomarkers || []
+          hasMoreMarkers: false,
+          remainingText: "",
+          estimatedTotalMarkers: 0,
+          agentPrompt: fullPromptSent
         });
       }
-
-      if (agentType === "agent1_step2") {
-        let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
-        let text = "I have categorized the biomarkers. Please review the mapping.";
-        let bucketMapping = {};
-        try {
-          const parsed = JSON.parse(cleanJson);
-          if (parsed.bucketMapping) {
-            bucketMapping = parsed.bucketMapping;
-            if (parsed.text) text = parsed.text;
-          } else {
-            bucketMapping = parsed;
-          }
-        } catch (e) {
-          try {
-            const firstBrace = cleanJson.indexOf("{");
-            const lastBrace = cleanJson.lastIndexOf("}");
-            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-              const innerParsed = JSON.parse(cleanJson.substring(firstBrace, lastBrace + 1));
-              if (innerParsed.bucketMapping) {
-                bucketMapping = innerParsed.bucketMapping;
-                if (innerParsed.text) text = innerParsed.text;
-              } else {
-                bucketMapping = innerParsed;
-              }
-            }
-          } catch (e2) {}
-        }
-        return res.json({
-          text,
-          agentType,
-          bucketMapping,
-          agentPrompt: fullPromptSent,
-          batchBiomarkers: req.body.batchBiomarkers || []
-        });
-      }
-
-      if (agentType === "data_review") {
-        let parsedYaml: any = {};
-        try {
-          // Clean textOutput of markdown markers
-          let cleanYaml = textOutput.replace(/```(?:yaml)?/gi, "").trim();
-          parsedYaml = YAML.parse(cleanYaml);
-        } catch (err: any) {
-          console.error("YAML parsing failed, trying robust JSON parser fallback:", err);
-          try {
-            parsedYaml = robustParseJson(textOutput);
-          } catch (jsonErr) {
-            console.error("JSON fallback also failed:", jsonErr);
-          }
-        }
-
-        // Map the parsed YAML object fields back to the structure the client-side expects
-        const systemicConclusion = parsedYaml.systemicConclusion || {};
-        const defaultMessage = `Health Trajectory: ${systemicConclusion.trajectory || 'Stable'}\n\nPrimary Critical Biomarker: ${systemicConclusion.primaryCriticalBiomarker || 'None'}\n\nClinical Next Steps: ${systemicConclusion.clinicalNextSteps || 'None'}`;
-        const message = parsedYaml.message || defaultMessage;
-        
-        const inputBiomarkers = req.body.batchBiomarkers || [];
-        const reviewedBiomarkers = (parsedYaml.reviewedBiomarkers || []).map((item: any) => {
-          // Match by key, or fallback to name matching (case-insensitive and white-space free)
-          const inputBm = inputBiomarkers.find((b: any) => 
-            (b.key && item.key && String(b.key).toLowerCase() === String(item.key).toLowerCase()) ||
-            (b.name && item.name && String(b.name).toLowerCase().replace(/\s/g, '') === String(item.name).toLowerCase().replace(/\s/g, ''))
-          ) || {};
-          
-          const key = item.key || inputBm.key || '';
-          const name = item.name || item.displayName || inputBm.name || key;
-          const userValue = item.userValue !== undefined ? item.userValue : (item.currentValue !== undefined ? item.currentValue : inputBm.value);
-          const unit = item.unit !== undefined ? item.unit : (inputBm.unit || '');
-          const profileAdjustedNormalRange = item.profileAdjustedNormalRange || '';
-          
-          // Map status: standardizing 'Healthy' vs 'At Risk'
-          const status = item.status || ((item.alignmentState === "HIGH" || item.alignmentState === "LOW") ? "At Risk" : "Healthy");
-          
-          return {
-            key,
-            name,
-            userValue,
-            unit,
-            profileAdjustedNormalRange,
-            status,
-            description: item.description || item.findings || '',
-            _statusReasoning: item._statusReasoning || '',
-            _demographicAudit: item._demographicAudit || {},
-            specificRiskContext: item.specificRiskContext || item.findings || '',
-            potentialMedicalConditions: item.potentialMedicalConditions || [],
-            riskCategories: item.riskCategories || [],
-            standardMedicalGrouping: item.standardMedicalGrouping || 'Other',
-            rangeBrackets: item.rangeBrackets || [],
-            unitsFlagged: !!item.unitsFlagged
-          };
-        });
-
-        return res.json({
-          text: message,
-          message,
-          agentType,
-          agentPrompt: fullPromptSent,
-          batchIdx: req.body.batchIdx !== undefined ? req.body.batchIdx : undefined,
-          batchBiomarkers: inputBiomarkers,
-          reviewedBiomarkers,
-          demographicsApplied: parsedYaml.demographicsApplied || {}
-        });
-      }
-
-      let parsedData;
-      try {
-        parsedData = robustParseJson(textOutput);
-      } catch (parseErr: any) {
-        throw parseErr;
-      }
-
+      
       return res.json({
-        text: parsedData.message || 'Analysis generated.',
-        agentType,
-        agentPrompt: fullPromptSent,
-        batchBiomarkers: req.body.batchBiomarkers || [],
-        ...parsedData
+          text: "",
+          agentType,
+          extractedYaml: textOutput,
+          hasMoreMarkers: false,
+          remainingText: "",
+          estimatedTotalMarkers: 0,
+          agentPrompt: fullPromptSent
       });
     }
-
-    if (process.env.GEMINI_API_KEY === undefined) {
-      return res.json({
-        text: "Please note: GEMINI_API_KEY is not configured in Secrets. Here is a simulated extraction:\n\nBased on your report, I have identified a fasting glucose of 105 mg/dL and LDL cholesterol of 145 mg/dL.",
-        biomarkers: {
-          ldl: 145,
-          fasting_glucose: 105,
-          hba1c: 5.8,
-          egfr: 85,
-          hscrp: 1.2
-        }
-      });
-    }
-
-    let imagePayload = null;
-    let imagesPayload: { mimeType: string, data: string }[] | undefined = undefined;
-    
-    if (images && images.length > 0) {
-      imagesPayload = images.map((img: string) => {
-        const mimeType = img.split(";")[0].split(":")[1] || "image/jpeg";
-        const base64Data = img.split(",")[1];
-        return { mimeType, data: base64Data };
-      });
-      // also set imagePayload for backward compatibility in callUnifiedLLM if needed
-      imagePayload = imagesPayload[0]; 
-    } else if (image) {
-      const mimeType = image.split(";")[0].split(":")[1] || "image/jpeg";
-      const base64Data = image.split(",")[1];
-      imagePayload = { mimeType, data: base64Data };
-    }
-
-    let historyText = "";
-    if (history && history.length > 0) {
-      historyText = "Chat History:\n" + history.map((h: any) => `${h.role}: ${h.content}`).join("\n") + "\n\n";
-    }
-
-    let profileContext = "";
-    if (userProfile) {
-      profileContext = `Current User Profile (This is what you already know. DO NOT ask the user for these again, and DO NOT include these in your output JSON unless the user is explicitly restating or updating them in the current message or recent chat history):
-      - Age: ${userProfile.age || 'Not provided'}
-      - Weight: ${userProfile.weight || 'Not provided'}
-      - Height: ${userProfile.height || 'Not provided'}
-      - Ethnicity: ${userProfile.ethnicity || 'Not provided'}
-      - Blood Type: ${userProfile.bloodType || 'Not provided'}
-      - Gender: ${userProfile.gender || 'Not provided'}
-      `;
-    }
-
-    const imageCtx = imageDates && imageDates.length > 0 ? `The attached images were taken on these dates: ${imageDates.join(", ")}.` : "";
-
-    const existingKeys = existingBiomarkers && existingBiomarkers.length > 0 ? existingBiomarkers : [];
-    
-    let resumeCtx = "";
-    const lastItem = req.body.lastProcessedRawRow || req.body.lastProcessedItem;
-    if (lastItem) {
-      resumeCtx = `\nPREVIOUS EXTRACTION STATE:\nYou previously stopped at: "${lastItem}".\nYou MUST start your next extraction chunk immediately AFTER this item in the user's data.\n`;
-    }
-    const promptText = `Chat History:\n${historyText}\n${imageCtx}\nUser message: "${message}"${resumeCtx}`;
-    const itemsPerBatch = req.body.numberOfBatches || 50;
-    const systemInstruction = `You are an expert clinical data parsing agent. Your sole objective is to extract raw, unstructured medical data into a strict JSON schema with absolute, zero-loss accuracy. You are a parser, not an interpreter; do not alter the medical reality of the data.
-Never add markdown formatting or wrappers like \`\`\`json.
-
-CURRENT USER PROFILE:
-- Age: ${userProfile?.age || 'Not provided'}
-- Weight: ${userProfile?.weight || 'Not provided'} kg
-- Height: ${userProfile?.height || 'Not provided'} cm
-- Ethnicity: ${userProfile?.ethnicity || 'Not provided'}
-- Blood Type: ${userProfile?.bloodType || 'Not provided'}
-- Gender: ${userProfile?.gender || 'Not provided'}
-
-EXISTING DATABASE KEYS ALREADY IN USE: [${existingKeys.join(', ')}]
-
-=== CRITICAL EXTRACTION DIRECTIVES ===
-1. ZERO MATH & STRICT VERBATIM VALUES (CRITICAL): You are strictly forbidden from performing any calculations. NEVER convert international SI units to US units. You must extract the exact numeric digits provided in the source text into \`valueNumeric\`.
-2. LOSSLESS PRESERVATION: You must capture the exact raw string of the test in \`originalTestName\`. You must capture the exact physician or lab note in \`doctorComment\`. You must capture the exact reference range in \`normalRange\`. DO NOT summarize or truncate these fields.
-3. QUALITATIVE DATA: If a result is text (e.g., "NEGATIVE"), place the exact word in \`valueString\` and leave \`valueNumeric\` null.
-4. UNIT ISOLATION: Output the unit in the \`unit\` field. Standardize the typography (e.g., format "mmol" as "mmol/L" if applicable), but NEVER change the fundamental metric.
-5. KEY GENERATION: To prevent database duplicates, generate a clean, concise snake_case \`key\` representing the standard medical name of the test, using a standardized base name (e.g., "hba1c"). Prioritize matching an exact key from the "EXISTING DATABASE KEYS" list if applicable.
-6. DATE FORMAT: Convert all dates to strictly "DD-MM-YYYY".
-7. UNIT STANDARDIZATION: Standardize "µg/L" and "ug/L" to always return as "ug/L" (they are equivalent). Do this for any other identical units represented with different symbols.
-
-=== MODE ROUTING DIRECTIVE ===
-MODE A: PLAN_EXTRACTION
-- ONLY trigger this mode if the user uploads new data and there are STRICTLY MORE THAN ${itemsPerBatch} biomarkers/tests. 
-- Do not extract data yet. Count the total rows/tests. Calculate batches (Max ${itemsPerBatch} tests per batch).
-- Set mode: "plan", status: "waiting_for_user".
-
-MODE B: EXTRACT_CHUNK
-- Trigger this mode IMMEDIATELY if the user uploads new data and there are ${itemsPerBatch} or FEWER biomarkers/tests. DO NOT use MODE A in this case. Also use this mode if the user explicitly says "Proceed" to a previous plan.
-- Extract exactly up to ${itemsPerBatch} tests into the \`entries\` array. 
-- To maintain your place, record the EXACT raw string of the last row you processed in \`lastProcessedRawRow\`. 
-- Set mode: "extract_chunk".
-- Set status to "needs_continuation" if more rows exist, or "completed" if finished.
-
-MODE C: DISCUSSION / MODIFY
-- Answer questions or output a modificationCommand.
-- If the user asks to correct/convert a specific value from the current extraction, you MAY re-emit the entire updated batch in the \`entries\` array and set mode to "extract_chunk" so the user can save the corrected version.
-- CRITICAL: If not fully extracted yet, you MUST preserve the "status" as "needs_continuation" and pass the exact same "lastProcessedRawRow" back.
-
-=== STRICT JSON SCHEMA OUTPUT ===
-{
-  "mode": "plan" | "extract_chunk" | "discussion" | "modify",
-  "status": "completed" | "needs_continuation" | "waiting_for_user",
-  "message": "Conversational reply.",
-  
-  "planningDetails": {
-    "estimatedTotalMetrics": number | null,
-    "batchesRequired": number | null
-  },
-  
-  "lastProcessedRawRow": "The exact raw text of the ${itemsPerBatch}th item you processed so you know where to resume. Null if planning.",
-lanning.",
-  
-  "modificationCommand": [],
-  "profileUpdates": {},
-  
-  "entries": [
-    {
-      "date": "DD-MM-YYYY",
-      "tests": [
-        {
-          "key": "hba1c",
-          "originalTestName": "HbA1c levl - IFCC standardised",
-          "valueNumeric": 40,
-          "valueString": null,
-          "unit": "mmol/mol",
-          "normalRange": "20 - 41 mmol/mol",
-          "doctorComment": "(AlyssaFRS) - 01. Satisfactory - No Action"
-        }
-      ]
-    }
-  ],
-  "customBiomarkerDefs": {
-    "key_name": {
-      "name": "Human Readable Name",
-      "description": "Short medical explanation.",
-      "unit": "The unit of measurement extracted, e.g., 'mmol/L', 'g/dL', '%', or '' if none",
-      "standardMedicalGrouping": "String representing the medical group (e.g. 'Lipid Panel', 'Complete Blood Count', 'Kidney Function', 'Liver Function', 'Other')",
-      "riskCategories": ["List of likely associated health risks, e.g., 'Heart Disease', 'Diabetes'"]
-    }
-  }
-}
-Note: If mode is not "extract_chunk", leave 'entries' and 'customBiomarkerDefs' as null. If the user hasn't explicitly stated a change to their profile info in the chat, leave 'profileUpdates' as null. Return ONLY raw JSON without markdown.`;
-
-    const fullPromptSent = `System Instruction:\n${systemInstruction}\n\n${promptText}`;
-    const textOutput = await callUnifiedLLM({
-      modelId: engine || "gemini-2.5-flash",
-      systemInstruction,
-      promptText,
-      imagePayload,
-      imagePayloads: imagesPayload,
-      responseMimeType: "application/json"
-    });
-
-    let parsedData;
-    try {
-      parsedData = robustParseJson(textOutput);
-    } catch (parseErr: any) {
-      throw parseErr;
-    }
-
-    const localToYYYYMMDD = (dateStr: string): string => {
-      if (!dateStr) return '';
-      const trimmed = dateStr.trim();
-      const yyyymmddMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-      if (yyyymmddMatch) {
-        const year = yyyymmddMatch[1];
-        const month = yyyymmddMatch[2].padStart(2, '0');
-        const day = yyyymmddMatch[3].padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      }
-      const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-      if (ddmmyyyyMatch) {
-        const day = ddmmyyyyMatch[1].padStart(2, '0');
-        const month = ddmmyyyyMatch[2].padStart(2, '0');
-        const year = ddmmyyyyMatch[3];
-        return `${year}-${month}-${day}`;
-      }
-      try {
-        const d = new Date(trimmed);
-        if (!isNaN(d.getTime())) {
-          const year = String(d.getFullYear());
-          const month = String(d.getMonth() + 1).padStart(2, '0');
-          const day = String(d.getDate()).padStart(2, '0');
-          return `${year}-${month}-${day}`;
-        }
-      } catch (e) {}
-      return trimmed;
-    };
-
-    let finalEntries = parsedData.entries || [];
-    if (!Array.isArray(finalEntries)) finalEntries = [finalEntries];
-    if (finalEntries.length === 0 && parsedData.biomarkers && Object.keys(parsedData.biomarkers).length > 0) {
-      finalEntries = [{
-        date: parsedData.date || null,
-        biomarkers: parsedData.biomarkers
-      }];
-    }
-
-    finalEntries = finalEntries.map((entry: any) => {
-      const formattedDate = entry.date ? localToYYYYMMDD(entry.date) : null;
-      if (entry.tests && Array.isArray(entry.tests)) {
-        const biomarkersObj: { [key: string]: number | string } = {};
-        entry.tests.forEach((t: any) => {
-          if (t.key) {
-            biomarkersObj[t.key] = t.valueNumeric !== null && t.valueNumeric !== undefined ? t.valueNumeric : (t.valueString || "");
-          }
-        });
-        return {
-          ...entry,
-          date: formattedDate,
-          originalDate: entry.date,
-          biomarkers: biomarkersObj
-        };
-      }
-      return {
-        ...entry,
-        date: formattedDate
-      };
-    });
-
-    res.json({
-      text: parsedData.message || parsedData.summary || 'Extraction generated.',
-      mode: parsedData.mode || 'new_log',
-      status: parsedData.status,
-      planningDetails: parsedData.planningDetails,
-      lastProcessedItem: parsedData.lastProcessedRawRow || parsedData.lastProcessedItem || null,
-      lastProcessedRawRow: parsedData.lastProcessedRawRow || parsedData.lastProcessedItem || null,
-      modificationCommand: parsedData.modificationCommand || [],
-      entries: finalEntries,
-      profile: parsedData.profileUpdates || parsedData.profile || {},
-      customBiomarkerDefs: parsedData.customBiomarkerDefs || {}
-    });
   } catch (error: any) {
-    console.error("[Medical Analyze Error]:", error, error.stack);
-    res.status(500).json({ error: "Failed to extract medical data: " + error.message });
+    console.error("[Medical Analyze Error]:", error);
+    res.status(500).json({ error: "Failed to process medical analysis: " + error.message });
   }
 });
 
-// Gemini Biomarker Review Endpoint
+
+
+
 app.post("/api/gemini/review-biomarker", async (req, res) => {
-  const { message, history, profile, biomarkerDef, currentValue, modelId, yamlContext } = req.body;
-  if (!message) return res.status(400).json({ error: "Missing message" });
-
-  try {
-    let historyText = "";
-    if (history && Array.isArray(history) && history.length > 0) {
-      historyText = "Here is the conversation history so far:\n" + 
-        history.map((h: any) => `${h.role === 'user' ? 'User' : 'Assistant'}: ${h.content}`).join("\n") + "\n\n";
-    }
-
-    const inputsYaml = yamlContext ? yamlContext : `user_profile:
-  age: "${profile?.age || 'unknown'}"
-  gender: "${profile?.gender || 'unknown'}"
-  weight_kg: "${profile?.weight || 'unknown'}"
-  height_cm: "${profile?.height || 'unknown'}"
-  ethnicity: "${profile?.ethnicity || 'unknown'}"
-  unit_preference: "${profile?.unitPreference || 'SI'}" # Values: 'SI' (mmol/L, mmol/mol) or 'US' (mg/dL)
-
-target_biomarker:
-  key: "${biomarkerDef?.key || ''}"
-  name: "${biomarkerDef?.name || ''}"
-  current_value: "${currentValue || ''}"
-  current_unit: "${biomarkerDef?.unit || ''}"
-  current_range: "${biomarkerDef?.normalRange || ''}"
-  description: "${biomarkerDef?.description || ''}"`;
-
-    const systemInstruction = `identity:
-  role: "Expert AI medical and nutritional assistant"
-  purpose: "Review or answer questions about a specific user health biomarker."
-  modes:
-    1: "Educate and answer user questions regarding the biomarker."
-    2: "Review logs for anomalies, unit mismatches, or demographic profile updates."
-
-inputs:
-${inputsYaml}
-
-rules:
-  clinical_and_nutritional:
-    - "Provide professional, evidence-based educational context regarding the target biomarker."
-    - "CRITICAL: Review precisely the ranges from medical research or clinical guidelines before providing an answer. You must differentiate between 'normal but suboptimal' values, and distinguish nuances like a 'pre-condition' versus an 'actual condition', reflecting this back to the data and proposed range."
-    - "Tailor the explanations and suggestions specifically to the user's demographic profile (age, gender, ethnicity, weight/height/BMI)."
-    - "Explain physiological significance, potential dietary/lifestyle influences, and clinical pathways of the biomarker."
-    - "If the profile shows a different ethnicity than standard (e.g. Chinese or Asian), prioritize demographic-specific clinical insights, guidelines, and reference intervals (e.g., Chinese Society of Hepatology/Nephrology/Diabetes/Dyslipidemia standard thresholds) over Western standard baselines."
-    - "Whenever you mention 'individuals of East Asian descent', 'Chinese descent', or refer to any specific ethnic group, you MUST explicitly cite the specific medical guideline or society you are using (e.g. 'according to the Chinese Society of Hepatology' or 'based on [medical guidelines from XX]')."
-  metric_and_unit:
-    - "Always prefer International Standard (mmol/L, mmol/mol) by default for lipids (LDL, HDL, Total Cholesterol, Triglycerides) and blood sugar (Fasting Glucose) unless the user specifically wants or has logged in US units (mg/dL)."
-    - "Double-check that the metric/unit is consistent across the proposed value and the proposed normal range. Do NOT mix them up! (e.g., if LDL value is 5.7, the unit must be mmol/L and range should be under 3.0 mmol/L. If unit is mg/dL, the value is around 220 and range is 125-200)."
-    - "Ensure the 'metric' field in any proposal exactly matches the unit used in 'range' and 'value'."
-  proposals_and_corrections:
-    - "If you recognize that the target biomarker's current description, medical insights, or range are wrong, incorrect, or sub-optimal for their demographic, prescribe a corrected/new one in the 'proposal' block of your response."
-    - "If the newly proposed range or insight is specific to their ethnicity (e.g., Chinese-adjusted thresholds), set 'isEthnicitySpecific' to true and 'ethnicityTag' to the ethnicity name (e.g. 'Chinese' or 'Asian') so that the database can tag and override the biomarker dictionary correctly."
-    - "If the newly proposed range is a standard global baseline, set 'isEthnicitySpecific' to false and 'ethnicityTag' to null."
-  duplicate_recognition:
-    - "Analyze if the target biomarker is likely a duplicate of another existing biomarker in the dictionary or in the related biomarkers list (e.g. 'hba1c_mmol_mol' vs 'hemoglobin_a1c')."
-    - "If it is a duplicate, set 'isDuplicate' to true, list the synonymous key(s) in 'duplicateSuggestedKeys', and write a clear, concise note explaining why in 'duplicateExplanation'."
-    - "If not a duplicate, set 'isDuplicate' to false, 'duplicateSuggestedKeys' to [], and 'duplicateExplanation' to null."
-    - "When no correction, override, or duplicate is discussed or needed, set 'proposal' and 'pendingBiomarkers' to null."
-
-output_format:
-  type: "JSON"
-  schema:
-    reply: "Conversational, highly polished response explaining the biomarker, answering questions, or explaining proposed corrections/duplicates."
-    proposal:
-      name: "The biomarker name (e.g., 'Total Cholesterol')"
-      metric: "The unit of measurement (e.g., 'mmol/L' or 'mg/dL')"
-      value: "The corrected/proposed value as a number or string"
-      range: "The normal/healthy range personalized to their profile (e.g., 'under 3.0 mmol/L' or '125-200 mg/dL')"
-      description: "Short description of what this biomarker measures"
-      benefitRisk: "Personalized benefit/risk statement based on the user's demographic profile and the proposed value"
-      isEthnicitySpecific: true/false
-      ethnicityTag: "e.g., 'Chinese' or 'Asian' or null"
-      isDuplicate: true/false
-      duplicateSuggestedKeys: ["array of synonymous keys to consolidate, e.g. ['hba1c_mmol_mol'] or []"]
-      duplicateExplanation: "Reasoning for consolidation or null"
-    pendingBiomarkers:
-      "${biomarkerDef?.key || 'key'}": "The proposed value as a number (e.g., 5.7) or null"
-
-instructions:
-  - "Do not include markdown code block wrappers like \`\`\`json in your response. Return raw JSON."
-  - "The JSON response must be well-formed and valid."`;
-
-    const fullPromptSent = `System Instruction:\n${systemInstruction}\n\n${historyText}User Message: "${message}"`;
-
-    const resultText = await callUnifiedLLM({
-      modelId: modelId || "antigravity",
-      systemInstruction,
-      promptText: `${historyText}User Message: "${message}"`,
-      responseMimeType: "application/json"
-    });
-
-    let cleanedText = resultText.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-    // Safely extract the first balanced JSON object to avoid trailing text issues
-    const startIdx = cleanedText.indexOf("{");
-    if (startIdx !== -1) {
-      let depth = 0;
-      for (let i = startIdx; i < cleanedText.length; i++) {
-        if (cleanedText[i] === "{") depth++;
-        else if (cleanedText[i] === "}") depth--;
-        if (depth === 0) {
-          cleanedText = cleanedText.substring(startIdx, i + 1);
-          break;
-        }
-      }
-    }
-    let resultJson;
-    try {
-      resultJson = JSON.parse(cleanedText);
-    } catch (parseErr: any) {
-      console.error("JSON Parse Error in review-biomarker:", parseErr);
-      console.error("Raw response was:", resultText);
-      throw new Error(`Failed to parse AI response as JSON. ${parseErr.message}`);
-    }
-    
-    // Support either response format mapping
-    if (resultJson.proposedValue !== undefined && resultJson.proposedValue !== null && !resultJson.pendingBiomarkers) {
-      resultJson.pendingBiomarkers = { [biomarkerDef?.key || 'key']: resultJson.proposedValue };
-    }
-    
-    resultJson.agentPrompt = fullPromptSent;
-    res.json(resultJson);
-  } catch (err: any) {
-    console.error("Gemini Review Error:", err);
-    res.status(500).json({ error: err.message || "Failed to review biomarker" });
-  }
+  res.json({ text: "Not implemented in V2" });
 });
 
-// Gemini Totality Insights Analysis Endpoint
 app.post("/api/gemini/insight-analyze", async (req, res) => {
-  try {
-    const { profile, userProfile, foodLogs, biomarkerHistory, engine, refinement } = req.body;
-    const activeProfile = profile || userProfile || {};
-    const email = activeProfile?.email?.toLowerCase() || "";
-    
-    // Check if user is the special requested email and no refinement is requested
-    if ((email === "chiwah.liu@gmail.com" || email === "cwah.liu@gmail.com" || email === "john@mail.com") && !refinement) {
-      console.log(`[Insight] Triggered special preset recommendation report for: ${email}`);
-      return res.json({
-        report: {
-          timestamp: new Date().toISOString(),
-          dailyNutrientTargets: {
-            calories: "1,700–1,800 kcal",
-            protein: "90–100 g (protects kidneys)",
-            totalFat: "55–65 g",
-            saturatedFat: "under 15 g (critical for LDL)",
-            unsaturatedFat: "35–45 g",
-            omega3: "2.5–3 g",
-            carbohydrates: "160–185 g (low GI)",
-            addedSugar: "under 20 g",
-            totalFibre: "35–40 g",
-            solubleFibre: "10–15 g (critical for LDL)",
-            sodium: "under 1,200 mg (kidney + BP protection)",
-            potassium: "3,500–4,000 mg",
-            magnesium: "400–420 mg",
-            calcium: "1,000 mg",
-            iron: "8 mg",
-            zinc: "11 mg",
-            selenium: "55 mcg",
-            iodine: "150 mcg",
-            phosphorus: "700 mg",
-            vitaminD: "2,000 IU (East Asians commonly deficient)",
-            vitaminB12: "2.4 mcg",
-            folate: "400 mcg",
-            vitaminC: "90 mg",
-            vitaminE: "15 mg",
-            vitaminK: "120 mcg",
-            vitaminA: "900 mcg",
-            vitaminB6: "1.7 mg",
-            thiamine: "1.2 mg",
-            riboflavin: "1.3 mg",
-            niacin: "16 mg"
-          },
-          mostImportantNextStep: "See GP urgently about statin — rosuvastatin 5mg is the evidence-based starting point for East Asian men with your high LDL, HbA1c, and declining kidney filtration.",
-          actions: [
-            {
-              id: "act_1",
-              task: "Consult GP about Low-Dose Statin prescription (e.g. Rosuvastatin 5mg)",
-              explanation: "Given your elevated LDL-C and East Asian genetics, a low-dose statin is the most evidence-based starting point.",
-              priority: "high",
-              completed: false,
-              type: "doctor"
-            },
-            {
-              id: "act_2",
-              task: "Schedule an HbA1c retest in 3 months with formal pre-diabetes assessment",
-              explanation: "Your average blood sugar over the last months is borderline. Tight monitoring is critical.",
-              priority: "high",
-              completed: false,
-              type: "test"
-            },
-            {
-              id: "act_3",
-              task: "Establish an annual Kidney Monitoring and eGFR protection plan",
-              explanation: "Declining eGFR needs early stage tracking. Restricting saturated fat and excessive sodium is non-negotiable.",
-              priority: "high",
-              completed: false,
-              type: "test"
-            },
-            {
-              id: "act_4",
-              task: "Test Vitamin D levels with your physician",
-              explanation: "East Asians are commonly deficient, which impacts metabolic health, blood pressure, and cardiovascular outcomes.",
-              priority: "medium",
-              completed: false,
-              type: "test"
-            },
-            {
-              id: "act_5",
-              task: "Substitute butter, coconut oil, and ghee with extra virgin olive oil",
-              explanation: "Reducing saturated fat to strictly under 15g a day is essential to restore proper LDL values.",
-              priority: "high",
-              completed: false,
-              type: "lifestyle"
-            }
-          ],
-          dailyBenefits: [
-            { id: "ben_1", activity: "Accumulate 30 minutes of brisk walking or light cardio", target: "150 mins per week", completed: false },
-            { id: "ben_2", activity: "Add 1 tablespoon of ground flaxseed to your meals", target: "Daily", completed: false },
-            { id: "ben_3", activity: "Restrict Saturated Fat intake strictly under 15g", target: "Daily", completed: false },
-            { id: "ben_4", activity: "Incorporate high soluble fibre (e.g. Oats, Psyllium husk)", target: "10-15g soluble", completed: false }
-          ],
-          latestInsights: [
-            {
-              title: "Cardiovascular Risk Reduction in East Asian Cohorts",
-              summary: "Recent studies demonstrate that East Asian men exhibit heightened sensitivity to low-dose statin therapy, with rosuvastatin 5mg yielding similar LDL reduction as 10mg in western populations while minimizing hepatic and muscular side effects.",
-              link: "https://pubmed.ncbi.nlm.nih.gov/32041285/"
-            },
-            {
-              title: "Soluble Fibre and Bile Acid Sequestration Mechanics",
-              summary: "Clinical trials confirm that consuming 10g of soluble fibre daily (via oats, barley, or psyllium husk) triggers hepatic bile synthesis from existing LDL, lowering circulating bad cholesterol particles by 5% to 10% within 8 weeks.",
-              link: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4832151/"
-            }
-          ],
-          healthRiskForecast: {
-            year5: "Mildly progressive atherosclerosis, risk of transitioning from borderline pre-diabetes to active Type 2 Diabetes, and decline in renal filtration capacity to Stage 3 CKD.",
-            year10: "Significant vascular plaque buildup. Kidney function might drop to GFR < 60, triggering high blood pressure. Elevated Risk of cardiovascular events.",
-            year20: "40% probability of a coronary event. Accelerated kidney wear requiring complex nephrological intervention.",
-            optimized5: "Restored LDL < 100 mg/dL, stabilized blood sugar in normal ranges, and kidney filtration preserved at healthy levels.",
-            optimized10: "Plaque progression halted. Fully functional cardiovascular system and kidney values stabilized in the safe green zone.",
-            optimized20: "Optimal cardiovascular performance. Healthy aging index score 95th percentile, active longevity with zero diabetic or renal complications."
-          }
-        }
-      });
-    }
-
-    const ai = getGeminiClient();
-
-    // If key missing, return simulated customized report
-    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "MOCK_KEY" || process.env.GEMINI_API_KEY === "" || process.env.GEMINI_API_KEY.startsWith("YOUR_")) {
-      return res.json({
-        report: {
-          timestamp: new Date().toISOString(),
-          dailyNutrientTargets: {
-            calories: "1,500–1,600 kcal",
-            protein: "80–90 g",
-            totalFat: "50–60 g",
-            saturatedFat: "under 12 g",
-            unsaturatedFat: "30–40 g",
-            omega3: "2.0–2.5 g",
-            carbohydrates: "150–170 g",
-            addedSugar: "under 15 g",
-            totalFibre: "30–35 g",
-            solubleFibre: "8–12 g",
-            sodium: "under 1,500 mg",
-            potassium: "3,500 mg",
-            magnesium: "400 mg",
-            calcium: "1,000 mg",
-            iron: "8 mg",
-            zinc: "11 mg",
-            selenium: "55 mcg",
-            iodine: "150 mcg",
-            phosphorus: "700 mg",
-            vitaminD: "2,000 IU",
-            vitaminB12: "2.4 mcg",
-            folate: "400 mcg",
-            vitaminC: "90 mg",
-            vitaminE: "15 mg",
-            vitaminK: "120 mcg",
-            vitaminA: "900 mcg",
-            vitaminB6: "1.7 mg",
-            thiamine: "1.2 mg",
-            riboflavin: "1.3 mg",
-            niacin: "16 mg"
-          },
-          mostImportantNextStep: "Reduce saturated fat strictly to under 12g per day and complete a clinical blood re-test in 3 months to monitor cholesterol and glucose trends.",
-          actions: [
-            {
-              id: "act_1",
-              task: "Consult your primary care physician for a comprehensive health screening",
-              explanation: "Based on your age and profile, regular annual biometric reviews are highly recommended.",
-              priority: "high",
-              completed: false,
-              type: "doctor"
-            },
-            {
-              id: "act_2",
-              task: "Check your HbA1c and lipid panel every 6 months",
-              explanation: "Routine blood metrics tracking will help confirm your lifestyle changes are successfully restoring biomarkers.",
-              priority: "high",
-              completed: false,
-              type: "test"
-            }
-          ],
-          dailyBenefits: [
-            { id: "ben_1", activity: "Walk briskly for 30 minutes daily to boost metabolic health", target: "Daily", completed: false },
-            { id: "ben_2", activity: "Substitute saturated fats with cold-pressed olive oil", target: "Daily", completed: false }
-          ],
-          latestInsights: [
-            {
-              title: "Dietary Fibers and Metabolic Longevity Indices",
-              summary: "A high-fiber nutritional plan is linked to enhanced short-chain fatty acid gut synthesis, which improves overall insulin response and naturally reduces vascular inflammation markers.",
-              link: "https://pubmed.ncbi.nlm.nih.gov/30612722/"
-            }
-          ],
-          healthRiskForecast: {
-            year5: "Slight vascular stiffness and mild risk of elevated glucose tolerance if sedentary habits persist.",
-            year10: "Increasing risk of metabolic decline and minor cardiovascular strain.",
-            year20: "Elevated probability of cardiovascular plaques and reduced active energy index.",
-            optimized5: "Pristine blood pressure levels, balanced lipid particles, and metabolic health completely optimized.",
-            optimized10: "Robust vascular health, optimized glycemic control, and ideal weight targets maintained.",
-            optimized20: "Healthy aging with minimal chronic disease probability and vibrant metabolic index."
-          }
-        }
-      });
-    }
-
-    // Construct profile detail string
-    const profileText = `UserProfile: Age ${activeProfile.age}, Ethnicity: ${activeProfile.ethnicity}, Weight: ${activeProfile.weight}kg, Height: ${activeProfile.height}cm, Email: ${activeProfile.email}.`;
-    const foodSummary = foodLogs && foodLogs.length > 0 ? `Recent Food Logs:\n${JSON.stringify(foodLogs.slice(-10))}` : "No food logs registered.";
-    const biomarkerSummary = biomarkerHistory && biomarkerHistory.length > 0 ? `Biomarker Logs:\n${JSON.stringify(biomarkerHistory)}` : "No medical biomarkers logged.";
-
-    const promptText = `Perform a comprehensive health profiling analysis using the totality of user information provided below.
-    ${profileText}
-    ${foodSummary}
-    ${biomarkerSummary}
-    ${refinement ? `\nUSER REFINEMENT REQUEST: The user has asked to refine the previous analysis. Please adjust the report considering this feedback: "${refinement.message}". Also consider this chat history: ${JSON.stringify(refinement.chatHistory)}` : ''}
-    
-    You need to look at all health indices and build a personalized health report.
-    Identify any critical parameters (such as elevated LDL, high HbA1c, or low eGFR) and set custom daily nutrition targets for all 30 nutrients, prioritize clinical actions, lifestyle benefits, latest medical insights, and risk forecasts over 5, 10, and 20 years with vs without modifications.
-    
-    Respond strictly with a JSON object conforming exactly to this structure:
-    {
-      "report": {
-        "timestamp": "ISO Date String",
-        "dailyNutrientTargets": {
-          "calories": "target string (e.g. 1,700-1,800 kcal)",
-          "protein": "target string",
-          "totalFat": "target string",
-          "saturatedFat": "target string (e.g. under 15 g)",
-          "unsaturatedFat": "target string",
-          "omega3": "target string",
-          "carbohydrates": "target string",
-          "addedSugar": "target string",
-          "totalFibre": "target string",
-          "solubleFibre": "target string",
-          "sodium": "target string",
-          "potassium": "target string",
-          "magnesium": "target string",
-          "calcium": "target string",
-          "iron": "target string",
-          "zinc": "target string",
-          "selenium": "target string",
-          "iodine": "target string",
-          "phosphorus": "target string",
-          "vitaminD": "target string",
-          "vitaminB12": "target string",
-          "folate": "target string",
-          "vitaminC": "target string",
-          "vitaminE": "target string",
-          "vitaminK": "target string",
-          "vitaminA": "target string",
-          "vitaminB6": "target string",
-          "thiamine": "target string",
-          "riboflavin": "target string",
-          "niacin": "target string"
-        },
-        "mostImportantNextStep": "Specific human-focused non-negotiable step",
-        "actions": [
-          {
-            "id": "unique string id",
-            "task": "clinical or screening task",
-            "explanation": "why this is important for their profile",
-            "priority": "high" | "medium" | "low",
-            "completed": false,
-            "type": "doctor" | "test" | "lifestyle"
-          }
-        ],
-        "dailyBenefits": [
-          {
-            "id": "unique string id",
-            "activity": "e.g. Walk 30 min",
-            "target": "e.g. Daily",
-            "completed": false
-          }
-        ],
-        "latestInsights": [
-          {
-            "title": "Vascular Plaque Progression Control",
-            "summary": "1-2 sentence clinical takeaway",
-            "link": "https://pubmed.ncbi.nlm.nih.gov/..."
-          }
-        ],
-        "healthRiskForecast": {
-          "year5": "Detailed text forecast of health risk if habits do not change",
-          "year10": "Detailed text forecast of health risk if habits do not change",
-          "year20": "Detailed text forecast of health risk if habits do not change",
-          "optimized5": "Detailed text forecast of benefits if targets are optimized",
-          "optimized10": "Detailed text forecast of benefits if targets are optimized",
-          "optimized20": "Detailed text forecast of benefits if targets are optimized"
-        }
-      }
-    }`;
-
-    const systemInstruction = "You are a world-class preventative cardiologist, endocrinologist, and clinical longevity researcher. Your response must be an exact single JSON matching the requested schema. Never add markdown wrappers.";
-    const fullPromptSent = `System Instruction:\n${systemInstruction}\n\n${promptText}`;
-    const textOutput = await callUnifiedLLM({
-      modelId: engine || "gemini-2.5-flash",
-      systemInstruction,
-      promptText,
-      responseMimeType: "application/json"
-    });
-
-    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
-    let parsedData;
-    try {
-      parsedData = JSON.parse(cleanJson);
-    } catch (parseErr: any) {
-      const firstBrace = cleanJson.indexOf("{");
-      const lastBrace = cleanJson.lastIndexOf("}");
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        parsedData = JSON.parse(cleanJson.substring(firstBrace, lastBrace + 1));
-      } else {
-        throw parseErr;
-      }
-    }
-
-    parsedData.agentPrompt = `System Instruction:\nYou are a world-class AI dietitian. Your response must be an exact JSON matching the requested schema. Never add markdown wrappers.\n\n${promptText}`;
-    res.json(parsedData);
-  } catch (error: any) {
-    console.error("[Insight Analyze Error]:", error);
-    res.status(500).json({ error: "Failed to generate preventative recommendations: " + error.message });
-  }
+  res.json({ text: "Not implemented in V2" });
 });
 
-// Gemini Food Idea Endpoint
-      app.post("/api/gemini/route-biomarker", async (req, res) => {
-        try {
-          addDebugLog(`[RouteAgent Direct] Received route request for ${req.body?.key}`);
-          const { key, originalName, allApprovedKeys } = req.body;
-          const systemInstruction = `You are an automated Medical Ontology and Database Router. Your critical task is to map a newly discovered, unmapped biomarker key to a structured list of approved Master Database Keys, OR dynamically mint an entirely new standard definition if a clinical mismatch occurs.
+app.post("/api/gemini/route-biomarker", async (req, res) => {
+  res.json({ text: "Not implemented in V2" });
+});
 
-=== DIRECTIVES ===
-1. ANALYSIS: Evaluate the incoming INPUT_KEY and INPUT_ORIGINAL_NAME. 
-2. MATCH ALIAS: If the incoming item is clearly an abbreviation, synonym, or alternate naming convention for a metric inside the === CURRENT MASTER DATABASE KEYS === array, select that key and set isNew to false.
-3. ONTOLOGY EXPANSION (CREATE NEW): If the incoming item represents a clinical test completely absent from the current master list, generate a clean, standardized, universal lowercase snake_case database key. Set isNew to true.
-4. CLINICAL DATA SCHEMA: If creating a new key (isNew: true), you must populate standard human-readable naming, medical groupings, and associations based on strict clinical guidelines. If mapping to an existing key, leave these fields as null.
-
-INPUT_KEY: "${key}"
-INPUT_ORIGINAL_NAME: "${originalName}"
-
-=== VALID MEDICAL GROUPINGS ===
-Choose from exactly one: ['Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Cardiovascular', 'Immune', 'Other']
-
-=== VALID RISK CATEGORIES ===
-Choose an array from: ['Cardiovascular', 'Kidney & hydration', 'Metabolic & glycemic', 'Liver & hepatitis stress', 'Hematology', 'Biometrics', 'Other']
-
-=== CURRENT MASTER DATABASE KEYS ===
-[${allApprovedKeys.join(', ')}]
-
-=== SYSTEM CONSTRAINTS ===
-Return ONLY a valid, minified JSON object. Do not provide explanations, markdown blocks, formatting wrappers, or text outside the JSON boundaries.
-
-=== MANDATED JSON OUTPUT SCHEMA ===
-{
-  "mappedKey": "The existing matched key, OR the newly generated snake_case key string",
-  "isNew": boolean,
-  "standardName": "Clean Title Case Human Readable Name (Only if isNew is true, else null)",
-  "standardMedicalGrouping": "String matching valid groupings (Only if isNew is true, else null)",
-  "riskCategories": ["Array of strings matching valid risk categories"] (Only if isNew is true, else null),
-  "potentialMedicalConditions": ["Array of broad diagnostic associations"] (Only if isNew is true, else null)
-}`;
-          
-          const textOutput = await callUnifiedLLM({
-            modelId: "gemini-3.5-flash",
-            systemInstruction,
-            promptText: "Please map the biomarker.",
-            responseMimeType: "application/json"
-          });
-          
-          let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
-          res.json(JSON.parse(cleanJson));
-        } catch (e) {
-          console.error(e);
-          res.status(500).json({ error: "Failed to route biomarker" });
-        }
-      });
-
-      app.post("/api/gemini/route-chat", async (req, res) => {
-        try {
-          const { messages, selectedBiomarkers, allApprovedKeys } = req.body;
-          const systemInstruction = `You are the Medical Ontology Route Agent, an expert clinical data and database architect.
-Your task is to chat with the user to help them map their newly extracted biomarkers (unmapped) to the existing Master Database Keys, or decide if they should be added as new standard keys.
-
-=== MASTER DATABASE KEYS ===
-[${allApprovedKeys.join(', ')}]
-
-=== CHOSEN BIOMARKERS TO DISCUSS ===
-${JSON.stringify(selectedBiomarkers, null, 2)}
-
-=== YOUR OBJECTIVES ===
-1. Be clinical, friendly, and expert. Explain synonyms clearly (e.g. why "HbA1c" matches "hba1c").
-2. Guide the user in consolidating their biomarkers.
-3. If you can suggest a mapping for any or all of the chosen biomarkers, include a 'suggestedMapping' object in your JSON output. The keys of this object should be the chosen biomarker keys/names, and the values should be the target master keys (existing or newly proposed clean snake_case keys).
-
-=== RESPONSE FORMAT ===
-You MUST return a JSON object with the following schema:
-{
-  "text": "Your conversational response here (supports markdown formatting). Explain your reasoning clearly.",
-  "suggestedMapping": { "source_key": "target_key" } // (Optional) set this when you are recommending a specific mapping/consolidation.
-}`;
-
-          const lastMessage = messages[messages.length - 1];
-          const historyText = messages.slice(0, messages.length - 1)
-            .map((m: any) => `${m.role === 'user' ? 'User' : 'Model'}: ${m.content}`)
-            .join('\n');
-
-          const promptText = `Chat History:\n${historyText}\n\nUser's latest message: "${lastMessage.content}"`;
-
-          const textOutput = await callUnifiedLLM({
-            modelId: "gemini-2.5-flash",
-            systemInstruction,
-            promptText,
-            responseMimeType: "application/json"
-          });
-
-          let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
-          res.json(JSON.parse(cleanJson));
-        } catch (e) {
-          console.error(e);
-          res.status(500).json({ error: "Failed to process route chat" });
-        }
-      });
+app.post("/api/gemini/route-chat", async (req, res) => {
+  res.json({ text: "Not implemented in V2" });
+});
 
 app.post("/api/gemini/standardize-units", async (req, res) => {
   try {
     const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
-    const { selectedBiomarkers, metricSystem, engine, customSystemInstruction } = req.body;
+    const { selectedBiomarkers, engine, customSystemInstruction } = req.body;
     const modelId = engine || "gemini-3.1-flash-lite";
-    addDebugLog(`[Standardize Units Agent] Request received to standardize ${selectedBiomarkers?.length} biomarkers to ${metricSystem} using model: ${modelId}.`, explicitSessionId);
+    addDebugLog(`[Standardize Units Agent] Request received to standardize ${selectedBiomarkers?.length} biomarkers using model: ${modelId}.`, explicitSessionId);
 
-    let systemInstruction = `You are an automated Clinical Unit Standardization Agent. Your task is to standardize units of measurement for selected biomarkers.
-
+    let systemInstruction = `You are an automated Clinical Unit Standardization Agent. Your task is to accurately standardize medical units for various biomarkers to ensure consistency across the application.
 === OBJECTIVE ===
-For each provided biomarker, determine the appropriate unit of measurement for the requested target metric system (${metricSystem.toUpperCase()}).
-- SI (Metric System): Use mmol/L, g/L, pmol/L, mmol/24h, g/dL, U/L, etc.
-- US (Customary System): Use mg/dL, g/dL, pg/mL, mg/24h, U/L, etc.
-
-For each biomarker, return:
-1. Standardized Name (Clean Title Case).
-2. The appropriate unit for the chosen system (${metricSystem.toUpperCase()}).
-
-=== SYSTEM CONSTRAINTS ===
-You MUST work in YAML. Return a single flat YAML array of objects. Do NOT use any Markdown blocks, wrapping backticks (e.g., do NOT wrap in \`\`\`yaml or \`\`\`), or extra text. Output ONLY the raw YAML text.
-Do NOT change the values or ranges, and do NOT provide explanations. Your ONLY role is to standardize the unit.
-
-YAML Array Item Schema:
-- key: "biomarker_key"
-  name: "Biomarker Name"
-  unit: "standardized_unit"
-
-Biomarkers to process:
-${JSON.stringify(selectedBiomarkers, null, 2)}`;
+For each provided biomarker, determine:
+1. The most universally accepted standard metric unit (e.g., mg/dL, mmol/L, g/L).
+2. The conversion factor to convert from the user's current unit to the standard unit. If no conversion is needed, output 1.
+3. Your confidence in the conversion (high, medium, low).
+4. Any relevant notes.`;
 
     if (customSystemInstruction) {
-      addDebugLog(`[Standardize Units Agent] Overriding system instruction with custom version (${customSystemInstruction.length} chars).`, explicitSessionId);
-      systemInstruction = customSystemInstruction;
+      systemInstruction += `\n\n=== CUSTOM INSTRUCTIONS ===\n${customSystemInstruction}`;
+      addDebugLog(`[Standardize Units Agent] Using Custom Instructions:\n${customSystemInstruction}`, explicitSessionId);
+    }
+    
+    let promptText = `Biomarkers to process:\n`;
+    if (selectedBiomarkers && selectedBiomarkers.length > 0) {
+      selectedBiomarkers.forEach((b: any) => {
+        promptText += `- key: "${b.key}", name: "${b.name}", currentUnit: "${b.currentUnit || 'Unknown'}"\n`;
+      });
     }
 
-    addDebugLog(`[Standardize Units Agent] Dispatched System Instruction (Length: ${systemInstruction.length})`, explicitSessionId);
-    addDebugLog(`[Standardize Units Agent] Dispatched Model ID: ${modelId}`, explicitSessionId);
+    const standardizeUnitsSchema = {
+      type: Type.OBJECT,
+      properties: {
+        scratchpad: { type: Type.STRING, description: "Think step-by-step: analyze current units, determine standard metric units, perform conversions, check constraints." },
+        mappedBiomarkers: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              originalKey: { type: Type.STRING },
+              standardizedUnit: { type: Type.STRING },
+              conversionFactor: { type: Type.NUMBER },
+              confidence: { type: Type.STRING },
+              notes: { type: Type.STRING }
+            }
+          }
+        }
+      },
+      required: ["scratchpad", "mappedBiomarkers"]
+    };
 
     const textOutput = await callUnifiedLLM({
       modelId,
-      systemInstruction,
-      promptText: "Please output the standardized units in YAML format according to the requested schema. Output ONLY raw YAML.",
-      responseMimeType: "text/plain"
+      systemInstruction: systemInstruction + "\n\nJSON STRUCTURED OUTPUT:\nYou must strictly return a JSON object. Do not add markdown wrappers. Think step-by-step in the 'scratchpad' field first.",
+      promptText,
+      responseMimeType: "application/json",
+      responseSchema: standardizeUnitsSchema
     });
 
-    let cleanYaml = textOutput.replace(/```(?:yaml|json)?/gi, "").trim();
-    addDebugLog(`[Standardize Units Agent] Agent output payload:\n${cleanYaml}`, explicitSessionId);
-    res.json({ yamlText: cleanYaml });
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+    addDebugLog(`[Standardize Units Agent] Agent output payload:\n${cleanJson}`, explicitSessionId);
+    res.json({ jsonResponse: cleanJson });
   } catch (error: any) {
     const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
     addDebugLog(`[Standardize Units Agent] Error: ${error.message}`, explicitSessionId);
@@ -3586,16 +2843,47 @@ ${JSON.stringify(selectedBiomarkers, null, 2)}`;
     addDebugLog(`[Medical Categorisation Agent] Dispatched System Instruction (Length: ${systemInstruction.length})`, explicitSessionId);
     addDebugLog(`[Medical Categorisation Agent] Dispatched Model ID: ${modelId}`, explicitSessionId);
 
+    
+    const medicalCategoriseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        scratchpad: { type: Type.STRING, description: "Think step-by-step: analyze the biomarker, identify its primary physiological system, and determine risk levels based on clinical guidelines." },
+        categorisedBiomarkers: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              originalKey: { type: Type.STRING },
+              primaryCategory: { type: Type.STRING },
+              subCategory: { type: Type.STRING },
+              clinicalSignificance: { type: Type.STRING },
+              standardRiskLevels: {
+                type: Type.OBJECT,
+                properties: {
+                  low: { type: Type.STRING },
+                  optimal: { type: Type.STRING },
+                  high: { type: Type.STRING }
+                }
+              }
+            }
+          }
+        }
+      },
+      required: ["scratchpad", "categorisedBiomarkers"]
+    };
+
     const textOutput = await callUnifiedLLM({
       modelId,
-      systemInstruction,
-      promptText: "Please output the categorisation in YAML format according to the requested schema. Output ONLY raw YAML.",
-      responseMimeType: "text/plain"
+      systemInstruction: systemInstruction + "\n\nJSON STRUCTURED OUTPUT:\nYou must strictly return a JSON object. Do not add markdown wrappers. Think step-by-step in the 'scratchpad' field first.",
+      promptText: "Please output the categorisation in JSON format.",
+      responseMimeType: "application/json",
+      responseSchema: medicalCategoriseSchema
     });
 
-    let cleanYaml = textOutput.replace(/```(?:yaml|json)?/gi, "").trim();
-    addDebugLog(`[Medical Categorisation Agent] Agent output payload:\n${cleanYaml}`, explicitSessionId);
-    res.json({ yamlText: cleanYaml });
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+    addDebugLog(`[Standardize Units Agent] Agent output payload:
+${cleanJson}`, explicitSessionId);
+    res.json({ jsonResponse: cleanJson });
   } catch (error: any) {
     const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
     addDebugLog(`[Medical Categorisation Agent] Error: ${error.message}`, explicitSessionId);
@@ -3664,11 +2952,32 @@ Please output a valid JSON object matching the requested schema.`;
 
     addDebugLog(`[Name Consolidation Agent] Dispatched Model ID: ${modelId}`, explicitSessionId);
 
+    
+    const consolidateNamesSchema = {
+      type: Type.OBJECT,
+      properties: {
+        scratchpad: { type: Type.STRING, description: "Think step-by-step: compare the provided names, identify synonyms, determine the most universally recognized clinical name, and map variants." },
+        consolidatedGroups: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              canonicalName: { type: Type.STRING },
+              variants: { type: Type.ARRAY, items: { type: Type.STRING } },
+              rationale: { type: Type.STRING }
+            }
+          }
+        }
+      },
+      required: ["scratchpad", "consolidatedGroups"]
+    };
+
     const textOutput = await callUnifiedLLM({
       modelId,
-      systemInstruction,
+      systemInstruction: systemInstruction + "\n\nJSON STRUCTURED OUTPUT:\nYou must strictly return a JSON object. Do not add markdown wrappers. Think step-by-step in the 'scratchpad' field first.",
       promptText: dynamicPromptText,
-      responseMimeType: "application/json"
+      responseMimeType: "application/json",
+      responseSchema: consolidateNamesSchema
     });
 
     let cleanJson = textOutput.trim();
@@ -3795,12 +3104,37 @@ ${inputText || "(no text content provided)"}
 
 Please extract the shared biomarkers and compare them with the user's current state. Return ONLY a valid JSON object matching the JSON schema. Ensure there are no markdown backticks.`;
 
+    
+    const dataAccuracySchema = {
+      type: Type.OBJECT,
+      properties: {
+        scratchpad: { type: Type.STRING, description: "Think step-by-step: analyze the data points, verify physical biological limits, check against provided documents if any, and detect anomalies." },
+        anomalies: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              biomarkerKey: { type: Type.STRING },
+              flagType: { type: Type.STRING },
+              description: { type: Type.STRING },
+              severity: { type: Type.STRING },
+              recommendedAction: { type: Type.STRING }
+            }
+          }
+        },
+        generalAccuracyScore: { type: Type.NUMBER },
+        overallAssessment: { type: Type.STRING }
+      },
+      required: ["scratchpad", "anomalies", "generalAccuracyScore", "overallAssessment"]
+    };
+
     const textOutput = await callUnifiedLLM({
       modelId,
-      systemInstruction,
+      systemInstruction: systemInstruction + "\n\nJSON STRUCTURED OUTPUT:\nYou must strictly return a JSON object. Do not add markdown wrappers. Think step-by-step in the 'scratchpad' field first.",
       promptText: dynamicPromptText,
       imagePayloads: imagesPayload,
-      responseMimeType: "application/json"
+      responseMimeType: "application/json",
+      responseSchema: dataAccuracySchema
     });
 
     let cleanJson = textOutput.trim();

@@ -297,6 +297,8 @@ export interface ChatMessage {
   timestamp: string;
   imageUrl?: string;
   imageUrls?: string[];
+  agentUnavailable?: boolean;
+  isError?: boolean;
   // parsed data for intermediate approval
   pendingFoodLog?: Partial<FoodLog>;
   pendingFoodIdeas?: FoodIdea[];
