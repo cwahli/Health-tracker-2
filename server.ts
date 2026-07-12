@@ -250,13 +250,13 @@ message: "A highly personalized conversational response detailing the clinical r
 modificationCommand: null or list of:
   - action: "update_weight" | "remove_item" | "add_item"
     itemName: "Literal name of the item from the active state to change"
-    newWeightGrams: number
+    newWeightGrams: "a number written as a string, e.g. \"120\""
     targetDbId: "Optional exact database ID (fdcId or barcode) from the itemsBreakdown list"
 foodData: null or:
   date: "YYYY-MM-DD (Dynamically set based on provided current time context)"
   name: "Literal food name"
   composition: "Brief operational summary of food ingredients"
-  weightGrams: number
+  weightGrams: "a number written as a string, e.g. \"120\""
   quantity: "Visual descriptive serving size (e.g., 1 medium, 2 skewers)"
   benefits: "Targeted clinical benefits addressing the patient's specific biomarkers"
   risks: "Explicit clinical risk warnings mapped to the patient's injected biomarker rules, plus universal Trans Fat warnings if applicable"
@@ -264,27 +264,27 @@ foodData: null or:
   recommendation: "Short, contextual tag (e.g., 'Best today', 'Heart-healthy', 'Caution: High Sodium', 'Perfect for target')"
   itemsBreakdown:
     - canonicalDbName: "Standardized target food name for local DB query execution"
-      weightGrams: number
+      weightGrams: "a number written as a string, e.g. \"120\""
       dbSource: "usda" | "off" | "estimated" | "label"
       dbId: "the fdcId or barcode used as the source for this item's numbers, or null if estimated"
       labelNutrientsPerServing: null or:
-        servingSizeGrams: number
-        calories: number
-        protein: number
-        totalFat: number
-        saturatedFat: number
-        transFat: number
-        carbohydrates: number
-        addedSugar: number
-        sodium: number
-        potassium: number
-        totalFibre: number
-        solubleFibre: number
+        servingSizeGrams: "a number written as a string, e.g. \"120\""
+        calories: "a number written as a string, e.g. \"120\""
+        protein: "a number written as a string, e.g. \"120\""
+        totalFat: "a number written as a string, e.g. \"120\""
+        saturatedFat: "a number written as a string, e.g. \"120\""
+        transFat: "a number written as a string, e.g. \"120\""
+        carbohydrates: "a number written as a string, e.g. \"120\""
+        addedSugar: "a number written as a string, e.g. \"120\""
+        sodium: "a number written as a string, e.g. \"120\""
+        potassium: "a number written as a string, e.g. \"120\""
+        totalFibre: "a number written as a string, e.g. \"120\""
+        solubleFibre: "a number written as a string, e.g. \"120\""
 comparison: null or:
   keyNutrientConcern: "The specific nutrient string causing primary clinical concern for this profile session"
   foods:
     - name: "Food option item name"
-      weightGrams: number
+      weightGrams: "a number written as a string, e.g. \"120\""
       suitability: "Short, contextual tag (e.g., 'Safest option', 'Moderate risk', 'Avoid')"
       pros: "Targeted biomarker benefits"
       cons: "Targeted biomarker risks"
@@ -1240,7 +1240,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
             if (item) {
               const oldWeight = Number(item.weightGrams) || 1;
               const R = mockCommand.newWeightGrams / oldWeight;
-              item.weightGrams = mockCommand.newWeightGrams;
+              item.weightGrams = Number(mockCommand.newWeightGrams);
               item.calories = Number((item.calories * R).toFixed(1));
               item.saturatedFat = Number((item.saturatedFat * R).toFixed(2));
               item.sodium = Number((item.sodium * R).toFixed(1));
@@ -1577,10 +1577,6 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
     const foodAnalyzeSchema = {
       type: Type.OBJECT,
       properties: {
-        scratchpad: {
-          type: Type.STRING,
-          description: "Think step-by-step here first. Identify the food, read the label numbers, and calculate the clinical risks before filling out the fields below."
-        },
         mode: { type: Type.STRING, description: "String indicating active mode: new_log, discussion, modify, or evaluation" },
         message: { type: Type.STRING, description: "A highly personalized conversational response detailing the clinical rationale, biomarker alignment, or modification confirmation." },
         modificationCommand: {
@@ -1590,7 +1586,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
             properties: {
               action: { type: Type.STRING, description: "'update_weight' | 'remove_item' | 'add_item'" },
               itemName: { type: Type.STRING, description: "Literal name of the item from the active state to change" },
-              newWeightGrams: { type: Type.NUMBER },
+              newWeightGrams: { type: Type.STRING, description: "The new weight in grams as a plain number string, e.g., '120'." },
               targetDbId: { type: Type.STRING, description: "Optional exact database ID (fdcId or barcode)", nullable: true }
             }
           },
@@ -1602,7 +1598,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
             date: { type: Type.STRING, description: "YYYY-MM-DD" },
             name: { type: Type.STRING },
             composition: { type: Type.STRING },
-            weightGrams: { type: Type.NUMBER },
+            weightGrams: { type: Type.STRING, description: "The total portion weight in grams as a plain number string, e.g., '150'." },
             quantity: { type: Type.STRING },
             benefits: { type: Type.STRING },
             risks: { type: Type.STRING },
@@ -1614,24 +1610,24 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
                 type: Type.OBJECT,
                 properties: {
                   canonicalDbName: { type: Type.STRING },
-                  weightGrams: { type: Type.NUMBER },
+                  weightGrams: { type: Type.STRING, description: "The specific weight of this ingredient in grams as a plain number string, e.g., '120'." },
                   dbSource: { type: Type.STRING, description: "'usda' | 'off' | 'estimated' | 'label'" },
                   dbId: { type: Type.STRING, nullable: true },
                   labelNutrientsPerServing: {
                     type: Type.OBJECT,
                     properties: {
-                      servingSizeGrams: { type: Type.NUMBER },
-                      calories: { type: Type.NUMBER },
-                      protein: { type: Type.NUMBER },
-                      totalFat: { type: Type.NUMBER },
-                      saturatedFat: { type: Type.NUMBER },
-                      transFat: { type: Type.NUMBER },
-                      carbohydrates: { type: Type.NUMBER },
-                      addedSugar: { type: Type.NUMBER },
-                      sodium: { type: Type.NUMBER },
-                      potassium: { type: Type.NUMBER },
-                      totalFibre: { type: Type.NUMBER },
-                      solubleFibre: { type: Type.NUMBER }
+                      servingSizeGrams: { type: Type.STRING, description: "Serving size in grams as a plain number string, e.g., '100'." },
+                      calories: { type: Type.STRING, description: "Calories per serving as a plain number string, e.g., '250'." },
+                      protein: { type: Type.STRING, description: "Protein in grams as a plain number string, e.g., '15'." },
+                      totalFat: { type: Type.STRING, description: "Total fat in grams as a plain number string, e.g., '8'." },
+                      saturatedFat: { type: Type.STRING, description: "Saturated fat in grams as a plain number string, e.g., '3'." },
+                      transFat: { type: Type.STRING, description: "Trans fat in grams as a plain number string, e.g., '0'." },
+                      carbohydrates: { type: Type.STRING, description: "Carbohydrates in grams as a plain number string, e.g., '30'." },
+                      addedSugar: { type: Type.STRING, description: "Added sugar in grams as a plain number string, e.g., '5'." },
+                      sodium: { type: Type.STRING, description: "Sodium in milligrams as a plain number string, e.g., '240'." },
+                      potassium: { type: Type.STRING, description: "Potassium in milligrams as a plain number string, e.g., '350'." },
+                      totalFibre: { type: Type.STRING, description: "Total fibre in grams as a plain number string, e.g., '4'." },
+                      solubleFibre: { type: Type.STRING, description: "Soluble fibre in grams as a plain number string, e.g., '1'." }
                     },
                     nullable: true
                   }
@@ -1651,7 +1647,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
                 type: Type.OBJECT,
                 properties: {
                   name: { type: Type.STRING },
-                  weightGrams: { type: Type.NUMBER },
+                  weightGrams: { type: Type.STRING, description: "Weight of compared option in grams as a plain number string, e.g., '120'." },
                   suitability: { type: Type.STRING },
                   pros: { type: Type.STRING },
                   cons: { type: Type.STRING }
@@ -1680,7 +1676,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           nullable: true
         }
       },
-      required: ["scratchpad", "mode", "message"]
+      required: ["mode", "message"]
     };
 
     const finalSystemInstruction = customSystemInstruction || systemInstruction;
@@ -1739,10 +1735,18 @@ Current User Input: "${message}"`;
     // CASE D: evaluation mode
     if (mode === "evaluation") {
       addDebugLog(`[Mode Routing] EVALUATION mode triggered.`);
+      const comparisonData = rawParsed.comparison || null;
+      if (comparisonData && comparisonData.foods && Array.isArray(comparisonData.foods)) {
+        comparisonData.foods.forEach((food: any) => {
+          if (food.weightGrams !== undefined) {
+            food.weightGrams = Number(food.weightGrams) || 0;
+          }
+        });
+      }
       return res.json({
         mode: "evaluation",
         text: rawParsed.message || "Here is the comparison between the options.",
-        comparison: rawParsed.comparison || null,
+        comparison: comparisonData,
         agentPrompt: fullPromptSent
       });
     }
