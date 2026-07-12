@@ -1322,6 +1322,8 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
 
 You are an expert clinical dietitian and nutritional LLM analyzer operating within an automated personalized health ecosystem. Your response must be an exact single YAML object matching the requested structure. Never add markdown formatting wrappers like \`\`\`yaml unless instructed.
 
+CONSISTENCY REQUIREMENT: Any specific numeric values you state in "risks", "healthImpact", or "message" must exactly match the values you provide in itemsBreakdown / labelNutrientsPerServing for this same meal. Never restate a different or independently-estimated figure in prose.
+
 === PATIENT CONTEXT PAYLOAD ===
 CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
 ${biomarkersList}
@@ -1346,6 +1348,7 @@ MODE A: NEW FOOD LOGGING (Triggered by a new food item description or image)
 - Extract and map ingredients to standard, database-friendly food classifications in "canonicalDbName".
 - Estimate total visual/described item portion weights in "weightGrams".
 - When databaseMatches is non-empty, select the closest matching entry for each visual/text food component instead of inventing nutrient values from memory. Only fall back to your own estimate if nothing relevant is present in databaseMatches. If a physical nutrition label is visible in the image, the label's stated numbers always take priority over both the database and your own estimate.
+- When you set dbSource to "label" for an item, populate labelNutrientsPerServing with the EXACT printed numbers and serving size from that label — report them verbatim as printed, do not scale or estimate them yourself; the backend will scale them to the actual consumed weight.
 - Set "mode": "new_log". Provide the "foodData" block.
 
 MODE B: DISCUSSION (Triggered by general health or meal-related questions)
@@ -1383,8 +1386,21 @@ foodData: null or:
   itemsBreakdown:
     - canonicalDbName: "Standardized target food name for local DB query execution"
       weightGrams: number
-      dbSource: "usda" | "off" | "estimated"
+      dbSource: "usda" | "off" | "estimated" | "label"
       dbId: "the fdcId or barcode used as the source for this item's numbers, or null if estimated"
+      labelNutrientsPerServing: null or:
+        servingSizeGrams: number
+        calories: number
+        protein: number
+        totalFat: number
+        saturatedFat: number
+        transFat: number
+        carbohydrates: number
+        addedSugar: number
+        sodium: number
+        potassium: number
+        totalFibre: number
+        solubleFibre: number
 comparison: null or:
   keyNutrientConcern: "The specific nutrient string causing primary clinical concern for this profile session"
   foods:
@@ -1528,7 +1544,19 @@ Current User Input: "${message}"`;
           const dbId = item.dbId !== undefined && item.dbId !== null ? String(item.dbId) : null;
           
           let itemNutrients: any = null;
-          if (dbId && dbMatchMap.has(dbId)) {
+          const labelData = item.labelNutrientsPerServing;
+          const servingSizeGrams = labelData ? Number(labelData.servingSizeGrams) : 0;
+          if (item.dbSource === "label" && labelData && servingSizeGrams > 0) {
+            // Start from the generic baseline so trace nutrients are still filled in
+            itemNutrients = getNutrientsForFood(canonicalName, itemWeight);
+            const scaleFactor = itemWeight / servingSizeGrams;
+            const coreLabelKeys = ["calories","protein","totalFat","saturatedFat","transFat","carbohydrates","addedSugar","sodium","potassium","totalFibre","solubleFibre"];
+            for (const key of coreLabelKeys) {
+              if (labelData[key] !== undefined && labelData[key] !== null) {
+                itemNutrients[key] = parseFloat((Number(labelData[key]) * scaleFactor).toFixed(2));
+              }
+            }
+          } else if (dbId && dbMatchMap.has(dbId)) {
             const baseNutrientsPer100g = dbMatchMap.get(dbId);
             itemNutrients = {};
             const factor = itemWeight / 100;

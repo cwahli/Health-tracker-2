@@ -726,12 +726,36 @@ export default function LogChat({
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState({ current: 0, total: 0, percent: 0 });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzingStepIndex, setAnalyzingStepIndex] = useState(0);
   const [expandedNutrients, setExpandedNutrients] = useState(false);
   const [isEngineSelectorOpen, setIsEngineSelectorOpen] = useState(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const t = translations[profile?.language || 'en'] || translations.en;
+
+  const ANALYZING_STEPS = type === 'food'
+    ? ["Reading your photos...", "Searching nutrition databases...", "Checking your biomarker profile...", "Consulting the clinical AI model..."]
+    : ["Gathering your recent history...", "Checking your biomarker profile...", "Consulting the clinical AI model..."];
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isAnalyzing) {
+      interval = setInterval(() => {
+        setAnalyzingStepIndex((prev) => {
+          if (prev < ANALYZING_STEPS.length - 1) {
+            return prev + 1;
+          }
+          return prev;
+        });
+      }, 1800);
+    } else {
+      setAnalyzingStepIndex(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isAnalyzing, type]);
 
   const [loggedMessageIds, setLoggedMessageIds] = useState<string[]>([]);
   const [showPastDiscussion, setShowPastDiscussion] = useState(false);
@@ -2856,7 +2880,7 @@ export default function LogChat({
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-2xl px-4 py-3 shadow-sm border border-slate-200 dark:border-slate-800/40">
               <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 font-medium">
-                {type === 'food' ? `Analyzing food values using ${selectedModelId} model...` : `Searching for relevant body information using ${selectedModelId} model...`}
+                {ANALYZING_STEPS[analyzingStepIndex]}
               </p>
             </div>
           </div>
