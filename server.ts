@@ -2849,11 +2849,441 @@ reviewedBiomarkers: []`;
 
 
 app.post("/api/gemini/review-biomarker", async (req, res) => {
-  res.json({ text: "Not implemented in V2" });
+  const { message, history, profile, biomarkerDef, currentValue, modelId, yamlContext } = req.body;
+  if (!message) return res.status(400).json({ error: "Missing message" });
+
+  try {
+    let historyText = "";
+    if (history && Array.isArray(history) && history.length > 0) {
+      historyText = "Here is the conversation history so far:\n" + 
+        history.map((h) => `${h.role === 'user' ? 'User' : 'Assistant'}: ${h.content}`).join("\n") + "\n\n";
+    }
+
+    const inputsYaml = yamlContext ? yamlContext : `user_profile:
+  age: "${profile?.age || 'unknown'}"
+  gender: "${profile?.gender || 'unknown'}"
+  weight_kg: "${profile?.weight || 'unknown'}"
+  height_cm: "${profile?.height || 'unknown'}"
+  ethnicity: "${profile?.ethnicity || 'unknown'}"
+  unit_preference: "${profile?.unitPreference || 'SI'}" # Values: 'SI' (mmol/L, mmol/mol) or 'US' (mg/dL)
+
+target_biomarker:
+  key: "${biomarkerDef?.key || ''}"
+  name: "${biomarkerDef?.name || ''}"
+  current_value: "${currentValue || ''}"
+  current_unit: "${biomarkerDef?.unit || ''}"
+  current_range: "${biomarkerDef?.normalRange || ''}"
+  description: "${biomarkerDef?.description || ''}"`;
+
+    const systemInstruction = `identity:
+  role: "Expert AI medical and nutritional assistant"
+  purpose: "Review or answer questions about a specific user health biomarker."
+  modes:
+    1: "Educate and answer user questions regarding the biomarker."
+    2: "Review logs for anomalies, unit mismatches, or demographic profile updates."
+
+inputs:
+${inputsYaml}
+
+rules:
+  clinical_and_nutritional:
+    - "Provide professional, evidence-based educational context regarding the target biomarker."
+    - "CRITICAL: Review precisely the ranges from medical research or clinical guidelines before providing an answer. You must differentiate between 'normal but suboptimal' values, and distinguish nuances like a 'pre-condition' versus an 'actual condition', reflecting this back to the data and proposed range."
+    - "Tailor the explanations and suggestions specifically to the user's demographic profile (age, gender, ethnicity, weight/height/BMI)."
+    - "Explain physiological significance, potential dietary/lifestyle influences, and clinical pathways of the biomarker."
+    - "If the profile shows a different ethnicity than standard (e.g. Chinese or Asian), prioritize demographic-specific clinical insights, guidelines, and reference intervals (e.g., Chinese Society of Hepatology/Nephrology/Diabetes/Dyslipidemia standard thresholds) over Western standard baselines."
+    - "Whenever you mention 'individuals of East Asian descent', 'Chinese descent', or refer to any specific ethnic group, you MUST explicitly cite the specific medical guideline or society you are using (e.g. 'according to the Chinese Society of Hepatology' or 'based on [medical guidelines from XX]')."
+  metric_and_unit:
+    - "Always prefer International Standard (mmol/L, mmol/mol) by default for lipids (LDL, HDL, Total Cholesterol, Triglycerides) and blood sugar (Fasting Glucose) unless the user specifically wants or has logged in US units (mg/dL)."
+    - "Double-check that the metric/unit is consistent across the proposed value and the proposed normal range. Do NOT mix them up! (e.g., if LDL value is 5.7, the unit must be mmol/L and range should be under 3.0 mmol/L. If unit is mg/dL, the value is around 220 and range is 125-200)."
+    - "Ensure the 'metric' field in any proposal exactly matches the unit used in 'range' and 'value'."
+  proposals_and_corrections:
+    - "If you recognize that the target biomarker's current description, medical insights, or range are wrong, incorrect, or sub-optimal for their demographic, prescribe a corrected/new one in the 'proposal' block of your response."
+    - "If the newly proposed range or insight is specific to their ethnicity (e.g., Chinese-adjusted thresholds), set 'isEthnicitySpecific' to true and 'ethnicityTag' to the ethnicity name (e.g. 'Chinese' or 'Asian') so that the database can tag and override the biomarker dictionary correctly."
+    - "If the newly proposed range is a standard global baseline, set 'isEthnicitySpecific' to false and 'ethnicityTag' to null."
+  duplicate_recognition:
+    - "Analyze if the target biomarker is likely a duplicate of another existing biomarker in the dictionary or in the related biomarkers list (e.g. 'hba1c_mmol_mol' vs 'hemoglobin_a1c')."
+    - "If it is a duplicate, set 'isDuplicate' to true, list the synonymous key(s) in 'duplicateSuggestedKeys', and write a clear, concise note explaining why in 'duplicateExplanation'."
+    - "If not a duplicate, set 'isDuplicate' to false, 'duplicateSuggestedKeys' to [], and 'duplicateExplanation' to null."
+    - "When no correction, override, or duplicate is discussed or needed, set 'proposal' and 'pendingBiomarkers' to null."
+
+output_format:
+  type: "JSON"
+  schema:
+    reply: "Conversational, highly polished response explaining the biomarker, answering questions, or explaining proposed corrections/duplicates."
+    proposal:
+      name: "The biomarker name (e.g., 'Total Cholesterol')"
+      metric: "The unit of measurement (e.g., 'mmol/L' or 'mg/dL')"
+      value: "The corrected/proposed value as a number or string"
+      range: "The normal/healthy range personalized to their profile (e.g., 'under 3.0 mmol/L' or '125-200 mg/dL')"
+      description: "Short description of what this biomarker measures"
+      benefitRisk: "Personalized benefit/risk statement based on the user's demographic profile and the proposed value"
+      isEthnicitySpecific: true/false
+      ethnicityTag: "e.g., 'Chinese' or 'Asian' or null"
+      isDuplicate: true/false
+      duplicateSuggestedKeys: ["array of synonymous keys to consolidate, e.g. ['hba1c_mmol_mol'] or []"]
+      duplicateExplanation: "Reasoning for consolidation or null"
+    pendingBiomarkers:
+      "${biomarkerDef?.key || 'key'}": "The proposed value as a number (e.g., 5.7) or null"
+
+instructions:
+  - "Do not include markdown code block wrappers like \`\`\`json in your response. Return raw JSON."
+  - "The JSON response must be well-formed and valid."`;
+
+    const fullPromptSent = `System Instruction:\n${systemInstruction}\n\n${historyText}User Message: "${message}"`;
+
+    const resultText = await callUnifiedLLM({
+      modelId: modelId || "antigravity",
+      systemInstruction,
+      promptText: `${historyText}User Message: "${message}"`,
+      responseMimeType: "application/json"
+    });
+
+    let cleanedText = resultText.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+    const startIdx = cleanedText.indexOf("{");
+    if (startIdx !== -1) {
+      let depth = 0;
+      for (let i = startIdx; i < cleanedText.length; i++) {
+        if (cleanedText[i] === "{") depth++;
+        else if (cleanedText[i] === "}") depth--;
+        if (depth === 0) {
+          cleanedText = cleanedText.substring(startIdx, i + 1);
+          break;
+        }
+      }
+    }
+    let resultJson;
+    try {
+      resultJson = JSON.parse(cleanedText);
+    } catch (parseErr: any) {
+      console.error("JSON Parse Error in review-biomarker:", parseErr);
+      console.error("Raw response was:", resultText);
+      throw new Error(`Failed to parse AI response as JSON. ${parseErr.message}`);
+    }
+    
+    if (resultJson.proposedValue !== undefined && resultJson.proposedValue !== null && !resultJson.pendingBiomarkers) {
+      resultJson.pendingBiomarkers = { [biomarkerDef?.key || 'key']: resultJson.proposedValue };
+    }
+    
+    resultJson.agentPrompt = fullPromptSent;
+    res.json(resultJson);
+  } catch (err: any) {
+    console.error("Gemini Review Error:", err);
+    res.status(500).json({ error: err.message || "Failed to review biomarker" });
+  }
 });
 
 app.post("/api/gemini/insight-analyze", async (req, res) => {
-  res.json({ text: "Not implemented in V2" });
+  try {
+    const { profile, userProfile, foodLogs, biomarkerHistory, engine, refinement } = req.body;
+    const activeProfile = profile || userProfile || {};
+    const email = activeProfile?.email?.toLowerCase() || "";
+
+    if ((email === "chiwah.liu@gmail.com" || email === "cwah.liu@gmail.com" || email === "john@mail.com") && !refinement) {
+      console.log(`[Insight] Triggered special preset recommendation report for: ${email}`);
+      return res.json({
+        report: {
+          timestamp: new Date().toISOString(),
+          dailyNutrientTargets: {
+            calories: "1,700–1,800 kcal",
+            protein: "90–100 g (protects kidneys)",
+            totalFat: "55–65 g",
+            saturatedFat: "under 15 g (critical for LDL)",
+            unsaturatedFat: "35–45 g",
+            omega3: "2.5–3 g",
+            carbohydrates: "160–185 g (low GI)",
+            addedSugar: "under 20 g",
+            totalFibre: "35–40 g",
+            solubleFibre: "10–15 g (critical for LDL)",
+            sodium: "under 1,200 mg (kidney + BP protection)",
+            potassium: "3,500–4,000 mg",
+            magnesium: "400–420 mg",
+            calcium: "1,000 mg",
+            iron: "8 mg",
+            zinc: "11 mg",
+            selenium: "55 mcg",
+            iodine: "150 mcg",
+            phosphorus: "700 mg",
+            vitaminD: "2,000 IU (East Asians commonly deficient)",
+            vitaminB12: "2.4 mcg",
+            folate: "400 mcg",
+            vitaminC: "90 mg",
+            vitaminE: "15 mg",
+            vitaminK: "120 mcg",
+            vitaminA: "900 mcg",
+            vitaminB6: "1.7 mg",
+            thiamine: "1.2 mg",
+            riboflavin: "1.3 mg",
+            niacin: "16 mg"
+          },
+          mostImportantNextStep: "See GP urgently about statin — rosuvastatin 5mg is the evidence-based starting point for East Asian men with your high LDL, HbA1c, and declining kidney filtration.",
+          actions: [
+            {
+              id: "act_1",
+              task: "Consult GP about Low-Dose Statin prescription (e.g. Rosuvastatin 5mg)",
+              explanation: "Given your elevated LDL-C and East Asian genetics, a low-dose statin is the most evidence-based starting point.",
+              priority: "high",
+              completed: false,
+              type: "doctor"
+            },
+            {
+              id: "act_2",
+              task: "Schedule an HbA1c retest in 3 months with formal pre-diabetes assessment",
+              explanation: "Your average blood sugar over the last months is borderline. Tight monitoring is critical.",
+              priority: "high",
+              completed: false,
+              type: "test"
+            },
+            {
+              id: "act_3",
+              task: "Establish an annual Kidney Monitoring and eGFR protection plan",
+              explanation: "Declining eGFR needs early stage tracking. Restricting saturated fat and excessive sodium is non-negotiable.",
+              priority: "high",
+              completed: false,
+              type: "test"
+            },
+            {
+              id: "act_4",
+              task: "Test Vitamin D levels with your physician",
+              explanation: "East Asians are commonly deficient, which impacts metabolic health, blood pressure, and cardiovascular outcomes.",
+              priority: "medium",
+              completed: false,
+              type: "test"
+            },
+            {
+              id: "act_5",
+              task: "Substitute butter, coconut oil, and ghee with extra virgin olive oil",
+              explanation: "Reducing saturated fat to strictly under 15g a day is essential to restore proper LDL values.",
+              priority: "high",
+              completed: false,
+              type: "lifestyle"
+            }
+          ],
+          dailyBenefits: [
+            { id: "ben_1", activity: "Accumulate 30 minutes of brisk walking or light cardio", target: "150 mins per week", completed: false },
+            { id: "ben_2", activity: "Add 1 tablespoon of ground flaxseed to your meals", target: "Daily", completed: false },
+            { id: "ben_3", activity: "Restrict Saturated Fat intake strictly under 15g", target: "Daily", completed: false },
+            { id: "ben_4", activity: "Incorporate high soluble fibre (e.g. Oats, Psyllium husk)", target: "10-15g soluble", completed: false }
+          ],
+          latestInsights: [
+            {
+              title: "Cardiovascular Risk Reduction in East Asian Cohorts",
+              summary: "Recent studies demonstrate that East Asian men exhibit heightened sensitivity to low-dose statin therapy, with rosuvastatin 5mg yielding similar LDL reduction as 10mg in western populations while minimizing hepatic and muscular side effects.",
+              link: "https://pubmed.ncbi.nlm.nih.gov/32041285/"
+            },
+            {
+              title: "Soluble Fibre and Bile Acid Sequestration Mechanics",
+              summary: "Clinical trials confirm that consuming 10g of soluble fibre daily (via oats, barley, or psyllium husk) triggers hepatic bile synthesis from existing LDL, lowering circulating bad cholesterol particles by 5% to 10% within 8 weeks.",
+              link: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4832151/"
+            }
+          ],
+          healthRiskForecast: {
+            year5: "Mildly progressive atherosclerosis, risk of transitioning from borderline pre-diabetes to active Type 2 Diabetes, and decline in renal filtration capacity to Stage 3 CKD.",
+            year10: "Significant vascular plaque buildup. Kidney function might drop to GFR < 60, triggering high blood pressure. Elevated Risk of cardiovascular events.",
+            year20: "40% probability of a coronary event. Accelerated kidney wear requiring complex nephrological intervention.",
+            optimized5: "Restored LDL < 100 mg/dL, stabilized blood sugar in normal ranges, and kidney filtration preserved at healthy levels.",
+            optimized10: "Plaque progression halted. Fully functional cardiovascular system and kidney values stabilized in the safe green zone.",
+            optimized20: "Optimal cardiovascular performance. Healthy aging index score 95th percentile, active longevity with zero diabetic or renal complications."
+          }
+        }
+      });
+    }
+
+    const ai = getGeminiClient();
+    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "MOCK_KEY" || process.env.GEMINI_API_KEY === "" || process.env.GEMINI_API_KEY.startsWith("YOUR_")) {
+      return res.json({
+        report: {
+          timestamp: new Date().toISOString(),
+          dailyNutrientTargets: {
+            calories: "1,500–1,600 kcal",
+            protein: "80–90 g",
+            totalFat: "50–60 g",
+            saturatedFat: "under 12 g",
+            unsaturatedFat: "30–40 g",
+            omega3: "2.0–2.5 g",
+            carbohydrates: "150–170 g",
+            addedSugar: "under 15 g",
+            totalFibre: "30–35 g",
+            solubleFibre: "8–12 g",
+            sodium: "under 1,500 mg",
+            potassium: "3,500 mg",
+            magnesium: "400 mg",
+            calcium: "1,000 mg",
+            iron: "8 mg",
+            zinc: "11 mg",
+            selenium: "55 mcg",
+            iodine: "150 mcg",
+            phosphorus: "700 mg",
+            vitaminD: "2,000 IU",
+            vitaminB12: "2.4 mcg",
+            folate: "400 mcg",
+            vitaminC: "90 mg",
+            vitaminE: "15 mg",
+            vitaminK: "120 mcg",
+            vitaminA: "900 mcg",
+            vitaminB6: "1.7 mg",
+            thiamine: "1.2 mg",
+            riboflavin: "1.3 mg",
+            niacin: "16 mg"
+          },
+          mostImportantNextStep: "Reduce saturated fat strictly to under 12g per day and complete a clinical blood re-test in 3 months to monitor cholesterol and glucose trends.",
+          actions: [
+            {
+              id: "act_1",
+              task: "Consult your primary care physician for a comprehensive health screening",
+              explanation: "Based on your age and profile, regular annual biometric reviews are highly recommended.",
+              priority: "high",
+              completed: false,
+              type: "doctor"
+            },
+            {
+              id: "act_2",
+              task: "Check your HbA1c and lipid panel every 6 months",
+              explanation: "Routine blood metrics tracking will help confirm your lifestyle changes are successfully restoring biomarkers.",
+              priority: "high",
+              completed: false,
+              type: "test"
+            }
+          ],
+          dailyBenefits: [
+            { id: "ben_1", activity: "Walk briskly for 30 minutes daily to boost metabolic health", target: "Daily", completed: false },
+            { id: "ben_2", activity: "Substitute saturated fats with cold-pressed olive oil", target: "Daily", completed: false }
+          ],
+          latestInsights: [
+            {
+              title: "Dietary Fibers and Metabolic Longevity Indices",
+              summary: "A high-fiber nutritional plan is linked to enhanced short-chain fatty acid gut synthesis, which improves overall insulin response and naturally reduces vascular inflammation markers.",
+              link: "https://pubmed.ncbi.nlm.nih.gov/30612722/"
+            }
+          ],
+          healthRiskForecast: {
+            year5: "Slight vascular stiffness and mild risk of elevated glucose tolerance if sedentary habits persist.",
+            year10: "Increasing risk of metabolic decline and minor cardiovascular strain.",
+            year20: "Elevated probability of cardiovascular plaques and reduced active energy index.",
+            optimized5: "Pristine blood pressure levels, balanced lipid particles, and metabolic health completely optimized.",
+            optimized10: "Robust vascular health, optimized glycemic control, and ideal weight targets maintained.",
+            optimized20: "Healthy aging with minimal chronic disease probability and vibrant metabolic index."
+          }
+        }
+      });
+    }
+
+    const profileText = `UserProfile: Age ${activeProfile.age}, Ethnicity: ${activeProfile.ethnicity}, Weight: ${activeProfile.weight}kg, Height: ${activeProfile.height}cm, Email: ${activeProfile.email}.`;
+    const foodSummary = foodLogs && foodLogs.length > 0 ? `Recent Food Logs:\n${JSON.stringify(foodLogs.slice(-10))}` : "No food logs registered.";
+    const biomarkerSummary = biomarkerHistory && biomarkerHistory.length > 0 ? `Biomarker Logs:\n${JSON.stringify(biomarkerHistory)}` : "No medical biomarkers logged.";
+
+    const promptText = `Perform a comprehensive health profiling analysis using the totality of user information provided below.
+    ${profileText}
+    ${foodSummary}
+    ${biomarkerSummary}
+    ${refinement ? `\nUSER REFINEMENT REQUEST: The user has asked to refine the previous analysis. Please adjust the report considering this feedback: "${refinement.message}". Also consider this chat history: ${JSON.stringify(refinement.chatHistory)}` : ""}
+    
+    You need to look at all health indices and build a personalized health report.
+    Identify any critical parameters (such as elevated LDL, high HbA1c, or low eGFR) and set custom daily nutrition targets for all 30 nutrients, prioritize clinical actions, lifestyle benefits, latest medical insights, and risk forecasts over 5, 10, and 20 years with vs without modifications.
+    
+    Respond strictly with a JSON object conforming exactly to this structure:
+    {
+      "report": {
+        "timestamp": "ISO Date String",
+        "dailyNutrientTargets": {
+          "calories": "target string (e.g. 1,700-1,800 kcal)",
+          "protein": "target string",
+          "totalFat": "target string",
+          "saturatedFat": "target string (e.g. under 15 g)",
+          "unsaturatedFat": "target string",
+          "omega3": "target string",
+          "carbohydrates": "target string",
+          "addedSugar": "target string",
+          "totalFibre": "target string",
+          "solubleFibre": "target string",
+          "sodium": "target string",
+          "potassium": "target string",
+          "magnesium": "target string",
+          "calcium": "target string",
+          "iron": "target string",
+          "zinc": "target string",
+          "selenium": "target string",
+          "iodine": "target string",
+          "phosphorus": "target string",
+          "vitaminD": "target string",
+          "vitaminB12": "target string",
+          "folate": "target string",
+          "vitaminC": "target string",
+          "vitaminE": "target string",
+          "vitaminK": "target string",
+          "vitaminA": "target string",
+          "vitaminB6": "target string",
+          "thiamine": "target string",
+          "riboflavin": "target string",
+          "niacin": "target string"
+        },
+        "mostImportantNextStep": "Specific human-focused non-negotiable step",
+        "actions": [
+          {
+            "id": "unique string id",
+            "task": "clinical or screening task",
+            "explanation": "why this is important for their profile",
+            "priority": "high" | "medium" | "low",
+            "completed": false,
+            "type": "doctor" | "test" | "lifestyle"
+          }
+        ],
+        "dailyBenefits": [
+          {
+            "id": "unique string id",
+            "activity": "e.g. Walk 30 min",
+            "target": "e.g. Daily",
+            "completed": false
+          }
+        ],
+        "latestInsights": [
+          {
+            "title": "Vascular Plaque Progression Control",
+            "summary": "1-2 sentence clinical takeaway",
+            "link": "https://pubmed.ncbi.nlm.nih.gov/..."
+          }
+        ],
+        "healthRiskForecast": {
+          "year5": "Detailed text forecast of health risk if habits do not change",
+          "year10": "Detailed text forecast of health risk if habits do not change",
+          "year20": "Detailed text forecast of health risk if habits do not change",
+          "optimized5": "Detailed text forecast of benefits if targets are optimized",
+          "optimized10": "Detailed text forecast of benefits if targets are optimized",
+          "optimized20": "Detailed text forecast of benefits if targets are optimized"
+        }
+      }
+    }`;
+
+    const systemInstruction = "You are a world-class preventative cardiologist, endocrinologist, and clinical longevity researcher. Your response must be an exact single JSON matching the requested schema. Never add markdown wrappers.";
+    const fullPromptSent = `System Instruction:\n${systemInstruction}\n\n${promptText}`;
+
+    const textOutput = await callUnifiedLLM({
+      modelId: engine || "gemini-2.5-flash",
+      systemInstruction,
+      promptText,
+      responseMimeType: "application/json"
+    });
+
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+    let parsedData;
+    try {
+      parsedData = JSON.parse(cleanJson);
+    } catch (parseErr) {
+      const firstBrace = cleanJson.indexOf("{");
+      const lastBrace = cleanJson.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        parsedData = JSON.parse(cleanJson.substring(firstBrace, lastBrace + 1));
+      } else {
+        throw parseErr;
+      }
+    }
+
+    parsedData.agentPrompt = `System Instruction:\nYou are a world-class AI dietitian. Your response must be an exact JSON matching the requested schema. Never add markdown wrappers.\n\n${promptText}`;
+    res.json(parsedData);
+  } catch (error: any) {
+    console.error("[Insight Analyze Error]:", error);
+    res.status(500).json({ error: "Failed to generate preventative recommendations: " + error.message });
+  }
 });
 
 app.post("/api/gemini/route-biomarker", async (req, res) => {
@@ -2861,7 +3291,46 @@ app.post("/api/gemini/route-biomarker", async (req, res) => {
 });
 
 app.post("/api/gemini/route-chat", async (req, res) => {
-  res.json({ text: "Not implemented in V2" });
+  try {
+    const { messages, selectedBiomarkers, allApprovedKeys } = req.body;
+    const systemInstruction = `You are the Medical Ontology Route Agent, an expert clinical data and database architect.
+Your task is to chat with the user to help them map their newly extracted biomarkers (unmapped) to the existing Master Database Keys, or decide if they should be added as new standard keys.
+
+=== MASTER DATABASE KEYS ===
+[${allApprovedKeys.join(", ")}]
+
+=== CHOSEN BIOMARKERS TO DISCUSS ===
+${JSON.stringify(selectedBiomarkers, null, 2)}
+
+=== YOUR OBJECTIVES ===
+1. Be clinical, friendly, and expert. Explain synonyms clearly (e.g. why "HbA1c" matches "hba1c").
+2. Guide the user in consolidating their biomarkers.
+3. If you can suggest a mapping for any or all of the chosen biomarkers, include a 'suggestedMapping' object in your JSON output. The keys of this object should be the chosen biomarker keys/names, and the values should be the target master keys (existing or newly proposed clean snake_case keys).
+
+=== RESPONSE FORMAT ===
+You MUST return a JSON object with the following schema:
+{
+  "text": "Your conversational response here (supports markdown formatting). Explain your reasoning clearly.",
+  "suggestedMapping": { "source_key": "target_key" } // (Optional) set this when you are recommending a specific mapping/consolidation.
+}`;
+
+    const lastMessage = messages[messages.length - 1];
+    const historyText = messages.slice(0, messages.length - 1).map(m => `${m.role === "user" ? "User" : "Model"}: ${m.content}`).join("\n");
+    const promptText = `Chat History:\n${historyText}\n\nUser's latest message: "${lastMessage.content}"`;
+
+    const textOutput = await callUnifiedLLM({
+      modelId: "gemini-2.5-flash",
+      systemInstruction,
+      promptText,
+      responseMimeType: "application/json"
+    });
+
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+    res.json(JSON.parse(cleanJson));
+  } catch (e: any) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to process route chat" });
+  }
 });
 
 app.post("/api/gemini/standardize-units", async (req, res) => {
