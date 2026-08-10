@@ -223,8 +223,7 @@ export async function upsertFoodAlias(alias: {
       .from('food_aliases')
       .upsert({
         alias_key: normAlias,
-        food_key: alias.food_key ? normalizeFoodKey(alias.food_key) : normAlias,
-        food_id: alias.food_id || null,
+        food_id: alias.food_id || alias.food_key || normAlias,
         weight: alias.weight ?? 1.0,
         source: alias.source || 'food_resolver',
         created_at: new Date().toISOString()
@@ -288,15 +287,8 @@ export async function upsertFoodItemCandidate(item: {
       return { success: true };
     }
 
-    // Guard 2: Reject candidate items with zero calories and zero macros
-    const cals = Number(item.nutrients_per_100g?.calories || 0);
-    const p = Number(item.nutrients_per_100g?.protein || 0);
-    const c = Number(item.nutrients_per_100g?.carbohydrates || 0);
-    const f = Number(item.nutrients_per_100g?.totalFat || 0);
-    if (cals <= 0 && p <= 0 && c <= 0 && f <= 0) {
-      console.log(`[FoodCatalog] Skipped zero-macro candidate item "${displayName}".`);
-      return { success: false, error: 'Zero-macro candidate item rejected' };
-    }
+    // Guard 2: Reject candidate items with zero calories and zero macros - REMOVED
+    // We allow zero-macro candidate items (like water, black coffee, diet drinks)
     
     // Check if existing candidate to count captures and check Atwater
     const { data: existingById } = await supabaseAdmin
@@ -522,8 +514,7 @@ export async function mergeFoodCatalogItems(
 
     await supabaseAdmin.from('food_aliases').upsert({
       alias_key: normSource,
-      food_key: normTarget,
-      food_id: targetItem?.food_id || undefined,
+      food_id: targetItem?.food_id || normTarget,
       weight: 1.0,
       source: 'admin_merge'
     }, { onConflict: 'alias_key' });
