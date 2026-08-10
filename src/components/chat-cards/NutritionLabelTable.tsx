@@ -1,0 +1,649 @@
+import React from 'react';
+import { Camera, Search } from 'lucide-react';
+import { nutrientDefinitions } from '../../utils/nutrition';
+import { translations } from '../../utils/translations';
+
+function parseLabelCalories(raw: any): number | null {
+  if (raw == null) return null;
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) return raw;
+  if (typeof raw === 'object') {
+    const v = raw.calories ?? raw.energy ?? raw.kcal ?? raw['Energy (kcal)'];
+    return parseLabelCalories(v);
+  }
+  const s = String(raw).replace(/,/g, '').trim();
+
+  const kcalMatch = s.match(/(-?\d+(?:\.\d+)?)\s*kcal/i);
+  if (kcalMatch) {
+    const n = parseFloat(kcalMatch[1]);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+
+  const kjMatch = s.match(/(-?\d+(?:\.\d+)?)\s*kj/i);
+  if (kjMatch) {
+    const kj = parseFloat(kjMatch[1]);
+    if (Number.isFinite(kj) && kj > 0) {
+      return Math.round((kj / 4.184) * 10) / 10;
+    }
+  }
+
+  const m = s.match(/(-?\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
+  if (!ssVal) return 100;
+  const lower = ssVal.toLowerCase().trim();
+
+  // 1. Explicit gram match e.g. "160g", "160 g", "(160g edible portion)", "per 160g"
+  const gMatch = lower.match(/(\d+(?:\.\d+)?)\s*g\b/);
+  if (gMatch) {
+    const val = parseFloat(gMatch[1]);
+    if (val > 0) return val;
+  }
+
+  // 2. Explicit ml match e.g. "250ml", "250 ml"
+  const mlMatch = lower.match(/(\d+(?:\.\d+)?)\s*ml\b/);
+  if (mlMatch) {
+    const val = parseFloat(mlMatch[1]);
+    if (val > 0) return val;
+  }
+
+  // 3. Explicit oz match e.g. "1oz", "1 oz"
+  const ozMatch = lower.match(/(\d+(?:\.\d+)?)\s*oz\b/);
+  if (ozMatch) {
+    const val = parseFloat(ozMatch[1]);
+    if (val > 0) return val * 28.35;
+  }
+
+  // 4. Fraction of pack/container check if no explicit g/ml match
+  const isFractionHalf = lower.includes('1/2') || lower.includes('half');
+  const isFractionThird = lower.includes('1/3') || lower.includes('third');
+  const isFractionQuarter = lower.includes('1/4') || lower.includes('quarter');
+
+  if (totalItemWeight > 0) {
+    if (isFractionHalf) return totalItemWeight / 2;
+    if (isFractionThird) return totalItemWeight / 3;
+    if (isFractionQuarter) return totalItemWeight / 4;
+  }
+
+  // 5. Whole pack/wrap/container or explicit count/piece
+  if (lower.includes('pack') || lower.includes('wrap') || lower.includes('container') || lower.includes('tub') || lower.includes('bag') || lower.includes('pouch') || lower.includes('piece') || lower.includes('slice') || lower.includes('portion') || lower.includes('serving') || lower.includes('biscuit') || lower.includes('cookie') || lower.includes('bun') || lower.includes('can') || lower.includes('bottle')) {
+    return totalItemWeight > 0 ? totalItemWeight : 100;
+  }
+
+  // 6. Generic number match e.g. "160" or "serving (30)"
+  const numMatch = lower.match(/[\d.]+/);
+  if (numMatch) {
+    const val = parseFloat(numMatch[0]);
+    // If it's a very small number like 1 or 2, it's almost certainly a piece count, not grams
+    if (val <= 10 && totalItemWeight > 0) {
+      return totalItemWeight; 
+    }
+    if (val > 0) return val;
+  }
+
+  return 100;
+}
+
+function normalizeNutritionKeys(obj: any) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const normalized: any = {};
+  
+  // Mapping of variation to standard camelCase keys
+  const keyMapping: { [key: string]: string } = {
+    'calories': 'calories', 'energy': 'calories', 'energi': 'calories', 'energitotal': 'calories', 'energi total': 'calories',
+    'totalfat': 'totalFat', 'lemaktotal': 'totalFat', 'lemak total': 'totalFat',
+    'saturatedfat': 'saturatedFat', 'lemakjenuh': 'saturatedFat', 'lemak jenuh': 'saturatedFat',
+    'saturatedfatenergy': 'saturatedFatEnergy', 'energidarilemakjenuh': 'saturatedFatEnergy',
+    'energyfromfat': 'energyFromFat', 'energidarilemak': 'energyFromFat',
+    'totalcarbohydrate': 'totalCarbohydrate', 'totalcarbs': 'totalCarbohydrate', 'karbohidrat': 'totalCarbohydrate', 'karbohidrattotal': 'totalCarbohydrate', 'karbohidrat total': 'totalCarbohydrate',
+    'sugar': 'sugar', 'gula': 'sugar', 'gulatotal': 'sugar', 'gula total': 'sugar',
+    'salt': 'salt', 'garam': 'salt', 'sodium': 'sodium', 'natrium': 'sodium',
+    'protein': 'protein',
+    'servingsize': 'servingSize', 'takaransaji': 'servingSize', 'takaran saji': 'servingSize',
+    'servingspercontainer': 'servingsPerContainer', 'jumlahsajianperkemasan': 'servingsPerContainer', 'sajianperkemasan': 'servingsPerContainer', 'sajian per kemasan': 'servingsPerContainer'
+  };
+
+  Object.keys(obj).forEach(k => {
+    const cleanKey = k.toLowerCase().replace(/_/g, '').replace(/-/g, '').trim();
+    const standardKey = keyMapping[cleanKey] || k;
+    normalized[standardKey] = obj[k];
+  });
+
+  if (normalized.calories) {
+    const parsedC = parseLabelCalories(normalized.calories);
+    if (parsedC !== null && parsedC > 0) {
+      normalized.calories = `${parsedC} kcal`;
+    }
+  }
+  
+  return normalized;
+}
+
+export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOpen = true, hideOwnToggle = false, language = "en" }: { activeScoutItems: any[], onConfirmItem?: (idx: any) => void, defaultOpen?: boolean, hideOwnToggle?: boolean, language?: string }) {
+  const t = translations[language || "en"] || translations.en;
+  let items = activeScoutItems;
+  if (typeof items === 'string') {
+    try { items = JSON.parse(items); } catch(e) { items = []; }
+  }
+  if (!Array.isArray(items) || !items.length) return null;
+  // Only `rawNutritionLabel` is gated on "a real physical panel is visible" — `nutritionFacts`
+  // is a general-purpose estimate field and must never be treated as evidence of a real label.
+  const expandedItems: any[] = [];
+  (items || []).forEach(item => {
+    if (!item) return;
+    expandedItems.push(item);
+    const subComps = item.componentsDetail || item.components;
+    if (Array.isArray(subComps)) {
+      subComps.forEach((comp: any) => {
+        if (!comp) return;
+        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.source === 'brand_official' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel);
+        if (isCompOfficial) {
+          expandedItems.push({
+            ...comp,
+            keyword: comp.searchQuery || comp.name || comp.keyword || comp.dish_name,
+            originalName: comp.name || comp.searchQuery || comp.keyword || comp.dish_name,
+            dbSource: comp.dbSource || comp.source || 'brand_official',
+            rawNutritionLabel: comp.rawNutritionLabel,
+            labelNutrientsPerServing: comp.labelNutrientsPerServing || comp.nutrients,
+            isRealTruth: true
+          });
+        }
+      });
+    }
+  });
+
+  const processedItems = expandedItems.map(item => {
+    if (!item) return item;
+    let parsedRaw = item.rawNutritionLabel;
+    if (typeof parsedRaw === 'string') {
+      try { parsedRaw = JSON.parse(parsedRaw.replace(/'/g, '"')); } catch (e) { parsedRaw = null; }
+    }
+    let parsedFacts = item.nutritionFacts;
+    if (typeof parsedFacts === 'string') {
+      try { parsedFacts = JSON.parse(parsedFacts.replace(/'/g, '"')); } catch (e) { parsedFacts = null; }
+    }
+    
+    let autoCorrectedCalories = item.autoCorrectedCalories || false;
+    let originalCalories = item.originalCalories || null;
+    let correctedRaw = normalizeNutritionKeys(parsedRaw);
+    let correctedFacts = normalizeNutritionKeys(parsedFacts);
+
+    // Only build a displayed "label" from labelNutrientsPerServing when dbSource
+    // confirms it is real truth (OCR label or curated brand/chain data). Estimated or
+    // component-summed reference data must never render in the label card — it belongs
+    // only in the calculation table as clearly-marked estimates.
+    const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || Boolean(item.isRealTruth);
+    const labelSource = item.labelNutrientsPerServing || item.primaryBase100g;
+    if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && isRealTruth && labelSource) {
+      const source = labelSource;
+      if (source && typeof source === 'object') {
+        const cals = source.calories ?? source.energy;
+        if (cals != null) {
+          correctedRaw = {
+            servingSize: source.servingSizeGrams ? `${source.servingSizeGrams}g` : '1 serving',
+            calories: `${cals} kcal`,
+            protein: source.protein != null ? `${source.protein}g` : undefined,
+            totalFat: (source.totalFat ?? source.fat) != null ? `${source.totalFat ?? source.fat}g` : undefined,
+            saturatedFat: source.saturatedFat != null ? `${source.saturatedFat}g` : undefined,
+            totalCarbohydrate: (source.totalCarbohydrate ?? source.carbohydrates ?? source.carbs) != null ? `${source.totalCarbohydrate ?? source.carbohydrates ?? source.carbs}g` : undefined,
+            sugar: source.sugar != null ? `${source.sugar}g` : (source.addedSugar != null ? `${source.addedSugar}g` : undefined),
+            addedSugar: source.addedSugar != null ? `${source.addedSugar}g` : undefined,
+            totalFibre: (source.totalFibre ?? source.fiber) != null ? `${source.totalFibre ?? source.fiber}g` : undefined,
+            sodium: source.sodium != null ? `${source.sodium}mg` : undefined,
+            salt: source.salt != null ? `${source.salt}g` : undefined
+          };
+        }
+      }
+    }
+    
+    // Check if anomalyFlags indicate calorie correction
+    if (item.anomalyFlags && Array.isArray(item.anomalyFlags)) {
+      const calorieFlag = item.anomalyFlags.find((f: string) => f.includes("calories mathematically auto-corrected from"));
+      if (calorieFlag) {
+        autoCorrectedCalories = true;
+        const match = calorieFlag.match(/from (\d+(?:\.\d+)?) to/);
+        if (match) {
+          originalCalories = match[1];
+        }
+      }
+    }
+    
+    return { 
+      ...item, 
+      rawNutritionLabel: correctedRaw, 
+      nutritionFacts: correctedFacts,
+      autoCorrectedCalories,
+      originalCalories,
+      isRealTruth
+    };
+  });
+
+  const NON_NUTRIENT_LABEL_KEYS = new Set(['servingSize', 'weight', 'servingsPerContainer']);
+
+  const hasLabels = processedItems.some((item: any) => {
+    if (!item) return false;
+    if (!item.rawNutritionLabel || typeof item.rawNutritionLabel !== 'object') {
+      return false;
+    }
+    const keys = Object.keys(item.rawNutritionLabel).filter(k => !NON_NUTRIENT_LABEL_KEYS.has(k));
+    if (keys.length === 0) return false;
+    return keys.some(k => {
+      const val = item.rawNutritionLabel[k];
+      return val !== undefined && val !== null && val !== '' && val !== '-' && val !== '--';
+    });
+  });
+
+  if (!hasLabels) return null;
+
+  const renderedItems = processedItems.map((item: any, i: number) => {
+            const meaningfulRawKeys = item.rawNutritionLabel
+              ? Object.keys(item.rawNutritionLabel).filter((k: string) =>
+                  !NON_NUTRIENT_LABEL_KEYS.has(k) &&
+                  item.rawNutritionLabel[k] !== undefined &&
+                  item.rawNutritionLabel[k] !== null &&
+                  item.rawNutritionLabel[k] !== '' &&
+                  item.rawNutritionLabel[k] !== '-' &&
+                  item.rawNutritionLabel[k] !== '--'
+                )
+              : [];
+            const hasRaw = meaningfulRawKeys.length > 0;
+            const hasNut = item.nutritionFacts && Object.keys(item.nutritionFacts).length > 0;
+            const hasIngredients = !!(item.ingredientsList && String(item.ingredientsList).trim());
+            if (!hasRaw) return null;
+
+            const isStandaloneLabelPhoto = item.source === 'label' && (!item.estimatedWeightGrams || Number(item.estimatedWeightGrams) === 0);
+            const missingWeight = !isStandaloneLabelPhoto && (!item.estimatedWeightGrams || isNaN(Number(item.estimatedWeightGrams)));
+
+            const cleanAnomalyFlags = (item.anomalyFlags || []).filter((f: string) => 
+              typeof f === 'string' &&
+              !f.includes("Converted printed salt") &&
+              !f.includes("Formula: 1g salt") &&
+              !f.toLowerCase().includes("converted printed salt")
+            );
+
+            const isUnclear = (item.itemConfidence?.toLowerCase().includes('low') || 
+                               item.itemConfidence?.toLowerCase().includes('medium')) || 
+                              (cleanAnomalyFlags.length > 0);
+            const showWarning = missingWeight || isUnclear;
+
+            const saltConversionNoteText = item.saltConversionNote ||
+              (Array.isArray(item.anomalyFlags) && item.anomalyFlags.find((f: string) => typeof f === 'string' && f.includes("Converted printed salt"))) ||
+              (item.rawNutritionLabel?.salt && (item.rawNutritionLabel?.sodium || item.nutritionFacts?.sodium)
+                ? `Converted printed salt (${item.rawNutritionLabel.salt}${item.rawNutritionLabel?.servingSize ? ` per ${item.rawNutritionLabel.servingSize}` : ''}) to sodium. Formula: 1g salt = 400mg sodium.`
+                : null);
+
+            // Merge keys for table
+            // Defensive guard: if calories are present but every core macro (protein/fat/carbs)
+            // reads exactly 0, that pattern means the source data was never actually captured
+            // for those fields (a real food with real calories always has non-zero macros
+            // somewhere). Treat those specific 0-valued fields as "not captured" and hide them,
+            // rather than showing misleading zeros. A genuine single-field zero (e.g. real
+            // "0g trans fat" sitting next to normal non-zero macros) is left untouched.
+            const parseRowNumber = (raw: any): number | null => {
+              if (raw === undefined || raw === null || raw === '') return null;
+              const m = String(raw).match(/-?\d+(?:\.\d+)?/);
+              return m ? parseFloat(m[0]) : null;
+            };
+            const calsForZeroCheck = parseLabelCalories(item.rawNutritionLabel?.calories ?? item.nutritionFacts?.calories);
+            const macroKeysForZeroCheck = ['protein', 'totalFat', 'totalCarbohydrate', 'carbohydrates'];
+            const macroValsForZeroCheck = macroKeysForZeroCheck
+              .map(k => parseRowNumber(item.rawNutritionLabel?.[k] ?? item.nutritionFacts?.[k]))
+              .filter((v): v is number => v !== null);
+            const hasImplausibleAllZeroMacros = (calsForZeroCheck || 0) > 0 &&
+              macroValsForZeroCheck.length > 0 &&
+              macroValsForZeroCheck.every(v => v === 0);
+
+            const allKeys = Array.from(
+              new Set([
+                ...(hasRaw ? Object.keys(item.rawNutritionLabel) : []),
+                ...(hasNut ? Object.keys(item.nutritionFacts) : []),
+              ])
+            ).filter((k) => {
+              if (k === 'servingSize' || k === 'weight' || k === 'servingsPerContainer') return false;
+              const val = item.rawNutritionLabel?.[k] !== undefined 
+                ? item.rawNutritionLabel?.[k] 
+                : item.nutritionFacts?.[k];
+              if (val === undefined || val === null || val === '' || val === '-' || val === '--') return false;
+              if (hasImplausibleAllZeroMacros && !k.toLowerCase().includes('calorie') && !k.toLowerCase().includes('energy')) {
+                const numVal = parseRowNumber(val);
+                if (numVal === 0) return false;
+              }
+              return true;
+            });
+
+            return (
+              <div
+                key={`nut-${i}`}
+                className="text-[10px] text-theme-text-secondary bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-theme-border/80"
+              >
+                <strong className="block text-slate-800 dark:text-slate-200 mb-2 font-display text-xs">
+                  {item.chainName ? (
+                    <>
+                      <span className="text-indigo-500 dark:text-indigo-400">{item.chainName}</span>
+                      {' · '}
+                    </>
+                  ) : null}
+                  {item.primaryBaseMatchName || item.labelProductName || item.scoutOriginalName || item.originalName || item.keyword}
+                </strong>
+
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 text-[10px]">
+                  {item.isRealTruth && (
+                    <div className="font-medium text-theme-neutral">
+                      <span className="text-slate-400 font-normal">
+                        {String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').toLowerCase().includes('ml') ? 'Volume:' : t.weightLabelWithColon}
+                      </span>{' '}
+                      {missingWeight ? <span className="text-amber-500 font-bold">{t.unknown}</span> : `${item.estimatedWeightGrams}${String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').toLowerCase().includes('ml') ? 'ml' : 'g'}`}
+                    </div>
+                  )}
+                  {((item.rawNutritionLabel?.servingsPerContainer !== undefined && item.rawNutritionLabel?.servingsPerContainer !== null) || 
+                    (item.nutritionFacts?.servingsPerContainer !== undefined && item.nutritionFacts?.servingsPerContainer !== null)) && (
+                    <div className="font-medium text-theme-neutral">
+                      <span className="text-slate-400 font-normal">{t.servingsPerContainerColon}</span>{' '}
+                      {item.rawNutritionLabel?.servingsPerContainer !== undefined && item.rawNutritionLabel?.servingsPerContainer !== null 
+                        ? item.rawNutritionLabel.servingsPerContainer 
+                        : item.nutritionFacts?.servingsPerContainer}
+                    </div>
+                  )}
+                </div>
+
+                {item.lockedNutrientKeys && Array.isArray(item.lockedNutrientKeys) && item.lockedNutrientKeys.length > 0 && (
+                  <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-[10px] text-amber-800 dark:text-amber-200 flex items-start gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 shrink-0 mt-0.5">
+                      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                      <path d="M12 9v4"></path>
+                      <path d="M12 17h.01"></path>
+                    </svg>
+                    <div>
+                      <span className="font-bold">Partial Printed Label:</span> Official truth locked for <span className="font-semibold underline">{item.lockedNutrientKeys.join(', ')}</span>. Unprinted macros (<span className="font-bold text-amber-600 dark:text-amber-400">⚠️</span>) are estimated by AI agent heuristic knowledge.
+                    </div>
+                  </div>
+                )}
+
+                {allKeys.length > 0 && (
+                  <div className="overflow-x-auto rounded-lg border border-theme-border/50">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100/50 dark:bg-slate-800/50">
+                          <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50">
+                            Nutrient
+                          </th>
+                          <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50">
+                            {(() => {
+                               const ssRaw = String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').trim();
+                               const totalG = (item.primaryBaseWeightG || item.estimatedWeightGrams) ? Number(item.primaryBaseWeightG || item.estimatedWeightGrams) : null;
+                               const ssGramsMatch = ssRaw.match(/^(\d+(?:\.\d+)?)\s*g$/i);
+                               // If the serving size grams exactly equal the Total column's grams, showing
+                               // both is redundant (e.g. "Serving Size (300g)" next to "Total (300g)").
+                               // In that case the serving IS the whole dish, so say so in words instead.
+                               if (ssRaw && ssGramsMatch && totalG && Math.abs(parseFloat(ssGramsMatch[1]) - totalG) < 0.5) {
+                                 return 'Serving Size (1 dish)';
+                               }
+                               if (ssRaw) return `Serving Size (${ssRaw})`;
+                               const bType = item.rawNutritionLabel?.basisType || item.basisType || (item.source === 'brand_official' || item.brandPriority ? 'per_dish' : 'per_100g');
+                               if (bType === 'per_dish' || bType === 'total' || bType === 'per_portion') {
+                                 return 'Per Dish';
+                               }
+                               return 'Per 100g';
+                            })()}
+                          </th>
+                          <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50 whitespace-nowrap">
+                            Total{(item.primaryBaseWeightG || item.estimatedWeightGrams) ? ` (${item.primaryBaseWeightG || item.estimatedWeightGrams}g)` : ''}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                        {allKeys.map((k) => {
+                          const originalVal = item.rawNutritionLabel?.[k] !== undefined 
+                            ? item.rawNutritionLabel?.[k] 
+                            : item.nutritionFacts?.[k];
+                            
+                          const isCalorieKey = k.toLowerCase().includes('calories') || k.toLowerCase().includes('energy');
+                          let numVal = null;
+                          if (originalVal !== undefined && originalVal !== null) {
+                            if (isCalorieKey) {
+                              numVal = parseLabelCalories(originalVal);
+                            } else {
+                              const match = String(originalVal).match(/[\d.]+/);
+                              if (match) numVal = parseFloat(match[0]);
+                            }
+                          }
+                          
+                          const isServingField = k.toLowerCase().includes('serving');
+                          
+                          let totalStr = '-';
+                          let originalDisplay = '-';
+                          
+                          if (originalVal !== undefined && originalVal !== null) {
+                            const hasUnit = /[a-zA-Z%]/.test(String(originalVal));
+                            const nutDef = nutrientDefinitions.find((n: any) => n.key.toLowerCase() === k.toLowerCase());
+                            const defaultUnit = isCalorieKey ? 'kcal' : (isServingField ? '' : (nutDef ? nutDef.unit : 'g'));
+                            const unit = isCalorieKey ? 'kcal' : (String(originalVal).replace(/[\d.\s]/g, '') || defaultUnit);
+                            
+                            if (isCalorieKey && numVal !== null) {
+                              originalDisplay = `${numVal} kcal`;
+                            } else {
+                              originalDisplay = (hasUnit && !isServingField) ? String(originalVal) : `${originalVal}${defaultUnit}`;
+                            }
+                            
+                            if (numVal !== null && !missingWeight && !isServingField) {
+                              const bType = item.rawNutritionLabel?.basisType || item.basisType || (item.source === 'brand_official' || item.brandPriority ? 'per_dish' : 'per_100g');
+                              const isDishBasis = bType === 'per_dish' || bType === 'total' || bType === 'per_portion' || bType === 'per_serving' || bType === 'per_pack';
+
+                              const weightToDisplay = item.primaryBaseWeightG || item.estimatedWeightGrams || 100;
+                              let labelServingGrams = isDishBasis ? weightToDisplay : 100;
+                              const wasFromRaw = item.rawNutritionLabel?.[k] !== undefined;
+                              
+                              if (wasFromRaw && item.rawNutritionLabel?.servingSize) {
+                                 const ssRaw = String(item.rawNutritionLabel.servingSize);
+                                 labelServingGrams = parseServingSizeGrams(ssRaw, weightToDisplay);
+                              }
+                              
+                              const multiplier = (isDishBasis && (labelServingGrams === weightToDisplay || labelServingGrams === 100))
+                                ? 1.0 
+                                : (weightToDisplay / labelServingGrams);
+                              const total = (numVal * multiplier).toFixed(1).replace(/\.0$/, '');
+                              totalStr = `${total}${unit}`;
+                            }
+                          }
+
+                          const standardMapping: Record<string, string> = {
+                            calories: 'calories',
+                            protein: 'protein',
+                            totalfat: 'totalFat',
+                            saturatedfat: 'saturatedFat',
+                            sodium: 'sodium',
+                            totalcarbohydrate: 'carbohydrates',
+                            carbohydrates: 'carbohydrates',
+                            totalcarbs: 'carbohydrates',
+                            totalfibre: 'totalFibre',
+                            fiber: 'totalFibre',
+                            fibre: 'totalFibre',
+                            sugar: 'sugar',
+                            addedsugar: 'addedSugar',
+                            transfat: 'transFat'
+                          };
+                          const normKey = standardMapping[k.toLowerCase()] || k;
+
+                          // Check if value actually came directly from raw printed label / OCR
+                          const isFromRawLabel = item.rawNutritionLabel?.[k] !== undefined && 
+                                                 item.rawNutritionLabel?.[k] !== null && 
+                                                 item.rawNutritionLabel?.[k] !== '' &&
+                                                 item.rawNutritionLabel?.[k] !== '-';
+
+                          const normLower = String(normKey).toLowerCase();
+                          const kLower = String(k).toLowerCase();
+
+                          const isExplicitlyEstimated = (Array.isArray(item.estimatedFields) && item.estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower)) ||
+                                                       (Array.isArray(item._estimatedFields) && item._estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower));
+
+                          const hasLockedKeys = Array.isArray(item.lockedNutrientKeys) && item.lockedNutrientKeys.length > 0;
+                          const inLockedKeys = hasLockedKeys && item.lockedNutrientKeys.some((lk: string) => {
+                            const lkLower = String(lk).toLowerCase();
+                            return lkLower === normLower ||
+                              lkLower === kLower ||
+                              (normLower === 'carbohydrates' && (lkLower === 'carbohydrate' || lkLower === 'carbs' || lkLower === 'totalcarbohydrate')) ||
+                              (normLower === 'totalfat' && (lkLower === 'fat' || lkLower === 'totalfat')) ||
+                              (normLower === 'totalfibre' && (lkLower === 'fiber' || lkLower === 'fibre' || lkLower === 'totalfibre')) ||
+                              (normLower === 'calories' && (lkLower === 'energy' || lkLower === 'cals'));
+                          });
+
+                          const isLocked = !isExplicitlyEstimated && (hasLockedKeys ? inLockedKeys : isFromRawLabel);
+
+                          const isSodium = k.toLowerCase().includes('sodium') || k.toLowerCase().includes('salt');
+
+                          return (
+                            <tr key={k} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                              <td className="py-1.5 px-2 font-medium text-theme-neutral capitalize">
+                                <div className="flex items-center gap-1">
+                                  <span>{k.replace(/([A-Z])/g, ' $1').trim()}</span>
+                                  {isLocked ? null : (!isServingField && (
+                                    <div className="relative group/estTooltip inline-flex items-center ml-1 z-20">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                        }}
+                                        className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 focus:outline-none cursor-pointer transition-colors"
+                                        aria-label="Estimated value notice"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-500">
+                                          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                                          <path d="M12 9v4"></path>
+                                          <path d="M12 17h.01"></path>
+                                        </svg>
+                                        !
+                                      </button>
+                                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 opacity-0 group-hover/estTooltip:opacity-100 group-focus-within/estTooltip:opacity-100 group-active/estTooltip:opacity-100 transition-opacity pointer-events-none whitespace-normal min-w-[160px] w-max max-w-[200px] p-1.5 bg-slate-900/95 dark:bg-slate-950/95 text-amber-200 text-[10px] font-normal normal-case rounded-md shadow-lg text-center z-50 border border-amber-500/30 backdrop-blur-sm">
+                                        The value is estimated by the AI agent
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {isSodium && saltConversionNoteText && (
+                                    <div className="relative group/saltTooltip inline-flex items-center z-20">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 hover:text-blue-600 cursor-help shrink-0">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                      </svg>
+                                      <div className="absolute left-0 bottom-full mb-1 opacity-0 group-hover/saltTooltip:opacity-100 transition-opacity pointer-events-none whitespace-normal min-w-[210px] w-max max-w-[260px] p-2 bg-slate-800 text-white text-[10px] rounded shadow-lg text-left z-50 font-normal normal-case">
+                                        {saltConversionNoteText}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-1.5 px-2 text-theme-text-secondary relative group/tooltip">
+                                <div className="flex items-center gap-1">
+                                  {originalDisplay}
+                                  {k.toLowerCase().includes('calories') && item.autoCorrectedCalories && (
+                                    <div className="relative z-50">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 cursor-help">
+                                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                                        <path d="M12 9v4"></path>
+                                        <path d="M12 17h.01"></path>
+                                      </svg>
+                                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-normal min-w-[200px] w-max max-w-[250px] p-2 bg-slate-800 text-white text-[10px] rounded shadow-lg text-center">
+                                        {t.abnormalValueMsg.replace("{item.originalCalories}", item.originalCalories).replace("{originalDisplay}", originalDisplay)}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-1.5 px-2 text-indigo-600 dark:text-indigo-400 font-bold">
+                                {totalStr}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {item.ingredientsList && String(item.ingredientsList).trim() && (
+                  <div className="mt-2.5 p-2 bg-slate-100/60 dark:bg-slate-800/40 rounded-lg text-[9.5px] leading-normal border border-slate-200/40 dark:border-slate-700/30 text-left">
+                    <span className="font-bold text-theme-text-secondary uppercase tracking-wider block mb-1 text-[8.5px]">{t.ingredientsLabel}</span>
+                    <span className="text-theme-neutral font-normal">{item.ingredientsList}</span>
+                  </div>
+                )}
+
+                {showWarning && (
+                  <div className="mt-2 flex flex-col gap-1.5 bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-800/50 rounded-lg p-2 font-sans">
+                    <div className="flex items-start gap-1.5 text-amber-700 dark:text-amber-400">
+                      <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div className="flex flex-col">
+                        <span className="text-[11px] font-bold leading-tight">
+                          {missingWeight ? t.missingPortionSize : t.visualScoutUnclear}
+                        </span>
+                        <span className="text-[10px] font-medium leading-tight opacity-90 mt-0.5">
+                          {isUnclear 
+                            ? `Low confidence or anomalies detected (${cleanAnomalyFlags.join(', ') || 'unclear detail'}).` 
+                            : t.providePortionSize}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-1">
+                      <button 
+                        onClick={() => { document.getElementById('food-chat-input')?.focus(); }} 
+                        className="flex-1 text-[10px] font-bold bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 py-1.5 px-3 rounded-md shadow-sm hover:bg-amber-50 dark:hover:bg-amber-900/40 active:scale-95 transition-all text-center"
+                      >
+                        Edit Item
+                      </button>
+                      <button 
+                        onClick={() => { 
+                          if (onConfirmItem) {
+                            onConfirmItem(item.scoutIndex ?? i);
+                          }
+                        }} 
+                        className="flex-1 text-[10px] font-bold bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 py-1.5 px-3 rounded-md shadow-sm hover:bg-amber-50 dark:hover:bg-amber-900/40 active:scale-95 transition-all text-center"
+                      >
+                        This is correct
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {item._preservedAnomalyFlags && item._preservedAnomalyFlags.length > 0 && (
+                  <div className="mt-2 text-[10px] text-theme-text-secondary font-sans px-1">
+                    t.noteAnomaly
+                  </div>
+                )}
+              </div>
+            );
+          }).filter(Boolean);
+
+  if (!renderedItems || renderedItems.length === 0) return null;
+
+  const labelsContent = (
+    <div className="mt-2 space-y-3 pl-2 border-l-2 border-indigo-100 dark:border-indigo-900/30">
+      {renderedItems}
+    </div>
+  );
+
+  if (hideOwnToggle) {
+    return <div className="mt-2 text-left pt-1 font-sans">{labelsContent}</div>;
+  }
+
+  return (
+    <div className="mt-2 text-left pt-1 font-sans">
+      <details className="group [&_summary::-webkit-details-marker]:hidden" open={defaultOpen}>
+        <summary className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold text-indigo-600 dark:text-indigo-400 select-none">
+          <span>{t.viewNutritionLabels}</span>
+          <svg
+            className="w-3 h-3 transition-transform group-open:rotate-180"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </summary>
+        {labelsContent}
+      </details>
+    </div>
+  );
+}

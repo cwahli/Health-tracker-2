@@ -1,0 +1,72 @@
+# Output templates (IMPACT · SELF-CHECK · GATE)
+
+Paste these before declaring COMPLETE on **L/X** work (and any multi-path change).  
+Do not invent a free-form STATUS that skips gates.
+
+---
+
+## IMPACT (before coding L/X)
+
+```text
+IMPACT
+class: S | M | L | X
+goal: <one sentence>
+files: [list that will change]
+paths: [e.g. Mode A | Mode D | Edit | agent1…agent5 | food sync | bio sync | N/A + reason]
+fields/contracts: [keys or tombstones that must remain]
+domain docs read: [food-calc | biomarkers | sync | none]
+out of scope: [explicit]
+risk if wrong: <one sentence>
+plan:
+  - …
+  - …
+  - …
+```
+
+If IMPACT reveals larger scope than the user asked: **stop and report** — do not silently expand.
+
+---
+
+## SELF-CHECK (before claiming ready for gates)
+
+```text
+SELF-CHECK
+- [ ] Every new import has a correct-path call site
+- [ ] No placeholders / stubs left
+- [ ] No drive-by refactors outside IMPACT.files
+- [ ] No dropped fields on merge/construct (or listed in scope)
+- [ ] Sibling paths: all updated OR known-broken noted
+- [ ] Detect+repair present if detection was in scope
+- [ ] Domain invariants from rulebook respected
+- [ ] No gate script weakened to force pass
+```
+
+Self-check allows submission to gates. It does **not** allow COMPLETE.
+
+---
+
+## GATE LOG (required for COMPLETE)
+
+```text
+GATE LOG
+tsc:     exit ?   (npx tsc --noEmit)
+vitest:  exit ?   (list exact files/patterns)
+assert:  exit ?   (list exact scripts)
+notes:   <sibling paths verified / known-broken link>
+```
+
+Copy real exit codes. “Tests passed” without names = FAIL.
+
+---
+
+## Minimal COMPLETE block
+
+```text
+COMPLETE
+IMPACT: <filled>
+SELF-CHECK: all boxes
+GATE LOG: all exit 0
+paths: <verified list>
+```
+
+Forbidden phrases until true: all done · fully verified · nothing left · all requirements completed.

@@ -1,0 +1,571 @@
+import { NUTRIENT_KEYS } from "./src/utils/nutrients";
+import { getTraceNutrientsForFoodType, getCookingMethodModifier, calculateUniversalAddedNutrients, BEVERAGE_PATTERN } from "./server_food_db";
+import { classifyUniversalPhysicalFormV3 } from "./server_matching_engine";
+import { decidePrepAddition } from "./server_prep_policy";
+import { 
+  sanitizeMealWeight, 
+  sanitizeString,
+  extractUSDANutrientsPer100g, 
+  extractOFFNutrientsPer100g,
+  checkIfItemIsAlreadyPrepared,
+  applyNutrientRealityChecks,
+  backfillSolubleFibre
+} from "./server_pure_helpers";
+import { deduceSugarBreakdown } from "./server_sugar_engine";
+
+export function cleanNutrientNumber(val: any): number {
+  if (val === null || val === undefined || isNaN(Number(val))) return 0;
+  let num = Number(val);
+  if (num < 0) num = 0;
+  num = Math.round(num * 100) / 100;
+  if (num >= 10) {
+    num = Math.round(num * 10) / 10;
+  }
+  return num;
+}
+
+export interface AggregatedNutrientsResult {
+  nutrients: Record<string, number>;
+  itemsBreakdown: any[];
+}
+
+export function aggregateItemsNutrients(
+  rawItems: any[],
+  totalWeightGrams: number,
+  dbMatchMap: Map<string, any>,
+  databaseMatchesArray: any[],
+  addDebugLog: (msg: string) => void
+): AggregatedNutrientsResult {
+  const nutrients: Record<string, number> = {};
+  for (const key of NUTRIENT_KEYS) {
+    nutrients[key] = 0;
+  }
+
+
+
+  const itemsBreakdown = rawItems.map((item: any) => {
+    const canonicalName = sanitizeString(item.canonicalDbName || item.name, "Unspecified Item");
+    const itemTruthNutrients = item.truthNutrients || {};
+    const itemLockedKeys = new Set<string>(item.lockedNutrientKeys || []);
+    const itemWeight = sanitizeMealWeight(item.weightGrams, Math.round(totalWeightGrams / rawItems.length));
+    const dbSource = sanitizeString(item.dbSource, "estimated");
+    const dbId = item.dbId !== undefined && item.dbId !== null ? String(item.dbId) : null;
+    
+    const itemNutrients: Record<string, any> = {};
+    for (const key of NUTRIENT_KEYS) {
+      itemNutrients[key] = 0;
+    }
+
+    // Computed early (was previously computed near the end of this loop, AFTER the sugar
+    // engine calls below — which meant deduceSugarBreakdown() never saw the real physicalForm
+    // and whole-food/dairy sugar immunity never fired). Single source of truth for the rest
+    // of this item's processing.
+    const physicalFormClassification = item.physicalFormClassification || classifyUniversalPhysicalFormV3({
+      name: canonicalName,
+      canonicalDbName: canonicalName,
+      originalLocalName: item.originalLocalName || item.originalName,
+      keyword: item.keyword || canonicalName,
+      visualIngredients: item.visualIngredients,
+      components: item.components
+    });
+
+    const labelData = item.labelNutrientsPerServing;
+    let servingSizeGrams = labelData && labelData.servingSizeGrams !== undefined && labelData.servingSizeGrams !== null
+      ? Number(labelData.servingSizeGrams)
+      : 0;
+    if (labelData && (!servingSizeGrams || isNaN(servingSizeGrams) || servingSizeGrams <= 0)) {
+      servingSizeGrams = itemWeight > 0 ? itemWeight : 100;
+    }
+    if (labelData) {
+      const saltVal = labelData.salt !== undefined && labelData.salt !== null ? Number(labelData.salt) : 0;
+      const sodVal = labelData.sodium !== undefined && labelData.sodium !== null ? Number(labelData.sodium) : 0;
+      if (!isNaN(saltVal) && saltVal > 0) {
+        if (!sodVal || sodVal < saltVal * 200) {
+          const saltGrams = saltVal >= 20 ? saltVal / 1000 : saltVal;
+          labelData.sodium = Math.round(saltGrams * 400);
+        }
+      }
+    }
+
+    // When printed-label (or brand) truth is locked, force those portion totals first.
+    // Multi-component primaryBase100g may still carry USDA density for micros/receipt
+    // sub-rows, but locked macros must never be recomputed from that density
+    // (debug: Co-op beef topside 25g label 37/7.3/63 → USDA 35/5.5/11).
+    const applyTruthLocks = (target: Record<string, any>) => {
+      Object.entries(itemTruthNutrients).forEach(([key, val]) => {
+        if (!itemLockedKeys.has(key)) return;
+        const num = Number(val);
+        if (Number.isFinite(num)) target[key] = num;
+      });
+    };
+
+    if (item.primaryBase100g) {
+      // It's a multi-component item! Calculate base and sauces and cooking method additions deterministically
+      const raw100 = { ...item.primaryBase100g };
+      if (raw100.salt !== undefined && raw100.salt !== null) {
+        const saltVal = Number(raw100.salt);
+        const sodVal = raw100.sodium !== undefined && raw100.sodium !== null ? Number(raw100.sodium) : 0;
+        if (!isNaN(saltVal) && saltVal > 0 && (!sodVal || sodVal < saltVal * 200)) {
+          const saltGrams = saltVal >= 20 ? saltVal / 1000 : saltVal;
+          raw100.sodium = Math.round(saltGrams * 400);
+        }
+      }
+      const itemWeightG = itemWeight;
+      
+      let baseW = item.primaryBaseWeightG || itemWeightG;
+      let sauceWSum = 0;
+      let scaleRatio = 1;
+      
+      if (item.saucesDetailList && item.saucesDetailList.length > 0) {
+        sauceWSum = item.saucesDetailList.reduce((acc: number, s: any) => acc + (s.weightGrams || 0), 0);
+      }
+      
+      if (item.primaryBaseWeightG) {
+         const originalWeight = item.primaryBaseWeightG + sauceWSum;
+         if (originalWeight > 0 && Math.abs(originalWeight - itemWeightG) > 2) {
+            scaleRatio = itemWeightG / originalWeight;
+            baseW = Math.round(item.primaryBaseWeightG * scaleRatio);
+         }
+      } else if (sauceWSum > 0) {
+         if (baseW === itemWeightG && sauceWSum < itemWeightG) {
+            baseW = Math.max(10, itemWeightG - sauceWSum);
+         }
+      }
+
+      const isDishBasis = raw100.basisType === 'total' || raw100.basisType === 'per_dish';
+      const baseFactor = isDishBasis ? 1 : (baseW / 100);
+
+      addDebugLog(`[Nutrient] "${canonicalName}" multi-component aggregation. raw100=${JSON.stringify(raw100)}, baseW=${baseW}, baseFactor=${baseFactor}`);
+
+      // 1. Calculate base ingredient nutrients
+      const portionBaseCal = Math.round((raw100.calories || 0) * baseFactor);
+      const portionBaseP = Math.round((raw100.protein || 0) * baseFactor * 10) / 10;
+      const portionBaseFat = Math.round((raw100.totalFat || 0) * baseFactor * 10) / 10;
+      const portionBaseSatFat = Math.round((raw100.saturatedFat || 0) * baseFactor * 10) / 10;
+      const portionBaseTransFat = Math.round((raw100.transFat || 0) * baseFactor * 10) / 10;
+      const portionBaseNa = Math.round((raw100.sodium || 0) * baseFactor);
+      const portionBaseCarbs = Math.round((raw100.carbohydrates || 0) * baseFactor * 10) / 10;
+      const portionBaseTotalSugar = Math.round((raw100.sugar !== undefined ? raw100.sugar : 0) * baseFactor * 10) / 10;
+      const portionBaseSugar = Math.round((raw100.addedSugar !== undefined ? raw100.addedSugar : 0) * baseFactor * 10) / 10;
+      const portionBaseK = Math.round((raw100.potassium || 0) * baseFactor);
+      const portionBaseFibre = Math.round((raw100.totalFibre !== undefined ? raw100.totalFibre : (raw100.fiber !== undefined ? raw100.fiber : (raw100.fibre !== undefined ? raw100.fibre : 0))) * baseFactor * 10) / 10;
+      let portionBaseSolubleFibre = Math.round((raw100.solubleFibre || 0) * baseFactor * 10) / 10;
+      if (portionBaseFibre > 0 && portionBaseSolubleFibre === 0) {
+        const compN = { totalFibre: portionBaseFibre, solubleFibre: 0 };
+        backfillSolubleFibre(compN, canonicalName || item.keyword || "");
+        portionBaseSolubleFibre = compN.solubleFibre || 0;
+      }
+
+      let sumCal = portionBaseCal;
+      let sumP = portionBaseP;
+      let sumFat = portionBaseFat;
+      let sumSatFat = portionBaseSatFat;
+      let sumTransFat = portionBaseTransFat;
+      let sumNa = portionBaseNa;
+      let sumCarbs = portionBaseCarbs;
+      let sumTotalSugar = portionBaseTotalSugar;
+      let sumSugar = portionBaseSugar;
+      let sumK = portionBaseK;
+      let sumFibre = portionBaseFibre;
+      let sumSolubleFibre = portionBaseSolubleFibre;
+
+      // 2. Add sauces
+      if (item.saucesDetailList && Array.isArray(item.saucesDetailList) && item.saucesDetailList.length > 0) {
+        item.saucesDetailList.forEach((s: any) => {
+          const sCal = Math.round((s.calories || 0) * scaleRatio);
+          const sP = Math.round((s.protein || 0) * scaleRatio * 10) / 10;
+          const sF = Math.round((s.totalFat || 0) * scaleRatio * 10) / 10;
+          const sSatFat = Math.round((s.saturatedFat !== undefined ? s.saturatedFat : 0.3) * scaleRatio * 10) / 10;
+          const sTransFat = Math.round((s.transFat || 0) * scaleRatio * 10) / 10;
+          const sNa = Math.round((s.sodium || 0) * scaleRatio);
+          const sCarbs = Math.round((s.carbohydrates || 0) * scaleRatio * 10) / 10;
+          const sTotalSugar = Math.round((s.sugar || 0) * scaleRatio * 10) / 10;
+          const sSugar = Math.round((s.addedSugar || 0) * scaleRatio * 10) / 10;
+          const sK = Math.round((s.potassium || 0) * scaleRatio);
+          const sFibre = Math.round((s.totalFibre || s.fiber || 0) * scaleRatio * 10) / 10;
+          const sSolubleFibre = Math.round((s.solubleFibre || 0) * scaleRatio * 10) / 10;
+
+          sumCal += sCal;
+          sumP += sP;
+          sumFat += sF;
+          sumSatFat += sSatFat;
+          sumTransFat += sTransFat;
+          sumNa += sNa;
+          sumCarbs += sCarbs;
+          sumTotalSugar += sTotalSugar;
+          sumSugar += sSugar;
+          sumK += sK;
+          sumFibre += sFibre;
+          sumSolubleFibre += sSolubleFibre;
+        });
+      }
+
+      // 3. Add cooking modifiers
+      let cookingCal = 0;
+      let cookingFat = 0;
+      let cookingSatFat = 0;
+      let cookingNa = 0;
+
+      const itemKwLower = (item.keyword || item.name || item.canonicalDbName || "").toLowerCase();
+      const isBeverage = BEVERAGE_PATTERN.test(itemKwLower);
+
+      if (!isBeverage) {
+        let rawMethod = (item.cookingMethod && item.cookingMethod !== 'unknown') ? item.cookingMethod : null;
+        if (!rawMethod) {
+          const kwLower = (item.keyword || item.name || "").toLowerCase();
+          if (kwLower.includes('wedge') || kwLower.includes('fries') || kwLower.includes('chip') || kwLower.includes('nugget')) {
+            rawMethod = 'deep_fried';
+          } else if (kwLower.includes('vegetable') || kwLower.includes('veg') || kwLower.includes('corn') || kwLower.includes('pea') || kwLower.includes('carrot') || kwLower.includes('broccoli')) {
+            rawMethod = 'boiled';
+          } else {
+            rawMethod = 'pan_fried';
+          }
+        }
+
+        const hasSauces = (item.saucesDetailList && item.saucesDetailList.length > 0 && item.saucesDetailList.some((s: any) => (s.sodium || 0) > 0)) ||
+          Boolean((item.name || item.canonicalDbName || "").toLowerCase().match(/\b(sauce|mayo|mayonnaise|dressing|gravy|salsa)\b/));
+        
+        const prepRes = decidePrepAddition({
+          weightGrams: itemWeightG,
+          cookingMethod: rawMethod,
+          dishName: item.originalName || item.name || item.keyword,
+          keyword: item.keyword,
+          canonicalDbName: item.canonicalDbName,
+          foodType: item.foodType,
+          componentCount: Array.isArray(item.components) ? item.components.length : 0,
+          hasLockedTruth: Boolean(item.hasLockedTruth || (item.truthNutrients && Object.keys(item.truthNutrients).length >= 11)),
+          isAlreadyPrepared: false,
+          cookingAdded: item.cookingAdded || null,
+          visualSheen: 0.5,
+          visualCoating: 0.5,
+          diningEnvironment: item.diningEnvironment || 'unknown',
+          hasSauceOrDressing: hasSauces,
+          physicalForm: physicalFormClassification.physicalForm,
+          dbSource: item.dbSource || dbSource,
+        });
+
+        cookingCal = prepRes.addedCalories;
+        cookingFat = prepRes.addedFat;
+        cookingSatFat = prepRes.addedSaturatedFat;
+        cookingNa = prepRes.addedSodium;
+      }
+
+      sumCal += cookingCal;
+      sumFat += cookingFat;
+      sumSatFat += cookingSatFat;
+      sumNa += cookingNa;
+
+      itemNutrients.calories = sumCal;
+      itemNutrients.protein = parseFloat(sumP.toFixed(2));
+      itemNutrients.totalFat = parseFloat(sumFat.toFixed(2));
+      itemNutrients.saturatedFat = parseFloat(sumSatFat.toFixed(2));
+      itemNutrients.transFat = parseFloat(sumTransFat.toFixed(2));
+      itemNutrients.sodium = sumNa;
+      itemNutrients.carbohydrates = parseFloat(sumCarbs.toFixed(2));
+      {
+        const sugarResult = deduceSugarBreakdown({
+          totalSugar: sumTotalSugar > 0 ? sumTotalSugar : sumSugar,
+          addedSugarPrinted: null,
+          carbohydrates: sumCarbs,
+          totalFibre: sumFibre,
+          physicalForm: physicalFormClassification.physicalForm,
+          ingredientsList: item.ingredientsList,
+        });
+        itemNutrients.sugar = sugarResult.sugar;
+        itemNutrients.addedSugar = sugarResult.addedSugar;
+      }
+      itemNutrients.potassium = sumK;
+      itemNutrients.totalFibre = parseFloat(sumFibre.toFixed(2));
+      itemNutrients.solubleFibre = parseFloat(sumSolubleFibre.toFixed(2));
+
+      // Re-apply printed locks immediately so the "summing components" log reflects truth
+      applyTruthLocks(itemNutrients);
+
+      addDebugLog(`[Nutrient] "${canonicalName}" computed DETERMINISTICALLY by summing components: Cal=${itemNutrients.calories}, Protein=${itemNutrients.protein}, Fat=${itemNutrients.totalFat}, SatFat=${itemNutrients.saturatedFat}, Sodium=${itemNutrients.sodium}, AddedSugar=${itemNutrients.addedSugar}, TotalFibre=${itemNutrients.totalFibre}${itemLockedKeys.size ? ` (locks=${Array.from(itemLockedKeys).join(',')})` : ''}`);
+    } else {
+      // STEP 1: Apply LLM core-11 estimate (present for label and estimated items)
+      if (labelData && servingSizeGrams > 0) {
+        const scaleFactor = itemWeight / servingSizeGrams;
+        for (const key of NUTRIENT_KEYS) {
+          if (labelData[key] !== undefined && labelData[key] !== null) {
+            itemNutrients[key] = parseFloat((Number(labelData[key]) * scaleFactor).toFixed(2));
+          }
+        }
+        addDebugLog(`[Nutrient] "${canonicalName}" core-11 from LLM estimate (servingSizeGrams=${servingSizeGrams}).`);
+      } else if (dbSource === "estimated") {
+        addDebugLog(`[Nutrient Warning] "${canonicalName}" is 'estimated' but LLM did not provide labelNutrientsPerServing. Core-11 will be zero.`);
+        itemNutrients.isUnverified = true;
+      }
+
+      // STEP 2: Override or reinforce core-11 with verified DB data from dbMatchMap or databaseMatchesArray
+      if (dbId) {
+        const hasInMap = dbMatchMap.has(dbId);
+        const match = !hasInMap ? databaseMatchesArray.find((m: any) => m.id === dbId) : null;
+        if (hasInMap) {
+          const baseNutrientsPer100g = dbMatchMap.get(dbId);
+          addDebugLog(`[Nutrient] "${canonicalName}" STEP 2 fallback override. baseNutrientsPer100g=${JSON.stringify(baseNutrientsPer100g)}`);
+          const factor = ((baseNutrientsPer100g as any)?.basisType === 'total' || (baseNutrientsPer100g as any)?.basisType === 'per_dish') ? 1 : (itemWeight / 100);
+          for (const key of NUTRIENT_KEYS) {
+            if (baseNutrientsPer100g[key] !== undefined && baseNutrientsPer100g[key] !== null) {
+              itemNutrients[key] = parseFloat((baseNutrientsPer100g[key] * factor).toFixed(2));
+            }
+          }
+          addDebugLog(`[Nutrient] "${canonicalName}" core-11 reinforced by dbMatchMap (source=${dbSource}, dbId=${dbId}).`);
+        } else if (match) {
+          const baseNutrientsPer100g = dbSource === "usda" ? extractUSDANutrientsPer100g(match) : extractOFFNutrientsPer100g(match);
+          const factor = ((baseNutrientsPer100g as any)?.basisType === 'total' || (baseNutrientsPer100g as any)?.basisType === 'per_dish') ? 1 : (itemWeight / 100);
+          for (const key of NUTRIENT_KEYS) {
+            if (baseNutrientsPer100g[key] !== undefined && baseNutrientsPer100g[key] !== null) {
+              itemNutrients[key] = parseFloat((baseNutrientsPer100g[key] * factor).toFixed(2));
+            }
+          }
+          addDebugLog(`[Nutrient] "${canonicalName}" core-11 reinforced by match object.`);
+        }
+      }
+    }
+
+    // STEP 2.5: Apply cooking method modifiers (fat, calories, sodium)
+    const cookingMethod = item.cookingMethod || 'unknown';
+    const visualSheen = item.visualSheen !== undefined ? item.visualSheen : 0.5;
+    const visualCoating = item.visualCoating !== undefined ? item.visualCoating : 0.5;
+    const diningEnvironment = item.diningEnvironment || 'unknown';
+    const nameLowerForMatrix = canonicalName.toLowerCase();
+    const foodMatrix = (item.foodType === 'ultra_processed' || item.foodType === 'root_veg' || nameLowerForMatrix.includes('potato') || nameLowerForMatrix.includes('wedge') || nameLowerForMatrix.includes('fry') || nameLowerForMatrix.includes('fries') || nameLowerForMatrix.includes('chip')) ? 'CELLULAR_STARCH' : nameLowerForMatrix;
+    
+    // Check if the item is already prepared or seasoned to avoid "double-salting"
+    let baselineSodium: number | undefined = undefined;
+    if (item.primaryBase100g && item.primaryBase100g.sodium !== undefined) {
+      baselineSodium = item.primaryBase100g.sodium;
+    } else if (item.labelNutrientsPerServing && item.labelNutrientsPerServing.sodium !== undefined) {
+      baselineSodium = item.labelNutrientsPerServing.sodium;
+    }
+    const isAlreadyPrepared = checkIfItemIsAlreadyPrepared(canonicalName, item.keyword || "", dbSource, baselineSodium);
+    const hasSauceOrDressing = (item.saucesDetailList && item.saucesDetailList.length > 0 && item.saucesDetailList.some((s: any) => (s.sodium || 0) > 0)) ||
+      Boolean((canonicalName || "").toLowerCase().match(/\b(sauce|mayo|mayonnaise|dressing|gravy|salsa)\b/));
+
+    const addedNutrients = decidePrepAddition({
+      weightGrams: itemWeight,
+      cookingMethod: cookingMethod,
+      dishName: canonicalName,
+      keyword: item.keyword,
+      canonicalDbName: item.canonicalDbName,
+      foodType: item.foodType,
+      componentCount: Array.isArray(item.components) ? item.components.length : 0,
+      hasLockedTruth: Boolean(item.hasLockedTruth || (itemTruthNutrients && Object.keys(itemTruthNutrients).length >= 11)),
+      isAlreadyPrepared: isAlreadyPrepared,
+      cookingAdded: item.cookingAdded || null,
+      visualSheen: visualSheen,
+      visualCoating: visualCoating,
+      diningEnvironment: diningEnvironment,
+      hasSauceOrDressing: hasSauceOrDressing,
+      physicalForm: physicalFormClassification.physicalForm,
+      dbSource: item.dbSource || dbSource,
+    });
+
+    if ((addedNutrients.addedFat > 0 || addedNutrients.addedSodium > 0) && dbSource !== 'estimated' && !item.primaryBase100g) {
+      itemNutrients.totalFat = parseFloat((itemNutrients.totalFat + addedNutrients.addedFat).toFixed(2));
+      itemNutrients.saturatedFat = parseFloat((itemNutrients.saturatedFat + addedNutrients.addedSaturatedFat).toFixed(2));
+      itemNutrients.calories = parseFloat((itemNutrients.calories + addedNutrients.addedCalories).toFixed(1));
+      itemNutrients.sodium = parseFloat((itemNutrients.sodium + addedNutrients.addedSodium).toFixed(1));
+      addDebugLog(`[Nutrient Modifier] Applied universal adhesion equation for "${canonicalName}": added +${addedNutrients.addedFat.toFixed(2)}g fat, +${addedNutrients.addedCalories.toFixed(1)} kcal, +${addedNutrients.addedSodium.toFixed(1)}mg sodium.`);
+    }
+
+    // Pre-apply truth locks so reality checks validate against locked truth values
+    Object.entries(itemTruthNutrients).forEach(([key, val]) => {
+      const num = Number(val);
+      if (Number.isFinite(num)) {
+        itemNutrients[key] = num;
+      }
+    });
+
+    // DIETITIAN REALITY CHECK: Sodium & Macro Sanity Check (Consolidated)
+    applyNutrientRealityChecks(
+      item.originalName || item.originalLocalName || item.keyword || canonicalName,
+      itemWeight,
+      itemNutrients,
+      addedNutrients.addedSodium,
+      addDebugLog,
+      dbSource,
+      {
+        originalName: item.originalName || item.originalLocalName || item.keyword,
+        keyword: item.keyword,
+        componentCount: Array.isArray(item.components) ? item.components.length : 0,
+        physicalForm: physicalFormClassification.physicalForm,
+        chainName: item.chainName || null,
+      }
+    );
+
+    // Zero-macro fallback for essential fields
+    if (isNaN(itemNutrients.calories) || itemNutrients.calories < 0) itemNutrients.calories = 0;
+    if (isNaN(itemNutrients.protein) || itemNutrients.protein < 0) itemNutrients.protein = 0;
+    if (isNaN(itemNutrients.totalFat) || itemNutrients.totalFat < 0) itemNutrients.totalFat = 0;
+    if (isNaN(itemNutrients.carbohydrates) || itemNutrients.carbohydrates < 0) itemNutrients.carbohydrates = 0;
+
+    // STEP 3: Derive the 20 trace nutrients from authentic DB data or food-type classification
+    const foodType = item.foodType || 'unknown';
+    const traceNutrients = { ...getTraceNutrientsForFoodType(foodType, itemWeight) };
+    
+    // Geofencing and Regional Fortification Logic
+    const fullText = ((item.ingredientsList || "") + " " + (item.originalName || "") + " " + JSON.stringify(item.rawNutritionLabel || {}) + " " + JSON.stringify(item.visualIngredients || []) + " " + (item.canonicalDbName || "")).toLowerCase();
+    const isUKRegion = fullText.includes(".info") || fullText.match(/\bgb\b/) || fullText.includes("saturates") || fullText.match(/\buk\b/);
+    if (isUKRegion) {
+        if (foodType === 'dairy' || foodType === 'grain') {
+            traceNutrients.vitaminD = 0; // Disable US fortification assumptions for UK/Europe
+            addDebugLog(`[Geofencing] Detected UK/European markers for "${canonicalName}". Disabling US fortification assumptions (Vitamin D = 0).`);
+        }
+    }
+    
+    let baseRef100g: Record<string, number> | null = null;
+    if (item.primaryBase100g) {
+      baseRef100g = item.primaryBase100g;
+    } else if (dbId && dbMatchMap && dbMatchMap.has(dbId)) {
+      baseRef100g = dbMatchMap.get(dbId);
+    } else if (dbId && databaseMatchesArray) {
+      const matchObj = databaseMatchesArray.find((m: any) => String(m.id) === String(dbId));
+      if (matchObj) {
+        baseRef100g = dbSource === "usda" ? extractUSDANutrientsPer100g(matchObj) : extractOFFNutrientsPer100g(matchObj);
+      }
+    }
+
+    const itemFactor = itemWeight / 100;
+    for (const key of Object.keys(traceNutrients)) {
+      if (baseRef100g && baseRef100g[key] !== undefined && baseRef100g[key] !== null) {
+        itemNutrients[key] = parseFloat((baseRef100g[key] * itemFactor).toFixed(2));
+      } else if (itemNutrients[key] === undefined || itemNutrients[key] === 0) {
+        itemNutrients[key] = (traceNutrients as any)[key];
+      }
+    }
+    addDebugLog(`[Nutrient] "${canonicalName}" trace-20 computed from ${baseRef100g ? 'authentic DB nutrients with fallback' : 'foodType=' + foodType}.`);
+
+    // Ensure physical consistency of fats for the item
+    if (itemNutrients.saturatedFat > itemNutrients.totalFat) {
+      itemNutrients.totalFat = itemNutrients.saturatedFat;
+    }
+    if (itemNutrients.transFat > itemNutrients.totalFat) {
+      itemNutrients.totalFat = itemNutrients.transFat;
+    }
+    if (itemNutrients.saturatedFat + itemNutrients.transFat > itemNutrients.totalFat) {
+      itemNutrients.totalFat = parseFloat((itemNutrients.saturatedFat + itemNutrients.transFat).toFixed(2));
+    }
+    itemNutrients.unsaturatedFat = parseFloat(Math.max(0, itemNutrients.totalFat - itemNutrients.saturatedFat - itemNutrients.transFat).toFixed(2));
+    if (itemNutrients.sugar || itemNutrients.addedSugar) {
+      const sugarResult = deduceSugarBreakdown({
+        totalSugar: itemNutrients.sugar || itemNutrients.addedSugar || 0,
+        addedSugarPrinted: labelData?.addedSugar != null ? Number(labelData.addedSugar) : null,
+        carbohydrates: itemNutrients.carbohydrates,
+        totalFibre: itemNutrients.totalFibre,
+        physicalForm: physicalFormClassification.physicalForm,
+        ingredientsList: item.ingredientsList,
+      });
+      itemNutrients.sugar = sugarResult.sugar;
+      itemNutrients.addedSugar = sugarResult.addedSugar;
+    }
+    itemNutrients.addedSugar = itemNutrients.addedSugar || 0;
+    itemNutrients.sugar = itemNutrients.sugar || 0;
+    itemNutrients.totalFibre = Math.max(0, itemNutrients.totalFibre || itemNutrients.fiber || itemNutrients.fibre || itemNutrients.serat || 0);
+
+    // Force locked truth nutrients for the individual item BEFORE clean precision clamp.
+    Object.entries(itemTruthNutrients).forEach(([key, val]) => {
+      if (itemLockedKeys.has(key)) {
+        const num = Number(val);
+        if (Number.isFinite(num)) {
+          itemNutrients[key] = num;
+        }
+      }
+    });
+
+    // Clamp all nutrients to 0 and clean precision
+    for (const key of NUTRIENT_KEYS) {
+      itemNutrients[key] = cleanNutrientNumber(itemNutrients[key]);
+    }
+
+    // Ensure lipid sub-components sum cleanly to totalFat
+    if (itemNutrients.totalFat > 0) {
+      const sat = itemNutrients.saturatedFat || 0;
+      const trans = itemNutrients.transFat || 0;
+      if (sat > itemNutrients.totalFat) {
+        itemNutrients.saturatedFat = itemNutrients.totalFat;
+      }
+      if (trans > itemNutrients.totalFat - itemNutrients.saturatedFat) {
+        itemNutrients.transFat = Math.max(0, itemNutrients.totalFat - itemNutrients.saturatedFat);
+      }
+      itemNutrients.unsaturatedFat = parseFloat(Math.max(0, itemNutrients.totalFat - itemNutrients.saturatedFat - (itemNutrients.transFat || 0)).toFixed(2));
+    } else {
+      itemNutrients.saturatedFat = 0;
+      itemNutrients.transFat = 0;
+      itemNutrients.unsaturatedFat = 0;
+    }
+
+    // Add to aggregated nutrients
+    for (const key of NUTRIENT_KEYS) {
+      nutrients[key] = cleanNutrientNumber(nutrients[key] + (itemNutrients[key] || 0));
+    }
+
+    const matchType = dbSource === "usda" ? "USDA FDC Entry" : dbSource === "off" ? "Open Food Facts Entry" : dbSource === "backend_calculated" || dbSource === "canonical" ? "Canonical Base Food Reference" : "Universal Nutrient Estimator";
+
+    const displayName = sanitizeString(
+      item.originalName || item.originalLocalName || item.keyword || item.name || canonicalName,
+      canonicalName
+    );
+
+    return {
+      name: displayName,
+      canonicalDbName: item.canonicalDbName || canonicalName,
+      originalName: item.originalName || item.originalLocalName || null,
+      originalLocalName: item.originalLocalName || item.originalName || null,
+      keyword: item.keyword || null,
+      chainName: item.chainName || null,
+      rawNutritionLabel: item.rawNutritionLabel || null,
+      scoutIndex: item.scoutIndex !== undefined ? item.scoutIndex : null,
+      weightGrams: itemWeight,
+      calories: itemNutrients.calories || 0,
+      protein: itemNutrients.protein || 0,
+      totalFat: itemNutrients.totalFat || 0,
+      saturatedFat: itemNutrients.saturatedFat || 0,
+      transFat: itemNutrients.transFat || 0,
+      carbohydrates: itemNutrients.carbohydrates || 0,
+      sugar: itemNutrients.sugar || 0,
+      addedSugar: itemNutrients.addedSugar || 0,
+      sodium: itemNutrients.sodium || 0,
+      potassium: itemNutrients.potassium || 0,
+      totalFibre: itemNutrients.totalFibre || itemNutrients.fiber || itemNutrients.fibre || itemNutrients.serat || 0,
+      solubleFibre: itemNutrients.solubleFibre || 0,
+      nutrients: itemNutrients,
+      labelNutrientsPerServing: item.labelNutrientsPerServing || null,
+      dbSource,
+      dbId,
+      isUnverified: itemNutrients.isUnverified || false,
+      cookingMethod: item.cookingMethod || null,
+      boundingBox2D: item.boundingBox2D || null,
+      sourceImageIndex: item.sourceImageIndex !== undefined ? item.sourceImageIndex : null,
+      components: item.components || null,
+      visualIngredients: item.visualIngredients || null,
+      saucesDetailList: item.saucesDetailList || [],
+      primaryBase100g: item.primaryBase100g || null,
+      primaryBaseMatchName: item.primaryBaseMatchName || null,
+      primaryBaseWeightG: item.primaryBaseWeightG || null,
+      cookingAdded: item.cookingAdded || null,
+      truthNutrients: itemTruthNutrients,
+      lockedNutrientKeys: Array.from(itemLockedKeys),
+      ingredientsList: item.ingredientsList || null,
+      physicalFormClassification,
+      matchReasonInfo: {
+        matchType,
+        physicalForm: physicalFormClassification.physicalForm,
+        matchedKeywords: Array.from(new Set(Array.isArray(physicalFormClassification.matchedTokens) ? physicalFormClassification.matchedTokens.map((t: any) => String(t).trim()) : [String(physicalFormClassification.matchedTokens || '').trim()])).filter(Boolean),
+        explanation: physicalFormClassification.explanation
+      }
+    };
+  });
+
+  for (const k of NUTRIENT_KEYS) {
+    if (nutrients[k] !== undefined) {
+      nutrients[k] = cleanNutrientNumber(nutrients[k]);
+    }
+  }
+
+  return {
+    nutrients,
+    itemsBreakdown
+  };
+}

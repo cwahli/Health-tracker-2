@@ -1,0 +1,479 @@
+export function formatPatientContext(context: {
+  biomarkersNeedingImprovement?: any[];
+  remainingAllowance?: any | null;
+  foodLogs?: any[];
+  userProfile?: any;
+}) {
+  const { biomarkersNeedingImprovement, remainingAllowance, foodLogs, userProfile } = context;
+
+  const formattedBiomarkers = Array.isArray(biomarkersNeedingImprovement) && biomarkersNeedingImprovement.length > 0
+    ? biomarkersNeedingImprovement.map((b: any) => {
+        if (typeof b === "string") {
+          return `• ${b}`;
+        }
+        if (b && typeof b === "object" && b.name) {
+          const statusStr = b.status ? ` is ${String(b.status).toUpperCase()}` : "";
+          const valStr = b.value !== undefined ? ` (${b.value} ${b.unit || ""}, normal range: ${b.normalRange || ""})` : "";
+          return `• ${b.name}${statusStr}${valStr}`;
+        }
+        return `• ${String(b)}`;
+      }).join("\n")
+    : "• None";
+
+  const biomarkersList = formattedBiomarkers;
+
+  // Timezone helper
+  const getCurrentDateInTimezone = (timezone?: string): string => {
+    try {
+      const options: Intl.DateTimeFormatOptions = {
+        timeZone: timezone || 'UTC',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      };
+      const formatter = new Intl.DateTimeFormat('en-CA', options);
+      return formatter.format(new Date());
+    } catch (e) {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  };
+
+  const timezone = userProfile?.timezone || 'UTC';
+  const todayStr = getCurrentDateInTimezone(timezone);
+
+  // Initialize nutrient tracking
+  const topNutrients = [
+    { key: 'saturatedFat', targetKey: 'saturatedFatTarget', label: 'Sat fat', unit: 'g', defaultTarget: 12 },
+    { key: 'calories', targetKey: 'caloriesTarget', label: 'Calorie', unit: 'kcal', defaultTarget: 1321 },
+    { key: 'sodium', targetKey: 'sodiumTarget', label: 'Sodium', unit: 'mg', defaultTarget: 960 },
+    { key: 'protein', targetKey: 'proteinTarget', label: 'Protein', unit: 'g', defaultTarget: 72 },
+    { key: 'carbohydrates', targetKey: 'carbohydratesTarget', label: 'Carbohydrates', unit: 'g', defaultTarget: 128 },
+    { key: 'totalFibre', altKey: 'solubleFibre', targetKey: 'solubleFibreTarget', label: 'Total Fibre', unit: 'g', defaultTarget: 38 },
+    { key: 'potassium', targetKey: 'potassiumTarget', label: 'Potassium', unit: 'mg', defaultTarget: 4200 },
+    { key: 'solubleFibre', targetKey: 'solubleFibreTarget', label: 'Soluble Fibre', unit: 'g', defaultTarget: 12 },
+    { key: 'addedSugar', targetKey: 'addedSugarTarget', label: 'Added Sugar', unit: 'g', defaultTarget: 24 },
+    // NOTE: 'sugar' (Total Sugar) is intentionally NOT tracked here as a limited target.
+    // Whole fruit/veg/dairy naturally contain sugar with no clinical daily cap; only
+    // Added Sugar has a meaningful limit. See clinical framing note below.
+    { key: 'transFat', targetKey: 'transFatTarget', label: 'Trans Fat', unit: 'g', defaultTarget: 0 },
+  ];
+
+  const getTarget = (key: string, defaultTarget: number) => {
+    if (remainingAllowance) {
+      if (remainingAllowance[key] !== undefined) return Math.round(Number(remainingAllowance[key]));
+    }
+    return defaultTarget;
+  };
+
+  // Compute actual 7-day averages and today's totals from foodLogs if present
+  let averages: Record<string, number> = {};
+  let todaysTotals: Record<string, number> = {};
+  let hasDynamicData = false;
+
+  if (Array.isArray(foodLogs) && foodLogs.length > 0) {
+    hasDynamicData = true;
+
+    // Last 7 days including today
+    const last7Days: string[] = [];
+    const parts = todayStr.split('-');
+    const todayDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(todayDate);
+      d.setDate(todayDate.getDate() - i);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      last7Days.push(`${y}-${m}-${day}`);
+    }
+
+    // Today's logged total
+    const todaysFoods = foodLogs.filter(f => f.date === todayStr);
+    todaysFoods.forEach(f => {
+      if (f.nutrients) {
+        Object.keys(f.nutrients).forEach(k => {
+          todaysTotals[k] = (todaysTotals[k] || 0) + (Number(f.nutrients[k]) || 0);
+        });
+      }
+    });
+
+    // 7-day averages
+    topNutrients.forEach((n) => {
+      const nutrientKey = n.key;
+      let total = 0;
+      last7Days.forEach(dStr => {
+        const dayFoods = foodLogs.filter(f => f.date === dStr);
+        const daySum = dayFoods.reduce((acc, curr) => {
+          return acc + (Number(curr.nutrients?.[nutrientKey] || (n.altKey ? curr.nutrients?.[n.altKey] : 0)) || 0);
+        }, 0);
+        total += daySum;
+      });
+      averages[nutrientKey] = total / 7;
+    });
+  }
+
+  let targetLimits = "=== NUTRITIONAL TARGET STATUS ===\n";
+
+  if (hasDynamicData) {
+    // 7 days avg line
+    const avgParts: string[] = [];
+    topNutrients.forEach((n) => {
+      const avgVal = Math.round(averages[n.key] || 0);
+      const targetVal = Math.round(getTarget(n.targetKey, n.defaultTarget));
+      if (avgVal > targetVal && targetVal > 0) {
+        const pctOver = Math.round(((avgVal - targetVal) / targetVal) * 100);
+        avgParts.push(`${n.label} (${avgVal}${n.unit} - ${pctOver}% over)`);
+      } else if (avgVal > 0) {
+        avgParts.push(`${n.label} (${avgVal}${n.unit} avg)`);
+      } else {
+        avgParts.push(`${n.label} (0${n.unit} avg)`);
+      }
+    });
+
+    const avgLine = `7 days avg: ${avgParts.join(', ')}`;
+
+    // Todays target line
+    const todayParts: string[] = [];
+    topNutrients.forEach((n) => {
+      const logged = Math.round(todaysTotals[n.key] || 0);
+      const targetVal = Math.round(getTarget(n.targetKey, n.defaultTarget));
+
+      if (targetVal > 0 && logged > targetVal) {
+        const overage = logged - targetVal;
+        todayParts.push(`${n.label} (${logged}${n.unit} over ${targetVal}${n.unit})`);
+      } else if (targetVal > 0) {
+        todayParts.push(`${n.label} (${logged}/${targetVal}${n.unit})`);
+      } else {
+        todayParts.push(`${logged}${n.unit}`);
+      }
+    });
+
+    const todayLine = `Todays target: ${todayParts.join(', ')}`;
+    targetLimits += `${avgLine}\n${todayLine}`;
+  } else {
+    // If no dynamic data or empty logs, use realistic default text
+    targetLimits += `7 days avg: Sat fat (33g - 172% over), Calorie (2610 kcal - 98% over), Sodium (3096mg - 222% over), Protein (125g avg - 74% over), Carbohydrates (226g avg - 76% over), Total Fibre (35g avg), Potassium (1777mg avg), Soluble Fibre (2.6g avg), Added Sugar (12g avg), Trans Fat (0g avg)\nTodays target: Sat fat (25g over 12g), Calorie (1272kcal over), Sodium (576mg over), Protein (113/72g), Carbohydrates (176/128g), Total fibre (36/38g), Potassium (1677/4200mg), Soluble Fibre (0/12g), Added Sugar (0/24g), Trans Fat (0/0g)`;
+  }
+
+  return { biomarkersList, targetLimits };
+}
+
+const DIETITIAN_CORE_DIRECTIVES = `
+You are a Dietician coach operating within a personalized health application. Provide direct, practical nutritional guidance as a raw JSON object without markdown wrappers.
+
+=== GENERAL RULES ===
+- Do not recite raw macro lists. 
+- Keep next steps focused on practical real-food habits or movement (not future gram targets).
+- When discussing sugar, always distinguish Total Sugar (naturally occurring, e.g. fructose in fruit, lactose in dairy) from Added Sugar (the only figure with a 24g/day guideline). Do not flag naturally high-sugar whole foods (fruit, vegetables, plain dairy) as a sugar concern — only flag genuinely high Added Sugar intake.
+
+=== VERDICT LABEL GUIDELINES (3-6 WORDS MAX) ===
+- Positive/Neutral Choice: Focus on a core physical health outcome. Example: "Good for your heart", "Boosts lean muscle tissue".
+- Overage/Risk Choice: Focus strictly on a punchy, metric-backed impact label. Example: "140% over sat fat limit", "115% over sodium limit".
+- BANNED: Never use vague descriptive sentences like "Elevates saturated fat and sodium limits" or "High saturated fat warning". Keep it punchy and metric-backed.
+
+=== MESSAGE NARRATIVE GUIDELINES (35-70 WORDS IN 4 BEATS) ===
+You MUST write the "message" narrative strictly using a 4-beat structure:
+- Beat 1 (Primary Asset & Metric): Praise the meal's key nutrient asset using specific, concrete metrics. Example: "You got 53g of quality protein and healthy omega-3s from the salmon."
+- Beat 2 (Impact/Overage & Metric): Highlight any overage/impact using exact, concrete metrics and percentages. Example: "However, the cheesy pasta adds 18g of saturated fat, pushing today's total 140% over limit."
+- Beat 3 (Symptom-Based Physical Effect): Translate abstract clinical or cholesterol jargon into a relatable immediate physical sensation or feeling. Example: "This heavy fat load causes physical sluggishness, digestive heaviness, and vascular stiffness." (BANNED: "temporarily burdens your cardiovascular system" or "impacts your lipid biomarkers").
+- Beat 4 (Actionable Next Steps): Recommend a direct physical action or habit to mitigate the impact. Example: "Take a 20-minute post-meal walk to boost circulation, and make your next meal rich in soluble fiber like lentils or greens."
+
+=== FULLY COMPLIANT FEW-SHOT EXAMPLE ===
+{
+  "_internalReasoning": "The user logged a meal with grilled salmon, macaroni and cheese, avocado, and lettuce. The salmon offers excellent lean protein and heart-healthy omega-3s, but the mac and cheese is highly concentrated in saturated fat and sodium. Given their high cholesterol and overweight status, I will frame this as an overage, calling out the exact 18g of saturated fat causing a 140% daily limit breach, explaining the physical feeling of vascular stiffness, and guiding a post-meal walk.",
+  "verdict": {
+    "label": "140% over sat fat limit",
+    "level": "alert"
+  },
+  "message": "You got 53g of quality protein and healthy omega-3s from the salmon. However, the cheesy pasta adds 18g of saturated fat, pushing today's total 140% over your daily limit. This heavy fat load causes physical sluggishness, digestive heaviness, and vascular stiffness. Take a 20-minute post-meal walk to boost circulation, and make your next meal rich in soluble fiber like lentils or greens.",
+  "foodData": {
+    "date": "2026-08-03",
+    "name": "Grilled Salmon with Macaroni and Cheese, Avocado, and Lettuce",
+    "description": "Grilled salmon fillet served alongside macaroni and cheese, avocado chunks, and fresh lettuce greens.",
+    "itemsBreakdown": [
+      {
+        "scoutIndex": 0,
+        "canonicalDbName": "Macaroni and Cheese, frozen entree",
+        "weightGrams": 220,
+        "dbSource": "usda",
+        "dbId": "173342",
+        "foodType": "prepared dish/entree",
+        "cookingMethod": "baked"
+      },
+      {
+        "scoutIndex": 1,
+        "canonicalDbName": "Fish, salmon, Atlantic, farmed, cooked, dry heat",
+        "weightGrams": 150,
+        "dbSource": "estimated",
+        "dbId": null,
+        "foodType": "protein",
+        "cookingMethod": "grilled"
+      },
+      {
+        "scoutIndex": 2,
+        "canonicalDbName": "Avocado, Hass, peeled, raw",
+        "weightGrams": 90,
+        "dbSource": "usda",
+        "dbId": "2710824",
+        "foodType": "fruit/fat source",
+        "cookingMethod": "raw"
+      },
+      {
+        "scoutIndex": 3,
+        "canonicalDbName": "Lettuce, iceberg, raw",
+        "weightGrams": 30,
+        "dbSource": "usda",
+        "dbId": "2346388",
+        "foodType": "vegetable",
+        "cookingMethod": "raw"
+      }
+    ]
+  }
+}
+`;
+
+const REQUIRED_OUTPUT_JSON_SCHEMA = `
+=== REQUIRED OUTPUT JSON SCHEMA ===
+{
+  "_internalReasoning": "string (Silently synthesize clinical evidence and plan response structure)",
+  "verdict": {
+    "label": "string (3-6 words max. Positive: Core health outcome e.g. 'Good for your heart'. Overage: Primary metric/impact e.g. '140% over sat fat limit')",
+    "level": "string ('good' | 'warning' | 'alert' | 'neutral')"
+  },
+  "message": "string (35-70 words in 4 beats: 1. Key Value w/ selective metric -> 2. Impact/Overage w/ selective metric if applicable -> 3. Symptom-based physical effect -> 4. Next Action: MITIGATION if overage occurred [walk/water/fiber], or CONTINUATION/GAP-FILLING if on-track [fill missing target])",
+  "foodData": {
+    "date": "string (YYYY-MM-DD)",
+    "name": "string (Meal title)",
+    "description": "string (Short dish summary)",
+    "itemsBreakdown": [
+      {
+        "scoutIndex": 0,
+        "canonicalDbName": "string (strictly standard database/product name, 2-5 words maximum. No reasoning/scaling/notes)",
+        "weightGrams": 0,
+        "dbSource": "string ('usda' | 'label' | 'estimated')",
+        "dbId": "string | null",
+        "foodType": "string (strictly concise 1-2 words category e.g. 'grain', 'protein', 'vegetable', 'fruit', 'dairy'. No sentences, no explanations, no explanations of calculations, no justifications)",
+        "cookingMethod": "string (strictly 1-2 words concise method e.g. 'raw', 'baked', 'grilled', 'boiled'. No justifications)"
+      }
+    ]
+  },
+  "comparison": {
+    "comparisonTitle": "string (e.g. 'Nutrients of Concern')",
+    "groups": [
+      {
+        "groupName": "string (Descriptive group name or option title e.g. 'Tier 1 - Safest Choice' or 'Sainsbury Scottish Oats')",
+        "scoutItemIndices": [0],
+        "verdict": {
+          "label": "string (3-6 words max. Positive: Core health outcome e.g. 'Good for your heart'. Overage: Primary metric/impact e.g. '140% over sat fat limit')",
+          "level": "string ('good' | 'warning' | 'alert' | 'neutral')"
+        },
+        "message": "string (35-70 words in 4 beats: 1. Key Value w/ selective metric -> 2. Impact/Overage w/ selective metric if applicable -> 3. Symptom-based physical effect -> 4. Next Action: MITIGATION if overage occurred [walk/water/fiber], or CONTINUATION/GAP-FILLING if on-track [fill missing target])",
+        "averageNutrients": {
+          "calories": 0,
+          "protein": 0,
+          "totalFat": 0,
+          "saturatedFat": 0,
+          "sodium": 0,
+          "carbohydrates": 0,
+          "addedSugar": 0,
+          "potassium": 0,
+          "totalFibre": 0
+        }
+      }
+    ]
+  }
+}
+`;
+
+export function buildFoodAnalyzeInstruction(context: {
+  biomarkersNeedingImprovement?: any[];
+  remainingAllowance?: any | null;
+  activeMeal?: any;
+  compareItemCount?: number;
+  forceModifyMode?: boolean;
+  foodLogs?: any[];
+  userProfile?: any;
+}): string {
+  const { biomarkersList, targetLimits } = formatPatientContext(context);
+  const { activeMeal, forceModifyMode = false } = context;
+
+  let sanitizedActiveMeal = null;
+  if (activeMeal) {
+    sanitizedActiveMeal = { ...activeMeal };
+    if (sanitizedActiveMeal.imageUrl && sanitizedActiveMeal.imageUrl.startsWith("data:image/")) {
+      sanitizedActiveMeal.imageUrl = "[base64_image_data_truncated]";
+    }
+  }
+
+  const mealStr = sanitizedActiveMeal ? JSON.stringify(sanitizedActiveMeal, null, 2) : "None";
+
+  return `CURRENT_ACTIVE_MEAL_STATE: ${mealStr}
+
+${DIETITIAN_CORE_DIRECTIVES}
+
+=== PATIENT CONTEXT PAYLOAD ===
+CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
+${biomarkersList}
+
+${targetLimits}
+
+=== ACTIVE TASK: FOOD ANALYSIS & LOGGING ===
+${forceModifyMode ? "Re-evaluate the active meal incorporating the patient's requested edits (weight corrections, name fixes, or ingredient swaps)." : "Process the scanned meal, verify database matches, perform nutritional analysis, and return the log details."}
+
+${REQUIRED_OUTPUT_JSON_SCHEMA}`;
+}
+
+export function buildModeAReviewInstruction(context: {
+  biomarkersNeedingImprovement?: any[];
+  remainingAllowance?: any | null;
+  foodLogs?: any[];
+  userProfile?: any;
+}): string {
+  const { biomarkersList, targetLimits } = formatPatientContext(context);
+
+  return `${DIETITIAN_CORE_DIRECTIVES}
+
+=== PATIENT CONTEXT PAYLOAD ===
+CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
+${biomarkersList}
+
+${targetLimits}
+
+=== ACTIVE TASK: NEW FOOD LOGGING ===
+DEFAULT TO CONSUMPTION: Process the identified food logs and visual scout items as a consumed meal. Provide constructive, warm clinical analysis on today's target fit.
+
+${REQUIRED_OUTPUT_JSON_SCHEMA}`;
+}
+
+export function buildModeAEditInstruction(context: {
+  biomarkersNeedingImprovement?: any[];
+  remainingAllowance?: any | null;
+  activeMeal?: any;
+  foodLogs?: any[];
+  userProfile?: any;
+}): string {
+  const { biomarkersList, targetLimits } = formatPatientContext(context);
+  let sanitizedActiveMeal = null;
+  if (context.activeMeal) {
+    sanitizedActiveMeal = { ...context.activeMeal };
+    if (sanitizedActiveMeal.imageUrl && sanitizedActiveMeal.imageUrl.startsWith("data:image/")) sanitizedActiveMeal.imageUrl = "[base64_image_data_truncated]";
+    if (sanitizedActiveMeal.imageUrls) sanitizedActiveMeal.imageUrls = [];
+    delete sanitizedActiveMeal.chatTranscript;
+    delete sanitizedActiveMeal.receiptTable;
+    delete sanitizedActiveMeal.nutrients;
+    delete sanitizedActiveMeal.verdict;
+    if (sanitizedActiveMeal.itemsBreakdown && Array.isArray(sanitizedActiveMeal.itemsBreakdown)) {
+      sanitizedActiveMeal.itemsBreakdown = sanitizedActiveMeal.itemsBreakdown.map((item: any) => ({
+        scoutIndex: item.scoutIndex,
+        dbId: item.dbId,
+        canonicalDbName: item.canonicalDbName || item.name,
+        foodType: item.foodType,
+        weightGrams: item.weightGrams,
+        dbSource: item.dbSource,
+        cookingMethod: item.cookingMethod
+      }));
+    }
+  }
+  const mealStr = sanitizedActiveMeal ? JSON.stringify(sanitizedActiveMeal, null, 2) : "None";
+
+  return `CURRENT_ACTIVE_MEAL_STATE: ${mealStr}
+
+${DIETITIAN_CORE_DIRECTIVES}
+
+=== PATIENT CONTEXT PAYLOAD ===
+CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
+${biomarkersList}
+
+${targetLimits}
+
+=== ACTIVE TASK: ACTIVE MEAL REASSESSMENT / EDIT ===
+The user requested an edit to CURRENT_ACTIVE_MEAL_STATE (e.g. "Change chicken weight to 250g").
+Recalculate nutrients, update "foodData" with corrected values, provide an updated assessment in "message", and output the corresponding command in "modificationCommand".
+CRITICAL INSTRUCTION: You MUST explicitly refresh all numerical callouts and calculations in both the "message" and "verdict" fields to reflect the new weights or item adjustments. Do NOT copy-paste the previous turn's narrative if weights have changed.
+
+${REQUIRED_OUTPUT_JSON_SCHEMA}`;
+}
+
+export function buildModeDCompareInstruction(context: {
+  biomarkersNeedingImprovement?: any[];
+  remainingAllowance?: any | null;
+  foodLogs?: any[];
+  userProfile?: any;
+}): string {
+  const { biomarkersList, targetLimits } = formatPatientContext(context);
+
+  return `${DIETITIAN_CORE_DIRECTIVES}
+
+=== PATIENT CONTEXT PAYLOAD ===
+CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
+${biomarkersList}
+
+${targetLimits}
+
+=== ACTIVE TASK: PRODUCT EVALUATION & COMPARISON ===
+Evaluate and rank each scanned item / option individually or into distinct comparison groups (e.g. Tier 1 - Best Choice, Tier 2 - Runner Up, Tier 3 - Less Suitable) based on the patient's biomarker warnings and remaining budgets.
+You MUST provide the "comparison" object in your JSON response. Inside "comparison.groups", create a separate group object for EACH scanned item or option, mapping its scout index via "scoutItemIndices" (e.g. [0] for item 0, [1] for item 1, [2] for item 2).
+You MUST provide at least 3 groups (e.g. best one, second best one, and others). The groups MUST be sorted by ranking, with the best one first. Use the group's "verdict.level" ('good', 'warning', 'alert', 'neutral') to define the rank of the group.
+Do NOT lump all items into a single bucket. Compare all items individually or in distinct ranked groups. Set the top-level "message", "verdict", and "foodData" to null in comparison mode.
+Mandate: averageNutrients for each group must equal the mean of server preCalc nutrients for scoutItemIndices, or omit averageNutrients/set to null to let the server calculate it automatically.
+
+${REQUIRED_OUTPUT_JSON_SCHEMA}`;
+}
+
+export function buildModeDEditInstruction(context: {
+  biomarkersNeedingImprovement?: any[];
+  remainingAllowance?: any | null;
+  activeComparison?: any;
+  foodLogs?: any[];
+  userProfile?: any;
+}): string {
+  const { biomarkersList, targetLimits } = formatPatientContext(context);
+  let sanitizedComparison = null;
+  if (context.activeComparison) {
+    sanitizedComparison = { ...context.activeComparison };
+    delete sanitizedComparison.chatTranscript;
+    // Comparisons typically have arrays of meals
+    if (sanitizedComparison.meals && Array.isArray(sanitizedComparison.meals)) {
+       sanitizedComparison.meals = sanitizedComparison.meals.map((m: any) => {
+         const sm = { ...m };
+         if (sm.imageUrl && sm.imageUrl.startsWith("data:image/")) sm.imageUrl = "[base64_image_data_truncated]";
+         if (sm.imageUrls) sm.imageUrls = [];
+         delete sm.receiptTable;
+         delete sm.nutrients;
+         delete sm.verdict;
+         if (sm.itemsBreakdown && Array.isArray(sm.itemsBreakdown)) {
+           sm.itemsBreakdown = sm.itemsBreakdown.map((item: any) => ({
+             scoutIndex: item.scoutIndex,
+             dbId: item.dbId,
+             canonicalDbName: item.canonicalDbName || item.name,
+             foodType: item.foodType,
+             weightGrams: item.weightGrams,
+             dbSource: item.dbSource,
+             cookingMethod: item.cookingMethod
+           }));
+         }
+         return sm;
+       });
+    }
+  }
+  const compStr = sanitizedComparison ? JSON.stringify(sanitizedComparison, null, 2) : "None";
+
+  return `CURRENT_ACTIVE_COMPARISON_STATE: ${compStr}
+
+${DIETITIAN_CORE_DIRECTIVES}
+
+=== PATIENT CONTEXT PAYLOAD ===
+CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
+${biomarkersList}
+
+${targetLimits}
+
+=== ACTIVE TASK: COMPARISON REFINEMENT ===
+Update your product selection and clinical coaching feedback based on the user's portion adjustments or questions.
+CRITICAL INSTRUCTION: You MUST explicitly refresh all numerical callouts and calculations in both the "message" and "verdict" fields to reflect the new weights or item adjustments. Do NOT copy-paste the previous turn's narrative if weights have changed.
+
+${REQUIRED_OUTPUT_JSON_SCHEMA}`;
+}
