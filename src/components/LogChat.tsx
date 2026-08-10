@@ -1511,7 +1511,7 @@ ${logsText}`);
             debugUrl: job.result?.debugUrl || raw.debugUrl,
             scoutItems: job.result?.scoutItems || raw.scoutItems || [],
             scoutContentType: raw.scoutContentType,
-            mode: (job.inputSnapshot as any)?.mode || 'review',
+            mode: raw.mode || (job.inputSnapshot as any)?.mode || 'review',
             comparison: raw.comparison,
             agentResult: {
               ...(raw.agentResult || {}),
@@ -1742,7 +1742,7 @@ ${logsText}`);
               hasImage: !!(foodLog?.imageUrl || foodLog?.imageUrls?.length || (job.inputSnapshot as any)?.hasImage),
               scoutItems: job.result?.scoutItems || raw.scoutItems || [],
               scoutContentType: raw.scoutContentType,
-              mode: (job.inputSnapshot as any)?.mode || 'review',
+              mode: raw.mode || (job.inputSnapshot as any)?.mode || 'review',
               comparison: raw.comparison,
               agentResult: {
                 ...(raw.agentResult || {}),

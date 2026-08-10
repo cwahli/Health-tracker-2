@@ -205,7 +205,8 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
   if (isSupabaseConfigured) {
     (async () => {
       try {
-        const { error } = await supabaseAdmin.from('agent_jobs').upsert(initialJobRecord, { onConflict: 'id' });
+        const { turn1Logs, accumulatedLogs, ...dbRecord } = initialJobRecord;
+        const { error } = await supabaseAdmin.from('agent_jobs').upsert(dbRecord, { onConflict: 'id' });
         if (error) {
           console.error('[ServerJobs] initial upsert failed:', error);
         }

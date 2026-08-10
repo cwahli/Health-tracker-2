@@ -100,7 +100,7 @@ export function fromEvaluationComparison(comparison: any, scoutItems: any[], met
         mode: 'compare_option',
         parentComparisonId: set.id,
         items,
-        nutrients: group.nutrients || {},
+        nutrients: group.nutrients || group.averageNutrients || {},
         content: {
           name: group.groupName || group.name || group.title || `Option ${index + 1}`,
           benefits: group.benefits || [],
