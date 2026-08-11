@@ -322,6 +322,24 @@ export async function executeFoodResolverAgent(
               if (product) {
                 nutrientsPer100g = extractOFFNutrientsPer100g(product);
               }
+            } else if (source === 'brand_official') {
+              const cleanId = chosenFdcId.replace(/^brand_menu_/, '');
+              const { data, error } = await supabaseAdmin.from('brand_menu_items').select('nutrients, nutrients_per_100g, basis_type, serving_grams').eq('id', cleanId).single();
+              if (data) {
+                if (data.nutrients_per_100g && Object.keys(data.nutrients_per_100g).length > 0) {
+                  nutrientsPer100g = data.nutrients_per_100g;
+                } else if (data.basis_type === 'per_100g' && data.nutrients) {
+                  nutrientsPer100g = data.nutrients;
+                } else if (data.nutrients) {
+                  if (data.serving_grams && data.serving_grams > 0) {
+                    const ratio = 100 / data.serving_grams;
+                    nutrientsPer100g = {};
+                    for (const k in data.nutrients) nutrientsPer100g[k] = (data.nutrients[k] || 0) * ratio;
+                  } else {
+                    nutrientsPer100g = data.nutrients;
+                  }
+                }
+              }
             } else {
               const food = await fetchUSDAFoodById(chosenFdcId);
               if (food) {
@@ -6702,7 +6720,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
 
       if (!truthMatch && webMatchRaw) {
         const src = webMatchRaw.source === 'brand_official' || webMatchRaw.brandPriority ? 'brand_official' : 'web_search';
-        if (isMultiComponentItem && (src === 'web_search' || isCompositeOrUnofficial || isMultiComponentHomeCooked)) {
+        if (isMultiComponentItem && (src === 'web_search' || (isCompositeOrUnofficial && src !== 'brand_official') || (isMultiComponentHomeCooked && src !== 'brand_official'))) {
           addDebugLog(`[TruthSkip] multi-component / composite dish "${item.originalName || item.keyword}": ignoring single-dish match "${webMatchRaw.dish_name || webMatchRaw.name}" as parent dish truth (use component decomposition + scout budget)`);
           // Do NOT set item.rawNutritionLabel from skipped single-dish parent match (prevents fake label hard locks)
         } else if (isMultiComponentHomeCooked && !isBrandMatch) {
@@ -7970,13 +7988,13 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         weightGrams: itemWeight,
         hardLabelKcal,
         brandMenuKcal:
-          primaryDbSource === 'brand_official' && primaryBase100g?.calories != null
+          !hasComponents && primaryDbSource === 'brand_official' && primaryBase100g?.calories != null
             ? (((primaryBase100g as any)?.basisType === 'total' || (primaryBase100g as any)?.basisType === 'per_dish')
                 ? ((Number(primaryBase100g.calories) < 60 && itemWeight >= 150) ? Number(primaryBase100g.calories) * (itemWeight / 100) : Number(primaryBase100g.calories))
                 : Number(primaryBase100g.calories) * (itemWeight / 100))
             : null,
         dishCacheKcal:
-          primaryDbSource === 'dish_cache' || primaryDbSource === 'internal_dish_cache'
+          !hasComponents && (primaryDbSource === 'dish_cache' || primaryDbSource === 'internal_dish_cache')
             ? Number(primaryBase100g?.calories) * (itemWeight / 100)
             : null,
         scoutEstimatedCalories: Number.isFinite(scoutEstCal) && scoutEstCal > 0 ? scoutEstCal : null,
@@ -9494,7 +9512,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               const cals = item.nutrients.calories || 0;
               const calDensity = (cals / item.weightGrams) * 100;
               const nameLower = (item.name || "").toLowerCase();
-              const isSolidMeal = item.components && item.components.length >= 2 && !nameLower.includes('soup') && !nameLower.includes('salad') && !nameLower.includes('veg') && !nameLower.includes('broth') && !nameLower.includes('water') && !nameLower.includes('beverage');
+              const isSolidMeal = item.components && item.components.length >= 2 && !nameLower.includes('soup') && !nameLower.includes('salad') && !nameLower.includes('veg') && !nameLower.includes('broth') && !nameLower.includes('water') && !nameLower.includes('beverage') && !nameLower.includes('latte') && !nameLower.includes('coffee') && !nameLower.includes('tea') && !nameLower.includes('juice') && !nameLower.includes('smoothie') && !nameLower.includes('milk') && !nameLower.includes('drink');
               if (isSolidMeal && calDensity < 60) {
                  addDebugLog(`[Sanity Check] WARNING: Item "${item.name}" weighing ${item.weightGrams}g registered at ${cals} kcal. This caloric density (${calDensity.toFixed(1)} kcal/100g) is impossibly low for a solid multi-ingredient food. Flagging anomaly.`);
                  item.anomalyFlags = item.anomalyFlags || [];

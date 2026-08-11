@@ -259,7 +259,9 @@ Complete. Not the master focus of this handover.
 - 2026-08-11: Food Analyze TypeError & Dietitian Safeguards:
   1. Fixed `TypeError: Cannot set properties of undefined (setting 'calories')` by adding defensive null/type guards in `server_vision_scout.ts` (for `newItem.rawNutritionLabel`), `server.ts` (for `parsedData.itemsBreakdown` and `activeMeal.itemsBreakdown` array items), `server_pure_helpers.ts`, `server_budget_reconcile.ts`, and `server_nutrient_aggregation.ts`.
   2. Protected dietitian execution flow from degrading into fallback state due to unhandled property assignment errors on null/undefined nutrient objects or component array entries.
-  3. Verified `npx tsc --noEmit` (0 errors), `compile_applet` (build succeeded), and Vitest unit tests (68 tests passed).
+  3. Fixed `brand_official` fetch logic: Removed `brand_menu_` prefix from IDs before querying the database, allowing successful nutrient extraction from `brand_menu_items`. Also added explicit logic to read `nutrients_per_100g` to handle `per_dish` vs `per_100g` basis correctly.
+  4. Fixed `Sanity Check` logic in `server.ts`: Added `latte`, `coffee`, `tea`, `milk`, `drink`, `juice`, and `smoothie` to the `isSolidMeal` exclusion list so the backend no longer aggressively autocorrects low-calorie beverages up to a 600 kcal generic solid baseline.
+  5. Verified `npx tsc --noEmit` (0 errors), `compile_applet` (build succeeded), and Vitest unit tests (68 tests passed).
 - - Plan snapshots (`STATUS_CONSOLIDATED`, REMAINING_ROADMAP) dated 2026-08-08 — verify before acting.
 
 ---
