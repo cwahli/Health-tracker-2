@@ -53,7 +53,8 @@ export interface AgentJob {
   finishedAt?: string;
   photoUrl?: string;
   debugUrl?: string;
-  retryNotBefore?: string; // ISO date string
+  retryNotBefore?: string;
+  serverSubmittedAt?: number; // ISO date string
   lastProgressAt?: string;
   abortController?: AbortController;
   cancelReason?: string;

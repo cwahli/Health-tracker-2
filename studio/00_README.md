@@ -2,11 +2,11 @@
 
 | File | Status | Topic |
 |------|:------:|-------|
-| **[M23_FIRESTORE_WRITE_KILL_SWITCH.md](./M23_FIRESTORE_WRITE_KILL_SWITCH.md)** | **ACTIVE** | **Free-tier Firestore write kill-switch (chat + telemetry) — AI Studio commit/push** |
-| [M22_MEAL_BUILD_TRUE_COMPLETE.md](./M22_MEAL_BUILD_TRUE_COMPLETE.md) | Prior | Meal Build true complete (archive if already on origin) |
-| [M21_1_MEAL_BUILD_COMPLETION_GATES.md](./M21_1_MEAL_BUILD_COMPLETION_GATES.md) | Prior | Nested meal-build gates |
-| [ACTIVE_STATUS.md](./ACTIVE_STATUS.md) | Board | Active pack + gates |
-| [../plan/RELIABILITY_FREE_TIER_PLAN.md](../plan/RELIABILITY_FREE_TIER_PLAN.md) | Plan | Optimized reliability / free-tier program |
+| **[M23_FULL_FREE_TIER_RELIABILITY.md](./M23_FULL_FREE_TIER_RELIABILITY.md)** | **ACTIVE MASTER** | **Full free-tier program M23→M28 continuous until master gate 0** |
+| [M23_FIRESTORE_WRITE_KILL_SWITCH.md](./M23_FIRESTORE_WRITE_KILL_SWITCH.md) | Nested | Phase M23 detail only |
+| [M22_MEAL_BUILD_TRUE_COMPLETE.md](./M22_MEAL_BUILD_TRUE_COMPLETE.md) | Prior | Meal Build (unrelated) |
+| [ACTIVE_STATUS.md](./ACTIVE_STATUS.md) | Board | Master gate + phase table |
+| [../plan/RELIABILITY_FREE_TIER_PLAN.md](../plan/RELIABILITY_FREE_TIER_PLAN.md) | Plan | Architecture + program |
 | [../AI_HANDOVER.md](../AI_HANDOVER.md) | **WIP status** | Multi-agent handoff + progress |
 
 **Completed packs:** `archive/studio/completed-2026-08/`. **Do not re-upload as current.**

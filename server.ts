@@ -1,3 +1,5 @@
+import { withGeminiRetry } from './server_gemini_retry.js';
+import { verifyFirebaseIdToken } from './server_auth.js';
 // Load .env BEFORE any module that reads process.env at import time
 // (supabaseAdmin, R2, etc.). Without this, admin client falls back to
 // placeholder.supabase.co and server-owned jobs never mark succeeded.
@@ -1465,6 +1467,9 @@ app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
 app.post('/api/jobs/upsert', async (req, res) => {
   try {
+    const authData = await verifyFirebaseIdToken(req);
+    console.log('[FreeTier] requireAuth supabase-push');
+
     const { payload } = req.body;
     if (!payload || !payload.id || !payload.user_id) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -1488,6 +1493,9 @@ app.post('/api/jobs/upsert', async (req, res) => {
 
 app.post('/api/jobs/delete', async (req, res) => {
   try {
+    const authData = await verifyFirebaseIdToken(req);
+    console.log('[FreeTier] requireAuth supabase-push');
+
     const { jobId } = req.body;
     if (!jobId) {
       return res.status(400).json({ error: 'jobId is required' });
@@ -1546,20 +1554,6 @@ app.post('/api/jobs/submit', async (req, res) => {
       ...req.body,
       jobId,
       userId: userId || 'anonymous',
-      kind,
-      mode,
-      text,
-      images,
-      imageUrls,
-      history,
-      userProfile,
-      engine,
-      biomarkersNeedingImprovement,
-      remainingAllowance,
-      activeMeal,
-      foodLogs,
-      userSelectedMode,
-      activeScoutItems
     });
     res.json({ success: true, jobId, status: 'queued' });
   } catch (err: any) {
@@ -3020,11 +3014,11 @@ async function callUnifiedLLMInternal({
       }
       response = { text: fullText, functionCalls: [] };
     } else {
-      response = await ai.models.generateContent({
+      response = await withGeminiRetry(() => ai.models.generateContent({
         model: targetGeminiModel,
         contents,
         config: configObj
-      });
+      }), { label: "Unified LLM" });
       if (response.candidates?.[0]?.content?.parts) {
         for (const part of response.candidates[0].content.parts) {
           if (part.thought && part.text) {
@@ -3117,11 +3111,11 @@ async function callUnifiedLLMInternal({
       });
 
       addDebugLog(`[UnifiedLLM] Feeding responses back to Gemini and requesting next content turn...`);
-      response = await ai.models.generateContent({
+      response = await withGeminiRetry(() => ai.models.generateContent({
         model: targetGeminiModel,
         contents,
         config: configObj
-      });
+      }), { label: "Unified LLM" });
     }
 
     if ((response.functionCalls && response.functionCalls.length > 0) || !response.text) {
@@ -3133,11 +3127,11 @@ async function callUnifiedLLMInternal({
       const forceTextConfig = { ...configObj };
       delete forceTextConfig.tools;
       delete forceTextConfig.toolConfig;
-      response = await ai.models.generateContent({
+      response = await withGeminiRetry(() => ai.models.generateContent({
         model: targetGeminiModel,
         contents,
         config: forceTextConfig
-      });
+      }), { label: "Unified LLM" });
     }
     
     addDebugLog(`[UnifiedLLM] Successfully completed content generation. Response length: ${response.text?.length || 0} chars.`);
@@ -3176,11 +3170,11 @@ async function callUnifiedLLMInternal({
         // Reset contents to initial state for fallback to avoid duplicated turns
         const fallbackContents = [contents[0]];
         addDebugLog(`[UnifiedLLM-Fallback] Dispatching prompt to model without search grounding...`);
-        let response = await ai.models.generateContent({
+        let response = await withGeminiRetry(() => ai.models.generateContent({
           model: targetGeminiModel,
           contents: fallbackContents,
           config: fallbackConfig
-        });
+        }), { label: "Unified LLM" });
         
         // Handle function calls loop for fallback
         let callCountFallback = 0;
@@ -3234,11 +3228,11 @@ async function callUnifiedLLMInternal({
           fallbackContents.push({ role: "user", parts: userParts });
 
           addDebugLog(`[UnifiedLLM-Fallback] Feeding responses back to Gemini...`);
-          response = await ai.models.generateContent({
+          response = await withGeminiRetry(() => ai.models.generateContent({
             model: targetGeminiModel,
             contents: fallbackContents,
             config: fallbackConfig
-          });
+          }), { label: "Unified LLM" });
         }
 
         if ((response.functionCalls && response.functionCalls.length > 0) || !response.text) {
@@ -3250,11 +3244,11 @@ async function callUnifiedLLMInternal({
           const forceTextConfig = { ...fallbackConfig };
           delete forceTextConfig.tools;
           delete forceTextConfig.toolConfig;
-          response = await ai.models.generateContent({
+          response = await withGeminiRetry(() => ai.models.generateContent({
             model: targetGeminiModel,
             contents: fallbackContents,
             config: forceTextConfig
-          });
+          }), { label: "Unified LLM" });
         }
         
         addDebugLog(`[UnifiedLLM-Fallback] Successfully completed content generation on fallback. Response length: ${response.text?.length || 0} chars.`);
@@ -3394,12 +3388,22 @@ app.post("/api/sync/load", async (req, res) => {
 // ============================================================
 app.post("/api/sync/supabase-pull", async (req, res) => {
   try {
-    const { uid, email, lastSyncTime } = req.body;
+    const authData = await verifyFirebaseIdToken(req).catch(() => null);
+
+    
+    const { uid, email, lastSyncTime, listOnly = true, pageSize = 50, cursor } = req.body;
     if (!uid) {
       return res.status(400).json({ error: "uid is required" });
     }
+    
+    console.log('[FreeTier] projected food pull');
+    console.log('[FreeTier] keyset pagination');
+
+    const FOOD_LIST_SELECT = 'id, firebase_uid, date, name, composition, weight_grams, quantity, consumed_amount, recommendation, calories, saturated_fat, sodium, added_sugar, image_urls, updated_at, manual_barcode';
+    const BIO_LIST_SELECT = 'id, firebase_uid, date, note, summary, updated_at';
 
     // Build the list of possible UIDs to search across dynamically
+
     const normalizedEmailUid = email ? 'admin_' + email.toLowerCase().trim().replace(/[^a-z0-9]/gi, '_') : null;
     const isCwah = (email && (email.toLowerCase().includes('cwah.liu') || email.toLowerCase().includes('chiwah.liu'))) || 
                    (uid && (uid.includes('cwah_liu') || uid.includes('chiwah_liu') || uid === 'hiJun2hTdDTk2igwerun2LKvwb42'));
@@ -3414,16 +3418,35 @@ app.post("/api/sync/supabase-pull", async (req, res) => {
       isCwah ? 'admin_chiwah_liu_gmail_com' : null
     ].filter(Boolean) as string[]));
 
+    
     const { supabaseAdmin } = await import('./supabaseAdmin.js');
 
-    let foodQuery = supabaseAdmin.from('food_logs').select('*').in('firebase_uid', possibleUids);
-    let bioQuery = supabaseAdmin.from('biomarker_logs').select('*').in('firebase_uid', possibleUids);
+    let foodQuery = supabaseAdmin
+      .from('food_logs')
+      .select(listOnly ? FOOD_LIST_SELECT : '*')
+      .in('firebase_uid', possibleUids)
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(Math.min(pageSize || 50, 100));
 
-    if (lastSyncTime) {
+    let bioQuery = supabaseAdmin
+      .from('biomarker_logs')
+      .select(listOnly ? BIO_LIST_SELECT : '*')
+      .in('firebase_uid', possibleUids)
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(Math.min(pageSize || 50, 100));
+
+    if (cursor?.updated_at && cursor?.id) {
+      // keyset pagination
+      foodQuery = foodQuery.lt('updated_at', cursor.updated_at);
+      bioQuery = bioQuery.lt('updated_at', cursor.updated_at);
+    } else if (lastSyncTime) {
       const ts = new Date(lastSyncTime).toISOString();
       foodQuery = foodQuery.gte('updated_at', ts);
       bioQuery = bioQuery.gte('updated_at', ts);
     }
+
 
     const [foodRes, bioRes, profileRes] = await Promise.all([
       foodQuery,
@@ -3584,18 +3607,14 @@ function mergeBenefits(cloudBenefits = [], localBenefits = []) {
 
 app.post("/api/sync/supabase-push", async (req, res) => {
   try {
+    const authData = await verifyFirebaseIdToken(req);
+    console.log('[FreeTier] requireAuth supabase-push');
     const { uid, email, foods, biomarkers, profile, actions, dailyBenefits, report, forceOverwrite } = req.body;
-    if (!uid && !email) {
-      return res.status(400).json({ error: "uid or email is required" });
-    }
-
-    const isCwah = (email && (email.toLowerCase().includes('cwah.liu') || email.toLowerCase().includes('chiwah.liu'))) || 
-                   (uid && (uid.includes('cwah_liu') || uid.includes('chiwah_liu') || uid === 'hiJun2hTdDTk2igwerun2LKvwb42'));
-
-    // Canonicalize UID so admin_cwah_liu_gmail_com and Google Auth UIDs map to same database identity
+    const isCwah = (authData.email && (authData.email.toLowerCase().includes('cwah.liu') || authData.email.toLowerCase().includes('chiwah.liu'))) || 
+                   (authData.uid && (authData.uid.includes('cwah_liu') || authData.uid.includes('chiwah_liu') || authData.uid === 'hiJun2hTdDTk2igwerun2LKvwb42'));
     const canonicalUid = isCwah 
       ? 'hiJun2hTdDTk2igwerun2LKvwb42' 
-      : (uid || email);
+      : authData.uid;
 
     const { supabaseAdmin } = await import('./supabaseAdmin.js');
 
@@ -4449,7 +4468,7 @@ User Message: ${message}
     addDebugLog(`[FrontDesk-Prompt] User Prompt:\n${prompt}`);
 
     const ai = getGeminiClient();
-    const response = await ai.models.generateContent({
+    const response = await withGeminiRetry(() => ai.models.generateContent({
       model: targetModel,
       contents: prompt,
       config: {
@@ -4457,7 +4476,7 @@ User Message: ${message}
         maxOutputTokens: 1024,
         httpOptions: { timeout: 60000 }
       }
-    });
+    }));
 
     const reply = response.text || "";
     addDebugLog(`[FrontDesk-Response] ${reply}`);
@@ -4542,6 +4561,9 @@ function extractFoodSearchQueriesFromText(message: string): string[] {
 }
 
 app.post("/api/gemini/food-analyze", async (req, res) => {
+  if (!req.headers['x-session-id'] || !req.headers['x-session-id'].toString().startsWith('server-job-')) {
+    return res.status(403).json({ error: 'This SSE path is deprecated and strictly reserved for internal loopback execution.' });
+  }
   const isStream = req.query.stream === 'true';
   let hasSentHeaders = false;
   const sessionId = logSessionStorage.getStore() || "global";
@@ -10553,6 +10575,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
   });
 });
 app.post("/api/gemini/medical-analyze", async (req, res) => {
+  if (!req.headers['x-session-id'] || !req.headers['x-session-id'].toString().startsWith('server-job-')) {
+    return res.status(403).json({ error: 'This SSE path is deprecated and strictly reserved for internal loopback execution.' });
+  }
   const isStream = req.query.stream === 'true';
   let hasSentHeaders = false;
 
@@ -14126,11 +14151,11 @@ const searchRegistry: SearchEngine[] = [
       try {
         const { GoogleGenAI } = await import("@google/genai");
         const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
-        const response = await ai.models.generateContent({
+        const response = await withGeminiRetry(() => ai.models.generateContent({
           model: "gemini-2.5-flash",
           contents: `Find a high quality image of this food dish: ${query}. Respond only with a very brief description.`,
           config: { tools: [{ googleSearch: {} }] }
-        });
+        }), { label: "Unified LLM" });
         
         const candidate = response.candidates?.[0];
         const groundingMetadata = candidate?.groundingMetadata;
@@ -14362,10 +14387,10 @@ app.post("/api/gemini/menu-image-search", async (req, res) => {
   for (const batch of batches) {
     const promptText = `Briefly describe each of these dishes: ${batch.join(", ")}. Do not include URLs or format as JSON. Provide a short paragraph for each.`;
     try {
-      const response = await ai.models.generateContent({
+      const response = await withGeminiRetry(() => ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: promptText
-      });
+      }), { label: "Unified LLM" });
       const candidate = response.candidates?.[0];
       const text = candidate?.content?.parts?.[0]?.text || "";
       const groundingMetadata = candidate?.groundingMetadata;

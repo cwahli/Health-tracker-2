@@ -34,7 +34,7 @@ import { pruneLocalStorageToFreeSpace, safeIdbSet } from '../utils/storageUtils'
 
 
 import { resolveFoodImage } from '../utils/imageResolver';
-import { executeFoodAgent, FoodAgentExecutorInput } from '../jobs/FoodAgentExecutor';
+
 import { JobStore } from '../jobs/JobStore';
 import { ImageStore } from '../jobs/ImageStore';
 import { reserveCredits } from '../jobs/credits';

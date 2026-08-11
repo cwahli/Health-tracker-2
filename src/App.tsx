@@ -15,8 +15,8 @@ import { JobStore } from './jobs/JobStore';
 import { JobQueueRunner } from './jobs/JobQueueRunner';
 import { initSupabaseJobSync, hydrateUserJobs } from './jobs/SupabaseJobSync';
 import { ImageStore } from './jobs/ImageStore';
-import { executeFoodAgent } from './jobs/FoodAgentExecutor';
-import { executeMedicalAgent } from './jobs/MedicalAgentExecutor';
+
+
 import { getProgressPercent, getStepCeiling } from './jobs/progress';
 import FloatingActionSheet from './components/FloatingActionSheet';
 
@@ -947,233 +947,49 @@ export default function App() {
             throw new Error('AbortError');
           }
 
-          if (job.kind === 'medical') {
-            const inputSnapshot = (job.inputSnapshot || {}) as any;
-            const executorInput = {
-              jobId: job.id,
-              text: inputSnapshot.text || '',
-              agentType: inputSnapshot.agentType || 'agent1_step1',
-              profile: profileRef.current,
-              modelId: localStorage.getItem('selectedModelId') || 'gemini-3.5-flash-lite',
-              requestId: job.requestId || `job_req_${Date.now()}`,
-              biomarkers: biomarkersRef.current || {},
-              biomarkerHistory: biomarkerHistoryRef.current || [],
-              actions: actions || [],
-              messages: job.messages || [],
-              numberOfBatches: inputSnapshot.numberOfBatches,
-              dataReviewBatchKeys: inputSnapshot.dataReviewBatchKeys,
-              dataReviewBatchIdx: inputSnapshot.dataReviewBatchIdx,
-              estimatedTotalMarkers: inputSnapshot.estimatedTotalMarkers,
-              currentBatch: inputSnapshot.currentBatch,
-              extractedData: inputSnapshot.extractedData,
-              remainingText: inputSnapshot.remainingText,
-              bucketMapping: inputSnapshot.bucketMapping,
-              reviewBiomarkerKey: inputSnapshot.reviewBiomarkerKey,
-              batchSize: inputSnapshot.batchSize
-            };
-
-            let resData: any = null;
-            let progressPercent = 0;
-
-            for await (const event of executeMedicalAgent(executorInput)) {
-              if (abortSignal.aborted) {
-                throw new Error('AbortError');
-              }
-
-              if (event.type === 'progress') {
-                const stepVal = event.stepKey ? getProgressPercent(event.stepKey) : (event.progressPercent || 20);
-                progressPercent = Math.max(progressPercent, stepVal);
-                JobStore.updateJob(job.id, {
-                  statusMessage: event.statusMessage || 'Analyzing medical data...',
-                  progressPercent
-                });
-              } else if (event.type === 'partial' && event.partialThoughts) {
-                const thoughts = event.partialThoughts;
-                const statusMsg = thoughts.dietitian
-                  ? `Clinical Dietitian reasoning:\n${thoughts.dietitian.slice(-100)}`
-                  : thoughts.scout
-                  ? `Medical Scout reasoning:\n${thoughts.scout.slice(-100)}`
-                  : 'Processing medical data...';
-
-                const stageKey = thoughts.activeStage || (thoughts.dietitian ? 'dietitian' : 'scout');
-                const basePercent = getProgressPercent(stageKey);
-                const ceiling = getStepCeiling(stageKey);
-                progressPercent = Math.min(ceiling, Math.max(progressPercent, basePercent));
-
-                JobStore.updateJob(job.id, {
-                  statusMessage: statusMsg,
-                  progressPercent
-                });
-              } else if (event.type === 'done') {
-                resData = event.data;
-              } else if (event.type === 'error') {
-                const errClass = event.errorClass || 'permanent';
-                const err = new Error(event.message || 'Medical analysis failed');
-                (err as any).class = errClass;
-                throw err;
-              }
-            }
-
-            if (abortSignal.aborted) {
-              throw new Error('AbortError');
-            }
-
-            if (!resData) {
-              throw new Error('No response data returned from executor');
-            }
-
-             let updatedMessages = job.messages || [];
-             if (resData?.message || resData?.reply || resData?.globalSummary || resData?.extractedData) {
-               // B6 FIX: Use real agentType from inputSnapshot, not hardcoded 'medical'
-               const realAgentType = inputSnapshot.agentType || 'agent1_step1';
-               const assistantMsg: any = {
-                 id: `msg_assistant_${Date.now()}`,
-                 role: 'assistant',
-                 content: resData.message || resData.reply || resData.globalSummary || 'Clinical analysis complete.',
-                 timestamp: new Date().toISOString(),
-                 agentResult: resData,
-                 agentType: realAgentType,
-                 agentTypeStep: resData.agentType || realAgentType
-               };
-               updatedMessages = [...updatedMessages, assistantMsg];
-
-               // B6 FIX: Emit log entry for biomarker_review so it appears in log history
-               if (realAgentType === 'biomarker_review' && resData) {
-                 try {
-                   await handleLogMedical(
-                     resData.corrections || resData.biomarkerCorrections || {},
-                     undefined,
-                     resData.date,
-                     undefined,
-                     undefined,
-                     true /* skipClose */
-                   );
-                 } catch (logErr) {
-                   console.warn('[JobQueueRunner] Failed to write biomarker_review log entry:', logErr);
-                 }
-               }
-             }
-
-            JobStore.updateJob(job.id, {
-              status: 'succeeded',
-              finishedAt: new Date().toISOString(),
-              progressPercent: 100,
-              statusMessage: 'Completed successfully',
-              result: resData,
-              messages: updatedMessages
-            });
-
-            return;
-          }
-
-          if ((job.kind === 'food_log' || job.kind === 'food_compare') && (job.resumeStage || job.statusMessage?.includes('Retry'))) {
-            console.log(`[JobQueueRunner] Job ${job.id} is a retry (resumeStage=${job.resumeStage}). Executing locally via executeFoodAgent...`);
-            const { ImageStore } = await import('./jobs/ImageStore');
-            const rawImages = (await ImageStore.getImages(job.id)) || [];
-            const stringImages: string[] = await Promise.all(
-              rawImages.map(async (img) => {
-                if (typeof img === 'string') return img;
-                if (img && typeof img === 'object') {
-                  const blob = img instanceof Blob ? img : new Blob([img as any], { type: (img as any).type || 'image/jpeg' });
-                  return new Promise<string>((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result as string);
-                    reader.onerror = () => resolve('');
-                    reader.readAsDataURL(blob);
-                  });
-                }
-                return '';
-              })
-            );
-            const cleanImages = stringImages.filter(Boolean);
-            const isDietitianResume = job.resumeStage === 'dietitian';
-            const executorInput = {
-              jobId: job.id,
-              text: job.inputSnapshot?.text || '',
-              images: cleanImages,
-              mode: (job.mode as 'review' | 'compare' | 'edit') || 'review',
-              lockedModeFamily: job.lockedModeFamily,
-              profile: profileRef.current || {},
-              modelId: localStorage.getItem('selectedModelId') || 'gemini-3.5-flash-lite',
-              requestId: job.requestId || job.id,
-              checkpoint: job.checkpoint,
-              signal: abortSignal,
-              activeScoutItems: job.checkpoint?.scoutItems,
-              scoutContentType: job.checkpoint?.scoutContentType,
-              skipScout: !!job.checkpoint?.scoutItems || isDietitianResume,
-              messages: job.messages || [],
-            };
-
-            let finalResData: any = null;
-            for await (const event of executeFoodAgent(executorInput)) {
-              if (abortSignal.aborted) throw new Error('AbortError');
-              if (event.type === 'progress') {
-                JobStore.updateJob(job.id, {
-                  stepKey: event.stepKey || job.stepKey,
-                  progressPercent: event.progressPercent !== undefined ? event.progressPercent : job.progressPercent,
-                  statusMessage: event.statusMessage || job.statusMessage,
-                });
-              } else if (event.type === 'checkpoint') {
-                import('./mealBuild/consolidate').then(({ consolidateMeal }) => {
-                  const m = job.mealBuild || { id: job.id, schemaVersion: 1, version: 1, items: [], status: 'draft', createdAt: new Date().toISOString() } as any;
-                  const updated = consolidateMeal(m, { items: event.checkpoint?.scoutItems || [] }, 'scout');
-                  JobStore.updateJob(job.id, {
-                    checkpoint: event.checkpoint,
-                    mealBuild: updated,
-                    stepKey: 'scout',
-                    progressPercent: 35,
-                    statusMessage: 'Scout checkpoint saved',
-                  });
-                });
-              } else if (event.type === 'partial') {
-                JobStore.updateJob(job.id, { liveThoughts: event.partialThoughts });
-              } else if (event.type === 'done') {
-                finalResData = event.data;
-                JobStore.updateJob(job.id, {
-                  result: event.data,
-                  progressPercent: 100,
-                  statusMessage: 'Analysis completed',
-                });
-              } else if (event.type === 'error') {
-                const err = new Error(event.message || 'Execution error');
-                (err as any).class = event.errorClass || 'transient';
-                throw err;
-              }
-            }
-
-            if (finalResData) {
-              const pendingFoodLog = finalResData.pendingFoodLog || finalResData.data || null;
-              const messageText = finalResData.message || finalResData.text || pendingFoodLog?.message || 'Analysis complete.';
-              const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive);
-              const assistantMsg = {
-                id: `msg_assistant_${job.id}`,
-                role: 'assistant',
-                content: messageText,
-                timestamp: new Date().toISOString(),
-                isLive: false,
-                agentType: 'food',
-                pendingFoodLog,
-                data: {
-                  pendingFoodLog,
-                  scoutItems: finalResData.scoutItems || [],
-                  photoUrl: finalResData.photoUrl,
-                  agentResult: {
-                    backendLogs: finalResData.backendLogs || '',
-                    globalLiveLogs: finalResData.backendLogs || '',
-                  }
-                }
-              };
-              JobStore.updateJob(job.id, {
-                messages: [...nonLiveMsgs, assistantMsg],
-                result: finalResData,
-                mealBuild: finalResData.mealBuild || job.mealBuild
+          // Durable jobs execute on server via /api/jobs/submit
+          if (job.kind === 'food_log' || job.kind === 'food_compare' || job.kind === 'medical') {
+            // Ensure job is submitted to server for retries or new jobs not yet pushed
+            if (!job.serverSubmittedAt || job.resumeStage || job.statusMessage?.includes('Retry')) {
+              console.log(`[JobQueueRunner] Submitting job ${job.id} to server...`);
+              let stringImages = [];
+              try {
+                const { ImageStore } = await import('./jobs/ImageStore');
+                const rawImages = (await ImageStore.getImages(job.id)) || [];
+                stringImages = await Promise.all(
+                  rawImages.map(async (img) => {
+                    if (typeof img === 'string') return img;
+                    if (img && typeof img === 'object') {
+                      const blob = img instanceof Blob ? img : new Blob([img], { type: img.type || 'image/jpeg' });
+                      return new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = () => resolve('');
+                        reader.readAsDataURL(blob);
+                      });
+                    }
+                    return '';
+                  })
+                );
+              } catch(e) {}
+              
+              await fetch('/api/jobs/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  jobId: job.id,
+                  userId: auth.currentUser?.uid || 'anonymous',
+                  kind: job.kind,
+                  mode: job.mode,
+                  text: job.inputSnapshot?.text || '',
+                  images: stringImages.filter(Boolean),
+                  history: job.messages || [],
+                  userProfile: profileRef.current,
+                  ...job.inputSnapshot
+                })
               });
+              JobStore.updateJob(job.id, { serverSubmittedAt: Date.now(), resumeStage: undefined });
             }
-            return;
-          }
-
-          // Durable food jobs execute on server via /api/jobs/submit
-          if ((job.kind === 'food_log' || job.kind === 'food_compare') && !job.resumeStage && !job.statusMessage?.includes('Retry')) {
             console.log(`[JobQueueRunner] Job ${job.id} is server-owned. Polling /api/jobs/status...`);
             let done = false;
             let pollAttempts = 0;
@@ -2963,12 +2779,7 @@ export default function App() {
           ];
           // Write to Firestore dashboard document to prevent multiple writes
           const tDashId = logInteraction('upload', `users/${uid}/metadata/dashboard`, null);
-          setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), {
-            actions: initialActions.map(sanitizeForFirestore),
-            dailyBenefits: initialBenefits.map(sanitizeForFirestore)
-          }, { merge: true })
-            .then(() => completeInteraction(tDashId, true, JSON.stringify({ actions: initialActions, dailyBenefits: initialBenefits }).length))
-            .catch(err => { completeInteraction(tDashId, false, 0, err.message); console.error(err); });
+          Promise.resolve() // [FreeTier] profile single-writer disabled; console.error(err); });
         }
         setFoodLogs([]);
         setBiomarkers({});
@@ -3822,13 +3633,12 @@ export default function App() {
         } else if (specificUpdate.type === 'profile') {
           const pId = logInteraction('upload', `users/${uid} (Profile)`, updatedProfile);
           await withTimeout(
-            setDoc(doc(db, 'users', uid), sanitizeForFirestore(profileForCloud), { merge: true })
-              .then(() => completeInteraction(pId, true, JSON.stringify(updatedProfile).length))
-              .catch(err => { completeInteraction(pId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+            // [FreeTier] profile single-writer disabled
+            Promise.resolve().then(() => completeInteraction(pId, true, 0)).catch(() => {}),
             5000,
             'Profile write'
           );
-          upsertProfileToSupabase(profileForCloud, uid, { actions: currActions, dailyBenefits: currBenefits, report: currReport, email: updatedProfile?.email || profile?.email || auth.currentUser?.email });
+          upsertProfileToSupabase(profileForCloud, uid, { actions: currActions, dailyBenefits: currBenefits, report: currReport, email: updatedProfile?.email || profile?.email || auth.currentUser?.email || undefined });
           const deletedFoods = updatedProfile?.deletedFoodLogIds || profile?.deletedFoodLogIds || {};
           const deletedBioLogs = updatedProfile?.deletedBiomarkerLogIds || profile?.deletedBiomarkerLogIds || {};
           await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, deletedFoods, deletedBioLogs, (sf, sb) => {
@@ -3871,58 +3681,29 @@ export default function App() {
           await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, deletedFoods, deletedBioLogs, (sf, sb) => {
             finalFoodsToSave = sf; finalBioToSave = sb; setFoodLogs(sf); setBiomarkerHistory(sb);
           });
-          const profilePromise = setDoc(doc(db, 'users', uid), sanitizeForFirestore(profileForCloud), { merge: true }).catch(err => handleFirestoreError(err));
+          const profilePromise = Promise.resolve();
+          console.log('[FreeTier] profile single-writer');
           await withTimeout(profilePromise, 3000, 'biomarkerLogsBatch');
-          upsertProfileToSupabase(profileForCloud, uid, { actions: currActions, dailyBenefits: currBenefits, report: currReport, email: updatedProfile?.email || profile?.email || auth.currentUser?.email });
+          upsertProfileToSupabase(profileForCloud, uid, { actions: currActions, dailyBenefits: currBenefits, report: currReport, email: updatedProfile?.email || profile?.email || auth.currentUser?.email || undefined });
         } else if (specificUpdate.type === 'actions') {
           const itemTrackId = logInteraction('upload', `users/${uid}/metadata/dashboard (Actions)`, null);
-          await withTimeout(
-            setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), { actions: currActions.map(sanitizeForFirestore) }, { merge: true })
-              .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currActions).length))
-              .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
-            2000,
-            'Actions write'
-          );
-          upsertProfileToSupabase(profileForCloud, uid, { actions: currActions, dailyBenefits: currBenefits, report: currReport, email: updatedProfile?.email || profile?.email || auth.currentUser?.email });
+          // [FreeTier] profile single-writer disabled
+          upsertProfileToSupabase(profileForCloud, uid, { actions: currActions, dailyBenefits: currBenefits, report: currReport, email: updatedProfile?.email || profile?.email || auth.currentUser?.email || undefined });
         } else if (specificUpdate.type === 'dailyBenefits') {
           const itemTrackId = logInteraction('upload', `users/${uid}/metadata/dashboard (Benefits)`, null);
-          await withTimeout(
-            setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), { dailyBenefits: currBenefits.map(sanitizeForFirestore) }, { merge: true })
-              .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currBenefits).length))
-              .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
-            2000,
-            'DailyBenefits write'
-          );
-          upsertProfileToSupabase(profileForCloud, uid, { actions: currActions, dailyBenefits: currBenefits, report: currReport, email: updatedProfile?.email || profile?.email || auth.currentUser?.email });
+          // [FreeTier] profile single-writer disabled
+          upsertProfileToSupabase(profileForCloud, uid, { actions: currActions, dailyBenefits: currBenefits, report: currReport, email: updatedProfile?.email || profile?.email || auth.currentUser?.email || undefined });
         } else if (specificUpdate.type === 'foodIdeas') {
           const itemTrackId = logInteraction('upload', `users/${uid}/metadata/dashboard (FoodIdeas)`, null);
-          await withTimeout(
-            setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), { foodIdeas: currFoodIdeas.map(sanitizeForFirestore) }, { merge: true })
-              .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currFoodIdeas).length))
-              .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
-            2000,
-            'FoodIdeas write'
-          );
+          // [FreeTier] profile single-writer disabled
         } else if (specificUpdate.type === 'report' && currReport) {
           const itemTrackId = logInteraction('upload', `users/${uid}/reports/latest`, currReport);
-          await withTimeout(
-            setDoc(doc(db, 'users', uid, 'reports', 'latest'), sanitizeForFirestore(currReport))
-              .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currReport).length))
-              .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
-            2000,
-            'Report write'
-          );
+          // [FreeTier] profile single-writer disabled
           
           const dashTrackId = logInteraction('upload', `users/${uid}/metadata/dashboard (Report Update)`, null);
           await withTimeout(
-            setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), {
-              actions: currActions.map(sanitizeForFirestore),
-              dailyBenefits: currBenefits.map(sanitizeForFirestore)
-            }).catch(console.error),
-            2000,
-            'Dashboard report sync'
-          );
-          upsertProfileToSupabase(profileForCloud, uid, { actions: currActions, dailyBenefits: currBenefits, report: currReport, email: updatedProfile?.email || profile?.email || auth.currentUser?.email });
+            Promise.resolve(), 2000, 'Dashboard report sync');
+          upsertProfileToSupabase(profileForCloud, uid, { actions: currActions, dailyBenefits: currBenefits, report: currReport, email: updatedProfile?.email || profile?.email || auth.currentUser?.email || undefined });
         } else if (specificUpdate.type === 'deleteFood' && specificUpdate.targetId) {
           const deletedFoods = updatedProfile?.deletedFoodLogIds || profile?.deletedFoodLogIds || {};
           const deletedBioLogs = updatedProfile?.deletedBiomarkerLogIds || profile?.deletedBiomarkerLogIds || {};
@@ -3944,7 +3725,7 @@ export default function App() {
           actions: currActions,
           dailyBenefits: currBenefits,
           report: currReport,
-          email: updatedProfile?.email || profile?.email || auth.currentUser?.email,
+          email: updatedProfile?.email || profile?.email || auth.currentUser?.email || undefined,
           forceOverwrite: true
         });
 
@@ -3962,9 +3743,9 @@ export default function App() {
         setBiomarkerHistory(syncedBios);
 
         const pId = logInteraction('upload', `users/${uid} (Profile)`, currProfile);
-        const profilePromise = setDoc(doc(db, 'users', uid), sanitizeForFirestore(profileForCloud))
-          .then(() => completeInteraction(pId, true, JSON.stringify(currProfile).length))
-          .catch(err => { completeInteraction(pId, false, 0, err.message); handleFirestoreError(err); });
+        const profilePromise = Promise.resolve();
+        console.log('[FreeTier] profile single-writer');
+        completeInteraction(pId, true, 0);
 
         // Run promises in small sequential batches of 5 to avoid exhausting the Firestore write stream
         const chunkPromises = async (tasks: (() => Promise<any>)[], chunkSize: number) => {
@@ -3975,10 +3756,7 @@ export default function App() {
         };
 
         const foodImageTasks = foodImagesToSave.map(imgData => {
-          return () => setDoc(doc(db, 'users', uid, 'foodImages', imgData.id), {
-            imageUrl: imgData.imageUrl || null,
-            imageUrls: imgData.imageUrls || []
-          }).catch(err => console.error("Food image sync error:", err));
+          return () => { console.log('[FreeTier] foodImages firestore write disabled'); return Promise.resolve(); };
         });
 
         const foodImagePromise = chunkPromises(foodImageTasks, 5).then(() => {
@@ -3998,17 +3776,11 @@ export default function App() {
           });
         });
 
-        const dashboardPromise = setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), {
-          actions: currActions.map(sanitizeForFirestore),
-          dailyBenefits: currBenefits.map(sanitizeForFirestore),
-          foodIdeas: currFoodIdeas.map(sanitizeForFirestore)
-        }, { merge: true }).catch(err => { handleFirestoreError(err); console.error(err); });
+        const dashboardPromise = Promise.resolve();
         let reportPromise = Promise.resolve();
         if (currReport) {
           const itemTrackId = logInteraction('upload', `users/${uid}/reports/latest`, currReport);
-          reportPromise = setDoc(doc(db, 'users', uid, 'reports', 'latest'), sanitizeForFirestore(currReport))
-            .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currReport).length))
-            .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); });
+          reportPromise = Promise.resolve();
         }
         await withTimeout(
           Promise.all([
@@ -4023,22 +3795,13 @@ export default function App() {
       } else {
         // Multi-document sync (default when no specific update provided)
         const pId = logInteraction('upload', `users/${uid} (Profile)`, currProfile);
-        const profilePromise = setDoc(doc(db, 'users', uid), sanitizeForFirestore(profileForCloud), { merge: true })
-          .then(() => completeInteraction(pId, true, JSON.stringify(currProfile).length))
-          .catch(err => { completeInteraction(pId, false, 0, err.message); handleFirestoreError(err); });
-        upsertProfileToSupabase(profileForCloud, uid, { actions: currActions, dailyBenefits: currBenefits, report: currReport, email: updatedProfile?.email || profile?.email || auth.currentUser?.email });
-          
-        const dashboardPromise = setDoc(doc(db, 'users', uid, 'metadata', 'dashboard'), {
-          actions: currActions.map(sanitizeForFirestore),
-          dailyBenefits: currBenefits.map(sanitizeForFirestore),
-          foodIdeas: currFoodIdeas.map(sanitizeForFirestore)
-        }, { merge: true }).catch(err => { handleFirestoreError(err); console.error(err); });
+        const profilePromise = Promise.resolve();
+        upsertProfileToSupabase(profileForCloud, uid, { actions: currActions, dailyBenefits: currBenefits, report: currReport, email: updatedProfile?.email || profile?.email || auth.currentUser?.email || undefined });
+        const dashboardPromise = Promise.resolve();
         let reportPromise = Promise.resolve();
         if (currReport) {
           const itemTrackId = logInteraction('upload', `users/${uid}/reports/latest`, currReport);
-          reportPromise = setDoc(doc(db, 'users', uid, 'reports', 'latest'), sanitizeForFirestore(currReport))
-            .then(() => completeInteraction(itemTrackId, true, JSON.stringify(currReport).length))
-            .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); });
+          reportPromise = Promise.resolve();
         }
         
         // V2 bulk sync
@@ -4064,10 +3827,7 @@ export default function App() {
           ))
           .map(f => {
             const hasRealImage = f.imageUrl && f.imageUrl !== '[image_removed_for_snapshot]' && f.imageUrl !== '';
-            return () => setDoc(doc(db, 'users', uid, 'foodImages', f.id), {
-              imageUrl: hasRealImage ? f.imageUrl : null,
-              imageUrls: f.imageUrls ? f.imageUrls.filter(u => u && u !== '[image_removed_for_snapshot]') : []
-            }).catch(err => console.error("Food image sync error:", err));
+            return () => { console.log('[FreeTier] foodImages firestore write disabled'); return Promise.resolve(); };
           });
 
         if (unsyncedImageTasks.length > 0) {

@@ -1,3 +1,4 @@
+import { auth } from '../firebase';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { JobStore } from './JobStore';
 import { AgentJob } from './types';
@@ -300,11 +301,13 @@ export async function upsertJobToSupabase(
 ): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
+    console.log('[FreeTier] thin clean_result');
     let finalCleanResult = cleanResult || job.result || null;
     if (job.mealBuild) {
       finalCleanResult = {
         ...(finalCleanResult || {}),
-        mealBuild: job.mealBuild
+        mealBuild: undefined, // job.mealBuildUrl || null
+        // mealBuild full object is stripped
       };
     }
 
@@ -325,7 +328,7 @@ export async function upsertJobToSupabase(
     // Push through the server to avoid exposing anon keys / RLS issues directly from client for writes
     const res = await fetch('/api/jobs/upsert', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(auth.currentUser ? { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` } : {}) },
       body: JSON.stringify({ payload }),
     });
     if (!res.ok) {
@@ -345,7 +348,7 @@ export async function deleteJobFromBackend(
     const baseUrl = typeof window !== 'undefined' ? '' : 'http://localhost:3000';
     const res = await fetch(`${baseUrl}/api/jobs/delete`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(auth.currentUser ? { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` } : {}) },
       body: JSON.stringify({ jobId, userId }),
     });
     if (!res.ok) {

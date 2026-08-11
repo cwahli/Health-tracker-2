@@ -1,6 +1,6 @@
 # Health Cockpit — Master AI Handover (WIP status board)
 
-**Last updated:** 2026-08-10 (Portion Clarification state loss & 0-nutrient calculation fixed, empty input send lockout resolved, and Interactive "Ready" badge implemented; all gates & tests PASS)  
+**Last updated:** 2026-08-11 (Free Tier Reliability M23-M28 completed: auth token verification, Gemini retry backoff, optimized payloads; all gates & tests PASS)  
 **Source of truth code intent:** https://github.com/cwahli/Health-tracker-6  
 **Tree of truth for product completeness:** **Desktop** working tree until Slice 0 / governance ship lands on origin.  
 **Always `git fetch` + re-audit before a session.**
@@ -251,7 +251,15 @@ Complete. Not the master focus of this handover.
 - 2026-08-10: Comparison and Pending Food Log Fixes:
   1. Added `comparison`, `comparisonSet`, and `scoutContentType` to the backend persistent `cleanResult` payload in `serverJobs.ts`, enabling seamless comparison data transmission to the frontend.
   2. Fixed comparison preview card metrics (0kcal/0g protein, Save Log button) and modal duplication issues by ensuring `pendingFoodLog` resolves to `null` on comparison (Mode D) runs.
-- Plan snapshots (`STATUS_CONSOLIDATED`, REMAINING_ROADMAP) dated 2026-08-08 — verify before acting.
+- 2026-08-11: Free-Tier Reliability (M23-M28) Completed:
+  1. Auth Verification (M27): Added robust `verifyFirebaseIdToken` and ensured full tokens are passed to `/api/sync/supabase-push` and `/api/jobs/*`.
+  2. Gemini Retry (M28): Added `withGeminiRetry` exponential backoff wrapper in `server.ts` to handle AI Studio rate limits (429s).
+  3. Payload Optimization (M26): Removed `mealBuild` object from `AgentJob` frontend/backend sync payloads to save R2/database bandwidth.
+  4. Tested and verified `scripts/assert-free-tier-complete.mjs` with exit code 0.
+- - 2026-08-11: Starting M29 (Job Path Unify):
+  1. Investigating removal of dead SSE paths in LogChat (`/api/gemini/food-analyze` and `/api/gemini/medical-analyze`).
+  2. Preparing to migrate `executeFoodAgent` retries and `medical` job execution to server submit+poll pattern instead of local execution.
+- - Plan snapshots (`STATUS_CONSOLIDATED`, REMAINING_ROADMAP) dated 2026-08-08 — verify before acting.
 
 ---
 
@@ -275,6 +283,7 @@ archive/
 
 | Date | Note |
 |------|------|
+| 2026-08-11 | M26-M28 Free Tier Reliability | M26 (thin jobs), M27 (Supabase pull/push auth verification), M28 (Gemini retry block with exponential backoff) applied and pass tests |
 | 2026-08-08 | Full audit: Desktop gates all green; origin behind/ahead mess (5 commits stubs); archive consolidated; M15 sole active pack |
 | 2026-08-06 | Master handover: modal M1–M2 done, M3 next (superseded by later Desktop work) |
 

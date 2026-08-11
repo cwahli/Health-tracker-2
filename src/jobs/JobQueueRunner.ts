@@ -7,114 +7,14 @@ import { auth } from '../firebase';
 
 export type JobExecutor = (job: AgentJob, abortSignal: AbortSignal) => Promise<void>;
 
-import { executeFoodAgent } from './FoodAgentExecutor';
+
 
 class JobQueueRunnerImpl {
   private isRunning = false;
   private consecutiveFailures = 0;
   private circuitBreakerPaused = false;
   private executor: JobExecutor = async (job, signal) => {
-    if (job.kind === 'food_log' || job.kind === 'food_compare') {
-      const rawImages = (await ImageStore.getImages(job.id)) || [];
-      const stringImages: string[] = await Promise.all(
-        rawImages.map(async (img) => {
-          if (typeof img === 'string') return img;
-          if (img && typeof img === 'object') {
-            const blob = img instanceof Blob ? img : new Blob([img as any], { type: (img as any).type || 'image/jpeg' });
-            return new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = () => resolve('');
-              reader.readAsDataURL(blob);
-            });
-          }
-          return '';
-        })
-      );
-      const cleanImages = stringImages.filter(Boolean);
-      const isDietitianResume = job.resumeStage === 'dietitian';
-      const executorInput = {
-        jobId: job.id,
-        text: job.inputSnapshot?.text || '',
-        images: cleanImages,
-        mode: (job.mode as 'review' | 'compare' | 'edit') || 'review',
-        lockedModeFamily: job.lockedModeFamily,
-        profile: job.inputSnapshot?.profile || {},
-        modelId: job.inputSnapshot?.modelId || 'gemini-3.5-flash-lite',
-        requestId: job.requestId || job.id,
-        checkpoint: job.checkpoint,
-        signal,
-        activeScoutItems: job.checkpoint?.scoutItems,
-        scoutContentType: job.checkpoint?.scoutContentType,
-        skipScout: !!job.checkpoint?.scoutItems || isDietitianResume,
-        portionChoices: (job.inputSnapshot as any)?.portionChoices,
-        messages: job.messages || [],
-      };
-
-      for await (const event of executeFoodAgent(executorInput)) {
-        if (event.type === 'progress') {
-          JobStore.updateJob(job.id, {
-            stepKey: event.stepKey || job.stepKey,
-            progressPercent: event.progressPercent !== undefined ? event.progressPercent : job.progressPercent,
-            statusMessage: event.statusMessage || job.statusMessage,
-          });
-        } else if (event.type === 'checkpoint') {
-          import('../mealBuild/consolidate').then(({ consolidateMeal }) => {
-             const m = job.mealBuild || { id: job.id, schemaVersion: 1, version: 1, items: [], status: 'draft', createdAt: new Date().toISOString() } as any;
-             const updated = consolidateMeal(m, { items: event.checkpoint?.scoutItems || [] }, 'scout');
-             JobStore.updateJob(job.id, {
-               checkpoint: event.checkpoint,
-               mealBuild: updated,
-               stepKey: 'scout',
-               progressPercent: 35,
-               statusMessage: 'Scout checkpoint saved',
-             });
-          });
-        } else if (event.type === 'partial') {
-          JobStore.updateJob(job.id, {
-            liveThoughts: event.partialThoughts,
-          });
-        } else if (event.type === 'done') {
-          const res = event.data || {};
-          const mb = res.mealBuild || res.data?.mealBuild || job.mealBuild;
-          
-          if (res.portionClarify || res.needsPortionClarify) {
-            JobStore.updateJob(job.id, {
-              status: 'awaiting_user',
-              result: res,
-              mealBuild: mb,
-              statusMessage: 'Please confirm portion size',
-            });
-          } else {
-            JobStore.updateJob(job.id, {
-              result: res,
-              mealBuild: mb,
-              progressPercent: 100,
-              statusMessage: 'Analysis completed',
-            });
-          }
-        } else if (event.type === 'error') {
-          const err = new Error(event.message || 'Execution error');
-          (err as any).class = event.errorClass || 'transient';
-          if (event.checkpoint) {
-            (err as any).scoutItems = event.checkpoint.scoutItems;
-            (err as any).scoutContentType = event.checkpoint.scoutContentType;
-          }
-          if (event.portionClarify) {
-            (err as any).portionClarify = event.portionClarify;
-          }
-          throw err;
-        }
-      }
-    }
-  };
-
-  private resolveSleep: (() => void) | null = null;
-  private handleVisibilityChange = () => {
-    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-      console.log('[JobQueueRunner] Document became visible. Waking queue runner...');
-      this.wake();
-    }
+    throw new Error('Default local executor is disabled. Jobs are processed server-side.');
   };
 
   setExecutor(executor: JobExecutor) {

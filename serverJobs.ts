@@ -219,7 +219,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
   // 2. Asynchronous cloud execution (fire & forget on server process)
   setImmediate(async () => {
     let lastProgressUpdate = 0;
-    const progressThrottleMs = 1500;
+    const progressThrottleMs = 5000;
     let accumulatedLogs: string[] = turn1Logs.length > 0
       ? [...turn1Logs, '\n--- USER CONFIRMED PORTION SIZES (TURN 2) ---\n']
       : [];
@@ -311,8 +311,9 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       resetChunkTimer();
 
       let response: Response;
+      const endpoint = dbKind === 'medical' ? '/api/gemini/medical-analyze?stream=true' : '/api/gemini/food-analyze?stream=true';
       try {
-        response = await fetch(`${baseUrl}/api/gemini/food-analyze?stream=true`, {
+        response = await fetch(`${baseUrl}${endpoint}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -323,7 +324,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         });
       } catch (fetchErr: any) {
         try {
-          response = await fetch(`http://localhost:${port}/api/gemini/food-analyze?stream=true`, {
+          response = await fetch(`http://localhost:${port}${endpoint}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

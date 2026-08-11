@@ -1,3 +1,4 @@
+import { auth } from '../firebase';
 import { trackApiCall } from './apiTracker';
 import { doc, getDoc, setDoc, collection, getDocs, Firestore } from 'firebase/firestore';
 import { FoodLog, BiomarkerLog, HealthAction, DailyBenefit, FoodIdea, RecommendationReport, UserProfile } from '../types';
@@ -295,7 +296,7 @@ export const upsertProfileToSupabase = async (
       try {
         const res = await fetchWithRetry('/api/sync/supabase-push', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(auth.currentUser ? { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` } : {}) },
           body: JSON.stringify({
             uid: u,
             email: e?.email,
@@ -363,7 +364,7 @@ export const syncLogsWithTimeBuckets = async (
     const sanitizedFoods = sanitizeFoodsForSync(unsyncedFoods, { stripAllDataImages: forceAllFoods });
     const pushRes = await fetchWithRetry('/api/sync/supabase-push', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(auth.currentUser ? { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` } : {}) },
       body: JSON.stringify({ uid, foods: sanitizedFoods, biomarkers: unsyncedBiomarkers })
     });
 
@@ -444,8 +445,8 @@ export const fetchAllConsolidatedLogs = async (
     const timeoutId = setTimeout(() => controller.abort(), pullTimeoutMs);
     const proxyRes = await fetch('/api/sync/supabase-pull', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uid, email: userEmail, lastSyncTime }),
+      headers: { 'Content-Type': 'application/json', ...(auth.currentUser ? { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` } : {}) },
+      body: JSON.stringify({ uid, email: userEmail, lastSyncTime, listOnly: true, pageSize: 50 }),
       signal: controller.signal
     }).finally(() => clearTimeout(timeoutId));
     

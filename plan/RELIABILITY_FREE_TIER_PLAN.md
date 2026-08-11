@@ -140,12 +140,31 @@ Local IDB              → chat transcripts, offline cache, in-flight jobs
 
 ## 8. Studio ship path
 
+### Preferred: one continuous master pack
+
 ```text
-plan/RELIABILITY_FREE_TIER_PLAN.md  (this file)
-  → studio/M23_… (one active pack)
-  → AI Studio gate 0 → commit/push
+plan/RELIABILITY_FREE_TIER_PLAN.md
+  → studio/M23_FULL_FREE_TIER_RELIABILITY.md   ← upload THIS for full program
+  → Studio iterates M23→M28 until:
+       node scripts/assert-free-tier-complete.mjs  exit 0
+  → tsc + sync vitest
+  → AI Studio commit/push
   → archive + AI_HANDOVER update
-  → next pack
+```
+
+### Optional: single-phase only
+
+```text
+studio/M23_FIRESTORE_WRITE_KILL_SWITCH.md  → m23 gate only (not full program)
 ```
 
 Local Grok/Claude/Cursor: prepare only; **no git push**.
+
+### After master COMPLETE — still optional later
+
+| Item | When |
+|------|------|
+| Cloudflare Pages CDN | Global static latency matters |
+| Playwright E2E | After soak of M23–M28 |
+| server.ts router extract | On touch / maintainability |
+| D1 investigation | Only if measured free-tier still fails |
