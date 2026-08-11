@@ -2990,29 +2990,41 @@ async function callUnifiedLLMInternal({
     let response: any;
     let thoughtsText = "";
     if (onStream && (!configObj.tools || configObj.tools.length === 0)) {
-      const stream = await ai.models.generateContentStream({
-        model: targetGeminiModel,
-        contents,
-        config: configObj
-      });
-      let fullText = "";
-      for await (const chunk of stream) {
-        if (chunk.candidates?.[0]?.content?.parts) {
-          for (const part of chunk.candidates[0].content.parts) {
-            if (part.thought && part.text) {
-              thoughtsText += part.text;
-              onStream(part.text, true); // true = isThought
-            } else if (part.text) {
-              fullText += part.text;
-              onStream(part.text, false);
+      try {
+        const stream = await withGeminiRetry(() => ai.models.generateContentStream({
+          model: targetGeminiModel,
+          contents,
+          config: configObj
+        }), { label: "Unified LLM Stream" });
+        let fullText = "";
+        for await (const chunk of stream) {
+          if (chunk.candidates?.[0]?.content?.parts) {
+            for (const part of chunk.candidates[0].content.parts) {
+              if (part.thought && part.text) {
+                thoughtsText += part.text;
+                onStream(part.text, true); // true = isThought
+              } else if (part.text) {
+                fullText += part.text;
+                onStream(part.text, false);
+              }
             }
+          } else if (chunk.text) {
+            fullText += chunk.text;
+            onStream(chunk.text, false);
           }
-        } else if (chunk.text) {
-          fullText += chunk.text;
-          onStream(chunk.text, false);
         }
+        response = { text: fullText, functionCalls: [] };
+      } catch (streamErr: any) {
+        addDebugLog(`[UnifiedLLM] Stream failed (${streamErr?.message}). Falling back to non-streaming generateContent...`);
+        const fullRes = await withGeminiRetry(() => ai.models.generateContent({
+          model: targetGeminiModel,
+          contents,
+          config: configObj
+        }), { label: "Unified LLM Stream Fallback" });
+        let fullText = fullRes.text || "";
+        if (onStream) onStream(fullText, false);
+        response = { text: fullText, candidates: fullRes.candidates, functionCalls: fullRes.functionCalls };
       }
-      response = { text: fullText, functionCalls: [] };
     } else {
       response = await withGeminiRetry(() => ai.models.generateContent({
         model: targetGeminiModel,
@@ -4811,14 +4823,16 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
               const rec = reconcileNutrients({ nutrients: foundation, budget, formOk: true });
               addDebugLog(`[Budget] mode=edit item="${item.name}" kcal=${budget.budgetKcal} source=${budget.source} weight=${newWeight}`);
               addDebugLog(`[Reconcile] mode=edit action=${rec.action} foundation=${rec.foundationKcal} final=${rec.finalKcal}`);
-              item.weightGrams = newWeight;
-              item.calories = Number((rec.nutrients.calories ?? rec.finalKcal).toFixed(1));
-              item.protein = Number((rec.nutrients.protein ?? foundation.protein).toFixed(2));
-              item.totalFat = Number((rec.nutrients.totalFat ?? foundation.totalFat).toFixed(2));
-              item.saturatedFat = Number((rec.nutrients.saturatedFat ?? foundation.saturatedFat).toFixed(2));
-              item.carbohydrates = Number((rec.nutrients.carbohydrates ?? foundation.carbohydrates).toFixed(2));
-              item.sodium = Number((rec.nutrients.sodium ?? foundation.sodium).toFixed(1));
-              if (scoutEst != null) item.estimatedCalories = scoutEst;
+              if (item) {
+                item.weightGrams = newWeight;
+                item.calories = Number(((rec?.nutrients?.calories ?? rec?.finalKcal) || 0).toFixed(1));
+                item.protein = Number(((rec?.nutrients?.protein ?? foundation?.protein) || 0).toFixed(2));
+                item.totalFat = Number(((rec?.nutrients?.totalFat ?? foundation?.totalFat) || 0).toFixed(2));
+                item.saturatedFat = Number(((rec?.nutrients?.saturatedFat ?? foundation?.saturatedFat) || 0).toFixed(2));
+                item.carbohydrates = Number(((rec?.nutrients?.carbohydrates ?? foundation?.carbohydrates) || 0).toFixed(2));
+                item.sodium = Number(((rec?.nutrients?.sodium ?? foundation?.sodium) || 0).toFixed(1));
+                if (scoutEst != null) item.estimatedCalories = scoutEst;
+              }
             }
           } else if (mockCommand.action === "remove_item") {
             const idx = activeMeal.itemsBreakdown?.findIndex((it: any) => it.name.toLowerCase().includes(mockCommand.itemName.toLowerCase()));
@@ -4859,8 +4873,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         const newSodium = (activeMeal.itemsBreakdown || []).reduce((acc: number, it: any) => acc + (Number(it.sodium) || 0), 0);
 
         if (!activeMeal.nutrients) activeMeal.nutrients = {};
-        if (!activeMeal.nutrients) activeMeal.nutrients = {};
-      activeMeal.nutrients.calories = Number(newCalories.toFixed(1));
+        activeMeal.nutrients.calories = Number(newCalories.toFixed(1));
         activeMeal.nutrients.saturatedFat = Number(newSaturatedFat.toFixed(2));
         activeMeal.nutrients.sodium = Number(newSodium.toFixed(1));
 
@@ -6691,16 +6704,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         const src = webMatchRaw.source === 'brand_official' || webMatchRaw.brandPriority ? 'brand_official' : 'web_search';
         if (isMultiComponentItem && (src === 'web_search' || isCompositeOrUnofficial || isMultiComponentHomeCooked)) {
           addDebugLog(`[TruthSkip] multi-component / composite dish "${item.originalName || item.keyword}": ignoring single-dish match "${webMatchRaw.dish_name || webMatchRaw.name}" as parent dish truth (use component decomposition + scout budget)`);
-          if (!item.rawNutritionLabel && (webMatchRaw.rawNutritionLabel || (webMatchRaw.source === 'brand_official' && webMatchRaw.calories > 0))) {
-            item.rawNutritionLabel = webMatchRaw.rawNutritionLabel || {
-              servingSize: "100g",
-              calories: `${webMatchRaw.calories || 0} kcal`,
-              protein: `${webMatchRaw.protein || 0}g`,
-              totalFat: `${webMatchRaw.fat || webMatchRaw.totalFat || 0}g`,
-              totalCarbohydrate: `${webMatchRaw.carbs || webMatchRaw.carbohydrates || 0}g`,
-              sugar: `${webMatchRaw.sugar || 0}g`
-            };
-          }
+          // Do NOT set item.rawNutritionLabel from skipped single-dish parent match (prevents fake label hard locks)
         } else if (isMultiComponentHomeCooked && !isBrandMatch) {
           addDebugLog(`[TruthSkip] home-cooked multi-component "${item.originalName || item.keyword}": ignoring non-brand match (use components + scout budget)`);
         } else {
@@ -6975,6 +6979,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             const ocrTargetCalories = Number(truthMatch.calories || 371);
 
             item.components.forEach((comp: any) => {
+              if (!comp || typeof comp !== 'object') return;
               const compWeight = itemWeight * ((comp.volumePercentage || 100) / 100);
               const rawQuery = comp.searchQuery || comp.name || comp.keyword || "";
               if (!rawQuery || compWeight <= 0 || isGenericZeroNutrientDiluent(rawQuery)) return;
@@ -7013,7 +7018,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
 
             if (scaleFactor !== 1 || rawSumCalories > 0) {
               item.components.forEach((comp: any) => {
-                if (comp.calories === undefined) return;
+                if (!comp || typeof comp !== 'object' || comp.calories === undefined) return;
                 comp.calories = Math.round(comp.calories * scaleFactor);
                 comp.protein = Math.round(comp.protein * scaleFactor * 10) / 10;
                 comp.carbohydrates = Math.round(comp.carbohydrates * scaleFactor * 10) / 10;
@@ -7927,11 +7932,22 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
       // Hard kcal only if we have printed label calories OR locked brand/label truth — not web
       let hardLabelKcal: number | null = null;
       if (printedCaloriesPresent) {
+        let ssGrams = 100;
+        if (rawLabelObj) {
+          const ssKey = Object.keys(rawLabelObj).find((k: string) => {
+            const clean = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+            return clean === 'servingsize' || clean === 'takaransaji';
+          });
+          if (ssKey) {
+            ssGrams = parseServingSizeGrams(String(rawLabelObj[ssKey]), itemWeight);
+          }
+        }
+        const scaledLabelCal = Math.round(labelCalVal * (itemWeight / ssGrams));
         // If label is per-100g, existing truth rescale may already be in itemTruthNutrients; prefer locked printed total when source is label
         hardLabelKcal =
           itemLockedKeys.has('calories') && itemTruthNutrients.calories != null && (primaryDbSource === 'label' || primaryDbSource === 'brand_official')
             ? Number(itemTruthNutrients.calories)
-            : labelCalVal;
+            : scaledLabelCal;
       } else if (
         itemLockedKeys.has('calories') &&
         itemTruthNutrients.calories != null &&
@@ -7984,6 +8000,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
       // If scaleFactor !== 1, scale component rows (componentsDetailList) as well so receipt invariant holds
       if (recRes.scaleFactor !== 1 && recRes.scaleFactor > 0) {
         componentsDetailList.forEach((s: any) => {
+          if (!s || typeof s !== 'object') return;
           if (s.calories != null) s.calories = Math.round(s.calories * recRes.scaleFactor * 10) / 10;
           if (s.protein != null) s.protein = Math.round(s.protein * recRes.scaleFactor * 10) / 10;
           if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * recRes.scaleFactor * 10) / 10;
@@ -8072,6 +8089,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
               }
             } else {
               componentsDetailList.forEach((s: any) => {
+                if (!s || typeof s !== 'object') return;
                 if (s.calories != null) s.calories = Math.round(s.calories * fix * 10) / 10;
                 if (s.protein != null) s.protein = Math.round(s.protein * fix * 10) / 10;
                 if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * fix * 10) / 10;
@@ -8085,6 +8103,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
               const fix = inv.itemCalories / inv.rowSum;
               if (fix >= 0.5 && fix <= 2.0) {
                 componentsDetailList.forEach((s: any) => {
+                  if (!s || typeof s !== 'object') return;
                   if (s.calories != null) s.calories = Math.round(s.calories * fix * 10) / 10;
                   if (s.protein != null) s.protein = Math.round(s.protein * fix * 10) / 10;
                   if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * fix * 10) / 10;
@@ -9467,6 +9486,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
         // Automated 'Sanity Check' Validation Layer
         parsedData.itemsBreakdown.forEach((item: any) => {
+           if (!item || typeof item !== 'object') return;
            if (item.weightGrams > 0 && item.nutrients) {
               const cals = item.nutrients.calories || 0;
               const calDensity = (cals / item.weightGrams) * 100;
@@ -9593,6 +9613,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         let grandWeight = 0;
 
         parsedData.itemsBreakdown.forEach((it: any, idx: number) => {
+          if (!it || typeof it !== 'object') return;
           const originalItemCal = safeNum(it.calories);
           const originalItemP = safeNum(it.protein);
           const originalItemSatFat = safeNum(it.saturatedFat);
@@ -10393,6 +10414,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             const R = newWeight / oldTotalWeight;
             
             activeMeal.itemsBreakdown.forEach((item: any) => {
+              if (!item || typeof item !== 'object') return;
               const oldW = Number(item.weightGrams) || 0;
               item.weightGrams = Math.round(oldW * R);
               item.calories = Number(((item.calories || 0) * R).toFixed(1));
@@ -10433,14 +10455,16 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               addDebugLog(`[Budget] mode=edit item="${item.name}" kcal=${budget.budgetKcal} source=${budget.source} weight=${newWeight}`);
               addDebugLog(`[Reconcile] mode=edit action=${rec.action} foundation=${rec.foundationKcal} final=${rec.finalKcal}`);
 
-              item.weightGrams = newWeight;
-              item.calories = Number((rec.nutrients.calories ?? rec.finalKcal).toFixed(1));
-              item.protein = Number((rec.nutrients.protein ?? foundation.protein).toFixed(1));
-              item.totalFat = Number((rec.nutrients.totalFat ?? foundation.totalFat).toFixed(1));
-              item.saturatedFat = Number((rec.nutrients.saturatedFat ?? foundation.saturatedFat).toFixed(2));
-              item.sodium = Number((rec.nutrients.sodium ?? foundation.sodium).toFixed(1));
-              item.carbohydrates = Number((rec.nutrients.carbohydrates ?? foundation.carbohydrates).toFixed(1));
-              if (scoutEst != null) item.estimatedCalories = scoutEst;
+              if (item) {
+                item.weightGrams = newWeight;
+                item.calories = Number(((rec?.nutrients?.calories ?? rec?.finalKcal) || 0).toFixed(1));
+                item.protein = Number(((rec?.nutrients?.protein ?? foundation?.protein) || 0).toFixed(1));
+                item.totalFat = Number(((rec?.nutrients?.totalFat ?? foundation?.totalFat) || 0).toFixed(1));
+                item.saturatedFat = Number(((rec?.nutrients?.saturatedFat ?? foundation?.saturatedFat) || 0).toFixed(2));
+                item.sodium = Number(((rec?.nutrients?.sodium ?? foundation?.sodium) || 0).toFixed(1));
+                item.carbohydrates = Number(((rec?.nutrients?.carbohydrates ?? foundation?.carbohydrates) || 0).toFixed(1));
+                if (scoutEst != null) item.estimatedCalories = scoutEst;
+              }
 
               addDebugLog(`[Modify Math] update_weight of "${item.name}" (dbId: ${item.dbId}) from ${oldWeight}g to ${newWeight}g (ratio: ${R.toFixed(3)})`);
             } else {
@@ -10499,9 +10523,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             const newAddedCalories = parseFloat((newModifier.addedCaloriesPer100g * factor).toFixed(1));
 
             // Adjust item nutrients
-            item.calories = parseFloat(Math.max(0, item.calories - oldAddedCalories + newAddedCalories).toFixed(1));
-            item.saturatedFat = parseFloat(Math.max(0, item.saturatedFat - oldAddedSatFat + newAddedSatFat).toFixed(2));
-            item.cookingMethod = newMethod;
+            if (item) {
+              item.calories = parseFloat(Math.max(0, (item.calories || 0) - oldAddedCalories + newAddedCalories).toFixed(1));
+              item.saturatedFat = parseFloat(Math.max(0, (item.saturatedFat || 0) - oldAddedSatFat + newAddedSatFat).toFixed(2));
+              item.cookingMethod = newMethod;
+            }
 
             // Also adjust top-level activeMeal.nutrients directly
             if (activeMeal.nutrients) {

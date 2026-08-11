@@ -483,6 +483,7 @@ export function checkAtwaterConsistency(
   itemNutrients: Record<string, number>,
   addDebugLog?: (msg: string) => void
 ): void {
+  if (!itemNutrients || typeof itemNutrients !== 'object') return;
   const protein = itemNutrients.protein || 0;
   let carbs = itemNutrients.carbohydrates || 0;
   const fat = itemNutrients.totalFat || 0;
@@ -586,6 +587,7 @@ export function applyNutrientRealityChecks(
     chainName?: string | null;
   }
 ): void {
+  if (!itemNutrients || typeof itemNutrients !== 'object') return;
   // Physics-based check first, unconditionally — no dbSource value, current or future,
   // exempts an item from basic thermodynamic plausibility.
   checkAtwaterConsistency(itemName, itemNutrients, addDebugLog);

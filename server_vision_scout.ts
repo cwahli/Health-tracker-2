@@ -664,13 +664,14 @@ export function parseAndHealVisionScout(
             correctedFat = satFat;
             if (!newItem.anomalyFlags) newItem.anomalyFlags = [];
             newItem.anomalyFlags.push(`fat overflow corrected: totalFat increased from ${fat} to ${satFat}`);
+            if (!newItem.rawNutritionLabel) newItem.rawNutritionLabel = {};
             if (newItem.rawNutritionLabel.totalFat !== undefined) newItem.rawNutritionLabel.totalFat = satFat;
             else newItem.rawNutritionLabel.fat = satFat;
           }
           
           // 2. Serving Mismatch / Macros Overflow
           let servingSizeGrams = 100; // default for per 100g
-          if (newItem.rawNutritionLabel.servingSize) {
+          if (newItem.rawNutritionLabel && newItem.rawNutritionLabel.servingSize) {
             const ssStr = String(newItem.rawNutritionLabel.servingSize).toLowerCase();
             const ssMatch = ssStr.match(/[\d.]+/);
             if (ssStr.includes('pack') || ssStr.includes('wrap') || ssStr.includes('container') || ssStr.includes('portion')) {

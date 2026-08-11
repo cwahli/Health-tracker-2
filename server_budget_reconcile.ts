@@ -367,7 +367,8 @@ export function applyPostReconcileTruthLocks(input: {
   nutrients: { calories: number; protein: number; totalFat: number; saturatedFat: number; sodium: number; carbohydrates: number };
   appliedDensityCorrection: boolean;
 } {
-  let { calories: sumCal, protein: sumP, totalFat: sumFat, saturatedFat: sumSatFat, sodium: sumNa, carbohydrates: sumCarbs } = input.sumNutrients;
+  const sum = input.sumNutrients || { calories: 0, protein: 0, totalFat: 0, saturatedFat: 0, sodium: 0, carbohydrates: 0 };
+  let { calories: sumCal = 0, protein: sumP = 0, totalFat: sumFat = 0, saturatedFat: sumSatFat = 0, sodium: sumNa = 0, carbohydrates: sumCarbs = 0 } = sum;
   const itemLockedKeysSet = new Set<string>(input.lockedNutrientKeys || Object.keys(input.ledgerTruth || {}));
   const receipt = input.receiptRealityCheckNutrients || {};
   let appliedDensityCorrection = false;

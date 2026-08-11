@@ -291,5 +291,20 @@ describe('Server Budget & Reconcile Logic', () => {
       expect(res.appliedDensityCorrection).toBe(false);
       expect(res.nutrients.calories).toBe(500); // Keeps row sum
     });
+
+    it('handles null or undefined sumNutrients gracefully', () => {
+      expect(() => applyPostReconcileTruthLocks({
+        sumNutrients: undefined as any,
+        ledgerTruth: { calories: 200 },
+        lockedNutrientKeys: ['calories'],
+      })).not.toThrow();
+
+      const res = applyPostReconcileTruthLocks({
+        sumNutrients: undefined as any,
+        ledgerTruth: { calories: 200 },
+        lockedNutrientKeys: ['calories'],
+      });
+      expect(res.nutrients.calories).toBe(200);
+    });
   });
 });

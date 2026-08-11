@@ -9,6 +9,7 @@ import {
   extractUSDANutrientsPer100g,
   extractOFFNutrientsPer100g,
   checkIfItemIsAlreadyPrepared,
+  checkAtwaterConsistency,
   applyNutrientRealityChecks,
   backfillSolubleFibre
 } from './server_pure_helpers';
@@ -246,6 +247,13 @@ describe('server_pure_helpers', () => {
       const nutrients = { calories: 0, protein: 0, totalFat: 0, carbohydrates: 0 };
       expect(() => applyNutrientRealityChecks("Water", 250, nutrients, 0, undefined, "usda")).not.toThrow();
       expect(nutrients.calories).toBe(0);
+    });
+
+    it('handles null or undefined itemNutrients gracefully without throwing TypeError', () => {
+      expect(() => checkAtwaterConsistency("Null Item", null as any)).not.toThrow();
+      expect(() => checkAtwaterConsistency("Undefined Item", undefined as any)).not.toThrow();
+      expect(() => applyNutrientRealityChecks("Null Item", 100, null as any, 0)).not.toThrow();
+      expect(() => applyNutrientRealityChecks("Undefined Item", 100, undefined as any, 0)).not.toThrow();
     });
   });
 

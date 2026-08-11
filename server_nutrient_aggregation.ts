@@ -41,7 +41,9 @@ export function aggregateItemsNutrients(
     nutrients[key] = 0;
   }
 
-
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    return { nutrients, itemsBreakdown: [] };
+  }
 
   const itemsBreakdown = rawItems.map((item: any) => {
     const canonicalName = sanitizeString(item.canonicalDbName || item.name, "Unspecified Item");

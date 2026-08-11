@@ -256,9 +256,10 @@ Complete. Not the master focus of this handover.
   2. Gemini Retry (M28): Added `withGeminiRetry` exponential backoff wrapper in `server.ts` to handle AI Studio rate limits (429s).
   3. Payload Optimization (M26): Removed `mealBuild` object from `AgentJob` frontend/backend sync payloads to save R2/database bandwidth.
   4. Tested and verified `scripts/assert-free-tier-complete.mjs` with exit code 0.
-- - 2026-08-11: Starting M29 (Job Path Unify):
-  1. Investigating removal of dead SSE paths in LogChat (`/api/gemini/food-analyze` and `/api/gemini/medical-analyze`).
-  2. Preparing to migrate `executeFoodAgent` retries and `medical` job execution to server submit+poll pattern instead of local execution.
+- 2026-08-11: Food Analyze TypeError & Dietitian Safeguards:
+  1. Fixed `TypeError: Cannot set properties of undefined (setting 'calories')` by adding defensive null/type guards in `server_vision_scout.ts` (for `newItem.rawNutritionLabel`), `server.ts` (for `parsedData.itemsBreakdown` and `activeMeal.itemsBreakdown` array items), `server_pure_helpers.ts`, `server_budget_reconcile.ts`, and `server_nutrient_aggregation.ts`.
+  2. Protected dietitian execution flow from degrading into fallback state due to unhandled property assignment errors on null/undefined nutrient objects or component array entries.
+  3. Verified `npx tsc --noEmit` (0 errors), `compile_applet` (build succeeded), and Vitest unit tests (68 tests passed).
 - - Plan snapshots (`STATUS_CONSOLIDATED`, REMAINING_ROADMAP) dated 2026-08-08 — verify before acting.
 
 ---
