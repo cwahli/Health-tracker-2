@@ -3386,6 +3386,60 @@ app.post("/api/sync/load", async (req, res) => {
 // Bypasses RLS so the frontend anon key doesn't need direct table access.
 // No auth required — data is keyed by UID and is non-sensitive nutrition data.
 // ============================================================
+app.get("/api/debug/supabase-pull-check", async (req, res) => {
+  try {
+    const uid = String(req.query.uid || 'hiJun2hTdDTk2igwerun2LKvwb42');
+    const email = String(req.query.email || 'cwah.liu@gmail.com');
+    const possibleUids = Array.from(new Set([
+      uid,
+      email,
+      'admin_' + email.toLowerCase().trim().replace(/[^a-z0-9]/gi, '_'),
+      'hiJun2hTdDTk2igwerun2LKvwb42',
+      'cwah.liu@gmail.com',
+      'chiwah.liu@gmail.com',
+      'admin_cwah_liu_gmail_com',
+      'admin_chiwah_liu_gmail_com'
+    ].filter(Boolean) as string[]));
+
+    const { supabaseAdmin } = await import('./supabaseAdmin.js');
+
+    const [foodRes, bioRes, profileRes] = await Promise.all([
+      supabaseAdmin.from('food_logs').select('id, firebase_uid, date, name, updated_at').in('firebase_uid', possibleUids).limit(5),
+      supabaseAdmin.from('biomarker_logs').select('id, firebase_uid, date, updated_at').in('firebase_uid', possibleUids).limit(5),
+      supabaseAdmin.from('profiles').select('firebase_uid, updated_at').in('firebase_uid', possibleUids).limit(5)
+    ]);
+
+    const [foodCountRes, bioCountRes] = await Promise.all([
+      supabaseAdmin.from('food_logs').select('id', { count: 'exact', head: true }).in('firebase_uid', possibleUids),
+      supabaseAdmin.from('biomarker_logs').select('id', { count: 'exact', head: true }).in('firebase_uid', possibleUids)
+    ]);
+
+    res.json({
+      queriedUid: uid,
+      queriedEmail: email,
+      possibleUids,
+      food: {
+        error: foodRes.error ? foodRes.error.message : null,
+        sampleRows: foodRes.data || [],
+        totalCount: foodCountRes.count ?? null,
+        totalCountError: foodCountRes.error ? foodCountRes.error.message : null
+      },
+      biomarker: {
+        error: bioRes.error ? bioRes.error.message : null,
+        sampleRows: bioRes.data || [],
+        totalCount: bioCountRes.count ?? null,
+        totalCountError: bioCountRes.error ? bioCountRes.error.message : null
+      },
+      profile: {
+        error: profileRes.error ? profileRes.error.message : null,
+        sampleRows: profileRes.data || []
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || String(error), stack: error.stack });
+  }
+});
+
 app.post("/api/sync/supabase-pull", async (req, res) => {
   try {
     const authData = await verifyFirebaseIdToken(req).catch(() => null);

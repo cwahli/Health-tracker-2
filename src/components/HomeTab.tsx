@@ -121,6 +121,23 @@ export default function HomeTab({
   const t = translations[profile.language] || translations.en;
   const activeFoodLogs = React.useMemo(() => (foodLogs || []).filter(f => f.sync_state !== 'delete'), [foodLogs]);
   const activeHistory = React.useMemo(() => (biomarkerHistory || []).filter(h => h.sync_state !== 'delete'), [biomarkerHistory]);
+  const [debugResult, setDebugResult] = React.useState<any>(null);
+  const [debugLoading, setDebugLoading] = React.useState(false);
+  const runSupabasePullDebugCheck = async () => {
+    setDebugLoading(true);
+    setDebugResult(null);
+    try {
+      const uid = (profile as any)?.firebase_uid || profile?.uid || '';
+      const email = profile?.email || '';
+      const res = await fetch(`/api/debug/supabase-pull-check?uid=${encodeURIComponent(uid)}&email=${encodeURIComponent(email)}`);
+      const data = await res.json();
+      setDebugResult(data);
+    } catch (e: any) {
+      setDebugResult({ error: e?.message || String(e) });
+    } finally {
+      setDebugLoading(false);
+    }
+  };
   const [showAllTargets, setShowAllTargets] = React.useState(false);
   const [expandedActionIds, setExpandedActionIds] = React.useState<Set<string>>(new Set());
   const [showAllActions, setShowAllActions] = React.useState<boolean>(false);
@@ -1029,6 +1046,27 @@ export default function HomeTab({
             >
               Add Your First Food Log
             </button>
+          </div>
+
+          {/* TEMP DEBUG: Supabase pull check — remove once data-loss issue is resolved */}
+          <div id="empty-state-debug-card" className="p-5 bg-theme-bg-card rounded-2xl border border-dashed border-amber-400/60 shadow-sm space-y-3">
+            <h3 className="text-xs font-bold text-amber-500">Debug: Check Supabase Data</h3>
+            <p className="text-xs text-theme-text-secondary leading-normal">
+              If you expected to see existing data here, tap this to check what the server actually finds in Supabase.
+            </p>
+            <button
+              id="empty-state-debug-btn"
+              onClick={runSupabasePullDebugCheck}
+              disabled={debugLoading}
+              className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-60"
+            >
+              {debugLoading ? 'Checking...' : 'Run Debug Check'}
+            </button>
+            {debugResult && (
+              <pre className="text-[10px] leading-tight whitespace-pre-wrap break-words bg-black/80 text-emerald-300 p-3 rounded-lg max-h-80 overflow-y-auto">
+                {JSON.stringify(debugResult, null, 2)}
+              </pre>
+            )}
           </div>
         </div>
       </div>
