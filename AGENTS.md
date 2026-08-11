@@ -1,10 +1,10 @@
 # AGENTS.md — Always-on rules (keep short)
 
 **Purpose:** Reduce cascade bugs from multi-agent AI work — without freezing product evolution.  
-**Repo:** https://github.com/cwahli/Health-tracker-6  
-**Updated:** 2026-08-09  
+**Repo:** https://github.com/cwahli/Health-tracker-2  
+**Updated:** 2026-08-11  
 
-**Token rule:** Read **this file first**. Load other docs **only when the table below says so**. Do not dump all domain rulebooks into every session.
+**Token rule:** Read **this file first**. Load domain rulebooks (`docs/agent/**`) **only when the table below says so**. (Investigating application source code, debug logs, and relevant functions is always permitted and encouraged; do not dump unneeded rulebook docs).
 
 ---
 
@@ -26,7 +26,10 @@ AGENTS + docs/agent = how we work without breaking each other (stable process)
 
 **Multi-agent context** goes in **`AI_HANDOVER.md`** (short “Session notes” / WIP rows), **not** by rewriting laws mid-flight.
 
-**Zero-Code-Change Exemption (Token-Saving Law):** Run tests, `tsc`, and regression gates **ONLY when application source code is modified** (`src/`, `server.ts`, `server_*.ts`, `agents/`, `supabase/`). For doc updates, explanations, question answers, folder mirroring/sync ops, or file reviews where NO application code changed, **STRICTLY SKIP running test suites and gate verification runs** to eliminate token and context waste.
+**Core Autonomous Invariants (Always-On):**
+- **Non-Terminal Search Law (Continuous Investigation):** A `grep`, search, or file-find command is **NEVER a valid ending to a turn**. An agent is strictly forbidden from ending its turn on a search/grep output (whether results are matching, partial, or completely empty). The agent MUST continue investigating, inspecting source files, and analyzing until it delivers the **complete Stage 1 Strategic Report** before yielding. If a search yields 0 results, immediately broaden keywords or search the pipeline mechanism in `server.ts`. Ending a turn on a search tool is an immediate auto-failure.
+- **Binding Execution Law:** Once the user gives approval or commands an action, agents **MUST NOT yield the turn after reading files**. Reading lines must be chained immediately with the write tool (`replace_file_content`), tests, and verification in a single continuous execution.
+- **Zero-Code-Change Exemption (Token-Saving Law):** Run tests, `tsc`, and regression gates **ONLY when application source code is modified** (`src/`, `server.ts`, `server_*.ts`, `agents/`, `supabase/`). For doc updates, explanations, question answers, folder mirroring/sync ops, or file reviews where NO application code changed, **STRICTLY SKIP running test suites and gate verification runs** to eliminate token and context waste.
 
 ---
 
@@ -57,10 +60,9 @@ Do not remove branches, error handlers, fallbacks, or **mode-tagged / gate-used 
 ### L2 — Contracts
 No breaking signature/API/prop changes without updating **all** call sites in the same task. Prefer optional params + defaults.
 
-### L3 — Scope honesty
-- **S** (1 file): implement directly.  
-- **M** (multi-file): ≤3-bullet plan then code.  
-- **L/X** (multi-path, merge, sync, dictionary): paste **IMPACT** first (`docs/agent/TEMPLATES.md`). Scope grows → **stop and report**.
+### L3 — Scope honesty & continuous execution
+- Perform comprehensive deep investigation across all relevant files without pausing mid-investigation.
+- Present architectural trade-offs concisely and obtain user direction before executing significant multi-file changes.
 
 ### L4 — Full implementation
 No placeholders or stub delivery. Import without **correct-path call site** = FAIL.
@@ -85,16 +87,30 @@ If the task hits food-calc / biomarkers / sync: **read** that domain file.
 - Do **not** invent a silent alternate pipeline “just for this bug.”  
 - Do **not** treat rulebooks as a ban on new features — only as a checklist against accidental breakage.
 
-### L11 — SDD & 2-Turn Execution Protocol (Mandatory for Class M/L/X)
-For non-trivial fixes or features (Class M/L/X), execution MUST follow a 2-turn protocol:
-- **Turn 1 (SDD Spec Phase)**: Write or update a Software Design Document in `plan/<task_name>.md`. Define:
-  1. **Structural Root Cause**: Diagnosis across full application architecture.
-  2. **Code Pruning Inventory**: List of obsolete conditionals, regexes, or functions to DELETE (net-zero/negative complexity growth).
-  3. **Deterministic Boundary**: Explicit split between LLM prompt role (strictly schema extraction/classification) and TypeScript logic (unit conversions, math, sanitization).
-  4. **Telemetry Audit**: Logging strategy using central `logger` (clean up transient logs, no duplicate terminal noise).
-  5. **Regression Test Plan**: Vitest suites to run and verify.
-  *DO NOT edit application source code during Turn 1.*
-- **Turn 2 (Execution Phase)**: Delete obsolete code, implement clean TS helpers, pass regression gates, and submit.
+### L11 — Autonomous Investigation & Strategic Proposal Protocol
+When addressing non-trivial tasks or fixes, agents MUST follow the 2-stage interaction model:
+
+1. **Stage 1 — Autonomous Deep Investigation & Strategic Report (No mid-way pausing)**:
+   - **Non-Terminal Search Law**: A `grep` or search command is strictly an intermediate tool call, NEVER a turn-ending response. Agents MUST NOT stop after a search (even if 0 matches are returned). The agent must chain `view_file`, broaden query terms, or trace the pipeline in `server.ts` until it delivers the complete **Stage 1 Strategic Report** in that single turn. Ending a turn on a search tool is an immediate fatal failure.
+   - **Continuous Investigation**: Perform thorough multi-file inspection and codebase analysis autonomously. Never stop mid-turn after `grep` or `view` to ask the user to say "continue".
+   - **Strategic & Best-Practice Review**: Evaluate industry best practices and research how the problem is standardly solved. Account for potential future failure modes and ensure the solution is durable (anti-patch guarantee).
+   - **Concise Architectural Proposal (No Raw Code Dumps)**: Present a clear, high-level summary:
+     - **Structural Root Cause & Diagnosis**
+     - **Options & Trade-offs**: Compare available approaches (e.g. Option A: quick patch vs. Option B: durable structural solution, with clear Pros and Cons).
+     - **Future Failure Mode Analysis**: Explicit explanation of how edge cases and downstream risks are mitigated.
+     - **Key Points of Proposed Changes**: Concise architectural bullets (*strictly avoid dumping large code blocks*).
+   - **Request Approval / Direction**: Await user selection or confirmation before applying edits to application source code.
+
+2. **Stage 2 — Post-Approval Autonomous Execution**:
+   - **Binding Execution Law**: Once the user gives approval or commands an action, the agent **MUST NOT yield the turn after reading or viewing files**. Reading lines to prepare an edit must be chained immediately with the write tool (`replace_file_content`), tests, and verification in a single continuous execution.
+   - Execute all required file changes in a single continuous flow.
+   - Run tests, type checks (`tsc`), and regression gates to verify zero cascade breakages.
+   - **Mandatory Executive Response Format (Zero Code Dumps)**:
+     All completion responses MUST strictly adhere to this format:
+     - **Root Cause & Diagnosis:** (1–2 concise sentences)
+     - **Key Changes Applied:** (2–4 high-level architectural bullets; no code blocks or diffs)
+     - **Verification:** (Pass/Fail status for build, `tsc`, tests, and gates)
+     *(Pasting raw code blocks, file contents, or diffs in chat is strictly prohibited).*
 
 ### L12 — Strict Prompt Line-Budget & Anti-Bloat Rule
 - **Strict Prompt Line Ceiling**: System prompts (in `server_vision_scout.ts`, dietitian instructions, biomarker agents) are strictly capped. Adding new lines to a prompt is FORBIDDEN unless an equivalent number of redundant/outdated prompt lines are removed in the same edit (net-zero line growth).
@@ -104,7 +120,7 @@ For non-trivial fixes or features (Class M/L/X), execution MUST follow a 2-turn 
 All of: IMPACT (L/X) · SELF-CHECK · (if code changed: `tsc` · domain regression map commands · pack assert if any; skip if doc/ops only) · paths verified or known-broken noted.
 
 **Forbidden until then:** “all done” / “fully verified” / “nothing left.”  
-**Auto FAIL:** import without call site · silent half-fix · detect without repair · dropped fields · gate weakened · drive-by scope.
+**Auto FAIL (Stage 2 execution):** import without call site · silent half-fix · detect without repair (when repair was approved) · dropped fields · gate weakened · drive-by scope.
 
 ---
 
@@ -185,9 +201,8 @@ Full pack craft: `docs/agent/PACKS.md`.
 
 ---
 
-## 7. Bugs (token-saving)
-
-Prefer `GET /api/bugs/open`; a11y + `domain_pack.json`; deep-fetch only if blocked.  
+## 7. Bug & Diagnostic Investigations
+When investigating user bug logs, errors, or diagnostic reports, deep multi-file inspection and reading the provided diagnostic markdown file is expected and encouraged.
 Spec: `plan/BUG_TRACKING_COMPREHENSIVE_PLAN.md`.
 
 ---
