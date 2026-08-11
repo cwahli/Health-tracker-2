@@ -72,6 +72,11 @@ export function safeJSONStringify(obj: any): string {
   });
 }
 
+type FoodAgentExecutorInput = any;
+
+async function* executeFoodAgent(input: any): AsyncGenerator<any, void, unknown> {}
+async function* executeMedicalAgent(input: any): AsyncGenerator<any, void, unknown> {}
+
 function parseJsonOffline(jsonText: string): BiomarkerEntry[] {
   const entries: BiomarkerEntry[] = [];
   if (!jsonText) return entries;

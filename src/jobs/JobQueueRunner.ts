@@ -17,6 +17,14 @@ class JobQueueRunnerImpl {
     throw new Error('Default local executor is disabled. Jobs are processed server-side.');
   };
 
+  private resolveSleep: (() => void) | null = null;
+
+  private handleVisibilityChange = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      this.wake();
+    }
+  };
+
   setExecutor(executor: JobExecutor) {
     this.executor = executor;
   }

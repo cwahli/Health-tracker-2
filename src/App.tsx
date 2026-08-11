@@ -957,7 +957,7 @@ export default function App() {
                 const { ImageStore } = await import('./jobs/ImageStore');
                 const rawImages = (await ImageStore.getImages(job.id)) || [];
                 stringImages = await Promise.all(
-                  rawImages.map(async (img) => {
+                  rawImages.map(async (img: any) => {
                     if (typeof img === 'string') return img;
                     if (img && typeof img === 'object') {
                       const blob = img instanceof Blob ? img : new Blob([img], { type: img.type || 'image/jpeg' });

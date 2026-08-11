@@ -3399,8 +3399,8 @@ app.post("/api/sync/supabase-pull", async (req, res) => {
     console.log('[FreeTier] projected food pull');
     console.log('[FreeTier] keyset pagination');
 
-    const FOOD_LIST_SELECT = 'id, firebase_uid, date, name, composition, weight_grams, quantity, consumed_amount, recommendation, calories, saturated_fat, sodium, added_sugar, image_urls, updated_at, manual_barcode';
-    const BIO_LIST_SELECT = 'id, firebase_uid, date, note, summary, updated_at';
+    const FOOD_LIST_SELECT = 'id, firebase_uid, date, name, composition, weight_grams, quantity, consumed_amount, recommendation, calories, saturated_fat, sodium, added_sugar, nutrients, benefits, risks, health_impact, items_breakdown, updated_at, manual_barcode';
+    const BIO_LIST_SELECT = 'id, firebase_uid, date, note, summary, biomarkers, tests, updated_at';
 
     // Build the list of possible UIDs to search across dynamically
 
