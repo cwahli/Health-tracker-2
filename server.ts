@@ -3423,7 +3423,7 @@ app.post("/api/sync/supabase-pull", async (req, res) => {
 
     let foodQuery = supabaseAdmin
       .from('food_logs')
-      .select(listOnly ? FOOD_LIST_SELECT : '*')
+      .select('*') // TEMP: bypass FOOD_LIST_SELECT until column-mismatch is confirmed against live schema
       .in('firebase_uid', possibleUids)
       .order('updated_at', { ascending: false })
       .order('id', { ascending: false })
@@ -3431,7 +3431,7 @@ app.post("/api/sync/supabase-pull", async (req, res) => {
 
     let bioQuery = supabaseAdmin
       .from('biomarker_logs')
-      .select(listOnly ? BIO_LIST_SELECT : '*')
+      .select('*') // TEMP: bypass BIO_LIST_SELECT until column-mismatch is confirmed against live schema
       .in('firebase_uid', possibleUids)
       .order('updated_at', { ascending: false })
       .order('id', { ascending: false })
@@ -3453,6 +3453,10 @@ app.post("/api/sync/supabase-pull", async (req, res) => {
       bioQuery,
       supabaseAdmin.from('profiles').select('*').in('firebase_uid', possibleUids)
     ]);
+
+    if (foodRes.error) console.error('[Supabase Pull] food query error:', foodRes.error.message);
+    if (bioRes.error) console.error('[Supabase Pull] biomarker query error:', bioRes.error.message);
+    if (profileRes.error) console.error('[Supabase Pull] profile query error:', profileRes.error.message);
 
     const foods = foodRes.error ? [] : (foodRes.data || []);
     const biomarkers = bioRes.error ? [] : (bioRes.data || []);
