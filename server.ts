@@ -8656,6 +8656,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         }
       });
       if (preCalculatedItems.length > 0) {
+        if (!aggregatedNutrients || typeof aggregatedNutrients !== 'object') {
+          aggregatedNutrients = {};
+        }
         NUTRIENT_KEYS.forEach(k => {
           const sum = preCalculatedItems.reduce((acc: number, item: any) => acc + (Number(item?.nutrients?.[k]) || 0), 0);
           aggregatedNutrients[k] = Math.round(sum * 10) / 10;
