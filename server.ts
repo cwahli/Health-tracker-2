@@ -6288,6 +6288,10 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
 
           // RULE 2.6: Identity poison rejects (query vs candidate title)
           const qLow = keyword.toLowerCase();
+          // milk / coffee / beverage components ≠ oat porridge / grain dish / bread / bar
+          if (/\b(milk|coffee|espresso|water|juice|tea)\b/i.test(qLow) &&
+              !/\b(oat|oats|porridge|cereal|bread|bar)\b/i.test(qLow) &&
+              /\b(oat|oats|porridge|cereal|bread|bar|cracker)\b/i.test(dbTitle)) return;
           // olives ≠ olive loaf / luncheon meat
           if (/\bolive/.test(qLow) && !/\bloaf|lunch|mortadella|sausage|bologna\b/.test(qLow) &&
               /\b(loaf|lunch|mortadella|sausage|bologna|pork)\b/i.test(dbTitle)) return;
@@ -6681,12 +6685,22 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
       const isBrandMatch = webMatchRaw && (webMatchRaw.source === 'brand_official' || webMatchRaw.brandPriority);
 
       const isMultiComponentItem = Array.isArray(item.components) && item.components.length >= 2;
-      const isCompositeOrUnofficial = isUnofficialOrCompositeDish(item.originalName || item.keyword, item.chainName || detectedChainKey).isUnofficial;
+      const isCompositeOrUnofficial = isUnofficialOrCompositeDish(item.originalName || item.keyword, item.chainName || detectedChainKey, item.provenance, item.notes, item).isUnofficial;
 
       if (!truthMatch && webMatchRaw) {
         const src = webMatchRaw.source === 'brand_official' || webMatchRaw.brandPriority ? 'brand_official' : 'web_search';
         if (isMultiComponentItem && (src === 'web_search' || isCompositeOrUnofficial || isMultiComponentHomeCooked)) {
           addDebugLog(`[TruthSkip] multi-component / composite dish "${item.originalName || item.keyword}": ignoring single-dish match "${webMatchRaw.dish_name || webMatchRaw.name}" as parent dish truth (use component decomposition + scout budget)`);
+          if (!item.rawNutritionLabel && (webMatchRaw.rawNutritionLabel || (webMatchRaw.source === 'brand_official' && webMatchRaw.calories > 0))) {
+            item.rawNutritionLabel = webMatchRaw.rawNutritionLabel || {
+              servingSize: "100g",
+              calories: `${webMatchRaw.calories || 0} kcal`,
+              protein: `${webMatchRaw.protein || 0}g`,
+              totalFat: `${webMatchRaw.fat || webMatchRaw.totalFat || 0}g`,
+              totalCarbohydrate: `${webMatchRaw.carbs || webMatchRaw.carbohydrates || 0}g`,
+              sugar: `${webMatchRaw.sugar || 0}g`
+            };
+          }
         } else if (isMultiComponentHomeCooked && !isBrandMatch) {
           addDebugLog(`[TruthSkip] home-cooked multi-component "${item.originalName || item.keyword}": ignoring non-brand match (use components + scout budget)`);
         } else {
@@ -7942,7 +7956,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         brandMenuKcal:
           primaryDbSource === 'brand_official' && primaryBase100g?.calories != null
             ? (((primaryBase100g as any)?.basisType === 'total' || (primaryBase100g as any)?.basisType === 'per_dish')
-                ? Number(primaryBase100g.calories)
+                ? ((Number(primaryBase100g.calories) < 60 && itemWeight >= 150) ? Number(primaryBase100g.calories) * (itemWeight / 100) : Number(primaryBase100g.calories))
                 : Number(primaryBase100g.calories) * (itemWeight / 100))
             : null,
         dishCacheKcal:
@@ -8602,6 +8616,32 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         }
       }
       return { textOutput, rawParsed };
+    }
+
+    // Pre-dietitian density check: ensure beverage and composite items are rescaled prior to Dietitian prompt payload
+    if (Array.isArray(preCalculatedItems)) {
+      preCalculatedItems.forEach((it: any) => {
+        if (!it || !it.weightGrams || !it.nutrients) return;
+        const cals = Number(it.nutrients.calories || 0);
+        const nameLower = String(it.name || it.keyword || '').toLowerCase();
+        const isBeverage = BEVERAGE_RAW_PATTERN.test(nameLower) || nameLower.includes('latte') || nameLower.includes('coffee') || nameLower.includes('drink');
+        if (isBeverage && it.weightGrams >= 150 && cals > 600) {
+          const maxAllowedCals = Math.round((it.weightGrams / 100) * 110);
+          const factor = maxAllowedCals / cals;
+          addDebugLog(`[Pre-Dietitian Reality Check] Rescaling beverage item "${it.name}" from ${cals} kcal -> ${maxAllowedCals} kcal prior to Dietitian prompt payload.`);
+          NUTRIENT_KEYS.forEach(k => {
+            if (it.nutrients[k] != null && typeof it.nutrients[k] === 'number') {
+              it.nutrients[k] = Math.round(it.nutrients[k] * factor * 10) / 10;
+            }
+          });
+        }
+      });
+      if (preCalculatedItems.length > 0) {
+        NUTRIENT_KEYS.forEach(k => {
+          const sum = preCalculatedItems.reduce((acc: number, item: any) => acc + (Number(item?.nutrients?.[k]) || 0), 0);
+          aggregatedNutrients[k] = Math.round(sum * 10) / 10;
+        });
+      }
     }
 
     addDebugLog('[MealBuild] projector dietitian');
@@ -9440,6 +9480,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                  // Auto-correct if it's drastically low
                  if (cals < 100 && item.weightGrams > 80) {
                     const fallbackFactor = item.weightGrams / 100;
+                    if (!item.nutrients) item.nutrients = {};
                     item.nutrients.calories = Math.round(200 * fallbackFactor);
                     addDebugLog(`[Sanity Check] Auto-correcting calories for "${item.name}" to generic solid baseline (${item.nutrients.calories} kcal).`);
                     // Update main total
@@ -10593,7 +10634,19 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
     if (preCalculatedItems && preCalculatedItems.length > 0 && preCalculatedItems.some((p: any) => p.estimatedCalories !== undefined || (p.primaryBase100g && p.primaryBase100g.calories !== undefined))) {
       addDebugLog(`[Dietitian Degrade] Dietitian failed permanently, but pre-calculated math exists. Salvaging meal build.`);
       
-      const salvagedMeal = buildSavableMealFromParsed(preCalculatedItems, req.body.activeMeal, aggregatedNutrients, null);
+      const salvagedAggregatedNutrients: Record<string, number> = {};
+      NUTRIENT_KEYS.forEach(k => salvagedAggregatedNutrients[k] = 0);
+      if (preCalculatedItems && Array.isArray(preCalculatedItems)) {
+        preCalculatedItems.forEach((p: any) => {
+          if (p.nutrients) {
+            NUTRIENT_KEYS.forEach(k => {
+              salvagedAggregatedNutrients[k] = parseFloat(((salvagedAggregatedNutrients[k] || 0) + (Number(p.nutrients[k]) || 0)).toFixed(2));
+            });
+          }
+        });
+      }
+
+      const salvagedMeal = buildSavableMealFromParsed(preCalculatedItems, req.body.activeMeal, salvagedAggregatedNutrients, null);
       const degradedMeal = markDietitianDegraded(salvagedMeal, error.message);
       const payloadData = toPendingFoodLog(degradedMeal);
       

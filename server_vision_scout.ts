@@ -644,6 +644,7 @@ export function parseAndHealVisionScout(
             return match ? parseFloat(match[0]) : null;
           };
 
+          if (!newItem.rawNutritionLabel) newItem.rawNutritionLabel = {};
           const rawCalVal = newItem.rawNutritionLabel.calories ?? newItem.rawNutritionLabel.energy;
           if (rawCalVal != null) {
             const parsedC = parseLabelCalories(rawCalVal);
@@ -703,6 +704,7 @@ export function parseAndHealVisionScout(
               }
           };
 
+          if (!newItem.rawNutritionLabel) newItem.rawNutritionLabel = {};
           if (rawC !== null && expectedCalories > 0 && Math.abs(expectedCalories - rawC) / expectedCalories > 0.20) {
               newItem.originalCalories = rawC;
               newItem.autoCorrectedCalories = true;
@@ -743,7 +745,7 @@ export function parseAndHealVisionScout(
           // fixing every nutrient, not just calories.
           if (newItem.rawNutritionLabelPerPack && typeof newItem.rawNutritionLabelPerPack === 'object') {
             const perPackCalMatch = String(newItem.rawNutritionLabelPerPack.calories || '').match(/[\d.]+/);
-            const per100CalMatch = String(newItem.rawNutritionLabel.calories || '').match(/[\d.]+/);
+            const per100CalMatch = String(newItem.rawNutritionLabel?.calories || '').match(/[\d.]+/);
             if (perPackCalMatch && per100CalMatch) {
               const perPackCal = parseFloat(perPackCalMatch[0]);
               const per100Cal = parseFloat(per100CalMatch[0]);

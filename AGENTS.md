@@ -85,6 +85,21 @@ If the task hits food-calc / biomarkers / sync: **read** that domain file.
 - Do **not** invent a silent alternate pipeline “just for this bug.”  
 - Do **not** treat rulebooks as a ban on new features — only as a checklist against accidental breakage.
 
+### L11 — SDD & 2-Turn Execution Protocol (Mandatory for Class M/L/X)
+For non-trivial fixes or features (Class M/L/X), execution MUST follow a 2-turn protocol:
+- **Turn 1 (SDD Spec Phase)**: Write or update a Software Design Document in `plan/<task_name>.md`. Define:
+  1. **Structural Root Cause**: Diagnosis across full application architecture.
+  2. **Code Pruning Inventory**: List of obsolete conditionals, regexes, or functions to DELETE (net-zero/negative complexity growth).
+  3. **Deterministic Boundary**: Explicit split between LLM prompt role (strictly schema extraction/classification) and TypeScript logic (unit conversions, math, sanitization).
+  4. **Telemetry Audit**: Logging strategy using central `logger` (clean up transient logs, no duplicate terminal noise).
+  5. **Regression Test Plan**: Vitest suites to run and verify.
+  *DO NOT edit application source code during Turn 1.*
+- **Turn 2 (Execution Phase)**: Delete obsolete code, implement clean TS helpers, pass regression gates, and submit.
+
+### L12 — Strict Prompt Line-Budget & Anti-Bloat Rule
+- **Strict Prompt Line Ceiling**: System prompts (in `server_vision_scout.ts`, dietitian instructions, biomarker agents) are strictly capped. Adding new lines to a prompt is FORBIDDEN unless an equivalent number of redundant/outdated prompt lines are removed in the same edit (net-zero line growth).
+- **No Prompt-Based Code**: Business logic, math, unit conversions, brand overrides, and data sanitization MUST live in pure TypeScript middleware, NEVER in English prompt instructions. Prompts are strictly for classification and schema extraction under 200 words.
+
 ### L10 — COMPLETE
 All of: IMPACT (L/X) · SELF-CHECK · (if code changed: `tsc` · domain regression map commands · pack assert if any; skip if doc/ops only) · paths verified or known-broken noted.
 
@@ -108,7 +123,7 @@ These files define how **all** agents work. Random edits dilute process and brea
 1. **Do not edit protected docs** as part of an unrelated feature/bugfix.  
 2. If a protected edit is needed (evolution, correction, new domain):  
    - **Stop and ask the human for confirmation** first, **or** only do it when a Studio pack explicitly lists that file as in-scope.  
-   - Show **before → after** for each protected file (or a clear unified diff summary).  
+   - Show a **concise summary of changes** when asking for confirmation (do NOT show full code unless it is a change to agent system instructions in prompt/modal).  
    - State **why** (product change / missing invariant / token fix).  
 3. Prefer recording ephemeral status in **`AI_HANDOVER.md`**, not by rewriting laws.  
 4. When product evolution changes an invariant: update domain rulebook + tests **together** so process stays honest — never leave stale laws that contradict code.
