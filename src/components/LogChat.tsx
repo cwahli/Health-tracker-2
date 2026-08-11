@@ -890,113 +890,22 @@ ${logsText}`);
       return;
     }
 
+    // M23 free-tier kill-switch: chat is device-local only (IDB).
+    // Cross-device chat is out of scope until a dedicated non-Firestore design.
+    console.log('[FreeTier] chat cloud write disabled');
     try {
-      const compressedMsgs = await compressLargeImagesInObject(msgs);
-      const compressedPayload = await compressLargeImagesInObject(payload);
-
-      const docRef = doc(db, 'users', userId, 'conversations', id);
-      trackApiCall('firebase_write', `Firestore Write - Save Chat Session (${id}) [Type: ${type || 'medical'}${agentType ? `, Agent: ${agentType}` : ''}] (saves chat messages, title, and lastSentPayload dynamically in Real-Time as messages are sent)`);
-
-      const finalDocObject = {
-        id,
-        userId,
-        type: type || 'medical',
-        agentType: agentType || null,
-        title: msgs.length > 1 
-          ? (msgs[1].role === 'user' ? msgs[1].content.slice(0, 30) + '...' : `Session - ${new Date(msgs[0].timestamp).toLocaleDateString()}`)
-          : `Session - ${new Date().toLocaleDateString()}`,
-        createdAt: msgs[0]?.timestamp || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        messages: compressedMsgs,
-        lastSentPayload: compressedPayload || null
-      };
-
-      // Progressive client-side pruning to strictly enforce Firestore 1MB limit (1,048,576 bytes)
-      let prunedObject = finalDocObject;
-      try {
-        let serialized = JSON.stringify(finalDocObject);
-        // Trigger pruning if size approaches 650KB (safe margin below 1MB)
-        if (serialized.length >= 650000) {
-          console.log(`[Firestore Limit Guard] Conversation size is ${serialized.length} bytes, applying aggressive progressive pruning...`);
-          const copy = JSON.parse(serialized);
-
-          // Deep sanitizer to strip base64 image strings
-          const deepSanitize = (val: any, keyName?: string): any => {
-            if (val === null || val === undefined) return val;
-            if (typeof val === 'string') {
-              if (val.startsWith('data:image/') || (val.length > 500 && val.includes('base64,'))) {
-                return 'data:image/jpeg;base64,... [Image pruned to conserve database space]';
-              }
-              return val;
-            }
-            if (Array.isArray(val)) return val.map((item) => deepSanitize(item, keyName));
-            if (typeof val === 'object') {
-              const res: any = {};
-              for (const [k, v] of Object.entries(val)) {
-                res[k] = deepSanitize(v, k);
-              }
-              return res;
-            }
-            return val;
-          };
-
-          // Step 1: Deep sanitize all messages and lastSentPayload
-          if (copy.messages && Array.isArray(copy.messages)) {
-            copy.messages = copy.messages.map((m: any, idx: number) => {
-              // Keep original imageUrl/imageUrls on the last message if short, otherwise sanitize
-              if (idx < copy.messages.length - 1) {
-                return deepSanitize(m);
-              }
-              return deepSanitize(m);
-            });
-          }
-          if (copy.lastSentPayload) {
-            copy.lastSentPayload = deepSanitize(copy.lastSentPayload);
-          }
-
-          serialized = JSON.stringify(copy);
-
-          // Step 2: If still >= 650KB, strip heavy sub-data payload from older messages (keep only core fields)
-          if (serialized.length >= 650000 && copy.messages && Array.isArray(copy.messages)) {
-            for (let i = 0; i < copy.messages.length - 1; i++) {
-              const msg = copy.messages[i];
-              if (msg.data) {
-                msg.data = {
-                  summary: msg.data.summary || msg.data.name || null,
-                  id: msg.data.id || null
-                };
-              }
-            }
-          }
-
-          serialized = JSON.stringify(copy);
-
-          // Step 3: If still >= 650KB, prune messages until total size < 650KB (down to minimum 3 messages)
-          if (serialized.length >= 650000 && copy.messages && Array.isArray(copy.messages)) {
-            while (copy.messages.length > 3 && JSON.stringify(copy).length > 650000) {
-              copy.messages.splice(1, 1); // Delete oldest non-welcome message
-            }
-          }
-
-          // Step 4: Emergency hard fallback if last message or payload alone is somehow massive
-          if (JSON.stringify(copy).length >= 950000) {
-            copy.lastSentPayload = null;
-            if (copy.messages && copy.messages.length > 2) {
-              copy.messages = [copy.messages[0], copy.messages[copy.messages.length - 1]];
-            }
-          }
-
-          prunedObject = copy;
-          console.log(`[Firestore Limit Guard] Progressive pruning complete. Final size: ${JSON.stringify(prunedObject).length} bytes.`);
-        }
-      } catch (pruneErr) {
-        console.warn("[Firestore Limit Guard] Error during progressive pruning:", pruneErr);
-      }
-
-      await setDoc(docRef, sanitizeForFirestore(prunedObject), { merge: true });
-    } catch (err) {
-      console.error("Error saving conversation to Firestore:", err);
+      const indexKey = `chat_index_${userId}_${type || 'medical'}_${agentType || 'none'}`;
+      const prev = JSON.parse(localStorage.getItem(indexKey) || '[]');
+      const title = msgs.length > 1 
+        ? (msgs[1].role === 'user' ? msgs[1].content.slice(0, 30) + '...' : `Session - ${new Date(msgs[0].timestamp).toLocaleDateString()}`)
+        : `Session - ${new Date().toLocaleDateString()}`;
+      const entry = { id, title, updatedAt: new Date().toISOString(), type: type || 'medical', agentType: agentType || null };
+      const next = [entry, ...(Array.isArray(prev) ? prev.filter((x: any) => x && x.id !== id) : [])].slice(0, 50);
+      localStorage.setItem(indexKey, JSON.stringify(next));
+    } catch (indexErr) {
+      console.warn('[FreeTier] chat index update failed', indexErr);
     }
+    return;
   };
 
   const migrateMessages = (msgs: any[]) => msgs.map(msg => {
@@ -1055,36 +964,11 @@ ${logsText}`);
 
     setIsLoadingConversations(true);
     try {
-      // Offline/Quota safety gate: If auto-sync is disabled or Firestore quota is exceeded,
-      // bypass the remote Firestore call and immediately throw to trigger local IndexedDB/localStorage fallback.
-      const isManualSyncOnly = localStorage.getItem('auto_sync_disabled') === 'true';
-      const isQuotaExceeded = localStorage.getItem('firestore_quota_exceeded') === 'true';
-      if (isManualSyncOnly || isQuotaExceeded) {
-        throw new Error(isManualSyncOnly ? "Auto-sync disabled (Manual Sync Only Mode)" : "Firestore quota exceeded");
-      }
-
-      // Single-field equality filter only (no orderBy in the query) — this avoids
-      // requiring a Firestore composite index entirely, since this project has no
-      // firestore.indexes.json / index-deploy pipeline. Sorting and the agentType
-      // filter happen client-side instead. Fetch a wider batch (100) since some of
-      // it will be filtered out by agentType before capping to 30 for display.
-      const q = query(
-        collection(db, 'users', userId, 'conversations'),
-        where('type', '==', type || 'medical'),
-        limit(100)
-      );
-      trackApiCall('firebase_read', `Firestore Read - Load Chat Sessions List (single-field query, filtered client-side, capped to 30) [Type: ${type || 'medical'}${agentType ? `, Agent: ${agentType}` : ''}] (downloads past chat session records to display in the conversation history side panel)`);
-      const snapshot = await getDocs(q);
-      const list: any[] = [];
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        // Treat a missing agentType field the same as agentType === null so older
-        // documents without the field still match correctly.
-        if ((data.agentType ?? null) === (agentType || null)) {
-          list.push(data);
-        }
-      });
-
+      // M23 free-tier kill-switch: chat list is loaded from local index only
+      const indexKey = `chat_index_${userId}_${type || 'medical'}_${agentType || 'none'}`;
+      const localListStr = localStorage.getItem(indexKey);
+      let list: any[] = localListStr ? JSON.parse(localListStr) : [];
+      
       list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
       const cappedList = list.slice(0, 30);
       setConversationsList(cappedList);
@@ -1093,7 +977,6 @@ ${logsText}`);
         const match = cappedList.find(c => c.id === activeConversationId) || cappedList[0];
         setActiveConversationId(match.id);
         
-        // Check if there is a newer local version in IndexedDB (has full images) or fallback to localStorage (stripped)
         let localSaved = null;
         let localPayload = null;
         try {
@@ -1147,53 +1030,7 @@ ${logsText}`);
         }]);
       }
     } catch (err: any) {
-      console.log("Error loading conversations from Firestore (falling back to local IndexedDB/localStorage):", err?.message || err);
-      try {
-        const listKey = `conversations_list_${type || 'medical'}_${agentType || 'none'}_${userId}`;
-        const localList = await idbGet(listKey);
-        if (localList && localList.length > 0) {
-          console.log("Successfully loaded backup conversations list from IndexedDB after Firestore error");
-          setConversationsList(localList);
-          
-          const match = localList.find((c: any) => c.id === activeConversationId) || localList[0];
-          setActiveConversationId(match.id);
-          
-          let localSaved = await idbGet(`${chatStorageKey}_${userId}_${match.id}`);
-          let localPayload = await idbGet(`${payloadStorageKey}_${userId}_${match.id}`);
-          
-          if (localSaved) {
-            setMessages(migrateMessages(localSaved), false);
-            setLastSentPayload(localPayload || null);
-          } else {
-            // Check if there is anything under guest just in case
-            let guestSaved = await idbGet(`${chatStorageKey}_guest_${match.id}`);
-            if (guestSaved) {
-              setMessages(migrateMessages(guestSaved), false);
-              setLastSentPayload(await idbGet(`${payloadStorageKey}_guest_${match.id}`) || null);
-            } else {
-              setMessages([getWelcomeMessage()], false);
-              setLastSentPayload(null);
-            }
-          }
-        } else {
-          // No local list, initialize new session
-          const newId = `session_${Date.now()}`;
-          setActiveConversationId(newId);
-          const welcome = getWelcomeMessage();
-          setMessages([welcome], false);
-          setLastSentPayload(null);
-          setConversationsList([{
-            id: newId,
-            type: type || 'medical',
-            agentType: agentType || null,
-            title: 'New Session',
-            updatedAt: new Date().toISOString(),
-            messages: [welcome]
-          }]);
-        }
-      } catch (fallbackErr) {
-        console.error("Failed to load offline conversations fallback from IndexedDB:", fallbackErr);
-      }
+      console.log("Error loading conversations from local index:", err?.message || err);
     } finally {
       setIsLoadingConversations(false);
     }

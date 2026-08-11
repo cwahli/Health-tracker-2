@@ -2,10 +2,11 @@
 
 | File | Status | Topic |
 |------|:------:|-------|
-| **[M20_AGENT_GOVERNANCE_AND_REGRESSION.md](./M20_AGENT_GOVERNANCE_AND_REGRESSION.md)** | **ACTIVE** | **Ship agent governance + domain regression (docs + tests) — AI Studio commit/push** |
-| [M19_AISTUDIO_API_KEY_AND_STREAM_FIX.md](./M19_AISTUDIO_API_KEY_AND_STREAM_FIX.md) | Optional/prior | API key / stream fix if still needed on tree |
-| [ACTIVE_STATUS.md](./ACTIVE_STATUS.md) | Board | Desktop vs GitHub + gates |
-| [../plan/REMAINING_ROADMAP_2026-08.md](../plan/REMAINING_ROADMAP_2026-08.md) | Plan | Architecture remaining map (verify freshness) |
+| **[M23_FIRESTORE_WRITE_KILL_SWITCH.md](./M23_FIRESTORE_WRITE_KILL_SWITCH.md)** | **ACTIVE** | **Free-tier Firestore write kill-switch (chat + telemetry) — AI Studio commit/push** |
+| [M22_MEAL_BUILD_TRUE_COMPLETE.md](./M22_MEAL_BUILD_TRUE_COMPLETE.md) | Prior | Meal Build true complete (archive if already on origin) |
+| [M21_1_MEAL_BUILD_COMPLETION_GATES.md](./M21_1_MEAL_BUILD_COMPLETION_GATES.md) | Prior | Nested meal-build gates |
+| [ACTIVE_STATUS.md](./ACTIVE_STATUS.md) | Board | Active pack + gates |
+| [../plan/RELIABILITY_FREE_TIER_PLAN.md](../plan/RELIABILITY_FREE_TIER_PLAN.md) | Plan | Optimized reliability / free-tier program |
 | [../AI_HANDOVER.md](../AI_HANDOVER.md) | **WIP status** | Multi-agent handoff + progress |
 
 **Completed packs:** `archive/studio/completed-2026-08/`. **Do not re-upload as current.**

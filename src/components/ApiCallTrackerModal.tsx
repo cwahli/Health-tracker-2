@@ -185,31 +185,14 @@ export default function ApiCallTrackerModal({ isOpen, onClose, userEmail, langua
     setIsSyncing(true);
     setSyncStatusMsg('idle');
     try {
-      trackApiCall('firebase_write', 'Firestore Write - Sync API Call Telemetry Batch (saves offline transaction logs to the cloud for system-wide auditing)');
-      const batch = writeBatch(db);
-      
-      const unsynced = events.filter(e => e.syncStatus !== 'synced');
-      if (unsynced.length === 0) {
-        setIsSyncing(false);
-        setSyncStatusMsg('success');
-        return;
-      }
-      unsynced.forEach(event => {
-        const timestampMs = new Date(event.timestamp).getTime();
-        const docId = `${userEmail.replace(/[^a-zA-Z0-9]/g, '_')}_${timestampMs}_${Math.random().toString(36).substring(2, 5)}`;
-        const docRef = doc(collection(db, 'api_events'), docId);
-        batch.set(docRef, {
-          ...event,
-          syncStatus: 'synced'
-        });
-      });
-      await batch.commit();
+      // M23: telemetry stays local — free-tier kill-switch (no api_events Firestore writes)
+      console.log('[FreeTier] telemetry cloud write disabled');
       const updatedEvents = events.map(e => ({ ...e, syncStatus: 'synced' as const }));
       localStorage.setItem('local_api_events', JSON.stringify(updatedEvents));
       setEvents(updatedEvents);
       setSyncStatusMsg('success');
     } catch (err) {
-      console.error("Failed to sync api events to cloud:", err);
+      console.error("Failed to mark api events synced:", err);
       setSyncStatusMsg('error');
     } finally {
       setIsSyncing(false);
@@ -280,8 +263,8 @@ export default function ApiCallTrackerModal({ isOpen, onClose, userEmail, langua
                   disabled={isSyncing || events.length === 0}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer hover:scale-[1.01]"
                 >
-                  {isSyncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Cloud className="w-3.5 h-3.5" />}
-                  <span>{t.syncToCloud}</span>
+                  {isSyncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  <span title="Cloud telemetry disabled (free tier)">Mark synced (local)</span>
                 </button>
                 <button
                   onClick={handleClearHistory}
