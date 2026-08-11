@@ -504,7 +504,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       // Helper to write successful outcome to Supabase
       persistSucceeded = async (finalPayload: any) => {
         const foodLog = finalPayload?.pendingFoodLog || finalPayload?.data || null;
-        const pendingFoodLog = foodLog || (finalPayload?.name && finalPayload?.nutrients ? finalPayload : finalPayload);
+        const pendingFoodLog = foodLog || (finalPayload?.name && finalPayload?.nutrients ? finalPayload : null);
         if (pendingFoodLog && typeof pendingFoodLog === 'object') {
           // Replace base64 strings with public R2 URL or remove them
           if (pendingFoodLog.imageUrl && String(pendingFoodLog.imageUrl).startsWith('data:')) {

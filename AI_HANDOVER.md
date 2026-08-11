@@ -248,6 +248,9 @@ Complete. Not the master focus of this handover.
   8. **Task 2 (Lazy Loading & Asset Retention):** Enhanced all image rendering pathways (`ImageSlider.tsx`, `LogChat.tsx`, `FoodHistoryTab.tsx`) with automatic `loading="lazy"`, `decoding="async"`, and viewport-deferred `IntersectionObserver` rendering, eliminating burst photo downloads on page refresh and large history feeds.
   10. **Health Trends Multi-Page Navigation:** Fixed food item linking from Health Trends (`TrendsTab.tsx` → `FoodHistoryTab.tsx`) so clicking any historical meal calculates its page offset (`Math.floor(targetIdx / itemsPerPage) + 1`), auto-navigates across pagination boundaries, clears any conflicting search filters, and smoothly scrolls to center the expanded food log card.
   11. All 283 unit tests across 38 suites and all M22 governance gates pass with exit code 0.
+- 2026-08-10: Comparison and Pending Food Log Fixes:
+  1. Added `comparison`, `comparisonSet`, and `scoutContentType` to the backend persistent `cleanResult` payload in `serverJobs.ts`, enabling seamless comparison data transmission to the frontend.
+  2. Fixed comparison preview card metrics (0kcal/0g protein, Save Log button) and modal duplication issues by ensuring `pendingFoodLog` resolves to `null` on comparison (Mode D) runs.
 - Plan snapshots (`STATUS_CONSOLIDATED`, REMAINING_ROADMAP) dated 2026-08-08 — verify before acting.
 
 ---
