@@ -29,6 +29,7 @@ AGENTS + docs/agent = how we work without breaking each other (stable process)
 **Core Autonomous Invariants (Always-On):**
 - **Non-Terminal Search Law (Continuous Investigation):** A `grep`, search, or file-find command is **NEVER a valid ending to a turn**. An agent is strictly forbidden from ending its turn on a search/grep output (whether results are matching, partial, or completely empty). The agent MUST continue investigating, inspecting source files, and analyzing until it delivers the **complete Stage 1 Strategic Report** before yielding. If a search yields 0 results, immediately broaden keywords or search the pipeline mechanism in `server.ts`. Ending a turn on a search tool is an immediate auto-failure.
 - **Binding Execution Law:** Once the user gives approval or commands an action, agents **MUST NOT yield the turn after reading files**. Reading lines must be chained immediately with the write tool (`replace_file_content`), tests, and verification in a single continuous execution.
+- **Anti-Simulation & Real Disk Verification Law:** Agents are strictly forbidden from outputting simulated tool responses, fake `MDout:` logs, or fabricated terminal logs in text. If an edit tool fails or returns `(nil ToolCall)`, the agent MUST treat the file as unedited, fix the parameters, and re-invoke the write tool. A task is NEVER complete without verifying actual disk writes via real machine tool execution (e.g. `tsc`, tests, or build tool calls).
 - **Zero-Code-Change Exemption (Token-Saving Law):** Run tests, `tsc`, and regression gates **ONLY when application source code is modified** (`src/`, `server.ts`, `server_*.ts`, `agents/`, `supabase/`). For doc updates, explanations, question answers, folder mirroring/sync ops, or file reviews where NO application code changed, **STRICTLY SKIP running test suites and gate verification runs** to eliminate token and context waste.
 
 ---
@@ -120,7 +121,7 @@ When addressing non-trivial tasks or fixes, agents MUST follow the 2-stage inter
 All of: IMPACT (L/X) · SELF-CHECK · (if code changed: `tsc` · domain regression map commands · pack assert if any; skip if doc/ops only) · paths verified or known-broken noted.
 
 **Forbidden until then:** “all done” / “fully verified” / “nothing left.”  
-**Auto FAIL (Stage 2 execution):** import without call site · silent half-fix · detect without repair (when repair was approved) · dropped fields · gate weakened · drive-by scope.
+**Auto FAIL (Stage 2 execution):** import without call site · silent half-fix · detect without repair (when repair was approved) · simulated tool output / fake edit completion · dropped fields · gate weakened · drive-by scope.
 
 ---
 
