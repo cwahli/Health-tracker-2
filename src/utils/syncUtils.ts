@@ -446,7 +446,7 @@ export const fetchAllConsolidatedLogs = async (
     const proxyRes = await fetch('/api/sync/supabase-pull', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(auth.currentUser ? { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` } : {}) },
-      body: JSON.stringify({ uid, email: userEmail, lastSyncTime, listOnly: true, pageSize: 50 }),
+      body: JSON.stringify({ uid, email: userEmail, lastSyncTime, listOnly: true, pageSize: 1000 }),
       signal: controller.signal
     }).finally(() => clearTimeout(timeoutId));
     
@@ -475,7 +475,10 @@ export const fetchAllConsolidatedLogs = async (
         });
       }
       if (result.success && result.profileData) {
-        if (result.profileData.profile) serverProfile = result.profileData.profile;
+        const rawP = result.profileData.profile || result.profileData;
+        if (rawP && (rawP.email || rawP.nickname !== undefined || rawP.lastUpdatedAt || rawP.customBiomarkers)) {
+          serverProfile = rawP;
+        }
         if (Array.isArray(result.profileData.actions)) serverActions = result.profileData.actions;
         if (Array.isArray(result.profileData.dailyBenefits)) serverBenefits = result.profileData.dailyBenefits;
         if (result.profileData.report !== undefined) serverReport = result.profileData.report || null;

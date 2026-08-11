@@ -3481,7 +3481,7 @@ app.post("/api/sync/supabase-pull", async (req, res) => {
       .in('firebase_uid', possibleUids)
       .order('updated_at', { ascending: false })
       .order('id', { ascending: false })
-      .limit(Math.min(pageSize || 50, 100));
+      .limit(Math.min(pageSize || 500, 1000));
 
     let bioQuery = supabaseAdmin
       .from('biomarker_logs')
@@ -3489,7 +3489,7 @@ app.post("/api/sync/supabase-pull", async (req, res) => {
       .in('firebase_uid', possibleUids)
       .order('updated_at', { ascending: false })
       .order('id', { ascending: false })
-      .limit(Math.min(pageSize || 50, 100));
+      .limit(Math.min(pageSize || 500, 1000));
 
     if (cursor?.updated_at && cursor?.id) {
       // keyset pagination

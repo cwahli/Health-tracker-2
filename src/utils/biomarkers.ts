@@ -650,7 +650,7 @@ export function detectFlaggedTelemetryErrors(
   // 1. Check current resolved biomarkers
   Object.entries(resolvedBiomarkers || {}).forEach(([key, val]) => {
     if (val === undefined || val === null || val === '') return;
-    if (profile?.notUsedBiomarkers?.[key] || profile?.notUsedInMedicalHistory?.[key] || profile?.deletedCustomBiomarkerKeys?.[key]) return;
+    if (profile?.notUsedBiomarkers?.[key] || profile?.notUsedInMedicalHistory?.[key] || (profile?.customBiomarkers?.[key] && profile?.deletedCustomBiomarkerKeys?.[key])) return;
     const def = (allDefinitions || []).find((d: any) => d.key === key) || biomarkerDefinitions.find((d: any) => d.key === key);
     const custom = profile?.customBiomarkers?.[key];
     const range = custom?.normalRange || def?.normalRange;
@@ -682,7 +682,7 @@ export function detectFlaggedTelemetryErrors(
   });
 
   Object.entries(historyByKey).forEach(([key, entries]) => {
-    if (profile?.notUsedBiomarkers?.[key] || profile?.notUsedInMedicalHistory?.[key] || profile?.deletedCustomBiomarkerKeys?.[key]) return;
+    if (profile?.notUsedBiomarkers?.[key] || profile?.notUsedInMedicalHistory?.[key] || (profile?.customBiomarkers?.[key] && profile?.deletedCustomBiomarkerKeys?.[key])) return;
     const def = (allDefinitions || []).find((d: any) => d.key === key) || biomarkerDefinitions.find((d: any) => d.key === key);
     const custom = profile?.customBiomarkers?.[key];
     const range = custom?.normalRange || def?.normalRange;

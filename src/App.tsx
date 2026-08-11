@@ -2060,10 +2060,10 @@ export default function App() {
           completeInteraction(tProfileId, true, userDoc.exists() ? JSON.stringify(userDoc.data()).length : 0);
         }
       }
-      if (userDoc.exists()) {
-        let cloudProfile = userDoc.data() as UserProfile;
+      let cloudProfile = (userDoc?.exists() ? userDoc.data() : null) as UserProfile | null;
+      if (true) {
         
-        const cloudTime = cloudProfile.lastUpdatedAt || 0;
+        const cloudTime = cloudProfile?.lastUpdatedAt || 0;
         const localTime = localProfile?.lastUpdatedAt || 0;
         let mergedProfile: UserProfile;
         let foods: FoodLog[] = [];
@@ -2400,9 +2400,9 @@ export default function App() {
               }
               const analysesSnap = await getDocs(collection(db, 'users', uid, 'agentAnalyses'));
               const analyses = analysesSnap.docs.map(d => d.data());
-              if (analyses.length > 0) {
+              if (analyses.length > 0 && cloudProfile) {
                 cloudProfile.agentAnalyses = analyses as any;
-              } else if (localProfile?.agentAnalyses) {
+              } else if (localProfile?.agentAnalyses && cloudProfile) {
                 cloudProfile.agentAnalyses = localProfile.agentAnalyses;
               }
             } catch (err) {
@@ -2412,7 +2412,7 @@ export default function App() {
                 abortWithLocalFallback();
                 return;
               }
-              if (localProfile?.agentAnalyses) {
+              if (localProfile?.agentAnalyses && cloudProfile) {
                 cloudProfile.agentAnalyses = localProfile.agentAnalyses;
               }
             }
@@ -2422,6 +2422,17 @@ export default function App() {
 
           if (spProfile) {
             cloudProfile = cloudProfile ? mergeProfiles(spProfile, cloudProfile) : spProfile;
+          }
+          if (!cloudProfile && (v2Foods.length > 0 || v2Logs.length > 0 || localProfile)) {
+            cloudProfile = localProfile || ({
+              email: activeEmail,
+              nickname: auth.currentUser?.displayName || '',
+              photoUrl: auth.currentUser?.photoURL || '',
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              language: 'en',
+              topNutrientsToMonitor: PRIMARY_NUTRIENTS,
+              lastUpdatedAt: Date.now()
+            } as UserProfile);
           }
           if (spActions && spActions.length > 0) {
             acts = mergeActions(spActions, acts);
