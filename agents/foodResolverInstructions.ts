@@ -38,13 +38,19 @@ const FoodCuratorActionSchemaRaw = z.object({
 }).passthrough();
 
 export const FoodCuratorActionSchema = z.preprocess((raw: any) => {
-  if (raw && Array.isArray(raw.actions)) {
+  // The LLM sometimes returns a bare top-level array (e.g. `[ {...}, {...} ]`) instead of
+  // the expected `{ "actions": [...] }` wrapper object. Normalize that shape here too —
+  // previously this caused Zod's "expected array, received undefined" on the `actions`
+  // path, which discarded every curator decision (including correct ones) and forced the
+  // whole batch through the blind "no curation happened" fallback.
+  const normalized = Array.isArray(raw) ? { actions: raw } : raw;
+  if (normalized && Array.isArray(normalized.actions)) {
     return {
-      ...raw,
-      actions: raw.actions.map((a: any) => (a && a.type == null && a.action != null) ? { ...a, type: a.action } : a)
+      ...normalized,
+      actions: normalized.actions.map((a: any) => (a && a.type == null && a.action != null) ? { ...a, type: a.action } : a)
     };
   }
-  return raw;
+  return normalized;
 }, FoodCuratorActionSchemaRaw);
 
 export const foodResolverCuratorInstruction = `You are the Master Curator of the AI Studio Food Database.
@@ -56,7 +62,7 @@ Your mandate is to resolve identity conflicts, deduplicate rows, and normalize d
 4. All stored densities are per 100g; interpret country serving formats; propose basis interpretation ('normalize_basis'), server will recompute.
 5. Quarantine impossible values (extreme kcal, absurd weights) using 'quarantine'.
 6. Choose only from provided candidates ('pick_existing'); NEVER invent IDs.
-7. Output strict JSON actions; one line reason each. Every action object MUST use the key "type" (not "action") for its action kind, e.g. {"type": "quarantine", "fdcId": "170775", "reason": "..."}. All ID fields (chosenFdcId, winnerFdcId, loserFdcIds, fdcId) MUST be strings, e.g. "170775", not bare numbers.
+7. Output strict JSON actions; one line reason each. The output MUST be a single JSON object of the exact shape {"actions": [ ... ]} — a top-level array is NOT valid, always wrap your action list in an "actions" key. Every action object MUST use the key "type" (not "action") for its action kind, e.g. {"type": "quarantine", "fdcId": "170775", "reason": "..."}. All ID fields (chosenFdcId, winnerFdcId, loserFdcIds, fdcId) MUST be strings, e.g. "170775", not bare numbers.
 8. Success = next identical query needs no Resolver because you added robust aliases.
 
 When presented with multiple matches for a query, pick the best one and add aliases so future searches hit instantly.

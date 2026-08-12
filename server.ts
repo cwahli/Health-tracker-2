@@ -1170,15 +1170,15 @@ MODE D: EVALUATION / COMPARISON
 
 === SYSTEM CONSTRAINTS ===
 
-First, think step-by-step in plain text.
+First, think step-by-step in the '_internalReasoning' field of the JSON.
 
 Second, output exactly one JSON object.
 
-The JSON must contain ONLY the fields requested below. Do NOT include a _internalReasoning field inside the JSON.
+The JSON must contain ONLY the fields requested below.
 
 === OUTPUT INSTRUCTIONS ===
 
-First, write out your step-by-step reasoning in plain text. Explain your clinical thoughts and support your reasoning before generating the JSON.
+First, write out your step-by-step reasoning inside the '_internalReasoning' JSON field. Explain your clinical thoughts and support your reasoning.
 
 Then, output your final mapped results in a raw, valid JSON block.
 
@@ -2856,7 +2856,7 @@ async function callUnifiedLLMInternal({
     if (isJson && finalJson && thoughtsText && !skipThoughtInjection) {
       try {
         const parsed = JSON.parse(finalJson);
-        if (parsed._internalReasoning && !parsed._internalReasoning) { parsed._internalReasoning = parsed._internalReasoning; }
+        
         if (!parsed._internalReasoning) {
           parsed._internalReasoning = thoughtsText;
           finalJson = JSON.stringify(parsed);
@@ -8403,7 +8403,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           message: "I have analyzed your food log.",
           foodData: { date: new Date().toISOString().split('T')[0], name: "Meal", description: "Logged meal", itemsBreakdown: [] }
         });
-        if (rawParsed._internalReasoning && !rawParsed._internalReasoning) { rawParsed._internalReasoning = rawParsed._internalReasoning; }
+        
         if (!rawParsed._internalReasoning && extractedScratchpad) {
           rawParsed._internalReasoning = extractedScratchpad;
         }
@@ -12841,7 +12841,7 @@ Your response must be exactly one JSON object matching the requested schema. Nev
       }
     }
 
-    if (parsedData._internalReasoning && !parsedData._internalReasoning) { parsedData._internalReasoning = parsedData._internalReasoning; }
+    
     
     // Sanitize any bare target values in nutrientTargets
     if (parsedData?.report?.riskCategories && Array.isArray(parsedData.report.riskCategories)) {
@@ -13087,11 +13087,11 @@ You MUST standardize the unit for each biomarker to match this preferred system.
 
 === SYSTEM CONSTRAINTS ===
 
-First, think step-by-step in plain text.
+First, think step-by-step in the '_internalReasoning' field of the JSON.
 
 Second, output exactly one JSON object.
 
-The JSON must contain ONLY the mappedBiomarkers array. No _internalReasoning inside the JSON.
+The JSON must contain ONLY the fields requested below.
 
 Output exactly ONE object per input biomarker.
 

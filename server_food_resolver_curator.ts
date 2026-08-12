@@ -17,7 +17,7 @@ export async function executeFoodResolverCurator(
     return `CASE ${i + 1}:\nQuery: "${g.query}"\nCandidates:\n${g.candidates.map(c => ` - ID: ${c.id} | Name: ${c.name} | Source: ${c.source}`).join('\n')}\n`;
   }).join('\n---\n');
 
-  const prompt = `Please curate the following database matches.\n\n${casesText}\n\nOutput a strict JSON matching the FoodCuratorActionSchema. Include 'pick_existing', 'merge_duplicates', 'normalize_basis', or 'quarantine' actions as appropriate for each case. Ensure 'chosenFdcId' in 'pick_existing' exactly matches one of the candidate IDs.`;
+  const prompt = `Please curate the following database matches.\n\n${casesText}\n\nOutput a strict JSON object of the shape {"actions": [...]} matching the FoodCuratorActionSchema — do NOT output a bare array. Include 'pick_existing', 'merge_duplicates', 'normalize_basis', or 'quarantine' actions as appropriate for each case. Ensure 'chosenFdcId' in 'pick_existing' exactly matches one of the candidate IDs.`;
 
   let jsonResult;
   try {
@@ -27,7 +27,7 @@ export async function executeFoodResolverCurator(
     if (!parsed) throw new Error("Failed to parse JSON from Curator LLM");
     jsonResult = FoodCuratorActionSchema.parse(JSON.parse(parsed));
   } catch (error) {
-    addDebugLog(`[CuratorAction] Failed to execute curator: ${error}`);
+    addDebugLog(`[CuratorAction] Failed to execute curator: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     // Fallback: Just return the first candidate for each gap if LLM fails
     return activeGaps.map(g => ({
       query: g.query,
