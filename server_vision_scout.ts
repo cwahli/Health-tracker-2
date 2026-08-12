@@ -713,7 +713,7 @@ export function parseAndHealVisionScout(
           };
 
           if (!newItem.rawNutritionLabel) newItem.rawNutritionLabel = {};
-          if (rawC !== null && expectedCalories > 0 && Math.abs(expectedCalories - rawC) / expectedCalories > 0.20) {
+          if (rawC !== null && expectedCalories > 0 && knownMacrosCount === 3 && Math.abs(expectedCalories - rawC) / expectedCalories > 0.20) {
               newItem.originalCalories = rawC;
               newItem.autoCorrectedCalories = true;
               newItem.rawNutritionLabel.calories = Math.round(expectedCalories);
