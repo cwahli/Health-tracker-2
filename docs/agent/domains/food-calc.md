@@ -26,7 +26,7 @@ Budget (label → dish/brand → scout → category×W)
 | Scout calories | **One** soft `estimatedCalories` **per dish item** — not per component, not full free macros |
 | `rawNutritionLabel` | **Printed label only** — never free estimates |
 | Dietitian | Coaches on **server preCalc only** — no free macro invent |
-| Food Resolver | Gap-only librarian (FDC / dish core) — not primary calorie estimator |
+| Food Resolver | Catalog curator (1-iter): multi-match, merge, brand routing, basis normalize, quarantine + aliases — not primary calorie estimator; not invoked on HIT_UNIQUE atomics |
 | Modes | Same finalize/budget math for **A, Edit, D** |
 
 ---

@@ -295,3 +295,4 @@ archive/
 *If this file ever shrinks back to “Admin Panel only”, restore this master content.*
 
 - M30 Epic (Food Curator): Phases 0, 1, 2, 3, 4, 5 fully completed (M30 COMPLETE)
+- 2026-08-11: Fixed `biomarker_review` missing historical context payload in `serverJobs.ts` and `LogChat.tsx`

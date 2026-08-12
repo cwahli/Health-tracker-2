@@ -20,6 +20,11 @@ export interface ServerJobPayload {
   foodLogs?: any[];
   userSelectedMode?: string;
   activeScoutItems?: any[];
+  agentType?: string;
+  biomarkerKey?: string;
+  biomarkers?: { [key: string]: number | string };
+  biomarkerHistory?: any[];
+  dataReviewBatchKeys?: string[];
   portionChoices?: any;
   skipScout?: boolean;
   scoutContentType?: 'ambiguous' | 'branded_single' | 'whole_food' | 'recipe';
@@ -288,6 +293,11 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         portionChoices: payload.portionChoices,
         skipScout: payload.skipScout,
         scoutContentType: payload.scoutContentType,
+        agentType: payload.agentType,
+        biomarkerKey: payload.biomarkerKey,
+        biomarkers: payload.biomarkers || {},
+        biomarkerHistory: payload.biomarkerHistory || [],
+        dataReviewBatchKeys: payload.dataReviewBatchKeys || [],
         // Task 6: Carry pre-resolved DB candidates from turn-1 portionClarify payload so
         // turn-2 skips the DB re-scan and uses the already-resolved context.
         resolvedDbCandidates: payload.resolvedDbCandidates || [],

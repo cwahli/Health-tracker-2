@@ -175,3 +175,4 @@ node scripts/assert-biomarker-flow.mjs
 3. Front desk same-day merge + alias map.  
 4. Remove or wire dead `biomarker_dictionary_store`.  
 5. Hallucination guards on apply.
+6. Fix `biomarker_review` missing historical context payload in `serverJobs.ts` and `LogChat.tsx`

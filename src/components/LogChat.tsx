@@ -2760,6 +2760,9 @@ ${logsText}`);
           estimatedTotalMarkers,
           currentBatch,
           reviewBiomarkerKey,
+          biomarkerKey: reviewBiomarkerKey,
+          biomarkers: biomarkers || {},
+          biomarkerHistory: biomarkerHistory || [],
           dataReviewBatchKeys,
           dataReviewBatchIdx,
           batchSize
