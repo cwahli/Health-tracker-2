@@ -5971,6 +5971,12 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         if (n.includes("cheese") || n.includes("mozzarella") || n.includes("cheddar") || n.includes("parmesan") || n.includes("feta") || n.includes("ricotta") || n.includes("gouda") || n.includes("provolone") || n.includes("paneer") || n.includes("halloumi")) {
           return { calories: 280, protein: 22, totalFat: 21, saturatedFat: 13, sodium: 550, carbohydrates: 2, transFat: 0, addedSugar: 0, potassium: 100, totalFibre: 0, solubleFibre: 0 };
         }
+        if (n.includes("yogurt") || n.includes("yoghurt") || n.includes("kefir") || n.includes("quark")) {
+          return { calories: 80, protein: 6, totalFat: 3, saturatedFat: 2, sodium: 45, carbohydrates: 7, transFat: 0, addedSugar: 4, potassium: 200, totalFibre: 0, solubleFibre: 0 };
+        }
+        if (n.includes("tortilla") || n.includes("wrap") || n.includes("flatbread") || n.includes("pitta") || n.includes("pita") || n.includes("naan") || n.includes("chapati")) {
+          return { calories: 290, protein: 8, totalFat: 7, saturatedFat: 1.5, sodium: 600, carbohydrates: 48, transFat: 0, addedSugar: 1, potassium: 130, totalFibre: 3, solubleFibre: 0.5 };
+        }
         if (n.includes("oat") || n.includes("cereal") || n.includes("granola") || n.includes("muesli") || n.includes("quinoa") || n.includes("barley")) {
           return { calories: 380, protein: 12, totalFat: 6, saturatedFat: 1, sodium: 10, carbohydrates: 65, transFat: 0, addedSugar: 5, potassium: 350, totalFibre: 10, solubleFibre: 4 };
         }
@@ -7350,6 +7356,23 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
               addDebugLog(`[Assembly Fallback] Component sum for "${item.originalName || item.keyword}" was ~0 kcal. Falling back to scout budget (${item.estimatedCalories} kcal).`);
               aggregatedNutrients.calories = Number(item.estimatedCalories);
             }
+          }
+
+          // COMPOSITE DENSITY FIX (Aug 2026): primaryBase100g must reflect this item's true
+          // weighted-average per-100g density across ALL matched components, not just the
+          // first one. Downstream consumers (aggregateItemsNutrients in
+          // server_nutrient_aggregation.ts, the meal compiler) multiply primaryBase100g by
+          // the item's FULL weight, so leaving it pinned to the first component silently
+          // misrepresents composite dishes (e.g. an entire chicken/avocado/egg/lettuce salad
+          // gets treated as if it were 100% chicken breast).
+          if (itemWeight > 0) {
+            const compositeBase100g: Record<string, number> = {};
+            NUTRIENT_KEYS.forEach(key => {
+              compositeBase100g[key] = parseFloat(((aggregatedNutrients[key] || 0) / (itemWeight / 100)).toFixed(3));
+            });
+            addDebugLog(`[Assembly] Recomputed primaryBase100g as weighted composite density for "${item.originalName || item.keyword}" (was: first-component-only density).`);
+            primaryBase100g = compositeBase100g;
+            primaryBaseWeightG = itemWeight;
           }
         }
       } else {
