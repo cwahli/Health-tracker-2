@@ -5,7 +5,8 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const db = initializeFirestore(app, {
-  localCache: memoryLocalCache()
+  localCache: memoryLocalCache(),
+  experimentalForceLongPolling: true
 }, (firebaseConfig as any).firestoreDatabaseId);
 
 // Suppress verbose internal Firebase SDK warnings (e.g. temporary connection drops, offline mode warnings)

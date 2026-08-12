@@ -341,7 +341,8 @@ export const PhysicalFormBadge: React.FC<PhysicalFormBadgeProps> = ({ item, comp
 
   const style = getFormStyle(classification.physicalForm);
   const matchReason = item.matchReasonInfo;
-  const dbSourceText = item.dbSource === 'usda' ? 'USDA FDC Entry' : item.dbSource === 'off' ? 'Open Food Facts Entry' : item.dbSource === 'canonical' || item.dbSource === 'backend_calculated' ? 'Canonical Reference' : 'Universal Nutrient Estimator';
+  const baseSourceText = item.dbSource === 'usda' ? 'USDA FDC Entry' : item.dbSource === 'off' ? 'Open Food Facts Entry' : item.dbSource === 'brand_official' || item.dbSource === 'label' ? 'Official Brand Entry' : item.dbSource === 'canonical' || item.dbSource === 'backend_calculated' ? 'Canonical Reference' : 'Universal Nutrient Estimator';
+  const dbSourceText = item.chainName ? `${item.chainName} (${baseSourceText})` : baseSourceText;
 
   const rawTokens = classification.matchedTokens || [];
   const tokensArray = Array.isArray(rawTokens) ? rawTokens : [String(rawTokens)];

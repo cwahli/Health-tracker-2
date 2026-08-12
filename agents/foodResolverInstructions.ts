@@ -11,43 +11,66 @@ const FoodCuratorActionSchemaRaw = z.object({
     z.object({
       type: z.literal('pick_existing'),
       query: z.string(),
-      chosenFdcId: coercedId,
+      chosenFdcId: coercedId.optional().nullable(),
+      parametricFdcId: coercedId.optional().nullable(),
+      parametricFoodName: z.string().optional().nullable(),
+      catalogType: z.enum(['commodity', 'brand']).optional(),
+      confidence: z.enum(['high', 'medium', 'low']).optional().default('high'),
       aliasesToCreate: z.array(z.string()).optional(),
       reason: z.string()
-    }),
+    }).passthrough(),
     z.object({
       type: z.literal('merge_duplicates'),
       winnerFdcId: coercedId,
       loserFdcIds: z.array(coercedId),
+      confidence: z.enum(['high', 'medium', 'low']).optional().default('high'),
       reason: z.string()
-    }),
+    }).passthrough(),
     z.object({
       type: z.literal('normalize_basis'),
-      fdcId: coercedId,
-      fromBasis: z.string(),
-      toBasis: z.string(),
-      conversionFactor: z.number(),
-      reason: z.string()
-    }),
+      fdcId: coercedId.optional().nullable(),
+      fromBasis: z.string().optional().nullable(),
+      toBasis: z.string().optional().nullable(),
+      conversionFactor: z.number().optional().nullable(),
+      query: z.string().optional().nullable(),
+      parametricFdcId: coercedId.optional().nullable(),
+      parametricFoodName: z.string().optional().nullable(),
+      catalogType: z.enum(['commodity', 'brand']).optional(),
+      confidence: z.enum(['high', 'medium', 'low']).optional().default('high'),
+      aliasesToCreate: z.array(z.string()).optional(),
+      reason: z.string().optional().default('')
+    }).passthrough(),
     z.object({
       type: z.literal('quarantine'),
       fdcId: coercedId,
       reason: z.string()
-    })
+    }).passthrough()
   ]))
 }).passthrough();
 
 export const FoodCuratorActionSchema = z.preprocess((raw: any) => {
-  // The LLM sometimes returns a bare top-level array (e.g. `[ {...}, {...} ]`) instead of
-  // the expected `{ "actions": [...] }` wrapper object. Normalize that shape here too —
-  // previously this caused Zod's "expected array, received undefined" on the `actions`
-  // path, which discarded every curator decision (including correct ones) and forced the
-  // whole batch through the blind "no curation happened" fallback.
   const normalized = Array.isArray(raw) ? { actions: raw } : raw;
-  if (normalized && Array.isArray(normalized.actions)) {
+  if (normalized && typeof normalized === 'object' && Array.isArray(normalized.actions)) {
     return {
       ...normalized,
-      actions: normalized.actions.map((a: any) => (a && a.type == null && a.action != null) ? { ...a, type: a.action } : a)
+      actions: normalized.actions.map((a: any) => {
+        if (!a || typeof a !== 'object') return a;
+        const typeVal = a.type || a.Type || a.action || a.Action || 'pick_existing';
+        const reasonVal = a.reason || a.Reason || a.reasonText || a.ReasonText || '';
+        const queryVal = a.query || a.Query || '';
+        const fdcIdVal = a.fdcId || a.FdcId || a.fdc_id || a.chosenFdcId || a.chosen_fdc_id || '';
+        const chosenFdcIdVal = a.chosenFdcId || a.chosen_fdc_id || a.fdcId || a.FdcId || '';
+        const confVal = (a.confidence || a.Confidence || 'high').toLowerCase();
+        return {
+          ...a,
+          type: typeVal,
+          reason: reasonVal,
+          query: queryVal,
+          fdcId: fdcIdVal,
+          chosenFdcId: chosenFdcIdVal,
+          confidence: ['high', 'medium', 'low'].includes(confVal) ? confVal : 'high'
+        };
+      })
     };
   }
   return normalized;
@@ -56,15 +79,11 @@ export const FoodCuratorActionSchema = z.preprocess((raw: any) => {
 export const foodResolverCuratorInstruction = `You are the Master Curator of the AI Studio Food Database.
 Your mandate is to resolve identity conflicts, deduplicate rows, and normalize data bases.
 
-1. You curate the internal nutrition database and resolve identity conflicts.
-2. Prefer reuse + alias over new rows; merge near-duplicates ('merge_duplicates').
-3. Route brand products vs generic commodities correctly.
-4. All stored densities are per 100g; interpret country serving formats; propose basis interpretation ('normalize_basis'), server will recompute.
-5. Quarantine impossible values (extreme kcal, absurd weights) using 'quarantine'.
-6. Choose only from provided candidates ('pick_existing'); NEVER invent IDs.
-7. Output strict JSON actions; one line reason each. The output MUST be a single JSON object of the exact shape {"actions": [ ... ]} — a top-level array is NOT valid, always wrap your action list in an "actions" key. Every action object MUST use the key "type" (not "action") for its action kind, e.g. {"type": "quarantine", "fdcId": "170775", "reason": "..."}. All ID fields (chosenFdcId, winnerFdcId, loserFdcIds, fdcId) MUST be strings, e.g. "170775", not bare numbers.
-8. Success = next identical query needs no Resolver because you added robust aliases.
-
-When presented with multiple matches for a query, pick the best one and add aliases so future searches hit instantly.
-If you see identical items with different IDs, merge them (pick one winner, list others as losers).
+1. PARAMETRIC USDA MEMORY & ZERO-CANDIDATE GAP RESOLUTION: For standard generic USDA clinical foods (e.g. raw avocado, hard-boiled egg, grilled chicken breast, flour tortilla, falafel, feta cheese, raw onion, raw red pepper), populate 'parametricFoodName' using a highly descriptive standard clinical name (e.g. "Avocados, raw, all commercial varieties" or "Egg, whole, cooked, hard-boiled"). If you are 100% confident in the exact 6-digit USDA database FDC ID, supply it in 'parametricFdcId'; otherwise, set 'parametricFdcId' to null. Do NOT guess or hallucinate 6-digit FDC IDs. All standard USDA items are 100g by definition — NEVER emit 'normalize_basis' for USDA or generic commodity items.
+2. STRICT CASE ISOLATION (ANTI-REUSE RULE): You must resolve each case in the batch independently. Do NOT copy, repeat, or reuse the same 'parametricFdcId' across different food queries unless the queries refer to the exact same ingredient. Repeating FDC IDs across unrelated cases is a severe database defect.
+3. CANDIDATE EVALUATION: When parametric ID is not known, select the best candidate ('chosenFdcId') from the provided candidates list.
+4. CONFIDENCE & ALIASES: Provide a 'confidence' ('high' | 'medium' | 'low') and list new normalized search aliases in 'aliasesToCreate'. High-confidence aliases are saved permanently.
+5. DUPLICATE MERGING & QUARANTINE: Merge duplicate candidate rows ('merge_duplicates') by picking 1 winner and listing loser IDs. Quarantine impossible or severely mismatched candidates ('quarantine').
+6. CATALOG ROUTING: Set 'catalogType' to 'commodity' for generic items or 'brand' for restaurant/packaged items.
+7. CRITICAL JSON SYNTAX RULE: Every property key MUST be strictly lowercase and double-quoted in valid JSON format (e.g. "type", "query", "chosenFdcId", "confidence", "reason"). Output a single JSON object {"actions": [...]}.
 `;

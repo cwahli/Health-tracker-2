@@ -5611,7 +5611,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         resItem.brandHits?.forEach((item: any) => {
           candidates.push({ id: String(item.id), name: `${item.chainName || ''} ${item.name || item.dish_name || ''}`.trim(), source: "brand_official" });
         });
-        const { resolveClass, bestMatch, survivors } = rankAndClassifyCandidates(resItem.query, resItem.usda, 65);
+        const { resolveClass, bestMatch, survivors } = rankAndClassifyCandidates(resItem.query, resItem.usda, 85);
         if (resolveClass === 'HIT_UNIQUE' && bestMatch) {
             addDebugLog(`[ResolveClass] HIT_UNIQUE for "${resItem.query}" -> ${bestMatch.description}`);
             writeAliasIfHitUnique(resolveClass, resItem.query, bestMatch).catch(e => console.error(e));
@@ -5654,7 +5654,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         const gapKey = normalizeFoodKey(cleanGapQuery);
         const isDuplicateGap = gapsForResolver.some(g => normalizeFoodKey(sanitizeDishTitle(g.query)) === gapKey);
 
-        if (!isDuplicateGap && candidates.length > 0 && cleanGapQuery) {
+        if (!isDuplicateGap && cleanGapQuery) {
           gapsForResolver.push({
             query: cleanGapQuery,
             candidates
@@ -5702,10 +5702,24 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
             temperature: 0.1,
           });
         };
+        const fetchNutrientsForFdcId = async (fdcId: string): Promise<Record<string, number> | null> => {
+          if (dbMatchMap.has(fdcId)) {
+            return dbMatchMap.get(fdcId) || null;
+          }
+          if (/^\d{6,}$/.test(fdcId)) {
+            const prod = await fetchOFFProductByBarcode(fdcId);
+            if (prod) return extractOFFNutrientsPer100g(prod);
+          } else if (/^\d+$/.test(fdcId)) {
+            const food = await fetchUSDAFoodById(fdcId);
+            if (food) return extractUSDANutrientsPer100g(food);
+          }
+          return null;
+        };
         const resolvedGaps = await executeFoodResolverCurator(
           gapsForResolver,
           addDebugLog,
-          callLLMFn
+          callLLMFn,
+          fetchNutrientsForFdcId
         );
 
         // For each resolved item, add it to databaseMatchesArray & dbMatchMap
@@ -6021,6 +6035,9 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         }
         if (n.includes("potato") || n.includes("wedge") || n.includes("yam")) {
           return { calories: 90, protein: 2, totalFat: 0.1, saturatedFat: 0.02, sodium: 10, carbohydrates: 21, transFat: 0, addedSugar: 0, potassium: 400, totalFibre: 1.5, solubleFibre: 0.5 };
+        }
+        if (n.includes("croissant") || n.includes("pastry") || n.includes("danish") || n.includes("brioche") || n.includes("muffin") || n.includes("scone") || n.includes("donut")) {
+          return { calories: 410, protein: 8, totalFat: 21, saturatedFat: 12, sodium: 450, carbohydrates: 46, transFat: 0, addedSugar: 8, potassium: 120, totalFibre: 2, solubleFibre: 0.4 };
         }
         if (n.includes("bread") || n.includes("roll") || n.includes("bun") || n.includes("toast") || n.includes("dough")) {
           return { calories: 250, protein: 8, totalFat: 3, saturatedFat: 0.5, sodium: 400, carbohydrates: 50, transFat: 0, addedSugar: 2, potassium: 100, totalFibre: 3, solubleFibre: 0.5 };
@@ -7145,7 +7162,27 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           }
           const query = prepareSearchQueryWithState(matchQuery, item.cookingMethod || scoutCookingMethod || 'baked');
           
-          let bestMatch = findBestMatch(query);
+          // Direct Curator / Query match priority: if databaseMatchesArray already contains an entry specifically resolved for this query, use it first!
+          const normCompQuery = normalizeFoodKey(query);
+          const calcTokenOverlap = (strA: string, strB: string): number => {
+            const setA = new Set(strA.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(Boolean));
+            const setB = new Set(strB.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(Boolean));
+            if (setA.size === 0 || setB.size === 0) return 0;
+            let matches = 0;
+            setA.forEach(token => { if (setB.has(token)) matches++; });
+            return matches / Math.min(setA.size, setB.size);
+          };
+          const directCuratorMatch = databaseMatchesArray.find((m: any) =>
+            normalizeFoodKey(m.searchQuery || '') === normCompQuery &&
+            m.source !== 'category_fallback' &&
+            !String(m.id || '').startsWith('fallback_') &&
+            calcTokenOverlap(normCompQuery, m.name || m.searchQuery || '') >= 0.5
+          );
+
+          let bestMatch = directCuratorMatch || findBestMatch(query);
+          if (directCuratorMatch) {
+            addDebugLog(`[MatchPriority] Bound direct Curator query match id=${directCuratorMatch.id} ("${directCuratorMatch.name}") for component "${query}".`);
+          }
           if (bestMatch && (bestMatch.source === 'web_search' || bestMatch.source === 'tavily' || bestMatch.source === 'serper' || bestMatch.source === 'google_cse')) {
             addDebugLog(`[MatchPriority] rejected web_search for component "${query}"`);
             bestMatch = undefined;
@@ -7178,7 +7215,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             const isQueryLoose = qTokens.some(t => ['cup', 'bowl', 'yogurt', 'fruit', 'loose'].includes(t));
 
             const GENERIC_MATCH_STOPWORDS = new Set(['cheese', 'canned', 'sauce', 'sauces', 'salad', 'dressing', 'cream', 'sliced', 'chopped', 'mixed', 'fresh', 'cooked', 'raw', 'shredded', 'grated', 'diced', 'whole', 'baked', 'fried', 'roasted', 'steamed', 'boiled', 'grilled', 'style', 'flavored', 'flavoured', 'plain', 'organic', 'natural', 'sweet', 'spicy', 'crushed', 'minced', 'topping', 'toppings', 'spread', 'filling', 'blend', 'garnish', 'crumbs', 'chunks', 'pieces']);
-            const significantQTokens = Array.from(new Set(qTokens.filter((t: string) => t.length > 3 && !GENERIC_MATCH_STOPWORDS.has(t))));
+            const significantQTokens = Array.from(new Set(qTokens.filter((t: string) => t.length >= 3 && !GENERIC_MATCH_STOPWORDS.has(t))));
 
             let better: any = undefined;
             let bestOverlapScore = 0;
@@ -7195,6 +7232,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
               if (isQueryLoose && (mName.includes(' bar') || mName.endsWith('bar'))) return;
 
               const qLow = String(query).toLowerCase();
+              if (/\b(egg|eggs|poultry|meat|chicken|pork|beef|fish|cheese|yogurt|yoghurt|feta|cottage|curd|granola|oats?|cereal|parfait|salad)\b/i.test(qLow) && /\b(tea|beverage|coffee|water|seltzer|soda|juice|hard\s*seltzer)\b/i.test(mName) && !/\b(tea|coffee|soda|juice|seltzer)\b/i.test(qLow)) return;
+              if (/\b(salad\s*cream|salad\s*dressing|dressing|mayonnaise|mayo|vinaigrette|sauce|condiment)\b/i.test(qLow) && /\b(ice\s*cream|cone|frozen\s+yogurt|gelato|sorbet|confectionery|candy|dessert|pastry|cake|cookie|donut)\b/i.test(mName) && !/\b(ice\s*cream|cone|dessert)\b/i.test(qLow)) return;
+              if (/\b(raisins?|prunes?|dates?|cranberr(y|ies)|figs?|apricots?)\b/i.test(qLow) && !/\b(oat|oats|cereal|granola|muesli|oatmeal|porridge|bar|bread|cake|cookie)\b/i.test(qLow) && /\b(cereal|cereals|oat|oats|instant|oatmeal|prepared\s+with\s+water|bar|granola)\b/i.test(mName)) return;
               if (/\bolive/.test(qLow) && !/\bloaf|lunch|mortadella|sausage|bologna\b/.test(qLow) && /\b(loaf|lunch|mortadella|sausage|bologna|pork)\b/i.test(mName)) return;
               if (/\b(salad|lettuce|mixed\s+salad|greens|leaves)\b/i.test(qLow) && /\b(taro|cassava|amaranth leaves|bitterleaf)\b/i.test(mName) && !/\btaro\b/i.test(qLow)) return;
               if (/\b(berr|blueberry|raspberry|strawberry|fruit)\b/i.test(qLow) && /\b(basil|oregano|thyme|parsley|cilantro|herb)\b/i.test(mName)) return;
@@ -7242,11 +7282,12 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           // an unrelated food's numbers instead of correctly falling through to the canonical
           // dictionary lookup or the category-fallback/Resolver path below.
           if (bestMatch) {
-            const relevanceStopwords = new Set(['cheese', 'canned', 'sauce', 'sauces', 'salad', 'dressing', 'cream', 'sliced', 'chopped', 'mixed', 'fresh', 'cooked', 'raw', 'shredded', 'grated', 'diced', 'whole', 'baked', 'fried', 'roasted', 'steamed', 'boiled', 'grilled', 'style', 'flavored', 'flavoured', 'plain', 'organic', 'natural', 'sweet', 'spicy', 'crushed', 'minced', 'topping', 'toppings', 'spread', 'filling', 'blend', 'garnish', 'crumbs', 'chunks', 'pieces', 'with', 'and', 'leaf', 'leaves', 'seed', 'seeds', 'green']);
-            const relevanceQTokens = String(query).toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter((t: string) => t.length > 3 && !relevanceStopwords.has(t));
+            const relevanceStopwords = new Set(['canned', 'sliced', 'chopped', 'mixed', 'fresh', 'cooked', 'raw', 'shredded', 'grated', 'diced', 'whole', 'baked', 'fried', 'roasted', 'steamed', 'boiled', 'grilled', 'style', 'flavored', 'flavoured', 'plain', 'organic', 'natural', 'sweet', 'spicy', 'crushed', 'minced', 'topping', 'toppings', 'spread', 'filling', 'blend', 'garnish', 'crumbs', 'chunks', 'pieces', 'with', 'and', 'leaf', 'leaves', 'seed', 'seeds', 'green']);
+            const rawQTokens = String(query).toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter((t: string) => t.length > 2);
+            const relevanceQTokens = rawQTokens.filter((t: string) => !relevanceStopwords.has(t));
+            const effectiveQTokens = relevanceQTokens.length > 0 ? relevanceQTokens : rawQTokens;
             const bmNameLow = String(bestMatch.name || bestMatch.dish_name || '').toLowerCase();
-            const hasRelevantOverlap = relevanceQTokens.length === 0 ||
-              relevanceQTokens.some((t: string) => bmNameLow.includes(t) || t.includes(bmNameLow.split(/\s+/).find((w: string) => w.length > 3) || '\u0000'));
+            const hasRelevantOverlap = effectiveQTokens.some((t: string) => bmNameLow.includes(t) || t.includes(bmNameLow.split(/\s+/).find((w: string) => w.length > 3) || '\u0000'));
             if (!hasRelevantOverlap) {
               addDebugLog(`[MatchPriority] Relevance gate rejected "${bestMatch.name}" (id=${bestMatch.id}) for query "${query}" — no meaningful token overlap.`);
               bestMatch = undefined;
@@ -7391,7 +7432,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           // Always push to componentsDetailList so all components are visible for compound meals
           let compLabel = "";
           const sourceUpper = String(bestMatch.source || 'usda').toUpperCase();
-          if (sourceUpper === 'USDA' && bestMatch.id) {
+          const fdcIdCand = bestMatch.fdcId || bestMatch.dbId || (bestMatch.id && !String(bestMatch.id).startsWith('canonical_') && !String(bestMatch.id).startsWith('printed_') && !String(bestMatch.id).startsWith('fallback_') && !String(bestMatch.id).startsWith('resolver_') ? bestMatch.id : null);
+
+          if (sourceUpper === 'USDA' && bestMatch.id && !String(bestMatch.id).startsWith('canonical_') && !String(bestMatch.id).startsWith('printed_')) {
             compLabel = `[USDA #${bestMatch.id}](https://fdc.nal.usda.gov/food-details/${bestMatch.id}/nutrients)${bestMatch.name ? ' (' + bestMatch.name + ')' : ''}`;
           } else if (sourceUpper === 'OFF' && bestMatch.id) {
             compLabel = `[OFF #${bestMatch.id}](https://world.openfoodfacts.org/product/${bestMatch.id})${bestMatch.name ? ' (' + bestMatch.name + ')' : ''}`;
@@ -7404,6 +7447,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             compLabel = dictFdcId
               ? `📖 [${cleanName}](https://fdc.nal.usda.gov/fdc-app.html#/food-details/${dictFdcId}/nutrients)`
               : `📖 ${cleanName}`;
+          } else if (fdcIdCand && !isNaN(Number(fdcIdCand))) {
+            const cleanName = bestMatch.name ? bestMatch.name.replace(/\s*\((internal_catalog|internal catalog|usual_catalog)\)/gi, '') : query;
+            compLabel = `📖 [${cleanName}](https://fdc.nal.usda.gov/fdc-app.html#/food-details/${fdcIdCand}/nutrients)`;
           } else {
             compLabel = `${bestMatch.name || query}`;
           }
@@ -7920,6 +7966,15 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
       // Apply reconciled nutrients map
       Object.assign(aggregatedNutrients, recRes.nutrients);
 
+      // Re-sync primaryBase100g with post-reconciliation aggregatedNutrients so downstream First-Principles Injection & aggregateItemsNutrients match precalc block exactly
+      if (primaryBase100g && itemWeight > 0) {
+        const scaledBase100g: Record<string, number> = { ...(primaryBase100g as any) };
+        NUTRIENT_KEYS.forEach(key => {
+          scaledBase100g[key] = parseFloat(((aggregatedNutrients[key] || 0) / (itemWeight / 100)).toFixed(3));
+        });
+        primaryBase100g = scaledBase100g;
+      }
+
       // If scaleFactor !== 1, scale component rows (componentsDetailList) as well so receipt invariant holds
       if (recRes.scaleFactor !== 1 && recRes.scaleFactor > 0) {
         componentsDetailList.forEach((s: any) => {
@@ -8284,9 +8339,16 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
     const isPureTextEdit = isExplicitModify || effectiveActiveMeal !== null || activeComparisonState !== null;
     if (!isPureTextEdit && visionScoutItems && visionScoutItems.length > 0) {
       const itemsList = visionScoutItems.map((item: any, idx: number) => {
+        // Use the item's real scoutIndex (assigned earlier, and possibly non-sequential
+        // after Multi-Photo Merge removes a duplicate) instead of array position. The
+        // Dietitian is instructed to copy this Index verbatim into its own output, and a
+        // later step matches the Dietitian's items back to backend-precalculated nutrients
+        // by this exact scoutIndex — showing array position here silently mismatches items
+        // whenever a merge has created a gap (e.g. a cross-photo duplicate was removed).
+        const displayIndex = (item.scoutIndex !== undefined && item.scoutIndex !== null) ? item.scoutIndex : idx;
         const facts = item.nutritionFacts;
         let scaledNutrientsStr = facts ? ` | NutritionFacts: ${JSON.stringify(facts)}` : "";
-        return `- Index: ${idx} | Scout Item: "${item.keyword}" | Weight: ${item.estimatedWeightGrams}g | Observed/Local Context: "${item.originalName}"${scaledNutrientsStr}`;
+        return `- Index: ${displayIndex} | Scout Item: "${item.keyword}" | Weight: ${item.estimatedWeightGrams}g | Observed/Local Context: "${item.originalName}"${scaledNutrientsStr}`;
       }).join('\n');
 
       visionScoutCtx = `\n=== VISUAL FOOD SCOUT IDENTIFIED ITEMS ===\n${itemsList}\n` +
@@ -9410,29 +9472,36 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         });
         parsedData.nutrients = grandTotals;
 
-        // Automated 'Sanity Check' Validation Layer
+        // Automated 'Sanity Check' Validation Layer & Density Rescale
+        let needsGrandTotalRecalc = false;
         parsedData.itemsBreakdown.forEach((item: any) => {
            if (!item || typeof item !== 'object') return;
            if (item.weightGrams > 0 && item.nutrients) {
               const cals = item.nutrients.calories || 0;
               const calDensity = (cals / item.weightGrams) * 100;
-              const nameLower = (item.name || "").toLowerCase();
-              const isSolidMeal = item.components && item.components.length >= 2 && !nameLower.includes('soup') && !nameLower.includes('salad') && !nameLower.includes('veg') && !nameLower.includes('broth') && !nameLower.includes('water') && !nameLower.includes('beverage') && !nameLower.includes('latte') && !nameLower.includes('coffee') && !nameLower.includes('tea') && !nameLower.includes('juice') && !nameLower.includes('smoothie') && !nameLower.includes('milk') && !nameLower.includes('drink');
-              if (isSolidMeal && calDensity < 60) {
-                 addDebugLog(`[Sanity Check] WARNING: Item "${item.name}" weighing ${item.weightGrams}g registered at ${cals} kcal. This caloric density (${calDensity.toFixed(1)} kcal/100g) is impossibly low for a solid multi-ingredient food. Flagging anomaly.`);
+              const nameLower = (item.canonicalDbName || item.originalName || item.name || "").toLowerCase();
+              
+              const isDryDense = nameLower.includes('granola') || nameLower.includes('cereal') || nameLower.includes('nut') || nameLower.includes('trail mix') || nameLower.includes('chip') || nameLower.includes('cracker') || nameLower.includes('cookie') || nameLower.includes('oat');
+              const isSolidMeal = !nameLower.includes('soup') && !nameLower.includes('salad') && !nameLower.includes('veg') && !nameLower.includes('broth') && !nameLower.includes('water') && !nameLower.includes('beverage') && !nameLower.includes('latte') && !nameLower.includes('coffee') && !nameLower.includes('tea') && !nameLower.includes('juice') && !nameLower.includes('smoothie') && !nameLower.includes('milk') && !nameLower.includes('drink');
+
+              if ((isDryDense && calDensity < 250) || (isSolidMeal && calDensity < 60)) {
+                 addDebugLog(`[Sanity Check] WARNING: Item "${item.canonicalDbName || item.name}" weighing ${item.weightGrams}g registered at ${cals} kcal (${calDensity.toFixed(1)} kcal/100g). Impossibly low caloric density.`);
                  item.anomalyFlags = item.anomalyFlags || [];
-                 item.anomalyFlags.push("Impossibly low caloric density for solid food.");
+                 item.anomalyFlags.push("Impossibly low caloric density.");
                  
-                 // Auto-correct if it's drastically low
-                 if (cals < 100 && item.weightGrams > 80) {
-                    const fallbackFactor = item.weightGrams / 100;
-                    if (!item.nutrients) item.nutrients = {};
-                    item.nutrients.calories = Math.round(200 * fallbackFactor);
-                    addDebugLog(`[Sanity Check] Auto-correcting calories for "${item.name}" to generic solid baseline (${item.nutrients.calories} kcal).`);
-                    // Update main total
-                    if (parsedData.nutrients) {
-                        parsedData.nutrients.calories = (parsedData.nutrients.calories || 0) - cals + item.nutrients.calories;
-                    }
+                 const targetDensity = isDryDense ? 420 : 160;
+                 const targetCals = Math.round((targetDensity * item.weightGrams) / 100);
+                 const scaleRatio = cals > 0 ? targetCals / cals : 1;
+
+                 if (targetCals > cals) {
+                    item.nutrients.calories = targetCals;
+                    if (item.nutrients.protein) item.nutrients.protein = Math.round(item.nutrients.protein * scaleRatio * 10) / 10;
+                    if (item.nutrients.totalFat) item.nutrients.totalFat = Math.round(item.nutrients.totalFat * scaleRatio * 10) / 10;
+                    if (item.nutrients.saturatedFat) item.nutrients.saturatedFat = Math.round(item.nutrients.saturatedFat * scaleRatio * 10) / 10;
+                    if (item.nutrients.carbohydrates) item.nutrients.carbohydrates = Math.round(item.nutrients.carbohydrates * scaleRatio * 10) / 10;
+                    if (item.nutrients.sodium) item.nutrients.sodium = Math.round(item.nutrients.sodium * scaleRatio);
+                    needsGrandTotalRecalc = true;
+                    addDebugLog(`[Sanity Check] Rescaled low-density item "${item.canonicalDbName || item.name}" from ${cals} kcal to ${targetCals} kcal (${targetDensity} kcal/100g reference).`);
                  }
               }
 
@@ -9443,10 +9512,55 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               if (hasZeroMacros) {
                 item.anomalyFlags = item.anomalyFlags || [];
                 item.anomalyFlags.push("Zero protein/carb anomaly on high-calorie item — possible broken database match.");
-                addDebugLog(`[Sanity Check] WARNING: Item "${item.name}" has ${cals}kcal but zero protein/carbs. Flagged for review.`);
+                addDebugLog(`[Sanity Check] WARNING: Item "${item.canonicalDbName || item.name}" has ${cals}kcal but zero protein/carbs. Flagged for review.`);
               }
            }
         });
+
+        if (needsGrandTotalRecalc && parsedData.itemsBreakdown) {
+          const updatedGrandTotals: Record<string, number> = {};
+          NUTRIENT_KEYS.forEach((k: string) => { updatedGrandTotals[k] = 0; });
+          parsedData.itemsBreakdown.forEach((it: any) => {
+            if (it.nutrients) {
+              NUTRIENT_KEYS.forEach((k: string) => {
+                updatedGrandTotals[k] = Math.round(((updatedGrandTotals[k] || 0) + (Number(it.nutrients[k]) || 0)) * 10) / 10;
+              });
+            }
+          });
+          parsedData.nutrients = updatedGrandTotals;
+        }
+
+        // Always synchronize narrative text with final grand totals across all narrative fields
+        if (parsedData.nutrients) {
+          const finalCal = parsedData.nutrients.calories || 0;
+          const finalP = parsedData.nutrients.protein || 0;
+          const finalFat = parsedData.nutrients.totalFat || 0;
+          const finalSatFat = parsedData.nutrients.saturatedFat || 0;
+          const finalNa = parsedData.nutrients.sodium || 0;
+          const finalCarbs = parsedData.nutrients.carbohydrates || 0;
+
+          if (parsedData.message) {
+            parsedData.message = synchronizeNarrativeText(parsedData.message, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+          }
+          if (rawParsed && rawParsed.message) {
+            rawParsed.message = synchronizeNarrativeText(rawParsed.message, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+          }
+          if (parsedData.description) {
+            parsedData.description = synchronizeNarrativeText(parsedData.description, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+          }
+          if (parsedData.benefits) {
+            parsedData.benefits = synchronizeNarrativeText(parsedData.benefits, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+          }
+          if (parsedData.risks) {
+            parsedData.risks = synchronizeNarrativeText(parsedData.risks, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+          }
+          if (parsedData.healthImpact) {
+            parsedData.healthImpact = synchronizeNarrativeText(parsedData.healthImpact, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+          }
+          if (parsedData.recommendation) {
+            parsedData.recommendation = synchronizeNarrativeText(parsedData.recommendation, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+          }
+        }
 
         // Fire-and-forget: register any new chain menu dishes in the background. Never blocks or fails the request.
         try {
@@ -9675,7 +9789,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           const canonicalBase = (dbSourceUpper === 'LABEL' || dbSourceUpper === 'BRAND_OFFICIAL')
             ? null
             : lookupCanonicalBaseFood(dbNameStr || it.keyword || it.name);
-          const realFdcId = (canonicalBase && canonicalBase.fdcId) ? canonicalBase.fdcId : (dbSourceUpper === 'USDA' && it.dbId && !String(it.dbId).startsWith('canonical_') && !String(it.dbId).startsWith('printed_') ? it.dbId : null);
+          const realFdcId = (canonicalBase && canonicalBase.fdcId) ? canonicalBase.fdcId : ((dbSourceUpper === 'USDA' || dbSourceUpper === 'INTERNAL_CATALOG' || dbSourceUpper === 'USUAL_CATALOG') && it.dbId && !String(it.dbId).startsWith('canonical_') && !String(it.dbId).startsWith('printed_') && !String(it.dbId).startsWith('fallback_') && !isNaN(Number(it.dbId)) ? it.dbId : null);
 
           if (dbSourceUpper === 'LABEL' || String(it.dbId || '').startsWith('printed_packaging_label')) {
             dbRefTag = `Printed Packaging Label (${cleanItemName})`;

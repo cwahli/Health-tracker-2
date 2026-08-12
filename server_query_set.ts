@@ -13,27 +13,19 @@ export function buildFoodSearchQuerySet(scoutItems: any[]): string[] {
       } else if (it.originalName) {
         rawQueries.push(it.originalName);
       }
-    }
-
-    if (hasMultipleComponents && !isBrandItem) {
-      // Drop parent multi-component titles for USDA atomic list
-      it.components.forEach((c: any) => {
-        const q = typeof c === 'string' ? c : c.searchQuery || c.name || c.keyword;
-        if (q) rawQueries.push(q);
-      });
-    } else {
+    } else if (!hasMultipleComponents) {
       if (it.queriesToSearch && Array.isArray(it.queriesToSearch)) {
         rawQueries.push(...it.queriesToSearch);
       }
       if (it.originalName) rawQueries.push(it.originalName);
-      if (it.keyword) rawQueries.push(it.keyword);
-      
-      if (it.components) {
-        it.components.forEach((c: any) => {
-          const q = typeof c === 'string' ? c : c.searchQuery || c.name || c.keyword;
-          if (q) rawQueries.push(q);
-        });
-      }
+      if (it.keyword && it.keyword !== it.originalName) rawQueries.push(it.keyword);
+    }
+
+    if (it.components && Array.isArray(it.components)) {
+      it.components.forEach((c: any) => {
+        const q = typeof c === 'string' ? c : c.searchQuery || c.name || c.keyword;
+        if (q) rawQueries.push(q);
+      });
     }
 
     // Additional checks to add common unlisted sauces if visual ingredients hint at them

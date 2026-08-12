@@ -1,6 +1,6 @@
 # Health Cockpit — Master AI Handover (WIP status board)
 
-**Last updated:** 2026-08-11 (Free Tier Reliability M23-M28 completed: auth token verification, Gemini retry backoff, optimized payloads; all gates & tests PASS)  
+**Last updated:** 2026-08-12 (Curator-driven USDA resolution & self-healing database architecture specification completed in plan/CURATOR_USDA_SELF_HEALING_PLAN.md with 6 failure mode safeguards)  
 **Source of truth code intent:** https://github.com/cwahli/Health-tracker-2  
 **Tree of truth for product completeness:** **Desktop** working tree until Slice 0 / governance ship lands on origin.  
 **Always `git fetch` + re-audit before a session.**
@@ -298,3 +298,4 @@ archive/
 - M30 Epic (Food Curator): Phases 0, 1, 2, 3, 4, 5 fully completed (M30 COMPLETE)
 - 2026-08-11: Fixed `biomarker_review` missing historical context payload in `serverJobs.ts` and `LogChat.tsx`
 - 2026-08-12: Integrated `suggestedFdcId` for Vision Scout standard reference foods and prioritized it in the backend component-matching loop with relevance gating safety checks.
+- 2026-08-12: Fixed `scoutIndex` mismatch after Multi-Photo Merge by ensuring the Dietitian LLM is supplied with the actual `scoutIndex` instead of sequential array position `idx` in the visual identified items section.

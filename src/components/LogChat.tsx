@@ -3075,7 +3075,7 @@ ${logsText}`);
         }
 
         if (resData.data) {
-          const lastFoodLog = [...messages].reverse().find(m => m.data?.pendingFoodLog)?.pendingFoodLog;
+          const lastFoodLog = [...messages].reverse().find(m => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
           const currentTranscript = [...messages, userMsg, liveMsg].map(m => ({
             role: m.role as 'user' | 'assistant',
             content: m.content,
@@ -3213,7 +3213,7 @@ ${logsText}`);
       }
 
       if (isAgent('food')) {
-        const lastFoodLog = [...messages].reverse().find(m => m.data?.pendingFoodLog)?.pendingFoodLog;
+        const lastFoodLog = [...messages].reverse().find(m => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
         if (lastFoodLog) {
           try {
             const prunedMeal = JSON.parse(JSON.stringify(lastFoodLog));
@@ -6215,7 +6215,7 @@ ${JSON.stringify(profile, null, 2)}`);
         agentPrompt={activeInstructionPrompt || undefined}
         outOfRangeBiomarkers={outOfRangeBiomarkers}
         remainingAllowance={remainingAllowance}
-        activeMeal={[...messages].reverse().find(m => m.data?.pendingFoodLog)?.pendingFoodLog}
+        activeMeal={[...messages].reverse().find(m => m.data?.pendingFoodLog)?.data?.pendingFoodLog}
         location={userLocation}
         recentMeals={foodLogs?.slice(-20).map(f => f.name)}
         budget={budget}
