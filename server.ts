@@ -7158,6 +7158,25 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
               bestMatch = better;
             }
           }
+          // Final relevance safety net: whatever path assigned bestMatch above, it must share
+          // at least one meaningful, non-generic token with the query before we trust it as a
+          // confident match. Without this, matches with effectively zero semantic relevance
+          // (e.g. "Yogurt, plain, low fat" -> "Water, bottled, plain", or "Mixed salad greens"
+          // -> "Beverages, POWERADE, Zero, Mixed Berry") were reaching the nutrient pipeline as
+          // if they were a genuine, confident single match — silently poisoning the item with
+          // an unrelated food's numbers instead of correctly falling through to the canonical
+          // dictionary lookup or the category-fallback/Resolver path below.
+          if (bestMatch) {
+            const relevanceStopwords = new Set(['cheese', 'canned', 'sauce', 'sauces', 'salad', 'dressing', 'cream', 'sliced', 'chopped', 'mixed', 'fresh', 'cooked', 'raw', 'shredded', 'grated', 'diced', 'whole', 'baked', 'fried', 'roasted', 'steamed', 'boiled', 'grilled', 'style', 'flavored', 'flavoured', 'plain', 'organic', 'natural', 'sweet', 'spicy', 'crushed', 'minced', 'topping', 'toppings', 'spread', 'filling', 'blend', 'garnish', 'crumbs', 'chunks', 'pieces', 'with', 'and']);
+            const relevanceQTokens = String(query).toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter((t: string) => t.length > 3 && !relevanceStopwords.has(t));
+            const bmNameLow = String(bestMatch.name || bestMatch.dish_name || '').toLowerCase();
+            const hasRelevantOverlap = relevanceQTokens.length === 0 ||
+              relevanceQTokens.some((t: string) => bmNameLow.includes(t) || t.includes(bmNameLow.split(/\s+/).find((w: string) => w.length > 3) || '\u0000'));
+            if (!hasRelevantOverlap) {
+              addDebugLog(`[MatchPriority] Relevance gate rejected "${bestMatch.name}" (id=${bestMatch.id}) for query "${query}" — no meaningful token overlap.`);
+              bestMatch = undefined;
+            }
+          }
           addDebugLog(`[Component Resolution Diagnostic] item="${item.originalName || item.keyword}" (scoutIndex=${itemIndex}) component[${cIdx}] query="${query}" -> canonicalMatch=${canonicalData ? JSON.stringify(canonicalData.fdcId || 'no-fdcid') : 'none'} bestMatch.source=${bestMatch?.source || 'null'} bestMatch.id=${bestMatch?.id || 'null'}`);
 
           let labelCompMatch: any = null;
