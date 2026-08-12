@@ -3407,7 +3407,19 @@ export const FoodCard: React.FC<AgentCardProps & {
                                 imageUrl: msg.data.pendingFoodLog?.imageUrl || (messageImages.length > 0 ? messageImages[0] : undefined),
                                 imageUrls: (msg.data.pendingFoodLog?.imageUrls && msg.data.pendingFoodLog.imageUrls.length > 0)
                                   ? msg.data.pendingFoodLog.imageUrls
-                                  : (messageImages.length > 0 ? messageImages : undefined)
+                                  : (messageImages.length > 0 ? messageImages : undefined),
+                                // Requirement: preserve dietitian verdict/message that already
+                                // display in-chat via agentResult but are otherwise dropped at save.
+                                // serverJobs.ts Task 4 should already set these on pendingFoodLog for
+                                // server-driven jobs; this is a client-side belt-and-suspenders fallback.
+                                verdict: msg.data.pendingFoodLog?.verdict || msg.data?.agentResult?.verdict,
+                                message: msg.data.pendingFoodLog?.message || msg.data?.agentResult?.message,
+                                // User requirement: persist full chat transcript with the saved log.
+                                chatTranscript: (messages || []).map((m: any) => ({
+                                  role: m.role,
+                                  content: m.content || '',
+                                  timestamp: m.timestamp
+                                })),
                               };
                               const logResult = onLogFood(foodToLog as FoodLog);
                               setLoggedMessageIds?.(prev => [...prev, msg.id]);

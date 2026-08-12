@@ -86,6 +86,21 @@ export async function uploadPhotoToR2(jobId: string, imageBlobOrDataUrl: string)
   }
 }
 
+// Additive batch helper. Uploads multiple images with indexed keys
+// (photos/{jobId}_0.jpg, photos/{jobId}_1.jpg, ...) so old single-image jobs
+// using the un-indexed photos/{jobId}.jpg key from uploadPhotoToR2 keep working.
+export async function uploadPhotosToR2(jobId: string, images: string[]): Promise<string[]> {
+  if (!images || images.length === 0) return [];
+  if (images.length === 1) {
+    const url = await uploadPhotoToR2(jobId, images[0]);
+    return url ? [url] : [];
+  }
+  const results = await Promise.all(
+    images.map((img, i) => uploadPhotoToR2(`${jobId}_${i}`, img))
+  );
+  return results.filter(Boolean);
+}
+
 export async function uploadDebugPayloadToR2(jobId: string, debugJson: object): Promise<string> {
   if (typeof window === 'undefined') {
     try {

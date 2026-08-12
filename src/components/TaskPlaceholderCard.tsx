@@ -35,6 +35,7 @@ export default function TaskPlaceholderCard({
     
     try {
       let finalImageUrl = '';
+      let finalImageUrls: string[] = [];
 
       // 1. Try fetching and converting raw images from ImageStore
       const images = await ImageStore.getImages(job.id);
@@ -78,6 +79,7 @@ export default function TaskPlaceholderCard({
         const validUrls = dataUrls.filter(url => url && (url.startsWith('data:image/') || url.startsWith('http')));
         if (validUrls.length > 0) {
           finalImageUrl = validUrls[0];
+          finalImageUrls = validUrls;
         }
       }
 
@@ -112,10 +114,20 @@ export default function TaskPlaceholderCard({
         finalImageUrl = remotePhoto;
       }
 
-      // Apply the resolved image URL if found
+      const remotePhotos = 
+        job.result?.clean_result?.pendingFoodLog?.imageUrls ||
+        job.result?.clean_result?.imageUrls ||
+        job.result?.imageUrls ||
+        (remotePhoto ? [remotePhoto] : []);
+
+      if (finalImageUrls.length === 0 && remotePhotos.length > 0) {
+        finalImageUrls = remotePhotos;
+      }
+
+      // Apply the resolved image URL(s) if found
       if (finalImageUrl) {
         logToSave.imageUrl = finalImageUrl;
-        logToSave.imageUrls = [finalImageUrl];
+        logToSave.imageUrls = finalImageUrls.length > 0 ? finalImageUrls : [finalImageUrl];
       }
     } catch (e) {
       console.warn('[TaskPlaceholderCard] Failed to convert ImageStore images to base64 for saving:', e);

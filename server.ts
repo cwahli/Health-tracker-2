@@ -1,3 +1,8 @@
+import dns from 'node:dns';
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch (e) {}
+
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import { checkCategoryAndStateCompatibility } from './server_pure_helpers.js';
 import { rankAndClassifyCandidates, writeAliasIfHitUnique } from './server_fdc_resolve.js';
@@ -6945,13 +6950,8 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           let backfillSource: 'none' | 'ingredient_decomposition' | 'name_canonical' = 'none';
 
           if (item.components && Array.isArray(item.components) && item.components.length > 0) {
-            let rawSumCalories = 0;
-            let rawSumProtein = 0;
-            let rawSumCarbs = 0;
-            let rawSumFat = 0;
-            let rawSumSatFat = 0;
-            let rawSumSodium = 0;
-            let rawSumSugar = 0;
+            const rawSums: Record<string, number> = {};
+            NUTRIENT_KEYS.forEach((k) => { rawSums[k] = 0; });
 
             const ocrTargetCalories = Number(truthMatch.calories || 371);
 
@@ -6980,15 +6980,22 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
               comp.name = bestMatch ? bestMatch.name : query;
               comp.source = bestMatch ? bestMatch.source : "estimated";
 
-              rawSumCalories += comp.calories;
-              rawSumProtein += comp.protein;
-              rawSumCarbs += comp.carbohydrates;
-              rawSumFat += comp.totalFat;
-              rawSumSatFat += comp.saturatedFat;
-              rawSumSodium += comp.sodium;
-              rawSumSugar += comp.sugar;
+              NUTRIENT_KEYS.forEach((key) => {
+                let val = 0;
+                if (key === 'carbohydrates') {
+                  val = Number(baseNutrients.carbohydrates || baseNutrients.carbs || 0) * f;
+                } else if (key === 'totalFat') {
+                  val = Number(baseNutrients.totalFat || baseNutrients.fat || 0) * f;
+                } else if (key === 'saturatedFat') {
+                  val = Number(baseNutrients.saturatedFat || baseNutrients.satFat || 0) * f;
+                } else {
+                  val = Number(baseNutrients[key] || 0) * f;
+                }
+                rawSums[key] += val;
+              });
             });
 
+            const rawSumCalories = rawSums['calories'] || 0;
             const scaleFactor = (rawSumCalories > 0 && ocrTargetCalories > 0) 
               ? ocrTargetCalories / rawSumCalories 
               : 1;
@@ -7005,12 +7012,13 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
                 comp.sugar = Math.round(comp.sugar * scaleFactor * 10) / 10;
               });
               
-              inferredFromIngredients.protein = Math.round(rawSumProtein * scaleFactor * 10) / 10;
-              inferredFromIngredients.totalFat = Math.round(rawSumFat * scaleFactor * 10) / 10;
-              inferredFromIngredients.saturatedFat = Math.round(rawSumSatFat * scaleFactor * 10) / 10;
-              inferredFromIngredients.carbohydrates = Math.round(rawSumCarbs * scaleFactor * 10) / 10;
-              inferredFromIngredients.sodium = Math.round(rawSumSodium * scaleFactor);
-              inferredFromIngredients.sugar = Math.round(rawSumSugar * scaleFactor * 10) / 10;
+              NUTRIENT_KEYS.forEach((key) => {
+                if (key === 'calories' || key === 'sodium') {
+                  inferredFromIngredients[key] = Math.round((rawSums[key] || 0) * scaleFactor);
+                } else {
+                  inferredFromIngredients[key] = Math.round((rawSums[key] || 0) * scaleFactor * 10) / 10;
+                }
+              });
               backfillSource = 'ingredient_decomposition';
               truthMatch._isComponentDecomposition = true;
             }

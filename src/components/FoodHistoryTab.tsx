@@ -2,7 +2,7 @@ import { trackApiCall } from '../utils/apiTracker';
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile, FoodLog, NutrientBreakdown, RecommendationReport } from '../types';
 import { translations } from '../utils/translations';
-import { Edit2, Trash2, Calendar, Search, ChevronDown, ChevronUp, Image as ImageIcon, Save, Check, Plus, Loader, X, Camera } from 'lucide-react';
+import { Edit2, Trash2, Calendar, Search, ChevronDown, ChevronUp, Image as ImageIcon, Save, Check, Plus, Loader, X, Camera, Download } from 'lucide-react';
 import { nutrientDefinitions, getNutrientColor } from '../utils/nutrition';
 import { formatNutrientDisplayValue } from '../utils/nutrients';
 import { db, auth } from '../firebase';
@@ -1628,6 +1628,17 @@ export default function FoodHistoryTab({
                                  </div>
                                );
                              })()}
+                             {log.debugUrl && (
+                               <a
+                                 href={log.debugUrl}
+                                 target="_blank"
+                                 rel="noopener noreferrer"
+                                 className="flex items-center gap-1 text-[10px] font-semibold text-indigo-500 hover:text-indigo-600 pt-1"
+                               >
+                                 <Download className="w-3 h-3" />
+                                 Download Debug Log
+                               </a>
+                             )}
                            </div>
 
 

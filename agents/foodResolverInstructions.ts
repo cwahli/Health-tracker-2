@@ -54,11 +54,16 @@ export const FoodCuratorActionSchema = z.preprocess((raw: any) => {
     const extraQuarantines: any[] = [];
     const sanitizedActions = normalized.actions.map((a: any) => {
       if (!a || typeof a !== 'object') return a;
-      const typeVal = a.type || a.Type || a.action || a.Action || 'pick_existing';
-      const reasonVal = a.reason || a.Reason || a.reasonText || a.ReasonText || '';
+      
+      let typeVal = a.type || a.Type || a.action || a.Action || 'pick_existing';
+      if (!['pick_existing', 'merge_duplicates', 'normalize_basis', 'quarantine'].includes(typeVal)) {
+        typeVal = 'pick_existing';
+      }
+
+      const reasonVal = a.reason || a.Reason || a.reasonText || a.ReasonText || 'Curated action';
       const queryVal = a.query || a.Query || '';
-      const fdcIdVal = a.fdcId || a.FdcId || a.fdc_id || a.chosenFdcId || a.chosen_fdc_id || '';
-      const chosenFdcIdVal = a.chosenFdcId || a.chosen_fdc_id || a.fdcId || a.FdcId || '';
+      const fdcIdVal = a.fdcId || a.FdcId || a.fdc_id || a.chosenFdcId || a.chosen_fdc_id || '0';
+      const chosenFdcIdVal = a.chosenFdcId || a.chosen_fdc_id || a.fdcId || a.FdcId || null;
       const confVal = (a.confidence || a.Confidence || 'high').toLowerCase();
 
       if (a.quarantine) {
@@ -74,7 +79,7 @@ export const FoodCuratorActionSchema = z.preprocess((raw: any) => {
         }
       }
 
-      return {
+      const baseObj: any = {
         ...a,
         type: typeVal,
         reason: reasonVal,
@@ -83,6 +88,17 @@ export const FoodCuratorActionSchema = z.preprocess((raw: any) => {
         chosenFdcId: chosenFdcIdVal,
         confidence: ['high', 'medium', 'low'].includes(confVal) ? confVal : 'high'
       };
+
+      if (typeVal === 'merge_duplicates') {
+        baseObj.winnerFdcId = a.winnerFdcId || a.winner_fdc_id || fdcIdVal || '0';
+        baseObj.loserFdcIds = Array.isArray(a.loserFdcIds) ? a.loserFdcIds : (a.loserFdcId ? [a.loserFdcId] : []);
+      }
+
+      if (typeVal === 'quarantine') {
+        baseObj.fdcId = fdcIdVal || '0';
+      }
+
+      return baseObj;
     });
 
     return {

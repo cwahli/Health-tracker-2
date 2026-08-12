@@ -1,4 +1,4 @@
-import { uploadPhotoToR2, uploadDebugPayloadToR2 } from './src/utils/r2Storage';
+import { uploadPhotoToR2, uploadPhotosToR2, uploadDebugPayloadToR2 } from './src/utils/r2Storage';
 import { supabase, isSupabaseConfigured } from './src/utils/supabaseClient';
 import { supabaseAdmin } from './supabaseAdmin';
 
@@ -229,6 +229,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       ? [...turn1Logs, '\n--- USER CONFIRMED PORTION SIZES (TURN 2) ---\n']
       : [];
     let photoUrl = imageUrls[0] || payload.photoUrl || existingMemJob?.photo_url || '';
+    let photoUrls: string[] = imageUrls || [];
     let currentProgress = 5;
     let currentStatusMessage = 'Starting cloud food analysis...';
     let finalData: any = null;
@@ -263,9 +264,12 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
     };
 
     try {
-      // Step A: Upload photos to Cloudflare R2
-      if (!photoUrl && images.length > 0) {
-        photoUrl = await uploadPhotoToR2(jobId, images[0]);
+      // Step A: Upload ALL photos to Cloudflare R2 (was: only images[0])
+      if (images.length > 0) {
+        photoUrls = await uploadPhotosToR2(jobId, images);
+        if (!photoUrl && photoUrls.length > 0) {
+          photoUrl = photoUrls[0]; // keep legacy single-photo field populated for backward compatibility
+        }
       }
 
       if (payload.portionChoices) {
@@ -280,7 +284,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       const bodyData = {
         message: text || '',
         images: images,
-        imageUrls: photoUrl ? [photoUrl] : imageUrls,
+        imageUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : imageUrls),
         history: payload.history || [],
         userProfile: payload.userProfile || null,
         engine: payload.engine || 'gemini-3.5-flash-lite',
@@ -517,14 +521,32 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         const foodLog = finalPayload?.pendingFoodLog || finalPayload?.data || null;
         const pendingFoodLog = foodLog || (finalPayload?.name && finalPayload?.nutrients ? finalPayload : null);
         if (pendingFoodLog && typeof pendingFoodLog === 'object') {
+          // Task 4 fix: verdict/message/description are top-level siblings on
+          // finalPayload (from the dietitian LLM schema), not nested inside
+          // pendingFoodLog/foodData. Without this they never reach the saved
+          // FoodLog even though FoodHistoryTab already renders them.
+          if (!pendingFoodLog.verdict && finalPayload?.verdict) {
+            pendingFoodLog.verdict = finalPayload.verdict;
+          }
+          if (!pendingFoodLog.message && (finalPayload?.message || finalPayload?.text)) {
+            pendingFoodLog.message = finalPayload.message || finalPayload.text;
+          }
+          if (!pendingFoodLog.description && finalPayload?.data?.description) {
+            pendingFoodLog.description = finalPayload.data.description;
+          }
+          if (!pendingFoodLog.recommendation && finalPayload?.verdict?.level) {
+            pendingFoodLog.recommendation = finalPayload.verdict.level;
+          }
           // Replace base64 strings with public R2 URL or remove them
           if (pendingFoodLog.imageUrl && String(pendingFoodLog.imageUrl).startsWith('data:')) {
             pendingFoodLog.imageUrl = photoUrl || '';
           }
           if (Array.isArray(pendingFoodLog.imageUrls)) {
-            pendingFoodLog.imageUrls = pendingFoodLog.imageUrls.map((url: any) => 
-              String(url).startsWith('data:') ? (photoUrl || '') : url
+            pendingFoodLog.imageUrls = pendingFoodLog.imageUrls.map((url: any, idx: number) => 
+              String(url).startsWith('data:') ? (photoUrls[idx] || photoUrl || '') : url
             ).filter(Boolean);
+          } else {
+            pendingFoodLog.imageUrls = photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : []);
           }
           delete pendingFoodLog.imageBase64;
           delete pendingFoodLog.images;
@@ -584,7 +606,12 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
             networkErrors: payload.networkErrors,
             userActionBreadcrumbs: payload.userActionBreadcrumbs
           });
-          if (debugUrl) cleanResult.debugUrl = debugUrl;
+          if (debugUrl) {
+            cleanResult.debugUrl = debugUrl;
+            if (pendingFoodLog) {
+              pendingFoodLog.debugUrl = debugUrl;
+            }
+          }
         } catch (r2Err) {
           console.warn('[ServerJobs] R2 debug upload failed (non-fatal):', r2Err);
         }

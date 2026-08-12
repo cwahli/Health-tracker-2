@@ -271,6 +271,7 @@ export interface FoodLog {
   nutrients: NutrientBreakdown;
   imageUrl?: string;
   imageUrls?: string[];
+  debugUrl?: string;
   itemsBreakdown?: FoodItemBreakdown[];
   scoutItems?: any[];
   chatTranscript?: { role: 'user' | 'assistant'; content: string; timestamp?: string }[];
