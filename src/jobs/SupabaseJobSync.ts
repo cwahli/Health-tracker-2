@@ -127,9 +127,23 @@ export function initSupabaseJobSync(userId?: string): () => void {
   // Always hydrate initial jobs from server API on mount
   hydrateUserJobs(userId);
 
+  // Fallback poll: the realtime channel below is a single WebSocket subscription with
+  // no reconnect logic. On flaky mobile connections it can silently drop, leaving jobs
+  // stuck at their last-seen progress forever even though the backend actually finished.
+  // Re-hydrate from the server periodically so any job stuck in a non-terminal status
+  // eventually catches up regardless of realtime channel health.
+  const fallbackPollInterval = setInterval(() => {
+    const hasActiveJob = JobStore.getAllJobs().some(
+      (j: any) => j.status !== 'succeeded' && j.status !== 'failed'
+    );
+    if (hasActiveJob) {
+      hydrateUserJobs(userId).catch(() => {});
+    }
+  }, 8000);
+
   if (!isSupabaseConfigured) {
     console.log('[SupabaseJobSync] Supabase not configured, realtime job sync disabled');
-    return () => {};
+    return () => clearInterval(fallbackPollInterval);
   }
 
   // Tracks the most recent `updated_at` timestamp successfully applied per job, so that
@@ -288,6 +302,7 @@ export function initSupabaseJobSync(userId?: string): () => void {
     .subscribe();
 
   return () => {
+    clearInterval(fallbackPollInterval);
     supabase.removeChannel(channel);
   };
 }

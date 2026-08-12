@@ -1,7 +1,5 @@
 # AGENTS.md — Always-on rules (keep short)
 
-**Purpose:** Reduce cascade bugs from multi-agent AI work — without freezing product evolution.  
-**Repo:** https://github.com/cwahli/Health-tracker-2  
 **Updated:** 2026-08-12  
 
 **Token rule:** Read **this file first**. Load domain rulebooks (`docs/agent/**`) **only when the table below says so**. (Investigating application source code, debug logs, and relevant functions is always permitted and encouraged; do not dump unneeded rulebook docs).
@@ -26,10 +24,6 @@ AGENTS + docs/agent = how we work without breaking each other (stable process)
 
 **Multi-agent context** goes in **`AI_HANDOVER.md`** (short “Session notes” / WIP rows), **not** by rewriting laws mid-flight.
 
-**Core Autonomous Invariants (Always-On):**
-- **Non-Terminal Search Law (Continuous Investigation):** A `grep`, search, or file-find command is **NEVER a valid ending to a turn**. An agent is strictly forbidden from ending its turn on a search/grep output (whether results are matching, partial, or completely empty). The agent MUST continue investigating, inspecting source files, and analyzing until it delivers the **complete Stage 1 Strategic Report** before yielding. If a search yields 0 results, immediately broaden keywords or search the pipeline mechanism in `server.ts`. Ending a turn on a search tool is an immediate auto-failure.
-- **Binding Execution Law:** Once the user gives approval or commands an action, agents **MUST NOT yield the turn after reading files**. Reading lines must be chained immediately with the write tool (`replace_file_content`), tests, and verification in a single continuous execution.
-- **Anti-Simulation & Real Disk Verification Law:** Agents are strictly forbidden from outputting simulated tool responses, fake `MDout:` logs, or fabricated terminal logs in text. If an edit tool fails or returns `(nil ToolCall)`, the agent MUST treat the file as unedited, fix the parameters, and re-invoke the write tool. A task is NEVER complete without verifying actual disk writes via real machine tool execution (e.g. `tsc`, tests, or build tool calls).
 - **Zero-Code-Change Exemption (Token-Saving Law):** Run tests, `tsc`, and regression gates **ONLY when application source code is modified** (`src/`, `server.ts`, `server_*.ts`, `agents/`, `supabase/`). For doc updates, explanations, question answers, folder mirroring/sync ops, or file reviews where NO application code changed, **STRICTLY SKIP running test suites and gate verification runs** to eliminate token and context waste.
 
 ---
@@ -61,10 +55,8 @@ Do not remove branches, error handlers, fallbacks, or **mode-tagged / gate-used 
 ### L2 — Contracts
 No breaking signature/API/prop changes without updating **all** call sites in the same task. Prefer optional params + defaults.
 
-### L3 — Scope honesty & continuous execution
-- Perform comprehensive deep investigation across all relevant files without pausing mid-investigation.
-- Present architectural trade-offs concisely and obtain user direction before executing significant multi-file changes.
-- **Exception:** Under **L13** (multipass pre-approved epic), the pack/message already supplies direction — do not re-stop for multi-file approval between phases.
+### L3 — Full autonomous execution
+Perform comprehensive deep investigation across all relevant files and execute durable solutions without pausing mid-investigation. 
 
 ### L4 — Full implementation
 No placeholders or stub delivery. Import without **correct-path call site** = FAIL.
@@ -89,50 +81,28 @@ If the task hits food-calc / biomarkers / sync: **read** that domain file.
 - Do **not** invent a silent alternate pipeline “just for this bug.”  
 - Do **not** treat rulebooks as a ban on new features — only as a checklist against accidental breakage.
 
-### L11 — Autonomous Investigation & Strategic Proposal Protocol
-When addressing non-trivial tasks or fixes, agents MUST follow the 2-stage interaction model:
-
-1. **Stage 1 — Autonomous Deep Investigation & Strategic Report (No mid-way pausing)**:
-   - **Non-Terminal Search Law**: A `grep` or search command is strictly an intermediate tool call, NEVER a turn-ending response. Agents MUST NOT stop after a search (even if 0 matches are returned). The agent must chain `view_file`, broaden query terms, or trace the pipeline in `server.ts` until it delivers the complete **Stage 1 Strategic Report** in that single turn. Ending a turn on a search tool is an immediate fatal failure.
-   - **Continuous Investigation**: Perform thorough multi-file inspection and codebase analysis autonomously. Never stop mid-turn after `grep` or `view` to ask the user to say "continue".
-   - **Strategic & Best-Practice Review**: Evaluate industry best practices and research how the problem is standardly solved. Account for potential future failure modes and ensure the solution is durable (anti-patch guarantee).
-   - **Concise Architectural Proposal (No Raw Code Dumps)**: Present a clear, high-level summary:
-     - **Structural Root Cause & Diagnosis**
-     - **Options & Trade-offs**: Compare available approaches (e.g. Option A: quick patch vs. Option B: durable structural solution, with clear Pros and Cons).
-     - **Future Failure Mode Analysis**: Explicit explanation of how edge cases and downstream risks are mitigated.
-     - **Key Points of Proposed Changes**: Concise architectural bullets (*strictly avoid dumping large code blocks*).
-   - **Request Approval / Direction**: Await user selection or confirmation before applying edits to application source code.
-   - **Exception:** If **L13** (multipass pre-approved epic) applies, Stage 1 await is **WAIVED** — the pack/message is approval; go straight to Stage 2 execution.
-
-2. **Stage 2 — Post-Approval Autonomous Execution**:
-   - **Binding Execution Law**: Once the user gives approval or commands an action, the agent **MUST NOT yield the turn after reading or viewing files**. Reading lines to prepare an edit must be chained immediately with the write tool (`replace_file_content`), tests, and verification in a single continuous execution.
-   - Execute all required file changes in a single continuous flow.
-   - Run tests, type checks (`tsc`), and regression gates to verify zero cascade breakages.
-   - **Mandatory Executive Response Format (Zero Code Dumps)**:
-     All completion responses MUST strictly adhere to this format:
-     - **Root Cause & Diagnosis:** (1–2 concise sentences)
-     - **Key Changes Applied:** (2–4 high-level architectural bullets; no code blocks or diffs)
-     - **Verification:** (Pass/Fail status for build, `tsc`, tests, and gates)
-     *(Pasting raw code blocks, file contents, or diffs in chat is strictly prohibited).*
+### L11 — Autonomous Continuous Execution Protocol
+When addressing tasks, bug fixes, or feature plans, agents execute end-to-end in a single continuous turn:
+1. **Autonomous Deep Investigation**: Perform thorough multi-file inspection across all relevant files without pausing mid-turn.
+2. **Durable Implementation**: Apply pure TypeScript middleware / code modifications directly (anti-patch guarantee). Never use stubs or placeholders.
+3. **Automated Verification**: Run tests, type checks (`tsc`), and regression gates to verify zero cascade breakages.
+4. **Mandatory Executive Response Format (Zero Code Dumps)**:
+   All completion responses MUST strictly adhere to this format:
+   - **Root Cause & Diagnosis:** (1–2 concise sentences)
+   - **Key Changes Applied:** (2–4 high-level architectural bullets; no code blocks or diffs)
+   - **Verification:** (Pass/Fail status for build, `tsc`, tests, and gates)
+   *(Pasting raw code blocks, file contents, or diffs in chat is strictly prohibited).*
 
 ### L12 — Strict Prompt Line-Budget & Anti-Bloat Rule
 - **Strict Prompt Line Ceiling**: System prompts (in `server_vision_scout.ts`, dietitian instructions, biomarker agents) are strictly capped. Adding new lines to a prompt is FORBIDDEN unless an equivalent number of redundant/outdated prompt lines are removed in the same edit (net-zero line growth).
 - **No Prompt-Based Code**: Business logic, math, unit conversions, brand overrides, and data sanitization MUST live in pure TypeScript middleware, NEVER in English prompt instructions. Prompts are strictly for classification and schema extraction under 200 words.
 
-### L13 — Multipass pre-approved epics (anti early-stop)
-When the user message or active `studio/M*.md` pack explicitly includes **all** of:
-1. the phrase **PRE-APPROVED** or **MULTIPASS AUTONOMOUS**,
-2. a phase/ID checklist through a named master gate,
-3. “do not wait for continue between phases” (or equivalent Autonomous Continuation Law),
-
-then:
-
-- L11 Stage 1 **Strategic Report + await approval is WAIVED** (the pack/message is approval).
-- L3 multi-file direction is **satisfied** by that pack.
-- After each phase’s tests pass, the agent **must start the next phase in the same work stream**.
+### L13 — Multipass Epic Continuation (Anti Early-Stop)
+When executing multi-phase plans (e.g. `studio/M*.md` or `plan/*.md`):
+- After each phase's tests pass, the agent **must immediately start the next phase in the same continuous stream**.
 - Ending a turn with only “ready for Phase N when you say continue” (or similar) while checklist IDs remain = **FAIL**.
 - On context pressure: write `AI_HANDOVER.md` multipass checkpoint + RESUME line, then continue from checkpoint without re-auditing the whole repo.
-- L10 COMPLETE still requires **master gate exit 0** — partial phase green ≠ COMPLETE.
+- L10 COMPLETE requires the named master gate to exit code 0.
 
 This law does **not** waive protected-doc confirmation (§3) unless the pack lists those files as in-scope.
 
@@ -140,7 +110,7 @@ This law does **not** waive protected-doc confirmation (§3) unless the pack lis
 All of: IMPACT (L/X) · SELF-CHECK · (if code changed: `tsc` · domain regression map commands · pack assert if any; skip if doc/ops only) · paths verified or known-broken noted.
 
 **Forbidden until then:** “all done” / “fully verified” / “nothing left.”  
-**Auto FAIL (Stage 2 execution):** import without call site · silent half-fix · detect without repair (when repair was approved) · simulated tool output / fake edit completion · dropped fields · gate weakened · drive-by scope · early-stop mid multipass epic while checklist IDs remain (L13).
+**Auto FAIL:** import without call site · silent half-fix · detect without repair · simulated tool output / fake edit completion · dropped fields · gate weakened · drive-by scope · early-stop mid multipass epic while checklist IDs remain (L13).
 
 ---
 
@@ -170,10 +140,6 @@ These files define how **all** agents work. Random edits dilute process and brea
 
 **Binding (agents forget this — read twice):**
 
-| Who | May commit / push to `origin`? |
-|-----|--------------------------------|
-| **AI Studio** (Studio pack session with human) | **Yes** — after gate exit 0 |
-| Grok / Claude / Cursor / other local agents | **No** — prepare files, packs, gates only |
 
 Local agents **must not**:
 
