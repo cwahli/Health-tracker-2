@@ -126,7 +126,8 @@ export async function executeFoodResolverCurator(
   });
 
   const currentQuarantineList = Array.from(quarantinedFdcIds);
-
+  const globalAliasesToUpsert = new Map<string, string>(); // alias_key -> target_food_id
+  
   for (const gap of activeGaps) {
     const gapQueryClean = gap.query.toLowerCase().trim();
     const action = jsonResult.actions.find((a: any) => {
@@ -262,15 +263,8 @@ export async function executeFoodResolverCurator(
 
         for (const alias of aliasesSet) {
            const cleanAlias = alias.toLowerCase().trim();
-           addDebugLog(`[AliasWrite] Creating alias "${cleanAlias}" -> ${finalChosenId}`);
-           try {
-             await supabaseAdmin.from('food_aliases').upsert({
-               alias_key: cleanAlias,
-               target_food_id: finalChosenId,
-               hit_count: 1
-             }, { onConflict: 'alias_key' });
-           } catch (e) {
-             console.error('[AliasWrite] Error persisting alias:', e);
+           if (!globalAliasesToUpsert.has(cleanAlias)) {
+             globalAliasesToUpsert.set(cleanAlias, finalChosenId);
            }
         }
       } else {
@@ -280,6 +274,21 @@ export async function executeFoodResolverCurator(
     } else {
       addDebugLog(`[CuratorAction] No pick_existing action found for "${gap.query}". Skipping.`);
       results.push({ query: gap.query, chosenFdcId: null, quarantinedIds: currentQuarantineList });
+    }
+  }
+
+  if (globalAliasesToUpsert.size > 0) {
+    for (const [cleanAlias, targetId] of globalAliasesToUpsert.entries()) {
+       addDebugLog(`[AliasWrite] Creating alias "${cleanAlias}" -> ${targetId}`);
+       try {
+         await supabaseAdmin.from('food_aliases').upsert({
+           alias_key: cleanAlias,
+           target_food_id: targetId,
+           hit_count: 1
+         }, { onConflict: 'alias_key' });
+       } catch (e) {
+         console.error('[AliasWrite] Error persisting alias:', e);
+       }
     }
   }
   

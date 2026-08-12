@@ -6814,6 +6814,11 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           if (value === undefined || value === null || value === '') return;
           const n = Number(value);
           if (!Number.isFinite(n)) return;
+          // Bug 1 Fix: Do not lock zero for soft micros on unverified web searches
+          if (n === 0 && !(truthMatch.source === 'label' || truthMatch.source === 'brand_official') && 
+              ['sugar', 'addedSugar', 'totalFibre', 'fiber', 'potassium', 'transFat', 'vitaminD', 'calcium', 'iron'].includes(key)) {
+             return;
+          }
           truthNutrients[key] = n;
           lockedNutrientKeys.add(key);
         };
@@ -8177,19 +8182,8 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           } else if (recRes.action === 'scale' || recRes.action === 'keep' || budgetRes.source === 'scout' || budgetRes.source === 'category') {
             if (!budgetRes.hardLock && inv.rowSum > 0 && inv.itemCalories > 0 && Math.abs(inv.rowSum - inv.itemCalories) > 1.1) {
               const fix = inv.itemCalories / inv.rowSum;
-              if (fix >= 0.5 && fix <= 2.0) {
-                componentsDetailList.forEach((s: any) => {
-                  if (!s || typeof s !== 'object') return;
-                  if (s.calories != null) s.calories = Math.round(s.calories * fix * 10) / 10;
-                  if (s.protein != null) s.protein = Math.round(s.protein * fix * 10) / 10;
-                  if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * fix * 10) / 10;
-                  if (s.saturatedFat != null) s.saturatedFat = Math.round(s.saturatedFat * fix * 10) / 10;
-                  if (s.sodium != null) s.sodium = Math.round(s.sodium * fix * 10) / 10;
-                });
-                addDebugLog(`[ReceiptInvariant] REPAIRED rows→softBudget factor=${fix.toFixed(3)} itemCal=${inv.itemCalories}`);
-              } else {
-                addDebugLog(`[ReceiptInvariant] SKIP soft repair factor=${fix.toFixed(3)} out of band`);
-              }
+              addDebugLog(`[ReceiptInvariant] SOFT REPAIR BYPASSED: itemCal=${inv.itemCalories}, rowSum=${inv.rowSum}. Trusting row sum.`);
+              aggregatedNutrients.calories = Math.round(inv.rowSum * 10) / 10;
             }
           } else if (inv.rowSum > 0) {
             // legacy: only when no scout/category budget
@@ -8242,7 +8236,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             `  Calories: ${Math.round(n.calories || 0)} kcal\n` +
             `  Protein: ${n.protein || 0}g\n` +
             `  Fat: ${n.totalFat || 0}g (Saturated: ${n.saturatedFat || 0}g)\n` +
-            `  Carbs: ${n.carbohydrates || 0}g (Sugar: ${n.addedSugar || 0}g)\n` +
+            `  Carbs: ${n.carbohydrates || 0}g (Sugar: ${n.sugar || 0}g, Added Sugar: ${n.addedSugar || 0}g)\n` +
             `  Sodium: ${n.sodium || 0}mg\n`;
         }).join("\n") + "\n\n";
     }
@@ -9570,68 +9564,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         });
         parsedData.nutrients = grandTotals;
 
-        // Automated 'Sanity Check' Validation Layer & Density Rescale
-        let needsGrandTotalRecalc = false;
-        parsedData.itemsBreakdown.forEach((item: any) => {
-           if (!item || typeof item !== 'object') return;
-           if (item.weightGrams > 0 && item.nutrients && !item.hasComponents) {
-              const cals = item.nutrients.calories || 0;
-              const calDensity = (cals / item.weightGrams) * 100;
-              const nameLower = (item.canonicalDbName || item.originalName || item.name || "").toLowerCase();
-              
-              const pfObj = classifyUniversalPhysicalFormV3({ name: nameLower });
-              const isFruitOrVegFromClass = pfObj.primaryCategory === 'fruit_vegetable' || pfObj.physicalForm === 'SOLID_FRUIT_VEG';
-              const isHighMoistureComposite = nameLower.includes('yogurt') || nameLower.includes('yoghurt') || nameLower.includes('parfait') || nameLower.includes('pudding') || nameLower.includes('compote') || nameLower.includes('porridge') || nameLower.includes('bowl') || nameLower.includes('pot') || nameLower.includes('curd') || nameLower.includes('mousse') || nameLower.includes('trifle') || nameLower.includes('dessert');
-              const isDryDense = !isHighMoistureComposite && (nameLower.includes('granola') || nameLower.includes('cereal') || nameLower.includes('nut') || nameLower.includes('trail mix') || nameLower.includes('chip') || nameLower.includes('cracker') || nameLower.includes('cookie') || nameLower.includes('oat'));
-              const isFruitOrVeg = isFruitOrVegFromClass || nameLower.includes('veg') || nameLower.includes('fruit') || nameLower.includes('banana') || nameLower.includes('clementine') || nameLower.includes('tangerine') || nameLower.includes('mandarin') || nameLower.includes('apple') || nameLower.includes('peach') || nameLower.includes('pear') || nameLower.includes('orange') || nameLower.includes('berry') || nameLower.includes('berries') || nameLower.includes('grape') || nameLower.includes('raspberry') || nameLower.includes('strawberry') || nameLower.includes('blueberry') || nameLower.includes('melon') || nameLower.includes('pineapple') || nameLower.includes('mango') || nameLower.includes('citrus') || nameLower.includes('lemon') || nameLower.includes('lime') || nameLower.includes('cherry') || nameLower.includes('cherries') || nameLower.includes('plum') || nameLower.includes('apricot') || nameLower.includes('fig') || nameLower.includes('date') || nameLower.includes('raisin') || nameLower.includes('avocado') || nameLower.includes('salad') || nameLower.includes('tomato') || nameLower.includes('cucumber') || nameLower.includes('produce');
-              const isSolidMeal = !isHighMoistureComposite && !isFruitOrVeg && !nameLower.includes('soup') && !nameLower.includes('salad') && !nameLower.includes('veg') && !nameLower.includes('broth') && !nameLower.includes('water') && !nameLower.includes('beverage') && !nameLower.includes('latte') && !nameLower.includes('coffee') && !nameLower.includes('tea') && !nameLower.includes('juice') && !nameLower.includes('smoothie') && !nameLower.includes('milk') && !nameLower.includes('drink');
-
-              if ((isDryDense && calDensity < 250) || (isSolidMeal && calDensity < 60)) {
-                 addDebugLog(`[Sanity Check] WARNING: Item "${item.canonicalDbName || item.name}" weighing ${item.weightGrams}g registered at ${cals} kcal (${calDensity.toFixed(1)} kcal/100g). Impossibly low caloric density.`);
-                 item.anomalyFlags = item.anomalyFlags || [];
-                 item.anomalyFlags.push("Impossibly low caloric density.");
-                 
-                 const targetDensity = isDryDense ? 420 : 160;
-                 const targetCals = Math.round((targetDensity * item.weightGrams) / 100);
-                 const scaleRatio = cals > 0 ? targetCals / cals : 1;
-
-                 if (targetCals > cals) {
-                    item.nutrients.calories = targetCals;
-                    if (item.nutrients.protein) item.nutrients.protein = Math.round(item.nutrients.protein * scaleRatio * 10) / 10;
-                    if (item.nutrients.totalFat) item.nutrients.totalFat = Math.round(item.nutrients.totalFat * scaleRatio * 10) / 10;
-                    if (item.nutrients.saturatedFat) item.nutrients.saturatedFat = Math.round(item.nutrients.saturatedFat * scaleRatio * 10) / 10;
-                    if (item.nutrients.carbohydrates) item.nutrients.carbohydrates = Math.round(item.nutrients.carbohydrates * scaleRatio * 10) / 10;
-                    if (item.nutrients.sodium) item.nutrients.sodium = Math.round(item.nutrients.sodium * scaleRatio);
-                    needsGrandTotalRecalc = true;
-                    addDebugLog(`[Sanity Check] Rescaled low-density item "${item.canonicalDbName || item.name}" from ${cals} kcal to ${targetCals} kcal (${targetDensity} kcal/100g reference).`);
-                 }
-              }
-
-              // Zero macro guard: flag items with >100kcal but 0g protein AND 0g carbs — likely a broken DB match
-              const pVal = item.protein !== undefined ? item.protein : (item.nutrients ? item.nutrients.protein : 0);
-              const cVal = item.carbs !== undefined ? item.carbs : (item.nutrients ? (item.nutrients.carbohydrates !== undefined ? item.nutrients.carbohydrates : item.nutrients.totalCarbohydrate) : 0);
-              const hasZeroMacros = cals > 100 && (pVal === 0 || pVal == null) && (cVal === 0 || cVal == null);
-              if (hasZeroMacros) {
-                item.anomalyFlags = item.anomalyFlags || [];
-                item.anomalyFlags.push("Zero protein/carb anomaly on high-calorie item — possible broken database match.");
-                addDebugLog(`[Sanity Check] WARNING: Item "${item.canonicalDbName || item.name}" has ${cals}kcal but zero protein/carbs. Flagged for review.`);
-              }
-           }
-        });
-
-        if (needsGrandTotalRecalc && parsedData.itemsBreakdown) {
-          const updatedGrandTotals: Record<string, number> = {};
-          NUTRIENT_KEYS.forEach((k: string) => { updatedGrandTotals[k] = 0; });
-          parsedData.itemsBreakdown.forEach((it: any) => {
-            if (it.nutrients) {
-              NUTRIENT_KEYS.forEach((k: string) => {
-                updatedGrandTotals[k] = Math.round(((updatedGrandTotals[k] || 0) + (Number(it.nutrients[k]) || 0)) * 10) / 10;
-              });
-            }
-          });
-          parsedData.nutrients = updatedGrandTotals;
-        }
-
         // Always synchronize narrative text with final grand totals across all narrative fields
         if (parsedData.nutrients) {
           const finalCal = parsedData.nutrients.calories || 0;
@@ -9983,7 +9915,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           );
 
           const prepReceipt =
-            isPackagedCondiment || isBeverage || rawMethod === "raw"
+            isPackagedCondiment || isBeverage
               ? { addedCalories: 0, addedFat: 0, addedSaturatedFat: 0, addedSodium: 0, reason: "packaged_beverage_or_raw" }
               : decidePrepAddition({
                   weightGrams: itemWeightG,

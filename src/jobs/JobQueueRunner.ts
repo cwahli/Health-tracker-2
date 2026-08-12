@@ -150,6 +150,7 @@ class JobQueueRunnerImpl {
         if (cleanResult) {
           JobStore.updateJob(job.id, {
             result: cleanResult,
+            mealBuild: cleanResult.mealBuild || job.mealBuild,
           });
         }
 

@@ -107,18 +107,6 @@ export function decidePrepAddition(input: PrepPolicyInput): PrepAddition {
     return { ...zeroPrep, reason: 'raw_whole_food' };
   }
 
-  const rawMethod = (input.cookingMethod || 'unknown').toLowerCase();
-  if (
-    rawMethod === 'raw' ||
-    rawMethod === 'brewed' ||
-    rawMethod === 'brewed_espresso' ||
-    rawMethod === 'poured' ||
-    BEVERAGE_PATTERN.test(rawMethod) ||
-    (input.foodType && BEVERAGE_PATTERN.test(input.foodType))
-  ) {
-    return { ...zeroPrep, reason: 'raw_or_beverage' };
-  }
-
   if (input.hasLockedTruth) {
     return { ...zeroPrep, reason: 'locked_truth' };
   }
@@ -148,6 +136,18 @@ export function decidePrepAddition(input: PrepPolicyInput): PrepAddition {
 
   if (itemAlreadyPrep && !isUserExplicit) {
     return { ...zeroPrep, reason: 'already_prepared' };
+  }
+
+  const rawMethod = (input.cookingMethod || 'unknown').toLowerCase();
+  if (
+    rawMethod === 'raw' ||
+    rawMethod === 'brewed' ||
+    rawMethod === 'brewed_espresso' ||
+    rawMethod === 'poured' ||
+    BEVERAGE_PATTERN.test(rawMethod) ||
+    (input.foodType && BEVERAGE_PATTERN.test(input.foodType))
+  ) {
+    return { ...zeroPrep, reason: 'raw_or_beverage' };
   }
 
   if (input.cookingAdded && !composite && (
