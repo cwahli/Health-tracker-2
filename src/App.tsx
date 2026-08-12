@@ -958,36 +958,66 @@ export default function App() {
                 const rawImages = (await ImageStore.getImages(job.id)) || [];
                 stringImages = await Promise.all(
                   rawImages.map(async (img: any) => {
-                    if (typeof img === 'string') return img;
-                    if (img && typeof img === 'object') {
-                      const blob = img instanceof Blob ? img : new Blob([img], { type: img.type || 'image/jpeg' });
-                      return new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = () => resolve(reader.result);
-                        reader.onerror = () => resolve('');
-                        reader.readAsDataURL(blob);
-                      });
+                    try {
+                      return await compressImage(img, 1024, 1024, 0.75);
+                    } catch {
+                      if (typeof img === 'string') return img;
+                      if (img && typeof img === 'object') {
+                        const blob = img instanceof Blob ? img : new Blob([img], { type: img.type || 'image/jpeg' });
+                        return new Promise((resolve) => {
+                          const reader = new FileReader();
+                          reader.onload = () => resolve(reader.result);
+                          reader.onerror = () => resolve('');
+                          reader.readAsDataURL(blob);
+                        });
+                      }
+                      return '';
                     }
-                    return '';
                   })
                 );
               } catch(e) {}
               
-              await fetch('/api/jobs/submit', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  jobId: job.id,
-                  userId: auth.currentUser?.uid || 'anonymous',
-                  kind: job.kind,
-                  mode: job.mode,
-                  text: job.inputSnapshot?.text || '',
-                  images: stringImages.filter(Boolean),
-                  history: job.messages || [],
-                  userProfile: profileRef.current,
-                  ...job.inputSnapshot
-                })
-              });
+              let submitOk = false;
+              let lastSubmitErr: any = null;
+              for (let sAttempt = 1; sAttempt <= 3; sAttempt++) {
+                try {
+                  const res = await fetch('/api/jobs/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      jobId: job.id,
+                      userId: auth.currentUser?.uid || 'anonymous',
+                      kind: job.kind,
+                      mode: job.mode,
+                      text: job.inputSnapshot?.text || '',
+                      images: stringImages.filter(Boolean),
+                      history: job.messages || [],
+                      userProfile: profileRef.current,
+                      ...job.inputSnapshot
+                    })
+                  });
+                  if (res.ok) {
+                    submitOk = true;
+                    break;
+                  }
+                  if (res.status >= 500 && sAttempt < 3) {
+                    await new Promise(r => setTimeout(r, 500 * sAttempt));
+                    continue;
+                  }
+                  const errTxt = await res.text().catch(() => '');
+                  throw new Error(`HTTP ${res.status}${errTxt ? ': ' + errTxt.slice(0, 200) : ''}`);
+                } catch (sErr) {
+                  lastSubmitErr = sErr;
+                  if (sAttempt < 3) {
+                    await new Promise(r => setTimeout(r, 500 * sAttempt));
+                  }
+                }
+              }
+
+              if (!submitOk) {
+                throw lastSubmitErr || new Error('Failed to submit job to server after 3 attempts');
+              }
+
               JobStore.updateJob(job.id, { serverSubmittedAt: Date.now(), resumeStage: undefined });
             }
             console.log(`[JobQueueRunner] Job ${job.id} is server-owned. Polling /api/jobs/status...`);
@@ -2882,35 +2912,30 @@ export default function App() {
     // Safety fallback: If Firebase auth takes too long to initialize (e.g. offline and indexedDB locked),
     // we stop the spinner so the user can interact with the app.
     const fallbackTimeout = setTimeout(async () => {
-      let alreadyLoggedIn = false;
-      setProfile((current) => {
-        if (current) alreadyLoggedIn = true;
-        return current;
-      });
-      if (alreadyLoggedIn) {
-        console.log("Auth check timed out, but user is already logged in. Bypassing fallback.");
-        return;
+      try {
+        console.warn("Auth check timed out. Falling back to local state.");
+        
+        const lastActiveEmail = localStorage.getItem('last_active_email') || 'cwah.liu@gmail.com';
+        const storageKey = getStorageKey(lastActiveEmail);
+        const parsedLocal = await get(storageKey);
+        if (parsedLocal) {
+          try {
+            if (parsedLocal.profile) setProfile(sanitizeProfile(parsedLocal.profile, lastActiveEmail));
+            if (parsedLocal.foodLogs) setFoodLogs(parsedLocal.foodLogs);
+            if (parsedLocal.biomarkers) setBiomarkers(parsedLocal.biomarkers);
+            if (parsedLocal.biomarkerHistory) setBiomarkerHistory(parsedLocal.biomarkerHistory);
+            if (parsedLocal.actions) setActions(parsedLocal.actions);
+            if (parsedLocal.dailyBenefits) setDailyBenefits(parsedLocal.dailyBenefits);
+            if (parsedLocal.report) setReport(parsedLocal.report);
+          } catch (e) {}
+        }
+        setSyncState('local');
+      } catch (err) {
+        console.error("Fallback timeout error:", err);
+      } finally {
+        setIsAuthChecking(false);
       }
-
-      console.warn("Auth check timed out. Falling back to local state.");
-      
-      const lastActiveEmail = localStorage.getItem('last_active_email') || 'cwah.liu@gmail.com';
-      const storageKey = getStorageKey(lastActiveEmail);
-      const parsedLocal = await get(storageKey);
-      if (parsedLocal) {
-        try {
-          if (parsedLocal.profile) setProfile(sanitizeProfile(parsedLocal.profile, lastActiveEmail));
-          if (parsedLocal.foodLogs) setFoodLogs(parsedLocal.foodLogs);
-          if (parsedLocal.biomarkers) setBiomarkers(parsedLocal.biomarkers);
-          if (parsedLocal.biomarkerHistory) setBiomarkerHistory(parsedLocal.biomarkerHistory);
-          if (parsedLocal.actions) setActions(parsedLocal.actions);
-          if (parsedLocal.dailyBenefits) setDailyBenefits(parsedLocal.dailyBenefits);
-          if (parsedLocal.report) setReport(parsedLocal.report);
-        } catch (e) {}
-      }
-      setSyncState('local');
-      setIsAuthChecking(false);
-    }, 10000);
+    }, 5000);
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       clearTimeout(fallbackTimeout);

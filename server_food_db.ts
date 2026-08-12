@@ -239,7 +239,15 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   plain_greek_yogurt: { fdcId: "170903", calories: 97, protein: 9.0, totalFat: 5.0, saturatedFat: 2.3, transFat: 0, carbohydrates: 3.9, sugar: 3.6, sodium: 47, potassium: 141, fiber: 0, foodType: 'dairy' },
   granola_cereal: { fdcId: "170287", calories: 471, protein: 10.0, totalFat: 20.0, saturatedFat: 3.5, transFat: 0, carbohydrates: 64.0, sugar: 29.0, sodium: 290, potassium: 336, fiber: 5.0, foodType: 'grain' },
   flour_tortilla: { fdcId: "172522", calories: 304, protein: 8.5, totalFat: 7.7, saturatedFat: 1.8, transFat: 0, carbohydrates: 49.7, sugar: 2.3, sodium: 521, potassium: 121, fiber: 2.4, foodType: 'grain' },
-  mixed_salad_greens: { fdcId: "169248", calories: 20, protein: 1.5, totalFat: 0.2, saturatedFat: 0.04, transFat: 0, carbohydrates: 3.6, sugar: 1.2, sodium: 20, potassium: 250, fiber: 2.2, foodType: 'leafy_veg' }
+  mixed_salad_greens: { fdcId: "169248", calories: 20, protein: 1.5, totalFat: 0.2, saturatedFat: 0.04, transFat: 0, carbohydrates: 3.6, sugar: 1.2, sodium: 20, potassium: 250, fiber: 2.2, foodType: 'leafy_veg' },
+  chocolate_brownie: { fdcId: "brownie_canonical", calories: 466, protein: 5.5, totalFat: 23.0, saturatedFat: 8.0, transFat: 0, carbohydrates: 62.0, sugar: 40.0, sodium: 300, potassium: 200, fiber: 3.5, foodType: 'processed' },
+  brownie: { fdcId: "brownie_canonical", calories: 466, protein: 5.5, totalFat: 23.0, saturatedFat: 8.0, transFat: 0, carbohydrates: 62.0, sugar: 40.0, sodium: 300, potassium: 200, fiber: 3.5, foodType: 'processed' },
+  fudge_brownie: { fdcId: "brownie_canonical", calories: 466, protein: 5.5, totalFat: 23.0, saturatedFat: 8.0, transFat: 0, carbohydrates: 62.0, sugar: 40.0, sodium: 300, potassium: 200, fiber: 3.5, foodType: 'processed' },
+  dark_chocolate: { fdcId: "dark_chocolate_canonical", calories: 546, protein: 4.9, totalFat: 31.0, saturatedFat: 19.0, transFat: 0, carbohydrates: 61.0, sugar: 48.0, sodium: 24, potassium: 559, fiber: 7.0, foodType: 'processed' },
+  dark_chocolate_chunk: { fdcId: "dark_chocolate_canonical", calories: 546, protein: 4.9, totalFat: 31.0, saturatedFat: 19.0, transFat: 0, carbohydrates: 61.0, sugar: 48.0, sodium: 24, potassium: 559, fiber: 7.0, foodType: 'processed' },
+  chocolate_chunk: { fdcId: "dark_chocolate_canonical", calories: 546, protein: 4.9, totalFat: 31.0, saturatedFat: 19.0, transFat: 0, carbohydrates: 61.0, sugar: 48.0, sodium: 24, potassium: 559, fiber: 7.0, foodType: 'processed' },
+  chocolate_chip_cookie: { fdcId: "cookie_canonical", calories: 488, protein: 5.5, totalFat: 24.0, saturatedFat: 11.0, transFat: 0, carbohydrates: 64.0, sugar: 38.0, sodium: 350, potassium: 180, fiber: 2.5, foodType: 'processed' },
+  chocolate_cake: { fdcId: "cake_canonical", calories: 389, protein: 4.5, totalFat: 18.0, saturatedFat: 5.5, transFat: 0, carbohydrates: 53.0, sugar: 36.0, sodium: 320, potassium: 160, fiber: 2.0, foodType: 'processed' }
 };
 
 export function lookupCanonicalBaseFood(name: string): any | null {

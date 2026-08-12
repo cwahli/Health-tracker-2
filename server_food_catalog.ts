@@ -405,6 +405,7 @@ export const DEFAULT_CATEGORY_PROFILES: Record<string, Record<string, number>> =
   cereal: { calories: 420, protein: 12, carbohydrates: 65, totalFat: 12, totalFibre: 8, sodium: 50 },
   legume: { calories: 160, protein: 8, carbohydrates: 25, totalFat: 3, totalFibre: 7, sodium: 200 },
   pastry: { calories: 410, protein: 8, carbohydrates: 46, totalFat: 21, saturatedFat: 12, totalFibre: 2, sodium: 450 },
+  dessert: { calories: 450, protein: 5, carbohydrates: 55, totalFat: 24, saturatedFat: 12, totalFibre: 2, sodium: 200 },
   general_dish: { calories: 150, protein: 6, carbohydrates: 18, totalFat: 6, saturatedFat: 1.5, totalFibre: 1.5, sodium: 300 }
 };
 
@@ -412,6 +413,7 @@ export function getFallbackCategoryProfile(query: string): Record<string, number
   const q = (query || '').toLowerCase();
   let base: Record<string, number> = { ...DEFAULT_CATEGORY_PROFILES.general_dish };
   if (/\b(beverage|drink|water|tea|coffee|soda)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.beverage };
+  else if (/\b(brownies?|cakes?|cookies?|chocolates?|cand(?:y|ies)|pies?|tarts?|fudge|desserts?|sweets?|biscuits?|puddings?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dessert };
   else if (/\b(croissants?|pastr(?:y|ies)|danish(?:es)?|muffins?|donuts?|doughnuts?|brioche|scones?|puffs?|bakery|bakeries)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.pastry };
   else if (/\b(eggs?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.egg };
   else if (/\b(chicken|turkey|poultry)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.poultry };

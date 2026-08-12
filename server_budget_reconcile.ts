@@ -167,9 +167,9 @@ export function reconcileNutrients(input: {
   let foundationKcal = Math.max(0, Number(nutrients.calories) || 0);
   let budgetKcal = input.budget.budgetKcal;
 
-  // Density Cap Guard: Cap meal calories at max 3.5 kcal/g (350 kcal per 100g)
+  // Density Cap Guard: Cap meal calories at max 6.0 kcal/g (600 kcal per 100g)
   if (input.weightGrams && input.weightGrams > 0 && budgetKcal && budgetKcal > 0) {
-    const maxAllowedKcal = Math.round(input.weightGrams * 3.5);
+    const maxAllowedKcal = Math.round(input.weightGrams * 6.0);
     if (budgetKcal > maxAllowedKcal) {
       budgetKcal = maxAllowedKcal;
     }
@@ -240,6 +240,19 @@ export function reconcileNutrients(input: {
         nutrients,
       };
     }
+    if (budgetKcal && foundationKcal > 0) {
+      const factor = budgetKcal / foundationKcal;
+      const scaled = scaleNutrientMap(nutrients, factor);
+      scaled.calories = Math.round(budgetKcal * 10) / 10;
+      return {
+        action: 'scale',
+        finalKcal: scaled.calories,
+        scaleFactor: factor,
+        foundationKcal,
+        budgetKcal,
+        nutrients: scaled,
+      };
+    }
     return {
       action: 'reject_scale',
       finalKcal: foundationKcal,
@@ -262,6 +275,20 @@ export function reconcileNutrients(input: {
   }
 
   if (ratio >= 0.5 && ratio <= 2.0) {
+    const factor = budgetKcal / foundationKcal;
+    const scaled = scaleNutrientMap(nutrients, factor);
+    scaled.calories = Math.round(budgetKcal * 10) / 10;
+    return {
+      action: 'scale',
+      finalKcal: scaled.calories,
+      scaleFactor: factor,
+      foundationKcal,
+      budgetKcal,
+      nutrients: scaled,
+    };
+  }
+
+  if (ratio < 0.5 && budgetKcal && foundationKcal > 0) {
     const factor = budgetKcal / foundationKcal;
     const scaled = scaleNutrientMap(nutrients, factor);
     scaled.calories = Math.round(budgetKcal * 10) / 10;

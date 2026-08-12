@@ -41,7 +41,7 @@ export const get = async (key: string): Promise<any> => {
   try {
     const result = await Promise.race([
       idbGet(key),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout")), 30000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout")), 3000))
     ]);
     if (result !== undefined) {
       return result;
@@ -110,7 +110,7 @@ export const set = async (key: string, val: any): Promise<void> => {
   try {
     await Promise.race([
       safeIdbSet(key, val),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout")), 30000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout")), 3000))
     ]);
     if (typeof window !== 'undefined') (window as any)._idbFailed = false;
   } catch (idbError) {
@@ -118,7 +118,7 @@ export const set = async (key: string, val: any): Promise<void> => {
     try {
       await Promise.race([
         safeIdbSet(key, val),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout (retry)")), 30000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout (retry)")), 3000))
       ]);
       if (typeof window !== 'undefined') (window as any)._idbFailed = false;
     } catch (retryError) {

@@ -2588,18 +2588,47 @@ ${logsText}`);
         // Send images and submit job to server background execution
         const getImagesAsBase64 = async (imagesList: any[]): Promise<string[]> => {
           return Promise.all(
-            imagesList.map(img => {
-              if (typeof img === 'string') {
-                return img;
+            imagesList.map(async (img) => {
+              try {
+                return await compressImage(img, 1024, 1024, 0.75);
+              } catch (err) {
+                if (typeof img === 'string') {
+                  return img;
+                }
+                return new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(reader.result as string);
+                  reader.onerror = () => reject(new Error('Failed to read image Blob'));
+                  reader.readAsDataURL(img as Blob);
+                });
               }
-              return new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = () => reject(new Error('Failed to read image Blob'));
-                reader.readAsDataURL(img as Blob);
-              });
             })
           );
+        };
+
+        const fetchSubmitWithRetry = async (url: string, payload: any, maxRetries = 3, delayMs = 500) => {
+          let lastErr: any = null;
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: safeJSONStringify(payload)
+              });
+              if (res.ok) return res;
+              if (res.status >= 500 && attempt < maxRetries) {
+                await new Promise(r => setTimeout(r, delayMs * Math.pow(2, attempt - 1)));
+                continue;
+              }
+              return res;
+            } catch (err) {
+              lastErr = err;
+              if (attempt < maxRetries) {
+                await new Promise(r => setTimeout(r, delayMs * Math.pow(2, attempt - 1)));
+              }
+            }
+          }
+          throw lastErr || new Error('Network request failed');
         };
 
         const lastFoodLogForJob = job?.result?.pendingFoodLog || 
@@ -2631,40 +2660,36 @@ ${logsText}`);
             submissionMode
           });
 
-          fetch('/api/jobs/submit', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: safeJSONStringify({
-              jobId: currentJobId,
-              idempotencyKey: `idemp_${auth.currentUser?.uid || 'anon'}_${currentJobId}`,
-              userId: auth.currentUser?.uid || 'anonymous',
-              kind: family === 'D' ? 'food_compare' : 'food_log',
-              mode: submissionMode,
-              text: userContent || textToSend,
-              images: stagedImagesForSubmit,
-              history: persistMessages,
-              userProfile: profile || null,
-              engine: selectedModelId || 'gemini-3.5-flash-lite',
-              biomarkersNeedingImprovement: [],
-              remainingAllowance: remainingAllowance || null,
-              activeMeal: prunedMealForJob,
-              foodLogs: [],
-              userSelectedMode: submissionMode,
-              activeScoutItems: scoutItemsForJob,
-              portionChoices: extraOptions?.portionChoices,
-              skipScout: extraOptions?.skipScout || !!extraOptions?.portionChoices,
-              resolvedDbCandidates: extraOptions?.resolvedDbCandidates || [],
-              priorLogsUrl: extraOptions?.priorLogsUrl || '',
-              photoUrl: (extraOptions as any)?.photoUrl || job?.photoUrl || job?.result?.photoUrl || undefined,
-              requestId: currentReqId,
-              clientConsoleLogs: window.__clientConsoleLogs || [],
-              networkErrors: window.__clientNetworkErrors || [],
-              userActionBreadcrumbs: window.__userActionBreadcrumbs || [],
-              lastUserAction: window.__lastUserAction || { action: 'chat_submit', prompt: userContent || textToSend, timestamp: new Date().toISOString() }
-            })
-          })
+          const submitPayload = {
+            jobId: currentJobId,
+            idempotencyKey: `idemp_${auth.currentUser?.uid || 'anon'}_${currentJobId}`,
+            userId: auth.currentUser?.uid || 'anonymous',
+            kind: family === 'D' ? 'food_compare' : 'food_log',
+            mode: submissionMode,
+            text: userContent || textToSend,
+            images: stagedImagesForSubmit,
+            history: persistMessages,
+            userProfile: profile || null,
+            engine: selectedModelId || 'gemini-3.5-flash-lite',
+            biomarkersNeedingImprovement: [],
+            remainingAllowance: remainingAllowance || null,
+            activeMeal: prunedMealForJob,
+            foodLogs: [],
+            userSelectedMode: submissionMode,
+            activeScoutItems: scoutItemsForJob,
+            portionChoices: extraOptions?.portionChoices,
+            skipScout: extraOptions?.skipScout || !!extraOptions?.portionChoices,
+            resolvedDbCandidates: extraOptions?.resolvedDbCandidates || [],
+            priorLogsUrl: extraOptions?.priorLogsUrl || '',
+            photoUrl: (extraOptions as any)?.photoUrl || job?.photoUrl || job?.result?.photoUrl || undefined,
+            requestId: currentReqId,
+            clientConsoleLogs: window.__clientConsoleLogs || [],
+            networkErrors: window.__clientNetworkErrors || [],
+            userActionBreadcrumbs: window.__userActionBreadcrumbs || [],
+            lastUserAction: window.__lastUserAction || { action: 'chat_submit', prompt: userContent || textToSend, timestamp: new Date().toISOString() }
+          };
+
+          fetchSubmitWithRetry('/api/jobs/submit', submitPayload)
           .then(async (res) => {
             if (!res.ok) {
               let detail = '';
@@ -2679,11 +2704,12 @@ ${logsText}`);
             JobQueueRunner.wake();
           })
           .catch(err => {
-            console.error('[LogChat] Server submit failed:', err);
+            console.error('[LogChat] Server submit failed after retries, delegating to JobQueueRunner:', err);
             JobStore.updateJob(currentJobId, {
-              status: 'failed',
-              statusMessage: 'Submission Failed: ' + (err.message || 'Server error')
+              status: 'queued',
+              statusMessage: 'Connection delayed; background runner retrying submit...'
             });
+            JobQueueRunner.wake();
           });
         }).catch(err => {
           console.error('[LogChat] Error converting images:', err);

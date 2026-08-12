@@ -5775,8 +5775,11 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           if (Array.isArray(rg.quarantinedIds)) {
             rg.quarantinedIds.forEach(id => {
               if (id) {
-                quarantinedIdsSet.add(String(id));
-                addDebugLog(`[Quarantine Sync] Added FDC ID ${id} to quarantinedIdsSet from curator.`);
+                const idStr = String(id);
+                if (!quarantinedIdsSet.has(idStr)) {
+                  quarantinedIdsSet.add(idStr);
+                  addDebugLog(`[Quarantine Sync] Added FDC ID ${idStr} to quarantinedIdsSet from curator.`);
+                }
               }
             });
           }
@@ -6108,6 +6111,9 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         }
         if (n.includes("potato") || n.includes("wedge") || n.includes("yam")) {
           return { calories: 90, protein: 2, totalFat: 0.1, saturatedFat: 0.02, sodium: 10, carbohydrates: 21, transFat: 0, addedSugar: 0, potassium: 400, totalFibre: 1.5, solubleFibre: 0.5 };
+        }
+        if (n.includes("brownie") || n.includes("cake") || n.includes("cookie") || n.includes("chocolate") || n.includes("candy") || n.includes("dessert") || n.includes("tart") || n.includes("pie") || n.includes("fudge") || n.includes("biscuit") || n.includes("sweet")) {
+          return { calories: 450, protein: 5, totalFat: 24, saturatedFat: 12, sodium: 200, carbohydrates: 55, transFat: 0, addedSugar: 30, potassium: 150, totalFibre: 2, solubleFibre: 0.4 };
         }
         if (n.includes("croissant") || n.includes("pastry") || n.includes("danish") || n.includes("brioche") || n.includes("muffin") || n.includes("scone") || n.includes("donut")) {
           return { calories: 410, protein: 8, totalFat: 21, saturatedFat: 12, sodium: 450, carbohydrates: 46, transFat: 0, addedSugar: 8, potassium: 120, totalFibre: 2, solubleFibre: 0.4 };
