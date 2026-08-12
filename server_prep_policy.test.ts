@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isCompositeDishForm, decidePrepAddition, buildFoodMatrix } from './server_prep_policy';
+import { isCompositeDishForm, decidePrepAddition, buildFoodMatrix } from './server_prep_policy.js';
 
 describe('server_prep_policy', () => {
   it('correctly identifies composite dish forms', () => {
@@ -20,7 +20,6 @@ describe('server_prep_policy', () => {
       componentCount: 4,
       cookingAdded: { addedCalories: 227, addedFat: 25, addedSaturatedFat: 5, addedSodium: 126 },
     });
-
     expect(res.addedCalories).toBe(0);
     expect(res.addedFat).toBe(0);
     expect(res.addedSaturatedFat).toBe(0);
@@ -63,5 +62,20 @@ describe('server_prep_policy', () => {
     });
     expect(res.addedCalories).toBeGreaterThan(0);
     expect(res.reason).toBe('calculated_prep');
+  });
+
+  it('suppresses prep oil with [PrepXOR] if dish has fat-bearing components', () => {
+    let logged = false;
+    const res = decidePrepAddition({
+      weightGrams: 200,
+      cookingMethod: 'grilled',
+      hasFatBearingComponent: true,
+      addDebugLog: (msg) => {
+        if (msg.includes('[PrepXOR]')) logged = true;
+      }
+    });
+    expect(res.addedCalories).toBe(0);
+    expect(res.reason).toBe('prep_xor_fat_bearing');
+    expect(logged).toBe(true);
   });
 });

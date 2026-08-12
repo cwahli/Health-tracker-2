@@ -103,6 +103,8 @@ H. Out of scope + order
 
 **Scope cap:** ≤6 acceptance IDs. Prefer delta packs after audit.
 
+**Exception — multipass epics:** A single pack may exceed 6 acceptance IDs when it is titled **MULTIPASS** (or states **MULTIPASS AUTONOMOUS** / **PRE-APPROVED**), is tied to one `plan/*.md` architecture file, and is closed by **one master** `assert-*.mjs`. Prefer this over N small packs that each stop for human “continue.” See `AGENTS.md` **L13**. Inter-phase “say continue” while checklist IDs remain = FAIL.
+
 ---
 
 ## 4. Mode matrix (food / multi-path)

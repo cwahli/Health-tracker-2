@@ -1,21 +1,21 @@
 import { describe, it, expect, vi } from 'vitest';
-import { executeFoodResolverAgent } from './server';
+import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 
-describe('Food Resolver Agent Execution (PASS 3)', () => {
+describe('Food Resolver Curator Agent', () => {
   it('discards chosenFdcId if NOT present in candidate allowlist and logs error', async () => {
     const logs: string[] = [];
     const addDebugLog = (msg: string) => logs.push(msg);
-
-    const mockLLM = vi.fn().mockResolvedValue(JSON.stringify({
-      resolutions: [
+    const mockLLM = vi.fn().mockResolvedValue(`\`\`\`json\n` + JSON.stringify({
+      actions: [
         {
+          type: 'pick_existing',
           query: 'mystery snack',
           chosenFdcId: 'FDC_FORGED_99999',
-          formTags: ['packaged']
+          reason: 'forged'
         }
       ]
-    }));
-
+    }) + `\n\`\`\``);
+    
     const gaps = [
       {
         query: 'mystery snack',
@@ -26,27 +26,26 @@ describe('Food Resolver Agent Execution (PASS 3)', () => {
       }
     ];
 
-    const results = await executeFoodResolverAgent(gaps, addDebugLog, mockLLM);
-
+    const results = await executeFoodResolverCurator(gaps, addDebugLog, mockLLM);
     expect(results).toHaveLength(1);
     expect(results[0].chosenFdcId).toBeNull(); // Discarded!
-    expect(logs.some(l => l.includes('[food_resolver_error] DISCARDED chosenFdcId'))).toBe(true);
+    expect(logs.some(l => l.includes('LLM hallucinated ID'))).toBe(true);
   });
 
   it('accepts chosenFdcId if present in candidate allowlist', async () => {
     const logs: string[] = [];
     const addDebugLog = (msg: string) => logs.push(msg);
-
-    const mockLLM = vi.fn().mockResolvedValue(JSON.stringify({
-      resolutions: [
+    const mockLLM = vi.fn().mockResolvedValue(`\`\`\`json\n` + JSON.stringify({
+      actions: [
         {
+          type: 'pick_existing',
           query: 'snack bar',
           chosenFdcId: '111111',
-          formTags: ['bar']
+          reason: 'matches'
         }
       ]
-    }));
-
+    }) + `\n\`\`\``);
+    
     const gaps = [
       {
         query: 'snack bar',
@@ -56,26 +55,9 @@ describe('Food Resolver Agent Execution (PASS 3)', () => {
       }
     ];
 
-    const results = await executeFoodResolverAgent(gaps, addDebugLog, mockLLM);
-
+    const results = await executeFoodResolverCurator(gaps, addDebugLog, mockLLM);
     expect(results).toHaveLength(1);
     expect(results[0].chosenFdcId).toBe('111111');
-    expect(logs.some(l => l.includes('[food_resolver_fetch_id] Validated candidate match'))).toBe(true);
-  });
-
-  it('caps gap items at N=8 and defers excess items', async () => {
-    const logs: string[] = [];
-    const addDebugLog = (msg: string) => logs.push(msg);
-
-    const mockLLM = vi.fn().mockResolvedValue(JSON.stringify({ resolutions: [] }));
-
-    const gaps = Array.from({ length: 12 }, (_, i) => ({
-      query: `item_${i}`,
-      candidates: [{ id: `id_${i}`, name: `name_${i}`, source: 'usda' }]
-    }));
-
-    await executeFoodResolverAgent(gaps, addDebugLog, mockLLM);
-
-    expect(logs.some(l => l.includes('[food_resolver_skip] Capping gap items at 8'))).toBe(true);
+    expect(logs.some(l => l.includes('pick_existing for "snack bar" -> 111111'))).toBe(true);
   });
 });

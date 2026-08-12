@@ -1,7 +1,7 @@
 # Health Cockpit — Master AI Handover (WIP status board)
 
 **Last updated:** 2026-08-11 (Free Tier Reliability M23-M28 completed: auth token verification, Gemini retry backoff, optimized payloads; all gates & tests PASS)  
-**Source of truth code intent:** https://github.com/cwahli/Health-tracker-6  
+**Source of truth code intent:** https://github.com/cwahli/Health-tracker-2  
 **Tree of truth for product completeness:** **Desktop** working tree until Slice 0 / governance ship lands on origin.  
 **Always `git fetch` + re-audit before a session.**
 
@@ -293,3 +293,5 @@ archive/
 ---
 
 *If this file ever shrinks back to “Admin Panel only”, restore this master content.*
+
+- M30 Epic (Food Curator): Phases 0, 1, 2, 3, 4, 5 fully completed (M30 COMPLETE)

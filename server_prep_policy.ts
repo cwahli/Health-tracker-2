@@ -78,6 +78,8 @@ export interface PrepPolicyInput {
   isAlreadyPrepared?: boolean;
   cookingAdded?: { addedCalories?: number; addedFat?: number; addedSaturatedFat?: number; addedSodium?: number } | null;
   visualSheen?: number;
+  hasFatBearingComponent?: boolean;
+  addDebugLog?: (msg: string) => void;
   visualCoating?: number;
   diningEnvironment?: string;
   hasSauceOrDressing?: boolean;
@@ -132,6 +134,11 @@ export function decidePrepAddition(input: PrepPolicyInput): PrepAddition {
     foodType: input.foodType,
   });
 
+  
+  if (input.hasFatBearingComponent && !isUserExplicit) {
+    if (input.addDebugLog) input.addDebugLog('[PrepXOR] Suppressing prep addition because dish has fat-bearing components');
+    return { ...zeroPrep, reason: 'prep_xor_fat_bearing' };
+  }
   if (composite && !isUserExplicit) {
     return { ...zeroPrep, reason: 'composite_dish_suppress_top_level_prep' };
   }

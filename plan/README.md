@@ -17,6 +17,8 @@ Agents must not rewrite plans mid-feature without human confirmation when the ch
 
 | Doc | Topic |
 |-----|--------|
+| [FOOD_RESOLVER_CURATOR_AND_1PASS_CATALOG_PLAN.md](./FOOD_RESOLVER_CURATOR_AND_1PASS_CATALOG_PLAN.md) | **Resolver curator + 1-pass atomics + self-heal catalog** (query hygiene, multi-match, brand routing, portion/basis normalize, quarantine) |
+| [AISTUDIO_M30_AGENTS_COMPAT.md](./AISTUDIO_M30_AGENTS_COMPAT.md) | AI Studio multipass instructions vs AGENTS.md early-stop analysis + proposed L13 |
 | [FOOD_LOG_UX_CALC_BACKLOG.md](./FOOD_LOG_UX_CALC_BACKLOG.md) | Food UX/calc backlog (label truth, portion, sync, brand…) |
 | [UNIFIED_MODAL_ASYNC_JOB_PLAN.md](./UNIFIED_MODAL_ASYNC_JOB_PLAN.md) | Unified modal + async multi-job |
 | [FOOD_CALC_HYBRID_AND_INTERNAL_DB_PLAN.md](./FOOD_CALC_HYBRID_AND_INTERNAL_DB_PLAN.md) | Food calc hybrid / catalog |

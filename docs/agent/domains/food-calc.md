@@ -113,3 +113,10 @@ npx vitest run server_budget_reconcile.test.ts server_vision_scout.test.ts serve
 
 1. Post-reconcile `applyPostReconcileTruthLocks` pure helper + tests extracted from `server.ts`.  
 2. Mode A/D/Edit call-site remains gate-asserted (string/log); do not drop mode tags.
+
+### Database Curator (Food Resolver)
+The Food Resolver agent now operates as a **Catalog Curator**. 
+- It uses a strict `FoodCuratorActionSchema` with actions like `pick_existing`, `merge_duplicates`, `normalize_basis`, and `quarantine`.
+- It is triggered by `MULTI_MATCH` or `MISS` classifications from the FDC Resolve layer.
+- `HIT_UNIQUE` queries bypass the LLM and are automatically aliased in the database.
+- It never invents meal macros or acts as a meal math calculator; its sole purpose is to resolve item identities to standard `food_items` rows.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { inferBasisFromServingText, scaleNutrientsToWeight, toPer100g, parseNutrientNumber } from './server_nutrient_basis';
+import { inferBasisFromServingText, scaleNutrientsToWeight, toPer100g, parseNutrientNumber, normalizeToPer100g, isPlausibleNutrients } from './server_nutrient_basis.js';
 
 describe('server_nutrient_basis', () => {
   it('parses nutrient numbers from string or number', () => {
@@ -22,7 +22,6 @@ describe('server_nutrient_basis', () => {
       servingGrams: 100,
       nutrients: { calories: 120, protein: 10, totalFat: 2.5 },
     }, 180);
-
     expect(scaled.calories).toBe(216);
     expect(scaled.protein).toBe(18);
     expect(scaled.totalFat).toBe(4.5);
@@ -34,7 +33,6 @@ describe('server_nutrient_basis', () => {
       servingGrams: 450,
       nutrients: { calories: 846, protein: 50 },
     }, 450);
-
     expect(scaled.calories).toBe(846);
     expect(scaled.protein).toBe(50);
   });
@@ -45,7 +43,6 @@ describe('server_nutrient_basis', () => {
       servingGrams: 40,
       nutrients: { calories: 200, totalFat: 10 },
     }, 20);
-
     expect(scaled.calories).toBe(100);
     expect(scaled.totalFat).toBe(5);
   });
@@ -56,8 +53,33 @@ describe('server_nutrient_basis', () => {
       servingGrams: 50,
       nutrients: { calories: 200, protein: 10 },
     });
-
     expect(per100.calories).toBe(400);
     expect(per100.protein).toBe(20);
+  });
+
+  it('normalizeToPer100g correctly normalizes based on pack or serving', () => {
+    const perPack = normalizeToPer100g({
+      basisType: 'per_pack',
+      servingGrams: null,
+      packGrams: 200,
+      nutrients: { calories: 400, protein: 20 },
+    });
+    expect(perPack.calories).toBe(200);
+    expect(perPack.protein).toBe(10);
+    
+    const perPack2 = normalizeToPer100g({
+      basisType: 'per_pack',
+      servingGrams: 50,
+      portionsPerPack: 4,
+      nutrients: { calories: 400, protein: 20 },
+    });
+    expect(perPack2.calories).toBe(200);
+    expect(perPack2.protein).toBe(10);
+  });
+
+  it('isPlausibleNutrients checks for limits', () => {
+    expect(isPlausibleNutrients({ calories: 960 }).valid).toBe(false);
+    expect(isPlausibleNutrients({ calories: 500, protein: 110 }).valid).toBe(false);
+    expect(isPlausibleNutrients({ calories: 500, protein: 50, fat: 20 }).valid).toBe(true);
   });
 });

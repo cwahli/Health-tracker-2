@@ -2,7 +2,7 @@
 
 **Purpose:** Reduce cascade bugs from multi-agent AI work — without freezing product evolution.  
 **Repo:** https://github.com/cwahli/Health-tracker-2  
-**Updated:** 2026-08-11  
+**Updated:** 2026-08-12  
 
 **Token rule:** Read **this file first**. Load domain rulebooks (`docs/agent/**`) **only when the table below says so**. (Investigating application source code, debug logs, and relevant functions is always permitted and encouraged; do not dump unneeded rulebook docs).
 
@@ -64,6 +64,7 @@ No breaking signature/API/prop changes without updating **all** call sites in th
 ### L3 — Scope honesty & continuous execution
 - Perform comprehensive deep investigation across all relevant files without pausing mid-investigation.
 - Present architectural trade-offs concisely and obtain user direction before executing significant multi-file changes.
+- **Exception:** Under **L13** (multipass pre-approved epic), the pack/message already supplies direction — do not re-stop for multi-file approval between phases.
 
 ### L4 — Full implementation
 No placeholders or stub delivery. Import without **correct-path call site** = FAIL.
@@ -101,6 +102,7 @@ When addressing non-trivial tasks or fixes, agents MUST follow the 2-stage inter
      - **Future Failure Mode Analysis**: Explicit explanation of how edge cases and downstream risks are mitigated.
      - **Key Points of Proposed Changes**: Concise architectural bullets (*strictly avoid dumping large code blocks*).
    - **Request Approval / Direction**: Await user selection or confirmation before applying edits to application source code.
+   - **Exception:** If **L13** (multipass pre-approved epic) applies, Stage 1 await is **WAIVED** — the pack/message is approval; go straight to Stage 2 execution.
 
 2. **Stage 2 — Post-Approval Autonomous Execution**:
    - **Binding Execution Law**: Once the user gives approval or commands an action, the agent **MUST NOT yield the turn after reading or viewing files**. Reading lines to prepare an edit must be chained immediately with the write tool (`replace_file_content`), tests, and verification in a single continuous execution.
@@ -117,11 +119,28 @@ When addressing non-trivial tasks or fixes, agents MUST follow the 2-stage inter
 - **Strict Prompt Line Ceiling**: System prompts (in `server_vision_scout.ts`, dietitian instructions, biomarker agents) are strictly capped. Adding new lines to a prompt is FORBIDDEN unless an equivalent number of redundant/outdated prompt lines are removed in the same edit (net-zero line growth).
 - **No Prompt-Based Code**: Business logic, math, unit conversions, brand overrides, and data sanitization MUST live in pure TypeScript middleware, NEVER in English prompt instructions. Prompts are strictly for classification and schema extraction under 200 words.
 
+### L13 — Multipass pre-approved epics (anti early-stop)
+When the user message or active `studio/M*.md` pack explicitly includes **all** of:
+1. the phrase **PRE-APPROVED** or **MULTIPASS AUTONOMOUS**,
+2. a phase/ID checklist through a named master gate,
+3. “do not wait for continue between phases” (or equivalent Autonomous Continuation Law),
+
+then:
+
+- L11 Stage 1 **Strategic Report + await approval is WAIVED** (the pack/message is approval).
+- L3 multi-file direction is **satisfied** by that pack.
+- After each phase’s tests pass, the agent **must start the next phase in the same work stream**.
+- Ending a turn with only “ready for Phase N when you say continue” (or similar) while checklist IDs remain = **FAIL**.
+- On context pressure: write `AI_HANDOVER.md` multipass checkpoint + RESUME line, then continue from checkpoint without re-auditing the whole repo.
+- L10 COMPLETE still requires **master gate exit 0** — partial phase green ≠ COMPLETE.
+
+This law does **not** waive protected-doc confirmation (§3) unless the pack lists those files as in-scope.
+
 ### L10 — COMPLETE
 All of: IMPACT (L/X) · SELF-CHECK · (if code changed: `tsc` · domain regression map commands · pack assert if any; skip if doc/ops only) · paths verified or known-broken noted.
 
 **Forbidden until then:** “all done” / “fully verified” / “nothing left.”  
-**Auto FAIL (Stage 2 execution):** import without call site · silent half-fix · detect without repair (when repair was approved) · simulated tool output / fake edit completion · dropped fields · gate weakened · drive-by scope.
+**Auto FAIL (Stage 2 execution):** import without call site · silent half-fix · detect without repair (when repair was approved) · simulated tool output / fake edit completion · dropped fields · gate weakened · drive-by scope · early-stop mid multipass epic while checklist IDs remain (L13).
 
 ---
 
@@ -196,7 +215,8 @@ Full pack craft: `docs/agent/PACKS.md`.
 ## 6. Studio packs (summary)
 
 1. One active pack under `studio/`.  
-2. ≤6 acceptance IDs; FIND→REPLACE / small swaps; machine gate exit 0.  
+2. ≤6 acceptance IDs by default; FIND→REPLACE / small swaps; machine gate exit 0.  
+   **Multipass exception (L13):** packs marked PRE-APPROVED / MULTIPASS AUTONOMOUS may exceed 6 IDs when closed by one master gate — see `docs/agent/PACKS.md`.  
 3. **Commit/push = AI Studio only** (§4).  
 4. After true COMPLETE: archive pack; update `AI_HANDOVER.md`.
 

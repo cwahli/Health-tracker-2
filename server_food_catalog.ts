@@ -124,12 +124,14 @@ export async function resolveInternalFood(query: string): Promise<InternalFoodMa
     if (aliasData && aliasData.food_items) {
       const fi = aliasData.food_items;
       if (fi.status === 'active' || (fi.status === 'candidate' && (fi.confidence || 0.5) >= 0.65 && checkAtwaterValidity(fi.nutrients_per_100g).valid)) {
+console.log(`[AliasHit] Found alias mapping for ${key} -> ${fi.food_id}`);
         return {
           food_id: fi.food_id,
           food_key: fi.food_key,
           display_name: fi.display_name,
           nutrients_per_100g: fi.nutrients_per_100g,
           source: fi.status === 'active' ? 'alias_active' : 'supabase_candidate',
+
           confidence: (fi.confidence || 0.9) * (aliasData.weight || 1.0),
           fdc_id: fi.fdc_id,
           form_tags: fi.form_tags,

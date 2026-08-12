@@ -42,6 +42,13 @@ If you touch a hot path and **no** row fits: add a unit/fixture test in the same
 npx vitest run server_budget_reconcile.test.ts server_vision_scout.test.ts server_nutrient_aggregation.test.ts server_portion_clarify.test.ts
 ```
 
+
+**M30 Curator Invariants:**
+- QuerySet components-only for multi-component.
+- Curator is not a meal calorie inventor (only curates catalog).
+- Brand/OCR hard lock still wins.
+- Mode A/D/Edit same finalize logic.
+
 ---
 
 ## Biomarkers
