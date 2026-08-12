@@ -1,4 +1,5 @@
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
+import { checkCategoryAndStateCompatibility } from './server_pure_helpers.js';
 import { rankAndClassifyCandidates, writeAliasIfHitUnique } from './server_fdc_resolve.js';
 import { buildFoodSearchQuerySet } from './server_query_set';
 import { withGeminiRetry } from './server_gemini_retry.js';
@@ -422,7 +423,6 @@ async function searchUSDA(query: string, maxResults: number = 5, dataTypes: stri
       const isExpectedZero = /\b(water|diet|zero|no sugar|sparkling|seltzer|ice|tea|coffee|vinegar|salt|spices?)\b/.test(name);
       
       if (kcal === 0 && protein < 0.5 && !isExpectedZero) {
-        console.log(`[DB REJECT] Dropping 0-kcal candidate: ${f.description} (${f.fdcId})`);
         return false;
       }
       return true;
@@ -587,7 +587,6 @@ async function searchOpenFoodFacts(query: string, maxResults: number = 5): Promi
       const isExpectedZero = /\b(water|diet|zero|no sugar|sparkling|seltzer|ice|tea|coffee|vinegar|salt|spices?)\b/.test(name);
       
       if (kcal === 0 && protein < 0.5 && !isExpectedZero) {
-        console.log(`[DB REJECT] Dropping 0-kcal OFF candidate: ${p.product_name} (${p.id})`);
         return false;
       }
       return true;
@@ -4896,16 +4895,12 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
 
     const isExplicitModify = !!(
       activeMeal &&
-      message &&
       (
         isPureWeightModification ||
-        // Text-only edit keywords (or edit mode pill). Images still allowed when B5 scale-only.
+        userExplicitlySelectedEditMode ||
         (
-          (refineDecision.skip || !imagePayloads || imagePayloads.length === 0) &&
-          (
-            userExplicitlySelectedEditMode ||
-            /\b(change|modify|update|remove|delete|correct|instead|replace|adjust|had|ate|only|portion|fraction|half|quarter|third|\d+\/\d+)\b/i.test(message)
-          )
+          message &&
+          /\b(change|modify|update|remove|delete|correct|instead|replace|adjust|had|ate|only|portion|fraction|half|quarter|third|\d+\/\d+)\b/i.test(message)
         )
       )
     );
@@ -4918,6 +4913,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
 
     let databaseMatches = "";
     const databaseMatchesArray: any[] = [];
+    const quarantinedIdsSet = new Set<string>();
     // Only inherit activeScoutItems if this is an explicit modification command on the active meal
     visionScoutItems = (isPureWeightModification || isExplicitModify || refineDecision.skip) ? (req.body.activeScoutItems || []) : [];
     let scoutScratchpad: string | undefined;
@@ -5208,6 +5204,28 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
 
     // Strip parenthetical local-language notes for cleaner USDA/OFF matching
     // e.g. "raw beef slices (daging empal and blade)" → "raw beef slices"
+    const loosenQuery = (query: string): string => {
+      if (!query) return "";
+      let q = query.toLowerCase().trim();
+      // Strip common brand adjectives and prefixes
+      q = q.replace(/\b(sainsburys?|tesco|morrisons?|asda|aldi|lidl|waitrose|marks\s*&\s*spencer|m&s|official|fresh|raw|cooked|baked|fried|roasted|steamed|boiled|grilled|organic|natural|wild|sweet|spicy|pure|premium|classic|canned|frozen|delicious|tasty|freshly)\b/g, '');
+      // Normalize plurals (simple s/es stripping for common words, especially fruits/vegetables)
+      q = q.replace(/\b(clementines|mandarins|tangerines|oranges|berries|raspberries|strawberries|blueberries|grapes|apples|pears|peaches|plums|bananas|lemons|limes|tomatoes|cucumbers|radishes|onions|carrots|potatoes|mushrooms|peas|beans)\b/g, (match) => {
+        if (match === 'berries') return 'berry';
+        if (match === 'raspberries') return 'raspberry';
+        if (match === 'strawberries') return 'strawberry';
+        if (match === 'blueberries') return 'blueberry';
+        if (match === 'tomatoes') return 'tomato';
+        if (match === 'potatoes') return 'potato';
+        if (match === 'radishes') return 'radish';
+        if (match.endsWith('es')) return match.slice(0, -2);
+        if (match.endsWith('s')) return match.slice(0, -1);
+        return match;
+      });
+      q = q.replace(/\s+/g, ' ').trim();
+      return q;
+    };
+
     const cleanQuery = (raw: string) => {
       let clean = raw.replace(/\s*\(.*?\)\s*/g, '').trim().toLowerCase();
       clean = clean.replace(/\b(soda|can|bottle|pack|tub|slice|cubes|pieces|portion|raw|cooked|boiled|baked|grilled|steamed)\b/g, '').replace(/\s+/g, ' ').trim();
@@ -5368,12 +5386,41 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
             ? Promise.resolve([])
             : searchBrandMenuItems(cleaned, detectedChainKey);
 
-          const [usda, off, brandHits, web] = await Promise.all([
+          let [usda, off, brandHits, web] = await Promise.all([
             searchUSDA(cleaned, 3, dataTypes),
             offP,
             brandP,
             webP
           ]);
+
+          // If zero results found in main database search, retry with loosened query
+          if (usda.length === 0 && off.length === 0 && brandHits.length === 0) {
+            const loosened = loosenQuery(cleaned);
+            if (loosened && loosened !== cleaned) {
+              addDebugLog(`[Database Search Fallback] Zero results for "${cleaned}". Retrying with loosened query "${loosened}"...`);
+              let fallbackOffP = Promise.resolve([]);
+              if (isBarcode || dataTypes.includes('Branded')) {
+                fallbackOffP = searchOpenFoodFacts(loosened, 3);
+              }
+              const fallbackBrandP = (isGeneric && !isDbBrand && !isBarcode && !detectedChainKey)
+                ? Promise.resolve([])
+                : searchBrandMenuItems(loosened, detectedChainKey);
+
+              const [fallUSDA, fallOFF, fallBrand] = await Promise.all([
+                searchUSDA(loosened, 3, dataTypes),
+                fallbackOffP,
+                fallbackBrandP
+              ]);
+
+              if (fallUSDA.length > 0 || fallOFF.length > 0 || fallBrand.length > 0) {
+                addDebugLog(`[Database Search Fallback] Succeeded for "${loosened}". USDA: ${fallUSDA.length}, OFF: ${fallOFF.length}, Brand: ${fallBrand.length}`);
+                usda = fallUSDA;
+                off = fallOFF;
+                brandHits = fallBrand;
+              }
+            }
+          }
+
           return { query: q, usda, off, brandHits, web };
         } catch (err) {
           return { query: q, usda: [], off: [], brandHits: [], web: [] };
@@ -5719,13 +5766,26 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           gapsForResolver,
           addDebugLog,
           callLLMFn,
-          fetchNutrientsForFdcId
+          fetchNutrientsForFdcId,
+          searchUSDA
         );
 
         // For each resolved item, add it to databaseMatchesArray & dbMatchMap
         resolvedGaps.forEach(rg => {
+          if (Array.isArray(rg.quarantinedIds)) {
+            rg.quarantinedIds.forEach(id => {
+              if (id) {
+                quarantinedIdsSet.add(String(id));
+                addDebugLog(`[Quarantine Sync] Added FDC ID ${id} to quarantinedIdsSet from curator.`);
+              }
+            });
+          }
           if (rg.nutrientsPer100g) {
             const virtualId = rg.chosenFdcId ? String(rg.chosenFdcId) : `resolver_${normalizeFoodKey(rg.query)}`;
+            if (quarantinedIdsSet.has(virtualId)) {
+              addDebugLog(`[Quarantine Block] Refusing to inject nutrients for quarantined FDC ID ${virtualId} ("${rg.query}").`);
+              return;
+            }
             dbMatchMap.set(virtualId, rg.nutrientsPer100g);
             
             const caloriesStr = String(rg.nutrientsPer100g.calories || 0);
@@ -5797,6 +5857,19 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
               event_type: 'deferred_gap',
               payload: { query, fallbackProfile }
             });
+            upsertFoodItemCandidate({
+              food_id: virtualId,
+              food_key: normQ,
+              display_name: query,
+              nutrients_per_100g: fallbackProfile,
+              status: 'category_fallback',
+              provenance: 'category_fallback'
+            }).catch(err => console.warn('[FallbackPersist] Error saving fallback item:', err));
+            upsertFoodAlias({
+              alias_key: normQ,
+              food_id: virtualId,
+              source: 'category_fallback'
+            }).catch(err => console.warn('[FallbackPersist] Error saving fallback alias:', err));
             addDebugLog(`[Food Resolver Fallback] Created category fallback for gap "${query}": ${JSON.stringify(fallbackProfile)}`);
         });
       }
@@ -6153,6 +6226,10 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         let highestScore = -999999;
 
         databaseMatchesArray.forEach((m: any) => {
+          if (m.id && quarantinedIdsSet.has(String(m.id))) {
+            addDebugLog(`[Quarantine Block] Blocked quarantined candidate "${m.name}" (id=${m.id}) from best-match evaluation.`);
+            return;
+          }
           if (m.source === 'canonical_dict' || m.source === 'estimated') return;
           // Never select category/last-resort stubs as "best" DB match when real USDA/OFF/catalog exist
           if (m.source === 'category_fallback' || m.source === 'fallback_estimated' || String(m.id || '').startsWith('fallback_')) return;
@@ -6592,10 +6669,11 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
 
       const isMultiComponentItem = Array.isArray(item.components) && item.components.length >= 2;
       const isCompositeOrUnofficial = isUnofficialOrCompositeDish(item.originalName || item.keyword, item.chainName || detectedChainKey, item.provenance, item.notes, item).isUnofficial;
+      const isGroceryBrand = isGroceryBrandSync(item.chainName || detectedChainKey || item.originalName || item.keyword || '');
 
       if (!truthMatch && webMatchRaw) {
         const src = webMatchRaw.source === 'brand_official' || webMatchRaw.brandPriority ? 'brand_official' : 'web_search';
-        if (isMultiComponentItem && (src === 'web_search' || (isCompositeOrUnofficial && src !== 'brand_official') || (isMultiComponentHomeCooked && src !== 'brand_official'))) {
+        if (isMultiComponentItem && (src === 'web_search' || isGroceryBrand || (isCompositeOrUnofficial && src !== 'brand_official') || (isMultiComponentHomeCooked && src !== 'brand_official'))) {
           addDebugLog(`[TruthSkip] multi-component / composite dish "${item.originalName || item.keyword}": ignoring single-dish match "${webMatchRaw.dish_name || webMatchRaw.name}" as parent dish truth (use component decomposition + scout budget)`);
           // Do NOT set item.rawNutritionLabel from skipped single-dish parent match (prevents fake label hard locks)
         } else if (isMultiComponentHomeCooked && !isBrandMatch) {
@@ -7176,6 +7254,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             normalizeFoodKey(m.searchQuery || '') === normCompQuery &&
             m.source !== 'category_fallback' &&
             !String(m.id || '').startsWith('fallback_') &&
+            !quarantinedIdsSet.has(String(m.id)) &&
             calcTokenOverlap(normCompQuery, m.name || m.searchQuery || '') >= 0.5
           );
 
@@ -7221,6 +7300,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             let bestOverlapScore = 0;
 
             databaseMatchesArray.forEach((m: any) => {
+              if (m.id && quarantinedIdsSet.has(String(m.id))) return;
               if (m.source === 'category_fallback' || String(m.id || '').startsWith('fallback_')) return;
               if (m.source !== 'internal_catalog' && m.source !== 'usda' && m.source !== 'off' && m.source !== 'brand_official') return;
               // Task 5: Dish-level totals (basisType='total'/'per_dish') are invalid as sub-ingredient
@@ -7288,8 +7368,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             const effectiveQTokens = relevanceQTokens.length > 0 ? relevanceQTokens : rawQTokens;
             const bmNameLow = String(bestMatch.name || bestMatch.dish_name || '').toLowerCase();
             const hasRelevantOverlap = effectiveQTokens.some((t: string) => bmNameLow.includes(t) || t.includes(bmNameLow.split(/\s+/).find((w: string) => w.length > 3) || '\u0000'));
-            if (!hasRelevantOverlap) {
-              addDebugLog(`[MatchPriority] Relevance gate rejected "${bestMatch.name}" (id=${bestMatch.id}) for query "${query}" — no meaningful token overlap.`);
+            const catCompat = checkCategoryAndStateCompatibility(query, bmNameLow);
+            if (!hasRelevantOverlap || !catCompat.compatible) {
+              addDebugLog(`[MatchPriority] Relevance gate rejected "${bestMatch.name}" (id=${bestMatch.id}) for query "${query}" — ${!catCompat.compatible ? catCompat.reason : 'no meaningful token overlap'}.`);
               bestMatch = undefined;
             }
           }
@@ -7984,6 +8065,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * recRes.scaleFactor * 10) / 10;
           if (s.saturatedFat != null) s.saturatedFat = Math.round(s.saturatedFat * recRes.scaleFactor * 10) / 10;
           if (s.sodium != null) s.sodium = Math.round(s.sodium * recRes.scaleFactor * 10) / 10;
+          if (s.carbohydrates != null) s.carbohydrates = Math.round(s.carbohydrates * recRes.scaleFactor * 10) / 10;
+          if (s.sugar != null) s.sugar = Math.round(s.sugar * recRes.scaleFactor * 10) / 10;
+          if (s.totalFibre != null) s.totalFibre = Math.round(s.totalFibre * recRes.scaleFactor * 10) / 10;
         });
       }
 
@@ -8258,11 +8342,11 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
     // 2. Prepend active state to Master System Instructions
     let effectiveActiveMeal = activeMeal;
     const hasUploadedNewImages = imagePayloads && imagePayloads.length > 0;
-    // B5: do not wipe active meal when scale-only refine (even if prior photos still attached)
+    // B5: do not wipe active meal when scale-only refine or explicit modify/edit mode
     if (
       !isWeightModification &&
       ((scoutRecommendedMode === "new_log" && !isExplicitModify && !userExplicitlySelectedEditMode) ||
-        (hasUploadedNewImages && !isExplicitModify))
+        (hasUploadedNewImages && !isExplicitModify && !userExplicitlySelectedEditMode))
     ) {
       addDebugLog(`[State Isolation] New image scan or new_log mode detected. Isolating activeMeal context so Dietitian operates on clean state.`);
       effectiveActiveMeal = null;
@@ -8336,7 +8420,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
 
     // Suppress Scout payload during text-only edits to conserve tokens
     let visionScoutCtx = "";
-    const isPureTextEdit = isExplicitModify || effectiveActiveMeal !== null || activeComparisonState !== null;
+    const isPureTextEdit = (isExplicitModify || effectiveActiveMeal !== null || activeComparisonState !== null) && (!imagePayloads || imagePayloads.length === 0);
     if (!isPureTextEdit && visionScoutItems && visionScoutItems.length > 0) {
       const itemsList = visionScoutItems.map((item: any, idx: number) => {
         // Use the item's real scoutIndex (assigned earlier, and possibly non-sequential
@@ -8783,7 +8867,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       addDebugLog(`[Mode Override] Overriding mode from 'evaluation' to 'new_log' because only 1 item was identified.`);
       mode = "new_log";
     }
-    const originalModeIsModify = (mode === "modify" || isExplicitModify || (req.body.activeMeal !== undefined && (message.toLowerCase().includes("change") || message.toLowerCase().includes("modify") || message.toLowerCase().includes("update") || message.toLowerCase().includes("remove") || message.toLowerCase().includes("add") || message.toLowerCase().includes("correct") || message.toLowerCase().includes("only") || message.toLowerCase().includes("instead") || message.toLowerCase().includes("replace"))));
+    const originalModeIsModify = (mode === "modify" || isExplicitModify || userExplicitlySelectedEditMode || (req.body.activeMeal !== undefined && (message.toLowerCase().includes("change") || message.toLowerCase().includes("modify") || message.toLowerCase().includes("update") || message.toLowerCase().includes("remove") || message.toLowerCase().includes("add") || message.toLowerCase().includes("correct") || message.toLowerCase().includes("only") || message.toLowerCase().includes("instead") || message.toLowerCase().includes("replace"))));
 
     apiCalls = [
       ...(hasImage ? [{ type: 'gemini', label: 'Food nutrition agent - Visual Scout (gemini-3.5-flash-lite)' }] : []),
@@ -9481,8 +9565,12 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               const calDensity = (cals / item.weightGrams) * 100;
               const nameLower = (item.canonicalDbName || item.originalName || item.name || "").toLowerCase();
               
-              const isDryDense = nameLower.includes('granola') || nameLower.includes('cereal') || nameLower.includes('nut') || nameLower.includes('trail mix') || nameLower.includes('chip') || nameLower.includes('cracker') || nameLower.includes('cookie') || nameLower.includes('oat');
-              const isSolidMeal = !nameLower.includes('soup') && !nameLower.includes('salad') && !nameLower.includes('veg') && !nameLower.includes('broth') && !nameLower.includes('water') && !nameLower.includes('beverage') && !nameLower.includes('latte') && !nameLower.includes('coffee') && !nameLower.includes('tea') && !nameLower.includes('juice') && !nameLower.includes('smoothie') && !nameLower.includes('milk') && !nameLower.includes('drink');
+              const pfObj = classifyUniversalPhysicalFormV3({ name: nameLower });
+              const isFruitOrVegFromClass = pfObj.primaryCategory === 'fruit_vegetable' || pfObj.physicalForm === 'SOLID_FRUIT_VEG';
+              const isHighMoistureComposite = nameLower.includes('yogurt') || nameLower.includes('yoghurt') || nameLower.includes('parfait') || nameLower.includes('pudding') || nameLower.includes('compote') || nameLower.includes('porridge') || nameLower.includes('bowl') || nameLower.includes('pot') || nameLower.includes('curd') || nameLower.includes('mousse') || nameLower.includes('trifle') || nameLower.includes('dessert');
+              const isDryDense = !isHighMoistureComposite && (nameLower.includes('granola') || nameLower.includes('cereal') || nameLower.includes('nut') || nameLower.includes('trail mix') || nameLower.includes('chip') || nameLower.includes('cracker') || nameLower.includes('cookie') || nameLower.includes('oat'));
+              const isFruitOrVeg = isFruitOrVegFromClass || nameLower.includes('veg') || nameLower.includes('fruit') || nameLower.includes('banana') || nameLower.includes('clementine') || nameLower.includes('tangerine') || nameLower.includes('mandarin') || nameLower.includes('apple') || nameLower.includes('peach') || nameLower.includes('pear') || nameLower.includes('orange') || nameLower.includes('berry') || nameLower.includes('berries') || nameLower.includes('grape') || nameLower.includes('raspberry') || nameLower.includes('strawberry') || nameLower.includes('blueberry') || nameLower.includes('melon') || nameLower.includes('pineapple') || nameLower.includes('mango') || nameLower.includes('citrus') || nameLower.includes('lemon') || nameLower.includes('lime') || nameLower.includes('cherry') || nameLower.includes('cherries') || nameLower.includes('plum') || nameLower.includes('apricot') || nameLower.includes('fig') || nameLower.includes('date') || nameLower.includes('raisin') || nameLower.includes('avocado') || nameLower.includes('salad') || nameLower.includes('tomato') || nameLower.includes('cucumber') || nameLower.includes('produce');
+              const isSolidMeal = !isHighMoistureComposite && !isFruitOrVeg && !nameLower.includes('soup') && !nameLower.includes('salad') && !nameLower.includes('veg') && !nameLower.includes('broth') && !nameLower.includes('water') && !nameLower.includes('beverage') && !nameLower.includes('latte') && !nameLower.includes('coffee') && !nameLower.includes('tea') && !nameLower.includes('juice') && !nameLower.includes('smoothie') && !nameLower.includes('milk') && !nameLower.includes('drink');
 
               if ((isDryDense && calDensity < 250) || (isSolidMeal && calDensity < 60)) {
                  addDebugLog(`[Sanity Check] WARNING: Item "${item.canonicalDbName || item.name}" weighing ${item.weightGrams}g registered at ${cals} kcal (${calDensity.toFixed(1)} kcal/100g). Impossibly low caloric density.`);

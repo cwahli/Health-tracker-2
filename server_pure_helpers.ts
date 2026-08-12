@@ -971,3 +971,55 @@ export function backfillSolubleFibre(
     }
   }
 }
+
+export function checkCategoryAndStateCompatibility(
+  query: string,
+  candidateName: string
+): { compatible: boolean; reason?: string } {
+  if (!query || !candidateName) return { compatible: true };
+  const q = query.toLowerCase().trim();
+  const c = candidateName.toLowerCase().trim();
+
+  // 1. Beverage vs Solid
+  const isQBeverage = /\b(beverage|beverages|drink|water|juice|beer|wine|soda|cola|tea|coffee|latte|mocha|macchiato|smoothie|shake|milk|oat\s*milk|almond\s*milk|soy\s*milk|coconut\s*milk|seltzer|powerade|gatorade)\b/i.test(q);
+  const isCBeverage = /\b(beverage|beverages|drink|water|juice|beer|wine|soda|cola|tea|coffee|latte|mocha|macchiato|smoothie|shake|milk|oat\s*milk|almond\s*milk|soy\s*milk|coconut\s*milk|seltzer|powerade|gatorade)\b/i.test(c);
+  const isQSolid = /\b(egg|eggs|yogurt|cheese|meat|chicken|steak|fish|salad|greens|bread|pastry|cake|cookie|tortilla|rice|pasta|grain|granola)\b/i.test(q);
+  const isCSolid = /\b(egg|eggs|yogurt|cheese|meat|chicken|steak|fish|salad|greens|bread|pastry|cake|cookie|tortilla|rice|pasta|grain|granola)\b/i.test(c);
+
+  if (isQBeverage && isCSolid && !isCBeverage) {
+    return { compatible: false, reason: `Blocked solid candidate ("${candidateName}") for beverage query ("${query}")` };
+  }
+  if (isQSolid && isCBeverage && !isQBeverage) {
+    return { compatible: false, reason: `Blocked beverage candidate ("${candidateName}") for solid food query ("${query}")` };
+  }
+
+  // 2. Pastry/Bakery vs Dairy/Yogurt/Produce
+  const isBakery = /\b(pastry|pastries|danish|donut|doughnut|muffin|croissant|cake|pie|tart|cookie|cookies|brownie|scone|biscuit)\b/i.test(c);
+  const isDairyOrProduce = /\b(yogurt|greek\s*yogurt|curd|milk|cheese|cottage\s*cheese|salad|greens|lettuce|spinach|kale|cabbage|apple|banana|orange|berry|berries)\b/i.test(q);
+  if (isBakery && isDairyOrProduce && !/\b(pastry|cake|pie|tart)\b/i.test(q)) {
+    return { compatible: false, reason: `Blocked bakery/pastry candidate ("${candidateName}") for dairy/produce query ("${query}")` };
+  }
+
+  // 3. Meat/Seafood vs Produce/Vegetables
+  const isMeatSeafoodCandidate = /\b(beef|steak|pork|bacon|ham|sausage|chicken|turkey|duck|fish|salmon|tuna|cod|shrimp|prawn|crab|lobster|clams|seafood)\b/i.test(c);
+  const isVegProduceQuery = /\b(salad|greens|lettuce|spinach|kale|cabbage|broccoli|cauliflower|carrot|cucumber|tomato|zucchini|pepper|onion)\b/i.test(q);
+  if (isMeatSeafoodCandidate && isVegProduceQuery && !/\b(chicken|beef|steak|pork|bacon|ham|fish|salmon|tuna|shrimp|prawn|crab|turkey|duck|seafood)\b/i.test(q)) {
+    return { compatible: false, reason: `Blocked meat/seafood candidate ("${candidateName}") for plain greens/vegetable query ("${query}")` };
+  }
+
+  // 4. Spice/Seasoning vs Fresh/Whole
+  const isSpiceCandidate = /\b(spice|spices|seasoning|seasonings|powder|extract|flavoring|flavouring)\b/i.test(c);
+  const isFreshWholeQuery = /\b(fresh|raw|whole|leaf|leaves|fruit|vegetable)\b/i.test(q);
+  if (isSpiceCandidate && isFreshWholeQuery && !/\b(spice|seasoning|powder|extract)\b/i.test(q)) {
+    return { compatible: false, reason: `Blocked spice/seasoning candidate ("${candidateName}") for fresh/whole food query ("${query}")` };
+  }
+
+  // 5. Dried/Powder vs Fresh/Cooked
+  const isDriedCandidate = /\b(dried|dehydrated|powder|powdered|freeze-dried|flakes)\b/i.test(c);
+  const isCookedFreshQuery = /\b(fresh|raw|cooked|boiled|hard-boiled|steamed|grilled|baked|poached)\b/i.test(q);
+  if (isDriedCandidate && isCookedFreshQuery && !/\b(dried|dehydrated|powder|powdered|flake|flakes)\b/i.test(q)) {
+    return { compatible: false, reason: `Blocked dried/powder candidate ("${candidateName}") for fresh/cooked query ("${query}")` };
+  }
+
+  return { compatible: true };
+}

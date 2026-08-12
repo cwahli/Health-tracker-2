@@ -396,6 +396,8 @@ export const DEFAULT_CATEGORY_PROFILES: Record<string, Record<string, number>> =
   meat: { calories: 200, protein: 22, carbohydrates: 0, totalFat: 12, saturatedFat: 4, sodium: 70 },
   poultry: { calories: 165, protein: 31, carbohydrates: 0, totalFat: 3.6, saturatedFat: 1, sodium: 74 },
   fish: { calories: 140, protein: 20, carbohydrates: 0, totalFat: 6, saturatedFat: 1.2, sodium: 60 },
+  egg: { calories: 155, protein: 13, carbohydrates: 1.1, totalFat: 11, saturatedFat: 3.3, sodium: 124 },
+  nuts_seeds: { calories: 580, protein: 20, carbohydrates: 20, totalFat: 50, saturatedFat: 7, totalFibre: 8, sodium: 5 },
   dairy: { calories: 60, protein: 3.2, carbohydrates: 4.8, totalFat: 3.2, saturatedFat: 2, sodium: 40 },
   cheese: { calories: 300, protein: 22, carbohydrates: 2, totalFat: 24, saturatedFat: 15, sodium: 600 },
   beverage: { calories: 0, protein: 0, carbohydrates: 0, totalFat: 0, sodium: 5 },
@@ -410,16 +412,18 @@ export function getFallbackCategoryProfile(query: string): Record<string, number
   const q = (query || '').toLowerCase();
   let base: Record<string, number> = { ...DEFAULT_CATEGORY_PROFILES.general_dish };
   if (/\b(beverage|drink|water|tea|coffee|soda)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.beverage };
-  else if (/\b(croissant|pastry|danish|muffin|donut|doughnut|brioche|scone|puff|bakery)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.pastry };
+  else if (/\b(croissants?|pastr(?:y|ies)|danish(?:es)?|muffins?|donuts?|doughnuts?|brioche|scones?|puffs?|bakery|bakeries)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.pastry };
+  else if (/\b(eggs?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.egg };
   else if (/\b(chicken|turkey|poultry)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.poultry };
   else if (/\b(fish|salmon|tuna|cod|shrimp|seafood)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.fish };
   else if (/\b(beef|pork|steak|lamb|mutton|meat)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.meat };
   else if (/\b(feta|cheddar|mozzarella|parmesan|cheese)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cheese };
   else if (/\b(milk|yogurt|yoghurt|greek|cream|butter|dairy)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dairy };
-  else if (/\b(granola|muesli|oat|cereal)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cereal };
-  else if (/\b(chickpea|hummus|lentil|bean)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.legume };
-  else if (/\b(rice|bread|pasta|potato|noodle|starch)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.starch };
-  else if (/\b(cucumber|tomato|apple|banana|berry|berries|carrot|salad|spinach|lettuce|olive|broccoli|vegetable|fruit|produce)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.produce };
+  else if (/\b(granola|muesli|oats?|cereals?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cereal };
+  else if (/\b(chickpeas?|hummus|lentils?|beans?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.legume };
+  else if (/\b(rice|bread|pasta|potatoe?s?|noodles?|starch)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.starch };
+  else if (/\b(sesame|almonds?|walnuts?|cashews?|pistachios?|peanuts?|pecans?|hazelnuts?|seeds?|nuts?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.nuts_seeds };
+  else if (/\b(cucumbers?|tomatoe?s?|apples?|bananas?|berr(?:y|ies)|carrots?|salads?|spinach|lettuce|olives?|broccoli|vegetables?|fruits?|produce|clementines?|oranges?|citrus|mandarins?|tangerines?|lemons?|limes?|grapefruits?|grapes?|peaches?|plums?|pears?|mangoes?|mangos?|kiwis?|pineapples?|melons?|watermelons?|cantaloupes?|honeydews?|nectarines?|apricots?|cherries|cherry|figs?|dates?|raisins?|avocados?|onions?|peppers?|garlics?|mushrooms?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.produce };
 
   const fullProfile: Record<string, number> = {};
   for (const k of NUTRIENT_KEYS) {

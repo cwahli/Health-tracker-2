@@ -1,9 +1,16 @@
 import { calculateGenericTokenCoverage, evaluateGenericModifierInversionPenalty, evaluateUniversalCategoryDisparity } from './server_matching_engine.js';
 import { supabaseAdmin } from './supabaseAdmin.js';
+import { checkCategoryAndStateCompatibility } from './server_pure_helpers.js';
 
 export function scoreCandidate(query: string, candidate: any): number {
+  const cDesc = candidate.description || candidate.product_name || candidate.name || "";
+  const compat = checkCategoryAndStateCompatibility(query, cDesc);
+  if (!compat.compatible) {
+    return -9999;
+  }
+
   const qTokens = query.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
-  const cName = (candidate.description || candidate.product_name || candidate.name || "").toLowerCase().replace(/[^a-z0-9\s]/g, '');
+  const cName = cDesc.toLowerCase().replace(/[^a-z0-9\s]/g, '');
   const cTokens = cName.split(/\s+/).filter(Boolean);
   
   const tokenCov = calculateGenericTokenCoverage(qTokens, cTokens);

@@ -234,13 +234,33 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   quinoa: { fdcId: "168917", calories: 120, protein: 4.4, totalFat: 1.9, saturatedFat: 0.2, transFat: 0, carbohydrates: 21.3, sugar: 0.9, sodium: 7, potassium: 172, fiber: 2.8, calcium: 17, iron: 1.5, magnesium: 64, foodType: 'grain' },
   edamame: { fdcId: "168411", calories: 121, protein: 11.9, totalFat: 5.2, saturatedFat: 0.6, transFat: 0, carbohydrates: 8.9, sugar: 2.2, sodium: 6, potassium: 436, fiber: 5.2, calcium: 63, iron: 2.3, magnesium: 64, foodType: 'vegetable' },
   cabbage_slaw: { fdcId: "170420", calories: 35, protein: 1.2, totalFat: 0.2, saturatedFat: 0.03, transFat: 0, carbohydrates: 7.5, sugar: 3.8, sodium: 22, potassium: 170, fiber: 2.4, vitaminC: 30, calcium: 35, iron: 0.5, foodType: 'vegetable' },
-  mcdonalds_mcchicken_sandwich: { fdcId: "canonical_mcd_mcchicken", calories: 225, protein: 8.67, totalFat: 10.0, saturatedFat: 1.7, transFat: 0, carbohydrates: 25.0, sugar: 2.7, sodium: 324, potassium: 120, fiber: 1.2, foodType: 'ultra_processed' }
+  mcdonalds_mcchicken_sandwich: { fdcId: "canonical_mcd_mcchicken", calories: 225, protein: 8.67, totalFat: 10.0, saturatedFat: 1.7, transFat: 0, carbohydrates: 25.0, sugar: 2.7, sodium: 324, potassium: 120, fiber: 1.2, foodType: 'ultra_processed' },
+  hard_boiled_egg: { fdcId: "173424", calories: 155, protein: 12.6, totalFat: 10.6, saturatedFat: 3.3, transFat: 0, carbohydrates: 1.1, sugar: 1.1, sodium: 124, potassium: 126, fiber: 0, foodType: 'egg' },
+  plain_greek_yogurt: { fdcId: "170903", calories: 97, protein: 9.0, totalFat: 5.0, saturatedFat: 2.3, transFat: 0, carbohydrates: 3.9, sugar: 3.6, sodium: 47, potassium: 141, fiber: 0, foodType: 'dairy' },
+  granola_cereal: { fdcId: "170287", calories: 471, protein: 10.0, totalFat: 20.0, saturatedFat: 3.5, transFat: 0, carbohydrates: 64.0, sugar: 29.0, sodium: 290, potassium: 336, fiber: 5.0, foodType: 'grain' },
+  flour_tortilla: { fdcId: "172522", calories: 304, protein: 8.5, totalFat: 7.7, saturatedFat: 1.8, transFat: 0, carbohydrates: 49.7, sugar: 2.3, sodium: 521, potassium: 121, fiber: 2.4, foodType: 'grain' },
+  mixed_salad_greens: { fdcId: "169248", calories: 20, protein: 1.5, totalFat: 0.2, saturatedFat: 0.04, transFat: 0, carbohydrates: 3.6, sugar: 1.2, sodium: 20, potassium: 250, fiber: 2.2, foodType: 'leafy_veg' }
 };
 
 export function lookupCanonicalBaseFood(name: string): any | null {
   if (!name) return null;
-  const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  let clean = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  if (name.includes(',')) {
+    const parts = name.toLowerCase().split(',').map(p => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      clean = parts.reverse().join('_').replace(/[^a-z0-9]/g, '_');
+    }
+  }
   const tokens = clean.split('_').filter(Boolean);
+  if (clean.includes('egg') || clean.includes('hard_boiled')) {
+    if (clean.includes('boiled') || clean.includes('cook') || clean.includes('whole') || clean.includes('hard')) {
+      return CANONICAL_BASE_FOODS.hard_boiled_egg;
+    }
+  }
+  if (clean.includes('greek_yogurt') || clean.includes('plain_greek') || (clean.includes('yogurt') && clean.includes('greek'))) return CANONICAL_BASE_FOODS.plain_greek_yogurt;
+  if (clean.includes('granola')) return CANONICAL_BASE_FOODS.granola_cereal;
+  if (clean.includes('tortilla')) return CANONICAL_BASE_FOODS.flour_tortilla;
+  if (clean.includes('salad_greens') || clean.includes('salad_leaves') || (clean.includes('salad') && clean.includes('mixed'))) return CANONICAL_BASE_FOODS.mixed_salad_greens;
   if (clean.includes('surimi') || clean.includes('crab_stick') || (clean.includes('crab') && clean.includes('stick')) || clean.includes('imitation_crab')) return CANONICAL_BASE_FOODS.surimi_crab_stick;
   if (clean.includes('edamame')) return CANONICAL_BASE_FOODS.edamame;
   if (clean.includes('quinoa')) return CANONICAL_BASE_FOODS.quinoa;
@@ -284,7 +304,7 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   if (tokens.includes('banana') || tokens.includes('bananas')) return CANONICAL_BASE_FOODS.banana;
   if (tokens.includes('nectarine') || tokens.includes('nectarines')) return CANONICAL_BASE_FOODS.nectarine;
   if (tokens.includes('oat') || tokens.includes('oats') || tokens.includes('oatmeal') || clean.includes('porridge')) return CANONICAL_BASE_FOODS.rolled_oats;
-  if (tokens.includes('tangerine') || tokens.includes('tangerines') || tokens.includes('mandarin') || tokens.includes('mandarins')) return CANONICAL_BASE_FOODS.tangerine;
+  if (tokens.includes('tangerine') || tokens.includes('tangerines') || tokens.includes('mandarin') || tokens.includes('mandarins') || tokens.includes('clementine') || tokens.includes('clementines')) return CANONICAL_BASE_FOODS.tangerine;
   if (tokens.includes('apple') || tokens.includes('apples')) return CANONICAL_BASE_FOODS.apple;
   if (tokens.includes('orange') || tokens.includes('oranges')) return CANONICAL_BASE_FOODS.orange;
   if (tokens.includes('peach') || tokens.includes('peaches')) return CANONICAL_BASE_FOODS.peach;

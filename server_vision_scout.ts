@@ -51,6 +51,7 @@ STEP 3: COMPONENT DECOMPOSITION, CLINICAL QUERIES & LABELS
 - MASS PERCENTAGE OVER VOLUME: When estimating component ratios, strongly prefer estimating 'massPercentage' (weight) over pure 'volumePercentage'.
 - BRAND SEPARATION: Keep brand names in 'originalName' or 'chainName'. Do not mash brand names into the 'keyword' or 'searchQuery' for generic components unless it's a specific branded component (e.g., "Sainsbury oat").
 - COMPONENT DECOMPOSITION (< 15 items): Decompose cooked dishes into raw 'components' (volume % totaling 100%, including oils, dressings, and sauces). Set precise boundingBox2D [ymin, xmin, ymax, xmax].
+- PRECISE COUNTING & OCCLUSION: Pay close attention to item counts. Do not assume there is only one item just because they are stacked or overlapping (e.g. multiple croissants on a plate, overlapping slices of bread). Extract each distinct item or specify a combined mass/weight representation for the true quantity.
 - COMPACT MODE (>= 15 items): Group high-density menus by category blocks or shelf rows.
 - PACKAGE LABELS (HARDENED FOR UK/EU & MULTI-COLUMN FORMATS):
   - PRESERVE BRAND IN COMPONENTS: If the user explicitly mentions a brand name for an ingredient (e.g., "Sainsbury oat"), you MUST preserve that brand name in the component's 'searchQuery' (e.g., "Sainsbury rolled oats" or "Sainsbury oat"). Do not strip the brand name from the component query.
