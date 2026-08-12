@@ -9476,7 +9476,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         let needsGrandTotalRecalc = false;
         parsedData.itemsBreakdown.forEach((item: any) => {
            if (!item || typeof item !== 'object') return;
-           if (item.weightGrams > 0 && item.nutrients) {
+           if (item.weightGrams > 0 && item.nutrients && !item.hasComponents) {
               const cals = item.nutrients.calories || 0;
               const calDensity = (cals / item.weightGrams) * 100;
               const nameLower = (item.canonicalDbName || item.originalName || item.name || "").toLowerCase();
