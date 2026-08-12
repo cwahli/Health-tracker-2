@@ -8,6 +8,7 @@ export const ScoutItemComponentSchema = z.object({
   visualSheen: z.number().min(0.0).max(1.0).optional(),
   visualCoating: z.number().min(0.0).max(1.0).optional(),
   pieceCount: z.number().optional(),
+  suggestedFdcId: z.string().nullable().optional(),
 });
 
 export const ScoutItemSchema = z.object({
@@ -45,6 +46,7 @@ STEP 2: UNIVERSAL DISH EXTRACTION & DEDUPLICATION
 
 STEP 3: COMPONENT DECOMPOSITION, CLINICAL QUERIES & LABELS
 - CLINICAL ENGLISH & USDA QUERY INVERSION: For all components and generic items, format the 'keyword' and 'searchQuery' in strict, clinical USDA-style inversion syntax: "Noun, descriptor, preparation" (e.g., "Egg, whole, cooked, hard-boiled", "Lettuce, iceberg, raw", "Chicken, breast, grilled"). Use pure clinical English.
+- OPTIONAL VERIFIED FDC HINT: For a component that is a well-known, unambiguous USDA standard reference food (e.g. a raw whole egg, a raw avocado, plain grilled chicken breast, raw iceberg lettuce) AND you are highly confident of its exact USDA FoodData Central ID from memory, populate 'suggestedFdcId' with that numeric ID as a string. Leave 'suggestedFdcId' null for anything ambiguous, branded, packaged, a prepared/composite dish, or any component you are not fully certain of — the backend verifies this ID and silently ignores it if wrong, but an unnecessary guess wastes a lookup. When in doubt, leave it null.
 - PREPARATION FAT & OILS: For any deep-fried, pan-fried, or heavily glazed items, explicitly extract the cooking oil or butter as a separate component (e.g., "Oil, vegetable, canola", "Butter, salted"). Assign it a realistic mass percentage.
 - MASS PERCENTAGE OVER VOLUME: When estimating component ratios, strongly prefer estimating 'massPercentage' (weight) over pure 'volumePercentage'.
 - BRAND SEPARATION: Keep brand names in 'originalName' or 'chainName'. Do not mash brand names into the 'keyword' or 'searchQuery' for generic components unless it's a specific branded component (e.g., "Sainsbury oat").
@@ -74,7 +76,7 @@ Output exactly ONE JSON object matching this schema. NEVER omit keys; use null o
       "ingredientsList": "string | null",
       "estimatedWeightGrams": "number",
       "estimatedCalories": "number",
-      "components": [{ "searchQuery": "string", "volumePercentage": "number" }],
+      "components": [{ "searchQuery": "string", "volumePercentage": "number", "suggestedFdcId": "string | null" }],
       "visualIngredients": ["string"],
       "source": "label | visual",
       "boundingBox2D": [150, 200, 800, 750],

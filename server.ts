@@ -5877,6 +5877,67 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       }
     }
 
+    // Verified Scout FDC hint pre-fetch: for components where Vision Scout supplied a
+    // suggestedFdcId (only expected for well-known, unambiguous staple foods), do a
+    // direct single-ID USDA lookup and validate it with the same relevance check used
+    // by the final safety-net gate further below, BEFORE the main per-item loop runs.
+    // This keeps the existing synchronous component-matching loop completely untouched
+    // (no forEach->for-of conversion, no async/await inside it). Hints that fail to
+    // resolve or fail the relevance check are silently dropped — the component falls
+    // through to today's normal search pipeline exactly as if no hint had been given.
+    const verifiedFdcHintMap = new Map<string, any>();
+    {
+      const hintFetchTasks: Array<{ key: string; fdcId: string; query: string }> = [];
+      visionScoutItems.forEach((item: any, itemIdx: number) => {
+        (item.components || []).forEach((comp: any, cIdx: number) => {
+          const hintId = comp.suggestedFdcId;
+          if (hintId && String(hintId).trim()) {
+            const q = comp.searchQuery || comp.name || comp.keyword || "";
+            hintFetchTasks.push({ key: `${itemIdx}:${cIdx}`, fdcId: String(hintId).trim(), query: q });
+          }
+        });
+      });
+
+      if (hintFetchTasks.length > 0) {
+        const hintResults = await Promise.all(hintFetchTasks.map(async (task) => {
+          const food = await fetchUSDAFoodById(task.fdcId);
+          return { task, food };
+        }));
+
+        hintResults.forEach(({ task, food }) => {
+          if (!food || !food.description) {
+            addDebugLog(`[ScoutFdcHint] id=${task.fdcId} for query "${task.query}" did not resolve — falling through to normal search.`);
+            return;
+          }
+          // Same relevance check as the final safety-net gate below (Task 1 stopword list).
+          const hintStopwords = new Set(['cheese', 'canned', 'sauce', 'sauces', 'salad', 'dressing', 'cream', 'sliced', 'chopped', 'mixed', 'fresh', 'cooked', 'raw', 'shredded', 'grated', 'diced', 'whole', 'baked', 'fried', 'roasted', 'steamed', 'boiled', 'grilled', 'style', 'flavored', 'flavoured', 'plain', 'organic', 'natural', 'sweet', 'spicy', 'crushed', 'minced', 'topping', 'toppings', 'spread', 'filling', 'blend', 'garnish', 'crumbs', 'chunks', 'pieces', 'with', 'and', 'leaf', 'leaves', 'seed', 'seeds', 'green']);
+          const qTokens = String(task.query).toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter((t: string) => t.length > 3 && !hintStopwords.has(t));
+          const fNameLow = String(food.description || '').toLowerCase();
+          const relevant = qTokens.length === 0 || qTokens.some((t: string) => fNameLow.includes(t));
+          if (!relevant) {
+            addDebugLog(`[ScoutFdcHint] Relevance check rejected hint id=${task.fdcId} ("${food.description}") for query "${task.query}" — falling through to normal search.`);
+            return;
+          }
+          const fdcIdStr = String(food.fdcId || task.fdcId);
+          const nutrients100g = extractUSDANutrientsPer100g(food);
+          dbMatchMap.set(fdcIdStr, nutrients100g);
+          const verifiedHit = {
+            id: fdcIdStr,
+            source: "usda_direct_hint",
+            name: food.description || "",
+            calories: String(nutrients100g.calories || 0),
+            protein: nutrients100g.protein,
+            fat: nutrients100g.totalFat,
+            saturatedFat: nutrients100g.saturatedFat,
+            sodium: nutrients100g.sodium
+          };
+          databaseMatchesArray.push(verifiedHit);
+          verifiedFdcHintMap.set(task.key, verifiedHit);
+          addDebugLog(`[ScoutFdcHint] Verified hint id=${fdcIdStr} ("${food.description}") accepted for query "${task.query}".`);
+        });
+      }
+    }
+
     // Backend-Side Mathematical Macro Aggregation for Component-Level Decomposition
     preCalculatedItems = visionScoutItems.map((item: any, itemIdx: number) => {
       const itemWeight = item.estimatedWeightGrams || 100;
@@ -7160,6 +7221,17 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
               addDebugLog(`[MatchPriority] preferred ${better.source} over ${bestMatch?.source || 'null'} for "${query}", id=${better.id}, overlapScore=${bestOverlapScore}`);
               bestMatch = better;
             }
+          }
+          // A verified Scout FDC hint (already fetched by direct ID and relevance-checked
+          // in the pre-fetch pass above) always takes priority over whatever the fuzzy
+          // search above found, since Scout is only supposed to supply one for unambiguous
+          // staple foods. It still passes through the same final relevance gate immediately
+          // below as a second, cheap safety check.
+          const scoutHintKey = `${itemIndex}:${cIdx}`;
+          if (verifiedFdcHintMap.has(scoutHintKey)) {
+            const hint = verifiedFdcHintMap.get(scoutHintKey);
+            addDebugLog(`[MatchPriority] Using verified Scout FDC hint id=${hint.id} ("${hint.name}") for query "${query}" (was bestMatch.source=${bestMatch?.source || 'null'}).`);
+            bestMatch = hint;
           }
           // Final relevance safety net: whatever path assigned bestMatch above, it must share
           // at least one meaningful, non-generic token with the query before we trust it as a

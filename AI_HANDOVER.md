@@ -286,6 +286,7 @@ archive/
 
 | Date | Note |
 |------|------|
+| 2026-08-12 | Vision Scout FDC Hints Integration | Added suggestedFdcId field to Vision Scout item components. Implemented verified Scout FDC hint pre-fetch and prioritization loop inside server.ts with relevance gating check, enabling zero-latency lookup of unambiguous standard reference foods. |
 | 2026-08-11 | M26-M28 Free Tier Reliability | M26 (thin jobs), M27 (Supabase pull/push auth verification), M28 (Gemini retry block with exponential backoff) applied and pass tests |
 | 2026-08-08 | Full audit: Desktop gates all green; origin behind/ahead mess (5 commits stubs); archive consolidated; M15 sole active pack |
 | 2026-08-06 | Master handover: modal M1–M2 done, M3 next (superseded by later Desktop work) |
@@ -296,3 +297,4 @@ archive/
 
 - M30 Epic (Food Curator): Phases 0, 1, 2, 3, 4, 5 fully completed (M30 COMPLETE)
 - 2026-08-11: Fixed `biomarker_review` missing historical context payload in `serverJobs.ts` and `LogChat.tsx`
+- 2026-08-12: Integrated `suggestedFdcId` for Vision Scout standard reference foods and prioritized it in the backend component-matching loop with relevance gating safety checks.
