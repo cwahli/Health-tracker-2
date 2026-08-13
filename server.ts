@@ -849,6 +849,36 @@ function resolveComparisonGroups(rawGroups: any[], scoutItems: any[]): any[] {
     }
   }
 
+  // Small-count safeguard: For < 3 total items, ensure each item gets its own group (1 item per group)
+  if (scoutItems.length > 0 && scoutItems.length < 3) {
+    const hasLumpedGroup = resolvedGroups.some(g => g.scoutItemIndices && g.scoutItemIndices.length > 1);
+    if (hasLumpedGroup) {
+      console.log(`[Comparison Grouping Safeguard] Unbundling multi-item group for ${scoutItems.length} items into 1 item per group.`);
+      const unbundledGroups: any[] = [];
+      scoutItems.forEach((sItem: any, idx: number) => {
+        const existingGroup = resolvedGroups.find(g => g.scoutItemIndices && g.scoutItemIndices.includes(idx)) || resolvedGroups[idx] || resolvedGroups[0];
+        const itemName = sItem.name || sItem.originalName || sItem.keyword || `Option ${idx + 1}`;
+        unbundledGroups.push({
+          groupName: existingGroup?.groupName && resolvedGroups.length > 1 ? existingGroup.groupName : itemName,
+          verdict: existingGroup?.verdict || { label: "Evaluated Option", level: "neutral" },
+          message: existingGroup?.message || `Nutritional evaluation for ${itemName}.`,
+          averageNutrients: sItem.preCalcNutrients || null,
+          scoutItemIndices: [idx],
+          itemClinicalThreats: existingGroup?.itemClinicalThreats ? { [String(idx)]: existingGroup.itemClinicalThreats[String(idx)] || "" } : {},
+          items: [{
+            name: itemName,
+            keyword: sItem.keyword || null,
+            originalName: sItem.originalName || null,
+            boundingBox2D: sItem.boundingBox2D || null,
+            sourceImageIndex: typeof sItem.sourceImageIndex === "number" ? sItem.sourceImageIndex : 0,
+            scoutIndex: idx
+          }]
+        });
+      });
+      return unbundledGroups;
+    }
+  }
+
   return resolvedGroups;
 }
 
@@ -1148,14 +1178,11 @@ MODE D: EVALUATION / COMPARISON
   4. TARGET ACQUISITION (POSITIVE IMPACT): Does the item significantly contribute to the "Nutrient target to reach today" (e.g., high Protein, Potassium, Soluble Fibre, or Unsaturated Fat) without grossly violating steps 1-3?
 
 - GROUPING STRATEGY (RANKED TIERS + THREAT CLUSTERING - MANDATORY & STRICTLY ENFORCED):
-  You MUST ALWAYS structure the 'comparison.groups' array in a strict tiered order with AT LEAST THREE distinct groups. EVEN IF ALL ITEMS ARE UNHEALTHY (like a shelf of deep-fried chips), you are STRICTLY FORBIDDEN from putting all items in a single bucket or ignoring the ranking requirement. You MUST forcibly rank them to find the "least harmful" choices to mitigate damage:
-  * TIER 1 (The Winner / Least Harmful Group) [MANDATORY]: This group MUST contain EXACTLY ONE item: the absolute best (or least harmful) choice for the patient (e.g. "Oishi Popcorn" as popcorn is a whole grain and has fiber). Set "groupName" to a descriptive reason without any prefixes or emojis (e.g., "Lowest in all harmful nutrients" or "Whole Grain Fiber Matrix"). 
-  * TIER 2 (The Runner-Up Group) [MANDATORY]: This group MUST contain EXACTLY ONE item: the second-best (or second least harmful) choice (e.g. "Taro Net" or "Chitato Lite" as they are baked/thinner). Set "groupName" to a descriptive reason without any prefixes or emojis (e.g., "Good balance of protein and calories" or "Baked Extruded Snack").
-  * TIER 3 (The Rest - Threat Clusters) [MANDATORY]: Group all remaining items into multiple descriptive threat groups based STRICTLY on their differences in clinical threats and ingredient matrices.
-     - NO GENERIC BUCKETS: You are strictly FORBIDDEN from using generic categories like "High Risk", "Avoid", "Items with high risk of Trans Fats and Sodium", or putting all Tier 3 items into a single giant bucket.
-     - THE DIVERGENCE RULE: Separate remaining items by their SINGLE worst offending nutrient. If specific nutrient labels are missing, you MUST cluster items by their base ingredient matrix (e.g., 'Critical Calorie & Saturated Fat Threat (Cassava/Root Veg)', 'High Saturated Fat Warning (Traditional Potato Chips)', 'High Glycemic Index & Sodium Risk (Corn & Extruded Snacks)') to determine the differing clinical threats.
-     - THE CONVERGENCE RULE: You may only group remaining items together if their worst offending nutrient and base ingredient matrix are EXACTLY the same.
-  *(Note: If there are only 2 items total, output only Tier 1 and Tier 2).*
+  * CRITICAL SMALL-COUNT RULE (<3 ITEMS): If there are LESS THAN 3 total scanned items (e.g. 1 or 2 items), DO NOT group multiple items together or create artificial third tiers. Output EXACTLY 1 group per scanned item (a group size of 1 item per group), mapping each item's index individually in 'scoutItemIndices' (e.g. Tier 1 with scoutItemIndices: [0], Tier 2 with scoutItemIndices: [1]).
+  * MULTI-ITEM SHELF RULE (>=3 ITEMS): If 3 or more items are scanned, structure the 'comparison.groups' array in a strict tiered order:
+    - TIER 1 (The Winner / Least Harmful Group): Exactly 1 item representing the best choice.
+    - TIER 2 (The Runner-Up Group): Exactly 1 item representing the second best choice.
+    - TIER 3 (The Rest - Threat Clusters): Group remaining items by clinical threats and ingredient matrices. Do NOT lump all items into a single bucket.
   * CRITICAL MATH REQUIREMENT: You MUST use the provided 'TRUE TOTAL NUTRITIONAL PAYLOAD' values for 'averageNutrients'. Do not re-calculate or apply serving size math yourself.
 
 - SCHEMA DETAILS:
@@ -1332,9 +1359,29 @@ app.post('/api/jobs/delete', async (req, res) => {
 
 app.post('/api/jobs/submit', async (req, res) => {
   try {
-    const { jobId, userId, kind, mode, text, images, imageUrls, history, userProfile, engine, biomarkersNeedingImprovement, remainingAllowance, activeMeal, foodLogs, userSelectedMode, activeScoutItems } = req.body;
+    const { jobId, userId, kind, mode, text, history, userProfile, engine, biomarkersNeedingImprovement, remainingAllowance, activeMeal, foodLogs, userSelectedMode, activeScoutItems } = req.body;
+    let { images, imageUrls } = req.body;
     if (!jobId) {
       return res.status(400).json({ error: 'jobId is required' });
+    }
+
+    if (images && Array.isArray(images) && images.length > 0) {
+      imageUrls = Array.isArray(imageUrls) ? [...imageUrls] : [];
+      for (let i = 0; i < images.length; i++) {
+        if (typeof images[i] === 'string' && images[i].startsWith('data:image/')) {
+          console.log(`[POST /api/jobs/submit] Uploading image ${i} to R2 for job ${jobId}...`);
+          try {
+            const r2Url = await uploadBase64ToR2(jobId, images[i], i);
+            if (r2Url && r2Url.startsWith('http')) {
+              imageUrls.push(r2Url);
+            }
+          } catch (e) {
+            console.error(`[POST /api/jobs/submit] Failed to upload image ${i} to R2`, e);
+          }
+        }
+      }
+      // After uploading to R2, we don't strictly need to clear images because they might be needed by the Scout?
+      // But submitServerJob will just use them. We will pass images as well.
     }
 
     const { checkOrRegisterIdempotentSubmission, submitServerJob } = await import('./serverJobs');
@@ -1474,8 +1521,9 @@ app.get('/api/jobs/debug', async (req, res) => {
       return res.status(400).json({ error: 'jobId query parameter is required' });
     }
 
+    const cleanJobId = String(jobId).trim();
     const { getInMemoryServerJob } = await import('./serverJobs');
-    let job: any = getInMemoryServerJob(String(jobId));
+    let job: any = getInMemoryServerJob(cleanJobId);
 
     if (!job) {
       const { isSupabaseConfigured } = await import('./src/utils/supabaseClient');
@@ -1485,7 +1533,7 @@ app.get('/api/jobs/debug', async (req, res) => {
           let query = supabaseAdmin
             .from('agent_jobs')
             .select('*')
-            .eq('id', String(jobId));
+            .eq('id', cleanJobId);
           if (userId && String(userId) !== 'anonymous') {
             query = query.eq('user_id', String(userId));
           }
@@ -1499,24 +1547,18 @@ app.get('/api/jobs/debug', async (req, res) => {
       }
     }
 
-    if (!job) {
-      return res.status(404).json({ error: 'Job not found' });
-    }
-
-    if (job.clean_result && typeof job.clean_result === 'object' && (job.clean_result as any).is_r2) {
-      try {
-        const { fetchJobResultFromR2 } = await import('./src/utils/r2Storage.js');
-        const fullResult = await fetchJobResultFromR2(job.id);
-        if (fullResult) {
-          job.clean_result = fullResult;
-        }
-      } catch (r2FetchErr) {
-        console.error(`[JobsDebug] Failed to transparently fetch R2 clean_result for ${job.id}:`, r2FetchErr);
-      }
-    }
-
     let debugPayload = null;
-    if (job.debug_url) {
+    const { fetchDebugPayloadFromR2, fetchLogsFromR2 } = await import('./src/utils/r2Storage.js');
+
+    // Attempt 1: Direct fetch from R2 using S3 credentials
+    try {
+      debugPayload = await fetchDebugPayloadFromR2(cleanJobId);
+    } catch (r2Err) {
+      console.warn('[JobsDebug] R2 direct debug payload fetch failed:', r2Err);
+    }
+
+    // Attempt 2: If public debug_url exists and Attempt 1 returned null
+    if (!debugPayload && job?.debug_url) {
       try {
         const response = await fetch(job.debug_url);
         if (response.ok) {
@@ -1527,7 +1569,11 @@ app.get('/api/jobs/debug', async (req, res) => {
       }
     }
 
+    // Attempt 3: DB / Memory fallback
     if (!debugPayload) {
+      if (!job) {
+        return res.status(404).json({ error: 'Job or debug payload not found' });
+      }
       const accumulated = Array.isArray(job.accumulatedLogs) ? job.accumulatedLogs.join('\n') : (Array.isArray(job.turn1Logs) ? job.turn1Logs.join('\n') : '');
       debugPayload = {
         jobId: job.id,
@@ -1548,17 +1594,16 @@ app.get('/api/jobs/debug', async (req, res) => {
 
     if (!debugPayload.backendLogs || String(debugPayload.backendLogs).startsWith('[Logs stored in R2') || String(debugPayload.backendLogs).startsWith('http')) {
       try {
-        const { fetchLogsFromR2 } = await import('./src/utils/r2Storage.js');
-        const logsFromR2 = await fetchLogsFromR2(job.id);
+        const logsFromR2 = await fetchLogsFromR2(cleanJobId);
         if (logsFromR2) {
           debugPayload.backendLogs = logsFromR2;
         }
       } catch (logFetchErr) {
-        console.warn(`[JobsDebug] Failed to fetch full logs from R2 for ${job.id}:`, logFetchErr);
+        console.warn(`[JobsDebug] Failed to fetch full logs from R2 for ${cleanJobId}:`, logFetchErr);
       }
     }
 
-    if ((!debugPayload.backendLogs || String(debugPayload.backendLogs).startsWith('[Logs stored in R2')) && Array.isArray(job.accumulatedLogs)) {
+    if ((!debugPayload.backendLogs || String(debugPayload.backendLogs).startsWith('[Logs stored in R2')) && job && Array.isArray(job.accumulatedLogs)) {
       debugPayload.backendLogs = job.accumulatedLogs.join('\n');
     }
 
@@ -1568,7 +1613,7 @@ app.get('/api/jobs/debug', async (req, res) => {
 
     if (req.query.format === 'markdown' || req.query.format === 'md') {
       const mdReport = buildDebugMarkdownReport({
-        jobId: String(jobId),
+        jobId: cleanJobId,
         status: safePayload.status,
         mode: safePayload.mode,
         message: safePayload.result?.message || safePayload.result?.text,
@@ -1590,16 +1635,29 @@ app.get('/api/jobs/debug', async (req, res) => {
         historyLog: safePayload.result?.historyLog
       });
       res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="debug-${jobId}.md"`);
+      res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.md"`);
       return res.send(mdReport);
     }
 
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="debug-${jobId}.json"`);
-    res.json(safePayload);
+    res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.json"`);
+    return res.json(safePayload);
   } catch (err: any) {
-    console.error('Failed to get job debug logs:', err);
-    res.status(500).json({ error: err.message || 'Failed to fetch debug logs' });
+    res.status(500).json({ error: err.message || 'Failed to fetch debug payload' });
+  }
+});
+
+app.get(['/debug/:key(*)', '/api/r2/debug/:key(*)'], async (req, res) => {
+  try {
+    const rawKey = req.params.key || req.path.replace(/^\/(api\/r2\/)?debug\//, '');
+    const cleanKey = rawKey.startsWith('debug/') ? rawKey : `debug/${rawKey}`;
+    const jobIdMatch = cleanKey.match(/([a-zA-Z0-9_\-]+)\.json$/);
+    const jobId = jobIdMatch ? jobIdMatch[1] : cleanKey;
+
+    return res.redirect(`/api/jobs/debug?jobId=${encodeURIComponent(jobId)}&format=markdown`);
+  } catch (err: any) {
+    console.error('[API] /debug proxy error:', err);
+    res.status(500).json({ error: 'Failed to retrieve debug file' });
   }
 });
 

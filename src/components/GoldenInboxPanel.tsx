@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, Play, Upload, CheckCircle2, AlertCircle, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { RefreshCw, Play, Upload, CheckCircle2, AlertCircle, Loader2, ChevronDown, ChevronRight, Trash2, Download } from 'lucide-react';
 
 type CaseRow = {
   id: string;
@@ -70,6 +70,21 @@ export default function GoldenInboxPanel() {
       if (!r.ok) throw new Error(j.error || 'replay failed');
       await load();
       if (openId === id) await openCase(id);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const deleteCase = async (id: string) => {
+    if (!window.confirm('Delete this golden meal?')) return;
+    setBusy(id);
+    try {
+      const r = await fetch(`/api/golden/cases/${id}`, { method: 'DELETE' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'delete failed');
+      await load();
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -171,9 +186,27 @@ export default function GoldenInboxPanel() {
               <Upload className="w-3 h-3" />
               Copy AI Studio prompt
             </button>
+            <button type="button" onClick={() => deleteCase(c.id)} className="px-2.5 py-1 rounded-lg bg-rose-700 text-[10px] font-bold text-white flex items-center gap-1">
+              <Trash2 className="w-3 h-3" />
+              Delete
+            </button>
           </div>
           {openId === c.id && detail && (
             <div className="px-3 pb-3 space-y-3 border-t border-white/10 pt-2 text-xs">
+              <div className="flex flex-wrap gap-2 mb-2">
+                {detail.logUrl && (
+                  <a href={detail.logUrl} target="_blank" rel="noreferrer" className="px-2.5 py-1 rounded-lg bg-emerald-900/40 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold flex items-center gap-1 hover:bg-emerald-800/60">
+                    <Download className="w-3 h-3" />
+                    Download Logs
+                  </a>
+                )}
+                {detail.scoutUrl && (
+                  <a href={detail.scoutUrl} target="_blank" rel="noreferrer" className="px-2.5 py-1 rounded-lg bg-indigo-900/40 border border-indigo-500/40 text-indigo-300 text-[10px] font-bold flex items-center gap-1 hover:bg-indigo-800/60">
+                    <Download className="w-3 h-3" />
+                    Download Prompt (Scout)
+                  </a>
+                )}
+              </div>
               {/* Iteration & Fix Actions */}
               <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/40 p-2.5 space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -198,6 +231,21 @@ export default function GoldenInboxPanel() {
                   <p className="text-[10px] text-white/50 italic">No explicit fix attempts logged yet for this iteration. Re-run after code edits.</p>
                 )}
               </div>
+
+              {detail.board?.resolutionStats && (
+                <div className="text-[10px] text-sky-200/90 space-y-1 rounded-xl border border-sky-500/20 bg-sky-950/30 p-2">
+                  <p className="font-bold text-sky-300">Food Resolution Diagnostics</p>
+                  <p>
+                    <span className="font-medium text-white">Sampled Components:</span> {detail.board.resolutionStats.sampled}
+                  </p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                    <span title="Found in USDA database"><span className="text-sky-400 font-bold">USDA:</span> {detail.board.resolutionStats.usda}</span>
+                    <span title="Found in internal catalog"><span className="text-indigo-400 font-bold">Catalog:</span> {detail.board.resolutionStats.catalog}</span>
+                    <span title="Sorted by resolver/curator"><span className="text-emerald-400 font-bold">Verified/Curator:</span> {detail.board.resolutionStats.curator}</span>
+                    <span title="Used default/estimated assignment"><span className="text-amber-400 font-bold">Fallback:</span> {detail.board.resolutionStats.fallback}</span>
+                  </div>
+                </div>
+              )}
 
               {detail.fixture && (
                 <div className="text-[10px] text-emerald-200/90 space-y-1 rounded-xl border border-emerald-500/20 bg-emerald-950/30 p-2">

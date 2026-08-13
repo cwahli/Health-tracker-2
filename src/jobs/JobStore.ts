@@ -196,6 +196,8 @@ class JobStoreImpl {
       messages: [],
       inputSnapshot: { text: '', imageRefs: [] },
       attemptByStep: {},
+      attemptCount: params.attemptCount || 1,
+      maxAttempts: params.maxAttempts || 3,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...params,

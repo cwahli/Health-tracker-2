@@ -57,14 +57,50 @@ async function uploadBacklogPayloadToR2(id: string, payload: any): Promise<strin
 
 async function fetchPayloadFromR2(id: string): Promise<any> {
   try {
+    const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
+    const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
+
+    if (CLOUDFLARE_R2_ACCESS_KEY_ID && CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
+      try {
+        const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
+        const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
+        const CLOUDFLARE_R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
+        const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+        const client = new S3Client({
+          region: 'auto',
+          endpoint: s3Endpoint,
+          credentials: {
+            accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
+            secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+          },
+        });
+        const command = new GetObjectCommand({
+          Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+          Key: `backlogs/${id}.json`,
+        });
+        const response = await client.send(command);
+        if (response.Body) {
+          const bodyString = await response.Body.transformToString();
+          return JSON.parse(bodyString);
+        }
+      } catch (s3Err) {
+        // Fallback to fetch
+      }
+    }
+
     const CLOUDFLARE_R2_PUBLIC_URL = (process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
     const url = `${CLOUDFLARE_R2_PUBLIC_URL}/backlogs/${id}.json`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(2500) });
     if (res.ok) {
       return await res.json();
     }
-  } catch (err) {
-    console.error(`[Backlog R2] Failed to fetch payload for ${id}:`, err);
+  } catch (err: any) {
+    const isNetworkErr = err && (err.name === 'TimeoutError' || err.name === 'AbortError' || err.name === 'TypeError' || (err.message && (err.message.includes('timeout') || err.message.includes('fetch failed'))));
+    if (isNetworkErr) {
+      console.debug(`[Backlog R2] Payload fetch skipped or unavailable for ${id}: ${err?.message || err}`);
+    } else {
+      console.warn(`[Backlog R2] Failed to fetch payload for ${id}:`, err?.message || err);
+    }
   }
   return null;
 }

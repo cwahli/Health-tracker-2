@@ -44,11 +44,20 @@ export type GoldenAttempt = {
   replaySummary?: string;
 };
 
+export type GoldenResolutionStats = {
+  sampled: number;
+  usda: number;
+  catalog: number;
+  curator: number;
+  fallback: number;
+};
+
 export type GoldenScoreboard = {
   observedMeal: GoldenMealLine[];
   expectedMeal: GoldenMealLine[];
   outcomes: GoldenOutcome[];
   tensions: Array<{ id: string; left: string; right: string; note: string }>;
+  resolutionStats?: GoldenResolutionStats;
 };
 
 const FORBIDDEN: Array<{ id: string; re: RegExp; label: string; signature: string }> = [
@@ -130,7 +139,21 @@ export function extractMealLines(food: any): GoldenMealLine[] {
       return Array.from(dishMap.values());
     }
 
-    // 3. Fallback: return raw items as list
+    // 3. Fallback: if there's a top-level food name, just use it, else return raw items as list
+    if (food.name || food.canonicalDbName) {
+      const n = food.nutrients || {};
+      return [{
+        name: String(food.name || food.canonicalDbName || 'Main Meal'),
+        weightGrams: numOrNull(food.weightGrams ?? food.weight),
+        calories: numOrNull(n.calories ?? food.calories),
+        protein: numOrNull(n.protein ?? food.protein),
+        carbohydrates: numOrNull(n.carbohydrates ?? food.carbs ?? food.carbohydrates),
+        totalFat: numOrNull(n.totalFat ?? food.totalFat ?? food.fat),
+        sodium: numOrNull(n.sodium ?? food.sodium),
+        scored: true,
+      }];
+    }
+
     return items.slice(0, 40).map((it: any) => {
       const n = it.nutrients || {};
       return {
@@ -272,6 +295,45 @@ function extractSignatureFromText(text: string): string | null {
   return null;
 }
 
+export function parseResolutionStats(logText: string): GoldenResolutionStats {
+  const stats: GoldenResolutionStats = {
+    sampled: 0,
+    usda: 0,
+    catalog: 0,
+    curator: 0,
+    fallback: 0,
+  };
+
+  const lines = logText.split('\n');
+  const seenComponents = new Set<string>();
+
+  for (const line of lines) {
+    if (line.includes('[Component Resolution Diagnostic]')) {
+      const match = line.match(/component\[\d+\]\s+query="([^"]+)"/);
+      if (match) {
+        const query = match[1];
+        // Only count each component query once
+        if (!seenComponents.has(query)) {
+          seenComponents.add(query);
+          stats.sampled++;
+          
+          if (line.includes('bestMatch.source=usda') || line.includes('bestMatch.source=off')) {
+            stats.usda++;
+          } else if (line.includes('bestMatch.source=internal_catalog') || line.includes('bestMatch.source=canonical_dict') || line.includes('bestMatch.source=usual_catalog')) {
+            stats.catalog++;
+          } else if (line.includes('bestMatch.source=estimated') || line.includes('bestMatch.source=null')) {
+            stats.fallback++;
+          } else if (line.includes('bestMatch.source=brand_official') || line.includes('bestMatch.source=label')) {
+            stats.curator++;
+          }
+        }
+      }
+    }
+  }
+
+  return stats;
+}
+
 export function buildScoreboard(input: {
   logText?: string;
   foodLog?: any;
@@ -280,6 +342,8 @@ export function buildScoreboard(input: {
   const observedMeal = extractMealLines(input.foodLog);
   const outcomes = parseKnownFails(input.logText || '');
   const tensions = parseTensions(input.logText || '');
+  const resolutionStats = parseResolutionStats(input.logText || '');
+
   (input.extraIssues || []).forEach((text, i) => {
     const raw = String(text || '').trim();
     if (!raw) return;
@@ -304,6 +368,7 @@ export function buildScoreboard(input: {
     expectedMeal: observedMeal.map((l) => ({ ...l, scored: false })),
     outcomes,
     tensions,
+    resolutionStats,
   };
 }
 

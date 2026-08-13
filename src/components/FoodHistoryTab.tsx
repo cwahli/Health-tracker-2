@@ -1246,7 +1246,6 @@ export default function FoodHistoryTab({
                       {/* AI Diagnostics */}
                       <div className="space-y-3 bg-indigo-50/20 dark:bg-indigo-950/10 p-3.5 rounded-2xl border border-indigo-100/30 dark:border-indigo-900/10 text-left">
                         <div className="space-y-2">
-                          <label className="text-[10px] font-bold text-indigo-500 block uppercase tracking-wider">AI Diagnostic Fields</label>
                           <div>
                             <label className="text-[10px] font-semibold text-slate-500 block mb-1">Recommendation / Summary Tag</label>
                             <input
@@ -1462,11 +1461,16 @@ export default function FoodHistoryTab({
                         </div>
                       </div>
 
-                      {(log.description || (log.healthImpact && !log.healthImpact.includes("Contributes to daily macro"))) && (
-                        <p className="text-xs text-theme-text-secondary leading-relaxed font-medium text-left">
-                          {log.description || log.healthImpact}
-                        </p>
-                      )}
+                      {/* AI Diagnostic Summary */}
+                      {(() => {
+                        const summaryText = log.description || log.message || (log.healthImpact && !log.healthImpact.includes("Contributes to daily macro") ? log.healthImpact : null);
+                        if (!summaryText) return null;
+                        return (
+                          <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium text-left bg-indigo-50/40 dark:bg-indigo-950/20 p-3 rounded-xl border border-indigo-100/30 dark:border-indigo-900/20 my-1">
+                            <p>{summaryText}</p>
+                          </div>
+                        );
+                      })()}
 
                       {/* Calories Badge & Top Targets & Expand Indicator */}
                       <div className="flex flex-wrap items-center justify-between pt-1 gap-2">
@@ -1601,45 +1605,7 @@ export default function FoodHistoryTab({
                             </div>
                           )}
 
-                           {/* AI Diagnostics Tracking Area */}
-                           <div className="bg-indigo-50/40 dark:bg-indigo-950/10 rounded-2xl p-4 border border-indigo-100/30 dark:border-indigo-900/10 space-y-3 text-left">
-                             <div className="border-b border-indigo-100/10 pb-1.5">
-                               <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-500 font-bold flex items-center gap-1">
-                                 <span>✨ AI Diagnostic Summary</span>
-                               </span>
-                             </div>
-                             
-                             {(log.description || log.message) && (
-                               <div className="text-[11.5px] leading-relaxed text-slate-700 dark:text-slate-300">
-                                 <p className="mt-0.5">{log.description || log.message}</p>
-                               </div>
-                             )}
 
-                             {/* Verdict Tag rendered below the message */}
-                             {(() => {
-                               const vLabel = log.verdict?.label || (log.recommendation && log.recommendation !== 'neutral' ? log.recommendation : null) || 'Balanced Choice';
-                               const vLevel = log.verdict?.level || log.recommendation || 'neutral';
-                               return (
-                                 <div className="flex items-center gap-2 pt-1.5 border-t border-indigo-100/10">
-                                   <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Verdict:</span>
-                                   <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${getRecommendationColorClass(vLevel)}`}>
-                                     {vLabel}
-                                   </span>
-                                 </div>
-                               );
-                             })()}
-                             {log.debugUrl && (
-                               <a
-                                 href={log.debugUrl}
-                                 target="_blank"
-                                 rel="noopener noreferrer"
-                                 className="flex items-center gap-1 text-[10px] font-semibold text-indigo-500 hover:text-indigo-600 pt-1"
-                               >
-                                 <Download className="w-3 h-3" />
-                                 Download Debug Log
-                               </a>
-                             )}
-                           </div>
 
 
 
@@ -1762,6 +1728,26 @@ export default function FoodHistoryTab({
                                   </div>
                                 </div>
                               )}
+                            </div>
+                          )}
+
+                          {/* Debug Log Download (Inside Expanded Log) */}
+                          {(log.debugUrl || log.id) && (
+                            <div className="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Diagnostic Log</span>
+                              <a
+                                href={`/api/jobs/debug?jobId=${encodeURIComponent(
+                                  log.debugUrl
+                                    ? (log.debugUrl.match(/debug\/(?:[^\/]+\/)?([a-zA-Z0-9_\-]+)\.json/i)?.[1] || log.id)
+                                    : log.id
+                                )}&format=markdown`}
+                                download={`debug-${log.id}.md`}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200/60 dark:border-indigo-800/60 transition-colors cursor-pointer"
+                                title="Download complete diagnostic report (.md)"
+                              >
+                                <Download className="w-3.5 h-3.5 text-indigo-500" />
+                                <span>Download Debug Log</span>
+                              </a>
                             </div>
                           )}
                         </div>

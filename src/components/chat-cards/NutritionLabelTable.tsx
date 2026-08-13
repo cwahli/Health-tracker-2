@@ -378,11 +378,14 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                // If the serving size grams exactly equal the Total column's grams, showing
                                // both is redundant (e.g. "Serving Size (300g)" next to "Total (300g)").
                                // In that case the serving IS the whole dish, so say so in words instead.
+                               const bType = item.rawNutritionLabel?.basisType || item.basisType || (item.source === 'brand_official' || item.brandPriority ? 'per_dish' : 'per_100g');
+                               if (bType === 'per_100g') {
+                                 return 'Per 100g';
+                               }
                                if (ssRaw && ssGramsMatch && totalG && Math.abs(parseFloat(ssGramsMatch[1]) - totalG) < 0.5) {
                                  return 'Serving Size (1 dish)';
                                }
                                if (ssRaw) return `Serving Size (${ssRaw})`;
-                               const bType = item.rawNutritionLabel?.basisType || item.basisType || (item.source === 'brand_official' || item.brandPriority ? 'per_dish' : 'per_100g');
                                if (bType === 'per_dish' || bType === 'total' || bType === 'per_portion') {
                                  return 'Per Dish';
                                }

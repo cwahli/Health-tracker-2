@@ -318,8 +318,8 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       const resetChunkTimer = () => {
         if (chunkTimer) clearTimeout(chunkTimer);
         chunkTimer = setTimeout(() => {
-          controller.abort(new Error('Stream stalled: No response from analysis engine for 45s.'));
-        }, 45000);
+          controller.abort(new Error('Stream stalled: No response from analysis engine within 90s.'));
+        }, 90000);
       };
 
       resetChunkTimer();

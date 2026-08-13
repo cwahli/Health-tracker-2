@@ -158,6 +158,45 @@ export async function uploadDebugPayloadToR2(jobId: string, debugJson: object): 
   }
 }
 
+export async function fetchDebugPayloadFromR2(jobId: string): Promise<any> {
+  try {
+    const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
+    const CLOUDFLARE_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
+    const CLOUDFLARE_R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
+    const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
+    const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
+
+    if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
+      return null;
+    }
+
+    const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+    const client = new S3Client({
+      region: 'auto',
+      endpoint: s3Endpoint,
+      credentials: {
+        accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
+        secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+      },
+    });
+
+    const cleanKey = jobId.includes('debug/') ? jobId : `debug/${jobId}.json`;
+    const command = new GetObjectCommand({
+      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+      Key: cleanKey,
+    });
+
+    const response = await client.send(command);
+    if (response.Body) {
+      const bodyString = await response.Body.transformToString();
+      return JSON.parse(bodyString);
+    }
+  } catch (err: any) {
+    console.debug(`[R2Storage] Skipping or failed to fetch debug payload for ${jobId}:`, err?.message || err);
+  }
+  return null;
+}
+
 export async function uploadJobResultToR2(jobId: string, resultJson: object): Promise<string> {
   if (typeof window === 'undefined') {
     try {
@@ -227,7 +266,7 @@ export async function fetchJobResultFromR2(jobId: string): Promise<any> {
       // Fallback to public URL if no credentials
       const CLOUDFLARE_R2_PUBLIC_URL = (process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
       const url = `${CLOUDFLARE_R2_PUBLIC_URL}/jobs/${jobId}_result.json`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: AbortSignal.timeout(2500) });
       if (res.ok) {
         return await res.json();
       }
@@ -254,8 +293,8 @@ export async function fetchJobResultFromR2(jobId: string): Promise<any> {
       const bodyString = await response.Body.transformToString();
       return JSON.parse(bodyString);
     }
-  } catch (err) {
-    console.error(`[R2Storage] Failed to fetch job result for ${jobId} using S3 SDK:`, err);
+  } catch (err: any) {
+    console.debug(`[R2Storage] Skipping or failed to fetch job result for ${jobId}:`, err?.message || err);
   }
   return null;
 }
@@ -327,7 +366,7 @@ export async function fetchLogsFromR2(jobId: string): Promise<string | null> {
     if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
       const CLOUDFLARE_R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
       const url = `${CLOUDFLARE_R2_PUBLIC_URL}/logs/${jobId}.log`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: AbortSignal.timeout(2500) });
       if (res.ok) {
         return await res.text();
       }
@@ -354,8 +393,8 @@ export async function fetchLogsFromR2(jobId: string): Promise<string | null> {
     if (response.Body) {
       return await response.Body.transformToString();
     }
-  } catch (err) {
-    console.error(`[R2Storage] Failed to fetch logs for ${jobId}:`, err);
+  } catch (err: any) {
+    console.debug(`[R2Storage] Skipping or failed to fetch logs for ${jobId}:`, err?.message || err);
   }
   return null;
 }

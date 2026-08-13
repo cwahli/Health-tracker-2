@@ -217,11 +217,11 @@ export default function TaskPlaceholderCard({
         const queue = JobStore.getAllJobs().filter(j => j.status === 'queued' || j.status === 'running');
         const myIndex = queue.findIndex(j => j.id === job.id);
         const ahead = myIndex > 0 ? myIndex : 0;
-        return ahead > 0 ? `Waiting — ${ahead} ahead` : 'Waiting to start...';
+        return ahead > 0 ? `Waiting — ${ahead} ahead` : 'Uploaded • Queued on server';
       }
       case 'running':
       case 'processing':
-        return job.statusMessage || (job.kind === 'medical' ? 'Analyzing medical data...' : 'Analyzing your meal...');
+        return 'Uploaded • Server Processing';
       case 'failed':
         return 'Analysis failed';
       case 'cancelled':
@@ -328,6 +328,9 @@ export default function TaskPlaceholderCard({
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getStatusColorClass()}`}>
                 {getStatusLabel()}
               </span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                Attempt {job.attemptCount || 1} of {job.maxAttempts || 3}
+              </span>
               {(job.status === 'running' || job.status === 'queued' || job.status === 'processing') && job.progressPercent > 0 && (
                 <span className="text-[10px] font-mono text-slate-400 font-bold">
                   {job.progressPercent}%
@@ -340,9 +343,15 @@ export default function TaskPlaceholderCard({
             </h4>
 
             {(job.status === 'running' || job.status === 'processing' || job.status === 'queued') && (
-              <p className="text-xs text-theme-text-secondary font-medium mt-1">
-                {job.statusMessage || 'Analyzing your meal...'}
-              </p>
+              <div className="mt-1 space-y-1">
+                <p className="text-xs text-theme-text-secondary font-medium">
+                  {job.statusMessage || (job.kind === 'medical' ? 'Analyzing medical data...' : 'Analyzing your meal...')}
+                </p>
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/60">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
+                  <span>Uploaded to server • Safe to close browser & check back later</span>
+                </div>
+              </div>
             )}
             
             {(job.status === 'running' || job.status === 'processing') && (
@@ -362,11 +371,23 @@ export default function TaskPlaceholderCard({
               </p>
             )}
 
-            {job.status === 'failed' && (
-              <p className="text-xs text-rose-500 font-medium line-clamp-2 mt-1">
-                ⚠️ {job.error?.message || 'Something went wrong during the analysis.'}
-              </p>
-            )}
+            {job.status === 'failed' && (() => {
+              const failureReason =
+                job.error?.message ||
+                (job.statusMessage && !['Analyzing on server...', 'Analyzing your meal...'].includes(job.statusMessage) ? job.statusMessage : null) ||
+                (typeof job.result?.message === 'string' && job.result.message ? job.result.message : null) ||
+                'Analysis request timed out or experienced a transient network issue.';
+              return (
+                <div className="mt-1 space-y-1">
+                  <p className="text-xs text-rose-600 dark:text-rose-400 font-medium line-clamp-3">
+                    ⚠️ {failureReason}
+                  </p>
+                  <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                    Attempt {job.attemptCount || 1} of {job.maxAttempts || 3} failed • Tap "Retry" to try again
+                  </p>
+                </div>
+              );
+            })()}
 
             {job.status === 'succeeded' && pendingFoodLog && (
               <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-theme-text-secondary">
@@ -390,15 +411,45 @@ export default function TaskPlaceholderCard({
               </div>
             )}
 
-            {job.status === 'succeeded' && (job.result?.comparisonSet?.optionMeals || job.result?.comparison?.options || job.result?.comparison?.groups) && (
-              <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
-                {(job.result?.comparisonSet?.optionMeals || job.result?.comparison?.options || job.result?.comparison?.groups || []).slice(0, 3).map((opt: any, idx: number) => (
-                  <span key={idx} className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-lg border border-indigo-100 dark:border-indigo-900/50 text-[11px] font-medium">
-                    {opt.groupName || opt.content?.name || opt.name || opt.title || `Option ${idx + 1}`}: {opt.nutrients?.calories || opt.calories || 0} kcal
-                  </span>
-                ))}
-              </div>
-            )}
+            {/* Comparison Options Summary Row with Calories */}
+            {(() => {
+              const compGroups = job.result?.comparisonSet?.optionMeals || job.result?.comparison?.options || job.result?.comparison?.groups || job.result?.clean_result?.comparison?.groups || (job as any).clean_result?.comparison?.groups;
+              const scoutItems = job.result?.scoutItems || job.result?.clean_result?.scoutItems || (job as any).scoutItems;
+
+              if (compGroups && Array.isArray(compGroups) && compGroups.length > 0) {
+                return (
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                    {compGroups.map((opt: any, idx: number) => {
+                      const name = opt.groupName || opt.content?.name || opt.name || opt.title || `Option ${idx + 1}`;
+                      const cals = opt.averageNutrients?.calories ?? opt.nutrients?.calories ?? opt.calories ?? opt.totalCalories;
+                      return (
+                        <span key={idx} className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-900/50 text-[11px] font-semibold flex items-center gap-1">
+                          <span>{name}:</span>
+                          <span className="font-bold text-indigo-800 dark:text-indigo-200">{cals != null ? `${Math.round(Number(cals))} kcal` : 'Calculating...'}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                );
+              } else if (scoutItems && Array.isArray(scoutItems) && scoutItems.length > 1) {
+                return (
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                    {scoutItems.map((item: any, idx: number) => {
+                      const name = item.originalName || item.keyword || `Option ${idx + 1}`;
+                      const cals = item.estimatedCalories ?? item.rawNutritionLabel?.calories ?? item.preCalcNutrients?.calories;
+                      const numericCals = cals != null ? parseFloat(String(cals).replace(/[^\d.]/g, '')) : NaN;
+                      return (
+                        <span key={idx} className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-900/50 text-[11px] font-semibold flex items-center gap-1">
+                          <span>{name}:</span>
+                          <span className="font-bold text-indigo-800 dark:text-indigo-200">{!isNaN(numericCals) && numericCals > 0 ? `${Math.round(numericCals)} kcal` : 'Calculating...'}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
 
           {/* Actions */}
@@ -447,11 +498,13 @@ export default function TaskPlaceholderCard({
                 type="button"
                 onClick={() => {
                   const isDegraded = Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian');
+                  const nextAttempt = (job.attemptCount || 1) + 1;
                   JobStore.updateJob(job.id, {
                     status: 'queued',
+                    attemptCount: nextAttempt,
                     retryNotBefore: undefined,
                     error: undefined,
-                    statusMessage: isDegraded ? 'Retrying AI advice...' : 'Retrying analysis...',
+                    statusMessage: isDegraded ? `Retrying AI advice (Attempt ${nextAttempt})...` : `Retrying analysis (Attempt ${nextAttempt})...`,
                     resumeStage: isDegraded ? 'dietitian' : undefined
                   });
                 }}

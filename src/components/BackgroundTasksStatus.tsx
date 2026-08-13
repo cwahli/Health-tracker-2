@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Loader2, XCircle, Eye } from 'lucide-react';
+import { Loader2, XCircle, Eye, CheckCircle2 } from 'lucide-react';
 import { JobStore } from '../jobs/JobStore';
 import { AgentJob } from '../jobs/types';
 
@@ -55,6 +55,10 @@ export default function BackgroundTasksStatus({ onViewJob }: BackgroundTasksStat
                   </div>
                   <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate mt-0.5">
                     {job.statusMessage || (job.kind === 'medical' ? 'Analyzing biomarkers...' : 'Analyzing meal photo...')}
+                  </p>
+                  <p className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
+                    <CheckCircle2 className="w-3 h-3 flex-shrink-0 text-emerald-500" />
+                    <span>Uploaded • Safe to close browser</span>
                   </p>
                 </div>
               </div>

@@ -267,7 +267,8 @@ export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) =>
 export function resolvePackageAndContextItems(
   items: any[],
   addDebugLog: (msg: string) => void,
-  userMessage: string = ""
+  userMessage: string = "",
+  isCompareMode: boolean = false
 ): any[] {
   if (!items || items.length <= 1) return items || [];
 
@@ -313,53 +314,63 @@ export function resolvePackageAndContextItems(
 
   const contextItemIndices = new Set<number>();
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    if (contextItemIndices.has(i)) continue;
+  // In compare mode, distinct options must NEVER be eliminated as package context
+  if (!isCompareMode) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (contextItemIndices.has(i)) continue;
 
-    if (isBulkPackageItem(item)) {
-      // Guard: multi-component visual meal on the plate is food, not packaging context
-      if (
-        Array.isArray(item.components) &&
-        item.components.length >= 2 &&
-        item.source !== "label" &&
-        !/\b(package|nutrition facts|unopened)\b/i.test(String(item.originalName || item.keyword || ""))
-      ) {
-        continue;
-      }
-
-      for (let j = 0; j < items.length; j++) {
-        if (i === j || contextItemIndices.has(j)) continue;
-        const otherItem = items[j];
-
-        let componentMatch = false;
-        if (otherItem.components && Array.isArray(otherItem.components)) {
-          for (const comp of otherItem.components) {
-            const compQuery = comp.searchQuery || comp.name || comp.keyword || "";
-            // Require strong overlap ( >= 0.75 ) so "Mac & Cheese" does NOT match component "feta cheese" via "cheese" alone
-            if (nameSimilarity(item.originalName || item.keyword, compQuery) >= 0.75) {
-              componentMatch = true;
-              if (item.rawNutritionLabel) {
-                comp.rawNutritionLabel = item.rawNutritionLabel;
-              }
-              break;
-            }
-          }
+      if (isBulkPackageItem(item)) {
+        // Guard: multi-component visual meal on the plate is food, not packaging context
+        if (
+          Array.isArray(item.components) &&
+          item.components.length >= 2 &&
+          item.source !== "label" &&
+          !/\b(package|nutrition facts|unopened)\b/i.test(String(item.originalName || item.keyword || ""))
+        ) {
+          continue;
         }
 
-        const dishNameSimilarity = nameSimilarity(item.originalName || item.keyword, otherItem.originalName || otherItem.keyword);
+        for (let j = 0; j < items.length; j++) {
+          if (i === j || contextItemIndices.has(j)) continue;
+          const otherItem = items[j];
 
-        if (componentMatch || dishNameSimilarity >= 0.5) {
-          contextItemIndices.add(i);
-          addDebugLog(`[Package Context Filter] Identified bulk package item "${item.originalName || item.keyword}" (${item.estimatedWeightGrams}g) as reference packaging/label context for dish "${otherItem.originalName || otherItem.keyword}". Excluding package from eaten items.`);
+          // Items from separate source images are distinct uploaded items, unless explicitly titled as a label panel
+          const isExplicitLabelPanel = /\b(nutrition facts|package label|label only|back of package|unopened box)\b/i.test(String(item.originalName || item.keyword || ""));
+          if (typeof item.sourceImageIndex === "number" && typeof otherItem.sourceImageIndex === "number" && item.sourceImageIndex !== otherItem.sourceImageIndex && !isExplicitLabelPanel) {
+            continue;
+          }
 
-          if (item.rawNutritionLabel && (!otherItem.rawNutritionLabel || Object.keys(otherItem.rawNutritionLabel).length === 0)) {
-            otherItem.rawNutritionLabel = item.rawNutritionLabel;
+          let componentMatch = false;
+          if (otherItem.components && Array.isArray(otherItem.components)) {
+            for (const comp of otherItem.components) {
+              const compQuery = comp.searchQuery || comp.name || comp.keyword || "";
+              // Require strong overlap ( >= 0.75 ) so "Mac & Cheese" does NOT match component "feta cheese" via "cheese" alone
+              if (nameSimilarity(item.originalName || item.keyword, compQuery) >= 0.75) {
+                componentMatch = true;
+                if (item.rawNutritionLabel) {
+                  comp.rawNutritionLabel = item.rawNutritionLabel;
+                }
+                break;
+              }
+            }
           }
-          if (item.ingredientsList && !otherItem.ingredientsList) {
-            otherItem.ingredientsList = item.ingredientsList;
+
+          const dishNameSimilarity = nameSimilarity(item.originalName || item.keyword, otherItem.originalName || otherItem.keyword);
+
+          // Only eliminate item if it is explicitly a sub-component match OR explicitly an unparsed label panel
+          if (componentMatch || (isExplicitLabelPanel && dishNameSimilarity >= 0.5)) {
+            contextItemIndices.add(i);
+            addDebugLog(`[Package Context Filter] Identified bulk package item "${item.originalName || item.keyword}" (${item.estimatedWeightGrams}g) as reference packaging/label context for dish "${otherItem.originalName || otherItem.keyword}". Excluding package from eaten items.`);
+
+            if (item.rawNutritionLabel && (!otherItem.rawNutritionLabel || Object.keys(otherItem.rawNutritionLabel).length === 0)) {
+              otherItem.rawNutritionLabel = item.rawNutritionLabel;
+            }
+            if (item.ingredientsList && !otherItem.ingredientsList) {
+              otherItem.ingredientsList = item.ingredientsList;
+            }
+            break;
           }
-          break;
         }
       }
     }
@@ -367,38 +378,53 @@ export function resolvePackageAndContextItems(
 
   if (userMessage && userMessage.trim().length > 0) {
     const cleanMsg = userMessage.toLowerCase();
-    for (let i = 0; i < items.length; i++) {
-      if (contextItemIndices.has(i)) continue;
-      const item = items[i];
-      const name = (item.originalName || item.keyword || "").toLowerCase();
+    if (!isCompareMode) {
+      for (let i = 0; i < items.length; i++) {
+        if (contextItemIndices.has(i)) continue;
+        const item = items[i];
+        const name = (item.originalName || item.keyword || "").toLowerCase();
 
-      if (isBulkPackageItem(item) && (cleanMsg.includes("oat") || cleanMsg.includes("fruit") || cleanMsg.includes("50g") || cleanMsg.includes("pack") || cleanMsg.includes("bowl"))) {
-        const hasOtherDish = items.some((it, idx) => idx !== i && !contextItemIndices.has(idx) && (it.source === "visual" || (it.components && it.components.length > 0)));
-        if (hasOtherDish) {
-          contextItemIndices.add(i);
-          addDebugLog(`[User Scope Anchor] User text "${userMessage}" anchors eaten meal scope. Excluding reference bulk package "${item.originalName || item.keyword}" (${item.estimatedWeightGrams}g).`);
+        if (isBulkPackageItem(item) && (cleanMsg.includes("oat") || cleanMsg.includes("fruit") || cleanMsg.includes("50g") || cleanMsg.includes("pack") || cleanMsg.includes("bowl"))) {
+          const hasOtherDish = items.some((it, idx) => idx !== i && !contextItemIndices.has(idx) && (it.source === "visual" || (it.components && it.components.length > 0)));
+          if (hasOtherDish) {
+            contextItemIndices.add(i);
+            addDebugLog(`[User Scope Anchor] User text "${userMessage}" anchors eaten meal scope. Excluding reference bulk package "${item.originalName || item.keyword}" (${item.estimatedWeightGrams}g).`);
+          }
         }
       }
     }
 
-    // Explicit User Gram Weight Anchor: Check if user message specifies exact portion weight (e.g. "50g of oats")
-    const weightMatches = Array.from(cleanMsg.matchAll(/(\d+(?:\.\d+)?)\s*(?:g|grams?)\b/g));
-    if (weightMatches.length > 0) {
-      weightMatches.forEach((m) => {
-        const explicitWeight = parseFloat(m[1]);
-        if (explicitWeight > 0 && explicitWeight <= 2000) {
+    // Explicit User Gram & Volume Weight Anchor: Check if user message specifies portion weights/volumes (e.g. "Lassi is 1L the other is 500ml" or "50g of oats")
+    const weightVolumeMatches = Array.from(cleanMsg.matchAll(/(\d+(?:\.\d+)?)\s*(g|grams?|ml|milliliters?|millilitres?|l|liters?|litres?)\b/gi));
+    if (weightVolumeMatches.length > 0) {
+      weightVolumeMatches.forEach((m, matchIndex) => {
+        const valNum = parseFloat(m[1]);
+        const unitStr = (m[2] || 'g').toLowerCase();
+        let explicitWeight = valNum;
+        if (unitStr.startsWith('l') && !unitStr.startsWith('m')) {
+          explicitWeight = valNum * 1000; // 1L -> 1000g
+        }
+        if (explicitWeight > 0 && explicitWeight <= 5000) {
           const matchIdx = m.index || 0;
           const contextBefore = cleanMsg.substring(Math.max(0, matchIdx - 40), matchIdx);
           const contextAfter = cleanMsg.substring(matchIdx, Math.min(cleanMsg.length, matchIdx + m[0].length + 40));
           const contextStr = `${contextBefore} ${contextAfter}`;
 
+          let matchedAnItem = false;
           for (let i = 0; i < items.length; i++) {
             if (contextItemIndices.has(i)) continue;
             const item = items[i];
             const nameStr = (item.originalName || item.keyword || '').toLowerCase();
             const words = nameStr.split(/[^a-z0-9]+/);
             const hasWordMatch = words.some(w => w.length >= 3 && contextStr.includes(w));
-            if (hasWordMatch || items.length === 1) {
+            
+            // Context heuristic: e.g. "other" or position matching for multi-item user inputs
+            const isPositionalMatch = items.length > 1 && (
+              (matchIndex === 0 && (contextStr.includes('first') || contextStr.includes('lassi') || i === 0)) ||
+              (matchIndex === 1 && (contextStr.includes('other') || contextStr.includes('second') || contextStr.includes('plain') || i === 1))
+            );
+
+            if (hasWordMatch || isPositionalMatch || items.length === 1) {
               if (item.components && Array.isArray(item.components) && item.components.length > 1) {
                 const matchedComp = item.components.find((c: any) => {
                   const cQuery = (c.searchQuery || c.name || c.keyword || '').toLowerCase();
@@ -407,15 +433,24 @@ export function resolvePackageAndContextItems(
                 if (matchedComp && Number(matchedComp.volumePercentage) > 0) {
                   const compPct = Number(matchedComp.volumePercentage) / 100;
                   const targetTotalWeight = Math.round(explicitWeight / compPct);
-                  addDebugLog(`[User Explicit Weight Anchor] User text specified ${explicitWeight}g for sub-component "${matchedComp.searchQuery || matchedComp.name}" in composite dish "${item.originalName || item.keyword}". Updating total dish estimatedWeightGrams from ${item.estimatedWeightGrams}g to ${targetTotalWeight}g (component=${explicitWeight}g).`);
+                  addDebugLog(`[User Explicit Weight Anchor] User text specified ${explicitWeight}g/ml for sub-component "${matchedComp.searchQuery || matchedComp.name}" in composite dish "${item.originalName || item.keyword}". Updating total dish estimatedWeightGrams from ${item.estimatedWeightGrams}g to ${targetTotalWeight}g (component=${explicitWeight}g).`);
                   item.estimatedWeightGrams = targetTotalWeight;
+                  matchedAnItem = true;
                   break;
                 }
               }
-              addDebugLog(`[User Explicit Weight Anchor] User text specified ${explicitWeight}g for "${item.originalName || item.keyword}". Updating estimatedWeightGrams from ${item.estimatedWeightGrams}g to ${explicitWeight}g.`);
+              addDebugLog(`[User Explicit Weight Anchor] User text specified ${explicitWeight}g/ml for "${item.originalName || item.keyword}". Updating estimatedWeightGrams from ${item.estimatedWeightGrams}g to ${explicitWeight}g.`);
               item.estimatedWeightGrams = explicitWeight;
+              matchedAnItem = true;
               break;
             }
+          }
+
+          // Fallback positional assignment if no word match occurred
+          if (!matchedAnItem && items[matchIndex]) {
+            const targetItem = items[matchIndex];
+            addDebugLog(`[User Explicit Weight Anchor Fallback] User text specified ${explicitWeight}g/ml for item index ${matchIndex} ("${targetItem.originalName || targetItem.keyword}"). Updating estimatedWeightGrams to ${explicitWeight}g.`);
+            targetItem.estimatedWeightGrams = explicitWeight;
           }
         }
       });
@@ -955,7 +990,7 @@ export function parseAndHealVisionScout(
         visionScoutItems = mergedList;
       }
 
-      visionScoutItems = resolvePackageAndContextItems(visionScoutItems, addDebugLog, userMessage);
+      visionScoutItems = resolvePackageAndContextItems(visionScoutItems, addDebugLog, userMessage, isCompareMode);
 
       for (const item of visionScoutItems) {
         if (item.keyword) {

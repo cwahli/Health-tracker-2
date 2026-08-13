@@ -935,10 +935,16 @@ export default function App() {
 
       while (attempts < maxAttempts) {
         attempts++;
-        if (attempts > 1) {
-          console.log(`[JobQueueRunner] Retrying job ${job.id} (Attempt ${attempts}/${maxAttempts})`);
+        const currentJob = JobStore.getJob(job.id);
+        const effectiveAttempt = Math.max(attempts, currentJob?.attemptCount || 1);
+        JobStore.updateJob(job.id, {
+          attemptCount: effectiveAttempt,
+          maxAttempts: maxAttempts
+        });
+        if (effectiveAttempt > 1) {
+          console.log(`[JobQueueRunner] Retrying job ${job.id} (Attempt ${effectiveAttempt}/${maxAttempts})`);
           JobStore.updateJob(job.id, {
-            statusMessage: `Retrying (attempt ${attempts}/${maxAttempts})...`
+            statusMessage: `Retrying (attempt ${effectiveAttempt}/${maxAttempts})...`
           });
         }
 

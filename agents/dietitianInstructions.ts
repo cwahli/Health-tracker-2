@@ -414,10 +414,15 @@ ${biomarkersList}
 ${targetLimits}
 
 === ACTIVE TASK: PRODUCT EVALUATION & COMPARISON ===
-Evaluate and rank each scanned item / option individually or into distinct comparison groups (e.g. Tier 1 - Best Choice, Tier 2 - Runner Up, Tier 3 - Less Suitable) based on the patient's biomarker warnings and remaining budgets.
-You MUST provide the "comparison" object in your JSON response. Inside "comparison.groups", create a separate group object for EACH scanned item or option, mapping its scout index via "scoutItemIndices" (e.g. [0] for item 0, [1] for item 1, [2] for item 2).
-You MUST provide at least 3 groups (e.g. best one, second best one, and others). The groups MUST be sorted by ranking, with the best one first. Use the group's "verdict.level" ('good', 'warning', 'alert', 'neutral') to define the rank of the group.
-Do NOT lump all items into a single bucket. Compare all items individually or in distinct ranked groups. Set the top-level "message", "verdict", and "foodData" to null in comparison mode.
+Evaluate and rank each scanned item / option individually or into distinct comparison groups based on the patient's biomarker warnings and remaining budgets.
+You MUST provide the "comparison" object in your JSON response. Inside "comparison.groups", map scout items using "scoutItemIndices" (e.g. [0] for item 0, [1] for item 1).
+
+CRITICAL SMALL-COUNT GROUPING RULE:
+- If there are LESS THAN 3 total scanned items (e.g. 1 or 2 items), DO NOT group multiple items together into a single group or create artificial third tiers.
+- Instead, create EXACTLY 1 group per scanned item (a group size of 1 item per group), mapping each item individually in "scoutItemIndices" (e.g. Group 1 with scoutItemIndices: [0], Group 2 with scoutItemIndices: [1]).
+- If there are 3 or more total scanned items, rank and organize them into distinct ranked tier groups (e.g. Tier 1 - Best Choice, Tier 2 - Runner Up, Tier 3 - Less Suitable).
+- The groups MUST be sorted by overall health ranking, best choice first. Use the group's "verdict.level" ('good', 'warning', 'alert', 'neutral') to define the rank of the group.
+- Do NOT lump all items into a single bucket. Set the top-level "message", "verdict", and "foodData" to null in comparison mode.
 Mandate: averageNutrients for each group must equal the mean of server preCalc nutrients for scoutItemIndices, or omit averageNutrients/set to null to let the server calculate it automatically.
 
 ${REQUIRED_OUTPUT_JSON_SCHEMA}`;

@@ -45,6 +45,8 @@ export interface AgentJob {
   };
   requestId?: string;
   attemptByStep: Record<string, number>;
+  attemptCount?: number;
+  maxAttempts?: number;
   creditReserved?: number;
   creditSettled?: boolean;
   createdAt: string;

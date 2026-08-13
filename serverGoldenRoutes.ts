@@ -8,6 +8,7 @@ import {
   evaluateLogOutcomes,
   evaluateMealLines,
   extractMealLines,
+  parseResolutionStats,
   scoreboardSummary,
   type GoldenAttempt,
   type GoldenMealLine,
@@ -389,6 +390,7 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
 
       board.outcomes = outcomes;
       board.observedMeal = actualLines;
+      board.resolutionStats = parseResolutionStats(freshLog || '');
       await putR2(deps, `${casePrefix(id)}/scoreboard.json`, JSON.stringify(board, null, 2), 'application/json');
       if (typeof req.body?.logText === 'string' && req.body.logText) {
         await putR2(deps, `${casePrefix(id)}/backend.log`, req.body.logText.slice(0, 400_000), 'text/plain');
@@ -473,6 +475,18 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
       res.json({ ok: true, status: 'promoted' });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || 'promote failed' });
+    }
+  });
+
+  app.delete('/api/golden/cases/:id', async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id);
+      const { data, error } = await gcGet(id);
+      if (error || !data) return res.status(404).json({ error: error || 'not found' });
+      await d1Query(`DELETE FROM golden_cases WHERE id = ?`, [id]);
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || 'delete failed' });
     }
   });
 }

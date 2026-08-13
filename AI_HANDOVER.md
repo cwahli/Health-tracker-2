@@ -307,3 +307,4 @@ archive/
 - 2026-08-13: Fixed extreme scale bounds and receipt invariants omitting weightGrams scaling when extrapolating macronutrients.
 
 - 2026-08-13: Repaired client-side JobQueueRunner.ts mealBuild extraction logic to satisfy M21.1 and M22 governance gates.
+- 2026-08-13: Golden Inbox & Food Resolution Diagnostics: Added `DELETE /api/golden/cases/:id` endpoint and UI delete button; added Download Logs/Prompt action links; added food resolution diagnostic breakdown (USDA, Catalog, Verified/Curator, Fallback) to scoreboard; added base64 image upload to R2 during job submission; expanded canonical database mappings for plain yogurt, raisins, almonds, croissant, falafel, hummus, feta cheese, red onion, bell pepper. All 44 test suites (325 tests) and typechecks pass.
