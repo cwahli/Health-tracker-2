@@ -39,7 +39,7 @@ import { BugCategory } from '../utils/issueBacklog';
 import { AVAILABLE_LLMS } from '../utils/llm';
 import { JobStore } from '../jobs/JobStore';
 import { saveAgentRequestLog } from '../utils/agentLogsTracker';
-import { extractMealLines, type GoldenMealLine } from '../utils/goldenScoreboard';
+import { extractMealLines, extractCapturedMealProblems, type GoldenMealLine } from '../utils/goldenScoreboard';
 import { collectOriginalFixture } from '../utils/goldenFixture';
 
 export interface BugSnapshotFabProps {
@@ -350,13 +350,32 @@ export default function BugSnapshotFab({
     }
   };
 
-  /** Requirement 2: Open modal immediately, then close shortly to get picture and show it again */
+  /** Requirement 2: Open modal immediately, extract captured meal errors & photos, then take screen capture */
   const handleOpenFab = async () => {
     setCategory(getCategoryForTab(activeTab));
     setTagId('');
     setError(null);
     setSuccess(null);
     setCapturing(true);
+
+    // Extract active job context (captured meal processing problems + meal photo)
+    const jobs = typeof JobStore?.getAllJobs === 'function' ? JobStore.getAllJobs() : [];
+    const activeJob =
+      jobs.find((j) => j.kind !== 'bug_triage' && (j.status === 'succeeded' || j.status === 'failed')) || jobs[0];
+
+    const capturedProblems = extractCapturedMealProblems(activeJob);
+    if (capturedProblems.length > 0) {
+      setSymptom((prev) => {
+        if (prev && prev.trim()) return prev;
+        return `[Captured Meal Processing Issues]\n` + capturedProblems.join('\n');
+      });
+    }
+
+    const mealPhoto =
+      activeJob?.result?.photoUrl ||
+      activeJob?.result?.pendingFoodLog?.imageUrl ||
+      activeJob?.result?.data?.pendingFoodLog?.imageUrl ||
+      activeJob?.inputSnapshot?.imageRefs?.[0];
 
     // 1. Open modal immediately
     setOpen(true);
@@ -371,17 +390,20 @@ export default function BugSnapshotFab({
 
     try {
       const frame = await capturePageScreenshot();
+      const currentShots: string[] = [];
       if (frame) {
         const webp = await compressToWebpOrJpeg(frame, 1280, 0.8);
-        setShots([webp]);
-      } else {
-        setShots([]);
+        currentShots.push(webp);
       }
+      if (mealPhoto && !currentShots.includes(mealPhoto)) {
+        currentShots.push(mealPhoto);
+      }
+      setShots(currentShots);
     } catch {
-      setShots([]);
+      setShots(mealPhoto ? [mealPhoto] : []);
     } finally {
       setCapturing(false);
-      // 4. Reopen modal with captured shot
+      // 4. Reopen modal with captured shots
       setOpen(true);
     }
   };
@@ -1066,23 +1088,54 @@ export default function BugSnapshotFab({
                           ))}
                         </ul>
                       )}
-                      {goldenLines.length > 0 && (
-                        <div className="space-y-1">
-                          <p className="font-bold text-white/90">Final result (tick a line to score it)</p>
-                          {goldenLines.map((line, i) => (
-                            <label key={i} className="flex items-center gap-1.5">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <p className="font-bold text-amber-200 text-xs">Top Dishes List — Assign Target Values</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGoldenLines((prev) => [
+                                ...prev,
+                                {
+                                  name: `Dish ${prev.length + 1}`,
+                                  weightGrams: null,
+                                  calories: null,
+                                  protein: null,
+                                  carbohydrates: null,
+                                  totalFat: null,
+                                  sodium: null,
+                                  scored: true,
+                                },
+                              ]);
+                            }}
+                            className="px-2 py-0.5 rounded bg-amber-500/30 hover:bg-amber-500/50 border border-amber-400/40 text-[10px] text-amber-200 font-bold flex items-center gap-1"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Add Dish
+                          </button>
+                        </div>
+                        {goldenLines.length === 0 ? (
+                          <p className="text-[10px] text-white/50 italic">No top dishes extracted yet. Click "Add Dish" above.</p>
+                        ) : (
+                          goldenLines.map((line, i) => (
+                            <div key={i} className="flex flex-wrap items-center gap-1.5 bg-black/40 p-1.5 rounded-lg border border-white/10">
+                              <label className="flex items-center gap-1 shrink-0" title="Tick to score in golden evaluation">
+                                <input
+                                  type="checkbox"
+                                  checked={line.scored}
+                                  onChange={(e) => {
+                                    const next = [...goldenLines];
+                                    next[i] = { ...next[i], scored: e.target.checked };
+                                    setGoldenLines(next);
+                                  }}
+                                  className="rounded border-amber-400"
+                                />
+                                <span className="text-[10px] text-amber-300 font-medium">Dish {i + 1}</span>
+                              </label>
                               <input
-                                type="checkbox"
-                                checked={line.scored}
-                                onChange={(e) => {
-                                  const next = [...goldenLines];
-                                  next[i] = { ...next[i], scored: e.target.checked };
-                                  setGoldenLines(next);
-                                }}
-                              />
-                              <input
-                                className="flex-1 bg-black/30 border border-white/15 rounded px-1 py-0.5 text-[10px]"
+                                className="flex-1 min-w-[120px] bg-slate-900 border border-white/20 rounded px-1.5 py-0.5 text-[10px] text-white"
                                 value={line.name}
+                                placeholder="Dish name (e.g. Ham Sandwich)"
                                 onChange={(e) => {
                                   const next = [...goldenLines];
                                   next[i] = { ...next[i], name: e.target.value };
@@ -1090,7 +1143,7 @@ export default function BugSnapshotFab({
                                 }}
                               />
                               <input
-                                className="w-16 bg-black/30 border border-white/15 rounded px-1 py-0.5 text-[10px]"
+                                className="w-16 bg-slate-900 border border-white/20 rounded px-1.5 py-0.5 text-[10px] text-amber-200"
                                 value={line.calories ?? ''}
                                 placeholder="kcal"
                                 onChange={(e) => {
@@ -1100,10 +1153,42 @@ export default function BugSnapshotFab({
                                   setGoldenLines(next);
                                 }}
                               />
-                            </label>
-                          ))}
-                        </div>
-                      )}
+                              <input
+                                className="w-16 bg-slate-900 border border-white/20 rounded px-1.5 py-0.5 text-[10px] text-emerald-200"
+                                value={line.weightGrams ?? ''}
+                                placeholder="grams"
+                                onChange={(e) => {
+                                  const next = [...goldenLines];
+                                  const v = e.target.value === '' ? null : Number(e.target.value);
+                                  next[i] = { ...next[i], weightGrams: v };
+                                  setGoldenLines(next);
+                                }}
+                              />
+                              <input
+                                className="w-12 bg-slate-900 border border-white/20 rounded px-1 py-0.5 text-[10px] text-blue-200"
+                                value={line.protein ?? ''}
+                                placeholder="p(g)"
+                                onChange={(e) => {
+                                  const next = [...goldenLines];
+                                  const v = e.target.value === '' ? null : Number(e.target.value);
+                                  next[i] = { ...next[i], protein: v };
+                                  setGoldenLines(next);
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setGoldenLines((prev) => prev.filter((_, idx) => idx !== i));
+                                }}
+                                className="p-1 text-rose-400 hover:text-rose-200 shrink-0"
+                                title="Remove dish"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
                       <textarea
                         rows={2}
                         value={extraIssuesText}

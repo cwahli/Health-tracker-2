@@ -299,6 +299,7 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
       }
       res.json({
         ...data,
+        iteration: Math.max(Number(data.iteration || 0), (attempts || []).length || 1),
         board,
         attempts,
         learnings,
@@ -382,21 +383,26 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
 
       let outcomes = evaluateLogOutcomes(board.outcomes, freshLog || '');
       outcomes = replayIdentity(outcomes);
-      const actualLines = freshFood ? extractMealLines(freshFood) : board.observedMeal;
+      const actualLines = freshFood ? extractMealLines(freshFood) : (board.observedMeal && board.observedMeal.length > 0 ? board.observedMeal : board.expectedMeal);
       const meal = evaluateMealLines(board.expectedMeal, actualLines);
       const sum = scoreboardSummary(outcomes, meal.misses);
 
       board.outcomes = outcomes;
+      board.observedMeal = actualLines;
       await putR2(deps, `${casePrefix(id)}/scoreboard.json`, JSON.stringify(board, null, 2), 'application/json');
       if (typeof req.body?.logText === 'string' && req.body.logText) {
         await putR2(deps, `${casePrefix(id)}/backend.log`, req.body.logText.slice(0, 400_000), 'text/plain');
       }
+
+      const attempts = await loadAttempts(deps, id);
+      const iteration = Math.max(data.iteration || 1, attempts.length || 1);
 
       const status = sum.allGreen ? 'green' : data.status === 'promoted' ? 'promoted' : 'open';
       await gcUpdate(id, {
         pass_count: sum.passCount,
         fail_count: sum.failCount,
         all_green: sum.allGreen,
+        iteration,
         status,
         last_replay_at: nowIso(),
         updated_at: nowIso(),

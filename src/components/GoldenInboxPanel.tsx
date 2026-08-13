@@ -6,12 +6,23 @@ type CaseRow = {
   title: string;
   status: string;
   job_id?: string;
+  photo_url?: string;
   pass_count: number;
   fail_count: number;
   iteration: number;
   all_green: boolean;
   updated_at: string;
 };
+
+function formatLabelText(val: any): string {
+  if (!val) return '';
+  const s = typeof val === 'string' ? val : JSON.stringify(val);
+  return s
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/(\.)([A-Z])/g, '$1 $2')
+    .replace(/:\s*/g, ': ');
+}
 
 export default function GoldenInboxPanel() {
   const [cases, setCases] = useState<CaseRow[]>([]);
@@ -122,17 +133,23 @@ export default function GoldenInboxPanel() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold text-white truncate">{c.title}</span>
-                <span className={`text-[10px] font-bold ${c.all_green ? 'text-emerald-300' : 'text-amber-300'}`}>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${c.all_green ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
                   {c.status}
                 </span>
-                <span className="text-[10px] text-white/50">iter {c.iteration}</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                  Fix Iteration #{openId === c.id && detail ? (detail.iteration || c.iteration || 1) : (c.iteration || 1)}
+                </span>
               </div>
-              <div className="mt-1 h-1.5 rounded-full bg-black/40 overflow-hidden flex">
+              <div className="mt-1.5 h-1.5 rounded-full bg-black/40 overflow-hidden flex">
                 <div className="bg-emerald-500" style={{ width: `${pct(c.pass_count, c.pass_count + c.fail_count)}%` }} />
                 <div className="bg-rose-500" style={{ width: `${pct(c.fail_count, c.pass_count + c.fail_count)}%` }} />
               </div>
-              <p className="text-[10px] text-white/50 mt-1">
-                {c.pass_count} pass · {c.fail_count} fail · job {c.job_id || '—'}
+              <p className="text-[10px] text-white/60 mt-1 flex items-center gap-2">
+                <span className="text-emerald-300 font-semibold">{c.pass_count} Fixed so far</span>
+                <span>·</span>
+                <span className="text-rose-300 font-semibold">{c.fail_count} Still pending</span>
+                <span>·</span>
+                <span>job {c.job_id || '—'}</span>
               </p>
             </div>
           </button>
@@ -156,45 +173,132 @@ export default function GoldenInboxPanel() {
             </button>
           </div>
           {openId === c.id && detail && (
-            <div className="px-3 pb-3 space-y-2 border-t border-white/10 pt-2">
-              {detail.fixture && (
-                <div className="text-[10px] text-emerald-200/90 space-y-1">
-                  <p className="font-bold text-emerald-300">Original input (frozen)</p>
-                  <p>Query: {detail.fixture.query ? `“${detail.fixture.query}”` : '(photo only)'}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {(detail.fixture.photos || []).map((u: string, i: number) => (
-                      <a key={i} href={u} target="_blank" rel="noreferrer" className="block">
-                        <img src={u} alt={`fixture ${i + 1}`} className="h-12 w-12 object-cover rounded border border-white/20" />
-                      </a>
+            <div className="px-3 pb-3 space-y-3 border-t border-white/10 pt-2 text-xs">
+              {/* Iteration & Fix Actions */}
+              <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/40 p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-indigo-300 text-[11px]">Fix Iteration Progress</span>
+                  <span className="text-[10px] text-indigo-200 bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-400/30 font-semibold">
+                    Iteration #{detail.iteration || c.iteration || 1}
+                  </span>
+                </div>
+                {(detail.attempts || []).length > 0 ? (
+                  <div className="space-y-1 text-[11px] text-white/80">
+                    <p className="font-semibold text-indigo-200">What was done to fix it:</p>
+                    {detail.attempts.slice(-3).map((a: any) => (
+                      <div key={a.n} className="bg-black/30 p-1.5 rounded border border-white/10 space-y-0.5">
+                        <p className="text-emerald-300 font-medium">Attempt #{a.n} ({a.actor || 'studio'})</p>
+                        <p className="text-white/90"><span className="text-white/60">Action taken:</span> {a.tried}</p>
+                        <p className="text-amber-200"><span className="text-white/60">Learned:</span> {a.learned}</p>
+                        {a.replaySummary && <p className="text-indigo-200"><span className="text-white/60">Result:</span> {a.replaySummary}</p>}
+                      </div>
                     ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-white/50 italic">No explicit fix attempts logged yet for this iteration. Re-run after code edits.</p>
+                )}
+              </div>
+
+              {detail.fixture && (
+                <div className="text-[10px] text-emerald-200/90 space-y-1 rounded-xl border border-emerald-500/20 bg-emerald-950/30 p-2">
+                  <p className="font-bold text-emerald-300">Meal Picture & Query (from food log)</p>
+                  <p>Query: {detail.fixture.query ? `“${detail.fixture.query}”` : '(photo only)'}</p>
+                  {(() => {
+                    const rawPhotos = detail.fixture.photos || detail.fixture.photoList || detail.fixture.imageRefs;
+                    const photoList: string[] = Array.isArray(rawPhotos) && rawPhotos.length > 0
+                      ? rawPhotos
+                      : ([detail.fixture.photo, detail.fixture.photoUrl, detail.fixture.imageUrl, c.photo_url].filter(Boolean) as string[]);
+                    return photoList.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {photoList.map((u: string, i: number) => (
+                          <a key={i} href={u} target="_blank" rel="noreferrer" className="block">
+                            <img src={u} alt={`meal photo ${i + 1}`} className="h-14 w-14 object-cover rounded border border-emerald-400/40" />
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-white/40 italic mt-0.5">No image attached</p>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Top Dishes / Meal Lines Expected vs Current Iteration Comparison */}
+              {Array.isArray(detail.board?.expectedMeal) && detail.board.expectedMeal.length > 0 && (
+                <div className="space-y-1.5 rounded-xl border border-white/15 bg-slate-900/80 p-2.5">
+                  <p className="font-bold text-white text-[11px] flex items-center justify-between">
+                    <span>Meal Dishes / Lines — Expected vs Current Iteration</span>
+                  </p>
+                  <div className="space-y-1 text-[10px]">
+                    {detail.board.expectedMeal.map((exp: any, idx: number) => {
+                      const obs = (detail.board?.observedMeal || []).find((o: any) =>
+                        o.name?.toLowerCase().includes(exp.name?.toLowerCase()) || exp.name?.toLowerCase().includes(o.name?.toLowerCase())
+                      ) || (detail.board?.observedMeal || [])[idx];
+                      const isMatch = obs ? (exp.calories == null || Math.abs((obs.calories ?? 0) - (exp.calories ?? 0)) < 30 || exp.scored === false) : false;
+                      return (
+                        <div key={idx} className={`p-1.5 rounded border flex flex-wrap items-center justify-between gap-1 ${isMatch ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-rose-950/30 border-rose-500/30'}`}>
+                          <div>
+                            <p className="font-semibold text-white">{exp.name}</p>
+                            <p className="text-white/60">Expected: {exp.calories != null ? `${exp.calories} kcal` : 'N/A'} · {exp.weightGrams != null ? `${exp.weightGrams}g` : 'N/A'}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className={`font-bold px-1.5 py-0.5 rounded text-[9px] ${isMatch ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                              {isMatch ? '✓ PASSED' : '✗ PENDING'}
+                            </span>
+                            <p className="text-white/70 mt-0.5">
+                              Current: {obs ? `${obs.calories ?? 0} kcal (${obs.weightGrams ?? 0}g)` : 'Missing in current run'}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
-              {(detail.board?.outcomes || []).map((o: any) => (
-                <div key={o.id} className="text-[11px] flex gap-2">
-                  <span className={o.pass === true ? 'text-emerald-300' : o.pass === false ? 'text-rose-300' : 'text-white/40'}>
-                    {o.pass === true ? '✓' : o.pass === false ? '✗' : '·'}
-                  </span>
-                  <span className="text-white/90">{o.label}</span>
+
+              {/* Fixed So Far vs Still Pending Requirements */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {/* Fixed So Far */}
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-2.5 space-y-1.5">
+                  <p className="font-bold text-emerald-300 text-[11px] flex items-center gap-1">
+                    <span>Fixed So Far (Passed)</span>
+                  </p>
+                  {((detail.board?.outcomes || []).filter((o: any) => o.pass === true)).length === 0 ? (
+                    <p className="text-[10px] text-white/50 italic">None fixed so far in this iteration.</p>
+                  ) : (
+                    (detail.board?.outcomes || []).filter((o: any) => o.pass === true).map((o: any) => (
+                      <div key={o.id} className="text-[10px] p-1.5 rounded bg-emerald-900/30 border border-emerald-500/20 text-emerald-100 space-y-0.5">
+                        <p className="font-medium text-emerald-200">✓ {formatLabelText(o.label)}</p>
+                        <p className="text-white/60">Expected: {formatLabelText(o.expected ?? 'Pass')} | Current: {formatLabelText(o.actual ?? 'OK (Pass)')}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
-              ))}
+
+                {/* Still Pending */}
+                <div className="rounded-xl border border-rose-500/30 bg-rose-950/30 p-2.5 space-y-1.5">
+                  <p className="font-bold text-rose-300 text-[11px] flex items-center gap-1">
+                    <span>Still Pending (To Fix)</span>
+                  </p>
+                  {((detail.board?.outcomes || []).filter((o: any) => o.pass !== true)).length === 0 ? (
+                    <p className="text-[10px] text-emerald-300 italic">All green! Everything fixed.</p>
+                  ) : (
+                    (detail.board?.outcomes || []).filter((o: any) => o.pass !== true).map((o: any) => (
+                      <div key={o.id} className="text-[10px] p-1.5 rounded bg-rose-900/30 border border-rose-500/20 text-rose-100 space-y-0.5">
+                        <p className="font-medium text-rose-200">✗ {formatLabelText(o.label)}</p>
+                        <p className="text-white/60">Expected: {formatLabelText(o.expected ?? 'No error')} | Current: {formatLabelText(o.actual ?? 'Failing / Triggered')}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
               {(detail.board?.tensions || []).length > 0 && (
-                <div className="text-[10px] text-amber-200/90 space-y-1">
-                  <p className="font-bold text-amber-300">Tensions (not on the board until you promote them)</p>
+                <div className="text-[10px] text-amber-200/90 space-y-1 rounded-xl border border-amber-500/30 bg-amber-950/30 p-2">
+                  <p className="font-bold text-amber-300">Tensions / Warnings</p>
                   {detail.board.tensions.map((t: any) => (
                     <p key={t.id}>
                       {t.left} ↔ {t.right} — {t.note}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {(detail.attempts || []).length > 0 && (
-                <div className="text-[10px] text-white/70 space-y-1">
-                  <p className="font-bold text-white/80">Attempts / learnings</p>
-                  {detail.attempts.slice(-6).map((a: any) => (
-                    <p key={a.n}>
-                      #{a.n} tried: {a.tried} → learned: {a.learned}
-                      {a.n >= 5 && a.createdNewIssue ? ' · do not retry this class' : ''}
                     </p>
                   ))}
                 </div>

@@ -183,6 +183,8 @@ export function setCachedUSDAFood(query: string, match: any): void {
 
 export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: number; protein: number; totalFat: number; saturatedFat: number; transFat: number; carbohydrates: number; sugar: number; sodium: number; potassium: number; fiber: number; vitaminC?: number; vitaminA?: number; calcium?: number; magnesium?: number; iron?: number; zinc?: number; folate?: number; vitaminB6?: number; vitaminD?: number; vitaminE?: number; vitaminK?: number; selenium?: number; phosphorus?: number; vitaminB12?: number; foodType: string }> = {
   tartar_sauce: { fdcId: "tartar_sauce_canonical", calories: 211, protein: 1.0, totalFat: 21.0, saturatedFat: 3.4, transFat: 0, carbohydrates: 4.4, sugar: 1.0, sodium: 730, potassium: 50, fiber: 1.0, foodType: 'ultra_processed' },
+  wheat_flour: { fdcId: "169680", calories: 364, protein: 10.33, totalFat: 0.98, saturatedFat: 0.15, transFat: 0, carbohydrates: 76.31, sugar: 0.27, sodium: 2, potassium: 107, fiber: 2.7, foodType: 'grain' },
+  granulated_sugar: { fdcId: "169652", calories: 387, protein: 0, totalFat: 0, saturatedFat: 0, transFat: 0, carbohydrates: 99.98, sugar: 99.9, sodium: 1, potassium: 2, fiber: 0, foodType: 'processed' },
   american_cheese: { fdcId: "american_cheese_canonical", calories: 330, protein: 18.0, totalFat: 27.0, saturatedFat: 17.0, transFat: 0, carbohydrates: 3.0, sugar: 2.0, sodium: 1500, potassium: 150, fiber: 0, foodType: 'dairy' },
   processed_cheese: { fdcId: "processed_cheese_canonical", calories: 330, protein: 18.0, totalFat: 27.0, saturatedFat: 17.0, transFat: 0, carbohydrates: 3.0, sugar: 2.0, sodium: 1500, potassium: 150, fiber: 0, foodType: 'dairy' },
   mayonnaise: { fdcId: "mayo_canonical", calories: 680, protein: 1.0, totalFat: 75.0, saturatedFat: 12.0, transFat: 0, carbohydrates: 0.6, sugar: 0.6, sodium: 635, potassium: 20, fiber: 0, foodType: 'ultra_processed' },
@@ -243,9 +245,9 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   chocolate_brownie: { fdcId: "brownie_canonical", calories: 466, protein: 5.5, totalFat: 23.0, saturatedFat: 8.0, transFat: 0, carbohydrates: 62.0, sugar: 40.0, sodium: 300, potassium: 200, fiber: 3.5, foodType: 'processed' },
   brownie: { fdcId: "brownie_canonical", calories: 466, protein: 5.5, totalFat: 23.0, saturatedFat: 8.0, transFat: 0, carbohydrates: 62.0, sugar: 40.0, sodium: 300, potassium: 200, fiber: 3.5, foodType: 'processed' },
   fudge_brownie: { fdcId: "brownie_canonical", calories: 466, protein: 5.5, totalFat: 23.0, saturatedFat: 8.0, transFat: 0, carbohydrates: 62.0, sugar: 40.0, sodium: 300, potassium: 200, fiber: 3.5, foodType: 'processed' },
-  dark_chocolate: { fdcId: "dark_chocolate_canonical", calories: 546, protein: 4.9, totalFat: 31.0, saturatedFat: 19.0, transFat: 0, carbohydrates: 61.0, sugar: 48.0, sodium: 24, potassium: 559, fiber: 7.0, foodType: 'processed' },
-  dark_chocolate_chunk: { fdcId: "dark_chocolate_canonical", calories: 546, protein: 4.9, totalFat: 31.0, saturatedFat: 19.0, transFat: 0, carbohydrates: 61.0, sugar: 48.0, sodium: 24, potassium: 559, fiber: 7.0, foodType: 'processed' },
-  chocolate_chunk: { fdcId: "dark_chocolate_canonical", calories: 546, protein: 4.9, totalFat: 31.0, saturatedFat: 19.0, transFat: 0, carbohydrates: 61.0, sugar: 48.0, sodium: 24, potassium: 559, fiber: 7.0, foodType: 'processed' },
+  dark_chocolate: { fdcId: "170272", calories: 546, protein: 4.9, totalFat: 31.0, saturatedFat: 19.0, transFat: 0, carbohydrates: 61.0, sugar: 48.0, sodium: 24, potassium: 559, fiber: 7.0, foodType: 'processed' },
+  dark_chocolate_chunk: { fdcId: "170272", calories: 546, protein: 4.9, totalFat: 31.0, saturatedFat: 19.0, transFat: 0, carbohydrates: 61.0, sugar: 48.0, sodium: 24, potassium: 559, fiber: 7.0, foodType: 'processed' },
+  chocolate_chunk: { fdcId: "170272", calories: 546, protein: 4.9, totalFat: 31.0, saturatedFat: 19.0, transFat: 0, carbohydrates: 61.0, sugar: 48.0, sodium: 24, potassium: 559, fiber: 7.0, foodType: 'processed' },
   chocolate_chip_cookie: { fdcId: "cookie_canonical", calories: 488, protein: 5.5, totalFat: 24.0, saturatedFat: 11.0, transFat: 0, carbohydrates: 64.0, sugar: 38.0, sodium: 350, potassium: 180, fiber: 2.5, foodType: 'processed' },
   chocolate_cake: { fdcId: "cake_canonical", calories: 389, protein: 4.5, totalFat: 18.0, saturatedFat: 5.5, transFat: 0, carbohydrates: 53.0, sugar: 36.0, sodium: 320, potassium: 160, fiber: 2.0, foodType: 'processed' }
 };
@@ -275,6 +277,9 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   if (clean.includes('slaw') || clean.includes('cabbage') || clean.includes('coleslaw')) return CANONICAL_BASE_FOODS.cabbage_slaw;
   if (clean.includes('mcchicken') || (clean.includes('mcdonald') && clean.includes('chicken'))) return CANONICAL_BASE_FOODS.mcdonalds_mcchicken_sandwich;
   if (clean.includes('avocado') && !clean.includes('oil')) return CANONICAL_BASE_FOODS.avocado;
+  if (clean.includes('chocolate') || clean.includes('dark_chocolate')) return CANONICAL_BASE_FOODS.dark_chocolate;
+  if (clean.includes('flour') || clean.includes('wheat_flour')) return CANONICAL_BASE_FOODS.wheat_flour;
+  if (clean.includes('sugar') && !clean.includes('syrup')) return CANONICAL_BASE_FOODS.granulated_sugar;
   if (clean.includes('salmon') && !clean.includes('bap') && !clean.includes('sandwich') && !clean.includes('sushi') && !clean.includes('roll')) {
     if (clean.includes('grill') || clean.includes('cook') || clean.includes('roast') || clean.includes('bake')) {
       return CANONICAL_BASE_FOODS.grilled_salmon;

@@ -1033,13 +1033,26 @@ export default function App() {
 
               let serverJob: any = null;
               try {
+                if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                  await new Promise(r => setTimeout(r, 2000));
+                  continue;
+                }
                 const statusRes = await fetch(`/api/jobs/status?jobId=${job.id}&userId=${auth.currentUser?.uid || 'anonymous'}`);
                 if (statusRes.ok) {
-                  const { jobs } = await statusRes.json();
-                  serverJob = jobs && jobs[0];
+                  const contentType = statusRes.headers.get('content-type');
+                  if (contentType && contentType.includes('application/json')) {
+                    const { jobs } = await statusRes.json();
+                    serverJob = jobs && jobs[0];
+                  }
                 }
-              } catch (pollErr) {
-                console.warn('[JobQueueRunner] Error polling status:', pollErr);
+              } catch (pollErr: any) {
+                const isFetchErr = pollErr && (pollErr.name === 'TypeError' || (pollErr.message && pollErr.message.includes('Failed to fetch')));
+                if (isFetchErr) {
+                  console.debug('[JobQueueRunner] Network poll pending:', pollErr.message || pollErr);
+                  await new Promise(r => setTimeout(r, 2500));
+                } else {
+                  console.warn('[JobQueueRunner] Error polling status:', pollErr);
+                }
               }
 
               if (serverJob) {
@@ -1262,8 +1275,11 @@ export default function App() {
               try {
                 const lateRes = await fetch(`/api/jobs/status?jobId=${job.id}&userId=${auth.currentUser?.uid || 'anonymous'}`);
                 if (lateRes.ok) {
-                  const { jobs } = await lateRes.json();
-                  lateJob = jobs && jobs[0];
+                  const contentType = lateRes.headers.get('content-type');
+                  if (contentType && contentType.includes('application/json')) {
+                    const { jobs } = await lateRes.json();
+                    lateJob = jobs && jobs[0];
+                  }
                 }
               } catch (_) { /* ignore */ }
 
@@ -2935,7 +2951,7 @@ export default function App() {
       } finally {
         setIsAuthChecking(false);
       }
-    }, 5000);
+    }, 8000);
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       clearTimeout(fallbackTimeout);

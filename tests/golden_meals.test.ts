@@ -54,9 +54,9 @@ function isForbidden(rule: NeverRule, candidateId: string, candidateName: string
 describe('Golden meals — fixture set', () => {
   const manifest = loadManifest();
 
-  it('registers exactly the 7 official goldens', () => {
+  it('registers exactly the 8 official goldens', () => {
     expect(manifest.goldens.map((g: { id: string }) => g.id)).toEqual([
-      'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7',
+      'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8'
     ]);
   });
 

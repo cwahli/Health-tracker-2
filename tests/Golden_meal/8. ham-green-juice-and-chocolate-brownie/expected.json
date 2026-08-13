@@ -1,0 +1,49 @@
+{
+  "id": "G8",
+  "title": "Ham, Green Juice, and Chocolate Brownie",
+  "mode": "new_log",
+  "promotedFrom": "1786568144255_xvr2hu14y",
+  "passes": [
+    {
+      "id": "replay",
+      "prompt": "",
+      "photos": [],
+      "kind": "replay_scout"
+    }
+  ],
+  "resolveLocks": [
+    {
+      "query": "chocolate",
+      "expectFdcId": "170272",
+      "from": "curator_parametric",
+      "foodName": "dark chocolate"
+    },
+    {
+      "query": "wheat flour",
+      "expectFdcId": "169680",
+      "from": "curator_parametric",
+      "foodName": "wheat flour white all purpose unenriched"
+    },
+    {
+      "query": "sugar",
+      "expectFdcId": "169652",
+      "from": "curator_parametric",
+      "foodName": "granulated sugar"
+    }
+  ],
+  "catalogGaps": [],
+  "neverMatch": [
+    {
+      "query": "sugar",
+      "forbiddenIds": [
+        "2710321"
+      ],
+      "forbiddenNames": [
+        "Popsicle, no sugar added"
+      ]
+    }
+  ],
+  "invariants": [
+    "Promoted from inbox after replay went green"
+  ]
+}

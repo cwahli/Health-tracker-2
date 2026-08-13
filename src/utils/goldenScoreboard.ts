@@ -67,21 +67,135 @@ const FORBIDDEN: Array<{ id: string; re: RegExp; label: string; signature: strin
 
 export function extractMealLines(food: any): GoldenMealLine[] {
   if (!food) return [];
+
+  // 1. Check for top-level dishes list (e.g. food.dishes, food.mealDishes, food.topDishes)
+  const topDishes = food.dishes || food.mealDishes || food.topDishes;
+  if (Array.isArray(topDishes) && topDishes.length > 0) {
+    return topDishes.map((d: any) => {
+      const n = d.nutrients || {};
+      return {
+        name: String(d.dish_name || d.dishName || d.name || 'Dish'),
+        weightGrams: numOrNull(d.weightGrams ?? d.weight ?? d.grams),
+        calories: numOrNull(n.calories ?? d.calories ?? d.kcal),
+        protein: numOrNull(n.protein ?? d.protein),
+        carbohydrates: numOrNull(n.carbohydrates ?? d.carbs ?? d.carbohydrates),
+        totalFat: numOrNull(n.totalFat ?? d.totalFat ?? d.fat),
+        sodium: numOrNull(n.sodium ?? d.sodium),
+        scored: true,
+      };
+    });
+  }
+
+  // 2. Check items in itemsBreakdown or items
   const items = food.itemsBreakdown || food.items || [];
-  if (!Array.isArray(items)) return [];
-  return items.slice(0, 40).map((it: any) => {
-    const n = it.nutrients || {};
-    return {
-      name: String(it.canonicalDbName || it.name || it.originalName || 'item'),
-      weightGrams: numOrNull(it.weightGrams ?? it.weight),
-      calories: numOrNull(n.calories ?? it.calories),
-      protein: numOrNull(n.protein ?? it.protein),
-      carbohydrates: numOrNull(n.carbohydrates ?? it.carbs ?? it.carbohydrates),
-      totalFat: numOrNull(n.totalFat ?? it.totalFat ?? it.fat),
-      sodium: numOrNull(n.sodium ?? it.sodium),
-      scored: true,
-    };
-  });
+  if (Array.isArray(items) && items.length > 0) {
+    // If items have explicit dish grouping (dishName/parentDish), aggregate by dish to form clean top dishes
+    const hasDishGrouping = items.some((it: any) => it.dishName || it.parentDish || it.dish);
+    if (hasDishGrouping) {
+      const dishMap = new Map<string, GoldenMealLine>();
+      items.forEach((it: any) => {
+        const dishName = String(it.dishName || it.parentDish || it.dish || it.canonicalDbName || it.name || 'Dish');
+        const n = it.nutrients || {};
+        const cal = numOrNull(n.calories ?? it.calories);
+        const w = numOrNull(it.weightGrams ?? it.weight);
+        const prot = numOrNull(n.protein ?? it.protein);
+        const carb = numOrNull(n.carbohydrates ?? it.carbs ?? it.carbohydrates);
+        const fat = numOrNull(n.totalFat ?? it.totalFat ?? it.fat);
+        const sod = numOrNull(n.sodium ?? it.sodium);
+
+        if (!dishMap.has(dishName)) {
+          dishMap.set(dishName, {
+            name: dishName,
+            weightGrams: w,
+            calories: cal,
+            protein: prot,
+            carbohydrates: carb,
+            totalFat: fat,
+            sodium: sod,
+            scored: true,
+          });
+        } else {
+          const ex = dishMap.get(dishName)!;
+          dishMap.set(dishName, {
+            ...ex,
+            weightGrams: (ex.weightGrams ?? 0) + (w ?? 0) || null,
+            calories: (ex.calories ?? 0) + (cal ?? 0) || null,
+            protein: (ex.protein ?? 0) + (prot ?? 0) || null,
+            carbohydrates: (ex.carbohydrates ?? 0) + (carb ?? 0) || null,
+            totalFat: (ex.totalFat ?? 0) + (fat ?? 0) || null,
+            sodium: (ex.sodium ?? 0) + (sod ?? 0) || null,
+          });
+        }
+      });
+      return Array.from(dishMap.values());
+    }
+
+    // 3. Fallback: return raw items as list
+    return items.slice(0, 40).map((it: any) => {
+      const n = it.nutrients || {};
+      return {
+        name: String(it.canonicalDbName || it.name || it.originalName || 'item'),
+        weightGrams: numOrNull(it.weightGrams ?? it.weight),
+        calories: numOrNull(n.calories ?? it.calories),
+        protein: numOrNull(n.protein ?? it.protein),
+        carbohydrates: numOrNull(n.carbohydrates ?? it.carbs ?? it.carbohydrates),
+        totalFat: numOrNull(n.totalFat ?? it.totalFat ?? it.fat),
+        sodium: numOrNull(n.sodium ?? it.sodium),
+        scored: true,
+      };
+    });
+  }
+
+  return [];
+}
+
+/**
+ * Extracts logged errors or problems captured when processing a meal job.
+ */
+export function extractCapturedMealProblems(job: any): string[] {
+  if (!job) return [];
+  const problems: string[] = [];
+
+  if (job.error?.message) {
+    problems.push(`[Job Error] ${job.error.message}`);
+  }
+
+  const result = job.result;
+  if (result?.pipelineErrors) {
+    if (Array.isArray(result.pipelineErrors)) {
+      result.pipelineErrors.forEach((e: any) =>
+        problems.push(typeof e === 'string' ? e : e.message || JSON.stringify(e))
+      );
+    } else if (typeof result.pipelineErrors === 'string') {
+      problems.push(result.pipelineErrors);
+    }
+  }
+
+  if (result?.error) {
+    problems.push(`[Result Error] ${typeof result.error === 'string' ? result.error : result.error.message || JSON.stringify(result.error)}`);
+  }
+
+  if (result?.warning) {
+    problems.push(`[Warning] ${typeof result.warning === 'string' ? result.warning : result.warning.message || JSON.stringify(result.warning)}`);
+  }
+
+  const logs = String(result?.backendLogs || job?.liveThoughts?.backendLogs || '');
+  if (logs) {
+    const knownFails = parseKnownFails(logs);
+    knownFails.forEach((f) => problems.push(`[Captured Log Rule] ${f.label}`));
+
+    const lines = logs.split('\n');
+    lines.forEach((l) => {
+      if (/\[(ReceiptInvariant|Reconcile|Error|Exception|FAIL|WARN)\]/i.test(l)) {
+        const clean = l.replace(/^\[.*?\]\s*/, '').trim();
+        if (clean && !problems.some((p) => p.includes(clean.slice(0, 30)))) {
+          problems.push(clean.slice(0, 150));
+        }
+      }
+    });
+  }
+
+  return Array.from(new Set(problems)).slice(0, 10);
 }
 
 function numOrNull(v: any): number | null {
@@ -145,6 +259,19 @@ export function parseTensions(logText: string): Array<{ id: string; left: string
   return tensions.slice(0, 20);
 }
 
+function extractSignatureFromText(text: string): string | null {
+  const t = String(text || '').trim();
+  if (!t) return null;
+  const match = t.match(/(Discrepancy|Zero matches|Zero fiber|Invariant fail\w*|differ from user|ReceiptInvariant|FAIL|Error|Exception|mismatch)/i);
+  if (match) return match[0];
+  if (/Zero matches/i.test(t)) return 'Zero matches';
+  if (/Discrepancy/i.test(t)) return 'Discrepancy';
+  if (/Zero fiber/i.test(t)) return 'Zero fiber';
+  if (/Invariant/i.test(t)) return 'Invariant';
+  if (/Demographics/i.test(t)) return 'Demographics';
+  return null;
+}
+
 export function buildScoreboard(input: {
   logText?: string;
   foodLog?: any;
@@ -154,10 +281,15 @@ export function buildScoreboard(input: {
   const outcomes = parseKnownFails(input.logText || '');
   const tensions = parseTensions(input.logText || '');
   (input.extraIssues || []).forEach((text, i) => {
-    const t = String(text || '').trim();
-    if (!t) return;
+    const raw = String(text || '').trim();
+    if (!raw) return;
+    const t = raw
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+      .replace(/(\.)([A-Z])/g, '$1 $2')
+      .replace(/:\s*/g, ': ');
     outcomes.push({
-      id: `user_${i}_${t.slice(0, 24).replace(/\W+/g, '_')}`,
+      id: `user_${i}_${raw.slice(0, 24).replace(/\W+/g, '_')}`,
       kind: 'custom',
       label: t,
       expected: t,
@@ -183,6 +315,18 @@ export function evaluateLogOutcomes(outcomes: GoldenOutcome[], logText: string):
       const sig = o.signature || String(o.actual || '');
       const present = sig ? log.toLowerCase().includes(sig.toLowerCase()) : false;
       return { ...o, pass: !present, actual: present ? sig : null };
+    }
+    if (o.kind === 'custom' || o.source === 'user') {
+      const sig = o.signature || extractSignatureFromText(o.label || String(o.expected || ''));
+      if (sig) {
+        const present = log.toLowerCase().includes(sig.toLowerCase());
+        return { ...o, pass: !present, actual: present ? `Found in log: ${sig}` : 'Resolved / Absent' };
+      }
+      if (!log.trim()) {
+        return { ...o, pass: false, actual: 'No log provided' };
+      }
+      const hasErrorInLog = /\[(Error|FAIL|Exception)\]/i.test(log) && log.toLowerCase().includes(o.label.slice(0, 15).toLowerCase());
+      return { ...o, pass: !hasErrorInLog, actual: hasErrorInLog ? 'Error found in log' : 'Resolved' };
     }
     return o;
   });

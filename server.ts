@@ -7584,6 +7584,59 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           });
         });
         
+        // Deduplicate componentsDetailList BEFORE computing final foundation budget
+        if (componentsDetailList.length > 0) {
+          const beforeLen = componentsDetailList.length;
+          const stripDisplayNoise = (raw: string): string => {
+            let s = String(raw || '');
+            s = s.replace(/\[[^\]]*\]\([^)]*\)/g, ' '); // markdown links
+            s = s.replace(/#\d+/g, ' ');
+            s = s.replace(/\b(estimated|usda|off|canonical base|estimated component baseline)\b/gi, ' ');
+            s = s.replace(/[()]/g, ' ');
+            return normalizeFoodKey(s);
+          };
+          const rowKey = (c: any): string => {
+            const id = c.dbId != null && String(c.dbId).trim() !== '' ? String(c.dbId) : '';
+            if (id && !id.startsWith('fallback_') && !id.startsWith('resolver_')) {
+              return `id:${id}`;
+            }
+            const wBucket = Math.round((Number(c.weightGrams) || 0) / 2) * 2; // ±1g collapse
+            const q = stripDisplayNoise(c.searchQuery || '');
+            const n = stripDisplayNoise(c.name || '');
+            return `n:${q || n}_w:${wBucket}`;
+          };
+          const dedupedMap = new Map<string, any>();
+          for (const c of componentsDetailList) {
+            const key = rowKey(c);
+            if (dedupedMap.has(key)) {
+              const ext = dedupedMap.get(key);
+              const cEst = /^estimated\b/i.test(String(c.name || '').replace(/^\[/, ''));
+              const eEst = /^estimated\b/i.test(String(ext.name || '').replace(/^\[/, ''));
+              if (eEst && !cEst) {
+                dedupedMap.set(key, c);
+              } else if (!eEst && cEst) {
+                // keep ext
+              } else if ((c.calories || 0) > (ext.calories || 0)) {
+                dedupedMap.set(key, c);
+              }
+            } else {
+              dedupedMap.set(key, c);
+            }
+          }
+          const afterLen = dedupedMap.size;
+          componentsDetailList.splice(0, componentsDetailList.length, ...Array.from(dedupedMap.values()));
+          if (beforeLen !== afterLen) {
+            addDebugLog(`[Receipt] dedupe componentsDetailList ${beforeLen}→${afterLen} for "${item.originalName || item.keyword}"`);
+            // Recalculate aggregatedNutrients since rows were removed
+            NUTRIENT_KEYS.forEach(key => aggregatedNutrients[key] = 0);
+            componentsDetailList.forEach((c: any) => {
+              NUTRIENT_KEYS.forEach(key => {
+                if (c[key] != null) aggregatedNutrients[key] += c[key];
+              });
+            });
+          }
+        }
+
         if (item.components.length >= 2) {
           const weightSum = componentsDetailList.reduce((sum: number, c: any) => sum + (c.weightGrams || 0), 0);
           addDebugLog(`[Assembly] multi-component rows=${componentsDetailList.length} weightSum=${weightSum} itemWeight=${itemWeight} for "${item.originalName || item.keyword}"`);
@@ -8087,6 +8140,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           if (s.carbohydrates != null) s.carbohydrates = Math.round(s.carbohydrates * recRes.scaleFactor * 10) / 10;
           if (s.sugar != null) s.sugar = Math.round(s.sugar * recRes.scaleFactor * 10) / 10;
           if (s.totalFibre != null) s.totalFibre = Math.round(s.totalFibre * recRes.scaleFactor * 10) / 10;
+          if (s.weightGrams != null) s.weightGrams = Math.round(s.weightGrams * recRes.scaleFactor * 10) / 10;
         });
       }
 
@@ -8096,53 +8150,6 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           aggregatedNutrients[key] = value;
         }
       });
-
-      // Deduplicate componentsDetailList (dbId first; strip Estimated/markdown; weight bucket)
-      if (componentsDetailList.length > 0) {
-        const beforeLen = componentsDetailList.length;
-        const stripDisplayNoise = (raw: string): string => {
-          let s = String(raw || '');
-          s = s.replace(/\[[^\]]*\]\([^)]*\)/g, ' '); // markdown links
-          s = s.replace(/#\d+/g, ' ');
-          s = s.replace(/\b(estimated|usda|off|canonical base|estimated component baseline)\b/gi, ' ');
-          s = s.replace(/[()]/g, ' ');
-          return normalizeFoodKey(s);
-        };
-        const rowKey = (c: any): string => {
-          const id = c.dbId != null && String(c.dbId).trim() !== '' ? String(c.dbId) : '';
-          if (id && !id.startsWith('fallback_') && !id.startsWith('resolver_')) {
-            return `id:${id}`;
-          }
-          const wBucket = Math.round((Number(c.weightGrams) || 0) / 2) * 2; // ±1g collapse
-          const q = stripDisplayNoise(c.searchQuery || '');
-          const n = stripDisplayNoise(c.name || '');
-          return `n:${q || n}_w:${wBucket}`;
-        };
-        const dedupedMap = new Map<string, any>();
-        for (const c of componentsDetailList) {
-          const key = rowKey(c);
-          if (dedupedMap.has(key)) {
-            const ext = dedupedMap.get(key);
-            // Prefer non-Estimated label; else higher calories
-            const cEst = /^estimated\b/i.test(String(c.name || '').replace(/^\[/, ''));
-            const eEst = /^estimated\b/i.test(String(ext.name || '').replace(/^\[/, ''));
-            if (eEst && !cEst) {
-              dedupedMap.set(key, c);
-            } else if (!eEst && cEst) {
-              // keep ext
-            } else if ((c.calories || 0) > (ext.calories || 0)) {
-              dedupedMap.set(key, c);
-            }
-          } else {
-            dedupedMap.set(key, c);
-          }
-        }
-        const afterLen = dedupedMap.size;
-        componentsDetailList.splice(0, componentsDetailList.length, ...Array.from(dedupedMap.values()));
-        if (beforeLen !== afterLen) {
-          addDebugLog(`[Receipt] dedupe componentsDetailList ${beforeLen}→${afterLen} for "${itemNameForBudget}"`);
-        }
-      }
 
       // Receipt invariant: component rows must match item total; repair if needed
       const compCals = componentsDetailList.map((s: any) => Number(s.calories) || 0);
@@ -8176,6 +8183,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
                 if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * fix * 10) / 10;
                 if (s.saturatedFat != null) s.saturatedFat = Math.round(s.saturatedFat * fix * 10) / 10;
                 if (s.sodium != null) s.sodium = Math.round(s.sodium * fix * 10) / 10;
+                if (s.weightGrams != null) s.weightGrams = Math.round(s.weightGrams * fix * 10) / 10;
               });
               addDebugLog(`[ReceiptInvariant] REPAIRED rows→item lock factor=${fix.toFixed(3)}`);
             }

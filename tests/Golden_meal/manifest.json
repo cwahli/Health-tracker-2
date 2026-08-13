@@ -43,6 +43,12 @@
       "dir": "7. Compare large set of similar choices",
       "mode": "evaluation",
       "title": "Chip aisle compact compare"
+    },
+    {
+      "id": "G8",
+      "dir": "8. ham-green-juice-and-chocolate-brownie",
+      "mode": "new_log",
+      "title": "Ham, Green Juice, and Chocolate Brownie"
     }
   ]
 }

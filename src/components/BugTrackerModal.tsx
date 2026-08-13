@@ -1195,10 +1195,12 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                           </p>
                         )}
                       </div>
-                      <p className="text-[11px] mt-0.5 pl-5">
+                      <p className="text-[11px] mt-0.5 pl-5 flex items-center gap-2 flex-wrap">
                         <span className={statusClass(tag.status)}>{tag.status}</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                          Fix Iteration #{tag.iteration || 1}
+                        </span>
                         <span className={textMuted}>
-                          {' '}
                           · {tag.linked_count ?? tag.linked_issues?.length ?? 0} report
                           {(tag.linked_count ?? 0) === 1 ? '' : 's'}
                         </span>
@@ -1269,7 +1271,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                         className={`text-[10px] whitespace-pre-wrap rounded-lg p-2 bg-black/35 cursor-pointer hover:bg-black/50 transition-colors ${textSecondary}`}
                         title="Click to edit progress"
                       >
-                        <span className="font-bold text-emerald-300">Progress (tried / learnt): </span>
+                        <span className="font-bold text-emerald-300">What was done to fix it (Progress / Attempt Notes): </span>
                         {tag.resolution_note || '(click to add progress notes)'}
                         <Edit2 className="w-2.5 h-2.5 inline ml-1 text-white/40" />
                       </div>
@@ -1316,7 +1318,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                         className={`text-[10px] whitespace-pre-wrap rounded-lg p-2 bg-black/35 cursor-pointer hover:bg-black/50 transition-colors text-amber-200`}
                         title="Click to edit open items"
                       >
-                        <span className="font-bold text-amber-400">What's Still Open: </span>
+                        <span className="font-bold text-amber-400">What's Still Pending / Open: </span>
                         {tag.whats_still_open || '(click to add remaining open items)'}
                         <Edit2 className="w-2.5 h-2.5 inline ml-1 text-white/40" />
                       </div>

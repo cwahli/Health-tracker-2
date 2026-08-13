@@ -145,12 +145,12 @@ class JobQueueRunnerImpl {
           ...strippedResult,
           photoUrl: photoUrl || strippedResult.photoUrl,
           debugUrl: debugUrl || strippedResult.debugUrl,
+          mealBuild: strippedResult.mealBuild, // ensure mealBuild is persisted
         } : undefined;
 
         if (cleanResult) {
           JobStore.updateJob(job.id, {
             result: cleanResult,
-            mealBuild: cleanResult.mealBuild || job.mealBuild,
           });
         }
 

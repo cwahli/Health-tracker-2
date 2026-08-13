@@ -7,6 +7,13 @@ export async function hydrateUserJobs(userId: string = 'anonymous'): Promise<voi
   try {
     const res = await fetch(`/api/jobs/status?userId=${encodeURIComponent(userId)}`);
     if (!res.ok) return;
+    
+    // During dev server restarts, the proxy might return a 200 OK HTML "Please wait" page.
+    const contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return;
+    }
+    
     const { jobs: rows } = await res.json();
     if (!rows || !Array.isArray(rows)) return;
 
@@ -114,8 +121,17 @@ export async function hydrateUserJobs(userId: string = 'anonymous'): Promise<voi
         JobStore.updateJob(row.id, updatePayload);
       }
     }
-  } catch (e) {
-    console.warn('[SupabaseJobSync] Error hydrating user jobs:', e);
+  } catch (e: any) {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      console.debug('[SupabaseJobSync] User offline, skipping job hydration');
+      return;
+    }
+    const isFetchErr = e && (e.name === 'TypeError' || (e.message && e.message.includes('Failed to fetch')));
+    if (isFetchErr) {
+      console.debug('[SupabaseJobSync] Network unavailable for job hydration:', e.message || e);
+    } else {
+      console.warn('[SupabaseJobSync] Error hydrating user jobs:', e);
+    }
   }
 }
 
@@ -133,6 +149,9 @@ export function initSupabaseJobSync(userId?: string): () => void {
   // Re-hydrate from the server periodically so any job stuck in a non-terminal status
   // eventually catches up regardless of realtime channel health.
   const fallbackPollInterval = setInterval(() => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return;
+    }
     const hasActiveJob = JobStore.getAllJobs().some(
       (j: any) => j.status !== 'succeeded' && j.status !== 'failed'
     );
@@ -187,12 +206,15 @@ export function initSupabaseJobSync(userId?: string): () => void {
               const baseUrl = typeof window !== 'undefined' ? '' : 'http://localhost:3000';
               const r = await fetch(`${baseUrl}/api/jobs/status?jobId=${row.id}`);
               if (r.ok) {
-                const fetchedWrapper = await r.json();
-                if (fetchedWrapper && fetchedWrapper.jobs && fetchedWrapper.jobs.length > 0) {
-                  // Our backend automatically unwraps the R2 result when fetching
-                  const backendJob = fetchedWrapper.jobs[0];
-                  if (backendJob && backendJob.clean_result) {
-                    cleanRes = backendJob.clean_result;
+                const contentType = r.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                  const fetchedWrapper = await r.json();
+                  if (fetchedWrapper && fetchedWrapper.jobs && fetchedWrapper.jobs.length > 0) {
+                    // Our backend automatically unwraps the R2 result when fetching
+                    const backendJob = fetchedWrapper.jobs[0];
+                    if (backendJob && backendJob.clean_result) {
+                      cleanRes = backendJob.clean_result;
+                    }
                   }
                 }
               }
@@ -349,8 +371,13 @@ export async function upsertJobToSupabase(
     if (!res.ok) {
       throw new Error('Failed to upsert job via backend');
     }
-  } catch (err) {
-    console.warn('[SupabaseJobSync] Failed to upsert job to backend/Supabase:', err);
+  } catch (err: any) {
+    const isFetchErr = err && (err.name === 'TypeError' || (err.message && err.message.includes('Failed to fetch')));
+    if (isFetchErr) {
+      console.debug('[SupabaseJobSync] Job upsert deferred (offline/network timeout):', err.message || err);
+    } else {
+      console.warn('[SupabaseJobSync] Failed to upsert job to backend/Supabase:', err);
+    }
   }
 }
 
@@ -369,7 +396,12 @@ export async function deleteJobFromBackend(
     if (!res.ok) {
       console.warn('[SupabaseJobSync] Failed to delete job from backend:', res.statusText);
     }
-  } catch (err) {
-    console.warn('[SupabaseJobSync] Error deleting job from backend:', err);
+  } catch (err: any) {
+    const isFetchErr = err && (err.name === 'TypeError' || (err.message && err.message.includes('Failed to fetch')));
+    if (isFetchErr) {
+      console.debug('[SupabaseJobSync] Job delete deferred (offline/network timeout):', err.message || err);
+    } else {
+      console.warn('[SupabaseJobSync] Error deleting job from backend:', err);
+    }
   }
 }
