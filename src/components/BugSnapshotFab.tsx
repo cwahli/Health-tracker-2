@@ -39,6 +39,8 @@ import { BugCategory } from '../utils/issueBacklog';
 import { AVAILABLE_LLMS } from '../utils/llm';
 import { JobStore } from '../jobs/JobStore';
 import { saveAgentRequestLog } from '../utils/agentLogsTracker';
+import { extractMealLines, type GoldenMealLine } from '../utils/goldenScoreboard';
+import { collectOriginalFixture } from '../utils/goldenFixture';
 
 export interface BugSnapshotFabProps {
   isAdmin: boolean;
@@ -194,6 +196,12 @@ export default function BugSnapshotFab({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<string>('');
   const [lastTriageJobId, setLastTriageJobId] = useState<string | null>(null);
+  const [saveAsGolden, setSaveAsGolden] = useState(true);
+  const [goldenLines, setGoldenLines] = useState<GoldenMealLine[]>([]);
+  const [extraIssuesText, setExtraIssuesText] = useState('');
+  const [previewIssues, setPreviewIssues] = useState<string[]>([]);
+  const [fixtureQuery, setFixtureQuery] = useState('');
+  const [fixturePhotoCount, setFixturePhotoCount] = useState(0);
 
   // Requirement 7: User-controlled sharing checkboxes
   const [sendChecklist, setSendChecklist] = useState({
@@ -280,6 +288,36 @@ export default function BugSnapshotFab({
   useEffect(() => {
     loadTags();
   }, [loadTags]);
+
+  useEffect(() => {
+    if (!open || !saveAsGolden) return;
+    const jobs = typeof JobStore?.getAllJobs === 'function' ? JobStore.getAllJobs() : [];
+    const job = jobs.find((j) => j.kind !== 'bug_triage' && (j.status === 'succeeded' || j.status === 'failed')) || jobs[0];
+    const food = job?.result?.pendingFoodLog || job?.result?.data?.pendingFoodLog;
+    const logs = String(job?.result?.backendLogs || job?.liveThoughts?.backendLogs || '');
+    const lines = extractMealLines(food);
+    if (lines.length) setGoldenLines(lines.map((l) => ({ ...l, scored: false })));
+    collectOriginalFixture(job)
+      .then((fx) => {
+        setFixtureQuery(fx.query);
+        setFixturePhotoCount(fx.photos.length);
+      })
+      .catch(() => {});
+    if (!logs && !food) return;
+    fetch('/api/golden/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logText: logs, foodLog: food }),
+    })
+      .then((r) => r.json())
+      .then((board) => {
+        setPreviewIssues((board.outcomes || []).map((o: any) => o.label));
+        if (Array.isArray(board.observedMeal) && board.observedMeal.length) {
+          setGoldenLines(board.expectedMeal || board.observedMeal);
+        }
+      })
+      .catch(() => {});
+  }, [open, saveAsGolden]);
 
   if (!isAdmin || !enabled) return null;
 
@@ -438,6 +476,9 @@ export default function BugSnapshotFab({
       let debug_payload: any = null;
       let nutrition_table_md = '';
       let meal_file_name = 'nutrition_table.md';
+      let resolvedBackendLogs = '';
+      let resolvedScoutItems: any[] = [];
+      let resolvedFoodLog: any = null;
 
       if (activeJob) {
         try {
@@ -466,7 +507,7 @@ export default function BugSnapshotFab({
 
           const jobForReport = fullJobData || activeJob;
 
-          const resolvedFoodLog =
+          resolvedFoodLog =
             fullJobData?.result?.pendingFoodLog ||
             fullJobData?.result?.data?.pendingFoodLog ||
             fullJobData?.pendingFoodLog ||
@@ -478,7 +519,7 @@ export default function BugSnapshotFab({
             (payload as any)?.pendingFoodLog ||
             null;
 
-          const resolvedScoutItems =
+          resolvedScoutItems =
             fullJobData?.result?.scoutItems ||
             fullJobData?.scoutItems ||
             activeJob.result?.scoutItems ||
@@ -493,7 +534,7 @@ export default function BugSnapshotFab({
             (payload as any)?.receiptTable ||
             [];
 
-          const resolvedBackendLogs =
+          resolvedBackendLogs =
             fullJobData?.backendLogs ||
             fullJobData?.result?.backendLogs ||
             activeJob.result?.backendLogs ||
@@ -632,6 +673,37 @@ export default function BugSnapshotFab({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+
+      if (saveAsGolden) {
+        try {
+          const extraIssues = extraIssuesText.split('\n').map((s) => s.trim()).filter(Boolean);
+          const fx = await collectOriginalFixture(activeJob);
+          const gRes = await fetch('/api/golden/cases', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jobId: activeJob?.id || env.activeJobId,
+              title: newTitle.trim() || symptom.trim() || `Golden ${activeJob?.id || ''}`.trim(),
+              tag_id: json.tag_id || tagId,
+              logText: resolvedBackendLogs || combinedLogs,
+              scout: resolvedScoutItems,
+              foodLog: resolvedFoodLog,
+              expectedMeal: goldenLines,
+              extraIssues,
+              originalQuery: fx.query,
+              photos: fx.photos,
+            }),
+          });
+          const gJson = await gRes.json().catch(() => ({}));
+          if (gRes.ok) {
+            setSuccess((s) => `${s || 'Saved.'} Golden case ${gJson.id?.slice?.(0, 8) || ''} — ${gJson.fail_count ?? '?'} checks failing.`);
+          } else {
+            console.warn('[BugSnapshot] golden create:', gJson.error);
+          }
+        } catch (gErr) {
+          console.warn('[BugSnapshot] golden create failed', gErr);
+        }
+      }
 
       // Save directly to AI Agent Diagnostic Log History
       try {
@@ -967,6 +1039,80 @@ export default function BugSnapshotFab({
                     className={inputCls}
                     placeholder="What looks wrong? (full diagnosis can be filled by Analyze later)"
                   />
+                </div>
+
+                <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 p-2.5 space-y-2">
+                  <label className="flex items-center gap-2 text-xs font-bold text-amber-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={saveAsGolden}
+                      onChange={(e) => setSaveAsGolden(e.target.checked)}
+                      className="rounded border-amber-400"
+                    />
+                    Save as golden meal (replay until A + B are green)
+                  </label>
+                  {saveAsGolden && (
+                    <div className="space-y-2 text-[11px] text-white/80">
+                      <p className="text-amber-100/80">
+                        Known issues are filled from the log. Add the result you accept, plus any bug the parser missed.
+                      </p>
+                      <p className="text-[10px] text-emerald-200/90">
+                        Original query: {fixtureQuery ? `“${fixtureQuery}”` : '(photo only)'} · {fixturePhotoCount} photo{fixturePhotoCount === 1 ? '' : 's'} already on this job — no re-upload.
+                      </p>
+                      {previewIssues.length > 0 && (
+                        <ul className="list-disc pl-4 space-y-0.5 text-rose-200">
+                          {previewIssues.map((p) => (
+                            <li key={p}>{p}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {goldenLines.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="font-bold text-white/90">Final result (tick a line to score it)</p>
+                          {goldenLines.map((line, i) => (
+                            <label key={i} className="flex items-center gap-1.5">
+                              <input
+                                type="checkbox"
+                                checked={line.scored}
+                                onChange={(e) => {
+                                  const next = [...goldenLines];
+                                  next[i] = { ...next[i], scored: e.target.checked };
+                                  setGoldenLines(next);
+                                }}
+                              />
+                              <input
+                                className="flex-1 bg-black/30 border border-white/15 rounded px-1 py-0.5 text-[10px]"
+                                value={line.name}
+                                onChange={(e) => {
+                                  const next = [...goldenLines];
+                                  next[i] = { ...next[i], name: e.target.value };
+                                  setGoldenLines(next);
+                                }}
+                              />
+                              <input
+                                className="w-16 bg-black/30 border border-white/15 rounded px-1 py-0.5 text-[10px]"
+                                value={line.calories ?? ''}
+                                placeholder="kcal"
+                                onChange={(e) => {
+                                  const next = [...goldenLines];
+                                  const v = e.target.value === '' ? null : Number(e.target.value);
+                                  next[i] = { ...next[i], calories: v };
+                                  setGoldenLines(next);
+                                }}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      <textarea
+                        rows={2}
+                        value={extraIssuesText}
+                        onChange={(e) => setExtraIssuesText(e.target.value)}
+                        className={inputCls}
+                        placeholder="Un-reported bugs (one per line) — e.g. wrap was scaled to scout guess"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Requirements 6 & 7: Cleaned up Capture pack and checkboxes for info sent */}

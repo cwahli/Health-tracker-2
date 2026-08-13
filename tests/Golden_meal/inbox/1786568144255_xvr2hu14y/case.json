@@ -1,0 +1,96 @@
+{
+  "id": "1786568144255_xvr2hu14y",
+  "status": "open",
+  "sourceFile": "/Users/chiwah/Downloads/debug-job_1786568144255_xvr2hu14y.md",
+  "capturedAt": "2026-08-12T23:57:03.524Z",
+  "mealName": "Ham, Green Juice, and Chocolate Brownie",
+  "observedCalories": 704,
+  "queries": [
+    "Co-op pork ham",
+    "salt",
+    "apple juice",
+    "mango puree",
+    "spinach juice",
+    "avocado puree",
+    "banana puree",
+    "chocolate",
+    "wheat flour",
+    "butter",
+    "sugar"
+  ],
+  "expectResolve": [
+    {
+      "query": "chocolate",
+      "expectFdcId": "170272",
+      "from": "curator_parametric",
+      "foodName": "dark chocolate"
+    },
+    {
+      "query": "wheat flour",
+      "expectFdcId": "169680",
+      "from": "curator_parametric",
+      "foodName": "wheat flour white all purpose unenriched"
+    },
+    {
+      "query": "sugar",
+      "expectFdcId": "169652",
+      "from": "curator_parametric",
+      "foodName": "granulated sugar"
+    }
+  ],
+  "neverMatch": [
+    {
+      "query": "sugar",
+      "forbiddenIds": [
+        "2710321"
+      ],
+      "forbiddenNames": [
+        "Popsicle, no sugar added"
+      ]
+    }
+  ],
+  "observedBindings": [
+    {
+      "componentIndex": 0,
+      "query": "chocolate",
+      "canonicalMatch": null,
+      "source": null,
+      "id": null
+    },
+    {
+      "componentIndex": 1,
+      "query": "wheat flour enriched wheat",
+      "canonicalMatch": null,
+      "source": null,
+      "id": null
+    },
+    {
+      "componentIndex": 2,
+      "query": "butter",
+      "canonicalMatch": null,
+      "source": "internal_catalog",
+      "id": "173410"
+    },
+    {
+      "componentIndex": 3,
+      "query": "sugar",
+      "canonicalMatch": null,
+      "source": "usda",
+      "id": "2710321"
+    }
+  ],
+  "categoryFallbacks": [
+    "Co-op Formed Ham",
+    "salt",
+    "Lidl Apple and Spinach Juice with Mango, Avocado and Banana",
+    "apple juice",
+    "banana puree",
+    "chocolate",
+    "wheat flour"
+  ],
+  "notes": [
+    "Open inbox case. Replay with: npm run golden:inbox",
+    "Fill expectResolve[].expectFdcId when you know the right USDA id.",
+    "When vitest is green, run: node scripts/golden-promote.mjs 1786568144255_xvr2hu14y"
+  ]
+}

@@ -1,11 +1,14 @@
 import fs from 'fs';
 import path from 'path';
-import { supabaseAdmin } from './supabaseAdmin.js';
+import { supabaseAdmin, isSupabaseConfigured } from './supabaseAdmin.js';
 
 let ensurePromise: Promise<{ ok: boolean; method: string; error?: string }> | null = null;
 
 /** Idempotent: create food catalog tables if missing. Safe to call often. */
 export async function ensureFoodCatalogSchema(): Promise<{ ok: boolean; method: string; error?: string }> {
+  if (!isSupabaseConfigured) {
+    return { ok: true, method: 'offline_mode' };
+  }
   if (ensurePromise) return ensurePromise;
   ensurePromise = (async () => {
     // 1) Fast path: table already visible to PostgREST

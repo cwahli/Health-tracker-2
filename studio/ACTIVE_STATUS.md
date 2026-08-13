@@ -7,6 +7,7 @@
 
 | Pack | Role |
 |------|------|
+| **[M31_GOLDEN_LATEST.md](./M31_GOLDEN_LATEST.md)** | **Fix latest golden inbox case — copy-paste §A** |
 | **[M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md](./M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md)** | **Food catalog curator + 1-pass atomics — multipass autonomous (PRE-APPROVAL in §A)** |
 | [M23_FULL_FREE_TIER_RELIABILITY.md](./M23_FULL_FREE_TIER_RELIABILITY.md) | Free-tier continuous M23→M28 (separate track) |
 | [M23_FIRESTORE_WRITE_KILL_SWITCH.md](./M23_FIRESTORE_WRITE_KILL_SWITCH.md) | Nested detail for phase M23 only |

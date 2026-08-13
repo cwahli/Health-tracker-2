@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "note": "Official golden meals. Layer B is asserted by tests/golden_meals.test.ts.",
+  "goldens": [
+    {
+      "id": "G1",
+      "dir": "1. Multi-food log",
+      "mode": "new_log",
+      "title": "Multi-food picnic + croissant edit"
+    },
+    {
+      "id": "G2",
+      "dir": "2. Composite dish with branded food",
+      "mode": "new_log",
+      "title": "Sainsbury oats 60g + latte + fruit"
+    },
+    {
+      "id": "G3",
+      "dir": "3. Branded dish with incomplete data",
+      "mode": "new_log",
+      "title": "Yolk plate + half potatoes"
+    },
+    {
+      "id": "G4",
+      "dir": "4. Portion size confirmation",
+      "mode": "new_log",
+      "title": "Picnic packs, ask quantity, stitch one meal"
+    },
+    {
+      "id": "G5",
+      "dir": "5. Compare nutrition labels",
+      "mode": "evaluation",
+      "title": "Compare printed snack labels"
+    },
+    {
+      "id": "G6",
+      "dir": "6. Compare menu items",
+      "mode": "evaluation",
+      "title": "Sambal Bakar Pencok 89 menu compare"
+    },
+    {
+      "id": "G7",
+      "dir": "7. Compare large set of similar choices",
+      "mode": "evaluation",
+      "title": "Chip aisle compact compare"
+    }
+  ]
+}

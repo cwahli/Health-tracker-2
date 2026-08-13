@@ -1,0 +1,99 @@
+{
+  "id": "G1",
+  "title": "Multi-food picnic + croissant edit",
+  "mode": "new_log",
+  "passes": [
+    {
+      "id": "identify",
+      "prompt": "",
+      "photos": [
+        "PXL_20260811_173526540.jpg",
+        "PXL_20260811_173542345.jpg",
+        "PXL_20260811_173551544.jpg",
+        "PXL_20260811_175019310 (1).jpg"
+      ]
+    },
+    {
+      "id": "edit_croissant",
+      "prompt": "I ate this croissant",
+      "photos": ["Edit croissant.png"],
+      "kind": "edit_existing_item",
+      "targetHint": "croissant"
+    }
+  ],
+  "expectedItems": [
+    {
+      "key": "granola_pot",
+      "names": ["Granola", "yogurt granola fruit cup", "granola yoghurt pot"],
+      "source": "components",
+      "notes": "Ingredient sticker only. No Co-op / chainName. Do not brand-lock to Co-op Blueberry Granola Yogurt Pot."
+    },
+    {
+      "key": "vegetarian_wrap",
+      "names": ["Vegetarian wrap"],
+      "source": "components",
+      "componentsFromLabel": ["falafel", "hummus", "feta cheese", "mixed salad leaves", "onion", "peppers", "garlic mayonnaise"]
+    },
+    {
+      "key": "chicken_avocado_salad",
+      "names": ["Grilled Chicken & Avocado Salad", "Chicken Avocado Salad"],
+      "source": "components",
+      "componentsFromLabel": ["grilled chicken breast", "avocado", "hard boiled egg", "mixed salad leaves", "sesame seed"]
+    },
+    {
+      "key": "croissants",
+      "names": ["Croissants", "butter croissant"],
+      "source": "canonical"
+    }
+  ],
+  "resolveLocks": [
+    { "query": "grilled chicken breast", "expectFdcId": "171077" },
+    { "query": "avocado", "expectFdcId": "171705" },
+    { "query": "raw avocado", "expectFdcId": "171705" },
+    { "query": "hard boiled egg", "expectFdcId": "173424" },
+    { "query": "garlic mayonnaise", "expectFdcId": "mayo_canonical" },
+    { "query": "garlic mayonnaise dressing", "expectFdcId": "mayo_canonical" },
+    { "query": "mayonnaise", "expectFdcId": "mayo_canonical" },
+    { "query": "flour tortilla", "expectFdcId": "172522" },
+    { "query": "granola", "expectFdcId": "170287" },
+    { "query": "romaine lettuce raw", "expectFdcId": "169248" },
+    { "query": "raw mixed salad greens", "expectFdcId": "169248" },
+    { "query": "sesame seed", "expectFdcId": "170150" }
+  ],
+  "mustResolve": [
+    { "query": "plain yogurt", "expectFdcId": "170903" },
+    { "query": "plain yoghurt", "expectFdcId": "170903" },
+    { "query": "raisins", "expectFdcId": "169641" },
+    { "query": "seedless raisins", "expectFdcId": "169641" },
+    { "query": "almonds", "expectFdcId": "170567" },
+    { "query": "sliced almonds", "expectFdcId": "170567" },
+    { "query": "butter croissant", "expectFdcId": "172242" },
+    { "query": "croissant", "expectFdcId": "172242" },
+    { "query": "falafel", "expectFdcId": "falafel_canonical" },
+    { "query": "hummus", "expectFdcId": "174289" },
+    { "query": "feta cheese", "expectFdcId": "173420" },
+    { "query": "mixed berries fruit compote", "expectFdcId": "167762" },
+    { "query": "raw red onion", "expectFdcId": "11282" },
+    { "query": "raw bell pepper", "expectFdcId": "170108" }
+  ],
+  "catalogGaps": [],
+  "neverMatch": [
+    { "query": "mixed berries", "forbiddenIds": ["174113"], "forbiddenNames": ["POWERADE", "Powerade Zero", "V8 SPLASH"] },
+    { "query": "mixed berries fruit compote", "forbiddenIds": ["174113"], "forbiddenNames": ["POWERADE"] },
+    { "query": "plain yogurt", "forbiddenIds": ["2710708", "2710539"], "forbiddenNames": ["Water, bottled", "Water, carbonated"] },
+    { "query": "plain yoghurt", "forbiddenNames": ["Water, bottled"] },
+    { "query": "granola", "forbiddenNames": ["Co-op Blueberry Granola Yogurt Pot"] },
+    { "query": "almonds", "forbiddenNames": ["Dark Choc Almond", "yolk Dark Choc Almond", "almond butter"] },
+    { "query": "raisins", "forbiddenIds": ["172991", "173908"], "forbiddenNames": ["Instant Oatmeal", "Raisin and Spice"] },
+    { "query": "mixed salad leaves", "forbiddenIds": ["170544", "168488", "170133"], "forbiddenNames": ["Taro", "Sweet potato leaves"] },
+    { "query": "falafel", "forbiddenNames": ["vegetarian falafel wrap ingredients"] },
+    { "query": "sugar", "forbiddenIds": ["2710321", "2710324", "2710318"], "forbiddenNames": ["Popsicle", "Snow cone", "Italian Ice"] },
+    { "query": "raw red onion", "forbiddenIds": ["171327"], "forbiddenNames": ["onion powder"] }
+  ],
+  "invariants": [
+    "Multi-component dishes search components only, not parent dish titles",
+    "No live USDA search on Analyze once catalog_only is on",
+    "No per-meal curator / alias / quarantine writes",
+    "Edit croissant updates the croissant row only; other three items stay"
+  ]
+}

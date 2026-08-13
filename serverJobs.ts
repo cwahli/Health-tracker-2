@@ -1,6 +1,6 @@
 import { uploadPhotoToR2, uploadPhotosToR2, uploadDebugPayloadToR2 } from './src/utils/r2Storage';
 import { supabase, isSupabaseConfigured } from './src/utils/supabaseClient';
-import { supabaseAdmin } from './supabaseAdmin';
+import { supabaseAdmin, isSupabaseConfigured as isSupabaseAdminConfigured } from './supabaseAdmin';
 
 export interface ServerJobPayload {
   jobId: string;
@@ -120,7 +120,7 @@ export async function recoverInterruptedServerJobs(): Promise<number> {
     }
 
     // 2. Check Supabase running jobs if configured
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && isSupabaseAdminConfigured) {
       const { data: stuckJobs, error } = await supabaseAdmin
         .from('agent_jobs')
         .select('*')

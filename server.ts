@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import dns from 'node:dns';
 try {
   dns.setDefaultResultOrder('ipv4first');
@@ -9,10 +10,6 @@ import { rankAndClassifyCandidates, writeAliasIfHitUnique } from './server_fdc_r
 import { buildFoodSearchQuerySet } from './server_query_set';
 import { withGeminiRetry } from './server_gemini_retry.js';
 import { verifyFirebaseIdToken } from './server_auth.js';
-// Load .env BEFORE any module that reads process.env at import time
-// (supabaseAdmin, R2, etc.). Without this, admin client falls back to
-// placeholder.supabase.co and server-owned jobs never mark succeeded.
-import 'dotenv/config';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { pushTranslationsToSheets, pullTranslationsFromSheets } from './server_translations';
@@ -249,6 +246,7 @@ import { extractBalancedJson, sanitizeMealWeight, findItemIndexInList, getUSDANu
 import { aggregateItemsNutrients, cleanNutrientNumber } from "./server_nutrient_aggregation";
 import { registerIssueBacklogRoutes } from './serverIssueBacklog.js';
 import { registerBugSnapshotRoutes } from './serverBugSnapshot.js';
+import { registerGoldenRoutes } from './serverGoldenRoutes.js';
 import { registerBrandMenuRoutes, isKnownDatabaseBrand, isKnownDatabaseBrandSync, fetchAllDatabaseBrands, searchBrandMenuItems, normalizeChainKey, consolidateBrandMenuItemsAndChains, cleanUnbrandedFoodCatalog } from './serverBrandMenu.js';
 import { supabaseAdmin } from './supabaseAdmin.js';
 import { isGenericZeroNutrientDiluent, getZeroNutrientVector, calculateGenericTokenCoverage, evaluateGenericModifierInversionPenalty, classifyUniversalPhysicalFormV3 } from "./server_matching_engine";
@@ -3494,10 +3492,12 @@ app.post("/api/sync/supabase-push", async (req, res) => {
     console.log('[FreeTier] requireAuth supabase-push');
     const { uid, email, foods, biomarkers, profile, actions, dailyBenefits, report, forceOverwrite } = req.body;
     const isCwah = (authData.email && (authData.email.toLowerCase().includes('cwah.liu') || authData.email.toLowerCase().includes('chiwah.liu'))) || 
-                   (authData.uid && (authData.uid.includes('cwah_liu') || authData.uid.includes('chiwah_liu') || authData.uid === 'hiJun2hTdDTk2igwerun2LKvwb42'));
+                   (authData.uid && (authData.uid.includes('cwah_liu') || authData.uid.includes('chiwah_liu') || authData.uid === 'hiJun2hTdDTk2igwerun2LKvwb42')) ||
+                   (email && (String(email).toLowerCase().includes('cwah.liu') || String(email).toLowerCase().includes('chiwah.liu'))) ||
+                   (uid && (String(uid).includes('cwah_liu') || String(uid).includes('chiwah_liu') || uid === 'hiJun2hTdDTk2igwerun2LKvwb42'));
     const canonicalUid = isCwah 
       ? 'hiJun2hTdDTk2igwerun2LKvwb42' 
-      : authData.uid;
+      : (authData.uid || uid || email);
 
     const { supabaseAdmin } = await import('./supabaseAdmin.js');
 
@@ -14764,6 +14764,12 @@ registerBugSnapshotRoutes(app, {
   addDebugLog: (msg: string, sessionId?: string) => addDebugLog(msg, sessionId),
 });
 
+registerGoldenRoutes(app, {
+  getS3Client: () => getS3Client(),
+  bucketName: CLOUDFLARE_R2_BUCKET_NAME,
+  publicUrlBase: CLOUDFLARE_R2_PUBLIC_URL,
+});
+
 registerBrandMenuRoutes(app);
 
 // Endpoint to compile logs and send to admin
@@ -15394,18 +15400,24 @@ async function compressImagesInObject(obj: any, report: any): Promise<boolean> {
 }
 
 
-  // Warm up database brand cache and trigger initial database self-cleaning maintenance
-  fetchAllDatabaseBrands().then(async ({ allBrands }) => {
-    console.log(`[BrandCache] Loaded ${allBrands.size} brands dynamically from database.`);
-    try {
-      const chainStats = await consolidateBrandMenuItemsAndChains(supabaseAdmin);
-      const catalogStats = await cleanUnbrandedFoodCatalog(supabaseAdmin);
-      console.log(`[SelfCleaning] Initial database maintenance complete:`, chainStats, catalogStats);
-    } catch (e) {
-      console.warn('[SelfCleaning] Startup maintenance warning:', e);
+  // Warm up database brand cache and trigger initial database self-cleaning maintenance if configured
+  import('./supabaseAdmin.js').then(({ isSupabaseConfigured, supabaseAdmin }) => {
+    if (isSupabaseConfigured) {
+      fetchAllDatabaseBrands().then(async ({ allBrands }) => {
+        console.log(`[BrandCache] Loaded ${allBrands.size} brands dynamically from database.`);
+        try {
+          const chainStats = await consolidateBrandMenuItemsAndChains(supabaseAdmin);
+          const catalogStats = await cleanUnbrandedFoodCatalog(supabaseAdmin);
+          console.log(`[SelfCleaning] Initial database maintenance complete:`, chainStats, catalogStats);
+        } catch (e) {
+          console.warn('[SelfCleaning] Startup maintenance warning:', e);
+        }
+      }).catch((err) => {
+        console.warn('[BrandCache] Warmup warning:', err);
+      });
+    } else {
+      console.log('[BrandCache] Supabase credentials not set, operating in local offline mode.');
     }
-  }).catch((err) => {
-    console.warn('[BrandCache] Warmup warning:', err);
   });
 
   recoverInterruptedServerJobs().then(count => {

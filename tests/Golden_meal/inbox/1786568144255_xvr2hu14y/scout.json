@@ -1,0 +1,168 @@
+{
+  "_internalReasoning": "Extracted three items across the provided images: Co-op sliced ham label in image 0, Lidl juice bottle label in image 1, and a chocolate brownie in image 2. For the package labels, standard 100g base is used following UK nutritional label guidelines.",
+  "items": [
+    {
+      "keyword": "sliced cooked ham",
+      "originalName": "Co-op Formed Ham",
+      "estimatedWeightGrams": 120,
+      "boundingBox2D": [
+        100,
+        250,
+        600,
+        800
+      ],
+      "sourceImageIndex": 0,
+      "anomalyFlags": [],
+      "chainName": "Co-op",
+      "components": [
+        {
+          "searchQuery": "Co-op pork ham",
+          "volumePercentage": 97
+        },
+        {
+          "searchQuery": "salt",
+          "volumePercentage": 3
+        }
+      ],
+      "cookingMethod": "boiled",
+      "estimatedCalories": 145,
+      "ingredientsList": "Pork (97%), Salt, Sugar, Stabiliser (Sodium triphosphate), Spirit Vinegar, Antioxidant (Sodium ascorbate), Preservative (Sodium nitrite).",
+      "itemConfidence": "High",
+      "nutritionFacts": null,
+      "rawNutritionLabel": {
+        "servingSize": "100g",
+        "calories": "121 kcal",
+        "protein": "21g",
+        "totalFat": "3.6g",
+        "saturatedFat": "1.3g",
+        "transFat": null,
+        "totalCarbohydrate": "0.9g",
+        "sugar": "0.9g",
+        "addedSugar": null,
+        "sodium": null,
+        "salt": "1.50g",
+        "potassium": null,
+        "totalFibre": "0.5g",
+        "solubleFibre": null
+      },
+      "source": "label",
+      "visualIngredients": [
+        "ham"
+      ]
+    },
+    {
+      "keyword": "apple spinach mango avocado banana juice",
+      "originalName": "Lidl Apple and Spinach Juice with Mango, Avocado and Banana",
+      "estimatedWeightGrams": 500,
+      "boundingBox2D": [
+        50,
+        200,
+        950,
+        850
+      ],
+      "sourceImageIndex": 1,
+      "anomalyFlags": [],
+      "chainName": "Lidl",
+      "components": [
+        {
+          "searchQuery": "apple juice",
+          "volumePercentage": 70
+        },
+        {
+          "searchQuery": "mango puree",
+          "volumePercentage": 10
+        },
+        {
+          "searchQuery": "spinach juice",
+          "volumePercentage": 9
+        },
+        {
+          "searchQuery": "avocado puree",
+          "volumePercentage": 6
+        },
+        {
+          "searchQuery": "banana puree",
+          "volumePercentage": 5
+        }
+      ],
+      "cookingMethod": "raw",
+      "estimatedCalories": 295,
+      "ingredientsList": "70% Apple Juice, 10% Mango Purée, 9% Spinach Juice, 6% Avocado Purée, 5% Banana Purée, Antioxidant: Ascorbic Acid.",
+      "itemConfidence": "High",
+      "nutritionFacts": null,
+      "rawNutritionLabel": {
+        "servingSize": "100g",
+        "calories": "59 kcal",
+        "protein": "0.5g",
+        "totalFat": "1.0g",
+        "saturatedFat": "0.1g",
+        "transFat": null,
+        "totalCarbohydrate": "11.1g",
+        "sugar": "10.2g",
+        "addedSugar": null,
+        "sodium": null,
+        "salt": "0.01g",
+        "potassium": null,
+        "totalFibre": "1.0g",
+        "solubleFibre": null
+      },
+      "source": "label",
+      "visualIngredients": [
+        "fruit juice",
+        "smoothie"
+      ]
+    },
+    {
+      "keyword": "chocolate brownie",
+      "originalName": "Chocolate Brownie",
+      "estimatedWeightGrams": 75,
+      "boundingBox2D": [
+        200,
+        100,
+        700,
+        750
+      ],
+      "sourceImageIndex": 2,
+      "anomalyFlags": [],
+      "chainName": null,
+      "components": [
+        {
+          "searchQuery": "chocolate",
+          "volumePercentage": 40
+        },
+        {
+          "searchQuery": "wheat flour",
+          "volumePercentage": 25
+        },
+        {
+          "searchQuery": "butter",
+          "volumePercentage": 20
+        },
+        {
+          "searchQuery": "sugar",
+          "volumePercentage": 15
+        }
+      ],
+      "cookingMethod": "baked",
+      "estimatedCalories": 320,
+      "ingredientsList": null,
+      "itemConfidence": "Medium",
+      "nutritionFacts": null,
+      "rawNutritionLabel": null,
+      "source": "visual",
+      "visualIngredients": [
+        "chocolate brownie",
+        "chocolate chunk"
+      ]
+    }
+  ],
+  "contentType": "visual",
+  "cookingMethod": "unknown",
+  "scanCompleteness": "full",
+  "queriesToSearch": [
+    "Co-op Formed Ham",
+    "Lidl Apple and Spinach Juice with Mango Avocado and Banana",
+    "chocolate brownie"
+  ],
+  "diningEnvironment": "unknown"
+}

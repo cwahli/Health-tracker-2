@@ -27,6 +27,9 @@ If you touch a hot path and **no** row fits: add a unit/fixture test in the same
 | Label truth / locks / hard-lock | `node scripts/assert-label-truth-locks.mjs` · `node scripts/assert-false-hard-lock.mjs` |
 | Receipt / dup rows | `node scripts/assert-receipt-dup-rows.mjs` |
 | Food catalog / DB / resolver | `npx vitest run server_food_catalog.test.ts server_food_db.test.ts server_food_resolver.test.ts` |
+| Golden meals (`tests/Golden_meal/**`) | `npx vitest run tests/golden_meals.test.ts` |
+| Golden inbox (failing meal replay) | `npm run golden:inbox` · ingest: `node scripts/golden-from-debug.mjs <debug.md>` |
+| Golden scoreboard parser | `npx vitest run src/utils/goldenScoreboard.test.ts` |
 | Nutrient aggregation / basis / prep | `npx vitest run server_nutrient_aggregation.test.ts server_nutrient_basis.test.ts server_prep_policy.test.ts` |
 | Portion clarify / refine / weight | `npx vitest run server_portion_clarify.test.ts` · `node scripts/assert-backlog-b1-portion-clarify.mjs` |
 | Food log identity / history | `node scripts/assert-food-log-identity.mjs` · `npx vitest run src/utils/foodLogDedupe.test.ts` |
@@ -39,7 +42,7 @@ If you touch a hot path and **no** row fits: add a unit/fixture test in the same
 **Food-calc smoke (any food math PR):**
 
 ```bash
-npx vitest run server_budget_reconcile.test.ts server_vision_scout.test.ts server_nutrient_aggregation.test.ts server_portion_clarify.test.ts
+npx vitest run server_budget_reconcile.test.ts server_vision_scout.test.ts server_nutrient_aggregation.test.ts server_portion_clarify.test.ts tests/golden_meals.test.ts
 ```
 
 

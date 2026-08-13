@@ -28,6 +28,7 @@ import { FlagIssueForm, CATEGORY_OPTIONS, saveBugTrackerCache } from './FlagIssu
 import { BugCategory } from '../utils/issueBacklog';
 import { AVAILABLE_LLMS } from '../utils/llm';
 import { saveAgentRequestLog } from '../utils/agentLogsTracker';
+import GoldenInboxPanel from './GoldenInboxPanel';
 
 interface BugTrackerModalProps {
   isOpen: boolean;
@@ -102,6 +103,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
   } | null>(null);
 
   const [activeTab, setActiveTab] = useState<BugCategory | 'all'>('all');
+  const [boardMode, setBoardMode] = useState<'bugs' | 'golden'>('bugs');
   const [isFlagFormOpen, setIsFlagFormOpen] = useState(false);
   const [expandedTagId, setExpandedTagId] = useState<string | null>(null);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
@@ -1000,8 +1002,27 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
             </div>
           )}
 
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setBoardMode('bugs')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${boardMode === 'bugs' ? 'bg-rose-600 border-rose-400 text-white' : 'bg-slate-800 border-white/10 text-white/70'}`}
+            >
+              Bugs
+            </button>
+            <button
+              type="button"
+              onClick={() => setBoardMode('golden')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${boardMode === 'golden' ? 'bg-amber-600 border-amber-400 text-white' : 'bg-slate-800 border-white/10 text-white/70'}`}
+            >
+              Golden inbox
+            </button>
+          </div>
+
+          {boardMode === 'golden' && <GoldenInboxPanel />}
+
           {/* Requirement 6: Filter Tabs: foodcart, biomarker, database, Home, Other with tag count badges */}
-          <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
+          {boardMode === 'bugs' && <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
             {[ { key: 'all', label: 'All' }, ...CATEGORY_OPTIONS ].map((c) => {
               const count = c.key === 'all' ? bugTags.length : bugTags.filter((t: any) => (t.category || 'foodcart') === c.key).length;
               const isActive = activeTab === c.key;
@@ -1026,10 +1047,9 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                 </button>
               );
             })}
-          </div>
+          </div>}
 
-          {/* Flag Issue expandable panel */}
-          {isFlagFormOpen && (
+          {boardMode === 'bugs' && isFlagFormOpen && (
             <div className={`${card} border-indigo-500/40 p-4`}>
               <FlagIssueForm
                 initialCategory={activeTab === 'all' ? 'foodcart' : activeTab}
@@ -1044,7 +1064,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
           )}
 
           {/* Simplified Active Bug Tags layout */}
-          {filteredTags.length === 0 && !loading && (
+          {boardMode === 'bugs' && filteredTags.length === 0 && !loading && (
             <div className="rounded-2xl border border-amber-500/40 bg-amber-950/40 p-4 space-y-2">
               <p className="text-sm text-white font-bold flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-amber-400" /> No active bug tags in {activeTab}
@@ -1108,7 +1128,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
             </div>
           )}
 
-          <div className="space-y-3">
+          {boardMode === 'bugs' && <div className="space-y-3">
             {filteredTags.map((tag: any) => {
               const open = expandedTagId === tag.id;
               const comments = Array.isArray(tag.comments) ? tag.comments : [];
@@ -1668,10 +1688,10 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                 </div>
               );
             })}
-          </div>
+          </div>}
 
           {/* Deletion candidates */}
-          {deletionCandidates.length > 0 && (
+          {boardMode === 'bugs' && deletionCandidates.length > 0 && (
             <div className="space-y-2">
               <p className={`text-sm font-bold text-amber-300`}>
                 Reports ready to delete ({deletionCandidates.length})
@@ -1708,7 +1728,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
           )}
 
           {/* Requirement 11: All Flagged Reports - Removed "Suggested tags", show existing tags & add/remove controls */}
-          <div className="space-y-2 pt-2 border-t border-white/10">
+          {boardMode === 'bugs' && <div className="space-y-2 pt-2 border-t border-white/10">
             <p className={`text-sm font-bold ${textPrimary}`}>All flagged reports ({allReports.length})</p>
             {allReports.map((rep: any) => {
               // Find existing tags linked to this report
@@ -1935,7 +1955,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                 </div>
               );
             })}
-          </div>
+          </div>}
         </div>
       </div>
     </div>,
