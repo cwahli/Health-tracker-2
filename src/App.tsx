@@ -3629,6 +3629,15 @@ export default function App() {
       }
     }
 
+    // We allow user-triggered specific updates to write to the cloud even if the sync state was 'local' (offline)
+    // or manual-sync-only mode is enabled, which helps deliberate actions (e.g. approving a biomarker
+    // correction) reach the cloud immediately instead of silently waiting on a manual sync tap.
+    // We only block background/automatic updates or if the database quota is explicitly exceeded.
+    const isUserTriggered = specificUpdate && 
+      specificUpdate.type !== 'googleSteps' && 
+      !specificUpdate.isAutoLog &&
+      !(specificUpdate.type === 'biomarkerLog' && String(specificUpdate.targetId).startsWith('med_log_bmi_init_'));
+
     // Never block Force Push on Firebase quota — Supabase is the authority path.
     // isFirestoreQuotaExceeded React state may still be true in this closure after clear.
     if (!isExplicitSync && (isFirestoreQuotaExceeded || checkQuotaFlag())) {
@@ -3638,18 +3647,10 @@ export default function App() {
 
     // Intercept automatic writes if manual sync mode is enabled to save quota
     const isManualSyncOnly = localStorage.getItem('auto_sync_disabled') === 'true';
-    if (isManualSyncOnly && !isExplicitSync) {
+    if (isManualSyncOnly && !isExplicitSync && !isUserTriggered) {
       setSyncState('local');
       return;
     }
-    
-    // We allow user-triggered specific updates to write to the cloud even if the sync state was 'local' (offline),
-    // which helps the app automatically sync and transition back to 'synced' state on any user action.
-    // We only block background/automatic updates or if the database quota is explicitly exceeded.
-    const isUserTriggered = specificUpdate && 
-      specificUpdate.type !== 'googleSteps' && 
-      !specificUpdate.isAutoLog &&
-      !(specificUpdate.type === 'biomarkerLog' && String(specificUpdate.targetId).startsWith('med_log_bmi_init_'));
 
     if (syncState === 'local' && specificUpdate?.type !== 'fullPush' && !isUserTriggered) {
       return;
