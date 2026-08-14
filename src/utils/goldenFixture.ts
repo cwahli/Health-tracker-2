@@ -12,6 +12,38 @@ export type GoldenFixture = {
   jobId?: string | null;
 };
 
+function jobTimeMs(j: any): number {
+  const parsed = Date.parse(j?.updatedAt || j?.startedAt || j?.finishedAt || j?.createdAt || '');
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  const m = String(j?.id || '').match(/job_(\d+)/);
+  if (m) return Number(m[1]);
+  return 0;
+}
+
+/**
+ * Always the most recent food job.
+ * An old stalled/429 job must not beat a meal you just finished.
+ */
+export function pickSnapshotJob(jobs: any[], explicitId?: string | null): any | null {
+  const list = Array.isArray(jobs) ? jobs : [];
+  if (explicitId) {
+    const hit = list.find((j) => j?.id === explicitId);
+    if (hit) return hit;
+  }
+  const food = list.filter(
+    (j) => j && j.kind !== 'bug_triage' && !String(j.id || '').startsWith('triage_') && !String(j.id || '').startsWith('bug_triage_')
+  );
+  const pool = food.length ? food : list;
+  return (
+    [...pool].sort((a, b) => {
+      const tb = jobTimeMs(b);
+      const ta = jobTimeMs(a);
+      if (tb !== ta) return tb - ta;
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    })[0] || null
+  );
+}
+
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();

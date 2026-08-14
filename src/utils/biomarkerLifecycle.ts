@@ -1,0 +1,464 @@
+/**
+ * Biomarker lifecycle helpers (plan/BIOMARKER_LIFECYCLE_PLAN.md).
+ * Relabel vs convert, Review apply, overlay fingerprint, convert table.
+ */
+import { toYYYYMMDD } from './dateUtils';
+import { getMappedBiomarkerKey, isBiomarkerApproved, detectFlaggedTelemetryErrors, biomarkerDefinitions } from './biomarkers';
+import type { BiomarkerLog } from '../types';
+
+export type UnitChangeMode = 'relabel' | 'convert';
+
+export type RangeVariesBy = 'age' | 'sex' | 'ethnicity';
+
+export interface ModificationCommand {
+  action: 'update_biomarker' | 'update_profile' | 'remove_biomarker' | string;
+  keyName?: string;
+  date?: string;
+  newValue?: string | number;
+  oldValue?: string | number;
+  reason?: string;
+}
+
+/** Per-analyte SI conversion. Unknown pair → refuse (do not guess). */
+export const ANALYTE_CONVERSIONS: Record<string, { from: string; to: string; multiply: number }> = {
+  hdl: { from: 'mg/dl', to: 'mmol/l', multiply: 0.02586 },
+  ldl: { from: 'mg/dl', to: 'mmol/l', multiply: 0.02586 },
+  total_cholesterol: { from: 'mg/dl', to: 'mmol/l', multiply: 0.02586 },
+  triglycerides: { from: 'mg/dl', to: 'mmol/l', multiply: 0.01129 },
+  fasting_glucose: { from: 'mg/dl', to: 'mmol/l', multiply: 0.0555 },
+  glucose: { from: 'mg/dl', to: 'mmol/l', multiply: 0.0555 },
+  creatinine: { from: 'mg/dl', to: 'umol/l', multiply: 88.4 },
+  total_bilirubin: { from: 'mg/dl', to: 'umol/l', multiply: 17.1 },
+  bilirubin: { from: 'mg/dl', to: 'umol/l', multiply: 17.1 },
+  hemoglobin: { from: 'g/dl', to: 'g/l', multiply: 10 },
+  albumin: { from: 'g/dl', to: 'g/l', multiply: 10 },
+};
+
+const RANGE_VARIES_BY: Record<string, RangeVariesBy[]> = {
+  bmi: ['ethnicity'],
+  hdl: ['ethnicity', 'sex'],
+  ldl: ['ethnicity'],
+  triglycerides: ['ethnicity', 'sex'],
+  total_cholesterol: ['ethnicity', 'sex'],
+  egfr: ['age', 'sex'],
+  creatinine: ['sex', 'age'],
+  hemoglobin: ['sex'],
+  hematocrit: ['sex'],
+  ferritin: ['sex'],
+  uric_acid: ['sex'],
+  testosterone: ['sex', 'age'],
+  estradiol: ['sex', 'age'],
+  alkaline_phosphatase: ['age', 'sex'],
+};
+
+export function getRangeVariesBy(key: string): RangeVariesBy[] {
+  const mapped = getMappedBiomarkerKey(key) || key;
+  return RANGE_VARIES_BY[mapped] || RANGE_VARIES_BY[key] || [];
+}
+
+function normUnit(u: string): string {
+  return (u || '').toLowerCase().replace(/µ/g, 'u').replace(/\s+/g, '');
+}
+
+export function convertViaTable(
+  key: string,
+  value: number,
+  fromUnit: string,
+  toUnit: string
+): { ok: true; value: number } | { ok: false; reason: string } {
+  const mapped = getMappedBiomarkerKey(key) || key;
+  const spec = ANALYTE_CONVERSIONS[mapped] || ANALYTE_CONVERSIONS[key];
+  if (!spec) {
+    return { ok: false, reason: `No conversion table for ${mapped}` };
+  }
+  const from = normUnit(fromUnit);
+  const to = normUnit(toUnit);
+  if (from === to) return { ok: true, value };
+  if (from === spec.from && to === spec.to) {
+    return { ok: true, value: Number((value * spec.multiply).toFixed(3)) };
+  }
+  if (from === spec.to && to === spec.from) {
+    return { ok: true, value: Number((value / spec.multiply).toFixed(3)) };
+  }
+  if (mapped === 'hba1c') {
+    // IFCC: mmol/mol = 10.93*% − 23.5
+    if ((from === '%' || from === 'percent') && (to === 'mmol/mol' || to === 'mmolmol')) {
+      return { ok: true, value: Math.round(10.93 * value - 23.5) };
+    }
+    if ((from === 'mmol/mol' || from === 'mmolmol') && (from !== to) && (to === '%' || to === 'percent')) {
+      return { ok: true, value: Number(((value + 23.5) / 10.93).toFixed(1)) };
+    }
+  }
+  return { ok: false, reason: `Incomparable units ${fromUnit} → ${toUnit} for ${mapped}` };
+}
+
+export function datesMatch(a?: string, b?: string): boolean {
+  if (!a || !b) return false;
+  return toYYYYMMDD(a) === toYYYYMMDD(b);
+}
+
+export function collectCatalogUnitMap(profile?: any): Record<string, string> {
+  const map: Record<string, string> = {};
+  (biomarkerDefinitions || []).forEach((d: any) => {
+    if (d?.key && d?.unit) map[d.key] = d.unit;
+  });
+  Object.entries(profile?.customBiomarkers || {}).forEach(([k, v]: [string, any]) => {
+    if (v?.unit) map[k] = v.unit;
+  });
+  return map;
+}
+
+/** Typical SI/canonical band after convert. Used to tell 13 µmol/L bilirubin from 0.8 mg/dL. */
+const SI_VALUE_BAND: Record<string, [number, number]> = {
+  hdl: [0.4, 4],
+  ldl: [0.5, 8],
+  total_cholesterol: [1, 12],
+  triglycerides: [0.2, 8],
+  fasting_glucose: [2, 20],
+  glucose: [2, 20],
+  creatinine: [20, 400],
+  total_bilirubin: [2, 80],
+  bilirubin: [2, 80],
+  hemoglobin: [80, 220],
+  albumin: [20, 60],
+};
+
+function inferConvSide(
+  key: string,
+  spec: { from: string; to: string; multiply: number },
+  value: number,
+  observedUnit?: string
+): 'from' | 'to' | null {
+  if (observedUnit) {
+    const u = normUnit(observedUnit);
+    if (u === spec.from) return 'from';
+    if (u === spec.to) return 'to';
+  }
+  const band = SI_VALUE_BAND[key];
+  if (band) {
+    const [lo, hi] = band;
+    if (value >= lo && value <= hi) return 'to';
+    const conv = convertViaTable(key, value, spec.from, spec.to);
+    if (conv.ok && conv.value >= lo && conv.value <= hi) return 'from';
+    return null;
+  }
+  if (spec.multiply < 1) return value >= 15 ? 'from' : 'to';
+  return value < 15 ? 'from' : 'to';
+}
+
+/**
+ * When Review writes an essay and omits modificationCommand (common after schema
+ * requires newValue), build convert commands from scale-shift history.
+ */
+export function buildReviewCommandsFromHistory(
+  history: { date?: string; biomarkers?: Record<string, any>; observationMeta?: Record<string, { rawUnit?: string }> }[] = [],
+  catalogUnitByKey: Record<string, string> = {}
+): ModificationCommand[] {
+  const byKey: Record<string, { date: string; value: number; rawKey: string; unit?: string }[]> = {};
+  (history || []).forEach((h) => {
+    if (!h?.date || !h.biomarkers) return;
+    Object.entries(h.biomarkers).forEach(([rawKey, raw]) => {
+      const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+      if (!Number.isFinite(n) || n <= 0) return;
+      const key = getMappedBiomarkerKey(rawKey) || rawKey;
+      if (!ANALYTE_CONVERSIONS[key]) return;
+      if (!byKey[key]) byKey[key] = [];
+      byKey[key].push({
+        date: h.date,
+        value: n,
+        rawKey,
+        unit: h.observationMeta?.[rawKey]?.rawUnit || h.observationMeta?.[key]?.rawUnit,
+      });
+    });
+  });
+
+  const cmds: ModificationCommand[] = [];
+  Object.entries(byKey).forEach(([key, entries]) => {
+    if (entries.length < 2) return;
+    const spec = ANALYTE_CONVERSIONS[key];
+    const sides = entries.map((e) => inferConvSide(key, spec, e.value, e.unit));
+    const fromCount = sides.filter((s) => s === 'from').length;
+    const toCount = sides.filter((s) => s === 'to').length;
+    if (fromCount === 0 || toCount === 0) return;
+
+    const catalog = normUnit(catalogUnitByKey[key] || '');
+    let target: 'from' | 'to' = toCount >= fromCount ? 'to' : 'from';
+    if (catalog === spec.to) target = 'to';
+    else if (catalog === spec.from && toCount < fromCount) target = 'from';
+
+    const fromUnit = target === 'to' ? spec.from : spec.to;
+    const toUnit = target === 'to' ? spec.to : spec.from;
+    entries.forEach((e, i) => {
+      if (!sides[i] || sides[i] === target) return;
+      const conv = convertViaTable(key, e.value, fromUnit, toUnit);
+      if (!conv.ok) return;
+      cmds.push({
+        action: 'update_biomarker',
+        keyName: key,
+        date: e.date,
+        oldValue: e.value,
+        newValue: conv.value,
+        reason: `Unit scaling: ${e.value} ${fromUnit} → ${conv.value} ${toUnit} (table, not a clinical finding).`,
+      });
+    });
+  });
+  return cmds;
+}
+
+/** If Review omitted newValue or the whole command list, fill from the convert table. */
+export function enrichReviewModificationCommands(
+  commands: ModificationCommand[] | undefined | null,
+  history: { date?: string; biomarkers?: Record<string, any>; observationMeta?: Record<string, { rawUnit?: string }> }[] = [],
+  catalogUnitByKey: Record<string, string> = {}
+): ModificationCommand[] {
+  const filled = (commands || []).map((cmd) => {
+    if (cmd.action !== 'update_biomarker' || !cmd.keyName) return cmd;
+    if (cmd.newValue !== undefined && cmd.newValue !== null && cmd.newValue !== '') return cmd;
+    const key = getMappedBiomarkerKey(cmd.keyName) || cmd.keyName;
+    const oldRaw = cmd.oldValue ?? history.find((h) => datesMatch(h.date, cmd.date))?.biomarkers?.[key]
+      ?? history.find((h) => datesMatch(h.date, cmd.date))?.biomarkers?.[cmd.keyName];
+    const oldNum = typeof oldRaw === 'number' ? oldRaw : parseFloat(String(oldRaw ?? ''));
+    if (!Number.isFinite(oldNum)) return cmd;
+    const histVals = history
+      .filter((h) => !datesMatch(h.date, cmd.date))
+      .map((h) => Number(h.biomarkers?.[key] ?? h.biomarkers?.[cmd.keyName]))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const histMedian = histVals.length
+      ? [...histVals].sort((a, b) => a - b)[Math.floor(histVals.length / 2)]
+      : 0;
+    const spec = ANALYTE_CONVERSIONS[key];
+    const catalogUnit = catalogUnitByKey[key] || catalogUnitByKey[cmd.keyName] || '';
+    if (!spec) return cmd;
+    const cat = normUnit(catalogUnit);
+    const looksLikeFrom = histMedian > 0 && oldNum / histMedian >= 8;
+    const targetIsSi = cat === spec.to || looksLikeFrom;
+    if (targetIsSi) {
+      const conv = convertViaTable(key, oldNum, spec.from, spec.to);
+      if (conv.ok) return { ...cmd, newValue: conv.value, keyName: key };
+    }
+    const looksLikeTo = histMedian > 0 && histMedian / oldNum >= 8;
+    if (cat === spec.from || looksLikeTo) {
+      const conv = convertViaTable(key, oldNum, spec.to, spec.from);
+      if (conv.ok) return { ...cmd, newValue: conv.value, keyName: key };
+    }
+    return cmd;
+  });
+
+  const synthesized = buildReviewCommandsFromHistory(history, catalogUnitByKey);
+  if (synthesized.length === 0) return filled;
+  const have = new Set(
+    filled
+      .filter((c) => c.keyName && c.date)
+      .map((c) => `${getMappedBiomarkerKey(c.keyName as string) || c.keyName}|${toYYYYMMDD(c.date as string)}`)
+  );
+  const extra = synthesized.filter((c) => {
+    const id = `${c.keyName}|${toYYYYMMDD(c.date as string)}`;
+    return !have.has(id);
+  });
+  return [...filled, ...extra];
+}
+
+export function applyModificationCommands(
+  history: BiomarkerLog[],
+  commands: ModificationCommand[] | undefined | null,
+  catalogUnitByKey: Record<string, string> = {}
+): { history: BiomarkerLog[]; applied: number } {
+  const enriched = enrichReviewModificationCommands(commands, history, catalogUnitByKey);
+  if (!enriched.length) return { history, applied: 0 };
+  let applied = 0;
+  const next = history.map((h) => ({
+    ...h,
+    biomarkers: { ...(h.biomarkers || {}) },
+  }));
+
+  enriched.forEach((cmd) => {
+    const key = cmd.keyName ? getMappedBiomarkerKey(cmd.keyName) || cmd.keyName : '';
+    if (!key) return;
+    if (cmd.action === 'update_biomarker' && cmd.newValue !== undefined) {
+      const idx = next.findIndex((h) => datesMatch(h.date, cmd.date));
+      const num = typeof cmd.newValue === 'number' ? cmd.newValue : Number(cmd.newValue);
+      const val = Number.isNaN(num) ? cmd.newValue : num;
+      if (idx >= 0) {
+        next[idx].biomarkers[key] = val;
+        next[idx].sync_state = 'update';
+        next[idx].updated_at = Date.now();
+        applied += 1;
+      } else if (cmd.date) {
+        next.push({
+          id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+          date: cmd.date,
+          biomarkers: { [key]: val },
+          note: cmd.reason || 'Corrected by Review',
+          sync_state: 'update',
+          updated_at: Date.now(),
+        });
+        applied += 1;
+      }
+    } else if (cmd.action === 'remove_biomarker' && cmd.date) {
+      const idx = next.findIndex((h) => datesMatch(h.date, cmd.date));
+      if (idx >= 0 && next[idx].biomarkers[key] !== undefined) {
+        delete next[idx].biomarkers[key];
+        next[idx].sync_state = 'update';
+        next[idx].updated_at = Date.now();
+        applied += 1;
+      }
+    }
+  });
+
+  return { history: next, applied };
+}
+
+export function latestValuesFromHistory(history: any[]): Record<string, number | string> {
+  const current: Record<string, number | string> = {};
+  const sorted = [...(history || [])]
+    .filter((h) => h && h.sync_state !== 'delete')
+    .sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date)));
+  sorted.forEach((log) => {
+    Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        current[k] = v as string | number;
+      }
+    });
+  });
+  return current;
+}
+
+export function overlayAgeBand(age: number | string | undefined | null): string {
+  const n = typeof age === 'number' ? age : parseInt(String(age ?? ''), 10);
+  if (!Number.isFinite(n) || n <= 0) return 'unknown';
+  if (n < 18) return '0-17';
+  const lo = Math.floor(n / 10) * 10;
+  return `${lo}-${lo + 9}`;
+}
+
+export function overlayFingerprint(profile: {
+  age?: any;
+  gender?: string;
+  ethnicity?: string;
+} | null | undefined): string {
+  const sex = String(profile?.gender || '').toLowerCase().slice(0, 1) || 'u';
+  const eth = String(profile?.ethnicity || '').toLowerCase().trim() || 'unspecified';
+  return `${overlayAgeBand(profile?.age)}|${sex}|${eth}`;
+}
+
+export function shouldRunCalibrator(
+  key: string,
+  profile: { age?: any; gender?: string; ethnicity?: string } | null | undefined,
+  overlay?: { fingerprint?: string; sameAsCatalog?: boolean } | null
+): boolean {
+  const varies = getRangeVariesBy(key);
+  if (varies.length === 0) return false;
+  const fp = overlayFingerprint(profile);
+  if (overlay?.fingerprint === fp) return false;
+  return true;
+}
+
+/** Retired chat destinations → owner the user should land on. */
+export const RETIRED_AGENT_REDIRECT: Record<string, string> = {
+  medical_extract: 'agent1',
+  agent2: 'data_review',
+  agent3: 'data_review',
+  agent5: 'data_review',
+};
+
+export function resolveAgentDestination(agentType: string | null | undefined): string | null {
+  if (!agentType) return null;
+  return RETIRED_AGENT_REDIRECT[agentType] || agentType;
+}
+
+export const INSTRUCTION_KEY_ALIASES: Record<string, string[]> = {
+  agent1: ['medical_extract'],
+  medical: ['medical_extract', 'agent1'],
+  medical_categorise: ['agent2'],
+  consolidate_names: ['agent3'],
+  data_review: ['agent5'],
+  biomarker_review: [],
+};
+
+export function readAliasedInstruction(storageKeyPrefix: string, resolvedKey: string): string | null {
+  if (typeof localStorage === 'undefined') return null;
+  const keys = [resolvedKey, ...(INSTRUCTION_KEY_ALIASES[resolvedKey] || [])];
+  for (const k of keys) {
+    const v = localStorage.getItem(`${storageKeyPrefix}${k}`);
+    if (v !== null) return v;
+  }
+  return null;
+}
+
+export function flaggedKeySet(profile: any, history?: any[], resolved?: Record<string, any>): Set<string> {
+  return new Set(
+    detectFlaggedTelemetryErrors(resolved || {}, profile, history || [], undefined).map((f) => f.key)
+  );
+}
+
+export function isLiveForUse(key: string, profile: any, history?: any[], resolved?: Record<string, any>, flagged?: Set<string>): boolean {
+  if (!isBiomarkerApproved(key, profile, history)) return false;
+  const bad = flagged || flaggedKeySet(profile, history, resolved);
+  return !bad.has(key);
+}
+
+export function filterHistoryForUse(history: any[] | undefined, profile: any): any[] {
+  const flagged = flaggedKeySet(profile, history);
+  return (history || []).map((log) => {
+    const next: Record<string, any> = {};
+    Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
+      if (isLiveForUse(k, profile, history, undefined, flagged)) next[k] = v;
+    });
+    const meta = { ...(log.observationMeta || {}) };
+    Object.keys(meta).forEach((k) => {
+      if (next[k] === undefined) delete meta[k];
+    });
+    return { ...log, biomarkers: next, observationMeta: Object.keys(meta).length ? meta : log.observationMeta };
+  }).filter((log) => Object.keys(log.biomarkers || {}).length > 0);
+}
+
+export function filterCurrentForUse(
+  current: Record<string, any> | undefined,
+  profile: any,
+  history?: any[]
+): Record<string, any> {
+  const flagged = flaggedKeySet(profile, history, current);
+  const out: Record<string, any> = {};
+  Object.entries(current || {}).forEach(([k, v]) => {
+    if (isLiveForUse(k, profile, history, current, flagged)) out[k] = v;
+  });
+  return out;
+}
+
+export function attachObservationMeta(
+  log: BiomarkerLog,
+  key: string,
+  meta: { unit?: string; printedRange?: string; labFlag?: string; rawValue?: string | number }
+): void {
+  if (!log.observationMeta) log.observationMeta = {};
+  log.observationMeta[key] = {
+    ...(log.observationMeta[key] || {}),
+    ...(meta.unit ? { rawUnit: meta.unit } : {}),
+    ...(meta.printedRange ? { printedRange: meta.printedRange } : {}),
+    ...(meta.labFlag ? { labFlag: meta.labFlag } : {}),
+    ...(meta.rawValue !== undefined ? { rawValue: meta.rawValue } : {}),
+  };
+}
+
+export function getObservationUnit(log: BiomarkerLog | undefined, key: string, fallback?: string): string {
+  return log?.observationMeta?.[key]?.rawUnit || fallback || '';
+}
+
+export const AGENT_DISPLAY_NAMES: Record<string, string> = {
+  medical: 'Lab Parser',
+  medical_extract: 'Lab Parser',
+  agent1: 'Lab Parser',
+  biomarker_review: 'Review',
+  agent2: 'Categoriser',
+  agent3: 'Name Deduper',
+  data_review: 'Range Calibrator',
+  agent4: 'Test Planner',
+  agent5: 'Range Calibrator',
+  agent7: 'Literature',
+  health_baseline: 'Health Coach',
+  front_desk: 'Front Desk',
+  data_accuracy: 'Field Compare',
+  name_consolidation: 'Name Deduper',
+  standardize_units: 'Unit Relabel',
+  medical_categorise: 'Categoriser',
+};

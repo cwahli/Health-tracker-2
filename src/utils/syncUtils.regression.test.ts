@@ -143,6 +143,37 @@ describe('mergeProfiles tombstones', () => {
     const m2 = mergeProfiles(cloud, reflag)!;
     expect(m2.notUsedBiomarkers?.k?.flaggedAt).toBe(300);
   });
+
+  it('does not resurrect stale cloud needsApproval after local approval', () => {
+    const cloud = base({
+      lastUpdatedAt: 50,
+      customBiomarkers: {
+        new_slug: { name: 'New', unit: '', needsApproval: true, updatedAt: 10 },
+      } as any,
+    });
+    const local = base({
+      lastUpdatedAt: 200,
+      customBiomarkers: {
+        new_slug: { name: 'New', unit: 'u', catalogApproved: true, updatedAt: 200 },
+      } as any,
+    });
+    const m = mergeProfiles(cloud, local)!;
+    expect(m.customBiomarkers?.new_slug?.needsApproval).toBeUndefined();
+    expect(m.customBiomarkers?.new_slug?.catalogApproved).toBe(true);
+  });
+
+  it('does not mark built-in overlay as pending when either side has a leftover flag', () => {
+    const cloud = base({
+      lastUpdatedAt: 200,
+      customBiomarkers: { hdl: { name: 'HDL-C', needsApproval: true, updatedAt: 200 } } as any,
+    });
+    const local = base({
+      lastUpdatedAt: 100,
+      customBiomarkers: { hdl: { name: 'HDL', unit: 'mmol/L', updatedAt: 50 } } as any,
+    });
+    const m = mergeProfiles(cloud, local)!;
+    expect(m.customBiomarkers?.hdl?.needsApproval).toBeUndefined();
+  });
 });
 
 describe('mergeBiomarkerHistory', () => {

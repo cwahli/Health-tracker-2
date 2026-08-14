@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, Play, Upload, CheckCircle2, AlertCircle, Loader2, ChevronDown, ChevronRight, Trash2, Download } from 'lucide-react';
+import { RefreshCw, Play, Upload, CheckCircle2, AlertCircle, Loader2, ChevronDown, ChevronRight, Trash2, Download, Copy } from 'lucide-react';
+import { PHASE_LABEL, groupJourneyByDish, mealLineNamesMatch } from '../utils/goldenScoreboard';
+import { buildGoldenChecklist, classifyStudioRed, formatGoldenShare, replayTapeBanner, studioLoopPlan } from '../utils/goldenStudio';
+import { fetchPhotosAsDataUrls, requestGoldenNewAnalyze, sameOriginPhotoUrl } from '../utils/goldenIngestClient';
 
 type CaseRow = {
   id: string;
@@ -30,7 +33,7 @@ export default function GoldenInboxPanel() {
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState<{ id: string; action: string } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -51,25 +54,52 @@ export default function GoldenInboxPanel() {
     load();
   }, []);
 
+  const refreshCase = async (id: string) => {
+    setOpenId(id);
+    const r = await fetch(`/api/golden/cases/${id}`);
+    setDetail(await r.json());
+  };
+
   const openCase = async (id: string) => {
     if (openId === id) {
       setOpenId(null);
       return;
     }
-    setOpenId(id);
-    const r = await fetch(`/api/golden/cases/${id}`);
-    const j = await r.json();
-    setDetail(j);
+    await refreshCase(id);
   };
 
-  const replay = async (id: string) => {
-    setBusy(id);
+  const [loopMsg, setLoopMsg] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const isBusy = (id: string, action?: string) =>
+    !!busy && busy.id === id && (!action || busy.action === action);
+
+  const replay = async (id: string, mode: 'log' | 'catalog' | 'pipeline' = 'log') => {
+    if (mode === 'pipeline') {
+      const ok = window.confirm(
+        'Pipeline re-runs resolve + truth from the frozen scout.\n\nIt does NOT call Vision Scout (no new photo read).\nIt MAY call Curator or Dietitian and use Gemini quota.\n\nThis is not Replay log.\n\nContinue?'
+      );
+      if (!ok) return;
+    }
+    setBusy({ id, action: mode });
+    setLoopMsg(null);
+    setError(null);
     try {
-      const r = await fetch(`/api/golden/cases/${id}/replay`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const r = await fetch(`/api/golden/cases/${id}/replay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'replay failed');
+      if (!r.ok) throw new Error(j.pipelineError || j.error || 'replay failed');
+      const label =
+        mode === 'log'
+          ? 'Replayed saved tape (no agent)'
+          : mode === 'catalog'
+            ? 'Replayed catalog (dictionary only, no agent)'
+            : 'Pipeline finished (may have called Curator/Dietitian)';
+      setLoopMsg(`${label} · ${j.passCount ?? '—'} pass / ${j.failCount ?? '—'} fail`);
       await load();
-      if (openId === id) await openCase(id);
+      await refreshCase(id);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -79,11 +109,15 @@ export default function GoldenInboxPanel() {
 
   const deleteCase = async (id: string) => {
     if (!window.confirm('Delete this golden meal?')) return;
-    setBusy(id);
+    setBusy({ id, action: 'delete' });
     try {
       const r = await fetch(`/api/golden/cases/${id}`, { method: 'DELETE' });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'delete failed');
+      if (openId === id) {
+        setOpenId(null);
+        setDetail(null);
+      }
       await load();
     } catch (e: any) {
       setError(e.message);
@@ -92,8 +126,65 @@ export default function GoldenInboxPanel() {
     }
   };
 
+  const runAnalyze = async (id: string) => {
+    if (busy?.action === 'analyze') return;
+    setBusy({ id, action: 'analyze' });
+    setLoopMsg(null);
+    setError(null);
+    try {
+      let d = openId === id ? detail : null;
+      if (!d) {
+        const r = await fetch(`/api/golden/cases/${id}`);
+        d = await r.json();
+      }
+      const rawPhotos: string[] = (d?.fixture?.photos || []).filter(Boolean);
+      if (!rawPhotos.length) {
+        throw new Error('No saved photos on this case. Snapshot again so photos are stored.');
+      }
+      const query = String(d?.fixture?.query || 'Analyze this meal photo.');
+      setLoopMsg('Loading saved photos…');
+      const photos = await fetchPhotosAsDataUrls(rawPhotos);
+      requestGoldenNewAnalyze({ caseId: id, query, photos });
+      setLoopMsg('NEW Analyze started. Inbox stays open — the board will rescore when the job finishes.');
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runLoop = async (id: string) => {
+    const ok = window.confirm(
+      'This is RUN UNTIL GREEN — not Replay log.\n\nIt re-runs the live pipeline once (frozen scout).\nIt does NOT call Vision Scout.\nIt MAY call Curator or Dietitian and use Gemini quota.\n\nContinue?'
+    );
+    if (!ok) return;
+    setBusy({ id, action: 'loop' });
+    setLoopMsg(null);
+    setError(null);
+    try {
+      const r = await fetch(`/api/golden/cases/${id}/loop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const j = await r.json();
+      if (!r.ok && !j.stopReason) throw new Error(j.error || 'loop failed');
+      setLoopMsg(
+        ['Run until green', j.message, j.pipelineError && j.pipelineError !== j.message ? j.pipelineError : '']
+          .filter(Boolean)
+          .join(' — ') || (j.allGreen ? 'Run until green · All green' : 'Run until green · Still red')
+      );
+      await load();
+      await refreshCase(id);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const promote = async (id: string) => {
-    setBusy(id);
+    setBusy({ id, action: 'promote' });
     try {
       const r = await fetch(`/api/golden/cases/${id}/promote`, { method: 'POST' });
       const j = await r.json();
@@ -107,11 +198,48 @@ export default function GoldenInboxPanel() {
   };
 
   const copyStudioPrompt = async (id: string) => {
-    const r = await fetch('/api/golden/studio-brief');
+    const r = await fetch(`/api/golden/cases/${id}/studio-brief`);
     const md = await r.text();
     await navigator.clipboard.writeText(
-      `Check the latest golden bug and fix it.\n\nUse GET /api/golden/studio-brief if this is stale.\nDo not change expected numbers. Read attempts before retrying an approach.\nAfter edits POST /api/golden/cases/${id}/attempt with tried/learned/next, then POST .../replay.\n\n---\n${md}`
+      `Check this golden bug and fix it.\n\nPOST /api/golden/cases/${id}/loop runs skipScout pipeline from the frozen scout (no new photos, no Gemini scout).\nStops at green, the same reds, 5 runs, or quota/stall. After a code change POST /attempt then /loop again.\nDo not change expected numbers.\n\n---\n${md}`
     );
+    setCopied(`studio:${id}`);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const copyJobShare = async (row: CaseRow) => {
+    let d = openId === row.id ? detail : null;
+    if (!d) {
+      const r = await fetch(`/api/golden/cases/${row.id}`);
+      d = await r.json();
+    }
+    const board = d?.board || {};
+    const pending = uniquePending(board);
+    const md = formatGoldenShare({
+      id: row.id,
+      title: d?.title || row.title,
+      jobId: row.job_id,
+      replayMode: board.replayMode,
+      query: d?.fixture?.query,
+      photoCount: Array.isArray(d?.fixture?.photos) ? d.fixture.photos.length : undefined,
+      pending: buildGoldenChecklist(board).map((p) => ({
+        group: p.status,
+        label: p.label,
+        youDo: p.youDo,
+      })),
+      mealLines: (board.expectedMeal || []).map((exp: any, idx: number) => {
+        const obs = findMealObs(board, exp, idx);
+        return {
+          name: exp.name,
+          expected: exp.calories != null ? `${exp.calories} kcal` : 'N/A',
+          current: obs ? `${obs.calories ?? 0} kcal` : 'missing',
+          status: mealLineStatus(board, exp, obs).label,
+        };
+      }),
+    });
+    await navigator.clipboard.writeText(md);
+    setCopied(`job:${row.id}`);
+    setTimeout(() => setCopied(null), 2000);
   };
 
   return (
@@ -119,7 +247,10 @@ export default function GoldenInboxPanel() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-bold text-white">Golden inbox</p>
-          <p className="text-[11px] text-white/60">A = your result lines. B = known + promoted log issues. Replay is the only pass/fail.</p>
+          <p className="text-[11px] text-white/60">
+            <span className="text-emerald-300 font-semibold">No agent:</span> Replay log (re-score the saved tape) · Replay catalog (dictionary only).{' '}
+            <span className="text-amber-300 font-semibold">May call Curator/Dietitian (quota):</span> Pipeline · Run until green. Neither calls Vision Scout.
+          </p>
         </div>
         <button type="button" onClick={load} className="p-2 rounded-lg bg-slate-800 border border-white/15 text-white">
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -130,6 +261,17 @@ export default function GoldenInboxPanel() {
         <div className="p-2.5 rounded-xl bg-rose-900/60 text-xs text-white flex gap-2">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           {error}
+        </div>
+      )}
+      {loopMsg && (
+        <div
+          className={`p-2.5 rounded-xl border text-xs ${
+            /no agent/i.test(loopMsg)
+              ? 'bg-emerald-900/40 border-emerald-500/30 text-emerald-100'
+              : 'bg-amber-900/50 border-amber-500/30 text-amber-100'
+          }`}
+        >
+          {loopMsg}
         </div>
       )}
 
@@ -168,28 +310,125 @@ export default function GoldenInboxPanel() {
               </p>
             </div>
           </button>
-          <div className="px-3 pb-3 flex flex-wrap gap-2">
-            <button type="button" onClick={() => replay(c.id)} className="px-2.5 py-1 rounded-lg bg-indigo-600 text-[10px] font-bold text-white flex items-center gap-1">
-              {busy === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
-              Re-run
-            </button>
-            <button
-              type="button"
-              disabled={!c.all_green}
-              onClick={() => promote(c.id)}
-              className="px-2.5 py-1 rounded-lg bg-emerald-700 disabled:opacity-30 text-[10px] font-bold text-white flex items-center gap-1"
-            >
-              <CheckCircle2 className="w-3 h-3" />
-              Promote
-            </button>
-            <button type="button" onClick={() => copyStudioPrompt(c.id)} className="px-2.5 py-1 rounded-lg bg-slate-700 text-[10px] font-bold text-white flex items-center gap-1">
-              <Upload className="w-3 h-3" />
-              Copy AI Studio prompt
-            </button>
-            <button type="button" onClick={() => deleteCase(c.id)} className="px-2.5 py-1 rounded-lg bg-rose-700 text-[10px] font-bold text-white flex items-center gap-1">
-              <Trash2 className="w-3 h-3" />
-              Delete
-            </button>
+          <div
+            className="px-3 pb-3 space-y-2"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-1">
+              <p className="text-[9px] font-bold uppercase tracking-wide text-emerald-300/80">No agent — never calls Gemini</p>
+              <div className="flex flex-wrap gap-2">
+                <InboxAction
+                  label="Replay log"
+                  hint="Re-score the saved backend.log. No Gemini, no search."
+                  tone="safe"
+                  busy={isBusy(c.id, 'log')}
+                  disabled={!!busy}
+                  onClick={() => replay(c.id, 'log')}
+                />
+                <InboxAction
+                  label="Replay catalog"
+                  hint="Look up frozen scout names in the local dictionary. No Gemini."
+                  tone="safe"
+                  busy={isBusy(c.id, 'catalog')}
+                  disabled={!!busy}
+                  onClick={() => replay(c.id, 'catalog')}
+                />
+              </div>
+            </div>
+            <div className="space-y-1 pt-1 border-t border-white/10">
+              <p className="text-[9px] font-bold uppercase tracking-wide text-amber-300/80">Calls Gemini — saved photos + query, no re-upload</p>
+              <div className="flex flex-wrap gap-2">
+                <InboxAction
+                  label="NEW Analyze"
+                  hint="Opens the food job with saved photos + query. Full scout + checks. New bugs are added when it finishes."
+                  tone="agent"
+                  icon="play"
+                  busy={isBusy(c.id, 'analyze')}
+                  disabled={!!busy}
+                  onClick={() => runAnalyze(c.id)}
+                />
+              </div>
+              <details className="pt-1">
+                <summary className="text-[9px] font-bold uppercase tracking-wide text-white/40 cursor-pointer">
+                  Advanced — skipScout only (no new photos)
+                </summary>
+                <div className="flex flex-wrap gap-2 mt-1">
+                <InboxAction
+                  label="Pipeline"
+                  hint="Live skipScout analyze. No Vision Scout. May use quota."
+                  tone="agent"
+                  busy={isBusy(c.id, 'pipeline')}
+                  disabled={!!busy}
+                  onClick={() => replay(c.id, 'pipeline')}
+                />
+                <InboxAction
+                  label="Run until green"
+                  hint={
+                    openId === c.id && detail && !studioLoopPlan(detail.board?.outcomes).mayLoop
+                      ? 'Will not run — leftover reds need NEW Analyze or are accept-only.'
+                      : 'One live pipeline pass, then stop. Only helps resolve/catalog reds. Not Replay log.'
+                  }
+                  tone="agent"
+                  icon="play"
+                  busy={isBusy(c.id, 'loop')}
+                  disabled={
+                    c.status === 'promoted' ||
+                    !!busy ||
+                    (openId === c.id && !!detail && !studioLoopPlan(detail.board?.outcomes).mayLoop)
+                  }
+                  onClick={() => runLoop(c.id)}
+                />
+                </div>
+              </details>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <InboxAction
+                  label="Promote"
+                  hint="Copy this case into official goldens after it is all-green."
+                  tone="ok"
+                  icon="check"
+                  busy={isBusy(c.id, 'promote')}
+                  disabled={!c.all_green || !!busy}
+                  onClick={() => promote(c.id)}
+                />
+                <InboxAction
+                  label={copied === `job:${c.id}` ? 'Copied job' : 'Copy job'}
+                  hint="Copy a short highlight of this case to paste in chat."
+                  tone="neutral"
+                  icon="copy"
+                  disabled={!!busy}
+                  onClick={() => copyJobShare(c)}
+                />
+                <InboxAction
+                  label={copied === `studio:${c.id}` ? 'Copied prompt' : 'Copy AI Studio prompt'}
+                  hint="Copy a brief for Studio. Does not run anything."
+                  tone="neutral"
+                  icon="upload"
+                  disabled={!!busy}
+                  onClick={() => copyStudioPrompt(c.id)}
+                />
+                <InboxAction
+                  label="Delete"
+                  hint="Remove this golden case."
+                  tone="danger"
+                  icon="trash"
+                  busy={isBusy(c.id, 'delete')}
+                  disabled={!!busy}
+                  onClick={() => deleteCase(c.id)}
+                />
+              </div>
+            </div>
+            {isBusy(c.id) && (
+              <p className="text-[10px] text-white/70">
+                {busy?.action === 'log' && 'Replaying saved tape… no agent.'}
+                {busy?.action === 'catalog' && 'Replaying catalog… no agent.'}
+                {busy?.action === 'analyze' && 'NEW Analyze: Vision Scout on saved photos…'}
+                {busy?.action === 'pipeline' && 'Running live pipeline… may call an agent.'}
+                {busy?.action === 'loop' && 'Run until green… may call an agent.'}
+                {busy?.action === 'promote' && 'Promoting…'}
+                {busy?.action === 'delete' && 'Deleting…'}
+              </p>
+            )}
           </div>
           {openId === c.id && detail && (
             <div className="px-3 pb-3 space-y-3 border-t border-white/10 pt-2 text-xs">
@@ -230,22 +469,80 @@ export default function GoldenInboxPanel() {
                 ) : (
                   <p className="text-[10px] text-white/50 italic">No explicit fix attempts logged yet for this iteration. Re-run after code edits.</p>
                 )}
+                <AttemptBox
+                  id={c.id}
+                  onSaved={async () => {
+                    await load();
+                    const r = await fetch(`/api/golden/cases/${c.id}`);
+                    setDetail(await r.json());
+                  }}
+                />
               </div>
 
-              {detail.board?.resolutionStats && (
-                <div className="text-[10px] text-sky-200/90 space-y-1 rounded-xl border border-sky-500/20 bg-sky-950/30 p-2">
-                  <p className="font-bold text-sky-300">Food Resolution Diagnostics</p>
-                  <p>
-                    <span className="font-medium text-white">Sampled Components:</span> {detail.board.resolutionStats.sampled}
+              {detail.board?.replayMode && (
+                <div className="space-y-1">
+                  <p className="text-[10px] font-semibold">
+                    {detail.board.replayMode === 'catalog' || detail.board.replayMode === 'log' ? (
+                      <span className="text-emerald-300">
+                        Last replay: {detail.board.replayMode === 'catalog' ? 'catalog (dictionary only)' : 'log (saved tape)'} · no agent
+                      </span>
+                    ) : detail.board.replayMode === 'analyze' ? (
+                      <span className="text-amber-300">
+                        Last run: NEW Analyze · Vision Scout on saved photos · same reds re-checked automatically
+                      </span>
+                    ) : (
+                      <span className="text-amber-300">
+                        Last replay: {detail.board.replayMode} (live resolve) · may have called Curator/Dietitian
+                      </span>
+                    )}
                   </p>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                    <span title="Found in USDA database"><span className="text-sky-400 font-bold">USDA:</span> {detail.board.resolutionStats.usda}</span>
-                    <span title="Found in internal catalog"><span className="text-indigo-400 font-bold">Catalog:</span> {detail.board.resolutionStats.catalog}</span>
-                    <span title="Sorted by resolver/curator"><span className="text-emerald-400 font-bold">Verified/Curator:</span> {detail.board.resolutionStats.curator}</span>
-                    <span title="Used default/estimated assignment"><span className="text-amber-400 font-bold">Fallback:</span> {detail.board.resolutionStats.fallback}</span>
-                  </div>
+                  {detail.board.replayMode === 'log' && (
+                    <p className="text-[10px] text-amber-200/90 rounded-lg border border-amber-500/30 bg-amber-950/30 px-2 py-1">
+                      {replayTapeBanner(uniquePending(detail.board))}
+                    </p>
+                  )}
                 </div>
               )}
+
+              {Array.isArray(detail.board?.journey) && detail.board.journey.length > 0 && (
+                <div className="rounded-xl border border-white/15 bg-slate-900/80 p-2.5 space-y-1.5">
+                  <p className="font-bold text-white text-[11px]">
+                    Scout journey — {detail.board.journey.filter((j: any) => j.identityPass).length}/{detail.board.journey.length} identified
+                  </p>
+                  {groupJourneyByDish(detail.board.journey).map((g) => (
+                    <div key={g.dish} className="space-y-0.5">
+                      <p className="text-[10px] font-semibold text-white/90 truncate">{g.dish}</p>
+                      {g.rows.map((j: any) => (
+                        <div key={j.id} className="flex items-baseline justify-between gap-2 text-[10px] pl-3">
+                          <span className="text-white/70 truncate">{j.query}</span>
+                          <span className={`font-bold shrink-0 ${j.identityPass ? 'text-emerald-300' : 'text-rose-300'}`}>
+                            {PHASE_LABEL[j.phase as keyof typeof PHASE_LABEL] || j.phase}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(() => {
+                const stats = detail.board?.resolutionStats;
+                if (!stats || !stats.sampled) return null;
+                return (
+                  <div className="text-[10px] text-sky-200/90 space-y-1 rounded-xl border border-sky-500/20 bg-sky-950/30 p-2">
+                    <p className="font-bold text-sky-300">Food Resolution Diagnostics</p>
+                    <p>
+                      <span className="font-medium text-white">Sampled Components:</span> {stats.sampled}
+                    </p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                      <span title="Live USDA/OFF"><span className="text-sky-400 font-bold">USDA:</span> {stats.usda}</span>
+                      <span title="Internal catalog"><span className="text-indigo-400 font-bold">Catalog:</span> {stats.catalog}</span>
+                      <span title="Printed label / official brand"><span className="text-emerald-400 font-bold">Label/brand:</span> {stats.curator}</span>
+                      <span title="Category fallback"><span className="text-amber-400 font-bold">Fallback:</span> {stats.fallback}</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {detail.fixture && (
                 <div className="text-[10px] text-emerald-200/90 space-y-1 rounded-xl border border-emerald-500/20 bg-emerald-950/30 p-2">
@@ -260,7 +557,7 @@ export default function GoldenInboxPanel() {
                       <div className="flex flex-wrap gap-1.5 mt-1">
                         {photoList.map((u: string, i: number) => (
                           <a key={i} href={u} target="_blank" rel="noreferrer" className="block">
-                            <img src={u} alt={`meal photo ${i + 1}`} className="h-14 w-14 object-cover rounded border border-emerald-400/40" />
+                            <img src={sameOriginPhotoUrl(u)} alt={`meal photo ${i + 1}`} className="h-14 w-14 object-cover rounded border border-emerald-400/40" />
                           </a>
                         ))}
                       </div>
@@ -279,19 +576,17 @@ export default function GoldenInboxPanel() {
                   </p>
                   <div className="space-y-1 text-[10px]">
                     {detail.board.expectedMeal.map((exp: any, idx: number) => {
-                      const obs = (detail.board?.observedMeal || []).find((o: any) =>
-                        o.name?.toLowerCase().includes(exp.name?.toLowerCase()) || exp.name?.toLowerCase().includes(o.name?.toLowerCase())
-                      ) || (detail.board?.observedMeal || [])[idx];
-                      const isMatch = obs ? (exp.calories == null || Math.abs((obs.calories ?? 0) - (exp.calories ?? 0)) < 30 || exp.scored === false) : false;
+                      const obs = findMealObs(detail.board, exp, idx);
+                      const st = mealLineStatus(detail.board, exp, obs);
                       return (
-                        <div key={idx} className={`p-1.5 rounded border flex flex-wrap items-center justify-between gap-1 ${isMatch ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-rose-950/30 border-rose-500/30'}`}>
+                        <div key={idx} className={`p-1.5 rounded border flex flex-wrap items-center justify-between gap-1 ${st.tone === 'warn' ? 'bg-amber-950/30 border-amber-500/30' : st.tone === 'ok' ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-rose-950/30 border-rose-500/30'}`}>
                           <div>
                             <p className="font-semibold text-white">{exp.name}</p>
                             <p className="text-white/60">Expected: {exp.calories != null ? `${exp.calories} kcal` : 'N/A'} · {exp.weightGrams != null ? `${exp.weightGrams}g` : 'N/A'}</p>
                           </div>
                           <div className="text-right">
-                            <span className={`font-bold px-1.5 py-0.5 rounded text-[9px] ${isMatch ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
-                              {isMatch ? '✓ PASSED' : '✗ PENDING'}
+                            <span className={`font-bold px-1.5 py-0.5 rounded text-[9px] ${st.tone === 'warn' ? 'bg-amber-500/20 text-amber-200' : st.tone === 'ok' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+                              {st.label}
                             </span>
                             <p className="text-white/70 mt-0.5">
                               Current: {obs ? `${obs.calories ?? 0} kcal (${obs.weightGrams ?? 0}g)` : 'Missing in current run'}
@@ -304,42 +599,77 @@ export default function GoldenInboxPanel() {
                 </div>
               )}
 
-              {/* Fixed So Far vs Still Pending Requirements */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {/* Fixed So Far */}
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-2.5 space-y-1.5">
-                  <p className="font-bold text-emerald-300 text-[11px] flex items-center gap-1">
-                    <span>Fixed So Far (Passed)</span>
-                  </p>
-                  {((detail.board?.outcomes || []).filter((o: any) => o.pass === true)).length === 0 ? (
-                    <p className="text-[10px] text-white/50 italic">None fixed so far in this iteration.</p>
-                  ) : (
-                    (detail.board?.outcomes || []).filter((o: any) => o.pass === true).map((o: any) => (
-                      <div key={o.id} className="text-[10px] p-1.5 rounded bg-emerald-900/30 border border-emerald-500/20 text-emerald-100 space-y-0.5">
-                        <p className="font-medium text-emerald-200">✓ {formatLabelText(o.label)}</p>
-                        <p className="text-white/60">Expected: {formatLabelText(o.expected ?? 'Pass')} | Current: {formatLabelText(o.actual ?? 'OK (Pass)')}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Still Pending */}
-                <div className="rounded-xl border border-rose-500/30 bg-rose-950/30 p-2.5 space-y-1.5">
-                  <p className="font-bold text-rose-300 text-[11px] flex items-center gap-1">
-                    <span>Still Pending (To Fix)</span>
-                  </p>
-                  {((detail.board?.outcomes || []).filter((o: any) => o.pass !== true)).length === 0 ? (
-                    <p className="text-[10px] text-emerald-300 italic">All green! Everything fixed.</p>
-                  ) : (
-                    (detail.board?.outcomes || []).filter((o: any) => o.pass !== true).map((o: any) => (
-                      <div key={o.id} className="text-[10px] p-1.5 rounded bg-rose-900/30 border border-rose-500/20 text-rose-100 space-y-0.5">
-                        <p className="font-medium text-rose-200">✗ {formatLabelText(o.label)}</p>
-                        <p className="text-white/60">Expected: {formatLabelText(o.expected ?? 'No error')} | Current: {formatLabelText(o.actual ?? 'Failing / Triggered')}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              {(() => {
+                const board = detail.board || {};
+                const mealMisses = (board.expectedMeal || [])
+                  .map((exp: any, idx: number) => {
+                    const obs = findMealObs(board, exp, idx);
+                    if (!obs) return `missing item "${exp.name}"`;
+                    return '';
+                  })
+                  .filter(Boolean);
+                const plan = studioLoopPlan(board.outcomes, { mealMisses, replayMode: board.replayMode });
+                const checks = buildGoldenChecklist(board);
+                const counts = {
+                  not_fixed: checks.filter((c) => c.status === 'not_fixed').length,
+                  need_analyze: checks.filter((c) => c.status === 'need_analyze').length,
+                  accept: checks.filter((c) => c.status === 'accept').length,
+                  fixed: checks.filter((c) => c.status === 'fixed').length,
+                };
+                return (
+                  <div className="rounded-xl border border-white/15 bg-slate-900/80 p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="font-bold text-white text-[11px]">Bug list</p>
+                      <p className="text-[10px] text-white/60">
+                        {counts.not_fixed} not fixed · {counts.need_analyze} need analyze · {counts.fixed} fixed
+                        {counts.accept ? ` · ${counts.accept} accept` : ''}
+                      </p>
+                    </div>
+                    <p className="text-[10px] text-white/60">{plan.instructions}</p>
+                    {checks.length === 0 ? (
+                      <p className="text-[10px] text-white/50 italic">No checks recorded yet. Replay log or NEW Analyze.</p>
+                    ) : (
+                      checks.map((p) => (
+                        <div
+                          key={p.id}
+                          className={`text-[10px] p-1.5 rounded border space-y-0.5 ${
+                            p.status === 'fixed'
+                              ? 'bg-emerald-950/30 border-emerald-500/20 text-emerald-100'
+                              : p.status === 'need_analyze'
+                                ? 'bg-amber-950/30 border-amber-500/30 text-amber-100'
+                                : p.status === 'accept'
+                                  ? 'bg-slate-800/60 border-white/10 text-white/80'
+                                  : 'bg-rose-950/30 border-rose-500/20 text-rose-100'
+                          }`}
+                        >
+                          <p className="font-medium flex items-center justify-between gap-2">
+                            <span className="min-w-0">{formatLabelText(p.label)}</span>
+                            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-black/30">
+                              {p.status === 'fixed'
+                                ? 'Fixed'
+                                : p.status === 'need_analyze'
+                                  ? 'Need Analyze'
+                                  : p.status === 'accept'
+                                    ? 'Accept'
+                                    : 'Not fixed'}
+                            </span>
+                          </p>
+                          {(p.expected || p.actual) && p.status !== 'fixed' && (
+                            <p className="text-white/60">
+                              {p.expected != null ? `Expected: ${formatLabelText(p.expected)}` : ''}
+                              {p.expected != null && p.actual != null ? ' · ' : ''}
+                              {p.actual != null ? `Current: ${formatLabelText(p.actual)}` : ''}
+                            </p>
+                          )}
+                          {p.youDo && p.status !== 'fixed' && (
+                            <p className="text-white/70">{p.youDo}</p>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                );
+              })()}
 
               {(detail.board?.tensions || []).length > 0 && (
                 <div className="text-[10px] text-amber-200/90 space-y-1 rounded-xl border border-amber-500/30 bg-amber-950/30 p-2">
@@ -357,6 +687,203 @@ export default function GoldenInboxPanel() {
       ))}
     </div>
   );
+}
+
+function InboxAction({
+  label,
+  hint,
+  tone,
+  icon,
+  busy,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  hint: string;
+  tone: 'safe' | 'agent' | 'ok' | 'neutral' | 'danger';
+  icon?: 'play' | 'check' | 'upload' | 'trash' | 'copy';
+  busy?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const toneClass =
+    tone === 'safe'
+      ? 'bg-slate-700'
+      : tone === 'agent'
+        ? 'bg-amber-700'
+        : tone === 'ok'
+          ? 'bg-emerald-700'
+          : tone === 'danger'
+            ? 'bg-rose-700'
+            : 'bg-slate-700';
+  const Icon =
+    icon === 'play'
+      ? Play
+      : icon === 'check'
+        ? CheckCircle2
+        : icon === 'upload'
+          ? Upload
+          : icon === 'trash'
+            ? Trash2
+            : icon === 'copy'
+              ? Copy
+              : null;
+  return (
+    <button
+      type="button"
+      title={hint}
+      disabled={disabled}
+      data-golden-action={label}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (disabled) return;
+        onClick();
+      }}
+      className={`px-2.5 py-1 rounded-lg ${toneClass} disabled:opacity-30 text-[10px] font-bold text-white flex items-center gap-1`}
+    >
+      {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : Icon ? <Icon className="w-3 h-3" /> : null}
+      {label}
+      {tone === 'safe' && (
+        <span className="text-[8px] font-bold uppercase tracking-wide text-emerald-300">no agent</span>
+      )}
+      {tone === 'agent' && (
+        <span className="text-[8px] font-bold uppercase tracking-wide text-amber-100">may call agent</span>
+      )}
+    </button>
+  );
+}
+
+function AttemptBox({ id, onSaved }: { id: string; onSaved: () => Promise<void> }) {
+  const [tried, setTried] = useState('');
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="pt-1.5 space-y-1">
+      <p className="text-[10px] text-indigo-200/80">After a code/catalog change, log it so the loop can run again:</p>
+      <div className="flex gap-1">
+        <input
+          className="flex-1 bg-slate-900 border border-white/20 rounded px-1.5 py-0.5 text-[10px] text-white"
+          placeholder="What you changed (unlocks the next run)"
+          value={tried}
+          onChange={(e) => setTried(e.target.value)}
+        />
+        <button
+          type="button"
+          disabled={!tried.trim() || busy}
+          className="px-2 py-0.5 rounded bg-indigo-700 disabled:opacity-30 text-[10px] font-bold text-white"
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const r = await fetch(`/api/golden/cases/${id}/attempt`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ actor: 'human', tried: tried.trim(), learned: '', next: 'Run until green' }),
+              });
+              if (!r.ok) throw new Error('attempt failed');
+              setTried('');
+              await onSaved();
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Log attempt
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function findMealObs(board: any, exp: any, idx: number) {
+  const list = board?.observedMeal || [];
+  const presenceOnly = exp.calories == null;
+  return (
+    list.find((o: any) => mealLineNamesMatch(exp.name, o.name, presenceOnly)) ||
+    (presenceOnly ? undefined : list[idx])
+  );
+}
+
+function mealLineStatus(board: any, exp: any, obs: any): { label: string; tone: 'ok' | 'warn' | 'bad' } {
+  const blob = (board?.invariants || [])
+    .filter((i: any) => !i.pass)
+    .map((i: any) => `${i.id} ${i.label}`)
+    .join(' ');
+  const name = String(exp.name || '').toLowerCase();
+  if (/weight_anchor|overwrote the first/.test(blob) && name && blob.toLowerCase().includes(name)) {
+    return { label: 'UNSCORED (buggy snapshot)', tone: 'warn' };
+  }
+  if (/label_merge|merged into/.test(blob) && /serrano|reformed ham|gran reserva/.test(name)) {
+    return { label: 'UNSCORED (glued label)', tone: 'warn' };
+  }
+  if (!obs) return { label: '✗ PENDING', tone: 'bad' };
+  if (exp.calories == null || exp.scored === false) {
+    return { label: '✓ PRESENT', tone: 'ok' };
+  }
+  if (Math.abs((obs.calories ?? 0) - (exp.calories ?? 0)) < 30) {
+    return { label: '✓ PASSED', tone: 'ok' };
+  }
+  return { label: '✗ PENDING', tone: 'bad' };
+}
+
+function uniquePending(board: any): Array<{
+  id: string;
+  group: string;
+  label: string;
+  expected?: any;
+  actual?: any;
+  next?: string;
+  youDo?: string;
+  kind?: string;
+}> {
+  const norm = (s: string) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const topic = (s: string) => {
+    const b = norm(s);
+    if (/weight_anchor|overwrote the first|portion weight|500.*1000/.test(b)) return 'weight';
+    if (/food\s*data|empty nutrition|comparison mode|empty_foodlog/.test(b)) return 'compare';
+    if (/brand\s*guard|generic token|sugar.*brand/.test(b)) return 'brand';
+    if (/label_merge|merged into/.test(b)) return 'label_merge';
+    if (/truth_merge|246.*102|150.*102|rejected vs ocr/.test(b)) return 'truth_merge';
+    return norm(s).slice(0, 80);
+  };
+  const hamMissing = (board?.expectedMeal || []).some((exp: any) => {
+    if (!/^ham$/i.test(String(exp.name || '').trim()) || exp.calories != null) return false;
+    return !findMealObs(board, exp, -1);
+  });
+  const invs = (board?.invariants || []).filter((i: any) => {
+    if (i.pass || !i.label) return false;
+    if (hamMissing && /truth_merge|rejected vs ocr|102 kcal/.test(`${i.id} ${i.label}`)) return false;
+    return true;
+  });
+  const outs = (board?.outcomes || []).filter((o: any) => {
+    if (o.enabled === false || o.pass === true || !o.label) return false;
+    if (hamMissing && /truth_merge|rejected vs ocr|102 kcal/.test(`${o.id} ${o.label}`)) return false;
+    return true;
+  });
+  const rows: Array<{
+    id: string;
+    group: string;
+    label: string;
+    expected?: any;
+    actual?: any;
+    next?: string;
+    youDo?: string;
+    kind?: string;
+  }> = [];
+  const seen = new Set<string>();
+  const push = (id: string, group: string, label: string, expected?: any, actual?: any) => {
+    const k = topic(label);
+    if (!k || seen.has(k) || seen.has(norm(label))) return;
+    seen.add(k);
+    seen.add(norm(label));
+    const how = classifyStudioRed(id, label);
+    rows.push({ id, group, label, expected, actual, next: how.next, youDo: how.youDo, kind: how.kind });
+  };
+  outs.forEach((o: any) => {
+    const inv = invs.find((i: any) => i.id === o.id || norm(i.label) === norm(o.label));
+    push(o.id, inv?.group || o.kind || 'check', o.label, o.expected, o.actual ?? inv?.actual);
+  });
+  invs.forEach((i: any) => push(i.id, i.group || 'check', i.label, i.expected, i.actual));
+  return rows;
 }
 
 function pct(n: number, d: number) {

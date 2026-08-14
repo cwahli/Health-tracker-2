@@ -1,0 +1,20 @@
+{
+  "id": "job_legacy_1786659330660",
+  "status": "open",
+  "mealName": "Prawn Layered Pasta Salad + Pink Iced Ring Doughnut + 1 more",
+  "slug": "prawn-layered-pasta-salad-pink-iced-ring-doughnut-1-more--legacy_17866593306",
+  "d1Id": "c9c38c43-c1a0-4eb3-aba4-32084d4edeeb",
+  "queries": [
+    "cooked pasta durum wheat",
+    "mixed vegetables carrot cucumber sweetcorn",
+    "peeled cooked prawns",
+    "Marie Rose sauce",
+    "iceberg lettuce",
+    "fried ring doughnut",
+    "pink sugar icing",
+    "cured serrano ham",
+    "reformed cured ham"
+  ],
+  "expectResolve": [],
+  "neverMatch": []
+}

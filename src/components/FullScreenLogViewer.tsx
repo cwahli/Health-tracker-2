@@ -30,17 +30,17 @@ interface AgentDef {
 const ALL_AGENT_DEFS: AgentDef[] = [
   {
     id: 'front_desk',
-    name: 'Health Preparation Agent',
+    name: 'Front Desk',
     test: (l) => l.includes('agenttype: front_desk') || l.includes('agenttype:front_desk') || l.includes('[frontdesk') || l.includes('front-desk') || l.includes('health preparation agent')
   },
   {
     id: 'agent1',
-    name: 'Clinical Calibration Agent',
+    name: 'Lab Parser',
     test: (l) => l.includes('agenttype: agent1') || l.includes('agenttype:agent1') || l.includes('standardize units agent') || l.includes('clinical calibration agent') || l.includes('[agent1]')
   },
   {
     id: 'data_review',
-    name: 'Data Accuracy Agent',
+    name: 'Range Calibrator',
     test: (l) => l.includes('agenttype: data_review') || l.includes('agenttype:data_review') || l.includes('data accuracy agent') || l.includes('clinical data accuracy agent') || l.includes('[data_review]')
   },
   {
@@ -50,7 +50,7 @@ const ALL_AGENT_DEFS: AgentDef[] = [
   },
   {
     id: 'agent7',
-    name: 'Health Report Agent',
+    name: 'Literature',
     test: (l) => l.includes('agenttype: agent7') || l.includes('agenttype:agent7') || l.includes('health report agent') || l.includes('medical insights') || l.includes('[agent7]')
   },
   {
@@ -65,27 +65,27 @@ const ALL_AGENT_DEFS: AgentDef[] = [
   },
   {
     id: 'medical_extract',
-    name: 'Clinical Data Parser',
+    name: 'Lab Parser',
     test: (l) => l.includes('agenttype: medical_extract') || l.includes('agenttype:medical_extract') || l.includes('clinical data parser') || l.includes('[medical_extract]')
   },
   {
     id: 'agent2',
-    name: 'Clinical Assessment Agent',
+    name: 'Categoriser',
     test: (l) => l.includes('agenttype: agent2') || l.includes('agenttype:agent2') || l.includes('clinical assessment agent') || l.includes('medical categorisation agent') || l.includes('[agent2]')
   },
   {
     id: 'agent3',
-    name: 'Clinical Harmonization Agent',
+    name: 'Name Deduper',
     test: (l) => l.includes('agenttype: agent3') || l.includes('agenttype:agent3') || l.includes('clinical harmonization agent') || l.includes('name consolidation agent') || l.includes('[agent3]')
   },
   {
     id: 'agent4',
-    name: 'Health Planning Agent',
+    name: 'Test Planner',
     test: (l) => l.includes('agenttype: agent4') || l.includes('agenttype:agent4') || l.includes('health planning agent') || l.includes('diagnostic agent (agent4)') || l.includes('biomarker synthesis agent') || l.includes('[agent4]')
   },
   {
     id: 'agent5',
-    name: 'Holistic Review Agent',
+    name: 'Range Calibrator',
     test: (l) => l.includes('agenttype: agent5') || l.includes('agenttype:agent5') || l.includes('holistic review agent') || l.includes('[agent5]')
   },
   {
@@ -154,7 +154,7 @@ export const AGENT_COLOR_MAP: Record<string, {
     borderColor: 'border-amber-500/40',
     bgBadge: 'bg-amber-950/70 text-amber-300 border-amber-500/40',
     dotColor: 'bg-amber-400',
-    name: 'Clinical Calibration Agent'
+    name: 'Lab Parser'
   },
   data_review: {
     textColor: 'text-emerald-300 dark:text-emerald-300',
@@ -196,21 +196,21 @@ export const AGENT_COLOR_MAP: Record<string, {
     borderColor: 'border-indigo-500/40',
     bgBadge: 'bg-indigo-950/70 text-indigo-300 border-indigo-500/40',
     dotColor: 'bg-indigo-400',
-    name: 'Clinical Data Parser'
+    name: 'Lab Parser'
   },
   agent2: {
     textColor: 'text-blue-300 dark:text-blue-300',
     borderColor: 'border-blue-500/40',
     bgBadge: 'bg-blue-950/70 text-blue-300 border-blue-500/40',
     dotColor: 'bg-blue-400',
-    name: 'Clinical Assessment Agent'
+    name: 'Categoriser'
   },
   agent3: {
     textColor: 'text-purple-300 dark:text-purple-300',
     borderColor: 'border-purple-500/40',
     bgBadge: 'bg-purple-950/70 text-purple-300 border-purple-500/40',
     dotColor: 'bg-purple-400',
-    name: 'Clinical Harmonization Agent'
+    name: 'Name Deduper'
   },
   agent4: {
     textColor: 'text-yellow-300 dark:text-yellow-300',

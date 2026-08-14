@@ -3,6 +3,14 @@ import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { JobStore } from './JobStore';
 import { AgentJob } from './types';
 
+const backendDeleteTried = new Set<string>();
+
+function forgetDeletedOnBackend(jobId: string, userId: string) {
+  if (!jobId || backendDeleteTried.has(jobId)) return;
+  backendDeleteTried.add(jobId);
+  deleteJobFromBackend(jobId, userId).catch(() => {});
+}
+
 export async function hydrateUserJobs(userId: string = 'anonymous'): Promise<void> {
   try {
     const res = await fetch(`/api/jobs/status?userId=${encodeURIComponent(userId)}`);
@@ -20,7 +28,7 @@ export async function hydrateUserJobs(userId: string = 'anonymous'): Promise<voi
     for (const row of rows) {
       if (!row || !row.id || JobStore.isJobDeleted(row.id)) {
         if (row && row.id && JobStore.isJobDeleted(row.id)) {
-          deleteJobFromBackend(row.id, userId);
+          forgetDeletedOnBackend(row.id, userId);
         }
         continue;
       }
@@ -78,13 +86,19 @@ export async function hydrateUserJobs(userId: string = 'anonymous'): Promise<voi
             hasImage: !!(photoUrl || row.photo_url || cleanRes?.photoUrl)
           },
           createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+          serverSubmittedAt: Date.now(),
         } as any);
       } else {
         const updatePayload: any = {
           status: row.status,
           progressPercent: row.progress_percent,
           statusMessage: row.status_message,
-          error: row.status === 'failed' ? { class: 'permanent', message: row.status_message || cleanRes?.message || existing.error?.message || 'Analysis failed on server' } : existing.error,
+          serverSubmittedAt: existing.serverSubmittedAt || Date.now(),
+          error: row.status === 'failed'
+            ? { class: 'permanent', message: row.status_message || cleanRes?.message || existing.error?.message || 'Analysis failed on server' }
+            : row.status === 'succeeded'
+              ? undefined
+              : existing.error,
           result: (cleanRes && !cleanRes.is_r2) ? cleanRes : (existing.result || cleanRes),
           mealBuild: cleanRes?.mealBuild || existing.mealBuild,
           photoUrl: photoUrl || row.photo_url || cleanRes?.photoUrl || existing.photoUrl,
@@ -193,7 +207,7 @@ export function initSupabaseJobSync(userId?: string): () => void {
         const row = payload.new as any;
         if (!row || !row.id || JobStore.isJobDeleted(row.id)) {
           if (row && row.id && JobStore.isJobDeleted(row.id)) {
-            deleteJobFromBackend(row.id, userId || 'anonymous');
+            forgetDeletedOnBackend(row.id, userId || 'anonymous');
           }
           return;
         }

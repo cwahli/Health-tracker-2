@@ -84,7 +84,12 @@ export const initializeFetchInterceptor = () => {
               trackApiCall(call.type, call.label);
             }
           });
-        } else if (!url.includes('/api/gemini/debug-logs') && !url.includes('/api/gemini/clear-debug-logs') && !url.includes('/api/gemini/send-logs')) {
+        } else if (
+          !url.includes('/api/gemini/debug-logs') &&
+          !url.includes('/api/gemini/clear-debug-logs') &&
+          !url.includes('/api/gemini/send-logs') &&
+          !url.includes('/api/golden/')
+        ) {
           // Fallback tracking if the server endpoint did not return an explicit apiCalls metadata array
           let type: ApiCallEvent['type'] = 'gemini';
           let label = 'Gemini Agent call';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAndHealVisionScout, mergeScoutItems } from "./server_vision_scout";
+import { parseAndHealVisionScout, mergeScoutItems, canMergeScoutLabelIntoFood, resolvePackageAndContextItems } from "./server_vision_scout";
 
 describe("server_vision_scout", () => {
   describe("mergeScoutItems", () => {
@@ -267,6 +267,47 @@ describe("server_vision_scout", () => {
       expect(result.items[0].rawNutritionLabel.calories).toBe('150 kcal');
       expect(result.items[0].ingredientsList).toBe("Tapioca starch, salt, palm oil");
       expect(result.items[0].visualIngredients).toEqual([]);
+    });
+  });
+
+  describe("explicit user weights on two drinks", () => {
+    it("does not apply 1L to the lassi after 500ml was already claimed", () => {
+      const items = [
+        { originalName: "Mango Lassi Yogurt Drink", keyword: "mango lassi", estimatedWeightGrams: 500, components: [] },
+        { originalName: "Low Fat Yogurt Drink", keyword: "yogurt drink", estimatedWeightGrams: 500, components: [] },
+      ];
+      const out = resolvePackageAndContextItems(items, () => {}, "Lassi is 500ml the other is 1L", true);
+      const lassi = out.find((i) => /lassi/i.test(i.originalName));
+      const other = out.find((i) => /low fat/i.test(i.originalName));
+      expect(lassi?.estimatedWeightGrams).toBe(500);
+      expect(other?.estimatedWeightGrams).toBe(1000);
+    });
+  });
+
+  describe("canMergeScoutLabelIntoFood", () => {
+    it("does not glue a reformed-ham label onto Serrano", () => {
+      const d = canMergeScoutLabelIntoFood(
+        { originalName: "Reformed Ham Nutrition Facts Label" },
+        { originalName: "Gran Reserva Serrano Ham 50% Duroc Breed", keyword: "serrano ham" }
+      );
+      expect(d.ok).toBe(false);
+      expect(d.reason).toMatch(/conflict|generic|weak/i);
+    });
+
+    it("still merges a milk label onto the matching milk carton", () => {
+      const d = canMergeScoutLabelIntoFood(
+        { originalName: "Organic Semi-Skimmed Milk Nutrition Facts Label" },
+        { originalName: "Organic Semi-Skimmed Milk" }
+      );
+      expect(d.ok).toBe(true);
+    });
+
+    it("merges a same-named ham label onto that ham", () => {
+      const d = canMergeScoutLabelIntoFood(
+        { originalName: "Co-op Formed Ham Nutrition Facts Label" },
+        { originalName: "Co-op Formed Ham" }
+      );
+      expect(d.ok).toBe(true);
     });
   });
 });

@@ -1963,9 +1963,12 @@ export async function isKnownDatabaseBrand(text: string): Promise<boolean> {
   return false;
 }
 
+const NEVER_A_BRAND = /^(sugar|salt|water|oil|flour|rice|pasta|ham|egg|eggs|butter|pepper|milk)$/i;
+
 export function isKnownDatabaseBrandSync(text: string): boolean {
   if (!text) return false;
-  const lower = text.toLowerCase();
+  const lower = text.toLowerCase().trim();
+  if (NEVER_A_BRAND.test(lower)) return false;
   const set = cachedBrandSet;
   if (!set) {
     // Fallback if not initialized yet
@@ -2044,8 +2047,25 @@ const GENERIC_COMMODITY_FOODS = new Set([
   'butter', 'unsalted butter', 'salted butter', 'margarine',
   'oil', 'olive oil', 'vegetable oil', 'cooking oil', 'sunflower oil',
   'salt', 'table salt', 'sea salt', 'black pepper', 'pepper', 'sugar', 'white sugar', 'brown sugar',
-  'chicken', 'chicken breast', 'salmon', 'beef', 'pork'
+  'chicken', 'chicken breast', 'salmon', 'beef', 'pork',
+  'ham', 'cooked ham', 'sliced ham', 'formed ham', 'reformed ham',
+  'pasta', 'cooked pasta', 'lettuce', 'iceberg lettuce',
+  'prawn', 'prawns', 'cooked prawns', 'shrimp', 'icing', 'frosting'
 ]);
+
+/** Reject dry-cured / snack hits for generic cooked-ham queries. */
+export function brandHitFitsQuery(query: string, hit: { name?: string; dish_name?: string }): boolean {
+  const q = String(query || '').toLowerCase();
+  const n = String(hit?.name || hit?.dish_name || '').toLowerCase();
+  if (!q || !n) return true;
+  if (/\b(cooked|reformed|formed)\s+ham\b/.test(q) || q === 'ham') {
+    if (/serrano|iberico|ibérico|prosciutto|parma|jamon|jamón/.test(n) && !/reformed|formed|cooked/.test(n)) {
+      return false;
+    }
+    if (/crisp|chip|chicken and ham/.test(n)) return false;
+  }
+  return true;
+}
 
 export function isGenericCommodityFood(query: string): boolean {
   if (!query) return false;

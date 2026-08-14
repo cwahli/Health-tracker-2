@@ -1,0 +1,316 @@
+{
+  "items": [
+    {
+      "keyword": "Prawn Layered Pasta Salad",
+      "itemConfidence": "High",
+      "estimatedWeightGrams": 340,
+      "estimatedCalories": 374,
+      "cookingMethod": "unknown",
+      "components": [
+        {
+          "searchQuery": "cooked pasta",
+          "volumePercentage": 29,
+          "calories": 151,
+          "protein": 3.5,
+          "carbohydrates": 32.4,
+          "totalFat": 0.6,
+          "saturatedFat": 0.1,
+          "sodium": 6,
+          "sugar": 0,
+          "name": "cooked pasta",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "mixed vegetables",
+          "volumePercentage": 29,
+          "calories": 75,
+          "protein": 3.5,
+          "carbohydrates": 13.9,
+          "totalFat": 0.6,
+          "saturatedFat": 0.1,
+          "sodium": 35,
+          "sugar": 0,
+          "name": "mixed vegetables",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "iceberg lettuce",
+          "volumePercentage": 14,
+          "calories": 8,
+          "protein": 0.6,
+          "carbohydrates": 1.7,
+          "totalFat": 0.1,
+          "saturatedFat": 0,
+          "sodium": 3,
+          "sugar": 0,
+          "name": "iceberg lettuce",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "cooked prawns",
+          "volumePercentage": 14,
+          "calories": 56,
+          "protein": 1.1,
+          "carbohydrates": 8.4,
+          "totalFat": 1.1,
+          "saturatedFat": 0.3,
+          "sodium": 56,
+          "sugar": 0,
+          "name": "cooked prawns",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "marie rose sauce",
+          "volumePercentage": 14,
+          "calories": 84,
+          "protein": 0.6,
+          "carbohydrates": 8.4,
+          "totalFat": 5.6,
+          "saturatedFat": 0.8,
+          "sodium": 447,
+          "sugar": 0,
+          "name": "marie rose sauce condiment",
+          "source": "estimated"
+        }
+      ],
+      "chainName": null,
+      "originalName": "Prawn Layered Pasta Salad",
+      "boundingBox2D": [
+        103,
+        0,
+        715,
+        523
+      ],
+      "sourceImageIndex": 0,
+      "anomalyFlags": [],
+      "ingredientsList": "29% Mixed Vegetables in Varying Proportions (Carrot, Cucumber, Sweetcorn), 29% Cooked Pasta (Durum Wheat Semolina, Water), 14% Iceberg Lettuce, 14% Peeled, Cooked Prawns (Peeled Prawns (Crustaceans), Water), 14% Marie Rose Sauce (Water, Rapeseed Oil, Tomato Concentrate, Sugar, Modified Potato Starch, Spirit Vinegar, Acidity Regulator: Acetic Acid; Egg Yolk, Concentrated Lemon Juice, Salt, Worcestershire Sauce [Water, Sugar, Spirit Vinegar, Molasses, Onion Purée, Salt, Tamarind Paste, Cloves, Ginger Purée, Garlic Purée], Acidity Regulator: Citric Acid; Mustard Seeds, Stabilisers: Xanthan Gum, Guar Gum; Preservatives: Potassium Sorbate, Sodium Benzoate; Colours: Ammonia Caramel, Lutein; Spices, Red Pepper Powder, Onion Powder, Herbs), Paprika.",
+      "nutritionFacts": null,
+      "rawNutritionLabel": {
+        "servingSize": "100g",
+        "calories": "110 kcal",
+        "protein": "4.2g",
+        "totalFat": "4.6g",
+        "saturatedFat": "0.4g",
+        "transFat": null,
+        "totalCarbohydrate": "12.3g",
+        "sugar": "2.9g",
+        "addedSugar": null,
+        "sodium": "148mg",
+        "salt": "0.37g",
+        "potassium": null,
+        "totalFibre": "1.4g",
+        "solubleFibre": null
+      },
+      "source": "label",
+      "visualIngredients": [],
+      "scoutIndex": 0,
+      "saltConversionNote": "Converted printed salt (0.37g per 100g) to sodium (148mg/serving, 503mg total). Formula: 1g salt = 400mg sodium.",
+      "labelProductName": "Prawn Layered Pasta Salad",
+      "cookingAdded": {
+        "addedCalories": 0,
+        "addedFat": 0,
+        "addedSaturatedFat": 0,
+        "addedSodium": 0
+      },
+      "name": "prawn pasta salad"
+    },
+    {
+      "keyword": "Serrano Ham Gran Reserva",
+      "itemConfidence": "High",
+      "estimatedWeightGrams": 100,
+      "estimatedCalories": 246,
+      "cookingMethod": "raw",
+      "components": [
+        {
+          "searchQuery": "serrano ham",
+          "volumePercentage": 100,
+          "calories": 246,
+          "protein": 36,
+          "carbohydrates": 0.7,
+          "totalFat": 11,
+          "saturatedFat": 4.9,
+          "sodium": 1880,
+          "sugar": 0.5,
+          "name": "Serrano Ham Gran Reserva 50% Duroc Breed",
+          "source": "brand_official"
+        }
+      ],
+      "chainName": null,
+      "originalName": "Serrano Ham Gran Reserva",
+      "boundingBox2D": [
+        211,
+        484,
+        995,
+        1000
+      ],
+      "sourceImageIndex": 0,
+      "anomalyFlags": [],
+      "ingredientsList": "Pork ham, salt, antioxidant: sodium ascorbate, preservatives: sodium nitrite, potassium nitrate. Prepared with 150g of pork ham per 100g of finished product.",
+      "nutritionFacts": null,
+      "rawNutritionLabel": {
+        "servingSize": "100g",
+        "calories": "246 kcal",
+        "protein": "36g",
+        "totalFat": "11g",
+        "saturatedFat": "4.9g",
+        "transFat": null,
+        "totalCarbohydrate": "0.7g",
+        "sugar": "0.5g",
+        "addedSugar": null,
+        "sodium": "1880mg",
+        "salt": "4.70g",
+        "potassium": null,
+        "totalFibre": "0.5g",
+        "solubleFibre": null
+      },
+      "source": "label",
+      "visualIngredients": [],
+      "scoutIndex": 1,
+      "saltConversionNote": "Converted printed salt (4.70g per 100g) to sodium (1880mg/serving, 1880mg total). Formula: 1g salt = 400mg sodium.",
+      "labelProductName": "Serrano Ham Gran Reserva 50% Duroc Breed",
+      "cookingAdded": {
+        "addedCalories": 0,
+        "addedFat": 0,
+        "addedSaturatedFat": 0,
+        "addedSodium": 0
+      },
+      "name": "serrano ham"
+    },
+    {
+      "keyword": "Pink Iced Ring Doughnut",
+      "itemConfidence": "High",
+      "estimatedWeightGrams": 75,
+      "estimatedCalories": 250,
+      "cookingMethod": "deep_fried",
+      "components": [
+        {
+          "searchQuery": "ring doughnut",
+          "volumePercentage": 80,
+          "calories": 227,
+          "protein": 7.3,
+          "carbohydrates": 45.5,
+          "totalFat": 2.7,
+          "saturatedFat": 0.5,
+          "sodium": 364,
+          "sugar": 0,
+          "name": "ring doughnut",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "pink sugar icing",
+          "volumePercentage": 20,
+          "calories": 23,
+          "protein": 0.5,
+          "carbohydrates": 3.4,
+          "totalFat": 0.5,
+          "saturatedFat": 0.1,
+          "sodium": 23,
+          "sugar": 0,
+          "name": "pink sugar icing",
+          "source": "estimated"
+        }
+      ],
+      "chainName": null,
+      "originalName": "Pink Iced Ring Doughnut",
+      "boundingBox2D": [
+        566,
+        327,
+        946,
+        969
+      ],
+      "sourceImageIndex": 2,
+      "anomalyFlags": [],
+      "ingredientsList": null,
+      "nutritionFacts": null,
+      "rawNutritionLabel": {
+        "servingSize": "1 Piece",
+        "calories": "250 kcal",
+        "protein": null,
+        "totalFat": null,
+        "saturatedFat": null,
+        "transFat": null,
+        "totalCarbohydrate": null,
+        "sugar": null,
+        "addedSugar": null,
+        "sodium": null,
+        "salt": null,
+        "potassium": null,
+        "totalFibre": null,
+        "solubleFibre": null
+      },
+      "source": "label",
+      "visualIngredients": [],
+      "scoutIndex": 2,
+      "labelProductName": "Pink Iced Ring Doughnut",
+      "cookingAdded": {
+        "addedCalories": 0,
+        "addedFat": 0,
+        "addedSaturatedFat": 0,
+        "addedSodium": 0
+      },
+      "name": "pink iced ring doughnut"
+    },
+    {
+      "keyword": "Reformed Ham Cured",
+      "itemConfidence": "High",
+      "estimatedWeightGrams": 100,
+      "estimatedCalories": 102,
+      "cookingMethod": "boiled",
+      "components": [
+        {
+          "searchQuery": "cooked ham",
+          "volumePercentage": 100,
+          "calories": 102,
+          "protein": 18,
+          "carbohydrates": 0.4,
+          "totalFat": 3,
+          "saturatedFat": 0.9,
+          "sodium": 600,
+          "sugar": 0,
+          "name": "Morrisons Cooked Chicken and Ham",
+          "source": "brand_official"
+        }
+      ],
+      "chainName": null,
+      "originalName": "Reformed Ham Cured",
+      "boundingBox2D": [
+        0,
+        0,
+        1000,
+        1000
+      ],
+      "sourceImageIndex": 4,
+      "anomalyFlags": [],
+      "ingredientsList": "Pork (77%), Water (20%), Salt, Dextrose, Spirit Vinegar, Stabilisers (Triphosphates, Diphosphates, Polyphosphates), Antioxidant (Sodium ascorbate), Preservative (Sodium nitrite).",
+      "nutritionFacts": null,
+      "rawNutritionLabel": {
+        "servingSize": "100g",
+        "calories": "102 kcal",
+        "protein": "16g",
+        "totalFat": "3.5g",
+        "saturatedFat": "1.3g",
+        "transFat": null,
+        "totalCarbohydrate": "1.2g",
+        "sugar": "1.2g",
+        "addedSugar": null,
+        "sodium": "640mg",
+        "salt": "1.60g",
+        "potassium": null,
+        "totalFibre": "0.5g",
+        "solubleFibre": null
+      },
+      "source": "label",
+      "visualIngredients": [],
+      "scoutIndex": 3,
+      "saltConversionNote": "Converted printed salt (1.60g per 100g) to sodium (640mg/serving, 640mg total). Formula: 1g salt = 400mg sodium.",
+      "labelProductName": "Reformed Ham, Cured and Cooked",
+      "cookingAdded": {
+        "addedCalories": 0,
+        "addedFat": 0,
+        "addedSaturatedFat": 0,
+        "addedSodium": 0
+      },
+      "name": "reformed ham"
+    }
+  ]
+}

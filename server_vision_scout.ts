@@ -22,6 +22,58 @@ export const ScoutItemSchema = z.object({
   chainName: z.string().nullable().optional(),
 }).passthrough();
 
+const LABEL_STOPWORDS = new Set([
+  'nutrition', 'facts', 'label', 'back', 'of', 'package', 'informasi', 'nilai', 'gizi', 'komposisi', 'the', 'a', 'and',
+]);
+const GENERIC_FOOD_TOKENS = new Set([
+  'ham', 'pork', 'chicken', 'beef', 'meat', 'cheese', 'milk', 'bread', 'rice', 'pasta', 'sauce', 'salad',
+  'juice', 'water', 'oil', 'salt', 'sugar', 'egg', 'fruit', 'slice', 'sliced', 'cured', 'cooked',
+]);
+const HAM_DRY_CURED = new Set(['serrano', 'iberico', 'prosciutto', 'parma', 'jamon', 'reserva', 'gran']);
+const HAM_COOKED_FORMED = new Set(['reformed', 'formed', 'cooked']);
+
+function tokenizeScoutName(s: string): string[] {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(/\s+/)
+    .filter((t) => t.length > 2 && !LABEL_STOPWORDS.has(t))
+    .map((t) => (t.endsWith('s') && t.length > 3 ? t.slice(0, -1) : t));
+}
+
+/** Pure: should a standalone nutrition-label scout item fold into this food item? */
+export function canMergeScoutLabelIntoFood(
+  labelItem: { originalName?: string; keyword?: string },
+  foodItem: { originalName?: string; keyword?: string }
+): { ok: boolean; score: number; reason: string } {
+  const labelTokens = tokenizeScoutName(labelItem.originalName || labelItem.keyword || '');
+  const foodTokens = tokenizeScoutName(foodItem.originalName || foodItem.keyword || '');
+  if (!labelTokens.length || !foodTokens.length) {
+    return { ok: false, score: 0, reason: 'empty name' };
+  }
+  const overlap = labelTokens.filter((t) => foodTokens.includes(t));
+  const score = overlap.length / Math.min(labelTokens.length, foodTokens.length);
+  const distinctiveOverlap = overlap.filter((t) => !GENERIC_FOOD_TOKENS.has(t));
+  const labelDry = labelTokens.some((t) => HAM_DRY_CURED.has(t));
+  const foodDry = foodTokens.some((t) => HAM_DRY_CURED.has(t));
+  const labelFormed = labelTokens.some((t) => HAM_COOKED_FORMED.has(t));
+  const foodFormed = foodTokens.some((t) => HAM_COOKED_FORMED.has(t));
+  if ((labelDry && foodFormed) || (labelFormed && foodDry)) {
+    return { ok: false, score, reason: 'conflicting ham type (dry-cured vs reformed/cooked)' };
+  }
+  if (distinctiveOverlap.length >= 1 && score >= 0.5) {
+    return { ok: true, score, reason: `distinctive overlap ${distinctiveOverlap.join(',')}` };
+  }
+  const foodExtraType = foodTokens.filter((t) => !GENERIC_FOOD_TOKENS.has(t) && !labelTokens.includes(t));
+  if (distinctiveOverlap.length === 0 && foodExtraType.length > 0) {
+    return { ok: false, score, reason: `only generic overlap; food has extra type (${foodExtraType.slice(0, 3).join(',')})` };
+  }
+  if (score >= 0.67 && distinctiveOverlap.length === 0 && foodExtraType.length === 0) {
+    return { ok: true, score, reason: 'same generic product' };
+  }
+  return { ok: false, score, reason: 'name overlap too weak' };
+}
+
 export const VisionScoutSchema = z.object({
   items: z.array(ScoutItemSchema).optional(),
   diningEnvironment: z.string().optional(),
@@ -397,6 +449,7 @@ export function resolvePackageAndContextItems(
     // Explicit User Gram & Volume Weight Anchor: Check if user message specifies portion weights/volumes (e.g. "Lassi is 1L the other is 500ml" or "50g of oats")
     const weightVolumeMatches = Array.from(cleanMsg.matchAll(/(\d+(?:\.\d+)?)\s*(g|grams?|ml|milliliters?|millilitres?|l|liters?|litres?)\b/gi));
     if (weightVolumeMatches.length > 0) {
+      const claimedItems = new Set<number>();
       weightVolumeMatches.forEach((m, matchIndex) => {
         const valNum = parseFloat(m[1]);
         const unitStr = (m[2] || 'g').toLowerCase();
@@ -419,12 +472,13 @@ export function resolvePackageAndContextItems(
             const hasWordMatch = words.some(w => w.length >= 3 && contextStr.includes(w));
             
             // Context heuristic: e.g. "other" or position matching for multi-item user inputs
+            // "the other is 1L" must not match item 0 just because the phrase contains "other".
             const isPositionalMatch = items.length > 1 && (
-              (matchIndex === 0 && (contextStr.includes('first') || contextStr.includes('lassi') || i === 0)) ||
-              (matchIndex === 1 && (contextStr.includes('other') || contextStr.includes('second') || contextStr.includes('plain') || i === 1))
+              (matchIndex === 0 && (/\bfirst\b/.test(contextStr) || i === 0)) ||
+              (matchIndex >= 1 && (/\b(other|second|plain)\b/.test(contextStr) ? !claimedItems.has(i) : i === matchIndex))
             );
 
-            if (hasWordMatch || isPositionalMatch || items.length === 1) {
+            if (!claimedItems.has(i) && (hasWordMatch || isPositionalMatch || items.length === 1)) {
               if (item.components && Array.isArray(item.components) && item.components.length > 1) {
                 const matchedComp = item.components.find((c: any) => {
                   const cQuery = (c.searchQuery || c.name || c.keyword || '').toLowerCase();
@@ -435,22 +489,28 @@ export function resolvePackageAndContextItems(
                   const targetTotalWeight = Math.round(explicitWeight / compPct);
                   addDebugLog(`[User Explicit Weight Anchor] User text specified ${explicitWeight}g/ml for sub-component "${matchedComp.searchQuery || matchedComp.name}" in composite dish "${item.originalName || item.keyword}". Updating total dish estimatedWeightGrams from ${item.estimatedWeightGrams}g to ${targetTotalWeight}g (component=${explicitWeight}g).`);
                   item.estimatedWeightGrams = targetTotalWeight;
+                  claimedItems.add(i);
                   matchedAnItem = true;
                   break;
                 }
               }
               addDebugLog(`[User Explicit Weight Anchor] User text specified ${explicitWeight}g/ml for "${item.originalName || item.keyword}". Updating estimatedWeightGrams from ${item.estimatedWeightGrams}g to ${explicitWeight}g.`);
               item.estimatedWeightGrams = explicitWeight;
+              claimedItems.add(i);
               matchedAnItem = true;
               break;
             }
           }
 
           // Fallback positional assignment if no word match occurred
-          if (!matchedAnItem && items[matchIndex]) {
-            const targetItem = items[matchIndex];
-            addDebugLog(`[User Explicit Weight Anchor Fallback] User text specified ${explicitWeight}g/ml for item index ${matchIndex} ("${targetItem.originalName || targetItem.keyword}"). Updating estimatedWeightGrams to ${explicitWeight}g.`);
-            targetItem.estimatedWeightGrams = explicitWeight;
+          if (!matchedAnItem) {
+            const fallbackIdx = !claimedItems.has(matchIndex) ? matchIndex : items.findIndex((_, idx) => !claimedItems.has(idx));
+            if (fallbackIdx >= 0 && items[fallbackIdx]) {
+              const targetItem = items[fallbackIdx];
+              addDebugLog(`[User Explicit Weight Anchor Fallback] User text specified ${explicitWeight}g/ml for item index ${fallbackIdx} ("${targetItem.originalName || targetItem.keyword}"). Updating estimatedWeightGrams to ${explicitWeight}g.`);
+              targetItem.estimatedWeightGrams = explicitWeight;
+              claimedItems.add(fallbackIdx);
+            }
           }
         }
       });
@@ -875,13 +935,13 @@ export function parseAndHealVisionScout(
             let bestScore = 0;
             let bestCandidate: any = null;
             for (const { it } of candidates) {
-              const score = nameSimilarity(labelItem, it);
-              if (score > bestScore) {
-                bestScore = score;
+              const decision = canMergeScoutLabelIntoFood(labelItem, it);
+              if (decision.ok && decision.score > bestScore) {
+                bestScore = decision.score;
                 bestCandidate = it;
               }
             }
-            if (bestCandidate && bestScore >= 0.5) {
+            if (bestCandidate) {
               primaryItem = bestCandidate;
             }
           }

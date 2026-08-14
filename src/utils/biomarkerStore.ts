@@ -8,9 +8,9 @@ export function getBiomarkerStore(): Record<string, any> {
   return {};
 }
 
-export function saveBiomarkerStore(store: Record<string, any>) {
-  localStorage.setItem('biomarker_dictionary_store', JSON.stringify(store));
-  window.dispatchEvent(new Event('biomarkerStoreUpdated'));
+export function saveBiomarkerStore(_store: Record<string, any>) {
+  // Dead dual path — catalog/overlay live on profile.customBiomarkers.
+  // Do not write biomarker_dictionary_store (plan Slice 1).
 }
 
 export function approvePendingBiomarker(biomarkerKey: string, targetCategory?: string) {

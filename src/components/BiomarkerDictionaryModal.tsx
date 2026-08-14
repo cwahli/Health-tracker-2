@@ -3,7 +3,7 @@ import { UniversalModal } from './UniversalModal';
 import { toYYYYMMDD } from "../utils/dateUtils";
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { UserProfile, BiomarkerLog } from '../types';
-import { biomarkerDefinitions, BIOMARKER_GROUPING_OPTIONS, getBiomarkerMetadata, getMergedBiomarkerDef } from '../utils/biomarkers';
+import { biomarkerDefinitions, BIOMARKER_GROUPING_OPTIONS, getBiomarkerMetadata, getMergedBiomarkerDef, isPendingCatalogApproval } from '../utils/biomarkers';
 import { X, CheckCircle, Check, AlertCircle, Edit2, Loader, Save, ArrowRight, CheckSquare, Square, MessageSquare, Send, ChevronLeft, ChevronDown, FileCode, Merge, Copy, Upload, Trash, Paperclip, Calendar, Info, Terminal, BrainCircuit, Clock, Zap } from 'lucide-react';
 import BiomarkerRangeBuilder, { parseNormalRangeStr } from './BiomarkerRangeBuilder';
 import CombineBiomarkersModal from './CombineBiomarkersModal';
@@ -60,72 +60,12 @@ interface ChatMessage {
 }
 
 const ensureCustomRanges = (
-  key: string,
-  normalRangeStr: string,
+  _key: string,
+  _normalRangeStr: string,
   existingCustomRanges: any[]
 ): any[] => {
-  if (existingCustomRanges && existingCustomRanges.length > 0) {
-    return existingCustomRanges;
-  }
-
-  // Auto-generate 1 custom override for Asian ethnicity
-  let rangeName = 'Chinese Lipid Guidelines';
-  let cleanRangeStr = normalRangeStr || '';
-
-  if (normalRangeStr) {
-    const parenMatch = normalRangeStr.match(/^(.*?)\s*\(([^)]+)\)$/);
-    if (parenMatch) {
-      cleanRangeStr = parenMatch[1].trim();
-      rangeName = parenMatch[2].trim();
-    }
-  }
-
-  // Fallbacks if cleanRangeStr is empty or not parsed well
-  if (!cleanRangeStr || cleanRangeStr.trim().length === 0) {
-    if (key === 'total_cholesterol') {
-      rangeName = 'Chinese Lipid Guidelines';
-      cleanRangeStr = '< 5.2 mmol/L';
-    } else if (key === 'ldl') {
-      rangeName = 'Chinese Lipid Guidelines';
-      cleanRangeStr = '< 3.4 mmol/L';
-    } else if (key === 'hdl') {
-      rangeName = 'Chinese Lipid Guidelines';
-      cleanRangeStr = '> 1.0 mmol/L';
-    } else if (key === 'triglycerides') {
-      rangeName = 'Chinese Lipid Guidelines';
-      cleanRangeStr = '< 1.7 mmol/L';
-    } else if (key === 'hba1c') {
-      rangeName = 'Asian Diabetes Association Guidelines';
-      cleanRangeStr = '< 5.7%';
-    } else if (key === 'fasting_glucose') {
-      rangeName = 'Asian Diabetes Association Guidelines';
-      cleanRangeStr = '< 5.6 mmol/L';
-    } else {
-      rangeName = 'Asian Clinical Guidelines';
-      cleanRangeStr = normalRangeStr || 'Normal';
-    }
-  }
-
-  // Parse cleanRangeStr into a RangeConfig
-  let type: 'simple' | 'bracket' = 'simple';
-  if (cleanRangeStr.includes('-')) {
-    type = 'bracket';
-  }
-  const parsedRangeConfig = parseNormalRangeStr(cleanRangeStr, type);
-
-  return [
-    {
-      id: 'cr_auto_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-      filters: {
-        ethnicity: 'asian',
-        gender: '',
-        minAge: '',
-        maxAge: ''
-      },
-      range: parsedRangeConfig,
-      name: rangeName
-    }
-  ];
+  // Auto-calibrate tool removed: never invent ethnicity overrides (they became "< 0 U/L").
+  return Array.isArray(existingCustomRanges) ? existingCustomRanges : [];
 };
 
 export const autoCalibrateBiomarkerDef = (key: string, builtInDef?: any, customDef?: any) => {
@@ -768,17 +708,6 @@ const DictionaryItem = ({
           </button>
           
           <div className="flex-1 min-w-0 pr-4">
-            {!initialGrouping && !isEditing && (
-               <div className="absolute top-0 right-0">
-                  <button
-                    onClick={() => onSave({ standardMedicalGrouping: 'Other' })}
-                    className="px-2 py-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-[10px] font-bold transition-colors shadow-sm"
-                  >
-                    Quick Approve
-                  </button>
-               </div>
-            )}
-            
             {isEditing ? (
               <div className="space-y-3 w-full">
                 <div className="grid grid-cols-2 gap-3">
@@ -957,31 +886,11 @@ const DictionaryItem = ({
                     Cancel
                   </button>
                   <button 
-                    type="button"
-                    onClick={() => {
-                      const calibrated = autoCalibrateBiomarkerDef(itemKey, builtInDef, customDef);
-                      setEditState({
-                        ...editState,
-                        name: calibrated.name,
-                        unit: calibrated.unit,
-                        normalRange: calibrated.normalRange,
-                        standardMedicalGrouping: calibrated.standardMedicalGrouping,
-                        riskCategories: Array.isArray(calibrated.riskCategories) ? calibrated.riskCategories.join(', ') : calibrated.riskCategories,
-                        potentialMedicalConditions: Array.isArray(calibrated.potentialMedicalConditions) ? calibrated.potentialMedicalConditions.join(', ') : calibrated.potentialMedicalConditions
-                      });
-                    }}
-                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded flex items-center gap-1 cursor-pointer"
-                    title="Auto-fill recommended standard values into form"
-                  >
-                    <Zap className="w-3.5 h-3.5 fill-current" />
-                    Auto-Fill Defaults
-                  </button>
-                  <button 
                     onClick={handleSave}
                     className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 flex items-center gap-1 cursor-pointer"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    Save & Approve
+                    Save
                   </button>
                 </div>
               </div>
@@ -1008,24 +917,6 @@ const DictionaryItem = ({
                     )}
                   </div>
 
-                  {approvalReason && (
-                    <button
-                      onClick={() => {
-                        onSave({
-                          name: initialName,
-                          unit: initialUnit || 'units',
-                          normalRange: initialNormalRange || 'Normal',
-                          standardMedicalGrouping: (initialGrouping && initialGrouping !== 'By Medical Practice') ? initialGrouping : 'Other',
-                          riskCategories: (def.riskCategories && def.riskCategories.length > 0 && !def.riskCategories.includes('Uncategorized')) ? def.riskCategories : ['General'],
-                          potentialMedicalConditions: (def.potentialMedicalConditions && def.potentialMedicalConditions.length > 0) ? def.potentialMedicalConditions : ['General Health']
-                        });
-                      }}
-                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer shrink-0"
-                    >
-                      <CheckCircle className="w-3.5 h-3.5" />
-                      Approve
-                    </button>
-                  )}
                 </div>
 
                 {/* Unified Calibration & Approval Banner */}
@@ -1035,7 +926,7 @@ const DictionaryItem = ({
                       <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                       <div>
                         <div className="font-bold flex items-center gap-1.5">
-                          Needs Calibration & Approval
+                          Incomplete definition
                         </div>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {missingUnit && <span className="px-1.5 py-0.5 text-[10px] bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300 rounded font-bold">Missing Unit</span>}
@@ -1047,23 +938,7 @@ const DictionaryItem = ({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                      {hasCalibrationChanges && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (onRequestCalibrateKeys) {
-                              onRequestCalibrateKeys([itemKey]);
-                            } else {
-                              handleAutoCalibrateAndApprove();
-                            }
-                          }}
-                          className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                          title="Review proposed calibrations and approve"
-                        >
-                          <Zap className="w-3.5 h-3.5 fill-current" />
-                          Auto-Calibrate & Approve
-                        </button>
-                      )}
+                      {false && hasCalibrationChanges && null}
                       <button
                         type="button"
                         onClick={handleStartEdit}
@@ -1717,22 +1592,7 @@ export default function BiomarkerDictionaryModal({
     return k.toLowerCase().includes(q) || (def.name || '').toLowerCase().includes(q) || hasTagMatch;
   };
 
-  const checkKeyNeedsApproval = (k: string) => {
-    const custom = profile.customBiomarkers?.[k];
-    if (custom?.needsApproval) return true;
-    
-    const builtIn = biomarkerDefinitions.find((d: any) => d.key === k || (Array.isArray(d.aliases) && d.aliases.some((a: string) => a.toLowerCase() === k)));
-    const itemLogs = collectItemLogs(k);
-    const combined = getMergedBiomarkerDef(k, builtIn, custom, itemLogs);
-
-    const isMissingUnit = !combined.unit || combined.unit.trim() === '';
-    const isMissingRange = !combined.normalRange || combined.normalRange.trim() === '' || combined.normalRange === 'Unknown';
-    const isMissingCategory = !combined.standardMedicalGrouping || combined.standardMedicalGrouping.trim() === '' || combined.standardMedicalGrouping === 'By Medical Practice' || combined.standardMedicalGrouping === 'Other';
-    const isMissingRisk = !Array.isArray(combined.riskCategories) || combined.riskCategories.length === 0 || combined.riskCategories.includes('Uncategorized');
-    const isMissingCondition = !Array.isArray(combined.potentialMedicalConditions) || combined.potentialMedicalConditions.length === 0;
-
-    return isMissingUnit || isMissingRange || isMissingCategory || isMissingRisk || isMissingCondition;
-  };
+  const checkKeyNeedsApproval = (k: string) => isPendingCatalogApproval(k, profile);
 
   const allApprovedKeysUnfiltered = useMemo(() => {
     const keys = new Set<string>();
@@ -1778,9 +1638,9 @@ export default function BiomarkerDictionaryModal({
 
   const toApproveKeys = useMemo(() => {
     if (filterOption === 'missing_units') return [];
-    const keys = new Set([...historyKeys, ...customKeys, ...builtInKeys]);
+    const keys = new Set([...historyKeys, ...customKeys]);
     return Array.from(keys).filter(k => checkKeyNeedsApproval(k)).filter(filterFn);
-  }, [historyKeys, customKeys, builtInKeys, searchQuery, profile.customBiomarkers, filterOption, biomarkerHistory]);
+  }, [historyKeys, customKeys, searchQuery, profile.customBiomarkers, filterOption, biomarkerHistory]);
 
   const { allGroupings, allRisks, allConditions } = useMemo(() => {
     const groupings = new Set<string>();
@@ -2739,6 +2599,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
         updatedAt: Date.now()
       };
       delete updatedCustom[key].needsApproval;
+      updatedCustom[key].catalogApproved = true;
     });
 
     onUpdateProfile({
@@ -3166,6 +3027,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
         updatedAt: Date.now()
       };
       delete updatedCustom[key].needsApproval;
+      updatedCustom[key].catalogApproved = true;
     });
 
     onUpdateProfile({ customBiomarkers: updatedCustom });
@@ -3184,6 +3046,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
         updatedAt: Date.now()
       };
       delete updatedCustom[key].needsApproval;
+      updatedCustom[key].catalogApproved = true;
     });
 
     onUpdateProfile({ customBiomarkers: updatedCustom });
@@ -5254,16 +5117,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
               {selectedKeys.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 animation-fade-in pb-2 w-full">
                   <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 shrink-0">{selectedKeys.length} selected</span>
-                  {calibratableSelectedKeys.length > 0 && (
-                    <button
-                      onClick={() => setCalibrationModalKeys(calibratableSelectedKeys)}
-                      className="shrink-0 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
-                      title="Review proposed calibrations and approve selected items"
-                    >
-                      <Zap className="w-3.5 h-3.5 fill-current" />
-                      Auto-Calibrate Selected ({calibratableSelectedKeys.length})
-                    </button>
-                  )}
+                  {false && calibratableSelectedKeys.length > 0 && null}
                   <button
                     onClick={() => setShowCombineModal(true)}
                     className="shrink-0 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm"
@@ -5299,7 +5153,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                           }}
                           className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50"
                         >
-                          Standardize Units Agent
+                          Unit Relabel
                         </button>
                         <button
                           onClick={() => {
@@ -5311,7 +5165,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                           }}
                           className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50"
                         >
-                          Medical Categorisation Agent
+                          Categoriser
                         </button>
                         <button
                           onClick={() => {
@@ -5324,7 +5178,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                           }}
                           className="w-full text-left px-3 py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-950/25"
                         >
-                          ✨ Data Accuracy Agent
+                          ✨ Field Compare
                         </button>
                         <button
                           onClick={() => {
@@ -5339,7 +5193,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                           }}
                           className="w-full text-left px-3 py-2 text-xs font-medium text-violet-600 dark:text-violet-400 font-semibold hover:bg-violet-50 dark:hover:bg-violet-950/25 border-t border-slate-100 dark:border-slate-700/50 mt-1 pt-2"
                         >
-                          🤝 Name Consolidation Agent
+                          🤝 Name Deduper
                         </button>
                         {onReviewWithAgent && (
                           <button
@@ -5350,7 +5204,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                             }}
                             className="w-full text-left px-3 py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-950/25 border-t border-slate-100 dark:border-slate-700/50 mt-1 pt-2"
                           >
-                            🧪 Standardize Biomarkers Agent
+                            🧪 Range Calibrator
                           </button>
                         )}
                       </div>
@@ -5620,17 +5474,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                     {pendingBiomarkersCount} biomarker(s) pending approval:
                   </span>
                   <div className="flex flex-wrap items-center gap-1.5 ml-auto">
-                    {calibratablePendingKeys.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setCalibrationModalKeys(calibratablePendingKeys)}
-                        className="px-3 py-1 bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-                        title="Review proposed calibrations and approve all pending items"
-                      >
-                        <Zap className="w-3.5 h-3.5 fill-current" />
-                        Auto-Calibrate & Approve All ({calibratablePendingKeys.length})
-                      </button>
-                    )}
+                    {false && calibratablePendingKeys.length > 0 && null}
                     {keysNeedingCategory.length > 0 && (
                       <button
                         type="button"
@@ -5673,42 +5517,6 @@ I can analyze these, compare them with our database keys, and find standard mapp
                     </h3>
                     {toApproveKeys.length > 0 && (
                       <div className="flex items-center gap-3">
-                        {selectedKeys.some(k => toApproveKeys.includes(k)) && (
-                          <button
-                            onClick={() => {
-                              const updates = {};
-                              selectedKeys.forEach(k => {
-                                if (toApproveKeys.includes(k)) {
-                                  updates[k] = { name: k, unit: '' };
-                                }
-                              });
-                              // Assuming onStandardizeUnits can take an object of custom definitions, or we need to dispatch profile update directly.
-                              // Let's call onSave for each, or we can add a batch update in App.tsx. 
-                              // Since BiomarkerDictionaryModal doesn't have onBatchSave, we can use onUpdateProfile if available, or just call onSave?
-                              // Wait, onSave in DictionaryItem calls onSave prop. Let's see how onSave is passed to DictionaryItem:
-                              // onSave={(updates) => {
-                              //  // Wait, the parent has handleUpdateCustomBiomarker(updates)
-                              // }}
-                              // Let's just create a new customBiomarkers object and update profile.
-                              const updatedCustom = { ...(profile.customBiomarkers || {}) };
-                              let hasChanges = false;
-                              selectedKeys.forEach(k => {
-                                if (toApproveKeys.includes(k)) {
-                                  updatedCustom[k] = { ...profile.customBiomarkers?.[k], name: k, standardMedicalGrouping: profile.customBiomarkers?.[k]?.standardMedicalGrouping || 'By Medical Practice' };
-                                  delete updatedCustom[k].needsApproval;
-                                  hasChanges = true;
-                                }
-                              });
-                              if (hasChanges) {
-                                onUpdateProfile({ ...profile, customBiomarkers: updatedCustom });
-                                setSelectedKeys(selectedKeys.filter(k => !toApproveKeys.includes(k)));
-                              }
-                            }}
-                            className="text-xs font-bold px-2 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400 rounded hover:bg-emerald-200"
-                          >
-                            Approve Selected
-                          </button>
-                        )}
                         <button 
                           onClick={() => handleToggleSelectAll(toApproveKeys)}
                           className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
@@ -6055,17 +5863,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
       />
 
       {/* AUTO-CALIBRATE PREVIEW & APPROVAL MODAL */}
-      {calibrationModalKeys && (
-        <AutoCalibrateApprovalModal
-          isOpen={!!calibrationModalKeys}
-          onClose={() => setCalibrationModalKeys(null)}
-          keysToCalibrate={calibrationModalKeys}
-          profile={profile}
-          biomarkerDefinitions={biomarkerDefinitions}
-          biomarkerHistory={biomarkerHistory}
-          onConfirm={handleApplyCalibrationConfirmed}
-        />
-      )}
+      {false && calibrationModalKeys && null}
     </div>
   );
 }

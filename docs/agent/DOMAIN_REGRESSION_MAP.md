@@ -72,7 +72,16 @@ npx vitest run src/utils/biomarkerIdentity.test.ts src/utils/biomarkerSanitize.t
 node scripts/assert-biomarker-flow.mjs
 ```
 
-**Still TODO:** pure extract of agent1/data_review apply + goldens; front_desk same-day merge.
+**Still TODO:** plan `BIOMARKER_LIFECYCLE_PLAN.md` §13 (Studio pack `studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md`). Do not add more “approved = has 5 fields” inferrers.
+
+**M31 remaining-work gate:**
+
+```bash
+node scripts/assert-biomarker-lifecycle-m31.mjs
+npx vitest run src/utils/biomarkerLifecycle.test.ts src/utils/biomarkerIdentity.test.ts src/utils/biomarkerSanitize.test.ts src/utils/dataSanitize.test.ts src/utils/syncUtils.regression.test.ts
+```
+
+**Design:** `plan/BIOMARKER_LIFECYCLE_PLAN.md` · **Laws:** `domains/biomarkers.md` (2026-08-14 consolidation).
 
 ---
 

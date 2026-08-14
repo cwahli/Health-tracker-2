@@ -8,7 +8,13 @@ import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import { checkCategoryAndStateCompatibility } from './server_pure_helpers.js';
 import { rankAndClassifyCandidates, writeAliasIfHitUnique } from './server_fdc_resolve.js';
 import { buildFoodSearchQuerySet } from './server_query_set';
-import { withGeminiRetry } from './server_gemini_retry.js';
+import {
+  withGeminiRetry,
+  isGeminiQuotaError,
+  isGeminiUnavailableError,
+  assertModelNotInQuotaCooldown,
+  noteGeminiQuota,
+} from './server_gemini_retry.js';
 import { verifyFirebaseIdToken } from './server_auth.js';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
@@ -239,6 +245,7 @@ import { decidePrepAddition } from "./server_prep_policy";
 import dotenv from "dotenv";
 import { AsyncLocalStorage } from "async_hooks";
 import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerStatusLabel, getBiomarkerMetadata, getCustomBiomarkerDef } from "./src/utils/biomarkers";
+import { filterHistoryForUse, enrichReviewModificationCommands } from "./src/utils/biomarkerLifecycle";
 import { generateDynamicInsight } from "./src/utils/biomarkerInsights";
 import { formatOptimalTargetValue } from "./src/utils/agentCalibration";
 import { NUTRIENT_KEYS } from "./src/utils/nutrients";
@@ -247,7 +254,7 @@ import { aggregateItemsNutrients, cleanNutrientNumber } from "./server_nutrient_
 import { registerIssueBacklogRoutes } from './serverIssueBacklog.js';
 import { registerBugSnapshotRoutes } from './serverBugSnapshot.js';
 import { registerGoldenRoutes } from './serverGoldenRoutes.js';
-import { registerBrandMenuRoutes, isKnownDatabaseBrand, isKnownDatabaseBrandSync, fetchAllDatabaseBrands, searchBrandMenuItems, normalizeChainKey, consolidateBrandMenuItemsAndChains, cleanUnbrandedFoodCatalog } from './serverBrandMenu.js';
+import { registerBrandMenuRoutes, isKnownDatabaseBrand, isKnownDatabaseBrandSync, fetchAllDatabaseBrands, searchBrandMenuItems, brandHitFitsQuery, normalizeChainKey, consolidateBrandMenuItemsAndChains, cleanUnbrandedFoodCatalog } from './serverBrandMenu.js';
 import { supabaseAdmin } from './supabaseAdmin.js';
 import { isGenericZeroNutrientDiluent, getZeroNutrientVector, calculateGenericTokenCoverage, evaluateGenericModifierInversionPenalty, classifyUniversalPhysicalFormV3 } from "./server_matching_engine";
 import { 
@@ -607,52 +614,6 @@ async function searchOpenFoodFacts(query: string, maxResults: number = 5): Promi
 }
 
 
-
-export interface SearchRequestContext {
-  ddgCallCount: number;
-  ddgBlocked: boolean;
-}
-
-async function searchOnlineWebNutrition(
-  query: string, 
-  chainKey?: string, 
-  ctx: SearchRequestContext = { ddgCallCount: 0, ddgBlocked: false }
-): Promise<any[]> {
-  try {
-    if (!query || !query.trim()) return [];
-    let isBlockedByBotProtection = false;
-
-    // Brand menu priority override — check chain_menu_sources first
-    const BRAND_MENU_PRIORITY: Record<string, string> = {
-      'yolk': 'https://yolk.vmos.io/store/a75aab37-d3ba-4833-9785-c5eb27592d49/menu',
-      'kfc': 'https://www.kfc.co.uk/nutrition',
-      'mcdonald': 'https://www.mcdonalds.com/gb/en-gb/eat/nutritioninfo.html',
-      'costa': 'https://www.costa.co.uk/menu',
-    };
-
-    const lowerQuery = query.toLowerCase();
-    const brandKey = Object.keys(BRAND_MENU_PRIORITY).find(k => lowerQuery.includes(k)) || chainKey;
-    const brandMenuUrl = brandKey ? BRAND_MENU_PRIORITY[brandKey] : null;
-
-    // First, check local/database brand menu items for exact or fuzzy dish match
-    try {
-      const brandHits = await searchBrandMenuItems(query, brandKey || chainKey);
-      if (brandHits && brandHits.length > 0) {
-        addDebugLog(`[Brand Menu Match] Matched stored brand item for "${query}" -> "${brandHits[0].name}" (${brandHits[0].chainName})`);
-        return brandHits;
-      }
-    } catch (brandErr: any) {
-      addDebugLog(`[Brand Menu Lookup Error] ${brandErr?.message || brandErr}`);
-    }
-    
-    // DuckDuckGo searches have been removed because they frequently get blocked.
-    addDebugLog(`[DuckDuckGo Search] Bypassed DuckDuckGo search for "${query}" because web searches are disabled to prevent blocks.`);
-    return [];
-  } catch (err: any) {
-    addDebugLog(`[DuckDuckGo Search] Error for "${query}": ${err?.message || err}`);
-    return [];
-  }
-}
 
 function isUsableWebNutritionHit(webItem: any): boolean {
   if (!webItem) return false;
@@ -1330,31 +1291,28 @@ app.post('/api/jobs/upsert', async (req, res) => {
 });
 
 app.post('/api/jobs/delete', async (req, res) => {
-  try {
-    const authData = await verifyFirebaseIdToken(req);
-    console.log('[FreeTier] requireAuth supabase-push');
-
-    const { jobId } = req.body;
-    if (!jobId) {
-      return res.status(400).json({ error: 'jobId is required' });
-    }
-    const { deleteInMemoryServerJob } = await import('./serverJobs');
-    deleteInMemoryServerJob(String(jobId));
-
-    const { isSupabaseConfigured } = await import('./src/utils/supabaseClient');
-    if (isSupabaseConfigured) {
-      const { supabaseAdmin } = await import('./supabaseAdmin');
-      const { error } = await supabaseAdmin.from('agent_jobs').delete().eq('id', String(jobId));
-      if (error) {
-        console.error('Failed to delete job from Supabase:', error);
-        return res.status(500).json({ error: error.message });
-      }
-    }
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error('Failed to delete job:', err);
-    res.status(500).json({ error: err.message || 'Internal server error' });
+  const { jobId } = req.body || {};
+  if (!jobId) {
+    return res.status(400).json({ error: 'jobId is required' });
   }
+  // Best-effort: never 500 — hydrate used to retry forever on 500.
+  try {
+    await verifyFirebaseIdToken(req).catch(() => null);
+    const { deleteInMemoryServerJob } = await import('./serverJobs.js');
+    deleteInMemoryServerJob(String(jobId));
+  } catch (memErr: any) {
+    console.warn('[jobs/delete] in-memory delete skipped:', memErr?.message || memErr);
+  }
+  try {
+    const { supabaseAdmin, isSupabaseConfigured } = await import('./supabaseAdmin.js');
+    if (isSupabaseConfigured) {
+      const { error } = await supabaseAdmin.from('agent_jobs').delete().eq('id', String(jobId));
+      if (error) console.warn('[jobs/delete] supabase:', error.message);
+    }
+  } catch (dbErr: any) {
+    console.warn('[jobs/delete] supabase skipped:', dbErr?.message || dbErr);
+  }
+  res.json({ success: true });
 });
 
 app.post('/api/jobs/submit', async (req, res) => {
@@ -2486,24 +2444,18 @@ async function callUnifiedLLM(args: any): Promise<any> {
                                 errStr.includes('timeout') || 
                                 errStr.includes('timed out') || 
                                 errStr.includes('504') ||
-                                errStr.includes('503') ||
                                 errStr.includes('expired');
 
     const isResourceExhausted = errStr.includes('resource_exhausted') || errStr.includes('quota') || errStr.includes('429');
     
     if (isResourceExhausted) {
-      throw new Error(`The Gemini API quota has been temporarily exhausted. Please wait a minute and try again. Detailed API Error: ${err.message}`);
+      const modelName = typeof args?.modelId === 'object' ? (args.modelId as any)?.name || (args.modelId as any)?.model : args?.modelId;
+      noteGeminiQuota(String(modelName || 'gemini-3.5-flash-lite'), err);
+      throw new Error(`The Gemini API quota has been temporarily exhausted on ${modelName || 'this model'}. Wait the retry-after, or switch to Gemini 3.1 Flash Lite (separate free-tier bucket). Detailed API Error: ${err.message}`);
     }
 
     if (isTimeoutOrDeadline) {
-      const is503 = errStr.includes('503') || errStr.includes('unavailable');
-      const delayMs = is503 ? 2000 : 0;
-      
       console.warn(`[UnifiedLLM] Request failed (${err.message}). Retrying once with 'skipThinking: true'...`);
-      
-      if (delayMs > 0) {
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
       
       try {
         const retryArgs = { 
@@ -2569,6 +2521,9 @@ async function callUnifiedLLMInternal({
     const isJson = responseMimeType === "application/json";
     const rawModelStr = typeof modelId === 'object' ? (modelId as any)?.name || (modelId as any)?.model || 'gemini-3.5-flash-lite' : (modelId || 'gemini-3.5-flash-lite');
     const normalizedModelId = rawModelStr.toLowerCase();
+    if (normalizedModelId.includes('gemini')) {
+      assertModelNotInQuotaCooldown(rawModelStr);
+    }
 
   // 1. Anthropic Claude Models
   if (normalizedModelId.includes("claude-")) {
@@ -2884,6 +2839,14 @@ async function callUnifiedLLMInternal({
         }
         response = { text: fullText, functionCalls: [] };
       } catch (streamErr: any) {
+        if (isGeminiQuotaError(streamErr)) {
+          noteGeminiQuota(targetGeminiModel, streamErr);
+          throw streamErr;
+        }
+        if (isGeminiUnavailableError(streamErr)) {
+          addDebugLog(`[UnifiedLLM] Stream 503 on ${targetGeminiModel} — not falling back to a second generateContent (that doubles quota).`);
+          throw streamErr;
+        }
         addDebugLog(`[UnifiedLLM] Stream failed (${streamErr?.message}). Falling back to non-streaming generateContent...`);
         const fullRes = await withGeminiRetry(() => ai.models.generateContent({
           model: targetGeminiModel,
@@ -4509,7 +4472,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
   let hasSentHeaders = false;
   const sessionId = logSessionStorage.getStore() || "global";
   const initialLogCount = (sessionDebugLogs[sessionId] || globalDebugLogs).length;
-  const searchCtx: SearchRequestContext = { ddgCallCount: 0, ddgBlocked: false };
+
 
   if (isStream) {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -5082,7 +5045,8 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           scoutAttempts++;
           try {
             if (scoutAttempts > 1) {
-              const delay = lastScoutErr?.message?.includes('503') || lastScoutErr?.message?.includes('429') || lastScoutErr?.message?.includes('UNAVAILABLE') ? 3000 : 1000;
+              if (isGeminiQuotaError(lastScoutErr)) break;
+              const delay = lastScoutErr?.message?.includes('503') || lastScoutErr?.message?.includes('UNAVAILABLE') ? 2000 : 1000;
               addDebugLog(`[Vision Scout] Waiting ${delay}ms before retry...`);
               await new Promise(resolve => setTimeout(resolve, delay));
               addDebugLog(`[Vision Scout] Retrying LLM call (Attempt ${scoutAttempts} of ${maxScoutAttempts})...`);
@@ -5183,12 +5147,27 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           } catch (scoutErr: any) {
             lastScoutErr = scoutErr;
             addDebugLog(`[Vision Scout Attempt ${scoutAttempts} Failed] Error: ${scoutErr.message}`);
+            if (isGeminiQuotaError(scoutErr)) {
+              addDebugLog(`[Vision Scout] Aborting further scout retries — 429 quota on this model. Switch model or wait.`);
+              break;
+            }
           }
         }
 
         if (!scoutResult) {
           addDebugLog(`[Vision Scout Failed Permanently] Both attempts failed. Last error: ${lastScoutErr?.message}`);
-          throw new Error(`Vision Scout Failed: Couldn't reliably read this image, please try again or re-upload. (Details: ${lastScoutErr?.message})`);
+          const raw = String(lastScoutErr?.message || '');
+          const isQuota = /429|RESOURCE_EXHAUSTED|quota exceeded/i.test(raw);
+          const isUnavailable = /503|UNAVAILABLE|overloaded/i.test(raw);
+          if (isQuota) {
+            throw new Error(
+              `Vision Scout Failed: Gemini quota (429) on this model — wait the retry-after window or switch model. Not a bad photo. (Details: ${raw})`
+            );
+          }
+          if (isUnavailable) {
+            throw new Error(`Vision Scout Failed: Gemini unavailable (503). Retry shortly. (Details: ${raw})`);
+          }
+          throw new Error(`Vision Scout Failed: Couldn't reliably read this image, please try again or re-upload. (Details: ${raw})`);
         }
 
         // Vision Scout _internalReasoning is removed per user request
@@ -5407,8 +5386,6 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       if (typeof (res as any).flush === 'function') (res as any).flush();
       sendLog('db_search', 'db_search', `Querying USDA & OpenFoodFacts databases for: [${uniqueQueries.join(', ')}]`);
       addDebugLog(`[Database Search] Performing USDA & OFF searches for queries: ${JSON.stringify(uniqueQueries)}`);
-      // Cap DuckDuckGo web searches to at most 2 queries per batch to avoid anti-bot/rate limiting triggers
-      const webSearchQuerySet = new Set(uniqueQueries.slice(0, 2));
 
       const searchPromises = uniqueQueries.map(async (q) => {
         try {
@@ -5424,7 +5401,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           const isGeneric = /^(mayo|mayonnaise|granola|tortilla|salad greens|mixed salad leaves|lettuce|tomato|onion|cucumber|bread|wrap|egg|boiled egg|salt|pepper|oil|butter|sugar|chicken|beef|pork|fish|tuna|salmon|rice|pasta|cheese)$/i.test(cleaned);
           if (isGeneric && !isDbBrand && !isBarcode) {
             dataTypes = 'Foundation,SR Legacy,Survey (FNDDS)'; // Override and lock to generics
-            addDebugLog(`[BrandGuard] Blocked branded search for generic token: ${cleaned}`);
+            addDebugLog(`[BrandGuard] Using generic USDA types for "${cleaned}" (not a brand — skip branded/OFF catalog)`);
           }
           
           let offP = Promise.resolve([]);
@@ -5432,13 +5409,6 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
             offP = searchOpenFoodFacts(cleaned, 3);
           }
           
-          const isMainItemQuery = (visionScoutItems && visionScoutItems.length > 0)
-            ? visionScoutItems.some((it: any) => it.originalName === q || it.keyword === q) || (scoutOriginalQueries.includes(q))
-            : true;
-            
-          const isBrandOrChainQuery = !!detectChainKeyFromText(q);
-          const shouldRunWebSearch = isMainItemQuery && (webSearchQuerySet.has(q) || isBrandOrChainQuery);
-          const webP = shouldRunWebSearch ? searchOnlineWebNutrition(q, detectedChainKey, searchCtx) : Promise.resolve([]);
           // BrandGuard: a generic token (e.g. plain "mayonnaise") should not be allowed to
           // match a specific restaurant's branded catalog item (e.g. "Pot of Chimi Mayo")
           // unless that chain was actually detected for this meal. Previously this guard
@@ -5449,12 +5419,12 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
             ? Promise.resolve([])
             : searchBrandMenuItems(cleaned, detectedChainKey);
 
-          let [usda, off, brandHits, web] = await Promise.all([
+          let [usda, off, brandHits] = await Promise.all([
             searchUSDA(cleaned, 3, dataTypes),
             offP,
             brandP,
-            webP
           ]);
+          const web: any[] = [];
 
           // If zero results found in main database search, retry with loosened query
           if (usda.length === 0 && off.length === 0 && brandHits.length === 0) {
@@ -5491,9 +5461,10 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       });
       const searchResultsList = await Promise.all(searchPromises);
       const list: string[] = [];
+      const seenBrandTargets = new Set<string>();
       for (const resItem of searchResultsList) {
         if (resItem.brandHits && Array.isArray(resItem.brandHits)) {
-          resItem.brandHits.forEach((bmHit: any) => {
+          resItem.brandHits.filter((bmHit: any) => brandHitFitsQuery(resItem.query, bmHit)).forEach((bmHit: any) => {
             const bType = bmHit.basisType || 'per_dish';
             const bmNutrients = {
               ...(bmHit.nutrients || {}),
@@ -5512,6 +5483,9 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
               basisType: bType,
               nutrients: bmNutrients
             });
+            const brandKey = `${String(bmHit.chainName || '').toLowerCase()}::${String(bmHit.name || '').toLowerCase()}`;
+            if (seenBrandTargets.has(brandKey)) return;
+            seenBrandTargets.add(brandKey);
             const bmProteinStr = (bmHit.protein !== undefined && bmHit.protein !== null) ? `${bmHit.protein}g` : 'n/a';
             const bmCarbsStr = (bmHit.carbohydrates !== undefined && bmHit.carbohydrates !== null) ? `${bmHit.carbohydrates}g` : 'n/a';
             const bmFatStr = (bmHit.fat !== undefined && bmHit.fat !== null) ? `${bmHit.fat}g` : 'n/a';
@@ -5892,6 +5866,11 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         uniqueQueries.forEach(query => {
           const normQ = normalizeFoodKey(query);
           if (resolvedQuerySet.has(normQ)) return;
+          const qLower = String(query || '').toLowerCase().trim();
+          if (qLower && labelCompleteQueries.has(qLower)) {
+            addDebugLog(`[Food Resolver Fallback] skip category fallback; printed label covers "${query}"`);
+            return;
+          }
           const already = databaseMatchesArray.some((m: any) =>
             normalizeFoodKey(m.searchQuery || '') === normQ &&
             m.source !== 'category_fallback' &&
@@ -8932,7 +8911,17 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         rawParsed.comparison = null; // Guaranteed 100% clean review card rendering
       } else if (userSelectedMode === 'compare') {
         rawParsed.mode = 'evaluation';
-        rawParsed.foodData = null;
+        const existingFd = rawParsed.foodData && typeof rawParsed.foodData === 'object' ? rawParsed.foodData : {};
+        const breakdown = Array.isArray(existingFd.itemsBreakdown) && existingFd.itemsBreakdown.length
+          ? existingFd.itemsBreakdown
+          : (visionScoutItems || []).map((s: any, idx: number) => ({
+              name: s.originalName || s.keyword || `item ${idx + 1}`,
+              originalName: s.originalName || s.keyword,
+              weightGrams: s.estimatedWeightGrams,
+              calories: s.estimatedCalories,
+              scoutIndex: s.scoutIndex ?? idx,
+            }));
+        rawParsed.foodData = { ...existingFd, itemsBreakdown: breakdown };
       }
     }
 
@@ -11708,6 +11697,7 @@ rules:
     - "If the newly proposed range is a standard global baseline, set 'isEthnicitySpecific' to false and 'ethnicityTag' to null."
     - "When no correction or override is discussed or needed, set 'proposal' to null."
     - "If you identify data entry errors, unit mix-ups, or date discrepancies in the log history, provide a 'modificationCommand' list to correct or remove them."
+    - "CRITICAL: Every update_biomarker command MUST include numeric newValue (the converted/corrected number). Never omit newValue. Convert US conventional (mg/dL) to the unit used in older logs (typically mmol/L for lipids, umol/L for bilirubin) using standard clinical factors. Example: HDL 50 mg/dL → newValue 1.29 (mmol/L)."
     - "CRITICAL RESPONSE STRUCTURE FOR REVIEWS & CORRECTIONS: In your conversational 'reply', you MUST explicitly structure your textual answer to include:"
       "1) Identification of Errors: Explicitly detail WHERE the error occurred in the current logs (e.g. 'Log on 05-06-2026 has Hematocrit recorded as 48 due to percentage notation instead of decimal ratio 0.48')."
       "2) Clear Before-and-After Summary: Provide a clear list or table showing 'Current Recorded Value → Proposed Fix' for every log entry being modified (e.g. '05-06-2026: 48 → 0.48')."
@@ -12030,7 +12020,7 @@ Your output MUST be a valid JSON object matching the schema provided.`;
                          date: { type: Type.STRING, description: "YYYY-MM-DD date of the log entry" },
                          reason: { type: Type.STRING, description: "Short explanation of the error (e.g. Scaling error: 48 percentage unit -> 0.48 decimal ratio)" }
                        },
-                       required: ["action", "keyName", "date"]
+                       required: ["action", "keyName", "date", "newValue"]
                      }
                    }
                  },
@@ -12175,11 +12165,20 @@ Your output MUST be a valid JSON object matching the schema provided.`;
         try {
           const cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
           const parsed = JSON.parse(cleanJson);
+          const unitMap: Record<string, string> = { ...(req.body.catalogUnitByKey || {}) };
+          Object.entries(userProfile?.customBiomarkers || {}).forEach(([k, v]: [string, any]) => {
+            if (v?.unit) unitMap[k] = v.unit;
+          });
+          const cmds = enrichReviewModificationCommands(
+            parsed.modificationCommand || [],
+            biomarkerHistory || [],
+            unitMap
+          );
           return res.json({
             text: parsed.reply || "",
             reply: parsed.reply || "",
             proposal: parsed.proposal || null,
-            modificationCommand: parsed.modificationCommand || null,
+            modificationCommand: cmds.length ? cmds : parsed.modificationCommand || null,
             agentType,
             agentPrompt: fullPromptSent,
             apiCalls: [{ type: 'gemini', label: `Biomarker Review Agent (${engine || 'gemini-3.5-flash-lite'})` }]
@@ -12651,7 +12650,7 @@ app.post("/api/gemini/insight-analyze", async (req, res) => {
       });
     }
 
-    const sanitizedBiomarkerHistory = (biomarkerHistory || []).map((log: any) => {
+    const sanitizedBiomarkerHistory = filterHistoryForUse(biomarkerHistory, activeProfile).map((log: any) => {
       const clean = { ...log };
       delete clean.tests;
       delete clean.updated_at;
@@ -12946,7 +12945,7 @@ app.post("/api/gemini/health-baseline-analyze", async (req, res) => {
     const { profile, userProfile, biomarkerHistory, engine, refinement, calibratedInsights, outOfRangeBiomarkers } = req.body;
     const activeProfile = profile || userProfile || {};
 
-    const sanitizedBiomarkerHistory = (biomarkerHistory || []).map((log: any) => {
+    const sanitizedBiomarkerHistory = filterHistoryForUse(biomarkerHistory, activeProfile).map((log: any) => {
       const clean = { ...log };
       delete clean.tests;
       delete clean.updated_at;

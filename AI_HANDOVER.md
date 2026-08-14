@@ -1,6 +1,6 @@
 # Health Cockpit — Master AI Handover (WIP status board)
 
-**Last updated:** 2026-08-12 (Curator-driven USDA resolution & self-healing database architecture specification completed in plan/CURATOR_USDA_SELF_HEALING_PLAN.md with 6 failure mode safeguards)  
+**Last updated:** 2026-08-14 (Biomarker lifecycle plan + domain rulebook consolidated; no code slices yet)  
 **Source of truth code intent:** https://github.com/cwahli/Health-tracker-2  
 **Tree of truth for product completeness:** **Desktop** working tree until Slice 0 / governance ship lands on origin.  
 **Always `git fetch` + re-audit before a session.**
@@ -19,7 +19,19 @@
 
 **Consolidated DONE / TODO (snapshot):** `plan/STATUS_CONSOLIDATED_2026-08.md` — **stale as of 2026-08-08**; re-audit before trusting GitHub vs Desktop bullets.  
 **Detail roadmap:** `plan/REMAINING_ROADMAP_2026-08.md` — same: use as map, verify against tree.  
-**Active Studio pack for ship:** **`studio/M20_AGENT_GOVERNANCE_AND_REGRESSION.md`**.
+**Active Studio pack for biomarkers:** **`studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md`**.
+
+### Session notes — biomarkers (2026-08-14)
+
+- **Studio pack for remaining work:** `studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md` — paste **§A only** into AI Studio. Implements plan §13 P0–P8. Master gate: `node scripts/assert-biomarker-lifecycle-m31.mjs`. Do not mix with food M30.
+
+- **Design:** `plan/BIOMARKER_LIFECYCLE_PLAN.md` (literature, 4 records, dispatcher, Calibrator auto-run, slices 0–4).  
+- **Laws:** `docs/agent/domains/biomarkers.md` rewritten to match; **code still the old blended writers**.  
+- **Slice 0 + consolidation 2026-08-14:** as above, plus retired destinations redirect (`agent2`/`agent3`/`agent5`/`medical_extract`); built-ins approved; unknown extract `needsApproval`; Home hides pending and does not treat flagged as diet-driving; instruction key aliases; dead dictionary store no longer written; Dictionary approve sets `catalogApproved`.  
+- **Slice 2–3 (2026-08-14 cont.):** `observationMeta` unit/printedRange/labFlag on extract, `handleLogMedical`, Front Desk; Medical History prefers log unit; food `outOfRange` and Health Coach/insight history drop pending + flagged.  
+- **Still open: Slice 4 Biomarkers golden inbox.** Insights may still open Lab Parser (`agent1`) for report extract (intentional).  
+- Binding literature laws in plan §1.1 and rulebook §2.1.  
+- Instruction packs stay; do not delete `agent2`/`data_review` prompts when folding names.
 
 ---
 

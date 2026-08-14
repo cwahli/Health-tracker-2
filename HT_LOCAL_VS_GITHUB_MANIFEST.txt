@@ -1,0 +1,163 @@
+Health-tracker local vs GitHub (origin/main)
+Compared at: 2026-08-14T00:46:11Z
+Local HEAD = origin/main = d75fd961ca960fac1ac6f1cdda8b6ee47b6067ad
+Branch: main...origin/main (no commit divergence; all delta is uncommitted)
+
+Modified tracked files (48):
+AI_HANDOVER.md
+docs/agent/DOMAIN_REGRESSION_MAP.md
+docs/agent/README.md
+docs/agent/domains/biomarkers.md
+package.json
+plan/README.md
+server.ts
+serverBrandMenu.ts
+serverGoldenRoutes.ts
+serverJobs.ts
+server_auth.ts
+server_gemini_retry.ts
+server_vision_scout.test.ts
+server_vision_scout.ts
+src/App.tsx
+src/components/BackgroundTasksStatus.tsx
+src/components/BiomarkerDictionaryModal.tsx
+src/components/BugSnapshotFab.tsx
+src/components/FullScreenInstructionViewer.tsx
+src/components/FullScreenLogViewer.tsx
+src/components/GoldenInboxPanel.tsx
+src/components/Header.tsx
+src/components/HomeTab.tsx
+src/components/InsightsTab.tsx
+src/components/LogChat.tsx
+src/components/MedicalHistoryTab.tsx
+src/components/TaskPlaceholderCard.tsx
+src/jobs/FoodAgentExecutor.ts
+src/jobs/JobQueueRunner.ts
+src/jobs/MedicalAgentExecutor.ts
+src/jobs/SupabaseJobSync.ts
+src/types.ts
+src/utils/agentConfig.ts
+src/utils/apiTracker.ts
+src/utils/biomarkerIdentity.test.ts
+src/utils/biomarkerSanitize.test.ts
+src/utils/biomarkerStore.ts
+src/utils/biomarkers.ts
+src/utils/dateUtils.ts
+src/utils/goldenFixture.ts
+src/utils/goldenScoreboard.test.ts
+src/utils/goldenScoreboard.ts
+src/utils/llm.ts
+src/utils/syncUtils.regression.test.ts
+src/utils/syncUtils.ts
+studio/00_README.md
+studio/ACTIVE_STATUS.md
+tests/golden_inbox.test.ts
+
+Untracked files (56):
+debug-inbox/Screenshot 2026-08-13 at 18.56.54.png
+plan/BIOMARKER_LIFECYCLE_PLAN.md
+scripts/assert-biomarker-lifecycle-m31.mjs
+scripts/golden-loop.mjs
+server_gemini_retry.test.ts
+src/jobs/__tests__/jobUploadState.test.ts
+src/jobs/jobUploadState.ts
+src/utils/biomarkerLifecycle.test.ts
+src/utils/biomarkerLifecycle.ts
+src/utils/goldenFixture.test.ts
+src/utils/goldenIngestClient.test.ts
+src/utils/goldenIngestClient.ts
+src/utils/goldenJourney.test.ts
+src/utils/goldenJourney.ts
+src/utils/goldenLoop.test.ts
+src/utils/goldenLoop.ts
+src/utils/goldenReplay.test.ts
+src/utils/goldenReplay.ts
+src/utils/goldenStudio.test.ts
+src/utils/goldenStudio.ts
+src/utils/jobFailure.test.ts
+src/utils/jobFailure.ts
+studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md
+tests/Golden_meal/inbox/INDEX.md
+tests/Golden_meal/inbox/bug--1786666026077_que4/case.json
+tests/Golden_meal/inbox/bug--1786666026077_que4/scout.json
+tests/Golden_meal/inbox/chocolate-croissants-vegetarian-wrap-1-more--1786666026077_que4/case.json
+tests/Golden_meal/inbox/chocolate-croissants-vegetarian-wrap-1-more--1786666026077_que4/scout.json
+tests/Golden_meal/inbox/job_1786644359025_vmfg9riak/case.json
+tests/Golden_meal/inbox/job_1786644359025_vmfg9riak/scout.json
+tests/Golden_meal/inbox/job_1786646310665_zszmh95lj/case.json
+tests/Golden_meal/inbox/job_1786646310665_zszmh95lj/scout.json
+tests/Golden_meal/inbox/job_1786652199365_x1im90hgm/case.json
+tests/Golden_meal/inbox/job_1786652199365_x1im90hgm/scout.json
+tests/Golden_meal/inbox/job_1786652981216_rdqp5y3k8/case.json
+tests/Golden_meal/inbox/job_1786652981216_rdqp5y3k8/scout.json
+tests/Golden_meal/inbox/job_1786666026077_que4vcxxi/case.json
+tests/Golden_meal/inbox/job_1786666026077_que4vcxxi/scout.json
+tests/Golden_meal/inbox/job_legacy_1786659330660/case.json
+tests/Golden_meal/inbox/job_legacy_1786659330660/scout.json
+tests/Golden_meal/inbox/mango-lassi-yogurt-drink-low-fat-yogurt-drink--1786652981216_rdqp/case.json
+tests/Golden_meal/inbox/mango-lassi-yogurt-drink-low-fat-yogurt-drink--1786652981216_rdqp/scout.json
+tests/Golden_meal/inbox/prawn-layered-pasta-salad-pink-iced-ring-doughnut-1-more--1786652199365_x1im/case.json
+tests/Golden_meal/inbox/prawn-layered-pasta-salad-pink-iced-ring-doughnut-1-more--1786652199365_x1im/scout.json
+tests/Golden_meal/inbox/prawn-layered-pasta-salad-pink-iced-ring-doughnut-1-more--legacy_17866593306/case.json
+tests/Golden_meal/inbox/prawn-layered-pasta-salad-pink-iced-ring-doughnut-1-more--legacy_17866593306/scout.json
+tests/Golden_meal/inbox/prawn-layered-pasta-salad-pink-iced-ring-doughnut-1-more--restore-good-analy/case.json
+tests/Golden_meal/inbox/prawn-layered-pasta-salad-pink-iced-ring-doughnut-1-more--restore-good-analy/scout.json
+tests/Golden_meal/inbox/prawn-layered-pasta-salad-pink-iced-ring-doughnut-1-more--restore-original-t/case.json
+tests/Golden_meal/inbox/prawn-layered-pasta-salad-pink-iced-ring-doughnut-1-more--restore-original-t/scout.json
+tests/Golden_meal/inbox/prawn-layered-pasta-salad-serrano-ham-gran-reserva-2-mor--1786646310665_zszm/case.json
+tests/Golden_meal/inbox/prawn-layered-pasta-salad-serrano-ham-gran-reserva-2-mor--1786646310665_zszm/scout.json
+tests/Golden_meal/inbox/restore-good-analyze-tape/case.json
+tests/Golden_meal/inbox/restore-good-analyze-tape/scout.json
+tests/Golden_meal/inbox/restore-original-tape/case.json
+tests/Golden_meal/inbox/restore-original-tape/scout.json
+
+Diffstat:
+ AI_HANDOVER.md                                 |   16 +-
+ docs/agent/DOMAIN_REGRESSION_MAP.md            |   11 +-
+ docs/agent/README.md                           |    3 +-
+ docs/agent/domains/biomarkers.md               |  298 +++---
+ package.json                                   |    3 +-
+ plan/README.md                                 |    1 +
+ server.ts                                      |  193 ++--
+ serverBrandMenu.ts                             |   24 +-
+ serverGoldenRoutes.ts                          | 1301 +++++++++++++++++++++++-
+ serverJobs.ts                                  |   31 +-
+ server_auth.ts                                 |    4 +-
+ server_gemini_retry.ts                         |   52 +-
+ server_vision_scout.test.ts                    |   43 +-
+ server_vision_scout.ts                         |   82 +-
+ src/App.tsx                                    |  301 +++---
+ src/components/BackgroundTasksStatus.tsx       |   15 +-
+ src/components/BiomarkerDictionaryModal.tsx    |  246 +----
+ src/components/BugSnapshotFab.tsx              |  585 ++++++-----
+ src/components/FullScreenInstructionViewer.tsx |    5 +-
+ src/components/FullScreenLogViewer.tsx         |   26 +-
+ src/components/GoldenInboxPanel.tsx            |  713 +++++++++++--
+ src/components/Header.tsx                      |   14 +-
+ src/components/HomeTab.tsx                     |   66 +-
+ src/components/InsightsTab.tsx                 |   71 +-
+ src/components/LogChat.tsx                     |  129 ++-
+ src/components/MedicalHistoryTab.tsx           |    5 +-
+ src/components/TaskPlaceholderCard.tsx         |   24 +-
+ src/jobs/FoodAgentExecutor.ts                  |    7 +-
+ src/jobs/JobQueueRunner.ts                     |    1 +
+ src/jobs/MedicalAgentExecutor.ts               |    5 +
+ src/jobs/SupabaseJobSync.ts                    |   20 +-
+ src/types.ts                                   |   16 +
+ src/utils/agentConfig.ts                       |   40 +-
+ src/utils/apiTracker.ts                        |    7 +-
+ src/utils/biomarkerIdentity.test.ts            |   34 +
+ src/utils/biomarkerSanitize.test.ts            |   15 +-
+ src/utils/biomarkerStore.ts                    |    6 +-
+ src/utils/biomarkers.ts                        |  101 +-
+ src/utils/dateUtils.ts                         |    9 +-
+ src/utils/goldenFixture.ts                     |   32 +
+ src/utils/goldenScoreboard.test.ts             |  216 ++++
+ src/utils/goldenScoreboard.ts                  |  519 +++++++++-
+ src/utils/llm.ts                               |    8 +-
+ src/utils/syncUtils.regression.test.ts         |   31 +
+ src/utils/syncUtils.ts                         |   22 +-
+ studio/00_README.md                            |    3 +-
+ studio/ACTIVE_STATUS.md                        |   12 +-
+ tests/golden_inbox.test.ts                     |   22 +-
+ 48 files changed, 4136 insertions(+), 1252 deletions(-)

@@ -8,9 +8,9 @@ export async function verifyFirebaseIdToken(req: any): Promise<{ uid: string; em
   const token = h.startsWith('Bearer ') ? h.slice(7) : '';
   if (!token) {
     if (isLocalhost) {
-      if (req.body && (req.body.uid || req.body.email || req.body.payload?.user_id)) {
+      if (req.body && (req.body.uid || req.body.userId || req.body.email || req.body.payload?.user_id)) {
         return { 
-          uid: req.body.uid || req.body.payload?.user_id || 'guest', 
+          uid: req.body.uid || req.body.userId || req.body.payload?.user_id || 'guest', 
           email: req.body.email || req.body.userEmail || '' 
         };
       }

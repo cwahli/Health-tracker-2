@@ -1,9 +1,9 @@
 import React from 'react';
 import { UserProfile, FoodLog, HealthAction, DailyBenefit, RecommendationReport, BiomarkerLog, ChatMessage, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
-import { CheckCircle2, Circle, AlertCircle, AlertTriangle, ShieldAlert, Wrench, ArrowRight, Heart, ChevronDown, ChevronUp, Calendar, MapPin, Search, Sparkles, Trash2, RefreshCw, Clock, Settings, X, TrendingUp, Activity, Copy, FlaskConical, Plus, BrainCircuit, Loader } from 'lucide-react';
+import { CheckCircle2, Circle, AlertCircle, AlertTriangle, ShieldAlert, Wrench, ArrowRight, Heart, ChevronDown, ChevronUp, Calendar, MapPin, Search, Sparkles, Trash2, Clock, Settings, X, TrendingUp, Activity, Copy, FlaskConical, Plus, BrainCircuit, Loader } from 'lucide-react';
 import { parseActionDetails, getDynamicTimeTag, sortActionsByDueDate } from '../utils/actionUtils';
-import { getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity, getBiomarkerMetadata, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill } from '../utils/biomarkers';
+import { getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity, getBiomarkerMetadata, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, isBiomarkerApproved } from '../utils/biomarkers';
 
 const getBiomarkerDef = (key: string) => biomarkerDefinitions.find(d => d.key === key);
 import { getAgentCalibration, formatOptimalTargetValue } from '../utils/agentCalibration';
@@ -370,6 +370,7 @@ export default function HomeTab({
       })
       .filter((b): b is NonNullable<typeof b> => {
         if (b === null) return false;
+        if (!isBiomarkerApproved(b.key, profile)) return false;
         
         if (profile?.notUsedBiomarkers) {
           if (profile.notUsedBiomarkers[b.key]) return false;
@@ -382,7 +383,7 @@ export default function HomeTab({
         const statusLabel = getBiomarkerStatusLabel(b.key, b.status, profile.customBiomarkers?.[b.key], b.value, profile).toUpperCase();
         if (statusLabel === 'OPTIMAL' || statusLabel === 'NORMAL' || statusLabel === 'HEALTHY' || statusLabel === 'TARGET' || statusLabel === 'EXCELLENT') return false;
 
-        return b.status === 'high' || b.status === 'low' || b.status === 'critical' || b.status === 'flagged';
+        return b.status === 'high' || b.status === 'low' || b.status === 'critical';
       });
 
     return list.sort((a, b) => {
@@ -397,8 +398,14 @@ export default function HomeTab({
   }, [resolvedBiomarkers, allDefinitions, hasBmiAlert]);
 
   const flaggedBiomarkers = React.useMemo(() => {
-    return problematicBiomarkers.filter(b => b.status === 'flagged');
-  }, [problematicBiomarkers]);
+    return detectFlaggedTelemetryErrors(resolvedBiomarkers, profile, activeHistory, allDefinitions)
+      .map((f) => {
+        const def = allDefinitions.find((d) => d.key === f.key);
+        if (!def || !isBiomarkerApproved(f.key, profile)) return null;
+        return { key: f.key, status: 'flagged' as const, def, value: f.value, unit: f.unit };
+      })
+      .filter((b): b is NonNullable<typeof b> => b !== null);
+  }, [resolvedBiomarkers, profile, activeHistory, allDefinitions]);
 
   const flaggedTelemetryErrors = React.useMemo(() => {
     return detectFlaggedTelemetryErrors(resolvedBiomarkers, profile, activeHistory, allDefinitions);
@@ -1104,7 +1111,7 @@ export default function HomeTab({
             <p className="text-xs text-amber-900/90 dark:text-amber-200/90 leading-relaxed">
               {flaggedTelemetryErrors.length > 0 ? (
                 <>
-                  Historical biomarker logs contain scaling shifts, unit notation errors, or improbable values (e.g. Hematocrit recorded as <code className="bg-amber-100 dark:bg-amber-950/60 px-1 py-0.5 rounded font-mono text-amber-900 dark:text-amber-300">48 vs 0.48 / 3</code>, or Lymphocyte count <code className="bg-amber-100 dark:bg-amber-950/60 px-1 py-0.5 rounded font-mono text-amber-900 dark:text-amber-300">11.8</code>). To avoid instructing a patient on skewed telemetry, please resolve these issues using the <strong>Biomarker Review Agent</strong> or <strong>Medical History</strong> before triggering health planning agents.
+                  Historical biomarker logs contain scaling shifts, unit notation errors, or improbable values (e.g. Hematocrit recorded as <code className="bg-amber-100 dark:bg-amber-950/60 px-1 py-0.5 rounded font-mono text-amber-900 dark:text-amber-300">48 vs 0.48 / 3</code>, or Lymphocyte count <code className="bg-amber-100 dark:bg-amber-950/60 px-1 py-0.5 rounded font-mono text-amber-900 dark:text-amber-300">11.8</code>). To avoid instructing a patient on skewed telemetry, please resolve these issues using the <strong>Biomarker Review Agent</strong> before triggering health planning agents.
                 </>
               ) : (
                 <>
@@ -1162,42 +1169,6 @@ export default function HomeTab({
                 <BrainCircuit className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
                 <span>Review with AI Agent</span>
               </button>
-
-              {flaggedTelemetryErrors.length > 0 && onNormalizeTelemetryErrors && (
-                <button
-                  type="button"
-                  onClick={() => onNormalizeTelemetryErrors(flaggedTelemetryErrors.map(e => e.key))}
-                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Auto-Fix Historical Scaling
-                </button>
-              )}
-
-              {flaggedBiomarkers.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const first = flaggedBiomarkers[0];
-                    setExpandedKey(first.key);
-                    const el = document.getElementById(`biomarker-card-${first.key}`) || document.getElementById('health-summary-section');
-                    if (el) el.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/60 dark:hover:bg-amber-900/90 text-amber-900 dark:text-amber-200 rounded-lg text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
-                >
-                  Inspect Card
-                </button>
-              )}
-
-              {onNavigateToTab && (
-                <button
-                  type="button"
-                  onClick={() => onNavigateToTab('medical')}
-                  className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                >
-                  Review in Medical History
-                </button>
-              )}
             </div>
           </div>
         );
@@ -2400,17 +2371,6 @@ export default function HomeTab({
               >
                 <BrainCircuit className="w-4 h-4 text-amber-300 animate-pulse" />
                 Review with AI Agent (Recommended)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTelemetryModal(false);
-                  onNavigateToTab('medical');
-                }}
-                className="w-full py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-              >
-                Edit Logs in Medical History
               </button>
 
               <button

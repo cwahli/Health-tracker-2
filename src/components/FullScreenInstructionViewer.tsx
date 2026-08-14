@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Copy, Check, Terminal, ShieldAlert, BookOpen, BrainCircuit, Edit2, RotateCcw, Save, Search, Code, Info, Sparkles, Plus, ChevronRight } from 'lucide-react';
 import { auth } from '../firebase';
+import { readAliasedInstruction } from '../utils/biomarkerLifecycle';
 
 interface FullScreenInstructionViewerProps {
   isOpen: boolean;
@@ -696,8 +697,8 @@ For each matched group, determine:
   // Initialize from localStorage or defaults on open/mount
   useEffect(() => {
     if (isOpen) {
-      const customSys = localStorage.getItem(`custom_system_instruction_${resolvedKey}`);
-      const customVar = localStorage.getItem(`custom_variable_data_${resolvedKey}`);
+      const customSys = readAliasedInstruction('custom_system_instruction_', resolvedKey);
+      const customVar = readAliasedInstruction('custom_variable_data_', resolvedKey);
       
       setVariableDataText(customVar !== null ? customVar : parts.defaultVariableData);
       setIsEditing(false);

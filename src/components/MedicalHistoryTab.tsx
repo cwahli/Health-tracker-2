@@ -761,7 +761,10 @@ export default function MedicalHistoryTab({
                       const isMissingCategory = !def.standardMedicalGrouping || def.standardMedicalGrouping.trim() === '' || def.standardMedicalGrouping === 'Other' || !def.riskCategories || def.riskCategories.length === 0 || def.riskCategories.includes('Uncategorized');
                       const isPendingApproval = !isBiomarkerApproved(def.key, profile, activeHistory);
                       
-                      let displayUnit = def.unit || '';
+                      const latestLogForUnit = [...(activeHistory || [])]
+                        .filter((h: any) => h.biomarkers && h.biomarkers[def.key] !== undefined)
+                        .sort((a: any, b: any) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)))[0];
+                      let displayUnit = latestLogForUnit?.observationMeta?.[def.key]?.rawUnit || def.unit || '';
                       if (profile.unitPreference === 'US' && typeof val === 'number') {
                         const reversed = reverseStandardizeUnit(def.key, val, displayUnit);
                         val = reversed.newValue;

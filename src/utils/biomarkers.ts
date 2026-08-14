@@ -68,6 +68,7 @@ export interface BiomarkerDefinition {
   standardMedicalGrouping?: string;
   potentialMedicalConditions?: string[];
   aliases?: string[];
+  rangeVariesBy?: ('age' | 'sex' | 'ethnicity')[];
 }
 
 export const biomarkerDefinitions: BiomarkerDefinition[] = [
@@ -854,24 +855,41 @@ export function normalizeHistoricalTelemetryErrors(
   return { updatedHistory, fixedCount };
 }
 
+/**
+ * Load-time pass: FLAG only. Does not rewrite numbers (law: no silent convert).
+ * `fixedCount` is how many keys look improbable — callers must not treat this as "already fixed".
+ */
 export function sanitizeBiomarkerHistoryOnLoad(
   history: any[],
   profile: any
-): { history: any[]; fixedCount: number; current: Record<string, any> } {
-  const { updatedHistory, fixedCount } = normalizeHistoricalTelemetryErrors(history, profile);
+): { history: any[]; fixedCount: number; current: Record<string, any>; flaggedKeys: string[] } {
+  const flagged = detectFlaggedTelemetryErrors(
+    {},
+    profile,
+    history || [],
+    undefined
+  );
+  const flaggedKeys = flagged.map((f) => f.key);
   const current: Record<string, any> = {};
-  if (updatedHistory && updatedHistory.length > 0) {
-    updatedHistory.forEach((log) => {
-      if (log?.biomarkers) {
-        Object.entries(log.biomarkers).forEach(([k, v]) => {
-          if (current[k] === undefined && v !== null && v !== undefined) {
-            current[k] = v;
-          }
-        });
+  const toYmd = (d: any) => {
+    const s = String(d || '').trim();
+    const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (iso) return `${iso[1]}${iso[2].padStart(2, '0')}${iso[3].padStart(2, '0')}`;
+    const dmy = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
+    if (dmy) return `${dmy[3]}${dmy[2].padStart(2, '0')}${dmy[1].padStart(2, '0')}`;
+    return s;
+  };
+  const sorted = [...(history || [])]
+    .filter((h) => h && h.sync_state !== 'delete')
+    .sort((a, b) => toYmd(a?.date).localeCompare(toYmd(b?.date)));
+  sorted.forEach((log) => {
+    Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
+      if (v !== null && v !== undefined && v !== '') {
+        current[k] = v;
       }
     });
-  }
-  return { history: updatedHistory, fixedCount, current };
+  });
+  return { history: history || [], fixedCount: flaggedKeys.length, current, flaggedKeys };
 }
 
 export const getBiomarkerStatus = (key: string, val: number | string, normalRangeStr?: string, customDef?: any, profile?: any): 'normal' | 'low' | 'high' | 'critical' | 'flagged' | 'unknown' => {
@@ -1094,11 +1112,10 @@ export const isAsianEthnicity = (eth?: string): boolean => {
   return lower.includes('asian') || lower.includes('china') || lower.includes('chinese') || lower.includes('india') || lower.includes('indian') || lower.includes('japan') || lower.includes('japanese') || lower.includes('korea') || lower.includes('korean');
 };
 export const isValEmpty = (val: any): boolean => {
-  if (val === undefined || val === null || val === '' || Number.isNaN(val)) return true;
+  if (val === undefined || val === null || val === '') return true;
+  if (typeof val === 'number' && Number.isNaN(val)) return true;
   if (typeof val === 'string' && val.trim() === '') return true;
-  if (val === 0 || val === '0') return true;
-  if (typeof val === 'number' && val === 0) return true;
-  if (typeof val === 'string' && parseFloat(val) === 0) return true;
+  // 0 is a real lab value (basophils, symptom remission, etc.)
   return false;
 };
 
@@ -1566,12 +1583,53 @@ export const BIOMARKER_GROUPING_OPTIONS = [
 
 
 
+export function isCatalogBuiltIn(key: string): boolean {
+  if (!key) return false;
+  const mapped = getMappedBiomarkerKey(key) || key.toLowerCase();
+  return biomarkerDefinitions.some((d: any) =>
+    d.key === mapped ||
+    d.key === key ||
+    (Array.isArray(d.aliases) && d.aliases.some((a: string) => a.toLowerCase() === mapped || a.toLowerCase() === key.toLowerCase()))
+  );
+}
+
+/**
+ * True only when this key is an explicit pending catalog proposal.
+ * Missing unit/range/category is a completeness issue, not "needs approval".
+ * Built-in / alias-mapped keys must never sit in the pending queue — extract and
+ * sync used to stamp needsApproval on every unmapped slug and on built-ins.
+ */
+export function isPendingCatalogApproval(key: string, profile: any): boolean {
+  if (!key) return false;
+  if (isCatalogBuiltIn(key)) return false;
+  const mapped = getMappedBiomarkerKey(key) || key.toLowerCase();
+  if (mapped && mapped !== key && isCatalogBuiltIn(mapped)) return false;
+  const custom = profile?.customBiomarkers?.[key] || profile?.customBiomarkers?.[mapped];
+  if (!custom) return false;
+  if (custom.catalogApproved === true) return false;
+  return custom.needsApproval === true;
+}
+
+/** Extract/chat may stamp a pending def only for a brand-new unknown key. */
+export function shouldStampExtractedDefPending(key: string, existingDef?: any): boolean {
+  if (!key) return false;
+  if (isCatalogBuiltIn(key)) return false;
+  const mapped = getMappedBiomarkerKey(key) || key.toLowerCase();
+  if (mapped && isCatalogBuiltIn(mapped)) return false;
+  if (existingDef?.catalogApproved === true) return false;
+  if (existingDef && existingDef.needsApproval !== true) return false;
+  return !existingDef || existingDef.needsApproval === true;
+}
+
 export function isBiomarkerApproved(key: string, profile: any, itemLogs?: any[]): boolean {
-  const k = key.toLowerCase();
-  if (profile?.customBiomarkers?.[k]?.needsApproval) return false;
+  const k = getMappedBiomarkerKey(key) || key.toLowerCase();
+  const custom = profile?.customBiomarkers?.[k] || profile?.customBiomarkers?.[key];
+  // Built-in catalog keys stay live even if a stale extract/sync left needsApproval on the custom overlay.
+  if (isCatalogBuiltIn(k) && custom?.catalogApproved !== false) return true;
+  if (custom?.needsApproval === true) return false;
+  if (custom?.catalogApproved === true) return true;
 
   const builtIn = biomarkerDefinitions.find((d: any) => d.key === k || (Array.isArray(d.aliases) && d.aliases.some((a: string) => a.toLowerCase() === k)));
-  const custom = profile?.customBiomarkers?.[k];
   const combined = getMergedBiomarkerDef(k, builtIn, custom, itemLogs);
 
   const hasUnit = !!combined.unit && combined.unit.trim() !== '';
@@ -1616,7 +1674,7 @@ export function isBiomarkerNeedingReview(
 }
 
 export function approvePendingBiomarker(biomarkerKey: string, targetCategory?: string) {
-  // If we're using localStorage store
+  // Dead store — callers must set profile.customBiomarkers[key].catalogApproved.
   try {
     const raw = localStorage.getItem('biomarker_dictionary_store');
     if (raw) {
@@ -1628,8 +1686,7 @@ export function approvePendingBiomarker(biomarkerKey: string, targetCategory?: s
         if (targetCategory) {
           store[biomarkerKey].category = targetCategory;
         }
-        localStorage.setItem('biomarker_dictionary_store', JSON.stringify(store));
-        window.dispatchEvent(new Event('biomarkerStoreUpdated'));
+        // Intentionally do not persist the dead store.
       }
     }
   } catch (e) {

@@ -1,165 +1,205 @@
 # Domain rulebook: Biomarkers
 
-**Load when:** dictionary, medical extract/review, agents 1–5 / data_review, calibration, combine/dedupe, biomarker logs, MedicalHistory, ranges.
+**Load when:** dictionary, extract/review, calibration, combine/dedupe, biomarker logs, MedicalHistory, ranges, Home/coach intake.
 
-**WIP status:** `AI_HANDOVER.md` · **Gates:** `DOMAIN_REGRESSION_MAP.md` → Biomarkers.
+**Architecture (design):** `plan/BIOMARKER_LIFECYCLE_PLAN.md`  
+**WIP:** `AI_HANDOVER.md` · **Gates:** `DOMAIN_REGRESSION_MAP.md` → Biomarkers.
 
-**How to use this book:** Alignment guide so dictionary / agents / logs / sync do not drift.  
-**Evolution allowed:** new agents, combine UX, key migrations — with IMPACT, tests, and protected-doc update if invariants change (`AGENTS.md` §3 before→after). Do not “simplify” by deleting tombstone or identity paths without scope.
+**How to use:** Laws so dictionary / agents / logs / sync do not drift.  
+**Evolution:** new agents, key migrations, store splits — IMPACT + tests + this file if invariants change (`AGENTS.md` §3 before→after).
+
+**2026-08-14 consolidation (product change):** target is catalog / pending / overlay / observations. **Code still implements the blended model** in §8. Follow **laws** on every change; move toward the target; do not invent a third pipeline.
+
+### Before → after (this edit)
+
+| Before | After |
+|---|---|
+| Mental model: extract agents → customs + logs → agent5/data_review | Four records: catalog, pending, overlay, observations |
+| Agents documented as agent1–5 personas | Named roles (Review, Lab Parser, …); ids still used in code |
+| Approval inferred from unit+range+grouping+risks+conditions | Target: catalog `approved`. Code still infers — do not add more inferrers |
+| `customBiomarkers` treated as the dictionary | Target: catalog defaults + user overlay. `customBiomarkers` remains the **synced bag** until Slice 1–3 |
+| Sanitize-on-set implied OK | **Law:** flag, do not silent-rewrite numbers |
+| (2026-08-14 add) | Binding literature laws §2.1: three ranges, convert table, upsert id, no average, age band, labFlag/printedRange, no race coefficient |
 
 ---
 
-## 1. Mental model (layers)
+## 1. Target mental model
 
 ```text
-Sources (labs / photos / manual)
-  → extract / review agents
-  → dictionary identity (canonical key + aliases)
-  → log entries (BiomarkerLog) + profile customs
-  → calibration / ranges (demographics, agent5 / data_review)
-  → UI (Home, MedicalHistory, dictionary modal, combine)
-  → sync/tombstones (see sync.md)
+Sources (labs / photos / text)
+  → Lab Parser (raw observations only)
+  → identity (catalog key + aliases)     miss → Pending (this user)
+  → clean (relabel XOR convert; dates; flags)
+  → Dictionary approve (human) if new key
+  → overlay (Range Calibrator) if rangeVariesBy + overlay stale
+  → live observations
+  → Home / Health Coach / food badges     approved + unflagged only
+  → sync / tombstones (domains/sync.md)
 ```
 
-Changing **one** layer without checking the next is the usual cascade.
+Changing **one** layer without the next is the usual cascade.
+
+**Used** (Home, categories, coach, food badges) only if: catalog approved **and** latest observation unflagged **and** legal value+unit pair.
 
 ---
 
-## 2. Agent roles (do not collapse or rewire casually)
+## 2. Four records (do not merge)
 
-From `src/utils/agentConfig.ts` (names can drift; **ids** matter):
+| Record | Owns | Must not |
+|---|---|---|
+| **Catalog** (admin dictionary) | key, aliases, default unit/range/description/category, `rangeVariesBy` | Invented by extract; user-specific ranges |
+| **Pending** | Unknown printed name + raw value/unit/date/source | Appear on Home/coach; become a catalog key without approve |
+| **Overlay** | This profile’s range / optimal / brackets + profile fingerprint | Change catalog defaults; rewrite log numbers |
+| **Observation** | Dated value + unit + source on an approved key | Exist as a bare number with unit only on the dictionary (target; today they do — see §8) |
 
-| Id | Role (intent) | Typical output |
-|----|----------------|----------------|
-| `medical_extract` | Parse reports → structured readings | raw structured values |
-| `data_review` | Batch calibration / accuracy on a batch | reviewed batch + ranges context |
-| `agent1` | Standardize terms → **master dictionary** | normalized keys / naming |
-| `agent2` | Clinical context (groupings, risks, conditions) | ontology-ish fields |
-| `agent3` | Harmonize synonyms / buckets | consolidation, fewer duplicates |
-| `agent4` | Planning (retest, gaps, confounders) | plan fields |
-| `agent5` | Personalized ranges / holistic review | range calibration signals |
-| `biomarker_review` | Single-biomarker review | apply path must not auto-send wrongly |
-| `medical` / `front_desk` | Broader medical / routing | must not invent dictionary keys freely |
+**Relabel vs convert:** unit-label change never rewrites numbers. Number change is Review + named factor + keep raw. Never both unless the user chose convert.
 
-**Laws:**
+**Calibrator** is overlay for a key **already in the catalog** when the population default is wrong for this age/sex/ethnicity. Not “new key.” Auto-run when overlay missing/stale **and** `rangeVariesBy` says it can move. User does not guess. Overlay fingerprint = **age band** + sex + ethnicity. See plan §5.
 
-1. **Pipeline order matters.** Do not have agent N overwrite agent N−1 identity fields without an explicit merge policy.  
-2. **Dictionary is source of truth for keys.** Agents propose; dictionary + approval gates own permanence.  
-3. **One canonical key per analyte.** Aliases map → key; do not create parallel keys for the same lab concept without combine flow.  
-4. **Hallucinated values:** agents must not invent numeric lab results the user did not provide; ranges/context ≠ fabricated readings.  
-5. Changing one agent’s schema ⇒ audit **apply/onAgentFinish** paths and any batch approval flags on profile.
-6. **Food agent biomarker intake:** Out-of-range biomarkers passed into food analyze must be filtered through `filterLogsByTombstone` and `getMappedBiomarkerKey` (no tombstoned or unapproved keys).
-7. **Read-only meal badging:** Food agents compute transient `dangerBadges` and `biomarkerStatus` on the meal envelope; they are strictly forbidden from mutating `profile.customBiomarkers` or creating phantom dictionary keys.
+### 2.1 Binding literature laws
+
+1. **Three ranges, never smashed** — printed (on the observation) · catalog default · overlay. No writer copies one onto another.  
+2. **Convert only via per-analyte table.** Incomparable or unknown pair → flag, do not guess.  
+3. **Observation identity** `(canonicalKey, date, sourceReportId)` — re-extract is upsert.  
+4. **Same calendar day ≠ average.** Merge on ingest only for the same source extract.  
+5. **Overlay fingerprint uses age band**, not exact age.  
+6. **Keep `printedRange` and `labFlag`** when the report has them.  
+7. **No race coefficient in the catalog.** Calibrator may cite a named society.
 
 ---
 
-## 3. Dictionary & identity
+## 3. Agent roles (names vs ids)
 
-| Store | Role |
-|-------|------|
-| `biomarkerDefinitions` (`src/utils/biomarkers.ts`) | Built-in catalog |
-| `biomarker_dictionary_store` (localStorage via `biomarkerStore.ts`) | User/runtime dictionary, pending approval |
-| Profile `customBiomarkers` | User customs (sync-sensitive) |
-| Tombstones | `deletedCustomBiomarkerKeys`, `deletedNotUsedBiomarkerKeys`, `notUsedBiomarkers` |
+**Ids matter in code and storage.** Display names below are what we say.
 
-**Invariants:**
+| Say | Id / menu | Allowed writes (target) |
+|---|---|---|
+| **Lab Parser** | `medical`, `medical_extract`, `agent1` extract | Raw / pending observations. **No catalog keys** |
+| **Review** | `biomarker_review` | **Only** agent that rewrites stored numbers (`modificationCommand`). n=1–5 may also propose alias, category, relabel **or** convert, compact `proposal.range` |
+| **Name Deduper** | Name Consolidation (`agent3` retired as destination) | Propose alias groups; human/combine apply |
+| **Categoriser** | Medical Categorisation (`agent2` retired as destination) | Catalog grouping/risks/conditions |
+| **Unit Relabel** | Standardize Units | Unit **label** only |
+| **Field Compare** | Data Accuracy (`data_accuracy`) | Diff table; no durable write until apply |
+| **Range Calibrator** | `data_review` | Overlay only. **No** observation values |
+| **Health Coach** | `health_baseline` | `report` targets from approved+unflagged |
+| **Test Planner** | `agent4` | Summaries / gaps / actions |
+| **Literature** | `agent7` | Summary |
+| **Front Desk** | `front_desk` | Route / profile. **No lab rows** |
+| **Dictionary** | Dictionary UI | Approve, alias-map, reject, combine → tombstones |
 
-- **Stable keys:** renaming a key is a **migration**, not a string swap — update logs, customs, tombstones, calibrations, UI maps together.  
-- **Pending approval:** `isPendingApproval` / approve helpers must not be bypassed by silent auto-write from agents.  
-- **Combine / dedupe:** use existing combine flows (`CombineBiomarkersModal` etc.); do not half-merge by overwriting one key and leaving orphan logs.  
-- **Not-used flags:** respect not-used + deleted-not-used maps; do not resurrect without user action.
+**Retired as picks (keep instruction packs, alias them):** `agent3`, `agent5` as “ranges”, `medical_extract` as a second parser, menu “Standardize Biomarkers”.
+
+**Instruction packs are product.** Do not delete `server.ts` / viewer / `custom_system_instruction_*` when folding a name. Do not concatenate all packs into Review.
+
+**Dispatcher:** n=1–5 → one Review/Add session (composed slices). n≥20 → one specialist pack per run. Full Calibrator novel stays on `data_review`.
+
+### Laws
+
+1. **Order:** parse → identity → clean → approve → overlay → use. Do not have agent N overwrite N−1 identity without an explicit merge.  
+2. **Dictionary owns keys.** Agents propose; human approval owns permanence.  
+3. **One canonical key per analyte.** Aliases fan in. Combine flow for merges — no half-merge.  
+4. **No invented lab numbers.** Ranges/context ≠ fabricated readings.  
+5. Change an agent schema ⇒ audit **apply / `onAgentFinish` / `handleLogMedical`**.  
+6. **Food intake:** `filterLogsByTombstone` + `getMappedBiomarkerKey`; no tombstoned or unapproved keys.  
+7. **Food is read-only** on dictionary/logs. Transient badges only.  
+8. **Review apply** consumes `modificationCommand` (same date normalize as `handleLogMedical`). Empty `corrections` is not a no-op when commands exist.  
+9. **Do not silent-rewrite** history in `setBiomarkerHistory` (no sanitize convert, no alias merge, no same-day collapse on set). Flag only. Ingest may merge same calendar day **once**.  
+10. **`0` is a value.** `isValEmpty` must not treat zero as missing.  
+11. **Literature laws §2.1** (three ranges, convert table, upsert, no average, age band, labFlag/printedRange, no race coefficient).
 
 ---
 
-## 4. Calibration
+## 4. Dictionary & identity (current stores)
+
+| Store | Role today | Target |
+|---|---|---|
+| `biomarkerDefinitions` | Hardcoded built-ins | Seed catalog |
+| `biomarker_dictionary_store` | Dead dual path (`approvePendingBiomarker`) | Remove writes; migrate then drop |
+| `profile.customBiomarkers` | Synced bag: defs + overlay + pending + agent scratch | Split overlay vs catalog |
+| Tombstones | `deletedCustomBiomarkerKeys`, `deletedNotUsedBiomarkerKeys`, `notUsedBiomarkers` | Unchanged protocol (`sync.md`) |
+
+**Invariants (keep during migration):**
+
+- Renaming a key is a **migration** (logs, customs, tombstones, calibrations, UI).  
+- Pending/approve helpers must not be bypassed by silent agent auto-write.  
+- Combine via existing combine flows.  
+- Not-used / deleted-not-used: no resurrect without user action.  
+- Prefer `getMappedBiomarkerKey` before any new custom key.
+
+---
+
+## 5. Calibration
 
 | Piece | Notes |
-|-------|--------|
-| `agentCalibration.ts` | Reads `batch_analysis_results` / reviewed biomarkers |
-| `data_review` / agent5 messaging | Demographic-aware ranges |
-| Range evaluation | `evaluateStructuredRange` + custom ranges/filters |
+|---|---|
+| Catalog `defaultRange` + `rangeVariesBy` | Population default; when overlay may differ |
+| Overlay on profile | `data_review` / Review `proposal` |
+| `agentCalibration.ts` | Reads `batch_analysis_results` (until overlay is first-class) |
+| `evaluateStructuredRange` | Single parse path for range strings |
 
-**Laws:**
-
-- Calibration **contextualizes ranges**; it does not replace raw logged values.  
-- Profile filters (age/gender/ethnicity) on custom ranges must keep working if range builder changes.  
-- Do not store free-text ranges in three formats without a single parse path — prefer existing helpers.
+**Laws:** Calibration **contextualizes ranges**; it does not replace raw logged values.  
+Profile filters (age/gender/ethnicity) on custom ranges must keep working.  
+Do not store free-text ranges in three formats without one parse path.
 
 ---
 
-## 5. Logs vs dictionary vs profile
+## 6. Logs vs dictionary vs profile
 
 | Data | Identity |
-|------|----------|
-| `BiomarkerLog` | `id` + `date` + `biomarkers` map of keys → values |
-| Delete log | `sync_state: 'delete'` **and/or** profile `deletedBiomarkerLogIds[id] = timestamp` |
-| Display filter | Exclude deleted; respect tombstone **timestamps vs `updated_at`** |
+|---|---|
+| `BiomarkerLog` | `id` + `date` + `biomarkers` map (today unitless numbers) |
+| Delete log | `sync_state: 'delete'` **and/or** `deletedBiomarkerLogIds[id] = ts` |
+| Display | Exclude deleted; tombstone **ts vs `updated_at`** |
 
-Cross-link: any UI edit path that “removes” a biomarker must use the **same** delete/tombstone rules as sync (`domains/sync.md`). Otherwise multi-device reappearance is guaranteed.
+Any UI “remove” must use the **same** delete/tombstone rules as `domains/sync.md`.
 
 ---
 
-## 6. Cross-surface checklist (before COMPLETE)
-
-When changing biomarker behavior, tick applicable rows:
+## 7. Cross-surface checklist (before COMPLETE)
 
 - [ ] Dictionary key identity preserved or migrated  
-- [ ] Agent apply path updates correct store (log vs dictionary vs profile)  
-- [ ] No duplicate keys introduced for same analyte  
-- [ ] Tombstones still filter history (`MedicalAgentExecutor`, App filters)  
-- [ ] Calibration still keyed by same biomarker key  
+- [ ] Apply path updates the correct record (observation vs catalog vs overlay vs pending)  
+- [ ] No duplicate keys for the same analyte  
+- [ ] Tombstones still filter (`MedicalAgentExecutor`, App)  
+- [ ] Calibration still keyed by the same key  
 - [ ] Combine / not-used / pending approval not bypassed  
-- [ ] Sanitize path still runs where expected  
-- [ ] `assert-biomarker-flow.mjs` still exit 0 if review/apply touched  
+- [ ] No new silent rewrite on `setBiomarkerHistory`  
+- [ ] Convert uses the per-analyte table (or flags); no generic scale hack  
+- [ ] Same-day merge only same `sourceReportId`; no averaging  
+- [ ] Printed range / lab flag not written onto catalog or overlay  
+- [ ] Instruction pack aliased if an agent name was folded  
+- [ ] `assert-biomarker-flow.mjs` exit 0 if review/apply touched  
+- [ ] Food still read-only on customs  
 
 ---
 
-## 7. Anti-patterns
+## 8. Agent → store write map (code as of 2026-08, until slices land)
 
-- “Clean the dictionary” by rewriting keys without log migration  
-- Agent invents new keys every run (alias explosion)  
-- Fixing agent3 harmonization by wiping agent1 standardized keys  
-- UI delete that only hides locally (no tombstone)  
-- Treating `biomarker_review` like auto-send food jobs  
-- Claiming COMPLETE after one agent path when dictionary + logs + sync all touch the change  
+**Apply hub:** `App.tsx` `onAgentFinish` + `handleLogMedical`.  
+**Executor is read-only for stores.**
 
----
+| Id | Durable writes today | Notes |
+|---|---|---|
+| `medical_extract` / `agent1` | History + current + `customBiomarkers`; batch may tombstone | Slug **without** always `getMappedBiomarkerKey` |
+| `data_review` | Overlay fields only (2026-08-14) | No longer writes `userValue` / `correctedHistoricalLogs` |
+| `agent2` | Grouping/risk/conditions on customs | No history values |
+| `agent3` | Summary text | Real combine = dictionary modal |
+| `agent4` | Planning summaries / gaps / actions | No lab keys |
+| `agent5` | `agentContextualizerSummary` only | Does **not** write ranges |
+| `biomarker_review` | `modificationCommand` + optional `corrections` + `proposal` overlay | Date match via `toYYYYMMDD` |
+| `medical` | Apply → `handleLogMedical` | Customs often `needsApproval` |
+| `front_desk` | `onAddBiomarkerLogs` push | No same-day merge / alias |
+| Dictionary UI | customs, approve, combine → tombstones | True consolidate path |
 
-## 8. Agent → store write map (audit 2026-08-09)
+**Shared:** delete/combine/sanitize tombstones; `mergeProfiles` / `mergeBiomarkerHistory`.
 
-**Primary apply hub:** `App.tsx` `onAgentFinish` + `handleLogMedical`.  
-**Executor is read-only for stores:** `MedicalAgentExecutor` filters tombstones then POSTs analyze only.
+### Identity rules (class X if you diverge)
 
-| Agent id | Durable writes | localStorage / side | Notes |
-|----------|----------------|---------------------|--------|
-| `medical_extract` / `agent1` | History + current biomarkers + `customBiomarkers`; batch may tombstone customs | `agent1_batch_results`, `approved_agent1_batches` | Flat vs batch paths differ; key slug **without** always calling `getMappedBiomarkerKey` |
-| `data_review` | `customBiomarkers` ranges/defs + history corrections + normalize telemetry | `batch_analysis_results`, `approved_data_review_batches` | Uses LLM keys as-is — **parallel-key risk** vs agent1 |
-| `agent2` | `customBiomarkers` bucket/risk/grouping fields only | approved analysis ids | No history values |
-| `agent3` | Summary text only on finish | — | Real combine is dictionary modal → `handleCombineBiomarkers` |
-| `agent4` | Planning summaries / gap tasks / may replace actions | — | No lab keys |
-| `agent5` | Contextualizer summary | — | No dictionary writes despite “ranges” copy |
-| `biomarker_review` | History + current via B5 / `handleLogMedical` | — | Dual apply paths; empty corrections no-op |
-| `medical` | Via user Apply → `handleLogMedical` | pending chat until apply | Customs often `needsApproval: true` |
-| `front_desk` | Profile + `onAddBiomarkerLogs` new rows | — | **No** same-day merge / alias map → easy dups |
-| Dictionary UI agents | customs, approve, combine → tombstones | `dict_*` UI keys | True consolidate path |
-
-**Shared writers:** delete/combine/sanitize (`deletedCustomBiomarkerKeys`, `deletedBiomarkerLogIds`), `mergeProfiles` / `mergeBiomarkerHistory` on sync.
-
-### Runtime dictionary truth
-
-| Store | Reality |
-|-------|---------|
-| `profile.customBiomarkers` | **Synced source of truth** agents/UI mutate |
-| `biomarker_dictionary_store` (localStorage) | Mostly **dead dual path** — `approvePendingBiomarker` only; do not assume agents write it |
-| `biomarkerDefinitions` | Built-in catalog |
-
-### Identity rules (default — change with migration + tests)
-
-1. Prefer **`getMappedBiomarkerKey`** before creating a new custom key (alias fan-in).  
-2. Avoid parallel keys for the same analyte (e.g. unit-suffixed lab names).  
-3. Delete dictionary key ⇒ **tombstone** + history migration; not UI hide alone.  
-4. Agent apply must not invent numeric lab values without source evidence.  
-5. Changing key slug logic across agent1 / handleLogMedical / front_desk is **class X** — align helpers or document divergence in `AI_HANDOVER`.
+1. `getMappedBiomarkerKey` before a new custom key.  
+2. No parallel keys (`hdl` + `hdl_c_mgdl`) without combine.  
+3. Delete key ⇒ tombstone + history migration.  
+4. No invented numeric labs.  
+5. Align slug logic across agent1 / `handleLogMedical` / front_desk or document in `AI_HANDOVER`.
 
 ### Tests
 
@@ -168,11 +208,31 @@ npx vitest run src/utils/biomarkerIdentity.test.ts src/utils/biomarkerSanitize.t
 node scripts/assert-biomarker-flow.mjs
 ```
 
-### Remaining backlog (not done)
+### Backlog (see plan slices)
 
-1. Extract pure `slugifyBiomarkerKey` / agent1 apply merge from `App.tsx` + goldens.  
-2. Wire agent1 + data_review apply through `getMappedBiomarkerKey`.  
-3. Front desk same-day merge + alias map.  
-4. Remove or wire dead `biomarker_dictionary_store`.  
-5. Hallucination guards on apply.
-6. Fix `biomarker_review` missing historical context payload in `serverJobs.ts` and `LogChat.tsx`
+1. Slice 0: no mutate on set; Review `modificationCommand`; relabel vs convert.  
+2. Slice 1: catalog gate; all ingest through `getMappedBiomarkerKey`; retire destinations.  
+3. Slice 2: per-log unit / conversion event; `0` is a value.  
+4. Slice 3: Calibrator overlay-only + auto-run; Home/coach gate.  
+5. Slice 4: Biomarkers golden inbox.  
+6. Remove or migrate `biomarker_dictionary_store`.  
+7. Hallucination guards on apply.
+
+---
+
+## 9. Anti-patterns
+
+- Agent invents catalog keys on extract  
+- Infer “approved” from complete-looking fields (target) / add more inferrers  
+- Concatenate every specialist prompt into Review  
+- Unit Relabel that converts numbers; sanitize that converts on load  
+- `agent5` treated as the range writer  
+- Front desk logging labs  
+- UI delete without tombstone  
+- Food mutating `customBiomarkers`  
+- COMPLETE after one apply path when logs + dictionary + sync all moved  
+- Deleting instruction packs when folding a **name**  
+- Averaging two same-day labs  
+- Generic `/10` `/100` `/38.67` convert  
+- Copying printed lab range onto catalog or overlay  
+- Race/ethnicity coefficient in catalog defaults

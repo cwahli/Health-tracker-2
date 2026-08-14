@@ -7,16 +7,26 @@
 
 | Pack | Role |
 |------|------|
-| **[M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md](./M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md)** | **Food catalog curator + 1-pass atomics — multipass autonomous (PRE-APPROVAL in §A)** |
+| **[M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md](./M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md)** | **Biomarker remaining work (§13) — multipass autonomous (PRE-APPROVAL in §A)** |
+| [M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md](./M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md) | Food catalog curator — separate track; do not mix into M31 |
 | [M23_FULL_FREE_TIER_RELIABILITY.md](./M23_FULL_FREE_TIER_RELIABILITY.md) | Free-tier continuous M23→M28 (separate track) |
 | [M23_FIRESTORE_WRITE_KILL_SWITCH.md](./M23_FIRESTORE_WRITE_KILL_SWITCH.md) | Nested detail for phase M23 only |
 | [M22_MEAL_BUILD_TRUE_COMPLETE.md](./M22_MEAL_BUILD_TRUE_COMPLETE.md) | Prior product pack |
 
 **Plans**
 
+- **Biomarker remaining:** [`plan/BIOMARKER_LIFECYCLE_PLAN.md`](../plan/BIOMARKER_LIFECYCLE_PLAN.md) §13
 - Food curator: [`plan/FOOD_RESOLVER_CURATOR_AND_1PASS_CATALOG_PLAN.md`](../plan/FOOD_RESOLVER_CURATOR_AND_1PASS_CATALOG_PLAN.md)
 - Agents early-stop analysis: [`plan/AISTUDIO_M30_AGENTS_COMPAT.md`](../plan/AISTUDIO_M30_AGENTS_COMPAT.md)
 - Free tier: [`plan/RELIABILITY_FREE_TIER_PLAN.md`](../plan/RELIABILITY_FREE_TIER_PLAN.md)
+
+## M31 — how to run AI Studio (biomarker remaining)
+
+1. Tree must include `plan/BIOMARKER_LIFECYCLE_PLAN.md` §13 and this pack.
+2. Paste **only section A** from `M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md` as the chat prompt.
+3. Do **not** ask him to “investigate and propose first” — that re-enables AGENTS L11 early stop.
+4. Master gate: `node scripts/assert-biomarker-lifecycle-m31.mjs` plus the vitest list in pack §F.
+5. Food M30 is a **different** track. Do not mix.
 
 ## M30 — how to run AI Studio (food curator)
 

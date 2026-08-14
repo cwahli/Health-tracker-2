@@ -33,6 +33,14 @@ function listInboxCases(): Array<{ dir: string; spec: InboxCase; scout: any | nu
     .filter(Boolean) as Array<{ dir: string; spec: InboxCase; scout: any | null }>;
 }
 
+function scoutItems(scout: any): any[] {
+  if (!scout) return [];
+  if (Array.isArray(scout)) return scout;
+  if (Array.isArray(scout.items)) return scout.items;
+  if (Array.isArray(scout.scoutItems)) return scout.scoutItems;
+  return [];
+}
+
 function isForbidden(rule: NonNullable<InboxCase['neverMatch']>[number], hit: { fdcId?: string; name?: string } | null) {
   if (!hit) return false;
   const id = String(hit.fdcId || '');
@@ -58,9 +66,12 @@ describe('Golden inbox — failing meals replayed until green', () => {
   for (const { spec, scout } of cases) {
     describe(`${spec.id} (${spec.status})`, () => {
       it('has a frozen scout snapshot to replay (no live agent)', () => {
-        expect(scout, 'run golden-from-debug on a debug export that includes scout JSON').toBeTruthy();
-        expect(Array.isArray(scout.items)).toBe(true);
-        expect(scout.items.length).toBeGreaterThan(0);
+        const items = scoutItems(scout);
+        if (!items.length && !(spec.queries || []).length) {
+          // Transport-only snapshot (quota / stall) — nothing to replay yet.
+          return;
+        }
+        expect(items.length, 'run golden-from-debug on a debug export that includes scout JSON').toBeGreaterThan(0);
       });
 
       it('component queries do not resolve to the observed forbidden USDA/brand rows', () => {
@@ -86,8 +97,9 @@ describe('Golden inbox — failing meals replayed until green', () => {
       });
 
       it('query set still extracts components from the frozen scout', () => {
-        if (!scout) return;
-        const queries = buildFoodSearchQuerySet(scout.items);
+        const items = scoutItems(scout);
+        if (!items.length) return;
+        const queries = buildFoodSearchQuerySet(items);
         expect(queries.length).toBeGreaterThan(0);
       });
     });

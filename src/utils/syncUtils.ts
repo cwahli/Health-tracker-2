@@ -5,6 +5,7 @@ import { FoodLog, BiomarkerLog, HealthAction, DailyBenefit, FoodIdea, Recommenda
 import { toYYYYMMDD } from './dateUtils';
 import { sanitizeForFirestore } from './firestoreUtils';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { isCatalogBuiltIn } from './biomarkers';
 
 export const toYYYYMM = (dateStr: string): string => {
   if (!dateStr) return 'unknown';
@@ -849,21 +850,14 @@ export function mergeProfiles(cloudProfile: UserProfile | null, localProfile: Us
     if (combinedRisks.length > 0) mergedDef.riskCategories = combinedRisks;
     if (combinedConditions.length > 0) mergedDef.potentialMedicalConditions = combinedConditions;
 
-    const isFullyTagged = (d: any): boolean =>
-      !!(d
-        && d.unit && String(d.unit).trim() && d.unit !== 'Unknown'
-        && d.normalRange && String(d.normalRange).trim() && d.normalRange !== 'Unknown'
-        && d.standardMedicalGrouping
-        && (Array.isArray(d.riskCategories) ? d.riskCategories.length > 0 : !!d.riskCategories)
-        && (Array.isArray(d.potentialMedicalConditions) ? d.potentialMedicalConditions.length > 0 : !!d.potentialMedicalConditions));
-
-    if (isFullyTagged(mergedDef)) {
-      // Fully tagged defs leave Pending Review. Only keep needsApproval if BOTH sides insist.
-      if (!(newerDef.needsApproval === true && olderDef.needsApproval === true && !isFullyTagged(newerDef) && !isFullyTagged(olderDef))) {
-        delete mergedDef.needsApproval;
-      }
-    } else if (newerDef.needsApproval === true || olderDef.needsApproval === true) {
+    if (isCatalogBuiltIn(k) || mergedDef.catalogApproved === true || newerDef.catalogApproved === true) {
+      delete mergedDef.needsApproval;
+      if (mergedDef.catalogApproved !== false) mergedDef.catalogApproved = true;
+    } else if (newerDef.needsApproval === true) {
+      // Newer side wins. Do not resurrect a stale cloud needsApproval after local approval.
       mergedDef.needsApproval = true;
+    } else {
+      delete mergedDef.needsApproval;
     }
 
     Object.keys(mergedDef).forEach(key => {

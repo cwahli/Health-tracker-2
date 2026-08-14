@@ -15,6 +15,7 @@ import { JobStore } from './jobs/JobStore';
 import { JobQueueRunner } from './jobs/JobQueueRunner';
 import { initSupabaseJobSync, hydrateUserJobs } from './jobs/SupabaseJobSync';
 import { ImageStore } from './jobs/ImageStore';
+import { startGoldenIngestWatcher } from './utils/goldenIngestClient';
 
 
 import { getProgressPercent, getStepCeiling } from './jobs/progress';
@@ -34,7 +35,8 @@ import { trackApiCall, setActiveQueryId, generateQueryId, initializeFetchInterce
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, getDocFromServer, getDocsFromServer, getDocsFromCache, writeBatch } from 'firebase/firestore';
 import { sanitizeForFirestore, checkQuotaFlag, handleRetryQuota } from './utils/firestoreUtils';
 import { getCurrentDateInTimezone, toYYYYMMDD, normalizeBiomarkerHistory } from './utils/dateUtils';
-import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint, isValEmpty, normalizeHistoricalTelemetryErrors } from './utils/biomarkers';
+import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint, isValEmpty, getMappedBiomarkerKey, normalizeHistoricalTelemetryErrors } from './utils/biomarkers';
+import { applyModificationCommands, overlayFingerprint, resolveAgentDestination, shouldRunCalibrator, attachObservationMeta, enrichReviewModificationCommands, collectCatalogUnitMap } from './utils/biomarkerLifecycle';
 import { formatOptimalTargetValue } from './utils/agentCalibration';
 import { standardizeUnit, CONVERSION_FACTORS } from './utils/unitConversion';
 import { get, set, pruneLocalStorageToFreeSpace, getStorageKey, getSnapshotKey, saveLocalSnapshot, loadLocalSnapshots, deleteLocalSnapshot, safeSaveToLocalStorage, getAggregatedAppData } from './utils/storageUtils';
@@ -879,14 +881,12 @@ export default function App() {
     const apply = (raw: BiomarkerLog[]) => {
       const normalized = normalizeBiomarkerHistory(raw || []);
       // Auto-fix unit-scale phantoms (195 mmol/L chol, 42.1 Hct, 14.5 Hb as g/L) and drop rest
-      const { history: cleaned, fixedCount, current } = sanitizeBiomarkerHistoryOnLoad(
+      const { history: cleaned, fixedCount } = sanitizeBiomarkerHistoryOnLoad(
         normalized,
         profileRef.current || profile
       );
       if (fixedCount > 0) {
-        console.log(`[BiomarkerSanitize] Auto-fixed/dropped ${fixedCount} improbable unit-scale values`);
-        // Rebuild current from cleaned history only (drop phantom 195 mmol/L chol etc.)
-        setBiomarkers({ ...current });
+        console.log(`[BiomarkerSanitize] Flagged ${fixedCount} improbable unit-scale value(s) — not auto-rewritten`);
       }
       return cleaned as BiomarkerLog[];
     };
@@ -1140,9 +1140,20 @@ export default function App() {
                     null;
                   const messageText =
                     cleanResult.message ||
+                    cleanResult.reply ||
                     cleanResult.text ||
                     pendingFoodLog?.message ||
                     'Analysis complete.';
+                  const snapAgentType = (job.inputSnapshot as any)?.agentType;
+                  const isMedicalJob = job.kind === 'medical';
+                  const isReviewJob = snapAgentType === 'biomarker_review' || cleanResult.agentType === 'biomarker_review';
+                  const reviewCmds = isReviewJob
+                    ? enrichReviewModificationCommands(
+                        cleanResult.modificationCommand || cleanResult.agentResult?.modificationCommand || [],
+                        (job.inputSnapshot as any)?.biomarkerHistory || [],
+                        collectCatalogUnitMap(profileRef.current)
+                      )
+                    : (cleanResult.modificationCommand || null);
                   const agentResult = {
                     scoutScratchpad: cleanResult.dietitianScratchpad ? undefined : cleanResult.scoutScratchpad,
                     dietitianScratchpad: cleanResult.dietitianScratchpad || '',
@@ -1151,6 +1162,9 @@ export default function App() {
                     dietitianAnswer: cleanResult.message || cleanResult.text || '',
                     scoutItems: cleanResult.scoutItems,
                     ...(cleanResult.agentResult || {}),
+                    modificationCommand: isReviewJob ? reviewCmds : (cleanResult.agentResult?.modificationCommand || cleanResult.modificationCommand),
+                    proposal: cleanResult.proposal || cleanResult.agentResult?.proposal || null,
+                    reply: cleanResult.reply || cleanResult.text || cleanResult.message,
                   };
 
                   const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive);
@@ -1160,7 +1174,8 @@ export default function App() {
                     content: messageText,
                     timestamp: new Date().toISOString(),
                     isLive: false,
-                    agentType: 'food',
+                    agentType: isMedicalJob ? (snapAgentType || cleanResult.agentType || 'medical') : 'food',
+                    modificationCommand: reviewCmds,
                     pendingFoodLog,
                     data: {
                       pendingFoodLog,
@@ -1175,7 +1190,7 @@ export default function App() {
                   const updatedMessages = [...nonLiveMsgs, assistantMsg];
                   JobStore.updateJob(job.id, {
                     status: 'succeeded',
-                    result: { ...cleanResult, pendingFoodLog, photoUrl: serverJob.photo_url || cleanResult.photoUrl, debugUrl: serverJob.debug_url || cleanResult.debugUrl },
+                    result: { ...cleanResult, pendingFoodLog, photoUrl: serverJob.photo_url || cleanResult.photoUrl, debugUrl: serverJob.debug_url || cleanResult.debugUrl, modificationCommand: isReviewJob ? reviewCmds : cleanResult.modificationCommand, proposal: cleanResult.proposal, reply: cleanResult.reply || cleanResult.text, agentType: isMedicalJob ? (snapAgentType || cleanResult.agentType) : cleanResult.agentType },
                     messages: updatedMessages,
                     mealBuild: cleanResult.mealBuild || job.mealBuild,
                     progressPercent: 100,
@@ -1473,6 +1488,7 @@ export default function App() {
     });
 
     JobQueueRunner.start();
+    const stopGoldenIngest = startGoldenIngestWatcher();
 
     // Subscribe to JobStore to handle automated credit refund when a job transitions to failed/cancelled
     const unsubscribeJobStore = JobStore.subscribe(async () => {
@@ -1501,6 +1517,7 @@ export default function App() {
 
     return () => {
       JobQueueRunner.stop();
+      stopGoldenIngest();
       unsubscribeJobStore();
     };
   }, []);
@@ -4384,6 +4401,11 @@ export default function App() {
     let hasNewBiomarkers = false;
     const modifiedLogIds: string[] = [];
     if (modificationCommand && modificationCommand.length > 0) {
+      const unitMapApply: Record<string, string> = {};
+      Object.entries(profile?.customBiomarkers || {}).forEach(([k, v]: [string, any]) => {
+        if (v?.unit) unitMapApply[k] = v.unit;
+      });
+      modificationCommand = enrichReviewModificationCommands(modificationCommand, updatedHistory, unitMapApply);
       let madeChanges = false;
       const normalizeDateForMatch = (s?: string) => {
         if (!s) return '';
@@ -4532,6 +4554,23 @@ export default function App() {
             sync_state: 'update',
             updated_at: Date.now()
           };
+          const mergeTarget = updatedHistory[existingLogIndex];
+          entryTests.forEach((t: any) => {
+            attachObservationMeta(mergeTarget, t.key, {
+              unit: t.unit,
+              printedRange: t.normalRange || t.printedRange,
+              labFlag: t.labFlag || t.flag,
+              rawValue: mappedExtracted[t.key],
+            });
+          });
+          Object.entries(mappedExtracted).forEach(([k, v]) => {
+            if (!mergeTarget.observationMeta?.[k]) {
+              attachObservationMeta(mergeTarget, k, {
+                unit: (currentProfile as any)?.customBiomarkers?.[k]?.unit,
+                rawValue: v,
+              });
+            }
+          });
           modifiedLogIds.push(updatedHistory[existingLogIndex].id);
         } else {
           const datedLog: BiomarkerLog = {
@@ -4542,6 +4581,22 @@ export default function App() {
             sync_state: 'new',
             updated_at: Date.now()
           };
+          entryTests.forEach((t: any) => {
+            attachObservationMeta(datedLog, t.key, {
+              unit: t.unit,
+              printedRange: t.normalRange || t.printedRange,
+              labFlag: t.labFlag || t.flag,
+              rawValue: mappedExtracted[t.key],
+            });
+          });
+          Object.entries(mappedExtracted).forEach(([k, v]) => {
+            if (!datedLog.observationMeta?.[k]) {
+              attachObservationMeta(datedLog, k, {
+                unit: (currentProfile as any)?.customBiomarkers?.[k]?.unit,
+                rawValue: v,
+              });
+            }
+          });
           updatedHistory.push(datedLog);
           modifiedLogIds.push(datedLog.id);
         }
@@ -4961,6 +5016,7 @@ export default function App() {
       }
 
       const oldCustom = (updatedProfile.customBiomarkers[targetKey] || updatedProfile.customBiomarkers[key] || {}) as any;
+      // Relabel only — never apply conversionFactor to stored numbers.
       const nextUnit = val.unit !== undefined && val.unit !== null && String(val.unit).trim() !== ''
         ? val.unit
         : oldCustom.unit;
@@ -5569,6 +5625,7 @@ export default function App() {
       {/* Header Profile Section */}
       <Header
         activeTab={activeTab}
+        viewingJobId={activeJobId}
         onNavigateTab={(tab) => setActiveTab(tab as any)}
         biomarkerHistory={biomarkerHistory}
         setBiomarkerHistory={setBiomarkerHistory}
@@ -5970,7 +6027,7 @@ export default function App() {
                   currentBatch?: number;
                   estimatedTotalMarkers?: number | null;
                 }) => {
-                  setActiveAgentType(agentType);
+                  setActiveAgentType(resolveAgentDestination(agentType) as any);
                   setPrefillMessage(options?.prefillMessage || null);
                   setActiveReviewBiomarkerKey(options?.biomarkerKey);
                   setActiveDataReviewBatchIdx(options?.dataReviewBatchIdx !== undefined ? options.dataReviewBatchIdx : null);
@@ -6055,7 +6112,7 @@ export default function App() {
       {(() => {
         const handleOpenAgentFromFrontDesk = (agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | null) => {
           setIsFrontDeskOpen(false);
-          setActiveAgentType(agentType);
+          setActiveAgentType(resolveAgentDestination(agentType) as any);
           setPrefillMessage(null);
           setActiveDataReviewBatchIdx(null);
           setActiveDataReviewBatchKeys([]);
@@ -6085,12 +6142,32 @@ export default function App() {
           let updatedBiomarkers = { ...biomarkers };
           let updatedHistory = [...biomarkerHistory];
           logs.forEach(log => {
-            updatedBiomarkers[log.biomarker] = log.value;
-            updatedHistory.push({
-              id: `bm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              biomarkers: { [log.biomarker]: log.value },
-              date: log.date || new Date().toISOString().split('T')[0]
-            });
+            const key = getMappedBiomarkerKey(log.biomarker) || log.biomarker;
+            updatedBiomarkers[key] = log.value;
+            const day = log.date || new Date().toISOString().split('T')[0];
+            const sourceId = log.sourceReportId;
+            const idx = updatedHistory.findIndex((h) =>
+              toYYYYMMDD(h.date) === toYYYYMMDD(day)
+              && (!sourceId || !h.sourceReportId || h.sourceReportId === sourceId)
+            );
+            if (idx >= 0 && (!sourceId || !updatedHistory[idx].sourceReportId || updatedHistory[idx].sourceReportId === sourceId)) {
+              updatedHistory[idx] = {
+                ...updatedHistory[idx],
+                biomarkers: { ...updatedHistory[idx].biomarkers, [key]: log.value },
+                sync_state: 'update',
+                updated_at: Date.now(),
+              };
+              attachObservationMeta(updatedHistory[idx], key, { unit: log.unit, rawValue: log.value });
+            } else {
+              const row = {
+                id: `bm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                biomarkers: { [key]: log.value },
+                date: day,
+                sourceReportId: sourceId,
+              };
+              attachObservationMeta(row, key, { unit: log.unit, rawValue: log.value });
+              updatedHistory.push(row);
+            }
           });
           setBiomarkers(updatedBiomarkers);
           setBiomarkerHistory(updatedHistory);
@@ -6106,7 +6183,10 @@ export default function App() {
         jobId={activeJobId}
         selectedModelId={selectedModelId}
         onChangeModelId={setSelectedModelId}
-        onJobEnqueued={(id, kind) => setActiveTab('food')}
+        onJobEnqueued={(id, kind) => {
+          setActiveJobId(id);
+          setActiveTab('food');
+        }}
         onClose={async () => {
           if (activeJobId) {
             const job = JobStore.getJob(activeJobId);
@@ -6217,13 +6297,22 @@ export default function App() {
           let currentDailyBenefits = [...dailyBenefits];
           let currentActions = [...actions];
 
-          // B5 FIX: Handle biomarker_review agent results — apply corrections to history + profile
+          // Review: apply modificationCommand (dated) and/or flat corrections
           if ((agentType as string) === 'biomarker_review') {
+            const commands = Array.isArray(agentResult?.modificationCommand)
+              ? agentResult.modificationCommand
+              : [];
+            const unitMap: Record<string, string> = {};
+            Object.entries(updatedProfile.customBiomarkers || {}).forEach(([k, v]: [string, any]) => {
+              if (v?.unit) unitMap[k] = v.unit;
+            });
+            const { history: afterCommands, applied } = applyModificationCommands(currentHistory, commands, unitMap);
+            currentHistory = afterCommands;
+
             const corrections: Record<string, any> = agentResult?.corrections || agentResult?.biomarkerCorrections || {};
-            const correctionDate = agentResult?.date || new Date().toISOString().split('T')[0];
             if (Object.keys(corrections).length > 0) {
-              // Merge corrections into the matching history entry or add new one
-              const existingIdx = currentHistory.findIndex((h: any) => h.date === correctionDate);
+              const correctionDate = agentResult?.date || new Date().toISOString().split('T')[0];
+              const existingIdx = currentHistory.findIndex((h: any) => toYYYYMMDD(h.date) === toYYYYMMDD(correctionDate));
               if (existingIdx >= 0) {
                 currentHistory[existingIdx] = {
                   ...currentHistory[existingIdx],
@@ -6234,25 +6323,46 @@ export default function App() {
                   id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                   date: correctionDate,
                   biomarkers: corrections,
-                  note: "Corrected by Biomarker Review Agent"
+                  note: "Corrected by Review"
                 });
               }
-              // Also update current biomarkers snapshot
-              const updatedBiomarkersFromReview = { ...biomarkers, ...corrections };
-              setBiomarkers(updatedBiomarkersFromReview);
-              setBiomarkerHistory(currentHistory);
-              
-              // Save profile with updated history
-              const finalProfile = { ...updatedProfile };
-              setProfile(finalProfile);
-              await saveAndSync(finalProfile, foodLogs, updatedBiomarkersFromReview, currentHistory, actions, dailyBenefits, report, { type: 'biomarkerLog' });
-              setCalibratingAgentType(null);
-              return;
-            } else {
-              // Even if corrections is empty, still clear and return
-              setCalibratingAgentType(null);
-              return;
             }
+
+            const proposal = agentResult?.proposal;
+            if (proposal && (proposal.range || proposal.metric)) {
+              const rawKey = agentResult.biomarkerKey || proposal.key || proposal.name || commands[0]?.keyName || '';
+              const overlayKey = getMappedBiomarkerKey(String(rawKey)) || String(rawKey).toLowerCase().replace(/[^a-z0-9]/g, '_');
+              if (overlayKey) {
+                if (!updatedProfile.customBiomarkers) updatedProfile.customBiomarkers = {};
+                const prev = (updatedProfile.customBiomarkers[overlayKey] || {}) as any;
+                updatedProfile.customBiomarkers[overlayKey] = {
+                  ...prev,
+                  name: proposal.name || prev.name || overlayKey,
+                  unit: proposal.metric || prev.unit,
+                  profileAdjustedNormalRange: proposal.range || prev.profileAdjustedNormalRange,
+                  description: proposal.description || prev.description || '',
+                  overlayFingerprint: overlayFingerprint(updatedProfile),
+                };
+              }
+            }
+
+            if (applied > 0 || Object.keys(corrections).length > 0) {
+              const recomputed: { [key: string]: number | string } = {};
+              [...currentHistory]
+                .filter((b: any) => b.sync_state !== 'delete')
+                .sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date)))
+                .forEach((log) => {
+                  Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
+                    recomputed[k] = v as string | number;
+                  });
+                });
+              setBiomarkers(recomputed);
+              setBiomarkerHistory(currentHistory);
+              setProfile(updatedProfile);
+              await saveAndSync(updatedProfile, foodLogs, recomputed, currentHistory, actions, dailyBenefits, report, { type: 'biomarkerLog' });
+            }
+            setCalibratingAgentType(null);
+            return;
           }
           
           if ((agentType as string) === 'agent1' || (agentType as string) === 'medical_extract') {
@@ -6604,7 +6714,9 @@ export default function App() {
               });
               
               filteredEntries.forEach(entry => {
-                const bioName = entry.biomarker.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                const rawSlug = String(entry.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+                const bioName = getMappedBiomarkerKey(rawSlug) || rawSlug;
+                const isBuiltIn = biomarkerDefinitions.some((d) => d.key === bioName);
                 let finalValue = entry.value;
                 let finalUnit = (entry.unit || '').replace(/µ/g, 'u');
                 let finalRange = (entry.referenceRange || '').replace(/µ/g, 'u');
@@ -6620,13 +6732,24 @@ export default function App() {
                 let existingLogIndex = currentHistory.findIndex(h => matchDate(h.date, standardDate));
                 if (existingLogIndex >= 0) {
                   currentHistory[existingLogIndex].biomarkers[bioName] = finalValue;
+                  attachObservationMeta(currentHistory[existingLogIndex], bioName, {
+                    unit: finalUnit,
+                    printedRange: finalRange,
+                    rawValue: finalValue,
+                  });
                 } else {
-                  currentHistory.push({
+                  const newLog = {
                     id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                     date: standardDate,
                     biomarkers: { [bioName]: finalValue },
                     note: "Extracted by Clinical Data Parser"
+                  };
+                  attachObservationMeta(newLog, bioName, {
+                    unit: finalUnit,
+                    printedRange: finalRange,
+                    rawValue: finalValue,
                   });
+                  currentHistory.push(newLog);
                 }
                 
                 if (!updatedProfile.customBiomarkers) updatedProfile.customBiomarkers = {};
@@ -6644,15 +6767,27 @@ export default function App() {
                 }
 
                 if (!updatedProfile.customBiomarkers[bioName]) {
-                  updatedProfile.customBiomarkers[bioName] = {
-                    name: entry.displayName || entry.biomarker,
-                    unit: finalUnit,
-                    normalRange: finalRange || 'Unknown',
-                    description: '',
-                    riskCategories: mapData?.riskCategories || [],
-                    standardMedicalGrouping: mapData?.standardMedicalGrouping || 'Other',
-                    potentialMedicalConditions: mapData?.potentialMedicalConditions || []
-                  };
+                  // Built-in / alias-mapped keys already live in the catalog. Do not invent
+                  // a custom overlay (or a pending-approval row) for every extracted line.
+                  if (!isBuiltIn) {
+                    updatedProfile.customBiomarkers[bioName] = {
+                      name: entry.displayName || entry.biomarker,
+                      unit: finalUnit,
+                      normalRange: finalRange || 'Unknown',
+                      description: '',
+                      riskCategories: mapData?.riskCategories || [],
+                      standardMedicalGrouping: mapData?.standardMedicalGrouping || 'Other',
+                      potentialMedicalConditions: mapData?.potentialMedicalConditions || [],
+                      needsApproval: true,
+                      catalogApproved: false,
+                    };
+                  } else if (shouldRunCalibrator(bioName, updatedProfile)) {
+                    updatedProfile.customBiomarkers[bioName] = {
+                      name: entry.displayName || entry.biomarker,
+                      catalogApproved: true,
+                      calibrationDue: true,
+                    } as any;
+                  }
                 } else {
                   // Upgrade a previously-registered raw-key name to a proper display name once one arrives,
                   // but never overwrite a name that's already something other than the raw key (e.g. user-edited).
@@ -6734,11 +6869,6 @@ export default function App() {
             const updatedCustoms = { ...(updatedProfile.customBiomarkers || {}) };
             
             if (agentResult.reviewedBiomarkers && Array.isArray(agentResult.reviewedBiomarkers)) {
-              // Create or update history logs for these reviewed biomarkers
-              const todayStr = new Date().toISOString().split('T')[0];
-              const logDate = agentResult.date || agentResult.logDate || todayStr;
-              const biomarkersByDate: Record<string, Record<string, any>> = {};
-
               agentResult.reviewedBiomarkers.forEach((bm: any) => {
                 const existing = (updatedCustoms[bm.key] || {}) as any;
                 const optVal = formatOptimalTargetValue(bm);
@@ -6746,9 +6876,9 @@ export default function App() {
                 updatedCustoms[bm.key] = {
                   ...existing,
                   name: bm.name || existing.name,
-                  unit: bm.unit || existing.unit,
+                  unit: existing.unit || bm.unit,
                   optimalValue: optVal,
-                  normalRange: bm.profileAdjustedNormalRange || existing.profileAdjustedNormalRange || existing.normalRange || '',
+                  normalRange: existing.normalRange || '',
                   profileAdjustedNormalRange: bm.profileAdjustedNormalRange || existing.profileAdjustedNormalRange || '',
                   description: bm.description || existing.description || '',
                   riskCategories: (existing.riskCategories && existing.riskCategories.length > 0) ? existing.riskCategories : (bm.riskCategories || []),
@@ -6756,70 +6886,11 @@ export default function App() {
                   potentialMedicalConditions: bm.potentialMedicalConditions || existing.potentialMedicalConditions || [],
                   specificRiskContext: bm.specificRiskContext || existing.specificRiskContext || '',
                   status: bm.status || existing.status || 'Healthy',
-                  rangeBrackets: bm.rangeBrackets || existing.rangeBrackets || []
+                  rangeBrackets: bm.rangeBrackets || existing.rangeBrackets || [],
+                  overlayFingerprint: overlayFingerprint(updatedProfile),
                 } as any;
-
-                // Group for log entry
-                const bmDate = bm.date || bm.logDate || logDate;
-                if (!biomarkersByDate[bmDate]) {
-                  biomarkersByDate[bmDate] = {};
-                }
-                if (bm.userValue !== undefined && bm.userValue !== null && bm.userValue !== '') {
-                  const valNum = Number(bm.userValue);
-                  biomarkersByDate[bmDate][bm.key] = isNaN(valNum) ? bm.userValue : valNum;
-                }
-
-                // Apply LLM-provided corrections to historical logs if available
-                if (Array.isArray(bm.correctedHistoricalLogs)) {
-                  bm.correctedHistoricalLogs.forEach((correction: any) => {
-                    const cDate = correction.date || correction.logDate;
-                    const cValNum = Number(correction.correctedValue);
-                    if (cDate && !isNaN(cValNum)) {
-                      if (!biomarkersByDate[cDate]) {
-                        biomarkersByDate[cDate] = {};
-                      }
-                      biomarkersByDate[cDate][bm.key] = cValNum;
-                    }
-                  });
-                }
+                // Overlay only — Review is the sole number writer.
               });
-
-              // Merge these into currentHistory
-              Object.entries(biomarkersByDate).forEach(([dateStr, bms]) => {
-                if (Object.keys(bms).length === 0) return;
-
-                const matchDate = (d1: string, d2: string) => {
-                  if (!d1 || !d2) return false;
-                  return String(d1).split('T')[0].trim() === String(d2).split('T')[0].trim();
-                };
-
-                let existingLogIndex = currentHistory.findIndex(h => matchDate(h.date, dateStr));
-                if (existingLogIndex >= 0) {
-                  currentHistory[existingLogIndex].biomarkers = {
-                    ...(currentHistory[existingLogIndex].biomarkers || {}),
-                    ...bms
-                  };
-                  if (!currentHistory[existingLogIndex].note) {
-                    currentHistory[existingLogIndex].note = "Calibrated by Clinical Calibration Agent";
-                  }
-                } else {
-                  currentHistory.push({
-                    id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-                    date: dateStr,
-                    biomarkers: bms,
-                    note: "Calibrated by Clinical Calibration Agent"
-                  });
-                }
-              });
-
-              currentHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
-
-              // Normalize historical telemetry/unit scaling errors across all history logs for reviewed keys
-              const reviewedKeys = agentResult.reviewedBiomarkers.map((bm: any) => bm.key).filter(Boolean);
-              const { updatedHistory: cleanedHist } = normalizeHistoricalTelemetryErrors(currentHistory, updatedProfile, undefined, reviewedKeys.length > 0 ? reviewedKeys : undefined);
-              currentHistory = cleanedHist;
-
-              setBiomarkerHistory(currentHistory);
 
               // Recompute current biomarkers state based on history
               const recomputedBiomarkers: { [key: string]: number | string } = {};

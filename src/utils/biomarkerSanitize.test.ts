@@ -26,7 +26,7 @@ describe('isBiomarkerValueImprobable', () => {
 });
 
 describe('sanitizeBiomarkerHistoryOnLoad', () => {
-  it('converts 195 mg/dL-style total cholesterol to ~5 mmol/L', () => {
+  it('flags 195 cholesterol but does not rewrite it', () => {
     const history = [
       {
         id: '1',
@@ -42,15 +42,14 @@ describe('sanitizeBiomarkerHistoryOnLoad', () => {
     const { history: cleaned, fixedCount, current } = sanitizeBiomarkerHistoryOnLoad(history, {});
     expect(fixedCount).toBeGreaterThan(0);
     const aug8 = cleaned.find((h) => String(h.date).includes('08'));
-    // After normalize, 195 should become ~5.04 mmol/L (mg/dL convert) not stay 195
-    const v = Number(aug8?.biomarkers?.total_cholesterol ?? current.total_cholesterol);
-    expect(v).toBeLessThan(30);
-    expect(v).toBeGreaterThan(3);
+    expect(Number(aug8?.biomarkers?.total_cholesterol)).toBe(195);
+    expect(Number(current.total_cholesterol)).toBe(195);
   });
 
-  it('fixes hematocrit 42.1 -> 0.421', () => {
+  it('flags hematocrit 42.1 but leaves the stored value', () => {
     const history = [{ id: '1', date: '08-08-2026', biomarkers: { hematocrit: 42.1 } }];
-    const { history: cleaned } = sanitizeBiomarkerHistoryOnLoad(history, {});
-    expect(Number(cleaned[0].biomarkers.hematocrit)).toBeCloseTo(0.421, 2);
+    const { history: cleaned, fixedCount } = sanitizeBiomarkerHistoryOnLoad(history, {});
+    expect(fixedCount).toBeGreaterThan(0);
+    expect(Number(cleaned[0].biomarkers.hematocrit)).toBeCloseTo(42.1, 1);
   });
 });

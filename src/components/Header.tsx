@@ -176,6 +176,8 @@ interface HeaderProps {
   onOpenFrontDesk?: () => void;
   onOpenUndo?: () => void;
   onNavigateTab?: (tab: string) => void;
+  /** Job currently open in the food/medical unified modal */
+  viewingJobId?: string | null;
 }
 
 const getSessionId = (): string => {
@@ -292,15 +294,19 @@ export default function Header({
   onSaveAndSync,
   onOpenFrontDesk,
   onOpenUndo,
-  onNavigateTab
+  onNavigateTab,
+  viewingJobId = null,
 }: HeaderProps) {
   const [jobs, setJobs] = useState(() => JobStore.getAllJobs());
   useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = JobStore.subscribe(() => {
-      setJobs(JobStore.getAllJobs());
+      if (t) clearTimeout(t);
+      t = setTimeout(() => setJobs(JobStore.getAllJobs()), 400);
     });
     return () => {
       unsubscribe();
+      if (t) clearTimeout(t);
     };
   }, []);
 
@@ -1483,13 +1489,14 @@ export default function Header({
           isAdmin={isAdmin}
           firebaseUid={auth.currentUser?.uid || null}
           activeTab={activeTab}
+          viewingJobId={viewingJobId}
           biomarkerHistory={biomarkerHistory}
           biomarkers={biomarkers}
           profile={profile}
           getModalContext={() => {
             try {
               const jobs = JobStore.getAllJobs?.() || [];
-              // Sort by ID descending (IDs are timestamp-prefixed) and exclude bug_triage stubs
+              const fromModal = viewingJobId ? jobs.find((j) => j.id === viewingJobId) : null;
               const candidates = [...jobs]
                 .filter((j) =>
                   j.kind !== 'bug_triage' &&
@@ -1498,6 +1505,7 @@ export default function Header({
                 )
                 .sort((a, b) => String(b.id).localeCompare(String(a.id)));
               const active =
+                fromModal ||
                 candidates.find((j) => j.status === 'running' || j.status === 'awaiting_user') ||
                 candidates.find((j) => j.status === 'succeeded' || j.status === 'failed') ||
                 candidates[0];

@@ -9,6 +9,8 @@ import {
   getMergedBiomarkerDef,
   isBiomarkerApproved,
   isBiomarkerMissingRange,
+  isPendingCatalogApproval,
+  shouldStampExtractedDefPending,
   biomarkerDefinitions,
 } from './biomarkers';
 
@@ -111,6 +113,10 @@ describe('getMergedBiomarkerDef — field priority', () => {
 });
 
 describe('approval / missing range gates', () => {
+  it('built-in hba1c is approved without a custom def', () => {
+    expect(isBiomarkerApproved('hba1c', {})).toBe(true);
+  });
+
   it('needsApproval on custom blocks isBiomarkerApproved', () => {
     const profile = {
       customBiomarkers: {
@@ -138,6 +144,34 @@ describe('approval / missing range gates', () => {
 
   it('built-in hba1c is not missing range', () => {
     expect(isBiomarkerMissingRange('hba1c', {})).toBe(false);
+  });
+
+  it('stale needsApproval on a built-in does not hide it from live use', () => {
+    const profile = {
+      customBiomarkers: { hdl: { needsApproval: true, name: 'HDL-C' } },
+    };
+    expect(isBiomarkerApproved('hdl', profile)).toBe(true);
+    expect(isPendingCatalogApproval('hdl', profile)).toBe(false);
+  });
+
+  it('pending is explicit needsApproval only — missing fields are not pending', () => {
+    const profile = {
+      customBiomarkers: {
+        mystery_panel: { name: 'Mystery', unit: '', normalRange: '' },
+        new_slug: { name: 'New', needsApproval: true },
+      },
+    };
+    expect(isPendingCatalogApproval('mystery_panel', profile)).toBe(false);
+    expect(isPendingCatalogApproval('new_slug', profile)).toBe(true);
+    expect(isPendingCatalogApproval('hdl_c', { customBiomarkers: { hdl_c: { needsApproval: true } } })).toBe(false);
+  });
+
+  it('extract does not stamp pending on catalog keys or already-approved defs', () => {
+    expect(shouldStampExtractedDefPending('hdl')).toBe(false);
+    expect(shouldStampExtractedDefPending('HDL-C')).toBe(false);
+    expect(shouldStampExtractedDefPending('brand_new_marker')).toBe(true);
+    expect(shouldStampExtractedDefPending('brand_new_marker', { catalogApproved: true })).toBe(false);
+    expect(shouldStampExtractedDefPending('brand_new_marker', { name: 'Reviewed' })).toBe(false);
   });
 });
 

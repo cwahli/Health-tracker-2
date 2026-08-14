@@ -5,6 +5,8 @@ import { AgentJob } from '../jobs/types';
 import { ImageStore } from '../jobs/ImageStore';
 import { JobStore } from '../jobs/JobStore';
 import { FoodLog } from '../types';
+import { humanizeJobFailure } from '../utils/jobFailure';
+import { isJobSafeToLeave } from '../jobs/jobUploadState';
 
 interface TaskPlaceholderCardProps {
   job: AgentJob;
@@ -347,10 +349,17 @@ export default function TaskPlaceholderCard({
                 <p className="text-xs text-theme-text-secondary font-medium">
                   {job.statusMessage || (job.kind === 'medical' ? 'Analyzing medical data...' : 'Analyzing your meal...')}
                 </p>
-                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/60">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-                  <span>Uploaded to server • Safe to close browser & check back later</span>
-                </div>
+                {isJobSafeToLeave(job) ? (
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/60">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
+                    <span>Uploaded to server • Safe to close browser & check back later</span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/60">
+                    <AlertTriangle className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                    <span>Uploading to server… Keep this tab open</span>
+                  </div>
+                )}
               </div>
             )}
             
@@ -372,14 +381,15 @@ export default function TaskPlaceholderCard({
             )}
 
             {job.status === 'failed' && (() => {
-              const failureReason =
+              const raw =
                 job.error?.message ||
                 (job.statusMessage && !['Analyzing on server...', 'Analyzing your meal...'].includes(job.statusMessage) ? job.statusMessage : null) ||
                 (typeof job.result?.message === 'string' && job.result.message ? job.result.message : null) ||
-                'Analysis request timed out or experienced a transient network issue.';
+                '';
+              const failureReason = humanizeJobFailure(raw);
               return (
                 <div className="mt-1 space-y-1">
-                  <p className="text-xs text-rose-600 dark:text-rose-400 font-medium line-clamp-3">
+                  <p className="text-xs text-rose-600 dark:text-rose-400 font-medium line-clamp-4">
                     ⚠️ {failureReason}
                   </p>
                   <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">

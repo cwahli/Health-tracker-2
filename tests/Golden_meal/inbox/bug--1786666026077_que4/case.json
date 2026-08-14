@@ -1,0 +1,124 @@
+{
+  "id": "job_1786666026077_que4vcxxi",
+  "status": "open",
+  "mealName": "bug",
+  "slug": "bug--1786666026077_que4",
+  "d1Id": "28fb0fea-70a3-4ced-8ae0-943c023d34b5",
+  "queries": [
+    "butter croissant",
+    "dark chocolate filling",
+    "flour tortilla",
+    "falafel",
+    "hummus",
+    "feta cheese",
+    "mixed salad leaves",
+    "red onion",
+    "bell pepper",
+    "hummus",
+    "cooked white quinoa",
+    "cucumber",
+    "cherry tomato",
+    "chickpeas",
+    "kalamata olives",
+    "feta cheese",
+    "pomegranate seeds",
+    "balsamic dressing",
+    "flour tortilla enriched wheat",
+    "mixed salad leaves lettuce mixed greens",
+    "chickpeas cooked boiled canned",
+    "kalamata olives olives canned"
+  ],
+  "expectResolve": [
+    {
+      "query": "butter croissant",
+      "expectFdcId": "172242",
+      "foodName": null
+    },
+    {
+      "query": "dark chocolate filling",
+      "expectFdcId": "170272",
+      "foodName": null
+    },
+    {
+      "query": "flour tortilla",
+      "expectFdcId": "172522",
+      "foodName": null
+    },
+    {
+      "query": "falafel",
+      "expectFdcId": "falafel_canonical",
+      "foodName": "falafel"
+    },
+    {
+      "query": "hummus",
+      "expectFdcId": "174289",
+      "foodName": "hummus"
+    },
+    {
+      "query": "feta cheese",
+      "expectFdcId": "173420",
+      "foodName": null
+    },
+    {
+      "query": "mixed salad leaves",
+      "expectFdcId": "169248",
+      "foodName": null
+    },
+    {
+      "query": "red onion",
+      "expectFdcId": "11282",
+      "foodName": null
+    },
+    {
+      "query": "bell pepper",
+      "expectFdcId": "170393",
+      "foodName": null
+    },
+    {
+      "query": "hummus",
+      "expectFdcId": "174289",
+      "foodName": "hummus"
+    },
+    {
+      "query": "cooked white quinoa",
+      "expectFdcId": "168917",
+      "foodName": null
+    },
+    {
+      "query": "cucumber",
+      "expectFdcId": "168409",
+      "foodName": "cucumber"
+    },
+    {
+      "query": "cherry tomato",
+      "expectFdcId": "170010",
+      "foodName": null
+    },
+    {
+      "query": "chickpeas",
+      "expectFdcId": "173800",
+      "foodName": null
+    },
+    {
+      "query": "feta cheese",
+      "expectFdcId": "173420",
+      "foodName": null
+    },
+    {
+      "query": "pomegranate seeds",
+      "expectFdcId": "brand_menu_7dc1e5b0-2e01-44ad-a020-75efc8cdec5e",
+      "foodName": null
+    },
+    {
+      "query": "flour tortilla enriched wheat",
+      "expectFdcId": "172522",
+      "foodName": null
+    },
+    {
+      "query": "chickpeas cooked boiled canned",
+      "expectFdcId": "173800",
+      "foodName": null
+    }
+  ],
+  "neverMatch": []
+}

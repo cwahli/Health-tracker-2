@@ -1,0 +1,27 @@
+{
+  "id": "job_1786646310665_zszmh95lj",
+  "status": "open",
+  "mealName": "Prawn Layered Pasta Salad + Serrano Ham Gran Reserva + 2 more",
+  "slug": "prawn-layered-pasta-salad-serrano-ham-gran-reserva-2-mor--1786646310665_zszm",
+  "d1Id": "50bf4282-1c53-4ad8-8f51-3464d71d0dd4",
+  "queries": [
+    "cooked pasta",
+    "mixed vegetables",
+    "iceberg lettuce",
+    "cooked prawns",
+    "marie rose sauce",
+    "serrano ham",
+    "ring doughnut",
+    "pink sugar icing",
+    "cooked ham"
+  ],
+  "expectResolve": [
+    {
+      "query": "pink sugar icing",
+      "expectFdcId": "169652",
+      "foodName": null
+    }
+  ],
+  "neverMatch": [],
+  "aliasOf": "prawn-layered-pasta-salad-serrano-ham-gran-reserva-2-mor--1786646310665_zszm"
+}

@@ -1,0 +1,175 @@
+{
+  "items": [
+    {
+      "keyword": "mango lassi yogurt drink",
+      "itemConfidence": "High",
+      "estimatedWeightGrams": 1000,
+      "estimatedCalories": 335,
+      "cookingMethod": "unknown",
+      "components": [
+        {
+          "searchQuery": "low fat yogurt",
+          "volumePercentage": 60,
+          "calories": 412,
+          "protein": 30.9,
+          "carbohydrates": 36.1,
+          "totalFat": 15.5,
+          "saturatedFat": 10.3,
+          "sodium": 232,
+          "sugar": 0,
+          "name": "low fat yogurt",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "mango puree",
+          "volumePercentage": 25,
+          "calories": 215,
+          "protein": 4.3,
+          "carbohydrates": 32.2,
+          "totalFat": 4.3,
+          "saturatedFat": 1.1,
+          "sodium": 215,
+          "sugar": 0,
+          "name": "mango puree",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "water",
+          "volumePercentage": 10
+        },
+        {
+          "searchQuery": "sugar",
+          "volumePercentage": 5,
+          "calories": 43,
+          "protein": 0.9,
+          "carbohydrates": 6.4,
+          "totalFat": 0.9,
+          "saturatedFat": 0.2,
+          "sodium": 43,
+          "sugar": 0,
+          "name": "sugar",
+          "source": "estimated"
+        }
+      ],
+      "chainName": null,
+      "originalName": "Mango Lassi Yogurt Drink",
+      "boundingBox2D": [
+        0,
+        0,
+        1000,
+        1000
+      ],
+      "sourceImageIndex": 0,
+      "anomalyFlags": [],
+      "ingredientsList": "Low fat yogurt (Milk), Mango compote (12%), (Mango Puree (35%), Sugar, Water, Modified Starch, Natural Flavoring, Acidity Regulator: Citric Acid, Colour: Carotenes).",
+      "nutritionFacts": null,
+      "rawNutritionLabel": {
+        "servingSize": "100ml",
+        "calories": "67 kcal",
+        "protein": "3.1g",
+        "totalFat": "1.4g",
+        "saturatedFat": "0.8g",
+        "transFat": null,
+        "totalCarbohydrate": "11g",
+        "sugar": "9.6g",
+        "addedSugar": null,
+        "sodium": "40mg",
+        "salt": "0.10g",
+        "potassium": null,
+        "totalFibre": "0.5g",
+        "solubleFibre": null
+      },
+      "source": "label",
+      "visualIngredients": [],
+      "scoutIndex": 0,
+      "saltConversionNote": "Converted printed salt (0.10g per 100g) to sodium (40mg/serving, 400mg total). Formula: 1g salt = 400mg sodium.",
+      "labelProductName": "Mango Lassi Yogurt Drink",
+      "cookingAdded": {
+        "addedCalories": 0,
+        "addedFat": 0,
+        "addedSaturatedFat": 0,
+        "addedSodium": 0
+      },
+      "name": "mango lassi yogurt drink"
+    },
+    {
+      "keyword": "yogurt drink",
+      "itemConfidence": "High",
+      "estimatedWeightGrams": 1000,
+      "estimatedCalories": 350,
+      "cookingMethod": "unknown",
+      "components": [
+        {
+          "searchQuery": "low fat yogurt",
+          "volumePercentage": 85,
+          "calories": 349,
+          "protein": 26.2,
+          "carbohydrates": 30.5,
+          "totalFat": 13.1,
+          "saturatedFat": 8.7,
+          "sodium": 196,
+          "sugar": 0,
+          "name": "low fat yogurt",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "water",
+          "volumePercentage": 14.8
+        },
+        {
+          "searchQuery": "sea salt",
+          "volumePercentage": 0.2,
+          "calories": 1,
+          "protein": 0,
+          "carbohydrates": 0.2,
+          "totalFat": 0,
+          "saturatedFat": 0,
+          "sodium": 1,
+          "sugar": 0,
+          "name": "sea salt",
+          "source": "estimated"
+        }
+      ],
+      "chainName": null,
+      "originalName": "Low Fat Yogurt Drink",
+      "boundingBox2D": [
+        0,
+        0,
+        1000,
+        1000
+      ],
+      "sourceImageIndex": 1,
+      "anomalyFlags": [],
+      "ingredientsList": "Low fat yogurt (Milk), Water, Sea Salt.",
+      "nutritionFacts": null,
+      "rawNutritionLabel": {
+        "servingSize": "100ml",
+        "calories": "35 kcal",
+        "protein": "3.0g",
+        "totalFat": "1.2g",
+        "saturatedFat": "0.7g",
+        "transFat": null,
+        "totalCarbohydrate": "2.9g",
+        "sugar": "1.8g",
+        "addedSugar": null,
+        "sodium": "120mg",
+        "salt": "0.3g",
+        "potassium": null,
+        "totalFibre": null,
+        "solubleFibre": null
+      },
+      "source": "label",
+      "visualIngredients": [],
+      "scoutIndex": 1,
+      "saltConversionNote": "Converted printed salt (0.3g per 100g) to sodium (120mg/serving, 1200mg total). Formula: 1g salt = 400mg sodium.",
+      "labelProductName": "Low Fat Yogurt Drink",
+      "cookingAdded": {
+        "addedCalories": 0,
+        "addedFat": 0,
+        "addedSaturatedFat": 0,
+        "addedSodium": 0
+      },
+      "name": "yogurt drink"
+    }
+  ]
+}

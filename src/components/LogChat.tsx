@@ -12,12 +12,13 @@ import { translations } from '../utils/translations';
 import { X, Send, Image, Camera, MessageSquare, Sparkles, Plus, Terminal, ChevronDown, ChevronUp, Loader, MapPin, Trash2, Check, Table, RotateCcw, RefreshCw, AlertTriangle, ShieldAlert, Edit2, Maximize2, Minimize2, Flag, BrainCircuit, Download } from 'lucide-react';
 import { UniversalModal } from './UniversalModal';
 import { nutrientDefinitions } from '../utils/nutrition';
-import { biomarkerDefinitions, getBiomarkerStatus, isAsianEthnicity, getBiomarkerStatusLabel, isBiomarkerValueImprobable, getMergedBiomarkerDef, detectFlaggedTelemetryErrors, buildReviewBiomarkerContext, buildBiomarkerReviewPrefill, getMappedBiomarkerKey } from '../utils/biomarkers';
+import { biomarkerDefinitions, getBiomarkerStatus, isAsianEthnicity, getBiomarkerStatusLabel, isBiomarkerValueImprobable, getMergedBiomarkerDef, detectFlaggedTelemetryErrors, buildReviewBiomarkerContext, buildBiomarkerReviewPrefill, getMappedBiomarkerKey, isBiomarkerApproved, isCatalogBuiltIn, shouldStampExtractedDefPending } from '../utils/biomarkers';
 import { BatchNavigator } from './BatchNavigator';
 import LLMSelector from './LLMSelector';
 import { AVAILABLE_LLMS } from '../utils/llm';
 import { compressMultipleImages, compressImage } from '../utils/imageCompressor';
 import { getCurrentDateInTimezone, toYYYYMMDD } from '../utils/dateUtils';
+import { enrichReviewModificationCommands, collectCatalogUnitMap } from '../utils/biomarkerLifecycle';
 import ImageSlider from './ImageSlider';
 import FullScreenLogViewer from './FullScreenLogViewer';
 import FullScreenInstructionViewer from './FullScreenInstructionViewer';
@@ -36,10 +37,12 @@ import { pruneLocalStorageToFreeSpace, safeIdbSet } from '../utils/storageUtils'
 import { resolveFoodImage } from '../utils/imageResolver';
 
 import { JobStore } from '../jobs/JobStore';
+import { humanizeJobFailure } from '../utils/jobFailure';
 import { ImageStore } from '../jobs/ImageStore';
 import { reserveCredits } from '../jobs/credits';
 import { JobQueueRunner } from '../jobs/JobQueueRunner';
 import { recordBreadcrumb } from '../utils/breadcrumbTracker';
+import { consumeGoldenAnalyzeToken, GOLDEN_NEW_ANALYZE_EVENT } from '../utils/goldenIngestClient';
 
 import { PRIMARY_NUTRIENTS, formatNutrientDisplayValue } from '../utils/nutrients';
 import { AgentType, AGENT_REGISTRY, getAgentRolloutStatus } from '../utils/agentConfig';
@@ -1336,7 +1339,15 @@ ${logsText}`);
           }
         }
 
-        const raw = job.result?.raw || job.result || {};
+        const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
+        const snapAgent = (job.inputSnapshot as any)?.agentType;
+        const reviewCmds = raw.modificationCommand || raw.agentResult?.modificationCommand;
+        const resolvedType = raw.agentType || snapAgent || (Array.isArray(reviewCmds) && reviewCmds.length ? 'biomarker_review' : type);
+        const unitMap = collectCatalogUnitMap(profile);
+        const isReview = resolvedType === 'biomarker_review' || type === 'biomarker_review' || agentType === 'biomarker_review';
+        const cmds = isReview
+          ? enrichReviewModificationCommands(Array.isArray(reviewCmds) ? reviewCmds : [], biomarkerHistory || [], unitMap)
+          : reviewCmds;
         const assistantMsg: ChatMessage = {
           id: `msg_assistant_${jobId}`,
           role: 'assistant',
@@ -1344,7 +1355,8 @@ ${logsText}`);
           timestamp: job.updatedAt || new Date().toISOString(),
           isLive: false,
           agentResult: raw,
-          agentType: type as any,
+          agentType: resolvedType as any,
+          modificationCommand: cmds,
           pendingFoodLog: foodLog,
           data: {
             pendingFoodLog: foodLog, // REQUIRED for FoodCard
@@ -1356,7 +1368,11 @@ ${logsText}`);
             mode: raw.mode || (job.inputSnapshot as any)?.mode || 'review',
             comparison: raw.comparison,
             agentResult: {
+              ...raw,
               ...(raw.agentResult || {}),
+              modificationCommand: cmds,
+              proposal: raw.proposal || raw.agentResult?.proposal || null,
+              reply: raw.reply || raw.text,
               scoutScratchpad: raw.agentResult?.scoutScratchpad || raw.scoutScratchpad || job.liveThoughts?.scout || '',
               dietitianScratchpad: raw.agentResult?.dietitianScratchpad || raw.dietitianScratchpad || job.liveThoughts?.dietitian || '',
               backendLogs: raw.agentResult?.backendLogs || raw.backendLogs || job.liveThoughts?.backendLogs || '',
@@ -1570,24 +1586,37 @@ ${logsText}`);
             }
           }
 
-          const raw = job.result?.raw || job.result || {};
+          const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
+          const snapAgent2 = (job.inputSnapshot as any)?.agentType;
+          const reviewCmds2 = raw.modificationCommand || raw.agentResult?.modificationCommand;
+          const resolvedType2 = raw.agentType || snapAgent2 || (Array.isArray(reviewCmds2) && reviewCmds2.length ? 'biomarker_review' : type);
+          const unitMap2 = collectCatalogUnitMap(profile);
+          const isReview2 = resolvedType2 === 'biomarker_review' || type === 'biomarker_review' || agentType === 'biomarker_review';
+          const cmds2 = isReview2
+            ? enrichReviewModificationCommands(Array.isArray(reviewCmds2) ? reviewCmds2 : [], biomarkerHistory || [], unitMap2)
+            : reviewCmds2;
           const assistantMsg: ChatMessage = {
             id: `msg_assistant_${jobId}`,
             role: 'assistant',
             content: raw.message || raw.reply || raw.globalSummary || 'Analysis complete.',
             timestamp: job.updatedAt || new Date().toISOString(),
             agentResult: raw,
-            agentType: type as any,
+            agentType: resolvedType2 as any,
+            modificationCommand: cmds2,
             pendingFoodLog: foodLog,
             data: {
-              pendingFoodLog: foodLog, // REQUIRED for FoodCard
+              pendingFoodLog: foodLog,
               hasImage: !!(foodLog?.imageUrl || foodLog?.imageUrls?.length || (job.inputSnapshot as any)?.hasImage),
               scoutItems: job.result?.scoutItems || raw.scoutItems || [],
               scoutContentType: raw.scoutContentType,
               mode: raw.mode || (job.inputSnapshot as any)?.mode || 'review',
               comparison: raw.comparison,
               agentResult: {
+                ...raw,
                 ...(raw.agentResult || {}),
+                modificationCommand: cmds2,
+                proposal: raw.proposal || raw.agentResult?.proposal || null,
+                reply: raw.reply || raw.text,
                 scoutScratchpad: raw.agentResult?.scoutScratchpad || raw.scoutScratchpad || job.liveThoughts?.scout || '',
                 dietitianScratchpad: raw.agentResult?.dietitianScratchpad || raw.dietitianScratchpad || job.liveThoughts?.dietitian || '',
                 backendLogs: raw.agentResult?.backendLogs || raw.backendLogs || job.liveThoughts?.backendLogs || '',
@@ -1639,7 +1668,7 @@ ${logsText}`);
           const assistantMsg: ChatMessage = {
             id: `msg_assistant_${jobId}`,
             role: 'assistant',
-            content: `⚠️ **Analysis failed**\n\n${job.error?.message || 'Something went wrong during the analysis.'}`,
+            content: `⚠️ **Analysis failed**\n\n${humanizeJobFailure(job.error?.message)}`,
             timestamp: job.updatedAt || new Date().toISOString(),
             isError: true
           };
@@ -2017,6 +2046,7 @@ ${logsText}`);
       const def = biomarkerDefinitions.find(d => d.key === key);
       const customDef = profile?.customBiomarkers?.[key];
       if (!def && !customDef) return;
+      if (!isBiomarkerApproved(key, profile, activeHistory)) return;
       
       let val = biomarkers?.[key];
       const historyLogs = activeHistory ? activeHistory.filter(h => h.biomarkers && h.biomarkers[key] !== undefined) : [];
@@ -2035,12 +2065,13 @@ ${logsText}`);
       const statusLabel = getBiomarkerStatusLabel(key, status, customDef, val, profile).toLowerCase();
       const isOptimallyLabeled = statusLabel.includes('optimal') || statusLabel === 'normal' || statusLabel === 'remission / healthy';
 
-      if ((status === 'high' || status === 'low' || status === 'critical' || status === 'flagged' || isImprobable) && (!isOptimallyLabeled || status === 'flagged' || isImprobable)) {
+      if (status === 'flagged' || isImprobable) return;
+      if ((status === 'high' || status === 'low' || status === 'critical') && !isOptimallyLabeled) {
         list.push({
           key,
           name,
           value: val,
-          status: (status === 'flagged' || isImprobable) ? 'flagged' : status,
+          status,
           normalRange,
           unit
         });
@@ -2402,7 +2433,8 @@ ${logsText}`);
           portionChoices: extraOptions?.portionChoices,
           activeScoutItems: scoutItemsForJob,
           skipScout: extraOptions?.skipScout,
-          scoutContentType: scoutContentTypeFallback
+          scoutContentType: scoutContentTypeFallback,
+          goldenCaseId: extraOptions?.goldenCaseId || (typeof overrideText === 'object' ? overrideText?.goldenCaseId : undefined),
         };
 
         // Use a durable base64 data URL instead of a throwaway blob: URL, so the
@@ -2493,7 +2525,9 @@ ${logsText}`);
             creditReserved: reserved,
             creditSettled: false,
             lockedModeFamily: family,
-            requestId: currentReqId
+            requestId: currentReqId,
+            serverSubmittedAt: undefined,
+            statusMessage: 'Uploading to server… Keep this tab open',
           });
         } else {
           JobStore.createJob({
@@ -2505,7 +2539,9 @@ ${logsText}`);
             creditReserved: reserved,
             creditSettled: false,
             lockedModeFamily: family,
-            requestId: currentReqId
+            requestId: currentReqId,
+            serverSubmittedAt: undefined,
+            statusMessage: 'Uploading to server… Keep this tab open',
           });
         }
 
@@ -2700,7 +2736,11 @@ ${logsText}`);
           })
           .then(data => {
             console.log('[LogChat] Job successfully submitted to server:', data);
-            JobStore.updateJob(currentJobId, { status: 'queued', statusMessage: 'Analyzing on server...' });
+            JobStore.updateJob(currentJobId, {
+              status: 'queued',
+              statusMessage: 'Analyzing on server...',
+              serverSubmittedAt: Date.now(),
+            });
             JobQueueRunner.wake();
           })
           .catch(err => {
@@ -2731,7 +2771,8 @@ ${logsText}`);
         clearTimeout(failsafe);
         isSendingRef.current = false;
 
-        onClose();
+        const keepOpen = !!(extraOptions?.goldenCaseId || (typeof overrideText === 'object' && overrideText?.goldenCaseId));
+        if (!keepOpen) onClose();
       } catch (err: any) {
         console.error('Failed to enqueue food job:', err);
         clearTimeout(failsafe);
@@ -2824,7 +2865,9 @@ ${logsText}`);
             messages: updatedMessages,
             creditReserved: reserved,
             creditSettled: false,
-            requestId: currentReqId
+            requestId: currentReqId,
+            serverSubmittedAt: undefined,
+            statusMessage: 'Uploading to server… Keep this tab open',
           });
         } else {
           JobStore.createJob({
@@ -2835,7 +2878,9 @@ ${logsText}`);
             messages: updatedMessages,
             creditReserved: reserved,
             creditSettled: false,
-            requestId: currentReqId
+            requestId: currentReqId,
+            serverSubmittedAt: undefined,
+            statusMessage: 'Uploading to server… Keep this tab open',
           });
         }
 
@@ -3988,9 +4033,15 @@ ${logsText}`);
         if (activeAgentType) {
           assistantMsg.agentType = (activeAgentType === 'agent1_step1' ? 'agent1' : activeAgentType) as AgentType;
           assistantMsg.agentResult = resData;
+          const unitMap = collectCatalogUnitMap(profile);
+          const reviewCmds = (activeAgentType === 'biomarker_review' || agentType === 'biomarker_review')
+            ? enrichReviewModificationCommands(resData.modificationCommand || [], activeHistory || [], unitMap)
+            : resData.modificationCommand;
+          assistantMsg.modificationCommand = reviewCmds;
           assistantMsg.data = {
             agentResult: {
               ...resData,
+              modificationCommand: reviewCmds,
               scoutScratchpad: resData.scoutScratchpad || liveThoughts.scout || '',
               dietitianScratchpad: resData.dietitianScratchpad || liveThoughts.dietitian || '',
               backendLogs: resData.backendLogs || backendLogsFull || liveThoughts.backendLogs || '',
@@ -4025,7 +4076,14 @@ ${logsText}`);
 
           if (resData.customBiomarkerDefs && Object.keys(resData.customBiomarkerDefs).length > 0) {
             Object.entries(resData.customBiomarkerDefs).forEach(([k, v]: [string, any]) => {
-              defsWithApproval[k] = { ...v, needsApproval: true };
+              const mapped = getMappedBiomarkerKey(k) || k;
+              if (isCatalogBuiltIn(mapped)) return;
+              const existing = profile?.customBiomarkers?.[mapped] || profile?.customBiomarkers?.[k];
+              if (existing) {
+                defsWithApproval[mapped] = { ...existing, ...v, needsApproval: existing.needsApproval };
+              } else if (shouldStampExtractedDefPending(mapped)) {
+                defsWithApproval[mapped] = { ...v, needsApproval: true };
+              }
             });
           }
 
@@ -4035,8 +4093,10 @@ ${logsText}`);
               const raw_name = test.raw_name || (typeof test === 'string' ? test : '');
               if (!raw_name) return;
               const suggested_key = test.suggested_key || raw_name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-              if (!defsWithApproval[suggested_key]) {
-                defsWithApproval[suggested_key] = {
+              const mapped = getMappedBiomarkerKey(suggested_key) || suggested_key;
+              if (isCatalogBuiltIn(mapped)) return;
+              if (!defsWithApproval[mapped] && shouldStampExtractedDefPending(mapped, profile?.customBiomarkers?.[mapped])) {
+                defsWithApproval[mapped] = {
                   name: raw_name,
                   unit: '',
                   normalRange: '',
@@ -4244,6 +4304,22 @@ ${logsText}`);
       }
     }
   }, [isOpen, autoSendMessage, type, agentType, reviewBiomarkerKey]);
+
+  useEffect(() => {
+    if (type !== 'food') return;
+    const onGolden = (ev: Event) => {
+      const d = (ev as CustomEvent).detail || {};
+      if (!d.caseId || !Array.isArray(d.photos) || d.photos.length === 0) return;
+      if (!consumeGoldenAnalyzeToken(d.token)) return;
+      handleSend(
+        { text: d.query || 'Analyze this meal photo.', imageUrls: d.photos, goldenCaseId: d.caseId, userSelectedMode: 'review' },
+        d.photos,
+        { goldenCaseId: d.caseId }
+      );
+    };
+    window.addEventListener(GOLDEN_NEW_ANALYZE_EVENT, onGolden as EventListener);
+    return () => window.removeEventListener(GOLDEN_NEW_ANALYZE_EVENT, onGolden as EventListener);
+  }, [type]);
 
   const handleContinueExtractionChunk = async (msg: any) => {
     setIsAnalyzing(true);
@@ -4683,7 +4759,9 @@ ${logsText}`);
   return (
       <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex flex-col justify-end sm:justify-center animation-fade-in font-sans ${isFullscreen ? 'p-0' : 'p-0 sm:p-4'}`}>
         <div 
-          id="food-chat-container" 
+          id="food-chat-container"
+          data-unified-modal="true"
+          data-job-id={jobId || ''}
           className={`w-full mx-auto bg-theme-bg-card flex flex-col shadow-2xl overflow-hidden transition-all duration-300 ${
             isFullscreen 
               ? 'max-w-full w-full h-full sm:h-full rounded-none border-none' 
@@ -5415,7 +5493,7 @@ ${JSON.stringify(profile, null, 2)}`);
                         </div>
                       ) : null}
                       
-                      {msg.agentType !== 'food' && (() => {
+                      {msg.agentType !== 'food' && msg.agentType !== 'biomarker_review' && !msg.modificationCommand?.length && !msg.data?.agentResult?.modificationCommand?.length && (() => {
                         const formatted = formatMessageContent(msg.content, msg);
                         if (!formatted || !formatted.trim()) return null;
                         return <p className="whitespace-pre-line break-words">{formatted}</p>;
@@ -5561,7 +5639,14 @@ ${JSON.stringify(profile, null, 2)}`);
 
                   {/* Render extracted Pending Food Log info */}
                   {(() => {
-                    const rendererType = msg.id?.startsWith('welcome_') ? 'welcome' : msg.agentType;
+                    const hasReviewFixes = !!(
+                      (Array.isArray(msg.modificationCommand) && msg.modificationCommand.length) ||
+                      (Array.isArray(msg.data?.agentResult?.modificationCommand) && msg.data.agentResult.modificationCommand.length) ||
+                      msg.data?.agentResult?.proposal
+                    );
+                    const rendererType = msg.id?.startsWith('welcome_')
+                      ? 'welcome'
+                      : (hasReviewFixes ? 'biomarker_review' : msg.agentType);
                     const Renderer = rendererType ? agentCardRegistry[rendererType] : null;
                     if (!Renderer) return null;
                     return (

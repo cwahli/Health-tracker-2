@@ -12,7 +12,7 @@ import { HealthBaselineCard } from './chat-cards/HealthBaselineCard';
 import { AgentResultTable } from './AgentResultTable';
 import { BatchNavigator } from './BatchNavigator';
 
-import { biomarkerDefinitions, getBiomarkerMetadata, getPhysiologicalBucket, BIOMARKER_GROUPING_OPTIONS, getMappedBiomarkerKey, getMergedBiomarkerDef } from '../utils/biomarkers';
+import { biomarkerDefinitions, getBiomarkerMetadata, getPhysiologicalBucket, BIOMARKER_GROUPING_OPTIONS, getMappedBiomarkerKey, getMergedBiomarkerDef, isCatalogBuiltIn, shouldStampExtractedDefPending } from '../utils/biomarkers';
 import { formatOptimalTargetValue } from '../utils/agentCalibration';
 import BiomarkerDictionaryModal from './BiomarkerDictionaryModal';
 import { auth } from '../firebase';
@@ -954,8 +954,10 @@ export default function InsightsTab({
         const raw_name = test?.raw_name || (typeof test === 'string' ? test : '');
         if (!raw_name) return;
         const suggested_key = test?.suggested_key || raw_name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-        if (!updatedCustoms[suggested_key]) {
-          updatedCustoms[suggested_key] = {
+        const mapped = getMappedBiomarkerKey(suggested_key) || suggested_key;
+        if (isCatalogBuiltIn(mapped)) return;
+        if (!updatedCustoms[mapped] && shouldStampExtractedDefPending(mapped, updatedCustoms[mapped])) {
+          updatedCustoms[mapped] = {
             name: raw_name,
             unit: '',
             normalRange: '',
@@ -1007,15 +1009,9 @@ export default function InsightsTab({
       const updatedCustoms = { ...(profile.customBiomarkers || {}) };
     const currentHistory = JSON.parse(JSON.stringify(biomarkerHistory || []));
     
-    // Create/update history logs for reviewed biomarkers
-    const todayStr = new Date().toISOString().split('T')[0];
-    const logDate = result.date || result.logDate || todayStr;
-    const biomarkersByDate: Record<string, Record<string, any>> = {};
-
     result.reviewedBiomarkers?.forEach((bm: any) => {
-      if (unselectedKeys && unselectedKeys.includes(bm.key)) return; // Skip deselected
+      if (unselectedKeys && unselectedKeys.includes(bm.key)) return;
       const existing: any = updatedCustoms[bm.key] || {};
-
       const optVal = formatOptimalTargetValue(bm);
 
       updatedCustoms[bm.key] = {
@@ -1023,7 +1019,7 @@ export default function InsightsTab({
         name: bm.name || existing.name,
         unit: existing.unit || bm.unit || '',
         optimalValue: optVal,
-        normalRange: optVal || bm.profileAdjustedNormalRange || existing.normalRange || '',
+        normalRange: existing.normalRange || '',
         profileAdjustedNormalRange: bm.profileAdjustedNormalRange || existing.profileAdjustedNormalRange || '',
         description: bm.description || existing.description || '',
         riskCategories: (existing.riskCategories && existing.riskCategories.length > 0) ? existing.riskCategories : (bm.riskCategories || []),
@@ -1031,23 +1027,8 @@ export default function InsightsTab({
         potentialMedicalConditions: bm.potentialMedicalConditions || existing.potentialMedicalConditions || [],
         specificRiskContext: bm.specificRiskContext || existing.specificRiskContext || '',
         status: bm.status || existing.status || 'Healthy',
-        rangeBrackets: bm.rangeBrackets || existing.rangeBrackets || []
+        rangeBrackets: bm.rangeBrackets || existing.rangeBrackets || [],
       } as any;
-
-      // Group for log entry
-      const bmDate = bm.date || bm.logDate || logDate;
-      if (!biomarkersByDate[bmDate]) {
-        biomarkersByDate[bmDate] = {};
-      }
-      
-      // Prefer explicit userValue, else fall back to the existing stored value for this key/date
-      const valueToSave = bm.userValue !== undefined && bm.userValue !== null && bm.userValue !== ''
-        ? bm.userValue
-        : (bm.value !== undefined ? bm.value : undefined);
-      if (valueToSave !== undefined) {
-        const valNum = Number(valueToSave);
-        biomarkersByDate[bmDate][bm.key] = isNaN(valNum) ? valueToSave : valNum;
-      }
     });
 
     const updatedProfile = {
@@ -1055,33 +1036,7 @@ export default function InsightsTab({
       customBiomarkers: updatedCustoms
     };
 
-    // Merge these into currentHistory
-    Object.entries(biomarkersByDate).forEach(([dateStr, bms]) => {
-      if (Object.keys(bms).length === 0) return;
-
-      const matchDate = (d1: string, d2: string) => {
-        if (!d1 || !d2) return false;
-        return String(d1).split('T')[0].trim() === String(d2).split('T')[0].trim();
-      };
-
-      let existingLogIndex = currentHistory.findIndex((h: any) => matchDate(h.date, dateStr));
-      if (existingLogIndex >= 0) {
-        currentHistory[existingLogIndex].biomarkers = {
-          ...(currentHistory[existingLogIndex].biomarkers || {}),
-          ...bms
-        };
-        if (!currentHistory[existingLogIndex].note) {
-          currentHistory[existingLogIndex].note = "Calibrated by Clinical Calibration Agent";
-        }
-      } else {
-        currentHistory.push({
-          id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-          date: dateStr,
-          biomarkers: bms,
-          note: "Calibrated by Clinical Calibration Agent"
-        });
-      }
-    });
+    // Overlay only — do not rewrite observation numbers from Range Calibrator.
 
     // Recompute biomarkers list
     const recomputedBiomarkers: { [key: string]: number | string } = {};
@@ -1290,9 +1245,9 @@ export default function InsightsTab({
     },
     {
       id: 'data_review',
-      title: 'Data review',
+      title: 'Range Calibrator',
       agentType: 'data_review',
-      description: 'Performs clinical taxonomy mapping, reference range calibration, and personalized health risk estimation on biomarker batches.',
+      description: 'Personalizes reference ranges for this profile. Does not change logged numbers.',
       valueProposition: 'Provides interactive review of your biomarkers with custom reference range adjustments.'
     },
     {
@@ -1304,14 +1259,14 @@ export default function InsightsTab({
     },
     {
       id: 'agent4',
-      title: 'Health planning agent',
+      title: 'Test Planner',
       agentType: 'agent4',
       description: 'Audits diagnostic data accuracy, evaluates external test factors, and identifies short & long-term testing gaps.',
       valueProposition: 'Ensures diagnostic picture accuracy, evaluates retest timing, and identifies short & long-term health risk testing gaps.'
     },
     {
       id: 'agent7',
-      title: 'Insights',
+      title: 'Literature',
       agentType: 'agent7',
       description: 'Scans PubMed and clinical trials to bring recent scientific debate and consensus on your specific health context.',
       valueProposition: 'Synthesizes clinical trial consensus and research evidence specific to your biomarkers.'

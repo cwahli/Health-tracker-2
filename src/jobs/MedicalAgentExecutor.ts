@@ -86,6 +86,11 @@ export async function* executeMedicalAgent(input: MedicalAgentExecutorInput): As
     delete lightProfile.customBiomarkers;
     bodyData.userProfile = lightProfile;
     bodyData.agentDiagnosticSummary = profile.agentDiagnosticSummary || '';
+    const catalogUnitByKey: Record<string, string> = {};
+    Object.entries(profile.customBiomarkers || {}).forEach(([k, v]: [string, any]) => {
+      if (v?.unit) catalogUnitByKey[k] = v.unit;
+    });
+    bodyData.catalogUnitByKey = catalogUnitByKey;
   }
 
   bodyData.biomarkers = biomarkers || {};

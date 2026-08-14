@@ -3,9 +3,18 @@ import {
   parseKnownFails,
   parseTensions,
   extractMealLines,
+  extractCapturedMealProblems,
+  isStaleCapturedStallSymptom,
+  stripStaleStallLines,
   evaluateLogOutcomes,
   evaluateMealLines,
   buildScoreboard,
+  scoreGoldenRun,
+  retainGoldenOutcomes,
+  deriveGoldenTitle,
+  goldenSlug,
+  statsFromJourney,
+  splitExtraIssueText,
 } from './goldenScoreboard';
 
 const picnicLog = `
@@ -19,6 +28,41 @@ const picnicLog = `
 `;
 
 describe('goldenScoreboard parser', () => {
+  it('scoreGoldenRun scores expected meal lines against a new pipeline foodLog', () => {
+    const { meal, summary } = scoreGoldenRun({
+      logText: '[backend] [Reconcile] item="Ham" action=hard_lock foundation=102 budget=102 final=102 factor=1.000',
+      expectedMeal: [
+        {
+          name: 'Ham',
+          weightGrams: 100,
+          calories: 102,
+          protein: 16,
+          carbohydrates: null,
+          totalFat: null,
+          sodium: null,
+          scored: true,
+        },
+      ],
+      foodLog: { itemsBreakdown: [{ originalName: 'Ham', weightGrams: 100, calories: 102, nutrients: { protein: 16 } }] },
+    });
+    expect(meal.pass).toBe(true);
+    expect(summary.failCount).toBe(0);
+  });
+
+  it('does not keep leftover category-fallback as a fail when identity ended on labels', () => {
+    const log = `
+[backend] [Food Resolver Fallback] Created category fallback for gap "cooked pasta"
+[backend] [Reconcile] item="Prawn Layered Pasta Salad" action=hard_lock foundation=374 budget=374 final=374 factor=1.000
+[backend] [Truth Direct Injection] "Prawn Layered Pasta Salad": Using direct nutrients (374 kcal) from label
+`;
+    const scout = {
+      items: [{ originalName: 'Prawn Layered Pasta Salad', components: [{ searchQuery: 'cooked pasta' }] }],
+    };
+    const board = buildScoreboard({ logText: log, scout });
+    expect(board.journey?.[0].phase).toBe('label_truth');
+    expect(board.outcomes.some((o) => o.id === 'log_category_fallback')).toBe(false);
+  });
+
   it('captures declared never-match and log events', () => {
     const rows = parseKnownFails(picnicLog);
     const ids = rows.map((r) => r.id);
@@ -34,6 +78,34 @@ describe('goldenScoreboard parser', () => {
     const t = parseTensions(picnicLog);
     expect(t.some((x) => x.note.includes('scaled'))).toBe(true);
     expect(t.some((x) => x.note.includes('Line sum'))).toBe(true);
+  });
+
+  it('treats a scored dish with no kcal as presence-only and does not match generic Ham to Serrano', () => {
+    const r = evaluateMealLines(
+      [
+        { name: 'Ham', weightGrams: null, calories: null, protein: null, carbohydrates: null, totalFat: null, sodium: null, scored: true },
+        { name: 'Salad', weightGrams: 340, calories: 374, protein: null, carbohydrates: null, totalFat: null, sodium: null, scored: true },
+      ],
+      [
+        { name: 'Prawn Layered Pasta Salad', weightGrams: 340, calories: 374, protein: 14, carbohydrates: null, totalFat: null, sodium: null, scored: false },
+        { name: 'Gran Reserva Serrano Ham', weightGrams: 100, calories: 102, protein: 16, carbohydrates: null, totalFat: null, sodium: null, scored: false },
+      ]
+    );
+    expect(r.pass).toBe(false);
+    expect(r.misses.some((m) => /missing item "Ham"/i.test(m) && /presence only/i.test(m))).toBe(true);
+    expect(r.misses.some((m) => /Salad/.test(m))).toBe(false);
+  });
+
+  it('presence-only Ham matches Reformed Ham label, not Serrano', () => {
+    const r = evaluateMealLines(
+      [{ name: 'Ham', weightGrams: null, calories: null, protein: null, carbohydrates: null, totalFat: null, sodium: null, scored: true }],
+      [
+        { name: 'Gran Reserva Serrano Ham 50% Duroc Breed', weightGrams: 100, calories: 246, protein: null, carbohydrates: null, totalFat: null, sodium: null, scored: false },
+        { name: 'Reformed Ham Nutrition Facts Label', weightGrams: 100, calories: 102, protein: null, carbohydrates: null, totalFat: null, sodium: null, scored: false },
+      ]
+    );
+    expect(r.pass).toBe(true);
+    expect(r.misses).toEqual([]);
   });
 
   it('does not pass meal totals when one line is under and another over', () => {
@@ -56,6 +128,26 @@ describe('goldenScoreboard parser', () => {
     expect(cleaned.every((o) => o.pass === true)).toBe(true);
   });
 
+  it('does not collapse four labeled dishes into the meal title', () => {
+    const lines = extractMealLines({
+      name: 'Prawn Pasta Salad with Cured Meats and Doughnut',
+      calories: 972,
+      itemsBreakdown: [
+        { originalName: 'Prawn Layered Pasta Salad', weightGrams: 340, calories: 374 },
+        { originalName: 'Serrano Ham Gran Reserva', weightGrams: 100, calories: 246 },
+        { originalName: 'Pink Iced Ring Doughnut', weightGrams: 75, calories: 250 },
+        { originalName: 'Reformed Ham', weightGrams: 100, calories: 102 },
+      ],
+    });
+    expect(lines.map((l) => l.name)).toEqual([
+      'Prawn Layered Pasta Salad',
+      'Serrano Ham Gran Reserva',
+      'Pink Iced Ring Doughnut',
+      'Reformed Ham',
+    ]);
+    expect(lines[0].calories).toBe(374);
+  });
+
   it('extracts meal lines from itemsBreakdown', () => {
     const lines = extractMealLines({
       itemsBreakdown: [{ canonicalDbName: 'Ham', weightGrams: 120, calories: 145, nutrients: { protein: 25 } }],
@@ -65,8 +157,132 @@ describe('goldenScoreboard parser', () => {
     expect(lines[0].protein).toBe(25);
   });
 
+  it('counts label-locked journey rows when the log has no Component Resolution Diagnostic', () => {
+    const stats = statsFromJourney([
+      { id: 'a', dish: 'Salad', query: 'pasta', scoutIndex: 0, componentIndex: 0, phase: 'label_truth', source: 'label', matchId: null, matchName: null, identityPass: true, blockers: [] },
+      { id: 'b', dish: 'Donut', query: 'icing', scoutIndex: 1, componentIndex: 1, phase: 'catalog', source: 'internal_catalog', matchId: '169652', matchName: 'icing', identityPass: true, blockers: [] },
+    ]);
+    expect(stats.sampled).toBe(2);
+    expect(stats.curator).toBe(1);
+    expect(stats.catalog).toBe(1);
+    expect(stats.usda).toBe(0);
+  });
+
+  it('names a golden from the dishes, not the job id', () => {
+    const title = deriveGoldenTitle({
+      foodLog: {
+        itemsBreakdown: [
+          { originalName: 'Prawn Layered Pasta Salad', calories: 374 },
+          { originalName: 'Serrano Ham Gran Reserva 50% Duroc Breed', calories: 246 },
+          { originalName: 'Pink Iced Ring Doughnut', calories: 250 },
+          { originalName: 'Reformed Ham, Cured and Cooked', calories: 102 },
+        ],
+      },
+      jobId: 'job_1786646310665_zszmh95lj',
+      fallback: 'Golden job_1786646310665_zszmh95lj',
+    });
+    expect(title).toBe('Prawn Layered Pasta Salad + Serrano Ham Gran Reserva + 2 more');
+    expect(title).not.toMatch(/job_178664/);
+    expect(goldenSlug(title, 'job_1786646310665_zszmh95lj')).toMatch(/prawn-layered-pasta-salad/);
+  });
+
+  it('keeps a previously red check as passed instead of deleting it', () => {
+    const prev = [
+      {
+        id: 'res_truth_merge_db_mismatch',
+        kind: 'log_event' as const,
+        label: 'DB match 150 vs OCR 102',
+        expected: 'x',
+        actual: 'y',
+        pass: false,
+        source: 'parser' as const,
+        enabled: true,
+        signature: '[Truth Merge] Database match calories',
+      },
+    ];
+    const kept = retainGoldenOutcomes(prev, [], 'no merge line in this tape');
+    expect(kept).toHaveLength(1);
+    expect(kept[0].pass).toBe(true);
+    expect(String(kept[0].actual)).toMatch(/cleared|resolved|absent/i);
+  });
+
   it('user extra issues land as custom outcomes', () => {
     const board = buildScoreboard({ logText: '', extraIssues: ['falafel bound to wrap'] });
     expect(board.outcomes.some((o) => o.source === 'user' && /falafel/.test(o.label))).toBe(true);
+  });
+
+  it('splits a mashed Gemini blob and does not keep weight/compare/brand extras on top of the auto overwrite', () => {
+    const mashed =
+      'Portion Weight Parsing Bug: The explicit 500ml weight anchor for the Mango Lassi was mistakenly overridden by the 1 L anchor, doubling its calculated nutrition values. Empty Nutrition UI Render: Comparison mode set foodData to null, causing the single-meal nutrition table in the UI to render completely blank. Brand Guard Search Fallback: The query filter misidentified the generic token "sugar" as a brand name, blocking external database lookup matches.';
+    expect(splitExtraIssueText(mashed)).toHaveLength(3);
+    const board = buildScoreboard({
+      logText:
+        '[User Explicit Weight Anchor] User text specified 500g/ml for "mango lassi yogurt drink". Updating estimatedWeightGrams from 400g to 500g.\n' +
+        '[User Explicit Weight Anchor] User text specified 1000g/ml for "mango lassi yogurt drink". Updating estimatedWeightGrams from 500g to 1000g.',
+      foodLog: {
+        itemsBreakdown: [
+          { originalName: 'Mango Lassi Yogurt Drink', calories: 335, estimatedWeightGrams: 1000 },
+          { originalName: 'Low Fat Yogurt Drink', calories: 350, estimatedWeightGrams: 1000 },
+        ],
+      },
+      extraIssues: [mashed],
+    });
+    const pending = board.outcomes.filter((o) => o.enabled && o.pass === false);
+    expect(pending.some((o) => /overwrote the first/.test(o.label))).toBe(true);
+    expect(pending.some((o) => /Portion Weight|Empty Nutrition|Brand Guard/i.test(o.label))).toBe(false);
+  });
+
+  it('treats the auto-filled stall block as leftover draft, not a user note', () => {
+    expect(
+      isStaleCapturedStallSymptom(
+        `[Captured Meal Processing Issues]
+[Job Error] Stream stalled: No response from analysis engine within 90s.
+[Result Error] Stream stalled: No response from analysis engine within 90s.`
+      )
+    ).toBe(true);
+    expect(isStaleCapturedStallSymptom('wrap was scaled to scout guess')).toBe(false);
+    expect(
+      stripStaleStallLines(
+        `[Captured Meal Processing Issues]
+[Job Error] Stream stalled: No response from analysis engine within 90s.
+wrap was scaled to scout guess`
+      )
+    ).toBe('wrap was scaled to scout guess');
+  });
+
+  it('does not prefill stall when the meal finished, even if error fields still say stalled', () => {
+    const problems = extractCapturedMealProblems({
+      status: 'succeeded',
+      error: { message: 'Stream stalled: No response from analysis engine within 90s.' },
+      result: {
+        error: 'Stream stalled: No response from analysis engine within 90s.',
+        pendingFoodLog: { name: 'Prawn Layered Pasta Salad', calories: 374 },
+      },
+    });
+    expect(problems.join('\n')).not.toMatch(/Stream stalled/i);
+  });
+
+  it('does not surface leftover stall on a succeeded job whose log never stalled', () => {
+    const problems = extractCapturedMealProblems({
+      status: 'succeeded',
+      error: { message: 'Stream stalled: No response from analysis engine within 90s.' },
+      result: {
+        error: 'Stream stalled: No response from analysis engine within 90s.',
+        backendLogs: `[backend] [Reconcile] item="Prawn Layered Pasta Salad" action=hard_lock foundation=374 budget=374 final=374 factor=1.000
+[backend] [Truth Direct Injection] "Prawn Layered Pasta Salad": Using direct nutrients (374 kcal) from label`,
+      },
+    });
+    expect(problems.join('\n')).not.toMatch(/Stream stalled/i);
+  });
+
+  it('keeps stall when the job actually failed with a stall in the log', () => {
+    const problems = extractCapturedMealProblems({
+      status: 'failed',
+      error: { message: 'Stream stalled: No response from analysis engine within 90s.' },
+      result: {
+        backendLogs: '[backend] [Error] Stream stalled: No response from analysis engine within 90s.',
+      },
+    });
+    expect(problems.join('\n')).toMatch(/Stream stalled/i);
   });
 });

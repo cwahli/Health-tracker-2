@@ -130,10 +130,9 @@ export async function* executeFoodAgent(input: FoodAgentExecutorInput): AsyncGen
     bodyData.foodLogs = activeFoodLogs.slice(-60).map((f: any) => ({ name: f.name, date: f.date, nutrients: f.nutrients }));
   }
   if (outOfRangeBiomarkers) {
-    bodyData.biomarkersNeedingImprovement = outOfRangeBiomarkers.map((b: any) => {
-      if (b.status === 'flagged') return `${b.name} is FLAGGED`;
-      return `${b.name} is ${b.status} (${b.value} ${b.unit})`; // simplified
-    });
+    bodyData.biomarkersNeedingImprovement = outOfRangeBiomarkers
+      .filter((b: any) => b && b.status !== 'flagged')
+      .map((b: any) => `${b.name} is ${b.status} (${b.value} ${b.unit})`);
   }
   if (remainingAllowance) {
     bodyData.remainingAllowance = remainingAllowance;

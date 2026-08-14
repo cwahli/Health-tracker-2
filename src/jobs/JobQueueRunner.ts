@@ -95,6 +95,7 @@ class JobQueueRunnerImpl {
 
       JobStore.updateJob(job.id, {
         status: 'succeeded',
+        error: undefined,
         finishedAt: new Date().toISOString(),
         progressPercent: 100,
         retryNotBefore: undefined,

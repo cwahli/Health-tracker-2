@@ -1,6 +1,7 @@
 import { uploadPhotoToR2, uploadPhotosToR2, uploadDebugPayloadToR2 } from './src/utils/r2Storage';
 import { supabase, isSupabaseConfigured } from './src/utils/supabaseClient';
 import { supabaseAdmin, isSupabaseConfigured as isSupabaseAdminConfigured } from './supabaseAdmin';
+import { remainingQuotaCooldownMs } from './server_gemini_retry.js';
 
 export interface ServerJobPayload {
   jobId: string;
@@ -296,6 +297,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         activeScoutItems: payload.activeScoutItems || [],
         portionChoices: payload.portionChoices,
         skipScout: payload.skipScout,
+        skipPortionClarify: (payload as any).skipPortionClarify,
         scoutContentType: payload.scoutContentType,
         agentType: payload.agentType,
         biomarkerKey: payload.biomarkerKey,
@@ -314,15 +316,26 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         controller.abort(new Error('Analysis request timed out after 180s.'));
       }, 180000);
 
+      const engineLabel = String(payload.engine || bodyData.engine || 'gemini-3.5-flash-lite');
       let chunkTimer: NodeJS.Timeout | null = null;
+      const stallMessage = `Stream stalled: Vision Scout (${engineLabel}) produced no tokens for 90s after the prompt. Gemini often hangs when free-tier quota is exhausted or the model is overloaded — not a bad photo. Switch to gemini-3.1-flash-lite.`;
       const resetChunkTimer = () => {
         if (chunkTimer) clearTimeout(chunkTimer);
         chunkTimer = setTimeout(() => {
-          controller.abort(new Error('Stream stalled: No response from analysis engine within 90s.'));
+          accumulatedLogs.push(`[error] ${stallMessage}`);
+          controller.abort(new Error(stallMessage));
         }, 90000);
       };
 
       resetChunkTimer();
+
+      const cooldownMs = remainingQuotaCooldownMs(engineLabel);
+      if (cooldownMs > 0) {
+        const sec = Math.ceil(cooldownMs / 1000);
+        throw new Error(
+          `Gemini free-tier quota on ${engineLabel} — cooldown ${sec}s. Switch to gemini-3.1-flash-lite (separate bucket). Not a bad photo.`
+        );
+      }
 
       let response: Response;
       const endpoint = dbKind === 'medical' ? '/api/gemini/medical-analyze?stream=true' : '/api/gemini/food-analyze?stream=true';
@@ -664,7 +677,13 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
 
     } catch (err: any) {
       console.error(`[ServerJobs] Job ${jobId} failed:`, err);
-      accumulatedLogs.push(`[error] Job execution failed: ${err.message || String(err)}`);
+      const abortReason =
+        err?.name === 'AbortError'
+          ? String(err?.cause?.message || err?.message || 'Stream aborted')
+          : err?.message || String(err);
+      if (!accumulatedLogs.some((l) => l.includes(String(abortReason)))) {
+        accumulatedLogs.push(`[error] Job execution failed: ${abortReason}`);
+      }
 
       if (finalData) {
         try {
@@ -688,8 +707,8 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       }
 
       const errorCleanResult: any = {
-        message: err.message || 'Server analysis failed or timed out',
-        error: err.message || 'Unknown error',
+        message: abortReason || 'Server analysis failed or timed out',
+        error: abortReason || 'Unknown error',
         backendLogsUrl: logsUrl || undefined,
         backendLogs: logsUrl ? `[Logs stored in R2: ${logsUrl}]` : rawErrorLogs.slice(0, 5000),
         photoUrl: photoUrl || undefined,
@@ -719,7 +738,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       const memJob = inMemoryServerJobs.get(jobId);
       if (memJob) {
         memJob.status = 'failed';
-        memJob.status_message = err.message || 'Server analysis failed';
+        memJob.status_message = abortReason || 'Server analysis failed';
         memJob.photo_url = photoUrl || null;
         memJob.clean_result = errorCleanResult;
         memJob.updated_at = new Date().toISOString();
@@ -729,7 +748,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         try {
           await supabaseAdmin.from('agent_jobs').update({
             status: 'failed',
-            status_message: err.message || 'Server analysis failed',
+            status_message: abortReason || 'Server analysis failed',
             photo_url: photoUrl || null,
             debug_url: errorCleanResult.debugUrl || null,
             clean_result: errorCleanResult,

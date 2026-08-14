@@ -137,6 +137,12 @@ export interface UserProfile {
       standardMedicalGrouping?: string;
       potentialMedicalConditions?: string[];
       updatedAt?: number;
+      /** Overlay fingerprint: ageBand|sex|ethnicity */
+      overlayFingerprint?: string;
+      sameAsCatalog?: boolean;
+      catalogApproved?: boolean;
+      rangeVariesBy?: ('age' | 'sex' | 'ethnicity')[];
+      rangeBrackets?: { name?: string; range?: string }[];
     }
   };
   lastUpdatedAt?: number;
@@ -308,6 +314,16 @@ export interface BiomarkerLog {
   tests?: ExtractedTestDetail[];
   sync_state?: SyncState;
   updated_at?: number;
+  /** Same extract of the same report — upsert / same-day merge key */
+  sourceReportId?: string;
+  observationMeta?: {
+    [key: string]: {
+      rawUnit?: string;
+      rawValue?: string | number;
+      printedRange?: string;
+      labFlag?: string;
+    };
+  };
 }
 
 export interface HealthAction {

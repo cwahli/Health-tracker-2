@@ -116,9 +116,10 @@ export function normalizeBiomarkerHistory<T extends MinimalBiomarkerLog>(history
     if (!log) continue;
     const rawDate = log.date || new Date().toISOString().split('T')[0];
     const normalizedDate = formatToDDMMYYYY(rawDate);
-    if (seenDates.has(normalizedDate)) {
-      // Merge biomarkers, notes, and summaries
-      const existing = seenDates.get(normalizedDate)!;
+    const sourceKey = (log as any).sourceReportId ? `${normalizedDate}::${(log as any).sourceReportId}` : normalizedDate;
+    if (seenDates.has(sourceKey)) {
+      // Same calendar day AND same source extract: merge keys (last write wins, never average).
+      const existing = seenDates.get(sourceKey)!;
       
       const newBiomarkers = { ...existing.biomarkers };
       Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
@@ -145,7 +146,7 @@ export function normalizeBiomarkerHistory<T extends MinimalBiomarkerLog>(history
         summary: log.summary ? dedupeDelimitedText('', log.summary, '; ') : log.summary
       };
       
-      seenDates.set(normalizedDate, copy);
+      seenDates.set(sourceKey, copy);
       results.push(copy);
     }
   }
