@@ -1048,5 +1048,12 @@ export function checkCategoryAndStateCompatibility(
     return { compatible: false, reason: `Blocked dried/powder candidate ("${candidateName}") for fresh/cooked query ("${query}")` };
   }
 
+  // 6. Condiment vs Produce
+  const isCondimentCandidate = /\b(sauce|sauces|dressing|dressings|condiment|condiments|ketchup|mayo|mayonnaise|mustard|syrup|syrups)\b/i.test(c);
+  const isProduceQuery = /\b(lettuce|spinach|apple|apples|strawberry|strawberries|kale|cabbage|broccoli|cauliflower|cucumber|cucumbers|tomato|tomatoes|zucchini|onion|onions|garlic)\b/i.test(q);
+  if (isCondimentCandidate && isProduceQuery && !/\b(sauce|dressing|condiment|ketchup|mayo|mayonnaise|mustard|syrup)\b/i.test(q)) {
+    return { compatible: false, reason: `Blocked condiment candidate ("${candidateName}") for fresh/whole produce query ("${query}")` };
+  }
+
   return { compatible: true };
 }

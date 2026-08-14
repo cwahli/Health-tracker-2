@@ -80,12 +80,24 @@ export async function executeFoodResolverCurator(
 ): Promise<Array<{ query: string; chosenFdcId: string | null; formTags?: string[]; dishCore?: Record<string, number>; nutrientsPer100g?: Record<string, number>; quarantinedIds?: string[] }>> {
   
   if (!gaps || gaps.length === 0) return [];
-  
+
   const MAX_GAPS = 8;
-  const activeGaps = gaps.slice(0, MAX_GAPS).map(g => ({
+  const allGapsCapped = gaps.map(g => ({
     ...g,
     candidates: g.candidates.slice(0, 4) // Cap candidate pool to top 4 per gap query
   }));
+  // Chunked dispatch: process every gap item in batches of MAX_GAPS rather than silently
+  // truncating the tail of the list (this previously caused items like "Cinnamon pastry roll"
+  // to never reach the curator at all when the batch exceeded 8 items). Results, aliases,
+  // merges and quarantines are accumulated across all chunks below.
+  const gapChunks: (typeof allGapsCapped)[] = [];
+  for (let i = 0; i < allGapsCapped.length; i += MAX_GAPS) {
+    gapChunks.push(allGapsCapped.slice(i, i + MAX_GAPS));
+  }
+
+  const allResults: Array<{ query: string; chosenFdcId: string | null; formTags?: string[]; dishCore?: Record<string, number>; nutrientsPer100g?: Record<string, number>; quarantinedIds?: string[] }> = [];
+
+  for (const activeGaps of gapChunks) {
 
   const casesText = activeGaps.map((g, i) => {
     const candsStr = g.candidates.length > 0
@@ -106,14 +118,16 @@ export async function executeFoodResolverCurator(
     jsonResult = FoodCuratorActionSchema.parse(JSON.parse(repairedJson));
   } catch (error) {
     addDebugLog(`[CuratorAction] Failed to execute curator: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
-    // Fallback: Return top category-compatible candidate if available
-    return activeGaps.map(g => {
+    // Fallback: use top category-compatible candidate if available for this chunk, then
+    // continue with the remaining chunks instead of aborting the whole batch.
+    allResults.push(...activeGaps.map(g => {
       const validCand = g.candidates.find(c => checkCategoryAndStateCompatibility(g.query, c.name).compatible);
       return {
         query: g.query,
         chosenFdcId: validCand ? validCand.id : null
       };
-    });
+    }));
+    continue;
   }
 
   const results: Array<{ query: string; chosenFdcId: string | null; formTags?: string[]; dishCore?: Record<string, number>; nutrientsPer100g?: Record<string, number>; quarantinedIds?: string[] }> = [];
@@ -130,26 +144,62 @@ export async function executeFoodResolverCurator(
   
   for (const gap of activeGaps) {
     const gapQueryClean = gap.query.toLowerCase().trim();
-    const action = jsonResult.actions.find((a: any) => {
+    // Pass 1: exact query match only. This MUST run across the whole actions array before any
+    // fuzzy matching is attempted, otherwise Array.find() can bind a gap to the wrong case
+    // (e.g. "crispy fried chicken" incorrectly binding to the "grilled chicken breast" action
+    // because they share the single token "chicken" and the old single-pass fuzzy check fired
+    // before the correct exact-match case later in the array was ever reached).
+    let action = jsonResult.actions.find((a: any) => {
       if (a.type !== 'pick_existing' && a.type !== 'normalize_basis') return false;
       const actQueryClean = a.query ? a.query.toLowerCase().trim() : '';
-      if (actQueryClean && actQueryClean === gapQueryClean) return true;
-      if (actQueryClean && (calculateTokenOverlap(actQueryClean, gapQueryClean) >= 0.3 || hasCoreTokenOverlap(actQueryClean, gapQueryClean))) return true;
-      if (!actQueryClean && a.chosenFdcId && gap.candidates.some(c => String(c.id) === String(a.chosenFdcId))) return true;
-      return false;
+      return actQueryClean !== '' && actQueryClean === gapQueryClean;
     });
+    // Pass 2: fuzzy fallback, only if no exact match exists anywhere in the batch. Requires BOTH
+    // a meaningful overlap ratio AND core-token agreement so a single shared generic word (e.g.
+    // "chicken") can no longer bind two unrelated cases together.
+    if (!action) {
+      action = jsonResult.actions.find((a: any) => {
+        if (a.type !== 'pick_existing' && a.type !== 'normalize_basis') return false;
+        const actQueryClean = a.query ? a.query.toLowerCase().trim() : '';
+        if (actQueryClean && calculateTokenOverlap(actQueryClean, gapQueryClean) >= 0.6 && hasCoreTokenOverlap(actQueryClean, gapQueryClean)) return true;
+        if (!actQueryClean && a.chosenFdcId && gap.candidates.some(c => String(c.id) === String(a.chosenFdcId))) return true;
+        return false;
+      });
+    }
     
     if (action && (action.type === 'pick_existing' || action.type === 'normalize_basis')) {
       let finalChosenId: string | null = null;
-      
-      // 1. Try to resolve via local deterministic dictionary first (Safe Canonical Mapping)
-      const localMatch = lookupCanonicalBaseFood(action.parametricFoodName || gap.query);
-      if (localMatch && localMatch.fdcId) {
-        addDebugLog(`[LocalDictionaryMatch] Resolved locally for "${gap.query}" -> FDC ${localMatch.fdcId} ("${action.parametricFoodName || gap.query}")`);
-        finalChosenId = String(localMatch.fdcId);
+
+      // 1. High-confidence curator parametric matches take precedence over the local static
+      // dictionary. The curator already reasons over the full query context (e.g. "breaded and
+      // fried" vs "grilled"), while the local dictionary is a coarse keyword-substring lookup
+      // that can silently overwrite a correct, more specific curator pick.
+      if (action.confidence === 'high' && action.parametricFdcId) {
+        const paramIdStr = String(action.parametricFdcId);
+        const paramName = action.parametricFoodName || gap.query;
+        const overlap = calculateTokenOverlap(gap.query, paramName);
+        const coreMatch = hasCoreTokenOverlap(gap.query, paramName);
+
+        if (overlap >= 0.30 || coreMatch) {
+          addDebugLog(`[ParametricVerification] PASSED (high-confidence, priority) for "${gap.query}" -> FDC ${paramIdStr} ("${paramName}", overlap: ${(overlap * 100).toFixed(0)}%, coreMatch: ${coreMatch})`);
+          finalChosenId = paramIdStr;
+        } else {
+          addDebugLog(`[ParametricVerification] REJECTED for "${gap.query}" -> FDC ${paramIdStr} ("${paramName}", overlap: ${(overlap * 100).toFixed(0)}% < 30%). Falling back to local dictionary/candidate.`);
+        }
       }
-      
-      // 2. Check Parametric FDC ID with Semantic Verification Gate
+
+      // 2. Local deterministic dictionary (Safe Canonical Mapping) — only consulted when the
+      // curator did not supply a verified high-confidence parametric match above.
+      if (!finalChosenId) {
+        const localMatch = lookupCanonicalBaseFood(action.parametricFoodName || gap.query);
+        if (localMatch && localMatch.fdcId) {
+          addDebugLog(`[LocalDictionaryMatch] Resolved locally for "${gap.query}" -> FDC ${localMatch.fdcId} ("${action.parametricFoodName || gap.query}")`);
+          finalChosenId = String(localMatch.fdcId);
+        }
+      }
+
+      // 2b. Medium/low-confidence parametric FDC ID with Semantic Verification Gate (only if
+      // neither the priority high-confidence check nor the local dictionary resolved it).
       if (!finalChosenId && action.parametricFdcId) {
         const paramIdStr = String(action.parametricFdcId);
         const paramName = action.parametricFoodName || gap.query;
@@ -343,5 +393,8 @@ export async function executeFoodResolverCurator(
   }
 
 
-  return results;
+  allResults.push(...results);
+  } // end for (const activeGaps of gapChunks)
+
+  return allResults;
 }
