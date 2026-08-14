@@ -4823,7 +4823,7 @@ ${logsText}`);
           </div>
         )}
 
-        {isAgent('medical') && (
+        {isAgent('medical') && (activeAgentKey === 'data_review' || activeAgentKey === 'agent1') && (
           <div className="px-4 py-2 bg-indigo-50/20 dark:bg-indigo-950/10 border-b border-theme-border/80 flex items-center justify-between text-xs shrink-0">
             <span className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">Items per batch:</span>
             <div className="flex items-center gap-2 bg-slate-100/80 dark:bg-slate-950/40 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-800/30">

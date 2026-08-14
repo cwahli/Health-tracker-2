@@ -4421,9 +4421,14 @@ export default function App() {
           const targetDate = cmd.date || getCurrentDateInTimezone(profile?.timezone);
           const logIdx = updatedHistory.findIndex(h => normalizeDateForMatch(h.date) === normalizeDateForMatch(targetDate));
           if (logIdx >= 0 && cmd.newValue !== undefined) {
-            updatedHistory[logIdx].biomarkers = {
-              ...updatedHistory[logIdx].biomarkers,
-              [cmd.keyName]: cmd.newValue
+            updatedHistory[logIdx] = {
+              ...updatedHistory[logIdx],
+              biomarkers: {
+                ...updatedHistory[logIdx].biomarkers,
+                [cmd.keyName]: cmd.newValue
+              },
+              sync_state: 'update',
+              updated_at: Date.now()
             };
             modifiedLogIds.push(updatedHistory[logIdx].id);
             madeChanges = true;
@@ -4439,7 +4444,12 @@ export default function App() {
           if (logIdx >= 0 && updatedHistory[logIdx].biomarkers[cmd.keyName] !== undefined) {
             const newBiomarkers = { ...updatedHistory[logIdx].biomarkers };
             delete newBiomarkers[cmd.keyName];
-            updatedHistory[logIdx].biomarkers = newBiomarkers;
+            updatedHistory[logIdx] = {
+              ...updatedHistory[logIdx],
+              biomarkers: newBiomarkers,
+              sync_state: 'update',
+              updated_at: Date.now()
+            };
             modifiedLogIds.push(updatedHistory[logIdx].id);
             madeChanges = true;
             hasNewBiomarkers = true;

@@ -397,19 +397,19 @@ export default function HomeTab({
     });
   }, [resolvedBiomarkers, allDefinitions, hasBmiAlert]);
 
+  const flaggedTelemetryErrors = React.useMemo(() => {
+    return detectFlaggedTelemetryErrors(resolvedBiomarkers, profile, activeHistory, allDefinitions);
+  }, [resolvedBiomarkers, profile, activeHistory, allDefinitions]);
+
   const flaggedBiomarkers = React.useMemo(() => {
-    return detectFlaggedTelemetryErrors(resolvedBiomarkers, profile, activeHistory, allDefinitions)
+    return flaggedTelemetryErrors
       .map((f) => {
         const def = allDefinitions.find((d) => d.key === f.key);
         if (!def || !isBiomarkerApproved(f.key, profile)) return null;
         return { key: f.key, status: 'flagged' as const, def, value: f.value, unit: f.unit };
       })
       .filter((b): b is NonNullable<typeof b> => b !== null);
-  }, [resolvedBiomarkers, profile, activeHistory, allDefinitions]);
-
-  const flaggedTelemetryErrors = React.useMemo(() => {
-    return detectFlaggedTelemetryErrors(resolvedBiomarkers, profile, activeHistory, allDefinitions);
-  }, [resolvedBiomarkers, profile, activeHistory, allDefinitions]);
+  }, [flaggedTelemetryErrors, profile, allDefinitions]);
 
   const [showTelemetryModal, setShowTelemetryModal] = React.useState(false);
   const [pendingAgentTrigger, setPendingAgentTrigger] = React.useState<{ agentType: any; options?: any } | null>(null);
