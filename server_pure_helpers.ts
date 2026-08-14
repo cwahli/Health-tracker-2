@@ -572,6 +572,53 @@ export function checkAtwaterConsistency(
   }
 }
 
+export function applyCommercialSodiumFloor(
+  itemName: string,
+  itemNutrients: Record<string, number>,
+  dbSource?: string,
+  addDebugLog?: (msg: string) => void,
+  ctx?: {
+    originalName?: string | null;
+    keyword?: string | null;
+    componentCount?: number;
+    physicalForm?: string | null;
+    chainName?: string | null;
+  }
+): void {
+  if (!itemNutrients || typeof itemNutrients !== 'object') return;
+  const canonicalName = itemName;
+  const identityForChecks = [
+    ctx?.originalName,
+    ctx?.keyword,
+    itemName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const isGroceryBrand =
+    ctx?.chainName != null && isGroceryBrandSync(ctx.chainName);
+  const isFastFoodOrChain =
+    (ctx?.chainName != null && !isGroceryBrand) ||
+    isKnownDatabaseBrandSync(identityForChecks) ||
+    /\b(kebab|tikka|wrap)\b/i.test(identityForChecks);
+
+  const isWholeFood = ctx?.physicalForm === 'SOLID_FRUIT_VEG' || dbSource === 'canonical_dict';
+
+  if (isFastFoodOrChain && !isWholeFood && (itemNutrients.calories || 0) > 0) {
+    const currentSodium = itemNutrients.sodium || 0;
+    const commercialSodiumFloor = Math.round((itemNutrients.calories || 0) * 1.8);
+    if (currentSodium < commercialSodiumFloor) {
+      if (addDebugLog) {
+        addDebugLog(
+          `[Commercial Sodium Floor] Sodium for fast-food item "${canonicalName}" (${currentSodium}mg) was below commercial floor (1.8mg/kcal). Adjusted sodium to ${commercialSodiumFloor}mg floor for ${itemNutrients.calories} kcal.`
+        );
+      }
+      itemNutrients.sodium = commercialSodiumFloor;
+    }
+  }
+}
+
 export function applyNutrientRealityChecks(
   itemName: string,
   itemWeight: number,
@@ -706,27 +753,7 @@ export function applyNutrientRealityChecks(
   }
 
   // 4b. Fast-Food Commercial Sodium Floor (Tier 3 Guardrail)
-  const isGroceryBrand = 
-    ctx?.chainName != null && isGroceryBrandSync(ctx.chainName);
-  const isFastFoodOrChain =
-    (ctx?.chainName != null && !isGroceryBrand) ||
-    isKnownDatabaseBrandSync(identityForChecks) ||
-    /\b(kebab|tikka|wrap)\b/i.test(identityForChecks);
-
-  const isWholeFood = ctx?.physicalForm === 'SOLID_FRUIT_VEG' || dbSource === 'canonical_dict';
-
-  if (isFastFoodOrChain && !isWholeFood && (itemNutrients.calories || 0) > 0) {
-    const currentSodium = itemNutrients.sodium || 0;
-    const commercialSodiumFloor = Math.round((itemNutrients.calories || 0) * 1.8);
-    if (currentSodium < commercialSodiumFloor) {
-      if (addDebugLog) {
-        addDebugLog(
-          `[Commercial Sodium Floor] Sodium for fast-food item "${canonicalName}" (${currentSodium}mg) was below commercial floor (1.8mg/kcal). Adjusted sodium to ${commercialSodiumFloor}mg floor for ${itemNutrients.calories} kcal.`
-        );
-      }
-      itemNutrients.sodium = commercialSodiumFloor;
-    }
-  }
+  applyCommercialSodiumFloor(itemName, itemNutrients, dbSource, addDebugLog, ctx);
 
   // 2. Fibre Reality Check (Specific for Kimchi / Radish)
   const isKimchiOrRadish = nameLower.includes('kimchi') || nameLower.includes('radish') || nameLower.includes('daikon') || nameLower.includes('kkakdugi');

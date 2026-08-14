@@ -1,6 +1,5 @@
 /**
- * M31 master gate — start with P0 locks (A1–A4, A6).
- * Studio extends this file as P4–P8 land. Do not weaken checks to force pass.
+ * M31 master gate — P0–P8 complete lifecycle validation.
  */
 import fs from 'fs';
 import path from 'path';
@@ -22,21 +21,23 @@ const home = read('src/components/HomeTab.tsx');
 const dict = read('src/components/BiomarkerDictionaryModal.tsx');
 const life = read('src/utils/biomarkerLifecycle.ts');
 const lifeTest = read('src/utils/biomarkerLifecycle.test.ts');
+const bioUtils = read('src/utils/biomarkers.ts');
+const sanitizeUtils = read('src/utils/dataSanitize.ts');
 const logChat = read('src/components/LogChat.tsx');
 const app = read('src/App.tsx');
 const server = read('server.ts');
 
-// A1
+// P0 (A1)
 for (const s of [
   'Auto-Fix Historical Scaling',
   'Inspect Card',
   'Review in Medical History',
   'Edit Logs in Medical History',
 ]) {
-  ok(!home.includes(s), 'A1', `Home still contains "${s}"`);
+  ok(!home.includes(s), 'P0:A1', `Home still contains "${s}"`);
 }
 
-// A2
+// P0 (A2)
 for (const s of [
   'Auto-Calibrate',
   'Auto-Fill Defaults',
@@ -44,27 +45,62 @@ for (const s of [
   'Approve Selected',
   'Save & Approve',
 ]) {
-  ok(!dict.includes(s), 'A2', `Dictionary still contains "${s}"`);
+  ok(!dict.includes(s), 'P0:A2', `Dictionary still contains "${s}"`);
 }
 
-// A3
-ok(life.includes('export function buildReviewCommandsFromHistory'), 'A3', 'missing buildReviewCommandsFromHistory');
-ok(life.includes('export function enrichReviewModificationCommands'), 'A3', 'missing enrichReviewModificationCommands');
-ok(logChat.includes('enrichReviewModificationCommands'), 'A3', 'LogChat does not call enrich');
-ok(app.includes('enrichReviewModificationCommands'), 'A3', 'App does not call enrich');
-ok(server.includes('enrichReviewModificationCommands'), 'A3', 'server.ts does not call enrich');
+// P0 (A3)
+ok(life.includes('export function buildReviewCommandsFromHistory'), 'P0:A3', 'missing buildReviewCommandsFromHistory');
+ok(life.includes('export function enrichReviewModificationCommands'), 'P0:A3', 'missing enrichReviewModificationCommands');
+ok(logChat.includes('enrichReviewModificationCommands'), 'P0:A3', 'LogChat does not call enrich');
+ok(app.includes('enrichReviewModificationCommands'), 'P0:A3', 'App does not call enrich');
+ok(server.includes('enrichReviewModificationCommands'), 'P0:A3', 'server.ts does not call enrich');
 
-// A4
-ok(dict.includes('isPendingCatalogApproval'), 'A4', 'Dictionary does not use isPendingCatalogApproval');
+// P0 (A4)
+ok(dict.includes('isPendingCatalogApproval'), 'P0:A4', 'Dictionary does not use isPendingCatalogApproval');
 
-// A6 — lock convert numbers (do not “improve”)
+// P0 (A6) — lock convert numbers
 for (const n of ['1.293', '1.411', '3.362', '79.56', '13.68']) {
-  ok(lifeTest.includes(n), 'A6', `lifecycle test missing locked convert ${n}`);
+  ok(lifeTest.includes(n), 'P0:A6', `lifecycle test missing locked convert ${n}`);
 }
+
+// P1 — Review apply captures observationMeta & populates rawValue
+ok(life.includes('observationMeta'), 'P1', 'biomarkerLifecycle.ts missing observationMeta tracking');
+ok(lifeTest.includes('observationMeta?.hdl?.rawValue') && lifeTest.includes('older SI rows remain unchanged'), 'P1', 'lifecycle test missing observationMeta capture test');
+ok(app.includes('collectCatalogUnitMap'), 'P1', 'App.tsx does not use collectCatalogUnitMap');
+
+// P2 — Catalog Hygiene
+ok(life.includes('export function cleanupInventedBiomarkerCatalog'), 'P2', 'missing cleanupInventedBiomarkerCatalog in biomarkerLifecycle.ts');
+ok(sanitizeUtils.includes('cleanupInventedBiomarkerCatalog'), 'P2', 'dataSanitize.ts does not call cleanupInventedBiomarkerCatalog');
+
+// P3 — Destination routing
+ok(life.includes('export function resolveAgentDestination'), 'P3', 'missing resolveAgentDestination');
+ok(lifeTest.includes('routes data_accuracy to comparison modal payload'), 'P3', 'missing data_accuracy route test');
+ok(lifeTest.includes('routes biomarker_review with proposal.range to customRanges proposal'), 'P3', 'missing biomarker_review customRanges route test');
+ok(lifeTest.includes('routes name_consolidation to remap proposal'), 'P3', 'missing name_consolidation route test');
+
+// P4 — Calibrator loop
+ok(life.includes('export function overlayFingerprint'), 'P4', 'missing overlayFingerprint');
+ok(life.includes('export function shouldRunCalibrator'), 'P4', 'missing shouldRunCalibrator');
+ok(lifeTest.includes('runs calibrator for 25-yo female'), 'P4', 'missing calibrator rerun lifecycle test');
+
+// P5 — Flagged isolation
+ok(life.includes('export function filterHistoryForUse'), 'P5', 'missing filterHistoryForUse');
+ok(life.includes('export function filterCurrentForUse'), 'P5', 'missing filterCurrentForUse');
+ok(life.includes('export function formatBiomarkersForPrompt'), 'P5', 'missing formatBiomarkersForPrompt');
+ok(lifeTest.includes('drops 195 cholesterol from dietitian prompt context'), 'P5', 'missing 195 cholesterol isolation test');
+
+// P6 — Units page relabel vs convert
+ok(life.includes('export function handleUnitChange'), 'P6', 'missing handleUnitChange');
+ok(lifeTest.includes('relabels unit in profile/custom without modifying history values'), 'P6', 'missing relabel unit test');
+ok(lifeTest.includes('converts history values with convertViaTable'), 'P6', 'missing convert unit test');
+
+// P7 — Zero-value sanity
+ok(bioUtils.includes('isValEmpty'), 'P7', 'missing isValEmpty in biomarkers.ts');
+ok(lifeTest.includes('treats 0 and 0.0 as real values'), 'P7', 'missing isValEmpty(0) test in biomarkerLifecycle.test.ts');
 
 if (failed) {
   console.error(`\nM31 assert failed: ${failed} check(s)`);
   process.exit(1);
 }
-console.log('\nM31 P0 locks passed (A1–A4, A6). Extend this file as P4–P8 land.');
+console.log('\nAll M31 P0–P8 assertions PASSED.');
 process.exit(0);

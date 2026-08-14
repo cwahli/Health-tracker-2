@@ -10,6 +10,9 @@ import {
 } from './biomarkers';
 import { toYYYYMMDD } from './dateUtils';
 import { mergeFoodLogsDeduped, foodLogFingerprint } from './foodLogDedupe';
+import { cleanupInventedBiomarkerCatalog } from './biomarkerLifecycle';
+
+export { cleanupInventedBiomarkerCatalog };
 
 export type SanitizeActionKind =
   | 'fix_value' // unit scale correction
@@ -318,13 +321,20 @@ export function applyDataSanitizePlan(
       });
     });
 
+  const cleanedCatalog = cleanupInventedBiomarkerCatalog({
+    ...opts.profile,
+    customBiomarkers: customs,
+    deletedCustomBiomarkerKeys: deletedCustom,
+  }, history);
+
   return {
     biomarkerHistory: history.filter((h) => Object.keys(h.biomarkers || {}).length > 0),
     biomarkers: { ...biomarkers, ...recomputed },
     foodLogs,
     profileUpdates: {
-      customBiomarkers: customs,
-      deletedCustomBiomarkerKeys: deletedCustom,
+      customBiomarkers: cleanedCatalog.profile.customBiomarkers,
+      deletedCustomBiomarkerKeys: cleanedCatalog.profile.deletedCustomBiomarkerKeys,
+      ...(cleanedCatalog.profile.customRanges ? { customRanges: cleanedCatalog.profile.customRanges } : {}),
     },
     applied,
   };

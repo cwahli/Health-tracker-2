@@ -3,7 +3,7 @@
  * Relabel vs convert, Review apply, overlay fingerprint, convert table.
  */
 import { toYYYYMMDD } from './dateUtils';
-import { getMappedBiomarkerKey, isBiomarkerApproved, detectFlaggedTelemetryErrors, biomarkerDefinitions } from './biomarkers';
+import { getMappedBiomarkerKey, isBiomarkerApproved, detectFlaggedTelemetryErrors, biomarkerDefinitions, parseNormalRangeBounds } from './biomarkers';
 import type { BiomarkerLog } from '../types';
 
 export type UnitChangeMode = 'relabel' | 'convert';
@@ -11,7 +11,7 @@ export type UnitChangeMode = 'relabel' | 'convert';
 export type RangeVariesBy = 'age' | 'sex' | 'ethnicity';
 
 export interface ModificationCommand {
-  action: 'update_biomarker' | 'update_profile' | 'remove_biomarker' | string;
+  action: 'update_biomarker' | 'update_profile' | 'remove_biomarker';
   keyName?: string;
   date?: string;
   newValue?: string | number;
@@ -90,6 +90,98 @@ export function convertViaTable(
     }
   }
   return { ok: false, reason: `Incomparable units ${fromUnit} → ${toUnit} for ${mapped}` };
+}
+
+export interface HandleUnitChangeOpts {
+  key: string;
+  fromUnit: string;
+  toUnit: string;
+  mode: UnitChangeMode; // 'relabel' | 'convert'
+  profile: any;
+  history?: BiomarkerLog[];
+  factor?: number; // optional custom factor
+}
+
+export interface HandleUnitChangeResult {
+  profile: any;
+  history: BiomarkerLog[];
+  convertedCount: number;
+}
+
+/**
+ * Handle unit changes with explicit relabel vs convert split (P6):
+ * - mode='relabel': updates profile/custom unit string ONLY. History numbers NEVER change.
+ * - mode='convert': applies convertViaTable (or custom factor) across matching history logs; records rawValue/rawUnit on observationMeta.
+ */
+export function handleUnitChange(opts: HandleUnitChangeOpts): HandleUnitChangeResult {
+  const { key, fromUnit, toUnit, mode, profile, history = [], factor } = opts;
+  const canonicalKey = getMappedBiomarkerKey(key) || key;
+
+  // 1. Update catalog / profile custom unit
+  const nextProfile = {
+    ...profile,
+    customBiomarkers: { ...(profile?.customBiomarkers || {}) },
+  };
+  const prevDef = nextProfile.customBiomarkers[canonicalKey] || {};
+  nextProfile.customBiomarkers[canonicalKey] = {
+    ...prevDef,
+    unit: toUnit,
+  };
+
+  if (mode === 'relabel') {
+    // Relabel: history numbers never change!
+    return {
+      profile: nextProfile,
+      history: [...history],
+      convertedCount: 0,
+    };
+  }
+
+  // mode === 'convert': convert history numbers & record observationMeta
+  let convertedCount = 0;
+  const nextHistory = history.map((log) => {
+    const rawVal = log.biomarkers?.[canonicalKey] ?? log.biomarkers?.[key];
+    if (rawVal === undefined || rawVal === null || rawVal === '') {
+      return log;
+    }
+    const num = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal));
+    if (isNaN(num)) return log;
+
+    let convertedVal: number | null = null;
+    if (typeof factor === 'number' && factor > 0) {
+      convertedVal = Number((num * factor).toFixed(3));
+    } else {
+      const res = convertViaTable(canonicalKey, num, fromUnit, toUnit);
+      if (res.ok) convertedVal = res.value;
+    }
+
+    if (convertedVal === null) return log;
+
+    const nextBiomarkers = { ...log.biomarkers, [canonicalKey]: convertedVal };
+    const nextMeta = log.observationMeta ? JSON.parse(JSON.stringify(log.observationMeta)) : {};
+    if (!nextMeta[canonicalKey]) nextMeta[canonicalKey] = {};
+    if (nextMeta[canonicalKey].rawValue === undefined) {
+      nextMeta[canonicalKey].rawValue = num;
+    }
+    if (!nextMeta[canonicalKey].rawUnit) {
+      nextMeta[canonicalKey].rawUnit = fromUnit;
+    }
+
+    convertedCount++;
+    return {
+      ...log,
+      biomarkers: nextBiomarkers,
+      observationMeta: nextMeta,
+      sync_state: 'update' as const,
+      updated_at: Date.now(),
+    };
+  });
+
+  return {
+    profile: nextProfile,
+    history: nextHistory,
+    convertedCount,
+  };
 }
 
 export function datesMatch(a?: string, b?: string): boolean {
@@ -269,6 +361,7 @@ export function applyModificationCommands(
   const next = history.map((h) => ({
     ...h,
     biomarkers: { ...(h.biomarkers || {}) },
+    observationMeta: h.observationMeta ? JSON.parse(JSON.stringify(h.observationMeta)) : undefined,
   }));
 
   enriched.forEach((cmd) => {
@@ -279,6 +372,11 @@ export function applyModificationCommands(
       const num = typeof cmd.newValue === 'number' ? cmd.newValue : Number(cmd.newValue);
       const val = Number.isNaN(num) ? cmd.newValue : num;
       if (idx >= 0) {
+        if (!next[idx].observationMeta) next[idx].observationMeta = {};
+        if (!next[idx].observationMeta[key]) next[idx].observationMeta[key] = {};
+        if (next[idx].observationMeta[key].rawValue === undefined && next[idx].biomarkers[key] !== undefined) {
+          next[idx].observationMeta[key].rawValue = cmd.oldValue !== undefined ? cmd.oldValue : next[idx].biomarkers[key];
+        }
         next[idx].biomarkers[key] = val;
         next[idx].sync_state = 'update';
         next[idx].updated_at = Date.now();
@@ -288,6 +386,11 @@ export function applyModificationCommands(
           id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
           date: cmd.date,
           biomarkers: { [key]: val },
+          observationMeta: {
+            [key]: {
+              rawValue: cmd.oldValue !== undefined ? cmd.oldValue : val,
+            },
+          },
           note: cmd.reason || 'Corrected by Review',
           sync_state: 'update',
           updated_at: Date.now(),
@@ -298,6 +401,9 @@ export function applyModificationCommands(
       const idx = next.findIndex((h) => datesMatch(h.date, cmd.date));
       if (idx >= 0 && next[idx].biomarkers[key] !== undefined) {
         delete next[idx].biomarkers[key];
+        if (next[idx].observationMeta?.[key]) {
+          delete next[idx].observationMeta[key];
+        }
         next[idx].sync_state = 'update';
         next[idx].updated_at = Date.now();
         applied += 1;
@@ -361,9 +467,60 @@ export const RETIRED_AGENT_REDIRECT: Record<string, string> = {
   agent5: 'data_review',
 };
 
-export function resolveAgentDestination(agentType: string | null | undefined): string | null {
+export interface AgentDestinationRoute {
+  destination: string;
+  payload?: any;
+  proposal?: any;
+  targetKey?: string;
+  requiresApproval?: boolean;
+  silentWrite?: boolean;
+}
+
+export function resolveAgentDestination(
+  agentType: string | null | undefined,
+  payload?: any
+): string | AgentDestinationRoute | null {
   if (!agentType) return null;
-  return RETIRED_AGENT_REDIRECT[agentType] || agentType;
+  const canonical = RETIRED_AGENT_REDIRECT[agentType] || agentType;
+
+  if (payload !== undefined && payload !== null) {
+    if (canonical === 'data_accuracy' || agentType === 'data_accuracy') {
+      return {
+        destination: 'comparison_modal',
+        payload,
+        requiresApproval: true,
+      };
+    }
+    if (canonical === 'biomarker_review' || agentType === 'biomarker_review') {
+      if (payload?.proposal?.range || payload?.proposal?.normalRange) {
+        return {
+          destination: 'custom_ranges_proposal',
+          targetKey: payload.biomarkerKey || payload.proposal?.key || payload.proposal?.name,
+          proposal: payload.proposal,
+          requiresApproval: true,
+          silentWrite: false,
+        };
+      }
+    }
+    if (
+      canonical === 'name_consolidation' ||
+      agentType === 'name_consolidation' ||
+      agentType === 'agent3' ||
+      agentType === 'consolidate_names'
+    ) {
+      return {
+        destination: 'name_remap_proposal',
+        proposal: payload?.proposal || payload,
+        requiresApproval: true,
+      };
+    }
+    return {
+      destination: canonical,
+      payload,
+    };
+  }
+
+  return canonical;
 }
 
 export const INSTRUCTION_KEY_ALIASES: Record<string, string[]> = {
@@ -425,6 +582,15 @@ export function filterCurrentForUse(
   return out;
 }
 
+export function formatBiomarkersForPrompt(
+  current: Record<string, any> | undefined,
+  profile: any,
+  history?: any[]
+): string {
+  const filtered = filterCurrentForUse(current, profile, history);
+  return JSON.stringify(filtered);
+}
+
 export function attachObservationMeta(
   log: BiomarkerLog,
   key: string,
@@ -462,3 +628,105 @@ export const AGENT_DISPLAY_NAMES: Record<string, string> = {
   standardize_units: 'Unit Relabel',
   medical_categorise: 'Categoriser',
 };
+
+export interface CleanupBiomarkerCatalogResult {
+  profile: any;
+  remappedKeys: Record<string, string>;
+  droppedKeys: string[];
+  strippedRanges: string[];
+}
+
+/**
+ * Cleanup helper for profile catalog hygiene (P2):
+ * 1. Remap custom keys through getMappedBiomarkerKey; tombstone alias key in deletedCustomBiomarkerKeys.
+ * 2. Drop metric_N / empty-name / needsApproval with no history and no unit.
+ * 3. Delete needsApproval on catalog-mapped keys.
+ * 4. Strip customRanges whose parsed bounds are < 0 or otherwise invented-empty. Does not invent replacements.
+ */
+export function cleanupInventedBiomarkerCatalog(
+  profile: any,
+  history: any[] = []
+): CleanupBiomarkerCatalogResult {
+  const nextProfile = {
+    ...profile,
+    customBiomarkers: { ...(profile?.customBiomarkers || {}) },
+    deletedCustomBiomarkerKeys: { ...(profile?.deletedCustomBiomarkerKeys || {}) },
+    customRanges: { ...(profile?.customRanges || {}) },
+  };
+
+  const remappedKeys: Record<string, string> = {};
+  const droppedKeys: string[] = [];
+  const strippedRanges: string[] = [];
+
+  // 1. Remap custom keys through getMappedBiomarkerKey & tombstone alias keys
+  Object.entries(nextProfile.customBiomarkers).forEach(([key, def]: [string, any]) => {
+    const mappedByKey = getMappedBiomarkerKey(key);
+    const mappedByName = def?.name ? getMappedBiomarkerKey(def.name) : '';
+    const mapped =
+      mappedByKey && mappedByKey !== key && biomarkerDefinitions.some((d) => d.key === mappedByKey)
+        ? mappedByKey
+        : mappedByName && mappedByName !== key && biomarkerDefinitions.some((d) => d.key === mappedByName)
+        ? mappedByName
+        : mappedByKey && mappedByKey !== key
+        ? mappedByKey
+        : '';
+
+    if (mapped && mapped !== key) {
+      remappedKeys[key] = mapped;
+      delete nextProfile.customBiomarkers[key];
+      nextProfile.deletedCustomBiomarkerKeys[key] = Date.now();
+    }
+  });
+
+  // 2. Drop metric_N / empty-name / needsApproval with no history and no unit
+  Object.entries(nextProfile.customBiomarkers).forEach(([key, def]: [string, any]) => {
+    const isJunkKey =
+      /^metric[_\s-]?\d+$/i.test(key) ||
+      /^metric\s*\d+$/i.test(String(def?.name || '')) ||
+      !def?.name ||
+      !String(def.name).trim();
+    const hasHistory = (history || []).some(
+      (h) => h?.biomarkers && h.biomarkers[key] != null && h.biomarkers[key] !== ''
+    );
+    const isPendingNoUnitNoHistory = def?.needsApproval === true && !hasHistory && !def?.unit;
+
+    if ((isJunkKey && !hasHistory) || isPendingNoUnitNoHistory) {
+      delete nextProfile.customBiomarkers[key];
+      nextProfile.deletedCustomBiomarkerKeys[key] = Date.now();
+      droppedKeys.push(key);
+    }
+  });
+
+  // 3. Delete needsApproval on catalog-mapped keys
+  Object.entries(nextProfile.customBiomarkers).forEach(([key, def]: [string, any]) => {
+    const mapped = getMappedBiomarkerKey(key) || key;
+    const isBuiltIn = biomarkerDefinitions.some((d: any) => d.key === mapped || d.key === key);
+    if (isBuiltIn && def?.needsApproval) {
+      delete def.needsApproval;
+    }
+  });
+
+  // 4. Strip customRanges whose parsed bounds are < 0 or otherwise invented-empty. Does not invent replacements.
+  Object.entries(nextProfile.customRanges).forEach(([key, range]: [string, any]) => {
+    const rangeStr = typeof range === 'string' ? range : range?.range || range?.normalRange || '';
+    const bounds = parseNormalRangeBounds(rangeStr);
+    const hasNegative =
+      (bounds && ((bounds.min !== undefined && bounds.min < 0) || (bounds.max !== undefined && bounds.max < 0))) ||
+      rangeStr.includes('< 0') ||
+      rangeStr.includes('<0');
+    const isEmptyObj = typeof range === 'object' && range !== null && Object.keys(range).length === 0;
+    const isEmptyStr = typeof range === 'string' && !range.trim();
+
+    if (hasNegative || isEmptyObj || isEmptyStr) {
+      delete nextProfile.customRanges[key];
+      strippedRanges.push(key);
+    }
+  });
+
+  return {
+    profile: nextProfile,
+    remappedKeys,
+    droppedKeys,
+    strippedRanges,
+  };
+}

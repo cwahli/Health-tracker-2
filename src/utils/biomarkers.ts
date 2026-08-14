@@ -530,10 +530,19 @@ export function getMappedBiomarkerKey(rawKey: string): string {
   const cleanNoUnderscore = rawKey.toLowerCase().replace(/[^a-z0-9]/g, '');
 
   for (const def of biomarkerDefinitions) {
-    if (def.key === clean || def.key === cleanNoUnderscore) return def.key;
+    const defKeyNoUnderscore = def.key.replace(/[^a-z0-9]/g, '');
+    const defNameNoUnderscore = (def.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (
+      def.key === clean ||
+      def.key === cleanNoUnderscore ||
+      defKeyNoUnderscore === cleanNoUnderscore ||
+      defNameNoUnderscore === cleanNoUnderscore
+    )
+      return def.key;
     if (def.aliases) {
       for (const alias of def.aliases) {
-        if (alias === clean || alias === cleanNoUnderscore) return def.key;
+        const aliasNoUnderscore = alias.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (alias === clean || alias === cleanNoUnderscore || aliasNoUnderscore === cleanNoUnderscore) return def.key;
       }
     }
   }
@@ -573,15 +582,15 @@ export const categoryLabels: { [key: string]: { [lang: string]: string } } = {
 export function parseNormalRangeBounds(normalRangeStr?: string): { min?: number; max?: number } {
   if (!normalRangeStr) return {};
   const s = String(normalRangeStr).trim();
-  const rangeMatch = s.match(/([\d.]+)\s*-\s*([\d.]+)/);
+  const rangeMatch = s.match(/(-?[\d.]+)\s*-\s*(-?[\d.]+)/);
   if (rangeMatch) {
     return { min: parseFloat(rangeMatch[1]), max: parseFloat(rangeMatch[2]) };
   }
-  const underMatch = s.match(/(?:under|<|aim\s+under|<=)\s*([\d.]+)/i);
+  const underMatch = s.match(/(?:under|<|aim\s+under|<=)\s*(-?[\d.]+)/i);
   if (underMatch) {
     return { max: parseFloat(underMatch[1]) };
   }
-  const overMatch = s.match(/(?:over|>|aim\s+over|>=)\s*([\d.]+)/i);
+  const overMatch = s.match(/(?:over|>|aim\s+over|>=)\s*(-?[\d.]+)/i);
   if (overMatch) {
     return { min: parseFloat(overMatch[1]) };
   }

@@ -23,7 +23,7 @@
 
 ### Session notes — biomarkers (2026-08-14)
 
-- **Studio pack for remaining work:** `studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md` — paste **§A only** into AI Studio. Implements plan §13 P0–P8. Master gate: `node scripts/assert-biomarker-lifecycle-m31.mjs`. Do not mix with food M30.
+- **Studio pack for remaining work:** `studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md` — P0–P8 implementation and machine gates COMPLETE. Master gate: `node scripts/assert-biomarker-lifecycle-m31.mjs` (All P0–P8 checks PASS). All biomarker unit test suites PASS. Type check (`tsc --noEmit` / lint) PASS. Ready for commit/archive.
 
 - **Design:** `plan/BIOMARKER_LIFECYCLE_PLAN.md` (literature, 4 records, dispatcher, Calibrator auto-run, slices 0–4).  
 - **Laws:** `docs/agent/domains/biomarkers.md` rewritten to match; **code still the old blended writers**.  

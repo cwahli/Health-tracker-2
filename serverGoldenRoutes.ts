@@ -427,7 +427,7 @@ async function runGoldenAnalyze(opts: {
   const bases = analyzeBaseUrls();
   for (let attempt = 0; attempt <= GOLDEN_LOOP_TRANSPORT_RETRIES; attempt++) {
     try {
-      let res: Response | null = null;
+      let res: globalThis.Response | null = null;
       let connectErr = '';
       for (const base of bases) {
         try {

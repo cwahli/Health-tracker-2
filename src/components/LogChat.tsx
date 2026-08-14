@@ -1344,7 +1344,7 @@ ${logsText}`);
         const reviewCmds = raw.modificationCommand || raw.agentResult?.modificationCommand;
         const resolvedType = raw.agentType || snapAgent || (Array.isArray(reviewCmds) && reviewCmds.length ? 'biomarker_review' : type);
         const unitMap = collectCatalogUnitMap(profile);
-        const isReview = resolvedType === 'biomarker_review' || type === 'biomarker_review' || agentType === 'biomarker_review';
+        const isReview = resolvedType === 'biomarker_review' || (type as string) === 'biomarker_review' || agentType === 'biomarker_review';
         const cmds = isReview
           ? enrichReviewModificationCommands(Array.isArray(reviewCmds) ? reviewCmds : [], biomarkerHistory || [], unitMap)
           : reviewCmds;
@@ -1591,7 +1591,7 @@ ${logsText}`);
           const reviewCmds2 = raw.modificationCommand || raw.agentResult?.modificationCommand;
           const resolvedType2 = raw.agentType || snapAgent2 || (Array.isArray(reviewCmds2) && reviewCmds2.length ? 'biomarker_review' : type);
           const unitMap2 = collectCatalogUnitMap(profile);
-          const isReview2 = resolvedType2 === 'biomarker_review' || type === 'biomarker_review' || agentType === 'biomarker_review';
+          const isReview2 = resolvedType2 === 'biomarker_review' || (type as string) === 'biomarker_review' || agentType === 'biomarker_review';
           const cmds2 = isReview2
             ? enrichReviewModificationCommands(Array.isArray(reviewCmds2) ? reviewCmds2 : [], biomarkerHistory || [], unitMap2)
             : reviewCmds2;

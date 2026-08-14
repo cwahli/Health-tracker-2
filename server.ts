@@ -249,7 +249,7 @@ import { filterHistoryForUse, enrichReviewModificationCommands } from "./src/uti
 import { generateDynamicInsight } from "./src/utils/biomarkerInsights";
 import { formatOptimalTargetValue } from "./src/utils/agentCalibration";
 import { NUTRIENT_KEYS } from "./src/utils/nutrients";
-import { extractBalancedJson, sanitizeMealWeight, findItemIndexInList, getUSDANutrientValue, extractUSDANutrientsPer100g, checkIfItemIsAlreadyPrepared, applyNutrientRealityChecks, synchronizeNarrativeText, evaluateNutrientWarnings, build31NutrientsMarkdownServer } from "./server_pure_helpers";
+import { extractBalancedJson, sanitizeMealWeight, findItemIndexInList, getUSDANutrientValue, extractUSDANutrientsPer100g, checkIfItemIsAlreadyPrepared, applyNutrientRealityChecks, applyCommercialSodiumFloor, synchronizeNarrativeText, evaluateNutrientWarnings, build31NutrientsMarkdownServer } from "./server_pure_helpers";
 import { aggregateItemsNutrients, cleanNutrientNumber } from "./server_nutrient_aggregation";
 import { registerIssueBacklogRoutes } from './serverIssueBacklog.js';
 import { registerBugSnapshotRoutes } from './serverBugSnapshot.js';
@@ -8177,7 +8177,6 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           if (s.carbohydrates != null) s.carbohydrates = Math.round(s.carbohydrates * recRes.scaleFactor * 10) / 10;
           if (s.sugar != null) s.sugar = Math.round(s.sugar * recRes.scaleFactor * 10) / 10;
           if (s.totalFibre != null) s.totalFibre = Math.round(s.totalFibre * recRes.scaleFactor * 10) / 10;
-          if (s.weightGrams != null) s.weightGrams = Math.round(s.weightGrams * recRes.scaleFactor * 10) / 10;
         });
       }
 
@@ -8187,6 +8186,25 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           aggregatedNutrients[key] = value;
         }
       });
+
+      // Apply the Commercial Sodium Floor unconditionally now that calories are finalized
+      // (post-reconcile), so the Dietitian prompt's macroTotals match what the final
+      // aggregateItemsNutrients pass will save. This runs regardless of soft/hard budget —
+      // unlike the earlier pre-budget applyNutrientRealityChecks call, which is intentionally
+      // skipped for soft-budget items because the calorie numbers aren't finalized yet at that point.
+      applyCommercialSodiumFloor(
+        item.originalName || item.keyword,
+        aggregatedNutrients,
+        effectiveDbSourceForChecks,
+        addDebugLog,
+        {
+          originalName: item.originalName || item.keyword,
+          keyword: item.keyword,
+          componentCount: Array.isArray(item.components) ? item.components.length : 0,
+          physicalForm: preForm?.physicalForm,
+          chainName: item.chainName || null,
+        }
+      );
 
       // Receipt invariant: component rows must match item total; repair if needed
       const compCals = componentsDetailList.map((s: any) => Number(s.calories) || 0);
@@ -8220,7 +8238,6 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
                 if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * fix * 10) / 10;
                 if (s.saturatedFat != null) s.saturatedFat = Math.round(s.saturatedFat * fix * 10) / 10;
                 if (s.sodium != null) s.sodium = Math.round(s.sodium * fix * 10) / 10;
-                if (s.weightGrams != null) s.weightGrams = Math.round(s.weightGrams * fix * 10) / 10;
               });
               addDebugLog(`[ReceiptInvariant] REPAIRED rows→item lock factor=${fix.toFixed(3)}`);
             }

@@ -36,7 +36,7 @@ import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, getDocFromServer, 
 import { sanitizeForFirestore, checkQuotaFlag, handleRetryQuota } from './utils/firestoreUtils';
 import { getCurrentDateInTimezone, toYYYYMMDD, normalizeBiomarkerHistory } from './utils/dateUtils';
 import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint, isValEmpty, getMappedBiomarkerKey, normalizeHistoricalTelemetryErrors } from './utils/biomarkers';
-import { applyModificationCommands, overlayFingerprint, resolveAgentDestination, shouldRunCalibrator, attachObservationMeta, enrichReviewModificationCommands, collectCatalogUnitMap } from './utils/biomarkerLifecycle';
+import { applyModificationCommands, overlayFingerprint, resolveAgentDestination, shouldRunCalibrator, attachObservationMeta, enrichReviewModificationCommands, collectCatalogUnitMap, type ModificationCommand } from './utils/biomarkerLifecycle';
 import { formatOptimalTargetValue } from './utils/agentCalibration';
 import { standardizeUnit, CONVERSION_FACTORS } from './utils/unitConversion';
 import { get, set, pruneLocalStorageToFreeSpace, getStorageKey, getSnapshotKey, saveLocalSnapshot, loadLocalSnapshots, deleteLocalSnapshot, safeSaveToLocalStorage, getAggregatedAppData } from './utils/storageUtils';
@@ -4268,7 +4268,7 @@ export default function App() {
     profileUpdates?: Partial<UserProfile>, 
     date?: string, 
     entries?: { date: string | null; biomarkers: { [key: string]: number | string }; tests?: any[] }[],
-    modificationCommand?: { action: 'update_biomarker' | 'update_profile' | 'remove_biomarker'; keyName: string; newValue?: string | number; date?: string }[],
+    modificationCommand?: ModificationCommand[],
     skipClose?: boolean
   ) => {
     let currentProfile = profile;
@@ -6302,10 +6302,7 @@ export default function App() {
             const commands = Array.isArray(agentResult?.modificationCommand)
               ? agentResult.modificationCommand
               : [];
-            const unitMap: Record<string, string> = {};
-            Object.entries(updatedProfile.customBiomarkers || {}).forEach(([k, v]: [string, any]) => {
-              if (v?.unit) unitMap[k] = v.unit;
-            });
+            const unitMap = collectCatalogUnitMap(updatedProfile);
             const { history: afterCommands, applied } = applyModificationCommands(currentHistory, commands, unitMap);
             currentHistory = afterCommands;
 
