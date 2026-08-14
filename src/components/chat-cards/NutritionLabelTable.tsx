@@ -667,59 +667,69 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
 
                 {item.compositeSiblings && item.compositeSiblings.length > 0 && (
                   <div className="mt-3 pt-2.5 border-t border-theme-border/60">
-                    <span className="font-bold text-theme-text-secondary uppercase tracking-wider block mb-1.5 text-[8.5px]">
-                      Composite Dish Ingredients
-                    </span>
-                    <div className="space-y-1.5">
-                      {item.compositeSiblings.map((sib: any, sibIdx: number) => {
-                        const sibName = String(sib.primaryBaseMatchName || sib.name || sib.searchQuery || sib.keyword || 'Ingredient')
-                          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-                          .replace(/^[📖\s]+/, '')
-                          .replace(/\s*\((internal_catalog|usual_catalog|canonical base)\)/gi, '')
-                          .trim();
-                        const sibWeight = sib.weightGrams || sib.estimatedWeightGrams || 0;
-                        const isLiquid = /milk|water|juice|oil|broth|sauce|drink|beverage|soup/i.test(sibName);
-                        const unitLabel = isLiquid ? 'ml' : 'g';
-                        const isBrand = sib.dbSource === 'brand_official' || sib.source === 'brand_official' || sib.brandName || sib.chainName;
-                        const isUsda = !isBrand && (sib.dbSource === 'usda' || String(sib.dbId).length > 4 || String(sib.name).includes('fdc.nal.usda.gov'));
-                        const sourceBadge = isBrand
-                          ? 'Brand Official'
-                          : (isUsda 
-                              ? 'USDA FoodData Central' 
-                              : (sib.dbSource === 'canonical_dict' ? 'Base Catalog Truth' : 'Standard Reference'));
-                        
-                        const cals = sib.calories ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.calories || 0) * (sibWeight / 100)) : null);
-                        const protein = sib.protein ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.protein || 0) * (sibWeight / 100) * 10) / 10 : null);
-                        const fat = (sib.totalFat ?? sib.fat) ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.totalFat ?? sib.baseNutrients100g.fat ?? 0) * (sibWeight / 100) * 10) / 10 : null);
-                        const carbs = (sib.carbohydrates ?? sib.carbs ?? sib.totalCarbohydrate) ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.totalCarbohydrate ?? sib.baseNutrients100g.carbohydrates ?? 0) * (sibWeight / 100) * 10) / 10 : null);
-                        const base100gCals = sib.baseNutrients100g?.calories ?? (sibWeight > 0 && cals ? Math.round((cals / sibWeight) * 100) : null);
+                    <details className="group [&_summary::-webkit-details-marker]:hidden" open>
+                      <summary className="flex items-center gap-1 cursor-pointer font-bold text-theme-text-secondary uppercase tracking-wider text-[9px] select-none">
+                        <svg
+                          className="w-3 h-3 transition-transform group-open:rotate-90"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                        </svg>
+                        <span>Composite Dish Ingredients</span>
+                      </summary>
+                      <div className="space-y-1.5 mt-2 ml-1">
+                        {item.compositeSiblings.map((sib: any, sibIdx: number) => {
+                          const sibName = String(sib.primaryBaseMatchName || sib.name || sib.searchQuery || sib.keyword || 'Ingredient')
+                            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                            .replace(/^[📖\s]+/, '')
+                            .replace(/\s*\((internal_catalog|usual_catalog|canonical base)\)/gi, '')
+                            .trim();
+                          const sibWeight = sib.weightGrams || sib.estimatedWeightGrams || 0;
+                          const isLiquid = /milk|water|juice|oil|broth|sauce|drink|beverage|soup/i.test(sibName);
+                          const unitLabel = isLiquid ? 'ml' : 'g';
+                          const isBrand = sib.dbSource === 'brand_official' || sib.source === 'brand_official' || sib.brandName || sib.chainName;
+                          const isUsda = !isBrand && (sib.dbSource === 'usda' || String(sib.dbId).length > 4 || String(sib.name).includes('fdc.nal.usda.gov'));
+                          const sourceBadge = isBrand
+                            ? 'Brand Official'
+                            : (isUsda 
+                                ? 'USDA FoodData Central' 
+                                : (sib.dbSource === 'canonical_dict' ? 'Base Catalog Truth' : 'Standard Reference'));
+                          
+                          const cals = sib.calories ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.calories || 0) * (sibWeight / 100)) : null);
+                          const protein = sib.protein ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.protein || 0) * (sibWeight / 100) * 10) / 10 : null);
+                          const fat = (sib.totalFat ?? sib.fat) ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.totalFat ?? sib.baseNutrients100g.fat ?? 0) * (sibWeight / 100) * 10) / 10 : null);
+                          const carbs = (sib.carbohydrates ?? sib.carbs ?? sib.totalCarbohydrate) ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.totalCarbohydrate ?? sib.baseNutrients100g.carbohydrates ?? 0) * (sibWeight / 100) * 10) / 10 : null);
+                          const base100gCals = sib.baseNutrients100g?.calories ?? (sibWeight > 0 && cals ? Math.round((cals / sibWeight) * 100) : null);
 
-                        return (
-                          <div key={`sib-${sibIdx}`} className="p-2 rounded-lg bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100/60 dark:border-indigo-900/40 text-[10px]">
-                            <div className="flex items-center justify-between gap-2 mb-1">
-                              <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                <span>{sibName}</span>
-                                <span className="text-slate-500 dark:text-slate-400 font-normal">({sibWeight}{unitLabel})</span>
-                              </div>
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-medium bg-indigo-100/80 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
-                                {sourceBadge}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-slate-600 dark:text-slate-300 text-[9.5px]">
-                              {cals != null && (
-                                <span>
-                                  <strong>{cals} kcal</strong>
-                                  {base100gCals ? <span className="text-slate-400 font-normal text-[8.5px]"> ({base100gCals} kcal/100{unitLabel})</span> : null}
+                          return (
+                            <div key={`sib-${sibIdx}`} className="p-2 rounded-lg bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100/60 dark:border-indigo-900/40 text-[10px]">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                  <span>{sibName}</span>
+                                  <span className="text-slate-500 dark:text-slate-400 font-normal">({sibWeight}{unitLabel})</span>
+                                </div>
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-medium bg-indigo-100/80 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+                                  [{sourceBadge}]
                                 </span>
-                              )}
-                              {protein != null && <span>Protein: <strong>{protein}g</strong></span>}
-                              {fat != null && <span>Fat: <strong>{fat}g</strong></span>}
-                              {carbs != null && <span>Carbs: <strong>{carbs}g</strong></span>}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-slate-600 dark:text-slate-300 text-[9.5px]">
+                                {cals != null && (
+                                  <span>
+                                    <strong>{cals} kcal</strong>
+                                    {base100gCals ? <span className="text-slate-400 font-normal text-[8.5px]"> ({base100gCals} kcal/100{unitLabel})</span> : null}
+                                  </span>
+                                )}
+                                {protein != null && <><span className="text-slate-400 opacity-60">·</span> <span>Protein: <strong>{protein}g</strong></span></>}
+                                {fat != null && <><span className="text-slate-400 opacity-60">·</span> <span>Fat: <strong>{fat}g</strong></span></>}
+                                {carbs != null && <><span className="text-slate-400 opacity-60">·</span> <span>Carbs: <strong>{carbs}g</strong></span></>}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    </details>
                   </div>
                 )}
 

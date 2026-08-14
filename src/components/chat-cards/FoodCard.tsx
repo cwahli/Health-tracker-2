@@ -2293,11 +2293,11 @@ export const FoodCard: React.FC<AgentCardProps & {
                                 
                                                                 {(() => {
                                   let groupScoutItems = (group.scoutItemIndices && group.scoutItemIndices.length > 0)
-                                    ? group.scoutItemIndices.map((i: number) => displayedScoutItems[i]).filter(Boolean)
+                                    ? group.scoutItemIndices.map((i: number) => activeScoutItems[i]).filter(Boolean)
                                     : [];
                                   
                                   if (groupScoutItems.length === 0 && group.items && group.items.length > 0) {
-                                    groupScoutItems = displayedScoutItems.filter((s: any) => {
+                                    groupScoutItems = activeScoutItems.filter((s: any) => {
                                       return group.items.some((gi: any) => 
                                         gi.name === s.keyword || 
                                         gi.name === s.originalName ||
@@ -3121,12 +3121,12 @@ export const FoodCard: React.FC<AgentCardProps & {
                                })}
                              </div>
 
-                             {openLabelIdx !== null && displayedScoutItems[openLabelIdx] && (
+                             {openLabelIdx !== null && activeScoutItems[openLabelIdx] && (
                                <div className="mt-2 w-full">
                                  <NutritionLabelTable
                                    defaultOpen={true}
                                    hideOwnToggle={true}
-                                   activeScoutItems={[displayedScoutItems[openLabelIdx]]}
+                                   activeScoutItems={[activeScoutItems[openLabelIdx]]}
                                    onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))}
                                  />
                                </div>
