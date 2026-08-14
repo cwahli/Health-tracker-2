@@ -63,7 +63,7 @@ async function gcInsert(fields: { tag_id?: string | null; job_id?: string | null
 }
 
 async function gcGet(id: string) {
-  const r = await d1Query(`SELECT * FROM golden_cases WHERE id = ? LIMIT 1`, [id]);
+  const r = await d1Query(`SELECT * FROM golden_cases WHERE id = ? OR job_id = ? OR tag_id = ? LIMIT 1`, [id, id, id]);
   if (!r.success) return { error: r.error, data: null };
   return { error: null as string | null, data: r.results[0] ? mapCaseRow(r.results[0]) : null };
 }
@@ -1724,11 +1724,39 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
   app.delete('/api/golden/cases/:id', async (req: Request, res: Response) => {
     try {
       const id = String(req.params.id);
-      const { data, error } = await gcGet(id);
-      if (error || !data) return res.status(404).json({ error: error || 'not found' });
-      await d1Query(`DELETE FROM golden_cases WHERE id = ?`, [id]);
+      const { data } = await gcGet(id);
+      const targetId = data?.id || id;
+      const candidates = [data?.id, data?.job_id, data?.tag_id, id].filter(Boolean) as string[];
+
+      // Clean from D1
+      await d1Query(`DELETE FROM golden_cases WHERE id = ? OR job_id = ? OR tag_id = ?`, [targetId, targetId, targetId]);
+
+      // Clean up disk inbox directory if present
+      const root = goldenMealRoot();
+      const inbox = path.join(root, 'inbox');
+      if (fs.existsSync(inbox)) {
+        let diskChanged = false;
+        for (const name of fs.readdirSync(inbox)) {
+          for (const c of candidates) {
+            if (name === c || (c.length > 5 && name.includes(c))) {
+              try {
+                fs.rmSync(path.join(inbox, name), { recursive: true, force: true });
+                diskChanged = true;
+              } catch (err) {
+                console.warn('[golden-delete] disk delete error:', err);
+              }
+              break;
+            }
+          }
+        }
+        if (diskChanged) {
+          writeInboxIndex(root);
+        }
+      }
+
       res.json({ ok: true });
     } catch (e: any) {
+      console.error('[golden-delete] error:', e);
       res.status(500).json({ error: e?.message || 'delete failed' });
     }
   });

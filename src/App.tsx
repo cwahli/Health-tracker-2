@@ -1043,7 +1043,14 @@ export default function App() {
                   await new Promise(r => setTimeout(r, 2000));
                   continue;
                 }
-                const statusRes = await fetch(`/api/jobs/status?jobId=${job.id}&userId=${auth.currentUser?.uid || 'anonymous'}`);
+                const statusController = new AbortController();
+                const timeoutId = setTimeout(() => statusController.abort(), 6000);
+                let statusRes: Response;
+                try {
+                  statusRes = await fetch(`/api/jobs/status?jobId=${job.id}&userId=${auth.currentUser?.uid || 'anonymous'}`, { signal: statusController.signal });
+                } finally {
+                  clearTimeout(timeoutId);
+                }
                 if (statusRes.ok) {
                   const contentType = statusRes.headers.get('content-type');
                   if (contentType && contentType.includes('application/json')) {
@@ -1294,7 +1301,14 @@ export default function App() {
               const reqId = job.requestId || job.id;
               let lateJob: any = null;
               try {
-                const lateRes = await fetch(`/api/jobs/status?jobId=${job.id}&userId=${auth.currentUser?.uid || 'anonymous'}`);
+                const lateController = new AbortController();
+                const timeoutId = setTimeout(() => lateController.abort(), 6000);
+                let lateRes: Response;
+                try {
+                  lateRes = await fetch(`/api/jobs/status?jobId=${job.id}&userId=${auth.currentUser?.uid || 'anonymous'}`, { signal: lateController.signal });
+                } finally {
+                  clearTimeout(timeoutId);
+                }
                 if (lateRes.ok) {
                   const contentType = lateRes.headers.get('content-type');
                   if (contentType && contentType.includes('application/json')) {

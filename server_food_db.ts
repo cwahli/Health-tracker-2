@@ -191,6 +191,12 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   feta_cheese: { fdcId: "173420", calories: 264, protein: 14.21, totalFat: 21.28, saturatedFat: 14.94, transFat: 0, carbohydrates: 4.09, sugar: 4.09, sodium: 917, potassium: 62, totalFibre: 0, foodType: 'dairy' },
   raw_red_onion: { fdcId: "11282", calories: 40, protein: 1.1, totalFat: 0.1, saturatedFat: 0.04, transFat: 0, carbohydrates: 9.34, sugar: 4.24, sodium: 4, potassium: 146, totalFibre: 1.7, foodType: 'veg' },
   raw_bell_pepper: { fdcId: "170108", calories: 20, protein: 0.86, totalFat: 0.17, saturatedFat: 0.05, transFat: 0, carbohydrates: 4.64, sugar: 2.4, sodium: 3, potassium: 175, totalFibre: 1.7, foodType: 'veg' },
+  sweet_bell_pepper: { fdcId: "170393", calories: 31, protein: 0.99, totalFat: 0.30, saturatedFat: 0.03, transFat: 0, carbohydrates: 6.03, sugar: 4.20, sodium: 4, potassium: 211, totalFibre: 2.1, foodType: 'veg' },
+  cucumber: { fdcId: "168409", calories: 15, protein: 0.65, totalFat: 0.11, saturatedFat: 0.03, transFat: 0, carbohydrates: 3.63, sugar: 1.67, sodium: 2, potassium: 147, totalFibre: 0.5, vitaminC: 2.8, calcium: 16, foodType: 'leafy_veg' },
+  chickpeas: { fdcId: "173800", calories: 164, protein: 8.86, totalFat: 2.59, saturatedFat: 0.27, transFat: 0, carbohydrates: 27.42, sugar: 4.8, sodium: 24, potassium: 291, totalFibre: 7.6, iron: 2.89, calcium: 49, magnesium: 48, foodType: 'legume' },
+  fried_ring_doughnut: { fdcId: "172813", calories: 426, protein: 5.7, totalFat: 22.9, saturatedFat: 5.8, transFat: 0, carbohydrates: 50.8, sugar: 26.7, sodium: 387, potassium: 115, totalFibre: 1.5, calcium: 87, foodType: 'processed' },
+  pomegranate_seeds_brand: { fdcId: "brand_menu_7dc1e5b0-2e01-44ad-a020-75efc8cdec5e", calories: 83, protein: 1.67, totalFat: 1.17, saturatedFat: 0.15, transFat: 0, carbohydrates: 18.7, sugar: 13.67, sodium: 3, potassium: 236, totalFibre: 4.0, vitaminC: 10.2, calcium: 10, foodType: 'fruit' },
+  sainsbury_rolled_oats: { fdcId: "brand_menu_0c6ab961-8c5c-4bcc-bc5d-2de648e7e470", calories: 370, protein: 11.0, totalFat: 6.0, saturatedFat: 1.0, transFat: 0, carbohydrates: 60.0, sugar: 1.0, sodium: 10, potassium: 350, totalFibre: 9.0, foodType: 'grain' },
 
   tartar_sauce: { fdcId: "tartar_sauce_canonical", calories: 211, protein: 1.0, totalFat: 21.0, saturatedFat: 3.4, transFat: 0, carbohydrates: 4.4, sugar: 1.0, sodium: 730, potassium: 50, totalFibre: 1.0, foodType: 'ultra_processed' },
   wheat_flour: { fdcId: "169680", calories: 364, protein: 10.33, totalFat: 0.98, saturatedFat: 0.15, transFat: 0, carbohydrates: 76.31, sugar: 0.27, sodium: 2, potassium: 107, totalFibre: 2.7, foodType: 'grain' },
@@ -267,6 +273,16 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   const normalized = name.toLowerCase().trim();
   if (normalized.includes('plain yogurt') || normalized.includes('plain yoghurt')) return CANONICAL_BASE_FOODS.plain_yogurt;
   
+  if (normalized.includes('sainsbury') && normalized.includes('oat')) return CANONICAL_BASE_FOODS.sainsbury_rolled_oats;
+
+  if (normalized.includes('pomegranate seed') || normalized.includes('pomegranate seeds')) return CANONICAL_BASE_FOODS.pomegranate_seeds_brand;
+
+  if (normalized.includes('cucumber')) return CANONICAL_BASE_FOODS.cucumber;
+
+  if (normalized.includes('chickpea') || normalized.includes('garbanzo')) return CANONICAL_BASE_FOODS.chickpeas;
+
+  if (normalized.includes('doughnut') || normalized.includes('donut')) return CANONICAL_BASE_FOODS.fried_ring_doughnut;
+
   if (normalized.includes('raisin')) return CANONICAL_BASE_FOODS.raisins;
   
   if (normalized.includes('almond')) return CANONICAL_BASE_FOODS.almonds;
@@ -281,7 +297,8 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   
   if (normalized.includes('red onion')) return CANONICAL_BASE_FOODS.raw_red_onion;
   
-  if (normalized.includes('bell pepper')) return CANONICAL_BASE_FOODS.raw_bell_pepper;
+  if (normalized === 'raw bell pepper') return CANONICAL_BASE_FOODS.raw_bell_pepper;
+  if (normalized.includes('bell pepper') || normalized.includes('sweet pepper')) return CANONICAL_BASE_FOODS.sweet_bell_pepper;
   
   if (normalized.includes('mixed berries fruit compote')) return CANONICAL_BASE_FOODS.strawberry;
 

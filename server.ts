@@ -1410,18 +1410,28 @@ app.get('/api/jobs/status', async (req, res) => {
         return res.status(400).json({ error: 'jobId or userId parameter is required' });
       }
       query = query.order('updated_at', { ascending: false }).limit(20);
-      const { data, error } = await query;
+
+      // Protect against Supabase latency/hangs with a 3.5s timeout
+      const queryPromise = Promise.resolve(query);
+      const timeoutPromise = new Promise<{ data: any; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error('Supabase query timed out after 3500ms')), 3500)
+      );
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
       if (error) throw error;
 
       if (data && data.length > 0) {
         const now = Date.now();
         const staleThresholdMs = 180000; // 3 minutes
         const processedJobs = await Promise.all((data || []).map(async (job: any) => {
-          // transparently resolve R2-stored clean_results on-the-fly
+          // transparently resolve R2-stored clean_results on-the-fly with 2.5s timeout
           if (job.clean_result && typeof job.clean_result === 'object' && (job.clean_result as any).is_r2) {
             try {
               const { fetchJobResultFromR2 } = await import('./src/utils/r2Storage.js');
-              const fullResult = await fetchJobResultFromR2(job.id);
+              const r2Promise = fetchJobResultFromR2(job.id);
+              const r2Timeout = new Promise<null>((_, reject) =>
+                setTimeout(() => reject(new Error('R2 fetch timed out')), 2500)
+              );
+              const fullResult = await Promise.race([r2Promise, r2Timeout]);
               if (fullResult) {
                 job.clean_result = fullResult;
               }
@@ -1441,15 +1451,16 @@ app.get('/api/jobs/status', async (req, res) => {
                 status_message: 'Analysis timed out on server (>3 min). Tap Retry to try again.',
                 updated_at: new Date().toISOString()
               };
-              try {
-                await supabaseAdmin.from('agent_jobs').update({
+              // Non-blocking update to avoid stalling response
+              Promise.resolve(
+                supabaseAdmin.from('agent_jobs').update({
                   status: 'failed',
                   status_message: 'Analysis timed out on server (>3 min). Tap Retry to try again.',
                   updated_at: new Date().toISOString()
-                }).eq('id', job.id);
-              } catch (uErr) {
+                }).eq('id', job.id)
+              ).catch((uErr: any) => {
                 console.error('[JobsStatus] Failed to update stale job status in DB:', uErr);
-              }
+              });
               return failedJob;
             }
           }
@@ -1459,7 +1470,7 @@ app.get('/api/jobs/status', async (req, res) => {
         return res.json({ jobs: processedJobs });
       }
     } catch (dbErr) {
-      console.warn('[JobsStatus] Supabase query failed, falling back to in-memory store:', dbErr);
+      console.warn('[JobsStatus] Supabase query failed or timed out, falling back to in-memory store:', dbErr);
     }
 
     if (jobId) {
@@ -7597,6 +7608,10 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             dbId: String(bestMatch.id),
             dbSource: bestMatch.source,
             rawNutritionLabel: bestMatch.rawNutritionLabel,
+            primaryBaseMatchName: bestMatch.name || query,
+            primaryBase100g: baseNutrients,
+            baseNutrients100g: baseNutrients,
+            labelNutrientsPerServing: (bestMatch.source === 'brand_official' || bestMatch.source === 'label') ? baseNutrients : null,
             isRealTruth: bestMatch.source === 'brand_official' || bestMatch.source === 'label'
           };
           NUTRIENT_KEYS.forEach(key => {
@@ -7711,6 +7726,8 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             addDebugLog(`[Assembly] Recomputed primaryBase100g as weighted composite density for "${item.originalName || item.keyword}" (was: first-component-only density).`);
             primaryBase100g = compositeBase100g;
             primaryBaseWeightG = itemWeight;
+            primaryBaseMatchName = item.originalName || item.keyword;
+            primaryDbSource = "composite";
           }
         }
       } else {

@@ -357,6 +357,8 @@ export type BugSnapshotDraft = {
   symptom?: string;
   shots?: string[];
   savedAt?: string;
+  snapshotType?: 'bug' | 'meal';
+  goldenTitle?: string;
 };
 
 export function saveBugSnapshotDraft(draft: BugSnapshotDraft): void {

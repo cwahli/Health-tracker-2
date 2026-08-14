@@ -14,13 +14,13 @@ import {
 import { db, auth } from '../firebase';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import GoogleHealthIntegration from './GoogleHealthIntegration';
-import FullScreenLogViewer from './FullScreenLogViewer';
+const FullScreenLogViewer = React.lazy(() => import('./FullScreenLogViewer'));
 import ApiCallTrackerModal from './ApiCallTrackerModal';
-import NutritionDataBrowserModal from './NutritionDataBrowserModal';
-import BugTrackerModal from './BugTrackerModal';
+const NutritionDataBrowserModal = React.lazy(() => import('./NutritionDataBrowserModal'));
+const BugTrackerModal = React.lazy(() => import('./BugTrackerModal'));
 import BugSnapshotFab, { BugSnapshotSettingsToggle } from './BugSnapshotFab';
-import UserManagementTab from './UserManagementTab';
-import BackupRestoreTab from './BackupRestoreTab';
+const UserManagementTab = React.lazy(() => import('./UserManagementTab'));
+const BackupRestoreTab = React.lazy(() => import('./BackupRestoreTab'));
 import { FoodCatalogAdminTab } from './FoodCatalogAdminTab';
 import { Activity, Stethoscope, X, ChevronRight, Database, Bug, Loader } from 'lucide-react';
 import { JobStore } from '../jobs/JobStore';
@@ -1466,6 +1466,7 @@ export default function Header({
         </div>
       </div>
     
+      <React.Suspense fallback={null}>
       {/* AI Agent Full Screen Logs */}
       <FullScreenLogViewer
         isOpen={showAgentLogs}
@@ -1484,6 +1485,7 @@ export default function Header({
         isOpen={showBugTracker}
         onClose={() => setShowBugTracker(false)}
       />
+      </React.Suspense>
       {isAdmin && (
         <BugSnapshotFab
           isAdmin={isAdmin}
@@ -3450,7 +3452,9 @@ export default function Header({
                   <FoodCatalogAdminTab />
                 </div>
               ) : dbOverlayViewMode === 'admin' && activeAdminTab === 'users' ? (
-                <UserManagementTab />
+                <React.Suspense fallback={null}>
+                  <UserManagementTab />
+                </React.Suspense>
               ) : dbOverlayViewMode === 'admin' && activeAdminTab === 'backup' ? (
                 <div className="space-y-6 max-h-[75vh] overflow-y-auto pb-8">
                   <div className="p-4 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl mx-4 mt-4 space-y-3">
@@ -3480,6 +3484,7 @@ export default function Header({
                       </button>
                     </div>
                   </div>
+                  <React.Suspense fallback={null}>
                   <BackupRestoreTab 
                      profile={profile} 
                      foodLogs={foodLogs || []} 
@@ -3492,6 +3497,7 @@ export default function Header({
                      dailyBenefits={dailyBenefits}
                      report={report}
                   />
+                  </React.Suspense>
                   <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 mx-4 mt-4">
                     <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-2">
                       <Cloud className="w-5 h-5 text-indigo-400" />
@@ -4482,6 +4488,7 @@ export default function Header({
         userEmail={profile?.email || auth.currentUser?.email || 'guest'}
       />
 
+      <React.Suspense fallback={null}>
       <NutritionDataBrowserModal
         isOpen={showNutritionDataBrowser}
         onClose={() => setShowNutritionDataBrowser(false)}
@@ -4491,6 +4498,7 @@ export default function Header({
         isOpen={showBugTracker}
         onClose={() => setShowBugTracker(false)}
       />
+      </React.Suspense>
     </>
   );
 }

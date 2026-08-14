@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, X, Plus, Trash2, Bug, Loader, Check, ImagePlus, CheckCircle2, Sparkles } from 'lucide-react';
+import { Camera, X, Plus, Trash2, Bug, Loader, Check, ImagePlus, CheckCircle2, Sparkles, Utensils } from 'lucide-react';
 import {
   isBugSnapshotEnabled,
   setBugSnapshotEnabled,
@@ -38,6 +38,8 @@ import { CATEGORY_OPTIONS, saveBugTrackerCache } from './FlagIssueModal';
 import { BugCategory } from '../utils/issueBacklog';
 import { AVAILABLE_LLMS } from '../utils/llm';
 import { JobStore } from '../jobs/JobStore';
+import { ImageStore } from '../jobs/ImageStore';
+import { normalizeMealImageUrl, UNUSABLE_IMAGE_TOKENS } from '../utils/foodImageSources';
 import { saveAgentRequestLog } from '../utils/agentLogsTracker';
 import {
   extractMealLines,
@@ -72,10 +74,60 @@ export interface BugSnapshotFabProps {
 function readOpenModalJobId(): string | null {
   if (typeof document === 'undefined') return null;
   const el = document.querySelector<HTMLElement>(
-    '#food-chat-container[data-job-id], [data-unified-modal][data-job-id]'
+    '#food-chat-container[data-job-id], [data-unified-modal][data-job-id], [data-modal="food"][data-job-id], [data-modal="meal"][data-job-id], [data-modal][data-job-id]'
   );
   const id = el?.getAttribute('data-job-id')?.trim();
-  return id || null;
+  if (id) return id;
+  const insideModal = document.querySelector<HTMLElement>('#food-chat-container, [data-unified-modal="true"]');
+  const innerId = insideModal?.getAttribute('data-job-id') || insideModal?.querySelector('[data-job-id]')?.getAttribute('data-job-id');
+  return innerId?.trim() || null;
+}
+
+export function isAnyMealModalOpen(viewingJobId?: string | null, activeTab?: string): boolean {
+  if (viewingJobId) return true;
+  if (typeof document === 'undefined') return false;
+  const modal = document.querySelector<HTMLElement>(
+    '#food-chat-container, [data-unified-modal="true"], [data-modal="food"], [data-modal="meal"]'
+  );
+  if (modal && modal.offsetParent !== null) return true;
+  if (Boolean(readOpenModalJobId())) return true;
+  if (activeTab === 'food') return true;
+  return false;
+}
+
+export async function resolveDisplayableImage(ref: unknown): Promise<string | null> {
+  if (!ref) return null;
+  if (ref instanceof Blob) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(ref);
+    });
+  }
+  if (typeof ref !== 'string') return null;
+  const s = ref.trim();
+  if (!s || UNUSABLE_IMAGE_TOKENS.has(s) || s.includes('image_removed_for_snapshot') || s.includes('Image reference preserved')) {
+    return null;
+  }
+  if (s.startsWith('data:image/')) return s;
+  if (s.startsWith('blob:')) return s;
+  if (s.startsWith('imageStore/')) {
+    try {
+      const { get } = await import('idb-keyval');
+      const val = await get<string | Blob>(s);
+      if (val) return await resolveDisplayableImage(val);
+    } catch {
+      /* ignore */
+    }
+  }
+  if (s.startsWith('/photos/') || s.startsWith('/api/r2/photos/') || s.startsWith('/api/golden/photo')) {
+    return s;
+  }
+  const norm = normalizeMealImageUrl(s);
+  if (norm) return norm;
+  if (/^https?:\/\//i.test(s)) return s;
+  return null;
 }
 
 export function getCategoryForTab(tab?: string): BugCategory {
@@ -117,10 +169,11 @@ async function capturePageScreenshot(): Promise<string | null> {
     const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
 
     const dataUrl = await toJpeg(target, {
-      quality: 0.7,
+      quality: 0.75,
       pixelRatio: 1,
       cacheBust: false,
       skipFonts: true,
+      backgroundColor: '#0f172a',
       ...(target === document.body
         ? {
             width: window.innerWidth,
@@ -134,34 +187,10 @@ async function capturePageScreenshot(): Promise<string | null> {
       filter: (node) => !isBugSnapshotNode(node),
     });
     if (dataUrl && dataUrl.startsWith('data:image/')) {
-      return await compressImage(dataUrl, 1280, 1280, 0.72);
+      return await compressImage(dataUrl, 1280, 1280, 0.75);
     }
   } catch (err) {
     console.warn(`${BUG_SNAPSHOT_LOG} html-to-image capture failed`, err);
-  }
-
-  // 3. Canvas-based fallback
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '18px system-ui, sans-serif';
-      ctx.fillText('[Screenshot viewport capture fallback]', 24, 48);
-      ctx.font = '13px system-ui, sans-serif';
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillText(`URL: ${window.location.href}`, 24, 80);
-      ctx.fillText(`Time: ${new Date().toISOString()}`, 24, 104);
-      ctx.fillText(`Viewport: ${window.innerWidth} × ${window.innerHeight}`, 24, 128);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
-      return await compressImage(dataUrl, 1280, 1280, 0.75);
-    }
-  } catch {
-    /* ignore */
   }
 
   return null;
@@ -180,6 +209,8 @@ export default function BugSnapshotFab({
 }: BugSnapshotFabProps) {
   const [enabled, setEnabled] = useState(true);
   const [open, setOpen] = useState(false);
+  const [snapshotType, setSnapshotType] = useState<'bug' | 'meal'>('bug');
+  const [goldenTitle, setGoldenTitle] = useState('');
   const [shots, setShots] = useState<string[]>([]);
   const [category, setCategory] = useState<BugCategory>(getCategoryForTab(activeTab));
   const [tagId, setTagId] = useState('');
@@ -193,7 +224,7 @@ export default function BugSnapshotFab({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<string>('');
   const [lastTriageJobId, setLastTriageJobId] = useState<string | null>(null);
-  const [saveAsGolden, setSaveAsGolden] = useState(true);
+  const [saveAsGolden, setSaveAsGolden] = useState(false);
   const [goldenLines, setGoldenLines] = useState<GoldenMealLine[]>([]);
   const [extraIssuesText, setExtraIssuesText] = useState('');
   const [previewIssues, setPreviewIssues] = useState<string[]>([]);
@@ -236,6 +267,11 @@ export default function BugSnapshotFab({
     if (!open) return;
     const draft = loadBugSnapshotDraft();
     if (!draft) return;
+    if (draft.snapshotType) {
+      setSnapshotType(draft.snapshotType);
+      setSaveAsGolden(draft.snapshotType === 'meal');
+    }
+    if (draft.goldenTitle) setGoldenTitle(draft.goldenTitle);
     if (draft.category) setCategory(draft.category as BugCategory);
     if (draft.tagId) setTagId(draft.tagId);
     if (draft.newTitle) setNewTitle(draft.newTitle);
@@ -258,8 +294,10 @@ export default function BugSnapshotFab({
       newTitle,
       symptom: stripStaleStallLines(symptom),
       shots,
+      snapshotType,
+      goldenTitle,
     });
-  }, [open, category, tagId, newTitle, symptom, shots]);
+  }, [open, category, tagId, newTitle, symptom, shots, snapshotType, goldenTitle]);
 
   // Paste images (Cmd/Ctrl+V)
   useEffect(() => {
@@ -300,7 +338,7 @@ export default function BugSnapshotFab({
   }, [loadTags]);
 
   useEffect(() => {
-    if (!open || !saveAsGolden) return;
+    if (!open || snapshotType !== 'meal') return;
     const jobs = typeof JobStore?.getAllJobs === 'function' ? JobStore.getAllJobs() : [];
     const modalJobId = viewingJobId || readOpenModalJobId();
     const job = pickSnapshotJob(jobs, modalJobId);
@@ -344,7 +382,7 @@ export default function BugSnapshotFab({
         }
       })
       .catch(() => {});
-  }, [open, saveAsGolden, viewingJobId]);
+  }, [open, snapshotType, viewingJobId]);
 
   if (!isAdmin || !enabled) return null;
 
@@ -379,6 +417,12 @@ export default function BugSnapshotFab({
 
   /** Requirement 2: Open modal immediately, extract captured meal errors & photos, then take screen capture */
   const handleOpenFab = async () => {
+    const modalJobId = viewingJobId || readOpenModalJobId();
+    const modalOpen = isAnyMealModalOpen(modalJobId, activeTab);
+    const initialMode: 'bug' | 'meal' = modalOpen ? 'meal' : 'bug';
+
+    setSnapshotType(initialMode);
+    setSaveAsGolden(initialMode === 'meal');
     setCategory(getCategoryForTab(activeTab));
     setTagId('');
     setError(null);
@@ -387,7 +431,16 @@ export default function BugSnapshotFab({
 
     // Extract active job context (captured meal processing problems + meal photo)
     const jobs = typeof JobStore?.getAllJobs === 'function' ? JobStore.getAllJobs() : [];
-    const activeJob = pickSnapshotJob(jobs, viewingJobId || readOpenModalJobId());
+    const activeJob = pickSnapshotJob(jobs, modalJobId);
+
+    // Pre-populate golden meal name from job context
+    const derivedTitle = deriveGoldenTitle({
+      foodLog: activeJob?.result?.pendingFoodLog || activeJob?.result?.data?.pendingFoodLog,
+      scout: activeJob?.result?.scoutItems || activeJob?.result?.data?.scoutItems || activeJob?.result?.scout,
+      jobId: activeJob?.id,
+      fallback: activeJob?.title || activeJob?.inputSnapshot?.text || '',
+    });
+    setGoldenTitle(derivedTitle);
 
     const capturedProblems = extractCapturedMealProblems(activeJob).filter(
       (p) => !isStaleCapturedStallSymptom(p)
@@ -398,15 +451,55 @@ export default function BugSnapshotFab({
         : ''
     );
 
-    const mealPhoto =
-      activeJob?.result?.photoUrl ||
-      activeJob?.result?.pendingFoodLog?.imageUrl ||
-      activeJob?.result?.data?.pendingFoodLog?.imageUrl ||
-      activeJob?.inputSnapshot?.imageRefs?.[0];
-
     setOpen(true);
     loadTags();
-    if (mealPhoto) setShots((s) => (s.includes(mealPhoto) ? s : [mealPhoto, ...s].slice(0, BUG_SNAPSHOT_MAX_SHOTS)));
+
+    // Asynchronously resolve real photos from the active job (IDB blobs, imageStore refs, R2 URLs)
+    const jobPhotos: string[] = [];
+    if (activeJob) {
+      try {
+        if (activeJob.id) {
+          const idbImages = await ImageStore.getImages(activeJob.id);
+          for (const img of idbImages) {
+            const resolved = await resolveDisplayableImage(img);
+            if (resolved && !jobPhotos.includes(resolved)) {
+              jobPhotos.push(resolved);
+            }
+          }
+        }
+      } catch {
+        /* fallback to fixture photos */
+      }
+
+      try {
+        const fx = await collectOriginalFixture(activeJob);
+        for (const p of fx.photos) {
+          const resolved = await resolveDisplayableImage(p);
+          if (resolved && !jobPhotos.includes(resolved)) {
+            jobPhotos.push(resolved);
+          }
+        }
+      } catch {
+        const mealPhoto =
+          activeJob?.result?.photoUrl ||
+          activeJob?.result?.pendingFoodLog?.imageUrl ||
+          activeJob?.result?.data?.pendingFoodLog?.imageUrl ||
+          activeJob?.inputSnapshot?.imageRefs?.[0];
+        if (mealPhoto) {
+          const resolved = await resolveDisplayableImage(mealPhoto);
+          if (resolved && !jobPhotos.includes(resolved)) {
+            jobPhotos.push(resolved);
+          }
+        }
+      }
+    }
+
+    if (jobPhotos.length > 0) {
+      setShots((s) => {
+        const combined = [...jobPhotos, ...s.filter((x) => !jobPhotos.includes(x))];
+        return combined.slice(0, BUG_SNAPSHOT_MAX_SHOTS);
+      });
+    }
 
     const modal = typeof document !== 'undefined'
       ? document.querySelector<HTMLElement>('#food-chat-container, [data-unified-modal="true"]')
@@ -469,10 +562,16 @@ export default function BugSnapshotFab({
     setError(null);
     setSuccess(null);
     try {
-      if (tagId === 'new_bug' && !newTitle.trim()) {
-        throw new Error('Enter a title for the new bug');
+      if (snapshotType === 'bug') {
+        if (tagId === 'new_bug' && !newTitle.trim()) {
+          throw new Error('Enter a title for the new bug');
+        }
+        if (!tagId) throw new Error('Select a bug tag or create new');
+      } else {
+        if (!goldenTitle.trim()) {
+          throw new Error('Enter a title for the golden meal');
+        }
       }
-      if (!tagId) throw new Error('Select a bug tag or create new');
       if (shots.length === 0) throw new Error('Add at least one screenshot');
 
       let payload: any = {};
@@ -672,10 +771,14 @@ export default function BugSnapshotFab({
       setChecklist(check);
 
       const autoTriage = isBugAutoTriageEnabled();
+      const effectiveCategory = snapshotType === 'meal' ? 'foodcart' : category;
+      const effectiveTagId = snapshotType === 'meal' ? undefined : (tagId === 'new_bug' ? undefined : tagId);
+      const effectiveNewTitle = snapshotType === 'meal' ? goldenTitle.trim() : (tagId === 'new_bug' ? newTitle.trim() : undefined);
+
       const body = {
-        category,
-        tag_id: tagId === 'new_bug' ? undefined : tagId,
-        new_bug_title: tagId === 'new_bug' ? newTitle.trim() : undefined,
+        category: effectiveCategory,
+        tag_id: effectiveTagId,
+        new_bug_title: effectiveNewTitle,
         user_symptom: symptom.trim() || undefined,
         shots,
         payload: {
@@ -702,7 +805,7 @@ export default function BugSnapshotFab({
           (payload as any)?.dish_query ||
           (payload as any)?.query ||
           domain_pack.food?.mealName ||
-          undefined,
+          (snapshotType === 'meal' ? goldenTitle.trim() : undefined),
         chain_key: (payload as any)?.chain_key || undefined,
         auto_triage: autoTriage,
         modelId: localStorage.getItem('selectedModelId') || 'gemini-3.5-flash-lite',
@@ -716,7 +819,7 @@ export default function BugSnapshotFab({
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
 
-      if (saveAsGolden) {
+      if (snapshotType === 'meal') {
         try {
           const extraIssues = extraIssuesText.split('\n').map((s) => s.trim()).filter(Boolean);
           const fx = await collectOriginalFixture(activeJob);
@@ -726,14 +829,15 @@ export default function BugSnapshotFab({
             body: JSON.stringify({
               jobId: activeJob?.id || env.activeJobId,
               title:
-                newTitle.trim() ||
+                goldenTitle.trim() ||
                 deriveGoldenTitle({
                   foodLog: resolvedFoodLog,
                   scout: resolvedScoutItems,
                   jobId: activeJob?.id,
                   fallback: symptom.trim(),
-                }),
-              tag_id: json.tag_id || tagId,
+                }) ||
+                'Golden meal',
+              tag_id: json.tag_id || tagId || undefined,
               logText: resolvedBackendLogs || combinedLogs,
               scout: resolvedScoutItems,
               foodLog: resolvedFoodLog,
@@ -932,18 +1036,19 @@ export default function BugSnapshotFab({
                   </div>
                 )}
 
-                <div className="flex flex-wrap gap-2">
+                {/* Capture & Add Image Toolbar */}
+                <div className="flex flex-wrap gap-2 items-center">
                   <button
                     type="button"
                     title="Capture screen"
                     disabled={capturing || shots.length >= BUG_SNAPSHOT_MAX_SHOTS}
                     onClick={handleCaptureScreen}
-                    className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold disabled:opacity-40 flex items-center gap-1.5"
+                    className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold disabled:opacity-40 flex items-center gap-1.5 text-white"
                   >
                     {capturing ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
                     {capturing ? 'Capturing meal…' : 'Capture meal'}
                   </button>
-                  <label className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-bold cursor-pointer flex items-center gap-1.5">
+                  <label className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-bold cursor-pointer flex items-center gap-1.5 text-white">
                     <ImagePlus className="w-3.5 h-3.5" />
                     Add image
                     <input
@@ -957,7 +1062,7 @@ export default function BugSnapshotFab({
                       }}
                     />
                   </label>
-                  <span className="text-white/50 self-center">
+                  <span className="text-white/50 self-center text-xs">
                     {shots.length}/{BUG_SNAPSHOT_MAX_SHOTS}
                   </span>
                 </div>
@@ -967,14 +1072,26 @@ export default function BugSnapshotFab({
                     {shots.map((s, i) => (
                       <div
                         key={i}
-                        className="relative shrink-0 w-20 h-20 rounded-lg overflow-hidden border border-white/20 cursor-pointer group"
+                        className="relative shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-white/20 bg-slate-950 cursor-pointer group shadow-sm"
                         onClick={() => setPreviewUrl(s)}
                       >
-                        <img src={s} alt={`shot ${i + 1}`} className="w-full h-full object-cover" />
+                        <img
+                          src={normalizeMealImageUrl(s) || s}
+                          alt={`shot ${i + 1}`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            if (!target.dataset.tried) {
+                              target.dataset.tried = '1';
+                              const norm = normalizeMealImageUrl(s);
+                              if (norm && norm !== s) target.src = norm;
+                            }
+                          }}
+                        />
                         <button
                           type="button"
                           title="Delete shot"
-                          className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/70 text-rose-300 hover:bg-rose-600 hover:text-white"
+                          className="absolute top-1 right-1 p-1 rounded-lg bg-black/75 text-rose-300 hover:bg-rose-600 hover:text-white transition-colors"
                           onClick={(e) => {
                             e.stopPropagation();
                             setShots((prev) => prev.filter((_, j) => j !== i));
@@ -982,318 +1099,388 @@ export default function BugSnapshotFab({
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
+                        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-white/80">
+                          #{i + 1}
+                        </span>
                       </div>
                     ))}
                   </div>
                 )}
 
-                <div className="space-y-1">
-                  <label className="font-bold text-white/90">Page / Category</label>
-                  <select
-                    value={category}
-                    onChange={(e) => {
-                      setCategory(e.target.value as BugCategory);
-                      setTagId('');
+                {/* Mode Selector Tabs: Bug vs Golden Meal */}
+                <div className="flex rounded-xl bg-slate-950 p-1 border border-white/15">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSnapshotType('bug');
+                      setSaveAsGolden(false);
                     }}
-                    className={inputCls}
+                    className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                      snapshotType === 'bug'
+                        ? 'bg-rose-600 text-white shadow-md'
+                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
                   >
-                    {CATEGORY_OPTIONS.map((c) => (
-                      <option key={c.key} value={c.key}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-white/90">Bug tag</label>
-                  <select
-                    value={tagId}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setTagId(val);
-                      if (val && val !== 'new_bug') {
-                        const selectedTag = bugTags.find((t) => t.id === val);
-                        if (selectedTag?.category) {
-                          const match = CATEGORY_OPTIONS.find(
-                            (c) => normalizeCat(c.key) === normalizeCat(selectedTag.category)
-                          );
-                          if (match) setCategory(match.key);
-                        }
+                    <Bug className="w-3.5 h-3.5" />
+                    <span>Bug Report</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSnapshotType('meal');
+                      setSaveAsGolden(true);
+                      if (!goldenTitle) {
+                        const jobs = typeof JobStore?.getAllJobs === 'function' ? JobStore.getAllJobs() : [];
+                        const modalJobId = viewingJobId || readOpenModalJobId();
+                        const activeJob = pickSnapshotJob(jobs, modalJobId);
+                        setGoldenTitle(
+                          deriveGoldenTitle({
+                            foodLog: activeJob?.result?.pendingFoodLog || activeJob?.result?.data?.pendingFoodLog,
+                            scout: activeJob?.result?.scoutItems || activeJob?.result?.data?.scoutItems || activeJob?.result?.scout,
+                            jobId: activeJob?.id,
+                            fallback: activeJob?.title || activeJob?.inputSnapshot?.text || '',
+                          })
+                        );
                       }
                     }}
-                    className={inputCls}
+                    className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                      snapshotType === 'meal'
+                        ? 'bg-amber-600 text-white shadow-md'
+                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
                   >
-                    <option value="">— Select or create —</option>
-                    <option value="new_bug">+ Create new bug…</option>
-                    {pageTags.length > 0 && (
-                      <optgroup label={`Active bugs for ${currentCategoryLabel}`}>
-                        {pageTags.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.title}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {otherTags.length > 0 && (
-                      <optgroup label="Other active bugs">
-                        {otherTags.map((t) => {
-                          const catLabel =
-                            CATEGORY_OPTIONS.find(
-                              (c) => normalizeCat(c.key) === normalizeCat(t.category)
-                            )?.label || t.category || 'Other';
-                          return (
-                            <option key={t.id} value={t.id}>
-                              [{catLabel}] {t.title}
-                            </option>
-                          );
-                        })}
-                      </optgroup>
-                    )}
-                  </select>
+                    <Utensils className="w-3.5 h-3.5" />
+                    <span>Golden Meal</span>
+                  </button>
                 </div>
 
-                {tagId && tagId !== 'new_bug' && (() => {
-                  const selectedTag = bugTags.find((t) => t.id === tagId);
-                  if (!selectedTag) return null;
-                  const problems = String(selectedTag.identified_problems || selectedTag.symptom || '').trim();
-                  const stillOpen = String(selectedTag.whats_still_open || '').trim();
-                  if (!problems && !stillOpen) return null;
-                  return (
-                    <div className="p-2.5 rounded-xl border border-violet-500/30 bg-violet-950/40 space-y-1 text-xs text-violet-100">
-                      {problems && (
-                        <>
-                          <div className="font-bold text-violet-300 flex items-center gap-1.5">
-                            <Sparkles className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                            <span>Previously identified problem:</span>
-                          </div>
-                          <div className="text-[11px] text-white/90 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto">
-                            {problems}
-                          </div>
-                        </>
-                      )}
-                      {stillOpen && (
-                        <div className="text-[10px] text-amber-200/90 pt-1 border-t border-violet-500/20">
-                          <span className="font-bold text-amber-300">Still open: </span>
-                          {stillOpen}
-                        </div>
-                      )}
+                {/* TAB 1: BUG REPORT FIELDS */}
+                {snapshotType === 'bug' && (
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="font-bold text-white/90">Page / Category</label>
+                      <select
+                        value={category}
+                        onChange={(e) => {
+                          setCategory(e.target.value as BugCategory);
+                          setTagId('');
+                        }}
+                        className={inputCls}
+                      >
+                        {CATEGORY_OPTIONS.map((c) => (
+                          <option key={c.key} value={c.key}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  );
-                })()}
 
-                {tagId === 'new_bug' && (
-                  <div className="space-y-1">
-                    <label className="font-bold text-amber-300">New bug title *</label>
-                    <input
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      className={inputCls}
-                      placeholder="Short descriptive title"
-                    />
+                    <div className="space-y-1">
+                      <label className="font-bold text-white/90">Bug tag</label>
+                      <select
+                        value={tagId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTagId(val);
+                          if (val && val !== 'new_bug') {
+                            const selectedTag = bugTags.find((t) => t.id === val);
+                            if (selectedTag?.category) {
+                              const match = CATEGORY_OPTIONS.find(
+                                (c) => normalizeCat(c.key) === normalizeCat(selectedTag.category)
+                              );
+                              if (match) setCategory(match.key);
+                            }
+                          }
+                        }}
+                        className={inputCls}
+                      >
+                        <option value="">— Select or create —</option>
+                        <option value="new_bug">+ Create new bug…</option>
+                        {pageTags.length > 0 && (
+                          <optgroup label={`Active bugs for ${currentCategoryLabel}`}>
+                            {pageTags.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.title}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {otherTags.length > 0 && (
+                          <optgroup label="Other active bugs">
+                            {otherTags.map((t) => {
+                              const catLabel =
+                                CATEGORY_OPTIONS.find(
+                                  (c) => normalizeCat(c.key) === normalizeCat(t.category)
+                                )?.label || t.category || 'Other';
+                              return (
+                                <option key={t.id} value={t.id}>
+                                  [{catLabel}] {t.title}
+                                </option>
+                              );
+                            })}
+                          </optgroup>
+                        )}
+                      </select>
+                    </div>
+
+                    {tagId && tagId !== 'new_bug' && (() => {
+                      const selectedTag = bugTags.find((t) => t.id === tagId);
+                      if (!selectedTag) return null;
+                      const problems = String(selectedTag.identified_problems || selectedTag.symptom || '').trim();
+                      const stillOpen = String(selectedTag.whats_still_open || '').trim();
+                      if (!problems && !stillOpen) return null;
+                      return (
+                        <div className="p-2.5 rounded-xl border border-violet-500/30 bg-violet-950/40 space-y-1 text-xs text-violet-100">
+                          {problems && (
+                            <>
+                              <div className="font-bold text-violet-300 flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                                <span>Previously identified problem:</span>
+                              </div>
+                              <div className="text-[11px] text-white/90 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto">
+                                {problems}
+                              </div>
+                            </>
+                          )}
+                          {stillOpen && (
+                            <div className="text-[10px] text-amber-200/90 pt-1 border-t border-violet-500/20">
+                              <span className="font-bold text-amber-300">Still open: </span>
+                              {stillOpen}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {tagId === 'new_bug' && (
+                      <div className="space-y-1">
+                        <label className="font-bold text-amber-300">New bug title *</label>
+                        <input
+                          value={newTitle}
+                          onChange={(e) => setNewTitle(e.target.value)}
+                          className={inputCls}
+                          placeholder="Short descriptive title"
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <label className="font-bold text-white/90">Identified problem / symptom (optional)</label>
+                      <textarea
+                        rows={2}
+                        value={symptom}
+                        onChange={(e) => setSymptom(e.target.value)}
+                        className={inputCls}
+                        placeholder="What looks wrong? (full diagnosis can be filled by Analyze later)"
+                      />
+                    </div>
                   </div>
                 )}
 
-                <div className="space-y-1">
-                  <label className="font-bold text-white/90">Identified problem / symptom (optional)</label>
-                  <textarea
-                    rows={2}
-                    value={symptom}
-                    onChange={(e) => setSymptom(e.target.value)}
-                    className={inputCls}
-                    placeholder="What looks wrong? (full diagnosis can be filled by Analyze later)"
-                  />
-                </div>
-
-                <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 p-2.5 space-y-2">
-                  <label className="flex items-center gap-2 text-xs font-bold text-amber-200 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={saveAsGolden}
-                      onChange={(e) => setSaveAsGolden(e.target.checked)}
-                      className="rounded border-amber-400"
-                    />
-                    Save as golden meal (replay until A + B are green)
-                  </label>
-                  {saveAsGolden && (
-                    <div className="space-y-2 text-[11px] text-white/80">
-                      {previewJourney.length > 0 && (
-                        <div className="rounded-lg border border-white/10 bg-black/30 p-1.5 space-y-1">
-                          <p className="text-[10px] font-bold text-amber-200">
-                            Scout identity — {previewJourney.filter((j) => j.identityPass).length}/{previewJourney.length} identified
-                          </p>
-                          {groupJourneyByDish(previewJourney).map((g) => (
-                            <div key={g.dish} className="space-y-0.5">
-                              <p className="text-[10px] font-semibold text-white/90 truncate">{g.dish}</p>
-                              {g.rows.map((j) => (
-                                <div key={j.id} className="flex items-baseline justify-between gap-2 text-[10px] pl-3">
-                                  <span className="text-white/70 truncate">{j.query}</span>
-                                  <span className={j.identityPass ? 'text-emerald-300 shrink-0' : 'text-rose-300 shrink-0'}>
-                                    {PHASE_LABEL[j.phase] || j.phase}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {previewInvariants.length > 0 && (
-                        <ul className="list-disc pl-4 space-y-0.5 text-rose-200">
-                          {previewInvariants.slice(0, 12).map((inv) => (
-                            <li key={inv.id}>{inv.label}</li>
-                          ))}
-                        </ul>
-                      )}
-                      {previewJourney.length === 0 && previewInvariants.length === 0 && previewIssues.length > 0 && (
-                        <ul className="list-disc pl-4 space-y-0.5 text-rose-200">
-                          {previewIssues.slice(0, 10).map((p) => (
-                            <li key={p}>{p}</li>
-                          ))}
-                        </ul>
-                      )}
-                      {previewJourney.length === 0 && previewInvariants.some((i) => i.group === 'transport') && (
-                        <p className="text-[10px] text-amber-200/90">
-                          Scout never listed foods. Replay catalog cannot run on this case until a job finishes. Switch to Gemini 3.1 Flash Lite and Analyze again — photos are already on the job.
-                        </p>
-                      )}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <p className="font-bold text-amber-200 text-xs">Top dishes — target values</p>
-                          <p className="text-[10px] text-white/45">Leave kcal empty to mean “this dish must appear” — don’t invent numbers.</p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setGoldenLines((prev) => [
-                                ...prev,
-                                {
-                                  name: `Dish ${prev.length + 1}`,
-                                  weightGrams: null,
-                                  calories: null,
-                                  protein: null,
-                                  carbohydrates: null,
-                                  totalFat: null,
-                                  sodium: null,
-                                  scored: true,
-                                },
-                              ]);
-                            }}
-                            className="px-2 py-0.5 rounded bg-amber-500/30 hover:bg-amber-500/50 border border-amber-400/40 text-[10px] text-amber-200 font-bold flex items-center gap-1"
-                          >
-                            <Plus className="w-3 h-3" />
-                            Add Dish
-                          </button>
-                        </div>
-                        {goldenLines.length === 0 ? (
-                          <p className="text-[10px] text-white/50 italic">No top dishes extracted yet. Click "Add Dish" above.</p>
-                        ) : (
-                          <div className="overflow-x-auto rounded-lg border border-white/10 bg-black/40">
-                            <table className="w-full text-[10px] border-collapse">
-                              <thead>
-                                <tr className="text-left text-[9px] uppercase tracking-wide text-white/45 border-b border-white/10">
-                                  <th className="px-1.5 py-1 font-bold w-6"></th>
-                                  <th className="px-1.5 py-1 font-bold">Dish</th>
-                                  <th className="px-1 py-1 font-bold text-amber-200/80 w-14">kcal</th>
-                                  <th className="px-1 py-1 font-bold text-emerald-200/80 w-14">g</th>
-                                  <th className="px-1 py-1 font-bold text-blue-200/80 w-12">P</th>
-                                  <th className="px-1 py-1 w-6"></th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {goldenLines.map((line, i) => (
-                                  <tr key={i} className="border-t border-white/5 align-middle">
-                                    <td className="px-1.5 py-1">
-                                      <input
-                                        type="checkbox"
-                                        checked={line.scored}
-                                        title="Score this dish"
-                                        onChange={(e) => {
-                                          const next = [...goldenLines];
-                                          next[i] = { ...next[i], scored: e.target.checked };
-                                          setGoldenLines(next);
-                                        }}
-                                        className="rounded border-amber-400"
-                                      />
-                                    </td>
-                                    <td className="px-1.5 py-1">
-                                      <input
-                                        className="w-full min-w-[140px] bg-slate-900 border border-white/20 rounded px-1.5 py-0.5 text-[10px] text-white"
-                                        value={line.name}
-                                        placeholder="Dish name"
-                                        onChange={(e) => {
-                                          const next = [...goldenLines];
-                                          next[i] = { ...next[i], name: e.target.value };
-                                          setGoldenLines(next);
-                                        }}
-                                      />
-                                    </td>
-                                    <td className="px-1 py-1">
-                                      <input
-                                        className="w-14 bg-slate-900 border border-white/20 rounded px-1 py-0.5 text-[10px] text-amber-200"
-                                        value={line.calories ?? ''}
-                                        placeholder="kcal"
-                                        onChange={(e) => {
-                                          const next = [...goldenLines];
-                                          const v = e.target.value === '' ? null : Number(e.target.value);
-                                          next[i] = { ...next[i], calories: v };
-                                          setGoldenLines(next);
-                                        }}
-                                      />
-                                    </td>
-                                    <td className="px-1 py-1">
-                                      <input
-                                        className="w-14 bg-slate-900 border border-white/20 rounded px-1 py-0.5 text-[10px] text-emerald-200"
-                                        value={line.weightGrams ?? ''}
-                                        placeholder="g"
-                                        onChange={(e) => {
-                                          const next = [...goldenLines];
-                                          const v = e.target.value === '' ? null : Number(e.target.value);
-                                          next[i] = { ...next[i], weightGrams: v };
-                                          setGoldenLines(next);
-                                        }}
-                                      />
-                                    </td>
-                                    <td className="px-1 py-1">
-                                      <input
-                                        className="w-12 bg-slate-900 border border-white/20 rounded px-1 py-0.5 text-[10px] text-blue-200"
-                                        value={line.protein ?? ''}
-                                        placeholder="P"
-                                        onChange={(e) => {
-                                          const next = [...goldenLines];
-                                          const v = e.target.value === '' ? null : Number(e.target.value);
-                                          next[i] = { ...next[i], protein: v };
-                                          setGoldenLines(next);
-                                        }}
-                                      />
-                                    </td>
-                                    <td className="px-1 py-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setGoldenLines((prev) => prev.filter((_, idx) => idx !== i));
-                                        }}
-                                        className="p-1 text-rose-400 hover:text-rose-200"
-                                        title="Remove dish"
-                                      >
-                                        <Trash2 className="w-3 h-3" />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                      <textarea
-                        rows={2}
-                        value={extraIssuesText}
-                        onChange={(e) => setExtraIssuesText(e.target.value)}
+                {/* TAB 2: GOLDEN MEAL FIELDS */}
+                {snapshotType === 'meal' && (
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="font-bold text-amber-300">Golden meal name *</label>
+                      <input
+                        value={goldenTitle}
+                        onChange={(e) => setGoldenTitle(e.target.value)}
                         className={inputCls}
-                        placeholder="Un-reported bugs (one per line) — e.g. wrap was scaled to scout guess"
+                        placeholder="e.g. Avocado Toast with Poached Eggs"
                       />
                     </div>
-                  )}
-                </div>
+
+                    <div className="space-y-1">
+                      <label className="font-bold text-white/90">Identified problem / symptom (optional)</label>
+                      <textarea
+                        rows={2}
+                        value={symptom}
+                        onChange={(e) => setSymptom(e.target.value)}
+                        className={inputCls}
+                        placeholder="What looks wrong with this meal parse? (e.g., incorrect grams or missing sauce)"
+                      />
+                    </div>
+
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 p-2.5 space-y-2">
+                      <div className="space-y-2 text-[11px] text-white/80">
+                        {previewJourney.length > 0 && (
+                          <div className="rounded-lg border border-white/10 bg-black/30 p-1.5 space-y-1">
+                            <p className="text-[10px] font-bold text-amber-200">
+                              Scout identity — {previewJourney.filter((j) => j.identityPass).length}/{previewJourney.length} identified
+                            </p>
+                            {groupJourneyByDish(previewJourney).map((g) => (
+                              <div key={g.dish} className="space-y-0.5">
+                                <p className="text-[10px] font-semibold text-white/90 truncate">{g.dish}</p>
+                                {g.rows.map((j) => (
+                                  <div key={j.id} className="flex items-baseline justify-between gap-2 text-[10px] pl-3">
+                                    <span className="text-white/70 truncate">{j.query}</span>
+                                    <span className={j.identityPass ? 'text-emerald-300 shrink-0' : 'text-rose-300 shrink-0'}>
+                                      {PHASE_LABEL[j.phase] || j.phase}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {previewInvariants.length > 0 && (
+                          <ul className="list-disc pl-4 space-y-0.5 text-rose-200">
+                            {previewInvariants.slice(0, 12).map((inv) => (
+                              <li key={inv.id}>{inv.label}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {previewJourney.length === 0 && previewInvariants.length === 0 && previewIssues.length > 0 && (
+                          <ul className="list-disc pl-4 space-y-0.5 text-rose-200">
+                            {previewIssues.slice(0, 10).map((p) => (
+                              <li key={p}>{p}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {previewJourney.length === 0 && previewInvariants.some((i) => i.group === 'transport') && (
+                          <p className="text-[10px] text-amber-200/90">
+                            Scout never listed foods. Replay catalog cannot run on this case until a job finishes. Switch to Gemini 3.1 Flash Lite and Analyze again — photos are already on the job.
+                          </p>
+                        )}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <p className="font-bold text-amber-200 text-xs">Top dishes — target values</p>
+                            <p className="text-[10px] text-white/45">Leave kcal empty to mean “this dish must appear” — don’t invent numbers.</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGoldenLines((prev) => [
+                                  ...prev,
+                                  {
+                                    name: `Dish ${prev.length + 1}`,
+                                    weightGrams: null,
+                                    calories: null,
+                                    protein: null,
+                                    carbohydrates: null,
+                                    totalFat: null,
+                                    sodium: null,
+                                    scored: true,
+                                  },
+                                ]);
+                              }}
+                              className="px-2 py-0.5 rounded bg-amber-500/30 hover:bg-amber-500/50 border border-amber-400/40 text-[10px] text-amber-200 font-bold flex items-center gap-1"
+                            >
+                              <Plus className="w-3 h-3" />
+                              Add Dish
+                            </button>
+                          </div>
+                          {goldenLines.length === 0 ? (
+                            <p className="text-[10px] text-white/50 italic">No top dishes extracted yet. Click "Add Dish" above.</p>
+                          ) : (
+                            <div className="overflow-x-auto rounded-lg border border-white/10 bg-black/40">
+                              <table className="w-full text-[10px] border-collapse">
+                                <thead>
+                                  <tr className="text-left text-[9px] uppercase tracking-wide text-white/45 border-b border-white/10">
+                                    <th className="px-1.5 py-1 font-bold w-6"></th>
+                                    <th className="px-1.5 py-1 font-bold">Dish</th>
+                                    <th className="px-1 py-1 font-bold text-amber-200/80 w-14">kcal</th>
+                                    <th className="px-1 py-1 font-bold text-emerald-200/80 w-14">g</th>
+                                    <th className="px-1 py-1 font-bold text-blue-200/80 w-12">P</th>
+                                    <th className="px-1 py-1 w-6"></th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {goldenLines.map((line, i) => (
+                                    <tr key={i} className="border-t border-white/5 align-middle">
+                                      <td className="px-1.5 py-1">
+                                        <input
+                                          type="checkbox"
+                                          checked={line.scored}
+                                          title="Score this dish"
+                                          onChange={(e) => {
+                                            const next = [...goldenLines];
+                                            next[i] = { ...next[i], scored: e.target.checked };
+                                            setGoldenLines(next);
+                                          }}
+                                          className="rounded border-amber-400"
+                                        />
+                                      </td>
+                                      <td className="px-1.5 py-1">
+                                        <input
+                                          className="w-full min-w-[140px] bg-slate-900 border border-white/20 rounded px-1.5 py-0.5 text-[10px] text-white"
+                                          value={line.name}
+                                          placeholder="Dish name"
+                                          onChange={(e) => {
+                                            const next = [...goldenLines];
+                                            next[i] = { ...next[i], name: e.target.value };
+                                            setGoldenLines(next);
+                                          }}
+                                        />
+                                      </td>
+                                      <td className="px-1 py-1">
+                                        <input
+                                          className="w-14 bg-slate-900 border border-white/20 rounded px-1 py-0.5 text-[10px] text-amber-200"
+                                          value={line.calories ?? ''}
+                                          placeholder="kcal"
+                                          onChange={(e) => {
+                                            const next = [...goldenLines];
+                                            const v = e.target.value === '' ? null : Number(e.target.value);
+                                            next[i] = { ...next[i], calories: v };
+                                            setGoldenLines(next);
+                                          }}
+                                        />
+                                      </td>
+                                      <td className="px-1 py-1">
+                                        <input
+                                          className="w-14 bg-slate-900 border border-white/20 rounded px-1 py-0.5 text-[10px] text-emerald-200"
+                                          value={line.weightGrams ?? ''}
+                                          placeholder="g"
+                                          onChange={(e) => {
+                                            const next = [...goldenLines];
+                                            const v = e.target.value === '' ? null : Number(e.target.value);
+                                            next[i] = { ...next[i], weightGrams: v };
+                                            setGoldenLines(next);
+                                          }}
+                                        />
+                                      </td>
+                                      <td className="px-1 py-1">
+                                        <input
+                                          className="w-12 bg-slate-900 border border-white/20 rounded px-1 py-0.5 text-[10px] text-blue-200"
+                                          value={line.protein ?? ''}
+                                          placeholder="P"
+                                          onChange={(e) => {
+                                            const next = [...goldenLines];
+                                            const v = e.target.value === '' ? null : Number(e.target.value);
+                                            next[i] = { ...next[i], protein: v };
+                                            setGoldenLines(next);
+                                          }}
+                                        />
+                                      </td>
+                                      <td className="px-1 py-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setGoldenLines((prev) => prev.filter((_, idx) => idx !== i));
+                                          }}
+                                          className="p-1 text-rose-400 hover:text-rose-200"
+                                          title="Remove dish"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                        <textarea
+                          rows={2}
+                          value={extraIssuesText}
+                          onChange={(e) => setExtraIssuesText(e.target.value)}
+                          className={inputCls}
+                          placeholder="Un-reported bugs (one per line) — e.g. wrap was scaled to scout guess"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Requirements 6 & 7: Cleaned up Capture pack and checkboxes for info sent */}
                 <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/25 p-2.5 space-y-2 text-[11px] text-white/70">
@@ -1378,10 +1565,12 @@ export default function BugSnapshotFab({
                   type="button"
                   disabled={busy}
                   onClick={handleSubmit}
-                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold disabled:opacity-40 flex items-center gap-1.5"
+                  className={`px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-40 flex items-center gap-1.5 text-white ${
+                    snapshotType === 'meal' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-rose-600 hover:bg-rose-500'
+                  }`}
                 >
                   {busy ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                  Save to bug tracker
+                  {snapshotType === 'meal' ? 'Save as golden meal' : 'Save to bug tracker'}
                 </button>
               </div>
             </div>

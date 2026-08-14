@@ -1668,11 +1668,11 @@ export const FoodCard: React.FC<AgentCardProps & {
         source: matchingScout?.source || item.source,
         dbSource: item.dbSource || matchingScout?.dbSource || null,
         dbId: item.dbId || matchingScout?.dbId || null,
-        isRealTruth: item.isRealTruth || item.dbSource === 'brand_official' || item.dbSource === 'label' || item.dbSource === 'label_partial',
-        labelNutrientsPerServing: item.labelNutrientsPerServing || item.primaryBase100g || matchingScout?.labelNutrientsPerServing || null,
+        isRealTruth: item.dbSource !== 'composite' && (item.isRealTruth || item.dbSource === 'brand_official' || item.dbSource === 'label' || item.dbSource === 'label_partial'),
+        labelNutrientsPerServing: item.labelNutrientsPerServing || (item.dbSource !== 'composite' ? item.primaryBase100g : null) || matchingScout?.labelNutrientsPerServing || null,
         primaryBase100g: item.primaryBase100g || null,
         primaryBaseMatchName: item.primaryBaseMatchName || item.canonicalDbName || null,
-        componentsDetailList: item.componentsDetailList || []
+        componentsDetailList: item.componentsDetailList || item.componentsDetail || matchingScout?.componentsDetailList || []
       };
     });
   }, [activeScoutItems, msg.data]);
@@ -2293,11 +2293,11 @@ export const FoodCard: React.FC<AgentCardProps & {
                                 
                                                                 {(() => {
                                   let groupScoutItems = (group.scoutItemIndices && group.scoutItemIndices.length > 0)
-                                    ? group.scoutItemIndices.map((i: number) => activeScoutItems[i]).filter(Boolean)
+                                    ? group.scoutItemIndices.map((i: number) => displayedScoutItems[i]).filter(Boolean)
                                     : [];
                                   
                                   if (groupScoutItems.length === 0 && group.items && group.items.length > 0) {
-                                    groupScoutItems = activeScoutItems.filter(s => {
+                                    groupScoutItems = displayedScoutItems.filter((s: any) => {
                                       return group.items.some((gi: any) => 
                                         gi.name === s.keyword || 
                                         gi.name === s.originalName ||
@@ -3075,16 +3075,30 @@ export const FoodCard: React.FC<AgentCardProps & {
                                        if (typeof raw === 'string') {
                                          try { raw = JSON.parse(raw); } catch (e) { raw = null; }
                                        }
-                                       if (!raw && item.isRealTruth && item.labelNutrientsPerServing) {
-                                         raw = item.labelNutrientsPerServing;
+                                       const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
+                                       const labelSource = item.labelNutrientsPerServing || item.primaryBase100g || item.baseNutrients100g;
+                                       if (!raw && isRealTruth && labelSource) {
+                                         raw = labelSource;
                                        }
-                                       if (!raw || typeof raw !== 'object') return false;
                                        const nonNutrientKeys = new Set(['servingSize', 'weight', 'servingsPerContainer']);
-                                       return Object.keys(raw).some((k) => {
-                                         if (nonNutrientKeys.has(k)) return false;
-                                         const val = raw[k];
-                                         return val !== undefined && val !== null && val !== '' && val !== '-' && val !== '--';
-                                       });
+                                       if (raw && typeof raw === 'object') {
+                                         const hasValidKeys = Object.keys(raw).some((k) => {
+                                           if (nonNutrientKeys.has(k)) return false;
+                                           const val = raw[k];
+                                           return val !== undefined && val !== null && val !== '' && val !== '-' && val !== '--';
+                                         });
+                                         if (hasValidKeys) return true;
+                                       }
+                                       const subComps = item.componentsDetailList || item.componentsDetail || item.components;
+                                       if (Array.isArray(subComps)) {
+                                         return subComps.some((c: any) => {
+                                           if (!c) return false;
+                                           const cRealTruth = c.dbSource === 'brand_official' || c.dbSource === 'label' || c.dbSource === 'off' || c.source === 'brand_official' || c.source === 'label' || Boolean(c.isRealTruth);
+                                           const cLabelSource = c.labelNutrientsPerServing || c.baseNutrients100g || c.primaryBase100g || c.nutrients;
+                                           return Boolean(c.rawNutritionLabel || (cRealTruth && cLabelSource));
+                                         });
+                                       }
+                                       return false;
                                      })() && (
                                        <button
                                          type="button"
@@ -3476,7 +3490,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                     </div>
                   ))}
                 </div>
-                <NutritionLabelTable defaultOpen={true} activeScoutItems={activeScoutItems} onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))} />
+                <NutritionLabelTable defaultOpen={true} activeScoutItems={displayedScoutItems} onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))} />
               </div>
             )}
 

@@ -70,16 +70,11 @@ export default function GoldenInboxPanel() {
 
   const [loopMsg, setLoopMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const isBusy = (id: string, action?: string) =>
     !!busy && busy.id === id && (!action || busy.action === action);
 
   const replay = async (id: string, mode: 'log' | 'catalog' | 'pipeline' = 'log') => {
-    if (mode === 'pipeline') {
-      const ok = window.confirm(
-        'Pipeline re-runs resolve + truth from the frozen scout.\n\nIt does NOT call Vision Scout (no new photo read).\nIt MAY call Curator or Dietitian and use Gemini quota.\n\nThis is not Replay log.\n\nContinue?'
-      );
-      if (!ok) return;
-    }
     setBusy({ id, action: mode });
     setLoopMsg(null);
     setError(null);
@@ -108,11 +103,12 @@ export default function GoldenInboxPanel() {
   };
 
   const deleteCase = async (id: string) => {
-    if (!window.confirm('Delete this golden meal?')) return;
     setBusy({ id, action: 'delete' });
+    setConfirmDeleteId(null);
+    setError(null);
     try {
       const r = await fetch(`/api/golden/cases/${id}`, { method: 'DELETE' });
-      const j = await r.json();
+      const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || 'delete failed');
       if (openId === id) {
         setOpenId(null);
@@ -154,10 +150,6 @@ export default function GoldenInboxPanel() {
   };
 
   const runLoop = async (id: string) => {
-    const ok = window.confirm(
-      'This is RUN UNTIL GREEN — not Replay log.\n\nIt re-runs the live pipeline once (frozen scout).\nIt does NOT call Vision Scout.\nIt MAY call Curator or Dietitian and use Gemini quota.\n\nContinue?'
-    );
-    if (!ok) return;
     setBusy({ id, action: 'loop' });
     setLoopMsg(null);
     setError(null);
@@ -407,15 +399,40 @@ export default function GoldenInboxPanel() {
                   disabled={!!busy}
                   onClick={() => copyStudioPrompt(c.id)}
                 />
-                <InboxAction
-                  label="Delete"
-                  hint="Remove this golden case."
-                  tone="danger"
-                  icon="trash"
-                  busy={isBusy(c.id, 'delete')}
-                  disabled={!!busy}
-                  onClick={() => deleteCase(c.id)}
-                />
+                {confirmDeleteId === c.id ? (
+                  <div className="flex items-center gap-1">
+                    <InboxAction
+                      label="Confirm Delete"
+                      hint="Permanently remove this golden case."
+                      tone="danger"
+                      icon="trash"
+                      busy={isBusy(c.id, 'delete')}
+                      disabled={!!busy}
+                      onClick={() => deleteCase(c.id)}
+                    />
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-white/80 border border-white/20"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setConfirmDeleteId(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <InboxAction
+                    label="Delete"
+                    hint="Remove this golden case."
+                    tone="danger"
+                    icon="trash"
+                    busy={isBusy(c.id, 'delete')}
+                    disabled={!!busy}
+                    onClick={() => setConfirmDeleteId(c.id)}
+                  />
+                )}
               </div>
             </div>
             {isBusy(c.id) && (

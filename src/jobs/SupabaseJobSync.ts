@@ -13,7 +13,14 @@ function forgetDeletedOnBackend(jobId: string, userId: string) {
 
 export async function hydrateUserJobs(userId: string = 'anonymous'): Promise<void> {
   try {
-    const res = await fetch(`/api/jobs/status?userId=${encodeURIComponent(userId)}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    let res: Response;
+    try {
+      res = await fetch(`/api/jobs/status?userId=${encodeURIComponent(userId)}`, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
     if (!res.ok) return;
     
     // During dev server restarts, the proxy might return a 200 OK HTML "Please wait" page.
@@ -220,7 +227,14 @@ export function initSupabaseJobSync(userId?: string): () => void {
             try {
               // Bypassing client-side CORS issues by fetching through our own backend proxy endpoint
               const baseUrl = typeof window !== 'undefined' ? '' : 'http://localhost:3000';
-              const r = await fetch(`${baseUrl}/api/jobs/status?jobId=${row.id}`);
+              const r2Controller = new AbortController();
+              const r2TimeoutId = setTimeout(() => r2Controller.abort(), 6000);
+              let r: Response;
+              try {
+                r = await fetch(`${baseUrl}/api/jobs/status?jobId=${row.id}`, { signal: r2Controller.signal });
+              } finally {
+                clearTimeout(r2TimeoutId);
+              }
               if (r.ok) {
                 const contentType = r.headers.get('content-type');
                 if (contentType && contentType.includes('application/json')) {

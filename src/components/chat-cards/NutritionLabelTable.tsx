@@ -128,30 +128,121 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
   if (typeof items === 'string') {
     try { items = JSON.parse(items); } catch(e) { items = []; }
   }
+  const NON_NUTRIENT_LABEL_KEYS = new Set([
+    'servingsize',
+    'servingSize',
+    'weight',
+    'servingspercontainer',
+    'servingsPerContainer',
+    'basistype',
+    'basisType',
+    'isdishbasis',
+    'isDishBasis',
+    'density',
+    'servingsizegrams',
+    'servingSizeGrams',
+    'servings',
+    'source',
+    'dbsource',
+    'dbSource',
+    'isrealtruth',
+    'isRealTruth',
+    'compositesiblings',
+    'compositeSiblings'
+  ]);
+
   if (!Array.isArray(items) || !items.length) return null;
   // Only `rawNutritionLabel` is gated on "a real physical panel is visible" — `nutritionFacts`
   // is a general-purpose estimate field and must never be treated as evidence of a real label.
   const expandedItems: any[] = [];
   (items || []).forEach(item => {
     if (!item) return;
-    expandedItems.push(item);
-    const subComps = item.componentsDetail || item.components;
-    if (Array.isArray(subComps)) {
+    const subComps = item.componentsDetailList || item.componentsDetail || item.components;
+    
+    // Check if subComps contains official / brand / label / truth components
+    const officialSubComps: any[] = [];
+    const allDishComps: any[] = [];
+
+    if (Array.isArray(subComps) && subComps.length > 0) {
       subComps.forEach((comp: any) => {
         if (!comp) return;
-        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.source === 'brand_official' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel);
-        if (isCompOfficial) {
-          expandedItems.push({
+        allDishComps.push(comp);
+        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel);
+        const compLabelSource = comp.baseNutrients100g || comp.primaryBase100g || comp.labelNutrientsPerServing || comp.nutrients;
+        if (isCompOfficial && (comp.rawNutritionLabel || compLabelSource)) {
+          const rawName = comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || comp.dish_name;
+          const cleanName = String(rawName).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/^[📖\s]+/, '').trim();
+          const compWeight = comp.weightGrams || comp.estimatedWeightGrams || comp.primaryBaseWeightG;
+          
+          // Build pure component raw label from its own 100g source if comp.rawNutritionLabel was cloned from parent or absent
+          let compRawLabel = comp.rawNutritionLabel;
+          if (compLabelSource && typeof compLabelSource === 'object') {
+            const cals = compLabelSource.calories ?? compLabelSource.energy;
+            if (cals != null && cals !== '') {
+              const calNum = parseLabelCalories(cals) ?? Number(cals);
+              compRawLabel = {
+                servingSize: '100g',
+                basisType: 'per_100g',
+                calories: !isNaN(calNum) ? `${calNum} kcal` : `${cals}`,
+                protein: compLabelSource.protein != null ? `${compLabelSource.protein}g` : undefined,
+                totalFat: (compLabelSource.totalFat ?? compLabelSource.fat) != null ? `${compLabelSource.totalFat ?? compLabelSource.fat}g` : undefined,
+                saturatedFat: compLabelSource.saturatedFat != null ? `${compLabelSource.saturatedFat}g` : undefined,
+                totalCarbohydrate: (compLabelSource.totalCarbohydrate ?? compLabelSource.carbohydrates ?? compLabelSource.carbs) != null ? `${compLabelSource.totalCarbohydrate ?? compLabelSource.carbohydrates ?? compLabelSource.carbs}g` : undefined,
+                sugar: compLabelSource.sugar != null ? `${compLabelSource.sugar}g` : (compLabelSource.addedSugar != null ? `${compLabelSource.addedSugar}g` : undefined),
+                addedSugar: compLabelSource.addedSugar != null ? `${compLabelSource.addedSugar}g` : undefined,
+                totalFibre: (compLabelSource.totalFibre ?? compLabelSource.fiber) != null ? `${compLabelSource.totalFibre ?? compLabelSource.fiber}g` : undefined,
+                sodium: compLabelSource.sodium != null ? `${compLabelSource.sodium}mg` : undefined,
+                salt: compLabelSource.salt != null ? `${compLabelSource.salt}g` : undefined
+              };
+            }
+          }
+
+          officialSubComps.push({
             ...comp,
-            keyword: comp.searchQuery || comp.name || comp.keyword || comp.dish_name,
-            originalName: comp.name || comp.searchQuery || comp.keyword || comp.dish_name,
+            keyword: cleanName,
+            originalName: cleanName,
+            name: cleanName,
+            primaryBaseMatchName: cleanName,
             dbSource: comp.dbSource || comp.source || 'brand_official',
-            rawNutritionLabel: comp.rawNutritionLabel,
-            labelNutrientsPerServing: comp.labelNutrientsPerServing || comp.nutrients,
-            isRealTruth: true
+            source: comp.source || comp.dbSource || 'brand_official',
+            rawNutritionLabel: compRawLabel,
+            nutritionFacts: comp.nutritionFacts || compLabelSource || null,
+            labelNutrientsPerServing: compLabelSource,
+            primaryBase100g: compLabelSource,
+            estimatedWeightGrams: compWeight,
+            primaryBaseWeightG: compWeight,
+            isRealTruth: true,
+            isComponentOfComposite: true
           });
         }
       });
+    }
+
+    if (officialSubComps.length > 0) {
+      officialSubComps.forEach((comp) => {
+        // Find sibling ingredients that are NOT this current component
+        const siblings = allDishComps.filter((c: any) => {
+          const cName = String(c.primaryBaseMatchName || c.name || c.searchQuery || c.keyword || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/^[📖\s]+/, '').trim().toLowerCase();
+          const compName = String(comp.primaryBaseMatchName || comp.name || comp.keyword || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/^[📖\s]+/, '').trim().toLowerCase();
+          return cName !== compName && c !== comp;
+        });
+
+        expandedItems.push({
+          ...comp,
+          compositeSiblings: siblings
+        });
+      });
+    } else {
+      const isMultiCompComposite = Array.isArray(subComps) && subComps.length >= 2;
+      const isItemRealTruth = (item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth)) && item.dbSource !== 'composite' && !isMultiCompComposite;
+      const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || (item.dbSource !== 'composite' && !isMultiCompComposite ? item.primaryBase100g : null);
+      const hasOwnExplicitLabel = Boolean(item.rawNutritionLabel && Object.keys(normalizeNutritionKeys(item.rawNutritionLabel) || {}).length > 0) || Boolean(isItemRealTruth && itemLabelSource);
+      if (hasOwnExplicitLabel) {
+        expandedItems.push({
+          ...item,
+          compositeSiblings: isMultiCompComposite ? allDishComps.filter(c => c !== item) : []
+        });
+      }
     }
   });
 
@@ -175,16 +266,22 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
     // confirms it is real truth (OCR label or curated brand/chain data). Estimated or
     // component-summed reference data must never render in the label card — it belongs
     // only in the calculation table as clearly-marked estimates.
-    const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || Boolean(item.isRealTruth);
-    const labelSource = item.labelNutrientsPerServing || item.primaryBase100g;
+    const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
+    const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g;
     if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && isRealTruth && labelSource) {
       const source = labelSource;
       if (source && typeof source === 'object') {
         const cals = source.calories ?? source.energy;
-        if (cals != null) {
+        if (cals != null && cals !== '') {
+          const isDishBasis = source.basisType === 'per_dish' || source.basisType === 'total' || source.basisType === 'per_portion' || source.basisType === 'per_serving' || source.basisType === 'per_pack';
+          const servingSizeStr = source.servingSizeGrams 
+            ? `${source.servingSizeGrams}g` 
+            : (isDishBasis ? '1 dish' : '100g');
+          const calNum = parseLabelCalories(cals) ?? Number(cals);
           correctedRaw = {
-            servingSize: source.servingSizeGrams ? `${source.servingSizeGrams}g` : '1 serving',
-            calories: `${cals} kcal`,
+            servingSize: servingSizeStr,
+            basisType: source.basisType || (isDishBasis ? 'per_dish' : 'per_100g'),
+            calories: !isNaN(calNum) ? `${calNum} kcal` : `${cals}`,
             protein: source.protein != null ? `${source.protein}g` : undefined,
             totalFat: (source.totalFat ?? source.fat) != null ? `${source.totalFat ?? source.fat}g` : undefined,
             saturatedFat: source.saturatedFat != null ? `${source.saturatedFat}g` : undefined,
@@ -221,14 +318,12 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
     };
   });
 
-  const NON_NUTRIENT_LABEL_KEYS = new Set(['servingSize', 'weight', 'servingsPerContainer']);
-
   const hasLabels = processedItems.some((item: any) => {
     if (!item) return false;
     if (!item.rawNutritionLabel || typeof item.rawNutritionLabel !== 'object') {
       return false;
     }
-    const keys = Object.keys(item.rawNutritionLabel).filter(k => !NON_NUTRIENT_LABEL_KEYS.has(k));
+    const keys = Object.keys(item.rawNutritionLabel).filter(k => !NON_NUTRIENT_LABEL_KEYS.has(k) && !NON_NUTRIENT_LABEL_KEYS.has(k.toLowerCase()));
     if (keys.length === 0) return false;
     return keys.some(k => {
       const val = item.rawNutritionLabel[k];
@@ -242,6 +337,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
             const meaningfulRawKeys = item.rawNutritionLabel
               ? Object.keys(item.rawNutritionLabel).filter((k: string) =>
                   !NON_NUTRIENT_LABEL_KEYS.has(k) &&
+                  !NON_NUTRIENT_LABEL_KEYS.has(k.toLowerCase()) &&
                   item.rawNutritionLabel[k] !== undefined &&
                   item.rawNutritionLabel[k] !== null &&
                   item.rawNutritionLabel[k] !== '' &&
@@ -302,7 +398,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                 ...(hasNut ? Object.keys(item.nutritionFacts) : []),
               ])
             ).filter((k) => {
-              if (k === 'servingSize' || k === 'weight' || k === 'servingsPerContainer') return false;
+              if (NON_NUTRIENT_LABEL_KEYS.has(k) || NON_NUTRIENT_LABEL_KEYS.has(k.toLowerCase())) return false;
               const val = item.rawNutritionLabel?.[k] !== undefined 
                 ? item.rawNutritionLabel?.[k] 
                 : item.nutritionFacts?.[k];
@@ -378,8 +474,9 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                // If the serving size grams exactly equal the Total column's grams, showing
                                // both is redundant (e.g. "Serving Size (300g)" next to "Total (300g)").
                                // In that case the serving IS the whole dish, so say so in words instead.
-                               const bType = item.rawNutritionLabel?.basisType || item.basisType || (item.source === 'brand_official' || item.brandPriority ? 'per_dish' : 'per_100g');
-                               if (bType === 'per_100g') {
+                               const isExplicit100g = /\b100\s*g\b/i.test(ssRaw);
+                               const bType = item.rawNutritionLabel?.basisType || item.basisType || (isExplicit100g ? 'per_100g' : ((item.source === 'brand_official' || item.brandPriority) ? 'per_dish' : 'per_100g'));
+                               if (bType === 'per_100g' || isExplicit100g) {
                                  return 'Per 100g';
                                }
                                if (ssRaw && ssGramsMatch && totalG && Math.abs(parseFloat(ssGramsMatch[1]) - totalG) < 0.5) {
@@ -432,8 +529,10 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                             }
                             
                             if (numVal !== null && !missingWeight && !isServingField) {
-                              const bType = item.rawNutritionLabel?.basisType || item.basisType || (item.source === 'brand_official' || item.brandPriority ? 'per_dish' : 'per_100g');
-                              const isDishBasis = bType === 'per_dish' || bType === 'total' || bType === 'per_portion' || bType === 'per_serving' || bType === 'per_pack';
+                              const ssServingSize = String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').trim();
+                              const isExplicit100gServing = /\b100\s*g\b/i.test(ssServingSize);
+                              const bType = item.rawNutritionLabel?.basisType || item.basisType || (isExplicit100gServing ? 'per_100g' : ((item.source === 'brand_official' || item.brandPriority) ? 'per_dish' : 'per_100g'));
+                              const isDishBasis = !isExplicit100gServing && (bType === 'per_dish' || bType === 'total' || bType === 'per_portion' || bType === 'per_serving' || bType === 'per_pack');
 
                               const weightToDisplay = item.primaryBaseWeightG || item.estimatedWeightGrams || 100;
                               let labelServingGrams = isDishBasis ? weightToDisplay : 100;
@@ -444,9 +543,9 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                  labelServingGrams = parseServingSizeGrams(ssRaw, weightToDisplay);
                               }
                               
-                              const multiplier = (isDishBasis && (labelServingGrams === weightToDisplay || labelServingGrams === 100))
+                              const multiplier = (isDishBasis && (!item.rawNutritionLabel?.servingSize || item.rawNutritionLabel?.servingSize === '1 dish' || item.rawNutritionLabel?.servingSize === '1 serving'))
                                 ? 1.0 
-                                : (weightToDisplay / labelServingGrams);
+                                : (labelServingGrams > 0 ? (weightToDisplay / labelServingGrams) : 1.0);
                               const total = (numVal * multiplier).toFixed(1).replace(/\.0$/, '');
                               totalStr = `${total}${unit}`;
                             }
@@ -563,6 +662,64 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                         })}
                       </tbody>
                     </table>
+                  </div>
+                )}
+
+                {item.compositeSiblings && item.compositeSiblings.length > 0 && (
+                  <div className="mt-3 pt-2.5 border-t border-theme-border/60">
+                    <span className="font-bold text-theme-text-secondary uppercase tracking-wider block mb-1.5 text-[8.5px]">
+                      Composite Dish Ingredients
+                    </span>
+                    <div className="space-y-1.5">
+                      {item.compositeSiblings.map((sib: any, sibIdx: number) => {
+                        const sibName = String(sib.primaryBaseMatchName || sib.name || sib.searchQuery || sib.keyword || 'Ingredient')
+                          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                          .replace(/^[📖\s]+/, '')
+                          .replace(/\s*\((internal_catalog|usual_catalog|canonical base)\)/gi, '')
+                          .trim();
+                        const sibWeight = sib.weightGrams || sib.estimatedWeightGrams || 0;
+                        const isLiquid = /milk|water|juice|oil|broth|sauce|drink|beverage|soup/i.test(sibName);
+                        const unitLabel = isLiquid ? 'ml' : 'g';
+                        const isBrand = sib.dbSource === 'brand_official' || sib.source === 'brand_official' || sib.brandName || sib.chainName;
+                        const isUsda = !isBrand && (sib.dbSource === 'usda' || String(sib.dbId).length > 4 || String(sib.name).includes('fdc.nal.usda.gov'));
+                        const sourceBadge = isBrand
+                          ? 'Brand Official'
+                          : (isUsda 
+                              ? 'USDA FoodData Central' 
+                              : (sib.dbSource === 'canonical_dict' ? 'Base Catalog Truth' : 'Standard Reference'));
+                        
+                        const cals = sib.calories ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.calories || 0) * (sibWeight / 100)) : null);
+                        const protein = sib.protein ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.protein || 0) * (sibWeight / 100) * 10) / 10 : null);
+                        const fat = (sib.totalFat ?? sib.fat) ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.totalFat ?? sib.baseNutrients100g.fat ?? 0) * (sibWeight / 100) * 10) / 10 : null);
+                        const carbs = (sib.carbohydrates ?? sib.carbs ?? sib.totalCarbohydrate) ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.totalCarbohydrate ?? sib.baseNutrients100g.carbohydrates ?? 0) * (sibWeight / 100) * 10) / 10 : null);
+                        const base100gCals = sib.baseNutrients100g?.calories ?? (sibWeight > 0 && cals ? Math.round((cals / sibWeight) * 100) : null);
+
+                        return (
+                          <div key={`sib-${sibIdx}`} className="p-2 rounded-lg bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100/60 dark:border-indigo-900/40 text-[10px]">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                <span>{sibName}</span>
+                                <span className="text-slate-500 dark:text-slate-400 font-normal">({sibWeight}{unitLabel})</span>
+                              </div>
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-medium bg-indigo-100/80 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+                                {sourceBadge}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-slate-600 dark:text-slate-300 text-[9.5px]">
+                              {cals != null && (
+                                <span>
+                                  <strong>{cals} kcal</strong>
+                                  {base100gCals ? <span className="text-slate-400 font-normal text-[8.5px]"> ({base100gCals} kcal/100{unitLabel})</span> : null}
+                                </span>
+                              )}
+                              {protein != null && <span>Protein: <strong>{protein}g</strong></span>}
+                              {fat != null && <span>Fat: <strong>{fat}g</strong></span>}
+                              {carbs != null && <span>Carbs: <strong>{carbs}g</strong></span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
