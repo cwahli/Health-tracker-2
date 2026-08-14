@@ -4034,8 +4034,10 @@ ${logsText}`);
           assistantMsg.agentType = (activeAgentType === 'agent1_step1' ? 'agent1' : activeAgentType) as AgentType;
           assistantMsg.agentResult = resData;
           const unitMap = collectCatalogUnitMap(profile);
-          const reviewCmds = (activeAgentType === 'biomarker_review' || agentType === 'biomarker_review')
-            ? enrichReviewModificationCommands(resData.modificationCommand || [], activeHistory || [], unitMap)
+          const isBiomarkerReviewTurn = activeAgentType === 'biomarker_review' || agentType === 'biomarker_review';
+          const serverCmds = Array.isArray(resData.modificationCommand) ? resData.modificationCommand : [];
+          const reviewCmds = isBiomarkerReviewTurn
+            ? (serverCmds.length ? serverCmds : enrichReviewModificationCommands(serverCmds, activeHistory || [], unitMap))
             : resData.modificationCommand;
           assistantMsg.modificationCommand = reviewCmds;
           assistantMsg.data = {
@@ -4065,6 +4067,16 @@ ${logsText}`);
           assistantMsg.planningDetails = resData.planningDetails;
           assistantMsg.lastProcessedItem = resData.lastProcessedItem;
           assistantMsg.modificationCommand = resData.modificationCommand;
+          if (Array.isArray(resData.modificationCommand) && resData.modificationCommand.length) {
+            assistantMsg.data = {
+              ...(assistantMsg.data || {}),
+              agentResult: {
+                ...(assistantMsg.data?.agentResult || {}),
+                ...resData,
+                modificationCommand: resData.modificationCommand
+              }
+            };
+          }
           assistantMsg.pendingBiomarkerEntries = resData.entries || [];
           // Legacy fallback
           assistantMsg.pendingBiomarkers = resData.biomarkers;

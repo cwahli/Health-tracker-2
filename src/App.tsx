@@ -5,10 +5,10 @@ import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import AuthScreen from './components/AuthScreen';
 import HomeTab from './components/HomeTab';
-import InsightsTab from './components/InsightsTab';
-import FoodHistoryTab from './components/FoodHistoryTab';
-import MedicalHistoryTab from './components/MedicalHistoryTab';
-import TrendsTab from './components/TrendsTab';
+const InsightsTab = React.lazy(() => import('./components/InsightsTab'));
+const FoodHistoryTab = React.lazy(() => import('./components/FoodHistoryTab'));
+const MedicalHistoryTab = React.lazy(() => import('./components/MedicalHistoryTab'));
+const TrendsTab = React.lazy(() => import('./components/TrendsTab'));
 import ConflictResolutionModal from './components/ConflictResolutionModal';
 import LogChat from './components/LogChat';
 import { JobStore } from './jobs/JobStore';
@@ -5773,6 +5773,11 @@ export default function App() {
       />
       {/* Main Viewport Container */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden" id="main-scroll-container">
+        <React.Suspense fallback={(
+          <div className="min-h-[50vh] flex items-center justify-center">
+            <Loader className="w-6 h-6 text-indigo-600 animate-spin" />
+          </div>
+        )}>
         {activeTab === 'home' && (
           <HomeTab
             profile={profile}
@@ -6081,6 +6086,7 @@ export default function App() {
           />
           </ErrorBoundary>
         )}
+        </React.Suspense>
       </main>
       {/* Floating Action Sheet overlay for Quick Actions */}
       <FloatingActionSheet

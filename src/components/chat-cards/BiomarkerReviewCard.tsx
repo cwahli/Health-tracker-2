@@ -60,7 +60,7 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
   const currentDef = profile?.customBiomarkers?.[targetKey] || biomarkerDefinitions.find(d => d.key === targetKey) || {};
 
   const proposal = msg.data?.agentResult?.proposal || msg.data?.proposal;
-  const mods = msg.data?.agentResult?.modificationCommand || msg.data?.modificationCommand;
+  const mods = msg.data?.agentResult?.modificationCommand || msg.data?.modificationCommand || msg.modificationCommand;
   const reply = msg.data?.agentResult?.reply || msg.content;
 
   const [localMods, setLocalMods] = React.useState<any[]>([]);

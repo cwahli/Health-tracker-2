@@ -14,7 +14,7 @@ import { BatchNavigator } from './BatchNavigator';
 
 import { biomarkerDefinitions, getBiomarkerMetadata, getPhysiologicalBucket, BIOMARKER_GROUPING_OPTIONS, getMappedBiomarkerKey, getMergedBiomarkerDef, isCatalogBuiltIn, shouldStampExtractedDefPending } from '../utils/biomarkers';
 import { formatOptimalTargetValue } from '../utils/agentCalibration';
-import BiomarkerDictionaryModal from './BiomarkerDictionaryModal';
+const BiomarkerDictionaryModal = React.lazy(() => import('./BiomarkerDictionaryModal'));
 import { auth } from '../firebase';
 
 interface InsightsTabProps {
@@ -2834,6 +2834,7 @@ export default function InsightsTab({
         </div>
       )}
       {showDictionaryModal && (
+        <React.Suspense fallback={null}>
         <BiomarkerDictionaryModal
           profile={profile?.email === 'demo@healthcockpit.com' ? { ...profile, agentAnalyses: [] } : profile}
           biomarkers={profile?.email === 'demo@healthcockpit.com' ? {} : biomarkers}
@@ -2865,6 +2866,7 @@ export default function InsightsTab({
           selectedModelId={selectedModelId}
           onChangeModelId={onChangeModelId}
         />
+        </React.Suspense>
       )}
     </div>
   );

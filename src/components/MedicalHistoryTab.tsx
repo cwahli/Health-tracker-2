@@ -11,7 +11,7 @@ const getBiomarkerDef = (key: string) => biomarkerDefinitions.find(d => d.key ==
 
 import { BiomarkerExpandedSection } from './BiomarkerExpandedSection';
 import CombineBiomarkersModal from './CombineBiomarkersModal';
-import BiomarkerDictionaryModal from './BiomarkerDictionaryModal';
+const BiomarkerDictionaryModal = React.lazy(() => import('./BiomarkerDictionaryModal'));
 import NotUsedBiomarkersModal from './NotUsedBiomarkersModal';
 import TaskPlaceholderCard from './TaskPlaceholderCard';
 import { JobStore } from '../jobs/JobStore';
@@ -1004,6 +1004,7 @@ export default function MedicalHistoryTab({
       )}
 
       {showDictionaryModal && onLogMedical && (
+        <React.Suspense fallback={null}>
         <BiomarkerDictionaryModal
           profile={profile?.email === 'demo@healthcockpit.com' ? { ...profile, agentAnalyses: [] } : profile}
           biomarkers={profile?.email === 'demo@healthcockpit.com' ? {} : biomarkers}
@@ -1027,6 +1028,7 @@ export default function MedicalHistoryTab({
           selectedModelId={selectedModelId}
           onChangeModelId={onChangeModelId}
         />
+        </React.Suspense>
       )}
 
       {/* LOCAL NOT USED BIOMARKERS MODAL FOR MEDICAL HISTORY */}
