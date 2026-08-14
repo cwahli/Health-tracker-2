@@ -13,7 +13,8 @@ export type WeightRefineKind =
   | 'whole_pack'
   | 'half'
   | 'quarter'
-  | 'relative_grams';
+  | 'relative_grams'
+  | 'item_count';
 
 export type WeightRefineIntent =
   | {
@@ -135,6 +136,24 @@ export function detectWeightRefineIntent(message: string | null | undefined): We
       const n = parseInt(m[1], 10);
       if (n >= 1 && n <= 24) {
         return { isRefine: true, kind: 'slices', weightGrams: null, unitCount: n, targetHint };
+      }
+    }
+  }
+
+  // N countable food items, e.g. "I only had 1 croissant", "I only ate 2 cookies".
+  // Deliberately broader than the slices/portions pattern above so ordinary discrete
+  // foods (croissant, egg, cookie, dumpling, etc.) are recognised without requiring a
+  // generic unit noun. Requires refine-style wording ("only had/ate", "just had/ate")
+  // immediately before the count so it doesn't fire on a plain new-meal description
+  // like "2 croissants for breakfast, plus coffee".
+  {
+    const m = msg.match(/\b(?:only\s+(?:had|ate)|had\s+only|ate\s+only|just\s+(?:had|ate))\s+(\d+)\s+([a-z][a-z\-]{2,24})/i);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      const noun = m[2].trim();
+      const genericUnits = ['g', 'gram', 'grams', 'slice', 'slices', 'portion', 'portions', 'serving', 'servings', 'piece', 'pieces'];
+      if (n >= 0 && n <= 24 && !genericUnits.includes(noun)) {
+        return { isRefine: true, kind: 'item_count', weightGrams: null, unitCount: n, targetHint: noun };
       }
     }
   }
@@ -274,6 +293,22 @@ export function resolveRefineWeightGrams(intent: WeightRefineIntent, targetItem:
   if (intent.kind === 'slices' && intent.unitCount != null) {
     return Math.round(intent.unitCount * parseSliceUnitGrams(targetItem));
   }
+  if (intent.kind === 'item_count' && intent.unitCount != null) {
+    // Scale from the target's existing per-unit weight if we know how many units it
+    // currently represents (pieceCount, or a leading digit in its own name e.g. "2
+    // Croissants"). If we can't determine a per-unit weight, return null rather than
+    // guess — the caller leaves the weight untouched, which is still strictly better
+    // than the old behaviour of re-running Vision Scout and losing the photo binding.
+    const origWeight = Number(targetItem?.estimatedWeightGrams) || 0;
+    const origCount =
+      Number(targetItem?.pieceCount) ||
+      Number(String(targetItem?.originalName || '').match(/^(\d+)\b/)?.[1]) ||
+      0;
+    if (origWeight > 0 && origCount > 0) {
+      return Math.max(1, Math.round((origWeight / origCount) * intent.unitCount));
+    }
+    return null;
+  }
   if (intent.kind === 'half') {
     return 50; // per-100g pack default
   }
@@ -341,6 +376,24 @@ export function shouldSkipScoutForWeightRefine(opts: {
   // Path B: images still attached from prior compose, but labels already locked
   if (imageCount > 0 && hasLocks) {
     return { skip: true, intent, reason: 'path_b_images_with_label_locks' };
+  }
+
+  // Path C: images still attached from prior compose (frontend resends them on
+  // follow-up edits), but this is a named whole-item count correction ("I only had 1
+  // croissant") against an item we can already identify in this meal by name. There is
+  // no reason to re-run Vision Scout just to reprocess a text portion correction — doing
+  // so both burns Gemini quota for no benefit and lets Scout re-assign a fresh
+  // sourceImageIndex per item, which desyncs the photo shown against each meal
+  // component. Only applies when we can actually find the named item in prior scout —
+  // otherwise fall through to the normal full pipeline as before.
+  if (imageCount > 0 && intent.kind === 'item_count') {
+    const hint = String(intent.targetHint || '').toLowerCase().replace(/s$/, '');
+    const targetIdx = hint
+      ? prior.findIndex((it) => String(it.originalName || it.keyword || it.name || '').toLowerCase().includes(hint))
+      : -1;
+    if (targetIdx >= 0) {
+      return { skip: true, intent, reason: 'path_c_item_count_named_target' };
+    }
   }
 
   if (opts.explicitSkipScout && prior.length > 0) {

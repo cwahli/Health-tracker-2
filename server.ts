@@ -8251,6 +8251,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         const inv = assertComponentSumMatchesItem(compCals, aggregatedNutrients.calories);
         if (!inv.ok) {
           addDebugLog(`[ReceiptInvariant] FAIL item="${itemNameForBudget}" rowSum=${inv.rowSum} itemCal=${inv.itemCalories}`);
+          addDebugLog(`[ReceiptInvariant Debug] item="${itemNameForBudget}" preRepair.aggregatedCalories=${aggregatedNutrients.calories} preRepair.itemLevelCaloriesField=${(item as any).calories ?? 'undefined'}`);
           // Only scale rows UP/DOWN to item when budget hard-locked from printed/brand — never for web fakes
           const genuineHardCal =
             budgetRes.hardLock === true &&

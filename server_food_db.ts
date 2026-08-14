@@ -373,7 +373,7 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   if (clean.includes('water') || clean.includes('soda_water') || clean.includes('sparkling_water')) return CANONICAL_BASE_FOODS.water;
   if (clean.includes('coca') || tokens.includes('cola') || tokens.includes('coke')) return CANONICAL_BASE_FOODS.coca_cola;
   if (clean.includes('cherry_tomato') || (clean.includes('cherry') && clean.includes('tomato'))) return CANONICAL_BASE_FOODS.cherry_tomato;
-  if (clean.includes('breaded_chicken_tender') || clean.includes('chicken_tender') || (clean.includes('breaded') && clean.includes('chicken'))) return CANONICAL_BASE_FOODS.breaded_chicken_tender;
+  if (clean.includes('breaded_chicken_tender') || clean.includes('chicken_tender') || (clean.includes('breaded') && clean.includes('chicken')) || (clean.includes('chicken') && (clean.includes('crispy') || clean.includes('crumbed') || clean.includes('panko') || clean.includes('battered') || clean.includes('katsu') || clean.includes('schnitzel')) && clean.includes('fried'))) return CANONICAL_BASE_FOODS.breaded_chicken_tender;
   if (clean.includes('chicken_breast') || (clean.includes('chicken') && clean.includes('breast'))) return CANONICAL_BASE_FOODS.chicken_breast;
   if (tokens.includes('rice')) return CANONICAL_BASE_FOODS.white_rice;
   if (clean.includes('white_fish') || (tokens.includes('fish') && !tokens.includes('salmon'))) return CANONICAL_BASE_FOODS.white_fish;
