@@ -41,29 +41,23 @@ export const get = async (key: string): Promise<any> => {
   try {
     const result = await Promise.race([
       idbGet(key),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout")), 3000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout")), 8000))
     ]);
     if (result !== undefined) {
       return result;
     }
-    // Only fall back to localStorage for lightweight non-app-data keys
-    if (!isHeavyKey) {
-      const val = localStorage.getItem(key);
-      return val ? JSON.parse(val) : undefined;
-    }
-    return undefined;
+    // Fall back to localStorage if IDB doesn't have it or returned undefined
+    const val = localStorage.getItem(key);
+    return val ? JSON.parse(val) : undefined;
   } catch (e) {
     console.log("get timeout/error (falling back to localStorage):", e);
     if (typeof window !== 'undefined') (window as any)._idbFailed = true;
-    if (!isHeavyKey) {
-      try {
-        const val = localStorage.getItem(key);
-        return val ? JSON.parse(val) : undefined;
-      } catch {
-        return undefined;
-      }
+    try {
+      const val = localStorage.getItem(key);
+      return val ? JSON.parse(val) : undefined;
+    } catch {
+      return undefined;
     }
-    return undefined;
   }
 };
 
@@ -96,34 +90,52 @@ export const safeIdbSet = async (key: string, val: any): Promise<void> => {
 
 export const set = async (key: string, val: any): Promise<void> => {
   const isHeavyKey = key.startsWith('health_cockpit_app_data_') || key.startsWith('health_cockpit_snapshots_');
-  // Heavy app data keys MUST be stored exclusively in high-capacity IndexedDB.
-  // Never leave frozen/stale JSON strings in localStorage that cause 5MB quota crashes.
-  if (isHeavyKey) {
-    try {
-      localStorage.removeItem(key); // Remove stale copy from localStorage
-    } catch {}
-  } else {
+  
+  if (!isHeavyKey) {
     try {
       localStorage.setItem(key, JSON.stringify(val));
     } catch {}
   }
+  
   try {
     await Promise.race([
       safeIdbSet(key, val),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout")), 3000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout")), 8000))
     ]);
     if (typeof window !== 'undefined') (window as any)._idbFailed = false;
+    // On success, clean up localStorage for heavy keys to save quota
+    if (isHeavyKey) {
+      try {
+        localStorage.removeItem(key);
+      } catch {}
+    }
   } catch (idbError) {
     console.warn("IndexedDB set failed once, retrying:", idbError);
     try {
       await Promise.race([
         safeIdbSet(key, val),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout (retry)")), 3000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout (retry)")), 8000))
       ]);
       if (typeof window !== 'undefined') (window as any)._idbFailed = false;
+      if (isHeavyKey) {
+        try {
+          localStorage.removeItem(key);
+        } catch {}
+      }
     } catch (retryError) {
       console.error("IndexedDB set failed twice, giving up on this write:", retryError);
       if (typeof window !== 'undefined') (window as any)._idbFailed = true;
+      // Fallback to localStorage for heavy keys if they fit within quota
+      if (isHeavyKey) {
+        try {
+          const stringified = JSON.stringify(val);
+          if (stringified.length < 4.5 * 1024 * 1024) {
+            localStorage.setItem(key, stringified);
+          }
+        } catch (e) {
+          console.error("localStorage fallback failed:", e);
+        }
+      }
     }
   }
 };
