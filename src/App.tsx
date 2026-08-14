@@ -2278,13 +2278,34 @@ export default function App() {
                 });
 
                 // Prefer durable http(s) /photos already on cloud meta before foodImages blast
+                // Merge cloud URLs with local URLs
                 v2Foods.forEach(f => {
-                  if (imageMap[f.id]) return;
-                  if (isUsableImageUrl(f.imageUrl) || (Array.isArray(f.imageUrls) && f.imageUrls.some(isUsableImageUrl))) {
-                    imageMap[f.id] = {
-                      imageUrl: isUsableImageUrl(f.imageUrl) ? f.imageUrl : (f.imageUrls || []).find(isUsableImageUrl),
-                      imageUrls: (f.imageUrls || []).filter(isUsableImageUrl),
-                    };
+                  const hasV2Image = isUsableImageUrl(f.imageUrl);
+                  const hasV2Urls = Array.isArray(f.imageUrls) && f.imageUrls.some(isUsableImageUrl);
+                  
+                  if (hasV2Image || hasV2Urls) {
+                    const v2ImageUrl = hasV2Image ? f.imageUrl : (f.imageUrls || []).find(isUsableImageUrl);
+                    const v2ImageUrls = (f.imageUrls || []).filter(isUsableImageUrl);
+                    
+                    const existingMap = imageMap[f.id];
+                    if (!existingMap) {
+                      imageMap[f.id] = {
+                        imageUrl: v2ImageUrl,
+                        imageUrls: v2ImageUrls,
+                      };
+                    } else {
+                      const mergedUrls = Array.from(new Set([
+                        ...(existingMap.imageUrls || []),
+                        ...v2ImageUrls,
+                        existingMap.imageUrl,
+                        v2ImageUrl
+                      ])).filter(isUsableImageUrl);
+                      
+                      imageMap[f.id] = {
+                        imageUrl: existingMap.imageUrl || v2ImageUrl || mergedUrls[0],
+                        imageUrls: mergedUrls
+                      };
+                    }
                   }
                 });
 

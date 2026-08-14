@@ -1424,7 +1424,7 @@ app.get('/api/jobs/status', async (req, res) => {
         const staleThresholdMs = 180000; // 3 minutes
         const processedJobs = await Promise.all((data || []).map(async (job: any) => {
           // transparently resolve R2-stored clean_results on-the-fly with 2.5s timeout
-          if (job.clean_result && typeof job.clean_result === 'object' && (job.clean_result as any).is_r2) {
+          if (jobId && job.clean_result && typeof job.clean_result === 'object' && (job.clean_result as any).is_r2) {
             try {
               const { fetchJobResultFromR2 } = await import('./src/utils/r2Storage.js');
               const r2Promise = fetchJobResultFromR2(job.id);

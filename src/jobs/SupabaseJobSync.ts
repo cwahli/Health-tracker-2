@@ -11,6 +11,43 @@ function forgetDeletedOnBackend(jobId: string, userId: string) {
   deleteJobFromBackend(jobId, userId).catch(() => {});
 }
 
+async function fetchAndPopulateR2Job(jobId: string) {
+  try {
+    const baseUrl = typeof window !== 'undefined' ? '' : 'http://localhost:3000';
+    const r2Controller = new AbortController();
+    const r2TimeoutId = setTimeout(() => r2Controller.abort(), 6000);
+    let r: Response;
+    try {
+      r = await fetch(`${baseUrl}/api/jobs/status?jobId=${jobId}`, { signal: r2Controller.signal });
+    } finally {
+      clearTimeout(r2TimeoutId);
+    }
+    if (r.ok) {
+      const contentType = r.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const fetchedWrapper = await r.json();
+        if (fetchedWrapper && fetchedWrapper.jobs && fetchedWrapper.jobs.length > 0) {
+          const backendJob = fetchedWrapper.jobs[0];
+          if (backendJob && backendJob.clean_result) {
+            const existing = JobStore.getJob(jobId);
+            if (existing && !existing.result) {
+              const updatedResult = backendJob.clean_result;
+              JobStore.updateJob(jobId, {
+                result: updatedResult,
+                mealBuild: updatedResult.mealBuild || existing.mealBuild,
+                photoUrl: updatedResult.photoUrl || existing.photoUrl,
+                debugUrl: updatedResult.debugUrl || existing.debugUrl
+              });
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`[SupabaseJobSync] Async R2 fetch via backend failed for ${jobId}:`, err);
+  }
+}
+
 export async function hydrateUserJobs(userId: string = 'anonymous'): Promise<void> {
   try {
     const controller = new AbortController();
@@ -95,6 +132,11 @@ export async function hydrateUserJobs(userId: string = 'anonymous'): Promise<voi
           createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
           serverSubmittedAt: Date.now(),
         } as any);
+        
+        // NEW CODE: trigger fetch for R2 result if missing!
+        if (cleanRes && cleanRes.is_r2) {
+          fetchAndPopulateR2Job(row.id);
+        }
       } else {
         const updatePayload: any = {
           status: row.status,
@@ -142,6 +184,11 @@ export async function hydrateUserJobs(userId: string = 'anonymous'): Promise<voi
           }];
         }
         JobStore.updateJob(row.id, updatePayload);
+        
+        // NEW CODE: trigger fetch for R2 result if existing result is missing/still is_r2
+        if (cleanRes && cleanRes.is_r2 && (!existing.result || existing.result.is_r2)) {
+          fetchAndPopulateR2Job(row.id);
+        }
       }
     }
   } catch (e: any) {
