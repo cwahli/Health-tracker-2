@@ -1080,6 +1080,26 @@ export default function App() {
                   progressPercent: progressVal,
                 });
 
+                if (serverJob.status === 'awaiting_user' || serverJob.status === 'succeeded' || serverJob.status === 'failed') {
+                  if (serverJob.clean_result === undefined) {
+                     const cachedJob = JobStore.getJob(job.id);
+                     if (cachedJob && cachedJob.result && !cachedJob.result.is_r2) {
+                        serverJob.clean_result = cachedJob.result;
+                     } else {
+                        try {
+                           const fullRes = await fetch(`/api/jobs/status?jobId=${job.id}&userId=${auth.currentUser?.uid || 'anonymous'}&full=true`);
+                           if (fullRes.ok) {
+                              const contentType = fullRes.headers.get('content-type');
+                              if (contentType && contentType.includes('application/json')) {
+                                const fullData = await fullRes.json();
+                                serverJob = fullData.jobs?.[0] || serverJob;
+                              }
+                           }
+                        } catch(e) {}
+                     }
+                  }
+                }
+
                 if (serverJob.status === 'awaiting_user') {
                   const cleanResult = serverJob.clean_result || {};
                   const clarifyMsg =
@@ -1306,7 +1326,7 @@ export default function App() {
                 const timeoutId = setTimeout(() => lateController.abort(), 6000);
                 let lateRes: Response;
                 try {
-                  lateRes = await fetch(`/api/jobs/status?jobId=${job.id}&userId=${auth.currentUser?.uid || 'anonymous'}`, { signal: lateController.signal });
+                  lateRes = await fetch(`/api/jobs/status?jobId=${job.id}&userId=${auth.currentUser?.uid || 'anonymous'}&full=true`, { signal: lateController.signal });
                 } finally {
                   clearTimeout(timeoutId);
                 }

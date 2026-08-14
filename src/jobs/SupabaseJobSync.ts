@@ -18,7 +18,7 @@ async function fetchAndPopulateR2Job(jobId: string) {
     const r2TimeoutId = setTimeout(() => r2Controller.abort(), 6000);
     let r: Response;
     try {
-      r = await fetch(`${baseUrl}/api/jobs/status?jobId=${jobId}`, { signal: r2Controller.signal });
+      r = await fetch(`${baseUrl}/api/jobs/status?jobId=${jobId}&full=true`, { signal: r2Controller.signal });
     } finally {
       clearTimeout(r2TimeoutId);
     }
@@ -230,7 +230,7 @@ export function initSupabaseJobSync(userId?: string): () => void {
       return;
     }
     const hasActiveJob = JobStore.getAllJobs().some(
-      (j: any) => j.status !== 'succeeded' && j.status !== 'failed'
+      (j: any) => j.status === 'running' || j.status === 'pending'
     );
     if (hasActiveJob) {
       hydrateUserJobs(userId).catch(() => {});
@@ -277,7 +277,11 @@ export function initSupabaseJobSync(userId?: string): () => void {
           const rowUpdatedAt = row.updated_at || '';
 
           let cleanRes = row.clean_result;
-          if (cleanRes && typeof cleanRes === 'object' && cleanRes.is_r2 && cleanRes.r2_url) {
+          const existingJobForR2Check = JobStore.getJob(row.id);
+
+          if (cleanRes && typeof cleanRes === 'object' && cleanRes.is_r2 && existingJobForR2Check?.result && !existingJobForR2Check.result.is_r2) {
+             cleanRes = existingJobForR2Check.result;
+          } else if (cleanRes && typeof cleanRes === 'object' && cleanRes.is_r2 && cleanRes.r2_url) {
             try {
               // Bypassing client-side CORS issues by fetching through our own backend proxy endpoint
               const baseUrl = typeof window !== 'undefined' ? '' : 'http://localhost:3000';
@@ -285,7 +289,7 @@ export function initSupabaseJobSync(userId?: string): () => void {
               const r2TimeoutId = setTimeout(() => r2Controller.abort(), 6000);
               let r: Response;
               try {
-                r = await fetch(`${baseUrl}/api/jobs/status?jobId=${row.id}`, { signal: r2Controller.signal });
+                r = await fetch(`${baseUrl}/api/jobs/status?jobId=${row.id}&full=true`, { signal: r2Controller.signal });
               } finally {
                 clearTimeout(r2TimeoutId);
               }

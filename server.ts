@@ -1401,7 +1401,9 @@ app.get('/api/jobs/status', async (req, res) => {
 
     try {
       const { supabaseAdmin } = await import('./supabaseAdmin');
-      let query = supabaseAdmin.from('agent_jobs').select('*');
+      const isFull = req.query.full === 'true';
+      const columns = isFull ? '*' : 'id, status, progress_percent, status_message, updated_at';
+      let query = supabaseAdmin.from('agent_jobs').select(columns);
       if (jobId) {
         query = query.eq('id', String(jobId));
       } else if (userId) {
