@@ -232,12 +232,18 @@ export async function upsertFoodAlias(alias: {
       }, { onConflict: 'alias_key' });
 
     if (error) {
-      console.warn(`[upsertFoodAlias] Supabase notice: ${error.message}`);
+      if (/fetch failed|TypeError|AbortError|network/i.test(error.message || '')) {
+        console.debug(`[upsertFoodAlias] Supabase notice: ${error.message}`);
+      } else {
+        console.warn(`[upsertFoodAlias] Supabase notice: ${error.message}`);
+      }
       return { success: true };
     }
     return { success: true };
   } catch (err: any) {
-    if (/schema cache|does not exist|Could not find the table/i.test(err.message || String(err))) { console.error("[CatalogSchema] Write failed because schema is missing. Run SQL: supabase/migrations/20260805_food_catalog_schema.sql or set DATABASE_URL and POST /api/admin/food-catalog/ensure-schema"); resetFoodCatalogSchemaEnsure(); } return { success: true, error: err.message || String(err) };
+    if (/schema cache|does not exist|Could not find the table/i.test(err.message || String(err))) { console.error("[CatalogSchema] Write failed because schema is missing. Run SQL: supabase/migrations/20260805_food_catalog_schema.sql or set DATABASE_URL and POST /api/admin/food-catalog/ensure-schema"); resetFoodCatalogSchemaEnsure(); }
+    else if (/fetch failed|TypeError|AbortError|network/i.test(err.message || String(err))) { console.debug('[upsertFoodAlias] Supabase network notice:', err.message || String(err)); }
+    return { success: true, error: err.message || String(err) };
   }
 }
 

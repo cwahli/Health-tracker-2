@@ -14,7 +14,8 @@ import { BatchNavigator } from './BatchNavigator';
 
 import { biomarkerDefinitions, getBiomarkerMetadata, getPhysiologicalBucket, BIOMARKER_GROUPING_OPTIONS, getMappedBiomarkerKey, getMergedBiomarkerDef, isCatalogBuiltIn, shouldStampExtractedDefPending } from '../utils/biomarkers';
 import { formatOptimalTargetValue } from '../utils/agentCalibration';
-const BiomarkerDictionaryModal = React.lazy(() => import('./BiomarkerDictionaryModal'));
+import { lazyWithRetry } from '../utils/lazyWithRetry';
+const BiomarkerDictionaryModal = lazyWithRetry(() => import('./BiomarkerDictionaryModal'));
 import { auth } from '../firebase';
 
 interface InsightsTabProps {

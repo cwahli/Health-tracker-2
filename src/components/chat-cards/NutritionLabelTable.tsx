@@ -167,7 +167,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
       subComps.forEach((comp: any) => {
         if (!comp) return;
         allDishComps.push(comp);
-        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel);
+        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel) || (comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_'));
         const compLabelSource = comp.baseNutrients100g || comp.primaryBase100g || comp.labelNutrientsPerServing || comp.nutrients;
         if (isCompOfficial && (comp.rawNutritionLabel || compLabelSource)) {
           const rawName = comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || comp.dish_name;
@@ -816,4 +816,147 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
       </details>
     </div>
   );
+}
+
+export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
+  let items = activeScoutItems;
+  if (typeof items === 'string') {
+    try { items = JSON.parse(items); } catch(e) { items = []; }
+  }
+  if (!Array.isArray(items) || !items.length) return false;
+
+  const NON_NUTRIENT_LABEL_KEYS = new Set([
+    'servingsize',
+    'servingSize',
+    'weight',
+    'servingspercontainer',
+    'servingsPerContainer',
+    'basistype',
+    'basisType',
+    'isdishbasis',
+    'isDishBasis',
+    'compositesiblings',
+    'compositeSiblings'
+  ]);
+
+  const expandedItems: any[] = [];
+  (items || []).forEach(item => {
+    if (!item) return;
+    const subComps = item.componentsDetailList || item.componentsDetail || item.components;
+    
+    const officialSubComps: any[] = [];
+    const allDishComps: any[] = [];
+
+    if (Array.isArray(subComps) && subComps.length > 0) {
+      subComps.forEach((comp: any) => {
+        if (!comp) return;
+        allDishComps.push(comp);
+        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel) || (comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_'));
+        const compLabelSource = comp.baseNutrients100g || comp.primaryBase100g || comp.labelNutrientsPerServing || comp.nutrients;
+        if (isCompOfficial && (comp.rawNutritionLabel || compLabelSource)) {
+          const rawName = comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || comp.dish_name;
+          const cleanName = String(rawName).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/^[📖\s]+/, '').trim();
+          const compWeight = comp.weightGrams || comp.estimatedWeightGrams || comp.primaryBaseWeightG;
+          
+          let compRawLabel = comp.rawNutritionLabel;
+          if (compLabelSource && typeof compLabelSource === 'object') {
+            const cals = compLabelSource.calories ?? compLabelSource.energy;
+            if (cals != null && cals !== '') {
+              const calNum = parseLabelCalories(cals) ?? Number(cals);
+              compRawLabel = {
+                servingSize: '100g',
+                basisType: 'per_100g',
+                calories: !isNaN(calNum) ? `${calNum} kcal` : `${cals}`,
+                protein: compLabelSource.protein != null ? `${compLabelSource.protein}g` : undefined,
+                totalFat: (compLabelSource.totalFat ?? compLabelSource.fat) != null ? `${compLabelSource.totalFat ?? compLabelSource.fat}g` : undefined,
+                saturatedFat: compLabelSource.saturatedFat != null ? `${compLabelSource.saturatedFat}g` : undefined,
+                totalCarbohydrate: (compLabelSource.totalCarbohydrate ?? compLabelSource.carbohydrates ?? compLabelSource.carbs) != null ? `${compLabelSource.totalCarbohydrate ?? compLabelSource.carbohydrates ?? compLabelSource.carbs}g` : undefined,
+                sugar: compLabelSource.sugar != null ? `${compLabelSource.sugar}g` : (compLabelSource.addedSugar != null ? `${compLabelSource.addedSugar}g` : undefined),
+                addedSugar: compLabelSource.addedSugar != null ? `${compLabelSource.addedSugar}g` : undefined,
+                totalFibre: (compLabelSource.totalFibre ?? compLabelSource.fiber) != null ? `${compLabelSource.totalFibre ?? compLabelSource.fiber}g` : undefined,
+                sodium: compLabelSource.sodium != null ? `${compLabelSource.sodium}mg` : undefined,
+                salt: compLabelSource.salt != null ? `${compLabelSource.salt}g` : undefined
+              };
+            }
+          }
+
+          officialSubComps.push({
+            ...comp,
+            rawNutritionLabel: compRawLabel
+          });
+        }
+      });
+    }
+
+    if (officialSubComps.length > 0) {
+      officialSubComps.forEach((comp) => {
+        expandedItems.push(comp);
+      });
+    } else {
+      const isMultiCompComposite = Array.isArray(subComps) && subComps.length >= 2;
+      const isItemRealTruth = (item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth)) && item.dbSource !== 'composite' && !isMultiCompComposite;
+      const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || (item.dbSource !== 'composite' && !isMultiCompComposite ? item.primaryBase100g : null);
+      const hasOwnExplicitLabel = Boolean(item.rawNutritionLabel && Object.keys(normalizeNutritionKeys(item.rawNutritionLabel) || {}).length > 0) || Boolean(isItemRealTruth && itemLabelSource);
+      if (hasOwnExplicitLabel) {
+        expandedItems.push(item);
+      }
+    }
+  });
+
+  const processedItems = expandedItems.map(item => {
+    if (!item) return item;
+    let parsedRaw = item.rawNutritionLabel;
+    if (typeof parsedRaw === 'string') {
+      try { parsedRaw = JSON.parse(parsedRaw.replace(/'/g, '"')); } catch (e) { parsedRaw = null; }
+    }
+    let correctedRaw = normalizeNutritionKeys(parsedRaw);
+
+    const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
+    const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g;
+    if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && isRealTruth && labelSource) {
+      const source = labelSource;
+      if (source && typeof source === 'object') {
+        const cals = source.calories ?? source.energy;
+        if (cals != null && cals !== '') {
+          const isDishBasis = source.basisType === 'per_dish' || source.basisType === 'total' || source.basisType === 'per_portion' || source.basisType === 'per_serving' || source.basisType === 'per_pack';
+          const servingSizeStr = source.servingSizeGrams 
+            ? `${source.servingSizeGrams}g` 
+            : (isDishBasis ? '1 dish' : '100g');
+          const calNum = parseLabelCalories(cals) ?? Number(cals);
+          correctedRaw = {
+            servingSize: servingSizeStr,
+            basisType: source.basisType || (isDishBasis ? 'per_dish' : 'per_100g'),
+            calories: !isNaN(calNum) ? `${calNum} kcal` : `${cals}`,
+            protein: source.protein != null ? `${source.protein}g` : undefined,
+            totalFat: (source.totalFat ?? source.fat) != null ? `${source.totalFat ?? source.fat}g` : undefined,
+            saturatedFat: source.saturatedFat != null ? `${source.saturatedFat}g` : undefined,
+            totalCarbohydrate: (source.totalCarbohydrate ?? source.carbohydrates ?? source.carbs) != null ? `${source.totalCarbohydrate ?? source.carbohydrates ?? source.carbs}g` : undefined,
+            sugar: source.sugar != null ? `${source.sugar}g` : (source.addedSugar != null ? `${source.addedSugar}g` : undefined),
+            addedSugar: source.addedSugar != null ? `${source.addedSugar}g` : undefined,
+            totalFibre: (source.totalFibre ?? source.fiber) != null ? `${source.totalFibre ?? source.fiber}g` : undefined,
+            sodium: source.sodium != null ? `${source.sodium}mg` : undefined,
+            salt: source.salt != null ? `${source.salt}g` : undefined
+          };
+        }
+      }
+    }
+    
+    return { 
+      ...item, 
+      rawNutritionLabel: correctedRaw
+    };
+  });
+
+  return processedItems.some((item: any) => {
+    if (!item) return false;
+    if (!item.rawNutritionLabel || typeof item.rawNutritionLabel !== 'object') {
+      return false;
+    }
+    const keys = Object.keys(item.rawNutritionLabel).filter(k => !NON_NUTRIENT_LABEL_KEYS.has(k) && !NON_NUTRIENT_LABEL_KEYS.has(k.toLowerCase()));
+    if (keys.length === 0) return false;
+    return keys.some(k => {
+      const val = item.rawNutritionLabel[k];
+      return val !== undefined && val !== null && val !== '' && val !== '-' && val !== '--';
+    });
+  });
 }

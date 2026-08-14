@@ -213,6 +213,7 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   cherry_tomato: { fdcId: "170010", calories: 18, protein: 0.9, totalFat: 0.2, saturatedFat: 0, transFat: 0, carbohydrates: 3.9, sugar: 2.6, sodium: 5, potassium: 237, totalFibre: 1.2, vitaminC: 13.7, vitaminA: 42, calcium: 10, magnesium: 11, iron: 0.27, foodType: 'leafy_veg' },
   white_rice: { fdcId: "169756", calories: 130, protein: 2.7, totalFat: 0.3, saturatedFat: 0.1, transFat: 0, carbohydrates: 28.2, sugar: 0.1, sodium: 1, potassium: 35, totalFibre: 0.4, calcium: 10, magnesium: 12, iron: 0.2, zinc: 0.49, foodType: 'grain' },
   chicken_breast: { fdcId: "171077", calories: 165, protein: 31.0, totalFat: 3.6, saturatedFat: 1.0, transFat: 0, carbohydrates: 0, sugar: 0, sodium: 74, potassium: 256, totalFibre: 0, calcium: 15, magnesium: 29, iron: 1.0, zinc: 1.0, foodType: 'poultry' },
+  breaded_chicken_tender: { fdcId: "171057", calories: 268, protein: 15.6, totalFat: 14.5, saturatedFat: 2.6, transFat: 0, carbohydrates: 18.7, sugar: 0.5, sodium: 604, potassium: 220, totalFibre: 1.2, foodType: 'poultry' },
   white_fish: { fdcId: "171986", calories: 90, protein: 19.0, totalFat: 1.2, saturatedFat: 0.3, transFat: 0, carbohydrates: 0, sugar: 0, sodium: 80, potassium: 338, totalFibre: 0, calcium: 16, magnesium: 32, iron: 0.4, foodType: 'fish_lean' },
   watermelon: { fdcId: "167765", calories: 30, protein: 0.6, totalFat: 0.2, saturatedFat: 0, transFat: 0, carbohydrates: 7.6, sugar: 6.2, sodium: 1, potassium: 112, totalFibre: 0.4, vitaminC: 8.1, vitaminA: 28, calcium: 7, magnesium: 10, foodType: 'fruit' },
   honeydew: { fdcId: "167760", calories: 36, protein: 0.5, totalFat: 0.1, saturatedFat: 0, transFat: 0, carbohydrates: 9.1, sugar: 8.1, sodium: 18, potassium: 228, totalFibre: 0.8, vitaminC: 18, vitaminA: 3, calcium: 6, magnesium: 10, foodType: 'fruit' },
@@ -265,12 +266,35 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   dark_chocolate_chunk: { fdcId: "170272", calories: 546, protein: 4.9, totalFat: 31.0, saturatedFat: 19.0, transFat: 0, carbohydrates: 61.0, sugar: 48.0, sodium: 24, potassium: 559, totalFibre: 7.0, foodType: 'processed' },
   chocolate_chunk: { fdcId: "170272", calories: 546, protein: 4.9, totalFat: 31.0, saturatedFat: 19.0, transFat: 0, carbohydrates: 61.0, sugar: 48.0, sodium: 24, potassium: 559, totalFibre: 7.0, foodType: 'processed' },
   chocolate_chip_cookie: { fdcId: "cookie_canonical", calories: 488, protein: 5.5, totalFat: 24.0, saturatedFat: 11.0, transFat: 0, carbohydrates: 64.0, sugar: 38.0, sodium: 350, potassium: 180, totalFibre: 2.5, foodType: 'processed' },
-  chocolate_cake: { fdcId: "cake_canonical", calories: 389, protein: 4.5, totalFat: 18.0, saturatedFat: 5.5, transFat: 0, carbohydrates: 53.0, sugar: 36.0, sodium: 320, potassium: 160, totalFibre: 2.0, foodType: 'processed' }
+  chocolate_cake: { fdcId: "cake_canonical", calories: 389, protein: 4.5, totalFat: 18.0, saturatedFat: 5.5, transFat: 0, carbohydrates: 53.0, sugar: 36.0, sodium: 320, potassium: 160, totalFibre: 2.0, foodType: 'processed' },
+  sweet_chilli_sauce: { fdcId: "1099195", calories: 190, protein: 0.4, totalFat: 0.2, saturatedFat: 0.0, transFat: 0, carbohydrates: 46.9, sugar: 40.0, sodium: 1240, potassium: 50, totalFibre: 0.5, foodType: 'ultra_processed' },
+  kalamata_olives: { fdcId: "1103091", calories: 115, protein: 0.8, totalFat: 10.7, saturatedFat: 1.4, transFat: 0, carbohydrates: 6.3, sugar: 0, sodium: 735, potassium: 42, totalFibre: 3.2, foodType: 'processed' },
+  balsamic_dressing: { fdcId: "1099238", calories: 238, protein: 0.1, totalFat: 19.3, saturatedFat: 2.8, transFat: 0, carbohydrates: 17.0, sugar: 14.2, sodium: 610, potassium: 25, totalFibre: 0, foodType: 'ultra_processed' },
+  mixed_vegetables: { fdcId: "170447", calories: 65, protein: 2.6, totalFat: 0.2, saturatedFat: 0.05, transFat: 0, carbohydrates: 14.1, sugar: 4.0, sodium: 42, potassium: 230, totalFibre: 4.1, foodType: 'veg' },
+  cooked_prawns: { fdcId: "175179", calories: 99, protein: 24.0, totalFat: 0.3, saturatedFat: 0.08, transFat: 0, carbohydrates: 0.2, sugar: 0, sodium: 111, potassium: 220, totalFibre: 0, foodType: 'shellfish' },
+  marie_rose_sauce: { fdcId: "marie_rose_canonical", calories: 320, protein: 1.0, totalFat: 30.0, saturatedFat: 4.5, transFat: 0, carbohydrates: 10.0, sugar: 8.0, sodium: 700, potassium: 40, totalFibre: 0, foodType: 'ultra_processed' },
+  serrano_ham: { fdcId: "172551", calories: 235, protein: 22.0, totalFat: 15.0, saturatedFat: 5.5, transFat: 0, carbohydrates: 1.0, sugar: 0, sodium: 1200, potassium: 300, totalFibre: 0, foodType: 'processed' },
+  mixed_berries: { fdcId: "171711", calories: 45, protein: 0.7, totalFat: 0.3, saturatedFat: 0.02, transFat: 0, carbohydrates: 11.0, sugar: 7.0, sodium: 1, potassium: 120, totalFibre: 2.5, foodType: 'fruit' },
+  low_fat_yogurt: { fdcId: "170903", calories: 63, protein: 5.25, totalFat: 1.55, saturatedFat: 1.0, transFat: 0, carbohydrates: 7.04, sugar: 7.04, sodium: 70, potassium: 230, totalFibre: 0, foodType: 'dairy' },
+  sea_salt: { fdcId: "173468", calories: 0, protein: 0, totalFat: 0, saturatedFat: 0, transFat: 0, carbohydrates: 0, sugar: 0, sodium: 38758, potassium: 8, totalFibre: 0, foodType: 'processed' }
 };
 
 export function lookupCanonicalBaseFood(name: string): any | null {
   
   const normalized = name.toLowerCase().trim();
+  if (normalized.includes('sweet chilli') || normalized.includes('sweet chili') || normalized.includes('chilli sauce') || normalized.includes('chili sauce')) return CANONICAL_BASE_FOODS.sweet_chilli_sauce;
+  if (normalized.includes('kalamata') || normalized.includes('olive')) return CANONICAL_BASE_FOODS.kalamata_olives;
+  if (normalized.includes('balsamic')) return CANONICAL_BASE_FOODS.balsamic_dressing;
+  if (normalized.includes('marie rose') || normalized.includes('rose sauce')) return CANONICAL_BASE_FOODS.marie_rose_sauce;
+  if (normalized.includes('serrano') || normalized.includes('cured ham') || normalized.includes('cooked ham') || normalized === 'ham') return CANONICAL_BASE_FOODS.serrano_ham;
+  if (normalized.includes('mixed berries fruit compote')) return CANONICAL_BASE_FOODS.strawberry;
+  if (normalized.includes('mixed berries') || normalized.includes('berry') || normalized.includes('berries')) return CANONICAL_BASE_FOODS.mixed_berries;
+  if (normalized.includes('low fat yogurt') || normalized.includes('low-fat yogurt') || normalized.includes('low fat yoghurt')) return CANONICAL_BASE_FOODS.low_fat_yogurt;
+  if (normalized.includes('sea salt') || normalized === 'salt') return CANONICAL_BASE_FOODS.sea_salt;
+  if (normalized.includes('cooked pasta') || normalized === 'pasta') return CANONICAL_BASE_FOODS.macaroni_pasta;
+  if (normalized.includes('mixed veg') || normalized === 'vegetables') return CANONICAL_BASE_FOODS.mixed_vegetables;
+  if (normalized.includes('prawn') || normalized.includes('prawns') || normalized.includes('shrimp')) return CANONICAL_BASE_FOODS.cooked_prawns;
+
   if (normalized.includes('plain yogurt') || normalized.includes('plain yoghurt')) return CANONICAL_BASE_FOODS.plain_yogurt;
   
   if (normalized.includes('sainsbury') && normalized.includes('oat')) return CANONICAL_BASE_FOODS.sainsbury_rolled_oats;
@@ -349,6 +373,7 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   if (clean.includes('water') || clean.includes('soda_water') || clean.includes('sparkling_water')) return CANONICAL_BASE_FOODS.water;
   if (clean.includes('coca') || tokens.includes('cola') || tokens.includes('coke')) return CANONICAL_BASE_FOODS.coca_cola;
   if (clean.includes('cherry_tomato') || (clean.includes('cherry') && clean.includes('tomato'))) return CANONICAL_BASE_FOODS.cherry_tomato;
+  if (clean.includes('breaded_chicken_tender') || clean.includes('chicken_tender') || (clean.includes('breaded') && clean.includes('chicken'))) return CANONICAL_BASE_FOODS.breaded_chicken_tender;
   if (clean.includes('chicken_breast') || (clean.includes('chicken') && clean.includes('breast'))) return CANONICAL_BASE_FOODS.chicken_breast;
   if (tokens.includes('rice')) return CANONICAL_BASE_FOODS.white_rice;
   if (clean.includes('white_fish') || (tokens.includes('fish') && !tokens.includes('salmon'))) return CANONICAL_BASE_FOODS.white_fish;

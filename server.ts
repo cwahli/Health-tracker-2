@@ -1428,8 +1428,8 @@ app.get('/api/jobs/status', async (req, res) => {
             try {
               const { fetchJobResultFromR2 } = await import('./src/utils/r2Storage.js');
               const r2Promise = fetchJobResultFromR2(job.id);
-              const r2Timeout = new Promise<null>((_, reject) =>
-                setTimeout(() => reject(new Error('R2 fetch timed out')), 2500)
+              const r2Timeout = new Promise<null>((resolve) =>
+                setTimeout(() => resolve(null), 5000)
               );
               const fullResult = await Promise.race([r2Promise, r2Timeout]);
               if (fullResult) {
@@ -2451,6 +2451,11 @@ async function callUnifiedLLM(args: any): Promise<any> {
     return await executeWithTimeout(args);
   } catch (err: any) {
     const errStr = String(err.message || err || "").toLowerCase();
+    const isAbortedOrStalled = err?.name === 'AbortError' || errStr.includes('abort') || errStr.includes('stalled');
+    if (isAbortedOrStalled) {
+      throw err;
+    }
+
     const isTimeoutOrDeadline = errStr.includes('deadline') || 
                                 errStr.includes('timeout') || 
                                 errStr.includes('timed out') || 
@@ -2465,7 +2470,7 @@ async function callUnifiedLLM(args: any): Promise<any> {
       throw new Error(`The Gemini API quota has been temporarily exhausted on ${modelName || 'this model'}. Wait the retry-after, or switch to Gemini 3.1 Flash Lite (separate free-tier bucket). Detailed API Error: ${err.message}`);
     }
 
-    if (isTimeoutOrDeadline) {
+    if (isTimeoutOrDeadline && !args.skipThinking) {
       console.warn(`[UnifiedLLM] Request failed (${err.message}). Retrying once with 'skipThinking: true'...`);
       
       try {
@@ -2856,6 +2861,16 @@ async function callUnifiedLLMInternal({
         }
         if (isGeminiUnavailableError(streamErr)) {
           addDebugLog(`[UnifiedLLM] Stream 503 on ${targetGeminiModel} — not falling back to a second generateContent (that doubles quota).`);
+          throw streamErr;
+        }
+        const errMsg = String(streamErr?.message || streamErr || "").toLowerCase();
+        const isAbortOrTimeout = streamErr?.name === 'AbortError' || 
+                                 errMsg.includes('abort') || 
+                                 errMsg.includes('stalled') || 
+                                 errMsg.includes('timeout') || 
+                                 errMsg.includes('timed out');
+        if (isAbortOrTimeout) {
+          addDebugLog(`[UnifiedLLM] Stream aborted/timed out (${streamErr?.message}) — throwing directly without non-streaming fallback.`);
           throw streamErr;
         }
         addDebugLog(`[UnifiedLLM] Stream failed (${streamErr?.message}). Falling back to non-streaming generateContent...`);
@@ -6438,7 +6453,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
   }
 
   // 5. Whole pack/wrap/container or explicit count/piece
-  if (lower.includes('pack') || lower.includes('wrap') || lower.includes('container') || lower.includes('tub') || lower.includes('bag') || lower.includes('pouch') || lower.includes('piece') || lower.includes('slice') || lower.includes('portion') || lower.includes('serving') || lower.includes('biscuit') || lower.includes('cookie') || lower.includes('bun') || lower.includes('can') || lower.includes('bottle')) {
+  if (lower.includes('pack') || lower.includes('wrap') || lower.includes('container') || lower.includes('tub') || lower.includes('bag') || lower.includes('pouch') || lower.includes('piece') || lower.includes('slice') || lower.includes('portion') || lower.includes('serving') || lower.includes('biscuit') || lower.includes('cookie') || lower.includes('bun') || lower.includes('can') || lower.includes('bottle') || lower.includes('item')) {
     return totalItemWeight > 0 ? totalItemWeight : 100;
   }
 
@@ -7514,9 +7529,10 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           } else if ((!bestMatch || bestMatch.source === 'category_fallback' || bestMatch.source === 'estimated') && canonicalData) {
             const virtualId = `canonical_comp_${itemIndex}_${cIdx}`;
             dbMatchMap.set(virtualId, canonicalData);
+            const isBrandMenu = canonicalData.fdcId && String(canonicalData.fdcId).startsWith("brand_menu_");
             bestMatch = {
               id: virtualId,
-              source: "canonical_dict",
+              source: isBrandMenu ? "brand_official" : "canonical_dict",
               name: `${query} (Canonical Base)`,
               calories: String(canonicalData.calories),
               protein: canonicalData.protein,
@@ -7739,7 +7755,8 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           const virtualId = `canonical_item_${item.scoutIndex}`;
           dbMatchMap.set(virtualId, canonicalData);
           primaryDbId = virtualId;
-          primaryDbSource = "canonical_dict";
+          const isBrandMenu = canonicalData.fdcId && String(canonicalData.fdcId).startsWith("brand_menu_");
+          primaryDbSource = isBrandMenu ? "brand_official" : "canonical_dict";
           primaryBaseMatchName = item.originalName || item.keyword;
           primaryBase100g = canonicalData;
           primaryBaseWeightG = itemWeight;

@@ -256,6 +256,17 @@ export async function uploadJobResultToR2(jobId: string, resultJson: object): Pr
 
 export async function fetchJobResultFromR2(jobId: string): Promise<any> {
   try {
+    const CLOUDFLARE_R2_PUBLIC_URL = (process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
+    const url = `${CLOUDFLARE_R2_PUBLIC_URL}/jobs/${jobId}_result.json`;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (fetchErr) {
+      // Ignored, will fall back to S3Client if possible
+    }
+
     const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
     const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
     const CLOUDFLARE_R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
@@ -263,13 +274,6 @@ export async function fetchJobResultFromR2(jobId: string): Promise<any> {
     const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
 
     if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
-      // Fallback to public URL if no credentials
-      const CLOUDFLARE_R2_PUBLIC_URL = (process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
-      const url = `${CLOUDFLARE_R2_PUBLIC_URL}/jobs/${jobId}_result.json`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(2500) });
-      if (res.ok) {
-        return await res.json();
-      }
       return null;
     }
 
@@ -358,18 +362,23 @@ export async function uploadLogsToR2(jobId: string, logsText: string): Promise<s
 
 export async function fetchLogsFromR2(jobId: string): Promise<string | null> {
   try {
+    const CLOUDFLARE_R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
+    const url = `${CLOUDFLARE_R2_PUBLIC_URL}/logs/${jobId}.log`;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        return await res.text();
+      }
+    } catch (fetchErr) {
+      // Ignored, will fall back to S3Client if possible
+    }
+
     const CLOUDFLARE_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
     const CLOUDFLARE_R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
     const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
     const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
 
     if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
-      const CLOUDFLARE_R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
-      const url = `${CLOUDFLARE_R2_PUBLIC_URL}/logs/${jobId}.log`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(2500) });
-      if (res.ok) {
-        return await res.text();
-      }
       return null;
     }
 

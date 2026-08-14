@@ -85,7 +85,7 @@ STEP 1: SCENE CLASSIFICATION & ENVIRONMENT
 - 'diningEnvironment': 'casual_restaurant' | 'fast_food_chain' | 'home_cooked' | 'fine_dining' | 'airline' | 'unknown'.
 
 STEP 2: UNIVERSAL DISH EXTRACTION & DEDUPLICATION
-- USER MESSAGE SCOPE ANCHOR & CONTEXT PACKAGES: The user's text message establishes what was consumed (e.g. "50g Sainsbury oat + fruits"). CRITICAL SPECIFIED PORTION RULE: If the user's text message explicitly specifies a weight or quantity, use your best judgment to assign it to the specific ingredient, or the total dish, based on their phrasing. For example, "50g of oats + fruits" might mean 50g of dry oats alone (plus additional weight for the fruits), or 50g total. Deduce the most logical total estimatedWeightGrams for the item you output. The user's explicit text sentence is the absolute ground truth. Photos of unopened bulk ingredient packages or nutrition panels serve as REFERENCE CONTEXT. IMPORTANT: You MUST extract ALL distinct food items meant for consumption that are visible in the scene (e.g. side plates, fruit bowls, drinks). Do NOT ignore other clearly visible foods just because the user only mentioned one item in their message. Only skip items if they are clearly unopened bulk grocery packaging used merely for context.
+- USER MESSAGE SCOPE ANCHOR & MULTI-DISH EXTRACTION: Extract EVERY distinct food, drink, side, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items' (e.g. if 2 dishes or a main + drink are visible, output 2 separate item objects). Do NOT combine distinct dishes into 1 item. If user's text message specifies a portion/weight (e.g. "50g of oats + fruits"), assign logically. The user's explicit text sentence is absolute ground truth. CRITICAL: If the user's text explicitly limits consumption (e.g., "I only had 1 croissant", "I just ate the salad"), you MUST strictly obey this constraint and ONLY extract the specified items. Skip all other visible food items entirely. Otherwise, only skip items if they are unopened bulk grocery packaging used merely for context.
 - CROSS-IMAGE DEDUPLICATION: If photos show BOTH a menu/kiosk screen AND physical food, extract each distinct dish ONCE across all photos. Do NOT duplicate items or extract physical screens/receipts as food items.
 - KNOWN CHAIN & BRAND IDENTIFICATION: For any restaurant chain, brand, or menu item (e.g. McDonald's, Yolk, Starbucks, Pret):
   1. Capture exact brand + dish title in 'originalName' (e.g. "YOLK Steak Chimi 2.0 Sandwich").
@@ -999,7 +999,13 @@ export function parseAndHealVisionScout(
 
             const calA = itemA.rawNutritionLabel?.calories || null;
             const calB = itemB.rawNutritionLabel?.calories || null;
-            const samePrintedCalories = calA !== null && calB !== null && calA === calB;
+            const parseCalNum = (c: any) => typeof c === 'number' ? c : (typeof c === 'string' ? parseFloat(c.replace(/[^0-9.]/g, '')) : null);
+            const numCalA = parseCalNum(calA);
+            const numCalB = parseCalNum(calB);
+            const hasCalA = numCalA !== null && !isNaN(numCalA);
+            const hasCalB = numCalB !== null && !isNaN(numCalB);
+            const samePrintedCalories = hasCalA && hasCalB && Math.abs(numCalA - numCalB) < 2;
+            const diffPrintedCalories = hasCalA && hasCalB && Math.abs(numCalA - numCalB) >= 2;
 
             const sameSourceImage = itemA.sourceImageIndex !== undefined
               && itemB.sourceImageIndex !== undefined
@@ -1015,11 +1021,13 @@ export function parseAndHealVisionScout(
             // Cross-image deduplication engine:
             // Merges items detected across different photos of the same meal (e.g. kiosk screen photo vs actual food photo)
             // DISABLED in compare mode, since the user is intentionally uploading multiple distinct items to compare.
-            const isCrossImageDuplicate = !isCompareMode && !sameSourceImage && (
+            // MUST NOT merge items if both have distinct nutrition labels with different calories, or different labels without exact key match.
+            const hasConflictingLabels = diffPrintedCalories || (hasLabelA && hasLabelB && !samePrintedCalories && !exactKeyMatch);
+
+            const isCrossImageDuplicate = !isCompareMode && !sameSourceImage && !hasConflictingLabels && (
               (samePrintedCalories && overlapRatio >= 0.4) ||
               exactKeyMatch ||
-              ((hasLabelA || hasLabelB) && overlapRatio >= 0.5) ||
-              (overlapRatio >= 0.7)
+              (overlapRatio >= 0.75)
             );
 
             if (isCrossImageDuplicate) {
@@ -1030,7 +1038,15 @@ export function parseAndHealVisionScout(
               if (hasLabelA && (!hasLabelB || Object.keys(itemB.rawNutritionLabel || {}).length === 0)) {
                 itemB.rawNutritionLabel = itemA.rawNutritionLabel;
               } else if (hasLabelA && hasLabelB) {
-                itemB.rawNutritionLabel = { ...itemA.rawNutritionLabel, ...itemB.rawNutritionLabel };
+                const mergedLabel = { ...itemB.rawNutritionLabel };
+                for (const key of Object.keys(itemA.rawNutritionLabel)) {
+                  const valA = itemA.rawNutritionLabel[key];
+                  const valB = mergedLabel[key];
+                  if ((valB === null || valB === undefined || valB === "") && valA !== null && valA !== undefined && valA !== "") {
+                    mergedLabel[key] = valA;
+                  }
+                }
+                itemB.rawNutritionLabel = mergedLabel;
               }
               if (itemA.components && Array.isArray(itemA.components) && itemA.components.length > 0 && (!itemB.components || itemB.components.length === 0)) {
                 itemB.components = itemA.components;

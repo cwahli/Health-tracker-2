@@ -1,5 +1,5 @@
 import { formatMessageContent } from '../../utils/formatUtils';
-import { NutritionLabelTable } from "./NutritionLabelTable";
+import { NutritionLabelTable, checkHasNutritionLabels } from "./NutritionLabelTable";
 import { trackApiCall } from '../../utils/apiTracker';
 import { PhysicalFormBadge } from '../PhysicalFormBadge';
 import React, { useState, useEffect, useRef } from 'react';
@@ -3070,36 +3070,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                          Confidence: {(item.itemConfidence || '').split('(')[0].trim()}
                                        </span>
                                      )}
-                                     {(() => {
-                                       let raw = item.rawNutritionLabel;
-                                       if (typeof raw === 'string') {
-                                         try { raw = JSON.parse(raw); } catch (e) { raw = null; }
-                                       }
-                                       const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
-                                       const labelSource = item.labelNutrientsPerServing || item.primaryBase100g || item.baseNutrients100g;
-                                       if (!raw && isRealTruth && labelSource) {
-                                         raw = labelSource;
-                                       }
-                                       const nonNutrientKeys = new Set(['servingSize', 'weight', 'servingsPerContainer']);
-                                       if (raw && typeof raw === 'object') {
-                                         const hasValidKeys = Object.keys(raw).some((k) => {
-                                           if (nonNutrientKeys.has(k)) return false;
-                                           const val = raw[k];
-                                           return val !== undefined && val !== null && val !== '' && val !== '-' && val !== '--';
-                                         });
-                                         if (hasValidKeys) return true;
-                                       }
-                                       const subComps = item.componentsDetailList || item.componentsDetail || item.components;
-                                       if (Array.isArray(subComps)) {
-                                         return subComps.some((c: any) => {
-                                           if (!c) return false;
-                                           const cRealTruth = c.dbSource === 'brand_official' || c.dbSource === 'label' || c.dbSource === 'off' || c.source === 'brand_official' || c.source === 'label' || Boolean(c.isRealTruth);
-                                           const cLabelSource = c.labelNutrientsPerServing || c.baseNutrients100g || c.primaryBase100g || c.nutrients;
-                                           return Boolean(c.rawNutritionLabel || (cRealTruth && cLabelSource));
-                                         });
-                                       }
-                                       return false;
-                                     })() && (
+                                     {checkHasNutritionLabels([item]) && (
                                        <button
                                          type="button"
                                          onClick={() => setOpenLabelIdx(prev => prev === i ? null : i)}

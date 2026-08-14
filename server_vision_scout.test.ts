@@ -310,4 +310,32 @@ describe("server_vision_scout", () => {
       expect(d.ok).toBe(true);
     });
   });
+
+  describe("cross-photo deduplication guards", () => {
+    it("does not merge two distinct items sharing flavor words when printed calories or labels differ", () => {
+      const mockOutput = {
+        items: [
+          {
+            keyword: "sweet chilli chicken wrap",
+            originalName: "Sweet Chilli Chicken Wrap",
+            estimatedWeightGrams: 220,
+            sourceImageIndex: 0,
+            rawNutritionLabel: { calories: "453 kcal" }
+          },
+          {
+            keyword: "mycoprotein sweet chilli mini fillets",
+            originalName: "Sweet Chilli Mini Fillets",
+            estimatedWeightGrams: 138,
+            sourceImageIndex: 1,
+            rawNutritionLabel: { calories: "98 kcal" }
+          }
+        ]
+      };
+
+      const result = parseAndHealVisionScout(mockOutput, () => {});
+      expect(result.items).toHaveLength(2);
+      expect(result.items[0].originalName).toBe("Sweet Chilli Chicken Wrap");
+      expect(result.items[1].originalName).toBe("Sweet Chilli Mini Fillets");
+    });
+  });
 });

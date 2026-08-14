@@ -131,7 +131,7 @@ export function buildFoodDomainPack(input: {
 
   return {
     mode: mode != null ? String(mode) : null,
-    jobId: job.id || result.jobId || p.jobId || null,
+    jobId: job.id || result.jobId || p.jobId || p.id || null,
     status: job.status || result.status || p.status || null,
     progressPercent: job.progressPercent ?? null,
     mealName: food.name || food.title || p.dish_query || null,
@@ -255,7 +255,7 @@ export function buildBiomarkerDomainPack(input: {
   if (crazy.length) sanitizeHints.push(`extreme_values:${crazy.map((c) => c.key).join(',')}`);
 
   return {
-    jobId: job.id || result.jobId || p.jobId || null,
+    jobId: job.id || result.jobId || p.jobId || p.id || null,
     kind: job.kind || p.kind || 'medical',
     agentLabel:
       result.agentLabel ||
@@ -304,12 +304,26 @@ export function resolveDomainPack(input: {
   const jobs = Array.isArray(input.jobs) ? input.jobs : [];
   const payload = input.payload || {};
 
-  const activeFood = jobs.find(
+  const targetJobId = payload.jobId || payload.id || null;
+
+  const findMatchingJob = (predicate: (j: any) => boolean) => {
+    if (targetJobId) {
+      const exact = jobs.find((j) => j.id === targetJobId);
+      if (exact && predicate(exact)) return exact;
+    }
+    // Search from newest to oldest
+    for (let i = jobs.length - 1; i >= 0; i--) {
+      if (predicate(jobs[i])) return jobs[i];
+    }
+    return undefined;
+  };
+
+  const activeFood = findMatchingJob(
     (j) =>
       (j.kind === 'food_log' || j.kind === 'food_compare' || j.kind === 'food' || String(j.kind || '').startsWith('food')) &&
       (j.status === 'running' || j.status === 'succeeded' || j.status === 'awaiting_user' || j.status === 'failed')
   );
-  const activeMed = jobs.find(
+  const activeMed = findMatchingJob(
     (j) =>
       (j.kind === 'medical' || j.kind === 'biomarker' || String(j.kind || '').includes('medical')) &&
       (j.status === 'running' || j.status === 'succeeded' || j.status === 'failed')

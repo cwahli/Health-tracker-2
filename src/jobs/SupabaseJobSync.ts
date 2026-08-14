@@ -149,7 +149,14 @@ export async function hydrateUserJobs(userId: string = 'anonymous'): Promise<voi
       console.debug('[SupabaseJobSync] User offline, skipping job hydration');
       return;
     }
-    const isFetchErr = e && (e.name === 'TypeError' || (e.message && e.message.includes('Failed to fetch')));
+    const isFetchErr =
+      e &&
+      (e.name === 'TypeError' ||
+        e.name === 'AbortError' ||
+        (e.message &&
+          (e.message.includes('Failed to fetch') ||
+            e.message.includes('aborted') ||
+            e.message.includes('signal is aborted'))));
     if (isFetchErr) {
       console.debug('[SupabaseJobSync] Network unavailable for job hydration:', e.message || e);
     } else {

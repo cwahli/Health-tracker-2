@@ -11,7 +11,8 @@ const getBiomarkerDef = (key: string) => biomarkerDefinitions.find(d => d.key ==
 
 import { BiomarkerExpandedSection } from './BiomarkerExpandedSection';
 import CombineBiomarkersModal from './CombineBiomarkersModal';
-const BiomarkerDictionaryModal = React.lazy(() => import('./BiomarkerDictionaryModal'));
+import { lazyWithRetry } from '../utils/lazyWithRetry';
+const BiomarkerDictionaryModal = lazyWithRetry(() => import('./BiomarkerDictionaryModal'));
 import NotUsedBiomarkersModal from './NotUsedBiomarkersModal';
 import TaskPlaceholderCard from './TaskPlaceholderCard';
 import { JobStore } from '../jobs/JobStore';
