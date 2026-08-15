@@ -167,7 +167,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
       subComps.forEach((comp: any) => {
         if (!comp) return;
         allDishComps.push(comp);
-        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel) || (comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_'));
+        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.dbSource === 'open_food_facts' || comp.dbSource === 'openfoodfacts' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel) || (comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_'));
         const compLabelSource = comp.baseNutrients100g || comp.primaryBase100g || comp.labelNutrientsPerServing || comp.nutrients;
         if (isCompOfficial && (comp.rawNutritionLabel || compLabelSource)) {
           const rawName = comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || comp.dish_name;
@@ -234,7 +234,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
       });
     } else {
       const isMultiCompComposite = Array.isArray(subComps) && subComps.length >= 2;
-      const isItemRealTruth = (item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth)) && item.dbSource !== 'composite' && !isMultiCompComposite;
+      const isItemRealTruth = (item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth)) && item.dbSource !== 'composite' && !isMultiCompComposite;
       const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || (item.dbSource !== 'composite' && !isMultiCompComposite ? item.primaryBase100g : null);
       const hasOwnExplicitLabel = Boolean(item.rawNutritionLabel && Object.keys(normalizeNutritionKeys(item.rawNutritionLabel) || {}).length > 0) || Boolean(isItemRealTruth && itemLabelSource);
       if (hasOwnExplicitLabel) {
@@ -266,7 +266,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
     // confirms it is real truth (OCR label or curated brand/chain data). Estimated or
     // component-summed reference data must never render in the label card — it belongs
     // only in the calculation table as clearly-marked estimates.
-    const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
+    const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
     const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g;
     if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && isRealTruth && labelSource) {
       const source = labelSource;
@@ -851,7 +851,7 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
       subComps.forEach((comp: any) => {
         if (!comp) return;
         allDishComps.push(comp);
-        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel) || (comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_'));
+        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.dbSource === 'open_food_facts' || comp.dbSource === 'openfoodfacts' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel) || (comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_'));
         const compLabelSource = comp.baseNutrients100g || comp.primaryBase100g || comp.labelNutrientsPerServing || comp.nutrients;
         if (isCompOfficial && (comp.rawNutritionLabel || compLabelSource)) {
           const rawName = comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || comp.dish_name;
@@ -894,7 +894,7 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
       });
     } else {
       const isMultiCompComposite = Array.isArray(subComps) && subComps.length >= 2;
-      const isItemRealTruth = (item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth)) && item.dbSource !== 'composite' && !isMultiCompComposite;
+      const isItemRealTruth = (item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth)) && item.dbSource !== 'composite' && !isMultiCompComposite;
       const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || (item.dbSource !== 'composite' && !isMultiCompComposite ? item.primaryBase100g : null);
       const hasOwnExplicitLabel = Boolean(item.rawNutritionLabel && Object.keys(normalizeNutritionKeys(item.rawNutritionLabel) || {}).length > 0) || Boolean(isItemRealTruth && itemLabelSource);
       if (hasOwnExplicitLabel) {
@@ -911,7 +911,7 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
     }
     let correctedRaw = normalizeNutritionKeys(parsedRaw);
 
-    const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
+    const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
     const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g;
     if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && isRealTruth && labelSource) {
       const source = labelSource;
