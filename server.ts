@@ -7333,7 +7333,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             calcTokenOverlap(normCompQuery, m.name || m.searchQuery || '') >= 0.5
           );
 
-          let bestMatch = directCuratorMatch || pickQueryScopedMatch(query, databaseMatchesArray, [rawQuery, matchQuery]) || findBestMatch(query, [rawQuery, matchQuery]);
+          let bestMatch = directCuratorMatch || pickQueryScopedMatch(query, databaseMatchesArray, [rawQuery, matchQuery], quarantinedIdsSet) || findBestMatch(query, [rawQuery, matchQuery]);
           if (directCuratorMatch) {
             addDebugLog(`[MatchPriority] Bound direct Curator query match id=${directCuratorMatch.id} ("${directCuratorMatch.name}") for component "${query}".`);
           }
@@ -8222,6 +8222,46 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           chainName: item.chainName || null,
         }
       );
+
+      // Sync dietitian-facing totals with the same composite density/sodium reconciliation
+      // that the receipt-table pass applies later, so the Dietitian prompt and the final UI
+      // table are built from identical numbers instead of diverging. See TASK 6 notes.
+      {
+        const isCompositeForDietitianSync =
+          (Array.isArray(item.components) && item.components.length >= 2) ||
+          preForm?.physicalForm === "COMPOUND_MEAL" ||
+          /\b(bowl|poke|salad|bento)\b/i.test(String(item.originalName || item.keyword || ""));
+        const dietitianSyncResult = applyPostReconcileTruthLocks({
+          sumNutrients: {
+            calories: aggregatedNutrients.calories || 0,
+            protein: aggregatedNutrients.protein || 0,
+            totalFat: aggregatedNutrients.totalFat || 0,
+            saturatedFat: aggregatedNutrients.saturatedFat || 0,
+            sodium: aggregatedNutrients.sodium || 0,
+            carbohydrates: aggregatedNutrients.carbohydrates || 0,
+          },
+          ledgerTruth: itemTruthNutrients,
+          lockedNutrientKeys: Array.from(itemLockedKeys),
+          receiptRealityCheckNutrients: {
+            calories: aggregatedNutrients.calories,
+            protein: aggregatedNutrients.protein,
+            totalFat: aggregatedNutrients.totalFat,
+            saturatedFat: aggregatedNutrients.saturatedFat,
+            sodium: aggregatedNutrients.sodium,
+            carbohydrates: aggregatedNutrients.carbohydrates,
+          },
+          isCompositeReceipt: isCompositeForDietitianSync,
+        });
+        if (dietitianSyncResult.appliedDensityCorrection || dietitianSyncResult.appliedSodiumRealityCheck) {
+          addDebugLog(`[Dietitian Sync] Pre-dietitian reconciliation applied for "${item.originalName || item.keyword}" (density=${dietitianSyncResult.appliedDensityCorrection}, sodium=${dietitianSyncResult.appliedSodiumRealityCheck}).`);
+          aggregatedNutrients.calories = dietitianSyncResult.nutrients.calories;
+          aggregatedNutrients.protein = dietitianSyncResult.nutrients.protein;
+          aggregatedNutrients.totalFat = dietitianSyncResult.nutrients.totalFat;
+          aggregatedNutrients.saturatedFat = dietitianSyncResult.nutrients.saturatedFat;
+          aggregatedNutrients.sodium = dietitianSyncResult.nutrients.sodium;
+          aggregatedNutrients.carbohydrates = dietitianSyncResult.nutrients.carbohydrates;
+        }
+      }
 
       // Receipt invariant: component rows must match item total; repair if needed
       const compCals = componentsDetailList.map((s: any) => Number(s.calories) || 0);
@@ -9141,7 +9181,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         // Build itemsBreakdown from Vision Scout output + best DB match per item
         if (visionScoutItems && visionScoutItems.length > 0) {
                     rawFoodData.itemsBreakdown = visionScoutItems.map((item: any) => {
-            const bestMatch = pickQueryScopedMatch(item.keyword || item.originalName || '', databaseMatchesArray);
+            const bestMatch = pickQueryScopedMatch(item.keyword || item.originalName || '', databaseMatchesArray, [], quarantinedIdsSet);
             
             // nutritionFacts is a general-purpose estimate field, never evidence of a
             // real printed label — do not let it set dbSource:'label'. Only item.source

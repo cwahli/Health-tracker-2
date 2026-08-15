@@ -369,7 +369,18 @@ export type IssueBacklogDeps = {
 export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps = {}) {
   const addDebugLog = deps.addDebugLog || ((m: string) => console.log(m));
 
+  // Short TTL cache: this dashboard doesn't need per-request freshness, and the
+  // underlying query does 2-3 sequential Supabase round trips including a jsonb
+  // payload column. Cache is in-memory/per-server-instance and intentionally has
+  // no write-side invalidation (see TASK_5 instructions for the tradeoff).
+  const OVERVIEW_CACHE_TTL_MS = 20_000;
+  let overviewCache: { data: any; expiresAt: number } | null = null;
+
   app.get('/api/bug-tracker/overview', async (_req: Request, res: Response) => {
+    if (overviewCache && overviewCache.expiresAt > Date.now()) {
+      res.json(overviewCache.data);
+      return;
+    }
     try {
       const { supabaseAdmin } = await import('./supabaseAdmin.js');
 
@@ -441,12 +452,14 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
         suggested_titles: parseNoteIntoTagTitles(i.user_note),
       }));
 
-      res.json({
+      const responsePayload = {
         bugTags,
         allReports: issues || [],
         deletionCandidates,
         reportNotePreviews,
-      });
+      };
+      overviewCache = { data: responsePayload, expiresAt: Date.now() + OVERVIEW_CACHE_TTL_MS };
+      res.json(responsePayload);
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'bug tracker overview failed' });
     }

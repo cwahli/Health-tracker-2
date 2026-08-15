@@ -92,7 +92,7 @@ STEP 2: UNIVERSAL DISH EXTRACTION & DEDUPLICATION
   1b. ALSO output the brand/chain name alone (e.g. 'McDonald\'s', not 'McDonald\'s Big Mac') in the new 'chainName' field. Leave 'chainName' null for home-cooked or non-branded items.
   2. Include brand + dish title in 'queriesToSearch' so the server executes live web search and database matching for official nutrients and ingredients.
   3. If calories/macros or ingredients are printed on a visible menu/kiosk screen or package, transcribe them into 'rawNutritionLabel' & 'ingredientsList' with 'source': 'label' (Screen OCR Dominance).
-  4. STRICT PRINTED TRUTH IN rawNutritionLabel: Transcribe ONLY values that are literally visible/printed on the image, photo, or kiosk screen into 'rawNutritionLabel'. NEVER invent, guess, or populate unprinted macro fields into 'rawNutritionLabel' using internal parametric memory. If a kiosk photo or menu board only displays calories (e.g. "455 kcal"), set ONLY calories: "455 kcal" in 'rawNutritionLabel' and set missing unprinted fields to null.
+  4. STRICT PRINTED TRUTH IN rawNutritionLabel: Transcribe ONLY values that are literally visible/printed on the image, photo, or kiosk screen into 'rawNutritionLabel'. NEVER invent, guess, or populate unprinted macro fields into 'rawNutritionLabel' using internal parametric memory. If a kiosk photo or menu board only displays calories (e.g. "455 kcal"), set ONLY calories: "455 kcal" in 'rawNutritionLabel' and set missing unprinted fields to null. When a photo is flagged as a nutrition label — even a secondary/background photo merged with a primary dish photo — look closely at that image specifically before transcribing: read each printed value directly off the label rather than defaulting fields to null, and only use null for a field if it is genuinely illegible or absent from the label itself.
   4b. SUGAR FIELDS — TOTAL vs ADDED: 'sugar' = Total Sugars, printed as "Sugars" or "of which sugars" on UK/EU labels, or "Total Sugars" on US labels. Populate 'sugar' whenever any sugar figure is printed. 'addedSugar' must be populated ONLY when the label explicitly and separately prints an "Added Sugars" or "Includes Xg Added Sugars" line (US FDA format). UK/EU labels almost never print this — leave 'addedSugar' null in that case. Do NOT copy the 'sugar' value into 'addedSugar' — the backend derives Added Sugar itself from food type and ingredients.
 - PARTIAL TRUTH TRANSCRIPTION & VISUAL TRACKING: Transcribe whatever partial truth is literally visible on the screen/label/menu (even if only calories, e.g. "450 kcal", or 8-10 key nutrients) into 'rawNutritionLabel'. Set 'lockedNutrientKeys' to an array of lowercase nutrient names that were literally visible (e.g. ["calories"]). NEVER invent unprinted fields in 'rawNutritionLabel'. Simultaneously, ALWAYS visually inspect and decompose dish ingredients in 'components' & 'visualIngredients' so the engine can extrapolate the full 31-nutrient profile using first principles anchored by the printed truth.
 
@@ -967,11 +967,20 @@ export function parseAndHealVisionScout(
 
           addDebugLog(`[Label Merge] Matched label "${labelItem.originalName || labelItem.keyword}" (sourceImageIndex=${labelItem.sourceImageIndex}) -> "${primaryItem.originalName || primaryItem.keyword}" (sourceImageIndex=${primaryItem.sourceImageIndex}).`);
 
-          if (labelItem.rawNutritionLabel && Object.keys(labelItem.rawNutritionLabel).length > 0) {
+          const labelHasRealData = labelItem.rawNutritionLabel && typeof labelItem.rawNutritionLabel === 'object'
+            ? Object.keys(labelItem.rawNutritionLabel).some((k: string) => {
+                if (k === 'servingSize' || k === 'weight' || k === 'servingsPerContainer') return false;
+                const v = labelItem.rawNutritionLabel[k];
+                return v !== undefined && v !== null && v !== '' && v !== '-' && v !== '--';
+              })
+            : false;
+          if (labelHasRealData) {
             primaryItem.rawNutritionLabel = {
               ...(primaryItem.rawNutritionLabel || {}),
               ...labelItem.rawNutritionLabel
             };
+          } else if (labelItem.rawNutritionLabel) {
+            addDebugLog(`[Label Merge] Label "${labelItem.originalName || labelItem.keyword}" was detected but all extracted nutrient values were empty/null. Skipping merge onto "${primaryItem.originalName || primaryItem.keyword}" rather than overwriting with empty data.`);
           }
           if (labelItem.ingredientsList) {
             primaryItem.ingredientsList = labelItem.ingredientsList;

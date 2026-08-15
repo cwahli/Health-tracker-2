@@ -21,13 +21,15 @@ export function rowBelongsToQuery(query: string, row: { searchQuery?: string | n
 export function pickQueryScopedMatch<T extends { searchQuery?: string | null; source?: string; id?: string }>(
   query: string,
   matches: T[],
-  extraQueries: string[] = []
+  extraQueries: string[] = [],
+  quarantinedIds?: Set<string>
 ): T | null {
   if (!query || !Array.isArray(matches)) return null;
   const scoped = matches.filter((m) => {
     if (!rowBelongsToQuery(query, m, extraQueries)) return false;
     if (m.source === 'category_fallback' || String(m.id || '').startsWith('fallback_')) return false;
     if (m.source === 'estimated' || m.source === 'canonical_dict') return false;
+    if (quarantinedIds && m.id && quarantinedIds.has(String(m.id))) return false;
     return true;
   });
   if (scoped.length === 0) return null;

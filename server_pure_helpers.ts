@@ -756,9 +756,7 @@ export function applyNutrientRealityChecks(
       addDebugLog(`[Dietitian Reality Check] Sodium for "${itemName}" (${itemNutrients.sodium}mg) was unrealistically high for a non-cured item. Reality check adjusted sodium from ${itemNutrients.sodium}mg to ${realisticSodium}mg.`);
     }
 
-    if (!isCompositeDish) {
-      itemNutrients.sodium = realisticSodium;
-    }
+    itemNutrients.sodium = realisticSodium;
   }
 
   // 4b. Fast-Food Commercial Sodium Floor (Tier 3 Guardrail)
@@ -1062,6 +1060,13 @@ export function checkCategoryAndStateCompatibility(
   const isFatCandidate = /\b(butter|margarine|oil|ghee|shortening|lard)\b/i.test(c);
   if (isSaltQuery && isFatCandidate && !/\b(butter|margarine|oil|ghee|shortening|lard)\b/i.test(q)) {
     return { compatible: false, reason: `Blocked fat/butter candidate ("${candidateName}") for salt query ("${query}")` };
+  }
+
+  // 4c. Raw Flour/Grain vs Baked/Bread/Tortilla
+  const isRawFlourQuery = /\b(flour|wheat flour|all-purpose flour|bread flour|cake flour|rye flour|semolina|cornmeal|raw grain|yeast)\b/i.test(q);
+  const isBakedGoodCandidate = /\b(tortilla|tortillas|bread|flatbread|pita|naan|bun|buns|roll|rolls|croissant|pastry|muffin|cake|cookie|donut|doughnut|scone|biscuit|cracker|crackers)\b/i.test(c);
+  if (isRawFlourQuery && isBakedGoodCandidate && !/\b(tortilla|bread|pita|naan|bun|roll|croissant|pastry|muffin|cake|cookie|donut|scone|biscuit|cracker)\b/i.test(q)) {
+    return { compatible: false, reason: `Blocked baked/bread/tortilla candidate ("${candidateName}") for raw flour/grain query ("${query}")` };
   }
 
   // 5. Dried/Powder vs Fresh/Cooked

@@ -6293,14 +6293,19 @@ export default function App() {
           setActiveTab('food');
         }}
         onClose={async () => {
-          if (activeJobId) {
-            const job = JobStore.getJob(activeJobId);
-            if (job && job.status === 'draft') {
-              await JobStore.deleteJob(activeJobId);
+          try {
+            if (activeJobId) {
+              const job = JobStore.getJob(activeJobId);
+              if (job && job.status === 'draft') {
+                await JobStore.deleteJob(activeJobId);
+              }
             }
+          } catch (err) {
+            console.error('[FoodChat onClose] Draft cleanup failed, closing modal anyway:', err);
+          } finally {
+            setActiveJobId(null);
+            setActiveTab('food');
           }
-          setActiveJobId(null);
-          setActiveTab('food');
         }}
         onLogFood={handleLogFood}
         biomarkers={biomarkers}
