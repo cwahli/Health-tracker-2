@@ -7347,7 +7347,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           }
           const canonicalData = lookupCanonicalBaseFood(query);
           // Prefer internal_catalog / usda / off over any residual fallback or missing match
-          if (!bestMatch || bestMatch.source === 'category_fallback' || String(bestMatch.id || '').startsWith('fallback_') || bestMatch.source === 'estimated') {
+          if (!canonicalData && (!bestMatch || bestMatch.source === 'category_fallback' || String(bestMatch.id || '').startsWith('fallback_') || bestMatch.source === 'estimated')) {
             const qTokens = String(query).toLowerCase().split(/\s+/).filter(Boolean);
             const isQueryCooked = qTokens.some(t => ['cooked', 'plated', 'salad', 'mixed', 'roasted'].includes(t));
             const isQueryLoose = qTokens.some(t => ['cup', 'bowl', 'yogurt', 'fruit', 'loose'].includes(t));
@@ -7608,12 +7608,6 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           } else {
             resolvedComponentsById.set(String(bestMatch.id), { isPrimary: false, sauceIndex: componentsDetailList.length - 1 });
           }
-
-          NUTRIENT_KEYS.forEach(key => {
-            if (baseNutrients[key] !== undefined && baseNutrients[key] !== null) {
-              aggregatedNutrients[key] += parseFloat((baseNutrients[key] * factor).toFixed(2));
-            }
-          });
         });
         
         // Deduplicate componentsDetailList BEFORE computing final foundation budget

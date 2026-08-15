@@ -1,0 +1,104 @@
+{
+  "items": [
+    {
+      "keyword": "Sweet Chilli Chicken Wrap",
+      "itemConfidence": "High",
+      "estimatedWeightGrams": 220,
+      "estimatedCalories": 453,
+      "cookingMethod": "unknown",
+      "components": [
+        {
+          "searchQuery": "flour tortilla wrap",
+          "volumePercentage": 40,
+          "calories": 265,
+          "protein": 7.3,
+          "carbohydrates": 43.9,
+          "totalFat": 6.4,
+          "saturatedFat": 1.4,
+          "sodium": 548,
+          "sugar": 0,
+          "name": "flour tortilla wrap enriched wheat",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "breaded chicken tender",
+          "volumePercentage": 35,
+          "calories": 132,
+          "protein": 24.8,
+          "carbohydrates": 0,
+          "totalFat": 2.9,
+          "saturatedFat": 0.8,
+          "sodium": 56,
+          "sugar": 0,
+          "name": "breaded chicken tender bakery bread enriched wheat",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "sweet chilli sauce",
+          "volumePercentage": 15,
+          "calories": 51,
+          "protein": 0.3,
+          "carbohydrates": 5.1,
+          "totalFat": 3.4,
+          "saturatedFat": 0.5,
+          "sodium": 274,
+          "sugar": 0,
+          "name": "sweet chilli sauce condiment",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "mixed salad greens",
+          "volumePercentage": 10,
+          "calories": 5,
+          "protein": 0.3,
+          "carbohydrates": 0.8,
+          "totalFat": 0,
+          "saturatedFat": 0,
+          "sodium": 5,
+          "sugar": 0.3,
+          "name": "mixed salad greens",
+          "source": "internal_catalog"
+        }
+      ],
+      "chainName": null,
+      "originalName": "Sweet Chilli Chicken Wrap",
+      "boundingBox2D": [
+        198,
+        92,
+        422,
+        245
+      ],
+      "sourceImageIndex": 0,
+      "anomalyFlags": [],
+      "ingredientsList": "Mycoprotein (86%), Sweet Chilli Marinade (7%) (Water, Sugar, Garlic Powder, Spices: Ginger, Cayenne Chilli, Chilli Powder, Yeast Extract, Sea Salt, Tomato Powder, Chilli Flakes, Lemon Juice Powder, Onion Powder, Maize Starch, Citric Acid, Dried Garlic, Coriander Leaf, Natural Flavouring, Stabiliser: Guar Gum; Lemon Oil, Lemongrass Oil), Rehydrated Free Range Egg White, Natural Flavouring, Firming Agents: Calcium Chloride, Calcium Acetate.",
+      "nutritionFacts": null,
+      "rawNutritionLabel": {
+        "servingSize": "1 meal",
+        "calories": "453 kcal",
+        "protein": null,
+        "totalFat": null,
+        "saturatedFat": null,
+        "transFat": null,
+        "totalCarbohydrate": null,
+        "sugar": null,
+        "addedSugar": null,
+        "sodium": null,
+        "salt": null,
+        "potassium": null,
+        "totalFibre": null,
+        "solubleFibre": null
+      },
+      "source": "label",
+      "visualIngredients": [],
+      "scoutIndex": 0,
+      "labelProductName": "Sweet Chilli Chicken Wrap",
+      "cookingAdded": {
+        "addedCalories": 0,
+        "addedFat": 0,
+        "addedSaturatedFat": 0,
+        "addedSodium": 0
+      },
+      "name": "sweet chilli chicken wrap"
+    }
+  ]
+}

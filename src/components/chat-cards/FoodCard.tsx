@@ -12,6 +12,8 @@ import { UniversalModal } from '../UniversalModal';
 import { flagIssueToServer, guessChainKey, ISSUE_TYPE_LABELS, IssueType } from '../../utils/issueBacklog';
 import { getAgentRequestLogs } from '../../utils/agentLogsTracker';
 import { ComprehensiveNutrientsTable } from './ComprehensiveNutrientsTable';
+import { JobStore } from '../../jobs/JobStore';
+import { toPendingFoodLog } from '../../mealBuild/adapters';
 
 function parseLabelCalories(raw: any): number | null {
   if (raw == null) return null;
@@ -1626,18 +1628,10 @@ export const FoodCard: React.FC<AgentCardProps & {
     
     const usedScoutIndices = new Set();
     // Map each item in itemsBreakdown to a scout item format
-    return itemsBreakdown.map((item: any) => {
+    return itemsBreakdown.map((item: any, i: number) => {
       // Find the best matching scout item in activeScoutItems to preserve bounding box and image index
       let matchingScout = (activeScoutItems || []).find((s: any) => {
-        if (s.scoutIndex !== undefined && item.scoutIndex !== undefined && Number(s.scoutIndex) === Number(item.scoutIndex)) {
-          const itemName = (item.canonicalDbName || item.name || item.originalName || '').toLowerCase();
-          const sName = (s.originalName || s.keyword || '').toLowerCase();
-          if (!itemName || !sName) return true;
-          if (itemName.includes(sName) || sName.includes(itemName)) return true;
-          const it = itemName.split(/[^a-z0-9]+/).filter((t: string) => t.length >= 4);
-          const st = sName.split(/[^a-z0-9]+/).filter((t: string) => t.length >= 4);
-          return it.some((t: string) => st.includes(t));
-        }
+        if (s.scoutIndex !== undefined && item.scoutIndex !== undefined && Number(s.scoutIndex) === Number(item.scoutIndex)) return true;
         return false;
       });
       if (!matchingScout) {
@@ -1652,8 +1646,12 @@ export const FoodCard: React.FC<AgentCardProps & {
           return itemTokens.some((t: string) => sTokens.includes(t));
         });
       }
-      // Never fall back to array position — dietitian reindex (0,1,2,3 vs 0,1,3,4)
-      // attached the croissant crop to the cinnamon roll.
+      if (!matchingScout && itemsBreakdown.length === (activeScoutItems || []).length) {
+        const candidate = (activeScoutItems || [])[i];
+        if (candidate && !usedScoutIndices.has(candidate.scoutIndex)) {
+          matchingScout = candidate;
+        }
+      }
       
       if (matchingScout && matchingScout.scoutIndex !== undefined) {
         usedScoutIndices.add(matchingScout.scoutIndex);
@@ -1764,7 +1762,91 @@ export const FoodCard: React.FC<AgentCardProps & {
     }
   };
 
-  if (msg.agentType !== 'food') return null;
+  const effectiveFoodLog = React.useMemo(() => {
+    const isValid = (l: any) => {
+      if (!l || typeof l !== 'object' || Array.isArray(l)) return false;
+      return !!(
+        l.name ||
+        l.title ||
+        (Array.isArray(l.itemsBreakdown) && l.itemsBreakdown.length > 0) ||
+        (Array.isArray(l.items) && l.items.length > 0) ||
+        (Array.isArray(l.scoutItems) && l.scoutItems.length > 0) ||
+        (l.nutrients && typeof l.nutrients === 'object' && Object.keys(l.nutrients).length > 0)
+      );
+    };
+
+    let log = msg.data?.pendingFoodLog || msg.pendingFoodLog;
+    if (isValid(log)) return log;
+
+    const raw = msg.data?.agentResult || msg.agentResult || msg.data?.clean_result || msg.data || {};
+    if (isValid(raw.pendingFoodLog)) return raw.pendingFoodLog;
+    if (isValid(raw.foodData)) return raw.foodData;
+    if (isValid(raw.data)) return raw.data;
+
+    if (raw.mealBuild) {
+      const mbLog = toPendingFoodLog(raw.mealBuild);
+      if (isValid(mbLog)) return mbLog;
+    }
+    if (msg.data?.mealBuild) {
+      const mbLog = toPendingFoodLog(msg.data.mealBuild);
+      if (isValid(mbLog)) return mbLog;
+    }
+    if ((msg as any).mealBuild) {
+      const mbLog = toPendingFoodLog((msg as any).mealBuild);
+      if (isValid(mbLog)) return mbLog;
+    }
+
+    const jobId = msg.data?.jobId || (msg as any).jobId;
+    if (jobId) {
+      const j = JobStore.getJob(jobId);
+      if (j) {
+        const jResult = j.result?.clean_result || j.result || {};
+        if (isValid(jResult.pendingFoodLog)) return jResult.pendingFoodLog;
+        if (jResult.mealBuild) {
+          const mbLog = toPendingFoodLog(jResult.mealBuild);
+          if (isValid(mbLog)) return mbLog;
+        }
+        if (j.mealBuild) {
+          const mbLog = toPendingFoodLog(j.mealBuild);
+          if (isValid(mbLog)) return mbLog;
+        }
+      }
+    }
+
+    const items = msg.data?.scoutItems || raw.scoutItems || raw.itemsBreakdown || raw.items || [];
+    if (items.length > 0 || raw.name || raw.title) {
+      return {
+        itemsBreakdown: items,
+        items: items,
+        nutrients: raw.nutrients || {},
+        name: raw.name || raw.title || 'Meal',
+        title: raw.name || raw.title || 'Meal',
+        benefits: raw.benefits || [],
+        risks: raw.risks || [],
+        recommendation: raw.recommendation || '',
+        verdict: raw.verdict || '',
+        message: raw.message || raw.text || msg.content || '',
+        imageUrls: raw.imageUrls || (msg.imageUrl ? [msg.imageUrl] : []),
+        photoUrl: raw.photoUrl || msg.imageUrl,
+        receiptTable: raw.receiptTable,
+        weightGrams: raw.weightGrams,
+        quantity: raw.quantity
+      };
+    }
+
+    return null;
+  }, [msg]);
+
+  if (effectiveFoodLog) {
+    if (!msg.data) msg.data = {};
+    if (!msg.data.pendingFoodLog) msg.data.pendingFoodLog = effectiveFoodLog;
+    if (!msg.pendingFoodLog) msg.pendingFoodLog = effectiveFoodLog;
+  }
+
+  const isFoodAgentType = !msg.agentType || msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'front_desk' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || msg.agentType === 'medical';
+  const hasFoodPayload = !!(effectiveFoodLog || msg.data?.scoutItems?.length || msg.data?.comparison || msg.data?.agentResult?.mealBuild || msg.agentResult?.scoutItems?.length);
+
+  if (!isFoodAgentType && !hasFoodPayload) return null;
 
   const userUploadedImages = React.useMemo(() => {
     if (!messages) return [];
@@ -3425,22 +3507,18 @@ export const FoodCard: React.FC<AgentCardProps & {
                           type="button"
                           onClick={() => {
                             if (isLoggingRef.current) return;
-                            if (msg.data?.pendingFoodLog && onLogFood) {
+                            const logTarget = effectiveFoodLog || msg.data?.pendingFoodLog;
+                            if (logTarget && onLogFood) {
                               isLoggingRef.current = true;
                               const foodToLog = {
-                                ...msg.data.pendingFoodLog,
-                                scoutItems: msg.data.scoutItems || [],
-                                imageUrl: msg.data.pendingFoodLog?.imageUrl || (messageImages.length > 0 ? messageImages[0] : undefined),
-                                imageUrls: (msg.data.pendingFoodLog?.imageUrls && msg.data.pendingFoodLog.imageUrls.length > 0)
-                                  ? msg.data.pendingFoodLog.imageUrls
+                                ...logTarget,
+                                scoutItems: msg.data?.scoutItems || logTarget.scoutItems || [],
+                                imageUrl: logTarget.imageUrl || (messageImages.length > 0 ? messageImages[0] : undefined),
+                                imageUrls: (logTarget.imageUrls && logTarget.imageUrls.length > 0)
+                                  ? logTarget.imageUrls
                                   : (messageImages.length > 0 ? messageImages : undefined),
-                                // Requirement: preserve dietitian verdict/message that already
-                                // display in-chat via agentResult but are otherwise dropped at save.
-                                // serverJobs.ts Task 4 should already set these on pendingFoodLog for
-                                // server-driven jobs; this is a client-side belt-and-suspenders fallback.
-                                verdict: msg.data.pendingFoodLog?.verdict || msg.data?.agentResult?.verdict,
-                                message: msg.data.pendingFoodLog?.message || msg.data?.agentResult?.message,
-                                // User requirement: persist full chat transcript with the saved log.
+                                verdict: logTarget.verdict || msg.data?.agentResult?.verdict,
+                                message: logTarget.message || msg.data?.agentResult?.message,
                                 chatTranscript: (messages || []).map((m: any) => ({
                                   role: m.role,
                                   content: m.content || '',

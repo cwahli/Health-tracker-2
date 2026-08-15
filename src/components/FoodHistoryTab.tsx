@@ -1053,7 +1053,12 @@ export default function FoodHistoryTab({
               <div
                 key={log.id}
                 id={`food-log-item-${log.id}`}
-                className={`overflow-hidden transition-all border-b border-theme-border pb-4 mb-4 ${isExpanded ? 'ring-2 ring-indigo-500/40 rounded-2xl bg-indigo-50/10 dark:bg-indigo-950/10' : ''}`}
+                onClick={() => {
+                  if (!isEditing && !isExpanded) {
+                    setExpandedLogId(log.id);
+                  }
+                }}
+                className={`overflow-hidden transition-all border-b border-theme-border pb-4 mb-4 ${!isEditing && !isExpanded ? 'cursor-pointer' : ''} ${isExpanded ? 'ring-2 ring-indigo-500/40 rounded-2xl bg-indigo-50/10 dark:bg-indigo-950/10' : ''}`}
               >
                 {/* Large visual rendering of attached meal images (lazy-loaded in ImageSlider) */}
                 {(resolvedImgs.length > 0 || resolvedImg) ? (
@@ -1443,7 +1448,10 @@ export default function FoodHistoryTab({
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => handleStartEdit(log)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartEdit(log);
+                            }}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800"
                             title="Edit food log"
                           >
@@ -1452,7 +1460,10 @@ export default function FoodHistoryTab({
 
                           <button
                             type="button"
-                            onClick={() => onDeleteFoodLog(log.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteFoodLog(log.id);
+                            }}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20"
                             title="Delete entry"
                           >
@@ -1563,15 +1574,22 @@ export default function FoodHistoryTab({
                             </div>
                           );
                         })()}
-                        
-                        <button
-                          type="button"
-                          onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
-                          className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
-                          title={isExpanded ? "Collapse details" : "Expand details"}
-                        >
-                          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                        </button>
+
+                        {/* Reduce link shown below top nutrients when card is expanded */}
+                        {isExpanded && (
+                          <div className="pt-2 text-left">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedLogId(null);
+                              }}
+                              className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 underline cursor-pointer inline-flex items-center gap-1"
+                            >
+                              <span>Reduce</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {/* Detailed 30 Nutrients Panel & AI Diagnostics */}

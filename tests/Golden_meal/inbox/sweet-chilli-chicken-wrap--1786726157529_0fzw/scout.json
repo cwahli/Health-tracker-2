@@ -1,0 +1,167 @@
+{
+  "items": [
+    {
+      "keyword": "Sweet Chilli Chicken Wrap",
+      "itemConfidence": "High",
+      "estimatedWeightGrams": 220,
+      "estimatedCalories": 453,
+      "cookingMethod": "grilled",
+      "components": [
+        {
+          "searchQuery": "flour tortilla wrap",
+          "volumePercentage": 40,
+          "calories": 501,
+          "protein": 13.8,
+          "carbohydrates": 82.8,
+          "totalFat": 12.1,
+          "saturatedFat": 2.6,
+          "sodium": 1036,
+          "sugar": 0,
+          "name": "flour tortilla wrap enriched wheat",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "breaded chicken tender",
+          "volumePercentage": 35,
+          "calories": 405,
+          "protein": 23.6,
+          "carbohydrates": 28.2,
+          "totalFat": 21.9,
+          "saturatedFat": 3.9,
+          "sodium": 912,
+          "sugar": 0.8,
+          "name": "breaded chicken tender",
+          "source": "internal_catalog"
+        },
+        {
+          "searchQuery": "sweet chilli sauce",
+          "volumePercentage": 10,
+          "calories": 82,
+          "protein": 0.2,
+          "carbohydrates": 20.2,
+          "totalFat": 0.1,
+          "saturatedFat": 0,
+          "sodium": 535,
+          "sugar": 17.3,
+          "name": "sweet chilli sauce",
+          "source": "internal_catalog"
+        },
+        {
+          "searchQuery": "crispy lettuce",
+          "volumePercentage": 15,
+          "calories": 10,
+          "protein": 0.6,
+          "carbohydrates": 1.9,
+          "totalFat": 0.1,
+          "saturatedFat": 0,
+          "sodium": 3,
+          "sugar": 0,
+          "name": "crispy lettuce",
+          "source": "estimated"
+        }
+      ],
+      "chainName": null,
+      "originalName": "Sweet Chilli Chicken Wrap",
+      "boundingBox2D": [
+        382,
+        303,
+        853,
+        665
+      ],
+      "sourceImageIndex": 0,
+      "anomalyFlags": [],
+      "ingredientsList": null,
+      "nutritionFacts": null,
+      "rawNutritionLabel": {
+        "servingSize": "220g",
+        "calories": "997 kcal"
+      },
+      "source": "visual",
+      "visualIngredients": [],
+      "scoutIndex": 0,
+      "labelProductName": "Sweet Chilli Chicken Wrap",
+      "cookingAdded": {
+        "addedCalories": 0,
+        "addedFat": 0,
+        "addedSaturatedFat": 0,
+        "addedSodium": 0
+      },
+      "name": "sweet chilli chicken wrap"
+    },
+    {
+      "keyword": "Quorn Sweet Chilli Mini Fillets",
+      "itemConfidence": "High",
+      "estimatedWeightGrams": 40,
+      "estimatedCalories": 68,
+      "cookingMethod": "baked",
+      "components": [
+        {
+          "searchQuery": "Quorn mycoprotein mini fillets",
+          "volumePercentage": 93,
+          "calories": 34,
+          "protein": 0.7,
+          "carbohydrates": 5.1,
+          "totalFat": 0.7,
+          "saturatedFat": 0.2,
+          "sodium": 34,
+          "sugar": 0,
+          "name": "Quorn mycoprotein mini fillets",
+          "source": "estimated"
+        },
+        {
+          "searchQuery": "sweet chilli marinade",
+          "volumePercentage": 7,
+          "calories": 5,
+          "protein": 0,
+          "carbohydrates": 1.2,
+          "totalFat": 0,
+          "saturatedFat": 0,
+          "sodium": 32,
+          "sugar": 1,
+          "name": "sweet chilli sauce",
+          "source": "internal_catalog"
+        }
+      ],
+      "chainName": "Quorn",
+      "originalName": "Quorn Sweet Chilli Mini Fillets",
+      "boundingBox2D": [
+        212,
+        187,
+        781,
+        782
+      ],
+      "sourceImageIndex": 1,
+      "anomalyFlags": [],
+      "ingredientsList": "Mycoprotein (86%), Sweet Chilli Marinade (7%) (Water, Sugar, Garlic Powder, Spices: Ginger, Cayenne Chilli, Chilli Powder, Yeast Extract, Sea Salt, Tomato Powder, Chilli Flakes, Lemon Juice Powder, Onion Powder, Maize Starch, Citric Acid, Dried Garlic, Coriander Leaf, Natural Flavouring, Stabiliser: Guar Gum; Lemon Oil, Lemongrass Oil), Rehydrated Free Range Egg White, Natural Flavouring, Firming Agents: Calcium Chloride, Calcium Acetate.",
+      "nutritionFacts": null,
+      "rawNutritionLabel": {
+        "servingSize": "100g",
+        "calories": "98 kcal",
+        "protein": "12g",
+        "totalFat": "2.1g",
+        "saturatedFat": "0.4g",
+        "transFat": null,
+        "totalCarbohydrate": "4.5g",
+        "sugar": "1.7g",
+        "addedSugar": null,
+        "sodium": "276mg",
+        "salt": "0.69g",
+        "potassium": null,
+        "totalFibre": "5.8g",
+        "solubleFibre": null
+      },
+      "source": "visual",
+      "visualIngredients": [],
+      "scoutIndex": 1,
+      "labelProductName": "Quorn Sweet Chilli Mini Fillets",
+      "saltConversionNote": "Converted printed salt (0.69g per 100g) to sodium (276mg/serving, 110mg total). Formula: 1g salt = 400mg sodium.",
+      "cookingAdded": {
+        "addedCalories": 0,
+        "addedFat": 0,
+        "addedSaturatedFat": 0,
+        "addedSodium": 0
+      },
+      "name": "mycoprotein sweet chilli mini fillet"
+    }
+  ]
+}

@@ -312,9 +312,18 @@ export function extractUSDANutrientsPer100g(food: any): Record<string, number> {
   setVal("carbohydrates", ["carbohydrate, by difference"]);
   setVal("addedSugar", ["added sugar"]);
   setVal("sugar", ["sugars, total including nlea", "sugars, total", "sugar", "total sugars"]);
+
+  const dLower = (food.description || food.name || "").toLowerCase();
+
+  // If the item is a sweet baking ingredient or pure sugar, all its sugar is Added Sugar
+  if (!profile["addedSugar"] && profile["sugar"] > 0) {
+    if (/\b(sugar|syrup|honey|molasses|agave|frosting|icing|jam|jelly|marmalade|candy|caramel)\b/i.test(dLower)) {
+      profile["addedSugar"] = profile["sugar"];
+    }
+  }
+
   setVal("totalFibre", ["fiber, total dietary", "fibre"]);
   if (profile["totalFibre"] === undefined || profile["totalFibre"] === null) {
-    const dLower = (food.description || food.name || "").toLowerCase();
     if (/\b(quinoa|oat|oats|oatmeal|brown rice|wild rice|barley|farro|buckwheat|millet)\b/i.test(dLower)) {
       profile["totalFibre"] = 2.8;
     } else if (/\b(white rice|rice|pasta|macaroni|noodle|noodles|bread|flour)\b/i.test(dLower)) {
@@ -1053,20 +1062,6 @@ export function checkCategoryAndStateCompatibility(
   const isFatCandidate = /\b(butter|margarine|oil|ghee|shortening|lard)\b/i.test(c);
   if (isSaltQuery && isFatCandidate && !/\b(butter|margarine|oil|ghee|shortening|lard)\b/i.test(q)) {
     return { compatible: false, reason: `Blocked fat/butter candidate ("${candidateName}") for salt query ("${query}")` };
-  }
-
-  // 4c. Poultry / meat vs onion-powder / crispy-onion spice (chicken → 171327)
-  const isPoultryQuery = /\b(chicken|turkey|poultry|breast|thigh|tender)\b/i.test(q);
-  const isOnionSpiceCand = /\b(onion\s*powder|spices?,?\s*onion|crispy\s*onion)\b/i.test(c) && !/\b(chicken|turkey|poultry)\b/i.test(c);
-  if (isPoultryQuery && isOnionSpiceCand && !/\bonion\b/i.test(q)) {
-    return { compatible: false, reason: `Blocked onion/spice candidate ("${candidateName}") for poultry query ("${query}")` };
-  }
-
-  // 4d. Raw flour ingredient vs prepared tortilla / wrap / flatbread (flour → 172522)
-  const isRawFlourQuery = /\bflour\b/i.test(q) && !/\b(tortilla|wrap|flatbread|burrito|taco|bread)\b/i.test(q);
-  const isPreparedTortillaCand = /\b(tortilla|wrap|flatbread|burrito)\b/i.test(c);
-  if (isRawFlourQuery && isPreparedTortillaCand) {
-    return { compatible: false, reason: `Blocked prepared-grain candidate ("${candidateName}") for flour ingredient query ("${query}")` };
   }
 
   // 5. Dried/Powder vs Fresh/Cooked

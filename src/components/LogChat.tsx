@@ -38,6 +38,63 @@ import { pruneLocalStorageToFreeSpace, safeIdbSet } from '../utils/storageUtils'
 import { resolveFoodImage } from '../utils/imageResolver';
 
 import { JobStore } from '../jobs/JobStore';
+import { toPendingFoodLog } from '../mealBuild/adapters';
+
+function isValidFoodLog(log: any): boolean {
+  if (!log || typeof log !== 'object' || Array.isArray(log)) return false;
+  return !!(
+    log.name ||
+    log.title ||
+    (Array.isArray(log.itemsBreakdown) && log.itemsBreakdown.length > 0) ||
+    (Array.isArray(log.items) && log.items.length > 0) ||
+    (Array.isArray(log.scoutItems) && log.scoutItems.length > 0) ||
+    (log.nutrients && typeof log.nutrients === 'object' && Object.keys(log.nutrients).length > 0)
+  );
+}
+
+function resolvePendingFoodLog(job: any): any {
+  if (!job) return null;
+  const rawResult = job.result?.clean_result || job.result?.raw?.data || job.result?.data || job.result || (job as any).clean_result || {};
+  
+  const candidates = [
+    job.result?.pendingFoodLog,
+    job.result?.clean_result?.pendingFoodLog,
+    rawResult.pendingFoodLog,
+    job.result?.foodData,
+    rawResult.foodData,
+    job.result?.data,
+    rawResult.data,
+    job.result?.mealBuild ? toPendingFoodLog(job.result.mealBuild) : null,
+    job.mealBuild ? toPendingFoodLog(job.mealBuild) : null,
+    rawResult.mealBuild ? toPendingFoodLog(rawResult.mealBuild) : null,
+    job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog || m.data?.pendingFoodLog)?.pendingFoodLog,
+    job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog
+  ];
+
+  for (const cand of candidates) {
+    if (isValidFoodLog(cand)) return cand;
+  }
+
+  const items = rawResult.itemsBreakdown || rawResult.items || rawResult.scoutItems || job.result?.scoutItems || [];
+  if (items.length > 0 || rawResult.name || rawResult.title || job.result?.name) {
+    return {
+      itemsBreakdown: items,
+      items: items,
+      nutrients: rawResult.nutrients || job.result?.nutrients || {},
+      name: rawResult.name || rawResult.title || rawResult.content?.name || job.result?.name || 'Meal',
+      title: rawResult.name || rawResult.title || rawResult.content?.name || job.result?.name || 'Meal',
+      benefits: rawResult.benefits || rawResult.content?.benefits || [],
+      risks: rawResult.risks || rawResult.content?.risks || [],
+      recommendation: rawResult.recommendation || rawResult.content?.recommendation || '',
+      verdict: rawResult.verdict || rawResult.content?.verdict || '',
+      message: rawResult.message || rawResult.text || job.result?.message || job.result?.text || '',
+      imageUrls: rawResult.imageUrls || job.result?.imageUrls || [],
+      photoUrl: rawResult.photoUrl || job.result?.photoUrl || job.photoUrl
+    };
+  }
+
+  return null;
+}
 import { humanizeJobFailure } from '../utils/jobFailure';
 import { ImageStore } from '../jobs/ImageStore';
 import { reserveCredits } from '../jobs/credits';
@@ -1328,12 +1385,7 @@ ${logsText}`);
           }
         }
 
-        const foodLog =
-          job.result?.pendingFoodLog ||
-          job.result?.raw?.data ||
-          job.result?.data ||
-          job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog || m.data?.pendingFoodLog)?.pendingFoodLog ||
-          job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
+        const foodLog = resolvePendingFoodLog(job);
 
         // Attach images from ImageStore or remotePhoto if foodLog lacks them
         try {
@@ -1356,7 +1408,9 @@ ${logsText}`);
         const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
         const snapAgent = (job.inputSnapshot as any)?.agentType;
         const reviewCmds = raw.modificationCommand || raw.agentResult?.modificationCommand;
-        const resolvedType = raw.agentType || snapAgent || (Array.isArray(reviewCmds) && reviewCmds.length ? 'biomarker_review' : type);
+        const resolvedType = (type === 'food' || foodLog || raw.agentType === 'food' || raw.agentType === 'food_log' || raw.agentType === 'food_analyze' || raw.agentType === 'front_desk')
+          ? 'food'
+          : (raw.agentType || snapAgent || (Array.isArray(reviewCmds) && reviewCmds.length ? 'biomarker_review' : type));
         const unitMap = collectCatalogUnitMap(profile);
         const isReview = resolvedType === 'biomarker_review' || (type as string) === 'biomarker_review' || agentType === 'biomarker_review';
         const cmds = isReview
@@ -1425,11 +1479,12 @@ ${logsText}`);
               }
             } catch {}
           }
-          if (m.role === 'assistant' && m.agentType === 'food') {
-            const foodLog = m.pendingFoodLog || m.data?.pendingFoodLog || job.result?.pendingFoodLog || job.result?.raw?.data || job.result?.data;
+          if (m.role === 'assistant' && (m.agentType === 'food' || m.agentType === 'food_log' || m.agentType === 'food_analyze' || m.agentType === 'front_desk' || type === 'food' || m.pendingFoodLog || m.data?.pendingFoodLog)) {
+            const foodLog = m.pendingFoodLog || m.data?.pendingFoodLog || resolvePendingFoodLog(job);
             if (foodLog) {
               return {
                 ...m,
+                agentType: 'food',
                 pendingFoodLog: foodLog,
                 data: {
                   ...m.data,
@@ -1574,13 +1629,8 @@ ${logsText}`);
           }
         }
 
-        if (job.status === 'succeeded' && (job.result?.data || job.result?.pendingFoodLog || type === 'medical')) {
-          const foodLog =
-            job.result?.pendingFoodLog ||
-            job.result?.raw?.data ||
-            job.result?.data ||
-            job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog || m.data?.pendingFoodLog)?.pendingFoodLog ||
-            job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
+        if (job.status === 'succeeded' && (job.result?.data || job.result?.pendingFoodLog || job.result?.mealBuild || job.mealBuild || job.result?.foodData || type === 'medical' || resolvePendingFoodLog(job))) {
+          const foodLog = resolvePendingFoodLog(job);
 
           // Attach images from ImageStore or remotePhoto if foodLog lacks them
           try {
@@ -2564,7 +2614,6 @@ ${logsText}`);
             lockedModeFamily: family,
             requestId: currentReqId,
             serverSubmittedAt: undefined,
-            clientSubmitPending: true,
             statusMessage: 'Uploading to server… Keep this tab open',
           });
         } else {
@@ -2579,7 +2628,6 @@ ${logsText}`);
             lockedModeFamily: family,
             requestId: currentReqId,
             serverSubmittedAt: undefined,
-            clientSubmitPending: true,
             statusMessage: 'Uploading to server… Keep this tab open',
           });
         }
@@ -2779,7 +2827,6 @@ ${logsText}`);
               status: 'queued',
               statusMessage: 'Analyzing on server...',
               serverSubmittedAt: Date.now(),
-              clientSubmitPending: false,
             });
             JobQueueRunner.wake();
           })
@@ -2787,7 +2834,6 @@ ${logsText}`);
             console.error('[LogChat] Server submit failed after retries, delegating to JobQueueRunner:', err);
             JobStore.updateJob(currentJobId, {
               status: 'queued',
-              clientSubmitPending: false,
               statusMessage: 'Connection delayed; background runner retrying submit...'
             });
             JobQueueRunner.wake();
@@ -2811,7 +2857,6 @@ ${logsText}`);
           console.error('[LogChat] Error converting images:', err);
           JobStore.updateJob(currentJobId, {
             status: 'failed',
-            clientSubmitPending: false,
             statusMessage: 'Submission Failed: Image conversion error'
           });
           clearTimeout(failsafe);
@@ -5564,7 +5609,9 @@ ${logsText}`);
                         </div>
                       ) : null}
                       
-                      {msg.agentType !== 'food' && msg.agentType !== 'biomarker_review' && !msg.modificationCommand?.length && !msg.data?.agentResult?.modificationCommand?.length && (() => {
+                      {(() => {
+                        const isFoodMsg = msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'front_desk' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length);
+                        if (isFoodMsg || msg.agentType === 'biomarker_review' || msg.modificationCommand?.length || msg.data?.agentResult?.modificationCommand?.length) return null;
                         const formatted = formatMessageContent(msg.content, msg);
                         if (!formatted || !formatted.trim()) return null;
                         return <p className="whitespace-pre-line break-words">{formatted}</p>;
@@ -5715,10 +5762,14 @@ ${logsText}`);
                       (Array.isArray(msg.data?.agentResult?.modificationCommand) && msg.data.agentResult.modificationCommand.length) ||
                       msg.data?.agentResult?.proposal
                     );
-                    const rendererType = msg.id?.startsWith('welcome_')
+                    const hasFoodContent = !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.agentResult?.mealBuild || msg.data?.agentResult?.clean_result || msg.agentResult?.scoutItems?.length);
+                    const rawRenderer = msg.id?.startsWith('welcome_')
                       ? 'welcome'
                       : (hasReviewFixes ? 'biomarker_review' : msg.agentType);
-                    const Renderer = rendererType ? agentCardRegistry[rendererType] : null;
+                    const rendererType = (rawRenderer && agentCardRegistry[rawRenderer])
+                      ? rawRenderer
+                      : (hasFoodContent ? 'food' : rawRenderer);
+                    const Renderer = rendererType ? (agentCardRegistry[rendererType] || (hasFoodContent ? agentCardRegistry['food'] : null)) : null;
                     if (!Renderer) return null;
                     return (
                       <>

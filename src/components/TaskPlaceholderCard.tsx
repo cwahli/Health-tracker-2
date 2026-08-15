@@ -170,6 +170,10 @@ export default function TaskPlaceholderCard({
           job.result?.pendingFoodLog ||
           job.result?.raw?.data ||
           job.result?.data ||
+    job.result?.foodData ||
+    job.result?.mealBuild?.content ||
+    job.mealBuild?.content ||
+    job.result?.foodData ||
           job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
           job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
 
@@ -264,28 +268,79 @@ export default function TaskPlaceholderCard({
 
   const pendingFoodLog =
     job.result?.pendingFoodLog ||
+    job.result?.clean_result?.pendingFoodLog ||
+    job.result?.clean_result?.data ||
+    job.result?.clean_result?.mealBuild ||
     job.result?.raw?.data ||
     job.result?.data ||
+    job.result?.foodData ||
+    job.result?.mealBuild ||
+    job.mealBuild ||
     job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
-    job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
+    job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog ||
+    (job as any).clean_result?.pendingFoodLog ||
+    (job as any).clean_result?.data;
 
+  const extractMealName = (): string | null => {
+    if (pendingFoodLog?.name && pendingFoodLog.name !== 'Meal') return pendingFoodLog.name;
+    if (pendingFoodLog?.title && pendingFoodLog.title !== 'Meal') return pendingFoodLog.title;
+    if (pendingFoodLog?.content?.name && pendingFoodLog.content.name !== 'Meal') return pendingFoodLog.content.name;
+    
+    if (job.result?.mealBuild?.content?.name && job.result.mealBuild.content.name !== 'Meal') return job.result.mealBuild.content.name;
+    if (job.mealBuild?.content?.name && job.mealBuild.content.name !== 'Meal') return job.mealBuild.content.name;
+    if (job.result?.clean_result?.mealBuild?.content?.name && job.result.clean_result.mealBuild.content.name !== 'Meal') return job.result.clean_result.mealBuild.content.name;
+    if (job.result?.data?.name && job.result.data.name !== 'Meal') return job.result.data.name;
+
+    const items =
+      pendingFoodLog?.itemsBreakdown ||
+      pendingFoodLog?.items ||
+      job.result?.itemsBreakdown ||
+      job.result?.items ||
+      job.result?.scoutItems ||
+      job.result?.clean_result?.scoutItems ||
+      job.result?.mealBuild?.items ||
+      job.mealBuild?.items ||
+      (job as any).scoutItems ||
+      (job as any).clean_result?.scoutItems;
+
+    if (Array.isArray(items) && items.length > 0) {
+      const names = items
+        .map((it: any) => typeof it === 'string' ? it : (it?.name || it?.originalName || it?.keyword || it?.canonicalDbName))
+        .filter(Boolean);
+      if (names.length > 0) {
+        return names.join(', ');
+      }
+    }
+
+    const textContent = job.result?.text || job.result?.message || job.result?.clean_result?.text || job.result?.clean_result?.message;
+    if (typeof textContent === 'string') {
+      const boldMatch = textContent.match(/\*\*([^*]+)\*\*/);
+      if (boldMatch && boldMatch[1]) {
+        return boldMatch[1].trim();
+      }
+    }
+
+    return null;
+  };
+
+  const detectedName = extractMealName();
   const rawInputText = job.inputSnapshot?.text?.trim() || '';
   const displayTitle =
     job.status === 'awaiting_user'
-      ? (pendingFoodLog?.name
-          ? `${pendingFoodLog.name} — Portion Selection Needed`
+      ? (detectedName
+          ? `${detectedName} — Portion Selection Needed`
           : job.result?.portionClarify?.promptMessage ||
             job.result?.clean_result?.portionClarify?.promptMessage ||
             (job as any).clean_result?.portionClarify?.promptMessage ||
             'Portion Choice Needed')
-      : (pendingFoodLog?.name ||
+      : (detectedName ||
         (rawInputText && rawInputText !== 'Analyze this meal photo.'
           ? rawInputText
           : job.kind === 'food_compare'
           ? 'Meal Comparison Request'
           : job.kind === 'medical'
           ? 'Medical Data Request'
-          : 'Analyzing Meal Photo...'));
+          : (job.status === 'succeeded' ? 'Meal Analysis Complete' : job.status === 'failed' ? 'Analysis failed' : 'Analyzing Meal Photo...')));
 
   return (
     <div className={`bg-theme-bg-card border rounded-3xl py-4 pl-0 pr-4 shadow-sm mx-0 mb-4 w-full transition-all hover:shadow-md overflow-hidden ${
@@ -481,7 +536,7 @@ export default function TaskPlaceholderCard({
                 className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
               >
                 <Eye className="w-3.5 h-3.5" />
-                {job.status === 'succeeded' ? 'View Result' : 'View Status'}
+                {job.status === 'succeeded' ? 'View Analysis' : 'View Status'}
               </button>
             )}
 

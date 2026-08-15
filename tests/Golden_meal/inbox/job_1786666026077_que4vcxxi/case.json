@@ -22,102 +22,98 @@
     "kalamata olives",
     "feta cheese",
     "pomegranate seeds",
-    "balsamic dressing",
-    "flour tortilla enriched wheat",
-    "mixed salad leaves lettuce mixed greens",
-    "chickpeas cooked boiled canned",
-    "kalamata olives olives canned"
+    "balsamic dressing"
   ],
   "expectResolve": [
     {
       "query": "butter croissant",
       "expectFdcId": "172242",
-      "foodName": null
+      "foodName": "processed"
     },
     {
       "query": "dark chocolate filling",
       "expectFdcId": "170272",
-      "foodName": null
+      "foodName": "processed"
     },
     {
       "query": "flour tortilla",
       "expectFdcId": "172522",
-      "foodName": null
+      "foodName": "grain"
     },
     {
       "query": "falafel",
       "expectFdcId": "falafel_canonical",
-      "foodName": "falafel"
+      "foodName": "legume"
     },
     {
       "query": "hummus",
       "expectFdcId": "174289",
-      "foodName": "hummus"
+      "foodName": "processed"
     },
     {
       "query": "feta cheese",
       "expectFdcId": "173420",
-      "foodName": null
+      "foodName": "dairy"
     },
     {
       "query": "mixed salad leaves",
       "expectFdcId": "169248",
-      "foodName": null
+      "foodName": "leafy_veg"
     },
     {
       "query": "red onion",
       "expectFdcId": "11282",
-      "foodName": null
+      "foodName": "veg"
     },
     {
       "query": "bell pepper",
       "expectFdcId": "170393",
-      "foodName": null
+      "foodName": "veg"
     },
     {
       "query": "hummus",
       "expectFdcId": "174289",
-      "foodName": "hummus"
+      "foodName": "processed"
     },
     {
       "query": "cooked white quinoa",
       "expectFdcId": "168917",
-      "foodName": null
+      "foodName": "grain"
     },
     {
       "query": "cucumber",
       "expectFdcId": "168409",
-      "foodName": "cucumber"
+      "foodName": "leafy_veg"
     },
     {
       "query": "cherry tomato",
       "expectFdcId": "170010",
-      "foodName": null
+      "foodName": "leafy_veg"
     },
     {
       "query": "chickpeas",
       "expectFdcId": "173800",
-      "foodName": null
+      "foodName": "legume"
+    },
+    {
+      "query": "kalamata olives",
+      "expectFdcId": "1103091",
+      "foodName": "processed"
     },
     {
       "query": "feta cheese",
       "expectFdcId": "173420",
-      "foodName": null
+      "foodName": "dairy"
     },
     {
       "query": "pomegranate seeds",
       "expectFdcId": "brand_menu_7dc1e5b0-2e01-44ad-a020-75efc8cdec5e",
-      "foodName": null
+      "foodName": "fruit"
     },
     {
-      "query": "flour tortilla enriched wheat",
-      "expectFdcId": "172522",
-      "foodName": null
-    },
-    {
-      "query": "chickpeas cooked boiled canned",
-      "expectFdcId": "173800",
-      "foodName": null
+      "query": "balsamic dressing",
+      "expectFdcId": "1099238",
+      "foodName": "ultra_processed"
     }
   ],
   "neverMatch": [],

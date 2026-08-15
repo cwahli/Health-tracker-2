@@ -1,0 +1,36 @@
+{
+  "id": "job_1786722855892_xjmij2w7v",
+  "status": "open",
+  "mealName": "Sweet Chilli Chicken Wrap",
+  "slug": "sweet-chilli-chicken-wrap--1786722855892_xjmi",
+  "d1Id": "9653ba92-faeb-4547-a583-611119772cda",
+  "queries": [
+    "flour tortilla wrap",
+    "breaded chicken tender",
+    "sweet chilli sauce",
+    "mixed salad greens"
+  ],
+  "expectResolve": [
+    {
+      "query": "flour tortilla wrap",
+      "expectFdcId": "172522",
+      "foodName": "grain"
+    },
+    {
+      "query": "breaded chicken tender",
+      "expectFdcId": "171057",
+      "foodName": "poultry"
+    },
+    {
+      "query": "sweet chilli sauce",
+      "expectFdcId": "1099195",
+      "foodName": "ultra_processed"
+    },
+    {
+      "query": "mixed salad greens",
+      "expectFdcId": "169248",
+      "foodName": "leafy_veg"
+    }
+  ],
+  "neverMatch": []
+}

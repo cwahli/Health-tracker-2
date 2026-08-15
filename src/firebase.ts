@@ -10,7 +10,7 @@ export const db = initializeFirestore(app, {
 }, (firebaseConfig as any).firestoreDatabaseId);
 
 // Suppress verbose internal Firebase SDK warnings (e.g. temporary connection drops, offline mode warnings)
-setLogLevel('error');
+setLogLevel('silent');
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();

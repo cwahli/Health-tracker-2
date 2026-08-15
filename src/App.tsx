@@ -28,6 +28,38 @@ import { translations } from './utils/translations';
 import { AVAILABLE_LLMS } from './utils/llm';
 import { PRIMARY_NUTRIENTS, isCoreNutrient, isAdditionalNutrient } from './utils/nutrients';
 import { getLocalFallbackReport } from './utils/fallbackReport';
+import { toPendingFoodLog } from './mealBuild/adapters';
+
+function extractPendingFoodLogFromCleanResult(cleanResult: any, photoUrl?: string): any {
+  if (!cleanResult) return null;
+  if (cleanResult.pendingFoodLog) return cleanResult.pendingFoodLog;
+  if (cleanResult.foodData) return cleanResult.foodData;
+  if (cleanResult.mealBuild) return toPendingFoodLog(cleanResult.mealBuild);
+  if (cleanResult.data && typeof cleanResult.data === 'object' && (cleanResult.data.itemsBreakdown || cleanResult.data.name || cleanResult.data.nutrients)) {
+    return cleanResult.data;
+  }
+  const items = cleanResult.scoutItems || cleanResult.itemsBreakdown || cleanResult.items || [];
+  if (items.length > 0 || cleanResult.name || cleanResult.title) {
+    return {
+      itemsBreakdown: items,
+      items: items,
+      nutrients: cleanResult.nutrients || {},
+      name: cleanResult.name || cleanResult.title || 'Meal',
+      title: cleanResult.name || cleanResult.title || 'Meal',
+      benefits: cleanResult.benefits || [],
+      risks: cleanResult.risks || [],
+      recommendation: cleanResult.recommendation || '',
+      verdict: cleanResult.verdict || '',
+      message: cleanResult.message || cleanResult.text || '',
+      imageUrls: cleanResult.imageUrls || (photoUrl ? [photoUrl] : []),
+      photoUrl: photoUrl || cleanResult.photoUrl,
+      receiptTable: cleanResult.receiptTable,
+      weightGrams: cleanResult.weightGrams,
+      quantity: cleanResult.quantity
+    };
+  }
+  return null;
+}
 import { getDemoProfile, getDemoBiomarkerHistory, getDemoFoodLogs, getDemoReport, DemoProfileType } from './utils/demoData';
 import { getAvailableCredits, deductAgentCredits } from './utils/creditManager';
 import { Plus, HeartHandshake, RefreshCw, Sparkles, Stethoscope, Utensils, Loader, CloudLightning, AlertTriangle, Activity } from 'lucide-react';
@@ -958,16 +990,7 @@ export default function App() {
           // Durable jobs execute on server via /api/jobs/submit
           if (job.kind === 'food_log' || job.kind === 'food_compare' || job.kind === 'medical') {
             // Ensure job is submitted to server for retries or new jobs not yet pushed
-            // LogChat already POSTs /api/jobs/submit. Re-submitting while
-            // clientSubmitPending (or after serverSubmittedAt) starts a second
-            // food-analyze and doubles Gemini calls. Only submit here if the
-            // client never started, or explicitly asked the runner to retry.
-            const clientAlreadySubmitting = !!job.clientSubmitPending;
-            const alreadyOnServer = !!job.serverSubmittedAt;
-            const runnerShouldRetry =
-              !!job.resumeStage ||
-              (job.statusMessage || '').includes('background runner retrying submit');
-            if ((!alreadyOnServer && !clientAlreadySubmitting) || runnerShouldRetry) {
+            if (!job.serverSubmittedAt || job.resumeStage || job.statusMessage?.includes('Retry')) {
               console.log(`[JobQueueRunner] Submitting job ${job.id} to server...`);
               let stringImages = [];
               try {
@@ -1171,10 +1194,7 @@ export default function App() {
 
                 if (serverJob.status === 'succeeded') {
                   const cleanResult = serverJob.clean_result || {};
-                  const pendingFoodLog =
-                    cleanResult.pendingFoodLog ||
-                    cleanResult.data ||
-                    null;
+                  const pendingFoodLog = extractPendingFoodLogFromCleanResult(cleanResult, serverJob.photo_url);
                   const messageText =
                     cleanResult.message ||
                     cleanResult.reply ||
@@ -1287,7 +1307,7 @@ export default function App() {
                   });
 
                   // Keep a non-live assistant bubble + full logs so the run doesn't "vanish"
-                  const pendingFoodLog = cleanResult.pendingFoodLog || cleanResult.data || null;
+                  const pendingFoodLog = extractPendingFoodLogFromCleanResult(cleanResult, serverJob.photo_url);
                   const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive);
                   const failAssistant = {
                     id: `msg_assistant_fail_${job.id}`,
@@ -1350,7 +1370,7 @@ export default function App() {
 
               if (lateJob?.status === 'succeeded' && lateJob.clean_result) {
                 const cleanResult = lateJob.clean_result || {};
-                const pendingFoodLog = cleanResult.pendingFoodLog || cleanResult.data || null;
+                const pendingFoodLog = extractPendingFoodLogFromCleanResult(cleanResult, lateJob?.photo_url);
                 const messageText = cleanResult.message || cleanResult.text || pendingFoodLog?.message || 'Analysis complete.';
                 const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive);
                 const assistantMsg = {
