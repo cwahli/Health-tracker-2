@@ -300,10 +300,21 @@ export function resolveRefineWeightGrams(intent: WeightRefineIntent, targetItem:
     // guess — the caller leaves the weight untouched, which is still strictly better
     // than the old behaviour of re-running Vision Scout and losing the photo binding.
     const origWeight = Number(targetItem?.estimatedWeightGrams) || 0;
-    const origCount =
+    let origCount =
       Number(targetItem?.pieceCount) ||
       Number(String(targetItem?.originalName || '').match(/^(\d+)\b/)?.[1]) ||
       0;
+      
+    if (origCount === 0 && origWeight > 0) {
+      // If unspecified, guess original count based on plurality of the name
+      const name = String(targetItem?.originalName || targetItem?.keyword || '').toLowerCase();
+      if (name.endsWith('s') && !name.endsWith('ss')) {
+        origCount = 2; // Plural defaults to 2 units (e.g. "croissants" -> 2)
+      } else {
+        origCount = 1; // Singular defaults to 1
+      }
+    }
+
     if (origWeight > 0 && origCount > 0) {
       return Math.max(1, Math.round((origWeight / origCount) * intent.unitCount));
     }

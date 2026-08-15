@@ -8281,8 +8281,20 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           } else if (recRes.action === 'scale' || recRes.action === 'keep' || budgetRes.source === 'scout' || budgetRes.source === 'category') {
             if (!budgetRes.hardLock && inv.rowSum > 0 && inv.itemCalories > 0 && Math.abs(inv.rowSum - inv.itemCalories) > 1.1) {
               const fix = inv.itemCalories / inv.rowSum;
-              addDebugLog(`[ReceiptInvariant] SOFT REPAIR BYPASSED: itemCal=${inv.itemCalories}, rowSum=${inv.rowSum}. Trusting row sum.`);
-              aggregatedNutrients.calories = Math.round(inv.rowSum * 10) / 10;
+              if (fix >= 0.5 && fix <= 2.0) {
+                componentsDetailList.forEach((s: any) => {
+                  if (!s || typeof s !== 'object') return;
+                  if (s.calories != null) s.calories = Math.round(s.calories * fix * 10) / 10;
+                  if (s.protein != null) s.protein = Math.round(s.protein * fix * 10) / 10;
+                  if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * fix * 10) / 10;
+                  if (s.saturatedFat != null) s.saturatedFat = Math.round(s.saturatedFat * fix * 10) / 10;
+                  if (s.sodium != null) s.sodium = Math.round(s.sodium * fix * 10) / 10;
+                });
+                addDebugLog(`[ReceiptInvariant] REPAIRED rows→item soft factor=${fix.toFixed(3)}`);
+              } else {
+                aggregatedNutrients.calories = Math.round(inv.rowSum * 10) / 10;
+                addDebugLog(`[ReceiptInvariant] REPAIRED itemCal→rowSum ${inv.itemCalories}→${inv.rowSum} (fix out of band)`);
+              }
             }
           } else if (inv.rowSum > 0) {
             // legacy: only when no scout/category budget
