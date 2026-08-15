@@ -81,19 +81,20 @@ export async function executeFoodResolverCurator(
   
   if (!gaps || gaps.length === 0) return [];
 
-  const MAX_GAPS = 8;
+  // Single-dispatch: send every gap item to the curator in ONE call instead of chunking.
+  // Previously this split into sequential "Batch 1 / Batch 2" LLM calls once the gap count
+  // exceeded 8 items, which is what caused duplicate resolver calls for ordinary multi-item
+  // meals. MAX_GAPS_SOFT_CAP is kept only for logging context — if the gap count exceeds it,
+  // it is left as a single oversized batch rather than being split into more LLM calls.
+  const MAX_GAPS_SOFT_CAP = 10;
   const allGapsCapped = gaps.map(g => ({
     ...g,
     candidates: g.candidates.slice(0, 4) // Cap candidate pool to top 4 per gap query
   }));
-  // Chunked dispatch: process every gap item in batches of MAX_GAPS rather than silently
-  // truncating the tail of the list (this previously caused items like "Cinnamon pastry roll"
-  // to never reach the curator at all when the batch exceeded 8 items). Results, aliases,
-  // merges and quarantines are accumulated across all chunks below.
-  const gapChunks: (typeof allGapsCapped)[] = [];
-  for (let i = 0; i < allGapsCapped.length; i += MAX_GAPS) {
-    gapChunks.push(allGapsCapped.slice(i, i + MAX_GAPS));
+  if (allGapsCapped.length > MAX_GAPS_SOFT_CAP) {
+    addDebugLog(`[Food Resolver] ${allGapsCapped.length} gap items exceeds the ${MAX_GAPS_SOFT_CAP}-item soft cap; dispatching as a single oversized batch instead of splitting into multiple LLM calls.`);
   }
+  const gapChunks: (typeof allGapsCapped)[] = [allGapsCapped];
 
   const allResults: Array<{ query: string; chosenFdcId: string | null; formTags?: string[]; dishCore?: Record<string, number>; nutrientsPer100g?: Record<string, number>; quarantinedIds?: string[] }> = [];
 

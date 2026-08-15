@@ -42,6 +42,22 @@ export interface ServerJobPayload {
 export const inMemoryServerJobs = new Map<string, any>();
 export const recentSubmissionsMap = new Map<string, { jobId: string; timestamp: number; status: string }>();
 
+// Per-user in-flight lock: tracks the single job currently running/queued for a user.
+// This is what actually prevents "double call" duplicate submissions. The client
+// generates a fresh jobId (and a fresh client-supplied idempotencyKey, which embeds
+// that jobId) on every send until the first response lands, so the content/time-bucket
+// fingerprint check below never catches a rapid double-click — it only ever compares a
+// key against itself. This lock is content-independent and userId-scoped instead.
+export const activeUserJobLocks = new Map<string, { jobId: string; timestamp: number }>();
+const USER_LOCK_MAX_AGE_MS = 5 * 60 * 1000; // safety valve: auto-clear if a job never reaches a terminal status
+
+export function releaseUserJobLock(userId: string, jobId: string) {
+  const lock = activeUserJobLocks.get(userId);
+  if (lock && lock.jobId === jobId) {
+    activeUserJobLocks.delete(userId);
+  }
+}
+
 // Clean up old idempotency entries periodically (> 60s)
 if (typeof setInterval !== 'undefined') {
   setInterval(() => {
@@ -60,6 +76,23 @@ export async function checkOrRegisterIdempotentSubmission(payload: ServerJobPayl
   const imgCount = (payload.images?.length || 0) + (payload.imageUrls?.length || 0);
   const modeKey = payload.userSelectedMode || payload.mode || 'review';
 
+  // 0. In-flight lock (userId-scoped, content-independent): if this user already has an
+  // active job that hasn't reached a terminal status, block ANY new jobId for them until
+  // it finishes. A resubmission that reuses the SAME jobId (e.g. a portion-confirm resume)
+  // is allowed through since it's a continuation, not a duplicate.
+  const existingLock = activeUserJobLocks.get(userId);
+  if (existingLock && existingLock.jobId !== payload.jobId) {
+    const lockedMemJob = inMemoryServerJobs.get(existingLock.jobId);
+    const lockedStatus = lockedMemJob?.status;
+    const lockIsStale = (Date.now() - existingLock.timestamp) > USER_LOCK_MAX_AGE_MS;
+    const lockedJobStillActive = lockedStatus === 'running' || lockedStatus === 'queued' || (!lockedMemJob && !lockIsStale);
+    if (lockedJobStillActive && !lockIsStale) {
+      console.log(`[ServerJobs Idempotency] Blocked duplicate submission for userId="${userId}" — job "${existingLock.jobId}" is still ${lockedStatus || 'in flight'}.`);
+      return { isDuplicate: true, jobId: existingLock.jobId, status: lockedStatus || 'running' };
+    }
+    activeUserJobLocks.delete(userId);
+  }
+
   // Explicit idempotencyKey or content fingerprint key (12s window)
   const key = payload.idempotencyKey || `${userId}:${rawText}:${imgCount}:${modeKey}:${Math.floor(Date.now() / 12000)}`;
 
@@ -76,6 +109,8 @@ export async function checkOrRegisterIdempotentSubmission(payload: ServerJobPayl
     timestamp: Date.now(),
     status: 'queued'
   });
+
+  activeUserJobLocks.set(userId, { jobId: payload.jobId, timestamp: Date.now() });
 
   return { isDuplicate: false, jobId: payload.jobId };
 }
@@ -227,7 +262,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
     let lastProgressUpdate = 0;
     const progressThrottleMs = 5000;
     let accumulatedLogs: string[] = turn1Logs.length > 0
-      ? [...turn1Logs, '\n--- USER CONFIRMED PORTION SIZES (TURN 2) ---\n']
+      ? [...turn1Logs, '\n--- USER CONTINUATION (TURN 2) ---\n']
       : [];
     let photoUrl = imageUrls[0] || payload.photoUrl || existingMemJob?.photo_url || '';
     let photoUrls: string[] = imageUrls || [];
@@ -493,6 +528,9 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           memJob.photo_url = photoUrl || memJob.photo_url;
           memJob.updated_at = new Date().toISOString();
         }
+        // Not actively in flight while paused for user input — release the lock so the
+        // user isn't blocked from starting something else while this awaits their reply.
+        releaseUserJobLock(userId, jobId);
         if (isSupabaseConfigured) {
           let lightweightFinalData = { ...finalData };
           try {
@@ -637,8 +675,16 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           memJob.photo_url = photoUrl || null;
           memJob.debug_url = cleanResult.debugUrl || null;
           memJob.clean_result = cleanResult;
+          // Persist this turn's accumulated debug logs so a follow-up message on the same
+          // jobId (e.g. a text correction) carries the full history forward instead of
+          // starting from scratch. Previously this was only ever done on the
+          // awaiting_user path, so any job that succeeded on its first turn silently lost
+          // its logs the moment a second turn began.
+          memJob.turn1Logs = [...accumulatedLogs];
+          memJob.accumulatedLogs = [...accumulatedLogs];
           memJob.updated_at = new Date().toISOString();
         }
+        releaseUserJobLock(userId, jobId);
 
         if (isSupabaseConfigured) {
           let lightweightResult = { ...cleanResult };
@@ -741,8 +787,13 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         memJob.status_message = abortReason || 'Server analysis failed';
         memJob.photo_url = photoUrl || null;
         memJob.clean_result = errorCleanResult;
+        // Persist accumulated debug logs on failure too, so a retry/continuation on the
+        // same jobId doesn't lose this turn's history (mirrors the succeeded-path fix).
+        memJob.turn1Logs = [...accumulatedLogs];
+        memJob.accumulatedLogs = [...accumulatedLogs];
         memJob.updated_at = new Date().toISOString();
       }
+      releaseUserJobLock(userId, jobId);
 
       if (isSupabaseConfigured) {
         try {

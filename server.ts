@@ -10227,7 +10227,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
           if (postReconcileResult.appliedDensityCorrection) {
             addDebugLog(`[LedgerInvariant] applied density correction for composite "${dishTitle}": adjusted calories from row-sum to ${postReconcileResult.nutrients.calories}`);
-          } else if (isCompositeReceipt) {
+          }
+          if (postReconcileResult.appliedSodiumRealityCheck) {
+            addDebugLog(`[LedgerInvariant] applied sodium reality-check override for composite "${dishTitle}": adjusted sodium from row-sum to ${postReconcileResult.nutrients.sodium}`);
+          }
+          if (!postReconcileResult.appliedDensityCorrection && !postReconcileResult.appliedSodiumRealityCheck && isCompositeReceipt) {
             addDebugLog(`[LedgerInvariant] composite "${dishTitle}": using row-sum totals, reality-check mutations ignored`);
           }
 

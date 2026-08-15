@@ -147,7 +147,8 @@ export function detectWeightRefineIntent(message: string | null | undefined): We
   // immediately before the count so it doesn't fire on a plain new-meal description
   // like "2 croissants for breakfast, plus coffee".
   {
-    const m = msg.match(/\b(?:only\s+(?:had|ate)|had\s+only|ate\s+only|just\s+(?:had|ate))\s+(\d+)\s+([a-z][a-z\-]{2,24})/i);
+    const m = msg.match(/\b(?:only\s+(?:had|ate)|had\s+only|ate\s+only|just\s+(?:had|ate))\s+(\d+)\s+([a-z][a-z\-]{2,24})/i)
+      || msg.match(/\b(?:had|ate)\s+(\d+)\s+([a-z][a-z\-]{2,24})\s+only\b/i);
     if (m) {
       const n = parseInt(m[1], 10);
       const noun = m[2].trim();

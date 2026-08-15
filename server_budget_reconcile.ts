@@ -369,12 +369,14 @@ export function applyPostReconcileTruthLocks(input: {
 }): {
   nutrients: { calories: number; protein: number; totalFat: number; saturatedFat: number; sodium: number; carbohydrates: number };
   appliedDensityCorrection: boolean;
+  appliedSodiumRealityCheck: boolean;
 } {
   const sum = input.sumNutrients || { calories: 0, protein: 0, totalFat: 0, saturatedFat: 0, sodium: 0, carbohydrates: 0 };
   let { calories: sumCal = 0, protein: sumP = 0, totalFat: sumFat = 0, saturatedFat: sumSatFat = 0, sodium: sumNa = 0, carbohydrates: sumCarbs = 0 } = sum;
   const itemLockedKeysSet = new Set<string>(input.lockedNutrientKeys || Object.keys(input.ledgerTruth || {}));
   const receipt = input.receiptRealityCheckNutrients || {};
   let appliedDensityCorrection = false;
+  let appliedSodiumRealityCheck = false;
 
   if (!input.isCompositeReceipt) {
     if (!itemLockedKeysSet.has('sodium') && receipt.sodium != null) sumNa = Math.max(0, receipt.sodium);
@@ -391,6 +393,21 @@ export function applyPostReconcileTruthLocks(input: {
       if (!itemLockedKeysSet.has('totalFat') && receipt.totalFat != null) sumFat = Math.max(0, receipt.totalFat);
       if (!itemLockedKeysSet.has('carbohydrates') && receipt.carbohydrates != null) sumCarbs = Math.max(0, receipt.carbohydrates);
       appliedDensityCorrection = true;
+    }
+  }
+
+  // Sodium reality-check override for composite items. This is intentionally independent
+  // of the calorie "density correction" above — a component-mix error like an unrealistic
+  // salt ratio can produce a wildly wrong sodium figure without the total calorie count
+  // being off by much (salt itself is ~0 kcal), so gating this on the calorie diffRatio
+  // would miss exactly the case it needs to catch. Only overrides when the row-sum and
+  // the reality-checked value disagree by more than 25%, so small legitimate differences
+  // are left alone.
+  if (input.isCompositeReceipt && !itemLockedKeysSet.has('sodium') && receipt.sodium != null && sumNa > 0) {
+    const sodiumDiffRatio = Math.abs(receipt.sodium - sumNa) / sumNa;
+    if (sodiumDiffRatio > 0.25) {
+      sumNa = Math.max(0, receipt.sodium);
+      appliedSodiumRealityCheck = true;
     }
   }
 
@@ -416,5 +433,6 @@ export function applyPostReconcileTruthLocks(input: {
       carbohydrates: Math.max(0, sumCarbs),
     },
     appliedDensityCorrection,
+    appliedSodiumRealityCheck,
   };
 }

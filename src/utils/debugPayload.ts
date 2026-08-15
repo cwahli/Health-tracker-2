@@ -291,32 +291,39 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
           lines.push(`| **${label}** | **${n[k]}${unit}** |`);
         }
       }
-      // Additional nutrients if present
-      const extraKeys: Array<[string, string]> = [
-        ['Cholesterol', 'cholesterol'],
-        ['Calcium', 'calcium'],
-        ['Iron', 'iron'],
-        ['Potassium', 'potassium'],
-        ['Vitamin A', 'vitaminA'],
-        ['Vitamin C', 'vitaminC'],
-        ['Vitamin D', 'vitaminD'],
-        ['Vitamin E', 'vitaminE'],
-        ['Vitamin K', 'vitaminK'],
-        ['Thiamin (B1)', 'thiamin'],
-        ['Riboflavin (B2)', 'riboflavin'],
-        ['Niacin (B3)', 'niacin'],
-        ['Vitamin B6', 'vitaminB6'],
-        ['Vitamin B12', 'vitaminB12'],
-        ['Folate', 'folate'],
-        ['Phosphorus', 'phosphorus'],
-        ['Magnesium', 'magnesium'],
-        ['Zinc', 'zinc'],
-        ['Copper', 'copper'],
-        ['Selenium', 'selenium']
+      // Additional nutrients if present. Units per USDA FDC convention: macro minerals in
+      // mg, fat-soluble vitamins and trace minerals mostly in mcg, B-vitamins in mg except
+      // B12/folate in mcg.
+      const extraKeys: Array<[string, string, string]> = [
+        ['Cholesterol', 'cholesterol', 'mg'],
+        ['Calcium', 'calcium', 'mg'],
+        ['Iron', 'iron', 'mg'],
+        ['Potassium', 'potassium', 'mg'],
+        ['Vitamin A', 'vitaminA', 'mcg'],
+        ['Vitamin C', 'vitaminC', 'mg'],
+        ['Vitamin D', 'vitaminD', 'mcg'],
+        ['Vitamin E', 'vitaminE', 'mg'],
+        ['Vitamin K', 'vitaminK', 'mcg'],
+        ['Thiamin (B1)', 'thiamin', 'mg'],
+        ['Riboflavin (B2)', 'riboflavin', 'mg'],
+        ['Niacin (B3)', 'niacin', 'mg'],
+        ['Vitamin B6', 'vitaminB6', 'mg'],
+        ['Vitamin B12', 'vitaminB12', 'mcg'],
+        ['Folate', 'folate', 'mcg'],
+        ['Phosphorus', 'phosphorus', 'mg'],
+        ['Magnesium', 'magnesium', 'mg'],
+        ['Zinc', 'zinc', 'mg'],
+        ['Copper', 'copper', 'mg'],
+        ['Selenium', 'selenium', 'mcg']
       ];
-      for (const [label, k] of extraKeys) {
+      for (const [label, k, unit] of extraKeys) {
         if (n[k] != null && n[k] !== '') {
-          lines.push(`| ${label} | ${n[k]} |`);
+          // These fields are currently only ever populated from sources that supply a
+          // real measured value — nothing in the pipeline computes a genuine, non-zero
+          // trace-nutrient figure. An exact 0 here means "not measured," not "confirmed
+          // zero" (see Batch 3 Task 6 for the same reasoning applied to the in-app table).
+          const display = Number(n[k]) === 0 ? 'N/A' : `${n[k]} ${unit}`;
+          lines.push(`| ${label} | ${display} |`);
         }
       }
       lines.push('');

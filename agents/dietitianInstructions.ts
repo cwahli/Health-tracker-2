@@ -155,8 +155,17 @@ export function formatPatientContext(context: {
     const todayLine = `Todays target: ${todayParts.join(', ')}`;
     targetLimits += `${avgLine}\n${todayLine}`;
   } else {
-    // If no dynamic data or empty logs, use realistic default text
-    targetLimits += `7 days avg: Sat fat (33g - 172% over), Calorie (2610 kcal - 98% over), Sodium (3096mg - 222% over), Protein (125g avg - 74% over), Carbohydrates (226g avg - 76% over), Total Fibre (35g avg), Potassium (1777mg avg), Soluble Fibre (2.6g avg), Added Sugar (12g avg), Trans Fat (0g avg)\nTodays target: Sat fat (25g over 12g), Calorie (1272kcal over), Sodium (576mg over), Protein (113/72g), Carbohydrates (176/128g), Total fibre (36/38g), Potassium (1677/4200mg), Soluble Fibre (0/12g), Added Sugar (0/24g), Trans Fat (0/0g)`;
+    // No dynamic food-log data was supplied for this request (new user, or this call
+    // path didn't attach foodLogs). Previously this showed a fully fictional "already
+    // over your limit" example dataset as if it were the user's real status — the
+    // Dietitian LLM would then treat those fake numbers as ground truth for its
+    // pre-calculated-percentage math, producing wildly wrong overage percentages for a
+    // real meal. Show an honest empty state instead: real targets, zero logged so far.
+    const emptyStateParts: string[] = topNutrients.map((n) => {
+      const targetVal = Math.round(getTarget(n.targetKey, n.defaultTarget));
+      return targetVal > 0 ? `${n.label} (0/${targetVal}${n.unit})` : `${n.label} (0${n.unit})`;
+    });
+    targetLimits += `No 7-day history available yet.\nTodays target: ${emptyStateParts.join(', ')}`;
   }
 
   return { biomarkersList, targetLimits };
