@@ -1,8 +1,8 @@
 # Health Cockpit — Master AI Handover (WIP status board)
 
-**Last updated:** 2026-08-14 (Biomarker lifecycle plan + domain rulebook consolidated; no code slices yet)  
+**Last updated:** 2026-08-15 (official tree moved off iCloud Desktop)  
 **Source of truth code intent:** https://github.com/cwahli/Health-tracker-2  
-**Tree of truth for product completeness:** **Desktop** working tree until Slice 0 / governance ship lands on origin.  
+**Tree of truth:** **`/Users/chiwah/src/Health-tracker`** — not Desktop. Desktop was iCloud-evicted (`dataless`) and is retired.  
 **Always `git fetch` + re-audit before a session.**
 
 ## Document roles (read this)
@@ -21,6 +21,15 @@
 **Detail roadmap:** `plan/REMAINING_ROADMAP_2026-08.md` — same: use as map, verify against tree.  
 **Active Studio pack for biomarkers:** **`studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md`**.
 
+### Session notes — official local tree (2026-08-15)
+
+- **Work here:** `/Users/chiwah/src/Health-tracker`. `npm run dev` → http://localhost:3000
+- Do **not** open or upload `Desktop/new_projects/Health-tracker` (iCloud dataless; hung git/server).
+- Studio `f82422c update` deleted query-scope, scout-reconcile, and `goldenLedger` from git. Those modules are restored and **wired in `server.ts`**.
+- Catalog replay / unbalanced trial balance cannot promote. Do not add `CANONICAL_BASE_FOODS` rows to green a meal.
+- Proof: one skipScout **Pipeline** replay of the croissant picnic. Journey strip must be balanced. Quorn/lassi honest leftovers stay red.
+- Upload to AI Studio as **check + commit only**. Do not `/loop`, do not Replay catalog, do not edit `server_food_db.ts`, do not delete `server_query_scoped_match.ts` / `server_scout_reconcile.ts` / `src/utils/goldenLedger.ts`.
+
 ### Session notes — biomarkers (2026-08-14)
 
 - **Studio pack for remaining work:** `studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md` — P0–P8 implementation and machine gates COMPLETE. Master gate: `node scripts/assert-biomarker-lifecycle-m31.mjs` (All P0–P8 checks PASS). All biomarker unit test suites PASS. Type check (`tsc --noEmit` / lint) PASS. Ready for commit/archive.
@@ -35,7 +44,9 @@
 
 ---
 
-## 0. Critical: GitHub vs Desktop (read first)
+## 0. Critical: GitHub vs this tree (read first)
+
+**Local runnable product is `/Users/chiwah/src/Health-tracker`.** GitHub `main` is still `f82422c` (modules deleted). Do not `git checkout` those restore files from origin.
 
 | Fact | Detail |
 |------|--------|

@@ -6,6 +6,13 @@ try {
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import { checkCategoryAndStateCompatibility, applyServerAverageNutrients } from './server_pure_helpers.js';
+import { filterMatchesForQuery, pickQueryScopedMatch } from './server_query_scoped_match.js';
+import {
+  namesReferToSameFood,
+  matchBreakdownItemToScout,
+  breakdownAlreadyHasScoutName,
+  applySoftReceiptAlignment,
+} from './server_scout_reconcile.js';
 import { rankAndClassifyCandidates, writeAliasIfHitUnique } from './server_fdc_resolve.js';
 import { buildFoodSearchQuerySet } from './server_query_set';
 import {
@@ -2213,8 +2220,10 @@ process.on('unhandledRejection', (reason) => {
 const imageSearchCache = new Map<string, any>();
 const PORT = 3000;
 const SERVER_START_TIME = Date.now();
+console.log("[boot] server.ts evaluated, starting…");
 
 async function startServer() {
+  console.log("[boot] startServer()");
   ensureFoodCatalogSchema().then((r) => {
     if (!r.ok) console.error('[CatalogSchema] ensure on boot failed:', r.method, r.error);
   }).catch(() => {});
@@ -6256,8 +6265,15 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         return { tokens: tokens.length ? tokens : words, categoryBias };
       };
 
-      const findBestMatch = (keyword: string) => {
+      const findBestMatch = (keyword: string, extraQueries: string[] = []) => {
         if (!keyword || !databaseMatchesArray || databaseMatchesArray.length === 0) return undefined;
+        // Query-scoped pool: a component may only bind rows tagged with its searchQuery.
+        // Shared-array scan is how chicken stole onion-powder 171327.
+        const anyTagged = databaseMatchesArray.some((m: any) => m && m.searchQuery);
+        const matchPool = anyTagged
+          ? filterMatchesForQuery(keyword, databaseMatchesArray, extraQueries)
+          : databaseMatchesArray;
+        if (!matchPool.length) return undefined;
         
         const { tokens: coreTokens, categoryBias } = extractCoreIdentityTokens(keyword);
         const queryTokens = new Set<string>(keyword.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/));
@@ -6268,7 +6284,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         let bestMatch: any = undefined;
         let highestScore = -999999;
 
-        databaseMatchesArray.forEach((m: any) => {
+        matchPool.forEach((m: any) => {
           if (m.id && quarantinedIdsSet.has(String(m.id))) {
             addDebugLog(`[Quarantine Block] Blocked quarantined candidate "${m.name}" (id=${m.id}) from best-match evaluation.`);
             return;
@@ -7317,7 +7333,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             calcTokenOverlap(normCompQuery, m.name || m.searchQuery || '') >= 0.5
           );
 
-          let bestMatch = directCuratorMatch || findBestMatch(query);
+          let bestMatch = directCuratorMatch || pickQueryScopedMatch(query, databaseMatchesArray, [rawQuery, matchQuery]) || findBestMatch(query, [rawQuery, matchQuery]);
           if (directCuratorMatch) {
             addDebugLog(`[MatchPriority] Bound direct Curator query match id=${directCuratorMatch.id} ("${directCuratorMatch.name}") for component "${query}".`);
           }
@@ -8157,8 +8173,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         primaryBase100g = scaledBase100g;
       }
 
-      // If scaleFactor !== 1, scale component rows (componentsDetailList) as well so receipt invariant holds
-      if (recRes.scaleFactor !== 1 && recRes.scaleFactor > 0) {
+      // Printed/brand hard lock may scale component rows to the label.
+      // Soft/scout budget must not silently scale rows (wrap ×0.730 / salad 2.000).
+      if (budgetRes.hardLock && recRes.scaleFactor !== 1 && recRes.scaleFactor > 0) {
         componentsDetailList.forEach((s: any) => {
           if (!s || typeof s !== 'object') return;
           if (s.calories != null) s.calories = Math.round(s.calories * recRes.scaleFactor * 10) / 10;
@@ -8170,6 +8187,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           if (s.sugar != null) s.sugar = Math.round(s.sugar * recRes.scaleFactor * 10) / 10;
           if (s.totalFibre != null) s.totalFibre = Math.round(s.totalFibre * recRes.scaleFactor * 10) / 10;
         });
+      } else if (!budgetRes.hardLock && recRes.action === 'scale') {
+        aggregatedNutrients.calories = recRes.foundationKcal;
+        addDebugLog(`[Reconcile] refused silent scale for "${itemNameForBudget}" — keep foundation=${recRes.foundationKcal}`);
       }
 
       // Re-apply ONLY hard-locked truth fields after reconcile (do not wipe soft budget reconcile)
@@ -8241,22 +8261,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             }
           } else if (recRes.action === 'scale' || recRes.action === 'keep' || budgetRes.source === 'scout' || budgetRes.source === 'category') {
             if (!budgetRes.hardLock && inv.rowSum > 0 && inv.itemCalories > 0 && Math.abs(inv.rowSum - inv.itemCalories) > 1.1) {
-              const isCompositeItem = componentsDetailList.length >= 2 || /\b(salad|pastry|bowl|poke|bento)\b/i.test(itemNameForBudget);
-              const fix = inv.itemCalories / inv.rowSum;
-              if (fix >= 0.5 && fix <= 2.0 && !isCompositeItem) {
-                componentsDetailList.forEach((s: any) => {
-                  if (!s || typeof s !== 'object') return;
-                  if (s.calories != null) s.calories = Math.round(s.calories * fix * 10) / 10;
-                  if (s.protein != null) s.protein = Math.round(s.protein * fix * 10) / 10;
-                  if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * fix * 10) / 10;
-                  if (s.saturatedFat != null) s.saturatedFat = Math.round(s.saturatedFat * fix * 10) / 10;
-                  if (s.sodium != null) s.sodium = Math.round(s.sodium * fix * 10) / 10;
-                });
-                addDebugLog(`[ReceiptInvariant] REPAIRED rows→item soft factor=${fix.toFixed(3)}`);
-              } else {
-                aggregatedNutrients.calories = Math.round(inv.rowSum * 10) / 10;
-                addDebugLog(`[ReceiptInvariant] REPAIRED itemCal→rowSum ${inv.itemCalories}→${inv.rowSum} (fix out of band or composite)`);
-              }
+              const aligned = applySoftReceiptAlignment(inv.itemCalories, inv.rowSum);
+              aggregatedNutrients.calories = aligned.itemCalories;
+              addDebugLog(`[ReceiptInvariant] itemCal:=rowSum ${inv.itemCalories}→${aligned.itemCalories} (no row scale)`);
             }
           } else if (inv.rowSum > 0) {
             // legacy: only when no scout/category budget
@@ -9098,9 +9105,18 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           let origItem: any = null;
           if (newItem.scoutIndex !== undefined && newItem.scoutIndex !== null) {
             origItem = origItems.find((o: any) => o.scoutIndex === newItem.scoutIndex);
+            if (origItem && !namesReferToSameFood(
+              newItem.canonicalDbName || newItem.name || newItem.originalName,
+              origItem.canonicalDbName || origItem.name || origItem.originalName
+            )) {
+              origItem = null;
+            }
           }
-          if (!origItem && origItems.length === rawFoodData.itemsBreakdown.length) {
-            origItem = origItems[idx];
+          if (!origItem) {
+            origItem = origItems.find((o: any) => namesReferToSameFood(
+              newItem.canonicalDbName || newItem.name || newItem.originalName,
+              o.canonicalDbName || o.name || o.originalName
+            )) || null;
           }
           if (!origItem) return newItem;
 
@@ -9125,10 +9141,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         // Build itemsBreakdown from Vision Scout output + best DB match per item
         if (visionScoutItems && visionScoutItems.length > 0) {
                     rawFoodData.itemsBreakdown = visionScoutItems.map((item: any) => {
-            const bestMatch = databaseMatchesArray.find((m: any) => 
-              m.name.toLowerCase().includes(item.keyword.split(' ').pop()) ||
-              item.keyword.toLowerCase().includes(m.name.toLowerCase().split(' ')[0])
-            );
+            const bestMatch = pickQueryScopedMatch(item.keyword || item.originalName || '', databaseMatchesArray);
             
             // nutritionFacts is a general-purpose estimate field, never evidence of a
             // real printed label — do not let it set dbSource:'label'. Only item.source
@@ -9283,33 +9296,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         if (visionScoutItems && Array.isArray(visionScoutItems)) {
           const usedIndices = new Set();
           rawFoodData.itemsBreakdown = rawFoodData.itemsBreakdown.map((item: any, idx: number) => {
-            const canonicalLower = (item.canonicalDbName || item.name || "").trim().toLowerCase();
-            let match = visionScoutItems.find((s: any) => {
-              if (item.scoutIndex !== undefined && s.scoutIndex !== undefined && Number(item.scoutIndex) === Number(s.scoutIndex)) {
-                return true;
-              }
-              return false;
-            });
-            if (!match) {
-              match = visionScoutItems.find((s: any) => {
-                if (usedIndices.has(s.scoutIndex)) return false;
-                const keywordLower = (s.keyword || "").trim().toLowerCase();
-                const originalLower = (s.originalName || "").trim().toLowerCase();
-                if (!canonicalLower) return false;
-                return (
-                  canonicalLower === keywordLower ||
-                  canonicalLower === originalLower ||
-                  (keywordLower.length > 0 && canonicalLower.includes(keywordLower)) ||
-                  (originalLower.length > 0 && canonicalLower.includes(originalLower)) ||
-                  (keywordLower.length > 0 && keywordLower.includes(canonicalLower)) ||
-                  (originalLower.length > 0 && originalLower.includes(canonicalLower))
-                );
-              });
-            }
-            // Removed array index fallback to prevent Index Shift Duplication bugs when lengths happen to match but items are shifted.
-            // if (!match && visionScoutItems.length === rawFoodData.itemsBreakdown.length && !usedIndices.has(visionScoutItems[idx]?.scoutIndex)) {
-            //   match = visionScoutItems[idx];
-            // }
+            const match = matchBreakdownItemToScout(item, visionScoutItems, usedIndices);
             if (match) {
               usedIndices.add(match.scoutIndex);
               const preCalc = preCalculatedItems.find((p: any) => p.scoutIndex === match.scoutIndex);
@@ -9375,6 +9362,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           visionScoutItems.forEach((sItem: any) => {
             const sIndex = sItem.scoutIndex;
             if (sIndex !== undefined && sIndex !== null && !usedIndices.has(sIndex)) {
+              if (breakdownAlreadyHasScoutName(rawFoodData.itemsBreakdown, sItem)) {
+                return;
+              }
               if (!isLabelName(sItem.originalName || sItem.keyword || '')) {
                 const preCalc = preCalculatedItems ? preCalculatedItems.find((p: any) => p.scoutIndex === sIndex) : null;
                 if (preCalc) {
@@ -9451,8 +9441,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                 itemTokens.some((t1: string) => pTokens.some((t2: string) => (t1.length >= 4 && t2.length >= 4 && (t1.startsWith(t2) || t2.startsWith(t1)))));
               const hasTokenOverlap = itemTokens.some((t: string) => pTokens.includes(t)) || hasStemOverlap;
               
-              if (!hasExplicitScoutIndexMatch && !hasKeywordMatch && !hasTokenOverlap && itemLower && (pOrigLower || pKwLower)) {
-                 addDebugLog(`[First-Principles Injection] Anomaly: Cryptographic data binding failed. Target item "${itemLower}" does not match parsed label/scout keyword "${pOrigLower || pKwLower}". Aborting cross-wired injection.`);
+              if (!hasKeywordMatch && !hasTokenOverlap && itemLower && (pOrigLower || pKwLower)) {
+                 addDebugLog(`[First-Principles Injection] Anomaly: index=${hasExplicitScoutIndexMatch ? 'agree' : 'no'} but names "${itemLower}" vs "${pOrigLower || pKwLower}" do not match. Aborting cross-wired injection.`);
                  preMatch = null;
               }
             }
@@ -9565,7 +9555,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             return false; // Fuzzy token matching was causing ID collisions (e.g. Meatball wrap matching Falafel wrap because they both share "wrap").
           });
           if (!preMatch && item.scoutIndex === undefined) {
-             preMatch = preCalculatedItems[idx] || null;
+             // Name only — never array position (4106 phantom).
+             preMatch = preCalculatedItems.find((p: any) => namesReferToSameFood(
+               item.canonicalDbName || item.name,
+               p.originalName || p.keyword
+             )) || null;
           }
           if (preMatch) {
             const itemLower = (item.canonicalDbName || item.name || "").trim().toLowerCase();
@@ -10383,7 +10377,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           }
 
           updatedScoutItems = updatedScoutItems.map((sItem: any, sIdx: number) => {
-            const bItem = parsedData.itemsBreakdown.find((b: any) => b.scoutIndex === sItem.scoutIndex) || parsedData.itemsBreakdown[sIdx];
+            const bItem = parsedData.itemsBreakdown.find((b: any) =>
+              b.scoutIndex === sItem.scoutIndex && namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword)
+            ) || parsedData.itemsBreakdown.find((b: any) => namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword));
               if (bItem && (bItem.canonicalDbName || bItem.name)) {
                 const newName = bItem.canonicalDbName || bItem.name;
                 return {
@@ -10428,7 +10424,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       let finalScoutItems = mergeScoutItems(visionScoutItems, rawParsed.scoutItems);
       if (parsedData && Array.isArray(parsedData.itemsBreakdown) && parsedData.itemsBreakdown.length > 0) {
         finalScoutItems = finalScoutItems.map((sItem: any, sIdx: number) => {
-          const bItem = parsedData.itemsBreakdown.find((b: any) => b.scoutIndex === sItem.scoutIndex) || parsedData.itemsBreakdown[sIdx];
+          const bItem = parsedData.itemsBreakdown.find((b: any) =>
+            b.scoutIndex === sItem.scoutIndex && namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword)
+          ) || parsedData.itemsBreakdown.find((b: any) => namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword));
           if (bItem && (bItem.canonicalDbName || bItem.name)) {
             const newName = bItem.canonicalDbName || bItem.name;
             return {
@@ -15406,11 +15404,19 @@ app.post('/admin/migrate', async (req, res) => {
 });
 
   const distPath = path.join(process.cwd(), "dist");
-  const hasBuiltDist = fs.existsSync(distPath);
-  if (hasBuiltDist) {
-    // A production build is present on disk: serve it directly and never spin up
-    // a dev-only Vite server in this process, regardless of NODE_ENV (this
-    // deployment's platform does not reliably set NODE_ENV=production).
+  const hasBuiltDist = fs.existsSync(path.join(distPath, "index.html"));
+  // Cloud Run / `npm start` should serve dist. Local `npm run dev` (tsx) must
+  // use Vite even when a stale dist/ is sitting on disk — otherwise the UI
+  // silently stays weeks old and looks "broken".
+  const runningFromSource =
+    process.env.FORCE_VITE === "1" ||
+    process.env.npm_lifecycle_event === "dev" ||
+    process.argv.some((a) => /(^|[\\/])tsx([\\/]|$)/.test(a));
+  const serveDist = hasBuiltDist && !runningFromSource;
+  console.log(
+    `[boot] frontend=${serveDist ? "dist" : "vite"} hasDist=${hasBuiltDist} fromSource=${runningFromSource}`
+  );
+  if (serveDist) {
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));

@@ -989,8 +989,12 @@ export default function App() {
 
           // Durable jobs execute on server via /api/jobs/submit
           if (job.kind === 'food_log' || job.kind === 'food_compare' || job.kind === 'medical') {
+            // LogChat already POSTing — do not start a second analyze (2× Gemini).
+            const latestForSubmit = JobStore.getJob(job.id) || job;
+            const clientOwnsSubmit = !!latestForSubmit.clientSubmitPending
+              && !String(latestForSubmit.statusMessage || '').includes('background runner retrying submit');
             // Ensure job is submitted to server for retries or new jobs not yet pushed
-            if (!job.serverSubmittedAt || job.resumeStage || job.statusMessage?.includes('Retry')) {
+            if (!clientOwnsSubmit && (!latestForSubmit.serverSubmittedAt || latestForSubmit.resumeStage || latestForSubmit.statusMessage?.includes('Retry'))) {
               console.log(`[JobQueueRunner] Submitting job ${job.id} to server...`);
               let stringImages = [];
               try {

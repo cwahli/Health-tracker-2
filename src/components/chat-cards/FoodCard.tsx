@@ -14,6 +14,23 @@ import { getAgentRequestLogs } from '../../utils/agentLogsTracker';
 import { ComprehensiveNutrientsTable } from './ComprehensiveNutrientsTable';
 import { JobStore } from '../../jobs/JobStore';
 import { toPendingFoodLog } from '../../mealBuild/adapters';
+import { namesReferToSameFood } from '../../../server_scout_reconcile';
+
+function foodCardName(item: any): string {
+  return item?.canonicalDbName || item?.name || item?.originalName || item?.keyword || '';
+}
+function scoutCardName(s: any): string {
+  return s?.originalName || s?.keyword || s?.name || '';
+}
+/** Index is only a hint. Name must agree or the crop/box is the wrong dish. */
+function scoutIndexAgrees(item: any, s: any): boolean {
+  if (s?.scoutIndex === undefined || item?.scoutIndex === undefined) return false;
+  if (Number(s.scoutIndex) !== Number(item.scoutIndex)) return false;
+  const a = foodCardName(item);
+  const b = scoutCardName(s);
+  if (!a || !b) return true;
+  return namesReferToSameFood(a, b);
+}
 
 function parseLabelCalories(raw: any): number | null {
   if (raw == null) return null;
@@ -1630,10 +1647,7 @@ export const FoodCard: React.FC<AgentCardProps & {
     // Map each item in itemsBreakdown to a scout item format
     return itemsBreakdown.map((item: any, i: number) => {
       // Find the best matching scout item in activeScoutItems to preserve bounding box and image index
-      let matchingScout = (activeScoutItems || []).find((s: any) => {
-        if (s.scoutIndex !== undefined && item.scoutIndex !== undefined && Number(s.scoutIndex) === Number(item.scoutIndex)) return true;
-        return false;
-      });
+      let matchingScout = (activeScoutItems || []).find((s: any) => scoutIndexAgrees(item, s));
       if (!matchingScout) {
         matchingScout = (activeScoutItems || []).find((s: any) => {
           if (s.scoutIndex !== undefined && usedScoutIndices.has(s.scoutIndex)) return false;
@@ -2350,10 +2364,8 @@ export const FoodCard: React.FC<AgentCardProps & {
                                     if (firstItem) {
                                       // Find matching scout item: prefer exact scoutIndex match over name heuristics
                                       const matchingScout = (resolvedScoutItems || []).find((s: any) => {
-                                        if (s.scoutIndex !== undefined && firstItem.scoutIndex !== undefined && s.scoutIndex === firstItem.scoutIndex) return true;
-                                        return (firstItem.name || "").toLowerCase().includes((s.keyword || "").toLowerCase()) || 
-                                        (s.keyword || "").toLowerCase().includes((firstItem.name || "").toLowerCase()) ||
-                                        (firstItem.name || "").toLowerCase().split(' ')[0] === (s.keyword || "").toLowerCase().split(' ')[0];
+                                        if (scoutIndexAgrees(firstItem, s)) return true;
+                                        return namesReferToSameFood(firstItem.name, s.keyword || s.originalName);
                                       });
                                       const imgIdx = typeof firstItem.sourceImageIndex === 'number' 
                                         ? firstItem.sourceImageIndex 
@@ -2575,10 +2587,8 @@ export const FoodCard: React.FC<AgentCardProps & {
                                      // 1. Precompute groupPreviewItems
                                      const groupPreviewItems = (group.items || []).map((item: any) => {
                                        const matchingScout = (resolvedScoutItems || []).find((s: any) => {
-                                         if (s.scoutIndex !== undefined && item.scoutIndex !== undefined && s.scoutIndex === item.scoutIndex) return true;
-                                         return (item.name || "").toLowerCase().includes((s.keyword || "").toLowerCase()) || 
-                                         (s.keyword || "").toLowerCase().includes((item.name || "").toLowerCase()) ||
-                                         (item.name || "").toLowerCase().split(' ')[0] === (s.keyword || "").toLowerCase().split(' ')[0];
+                                         if (scoutIndexAgrees(item, s)) return true;
+                                         return namesReferToSameFood(item.name, s.keyword || s.originalName);
                                        });
                                        const imgIdx = typeof item.sourceImageIndex === 'number' 
                                          ? item.sourceImageIndex 
@@ -2910,10 +2920,8 @@ export const FoodCard: React.FC<AgentCardProps & {
         const resolvedMessageImages = messageImages;
         // Resolve its image source and bounding box: prefer exact scoutIndex match over name heuristics
         const matchingScout = (resolvedScoutItems || []).find((s: any) => {
-          if (s.scoutIndex !== undefined && item.scoutIndex !== undefined && s.scoutIndex === item.scoutIndex) return true;
-          return (item.name || "").toLowerCase().includes((s.keyword || "").toLowerCase()) || 
-          (s.keyword || "").toLowerCase().includes((item.name || "").toLowerCase()) ||
-          (item.name || "").toLowerCase().split(' ')[0] === (s.keyword || "").toLowerCase().split(' ')[0];
+          if (scoutIndexAgrees(item, s)) return true;
+          return namesReferToSameFood(item.name, s.keyword || s.originalName);
         });
         const imgIdx = typeof item.sourceImageIndex === 'number' 
           ? item.sourceImageIndex 

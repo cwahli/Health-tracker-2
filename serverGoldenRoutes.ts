@@ -1643,8 +1643,9 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
       const id = String(req.params.id);
       const { data } = await gcGet(id);
       if (!data) return res.status(404).json({ error: 'not found' });
-      if (!data.all_green) {
-        return res.status(409).json({ error: 'Loop / replay is not all-green. Promote is disabled.' });
+      const boardForPromote = await loadBoard(deps, id);
+      if (!data.all_green || (boardForPromote?.ledger && !boardForPromote.ledger.mayPromote)) {
+        return res.status(409).json({ error: 'Compiler will not promote (unbalanced books or catalog replay).' });
       }
       const jobId = data.job_id || id;
       let disk: { dir: string; goldenId: string } | null = null;
@@ -1705,8 +1706,8 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
         '- Do NOT change expected meal numbers or delete outcome rows.',
         '- Do NOT claim COMPLETE if studioMayClaim is not complete.',
         '- Do NOT retry a 429 by re-uploading photos into the same model.',
-        '- After edits: POST /api/golden/cases/' + id + '/attempt then the Next button below.',
-        '- Loop = skipScout pipeline from frozen scout. It skips accept + NEW-Analyze reds.',
+        '- After a class unit test is green: one Pipeline replay (skipScout). Do not POST /loop.',
+        '- Catalog replay cannot promote. Unbalanced trial balance cannot promote.',
         '- If Next says NEW Analyze, do not Replay log and call it fixed.',
         '',
         board?.ledger ? formatLedgerBrief(board.ledger) : '',

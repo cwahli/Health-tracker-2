@@ -2614,6 +2614,7 @@ ${logsText}`);
             lockedModeFamily: family,
             requestId: currentReqId,
             serverSubmittedAt: undefined,
+            clientSubmitPending: true,
             statusMessage: 'Uploading to server… Keep this tab open',
           });
         } else {
@@ -2628,6 +2629,7 @@ ${logsText}`);
             lockedModeFamily: family,
             requestId: currentReqId,
             serverSubmittedAt: undefined,
+            clientSubmitPending: true,
             statusMessage: 'Uploading to server… Keep this tab open',
           });
         }
@@ -2827,6 +2829,7 @@ ${logsText}`);
               status: 'queued',
               statusMessage: 'Analyzing on server...',
               serverSubmittedAt: Date.now(),
+              clientSubmitPending: false,
             });
             JobQueueRunner.wake();
           })
@@ -2834,6 +2837,7 @@ ${logsText}`);
             console.error('[LogChat] Server submit failed after retries, delegating to JobQueueRunner:', err);
             JobStore.updateJob(currentJobId, {
               status: 'queued',
+              clientSubmitPending: false,
               statusMessage: 'Connection delayed; background runner retrying submit...'
             });
             JobQueueRunner.wake();
@@ -2961,6 +2965,7 @@ ${logsText}`);
             creditSettled: false,
             requestId: currentReqId,
             serverSubmittedAt: undefined,
+            clientSubmitPending: true,
             statusMessage: 'Uploading to server… Keep this tab open',
           });
         } else {
@@ -2974,6 +2979,7 @@ ${logsText}`);
             creditSettled: false,
             requestId: currentReqId,
             serverSubmittedAt: undefined,
+            clientSubmitPending: true,
             statusMessage: 'Uploading to server… Keep this tab open',
           });
         }
