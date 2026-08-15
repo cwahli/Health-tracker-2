@@ -1070,23 +1070,27 @@ export function parseAndHealVisionScout(
       visionScoutItems = resolvePackageAndContextItems(visionScoutItems, addDebugLog, userMessage, isCompareMode);
 
       for (const item of visionScoutItems) {
-        if (item.keyword) {
-          queriesToSearch.push(item.keyword);
-        }
-        if (item.components && Array.isArray(item.components) && item.components.length > 0) {
-          item.components.forEach((c: any) => {
-            const queryName = typeof c === 'string' ? c : (c.searchQuery || c.name || c.keyword);
-            if (queryName) {
-              queriesToSearch.push(queryName);
-            }
-          });
-        }
-        if (item.visualIngredients && Array.isArray(item.visualIngredients)) {
-          item.visualIngredients.forEach((v: any) => {
-            if (typeof v === 'string' && v.trim()) {
-              queriesToSearch.push(v.trim());
-            }
-          });
+        // Issue #6: Persistent Web Search Override on Generic Items.
+        // Restrict queriesToSearch strictly to detected restaurant chains or packaged brand names (chainName !== null).
+        if (item.chainName) {
+          if (item.keyword) {
+            queriesToSearch.push(item.keyword);
+          }
+          if (item.components && Array.isArray(item.components) && item.components.length > 0) {
+            item.components.forEach((c: any) => {
+              const queryName = typeof c === 'string' ? c : (c.searchQuery || c.name || c.keyword);
+              if (queryName) {
+                queriesToSearch.push(queryName);
+              }
+            });
+          }
+          if (item.visualIngredients && Array.isArray(item.visualIngredients)) {
+            item.visualIngredients.forEach((v: any) => {
+              if (typeof v === 'string' && v.trim()) {
+                queriesToSearch.push(v.trim());
+              }
+            });
+          }
         }
         visionScoutRanAndReturnedItems = true;
       }

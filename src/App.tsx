@@ -16,6 +16,7 @@ import { JobStore } from './jobs/JobStore';
 import { JobQueueRunner } from './jobs/JobQueueRunner';
 import { initSupabaseJobSync, hydrateUserJobs } from './jobs/SupabaseJobSync';
 import { ImageStore } from './jobs/ImageStore';
+import { refundCredits } from './jobs/credits';
 import { startGoldenIngestWatcher } from './utils/goldenIngestClient';
 
 
@@ -1533,7 +1534,6 @@ export default function App() {
       for (const job of allJobs) {
         if ((job.status === 'failed' || job.status === 'cancelled') && job.creditReserved && !job.creditSettled) {
           if (newProfile) {
-            const { refundCredits } = await import('./jobs/credits');
             newProfile = refundCredits(job, newProfile);
             JobStore.updateJob(job.id, { creditSettled: true });
             profileUpdated = true;

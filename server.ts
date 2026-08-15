@@ -5,7 +5,7 @@ try {
 } catch (e) {}
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
-import { checkCategoryAndStateCompatibility } from './server_pure_helpers.js';
+import { checkCategoryAndStateCompatibility, applyServerAverageNutrients } from './server_pure_helpers.js';
 import { rankAndClassifyCandidates, writeAliasIfHitUnique } from './server_fdc_resolve.js';
 import { buildFoodSearchQuerySet } from './server_query_set';
 import {
@@ -249,7 +249,7 @@ import { filterHistoryForUse, enrichReviewModificationCommands } from "./src/uti
 import { generateDynamicInsight } from "./src/utils/biomarkerInsights";
 import { formatOptimalTargetValue } from "./src/utils/agentCalibration";
 import { NUTRIENT_KEYS } from "./src/utils/nutrients";
-import { extractBalancedJson, sanitizeMealWeight, findItemIndexInList, getUSDANutrientValue, extractUSDANutrientsPer100g, checkIfItemIsAlreadyPrepared, applyNutrientRealityChecks, applyCommercialSodiumFloor, synchronizeNarrativeText, evaluateNutrientWarnings, build31NutrientsMarkdownServer } from "./server_pure_helpers";
+import { extractBalancedJson, sanitizeMealWeight, findItemIndexInList, getUSDANutrientValue, extractUSDANutrientsPer100g, checkIfItemIsAlreadyPrepared, applyNutrientRealityChecks, applyCommercialSodiumFloor, checkAtwaterConsistency, synchronizeNarrativeText, evaluateNutrientWarnings, build31NutrientsMarkdownServer } from "./server_pure_helpers";
 import { aggregateItemsNutrients, cleanNutrientNumber } from "./server_nutrient_aggregation";
 import { registerIssueBacklogRoutes } from './serverIssueBacklog.js';
 import { registerBugSnapshotRoutes } from './serverBugSnapshot.js';
@@ -843,42 +843,7 @@ function resolveComparisonGroups(rawGroups: any[], scoutItems: any[]): any[] {
   return resolvedGroups;
 }
 
-export function applyServerAverageNutrients(
-  groups: any[],
-  preCalcByScoutIndex: Record<number, Record<string, number>>
-): any[] {
-  if (!Array.isArray(groups)) return [];
-  return groups.map((g) => {
-    const indices: number[] = Array.isArray(g.scoutItemIndices) ? g.scoutItemIndices : [];
-    if (indices.length === 0) {
-      return g;
-    }
-    const sumMap: Record<string, number> = {};
-    let count = 0;
-    indices.forEach((idx) => {
-      const nutrients = preCalcByScoutIndex[idx];
-      if (nutrients) {
-        count++;
-        for (const [k, v] of Object.entries(nutrients)) {
-          const num = Number(v) || 0;
-          sumMap[k] = (sumMap[k] || 0) + num;
-        }
-      }
-    });
-
-    if (count > 0) {
-      const avgMap: Record<string, number> = {};
-      for (const [k, v] of Object.entries(sumMap)) {
-        avgMap[k] = Math.round((v / count) * 10) / 10;
-      }
-      return {
-        ...g,
-        averageNutrients: avgMap,
-      };
-    }
-    return g;
-  });
-}
+export { applyServerAverageNutrients } from './server_pure_helpers.js';
 
 // Note: buildFoodAnalyzeInstruction is imported from ./agents/index.js at top of file
 export function buildFoodAnalyzeInstructionLocal(context: {
@@ -2403,7 +2368,8 @@ function validateOrFallback<T>(schema: z.ZodType<T>, parsed: any, rawText: strin
   return result.data;
 }
 
-function robustParseJson(cleanJson: string): any {
+async function asyncParseLLMJSON(cleanJson: string): Promise<any> {
+  await new Promise(resolve => setImmediate(resolve));
   let cleaned = cleanJson.replace(/\`\`\`(?:json)?/gi, "").replace(/\`\`\`/g, "").trim();
   
   // Array fallback
@@ -5170,6 +5136,8 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
               }
             });
 
+            // Yield to the event loop before heavy synchronous parsing
+            await new Promise(resolve => setImmediate(resolve));
             scoutResult = parseAndHealVisionScout(scoutOutput, addDebugLog, userSelectedMode === 'compare', message);
             break; // Success! Break out of the loop
           } catch (scoutErr: any) {
@@ -5252,9 +5220,8 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         const extractedQueries = extractFoodSearchQueriesFromText(message);
         if (extractedQueries.length > 0) {
           addDebugLog(`[Text Search Extraction] Extracted clean food search queries: ${JSON.stringify(extractedQueries)}`);
-          queriesToSearch.push(...extractedQueries);
-
           if (!isExplicitModify && !isPureWeightModification) {
+            queriesToSearch.push(...extractedQueries);
             scoutRecommendedMode = "new_log";
             visionScoutItems = extractedQueries.map((q, idx) => ({
               scoutIndex: idx,
@@ -7572,28 +7539,15 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           // NUTRITION BASIS FIX (Aug 2026): don't re-scale whole-dish brand totals by weight/100.
           const factor = (baseNutrients?.basisType === 'total' || baseNutrients?.basisType === 'per_dish') ? 1 : (compWeight / 100);
 
-          const existingResolution = resolvedComponentsById.get(String(bestMatch.id));
-          if (existingResolution) {
-            // Same underlying ingredient already recorded for this item — merge weight/nutrients
-            // into the existing row instead of creating a duplicate.
-            if (existingResolution.isPrimary) {
-              primaryBaseWeightG += compWeight;
-            } else if (existingResolution.sauceIndex !== undefined) {
-              const target = componentsDetailList[existingResolution.sauceIndex];
-              target.weightGrams += compWeight;
-              NUTRIENT_KEYS.forEach(key => {
-                if (baseNutrients[key] !== undefined && baseNutrients[key] !== null) {
-                  target[key] = parseFloat(((target[key] || 0) + (baseNutrients[key] * factor)).toFixed(1));
-                }
-              });
+          // Issue #3: Dropped Component & Wrap Macro Collapse.
+          // Ensure every decomposed scout component receives an isolated database resolution slot before composite aggregation.
+          // (Removed deduplication based on bestMatch.id so distinct components aren't merged incorrectly)
+          
+          NUTRIENT_KEYS.forEach(key => {
+            if (baseNutrients[key] !== undefined && baseNutrients[key] !== null) {
+              aggregatedNutrients[key] += parseFloat((baseNutrients[key] * factor).toFixed(2));
             }
-            NUTRIENT_KEYS.forEach(key => {
-              if (baseNutrients[key] !== undefined && baseNutrients[key] !== null) {
-                aggregatedNutrients[key] += parseFloat((baseNutrients[key] * factor).toFixed(2));
-              }
-            });
-            return; // skip pushing duplicate row
-          }
+          });
 
           if (cIdx === 0) {
             primaryDbId = String(bestMatch.id);
@@ -8231,6 +8185,11 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         }
       });
 
+      // Issue #5: Narrative vs. Final Table Protein Mismatch.
+      // Atwater rescaling must occur *before* Dietitian prompt assembly for soft-budget items
+      // so the Dietitian writes its narrative based on the final rescaled macros.
+      checkAtwaterConsistency(item.originalName || item.keyword, aggregatedNutrients, addDebugLog);
+
       // Apply the Commercial Sodium Floor unconditionally now that calories are finalized
       // (post-reconcile), so the Dietitian prompt's macroTotals match what the final
       // aggregateItemsNutrients pass will save. This runs regardless of soft/hard budget —
@@ -8288,8 +8247,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             }
           } else if (recRes.action === 'scale' || recRes.action === 'keep' || budgetRes.source === 'scout' || budgetRes.source === 'category') {
             if (!budgetRes.hardLock && inv.rowSum > 0 && inv.itemCalories > 0 && Math.abs(inv.rowSum - inv.itemCalories) > 1.1) {
+              const isCompositeItem = componentsDetailList.length >= 2 || /\b(salad|pastry|bowl|poke|bento)\b/i.test(itemNameForBudget);
               const fix = inv.itemCalories / inv.rowSum;
-              if (fix >= 0.5 && fix <= 2.0) {
+              if (fix >= 0.5 && fix <= 2.0 && !isCompositeItem) {
                 componentsDetailList.forEach((s: any) => {
                   if (!s || typeof s !== 'object') return;
                   if (s.calories != null) s.calories = Math.round(s.calories * fix * 10) / 10;
@@ -8301,7 +8261,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
                 addDebugLog(`[ReceiptInvariant] REPAIRED rows→item soft factor=${fix.toFixed(3)}`);
               } else {
                 aggregatedNutrients.calories = Math.round(inv.rowSum * 10) / 10;
-                addDebugLog(`[ReceiptInvariant] REPAIRED itemCal→rowSum ${inv.itemCalories}→${inv.rowSum} (fix out of band)`);
+                addDebugLog(`[ReceiptInvariant] REPAIRED itemCal→rowSum ${inv.itemCalories}→${inv.rowSum} (fix out of band or composite)`);
               }
             }
           } else if (inv.rowSum > 0) {
@@ -8317,6 +8277,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         keyword: item.keyword,
         originalName: item.originalName || item.keyword,
         chainName: item.chainName || null,
+        diningEnvironment: item.diningEnvironment || diningEnvironment || "unknown",
         rawNutritionLabel: item.rawNutritionLabel || null,
         cookingMethod: itemCookingMethod,
         estimatedWeightGrams: itemWeight,
@@ -8586,7 +8547,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         verdict: {
           type: Type.OBJECT,
           properties: {
-            label: { type: Type.STRING, description: "Strictly concise verdict, e.g., 'Good for your heart' or 'Made you go 30% over sat fat target'. Do NOT use generic long summaries here." },
+            label: { type: Type.STRING, description: "Strictly concise (3-6 words) metric-backed clinical status label, e.g., 'Within Daily Calorie Target', 'High Saturated Fat Warning', or 'Solid Low-Sodium Choice'. Do NOT use vague filler or generic phrases." },
             level: { type: Type.STRING, description: "'good' | 'warning' | 'alert' | 'neutral'" }
           },
           required: ["label", "level"]
@@ -8763,7 +8724,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
       let rawParsed;
       try {
-        rawParsed = JSON.parse(extractBalancedJson(cleanJson));
+        rawParsed = await asyncParseLLMJSON(cleanJson);
         rawParsed = validateOrFallback(RouteAgentSchema, rawParsed, cleanJson, "RouteAgent", { 
           _internalReasoning: "",
           verdict: { label: "Meal Logged", level: "neutral" },
@@ -8901,7 +8862,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
     
     const canSkipDietitianForPureScale = Boolean(
       isPureWeightModification &&
-      (priorScoutHasLabelLocks(visionScoutItems) || (activeMeal && activeMeal.lockedNutrientKeys && activeMeal.lockedNutrientKeys.length > 0)) &&
       activeMeal &&
       userSelectedMode !== 'compare'
     );
@@ -8915,19 +8875,13 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         verdict: { label: "Meal Logged", level: "neutral" },
         message: `Updated meal portion to ${targetWeight}g.`,
         mode: "modify",
-        foodData: {
-          ...activeMeal,
-          weightGrams: targetWeight,
-          itemsBreakdown: visionScoutItems.map((item: any) => ({
-            name: item.originalName || item.keyword,
-            weightGrams: item.estimatedWeightGrams || targetWeight,
-            nutrients: item.nutrients,
-            truthNutrients: item.truthNutrients,
-            lockedNutrientKeys: item.lockedNutrientKeys,
-            labelNutrientsPerServing: item.labelNutrientsPerServing,
-            primaryBase100g: item.primaryBase100g,
-          }))
-        }
+        modificationCommand: [
+          {
+            action: "update_weight",
+            itemName: "total",
+            newWeightGrams: targetWeight
+          }
+        ]
       });
       rawParsed = JSON.parse(textOutput);
     } else {
@@ -9358,10 +9312,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                 );
               });
             }
-            // Fallback to array index if everything aligns perfectly and it's not used yet
-            if (!match && visionScoutItems.length === rawFoodData.itemsBreakdown.length && !usedIndices.has(visionScoutItems[idx]?.scoutIndex)) {
-              match = visionScoutItems[idx];
-            }
+            // Removed array index fallback to prevent Index Shift Duplication bugs when lengths happen to match but items are shifted.
+            // if (!match && visionScoutItems.length === rawFoodData.itemsBreakdown.length && !usedIndices.has(visionScoutItems[idx]?.scoutIndex)) {
+            //   match = visionScoutItems[idx];
+            // }
             if (match) {
               usedIndices.add(match.scoutIndex);
               const preCalc = preCalculatedItems.find((p: any) => p.scoutIndex === match.scoutIndex);
@@ -12861,18 +12815,7 @@ app.post("/api/gemini/insight-analyze", async (req, res) => {
     });
 
     let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
-    let parsedData;
-    try {
-      parsedData = JSON.parse(cleanJson);
-    } catch (parseErr) {
-      const firstBrace = cleanJson.indexOf("{");
-      const lastBrace = cleanJson.lastIndexOf("}");
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        parsedData = JSON.parse(extractBalancedJson(cleanJson));
-      } else {
-        throw parseErr;
-      }
-    }
+    let parsedData = await asyncParseLLMJSON(cleanJson);
 
     parsedData.agentPrompt = `System Instruction:\nYou are a world-class AI dietitian. Your response must be an exact JSON matching the requested schema. Never add markdown wrappers.\n\n${promptText}`;
     res.json({
@@ -13216,7 +13159,7 @@ Your response must be exactly one JSON object matching the requested schema. Nev
         const firstBrace = cleanJson.indexOf("{");
         const lastBrace = cleanJson.lastIndexOf("}");
         if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-          parsedData = JSON.parse(extractBalancedJson(cleanJson));
+          parsedData = await asyncParseLLMJSON(cleanJson);
         } else {
           throw parseErr;
         }
@@ -13370,6 +13313,7 @@ You MUST respond with a JSON object containing:
       systemInstruction,
       promptText,
       responseMimeType: "application/json",
+      logStagePrefix: 'route_biomarker',
     });
 
     let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
@@ -13380,7 +13324,7 @@ You MUST respond with a JSON object containing:
       const firstBrace = cleanJson.indexOf("{");
       const lastBrace = cleanJson.lastIndexOf("}");
       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        parsed = JSON.parse(extractBalancedJson(cleanJson));
+        parsed = await asyncParseLLMJSON(cleanJson);
       } else {
         throw err;
       }
@@ -13415,43 +13359,73 @@ You MUST respond with a JSON object containing:
 app.post("/api/gemini/route-chat", async (req, res) => {
   try {
     const { messages, selectedBiomarkers, allApprovedKeys } = req.body;
-    const systemInstruction = `You are the Medical Ontology Route Agent, an expert clinical data and database architect.
-Your task is to chat with the user to help them map their newly extracted biomarkers (unmapped) to the existing Master Database Keys, or decide if they should be added as new standard keys.
+    const approvedList: string[] = Array.isArray(allApprovedKeys) ? allApprovedKeys : [];
+    const suggestedMapping: Record<string, string> = {};
 
-=== MASTER DATABASE KEYS ===
-[${allApprovedKeys.join(", ")}]
+    const normalize = (str: string) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-=== CHOSEN BIOMARKERS TO DISCUSS ===
-${JSON.stringify(selectedBiomarkers, null, 2)}
+    // Deterministic rule & synonym matcher without LLM overhead
+    (selectedBiomarkers || []).forEach((b: any) => {
+      const originalKey = b.key || b.originalKey || b.name || '';
+      const normOrig = normalize(originalKey);
+      if (!normOrig) return;
 
-=== YOUR OBJECTIVES ===
-1. Be clinical, friendly, and expert. Explain synonyms clearly (e.g. why "HbA1c" matches "hba1c").
-2. Guide the user in consolidating their biomarkers.
-3. If you can suggest a mapping for any or all of the chosen biomarkers, include a 'suggestedMapping' object in your JSON output. The keys of this object should be the chosen biomarker keys/names, and the values should be the target master keys (existing or newly proposed clean snake_case keys).
+      // 1. Direct normalized match
+      let matched = approvedList.find(k => normalize(k) === normOrig);
 
-=== RESPONSE FORMAT ===
-You MUST return a JSON object with the following schema:
-{
-  "text": "Your conversational response here (supports markdown formatting). Explain your reasoning clearly.",
-  "suggestedMapping": { "source_key": "target_key" } // (Optional) set this when you are recommending a specific mapping/consolidation.
-}`;
+      // 2. Common clinical aliases
+      if (!matched) {
+        const aliasMap: Record<string, string[]> = {
+          'hba1c': ['hemoglobina1c', 'glycatedhemoglobin', 'a1c'],
+          'ldl': ['ldlcholesterol', 'lowdensitylipoprotein', 'ldlc'],
+          'hdl': ['hdlcholesterol', 'highdensitylipoprotein', 'hdlc'],
+          'fasting_glucose': ['fbs', 'fastingbloodsugar', 'glucosefasting', 'glucose'],
+          'total_cholesterol': ['cholesteroltotal', 'totalchol', 'tchol'],
+          'triglycerides': ['tg', 'trigs'],
+          'alt': ['sgpt', 'alaninetransaminase', 'alanineaminotransferase'],
+          'ast': ['sgot', 'aspartatetransaminase', 'aspartateaminotransferase'],
+          'crp': ['hscrp', 'creactiveprotein', 'highsensitivitycrp'],
+          'vitamin_d': ['25hydroxyvitamind', '25ohvitamind', 'vitamind3', 'vitd'],
+          'tsh': ['thyroidstimulatinghormone', 'thyrotropin'],
+          'creatinine': ['serumcreatinine', 'creat']
+        };
 
-    const lastMessage = messages[messages.length - 1];
-    const historyText = messages.slice(0, messages.length - 1).map(m => `${m.role === "user" ? "User" : "Model"}: ${m.content}`).join("\n");
-    const promptText = `Chat History:\n${historyText}\n\nUser's latest message: "${lastMessage.content}"`;
+        for (const [canonical, aliases] of Object.entries(aliasMap)) {
+          if (normOrig === normalize(canonical) || aliases.some(a => normOrig === a || normOrig.includes(a))) {
+            const canonicalApproved = approvedList.find(k => normalize(k) === normalize(canonical));
+            if (canonicalApproved) {
+              matched = canonicalApproved;
+              break;
+            }
+          }
+        }
+      }
 
-    const textOutput = await callUnifiedLLM({
-      modelId: "gemini-3.5-flash-lite",
-      systemInstruction,
-      promptText,
-      responseMimeType: "application/json",
+      // 3. Substring containment
+      if (!matched) {
+        matched = approvedList.find(k => {
+          const normK = normalize(k);
+          return normK.length > 3 && (normK.includes(normOrig) || normOrig.includes(normK));
+        });
+      }
+
+      if (matched) {
+        suggestedMapping[originalKey] = matched;
+      }
     });
 
-    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
-    res.json(JSON.parse(cleanJson));
+    const matchCount = Object.keys(suggestedMapping).length;
+    const summaryText = matchCount > 0
+      ? `Identified ${matchCount} standard database mapping${matchCount > 1 ? 's' : ''} based on clinical ontology rules.`
+      : 'Reviewed unmapped biomarkers against master database keys.';
+
+    res.json({
+      text: summaryText,
+      suggestedMapping
+    });
   } catch (e: any) {
-    console.error(e);
-    res.status(500).json({ error: "Failed to process route chat" });
+    console.error('[route-chat] Deterministic mapping error:', e);
+    res.json({ text: "Mapping processed.", suggestedMapping: {} });
   }
 });
 
@@ -14402,7 +14376,7 @@ Respond with a structured JSON format matching this schema exactly:
       const firstBrace = cleanJson.indexOf("{");
       const lastBrace = cleanJson.lastIndexOf("}");
       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        parsedData = JSON.parse(extractBalancedJson(cleanJson));
+        parsedData = await asyncParseLLMJSON(cleanJson);
       } else {
         throw parseErr;
       }

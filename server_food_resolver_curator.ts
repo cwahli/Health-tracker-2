@@ -280,14 +280,9 @@ export async function executeFoodResolverCurator(
         }
       }
 
-      // 3d. Final fallback to category-compatible candidate in gap pool
-      if (!finalChosenId && gap.candidates.length > 0) {
-        const validCand = gap.candidates.find(c => !quarantinedFdcIds.has(String(c.id)) && checkCategoryAndStateCompatibility(gap.query, c.name).compatible);
-        if (validCand) {
-          finalChosenId = String(validCand.id);
-          addDebugLog(`[CuratorAction] Category-compatible candidate fallback for "${gap.query}" -> FDC ${finalChosenId} ("${validCand.name}")`);
-        }
-      }
+      // Issue #2: Force unverified items to use deterministic category fallbacks instead of binding wrong IDs.
+      // Do NOT fall back to arbitrary gap candidates if the chosen ID was rejected.
+      // (Removed 3d. Final fallback to category-compatible candidate in gap pool)
       
       if (finalChosenId) {
         addDebugLog(`[CuratorAction] pick_existing for "${gap.query}" -> ${finalChosenId} (Reason: ${action.reason})`);

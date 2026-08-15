@@ -28,7 +28,7 @@ describe('Food Resolver Curator Agent', () => {
 
     const results = await executeFoodResolverCurator(gaps, addDebugLog, mockLLM);
     expect(results).toHaveLength(1);
-    expect(results[0].chosenFdcId).toBe('111111'); // Discarded hallucination, but fell back to first candidate!
+    expect(results[0].chosenFdcId).toBeNull(); // Discarded hallucination, and deterministic fallback logic refuses arbitrary candidates
     expect(logs.some(l => l.includes('LLM hallucinated ID'))).toBe(true);
   });
 

@@ -138,11 +138,12 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   if (Array.isArray(input.userActionBreadcrumbs) && input.userActionBreadcrumbs.length > 0) {
     lines.push(`| Timestamp | Action | Target / Context | Details |`);
     lines.push(`|-----------|--------|------------------|---------|`);
-    for (const b of input.userActionBreadcrumbs.slice(-25)) {
+    for (const b of input.userActionBreadcrumbs.slice(-50)) {
       const ts = b.timestamp ? b.timestamp.slice(11, 19) : '—';
       const act = String(b.action || 'event').replace(/\|/g, '/');
       const tgt = String(b.target || '—').replace(/\|/g, '/');
-      const det = String(typeof b.details === 'object' ? JSON.stringify(b.details) : (b.details || '—')).replace(/\|/g, '/').slice(0, 80);
+      const rawDet = typeof b.details === 'object' ? JSON.stringify(b.details) : (b.details != null ? String(b.details) : '—');
+      const det = rawDet.replace(/\|/g, '/');
       lines.push(`| ${ts} | ${act} | ${tgt} | ${det} |`);
     }
   } else {
@@ -318,11 +319,8 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       ];
       for (const [label, k, unit] of extraKeys) {
         if (n[k] != null && n[k] !== '') {
-          // These fields are currently only ever populated from sources that supply a
-          // real measured value — nothing in the pipeline computes a genuine, non-zero
-          // trace-nutrient figure. An exact 0 here means "not measured," not "confirmed
-          // zero" (see Batch 3 Task 6 for the same reasoning applied to the in-app table).
-          const display = Number(n[k]) === 0 ? 'N/A' : `${n[k]} ${unit}`;
+          const val = Number(n[k]);
+          const display = isNaN(val) ? 'N/A' : `${val} ${unit}`;
           lines.push(`| ${label} | ${display} |`);
         }
       }

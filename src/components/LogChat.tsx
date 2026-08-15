@@ -5,7 +5,7 @@ import { agentCardRegistry } from './chat-cards';
 import { AgentThoughtBox } from './chat-cards/FoodCard';
 import { trackApiCall, setActiveQueryId, generateQueryId } from '../utils/apiTracker';
 import { saveAgentRequestLog, getAgentRequestLogs } from '../utils/agentLogsTracker';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, Suspense } from 'react';
 
 import { ChatMessage, FoodLog, UserProfile, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
@@ -20,7 +20,8 @@ import { compressMultipleImages, compressImage } from '../utils/imageCompressor'
 import { getCurrentDateInTimezone, toYYYYMMDD } from '../utils/dateUtils';
 import { enrichReviewModificationCommands, collectCatalogUnitMap } from '../utils/biomarkerLifecycle';
 import ImageSlider from './ImageSlider';
-import FullScreenLogViewer from './FullScreenLogViewer';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
+const FullScreenLogViewer = lazyWithRetry(() => import('./FullScreenLogViewer'));
 import FullScreenInstructionViewer from './FullScreenInstructionViewer';
 import { NutritionLabelTable } from './chat-cards/NutritionLabelTable';
 import { InteractivePlacesMap } from './InteractivePlacesMap';
@@ -41,7 +42,7 @@ import { humanizeJobFailure } from '../utils/jobFailure';
 import { ImageStore } from '../jobs/ImageStore';
 import { reserveCredits } from '../jobs/credits';
 import { JobQueueRunner } from '../jobs/JobQueueRunner';
-import { recordBreadcrumb } from '../utils/breadcrumbTracker';
+import { recordBreadcrumb, clearBreadcrumbs } from '../utils/breadcrumbTracker';
 import { consumeGoldenAnalyzeToken, GOLDEN_NEW_ANALYZE_EVENT } from '../utils/goldenIngestClient';
 
 import { PRIMARY_NUTRIENTS, formatNutrientDisplayValue } from '../utils/nutrients';
@@ -1228,6 +1229,7 @@ ${logsText}`);
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState({ current: 0, total: 0, percent: 0 });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeReqId, setActiveReqId] = useState<string | null>(null);
   const [isThoughtsExpanded, setIsThoughtsExpanded] = useState(true);
   const [analyzingStepIndex, setAnalyzingStepIndex] = useState(0);
@@ -1263,7 +1265,18 @@ ${logsText}`);
     if ((type !== 'food' && type !== 'medical') || !jobId || !isOpen) return;
     const loadJobMessages = async () => {
       const job = JobStore.getJob(jobId);
-      if (!job) return;
+      if (!job) {
+        setIsAnalyzing(false);
+        isSendingRef.current = false;
+        return;
+      }
+
+      if (job.status === 'succeeded' || job.status === 'failed' || job.status === 'awaiting_user' || job.status === 'draft') {
+        setIsAnalyzing(false);
+        isSendingRef.current = false;
+      } else if (job.status === 'running' || job.status === 'queued') {
+        setIsAnalyzing(true);
+      }
 
       const remotePhoto =
         job.photoUrl ||
@@ -1718,6 +1731,14 @@ ${logsText}`);
       unsubscribe();
     };
   }, [jobId, isOpen, type]);
+
+  // Cleanly reset isAnalyzing and isSending when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setIsAnalyzing(false);
+      isSendingRef.current = false;
+    }
+  }, [isOpen]);
 
   const handleDownloadDebug = async (jobIdToDownload: string, msg: any, format: 'json' | 'markdown' = 'markdown') => {
     const job = JobStore.getJob(jobIdToDownload);
@@ -2280,18 +2301,26 @@ ${logsText}`);
 
   const handleSend = async (overrideText?: string | { text?: string; imageUrls?: string[]; compareOnly?: boolean; compareItems?: string[]; sourceMsgId?: string; skipScout?: boolean; activeScoutItems?: any; scoutContentType?: any; overrideMode?: string; userSelectedMode?: string; } | any, extraImages?: any[], extraOptions?: any) => {
     const now = Date.now();
-    if (now - lastSendClickTimeRef.current < 1000) {
-      console.log('[handleSend] Blocked — debounced duplicate click within 1000ms.');
+    if (now - lastSendClickTimeRef.current < 1500) {
+      console.log('[handleSend] Blocked — debounced duplicate click within 1500ms.');
       return;
     }
-    if (isSendingRef.current || isAnalyzing) {
+    if (isSendingRef.current || isAnalyzing || isSubmitting) {
       console.log('[handleSend] Blocked — analysis already in progress or duplicate tap.');
       return;
     }
     lastSendClickTimeRef.current = now;
+    recordBreadcrumb('submit_initiated', 'chat_composer', {
+      prompt: typeof overrideText === 'string' ? overrideText : overrideText?.text,
+      imageCount: extraImages?.length || selectedImages.length
+    });
     isSendingRef.current = true;
+    setIsSubmitting(true);
     setIsAnalyzing(true);
-    const failsafe = setTimeout(() => { isSendingRef.current = false; }, 60000);
+    const failsafe = setTimeout(() => {
+      isSendingRef.current = false;
+      setIsSubmitting(false);
+    }, 60000);
     // Check credit limits before proceeding
     if (profile) {
       const creditInfo = getAvailableCredits(profile);
@@ -2308,6 +2337,7 @@ ${logsText}`);
         };
         setMessages(prev => [...prev, errorMsg]);
         isSendingRef.current = false;
+        setIsSubmitting(false);
         setIsAnalyzing(false);
         return;
       }
@@ -2705,7 +2735,7 @@ ${logsText}`);
 
           const submitPayload = {
             jobId: currentJobId,
-            idempotencyKey: `idemp_${auth.currentUser?.uid || 'anon'}_${currentJobId}`,
+            idempotencyKey: `idemp_${auth.currentUser?.uid || 'anon'}_${currentJobId}_${currentReqId}`,
             userId: auth.currentUser?.uid || 'anonymous',
             kind: family === 'D' ? 'food_compare' : 'food_log',
             mode: submissionMode,
@@ -2757,6 +2787,21 @@ ${logsText}`);
               statusMessage: 'Connection delayed; background runner retrying submit...'
             });
             JobQueueRunner.wake();
+          }).finally(() => {
+            // Wake queue runner & notify parent
+            JobQueueRunner.wake();
+            if (onJobEnqueued) {
+              onJobEnqueued(currentJobId, 'food');
+            }
+
+            // Release the double-tap guard now that the job is queued
+            clearTimeout(failsafe);
+            isSendingRef.current = false;
+            setIsSubmitting(false);
+            setIsAnalyzing(false);
+
+            const keepOpen = !!(extraOptions?.goldenCaseId || (typeof overrideText === 'object' && overrideText?.goldenCaseId));
+            if (!keepOpen) onClose();
           });
         }).catch(err => {
           console.error('[LogChat] Error converting images:', err);
@@ -2764,26 +2809,18 @@ ${logsText}`);
             status: 'failed',
             statusMessage: 'Submission Failed: Image conversion error'
           });
+          clearTimeout(failsafe);
+          setIsSubmitting(false);
+          setIsAnalyzing(false);
+          isSendingRef.current = false;
         });
 
-        // Wake queue runner & notify parent
-        JobQueueRunner.wake();
-        if (onJobEnqueued) {
-          onJobEnqueued(currentJobId, 'food');
-        }
-
-        // Release the double-tap guard now that the job is queued — the actual
-        // analysis runs in the background via JobStore/JobQueueRunner, so the
-        // user should be free to log another item immediately.
-        clearTimeout(failsafe);
-        isSendingRef.current = false;
-
-        const keepOpen = !!(extraOptions?.goldenCaseId || (typeof overrideText === 'object' && overrideText?.goldenCaseId));
-        if (!keepOpen) onClose();
       } catch (err: any) {
         console.error('Failed to enqueue food job:', err);
         clearTimeout(failsafe);
         isSendingRef.current = false;
+        setIsSubmitting(false);
+        setIsAnalyzing(false);
         const errorMsg: ChatMessage = {
           id: `msg_err_${Date.now()}`,
           role: 'assistant',
@@ -4302,6 +4339,7 @@ ${logsText}`);
     } finally {
       clearTimeout(failsafe);
       isSendingRef.current = false;
+      setIsSubmitting(false);
       setIsAnalyzing(false);
       setActiveReqId(null);
     }
@@ -5386,43 +5424,44 @@ ${logsText}`);
                       <span>🔍 View Log</span>
                     </button>
 
-                    <FullScreenLogViewer
-                      isOpen={showFullScreenConv}
-                      onClose={() => setShowFullScreenConv(false)}
-                      title="Full Agent Request Payload & Log"
-                      logsText={(() => {
-                        const msgLog = messages.map(m => `[${m.role.toUpperCase()}]\n${m.content}`).join('\n\n---\n\n');
-                        let logTxt = lastSentPayload ? `=== PAYLOAD ===\n${JSON.stringify(lastSentPayload, null, 2)}\n\n=== CONVERSATION ===\n${msgLog}` : msgLog;
-                        if (isAgent('medical')) {
-                          logTxt += `\n\n[Medical Profile]\n${JSON.stringify(profile, null, 2)}`;
-                        }
-                        return logTxt;
-                      })()}
-                      logsArray={(() => {
-                        const arr = messages.map(m => `[${m.role.toUpperCase()}]
-${m.content}`);
-                        if (lastSentPayload) {
-                          arr.unshift(`=== PAYLOAD ===
-${JSON.stringify(lastSentPayload, null, 2)}`);
-                        }
-                        if (isAgent('medical')) {
-                          arr.push(`[Medical Profile]
-${JSON.stringify(profile, null, 2)}`);
-                        }
-                        return arr;
-                      })()}
-                      onSendToAdmin={handleSendLogToAdmin}
-                      isSendingLogs={isSendingLogs}
-                      logsSendStatus={logsSendStatus}
-                      onClearLogs={() => {
-                        setMessages(prev => prev.length > 0 ? [prev[0]] : []);
-                        setLastSentPayload(null);
-                        sessionStorage.removeItem(payloadStorageKey);
-                        sessionStorage.removeItem(chatStorageKey);
-                        setShowFullScreenConv(false);
-                      }}
-                      eventsCount={messages.length}
-                    />
+                    {showFullScreenConv && (
+                      <Suspense fallback={null}>
+                        <FullScreenLogViewer
+                          isOpen={showFullScreenConv}
+                          onClose={() => setShowFullScreenConv(false)}
+                          title="Full Agent Request Payload & Log"
+                          logsText={(() => {
+                            const msgLog = messages.map(m => `[${m.role.toUpperCase()}]\n${m.content}`).join('\n\n---\n\n');
+                            let logTxt = lastSentPayload ? `=== PAYLOAD ===\n${JSON.stringify(lastSentPayload, null, 2)}\n\n=== CONVERSATION ===\n${msgLog}` : msgLog;
+                            if (isAgent('medical')) {
+                              logTxt += `\n\n[Medical Profile]\n${JSON.stringify(profile, null, 2)}`;
+                            }
+                            return logTxt;
+                          })()}
+                          logsArray={(() => {
+                            const arr = messages.map(m => `[${m.role.toUpperCase()}]\n${m.content}`);
+                            if (lastSentPayload) {
+                              arr.unshift(`=== PAYLOAD ===\n${JSON.stringify(lastSentPayload, null, 2)}`);
+                            }
+                            if (isAgent('medical')) {
+                              arr.push(`[Medical Profile]\n${JSON.stringify(profile, null, 2)}`);
+                            }
+                            return arr;
+                          })()}
+                          onSendToAdmin={handleSendLogToAdmin}
+                          isSendingLogs={isSendingLogs}
+                          logsSendStatus={logsSendStatus}
+                          onClearLogs={() => {
+                            setMessages(prev => prev.length > 0 ? [prev[0]] : []);
+                            setLastSentPayload(null);
+                            sessionStorage.removeItem(payloadStorageKey);
+                            sessionStorage.removeItem(chatStorageKey);
+                            setShowFullScreenConv(false);
+                          }}
+                          eventsCount={messages.length}
+                        />
+                      </Suspense>
+                    )}
                   </div>
                 </div>
               )}
@@ -6159,7 +6198,7 @@ ${JSON.stringify(profile, null, 2)}`);
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === 'Enter' && !isAnalyzing && !isSubmitting && !isSendingRef.current) {
                     const triggerText = inputText.trim() || autoSendMessage || (reviewBiomarkerKey ? buildBiomarkerReviewPrefill(reviewBiomarkerKey, undefined, biomarkers, profile) : '');
                     handleSend(triggerText || undefined);
                   }
@@ -6172,14 +6211,19 @@ ${JSON.stringify(profile, null, 2)}`);
                 id="food-chat-send-btn"
                 type="button"
                 onClick={() => {
+                  if (isAnalyzing || isSubmitting || isSendingRef.current) return;
                   const triggerText = inputText.trim() || autoSendMessage || (reviewBiomarkerKey ? buildBiomarkerReviewPrefill(reviewBiomarkerKey, undefined, biomarkers, profile) : '');
                   handleSend(triggerText || undefined);
                 }}
-                disabled={isAnalyzing || isSendingRef.current}
-                className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50"
+                disabled={isAnalyzing || isSubmitting || isSendingRef.current}
+                className={`px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs flex items-center gap-1.5 shrink-0 ${(isAnalyzing || isSubmitting || isSendingRef.current) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'}`}
               >
-                <Send className="w-4 h-4" />
-                <span>{isAnalyzing ? 'Analyzing...' : 'Analyze'}</span>
+                {(isAnalyzing || isSubmitting) ? (
+                  <Loader className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+                <span>{(isAnalyzing || isSubmitting) ? 'Analyzing...' : 'Analyze'}</span>
               </button>
             </div>
           )}
@@ -6361,22 +6405,25 @@ ${JSON.stringify(profile, null, 2)}`);
         currency={currency}
         maxDistance={maxDistance}
       />
-      <FullScreenLogViewer
-        isOpen={showFullScreenDebugLogs}
-        onClose={() => setShowFullScreenDebugLogs(false)}
-        title="AI Agent Diagnostic Log History"
-        logsText={debugLogs.map(l => `[${l.timestamp}] ${l.message}`).join('\\n')}
-        logsArray={debugLogs.map(l => `[${l.timestamp}]
-${l.message}`)}
-        onSendToAdmin={handleSendDebugLogsToAdmin}
-        isSendingLogs={isDebugSendingLogs}
-        logsSendStatus={debugLogsSendStatus}
-        onClearLogs={handleClearDebugLogs}
-        eventsCount={debugLogs.length}
-        conversationsList={conversationsList}
-        activeConversationId={activeConversationId || undefined}
-        showFilters={true}
-      />
+      {showFullScreenDebugLogs && (
+        <Suspense fallback={null}>
+          <FullScreenLogViewer
+            isOpen={showFullScreenDebugLogs}
+            onClose={() => setShowFullScreenDebugLogs(false)}
+            title="AI Agent Diagnostic Log History"
+            logsText={debugLogs.map(l => `[${l.timestamp}] ${l.message}`).join('\\n')}
+            logsArray={debugLogs.map(l => `[${l.timestamp}]\n${l.message}`)}
+            onSendToAdmin={handleSendDebugLogsToAdmin}
+            isSendingLogs={isDebugSendingLogs}
+            logsSendStatus={debugLogsSendStatus}
+            onClearLogs={handleClearDebugLogs}
+            eventsCount={debugLogs.length}
+            conversationsList={conversationsList}
+            activeConversationId={activeConversationId || undefined}
+            showFilters={true}
+          />
+        </Suspense>
+      )}
       {flagMsg && (
         <UniversalModal
           isOpen={!!flagMsg}

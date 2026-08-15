@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { normalizeFoodKey, normalizeDishKey, resolveInternalFood, checkAtwaterValidity, getFallbackCategoryProfile, upsertFoodAlias, mergeFoodCatalogItems } from './server_food_catalog';
-import { applyServerAverageNutrients } from './server';
+import { applyServerAverageNutrients } from './server_pure_helpers';
 import { NUTRIENT_KEYS } from './src/utils/nutrients';
 
 describe('Food Catalog Normalization & Resolution (PASS 2 - R7)', () => {

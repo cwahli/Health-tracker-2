@@ -1,7 +1,8 @@
 import { trackApiCall, setActiveQueryId, generateQueryId } from '../utils/apiTracker';
 import { UniversalModal } from './UniversalModal';
 import { toYYYYMMDD } from "../utils/dateUtils";
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
 import { UserProfile, BiomarkerLog } from '../types';
 import { biomarkerDefinitions, BIOMARKER_GROUPING_OPTIONS, getBiomarkerMetadata, getMergedBiomarkerDef, isPendingCatalogApproval } from '../utils/biomarkers';
 import { X, CheckCircle, Check, AlertCircle, Edit2, Loader, Save, ArrowRight, CheckSquare, Square, MessageSquare, Send, ChevronLeft, ChevronDown, FileCode, Merge, Copy, Upload, Trash, Paperclip, Calendar, Info, Terminal, BrainCircuit, Clock, Zap } from 'lucide-react';
@@ -9,7 +10,7 @@ import BiomarkerRangeBuilder, { parseNormalRangeStr } from './BiomarkerRangeBuil
 import CombineBiomarkersModal from './CombineBiomarkersModal';
 import LLMSelector from './LLMSelector';
 import FullScreenInstructionViewer from './FullScreenInstructionViewer';
-import FullScreenLogViewer from './FullScreenLogViewer';
+const FullScreenLogViewer = lazyWithRetry(() => import('./FullScreenLogViewer'));
 import NotUsedBiomarkersModal from './NotUsedBiomarkersModal';
 import { saveAgentRequestLog } from '../utils/agentLogsTracker';
 
@@ -1785,7 +1786,6 @@ I can analyze these, compare them with our database keys, and find standard mapp
         content: m.content
       }));
 
-      trackApiCall('gemini', `Route Chat`);
       const res = await fetch('/api/gemini/route-chat', {
         method: 'POST',
         headers: { 
@@ -5844,12 +5844,16 @@ I can analyze these, compare them with our database keys, and find standard mapp
       })()}
 
       {/* AI AGENT DIAGNOSTIC LOG HISTORY UNIFIED MODAL */}
-      <FullScreenLogViewer
-        isOpen={showAgentLogs}
-        onClose={() => setShowAgentLogs(false)}
-        title="AI Agent Diagnostic Log History"
-        logsText=""
-      />
+      {showAgentLogs && (
+        <Suspense fallback={null}>
+          <FullScreenLogViewer
+            isOpen={showAgentLogs}
+            onClose={() => setShowAgentLogs(false)}
+            title="AI Agent Diagnostic Log History"
+            logsText=""
+          />
+        </Suspense>
+      )}
 
       {/* NOT USED BIOMARKERS MODAL */}
       <NotUsedBiomarkersModal

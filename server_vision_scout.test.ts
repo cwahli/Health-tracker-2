@@ -114,7 +114,7 @@ describe("server_vision_scout", () => {
       expect(result.scoutCookingMethod).toBe("deep-fried");
       expect(result.visionScoutContentType).toBe("visual");
       expect(result.scoutRecommendedMode).toBe("new_log");
-      expect(result.queriesToSearch).toContain("french fries");
+      expect(result.queriesToSearch).toHaveLength(0); // Generic items like 'french fries' without chainName shouldn't be pre-searched
       expect(result.visionScoutRanAndReturnedItems).toBe(true);
     });
 

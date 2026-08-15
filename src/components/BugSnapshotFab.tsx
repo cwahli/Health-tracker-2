@@ -38,6 +38,7 @@ import { CATEGORY_OPTIONS, saveBugTrackerCache } from './FlagIssueModal';
 import { BugCategory } from '../utils/issueBacklog';
 import { AVAILABLE_LLMS } from '../utils/llm';
 import { JobStore } from '../jobs/JobStore';
+import { get as idbGet } from 'idb-keyval';
 import { ImageStore } from '../jobs/ImageStore';
 import { normalizeMealImageUrl, UNUSABLE_IMAGE_TOKENS } from '../utils/foodImageSources';
 import { saveAgentRequestLog } from '../utils/agentLogsTracker';
@@ -114,8 +115,7 @@ export async function resolveDisplayableImage(ref: unknown): Promise<string | nu
   if (s.startsWith('blob:')) return s;
   if (s.startsWith('imageStore/')) {
     try {
-      const { get } = await import('idb-keyval');
-      const val = await get<string | Blob>(s);
+      const val = await idbGet<string | Blob>(s);
       if (val) return await resolveDisplayableImage(val);
     } catch {
       /* ignore */

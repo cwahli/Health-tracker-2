@@ -876,6 +876,9 @@ export function synchronizeNarrativeText(
 
   // 5. Protein
   updated = updated.replace(/\b[\d,]+(\.\d+)?\s*g\s*(of\s*)?protein\b/gi, `${pVal}g of protein`);
+  updated = updated.replace(/protein\s*\([^)]*[\d,]+(\.\d+)?\s*g[^)]*\)/gi, `protein (${pVal}g)`);
+  updated = updated.replace(/protein\s*:\s*[\d,]+(\.\d+)?\s*g/gi, `protein: ${pVal}g`);
+  updated = updated.replace(/(roughly|approximately|about|around|~)\s*[\d,]+(\.\d+)?\s*g\s*(of\s*)?protein\b/gi, `~$pVal}g of protein`.replace('$pVal', String(pVal)));
 
   // 6. Carbohydrates
   if (grandCarbs !== undefined && grandCarbs > 0) {
@@ -1034,11 +1037,22 @@ export function checkCategoryAndStateCompatibility(
     return { compatible: false, reason: `Blocked meat/seafood candidate ("${candidateName}") for plain greens/vegetable query ("${query}")` };
   }
 
-  // 4. Spice/Seasoning vs Fresh/Whole
+  // 4. Spice/Seasoning vs Fresh/Whole/Meat
   const isSpiceCandidate = /\b(spice|spices|seasoning|seasonings|powder|extract|flavoring|flavouring)\b/i.test(c);
   const isFreshWholeQuery = /\b(fresh|raw|whole|leaf|leaves|fruit|vegetable)\b/i.test(q);
+  const isMeatSeafoodQuery = /\b(beef|steak|pork|bacon|ham|sausage|chicken|turkey|duck|fish|salmon|tuna|cod|shrimp|prawn|crab|lobster|clams|seafood)\b/i.test(q);
   if (isSpiceCandidate && isFreshWholeQuery && !/\b(spice|seasoning|powder|extract)\b/i.test(q)) {
     return { compatible: false, reason: `Blocked spice/seasoning candidate ("${candidateName}") for fresh/whole food query ("${query}")` };
+  }
+  if (isSpiceCandidate && isMeatSeafoodQuery && !/\b(spice|seasoning|powder|extract)\b/i.test(q)) {
+    return { compatible: false, reason: `Blocked spice/seasoning candidate ("${candidateName}") for meat/seafood query ("${query}")` };
+  }
+
+  // 4b. Salt vs Butter/Fat
+  const isSaltQuery = /\b(salt|table salt|sea salt|sodium chloride)\b/i.test(q);
+  const isFatCandidate = /\b(butter|margarine|oil|ghee|shortening|lard)\b/i.test(c);
+  if (isSaltQuery && isFatCandidate && !/\b(butter|margarine|oil|ghee|shortening|lard)\b/i.test(q)) {
+    return { compatible: false, reason: `Blocked fat/butter candidate ("${candidateName}") for salt query ("${query}")` };
   }
 
   // 5. Dried/Powder vs Fresh/Cooked
@@ -1056,4 +1070,41 @@ export function checkCategoryAndStateCompatibility(
   }
 
   return { compatible: true };
+}
+
+export function applyServerAverageNutrients(
+  groups: any[],
+  preCalcByScoutIndex: Record<number, Record<string, number>>
+): any[] {
+  if (!Array.isArray(groups)) return [];
+  return groups.map((g) => {
+    const indices: number[] = Array.isArray(g.scoutItemIndices) ? g.scoutItemIndices : [];
+    if (indices.length === 0) {
+      return g;
+    }
+    const sumMap: Record<string, number> = {};
+    let count = 0;
+    indices.forEach((idx) => {
+      const nutrients = preCalcByScoutIndex[idx];
+      if (nutrients) {
+        count++;
+        for (const [k, v] of Object.entries(nutrients)) {
+          const num = Number(v) || 0;
+          sumMap[k] = (sumMap[k] || 0) + num;
+        }
+      }
+    });
+
+    if (count > 0) {
+      const avgMap: Record<string, number> = {};
+      for (const [k, v] of Object.entries(sumMap)) {
+        avgMap[k] = Math.round((v / count) * 10) / 10;
+      }
+      return {
+        ...g,
+        averageNutrients: avgMap,
+      };
+    }
+    return g;
+  });
 }

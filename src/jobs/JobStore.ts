@@ -2,6 +2,7 @@ import { AgentJob } from './types';
 import { ImageStore } from './ImageStore';
 import { MealBuild } from '../mealBuild/types';
 import { rebaseUserEdit } from '../mealBuild/consolidate';
+import { deleteJobFromBackend } from './SupabaseJobSync';
 
 type Listener = () => void;
 
@@ -248,9 +249,7 @@ class JobStoreImpl {
     // Draft cleanup auto-purges associated ImageStore entries
     await ImageStore.purgeImages(id);
     // Asynchronously delete job from backend / Supabase
-    import('./SupabaseJobSync')
-      .then((m) => m.deleteJobFromBackend(id))
-      .catch((err) => console.warn('Failed to dispatch backend job deletion:', err));
+    deleteJobFromBackend(id).catch((err) => console.warn('Failed to dispatch backend job deletion:', err));
   }
 
   rebaseJobMealEdit(

@@ -267,7 +267,7 @@ export function aggregateItemsNutrients(
       {
         const sugarResult = deduceSugarBreakdown({
           totalSugar: sumTotalSugar > 0 ? sumTotalSugar : sumSugar,
-          addedSugarPrinted: null,
+          addedSugarPrinted: sumSugar >= 0 ? sumSugar : (raw100.addedSugar !== undefined ? raw100.addedSugar : null),
           carbohydrates: sumCarbs,
           totalFibre: sumFibre,
           physicalForm: physicalFormClassification.physicalForm,
@@ -453,7 +453,7 @@ export function aggregateItemsNutrients(
     if (itemNutrients.sugar || itemNutrients.addedSugar) {
       const sugarResult = deduceSugarBreakdown({
         totalSugar: itemNutrients.sugar || itemNutrients.addedSugar || 0,
-        addedSugarPrinted: labelData?.addedSugar != null ? Number(labelData.addedSugar) : null,
+        addedSugarPrinted: labelData?.addedSugar != null ? Number(labelData.addedSugar) : (itemNutrients.addedSugar !== undefined && itemNutrients.addedSugar !== null ? Number(itemNutrients.addedSugar) : null),
         carbohydrates: itemNutrients.carbohydrates,
         totalFibre: itemNutrients.totalFibre,
         physicalForm: physicalFormClassification.physicalForm,

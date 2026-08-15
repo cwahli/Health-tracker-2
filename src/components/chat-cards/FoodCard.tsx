@@ -1831,8 +1831,22 @@ export const FoodCard: React.FC<AgentCardProps & {
   }, [messageImages]);
 
   const resolvedScoutItems = React.useMemo(() => {
-    return (activeScoutItems && activeScoutItems.length > 0) ? activeScoutItems : (msg.data?.scoutItems || []);
-  }, [activeScoutItems, msg.data?.scoutItems]);
+    if (activeScoutItems && activeScoutItems.length > 0) return activeScoutItems;
+    if (msg.data?.scoutItems && msg.data.scoutItems.length > 0) return msg.data.scoutItems;
+    if (msg.data?.pendingFoodLog?.scoutItems && Array.isArray(msg.data.pendingFoodLog.scoutItems) && msg.data.pendingFoodLog.scoutItems.length > 0) return msg.data.pendingFoodLog.scoutItems;
+    if (msg.pendingFoodLog?.scoutItems && Array.isArray(msg.pendingFoodLog.scoutItems) && msg.pendingFoodLog.scoutItems.length > 0) return msg.pendingFoodLog.scoutItems;
+    if (msg.data?.agentResult?.scoutItems && Array.isArray(msg.data.agentResult.scoutItems) && msg.data.agentResult.scoutItems.length > 0) return msg.data.agentResult.scoutItems;
+    if (messages) {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const m = messages[i];
+        if (m.data?.scoutItems && m.data.scoutItems.length > 0) return m.data.scoutItems;
+        if (m.data?.pendingFoodLog?.scoutItems && m.data.pendingFoodLog.scoutItems.length > 0) return m.data.pendingFoodLog.scoutItems;
+        if (m.pendingFoodLog?.scoutItems && m.pendingFoodLog.scoutItems.length > 0) return m.pendingFoodLog.scoutItems;
+        if (m.data?.agentResult?.scoutItems && m.data.agentResult.scoutItems.length > 0) return m.data.agentResult.scoutItems;
+      }
+    }
+    return [];
+  }, [activeScoutItems, msg, messages]);
 
   const getNutrientFromTable = (comparisonTable: any, nutrientNameQuery: string, foodIdx: number): string | null => {
     if (!comparisonTable || !comparisonTable.rows) return null;
@@ -1872,7 +1886,7 @@ export const FoodCard: React.FC<AgentCardProps & {
     // Enrich each group's items with boundingBox2D and sourceImageIndex from scoutItems
     const groups = rawGroups.map((g: any) => {
       const items = (g.items || []).map((item: any) => {
-        const matchingScout = (msg.data?.scoutItems || []).find((s: any) => {
+        const matchingScout = (resolvedScoutItems || []).find((s: any) => {
           const itemName = (item.name || "").toLowerCase();
           const sKw = (s.keyword || "").toLowerCase();
           const sOrig = (s.originalName || "").toLowerCase();
@@ -1881,7 +1895,7 @@ export const FoodCard: React.FC<AgentCardProps & {
             (itemName && sOrig && (itemName.includes(sOrig) || sOrig.includes(itemName))) ||
             (itemName.split(' ')[0] === sKw.split(' ')[0])
           );
-        }) || (msg.data?.scoutItems || []).find((s: any) => {
+        }) || (resolvedScoutItems || []).find((s: any) => {
           const gName = (g.groupName || "").toLowerCase();
           const sKw = (s.keyword || "").toLowerCase();
           const sOrig = (s.originalName || "").toLowerCase();
@@ -1909,7 +1923,7 @@ export const FoodCard: React.FC<AgentCardProps & {
           sourceImageIndex: 0
         }
       ].map(item => {
-        const matchingScout = (msg.data?.scoutItems || []).find((s: any) => {
+        const matchingScout = (resolvedScoutItems || []).find((s: any) => {
           const gName = (g.groupName || "").toLowerCase();
           const sKw = (s.keyword || "").toLowerCase();
           const sOrig = (s.originalName || "").toLowerCase();
@@ -1933,7 +1947,7 @@ export const FoodCard: React.FC<AgentCardProps & {
     });
 
     return groups;
-  }, [msg.data, profile?.topNutrientsToMonitor]);
+  }, [comparisonData, resolvedScoutItems, profile?.topNutrientsToMonitor]);
 
   // Function to parallel-fetch all text menu images in complete mode
   const fetchGroupMenuImages = async (groupIdx: number) => {
@@ -2246,7 +2260,6 @@ export const FoodCard: React.FC<AgentCardProps & {
                                     const firstItem = group.items?.[0];
                                     
                                     const resolvedMessageImages = messageImages;
-                                    const resolvedScoutItems = msg.data?.scoutItems || [];
 
                                     if (firstItem) {
                                       // Find matching scout item: prefer exact scoutIndex match over name heuristics
@@ -2473,7 +2486,6 @@ export const FoodCard: React.FC<AgentCardProps & {
                                      const isVisualOrPosted = scoutType === 'visual_or_posted';
                                      
                                      const resolvedMessageImages = messageImages;
-                                     const resolvedScoutItems = msg.data?.scoutItems || [];
                                      // 1. Precompute groupPreviewItems
                                      const groupPreviewItems = (group.items || []).map((item: any) => {
                                        const matchingScout = (resolvedScoutItems || []).find((s: any) => {
@@ -2810,7 +2822,6 @@ export const FoodCard: React.FC<AgentCardProps & {
         const item = group.items?.[previewState.itemIdx];
         if (!item) return null;
         const resolvedMessageImages = messageImages;
-        const resolvedScoutItems = msg.data?.scoutItems || [];
         // Resolve its image source and bounding box: prefer exact scoutIndex match over name heuristics
         const matchingScout = (resolvedScoutItems || []).find((s: any) => {
           if (s.scoutIndex !== undefined && item.scoutIndex !== undefined && s.scoutIndex === item.scoutIndex) return true;

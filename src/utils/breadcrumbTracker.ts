@@ -37,7 +37,7 @@ export function recordBreadcrumb(action: string, target?: string, details?: any)
       details
     };
     window.__userActionBreadcrumbs.push(entry);
-    if (window.__userActionBreadcrumbs.length > 50) {
+    if (window.__userActionBreadcrumbs.length > 100) {
       window.__userActionBreadcrumbs.shift();
     }
     const promptText = typeof details === 'string' ? details : (details?.prompt || details?.text || details?.label);
@@ -47,6 +47,16 @@ export function recordBreadcrumb(action: string, target?: string, details?: any)
       timestamp: entry.timestamp,
       details
     };
+  } catch (_) {}
+}
+
+/** Clear the breadcrumb ring-buffer before a new chat turn so that
+ *  per-turn logs are not contaminated by stale interactions from
+ *  previous turns in a continuous session. */
+export function clearBreadcrumbs() {
+  try {
+    if (typeof window === 'undefined') return;
+    window.__userActionBreadcrumbs = [];
   } catch (_) {}
 }
 

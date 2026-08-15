@@ -8,6 +8,7 @@ export interface SugarDeductionInput {
   totalFat?: number | null;
   physicalForm?: string | null;    // reuse classifyUniversalPhysicalFormV3 output, e.g. 'SOLID_FRUIT_VEG'
   ingredientsList?: string | null;
+  foodName?: string | null;        // dish / ingredient name for sweetener classification
 }
 
 export interface SugarDeductionResult {
@@ -21,10 +22,12 @@ export interface SugarDeductionResult {
     | 'no_sweetener_in_ingredients'
     | 'ingredient_sweetener_present'
     | 'carb_remainder_capped'
+    | 'designated_sweetener_check'
     | 'unresolved_default_full_sugar';
 }
 
 const SWEETENER_REGEX = /\b(sugar|sugars|syrup|honey|fructose|dextrose|sucrose|glucose|maltose|caramel|cane|molasses|agave|nectar|sweetener|corn\s*syrup|isoglucose|treacle)\b/i;
+const DESIGNATED_SWEETENER_REGEX = /\b(sugar|syrup|honey|glaze|icing|frosting|sweetener|caramel|jam|jelly|sweet\s*sauce|candy|chocolate|toffee|agave|treacle|marshmallow|sweetened|confectionery|dessert|cookie|cake|pastry|doughnut|donut)\b/i;
 
 const LACTOSE_G_PER_100G = 4.5;
 
@@ -55,7 +58,7 @@ export function deduceSugarBreakdown(input: SugarDeductionInput): SugarDeduction
   const form = String(input.physicalForm || '').toUpperCase();
 
   // 2. Whole Food Immunity Rule
-  if (form === 'SOLID_FRUIT_VEG' || form === 'SOLID_MEAT_FISH') {
+  if (form === 'SOLID_FRUIT_VEG' || form === 'SOLID_MEAT_FISH' || form === 'SOLID_GRAIN_STARCH') {
     return {
       sugar: round1(totalSugar),
       addedSugar: 0,
@@ -95,9 +98,21 @@ export function deduceSugarBreakdown(input: SugarDeductionInput): SugarDeduction
     };
   }
 
-  // 5. Unresolved: no ingredients list, no whole-food/dairy classification, no printed added sugar.
-  // Conservative default: treat as fully added (matches pre-fix behavior for genuinely unknown
-  // processed items, but whole foods/dairy/ingredient-checked items never reach this branch).
+  // 5. Designated sweetener foodName check
+  if (input.foodName) {
+    const isDesignated = DESIGNATED_SWEETENER_REGEX.test(input.foodName);
+    if (!isDesignated) {
+      // Non-sweetener whole dish/savory component defaults to natural sugar
+      return {
+        sugar: round1(totalSugar),
+        addedSugar: 0,
+        naturalSugar: round1(totalSugar),
+        derivationMethod: 'designated_sweetener_check',
+      };
+    }
+  }
+
+  // 6. Unresolved default: for designated sweets without ingredients, treat as added sugar
   return {
     sugar: round1(totalSugar),
     addedSugar: round1(totalSugar),

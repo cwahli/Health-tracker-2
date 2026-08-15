@@ -401,15 +401,9 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
       if (iErr) return res.status(500).json({ error: iErr.message });
 
       if (issues && Array.isArray(issues)) {
-        issues = await Promise.all(issues.map(async (issue: any) => {
-          if (issue.payload && typeof issue.payload === 'object' && (issue.payload as any).is_r2) {
-            const r2Payload = await fetchPayloadFromR2(issue.id);
-            if (r2Payload) {
-              return { ...issue, payload: r2Payload };
-            }
-          }
-          return issue;
-        }));
+        // We removed fetchPayloadFromR2 in the overview endpoint to fix a massive 
+        // 200-item sequential/concurrent fetch that was blocking the event loop and network, 
+        // resulting in 4-second latency. The frontend should only fetch payload on-demand.
       }
 
       const { tags, links } = await loadBugTagsWithLinks(supabaseAdmin);

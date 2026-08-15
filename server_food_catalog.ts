@@ -1,4 +1,4 @@
-import { supabaseAdmin } from './supabaseAdmin';
+import { supabaseAdmin, isSupabaseConfigured } from './supabaseAdmin';
 import { CANONICAL_BASE_FOODS } from './server_food_db';
 import { NUTRIENT_KEYS } from './src/utils/nutrients';
 import { ensureFoodCatalogSchema, resetFoodCatalogSchemaEnsure } from "./server_food_catalog_schema.js";
@@ -76,6 +76,10 @@ export async function resolveInternalFood(query: string): Promise<InternalFoodMa
   }
 
   // 2. Query Supabase for active/candidate food item or alias
+  if (!isSupabaseConfigured) {
+    return null;
+  }
+
   try {
     const { data: itemData, error: itemError } = await supabaseAdmin
       .from('food_items')
@@ -151,6 +155,9 @@ export async function resolveDishCache(query: string): Promise<InternalDishMatch
   if (!query) return null;
   const key = normalizeDishKey(query);
   if (!key) return null;
+  if (!isSupabaseConfigured) {
+    return null;
+  }
 
   try {
     const { data: dish, error } = await supabaseAdmin
@@ -213,6 +220,9 @@ export async function upsertFoodAlias(alias: {
   weight?: number;
   source?: string;
 }): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured) {
+    return { success: true };
+  }
   try {
     const ens = await ensureFoodCatalogSchema();
     if (!ens.ok && /schema cache|does not exist|Could not find the table/i.test(ens.error || '')) {
@@ -220,12 +230,19 @@ export async function upsertFoodAlias(alias: {
     }
     const normAlias = normalizeFoodKey(alias.alias_key);
     if (!normAlias) return { success: false, error: 'Alias key required' };
+    
+    const targetFoodId = alias.food_id || alias.food_key || normAlias;
+    if (normAlias === targetFoodId) {
+      // Issue #8: Generated redundant aliases for exact query strings. Add a local check to skip exact self-references.
+      console.debug(`[upsertFoodAlias] Skipping self-referential alias: ${normAlias}`);
+      return { success: true };
+    }
 
     const { error } = await supabaseAdmin
       .from('food_aliases')
       .upsert({
         alias_key: normAlias,
-        food_id: alias.food_id || alias.food_key || normAlias,
+        food_id: targetFoodId,
         weight: alias.weight ?? 1.0,
         source: alias.source || 'food_resolver',
         created_at: new Date().toISOString()
@@ -510,6 +527,10 @@ export async function mergeFoodCatalogItems(
 
     if ((sourceHasBar && targetHasLoose) || (sourceHasLoose && targetHasBar)) {
       return { success: false, error: 'Refused merge: Incompatible physical form tags (bar vs loose/cup)' };
+    }
+
+    if (!isSupabaseConfigured) {
+      return { success: true, message: 'Offline mode: merge skipped' };
     }
 
     const { data: sourceItem } = await supabaseAdmin.from('food_items').select('*').eq('food_key', normSource).maybeSingle();
