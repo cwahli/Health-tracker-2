@@ -3,6 +3,8 @@
 **Handover (WIP):** [`AI_HANDOVER.md`](../AI_HANDOVER.md)  
 **Process:** [`AGENTS.md`](../AGENTS.md) · [`docs/agent/PACKS.md`](../docs/agent/PACKS.md)
 
+**Bug-fix law (2026-08-15):** `AGENTS.md` **L14** — several independent jobs in one turn are required; `POST /loop` / meal-green search is forbidden. Copy-AI-Studio from Golden inbox now ships that contract.
+
 ## Active packs
 
 | Pack | Role |

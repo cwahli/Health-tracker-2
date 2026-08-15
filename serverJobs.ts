@@ -201,6 +201,15 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
   const dbKind = kind || 'food_log';
   const dbMode = mode || 'review';
 
+  // Same jobId + two client POSTs (LogChat + JobQueueRunner race) used to start
+  // two food-analyze streams and double every Gemini call. A new send after
+  // succeeded / awaiting_user / failed is a real continuation and must proceed.
+  const already = inMemoryServerJobs.get(jobId);
+  if (already && (already.status === 'running' || already.status === 'queued')) {
+    console.log(`[ServerJobs] Job ${jobId} already ${already.status} — skipping duplicate analyze.`);
+    return;
+  }
+
   let initialStatusMessage = 'Starting cloud food analysis...';
   if (payload.portionChoices && typeof payload.portionChoices === 'object' && Array.isArray(payload.activeScoutItems)) {
     const parts: string[] = [];

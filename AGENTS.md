@@ -1,6 +1,6 @@
 # AGENTS.md — Always-on rules (keep short)
 
-**Updated:** 2026-08-12  
+**Updated:** 2026-08-15  
 
 **Token rule:** Read **this file first**. Load domain rulebooks (`docs/agent/**`) **only when the table below says so**. (Investigating application source code, debug logs, and relevant functions is always permitted and encouraged; do not dump unneeded rulebook docs).
 
@@ -68,7 +68,9 @@ One path fixed ≠ feature done. Shared helper + all call sites, **or** explicit
 Do not drop existing merge/construct fields unless scoped + consumers audited.
 
 ### L7 — Detect AND repair
-Detection-only is incomplete when repair is in scope.
+Detection-only is incomplete when repair is in scope.  
+Repair = fix the **class** (ranker refuse, restore a dropped dish, stop a silent scale).  
+It does **not** mean paint a meal green (catalog `includes()`, alias, `expected.json`, `POST /loop`). See L14.
 
 ### L8 — Prefer extract over god-file rewrites
 Hot pure logic → small modules + tests; thin call sites in `server.ts` / `App.tsx`.
@@ -106,11 +108,29 @@ When executing multi-phase plans (e.g. `studio/M*.md` or `plan/*.md`):
 
 This law does **not** waive protected-doc confirmation (§3) unless the pack lists those files as in-scope.
 
+### L14 — Multi-job OK, retry-loops forbidden
+When asked to fix bugs (one ticket or a whole registry):
+
+1. **Split into independent jobs.** A 7-row table is several jobs, not one meal-green search. Run them in the **same turn** when files do not collide. Do not stop after job 1 and ask the human to continue.
+2. **Work item = class, not meal `all_green`.** Classify first: `FALSE_FRIEND` · `DISH_DROP` · `OPENING_WRONG` · `SILENT_REPAIR` · `CALL_BUDGET` · `INFRA_LATENCY`. One class per job. Other reds on that meal are out of session.
+3. **Inner loop = named vitest, never `/loop`.** Forbidden as the way you work:
+   - `POST /api/golden/cases/:id/loop`
+   - Replaying the same meal until `all_green`
+   - Adding another `includes()` / hard-pass and retrying
+   - Grepping a ghost (e.g. a Chat Router that is not on the food path) past one failed hypothesis
+4. **Hypothesis budget.** Each job: `class` + hypothesis + predicted test + one allowed file. Predicted test does not flip → hypothesis **burned**. Two burns → **STOP that job** (`blocked_human`) and start the next independent job. Do not invent a third cheat.
+5. **Forbidden unless the class names them:** `server_food_db.ts`, `food_aliases`, golden `expected.json`, dietitian prompt bloat. Exact `expectFdcId` is **not** the reward.
+6. **Honest residual is done.** `MISS` / cannot resolve / needs human is a valid terminal. Do not bind a false friend to paint green. Do not steal a sibling component’s row. A **meal trial-balance miss** (backend/dietitian correction, narrative ≠ table) stays red and classifies `SILENT_REPAIR` / `DISH_DROP` — do not “repair” the books to green.
+7. **Durable test:** the inner test must fail on a *new* food of the same class (query-scoped pool, not “G8 sugar”). If the test only mentions one FDC, it is a patch.
+8. **Parallel is required, retry-loop is not.** Different classes / different files = do them now. Same-file collision = serialize those two only. Human only at `blocked_human`.
+
+This law **overrides L11 / L13** when they would mean “keep `/loop`-ing or grepping until the meal is green.” Continuous execution = the next **job**, not the next **replay**.
+
 ### L10 — COMPLETE
 All of: IMPACT (L/X) · SELF-CHECK · (if code changed: `tsc` · domain regression map commands · pack assert if any; skip if doc/ops only) · paths verified or known-broken noted.
 
 **Forbidden until then:** “all done” / “fully verified” / “nothing left.”  
-**Auto FAIL:** import without call site · silent half-fix · detect without repair · simulated tool output / fake edit completion · dropped fields · gate weakened · drive-by scope · early-stop mid multipass epic while checklist IDs remain (L13).
+**Auto FAIL:** import without call site · silent half-fix · detect without repair · simulated tool output / fake edit completion · dropped fields · gate weakened · drive-by scope · early-stop mid multipass epic while checklist IDs remain (L13) · `POST /loop` or meal-replay as the inner work method (L14) · claiming Fixed after a catalog/`includes()` paint.
 
 ---
 

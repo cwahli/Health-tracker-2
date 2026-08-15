@@ -18,6 +18,7 @@ import {
   type GoldenJourneyRow,
   type JourneyPhase,
 } from './goldenJourney';
+import { compileGoldenMeal, type GoldenMealCompile } from './goldenLedger';
 import { loopRedClass } from './goldenStudio';
 
 export type { GoldenInvariant, GoldenJourneyRow, JourneyPhase };
@@ -131,6 +132,7 @@ export type GoldenScoreboard = {
   journey?: GoldenJourneyRow[];
   invariants?: GoldenInvariant[];
   replayMode?: 'log' | 'catalog' | 'pipeline' | 'loop' | 'analyze';
+  ledger?: GoldenMealCompile;
 };
 
 const FORBIDDEN: Array<{ id: string; re: RegExp; label: string; signature: string }> = [
@@ -847,7 +849,14 @@ export function scoreGoldenRun(input: {
   );
   board.outcomes = outcomes;
   const meal = evaluateMealLines(board.expectedMeal, board.observedMeal);
+  board.ledger = compileGoldenMeal({
+    logText: input.logText,
+    foodLog: input.foodLog,
+    scout: input.scout,
+    replayMode: input.replayMode,
+  });
   const summary = scoreboardSummary(outcomes, meal.misses);
+  if (board.ledger && !board.ledger.mayPromote) summary.allGreen = false;
   return { board, meal, summary };
 }
 

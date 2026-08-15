@@ -958,7 +958,16 @@ export default function App() {
           // Durable jobs execute on server via /api/jobs/submit
           if (job.kind === 'food_log' || job.kind === 'food_compare' || job.kind === 'medical') {
             // Ensure job is submitted to server for retries or new jobs not yet pushed
-            if (!job.serverSubmittedAt || job.resumeStage || job.statusMessage?.includes('Retry')) {
+            // LogChat already POSTs /api/jobs/submit. Re-submitting while
+            // clientSubmitPending (or after serverSubmittedAt) starts a second
+            // food-analyze and doubles Gemini calls. Only submit here if the
+            // client never started, or explicitly asked the runner to retry.
+            const clientAlreadySubmitting = !!job.clientSubmitPending;
+            const alreadyOnServer = !!job.serverSubmittedAt;
+            const runnerShouldRetry =
+              !!job.resumeStage ||
+              (job.statusMessage || '').includes('background runner retrying submit');
+            if ((!alreadyOnServer && !clientAlreadySubmitting) || runnerShouldRetry) {
               console.log(`[JobQueueRunner] Submitting job ${job.id} to server...`);
               let stringImages = [];
               try {

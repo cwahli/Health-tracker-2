@@ -1626,10 +1626,18 @@ export const FoodCard: React.FC<AgentCardProps & {
     
     const usedScoutIndices = new Set();
     // Map each item in itemsBreakdown to a scout item format
-    return itemsBreakdown.map((item: any, i: number) => {
+    return itemsBreakdown.map((item: any) => {
       // Find the best matching scout item in activeScoutItems to preserve bounding box and image index
       let matchingScout = (activeScoutItems || []).find((s: any) => {
-        if (s.scoutIndex !== undefined && item.scoutIndex !== undefined && Number(s.scoutIndex) === Number(item.scoutIndex)) return true;
+        if (s.scoutIndex !== undefined && item.scoutIndex !== undefined && Number(s.scoutIndex) === Number(item.scoutIndex)) {
+          const itemName = (item.canonicalDbName || item.name || item.originalName || '').toLowerCase();
+          const sName = (s.originalName || s.keyword || '').toLowerCase();
+          if (!itemName || !sName) return true;
+          if (itemName.includes(sName) || sName.includes(itemName)) return true;
+          const it = itemName.split(/[^a-z0-9]+/).filter((t: string) => t.length >= 4);
+          const st = sName.split(/[^a-z0-9]+/).filter((t: string) => t.length >= 4);
+          return it.some((t: string) => st.includes(t));
+        }
         return false;
       });
       if (!matchingScout) {
@@ -1644,12 +1652,8 @@ export const FoodCard: React.FC<AgentCardProps & {
           return itemTokens.some((t: string) => sTokens.includes(t));
         });
       }
-      if (!matchingScout && itemsBreakdown.length === (activeScoutItems || []).length) {
-        const candidate = (activeScoutItems || [])[i];
-        if (candidate && !usedScoutIndices.has(candidate.scoutIndex)) {
-          matchingScout = candidate;
-        }
-      }
+      // Never fall back to array position — dietitian reindex (0,1,2,3 vs 0,1,3,4)
+      // attached the croissant crop to the cinnamon roll.
       
       if (matchingScout && matchingScout.scoutIndex !== undefined) {
         usedScoutIndices.add(matchingScout.scoutIndex);

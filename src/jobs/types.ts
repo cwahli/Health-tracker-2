@@ -57,6 +57,8 @@ export interface AgentJob {
   debugUrl?: string;
   retryNotBefore?: string;
   serverSubmittedAt?: number; // ISO date string
+  /** Client is already POSTing /api/jobs/submit — runner must not submit a second analyze. */
+  clientSubmitPending?: boolean;
   lastProgressAt?: string;
   abortController?: AbortController;
   cancelReason?: string;

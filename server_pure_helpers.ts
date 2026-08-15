@@ -1055,6 +1055,20 @@ export function checkCategoryAndStateCompatibility(
     return { compatible: false, reason: `Blocked fat/butter candidate ("${candidateName}") for salt query ("${query}")` };
   }
 
+  // 4c. Poultry / meat vs onion-powder / crispy-onion spice (chicken → 171327)
+  const isPoultryQuery = /\b(chicken|turkey|poultry|breast|thigh|tender)\b/i.test(q);
+  const isOnionSpiceCand = /\b(onion\s*powder|spices?,?\s*onion|crispy\s*onion)\b/i.test(c) && !/\b(chicken|turkey|poultry)\b/i.test(c);
+  if (isPoultryQuery && isOnionSpiceCand && !/\bonion\b/i.test(q)) {
+    return { compatible: false, reason: `Blocked onion/spice candidate ("${candidateName}") for poultry query ("${query}")` };
+  }
+
+  // 4d. Raw flour ingredient vs prepared tortilla / wrap / flatbread (flour → 172522)
+  const isRawFlourQuery = /\bflour\b/i.test(q) && !/\b(tortilla|wrap|flatbread|burrito|taco|bread)\b/i.test(q);
+  const isPreparedTortillaCand = /\b(tortilla|wrap|flatbread|burrito)\b/i.test(c);
+  if (isRawFlourQuery && isPreparedTortillaCand) {
+    return { compatible: false, reason: `Blocked prepared-grain candidate ("${candidateName}") for flour ingredient query ("${query}")` };
+  }
+
   // 5. Dried/Powder vs Fresh/Cooked
   const isDriedCandidate = /\b(dried|dehydrated|powder|powdered|freeze-dried|flakes)\b/i.test(c);
   const isCookedFreshQuery = /\b(fresh|raw|cooked|boiled|hard-boiled|steamed|grilled|baked|poached)\b/i.test(q);

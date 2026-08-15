@@ -561,8 +561,13 @@ export function parseAndHealVisionScout(
     let lowestConfidence = "High (>90%)";
     let globalComment = "";
     if (parsedScout.queriesToSearch && Array.isArray(parsedScout.queriesToSearch)) {
+      const chainNames = (parsedScout.items || [])
+        .map((it: any) => String(it?.chainName || '').toLowerCase().trim())
+        .filter(Boolean);
       parsedScout.queriesToSearch.forEach((q: any) => {
-        if (typeof q === 'string' && q.trim()) {
+        if (typeof q !== 'string' || !q.trim()) return;
+        const ql = q.toLowerCase();
+        if (chainNames.some((c: string) => ql.includes(c))) {
           queriesToSearch.push(q.trim());
         }
       });

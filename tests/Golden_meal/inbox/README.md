@@ -1,13 +1,22 @@
-# Inbox — failing meals that loop until green
+# Inbox — class examples, not a catalog todo list
 
-When a logged meal is wrong:
+~14 folders are **4 unique meals** snapshotted many times. Treat the meal as an *example of a class*, not 14 tickets.
 
-1. Download the debug export (the same `.md` you already save).
-2. `node scripts/golden-from-debug.mjs ~/Downloads/debug-job_….md`
-3. `npm run golden:inbox`  
-   Re-run that after every code/catalog fix. **Do not re-photo the meal.**
-4. When it is green: `node scripts/golden-promote.mjs <jobId>`
+| Unique meal | Class | Durable solver |
+|---|---|---|
+| Croissants + wrap + quinoa | `FALSE_FRIEND` + query-scope | Bind only rows tagged with that component’s `searchQuery`. Do not steal tortilla/olive/sesame from a sibling. |
+| Prawn pasta + doughnut + hams | `DISH_DROP` / identity | Scout presence + name match. Ham ≠ Serrano collapse is a matcher bug, not a new FDC. |
+| Lassi 1000g | `OPENING_WRONG` | Weight-anchor / claimedItems. Frozen tape stays red on purpose. |
+| Quota / no scout | transport | Not food-calc. Do not invent binds. |
 
-This is replay only (frozen `scout.json`). No Gemini. That is what replaces 10–20 manual logs.
+**Forbidden “green”:** adding `CANONICAL_BASE_FOODS` / aliases / expected FDC so `lookupCanonicalBaseFood` matches. That is the same bug on the next food.
 
-Live-agent rotation is separate and still one meal at a time.
+**Flow (no `/loop`, no babysit):**
+
+1. Classify the meal (one class in session).
+2. Write a unit test that would fail on *any* new food of that class (query-scoped bind, refuse false friend, no index re-inject).
+3. Patch scout **or** resolver **or** backend bind — the layer that broke the contract.
+4. Run that test file. Two burned hypotheses → `blocked_human`.
+5. One outer replay of the example meal. Catalog replay cannot promote.
+
+Human is only needed at `blocked_human` (genuinely new food, or scout opening is wrong and needs a new photo/text).

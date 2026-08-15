@@ -265,13 +265,19 @@ export function aggregateItemsNutrients(
       itemNutrients.sodium = sumNa;
       itemNutrients.carbohydrates = parseFloat(sumCarbs.toFixed(2));
       {
+        const componentNames = [
+          item.ingredientsList,
+          ...(Array.isArray(item.components) ? item.components.map((c: any) => (typeof c === 'string' ? c : c.searchQuery || c.name || '')) : []),
+          ...(Array.isArray(item.componentsDetailList) ? item.componentsDetailList.map((c: any) => c.name || c.searchQuery || '') : []),
+        ].filter(Boolean).join(', ');
         const sugarResult = deduceSugarBreakdown({
           totalSugar: sumTotalSugar > 0 ? sumTotalSugar : sumSugar,
-          addedSugarPrinted: sumSugar >= 0 ? sumSugar : (raw100.addedSugar !== undefined ? raw100.addedSugar : null),
+          addedSugarPrinted: null,
           carbohydrates: sumCarbs,
           totalFibre: sumFibre,
           physicalForm: physicalFormClassification.physicalForm,
-          ingredientsList: item.ingredientsList,
+          ingredientsList: componentNames || item.ingredientsList,
+          foodName: canonicalName || item.keyword || item.originalName,
         });
         itemNutrients.sugar = sugarResult.sugar;
         itemNutrients.addedSugar = sugarResult.addedSugar;
@@ -453,11 +459,12 @@ export function aggregateItemsNutrients(
     if (itemNutrients.sugar || itemNutrients.addedSugar) {
       const sugarResult = deduceSugarBreakdown({
         totalSugar: itemNutrients.sugar || itemNutrients.addedSugar || 0,
-        addedSugarPrinted: labelData?.addedSugar != null ? Number(labelData.addedSugar) : (itemNutrients.addedSugar !== undefined && itemNutrients.addedSugar !== null ? Number(itemNutrients.addedSugar) : null),
+        addedSugarPrinted: labelData?.addedSugar != null ? Number(labelData.addedSugar) : null,
         carbohydrates: itemNutrients.carbohydrates,
         totalFibre: itemNutrients.totalFibre,
         physicalForm: physicalFormClassification.physicalForm,
         ingredientsList: item.ingredientsList,
+        foodName: canonicalName || item.keyword || item.originalName,
       });
       itemNutrients.sugar = sugarResult.sugar;
       itemNutrients.addedSugar = sugarResult.addedSugar;

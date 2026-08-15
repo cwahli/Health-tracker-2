@@ -193,7 +193,7 @@ export default function GoldenInboxPanel() {
     const r = await fetch(`/api/golden/cases/${id}/studio-brief`);
     const md = await r.text();
     await navigator.clipboard.writeText(
-      `Check this golden bug and fix it.\n\nPOST /api/golden/cases/${id}/loop runs skipScout pipeline from the frozen scout (no new photos, no Gemini scout).\nStops at green, the same reds, 5 runs, or quota/stall. After a code change POST /attempt then /loop again.\nDo not change expected numbers.\n\n---\n${md}`
+      `Check this golden bug and fix it.\n\nDo NOT POST /loop. Do not replay the meal until all_green. Do not edit catalog, aliases, or expected numbers to paint green.\n\n1. Classify the reds (FALSE_FRIEND / DISH_DROP / OPENING_WRONG / SILENT_REPAIR / CALL_BUDGET). Several bugs = several jobs; do independent classes in this same turn when files do not collide.\n2. Each job: hypothesis + predicted unit test + one allowed file. Predicted test does not flip → hypothesis burned. Two burns → STOP that job (blocked_human) and start the next.\n3. Inner loop = named vitest. Outer = one pipeline replay after the class test is green.\n4. Forbidden: server_food_db.ts, food_aliases, expected.json, dietitian prompt bloat, POST /api/golden/cases/${id}/loop.\n\n---\n${md}`
     );
     setCopied(`studio:${id}`);
     setTimeout(() => setCopied(null), 2000);
@@ -356,19 +356,11 @@ export default function GoldenInboxPanel() {
                 />
                 <InboxAction
                   label="Run until green"
-                  hint={
-                    openId === c.id && detail && !studioLoopPlan(detail.board?.outcomes).mayLoop
-                      ? 'Will not run — leftover reds need NEW Analyze or are accept-only.'
-                      : 'One live pipeline pass, then stop. Only helps resolve/catalog reds. Not Replay log.'
-                  }
+                  hint="Disabled (L14). Do not /loop. Use Pipeline once after a class unit test is green."
                   tone="agent"
                   icon="play"
                   busy={isBusy(c.id, 'loop')}
-                  disabled={
-                    c.status === 'promoted' ||
-                    !!busy ||
-                    (openId === c.id && !!detail && !studioLoopPlan(detail.board?.outcomes).mayLoop)
-                  }
+                  disabled
                   onClick={() => runLoop(c.id)}
                 />
                 </div>
@@ -517,6 +509,44 @@ export default function GoldenInboxPanel() {
                     <p className="text-[10px] text-amber-200/90 rounded-lg border border-amber-500/30 bg-amber-950/30 px-2 py-1">
                       {replayTapeBanner(uniquePending(detail.board))}
                     </p>
+                  )}
+                </div>
+              )}
+
+              {detail.board?.ledger && (
+                <div className="rounded-xl border border-violet-500/30 bg-violet-950/30 p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-bold text-violet-200 text-[11px]">Meal journey / trial balance</p>
+                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${detail.board.ledger.compiler === 'green' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-200'}`}>
+                      {detail.board.ledger.compiler === 'green' ? 'balanced' : 'unbalanced'}
+                      {detail.board.ledger.primaryClass ? ` · ${detail.board.ledger.primaryClass}` : ''}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-white/60">
+                    Scout → foundation → reconcile → dietitian payload → saved table → narrative.
+                    A backend or dietitian correction stays red — it does not promote.
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {(detail.board.ledger.books || []).map((b: any) => (
+                      <div key={b.id} className="px-1.5 py-1 rounded bg-black/30 border border-white/10 text-[10px]">
+                        <p className="text-white/50">{b.label.replace(/ \(.*/, '')}</p>
+                        <p className="font-bold text-white">{b.kcal == null ? '—' : `${b.kcal}`}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {(detail.board.ledger.imbalances || []).length > 0 && (
+                    <div className="space-y-0.5">
+                      {detail.board.ledger.imbalances.map((i: any) => (
+                        <p key={i.id} className="text-[10px] text-rose-100">
+                          <span className="font-bold">{i.signal}</span>
+                          {' · '}
+                          {i.label}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {!detail.board.ledger.mayPromote && (
+                    <p className="text-[10px] text-amber-200">Compiler: do not claim fixed_meal / do not Promote.</p>
                   )}
                 </div>
               )}

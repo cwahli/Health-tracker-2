@@ -22,6 +22,7 @@ import {
 } from './src/utils/goldenScoreboard.js';
 import { lookupCanonicalBaseFood } from './server_food_db.js';
 import { catalogReplayGreen, replayScoutAgainstCatalog } from './src/utils/goldenReplay.js';
+import { compileGoldenMeal, formatLedgerBrief } from './src/utils/goldenLedger.js';
 import { normalizeScoutItems } from './src/utils/goldenJourney.js';
 import { d1Query } from './server_d1.js';
 import { classifyStudioRed, studioLoopPlan, loopRedClass } from './src/utils/goldenStudio.js';
@@ -764,6 +765,21 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
       } catch {
         fixture = null;
       }
+      if (board && !board.ledger) {
+        const logText = (await getR2Text(deps, `${casePrefix(id)}/backend.log`)) || '';
+        const foodRaw = await getR2Text(deps, `${casePrefix(id)}/foodLog.json`);
+        const scoutRaw = await getR2Text(deps, `${casePrefix(id)}/scout.json`);
+        let foodLog: any = null;
+        let scout: any = null;
+        try { foodLog = foodRaw ? JSON.parse(foodRaw) : null; } catch { foodLog = null; }
+        try { scout = scoutRaw ? JSON.parse(scoutRaw) : null; } catch { scout = null; }
+        board.ledger = compileGoldenMeal({
+          logText,
+          foodLog,
+          scout,
+          replayMode: board.replayMode,
+        });
+      }
       res.json({
         ...data,
         iteration: Math.max(Number(data.iteration || 0), (attempts || []).length || 1),
@@ -814,9 +830,9 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
         '- Do NOT change expected meal numbers or delete outcome rows.',
         '- Do NOT claim COMPLETE. Replay decides pass/fail.',
         '- Read Attempts / Learnings before changing code. Do not retry a failed approach.',
-        '- After edits: POST /api/golden/cases/' + data.id + '/attempt then POST .../loop.',
-        '- Loop = skipScout pipeline from frozen scout. Stops at green, same reds, 5 runs, or transport fail.',
-        '- Do not call /loop again without a human/studio attempt — it will lock.',
+        '- After edits: POST /api/golden/cases/' + data.id + '/attempt. Do NOT POST /loop.',
+        '- Compiler: meal trial balance must agree. Catalog replay cannot promote.',
+        '- Inner loop = unit test for the class. Two burned hypotheses → blocked_human.',
         '',
         '## Scout identity (auto — do not ask the user to re-list foods)',
         ...((board?.journey || []).length
@@ -1000,7 +1016,15 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
         (o) => o.enabled && o.pass === false && loopRedClass(o.id, o.label) !== 'accept'
       );
       const plan = studioLoopPlan(outcomes);
-      const allGreen = identGreen && meal.pass && (mode === 'catalog' || plan.promoteGreen);
+      if (!board.ledger || mode === 'catalog') {
+        board.ledger = compileGoldenMeal({
+          foodLog,
+          scout: storedScout,
+          replayMode: mode,
+        });
+      }
+      // Compiler: catalog replay cannot promote. Imbalance stays red.
+      const allGreen = mode !== 'catalog' && identGreen && meal.pass && plan.promoteGreen && board.ledger.mayPromote;
       const passCount = journey.filter((j) => j.identityPass).length + (meal.pass ? 1 : 0);
       const failCount =
         journey.filter((j) => !j.identityPass).length +
@@ -1684,6 +1708,8 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
         '- After edits: POST /api/golden/cases/' + id + '/attempt then the Next button below.',
         '- Loop = skipScout pipeline from frozen scout. It skips accept + NEW-Analyze reds.',
         '- If Next says NEW Analyze, do not Replay log and call it fixed.',
+        '',
+        board?.ledger ? formatLedgerBrief(board.ledger) : '',
         '',
         '## Scout identity',
         ...((board?.journey || []).length

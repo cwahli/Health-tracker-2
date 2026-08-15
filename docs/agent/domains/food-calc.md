@@ -26,7 +26,7 @@ Budget (label → dish/brand → scout → category×W)
 | Scout calories | **One** soft `estimatedCalories` **per dish item** — not per component, not full free macros |
 | `rawNutritionLabel` | **Printed label only** — never free estimates |
 | Dietitian | Coaches on **server preCalc only** — no free macro invent |
-| Food Resolver | Catalog curator (1-iter): multi-match, merge, brand routing, basis normalize, quarantine + aliases — not primary calorie estimator; not invoked on HIT_UNIQUE atomics |
+| Food Resolver | Catalog curator (1-iter): multi-match, merge, brand routing, basis normalize, quarantine + aliases — not primary calorie estimator; not invoked on HIT_UNIQUE atomics. Each component binds **only** to rows tagged with that component’s `searchQuery`. Do not steal a sibling’s FDC. Honest `MISS` is valid. |
 | Modes | Same finalize/budget math for **A, Edit, D** |
 
 ---
@@ -55,7 +55,7 @@ Budget (label → dish/brand → scout → category×W)
 | Log Stitching | Preserve `turn1Logs` across portion pauses; stitch Turn 1 + Turn 2 logs for complete R2 debug trace |
 | UI Portion Card | Map `needsPortionClarify` & `portionClarify` into `msg.data` so portion selection card renders immediately |
 | Stale Narrative | Weight/portion change without dietitian re-run sets `staleDietitianNarrative=true` (D8 / edit scale) |
-| Invariant | Detect **and REPAIR** (not log-only FAIL) |
+| Invariant | Detect **and REPAIR the class** (not log-only FAIL). Do **not** “repair” by scaling/aliasing to hide imbalance (L14) |
 | Match priority | Real USDA/OFF/catalog **beats** `category_fallback` |
 | Fail-open | Agent error → top form-safe candidate, not mass category dump |
 | Import | Call site on **each** required branch |
@@ -68,6 +68,59 @@ Budget (label → dish/brand → scout → category×W)
 - Re-running entire vision scout / DB search on Turn 2 portion confirmation  
 - Dropping `portionClarify` metadata in client streaming message handlers  
 - Overwriting Turn 1 vision logs in R2 upon Turn 2 completion  
+
+---
+
+## 3b. Durable pipeline contract (long-term, no catalog paint)
+
+Success is **not** “this meal’s FDC IDs match a spreadsheet.”  
+Success is: **Scout names the food → Resolver resolves *that query* → Backend keeps that bind.** The next unknown food uses the same path.
+
+```text
+Scout (vision)     → dishes + component searchQuery + scoutIndex + boxes
+Resolver (1 LLM)   → for each query: HIT / MULTI / MISS on *that* query’s candidates
+Backend bind       → component may only use rows tagged searchQuery === this query
+Honest residual    → MISS is done. Do not steal a sibling row. Do not invent an alias.
+
+Meal trial balance (golden detector — does not solve):
+  scout_est → foundation → reconcile → dietitian_payload → saved_table → narrative
+  Adjacent books must agree. A backend or dietitian *correction* is a red
+  (SILENT_REPAIR / DISH_DROP), not a way to paint green.
+```
+
+| Layer | May do | Must not do |
+|---|---|---|
+| Scout | Extract names, components, weights, printed labels | Guess FDC IDs; invent `rawNutritionLabel` |
+| Resolver | Pick / quarantine / MISS among **this query’s** USDA/OFF hits | Write `food_aliases` from HIT_UNIQUE; bind chicken using the onions row |
+| Backend | Query-scoped bind; index/name identity; no 2.000 silent scale | `includes()` catalog; `expectFdcId` paint; meal-wide `databaseMatchesArray` steal |
+
+**Patches that look green and fail on the next food (forbidden):**
+
+- `CANONICAL_BASE_FOODS` / `lookupCanonicalBaseFood` `includes()`
+- `expectResolve` exact FDC as the test reward
+- `POST /loop` until picnic `all_green`
+- Extra negative regex for one ID (171327, 172522, …) as the *only* fix
+
+**Debug flow (Studio, no babysit, no loop):**
+
+1. Classify the tape (one class). List other reds as out of session.
+2. Hypothesis: which **layer** broke the contract (scout opening / resolver MISS vs steal / backend steal / silent repair).
+3. Predicted test: a **generic** fixture (not “G8 sugar”), e.g. pool with two sibling queries — bind must not cross.
+4. Patch that layer only. Two burned hypotheses → `blocked_human` (only then ping the human).
+5. Outer: one replay of the example meal. Do not `/loop`.
+
+| Class | Inbox / tape examples | Layer that should learn |
+|---|---|---|
+| Query-scope steal | wrap chicken→onion powder; flour→tortilla; salt→butter | Backend bind (`searchQuery`) |
+| False friend in-query | sugar→Popsicle; berries→Powerade; ham→salt pork | Resolver ranker refuse |
+| Dish drop / index | croissant phantom 4106; ham gone; quinoa gone | Backend identity + scout merge |
+| Opening wrong | lassi 1000g | Scout weight-anchor; one NEW Analyze |
+| Silent repair | receipt 2.000 | Backend: stay red, `itemCal := rowSum` |
+| Transport | inbox quota job | Not food-calc |
+
+**Golden compiler + journey UI:** inbox shows scout→…→narrative books. `all_green` / Promote is blocked while the compiler is `unbalanced`. Catalog replay cannot promote.
+
+**Many jobs, no loop:** run independent classes in one turn. Inner loop = named vitest. `POST /loop` is forbidden. Two burned hypotheses → `blocked_human` on that job (only then ping the human), then start the next class.
 
 ---
 

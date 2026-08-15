@@ -8,6 +8,8 @@ import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
 import { checkCategoryAndStateCompatibility, applyServerAverageNutrients } from './server_pure_helpers.js';
 import { rankAndClassifyCandidates, writeAliasIfHitUnique } from './server_fdc_resolve.js';
 import { buildFoodSearchQuerySet } from './server_query_set';
+import { reconcileDietitianToScout, matchBreakdownItemToScout, applySoftReceiptAlignment } from './server_scout_reconcile.js';
+import { pickQueryScopedMatch, filterMatchesForQuery } from './server_query_scoped_match.js';
 import {
   withGeminiRetry,
   isGeminiQuotaError,
@@ -1391,7 +1393,7 @@ app.get('/api/jobs/status', async (req, res) => {
         const staleThresholdMs = 180000; // 3 minutes
         const processedJobs = await Promise.all((data || []).map(async (job: any) => {
           // transparently resolve R2-stored clean_results on-the-fly with 2.5s timeout
-          if (jobId && job.clean_result && typeof job.clean_result === 'object' && (job.clean_result as any).is_r2) {
+          if (isFull && jobId && job.clean_result && typeof job.clean_result === 'object' && (job.clean_result as any).is_r2) {
             try {
               const { fetchJobResultFromR2 } = await import('./src/utils/r2Storage.js');
               const r2Promise = fetchJobResultFromR2(job.id);
@@ -5185,8 +5187,13 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           } else if (visionScoutItems && visionScoutItems.length <= 1 && scoutRecommendedMode === "evaluation") {
             scoutRecommendedMode = "new_log";
           }
-          queriesToSearch.push(...scoutResult.queriesToSearch);
-          scoutOriginalQueries.push(...scoutResult.queriesToSearch);
+          const brandedQueries = (scoutResult.queriesToSearch || []).filter((q: string) =>
+            (visionScoutItems || []).some((it: any) => it.chainName && String(q || '').toLowerCase().includes(String(it.chainName).toLowerCase()))
+          );
+          if (brandedQueries.length > 0) {
+            queriesToSearch.push(...brandedQueries);
+            scoutOriginalQueries.push(...brandedQueries);
+          }
           visionScoutRanAndReturnedItems = scoutResult.visionScoutRanAndReturnedItems;
 
           const scoutItemsSummary = visionScoutItems.map((it: any) => ({
@@ -5821,6 +5828,12 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
               addDebugLog(`[Quarantine Block] Refusing to inject nutrients for quarantined FDC ID ${virtualId} ("${rg.query}").`);
               return;
             }
+            const bindLabel = (rg as any).parametricFoodName || rg.query;
+            const bindCompat = checkCategoryAndStateCompatibility(rg.query, bindLabel);
+            if (!bindCompat.compatible) {
+              addDebugLog(`[Food Resolver Integration] Refusing inject for "${rg.query}" -> ${virtualId} (${bindLabel}): ${bindCompat.reason}`);
+              return;
+            }
             dbMatchMap.set(virtualId, rg.nutrientsPer100g);
             
             const caloriesStr = String(rg.nutrientsPer100g.calories || 0);
@@ -6256,8 +6269,13 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         return { tokens: tokens.length ? tokens : words, categoryBias };
       };
 
-      const findBestMatch = (keyword: string) => {
+      const findBestMatch = (keyword: string, extraQueries: string[] = []) => {
         if (!keyword || !databaseMatchesArray || databaseMatchesArray.length === 0) return undefined;
+
+        // Structural: only rows the resolver/search tagged for this query.
+        // Untagged / other-query rows are how chicken stole onion-powder 171327.
+        const scopedPool = filterMatchesForQuery(keyword, databaseMatchesArray, extraQueries);
+        if (scopedPool.length === 0) return undefined;
         
         const { tokens: coreTokens, categoryBias } = extractCoreIdentityTokens(keyword);
         const queryTokens = new Set<string>(keyword.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/));
@@ -6268,7 +6286,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         let bestMatch: any = undefined;
         let highestScore = -999999;
 
-        databaseMatchesArray.forEach((m: any) => {
+        scopedPool.forEach((m: any) => {
           if (m.id && quarantinedIdsSet.has(String(m.id))) {
             addDebugLog(`[Quarantine Block] Blocked quarantined candidate "${m.name}" (id=${m.id}) from best-match evaluation.`);
             return;
@@ -7299,27 +7317,10 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           }
           const query = prepareSearchQueryWithState(matchQuery, item.cookingMethod || scoutCookingMethod || 'baked');
           
-          // Direct Curator / Query match priority: if databaseMatchesArray already contains an entry specifically resolved for this query, use it first!
-          const normCompQuery = normalizeFoodKey(query);
-          const calcTokenOverlap = (strA: string, strB: string): number => {
-            const setA = new Set(strA.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(Boolean));
-            const setB = new Set(strB.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(Boolean));
-            if (setA.size === 0 || setB.size === 0) return 0;
-            let matches = 0;
-            setA.forEach(token => { if (setB.has(token)) matches++; });
-            return matches / Math.min(setA.size, setB.size);
-          };
-          const directCuratorMatch = databaseMatchesArray.find((m: any) =>
-            normalizeFoodKey(m.searchQuery || '') === normCompQuery &&
-            m.source !== 'category_fallback' &&
-            !String(m.id || '').startsWith('fallback_') &&
-            !quarantinedIdsSet.has(String(m.id)) &&
-            calcTokenOverlap(normCompQuery, m.name || m.searchQuery || '') >= 0.5
-          );
-
-          let bestMatch = directCuratorMatch || findBestMatch(query);
-          if (directCuratorMatch) {
-            addDebugLog(`[MatchPriority] Bound direct Curator query match id=${directCuratorMatch.id} ("${directCuratorMatch.name}") for component "${query}".`);
+          const scopedMatch = pickQueryScopedMatch(query, databaseMatchesArray, [rawQuery, matchQuery]);
+          let bestMatch = scopedMatch || findBestMatch(query, [rawQuery, matchQuery]);
+          if (scopedMatch) {
+            addDebugLog(`[MatchPriority] Bound query-scoped resolver/search row id=${scopedMatch.id} ("${scopedMatch.name}") for component "${query}".`);
           }
           if (bestMatch && (bestMatch.source === 'web_search' || bestMatch.source === 'tavily' || bestMatch.source === 'serper' || bestMatch.source === 'google_cse')) {
             addDebugLog(`[MatchPriority] rejected web_search for component "${query}"`);
@@ -7358,7 +7359,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             let better: any = undefined;
             let bestOverlapScore = 0;
 
-            databaseMatchesArray.forEach((m: any) => {
+            filterMatchesForQuery(query, databaseMatchesArray, [rawQuery, matchQuery]).forEach((m: any) => {
               if (m.id && quarantinedIdsSet.has(String(m.id))) return;
               if (m.source === 'category_fallback' || String(m.id || '').startsWith('fallback_')) return;
               if (m.source !== 'internal_catalog' && m.source !== 'usda' && m.source !== 'off' && m.source !== 'brand_official') return;
@@ -8247,22 +8248,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             }
           } else if (recRes.action === 'scale' || recRes.action === 'keep' || budgetRes.source === 'scout' || budgetRes.source === 'category') {
             if (!budgetRes.hardLock && inv.rowSum > 0 && inv.itemCalories > 0 && Math.abs(inv.rowSum - inv.itemCalories) > 1.1) {
-              const isCompositeItem = componentsDetailList.length >= 2 || /\b(salad|pastry|bowl|poke|bento)\b/i.test(itemNameForBudget);
-              const fix = inv.itemCalories / inv.rowSum;
-              if (fix >= 0.5 && fix <= 2.0 && !isCompositeItem) {
-                componentsDetailList.forEach((s: any) => {
-                  if (!s || typeof s !== 'object') return;
-                  if (s.calories != null) s.calories = Math.round(s.calories * fix * 10) / 10;
-                  if (s.protein != null) s.protein = Math.round(s.protein * fix * 10) / 10;
-                  if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * fix * 10) / 10;
-                  if (s.saturatedFat != null) s.saturatedFat = Math.round(s.saturatedFat * fix * 10) / 10;
-                  if (s.sodium != null) s.sodium = Math.round(s.sodium * fix * 10) / 10;
-                });
-                addDebugLog(`[ReceiptInvariant] REPAIRED rows→item soft factor=${fix.toFixed(3)}`);
-              } else {
-                aggregatedNutrients.calories = Math.round(inv.rowSum * 10) / 10;
-                addDebugLog(`[ReceiptInvariant] REPAIRED itemCal→rowSum ${inv.itemCalories}→${inv.rowSum} (fix out of band or composite)`);
-              }
+              const aligned = applySoftReceiptAlignment(inv.itemCalories, inv.rowSum);
+              aggregatedNutrients.calories = aligned.itemCalories;
+              addDebugLog(`[ReceiptInvariant] REPAIRED itemCal→rowSum ${inv.itemCalories}→${aligned.itemCalories} (no soft row scale)`);
             }
           } else if (inv.rowSum > 0) {
             // legacy: only when no scout/category budget
@@ -9105,8 +9093,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           if (newItem.scoutIndex !== undefined && newItem.scoutIndex !== null) {
             origItem = origItems.find((o: any) => o.scoutIndex === newItem.scoutIndex);
           }
-          if (!origItem && origItems.length === rawFoodData.itemsBreakdown.length) {
-            origItem = origItems[idx];
+          if (!origItem) {
+            origItem = matchBreakdownItemToScout(newItem, origItems, new Set());
           }
           if (!origItem) return newItem;
 
@@ -9285,69 +9273,23 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             }
           });
         }
-        // Enrich items with originalLocalName from visionScoutItems and preCalculatedItems if available
+        // Enrich + reconcile by scoutIndex / name. Never by array position (4106 kcal phantom).
         if (visionScoutItems && Array.isArray(visionScoutItems)) {
-          const usedIndices = new Set();
-          rawFoodData.itemsBreakdown = rawFoodData.itemsBreakdown.map((item: any, idx: number) => {
-            const canonicalLower = (item.canonicalDbName || item.name || "").trim().toLowerCase();
-            let match = visionScoutItems.find((s: any) => {
-              if (item.scoutIndex !== undefined && s.scoutIndex !== undefined && Number(item.scoutIndex) === Number(s.scoutIndex)) {
-                return true;
-              }
-              return false;
+          const reconciled = reconcileDietitianToScout(rawFoodData.itemsBreakdown, visionScoutItems);
+          if (reconciled.reinjected.length > 0) {
+            reconciled.reinjected.forEach((row: any) => {
+              addDebugLog(`[Scout Reconcile] Truly omitted "${row.originalName}" (scoutIndex=${row.scoutIndex}) — name was not already on the board.`);
             });
-            if (!match) {
-              match = visionScoutItems.find((s: any) => {
-                if (usedIndices.has(s.scoutIndex)) return false;
-                const keywordLower = (s.keyword || "").trim().toLowerCase();
-                const originalLower = (s.originalName || "").trim().toLowerCase();
-                if (!canonicalLower) return false;
-                return (
-                  canonicalLower === keywordLower ||
-                  canonicalLower === originalLower ||
-                  (keywordLower.length > 0 && canonicalLower.includes(keywordLower)) ||
-                  (originalLower.length > 0 && canonicalLower.includes(originalLower)) ||
-                  (keywordLower.length > 0 && keywordLower.includes(canonicalLower)) ||
-                  (originalLower.length > 0 && originalLower.includes(canonicalLower))
-                );
-              });
-            }
-            // Removed array index fallback to prevent Index Shift Duplication bugs when lengths happen to match but items are shifted.
-            // if (!match && visionScoutItems.length === rawFoodData.itemsBreakdown.length && !usedIndices.has(visionScoutItems[idx]?.scoutIndex)) {
-            //   match = visionScoutItems[idx];
-            // }
-            if (match) {
-              usedIndices.add(match.scoutIndex);
-              const preCalc = preCalculatedItems.find((p: any) => p.scoutIndex === match.scoutIndex);
-              if (preCalc) {
-                return {
-                  ...item,
-                  scoutIndex: item.scoutIndex !== undefined ? item.scoutIndex : match.scoutIndex,
-                  originalName: match.originalName || item.originalName || item.originalLocalName || null,
-                  originalLocalName: match.originalName || item.originalLocalName || null,
-                  chainName: match.chainName || item.chainName || null,
-                  rawNutritionLabel: match.rawNutritionLabel || item.rawNutritionLabel || null,
-                  keyword: match.keyword || item.keyword || null,
-                  visualIngredients: item.visualIngredients || match.visualIngredients || null,
-                  cookingMethod: (match.cookingMethod && match.cookingMethod !== 'unknown') ? match.cookingMethod : (item.cookingMethod || null),
-                  components: item.components || match.components || null,
-                  dbId: preCalc.bestMatchDbId || item.dbId || null,
-                  dbSource: preCalc.bestMatchDbSource || item.dbSource || 'estimated',
-                  hasComponents: Boolean(preCalc.hasComponents),
-                  primaryBase100g: preCalc.primaryBase100g || null,
-                  primaryBaseMatchName: preCalc.primaryBaseMatchName || null,
-                  primaryBaseWeightG: preCalc.primaryBaseWeightG || item.weightGrams,
-                  componentsDetailList: preCalc.componentsDetailList || [],
-                  cookingAdded: preCalc.cookingAdded || { addedCalories: 0, addedFat: 0, addedSaturatedFat: 0, addedSodium: 0 },
-                  truthNutrients: preCalc.truthNutrients || {},
-                  lockedNutrientKeys: preCalc.lockedNutrientKeys || [],
-                  ingredientsList: preCalc.ingredientsList || item.ingredientsList || match.ingredientsList || null,
-                  labelNutrientsPerServing: preCalc.labelNutrientsPerServing || preCalc.primaryBase100g || item.labelNutrientsPerServing || null
-                };
-              }
+          }
+          rawFoodData.itemsBreakdown = reconciled.items.map((item: any) => {
+            const match = visionScoutItems.find((s: any) =>
+              s?.scoutIndex !== undefined && Number(s.scoutIndex) === Number(item.scoutIndex)
+            );
+            if (!match) return item;
+            const preCalc = (preCalculatedItems || []).find((p: any) => Number(p.scoutIndex) === Number(match.scoutIndex));
+            if (preCalc) {
               return {
                 ...item,
-                scoutIndex: item.scoutIndex !== undefined ? item.scoutIndex : match.scoutIndex,
                 originalName: match.originalName || item.originalName || item.originalLocalName || null,
                 originalLocalName: match.originalName || item.originalLocalName || null,
                 chainName: match.chainName || item.chainName || null,
@@ -9355,63 +9297,31 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                 keyword: match.keyword || item.keyword || null,
                 visualIngredients: item.visualIngredients || match.visualIngredients || null,
                 cookingMethod: (match.cookingMethod && match.cookingMethod !== 'unknown') ? match.cookingMethod : (item.cookingMethod || null),
-                components: item.components || match.components || null
+                components: item.components || match.components || null,
+                boundingBox2D: item.boundingBox2D || match.boundingBox2D || null,
+                sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : match.sourceImageIndex,
+                dbId: preCalc.bestMatchDbId || item.dbId || null,
+                dbSource: preCalc.bestMatchDbSource || item.dbSource || 'estimated',
+                hasComponents: Boolean(preCalc.hasComponents),
+                primaryBase100g: preCalc.primaryBase100g || null,
+                primaryBaseMatchName: preCalc.primaryBaseMatchName || null,
+                primaryBaseWeightG: preCalc.primaryBaseWeightG || item.weightGrams,
+                componentsDetailList: preCalc.componentsDetailList || item.componentsDetailList || [],
+                cookingAdded: preCalc.cookingAdded || { addedCalories: 0, addedFat: 0, addedSaturatedFat: 0, addedSodium: 0 },
+                truthNutrients: preCalc.truthNutrients || {},
+                lockedNutrientKeys: preCalc.lockedNutrientKeys || [],
+                ingredientsList: preCalc.ingredientsList || item.ingredientsList || match.ingredientsList || null,
+                labelNutrientsPerServing: preCalc.labelNutrientsPerServing || preCalc.primaryBase100g || item.labelNutrientsPerServing || null
               };
             }
             return {
               ...item,
-              scoutIndex: item.scoutIndex !== undefined ? item.scoutIndex : idx
+              originalName: match.originalName || item.originalName || item.originalLocalName || null,
+              boundingBox2D: item.boundingBox2D || match.boundingBox2D || null,
+              sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : match.sourceImageIndex,
+              keyword: match.keyword || item.keyword || null,
+              components: item.components || match.components || null
             };
-          });
-
-          // Reconcile missing visionScoutItems that the Dietitian LLM omitted
-          const isLabelName = (s: string) => {
-            const orig = String(s || '').toLowerCase();
-            const foodKeywords = ["milk", "burger", "fries", "fry", "chicken", "fish", "beef", "pork", "salad", "wrap", "bread", "juice", "water", "tea", "coffee", "rice", "noodle", "pasta", "pizza", "cookie", "cake", "fruit", "vegetable", "cheese", "yogurt", "egg", "soup", "stew", "pancake", "waffle", "sausage", "bacon", "steak", "tart", "pie", "donut", "doughnut", "oat", "cereal", "muffin", "soda", "coke", "drink", "beverage", "salami", "kefir"];
-            if (foodKeywords.some(kw => orig.includes(kw))) return false;
-            return orig.includes("nutrition fact") || 
-                   orig.includes("informasi nilai gizi") || 
-                   orig.includes("komposisi") || 
-                   orig.includes("nutrition label") || 
-                   orig.includes("back of package") || 
-                   orig.includes("printed_packaging_label") ||
-                   orig === "label";
-          };
-
-          visionScoutItems.forEach((sItem: any) => {
-            const sIndex = sItem.scoutIndex;
-            if (sIndex !== undefined && sIndex !== null && !usedIndices.has(sIndex)) {
-              if (!isLabelName(sItem.originalName || sItem.keyword || '')) {
-                const preCalc = preCalculatedItems ? preCalculatedItems.find((p: any) => p.scoutIndex === sIndex) : null;
-                if (preCalc) {
-                  addDebugLog(`[Scout Reconcile] Adding omitted Vision Scout item "${sItem.originalName || sItem.keyword}" (scoutIndex=${sIndex}) back to itemsBreakdown.`);
-                  usedIndices.add(sIndex);
-                  rawFoodData.itemsBreakdown.push({
-                    scoutIndex: sIndex,
-                    canonicalDbName: sItem.originalName || sItem.keyword || "Food Item",
-                    originalName: sItem.originalName || sItem.keyword || "Food Item",
-                    originalLocalName: sItem.originalName || null,
-                    keyword: sItem.keyword || null,
-                    weightGrams: preCalc.primaryBaseWeightG || sItem.estimatedWeightGrams || 100,
-                    dbId: preCalc.bestMatchDbId,
-                    dbSource: preCalc.bestMatchDbSource,
-                    hasComponents: Boolean(preCalc.hasComponents),
-                    primaryBase100g: preCalc.primaryBase100g || null,
-                    primaryBaseMatchName: preCalc.primaryBaseMatchName || null,
-                    primaryBaseWeightG: preCalc.primaryBaseWeightG || sItem.estimatedWeightGrams || 100,
-                    componentsDetailList: preCalc.componentsDetailList || [],
-                    cookingAdded: preCalc.cookingAdded || { addedCalories: 0, addedFat: 0, addedSaturatedFat: 0, addedSodium: 0 },
-                    truthNutrients: preCalc.truthNutrients || {},
-                    lockedNutrientKeys: preCalc.lockedNutrientKeys || [],
-                    ingredientsList: preCalc.ingredientsList || sItem.ingredientsList || null,
-                    labelNutrientsPerServing: preCalc.primaryBase100g || null,
-                    cookingMethod: (sItem.cookingMethod && sItem.cookingMethod !== 'unknown') ? sItem.cookingMethod : 'raw',
-                    components: sItem.components || null,
-                    rawNutritionLabel: sItem.rawNutritionLabel || null
-                  });
-                }
-              }
-            }
           });
         }
 
@@ -10388,8 +10298,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             updatedScoutItems = updatedScoutItems.filter((sItem: any) => currentScoutIndices.has(sItem.scoutIndex));
           }
 
-          updatedScoutItems = updatedScoutItems.map((sItem: any, sIdx: number) => {
-            const bItem = parsedData.itemsBreakdown.find((b: any) => b.scoutIndex === sItem.scoutIndex) || parsedData.itemsBreakdown[sIdx];
+          updatedScoutItems = updatedScoutItems.map((sItem: any) => {
+            const bItem = parsedData.itemsBreakdown.find((b: any) => b.scoutIndex === sItem.scoutIndex)
+              || parsedData.itemsBreakdown.find((b: any) => matchBreakdownItemToScout(b, [sItem], new Set()));
               if (bItem && (bItem.canonicalDbName || bItem.name)) {
                 const newName = bItem.canonicalDbName || bItem.name;
                 return {
@@ -10433,8 +10344,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
       let finalScoutItems = mergeScoutItems(visionScoutItems, rawParsed.scoutItems);
       if (parsedData && Array.isArray(parsedData.itemsBreakdown) && parsedData.itemsBreakdown.length > 0) {
-        finalScoutItems = finalScoutItems.map((sItem: any, sIdx: number) => {
-          const bItem = parsedData.itemsBreakdown.find((b: any) => b.scoutIndex === sItem.scoutIndex) || parsedData.itemsBreakdown[sIdx];
+        finalScoutItems = finalScoutItems.map((sItem: any) => {
+          const bItem = parsedData.itemsBreakdown.find((b: any) => b.scoutIndex === sItem.scoutIndex)
+            || parsedData.itemsBreakdown.find((b: any) => matchBreakdownItemToScout(b, [sItem], new Set()));
           if (bItem && (bItem.canonicalDbName || bItem.name)) {
             const newName = bItem.canonicalDbName || bItem.name;
             return {

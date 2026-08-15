@@ -101,6 +101,16 @@ describe('studioLoopPlan', () => {
     expect(plan.instructions).toMatch(/Do NOT POST \/loop/i);
   });
 
+  it('never allows POST /loop — pipeline reds are a class job, not meal-green search', () => {
+    const plan = studioLoopPlan([
+      { id: 'res_false_friend_sugar', label: 'sugar bound to Popsicle', pass: false, enabled: true },
+    ]);
+    expect(plan.mayLoop).toBe(false);
+    expect(plan.studioMayClaim).toBe('keep_working');
+    expect(plan.instructions).toMatch(/Do NOT POST \/loop/i);
+    expect(plan.instructions).not.toMatch(/POST \/loop is allowed/i);
+  });
+
   it('treats accept-only leftover as code-green', () => {
     const plan = studioLoopPlan([
       {

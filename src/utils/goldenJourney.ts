@@ -9,7 +9,11 @@
  *   scouted → no_match → fallback → mismatch → broad_base → usda_live → catalog | label_truth
  *
  * Separate auto invariants (math / dietitian / shape / truth) sit beside identity.
+ * Meal trial balance (scout → foundation → dietitian → table → narrative) is
+ * a detector: imbalance stays red. See goldenLedger.ts.
  */
+
+import { detectLedgerImbalances, ledgerImbalancesToInvariants } from './goldenLedger';
 
 export type JourneyPhase =
   | 'scouted'
@@ -1157,9 +1161,13 @@ export function evaluateJourneyBoard(input: {
 } {
   const errorText = sanitizeJobErrorText(input.errorText || '', input.logText || '', input.jobStatus);
   const journey = buildJourney(input);
+  const ledgerInv = ledgerImbalancesToInvariants(
+    detectLedgerImbalances({ logText: input.logText, foodLog: input.foodLog, scout: input.scout })
+  );
   const invariants = [
     ...buildTransportInvariants({ ...input, errorText }),
     ...buildAutoInvariants({ ...input, journey }),
+    ...ledgerInv,
   ];
   return { journey, invariants };
 }

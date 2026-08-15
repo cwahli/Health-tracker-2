@@ -27,7 +27,8 @@ export interface SugarDeductionResult {
 }
 
 const SWEETENER_REGEX = /\b(sugar|sugars|syrup|honey|fructose|dextrose|sucrose|glucose|maltose|caramel|cane|molasses|agave|nectar|sweetener|corn\s*syrup|isoglucose|treacle)\b/i;
-const DESIGNATED_SWEETENER_REGEX = /\b(sugar|syrup|honey|glaze|icing|frosting|sweetener|caramel|jam|jelly|sweet\s*sauce|candy|chocolate|toffee|agave|treacle|marshmallow|sweetened|confectionery|dessert|cookie|cake|pastry|doughnut|donut)\b/i;
+const DESIGNATED_SWEETENER_REGEX = /\b(sugar|syrup|honey|glaze|icing|frosting|sweetener|caramel|jam|jelly|sweet\s*sauce|candy|chocolate|toffee|agave|treacle|marshmallow|sweetened|confectionery|dessert|cookie|cake|pastry|doughnut|donut|cinnamon\s*roll|croissant|danish|muffin|brownie|cane)\b/i;
+const BAKERY_DISH_REGEX = /\b(cinnamon(\s*roll)?|croissant|pastry|danish|donut|doughnut|muffin|brownie|cookie|cake|glaze|icing|cane\s*sugar)\b/i;
 
 const LACTOSE_G_PER_100G = 4.5;
 
@@ -57,8 +58,9 @@ export function deduceSugarBreakdown(input: SugarDeductionInput): SugarDeduction
 
   const form = String(input.physicalForm || '').toUpperCase();
 
-  // 2. Whole Food Immunity Rule
-  if (form === 'SOLID_FRUIT_VEG' || form === 'SOLID_MEAT_FISH' || form === 'SOLID_GRAIN_STARCH') {
+  // 2. Whole Food Immunity Rule — not for bakery / glazed pastry (cinnamon roll, croissant)
+  const bakeryName = BAKERY_DISH_REGEX.test(String(input.foodName || '')) || BAKERY_DISH_REGEX.test(String(input.ingredientsList || ''));
+  if (!bakeryName && (form === 'SOLID_FRUIT_VEG' || form === 'SOLID_MEAT_FISH' || form === 'SOLID_GRAIN_STARCH')) {
     return {
       sugar: round1(totalSugar),
       addedSugar: 0,

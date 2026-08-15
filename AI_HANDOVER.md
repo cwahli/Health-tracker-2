@@ -294,6 +294,12 @@ archive/
 
 ---
 
+## 8b. Session notes (2026-08-15)
+
+- **L14** in `AGENTS.md`: Studio may run several independent bug-class jobs in one turn; `POST /loop` / meal-green search is forbidden. Golden inbox “Copy AI Studio prompt” ships that contract. “Run until green” is disabled.
+- **2× Gemini calls (confirmed):** not a Chat Router. Guarded with `clientSubmitPending` + skip-if-already-running in `submitServerJob`.
+- **Tape `job_1786797989691` class fixes (uncommitted, for Studio to check):** DISH_DROP `server_scout_reconcile.ts` (no index-4 re-inject; name wins when dietitian reindexes); FALSE_FRIEND category drops (chicken↛171327, flour↛172522, salt↛173430); SILENT_REPAIR no 2.000 row scale; bakery added-sugar; poll path never hydrates R2; generic `queriesToSearch` not copied.
+
 ## 9. Changelog
 
 | Date | Note |

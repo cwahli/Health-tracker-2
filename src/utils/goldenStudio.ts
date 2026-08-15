@@ -178,12 +178,12 @@ export function studioLoopPlan(
     };
   }
   return {
-    mayLoop: true,
+    mayLoop: false,
     pipelineGreen: false,
     promoteGreen: false,
     stopReason: null,
     studioMayClaim: 'keep_working',
-    instructions: `POST /loop is allowed — ${pipeline.length} red(s) are resolve/catalog and can move without a new scout. Do not touch NEW-Analyze reds. Do not hunt accept rows.`,
+    instructions: `Do NOT POST /loop. ${pipeline.length} pipeline red(s) are a class job, not a meal-green search. Classify (FALSE_FRIEND / DISH_DROP / SILENT_REPAIR / …), write a unit test, two hypotheses then STOP that job. Meal replay is outer, once. You may start the next independent class in this turn.`,
   };
 }
 
