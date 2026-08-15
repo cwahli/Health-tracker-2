@@ -143,7 +143,8 @@ export function formatPatientContext(context: {
 
       if (targetVal > 0 && logged > targetVal) {
         const overage = logged - targetVal;
-        todayParts.push(`${n.label} (${logged}${n.unit} over ${targetVal}${n.unit})`);
+        const pctOver = Math.round((overage / targetVal) * 100);
+        todayParts.push(`${n.label} (${logged}${n.unit} over ${targetVal}${n.unit}, ${pctOver}% over daily limit)`);
       } else if (targetVal > 0) {
         todayParts.push(`${n.label} (${logged}/${targetVal}${n.unit})`);
       } else {
@@ -177,18 +178,18 @@ You are a Dietician coach operating within a personalized health application. Pr
 === MESSAGE NARRATIVE GUIDELINES (35-70 WORDS IN 4 BEATS) ===
 You MUST write the "message" narrative strictly using a 4-beat structure:
 - Beat 1 (Primary Asset & Metric): Praise the meal's key nutrient asset using specific, concrete metrics. Example: "You got 53g of quality protein and healthy omega-3s from the salmon."
-- Beat 2 (Impact/Overage & Metric): Highlight any overage/impact using exact, concrete metrics and percentages. Example: "However, the cheesy pasta adds 18g of saturated fat, pushing today's total to 140% of your daily limit."
+- Beat 2 (Impact/Overage & Metric): Highlight any overage/impact using exact, concrete metrics and percentages, using the pre-calculated overage percentages already provided in the NUTRITIONAL TARGET STATUS section above — do not calculate percentages yourself. Example: "However, the cheesy pasta adds 18g of saturated fat, pushing today's total 140% over your daily limit."
 - Beat 3 (Symptom-Based Physical Effect): Translate abstract clinical or cholesterol jargon into a relatable immediate physical sensation or feeling. Example: "This heavy fat load causes physical sluggishness, digestive heaviness, and vascular stiffness." (BANNED: "temporarily burdens your cardiovascular system" or "impacts your lipid biomarkers").
 - Beat 4 (Actionable Next Steps): Recommend a direct physical action or habit to mitigate the impact. Example: "Take a 20-minute post-meal walk to boost circulation, and make your next meal rich in soluble fiber like lentils or greens."
 
 === FULLY COMPLIANT FEW-SHOT EXAMPLE ===
 {
-  "_internalReasoning": "The user logged a meal with grilled salmon, macaroni and cheese, avocado, and lettuce. The salmon offers excellent lean protein and heart-healthy omega-3s, but the mac and cheese is highly concentrated in saturated fat and sodium. Given their high cholesterol and overweight status, I will frame this as an overage, calling out the exact 18g of saturated fat causing a 40% daily limit breach, explaining the physical feeling of vascular stiffness, and guiding a post-meal walk.",
+  "_internalReasoning": "The user logged a meal with grilled salmon, macaroni and cheese, avocado, and lettuce. The salmon offers excellent lean protein and heart-healthy omega-3s, but the mac and cheese is highly concentrated in saturated fat and sodium. Given their high cholesterol and overweight status, I will frame this as an overage, using the pre-calculated 140% over figure from the NUTRITIONAL TARGET STATUS section for the exact 18g of saturated fat, explaining the physical feeling of vascular stiffness, and guiding a post-meal walk.",
   "verdict": {
-    "label": "40% over sat fat limit",
+    "label": "140% over sat fat limit",
     "level": "alert"
   },
-  "message": "You got 53g of quality protein and healthy omega-3s from the salmon. However, the cheesy pasta adds 18g of saturated fat, pushing today's total to 140% of your daily limit. This heavy fat load causes physical sluggishness, digestive heaviness, and vascular stiffness. Take a 20-minute post-meal walk to boost circulation, and make your next meal rich in soluble fiber like lentils or greens.",
+  "message": "You got 53g of quality protein and healthy omega-3s from the salmon. However, the cheesy pasta adds 18g of saturated fat, pushing today's total 140% over your daily limit. This heavy fat load causes physical sluggishness, digestive heaviness, and vascular stiffness. Take a 20-minute post-meal walk to boost circulation, and make your next meal rich in soluble fiber like lentils or greens.",
   "foodData": {
     "date": "2026-08-03",
     "name": "Grilled Salmon with Macaroni and Cheese, Avocado, and Lettuce",
@@ -246,8 +247,8 @@ const REQUIRED_OUTPUT_JSON_SCHEMA = `
   "message": "string (35-70 words in 4 beats: 1. Key Value w/ selective metric -> 2. Impact/Overage w/ selective metric if applicable -> 3. Symptom-based physical effect -> 4. Next Action: MITIGATION if overage occurred [walk/water/fiber], or CONTINUATION/GAP-FILLING if on-track [fill missing target])",
   "foodData": {
     "date": "string (YYYY-MM-DD)",
-    "name": "string (Meal title)",
-    "description": "string (Short dish summary)",
+    "name": "string (Meal title. Must match the singular/plural form of each item exactly as it appears in that item's own itemsBreakdown entry below — e.g. if itemsBreakdown lists a single item as 'Croissant', the title must say 'Croissant', not 'Croissants', and vice versa.)",
+    "description": "string (Short dish summary. Same singular/plural consistency rule as the title above.)",
     "itemsBreakdown": [
       {
         "scoutIndex": 0,

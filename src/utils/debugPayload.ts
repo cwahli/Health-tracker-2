@@ -184,8 +184,15 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     for (const it of input.scoutItems.slice(0, 30)) {
       const nm = String(it.originalName || it.keyword || it.name || 'item').replace(/\|/g, '/');
       const w = it.estimatedWeightGrams ?? it.weightGrams ?? '?';
-      const conf = it.confidence != null ? `${Math.round(it.confidence * 100)}%` : '—';
-      const query = String(it.searchQuery || it.notes || '—').replace(/\|/g, '/');
+      const conf = it.itemConfidence ? String(it.itemConfidence).replace(/\|/g, '/') : '—';
+      const componentQueries = Array.isArray(it.components)
+        ? it.components.map((c: any) => c && c.searchQuery).filter(Boolean)
+        : [];
+      const query = componentQueries.length > 0
+        ? componentQueries.join('; ').replace(/\|/g, '/')
+        : (Array.isArray(it.anomalyFlags) && it.anomalyFlags.length > 0
+            ? it.anomalyFlags.join('; ').replace(/\|/g, '/')
+            : '—');
       lines.push(`| ${nm} | ${w}g | ${conf} | ${query} |`);
     }
     lines.push('');

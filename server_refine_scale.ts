@@ -306,12 +306,24 @@ export function resolveRefineWeightGrams(intent: WeightRefineIntent, targetItem:
       0;
       
     if (origCount === 0 && origWeight > 0) {
-      // If unspecified, guess original count based on plurality of the name
+      // If unspecified, guess original count based on plurality of the name — but only
+      // for foods that are genuinely eaten as discrete countable units. Mass-noun plurals
+      // (fries, greens, noodles, grapes, beans, oats, chips, crisps,
+      // berries, leaves, sprouts, herbs, spices, crumbs, chunks, shreds,
+      // flakes, grains, lentils, peas, nuts, seeds, raisins, olives,
+      // are not "2 units" just because the name ends in "s", so we deliberately exclude
+      // common ones here rather than let the guess silently misfire on them.
       const name = String(targetItem?.originalName || targetItem?.keyword || '').toLowerCase();
-      if (name.endsWith('s') && !name.endsWith('ss')) {
+      const massNounPlurals = [
+        'fries', 'greens', 'noodles', 'grapes', 'beans', 'oats', 'chips', 'crisps',
+        'berries', 'leaves', 'sprouts', 'herbs', 'spices', 'crumbs', 'chunks', 'shreds',
+        'flakes', 'grains', 'lentils', 'peas', 'nuts', 'seeds', 'raisins', 'olives',
+      ];
+      const isMassNoun = massNounPlurals.some((w) => name.includes(w));
+      if (!isMassNoun && name.endsWith('s') && !name.endsWith('ss')) {
         origCount = 2; // Plural defaults to 2 units (e.g. "croissants" -> 2)
       } else {
-        origCount = 1; // Singular defaults to 1
+        origCount = 1; // Singular, or an excluded mass-noun plural, defaults to 1
       }
     }
 

@@ -271,7 +271,7 @@ function build31NutrientsMarkdownClient(nutrients: Record<string, any>): string 
     { key: 'niacin', label: 'Niacin (B3)', unit: 'mg' },
   ];
 
-  const fmt = (v: any, unit: string, key?: string) => {
+  const fmt = (v: any, unit: string, key?: string, isAdditionalTrace?: boolean) => {
     if (key === 'salt' && (v === undefined || v === null || isNaN(Number(v)))) {
       if (nutrients && nutrients.sodium !== undefined && nutrients.sodium !== null && !isNaN(Number(nutrients.sodium))) {
         const saltGrams = (Number(nutrients.sodium) * 2.54) / 1000;
@@ -281,11 +281,18 @@ function build31NutrientsMarkdownClient(nutrients: Record<string, any>): string 
     }
     if (v === undefined || v === null || isNaN(Number(v))) return '--';
     const num = Math.round(Number(v) * 100) / 100;
+    // The 20 "additional" trace nutrients (selenium, riboflavin, niacin, B6, B12,
+    // phosphorus, etc.) are currently only ever populated from sources that supply a real
+    // measured value — nothing in the pipeline computes a genuine, non-zero 0 for these.
+    // So an exact 0 here means "not measured," not "confirmed zero," and showing a bare
+    // "0" would misleadingly imply the food has none of that nutrient. Core nutrients
+    // (calories, protein, etc.) are unaffected — they're always populated.
+    if (isAdditionalTrace && num === 0) return 'N/A';
     return unit ? `${num} ${unit}` : `${num}`;
   };
 
   const coreRows = coreList.map(item => `| ${item.label} | ${fmt(nutrients[item.key], item.unit, item.key)} |`);
-  const addRows = additionalList.map(item => `| ${item.label} | ${fmt(nutrients[item.key], item.unit, item.key)} |`);
+  const addRows = additionalList.map(item => `| ${item.label} | ${fmt(nutrients[item.key], item.unit, item.key, true)} |`);
 
   return [
     "\n### 📋 Comprehensive Nutrient Values (31 Nutrients)\n",
