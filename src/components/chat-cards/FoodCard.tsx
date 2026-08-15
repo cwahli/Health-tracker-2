@@ -1596,8 +1596,10 @@ export const FoodCard: React.FC<AgentCardProps & {
   const activeScoutItems = React.useMemo(() => {
     let items = [];
     if (msg.data?.scoutItems && msg.data.scoutItems.length > 0) items = msg.data.scoutItems;
+    else if (msg.data?.pendingFoodLog?.scoutItems && Array.isArray(msg.data.pendingFoodLog.scoutItems) && msg.data.pendingFoodLog.scoutItems.length > 0) items = msg.data.pendingFoodLog.scoutItems;
     else if (msg.data?.agentResult?.scoutData?.items && Array.isArray(msg.data.agentResult.scoutData.items)) items = msg.data.agentResult.scoutData.items;
     else if (msg.data?.scoutData?.items && Array.isArray(msg.data.scoutData.items)) items = msg.data.scoutData.items;
+    else if (msg.data?.agentResult?.scoutItems && Array.isArray(msg.data.agentResult.scoutItems)) items = msg.data.agentResult.scoutItems;
     
     if (confirmedScoutIndices.size > 0) {
       return items.map((item: any, i: number) => {
@@ -1663,8 +1665,8 @@ export const FoodCard: React.FC<AgentCardProps & {
         scoutOriginalName: matchingScout?.originalName || null,
         labelProductName: matchingScout?.labelProductName || item.labelProductName || null,
         estimatedWeightGrams: item.weightGrams,
-        boundingBox2D: matchingScout ? matchingScout.boundingBox2D : null,
-        sourceImageIndex: matchingScout ? matchingScout.sourceImageIndex : null,
+        boundingBox2D: item.boundingBox2D || (matchingScout ? matchingScout.boundingBox2D : null),
+        sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : (matchingScout ? matchingScout.sourceImageIndex : null),
         itemConfidence: matchingScout ? matchingScout.itemConfidence : "High (>90%)",
         anomalyFlags: matchingScout ? matchingScout.anomalyFlags : [],
         cookingMethod: item.cookingMethod || (matchingScout ? matchingScout.cookingMethod : null),
@@ -1790,23 +1792,33 @@ export const FoodCard: React.FC<AgentCardProps & {
     if (msg.pendingFoodLog?.imageUrls && msg.pendingFoodLog.imageUrls.length > 0) {
       return msg.pendingFoodLog.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
     }
+    if (msg.data?.foodLog?.imageUrls && msg.data.foodLog.imageUrls.length > 0) {
+      return msg.data.foodLog.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
+    }
+    if (msg.data?.data?.imageUrls && msg.data.data.imageUrls.length > 0) {
+      return msg.data.data.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
+    }
 
-    // 3. Find the user message associated with THIS request turn (i.e. immediately preceding user message)
+    // 3. Search backwards through messages in this conversation to find the source images for this meal thread
     if (messages) {
       const currentIdx = messages.indexOf(msg);
-      if (currentIdx > 0) {
-        for (let i = currentIdx - 1; i >= 0; i--) {
-          const m = messages[i];
-          if (m.role === 'assistant' && m.id !== msg.id) {
-            // Reached previous assistant message in history, stop looking past current turn!
-            break;
-          }
-          if (m.imageUrls && m.imageUrls.length > 0) {
-            return m.imageUrls.map(url => resolveFoodImage(url, foodLogs) || url);
-          }
-          if (m.imageUrl) {
-            return [resolveFoodImage(m.imageUrl, foodLogs) || m.imageUrl];
-          }
+      const startIdx = currentIdx > 0 ? currentIdx - 1 : messages.length - 1;
+      for (let i = startIdx; i >= 0; i--) {
+        const m = messages[i];
+        if (m.imageUrls && m.imageUrls.length > 0) {
+          return m.imageUrls.map(url => resolveFoodImage(url, foodLogs) || url);
+        }
+        if (m.imageUrl) {
+          return [resolveFoodImage(m.imageUrl, foodLogs) || m.imageUrl];
+        }
+        if (m.data?.pendingFoodLog?.imageUrls && m.data.pendingFoodLog.imageUrls.length > 0) {
+          return m.data.pendingFoodLog.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
+        }
+        if (m.pendingFoodLog?.imageUrls && m.pendingFoodLog.imageUrls.length > 0) {
+          return m.pendingFoodLog.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
+        }
+        if (m.data?.foodLog?.imageUrls && m.data.foodLog.imageUrls.length > 0) {
+          return m.data.foodLog.imageUrls.map((url: string) => resolveFoodImage(url, foodLogs) || url);
         }
       }
     }
@@ -1819,8 +1831,8 @@ export const FoodCard: React.FC<AgentCardProps & {
   }, [messageImages]);
 
   const resolvedScoutItems = React.useMemo(() => {
-    return msg.data?.scoutItems || [];
-  }, [msg.data?.scoutItems]);
+    return (activeScoutItems && activeScoutItems.length > 0) ? activeScoutItems : (msg.data?.scoutItems || []);
+  }, [activeScoutItems, msg.data?.scoutItems]);
 
   const getNutrientFromTable = (comparisonTable: any, nutrientNameQuery: string, foodIdx: number): string | null => {
     if (!comparisonTable || !comparisonTable.rows) return null;
@@ -2840,20 +2852,21 @@ export const FoodCard: React.FC<AgentCardProps & {
       {(() => {
         if (scoutPreviewIdx === null) return null;
         
-        const item = activeScoutItems[scoutPreviewIdx];
+        const scoutList = (displayedScoutItems && displayedScoutItems.length > 0) ? displayedScoutItems : activeScoutItems;
+        const item = scoutList[scoutPreviewIdx];
         if (!item) return null;
         const imgIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
         const resolvedImgSrc = (messageImages.length > 0)
           ? messageImages[imgIdx >= 0 && imgIdx < messageImages.length ? imgIdx : 0]
-          : getFoodImageUrl(item.keyword);
-        const bb = item.boundingBox2D || null;
+          : getFoodImageUrl(item.keyword || item.name || item.originalName);
+        const bb = item.boundingBox2D || item.boundingBox || null;
         return (
           <ZoomableImage 
             src={resolvedImgSrc} 
             boundingBox={bb}
             onClose={() => setScoutPreviewIdx(null)}
-            foodName={showTranslations.scout ? (item.keyword || item.originalName) : (item.originalName || item.keyword)}
-            hasNext={scoutPreviewIdx < activeScoutItems.length - 1}
+            foodName={showTranslations.scout ? (item.keyword || item.originalName || item.name) : (item.originalName || item.keyword || item.name)}
+            hasNext={scoutPreviewIdx < scoutList.length - 1}
             hasPrev={scoutPreviewIdx > 0}
             onNext={() => setScoutPreviewIdx(prev => prev !== null ? prev + 1 : null)}
             onPrev={() => setScoutPreviewIdx(prev => prev !== null ? prev - 1 : null)}
@@ -2922,11 +2935,17 @@ export const FoodCard: React.FC<AgentCardProps & {
                            </button>
                          </div>
                       )}
-                      {msg.data?.pendingFoodLog.imageUrls && msg.data?.pendingFoodLog.imageUrls.length > 0 && (
-                        <div className="overflow-hidden border-y sm:border border-slate-100 dark:border-slate-700/50 shadow-sm mb-3 w-[calc(100%+2rem)] -mx-4 sm:mx-0 sm:w-full sm:rounded-2xl">
-                          <ImageSlider images={msg.data?.pendingFoodLog.imageUrls} altText={msg.data?.pendingFoodLog.name || "Pending meal"} />
-                        </div>
-                      )}
+                      {(() => {
+                        const displayImgs = (msg.data?.pendingFoodLog?.imageUrls && msg.data.pendingFoodLog.imageUrls.length > 0)
+                          ? msg.data.pendingFoodLog.imageUrls
+                          : messageImages;
+                        if (!displayImgs || displayImgs.length === 0) return null;
+                        return (
+                          <div className="overflow-hidden border-y sm:border border-slate-100 dark:border-slate-700/50 shadow-sm mb-3 w-[calc(100%+2rem)] -mx-4 sm:mx-0 sm:w-full sm:rounded-2xl">
+                            <ImageSlider images={displayImgs} altText={msg.data?.pendingFoodLog?.name || "Pending meal"} />
+                          </div>
+                        );
+                      })()}
                       
 
 

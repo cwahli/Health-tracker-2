@@ -961,7 +961,6 @@ export default function App() {
               console.log(`[JobQueueRunner] Submitting job ${job.id} to server...`);
               let stringImages = [];
               try {
-                const { ImageStore } = await import('./jobs/ImageStore');
                 const rawImages = (await ImageStore.getImages(job.id)) || [];
                 stringImages = await Promise.all(
                   rawImages.map(async (img: any) => {

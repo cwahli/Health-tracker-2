@@ -304,12 +304,28 @@ export async function executeFoodResolverCurator(
         
         // 4. Persist aliases for the curated query and listed aliases to build a self-learning database
         const aliasesSet = new Set<string>();
-        if (action.aliasesToCreate) {
-          action.aliasesToCreate.forEach(a => aliasesSet.add(a.toLowerCase().trim()));
+        const targetCanonicalName = (action.parametricFoodName || gap.query || '').toLowerCase().trim();
+        
+        const isTrivialOrSelfAlias = (alias: string, canon: string) => {
+          if (!alias || !canon) return true;
+          if (alias === canon) return true;
+          if (alias + 's' === canon || canon + 's' === alias) return true;
+          if (alias + 'es' === canon || canon + 'es' === alias) return true;
+          return false;
+        };
+
+        if (action.aliasesToCreate && Array.isArray(action.aliasesToCreate)) {
+          // Filter out trivial plurals/self-matches and cap to at most 2 genuine colloquial synonyms
+          const filteredSynonyms = action.aliasesToCreate
+            .map(a => String(a || '').toLowerCase().trim())
+            .filter(a => a.length >= 3 && !isTrivialOrSelfAlias(a, targetCanonicalName))
+            .slice(0, 2);
+          filteredSynonyms.forEach(a => aliasesSet.add(a));
         }
-        aliasesSet.add(gap.query.toLowerCase().trim());
-        if (action.parametricFoodName) {
-          aliasesSet.add(action.parametricFoodName.toLowerCase().trim());
+
+        const cleanGapQuery = (gap.query || '').toLowerCase().trim();
+        if (!isTrivialOrSelfAlias(cleanGapQuery, targetCanonicalName)) {
+          aliasesSet.add(cleanGapQuery);
         }
 
         for (const alias of aliasesSet) {

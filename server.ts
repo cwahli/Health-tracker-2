@@ -6726,7 +6726,15 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         isFuzzyMatch(m)
       );
       
-      // 2. Try web search sources next
+      // 2. Try verified database sources next (USDA, OpenFoodFacts, internal curator, catalog)
+      if (!webMatchRaw) {
+        webMatchRaw = databaseMatchesArray.find((m: any) => 
+          (m.source === 'usda' || m.source === 'off' || m.source === 'internal_dish_cache' || m.source === 'canonical_dict' || String(m.id || '').startsWith('resolver_')) &&
+          isFuzzyMatch(m)
+        );
+      }
+
+      // 3. Fallback to web search sources if no canonical DB match was found
       if (!webMatchRaw) {
         webMatchRaw = databaseMatchesArray.find((m: any) => 
           (m.source === 'web_search' || m.source === 'tavily' || m.source === 'serper' || m.source === 'google_cse') &&
@@ -6734,7 +6742,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         );
       }
       
-      // 3. Fallback to OpenFoodFacts ('off') or USDA ('usda') if fuzzy match succeeds
+      // 4. Fallback to any remaining fuzzy match
       if (!webMatchRaw) {
         webMatchRaw = databaseMatchesArray.find(isFuzzyMatch);
       }
@@ -8719,7 +8727,7 @@ ${databaseMatchesCtx}
 Current User Input: "${message}"`) + modeDPromptSuffix;
 
     fullPromptSent = `System Instruction:\n${finalSystemInstruction}\n\n${promptText}`;
-    addDebugLog(`[RouteAgent Chat] Sending request to Gemini...`);
+    addDebugLog(`[Dietitian Coach] Sending nutrition analysis request to Gemini...`);
     async function callAndParseFoodAnalysis(callArgs: any): Promise<{ textOutput: string; rawParsed: any }> {
       if (isStream) {
         callArgs.onStream = (chunk: string, isThought?: boolean) => {
@@ -8873,7 +8881,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite", // Updating to flash-lite as recommended
       systemInstruction: finalSystemInstruction,
       promptText,
-      imagePayloads,
+      imagePayloads: undefined, // Strip redundant image payloads: Dietitian Coach consumes structured JSON nutrition summary
       responseMimeType: "application/json" as const,
       responseSchema: foodAnalyzeSchema,
       maxOutputTokens: 8192, // Boosted to ensure all items fit
@@ -8959,7 +8967,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
     }
 
 
-    addDebugLog(`[RouteAgent Chat] Received response from Gemini. Length: ${textOutput.length} chars.`);
+    addDebugLog(`[Dietitian Coach] Received response from Gemini. Length: ${textOutput.length} chars.`);
 
     if (rawParsed._internalReasoning) {
       addDebugLog(`[Dietitian Internal Reasoning]\n${rawParsed._internalReasoning}`);

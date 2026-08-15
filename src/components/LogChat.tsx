@@ -4,7 +4,7 @@ import {
 import { agentCardRegistry } from './chat-cards';
 import { AgentThoughtBox } from './chat-cards/FoodCard';
 import { trackApiCall, setActiveQueryId, generateQueryId } from '../utils/apiTracker';
-import { saveAgentRequestLog } from '../utils/agentLogsTracker';
+import { saveAgentRequestLog, getAgentRequestLogs } from '../utils/agentLogsTracker';
 import React, { useState, useRef, useEffect } from 'react';
 
 import { ChatMessage, FoodLog, UserProfile, FoodIdea } from '../types';
@@ -494,6 +494,7 @@ export default function LogChat({
   };
 
   const isSendingRef = useRef(false);
+  const lastSendClickTimeRef = useRef<number>(0);
 
 
   const [showDataUsed, setShowDataUsed] = useState(false);
@@ -1792,7 +1793,6 @@ ${logsText}`);
 
     if (!finalBackendLogs || finalBackendLogs.startsWith('[Logs stored in R2') || finalBackendLogs.length < 50) {
       try {
-        const { getAgentRequestLogs } = await import('../utils/agentLogsTracker');
         const storedLogs = getAgentRequestLogs();
         const matchedReq = storedLogs.find(r => r.id === jobIdToDownload || (msg?.data?.agentResult?.requestId && r.id === msg.data.agentResult.requestId));
         if (matchedReq && matchedReq.logs && matchedReq.logs.length > 0) {
@@ -2279,11 +2279,18 @@ ${logsText}`);
   };
 
   const handleSend = async (overrideText?: string | { text?: string; imageUrls?: string[]; compareOnly?: boolean; compareItems?: string[]; sourceMsgId?: string; skipScout?: boolean; activeScoutItems?: any; scoutContentType?: any; overrideMode?: string; userSelectedMode?: string; } | any, extraImages?: any[], extraOptions?: any) => {
+    const now = Date.now();
+    if (now - lastSendClickTimeRef.current < 1000) {
+      console.log('[handleSend] Blocked — debounced duplicate click within 1000ms.');
+      return;
+    }
     if (isSendingRef.current || isAnalyzing) {
       console.log('[handleSend] Blocked — analysis already in progress or duplicate tap.');
       return;
     }
+    lastSendClickTimeRef.current = now;
     isSendingRef.current = true;
+    setIsAnalyzing(true);
     const failsafe = setTimeout(() => { isSendingRef.current = false; }, 60000);
     // Check credit limits before proceeding
     if (profile) {
@@ -4149,7 +4156,11 @@ ${logsText}`);
               if (onLogFood) {
                 onLogFood({
                   ...targetMsg.data.pendingFoodLog,
-                  ...resData.data
+                  ...resData.data,
+                  imageUrls: (resData.data?.imageUrls && resData.data.imageUrls.length > 0)
+                    ? resData.data.imageUrls
+                    : (targetMsg.data.pendingFoodLog?.imageUrls || targetMsg.imageUrls || []),
+                  imageUrl: resData.data?.imageUrl || targetMsg.data.pendingFoodLog?.imageUrl || targetMsg.imageUrl || undefined
                 } as FoodLog);
               }
             }
@@ -4162,7 +4173,7 @@ ${logsText}`);
                 // scoutItems too — the "Meal composition" gallery/chips read from
                 // scoutItems (not itemsBreakdown), so without this they keep
                 // showing items that were just removed.
-                let prunedScoutItems = m.data?.scoutItems;
+                let prunedScoutItems = (resData.scoutItems && resData.scoutItems.length > 0) ? resData.scoutItems : m.data?.scoutItems;
                 if (Array.isArray(resData.modificationCommand)) {
                   const removedScoutIndices = new Set<number>();
                   const removedAnItem = resData.modificationCommand.some((cmd: any) => cmd?.action === 'remove_item');
@@ -4177,7 +4188,7 @@ ${logsText}`);
                     });
                   }
                   if (removedScoutIndices.size > 0 && Array.isArray(m.data?.scoutItems)) {
-                    prunedScoutItems = m.data.scoutItems.filter((s: any) => !removedScoutIndices.has(s.scoutIndex));
+                    prunedScoutItems = (prunedScoutItems || m.data.scoutItems).filter((s: any) => !removedScoutIndices.has(s.scoutIndex));
                   }
                 }
 
@@ -4192,7 +4203,11 @@ ${logsText}`);
                     scoutItems: prunedScoutItems,
                     pendingFoodLog: {
                       ...m.data?.pendingFoodLog,
-                      ...resData.data
+                      ...resData.data,
+                      imageUrls: (resData.data?.imageUrls && resData.data.imageUrls.length > 0)
+                        ? resData.data.imageUrls
+                        : (m.data?.pendingFoodLog?.imageUrls || m.imageUrls || []),
+                      imageUrl: resData.data?.imageUrl || m.data?.pendingFoodLog?.imageUrl || m.imageUrl || undefined
                     }
                   }
                 };
@@ -5757,6 +5772,7 @@ ${JSON.stringify(profile, null, 2)}`);
                                   currentJob?.result?.backendLogsUrl ||
                                   currentJob?.result?.clean_result?.backendLogsUrl ||
                                   '';
+                                recordBreadcrumb('confirm_portions', 'portion_clarify_card', { choices, inPlaceMsgId: msg.id });
                                 handleSend(JSON.stringify(choices), [], {
                                   portionChoices: choices,
                                   skipScout: true,
@@ -6159,7 +6175,7 @@ ${JSON.stringify(profile, null, 2)}`);
                   const triggerText = inputText.trim() || autoSendMessage || (reviewBiomarkerKey ? buildBiomarkerReviewPrefill(reviewBiomarkerKey, undefined, biomarkers, profile) : '');
                   handleSend(triggerText || undefined);
                 }}
-                disabled={isAnalyzing}
+                disabled={isAnalyzing || isSendingRef.current}
                 className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
