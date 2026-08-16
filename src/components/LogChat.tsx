@@ -18,7 +18,7 @@ import LLMSelector from './LLMSelector';
 import { AVAILABLE_LLMS } from '../utils/llm';
 import { compressMultipleImages, compressImage } from '../utils/imageCompressor';
 import { getCurrentDateInTimezone, toYYYYMMDD } from '../utils/dateUtils';
-import { enrichReviewModificationCommands, collectCatalogUnitMap } from '../utils/biomarkerLifecycle';
+import { enrichReviewModificationCommands, collectCatalogUnitMap, sanitizeReviewReply } from '../utils/biomarkerLifecycle';
 import ImageSlider from './ImageSlider';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 const FullScreenLogViewer = lazyWithRetry(() => import('./FullScreenLogViewer'));
@@ -1416,10 +1416,11 @@ ${logsText}`);
         const cmds = isReview
           ? enrichReviewModificationCommands(Array.isArray(reviewCmds) ? reviewCmds : [], biomarkerHistory || [], unitMap)
           : reviewCmds;
+        const rawContent = raw.message || raw.text || raw.reply || raw.globalSummary || 'Analysis complete.';
         const assistantMsg: ChatMessage = {
           id: `msg_assistant_${jobId}`,
           role: 'assistant',
-          content: raw.message || raw.text || raw.reply || raw.globalSummary || 'Analysis complete.',
+          content: isReview ? sanitizeReviewReply(rawContent, cmds, biomarkerHistory || [], unitMap) : rawContent,
           timestamp: job.updatedAt || new Date().toISOString(),
           isLive: false,
           agentResult: raw,
@@ -1659,10 +1660,11 @@ ${logsText}`);
           const cmds2 = isReview2
             ? enrichReviewModificationCommands(Array.isArray(reviewCmds2) ? reviewCmds2 : [], biomarkerHistory || [], unitMap2)
             : reviewCmds2;
+          const rawContent2 = raw.message || raw.reply || raw.globalSummary || 'Analysis complete.';
           const assistantMsg: ChatMessage = {
             id: `msg_assistant_${jobId}`,
             role: 'assistant',
-            content: raw.message || raw.reply || raw.globalSummary || 'Analysis complete.',
+            content: isReview2 ? sanitizeReviewReply(rawContent2, cmds2, biomarkerHistory || [], unitMap2) : rawContent2,
             timestamp: job.updatedAt || new Date().toISOString(),
             agentResult: raw,
             agentType: resolvedType2 as any,
@@ -2907,6 +2909,17 @@ ${logsText}`);
         const currentJobId = jobId || `job_medical_${Date.now()}`;
         const job = JobStore.getJob(currentJobId);
 
+        // B3 FIX: A job/chat thread can be reused across genuinely different biomarker
+        // agent actions (e.g. a single biomarker_review chat followed by a bulk
+        // agent1_step1 lab-report paste in the same open modal). When the agentType or
+        // reviewBiomarkerKey of this submission differs from what the job was last used
+        // for, treat it as a fresh action rather than a retry of the old one.
+        const previousInputSnapshot = job?.inputSnapshot as any;
+        const isDifferentBiomarkerAction = !!job && (
+          (previousInputSnapshot?.agentType || 'agent1_step1') !== activeType ||
+          (previousInputSnapshot?.reviewBiomarkerKey || undefined) !== (reviewBiomarkerKey || undefined)
+        );
+
         const mapMsg = [...messages].reverse().find(m => m.data?.agentResult?.bucketMapping || m.data?.bucketMapping);
         const bucketMappingStr = mapMsg
           ? (typeof (mapMsg.agentResult?.bucketMapping || mapMsg.bucketMapping) === 'string'
@@ -2940,7 +2953,7 @@ ${logsText}`);
           timestamp: new Date().toISOString()
         };
 
-        const existingMsgs = (job?.messages && job.messages.length > 0)
+        const existingMsgs = (job?.messages && job.messages.length > 0 && !isDifferentBiomarkerAction)
           ? job.messages
           : [getWelcomeMessage()];
         const updatedMessages = [...existingMsgs, userMsg];
@@ -2967,6 +2980,7 @@ ${logsText}`);
             serverSubmittedAt: undefined,
             clientSubmitPending: true,
             statusMessage: 'Uploading to server… Keep this tab open',
+            ...(isDifferentBiomarkerAction ? { attemptCount: 1, maxAttempts: 3 } : {}),
           });
         } else {
           JobStore.createJob({
@@ -4159,7 +4173,12 @@ ${logsText}`);
           }
           }
           if (onAgentAnalysisSaved && agentType) {
-            activeAnalysisIdRef.current = await onAgentAnalysisSaved(agentType, resData, activeAnalysisIdRef.current || undefined);
+            // B3 FIX: persist the normalized agent type (assistantMsg.agentType), not the
+            // raw server-step type (e.g. 'agent1_step1'). InsightsTab.tsx's biomarker
+            // review tables key off the normalized type ('agent1'), so saving the raw
+            // step type silently hid the review table for every biomarker agent whose
+            // raw type differs from its normalized/display type.
+            activeAnalysisIdRef.current = await onAgentAnalysisSaved(assistantMsg.agentType || agentType, resData, activeAnalysisIdRef.current || undefined);
           }
         } else {
           assistantMsg.mode = resData.mode;

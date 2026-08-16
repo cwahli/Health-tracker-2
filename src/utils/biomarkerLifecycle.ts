@@ -297,7 +297,7 @@ export function buildReviewCommandsFromHistory(
   return cmds;
 }
 
-/** If Review omitted newValue or the whole command list, fill from the convert table. */
+/** If Review omitted newValue, hallucinated values, or produced scaling error reasons, correct from convert table. */
 export function enrichReviewModificationCommands(
   commands: ModificationCommand[] | undefined | null,
   history: { date?: string; biomarkers?: Record<string, any>; observationMeta?: Record<string, { rawUnit?: string }> }[] = [],
@@ -305,12 +305,12 @@ export function enrichReviewModificationCommands(
 ): ModificationCommand[] {
   const filled = (commands || []).map((cmd) => {
     if (cmd.action !== 'update_biomarker' || !cmd.keyName) return cmd;
-    if (cmd.newValue !== undefined && cmd.newValue !== null && cmd.newValue !== '') return cmd;
     const key = getMappedBiomarkerKey(cmd.keyName) || cmd.keyName;
     const oldRaw = cmd.oldValue ?? history.find((h) => datesMatch(h.date, cmd.date))?.biomarkers?.[key]
       ?? history.find((h) => datesMatch(h.date, cmd.date))?.biomarkers?.[cmd.keyName];
     const oldNum = typeof oldRaw === 'number' ? oldRaw : parseFloat(String(oldRaw ?? ''));
     if (!Number.isFinite(oldNum)) return cmd;
+
     const histVals = history
       .filter((h) => !datesMatch(h.date, cmd.date))
       .map((h) => Number(h.biomarkers?.[key] ?? h.biomarkers?.[cmd.keyName]))
@@ -321,18 +321,50 @@ export function enrichReviewModificationCommands(
     const spec = ANALYTE_CONVERSIONS[key];
     const catalogUnit = catalogUnitByKey[key] || catalogUnitByKey[cmd.keyName] || '';
     if (!spec) return cmd;
+
     const cat = normUnit(catalogUnit);
     const looksLikeFrom = histMedian > 0 && oldNum / histMedian >= 8;
-    const targetIsSi = cat === spec.to || looksLikeFrom;
+    const isSiBand = SI_VALUE_BAND[key] && histMedian >= SI_VALUE_BAND[key][0] && oldNum < SI_VALUE_BAND[key][0];
+    const targetIsSi = cat === spec.to || looksLikeFrom || isSiBand;
+
     if (targetIsSi) {
       const conv = convertViaTable(key, oldNum, spec.from, spec.to);
-      if (conv.ok) return { ...cmd, newValue: conv.value, keyName: key };
+      if (conv.ok) {
+        const curNewVal = typeof cmd.newValue === 'number' ? cmd.newValue : parseFloat(String(cmd.newValue ?? ''));
+        const badVal = !Number.isFinite(curNewVal) || Math.abs(curNewVal - conv.value) > 0.5;
+        const badReason = !cmd.reason || /decimal|misplaced|scaling|digit|divide|dividing/i.test(cmd.reason);
+        return {
+          ...cmd,
+          keyName: key,
+          oldValue: oldNum,
+          newValue: conv.value,
+          reason: badReason
+            ? `Unit conversion: ${oldNum} ${spec.from} → ${conv.value} ${spec.to} using clinical factor ${spec.multiply} (table, not a clinical finding).`
+            : cmd.reason,
+        };
+      }
     }
+
     const looksLikeTo = histMedian > 0 && histMedian / oldNum >= 8;
     if (cat === spec.from || looksLikeTo) {
       const conv = convertViaTable(key, oldNum, spec.to, spec.from);
-      if (conv.ok) return { ...cmd, newValue: conv.value, keyName: key };
+      if (conv.ok) {
+        const curNewVal = typeof cmd.newValue === 'number' ? cmd.newValue : parseFloat(String(cmd.newValue ?? ''));
+        const badVal = !Number.isFinite(curNewVal) || Math.abs(curNewVal - conv.value) > 0.5;
+        const badReason = !cmd.reason || /decimal|misplaced|scaling|digit|divide|dividing/i.test(cmd.reason);
+        return {
+          ...cmd,
+          keyName: key,
+          oldValue: oldNum,
+          newValue: conv.value,
+          reason: badReason
+            ? `Unit conversion: ${oldNum} ${spec.to} → ${conv.value} ${spec.from} using clinical factor ${spec.multiply} (table, not a clinical finding).`
+            : cmd.reason,
+        };
+      }
     }
+
+    if (cmd.newValue !== undefined && cmd.newValue !== null && cmd.newValue !== '') return cmd;
     return cmd;
   });
 
@@ -348,6 +380,77 @@ export function enrichReviewModificationCommands(
     return !have.has(id);
   });
   return [...filled, ...extra];
+}
+
+/**
+ * Sanitizes LLM text output for biomarker_review to prevent erroneous math descriptions
+ * (e.g. replacing hallucinated "0.8 -> 16" or "dividing by 20" or "decimal placement shift"
+ * with the accurate clinical unit conversion factor and converted value).
+ */
+export function sanitizeReviewReply(
+  reply: string,
+  commands: ModificationCommand[] = [],
+  history: { date?: string; biomarkers?: Record<string, any> }[] = [],
+  catalogUnitByKey: Record<string, string> = {}
+): string {
+  if (!reply || typeof reply !== 'string') return reply || '';
+  let clean = reply;
+
+  // 1. Process each command to fix hallucinated numbers in reply text
+  (commands || []).forEach((cmd) => {
+    if (cmd.action !== 'update_biomarker' || !cmd.keyName) return;
+    const key = getMappedBiomarkerKey(cmd.keyName) || cmd.keyName;
+    const spec = ANALYTE_CONVERSIONS[key];
+    if (!spec) return;
+
+    const oldVal = cmd.oldValue !== undefined ? cmd.oldValue : '';
+    const newVal = cmd.newValue !== undefined ? cmd.newValue : '';
+
+    if (oldVal !== '' && newVal !== '') {
+      // Find patterns like "0.8 -> 16" or "0.8 -> 16.0" or "0.8 to 16" or "0.8 → 16"
+      const numPattern = new RegExp(
+        `\\b(${oldVal})\\s*(?:->|-->|to|→)\\s*(\\d+(?:\\.\\d+)?)\\b`,
+        'gi'
+      );
+      clean = clean.replace(numPattern, (match, p1, p2) => {
+        const numP2 = parseFloat(p2);
+        if (Math.abs(numP2 - Number(newVal)) > 0.5) {
+          return `${p1} ${spec.from} → ${newVal} ${spec.to}`;
+        }
+        return `${p1} ${spec.from} → ${p2} ${spec.to}`;
+      });
+    }
+
+    // Replace "0.8 umol/L" with "0.8 mg/dL" if old value was in mg/dL before conversion
+    if (oldVal !== '') {
+      const wrongUnitPattern = new RegExp(`\\b(${oldVal})\\s*(?:umol\\/L|µmol\\/L|mmol\\/L)\\b`, 'gi');
+      clean = clean.replace(wrongUnitPattern, `$1 ${spec.from}`);
+    }
+  });
+
+  // 2. Fix erroneous text phrases describing unit conversions as decimal placement or scaling errors
+  clean = clean.replace(
+    /decimal placement shift \([^)]*\)/gi,
+    'unit conversion using standard clinical factor'
+  );
+  clean = clean.replace(
+    /decimal placement shift/gi,
+    'unit conversion using standard clinical factor'
+  );
+  clean = clean.replace(
+    /decimal point misplaced/gi,
+    'unit conversion required'
+  );
+  clean = clean.replace(
+    /dividing by \d+|dropping a digit/gi,
+    'applying clinical unit conversion factor'
+  );
+  clean = clean.replace(
+    /data-entry\/unit-scaling correction/gi,
+    'unit conversion correction'
+  );
+
+  return clean;
 }
 
 export function applyModificationCommands(

@@ -252,7 +252,7 @@ import { decidePrepAddition } from "./server_prep_policy";
 import dotenv from "dotenv";
 import { AsyncLocalStorage } from "async_hooks";
 import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerStatusLabel, getBiomarkerMetadata, getCustomBiomarkerDef } from "./src/utils/biomarkers";
-import { filterHistoryForUse, enrichReviewModificationCommands } from "./src/utils/biomarkerLifecycle";
+import { filterHistoryForUse, enrichReviewModificationCommands, sanitizeReviewReply } from "./src/utils/biomarkerLifecycle";
 import { generateDynamicInsight } from "./src/utils/biomarkerInsights";
 import { formatOptimalTargetValue } from "./src/utils/agentCalibration";
 import { NUTRIENT_KEYS } from "./src/utils/nutrients";
@@ -11780,11 +11780,11 @@ rules:
     - "If the newly proposed range is a standard global baseline, set 'isEthnicitySpecific' to false and 'ethnicityTag' to null."
     - "When no correction or override is discussed or needed, set 'proposal' to null."
     - "If you identify data entry errors, unit mix-ups, or date discrepancies in the log history, provide a 'modificationCommand' list to correct or remove them."
-    - "CRITICAL: Every update_biomarker command MUST include numeric newValue (the converted/corrected number). Never omit newValue. Convert US conventional (mg/dL) to the unit used in older logs (typically mmol/L for lipids, umol/L for bilirubin) using standard clinical factors. Example: HDL 50 mg/dL → newValue 1.29 (mmol/L)."
+    - "CRITICAL: Every update_biomarker command MUST include numeric newValue (the converted/corrected number). Never omit newValue. Convert US conventional (mg/dL) to the unit used in older logs (typically mmol/L for lipids, umol/L for bilirubin) using standard clinical factors. Example: HDL 50 mg/dL → newValue 1.29 (mmol/L); Total Bilirubin 0.8 mg/dL → newValue 13.68 umol/L (multiply by 17.1). Never describe unit conversions as decimal placement shifts or dividing by 20."
     - "CRITICAL RESPONSE STRUCTURE FOR REVIEWS & CORRECTIONS: In your conversational 'reply', you MUST explicitly structure your textual answer to include:"
-      "1) Identification of Errors: Explicitly detail WHERE the error occurred in the current logs (e.g. 'Log on 05-06-2026 has Hematocrit recorded as 48 due to percentage notation instead of decimal ratio 0.48')."
-      "2) Clear Before-and-After Summary: Provide a clear list or table showing 'Current Recorded Value → Proposed Fix' for every log entry being modified (e.g. '05-06-2026: 48 → 0.48')."
-      "3) Correction Basis: State plainly that this is a data-entry/unit-scaling correction, not a new clinical finding. Briefly name the scaling rule applied (e.g. 'percentage notation stored instead of decimal ratio'). Do NOT speculate about diagnoses, conditions, or disease risk (e.g. polycythemia, hyponatremia) from a scaling correction alone — only include clinical interpretation if the user's message explicitly asked an educational/diagnostic question about the biomarker (Mode 1)."
+      "1) Identification of Errors: Explicitly detail WHERE the error occurred in the current logs (e.g. 'Log on 08-08-2026 has Total Bilirubin recorded as 0.8 mg/dL while historical logs are in µmol/L')."
+      "2) Clear Before-and-After Summary: Provide a clear list or table showing 'Current Recorded Value → Proposed Fix' using the exact converted number (e.g. '08-08-2026: 0.8 mg/dL → 13.68 µmol/L')."
+      "3) Correction Basis: State plainly that this is a unit conversion correction using standard clinical factors (e.g. multiplying Total Bilirubin in mg/dL by 17.1 to get µmol/L), not a new clinical finding or decimal placement error. Do NOT speculate about diagnoses from a unit conversion."
 
 instructions:
   - "The JSON response must be well-formed and valid."`;
@@ -12257,9 +12257,15 @@ Your output MUST be a valid JSON object matching the schema provided.`;
             biomarkerHistory || [],
             unitMap
           );
+          const sanitizedReply = sanitizeReviewReply(
+            parsed.reply || parsed.text || "",
+            cmds,
+            biomarkerHistory || [],
+            unitMap
+          );
           return res.json({
-            text: parsed.reply || "",
-            reply: parsed.reply || "",
+            text: sanitizedReply,
+            reply: sanitizedReply,
             proposal: parsed.proposal || null,
             modificationCommand: cmds.length ? cmds : parsed.modificationCommand || null,
             agentType,

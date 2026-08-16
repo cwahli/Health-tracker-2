@@ -3,6 +3,7 @@ import {
   applyModificationCommands,
   enrichReviewModificationCommands,
   buildReviewCommandsFromHistory,
+  sanitizeReviewReply,
   convertViaTable,
   handleUnitChange,
   overlayAgeBand,
@@ -299,6 +300,53 @@ describe('isValEmpty', () => {
     expect(isValEmpty(null)).toBe(true);
     expect(isValEmpty(undefined)).toBe(true);
     expect(isValEmpty(NaN)).toBe(true);
+  });
+});
+
+describe('sanitizeReviewReply & review command enrichment', () => {
+  it('corrects hallucinated newValue (16 -> 13.68) and bad reason for bilirubin 0.8', () => {
+    const history = [
+      { id: '1', date: '08-08-2026', biomarkers: { total_bilirubin: 0.8 } },
+      { id: '2', date: '02-08-2026', biomarkers: { total_bilirubin: 16 } },
+      { id: '3', date: '05-06-2026', biomarkers: { total_bilirubin: 14 } },
+    ];
+    const catalogUnits = { total_bilirubin: 'umol/L' };
+    const hallucinatedCmds = [
+      {
+        action: 'update_biomarker' as const,
+        keyName: 'total_bilirubin',
+        date: '08-08-2026',
+        oldValue: 0.8,
+        newValue: 16,
+        reason: 'Data entry scaling error: decimal point misplaced compared to historical logs',
+      },
+    ];
+
+    const enriched = enrichReviewModificationCommands(hallucinatedCmds, history, catalogUnits);
+    expect(enriched[0].newValue).toBeCloseTo(13.68, 1);
+    expect(enriched[0].reason).toContain('Unit conversion: 0.8 mg/dl');
+    expect(enriched[0].reason).not.toContain('misplaced');
+  });
+
+  it('sanitizes reply text containing hallucinated 0.8 -> 16 and decimal placement shift phrases', () => {
+    const cmds = [
+      {
+        action: 'update_biomarker' as const,
+        keyName: 'total_bilirubin',
+        date: '08-08-2026',
+        oldValue: 0.8,
+        newValue: 13.68,
+        reason: 'Unit conversion: 0.8 mg/dl → 13.68 umol/l',
+      },
+    ];
+    const rawReply =
+      '1) Error: log on 08-08-2026 has Total Bilirubin recorded as 0.8 umol/L.\n2) Summary: 08-08-2026: 0.8 -> 16\n3) Basis: decimal placement shift (dividing by 20 or dropping a digit).';
+
+    const clean = sanitizeReviewReply(rawReply, cmds);
+    expect(clean.toLowerCase()).toContain('0.8 mg/dl → 13.68 umol/l');
+    expect(clean).not.toContain('0.8 -> 16');
+    expect(clean).not.toContain('decimal placement shift');
+    expect(clean).toContain('unit conversion using standard clinical factor');
   });
 });
 
