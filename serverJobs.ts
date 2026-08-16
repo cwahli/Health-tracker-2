@@ -728,7 +728,6 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           agentType: finalPayload?.agentType || undefined,
           extractedData: finalPayload?.extractedData || undefined,
           hasMoreMarkers: finalPayload?.hasMoreMarkers || undefined,
-          remainingText: finalPayload?.remainingText || undefined,
           estimatedTotalMarkers: finalPayload?.estimatedTotalMarkers ?? undefined,
           unmappedTests: finalPayload?.unmappedTests || undefined,
           currentBatch: finalPayload?.currentBatch || undefined,
@@ -765,7 +764,6 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           agentResult: {
             extractedData: finalPayload?.extractedData || undefined,
             hasMoreMarkers: finalPayload?.hasMoreMarkers || undefined,
-            remainingText: finalPayload?.remainingText || undefined,
             estimatedTotalMarkers: finalPayload?.estimatedTotalMarkers ?? undefined,
             unmappedTests: finalPayload?.unmappedTests || undefined,
             currentBatch: finalPayload?.currentBatch || undefined,

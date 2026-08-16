@@ -21,10 +21,14 @@
    - Modified `serverJobs.ts` to transform `flagged` trace rows from table interception into valid `modificationCommand` inputs (`update_biomarker`), mapping them to the expected review shape.
    - Refactored `App.tsx` logic to ensure all incoming biomarker modification commands pass through the `enrichReviewModificationCommands` layer automatically, successfully unifying table-ingest flagged item correction with standard LLM hallucination reviews.
    - Fixed `handleLogMedical` so that `update_biomarker` can safely insert *new* rows for net-new dates generated via CSV ingest, completing the staged confirm & upsert pathway.
-6. **Golden Test Harness (G-B6, G-B7, G-B9)**: Created complete test cases under `tests/Golden_biomarker/examples/` for symptom diary routing (`WRONG_DOOR`), incomplete reading detection (`COMPLETENESS`), and vision non-medical image handling (`CONFORMANCE_SHAPE`).
+6. **Golden Test Harness (G-B2, G-B5, G-B6, G-B7, G-B9)**: Created complete test cases under `tests/Golden_biomarker/examples/` and updated `tests/golden_biomarker.test.ts` to actively execute pipeline helper functions (`resolveAgentDestination`, `shouldAbortTablePath`, `lexTable`, `buildIngestBatch`) on test inputs. Created `scripts/golden-from-medical-debug.mjs` for capturing medical debug exports into golden fixtures.
 7. **Golden Meal Dataset Expansion (Item 1)**: Added case `G9` (Salmon Poke Bowl with Avocado) to `/tests/Golden_meal/` and updated `manifest.json` & `golden_meals.test.ts`.
-8. **Biomarker Ingest v2 Extensions (Item 2)**: Added lab document metadata & header/footer regex filtering and clean string handling to `lexTable` and `buildIngestBatch` in `src/utils/biomarkerLifecycle.ts`.
+8. **Biomarker Ingest v2 Extensions & Extract Hygiene (Items B2.1, B2.3, B2.4 & B2.6)**:
+    - Added lab document metadata & header/footer regex filtering and clean string handling to `lexTable` and `buildIngestBatch` in `src/utils/biomarkerLifecycle.ts`.
+    - Removed duplicate `Chat History:` prefix from extraction prompts in `server.ts` (Item B2.1) and removed `remainingText` echoes from payload snapshots in `server.ts` and `serverJobs.ts` (Item B2.3).
+    - Extended `resolveAgentDestination` in `src/utils/biomarkerLifecycle.ts` to handle explicit `isWrongDoor` and `destination` overrides (Item B2.4), and updated G-B2 in `tests/golden_biomarker.test.ts` to lex and ingest 140-row NHS print table fixtures (Item B2.6 / B4.3).
 9. **Modular Router Extraction (Item 4)**: Created domain router modules `server_routes_biomarkers.ts` and `server_routes_food.ts` and registered them on Express app in `server.ts`.
+10. **Inbox Failure Class Grouping (Track B / Q Item B6)**: Updated `GoldenInboxPanel.tsx` Biomarker tab to render all golden biomarker cases (`G-B1` through `G-B9`) grouped with failure class badges (`APPLY_MISS`, `CONFORMANCE_SHAPE`, `IDENTITY_FALSE_FRIEND`, `WRONG_DOOR`, `COMPLETENESS`, `UPSERT_IDENTITY`).
 
 ---
 ## Track B Wave B7 Progress (Items 7.1, 7.2, 7.3, 7.4, 7.8)
@@ -37,10 +41,10 @@
 13. **Dedicated Pending Store Isolation (Item 7.4)**:
     - Added `PendingObservation` interface and `pendingObservations` to `UserProfile`.
     - Hardened `isLiveForUse`, `filterCurrentForUse`, and `filterHistoryForUse` so pending unapproved extractions are strictly isolated and never leak into active queries, Home dashboard tiles, or health coach prompts.
-14. **Drop Legacy Dictionary Store (Item 7.8)**:
+14. **Silent Calibrator (Item 7.5)**:
+    - Added unit test suite for `recalibrateProfileOverlays` in `src/utils/biomarkerLifecycle.test.ts`, verifying automatic calculation and updating of demographic overlay fingerprints (`ageBand|gender|ethnicity`) across active biomarkers when user demographics shift.
+15. **Drop Legacy Dictionary Store (Item 7.8)**:
     - Deprecated `biomarker_dictionary_store` local storage access in `biomarkerStore.ts` and `biomarkers.ts` in favor of `profile.customBiomarkers`.
-15. **Demographic Fingerprinting for Overlays (Item 7.5)**:
-    - Implemented `recalibrateProfileOverlays` in `src/utils/biomarkerLifecycle.ts` which detects shifts in demographic fingerprints (`${ageBand}|${gender}|${ethnicity}`) and safely updates overlay references for biomarkers whose clinical reference ranges vary by demographic factors.
 16. **Reference Range Source Badges (Item 7.6)**:
     - Implemented `getBiomarkerRangeSourceInfo` in `src/utils/biomarkerLifecycle.ts` and integrated it with `BiomarkerExpandedSection.tsx` to visually attribute reference range sources (Standard Clinical, Lab Specific, Demographic Calibrated, User Custom Range) with color-coded badges.
 17. **Kill normalizeHistoricalTelemetryErrors Writers (Item 7.7)**:

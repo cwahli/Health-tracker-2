@@ -475,4 +475,21 @@ describe('attachObservationMeta (7.3 Historical observationMeta backfill)', () =
   });
 });
 
+describe('recalibrateProfileOverlays (7.5 Silent Calibrator)', () => {
+  it('updates overlayFingerprint when demographic profile changes', () => {
+    const profile = {
+      age: 45,
+      gender: 'female',
+      ethnicity: 'asian',
+      customBiomarkers: {
+        creatinine: { name: 'Creatinine', overlayFingerprint: '20-29|m|default' }
+      }
+    };
+
+    const res = recalibrateProfileOverlays(profile, ['creatinine']);
+    expect(res.recalibratedCount).toBe(1);
+    expect(res.updatedCustomBiomarkers.creatinine.overlayFingerprint).toBe('40-49|f|asian');
+  });
+});
+
 

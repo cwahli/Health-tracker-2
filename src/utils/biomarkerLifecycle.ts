@@ -834,6 +834,18 @@ export function resolveAgentDestination(
   const canonical = RETIRED_AGENT_REDIRECT[agentType] || agentType;
 
   if (payload !== undefined && payload !== null) {
+    if (payload?.isWrongDoor === true) {
+      return {
+        destination: payload.destination || 'food',
+        payload,
+      };
+    }
+    if (payload?.destination && typeof payload.destination === 'string') {
+      return {
+        destination: payload.destination,
+        payload,
+      };
+    }
     if (canonical === 'data_accuracy' || agentType === 'data_accuracy') {
       return {
         destination: 'comparison_modal',

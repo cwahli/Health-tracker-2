@@ -10532,7 +10532,7 @@ Your output MUST be a valid JSON object matching the schema provided.`;
       } else {
         let historyText = "";
         if (history && history.length > 0) {
-          historyText = "Chat History:\n" + history.map((h: any) => `${h.role}: ${h.content}`).join("\n") + "\n\n";
+          historyText = history.map((h: any) => `${h.role}: ${h.content}`).join("\n") + "\n\n";
         }
         
         let imagePayload = null;
@@ -10604,7 +10604,6 @@ Your output MUST be a valid JSON object matching the schema provided.`;
             reportSource = reportSource.slice(req.body.lastProcessedIndex);
           }
           
-          const remText = req.body.remainingText ? `\n\nREMAINING UNPARSED TEXT:\n${req.body.remainingText}` : "";
           const prevTotal = req.body.estimatedTotalMarkers ? `\n\nPREVIOUSLY ESTIMATED TOTAL MARKERS:\n${req.body.estimatedTotalMarkers}` : "";
           const baseData = customVariableData ? `\n\n${customVariableData}\n` : `\n\nUSER PROFILE:\n${JSON.stringify(cleanProfile, null, 2)}\n`;
           const step1Timezone = req.body.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -10616,7 +10615,7 @@ Your output MUST be a valid JSON object matching the schema provided.`;
             step1LocalDateStr = new Date().toISOString().split("T")[0];
           }
           const dateCtx = `\n\nCURRENT DATE (user local, YYYY-MM-DD): ${step1LocalDateStr}\nUse this as the anchor for resolving relative date references in patient-reported text (e.g. "today", "yesterday", "the last 2 days").\n`;
-          dataContext = `\n\nUSER RAW DATA:\n${reportSource}${prevJson}${remText}${prevTotal}${dateCtx}${baseData}`;
+          dataContext = `\n\nUSER RAW DATA:\n${reportSource}${prevJson}${prevTotal}${dateCtx}${baseData}`;
         } else if (agentType === "agent1_step2") {
           const baseData = customVariableData ? `\n\n${customVariableData}\n` : "";
           dataContext = `${baseData}\n\nEXTRACTED JSON DATA:\n${jsonStr}\n`;

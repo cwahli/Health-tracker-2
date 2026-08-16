@@ -6,24 +6,7 @@ A **test method**, not a product lifecycle. Class-first goldens (not meal-green)
 
 Ingest architecture stays in `BIOMARKER_LIFECYCLE.md` Part B. Wave order stays in `ROADMAP.md`.
 
----
-
-**Pillar:** 1 — Biomarkers (+ 4 Quality loop). Map: `plan/README.md`. Execute: `BIOMARKER_IMPLEMENTATION_ROADMAP.md`.
-
-**Status:** Consolidated 2026-08-16. Ready to implement. Not started as code.  
-**This is the single build plan.** Architecture stays in the sibling docs. Do not invent a third pipeline.
-
-| Doc | Role | Do not |
-|---|---|---|
-| `plan/BIOMARKER_LIFECYCLE_PLAN.md` | Frozen UX/dispatch: four records, agent roles, 7 literature laws, §13 remaining | Rebuild slices 0–3 or rename agent ids |
-| `docs/agent/domains/biomarkers.md` | Laws + current write map | Change an invariant without IMPACT |
-| `plan/BIOMARKER_INGEST_ROUTER_PLAN.md` | Front door: classifier, buckets, Layer-1 ↔ Parser handoff, failure modes | Implement as one PR |
-| `studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md` | Landed Review/apply/convert + remaining P0–P8 | Restore Auto-Fix / Auto-Calibrate |
-| **This file** | How we **build and test** without a meal-log loop | Treat G-B2 “all green” as the work item |
-
-**Gates:** `docs/agent/DOMAIN_REGRESSION_MAP.md` → Biomarkers  
-**WIP:** `AI_HANDOVER.md`  
-**Execute in order:** `plan/BIOMARKER_IMPLEMENTATION_ROADMAP.md` (Waves 0–7).
+**Status:** Landed through Waves 0–7. All core gates passing (exit 0).
 
 ---
 

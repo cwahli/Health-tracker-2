@@ -318,19 +318,26 @@ export default function GoldenInboxPanel() {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-slate-800/50 p-3 space-y-2">
-            <p className="text-xs font-bold text-white">Biomarker Failure Classes</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[10px]">
+            <p className="text-xs font-bold text-white">Golden Biomarker Fixtures & Failure Classes</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
               {[
-                { name: 'IDENTITY_FALSE_FRIEND', desc: 'Wrong analyte match' },
-                { name: 'CONFORMANCE_UNIT', desc: 'Unit family mismatch' },
-                { name: 'APPLY_MISS', desc: 'Modification not applied' },
-                { name: 'SILENT_REWRITE', desc: 'Older rows overwritten' },
-                { name: 'UPSERT_IDENTITY', desc: 'Key aliasing conflict' },
-                { name: 'PLAUSIBILITY', desc: 'Out-of-bound physiological value' },
-              ].map((c) => (
-                <div key={c.name} className="p-2 rounded-lg bg-black/20 border border-white/5 space-y-0.5">
-                  <div className="font-mono font-bold text-indigo-300">{c.name}</div>
-                  <div className="text-white/50 text-[9px]">{c.desc}</div>
+                { id: 'G-B1', class: 'APPLY_MISS', name: 'Five Locked Conversions', desc: 'HDL, TG, LDL, Creatinine, Bilirubin unit scale conversion' },
+                { id: 'G-B2', class: 'CONFORMANCE_SHAPE', name: 'EMIS / NHS Print Table', desc: '140-row print table lexing & batch ingestion' },
+                { id: 'G-B4', class: 'IDENTITY_FALSE_FRIEND', name: 'Specimen Guard', desc: 'Urine/stool specimen analyte isolation' },
+                { id: 'G-B5', class: 'WRONG_DOOR', name: 'Dietary in Medical Door', desc: 'Food logging input routed to food domain' },
+                { id: 'G-B6', class: 'WRONG_DOOR', name: 'Symptom Log Entry', desc: 'Symptom diary input routed to symptom domain' },
+                { id: 'G-B7', class: 'COMPLETENESS', name: 'Fragmented Reading', desc: 'Incomplete truncated table abort guard' },
+                { id: 'G-B8', class: 'UPSERT_IDENTITY', name: 'Repaste Identity', desc: 'Identical report re-paste deduplication' },
+                { id: 'G-B9', class: 'CONFORMANCE_SHAPE', name: 'Vision N/A Abort', desc: 'Non-medical image vision abort handling' },
+              ].map((caseItem) => (
+                <div key={caseItem.id} className="p-2 rounded-lg bg-black/30 border border-white/10 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white font-mono">{caseItem.id} — {caseItem.name}</span>
+                    <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      {caseItem.class}
+                    </span>
+                  </div>
+                  <div className="text-white/60 text-[10px]">{caseItem.desc}</div>
                 </div>
               ))}
             </div>

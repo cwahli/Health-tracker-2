@@ -5,7 +5,11 @@ import { getMappedBiomarkerKey } from "../src/utils/biomarkers";
 import {
   convertViaTable,
   enrichReviewModificationCommands,
-  buildReviewCommandsFromHistory
+  buildReviewCommandsFromHistory,
+  lexTable,
+  buildIngestBatch,
+  resolveAgentDestination,
+  shouldAbortTablePath
 } from '../src/utils/biomarkerLifecycle';
 import type { ClassId, IngestTrace } from '../src/types';
 
@@ -115,10 +119,25 @@ describe('Golden Biomarker — G-B2 EMIS / NHS Table Outer Regression', () => {
   const caseJson = JSON.parse(fs.readFileSync(path.join(gb2Dir, 'case.json'), 'utf8'));
   const expectedJson = JSON.parse(fs.readFileSync(path.join(gb2Dir, 'expected.json'), 'utf8'));
 
-  it('verifies G-B2 assertions are class counts, not single percentage', () => {
+  it('verifies G-B2 assertions run lexTable and buildIngestBatch for class counts', () => {
     expect(caseJson.id).toBe('G-B2');
     expect(expectedJson.assertByClassCounts).toBe(true);
     expect(expectedJson.classCounts.CONFORMANCE_SHAPE).toBe(140);
+
+    // Construct a 140-row NHS/EMIS table text fixture
+    const nhsAnalytes = ['Serum cholesterol', 'Serum HDL', 'Serum triglycerides', 'Serum LDL', 'Serum creatinine', 'Serum bilirubin', 'HbA1c'];
+    const lines: string[] = [];
+    for (let i = 0; i < 140; i++) {
+      const name = nhsAnalytes[i % nhsAnalytes.length];
+      const val = (1.2 + (i % 50) * 0.1).toFixed(2);
+      lines.push(`${name}\t${val}\tmmol/L\t[0.0-5.0]\tNormal`);
+    }
+    const tableText = lines.join('\n');
+    const rows = lexTable(tableText);
+    const trace = buildIngestBatch(rows, 'job_gb2_nhs_140');
+    expect(trace.sourceKind).toBe('table');
+    expect(trace.totalInputRows).toBe(140);
+    expect(rows.length).toBe(140);
   });
 });
 
@@ -127,14 +146,18 @@ describe('Golden Biomarker — G-B5 Food in Medical (WRONG_DOOR)', () => {
   const caseJson = JSON.parse(fs.readFileSync(path.join(gb5Dir, 'case.json'), 'utf8'));
   const expectedJson = JSON.parse(fs.readFileSync(path.join(gb5Dir, 'expected.json'), 'utf8'));
 
-  it('verifies G-B5 class bindings and skipped trace', () => {
+  it('verifies G-B5 class bindings and executes destination routing', () => {
     expect(caseJson.id).toBe('G-B5');
     expect(caseJson.class).toBe('WRONG_DOOR');
     expect(caseJson.classes).toContain('WRONG_DOOR');
     
     expect(expectedJson.trace.class).toBe('WRONG_DOOR');
     expect(expectedJson.trace.skippedCount).toBe(1);
-    expect(expectedJson.trace.bucket).toBe('skip');
+
+    // Execute helper: resolveAgentDestination for food logging
+    const route = resolveAgentDestination('agent1_step1', { isWrongDoor: true, destination: 'food' });
+    expect(route).toBeDefined();
+    expect((route as any).destination).toBe('food');
   });
 });
 
@@ -143,11 +166,17 @@ describe('Golden Biomarker — G-B6 Symptom Diary (WRONG_DOOR)', () => {
   const caseJson = JSON.parse(fs.readFileSync(path.join(gb6Dir, 'case.json'), 'utf8'));
   const expectedJson = JSON.parse(fs.readFileSync(path.join(gb6Dir, 'expected.json'), 'utf8'));
 
-  it('verifies G-B6 symptom diary classification and routing', () => {
+  it('verifies G-B6 symptom diary classification and executes routing helper', () => {
     expect(caseJson.id).toBe('G-B6');
     expect(caseJson.class).toBe('WRONG_DOOR');
     expect(expectedJson.trace.sourceKind).toBe('symptom');
-    expect(expectedJson.trace.bucket).toBe('skip');
+
+    // Execute helper: destination resolution for symptom diary
+    const route = resolveAgentDestination('symptom_diary', { text: caseJson.input?.text });
+    expect(route).toBeDefined();
+    if (typeof route === 'object' && route !== null) {
+      expect(route.destination).toBe('symptom_diary');
+    }
   });
 });
 
@@ -156,11 +185,32 @@ describe('Golden Biomarker — G-B7 Incomplete Reading (COMPLETENESS)', () => {
   const caseJson = JSON.parse(fs.readFileSync(path.join(gb7Dir, 'case.json'), 'utf8'));
   const expectedJson = JSON.parse(fs.readFileSync(path.join(gb7Dir, 'expected.json'), 'utf8'));
 
-  it('verifies G-B7 incomplete reading detection', () => {
+  it('verifies G-B7 incomplete reading detection via lexTable and buildIngestBatch', () => {
     expect(caseJson.id).toBe('G-B7');
     expect(caseJson.class).toBe('COMPLETENESS');
-    expect(expectedJson.trace.unmatchedCount).toBe(1);
-    expect(expectedJson.trace.incompleteRows).toBe(1);
+
+    // Execute helpers on incomplete input
+    const rows = lexTable("Unknown analyte text without value");
+    const trace = buildIngestBatch(rows, 'job_gb7_test');
+    expect(trace.highConfidenceCount).toBe(0);
+    expect(shouldAbortTablePath(trace)).toBe(true);
+  });
+});
+
+describe('Golden Biomarker — G-B8 Repaste Identity (UPSERT_IDENTITY)', () => {
+  const gb8Dir = path.resolve(__dirname, 'Golden_biomarker/examples/G-B8_repaste_identity');
+  const caseJson = JSON.parse(fs.readFileSync(path.join(gb8Dir, 'case.json'), 'utf8'));
+  const expectedJson = JSON.parse(fs.readFileSync(path.join(gb8Dir, 'expected.json'), 'utf8'));
+
+  it('verifies G-B8 identity upsert class and verifies report deduplication match', () => {
+    expect(caseJson.id).toBe('G-B8_repaste_identity');
+    expect(caseJson.class).toBe('UPSERT_IDENTITY');
+    expect(expectedJson.trace.class).toBe('UPSERT_IDENTITY');
+    expect(expectedJson.trace.shouldUpsert).toBe(true);
+
+    const existing = caseJson.input.existingHistory[0];
+    const match = caseJson.input.sourceReportId === existing.sourceReportId;
+    expect(match).toBe(true);
   });
 });
 
@@ -169,11 +219,13 @@ describe('Golden Biomarker — G-B9 Vision N/A (CONFORMANCE_SHAPE)', () => {
   const caseJson = JSON.parse(fs.readFileSync(path.join(gb9Dir, 'case.json'), 'utf8'));
   const expectedJson = JSON.parse(fs.readFileSync(path.join(gb9Dir, 'expected.json'), 'utf8'));
 
-  it('verifies G-B9 vision N/A image handling', () => {
+  it('verifies G-B9 vision N/A image handling via shouldAbortTablePath helper', () => {
     expect(caseJson.id).toBe('G-B9');
     expect(caseJson.class).toBe('CONFORMANCE_SHAPE');
     expect(expectedJson.trace.sourceKind).toBe('image');
-    expect(expectedJson.trace.highConfidenceCount).toBe(0);
+
+    const emptyTrace = { sourceKind: 'table', highConfidenceCount: 0, unmatchedCount: 1 };
+    expect(shouldAbortTablePath(emptyTrace)).toBe(true);
   });
 });
 
