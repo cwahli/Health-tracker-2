@@ -214,9 +214,23 @@ export default function TaskPlaceholderCard({
     };
   }, [job.id, job.photoUrl, job.result, job.messages]);
 
+  const lastMsgContent = (job.messages && job.messages.length > 0) ? job.messages[job.messages.length - 1]?.content : '';
+  const isFailedOrTimedOut =
+    job.status === 'failed' ||
+    job.status === 'cancelled' ||
+    job.status === 'cancel_requested' ||
+    !!job.error ||
+    (typeof job.statusMessage === 'string' && /timed out|failed|error/i.test(job.statusMessage)) ||
+    (typeof job.result?.message === 'string' && /timed out|failed|error/i.test(job.result.message)) ||
+    (typeof job.result?.error === 'string' && !!job.result.error) ||
+    (typeof lastMsgContent === 'string' && /timed out|failed|error/i.test(lastMsgContent) && !job.result?.pendingFoodLog);
+
   const getStatusLabel = () => {
     if (job.status === 'succeeded' && Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) {
       return 'AI advice pending';
+    }
+    if (isFailedOrTimedOut && job.status !== 'running' && job.status !== 'processing' && job.status !== 'queued') {
+      return 'Analysis failed';
     }
     switch (job.status) {
       case 'queued': {
@@ -227,7 +241,7 @@ export default function TaskPlaceholderCard({
       }
       case 'running':
       case 'processing':
-        return 'Uploaded • Server Processing';
+        return `Attempt ${job.attemptCount || 1} of ${job.maxAttempts || 3}`;
       case 'failed':
         return 'Analysis failed';
       case 'cancelled':
@@ -245,6 +259,9 @@ export default function TaskPlaceholderCard({
   const getStatusColorClass = () => {
     if (job.status === 'succeeded' && Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) {
       return 'text-amber-600 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700';
+    }
+    if (isFailedOrTimedOut && job.status !== 'running' && job.status !== 'processing' && job.status !== 'queued') {
+      return 'text-rose-600 bg-rose-50 dark:bg-rose-950/40';
     }
     switch (job.status) {
       case 'queued':
@@ -385,9 +402,11 @@ export default function TaskPlaceholderCard({
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getStatusColorClass()}`}>
                 {getStatusLabel()}
               </span>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                Attempt {job.attemptCount || 1} of {job.maxAttempts || 3}
-              </span>
+              {job.status !== 'running' && job.status !== 'processing' && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                  Attempt {job.attemptCount || 1} of {job.maxAttempts || 3}
+                </span>
+              )}
               {(job.status === 'running' || job.status === 'queued' || job.status === 'processing') && job.progressPercent > 0 && (
                 <span className="text-[10px] font-mono text-slate-400 font-bold">
                   {job.progressPercent}%
@@ -401,9 +420,15 @@ export default function TaskPlaceholderCard({
 
             {(job.status === 'running' || job.status === 'processing' || job.status === 'queued') && (
               <div className="mt-1 space-y-1">
-                <p className="text-xs text-theme-text-secondary font-medium">
-                  {job.statusMessage || (job.kind === 'medical' ? 'Analyzing medical data...' : 'Analyzing your meal...')}
-                </p>
+                {job.statusMessage && !job.statusMessage.toLowerCase().includes('uploading to server') ? (
+                  <p className="text-xs text-theme-text-secondary font-medium">
+                    {job.statusMessage}
+                  </p>
+                ) : !job.statusMessage ? (
+                  <p className="text-xs text-theme-text-secondary font-medium">
+                    {job.kind === 'medical' ? 'Analyzing medical data...' : 'Analyzing your meal...'}
+                  </p>
+                ) : null}
                 {isJobSafeToLeave(job) ? (
                   <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/60">
                     <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
@@ -435,11 +460,12 @@ export default function TaskPlaceholderCard({
               </p>
             )}
 
-            {job.status === 'failed' && (() => {
+            {isFailedOrTimedOut && (() => {
               const raw =
                 job.error?.message ||
                 (job.statusMessage && !['Analyzing on server...', 'Analyzing your meal...'].includes(job.statusMessage) ? job.statusMessage : null) ||
                 (typeof job.result?.message === 'string' && job.result.message ? job.result.message : null) ||
+                (typeof lastMsgContent === 'string' ? lastMsgContent : '') ||
                 '';
               const failureReason = humanizeJobFailure(raw);
               return (
@@ -536,12 +562,12 @@ export default function TaskPlaceholderCard({
                 className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
               >
                 <Eye className="w-3.5 h-3.5" />
-                {job.status === 'succeeded' ? 'View Analysis' : 'View Status'}
+                {job.status === 'succeeded' && !isFailedOrTimedOut ? 'View Analysis' : 'View Status'}
               </button>
             )}
 
             {/* Save Log Button for Succeeded Jobs */}
-            {((job.status === 'succeeded' || job.result?.savable || job.result?.mealBuild?.savable || job.mealBuild?.savable) && !!pendingFoodLog) && (
+            {((job.status === 'succeeded' && !isFailedOrTimedOut) || job.result?.savable || job.result?.mealBuild?.savable || job.mealBuild?.savable) && !!pendingFoodLog && (
               <button
                 type="button"
                 onClick={handleLocalSave}
@@ -557,8 +583,8 @@ export default function TaskPlaceholderCard({
               </button>
             )}
 
-            {/* Retry Button for Failed or Cancelled Jobs */}
-            {((job.status === 'failed' || job.status === 'cancelled' || job.status === 'cancel_requested') || (Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian'))) && (
+            {/* Retry Button for Failed, Cancelled, or Timed-out Jobs */}
+            {(isFailedOrTimedOut || job.status === 'failed' || job.status === 'cancelled' || job.status === 'cancel_requested' || (Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian'))) && (
               <button
                 type="button"
                 onClick={() => {
@@ -584,19 +610,7 @@ export default function TaskPlaceholderCard({
               </button>
             )}
 
-            {/* Cancel Button for Active Jobs */}
-            {(job.status === 'queued' || job.status === 'running' || job.status === 'processing' || job.status === 'awaiting_user') && (
-              <button
-                type="button"
-                onClick={() => onCancel(job.id)}
-                className="px-3 py-1.5 text-xs font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
-              >
-                <XCircle className="w-3.5 h-3.5" />
-                Cancel
-              </button>
-            )}
-
-            {/* Delete (Trash) Button: Always available for all jobs */}
+            {/* Delete (Trash) Button: Always available for all jobs to cancel/discard */}
             <button
               type="button"
               onClick={() => onDelete(job.id)}

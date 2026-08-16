@@ -1065,14 +1065,13 @@ export default function App() {
             }
             console.log(`[JobQueueRunner] Job ${job.id} is server-owned. Polling /api/jobs/status...`);
             let done = false;
-            let pollAttempts = 0;
-            const maxPollAttempts = 120; // 4 minutes
+            const pollStartTime = Date.now();
+            const maxPollTimeMs = 3 * 60 * 1000; // Strict 3 minute timeout window
 
-            while (!done && pollAttempts < maxPollAttempts) {
+            while (!done && (Date.now() - pollStartTime) < maxPollTimeMs) {
               if (abortSignal.aborted) {
                 throw new Error('AbortError');
               }
-              pollAttempts++;
 
               let serverJob: any = null;
               try {
@@ -1099,10 +1098,11 @@ export default function App() {
                 const isFetchErr = pollErr && (pollErr.name === 'TypeError' || (pollErr.message && pollErr.message.includes('Failed to fetch')));
                 if (isFetchErr) {
                   console.debug('[JobQueueRunner] Network poll pending:', pollErr.message || pollErr);
-                  await new Promise(r => setTimeout(r, 2500));
                 } else {
                   console.warn('[JobQueueRunner] Error polling status:', pollErr);
                 }
+                await new Promise(r => setTimeout(r, 2000));
+                continue;
               }
 
               if (serverJob) {

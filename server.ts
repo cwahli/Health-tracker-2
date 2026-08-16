@@ -256,7 +256,7 @@ import { filterHistoryForUse, enrichReviewModificationCommands } from "./src/uti
 import { generateDynamicInsight } from "./src/utils/biomarkerInsights";
 import { formatOptimalTargetValue } from "./src/utils/agentCalibration";
 import { NUTRIENT_KEYS } from "./src/utils/nutrients";
-import { extractBalancedJson, sanitizeMealWeight, findItemIndexInList, getUSDANutrientValue, extractUSDANutrientsPer100g, checkIfItemIsAlreadyPrepared, applyNutrientRealityChecks, applyCommercialSodiumFloor, checkAtwaterConsistency, synchronizeNarrativeText, evaluateNutrientWarnings, build31NutrientsMarkdownServer } from "./server_pure_helpers";
+import { extractBalancedJson, sanitizeMealWeight, findItemIndexInList, getUSDANutrientValue, extractUSDANutrientsPer100g, checkIfItemIsAlreadyPrepared, applyNutrientRealityChecks, applyCommercialSodiumFloor, checkAtwaterConsistency, synchronizeNarrativeText, evaluateNutrientWarnings, build31NutrientsMarkdownServer, enforceTitlePluralParity } from "./server_pure_helpers";
 import { aggregateItemsNutrients, cleanNutrientNumber } from "./server_nutrient_aggregation";
 import { registerIssueBacklogRoutes } from './serverIssueBacklog.js';
 import { registerBugSnapshotRoutes } from './serverBugSnapshot.js';
@@ -8313,6 +8313,19 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         }
       }
 
+      // Re-sync primaryBase100g again after the ReceiptInvariant repair above, which can further
+      // mutate aggregatedNutrients.calories AFTER the earlier post-reconciliation resync ran.
+      // Without this, primaryBase100g keeps stale pre-repair values, and the later First-Principles
+      // Injection stage recomputes item nutrients from that stale basis instead of the repaired total
+      // (e.g. reproducing a pre-ReceiptInvariant calorie figure instead of the corrected one).
+      if (primaryBase100g && itemWeight > 0) {
+        const receiptRepairedBase100g: Record<string, number> = { ...(primaryBase100g as any) };
+        NUTRIENT_KEYS.forEach(key => {
+          receiptRepairedBase100g[key] = parseFloat(((aggregatedNutrients[key] || 0) / (itemWeight / 100)).toFixed(3));
+        });
+        primaryBase100g = receiptRepairedBase100g;
+      }
+
       return {
         scoutIndex: item.scoutIndex,
         keyword: item.keyword,
@@ -9227,6 +9240,12 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       };
 
       parsedData.name = sanitizeString(rawFoodData.name, "Meal Log");
+      // Enforce singular/plural parity between the composite title and each item's own
+      // canonicalDbName in itemsBreakdown (the LLM is only asked to do this via prompt
+      // instruction, with no code-level enforcement — see agents/dietitianInstructions.ts).
+      if (Array.isArray(rawFoodData.itemsBreakdown) && rawFoodData.itemsBreakdown.length > 0) {
+        parsedData.name = enforceTitlePluralParity(parsedData.name, rawFoodData.itemsBreakdown);
+      }
       parsedData.date = sanitizeString(rawFoodData.date, new Date().toISOString().split("T")[0]);
       parsedData.composition = sanitizeString(rawFoodData.composition, "Unspecified ingredients");
       

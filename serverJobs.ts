@@ -740,7 +740,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         accumulatedLogs.push(`[error] Job execution failed: ${abortReason}`);
       }
 
-      if (finalData) {
+      if (finalData && !finalData.error && !/timed out|failed|error/i.test(finalData.message || '')) {
         try {
           accumulatedLogs.push('[ServerJobs] Recovering: final result was present despite later error — marking succeeded.');
           if (persistSucceeded) {

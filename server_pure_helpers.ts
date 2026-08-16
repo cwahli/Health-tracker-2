@@ -653,11 +653,10 @@ export function applyNutrientRealityChecks(
   // Skip heuristic (category/keyword-based) checks for label/kiosk/screen/menu sourced items,
   // including partial backfills — but NOT the Atwater check above, which already ran.
   const isLabelOrScreenSource = dbSource === "label" || 
-    dbSource === "label_partial" || 
     dbSource === "kiosk" || 
     dbSource === "screen" || 
     dbSource === "menu" || 
-    (typeof dbSource === "string" && dbSource.startsWith("label"));
+    (typeof dbSource === "string" && dbSource.startsWith("label") && dbSource !== "label_partial");
 
   if (isLabelOrScreenSource) {
     if (addDebugLog) {
@@ -897,6 +896,71 @@ export function synchronizeNarrativeText(
 }
 
 
+
+// Quantity words that make the plural/singular form already visible in a title
+// grammatically correct regardless of itemsBreakdown's own canonical form
+// (e.g. "Two Croissants" is correct even if canonicalDbName is singular "Croissant";
+// "A Croissant" is correct even if canonicalDbName is plural "Croissants").
+const TITLE_PARITY_SINGULAR_QUANTITY_RE = /^(a|an|one|1)$/i;
+const TITLE_PARITY_PLURAL_QUANTITY_RE = /^(\d+|two|three|four|five|six|seven|eight|nine|ten|couple|few|several|many)$/i;
+
+function pluralizeSimpleWord(word: string): string {
+  if (/[sxz]$/i.test(word) || /(ch|sh)$/i.test(word)) return `${word}es`;
+  if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`;
+  return `${word}s`;
+}
+
+function singularizeSimpleWord(word: string): string {
+  if (/ies$/i.test(word)) return `${word.slice(0, -3)}y`;
+  if (/(ches|shes|xes|zes|ses)$/i.test(word)) return word.slice(0, -2);
+  if (/s$/i.test(word) && !/ss$/i.test(word)) return word.slice(0, -1);
+  return word;
+}
+
+/**
+ * Enforces singular/plural parity between the composite meal title and each item's own
+ * canonicalDbName/name in itemsBreakdown, per the system-prompt rule that requires them to
+ * match exactly (e.g. itemsBreakdown "Croissant" (singular) but title says "Croissants").
+ * The LLM is only asked to do this via prompt instruction with no code-level enforcement,
+ * so mismatches slip through. Skips correction when a quantity word already visible in the
+ * title (e.g. "Two", "A", "3") independently justifies the form that's already there.
+ */
+export function enforceTitlePluralParity(title: string, itemsBreakdown: any[]): string {
+  if (!title || typeof title !== 'string' || !Array.isArray(itemsBreakdown) || itemsBreakdown.length === 0) {
+    return title;
+  }
+
+  let updated = title;
+
+  for (const it of itemsBreakdown) {
+    const canonicalName = String((it && (it.canonicalDbName || it.name)) || '').trim();
+    if (!canonicalName) continue;
+
+    const words = canonicalName.split(/\s+/);
+    const lastWord = words[words.length - 1];
+    const restPrefix = words.slice(0, -1).join(' ');
+
+    const singularLast = singularizeSimpleWord(lastWord);
+    const pluralLast = pluralizeSimpleWord(singularLast);
+    const canonicalIsPlural = lastWord.toLowerCase() === pluralLast.toLowerCase();
+    const wrongFormLast = canonicalIsPlural ? singularLast : pluralLast;
+    if (!wrongFormLast || wrongFormLast.toLowerCase() === lastWord.toLowerCase()) continue;
+
+    const wrongPhrase = restPrefix ? `${restPrefix} ${wrongFormLast}` : wrongFormLast;
+    const correctPhrase = restPrefix ? `${restPrefix} ${lastWord}` : lastWord;
+    const escaped = wrongPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const re = new RegExp(`(\\S+\\s+)?\\b${escaped}\\b`, 'gi');
+    updated = updated.replace(re, (match: string, precedingWord: string) => {
+      const token = precedingWord ? precedingWord.trim() : '';
+      if (canonicalIsPlural && TITLE_PARITY_SINGULAR_QUANTITY_RE.test(token)) return match;
+      if (!canonicalIsPlural && TITLE_PARITY_PLURAL_QUANTITY_RE.test(token)) return match;
+      return precedingWord ? `${precedingWord}${correctPhrase}` : correctPhrase;
+    });
+  }
+
+  return updated;
+}
 
 export function build31NutrientsMarkdownServer(nutrients: Record<string, any>): string {
   if (!nutrients) return '';
