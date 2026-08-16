@@ -76,12 +76,14 @@ export async function checkOrRegisterIdempotentSubmission(payload: ServerJobPayl
   const imgCount = (payload.images?.length || 0) + (payload.imageUrls?.length || 0);
   const modeKey = payload.userSelectedMode || payload.mode || 'review';
 
+  const isRetry = !!(payload as any).isRetry || payload.mode === 'retry';
+
   // 0. In-flight lock (userId-scoped, content-independent): if this user already has an
   // active job that hasn't reached a terminal status, block ANY new jobId for them until
   // it finishes. A resubmission that reuses the SAME jobId (e.g. a portion-confirm resume)
   // is allowed through since it's a continuation, not a duplicate.
   const existingLock = activeUserJobLocks.get(userId);
-  if (existingLock && existingLock.jobId !== payload.jobId) {
+  if (existingLock && existingLock.jobId !== payload.jobId && !isRetry) {
     const lockedMemJob = inMemoryServerJobs.get(existingLock.jobId);
     const lockedStatus = lockedMemJob?.status;
     const lockIsStale = (Date.now() - existingLock.timestamp) > USER_LOCK_MAX_AGE_MS;
@@ -97,11 +99,13 @@ export async function checkOrRegisterIdempotentSubmission(payload: ServerJobPayl
   const key = payload.idempotencyKey || `${userId}:${rawText}:${imgCount}:${modeKey}:${Math.floor(Date.now() / 12000)}`;
 
   const existing = recentSubmissionsMap.get(key);
-  if (existing && (Date.now() - existing.timestamp < 12000)) {
+  if (existing && (Date.now() - existing.timestamp < 12000) && !isRetry) {
     const memJob = inMemoryServerJobs.get(existing.jobId);
     const currentStatus = memJob?.status || existing.status || 'queued';
-    console.log(`[ServerJobs Idempotency] Blocked duplicate submission key="${key}". Reusing active jobId="${existing.jobId}" (status="${currentStatus}")`);
-    return { isDuplicate: true, jobId: existing.jobId, status: currentStatus };
+    if (currentStatus === 'running' || currentStatus === 'queued') {
+      console.log(`[ServerJobs Idempotency] Blocked duplicate submission key="${key}". Reusing active jobId="${existing.jobId}" (status="${currentStatus}")`);
+      return { isDuplicate: true, jobId: existing.jobId, status: currentStatus };
+    }
   }
 
   recentSubmissionsMap.set(key, {
@@ -204,13 +208,14 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
   // Same jobId + two client POSTs (LogChat + JobQueueRunner race) used to start
   // two food-analyze streams and double every Gemini call. A new send after
   // succeeded / awaiting_user / failed is a real continuation and must proceed.
+  const isRetryJob = !!(payload as any).isRetry || payload.mode === 'retry';
   const already = inMemoryServerJobs.get(jobId);
-  if (already && (already.status === 'running' || already.status === 'queued')) {
+  if (already && (already.status === 'running' || already.status === 'queued') && !isRetryJob) {
     console.log(`[ServerJobs] Job ${jobId} already ${already.status} — skipping duplicate analyze.`);
     return;
   }
 
-  let initialStatusMessage = 'Starting cloud food analysis...';
+  let initialStatusMessage = dbKind === 'medical' ? 'Starting cloud medical analysis...' : 'Starting cloud food analysis...';
   if (payload.portionChoices && typeof payload.portionChoices === 'object' && Array.isArray(payload.activeScoutItems)) {
     const parts: string[] = [];
     Object.entries(payload.portionChoices).forEach(([key, value]) => {

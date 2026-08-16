@@ -989,13 +989,18 @@ export default function App() {
 
           // Durable jobs execute on server via /api/jobs/submit
           if (job.kind === 'food_log' || job.kind === 'food_compare' || job.kind === 'medical') {
-            // LogChat already POSTing — do not start a second analyze (2× Gemini).
             const latestForSubmit = JobStore.getJob(job.id) || job;
-            const clientOwnsSubmit = !!latestForSubmit.clientSubmitPending
+            const isRetryAttempt = effectiveAttempt > 1 || job.status === 'failed' || !!job.error || /retry|retrying|failed/i.test(latestForSubmit.statusMessage || '');
+            const clientOwnsSubmit = !isRetryAttempt && !!latestForSubmit.clientSubmitPending
               && !String(latestForSubmit.statusMessage || '').includes('background runner retrying submit');
             // Ensure job is submitted to server for retries or new jobs not yet pushed
-            if (!clientOwnsSubmit && (!latestForSubmit.serverSubmittedAt || latestForSubmit.resumeStage || latestForSubmit.statusMessage?.includes('Retry'))) {
-              console.log(`[JobQueueRunner] Submitting job ${job.id} to server...`);
+            const needsServerSubmit = !clientOwnsSubmit && (
+              isRetryAttempt ||
+              !latestForSubmit.serverSubmittedAt ||
+              !!latestForSubmit.resumeStage
+            );
+            if (needsServerSubmit) {
+              console.log(`[JobQueueRunner] Submitting job ${job.id} to server (Attempt ${effectiveAttempt}/${maxAttempts}, isRetry=${isRetryAttempt})...`);
               let stringImages = [];
               try {
                 const rawImages = (await ImageStore.getImages(job.id)) || [];
@@ -1036,6 +1041,7 @@ export default function App() {
                       images: stringImages.filter(Boolean),
                       history: job.messages || [],
                       userProfile: profileRef.current,
+                      isRetry: isRetryAttempt,
                       ...job.inputSnapshot
                     })
                   });

@@ -29,6 +29,7 @@
 - Catalog replay / unbalanced trial balance cannot promote. Do not add `CANONICAL_BASE_FOODS` rows to green a meal.
 - Proof: one skipScout **Pipeline** replay of the croissant picnic. Journey strip must be balanced. Quorn/lassi honest leftovers stay red.
 - Upload to AI Studio as **check + commit only**. Do not `/loop`, do not Replay catalog, do not edit `server_food_db.ts`, do not delete `server_query_scoped_match.ts` / `server_scout_reconcile.ts` / `src/utils/goldenLedger.ts`.
+- **Job Retry Logic Fix (2026-08-15):** Fixed issue where retry attempts for server-owned jobs (including medical analysis) were skipping `/api/jobs/submit` re-submission due to `clientSubmitPending: true` state on the client job object. Updated `JobQueueRunner`, `TaskPlaceholderCard`, `LogChat`, `server.ts`, and `serverJobs.ts` so retries explicitly clear `clientSubmitPending`, submit the retry request with `isRetry: true`, bypass idempotency locks on retries, and execute server analysis.
 
 ### Session notes — biomarkers (2026-08-14)
 

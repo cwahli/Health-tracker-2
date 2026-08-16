@@ -5737,8 +5737,10 @@ ${logsText}`);
                                   status: 'queued',
                                   retryNotBefore: undefined,
                                   error: undefined,
+                                  clientSubmitPending: false,
                                   statusMessage: 'Retrying analysis...'
                                 });
+                                JobQueueRunner.wake();
                               }}
                               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                             >

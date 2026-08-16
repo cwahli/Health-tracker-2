@@ -4,6 +4,7 @@ import { Loader2, Trash2, XCircle, CheckCircle2, AlertTriangle, Eye, Save, Rotat
 import { AgentJob } from '../jobs/types';
 import { ImageStore } from '../jobs/ImageStore';
 import { JobStore } from '../jobs/JobStore';
+import { JobQueueRunner } from '../jobs/JobQueueRunner';
 import { FoodLog } from '../types';
 import { humanizeJobFailure } from '../utils/jobFailure';
 import { isJobSafeToLeave } from '../jobs/jobUploadState';
@@ -595,9 +596,11 @@ export default function TaskPlaceholderCard({
                     attemptCount: nextAttempt,
                     retryNotBefore: undefined,
                     error: undefined,
+                    clientSubmitPending: false,
                     statusMessage: isDegraded ? `Retrying AI advice (Attempt ${nextAttempt})...` : `Retrying analysis (Attempt ${nextAttempt})...`,
                     resumeStage: isDegraded ? 'dietitian' : undefined
                   });
+                  JobQueueRunner.wake();
                 }}
                 className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1 cursor-pointer ${
                   (Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian'))
