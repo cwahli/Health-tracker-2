@@ -158,7 +158,7 @@ export async function uploadDebugPayloadToR2(jobId: string, debugJson: object): 
   }
 }
 
-export async function fetchDebugPayloadFromR2(jobId: string): Promise<any> {
+export async function fetchDebugPayloadFromR2(jobId: string, userId?: string): Promise<any> {
   try {
     const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
     const CLOUDFLARE_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
@@ -180,16 +180,35 @@ export async function fetchDebugPayloadFromR2(jobId: string): Promise<any> {
       },
     });
 
-    const cleanKey = jobId.includes('debug/') ? jobId : `debug/${jobId}.json`;
-    const command = new GetObjectCommand({
-      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-      Key: cleanKey,
-    });
+    const rawJobId = jobId.trim();
+    const candidateKeys: string[] = [];
+    if (rawJobId.includes('/') || rawJobId.startsWith('debug/')) {
+      candidateKeys.push(rawJobId);
+    } else {
+      if (userId && userId !== 'anonymous') {
+        const cleanUid = String(userId).replace(/[^a-zA-Z0-9_\-@.]/g, '_').slice(0, 120);
+        const cleanJid = rawJobId.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 120);
+        candidateKeys.push(`debug/${cleanUid}/${cleanJid}.json`);
+      }
+      const cleanJid = rawJobId.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 120);
+      candidateKeys.push(`debug/anonymous/${cleanJid}.json`);
+      candidateKeys.push(`debug/${rawJobId}.json`);
+    }
 
-    const response = await client.send(command);
-    if (response.Body) {
-      const bodyString = await response.Body.transformToString();
-      return JSON.parse(bodyString);
+    for (const key of candidateKeys) {
+      try {
+        const command = new GetObjectCommand({
+          Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+          Key: key,
+        });
+        const response = await client.send(command);
+        if (response.Body) {
+          const bodyString = await response.Body.transformToString();
+          return JSON.parse(bodyString);
+        }
+      } catch (keyErr: any) {
+        // Continue to try next candidate key
+      }
     }
   } catch (err: any) {
     console.debug(`[R2Storage] Skipping or failed to fetch debug payload for ${jobId}:`, err?.message || err);

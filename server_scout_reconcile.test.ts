@@ -75,4 +75,8 @@ describe('namesReferToSameFood', () => {
   it('treats 2 Butter Croissants and Butter Croissants as the same dish', () => {
     expect(namesReferToSameFood('2 Butter Croissants', 'Butter Croissants')).toBe(true);
   });
+
+  it('matches Cereal Bar to raspberry white chocolate cereal bar', () => {
+    expect(namesReferToSameFood('Cereal Bar', 'raspberry white chocolate cereal bar')).toBe(true);
+  });
 });

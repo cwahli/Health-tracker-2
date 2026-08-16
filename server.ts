@@ -55,6 +55,7 @@ import {
 } from './server_refine_scale.js';
 import { z } from "zod";
 import { getMappedBiomarkerKey } from './src/utils/biomarkers';
+import { extractMostRecentImageDate } from './src/utils/dateUtils.js';
 import * as cheerio from "cheerio";
 import fs from "fs";
 import path from "path";
@@ -1495,7 +1496,7 @@ app.get('/api/jobs/debug', async (req, res) => {
 
     // Attempt 1: Direct fetch from R2 using S3 credentials
     try {
-      debugPayload = await fetchDebugPayloadFromR2(cleanJobId);
+      debugPayload = await fetchDebugPayloadFromR2(cleanJobId, userId ? String(userId) : undefined);
     } catch (r2Err) {
       console.warn('[JobsDebug] R2 direct debug payload fetch failed:', r2Err);
     }
@@ -1551,7 +1552,7 @@ app.get('/api/jobs/debug', async (req, res) => {
     }
 
     // B9c / B14 — never return fat base64 meal photos in debug download
-    const { stripHeavyImages, buildDebugMarkdownReport } = await import('./src/utils/debugPayload.js');
+    const { stripHeavyImages, buildDebugMarkdownReport } = await import('./src/utils/debugPayload');
     const safePayload = stripHeavyImages(debugPayload);
 
     if (req.query.format === 'markdown' || req.query.format === 'md') {
@@ -2154,7 +2155,7 @@ app.post('/api/r2/upload-debug', async (req, res) => {
   try {
     const { jobId, payload, userId } = req.body;
     // B14: strip base64; user-scoped cold key (legacy flat key still writable via old clients)
-    const { stripHeavyImages, coldDebugR2Key, COLD_DEBUG_LOG } = await import('./src/utils/debugPayload.js');
+    const { stripHeavyImages, coldDebugR2Key, COLD_DEBUG_LOG } = await import('./src/utils/debugPayload');
     const key = coldDebugR2Key(String(jobId || 'unknown'), userId || payload?.userId || 'anonymous');
     const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/${key}`;
     const client = getS3Client();
@@ -6655,9 +6656,42 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         const origTokens = tokenize(origNorm);
         const keyTokens = tokenize(keyNorm);
 
+        // Guard: if candidate is a brand_official item, require brand name or strong category match.
+        // Prevent flavor-token collisions (e.g. "Chocolate Cookie with white chocolate chunks" matching "Skinny Crunch Light Raspberry & White Choc")
+        if (m.source === 'brand_official' || m.brandPriority) {
+          const mChain = String(m.chainName || m.brand || '').toLowerCase().trim();
+          const targetBrand = String(item.chainName || detectedChainKey || '').toLowerCase().trim();
+          const origHasBrand = mChain && (origNorm.includes(mChain) || keyNorm.includes(mChain));
+
+          // If the candidate belongs to an official brand/chain, but the food item has no brand detected
+          // and the dish name does not mention the brand, REJECT brand matching.
+          if (mChain && !targetBrand && !origHasBrand) {
+            return false;
+          }
+
+          // If both have brand specified, ensure they align
+          if (targetBrand && mChain && !targetBrand.includes(mChain) && !mChain.includes(targetBrand)) {
+            return false;
+          }
+
+          // If query has no brand specified, but candidate belongs to a packaged brand (e.g. Skinny Crunch),
+          // ensure the candidate name actually has the core dish type (e.g. cookie vs bar)
+          const isBarCandidate = /\b(bar|crisp|sachet|cereal|crunch)\b/i.test(mNameNorm);
+          const isCookieTarget = /\b(cookie|biscuit)\b/i.test(origNorm) || /\b(cookie|biscuit)\b/i.test(keyNorm);
+          if (isCookieTarget && isBarCandidate) {
+            return false;
+          }
+
+          const isSaladTarget = /\b(salad|bowl)\b/i.test(origNorm);
+          const isSweetBarCandidate = /\b(bar|chocolate|crunch)\b/i.test(mNameNorm);
+          if (isSaladTarget && isSweetBarCandidate) {
+            return false;
+          }
+        }
+
         const DISH_FORM_WORDS = new Set([
           'sandwich', 'side', 'cup', 'bites', 'bowl', 'salad', 'wrap', 'burger',
-          'sub', 'roll', 'bar', 'shake', 'platter', 'box', 'meal'
+          'sub', 'roll', 'bar', 'shake', 'platter', 'box', 'meal', 'cookie', 'biscuit'
         ]);
 
         // Chain/brand name tokens (e.g. "yolk") are near-universal across every dish on that
@@ -9246,7 +9280,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       if (Array.isArray(rawFoodData.itemsBreakdown) && rawFoodData.itemsBreakdown.length > 0) {
         parsedData.name = enforceTitlePluralParity(parsedData.name, rawFoodData.itemsBreakdown);
       }
-      parsedData.date = sanitizeString(rawFoodData.date, new Date().toISOString().split("T")[0]);
+      const mostRecentImageDate = extractMostRecentImageDate(imageDates);
+      parsedData.date = sanitizeString(rawFoodData.date, mostRecentImageDate || new Date().toISOString().split("T")[0]);
+      if (mostRecentImageDate && (!rawFoodData.date || rawFoodData.date === 'undefined' || String(rawFoodData.date).trim() === '')) {
+        parsedData.date = mostRecentImageDate;
+      }
       parsedData.composition = sanitizeString(rawFoodData.composition, "Unspecified ingredients");
       
       const itemsWeightSum = Array.isArray(rawFoodData.itemsBreakdown)

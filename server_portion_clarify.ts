@@ -57,19 +57,17 @@ function hasEnoughLabelFields(raw: any): boolean {
 }
 
 /**
- * Multi-serve grocery packs with a per-100g panel (e.g. Co-op beef topside 100g e / 4 slices).
+ * Multi-serve grocery packs, multipacks, or items with ambiguous unit counts.
  * Single-serve pots (yogurt ~215g) with clear container size are NOT ambiguous.
  */
 export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionClarifyItem | null {
-  const raw = item?.rawNutritionLabel;
-  if (!hasPrintedCalories(raw) || !hasEnoughLabelFields(raw)) return null;
-
   const name = String(item.originalName || item.keyword || item.name || 'Item').trim();
   const nameL = name.toLowerCase();
   const ing = String(item.ingredientsList || item.ingredients || '').toLowerCase();
-  const blob = `${nameL} ${ing}`;
+  const blob = `${nameL} ${ing} ${String(item.keyword || '').toLowerCase()}`;
   const w = Math.round(Number(item.estimatedWeightGrams) || 0);
-  const ssG = parseServingGramsFromLabel(raw.servingSize) ?? 100;
+  const raw = item?.rawNutritionLabel;
+  const ssG = parseServingGramsFromLabel(raw?.servingSize) ?? (raw ? 100 : null);
 
   // Clear single-serve container (pot/cup/bottle) with large estimated weight — trust scout
   if (/\b(yogurt|yoghurt|pot|parfait|smoothie|drink|bottle|can of)\b/i.test(nameL) && w >= 150) {
@@ -79,6 +77,36 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
     return null; // classic UK yogurt pot
   }
 
+  // 1. Multipack Snack / Bar / Confection detection (e.g. "5 bars", "box of 6", "multipack", "Skinny Crunch")
+  const multipackMatch = blob.match(/\b(\d+)\s*(?:pack|pk|bars?|bakes?|sachets?|pouches?|pieces?|pcs?|biscuits?|cookies?)\b/i);
+  const isSnackOrBarMultipack = /\b(bar|bars|cereal bar|snack bar|protein bar|cookie|biscuit|crisps|snack)\b/i.test(blob) &&
+    (multipackMatch || /\b(multipack|box|pack of|share size|multi pack)\b/i.test(blob) || (w > 0 && w <= 35 && raw));
+
+  if (isSnackOrBarMultipack) {
+    const packUnits = multipackMatch ? parseInt(multipackMatch[1], 10) : 5;
+    const singleUnitGrams = (w > 0 && w <= 50) ? w : Math.round((ssG && ssG < 100) ? ssG : (ssG === 100 ? (w > 0 ? w : 20) : 20));
+    const totalBoxGrams = singleUnitGrams * Math.min(Math.max(packUnits, 3), 10);
+
+    const options: PortionOption[] = [];
+    options.push({ id: `unit_1_${singleUnitGrams}`, label: `1 bar / piece (${singleUnitGrams}g)`, weightGrams: singleUnitGrams });
+    options.push({ id: `unit_2_${singleUnitGrams * 2}`, label: `2 bars / pieces (${singleUnitGrams * 2}g)`, weightGrams: singleUnitGrams * 2 });
+    if (packUnits >= 3) {
+      options.push({ id: `unit_3_${singleUnitGrams * 3}`, label: `3 bars / pieces (${singleUnitGrams * 3}g)`, weightGrams: singleUnitGrams * 3 });
+    }
+    options.push({ id: `pack_all_${totalBoxGrams}`, label: `Entire pack / box (${totalBoxGrams}g)`, weightGrams: totalBoxGrams });
+
+    return {
+      scoutIndex,
+      name,
+      estimatedWeightGrams: singleUnitGrams,
+      labelServingGrams: ssG,
+      options,
+      reason: 'Multipack / multi-unit snack — confirm how many units were consumed',
+    };
+  }
+
+  if (!hasPrintedCalories(raw) || !hasEnoughLabelFields(raw)) return null;
+
   const servingsRaw = raw.servingsPerContainer ?? raw.servings ?? raw.numberOfServings;
   const servings =
     servingsRaw != null && String(servingsRaw).trim() !== ''
@@ -87,11 +115,11 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
 
   const looksMultiServePack =
     (servings != null && servings >= 2) ||
-    /\b(slice|sliced|topside|rashers|servings?|per slice|4 servings|pack of)\b/i.test(blob) ||
+    /\b(slice|sliced|topside|rashers|servings?|per slice|4 servings|pack of|tub|deli)\b/i.test(blob) ||
     (ssG === 100 &&
       w > 0 &&
       w < 100 &&
-      /\b(beef|chicken|ham|turkey|cheese|salmon|bacon|meat|fish)\b/i.test(nameL));
+      /\b(beef|chicken|ham|turkey|cheese|salmon|bacon|meat|fish|salad)\b/i.test(nameL));
 
   if (!(ssG === 100 && looksMultiServePack)) {
     return null;

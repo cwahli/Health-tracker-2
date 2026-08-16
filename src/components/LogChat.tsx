@@ -2330,12 +2330,15 @@ ${logsText}`);
           try {
             const exifData = await exifr.parse(f, ['DateTimeOriginal']);
             if (exifData && exifData.DateTimeOriginal) {
-              return new Date(exifData.DateTimeOriginal).toLocaleString();
+              return new Date(exifData.DateTimeOriginal).toISOString();
             }
           } catch (e) {
             console.warn("Could not parse EXIF for", f.name);
           }
-          return new Date(f.lastModified).toLocaleString();
+          if (f.lastModified) {
+            return new Date(f.lastModified).toISOString();
+          }
+          return new Date().toISOString();
         }));
         setSelectedImages(prev => [...prev, ...compressed]);
         setSelectedImagesForAnalysis(prev => [...prev, ...analysisCompressed]);
@@ -2403,6 +2406,7 @@ ${logsText}`);
     let textToSend = typeof overrideText === 'string' ? overrideText : (overrideText?.text || inputText);
     const overrideImagesInner = typeof overrideText === 'object' && overrideText?.imageUrls ? overrideText.imageUrls : (extraImages || []);
     const finalImages = overrideImagesInner.length > 0 ? overrideImagesInner : selectedImages;
+    const tempDates = overrideImagesInner.length > 0 ? (extraOptions?.imageDates || []) : [...imageDates];
     
     const compareOnly = typeof overrideText === 'object' && overrideText?.compareOnly;
     const compareItems = typeof overrideText === 'object' && overrideText?.compareItems;
@@ -2517,6 +2521,7 @@ ${logsText}`);
         const inputSnapshot = {
           text: userContent,
           imageRefs: [],
+          imageDates: tempDates.length > 0 ? tempDates : (extraOptions?.imageDates || job?.inputSnapshot?.imageDates || undefined),
           hasImage: finalImages.length > 0,
           mode: submissionMode,
           portionChoices: extraOptions?.portionChoices,
@@ -2711,6 +2716,7 @@ ${logsText}`);
         setInputText('');
         setSelectedImages([]);
         setSelectedImagesForAnalysis([]);
+        setImageDates([]);
 
         // Send images and submit job to server background execution
         const getImagesAsBase64 = async (imagesList: any[]): Promise<string[]> => {
@@ -2795,6 +2801,7 @@ ${logsText}`);
             mode: submissionMode,
             text: userContent || textToSend,
             images: stagedImagesForSubmit,
+            imageDates: tempDates.length > 0 ? tempDates : (extraOptions?.imageDates || job?.inputSnapshot?.imageDates || undefined),
             history: persistMessages,
             userProfile: profile || null,
             engine: selectedModelId || 'gemini-3.5-flash-lite',
@@ -3119,7 +3126,6 @@ ${logsText}`);
     }
     const tempImages = overrideImagesInner.length > 0 ? overrideImagesInner : [...selectedImages];
     const tempAnalysisImages = overrideImagesInner.length > 0 ? overrideImagesInner : [...selectedImagesForAnalysis];
-    const tempDates = overrideImagesInner.length > 0 ? [] : [...imageDates];
     setSelectedImages([]);
     setSelectedImagesForAnalysis([]);
     setImageDates([]);
@@ -5657,15 +5663,16 @@ ${logsText}`);
                       })()}
 
                       {(() => {
-                        const debugUrl = msg.data?.debugUrl || (jobId ? JobStore.getJob(jobId)?.result?.debugUrl : undefined);
-                        if (!debugUrl && !jobId) return null;
+                        const targetJobId = (msg.id?.startsWith('msg_assistant_job_') ? msg.id.replace('msg_assistant_', '') : '') || (msg.id?.startsWith('msg_assistant_') ? msg.id.replace('msg_assistant_', '') : '') || msg.data?.jobId || jobId;
+                        const debugUrl = msg.data?.debugUrl || (targetJobId ? JobStore.getJob(targetJobId)?.result?.debugUrl : undefined) || (jobId ? JobStore.getJob(jobId)?.result?.debugUrl : undefined);
+                        if (!debugUrl && !targetJobId) return null;
                         return (
                           <div className="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">
                             <button
                               type="button"
                               onClick={() => {
-                                if (jobId) {
-                                  handleDownloadDebug(jobId, msg);
+                                if (targetJobId) {
+                                  handleDownloadDebug(targetJobId, msg);
                                 }
                               }}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
@@ -5806,7 +5813,7 @@ ${logsText}`);
                     const hasFoodContent = !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.agentResult?.mealBuild || msg.data?.agentResult?.clean_result || msg.agentResult?.scoutItems?.length);
                     const rawRenderer = msg.id?.startsWith('welcome_')
                       ? 'welcome'
-                      : (hasReviewFixes ? 'biomarker_review' : msg.agentType);
+                      : (hasReviewFixes ? 'biomarker_review' : ((msg.agentType === 'agent1_step1' || String(msg.agentType).startsWith('agent1_step') || msg.agentType === 'medical_extract' || msg.agentType === 'medical') ? 'agent1' : msg.agentType));
                     const rendererType = (rawRenderer && agentCardRegistry[rawRenderer])
                       ? rawRenderer
                       : (hasFoodContent ? 'food' : rawRenderer);

@@ -209,6 +209,62 @@ export function toYYYYMMDD(dateStr: string | undefined | null): string {
   return new Date().toISOString().split('T')[0];
 }
 
+export function extractMostRecentImageDate(imageDates?: any[]): string | null {
+  if (!imageDates || !Array.isArray(imageDates) || imageDates.length === 0) {
+    return null;
+  }
+  let maxTime = -Infinity;
+  let bestDateStr: string | null = null;
+
+  for (const raw of imageDates) {
+    if (!raw) continue;
+    let parsedTime = NaN;
+    let ymdCandidate: string | null = null;
+
+    if (typeof raw === 'number' && !isNaN(raw)) {
+      parsedTime = raw;
+      const d = new Date(raw);
+      if (!isNaN(d.getTime())) {
+        const yr = d.getFullYear();
+        const mo = String(d.getMonth() + 1).padStart(2, '0');
+        const dy = String(d.getDate()).padStart(2, '0');
+        ymdCandidate = `${yr}-${mo}-${dy}`;
+      }
+    } else if (typeof raw === 'string') {
+      const str = raw.trim();
+      // Handle EXIF format "YYYY:MM:DD HH:MM:SS"
+      const exifMatch = str.match(/^(\d{4}):(\d{2}):(\d{2})/);
+      if (exifMatch) {
+        ymdCandidate = `${exifMatch[1]}-${exifMatch[2]}-${exifMatch[3]}`;
+        const d = new Date(`${ymdCandidate}T12:00:00Z`);
+        parsedTime = d.getTime();
+      } else {
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+          parsedTime = d.getTime();
+          const yr = d.getFullYear();
+          const mo = String(d.getMonth() + 1).padStart(2, '0');
+          const dy = String(d.getDate()).padStart(2, '0');
+          ymdCandidate = `${yr}-${mo}-${dy}`;
+        }
+      }
+    } else if (raw instanceof Date && !isNaN(raw.getTime())) {
+      parsedTime = raw.getTime();
+      const yr = raw.getFullYear();
+      const mo = String(raw.getMonth() + 1).padStart(2, '0');
+      const dy = String(raw.getDate()).padStart(2, '0');
+      ymdCandidate = `${yr}-${mo}-${dy}`;
+    }
+
+    if (!isNaN(parsedTime) && ymdCandidate && parsedTime > maxTime) {
+      maxTime = parsedTime;
+      bestDateStr = ymdCandidate;
+    }
+  }
+
+  return bestDateStr;
+}
+
 export function formatTimelineDate(dateStr: string): string {
   if (!dateStr) return '';
   const ymd = toYYYYMMDD(dateStr);

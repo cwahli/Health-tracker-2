@@ -2,6 +2,7 @@ import { uploadPhotoToR2, uploadPhotosToR2, uploadDebugPayloadToR2 } from './src
 import { supabase, isSupabaseConfigured } from './src/utils/supabaseClient';
 import { supabaseAdmin, isSupabaseConfigured as isSupabaseAdminConfigured } from './supabaseAdmin';
 import { remainingQuotaCooldownMs } from './server_gemini_retry.js';
+import { extractMostRecentImageDate } from './src/utils/dateUtils';
 
 export interface ServerJobPayload {
   jobId: string;
@@ -12,6 +13,7 @@ export interface ServerJobPayload {
   text?: string;
   images?: string[]; // base64 or data URLs
   imageUrls?: string[];
+  imageDates?: any[];
   history?: any[];
   userProfile?: any;
   engine?: string;
@@ -356,6 +358,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         // Task 6: Carry pre-resolved DB candidates from turn-1 portionClarify payload so
         // turn-2 skips the DB re-scan and uses the already-resolved context.
         resolvedDbCandidates: payload.resolvedDbCandidates || [],
+        imageDates: payload.imageDates || [],
       };
       // Note: priorLogsUrl is kept in payload separately for log stitching in persistSucceeded.
 
@@ -519,7 +522,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       if (finalData.needsPortionClarify) {
         let logsUrl = '';
         try {
-          const { uploadLogsToR2 } = await import('./src/utils/r2Storage.js');
+          const { uploadLogsToR2 } = await import('./src/utils/r2Storage');
           logsUrl = await uploadLogsToR2(jobId, accumulatedLogs.join('\n'));
         } catch (r2LogErr) {
           console.warn('[ServerJobs] Failed uploading portion clarify logs to R2:', r2LogErr);
@@ -548,7 +551,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         if (isSupabaseConfigured) {
           let lightweightFinalData = { ...finalData };
           try {
-            const { uploadJobResultToR2 } = await import('./src/utils/r2Storage.js');
+            const { uploadJobResultToR2 } = await import('./src/utils/r2Storage');
             const publicUrl = await uploadJobResultToR2(jobId, finalData);
             if (publicUrl) {
               lightweightFinalData = {
@@ -602,6 +605,10 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           if (!pendingFoodLog.recommendation && finalPayload?.verdict?.level) {
             pendingFoodLog.recommendation = finalPayload.verdict.level;
           }
+          if (!pendingFoodLog.date || pendingFoodLog.date === 'undefined' || String(pendingFoodLog.date).trim() === '') {
+            const mostRecentDate = extractMostRecentImageDate(payload.imageDates || (finalPayload as any)?.imageDates);
+            pendingFoodLog.date = mostRecentDate || new Date().toISOString().split('T')[0];
+          }
           // Replace base64 strings with public R2 URL or remove them
           if (pendingFoodLog.imageUrl && String(pendingFoodLog.imageUrl).startsWith('data:')) {
             pendingFoodLog.imageUrl = photoUrl || '';
@@ -620,7 +627,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         let logsUrl = '';
         const rawLogsText = accumulatedLogs.join('\n');
         try {
-          const { uploadLogsToR2 } = await import('./src/utils/r2Storage.js');
+          const { uploadLogsToR2 } = await import('./src/utils/r2Storage');
           logsUrl = await uploadLogsToR2(jobId, rawLogsText);
         } catch (r2LogErr) {
           console.warn('[ServerJobs] Failed uploading execution logs to R2:', r2LogErr);
@@ -724,7 +731,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         if (isSupabaseConfigured) {
           let lightweightResult = { ...cleanResult };
           try {
-            const { uploadJobResultToR2 } = await import('./src/utils/r2Storage.js');
+            const { uploadJobResultToR2 } = await import('./src/utils/r2Storage');
             const publicUrl = await uploadJobResultToR2(jobId, cleanResult);
             if (publicUrl) {
               lightweightResult = {
@@ -781,7 +788,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       let logsUrl = '';
       const rawErrorLogs = accumulatedLogs.join('\n');
       try {
-        const { uploadLogsToR2 } = await import('./src/utils/r2Storage.js');
+        const { uploadLogsToR2 } = await import('./src/utils/r2Storage');
         logsUrl = await uploadLogsToR2(jobId, rawErrorLogs);
       } catch (r2LogErr) {
         console.warn('[ServerJobs] Failed uploading error logs to R2:', r2LogErr);

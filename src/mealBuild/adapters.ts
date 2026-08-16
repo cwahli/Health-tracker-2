@@ -28,6 +28,7 @@ export function fromPendingFoodLog(log: any, meta?: Partial<MealBuild>): MealBui
     receiptTable: log.receiptTable,
     weightGrams: log.weightGrams,
     quantity: log.quantity,
+    date: log.date || meta?.date,
     ...meta
   };
   

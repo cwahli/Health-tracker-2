@@ -18,14 +18,32 @@ export function namesReferToSameFood(a: unknown, b: unknown): boolean {
   if (!na || !nb) return false;
   if (na === nb) return true;
   if (na.length >= 6 && nb.length >= 6 && (na.includes(nb) || nb.includes(na))) return true;
-  const ta = new Set(na.split(' ').filter((t) => t.length >= 4));
-  const tb = new Set(nb.split(' ').filter((t) => t.length >= 4));
+  const ta = new Set(na.split(' ').filter((t) => t.length >= 3));
+  const tb = new Set(nb.split(' ').filter((t) => t.length >= 3));
   if (ta.size === 0 || tb.size === 0) return false;
   let overlap = 0;
   ta.forEach((t) => {
     if (tb.has(t)) overlap++;
   });
-  return overlap >= 2 || (overlap === 1 && (ta.has('croissant') || tb.has('croissant') || ta.has('cinnamon') || tb.has('cinnamon')));
+  
+  // Specific single-token key food forms or common food category names
+  if (
+    overlap >= 2 ||
+    (overlap === 1 && (
+      ta.has('croissant') || tb.has('croissant') ||
+      ta.has('cinnamon') || tb.has('cinnamon') ||
+      (ta.has('cereal') && tb.has('cereal')) ||
+      (ta.has('bar') && tb.has('bar')) ||
+      (ta.has('cookie') && tb.has('cookie')) ||
+      (ta.has('salad') && tb.has('salad')) ||
+      (ta.has('wrap') && tb.has('wrap')) ||
+      (ta.has('burger') && tb.has('burger')) ||
+      (ta.has('sandwich') && tb.has('sandwich'))
+    ))
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export function breakdownItemName(item: any): string {
@@ -51,6 +69,15 @@ export function isStandaloneLabelName(s: string): boolean {
   );
 }
 
+export function scoutItemMatchesBreakdownName(s: any, itemName: string): boolean {
+  if (!s || !itemName) return false;
+  if (namesReferToSameFood(itemName, s.originalName)) return true;
+  if (namesReferToSameFood(itemName, s.keyword)) return true;
+  if (namesReferToSameFood(itemName, s.name)) return true;
+  if (namesReferToSameFood(itemName, s.canonicalDbName)) return true;
+  return false;
+}
+
 /** Match one breakdown row to an unused scout item. Never uses array index. */
 export function matchBreakdownItemToScout(
   item: any,
@@ -65,7 +92,7 @@ export function matchBreakdownItemToScout(
     );
     if (byIndex && !usedIndices.has(byIndex.scoutIndex)) {
       const itemName = breakdownItemName(item);
-      if (!itemName || namesReferToSameFood(itemName, scoutItemName(byIndex))) {
+      if (!itemName || scoutItemMatchesBreakdownName(byIndex, itemName)) {
         return byIndex;
       }
       // Dietitian reused a sequential index that belongs to a different dish.
@@ -77,14 +104,13 @@ export function matchBreakdownItemToScout(
   return (
     scoutItems.find((s) => {
       if (s?.scoutIndex !== undefined && usedIndices.has(s.scoutIndex)) return false;
-      return namesReferToSameFood(itemName, scoutItemName(s));
+      return scoutItemMatchesBreakdownName(s, itemName);
     }) || null
   );
 }
 
 export function breakdownAlreadyHasScoutName(breakdown: any[], sItem: any): boolean {
-  const sName = scoutItemName(sItem);
-  return (breakdown || []).some((it) => namesReferToSameFood(breakdownItemName(it), sName));
+  return (breakdown || []).some((it) => scoutItemMatchesBreakdownName(sItem, breakdownItemName(it)));
 }
 
 export type ScoutReconcileResult = {

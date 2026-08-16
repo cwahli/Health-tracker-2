@@ -15,6 +15,7 @@ import { ComprehensiveNutrientsTable } from './ComprehensiveNutrientsTable';
 import { JobStore } from '../../jobs/JobStore';
 import { toPendingFoodLog } from '../../mealBuild/adapters';
 import { namesReferToSameFood } from '../../../server_scout_reconcile';
+import { extractMostRecentImageDate, getCurrentDateInTimezone } from '../../utils/dateUtils';
 
 function foodCardName(item: any): string {
   return item?.canonicalDbName || item?.name || item?.originalName || item?.keyword || '';
@@ -3518,8 +3519,12 @@ export const FoodCard: React.FC<AgentCardProps & {
                             const logTarget = effectiveFoodLog || msg.data?.pendingFoodLog;
                             if (logTarget && onLogFood) {
                               isLoggingRef.current = true;
+                              const mostRecentImageDate = extractMostRecentImageDate(
+                                (logTarget as any).imageDates || msg.data?.imageDates || msg.data?.agentResult?.imageDates
+                              );
                               const foodToLog = {
                                 ...logTarget,
+                                date: logTarget.date || mostRecentImageDate || (profile?.timezone ? getCurrentDateInTimezone(profile.timezone) : new Date().toISOString().split('T')[0]),
                                 scoutItems: msg.data?.scoutItems || logTarget.scoutItems || [],
                                 imageUrl: logTarget.imageUrl || (messageImages.length > 0 ? messageImages[0] : undefined),
                                 imageUrls: (logTarget.imageUrls && logTarget.imageUrls.length > 0)

@@ -1260,6 +1260,11 @@ export default function App() {
                     reply: cleanResult.reply || cleanResult.text || cleanResult.message,
                   };
 
+                  const rawAgentType = snapAgentType || cleanResult.agentType || (isMedicalJob ? 'agent1' : 'food');
+                  const normalizedAgentType = isMedicalJob
+                    ? ((rawAgentType === 'agent1_step1' || rawAgentType === 'medical' || rawAgentType === 'medical_extract' || String(rawAgentType).startsWith('agent1_step')) ? 'agent1' : rawAgentType)
+                    : 'food';
+
                   const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive);
                   const assistantMsg = {
                     id: `msg_assistant_${job.id}`,
@@ -1267,10 +1272,12 @@ export default function App() {
                     content: messageText,
                     timestamp: new Date().toISOString(),
                     isLive: false,
-                    agentType: isMedicalJob ? (snapAgentType || cleanResult.agentType || 'medical') : 'food',
+                    agentType: isMedicalJob ? normalizedAgentType : 'food',
+                    agentTypeStep: rawAgentType,
                     modificationCommand: reviewCmds,
                     pendingFoodLog,
                     data: {
+                      jobId: job.id,
                       pendingFoodLog,
                       hasImage: !!(serverJob.photo_url || pendingFoodLog?.imageUrl || (job.inputSnapshot as any)?.hasImage),
                       photoUrl: serverJob.photo_url || cleanResult.photoUrl,
@@ -1283,7 +1290,19 @@ export default function App() {
                   const updatedMessages = [...nonLiveMsgs, assistantMsg];
                   JobStore.updateJob(job.id, {
                     status: 'succeeded',
-                    result: { ...cleanResult, pendingFoodLog, photoUrl: serverJob.photo_url || cleanResult.photoUrl, debugUrl: serverJob.debug_url || cleanResult.debugUrl, modificationCommand: isReviewJob ? reviewCmds : cleanResult.modificationCommand, proposal: cleanResult.proposal, reply: cleanResult.reply || cleanResult.text, agentType: isMedicalJob ? (snapAgentType || cleanResult.agentType) : cleanResult.agentType },
+                    result: {
+                      ...cleanResult,
+                      pendingFoodLog,
+                      photoUrl: serverJob.photo_url || cleanResult.photoUrl,
+                      debugUrl: serverJob.debug_url || cleanResult.debugUrl,
+                      modificationCommand: isReviewJob ? reviewCmds : cleanResult.modificationCommand,
+                      proposal: cleanResult.proposal,
+                      reply: cleanResult.reply || cleanResult.text,
+                      agentType: isMedicalJob ? normalizedAgentType : cleanResult.agentType,
+                      agentTypeStep: rawAgentType,
+                      agentResult,
+                      extractedData: cleanResult.extractedData,
+                    },
                     messages: updatedMessages,
                     mealBuild: cleanResult.mealBuild || job.mealBuild,
                     progressPercent: 100,

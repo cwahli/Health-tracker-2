@@ -377,6 +377,7 @@ export default function InsightsTab({
   });
 
   const [fullscreenBatchIndex, setFullscreenBatchIndex] = useState<number | null>(null);
+  const [fullscreenExtractionAnalysis, setFullscreenExtractionAnalysis] = useState<any | null>(null);
 
   const [approvedAgent1Batches, setApprovedAgent1Batches] = useState<Record<string, boolean>>(() => {
     try {
@@ -1074,6 +1075,105 @@ export default function InsightsTab({
     }
   };
 
+  const handleApproveExtractionAnalysis = async (analysis: any, unselectedKeys: string[] = []) => {
+    if (!analysis) return;
+    setIsApplying(true);
+    try {
+      const res = analysis.result || {};
+      const extractedRows = Array.isArray(res.extractedData) ? res.extractedData : (Array.isArray(res.biomarkers) ? res.biomarkers : []);
+      
+      const selectedRows = extractedRows.filter((row: any) => {
+        const key = row.standard_key || row.key || row.biomarker || row.name;
+        return !unselectedKeys.includes(key);
+      });
+
+      if (selectedRows.length > 0) {
+        const currentHistory = JSON.parse(JSON.stringify(biomarkerHistory || []));
+        const updatedCustoms = { ...(profile.customBiomarkers || {}) };
+        const dateMap: { [dateStr: string]: { [key: string]: number | string } } = {};
+
+        selectedRows.forEach((row: any) => {
+          const key = row.standard_key || row.key || row.biomarker;
+          const val = row.numeric_value ?? row.value ?? row.qualitative_value;
+          if (key && val !== undefined && val !== null) {
+            const rDate = row.date || new Date().toISOString().split('T')[0];
+            if (!dateMap[rDate]) dateMap[rDate] = {};
+            dateMap[rDate][key] = val;
+
+            if (!updatedCustoms[key]) {
+              updatedCustoms[key] = {
+                name: row.display_name || row.name || row.biomarker || key,
+                unit: row.unit || '',
+                normalRange: row.reference_range || row.normalRange || '',
+                description: row.description || '',
+                standardMedicalGrouping: row.category || 'By Medical Practice'
+              };
+            }
+          }
+        });
+
+        Object.entries(dateMap).forEach(([dStr, bObj]) => {
+          const existingEntry = currentHistory.find((h: any) => h.date === dStr);
+          if (existingEntry) {
+            existingEntry.biomarkers = {
+              ...(existingEntry.biomarkers || {}),
+              ...bObj
+            };
+            existingEntry.updated_at = Date.now();
+          } else {
+            currentHistory.push({
+              id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+              date: dStr,
+              biomarkers: bObj,
+              created_at: Date.now(),
+              updated_at: Date.now(),
+              sync_state: 'synced'
+            });
+          }
+        });
+
+        currentHistory.sort((a: any, b: any) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
+
+        const recomputedBiomarkers: { [key: string]: number | string } = {};
+        [...currentHistory].sort((a: any, b: any) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach((log: any) => {
+          Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
+            recomputedBiomarkers[k] = v as string | number;
+          });
+        });
+
+        const updatedProfile = {
+          ...profile,
+          customBiomarkers: updatedCustoms
+        };
+
+        if (onUpdateProfile) {
+          await onUpdateProfile(updatedProfile);
+        }
+        if (onUpdateHistory) {
+          await onUpdateHistory(currentHistory, recomputedBiomarkers, updatedProfile);
+        }
+      }
+
+      setApprovedSteps(prev => {
+        const updated = { ...prev, agent1: true };
+        localStorage.setItem('approvedSteps', JSON.stringify(updated));
+        return updated;
+      });
+
+      if (analysis.id) {
+        setApprovedAnalysisId('agent1', analysis.id);
+      }
+
+      if (onAgentAnalysisSaved) {
+        await onAgentAnalysisSaved('agent1', res, analysis.id);
+      }
+    } catch (err) {
+      console.error("Failed to approve extraction analysis:", err);
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
   const handleRefineDataCleaning = () => {
     // 1. Set excludeStandardized to true to hide already standardized biomarkers
     setExcludeStandardized(true);
@@ -1243,6 +1343,13 @@ export default function InsightsTab({
       agentType: null,
       description: 'Allows the clinical multi-agent team to calibrate reference ranges and interventions to your precise physiology.',
       valueProposition: 'Demographics and core biomarkers checklist calibration.'
+    },
+    {
+      id: 'agent1',
+      title: 'Lab Parser',
+      agentType: 'agent1',
+      description: 'Parses raw medical reports, lab PDF uploads, or text logs into standardized clinical biomarkers.',
+      valueProposition: 'Extracts and standardizes raw lab reports into your physiological database.'
     },
     {
       id: 'data_review',
@@ -1889,25 +1996,28 @@ export default function InsightsTab({
                                 const hasMore = !!(res.hasMoreMarkers || res.hasMore || res.needsContinuation || res.status === 'needs_continuation');
                                 const currentBatch = res.currentBatch || 1;
                                 const estimatedTotal = res.estimatedTotalMarkers || null;
-                                const extractedCount = Array.isArray(res.extractedData) ? res.extractedData.length : 0;
+                                const extractedCount = Array.isArray(res.extractedData) ? res.extractedData.length : (Array.isArray(res.biomarkers) ? res.biomarkers.length : 0);
 
                                 // Check if user has approved this analysis
                                 const isApproved = approvedSteps['agent1'] || approvedAnalysisIds['agent1'] === latestExtraction.id;
 
-                                if (!hasMore && isApproved) return null;
+                                // If extraction has 0 markers and not in progress, do not show pending box
+                                if (extractedCount === 0 && !hasMore && !res.agentResult) return null;
 
                                 return (
                                   <div className={`p-4 rounded-2xl border transition-all ${
                                     hasMore 
                                       ? 'bg-indigo-50/40 dark:bg-indigo-950/10 border-indigo-100 dark:border-indigo-900/50' 
-                                      : 'bg-emerald-50/45 dark:bg-emerald-950/10 border-emerald-100 dark:border-emerald-900/50'
+                                      : isApproved
+                                        ? 'bg-emerald-50/20 dark:bg-emerald-950/5 border-emerald-100/60 dark:border-emerald-900/30'
+                                        : 'bg-emerald-50/45 dark:bg-emerald-950/10 border-emerald-100 dark:border-emerald-900/50'
                                   }`}>
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                       <div className="space-y-1.5 flex-1 text-left">
                                         <div className="flex items-center gap-2">
                                           <span className={`w-2 h-2 rounded-full ${hasMore ? 'bg-indigo-500 animate-pulse' : 'bg-emerald-500'}`} />
                                           <h5 className="text-xs font-bold text-theme-text">
-                                            {hasMore ? 'Extraction In Progress' : 'Extracted Data Pending Approval'}
+                                            {hasMore ? 'Extraction In Progress' : isApproved ? 'Extracted Data Approved' : 'Extracted Data Pending Approval'}
                                           </h5>
                                         </div>
                                         
@@ -1916,6 +2026,8 @@ export default function InsightsTab({
                                             estimatedTotal 
                                               ? `Batch ${currentBatch} active. Extracted ${extractedCount} of ~${estimatedTotal} estimated biomarkers so far.`
                                               : `Batch ${currentBatch} active. Extracted ${extractedCount} biomarkers. Click below to continue.`
+                                          ) : isApproved ? (
+                                            `Extraction approved! ${extractedCount} biomarkers are applied to your profile and clinical pipeline.`
                                           ) : (
                                             `Extraction complete! Successfully extracted ${extractedCount} biomarkers. Review and apply them to calibrate your pipeline.`
                                           )}
@@ -1935,55 +2047,50 @@ export default function InsightsTab({
                                           </span>
                                         </div>
 
-                                        {Array.isArray(res.extractedData) && res.extractedData.length > 0 && (
-                                          <div className="mt-3 border border-slate-150 dark:border-slate-800 rounded-2xl overflow-hidden max-h-64 overflow-y-auto">
-                                            <table className="w-full text-left">
-                                              <thead className="bg-slate-50 dark:bg-slate-900/60 sticky top-0">
-                                                <tr>
-                                                  <th className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-slate-500">Biomarker</th>
-                                                  <th className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-slate-500">Date</th>
-                                                  <th className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-slate-500">Value</th>
-                                                  <th className="px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-slate-500">Unit</th>
-                                                </tr>
-                                              </thead>
-                                              <tbody>
-                                                {res.extractedData.map((row: any, i: number) => (
-                                                  <tr key={i} className="border-t border-slate-150 dark:border-slate-800">
-                                                    <td className="px-3 py-2 text-[11px] font-bold text-theme-text">{row.display_name || row.biomarker}</td>
-                                                    <td className="px-3 py-2 text-[10px] text-slate-400">{row.date}</td>
-                                                    <td className="px-3 py-2 text-[10px] text-slate-400">{row.numeric_value ?? row.qualitative_value ?? '—'}</td>
-                                                    <td className="px-3 py-2 text-[10px] text-slate-400">{row.unit || '—'}</td>
-                                                  </tr>
-                                                ))}
-                                              </tbody>
-                                            </table>
+                                        {(Array.isArray(res.extractedData) && res.extractedData.length > 0) || res.agentResult ? (
+                                          <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+                                            <AgentResultTable
+                                              agentType="agent1"
+                                              agentResult={res}
+                                              profile={profile}
+                                              biomarkerHistory={activeHistory || []}
+                                              initialRawText=""
+                                              isApplying={isApplying}
+                                              onApplyChanges={async (unselectedKeys?: string[]) => {
+                                                await handleApproveExtractionAnalysis(latestExtraction, unselectedKeys);
+                                              }}
+                                            />
                                           </div>
-                                        )}
+                                        ) : null}
                                       </div>
 
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (hasMore) {
-                                            onOpenAgentChat?.('agent1', {
-                                              remainingText: res.remainingText || '',
-                                              extractedData: res.extractedData || [],
-                                              currentBatch: currentBatch + 1,
-                                              estimatedTotalMarkers: estimatedTotal,
-                                              prefillMessage: 'continue'
-                                            });
-                                          } else {
-                                            onOpenAgentChat?.('agent1');
-                                          }
-                                        }}
-                                        className={`px-3 py-1.5 rounded-xl text-[10px] font-bold text-white transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer ${
-                                          hasMore 
-                                            ? 'bg-indigo-600 hover:bg-indigo-700' 
-                                            : 'bg-emerald-600 hover:bg-emerald-700'
-                                        }`}
-                                      >
-                                        {hasMore ? 'Continue Extraction' : 'Review & Approve'}
-                                      </button>
+                                      <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (hasMore) {
+                                              onOpenAgentChat?.('agent1', {
+                                                remainingText: res.remainingText || '',
+                                                extractedData: res.extractedData || [],
+                                                currentBatch: currentBatch + 1,
+                                                estimatedTotalMarkers: estimatedTotal,
+                                                prefillMessage: 'continue'
+                                              });
+                                            } else {
+                                              setFullscreenExtractionAnalysis(latestExtraction);
+                                            }
+                                          }}
+                                          className={`px-3 py-1.5 rounded-xl text-[10px] font-bold text-white transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer ${
+                                            hasMore 
+                                              ? 'bg-indigo-600 hover:bg-indigo-700' 
+                                              : isApproved
+                                                ? 'bg-slate-700 hover:bg-slate-800'
+                                                : 'bg-emerald-600 hover:bg-emerald-700'
+                                          }`}
+                                        >
+                                          {hasMore ? 'Continue Extraction' : isApproved ? 'View Table' : 'Review & Approve'}
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -2182,12 +2289,16 @@ export default function InsightsTab({
                                   </button>
                                   <button
                                     onClick={() => {
-                                      const suggestionText = typeof latestAnalysis.result === 'string' 
-                                        ? latestAnalysis.result 
-                                        : JSON.stringify(latestAnalysis.result, null, 2);
-                                      onOpenAgentChat?.(step.agentType as any, {
-                                        prefillMessage: `I want to edit some information in your previous suggestion for ${step.title}. Here is the suggestion:\n\n${suggestionText}\n\nCould you please help me edit and adjust this suggestion?`
-                                      });
+                                      if (['agent1', 'agent2', 'agent3', 'agent4', 'medical_extract'].includes(step.agentType!)) {
+                                        setFullscreenExtractionAnalysis(latestAnalysis);
+                                      } else {
+                                        const suggestionText = typeof latestAnalysis.result === 'string' 
+                                          ? latestAnalysis.result 
+                                          : JSON.stringify(latestAnalysis.result, null, 2);
+                                        onOpenAgentChat?.(step.agentType as any, {
+                                          prefillMessage: `I want to edit some information in your previous suggestion for ${step.title}. Here is the suggestion:\n\n${suggestionText}\n\nCould you please help me edit and adjust this suggestion?`
+                                        });
+                                      }
                                     }}
                                     className="py-2.5 px-3 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                   >
@@ -2330,6 +2441,66 @@ export default function InsightsTab({
                 className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
               >
                 Close Fullscreen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {fullscreenExtractionAnalysis && fullscreenExtractionAnalysis.result && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[60] flex items-center justify-center p-4 sm:p-6 md:p-10">
+          <div className="bg-theme-bg-card border border-theme-border rounded-3xl w-full max-w-7xl h-[85vh] flex flex-col shadow-2xl overflow-hidden animation-zoom-in">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-theme-border bg-slate-50/50 dark:bg-slate-950/20">
+              <div>
+                <h3 className="text-sm font-bold text-theme-text font-display">
+                  Extracted Clinical Biomarkers Review & Calibration
+                </h3>
+                <p className="text-[10px] text-slate-450 mt-1">
+                  Review all extracted biomarkers, standardized names, units, and values before applying to your health profile.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFullscreenExtractionAnalysis(null)}
+                className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-850 text-slate-450 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-auto p-6 bg-slate-50/20 dark:bg-slate-950/10">
+              <AgentResultTable
+                agentType="agent1"
+                agentResult={fullscreenExtractionAnalysis.result}
+                profile={profile}
+                biomarkerHistory={activeHistory}
+                isApplying={isApplying}
+                onApplyChanges={async (unselectedKeys?: string[]) => {
+                  await handleApproveExtractionAnalysis(fullscreenExtractionAnalysis, unselectedKeys);
+                  setFullscreenExtractionAnalysis(null);
+                }}
+              />
+            </div>
+            
+            <div className="px-6 py-4 border-t border-theme-border bg-slate-50/50 dark:bg-slate-950/20 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setFullscreenExtractionAnalysis(null)}
+                className="px-4 py-2 bg-slate-150 dark:bg-slate-800 text-theme-text rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={isApplying}
+                onClick={async () => {
+                  await handleApproveExtractionAnalysis(fullscreenExtractionAnalysis);
+                  setFullscreenExtractionAnalysis(null);
+                }}
+                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                {isApplying ? 'Applying...' : 'Approve & Apply to Profile'}
               </button>
             </div>
           </div>

@@ -24,9 +24,9 @@ import {
   AGENT_STRUCTURE_DEFAULT,
   TIER1_MAX_SHOTS,
   type BugSnapshotManifest,
-} from './src/utils/bugSnapshot.js';
-import { domainPackForAgent, buildOverviewMarkdown } from './src/utils/bugDomainPacks.js';
-import { stripHeavyImages } from './src/utils/debugPayload.js';
+} from './src/utils/bugSnapshot';
+import { domainPackForAgent, buildOverviewMarkdown } from './src/utils/bugDomainPacks';
+import { stripHeavyImages } from './src/utils/debugPayload';
 import { normalizeTagKey } from './serverIssueBacklog.js';
 
 export type BugSnapshotDeps = {

@@ -65,13 +65,13 @@ export const BiomarkerCard: React.FC<AgentCardProps> = ({
                       </div>
 
                       {/* Content details based on Agent type */}
-                      {msg.agentType && AGENT_REGISTRY[msg.agentType as AgentType]?.capabilities?.includes('biomarker_table_view') && msg.data?.agentResult && (
+                      {msg.agentType && (AGENT_REGISTRY[msg.agentType as AgentType]?.capabilities?.includes('biomarker_table_view') || msg.agentType === 'agent1' || msg.agentType === 'agent1_step1' || msg.agentType === 'medical' || msg.agentType === 'medical_extract') && msg.data?.agentResult && (
                         <ErrorBoundary>
                         <AgentResultTable
                           agentType={
                             msg.agentTypeStep === 'agent1_step2' ? 'agent2' :
                             msg.agentTypeStep === 'agent1_step3' ? 'agent3' :
-                            msg.agentType as 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'data_review'
+                            (msg.agentType === 'medical' || msg.agentType === 'medical_extract' || msg.agentType === 'agent1_step1' ? 'agent1' : msg.agentType) as 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'data_review'
                           }
                           agentResult={msg.data?.agentResult}
                           profile={profile}

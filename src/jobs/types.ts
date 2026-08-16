@@ -22,6 +22,8 @@ export interface AgentJob {
     imageRefs: string[];
     profile?: any;
     modelId?: string;
+    imageDates?: any[];
+    [key: string]: any;
   };
   checkpoint?: any;
   mealBuild?: MealBuild;
