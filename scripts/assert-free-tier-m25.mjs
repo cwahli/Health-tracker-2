@@ -24,7 +24,7 @@ function read(rel) {
 }
 
 console.log('\n=== M25 Supabase payload diet ===\n');
-const server = read('server.ts');
+const server = read('server.ts') + '\n' + read('server_routes_sync.ts');
 const sync = read('src/utils/syncUtils.ts');
 
 if (!server.includes('[FreeTier] projected food pull') && !server.includes('[FreeTier] keyset pagination')) {

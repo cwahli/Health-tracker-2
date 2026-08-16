@@ -715,6 +715,100 @@ export function shouldRunCalibrator(
   return true;
 }
 
+export type RangeSourceKind = 'custom' | 'demographic' | 'lab_report' | 'catalog';
+
+export interface RangeSourceInfo {
+  sourceKind: RangeSourceKind;
+  sourceLabel: string;
+  badgeClass: string;
+  sourceRange: string;
+}
+
+/**
+ * Derives reference range source attribution for UI badges (B7.6).
+ * Categories:
+ * 1. custom: User explicitly modified/customized range in their profile.
+ * 2. demographic: Calibrator adjusted range for age/gender/ethnicity profile.
+ * 3. lab_report: Range extracted directly from printed lab report observation metadata.
+ * 4. catalog: Standard population default clinical reference range.
+ */
+export function getBiomarkerRangeSourceInfo(
+  key: string,
+  def: { normalRange?: string; unit?: string },
+  profile?: { customBiomarkers?: Record<string, any>; age?: any; gender?: string; ethnicity?: string } | null,
+  latestLog?: { observationMeta?: Record<string, { printedRange?: string }> } | null,
+  agentCalibration?: { profileAdjustedNormalRange?: string } | null
+): RangeSourceInfo {
+  const custom = profile?.customBiomarkers?.[key];
+  const customRange = custom?.normalRange;
+  const printedRange = latestLog?.observationMeta?.[key]?.printedRange;
+  const calibratedRange = agentCalibration?.profileAdjustedNormalRange;
+  const defaultRange = def?.normalRange || '';
+
+  if (customRange && typeof customRange === 'string' && customRange.trim() && customRange !== defaultRange && !custom?.overlayFingerprint) {
+    return {
+      sourceKind: 'custom',
+      sourceLabel: 'User Custom Range',
+      badgeClass: 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/40',
+      sourceRange: customRange.trim(),
+    };
+  }
+
+  if (calibratedRange && typeof calibratedRange === 'string' && calibratedRange.trim() && calibratedRange !== defaultRange) {
+    return {
+      sourceKind: 'demographic',
+      sourceLabel: 'Demographic Calibrated',
+      badgeClass: 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40',
+      sourceRange: calibratedRange.trim(),
+    };
+  }
+
+  if (printedRange && typeof printedRange === 'string' && printedRange.trim() && printedRange !== defaultRange) {
+    return {
+      sourceKind: 'lab_report',
+      sourceLabel: 'Lab Report Specific',
+      badgeClass: 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/40',
+      sourceRange: printedRange.trim(),
+    };
+  }
+
+  return {
+    sourceKind: 'catalog',
+    sourceLabel: 'Standard Clinical',
+    badgeClass: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+    sourceRange: defaultRange || 'Standard',
+  };
+}
+
+/**
+ * Evaluates demographic overlays across active profile biomarkers.
+ * When age, gender, or ethnicity change, returns updated customBiomarkers
+ * with new fingerprints for analytes that vary by demographic (B7.5).
+ */
+export function recalibrateProfileOverlays(
+  profile: { age?: any; gender?: string; ethnicity?: string; customBiomarkers?: Record<string, any> } | null | undefined,
+  activeKeys: string[] = []
+): { updatedCustomBiomarkers: Record<string, any>; recalibratedCount: number } {
+  const custom = { ...(profile?.customBiomarkers || {}) };
+  if (!profile) return { updatedCustomBiomarkers: custom, recalibratedCount: 0 };
+  const currentFp = overlayFingerprint(profile);
+  let count = 0;
+
+  const candidateKeys = activeKeys.length > 0 ? activeKeys : Object.keys(custom);
+  for (const k of candidateKeys) {
+    const existing = custom[k];
+    if (shouldRunCalibrator(k, profile, existing)) {
+      custom[k] = {
+        ...(existing || {}),
+        overlayFingerprint: currentFp,
+      };
+      count += 1;
+    }
+  }
+
+  return { updatedCustomBiomarkers: custom, recalibratedCount: count };
+}
+
 /** Retired chat destinations → owner the user should land on. */
 export const RETIRED_AGENT_REDIRECT: Record<string, string> = {
   medical_extract: 'agent1',

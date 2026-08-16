@@ -8,6 +8,7 @@ import { generateDynamicInsight } from '../utils/biomarkerInsights';
 import { reverseStandardizeUnit, formatNormalRange, CONVERSION_FACTORS, standardizeUnit } from '../utils/unitConversion';
 import BiomarkerCalculationPanel from './BiomarkerCalculationPanel';
 import { getAgentCalibration, formatOptimalTargetValue } from '../utils/agentCalibration';
+import { getBiomarkerRangeSourceInfo } from '../utils/biomarkerLifecycle';
 import { translations } from '../utils/translations';
 
 interface BiomarkerExpandedSectionProps {
@@ -103,6 +104,14 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
     }
     return def.normalRange || 'Optimal range pending evaluation';
   }, [agentCalibration, def.normalRange, profile?.customBiomarkers, def.key]);
+
+  const rangeSourceInfo = React.useMemo(() => {
+    const rawLatestLog = biomarkerHistory
+      .filter(h => h.biomarkers[def.key] !== undefined)
+      .sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date)))
+      .slice(-1)[0];
+    return getBiomarkerRangeSourceInfo(def.key, def, profile, rawLatestLog, agentCalibration);
+  }, [def.key, def, profile, biomarkerHistory, agentCalibration]);
 
   const latestLog = historyData[historyData.length - 1];
   const val = latestLog ? latestLog.originalVal : biomarkers[def.key];
@@ -215,6 +224,28 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
             </span>
           </div>
         )}
+      </div>
+
+      {/* Reference Range & Source Attribution Card (B7.6) */}
+      <div className="p-3.5 bg-slate-100/70 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-2 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-indigo-500/10 dark:bg-indigo-500/20 rounded-xl text-indigo-600 dark:text-indigo-400 font-bold shrink-0">
+            📊
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Clinical Reference Range
+              </span>
+              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${rangeSourceInfo.badgeClass}`}>
+                {rangeSourceInfo.sourceLabel}
+              </span>
+            </div>
+            <span className="text-xs font-extrabold text-slate-900 dark:text-slate-100 font-mono">
+              {rangeSourceInfo.sourceRange || def.normalRange || 'Standard'} {def.unit ? `(${def.unit})` : ''}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Collapsible More Details Accordion */}

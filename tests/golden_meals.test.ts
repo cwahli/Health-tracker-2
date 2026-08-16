@@ -253,3 +253,46 @@ describe('Golden meals — G4 / G6 / G7 mode contracts', () => {
     expect(g7.passes[0].kind).toBe('compare_shelf');
   });
 });
+
+describe('Golden meals — F-3 Multi-component regional dish decomposition', () => {
+  it('decomposes a dim sum set into distinct searchable item queries without parent pollution', () => {
+    const queries = buildFoodSearchQuerySet([
+      {
+        originalName: 'Dim Sum Tasting Basket',
+        keyword: 'dim sum platter',
+        components: [
+          { searchQuery: 'har gow shrimp dumpling' },
+          { searchQuery: 'siu mai pork dumpling' },
+          { searchQuery: 'steamed char siu bao' },
+          { searchQuery: 'jasmine tea' },
+        ],
+      },
+    ]);
+    expect(queries).toContain('har gow shrimp dumpling');
+    expect(queries).toContain('siu mai pork dumpling');
+    expect(queries).toContain('steamed char siu bao');
+    expect(queries).toContain('jasmine tea');
+    expect(queries.some((q) => /dim sum tasting basket/i.test(q))).toBe(false);
+  });
+
+  it('decomposes a Japanese bento box into protein, carb, sides, and soup components', () => {
+    const queries = buildFoodSearchQuerySet([
+      {
+        originalName: 'Salmon Teriyaki Bento Box',
+        keyword: 'salmon bento',
+        components: [
+          { searchQuery: 'grilled salmon teriyaki' },
+          { searchQuery: 'steamed white rice' },
+          { searchQuery: 'edamame beans' },
+          { searchQuery: 'miso soup' },
+        ],
+      },
+    ]);
+    expect(queries).toContain('grilled salmon teriyaki');
+    expect(queries).toContain('steamed white rice');
+    expect(queries).toContain('edamame beans');
+    expect(queries).toContain('miso soup');
+    expect(queries.some((q) => /^salmon bento$/i.test(q))).toBe(false);
+  });
+});
+

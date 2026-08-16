@@ -18,6 +18,8 @@ import {
   getObservationUnit,
   cleanupInventedBiomarkerCatalog,
   isLiveForUse,
+  getBiomarkerRangeSourceInfo,
+  recalibrateProfileOverlays,
 } from './biomarkerLifecycle';
 import { isValEmpty, sanitizeBiomarkerHistoryOnLoad } from './biomarkers';
 
@@ -214,6 +216,47 @@ describe('overlay fingerprint / calibrator gate', () => {
     // Change age to 55: fingerprint changes from 20-29|f|asian to 50-59|f|asian -> runs again
     const profile55 = { age: 55, gender: 'Female', ethnicity: 'Asian' };
     expect(shouldRunCalibrator('hdl', profile55, overlay)).toBe(true);
+  });
+
+  it('recalibrates profile overlays when demographic fingerprint shifts', () => {
+    const profile25 = {
+      age: 25,
+      gender: 'Female',
+      ethnicity: 'Asian',
+      customBiomarkers: {
+        hdl: { name: 'HDL Cholesterol', normalRange: '> 1.3 mmol/L' },
+        serum_sodium: { name: 'Serum Sodium', normalRange: '135 - 145 mmol/L' },
+      },
+    };
+    const res = recalibrateProfileOverlays(profile25, ['hdl', 'serum_sodium']);
+    expect(res.recalibratedCount).toBe(1);
+    expect(res.updatedCustomBiomarkers.hdl.overlayFingerprint).toBe('20-29|f|asian');
+  });
+
+  it('correctly attributes reference range sources (catalog, lab report, demographic, custom)', () => {
+    const def = { normalRange: '135 - 145', unit: 'mmol/L' };
+    
+    // 1. Standard Catalog
+    const s1 = getBiomarkerRangeSourceInfo('serum_sodium', def, null, null, null);
+    expect(s1.sourceKind).toBe('catalog');
+    expect(s1.sourceLabel).toBe('Standard Clinical');
+
+    // 2. Lab Specific Printed Range
+    const logWithPrinted = { observationMeta: { serum_sodium: { printedRange: '133 - 146' } } };
+    const s2 = getBiomarkerRangeSourceInfo('serum_sodium', def, null, logWithPrinted, null);
+    expect(s2.sourceKind).toBe('lab_report');
+    expect(s2.sourceRange).toBe('133 - 146');
+
+    // 3. Demographic Calibrated Range
+    const s3 = getBiomarkerRangeSourceInfo('hdl', { normalRange: '> 1.0', unit: 'mmol/L' }, null, null, { profileAdjustedNormalRange: '> 1.3 mmol/L' });
+    expect(s3.sourceKind).toBe('demographic');
+    expect(s3.sourceRange).toBe('> 1.3 mmol/L');
+
+    // 4. Custom User Override
+    const customProfile = { customBiomarkers: { serum_sodium: { normalRange: '130 - 150' } } };
+    const s4 = getBiomarkerRangeSourceInfo('serum_sodium', def, customProfile, null, null);
+    expect(s4.sourceKind).toBe('custom');
+    expect(s4.sourceLabel).toBe('User Custom Range');
   });
 });
 

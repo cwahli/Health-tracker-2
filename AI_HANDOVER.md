@@ -39,18 +39,24 @@
     - Hardened `isLiveForUse`, `filterCurrentForUse`, and `filterHistoryForUse` so pending unapproved extractions are strictly isolated and never leak into active queries, Home dashboard tiles, or health coach prompts.
 14. **Drop Legacy Dictionary Store (Item 7.8)**:
     - Deprecated `biomarker_dictionary_store` local storage access in `biomarkerStore.ts` and `biomarkers.ts` in favor of `profile.customBiomarkers`.
+15. **Demographic Fingerprinting for Overlays (Item 7.5)**:
+    - Implemented `recalibrateProfileOverlays` in `src/utils/biomarkerLifecycle.ts` which detects shifts in demographic fingerprints (`${ageBand}|${gender}|${ethnicity}`) and safely updates overlay references for biomarkers whose clinical reference ranges vary by demographic factors.
+16. **Reference Range Source Badges (Item 7.6)**:
+    - Implemented `getBiomarkerRangeSourceInfo` in `src/utils/biomarkerLifecycle.ts` and integrated it with `BiomarkerExpandedSection.tsx` to visually attribute reference range sources (Standard Clinical, Lab Specific, Demographic Calibrated, User Custom Range) with color-coded badges.
 
 ---
-## Track F Food Identity Quality Progress (Items F-1, F-2, F-4)
-15. **Catalog-First Defaulting & Self-Heal Cache (Items F-1 & F-2)**:
+## Track F Food Identity Quality Progress (Items F-1, F-2, F-3, F-4)
+17. **Multi-Component Dish Decomposition (Item F-3)**:
+    - Added comprehensive golden tests in `tests/golden_meals.test.ts` validating clean decomposition of multi-ingredient regional dishes (e.g. Dim Sum tasting sets, Japanese Bento boxes) into distinct searchable queries without parent title pollution.
+18. **Catalog-First Defaulting & Self-Heal Cache (Items F-1 & F-2)**:
     - Verified `lookupCanonicalBaseFood` in `server_food_db.ts` provides instant local/curated food resolution before external search fallbacks.
     - Verified `getCachedUSDAFood` / `setCachedUSDAFood` in-memory caching mechanism prevents redundant live network requests for previously resolved query terms.
-16. **Food DB & Catalog Unit Tests (Item F-4)**:
+19. **Food DB & Catalog Unit Tests (Item F-4)**:
     - Added automated unit tests in `server_food_db.test.ts` for catalog-first lookup and USDA caching, ensuring 100% test pass rate across all 61 test suites.
 
 ---
 ## Track R Modular Router Extraction Progress (Item R-4)
-17. **Jobs Router Extraction (`server_routes_jobs.ts`)**:
+20. **Jobs Router Extraction (`server_routes_jobs.ts`)**:
     - Extracted all `/api/jobs/*` endpoints (`/upsert`, `/delete`, `/submit`, `/status`, `/debug`) into dedicated Express router module `server_routes_jobs.ts`.
     - Mounted `jobsRouter` in `server.ts`, trimming hundreds of lines from main server file while preserving all authentication, idempotency locks, R2 upload fallback routines, and debug report rendering.
 
