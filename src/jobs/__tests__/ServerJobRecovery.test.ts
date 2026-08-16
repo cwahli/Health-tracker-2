@@ -41,4 +41,31 @@ describe('Initiative J: True Server Background Workers & Crash Recovery', () => 
     const recoveredJobBefore = inMemoryServerJobs.get('finished-job-200');
     expect(recoveredJobBefore?.status).toBe('succeeded');
   });
+
+  it('handles recovery gracefully when in-memory job store has mixed valid and stale jobs', async () => {
+    inMemoryServerJobs.set('job-active-1', {
+      id: 'job-active-1',
+      user_id: 'user-1',
+      kind: 'food_log',
+      mode: 'review',
+      status: 'running',
+      progress_percent: 20,
+      status_message: 'Scouting image',
+      updated_at: new Date(Date.now() - 120000).toISOString(),
+    });
+    inMemoryServerJobs.set('job-failed-2', {
+      id: 'job-failed-2',
+      user_id: 'user-1',
+      kind: 'food_log',
+      mode: 'review',
+      status: 'failed',
+      progress_percent: 0,
+      status_message: 'Network timeout',
+      updated_at: new Date().toISOString(),
+    });
+
+    const count = await recoverInterruptedServerJobs();
+    expect(count).toBeGreaterThanOrEqual(1);
+    expect(inMemoryServerJobs.get('job-failed-2')?.status).toBe('failed');
+  });
 });

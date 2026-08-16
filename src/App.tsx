@@ -69,7 +69,7 @@ import { trackApiCall, setActiveQueryId, generateQueryId, initializeFetchInterce
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, getDocFromServer, getDocsFromServer, getDocsFromCache, writeBatch } from 'firebase/firestore';
 import { sanitizeForFirestore, checkQuotaFlag, handleRetryQuota } from './utils/firestoreUtils';
 import { getCurrentDateInTimezone, toYYYYMMDD, normalizeBiomarkerHistory } from './utils/dateUtils';
-import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint, isValEmpty, getMappedBiomarkerKey, normalizeHistoricalTelemetryErrors } from './utils/biomarkers';
+import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint, isValEmpty, getMappedBiomarkerKey } from './utils/biomarkers';
 import { applyModificationCommands, overlayFingerprint, resolveAgentDestination, shouldRunCalibrator, attachObservationMeta, enrichReviewModificationCommands, collectCatalogUnitMap, type ModificationCommand } from './utils/biomarkerLifecycle';
 import { formatOptimalTargetValue } from './utils/agentCalibration';
 import { standardizeUnit, CONVERSION_FACTORS } from './utils/unitConversion';
@@ -5970,24 +5970,7 @@ export default function App() {
               setActiveReviewBiomarkerKey(options?.biomarkerKey);
               if (options?.dataReviewBatchIdx !== undefined) setActiveDataReviewBatchIdx(options.dataReviewBatchIdx);
               if (options?.dataReviewBatchKeys) setActiveDataReviewBatchKeys(options.dataReviewBatchKeys);
-                            setIsMedicalChatOpen(true);
-            }}
-            onNormalizeTelemetryErrors={async (targetKeys) => {
-              const { updatedHistory, fixedCount } = normalizeHistoricalTelemetryErrors(biomarkerHistory, profile, undefined, targetKeys);
-              if (fixedCount > 0) {
-                setBiomarkerHistory(updatedHistory);
-                const recomputedBiomarkers: { [key: string]: number | string } = {};
-                [...updatedHistory]
-                  .filter(b => b.sync_state !== 'delete' && !(profile?.deletedBiomarkerLogIds?.[b.id] && (profile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0)))
-                  .sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date)))
-                  .forEach(log => {
-                    Object.entries(log.biomarkers).forEach(([k, v]) => {
-                      recomputedBiomarkers[k] = v as string | number;
-                    });
-                  });
-                setBiomarkers(recomputedBiomarkers);
-                await saveAndSync(profile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report);
-              }
+              setIsMedicalChatOpen(true);
             }}
             hideSensitive={hideSensitive}
             selectedModelId={selectedModelId}

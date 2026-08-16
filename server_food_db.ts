@@ -323,8 +323,6 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   
   if (normalized === 'raw bell pepper') return CANONICAL_BASE_FOODS.raw_bell_pepper;
   if (normalized.includes('bell pepper') || normalized.includes('sweet pepper')) return CANONICAL_BASE_FOODS.sweet_bell_pepper;
-  
-  if (normalized.includes('mixed berries fruit compote')) return CANONICAL_BASE_FOODS.strawberry;
 
   if (!name) return null;
   let clean = name.toLowerCase().replace(/[^a-z0-9]/g, '_');

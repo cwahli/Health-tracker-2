@@ -80,7 +80,6 @@ interface HomeTabProps {
     addedBenefit?: string;
     descriptionExplain?: string;
   }) => void;
-  onNormalizeTelemetryErrors?: (targetKeys?: string[]) => void;
   isLoadingProfile?: boolean;
   syncState?: string;
   onViewJob?: (jobId: string) => void;
@@ -112,7 +111,6 @@ export default function HomeTab({
   onDismissBmiAlert,
   onApplyCalculation,
   onUpdateReport,
-  onNormalizeTelemetryErrors,
   isLoadingProfile,
   syncState,
   onViewJob,

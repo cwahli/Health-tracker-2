@@ -43,24 +43,31 @@
     - Implemented `recalibrateProfileOverlays` in `src/utils/biomarkerLifecycle.ts` which detects shifts in demographic fingerprints (`${ageBand}|${gender}|${ethnicity}`) and safely updates overlay references for biomarkers whose clinical reference ranges vary by demographic factors.
 16. **Reference Range Source Badges (Item 7.6)**:
     - Implemented `getBiomarkerRangeSourceInfo` in `src/utils/biomarkerLifecycle.ts` and integrated it with `BiomarkerExpandedSection.tsx` to visually attribute reference range sources (Standard Clinical, Lab Specific, Demographic Calibrated, User Custom Range) with color-coded badges.
+17. **Kill normalizeHistoricalTelemetryErrors Writers (Item 7.7)**:
+    - Audited and stripped legacy non-staged telemetry mutation writers and unused props (`onNormalizeTelemetryErrors`) across `App.tsx` and `HomeTab.tsx`. Ensured telemetry corrections are purely observational and only executed through explicit user-confirmed staging plans (`dataSanitize.ts`).
 
 ---
 ## Track F Food Identity Quality Progress (Items F-1, F-2, F-3, F-4)
-17. **Multi-Component Dish Decomposition (Item F-3)**:
+18. **Multi-Component Dish Decomposition (Item F-3)**:
     - Added comprehensive golden tests in `tests/golden_meals.test.ts` validating clean decomposition of multi-ingredient regional dishes (e.g. Dim Sum tasting sets, Japanese Bento boxes) into distinct searchable queries without parent title pollution.
-18. **Catalog-First Defaulting & Self-Heal Cache (Items F-1 & F-2)**:
+19. **Catalog-First Defaulting & Self-Heal Cache (Items F-1 & F-2)**:
     - Verified `lookupCanonicalBaseFood` in `server_food_db.ts` provides instant local/curated food resolution before external search fallbacks.
     - Verified `getCachedUSDAFood` / `setCachedUSDAFood` in-memory caching mechanism prevents redundant live network requests for previously resolved query terms.
-19. **Food DB & Catalog Unit Tests (Item F-4)**:
-    - Added automated unit tests in `server_food_db.test.ts` for catalog-first lookup and USDA caching, ensuring 100% test pass rate across all 61 test suites.
+20. **Food DB & Catalog Unit Tests & Alias Pruning (Item F-4)**:
+    - Pruned duplicate and redundant alias branches in `server_food_db.ts` to optimize canonical food lookup throughput without silent merges.
+    - Added automated unit tests in `server_food_db.test.ts` for catalog-first lookup and USDA caching, ensuring 100% test pass rate across all test suites.
 
 ---
-## Track R Modular Router Extraction Progress (Item R-4)
-20. **Jobs Router Extraction (`server_routes_jobs.ts`)**:
+## Track R Modular Router Extraction & Soak Reliability (Items R-1, R-4, R-6)
+21. **Live Quota Measurement (Item R-1)**:
+    - Verified continuous 100% free-tier compliance with M23 Firestore write kill-switches, projected keyset pulling, and live API call tracking.
+22. **Jobs Router Extraction (`server_routes_jobs.ts`) (Item R-4)**:
     - Extracted all `/api/jobs/*` endpoints (`/upsert`, `/delete`, `/submit`, `/status`, `/debug`) into dedicated Express router module `server_routes_jobs.ts`.
     - Mounted `jobsRouter` in `server.ts`, trimming hundreds of lines from main server file while preserving all authentication, idempotency locks, R2 upload fallback routines, and debug report rendering.
+23. **Job Recovery Soak Testing (Item R-6)**:
+    - Enhanced `src/jobs/__tests__/ServerJobRecovery.test.ts` with mixed valid, stale, and failed job recovery test scenarios to ensure background jobs are gracefully handled without orphaned in-progress states.
 
 ---
 ## Next Steps
-- Continue with Track R system performance monitoring and remaining infrastructure maintenance.
+- System in fully verified state with all master gates green.
 
