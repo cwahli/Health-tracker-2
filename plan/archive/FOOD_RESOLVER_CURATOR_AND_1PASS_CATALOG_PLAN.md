@@ -1,5 +1,7 @@
 # Food Resolver Curator + 1-Pass Atomic Catalog Plan
 
+**Pillar:** 2 — Food. Map: `plan/README.md`.
+
 **Status:** Proposed architecture (implementation-ready)  
 **Date:** 2026-08-12  
 **Domain:** Food-calc / catalog / resolver  
@@ -755,3 +757,21 @@ When phases land (protected-doc confirmation per `AGENTS.md`):
 ## 22. One-line north star
 
 **Deterministic resolve serves the meal; the Resolver curates identity, basis, and brand routing so the catalog self-heals and the Resolver is not needed next time — while OCR/brand remain meal truth.**
+
+---
+
+## 23. Remaining work (honest — 2026-08-16)
+
+Architecture / M30 assert is **green**. Pipeline pieces above are **not** to be rebuilt. What is still open was in archived `CURATOR_USDA_SELF_HEALING_PLAN.md` plus golden soak:
+
+| ID | Item | Class | Do not |
+|---|---|---|---|
+| F-1 | Self-heal KPI unproven: same query still hitting curator / live USDA | `FALSE_FRIEND` / alias soak | Rebuild curator |
+| F-2 | Live USDA still on Analyze gap path; catalog-first not default for every bind | identity | Ban USDA for research; keep as last resort |
+| F-3 | Golden meals still red (picnic, lassi, ham merge, etc.) | class playbooks (pillar 4) | `POST /loop` until all-green |
+| F-4 | Alias hit rate / near-duplicate active pairs (metrics §19) | catalog hygiene | Silent merge without gate |
+| F-5 | TypeError on `.calories` | **Done** — abandoned as a work item | Re-apply `fix_food_analyze_typeerror.md` |
+
+**Execute:** one **class** at a time (`FALSE_FRIEND`, `DISH_DROP`, `OPENING_WRONG`, `SILENT_REPAIR`). Inner = vitest. Outer = one golden example. See `plan/README.md` §4.
+
+P5 checkbox above means “suite exists,” not “all goldens green.”

@@ -1,7 +1,16 @@
-# Reliability & Lean Free-Tier Plan (optimized)
+# Sync and reliability
 
-**Status:** Architecture / program board (not a Studio pack)  
-**Updated:** 2026-08-11  
+**Pillar:** 3 — Sync / reliability. **Start work from:** [ROADMAP.md](./ROADMAP.md).  
+**Laws:** `docs/agent/domains/sync.md`
+
+Infra and quotas, not a patient/data lifecycle. Was `RELIABILITY_FREE_TIER_PLAN.md`. Full text kept below. Core M23–M28 is complete. Parked IDs **R-1…R-6** are also listed on `ROADMAP.md`.
+
+---
+
+**Pillar:** 3 — Sync / reliability. Map: `plan/README.md`.
+
+**Status:** M23–M28 **core COMPLETE** (`assert-free-tier-complete.mjs` exit 0, 2026-08-16). Remaining = parked list in §9 only.  
+**Updated:** 2026-08-16  
 **Code truth:** Desktop working tree; ship via AI Studio packs only  
 **Domain:** `docs/agent/domains/sync.md` (Class L/X when touching merge/tombstones)
 
@@ -42,15 +51,17 @@ These are the principles behind this program — not new invention.
 | Base64 images in Supabase food rows | **DONE cleaned** | R2 migrations + push interceptor; size check scripts |
 | Debug / cold logs to R2 | **DONE pattern** | `debug_url`, strip helpers, cold debug |
 | UI history page size 15 + lazy images | **DONE (UI only)** | `FOOD_HISTORY_PAGE_SIZE = 15` — **not** server cursor |
-| Job crash recovery | **PARTIAL** | `recoverInterruptedServerJobs` |
-| Profile dual-write Firestore + Supabase | **STILL LIVE** | `App.tsx` `setDoc` + `upsertProfileToSupabase` |
-| Chat auto `setDoc` per save | **STILL LIVE** | `LogChat.saveConversationToFirestore` |
-| API telemetry → Firestore batch | **STILL LIVE** | `ApiCallTrackerModal.handleSyncToCloud` |
-| Pull `SELECT *` all logs | **STILL LIVE** | `/api/sync/supabase-pull` |
-| `agent_jobs.clean_result` may embed mealBuild | **RISK** | `SupabaseJobSync.upsertJobToSupabase` |
-| `server.ts` ~766KB | **REAL** | Extract on touch; not Phase-0 |
+| Job crash recovery | **PARTIAL** | `recoverInterruptedServerJobs` — soak; not a new pack |
+| Chat auto Firestore write | **DONE (M23)** | IDB primary; `[FreeTier] chat cloud write disabled` |
+| API telemetry Firestore batch | **DONE (M23)** | `[FreeTier] telemetry cloud write disabled` |
+| Profile dual-write | **DONE (M24 assert)** | Single writer; do not reintroduce `setDoc` profile |
+| Pull `SELECT *` all logs | **DONE (M25 assert)** | Projected / keyset markers on `/api/sync/supabase-pull` |
+| Fat `agent_jobs` JSONB | **DONE (M26 assert)** | Thin status + R2 |
+| Proxy authn | **DONE (M27 assert)** | Firebase ID token |
+| Gemini retry | **DONE (M28)** | `withGeminiRetry` |
+| `server.ts` monolith | **OPEN — parked** | §9; not a free-tier crash fix |
 
-**Historical claim (~83MB / 20–30 logs)** maps to **base64 era**. Re-measure after kill-switch packs; do not re-migrate images.
+**Historical claim (~83MB / 20–30 logs)** maps to **base64 era**. Re-measure if quota returns; do not re-migrate images.
 
 ---
 
@@ -162,9 +173,16 @@ Local Grok/Claude/Cursor: prepare only; **no git push**.
 
 ### After master COMPLETE — still optional later
 
-| Item | When |
-|------|------|
-| Cloudflare Pages CDN | Global static latency matters |
-| Playwright E2E | After soak of M23–M28 |
-| server.ts router extract | On touch / maintainability |
-| D1 investigation | Only if measured free-tier still fails |
+Absorbed from archived `Reliability_perf.md`. **Do not start these to “finish reliability.”** Start only if the trigger is true.
+
+| ID | Item | Trigger | Abandoned if |
+|---|---|---|---|
+| R-1 | Re-measure Firestore writes / Supabase egress on a normal day | Quota or bill spike | — |
+| R-2 | Cloudflare Pages for `dist/` | Global static latency actually hurts | Never required for personal use |
+| R-3 | Playwright E2E (upload → parse → edit → save) | After soak; not before | Not a substitute for class goldens |
+| R-4 | Extract `server.ts` routes (food / jobs / biomarkers) | Touching the monolith anyway | Do not big-bang for free-tier |
+| R-5 | Investigate D1 as primary SQL | **After** R-1, free tier still fails | Default: stay on thin Supabase + R2 |
+| R-6 | Job crash recovery soak | Interrupted jobs still orphan | Partial today — fix the bug, no new plan |
+| R-7 | knip / memoize `getBiomarkerStatus` | Never a reliability gate | **Abandoned** as a milestone |
+
+**Abandoned from the 6-phase draft (do not rebuild):** dual-write removal in `firestoreUtils` / `SupabaseJobSync` (already gone); re-running image→R2 migrations; RLS-only without token verify (M27 did token verify).

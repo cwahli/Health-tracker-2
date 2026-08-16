@@ -3,6 +3,9 @@
 **Load when:** dictionary, extract/review, calibration, combine/dedupe, biomarker logs, MedicalHistory, ranges, Home/coach intake.
 
 **Architecture (design):** `plan/BIOMARKER_LIFECYCLE_PLAN.md`  
+**Ingest router:** `plan/BIOMARKER_INGEST_ROUTER_PLAN.md` — source classifier, leftover-only Parser, flagged-only Review.  
+**Build + goldens:** `plan/BIOMARKER_INGEST_AND_GOLDENS_PLAN.md` — class-first (not meal-green); ingest router I0–I9.  
+**Roadmap:** `plan/BIOMARKER_IMPLEMENTATION_ROADMAP.md` — Waves 0–7. Do not invent a third pipeline.  
 **WIP:** `AI_HANDOVER.md` · **Gates:** `DOMAIN_REGRESSION_MAP.md` → Biomarkers.
 
 **How to use:** Laws so dictionary / agents / logs / sync do not drift.  

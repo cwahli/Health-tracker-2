@@ -81,7 +81,16 @@ node scripts/assert-biomarker-lifecycle-m31.mjs
 npx vitest run src/utils/biomarkerLifecycle.test.ts src/utils/biomarkerIdentity.test.ts src/utils/biomarkerSanitize.test.ts src/utils/dataSanitize.test.ts src/utils/syncUtils.regression.test.ts
 ```
 
-**Design:** `plan/BIOMARKER_LIFECYCLE_PLAN.md` · **Laws:** `domains/biomarkers.md` (2026-08-14 consolidation).
+**Design:** `plan/BIOMARKER_LIFECYCLE_PLAN.md` · **Laws:** `domains/biomarkers.md` (2026-08-14 consolidation).  
+**Ingest build:** `plan/BIOMARKER_INGEST_AND_GOLDENS_PLAN.md`. **Order:** `plan/BIOMARKER_IMPLEMENTATION_ROADMAP.md`. After Wave 1 (I0) those files exist; until then run the M31 gate only. When touching extract / matcher / leftover Parser:
+
+```bash
+node scripts/assert-biomarker-lifecycle-m31.mjs
+node scripts/assert-biomarker-ingest.mjs
+npx vitest run src/utils/biomarkerLifecycle.test.ts src/utils/biomarkerIdentity.test.ts src/utils/biomarkerIngest.test.ts tests/golden_biomarkers.test.ts
+```
+
+Goldens live in `tests/Golden_biomarker/` (not `Golden_meal/`). Group by **class** (`IDENTITY_FALSE_FRIEND`, `SILENT_REWRITE`, …), not by job id. Replay must not call Gemini. G-B1 convert locks stay `1.293` / `1.411` / `3.362` / `79.56` / `13.68`. Work item is the class — do not “make G-B2 all-green.”
 
 ---
 

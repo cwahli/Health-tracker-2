@@ -1,7 +1,10 @@
 # Biomarker lifecycle — architecture plan
 
+**Pillar:** 1 — Biomarkers. Map: `plan/README.md`. Execute: `BIOMARKER_IMPLEMENTATION_ROADMAP.md`.
+
 **Status:** Design agreed 2026-08-14. Slices 0–3 **core** landed. 2026-08-14 late session: Home auto-fix / dictionary auto-calibrate+approve removed; pending = explicit `needsApproval` only; Review synthesizes convert commands when the model writes an essay. **Remaining work is §13 — do not start new agents until that list is walked.**  
 **Rulebook (laws while coding):** `docs/agent/domains/biomarkers.md`  
+**Ingest front door (2026-08-16):** `plan/BIOMARKER_INGEST_ROUTER_PLAN.md` — what Lab Parser / Review see after the deterministic router. Does not replace this file.  
 **Gates:** `docs/agent/DOMAIN_REGRESSION_MAP.md` → Biomarkers  
 **Do not implement this file as one PR.** Slices below. Instruction packs stay; agent *ids* stay until a dedicated migration.
 
@@ -241,15 +244,17 @@ Write map (today) stays in `docs/agent/domains/biomarkers.md` § write map until
 
 ## 9. Goldens (after Slice 0–2)
 
-Inbox: **Food | Biomarkers**. Do not clone meal kcal tables.
+**Taxonomy:** lifecycle stages are UX/dispatch. Goldens group by **class** (Weiskopf DQ + auto-bugs), not by job. Build plan: `BIOMARKER_INGEST_AND_GOLDENS_PLAN.md` §1.2.
 
-Pin: `domain=biomarkers`, `agentId`, `lifecycleStage`, `jobId`, `scopeKeys`, `asOf`, history+def slice, fingerprint.
+Inbox: **Food | Biomarkers**. Do not clone meal kcal tables. Group the biomarker tab by **class**, then example.
 
-Board: observation table (key, date, raw, canonical, unit) + events + definition + batch cursor.
+Pin: `domain=biomarkers`, `class`, `agentId`, `lifecycleStage`, `jobId`, `scopeKeys`, `asOf`, history+def slice, fingerprint.
 
-First fixture: `job_medical_1786660190499` (HDL/TG/LDL/bili unit mix). Auto-bugs: impossible pair, 15× shift, apply didn’t land, silent sanitize would rewrite, pending on Home.
+Board: observation table (key, date, raw, canonical, unit) + events + definition + batch cursor + **class**.
 
-Replay = re-parse frozen medical log or re-run same agent on frozen slice. Not food NEW Analyze.
+First fixture: `job_medical_1786660190499` (HDL/TG/LDL/bili unit mix) — example of `SILENT_REWRITE` + `APPLY_MISS`. Auto-bugs: impossible pair, 15× shift, apply didn’t land, silent sanitize would rewrite, pending on Home.
+
+Replay = class unit test first, then frozen example. Not food NEW Analyze. Work item is the class, not “make this job all-green.”
 
 ---
 
@@ -322,6 +327,9 @@ Status key: **landed** = in Desktop tree · **partial** = code exists, product g
 | `docs/agent/DOMAIN_REGRESSION_MAP.md` | Which tests |
 | `AI_HANDOVER.md` | WIP / which slice is active |
 | `studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md` | **AI Studio pack** — paste §A; implements §13 P0–P8 |
+| `plan/BIOMARKER_INGEST_ROUTER_PLAN.md` | Front door: classifier / leftover Parser / failure modes |
+| `plan/BIOMARKER_INGEST_AND_GOLDENS_PLAN.md` | **Build** — class-first goldens (UX lifecycle ≠ test taxonomy) + ingest router. Does not replace §13. |
+| `plan/BIOMARKER_IMPLEMENTATION_ROADMAP.md` | **Order of work** — Waves 0–7 + PR cut. |
 
 When a slice changes an invariant, update the rulebook **in the same change** (`AGENTS.md` §3).
 

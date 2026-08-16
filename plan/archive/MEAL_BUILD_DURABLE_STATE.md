@@ -1,5 +1,7 @@
 # Meal Build — Durable progressive meal template
 
+**Pillar:** 2 — Food. Map: `plan/README.md`.
+
 **Status:** Architecture (durable). Live WIP → `AI_HANDOVER.md`.  
 **Studio pack:** `studio/M21_MEAL_BUILD_DURABLE_STATE.md`  
 **Updated:** 2026-08-09 (OCC, masks, stageKey, limits, migrate, history/debug, **deletions, stale narrative, 409 rebase, R2 TTL, chaos resilience matrix §12**)  

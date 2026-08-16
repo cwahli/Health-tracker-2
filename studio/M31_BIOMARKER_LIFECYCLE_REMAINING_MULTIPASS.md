@@ -211,11 +211,13 @@ Do not open five agents for “add one marker.” Do not paste Calibrator 8.8k i
 
 ### P8 — Slice 4 Biomarkers golden inbox
 
-- Golden UI: **Food | Biomarkers** (existing `GoldenInboxPanel` — add a domain tab; do not clone meal kcal columns).  
-- Pin G-B1: `job_medical_1786660190499` and `job_medical_1786666223594`.  
-- Board: key, date, raw, canonical, unit + events + definition.  
+Follow `plan/BIOMARKER_INGEST_AND_GOLDENS_PLAN.md` (class-first). Do **not** make “job all-green” the reward (that is the meal-log loop).
+
+- Golden UI: **Food | Biomarkers** (existing `GoldenInboxPanel` — add a domain tab; do not clone meal kcal columns). Group biomarker rows by **class**, then example.  
+- Pin G-B1: `job_medical_1786660190499` and `job_medical_1786666223594` as examples of `SILENT_REWRITE` + `APPLY_MISS`.  
+- Board: class, key, date, raw, canonical, unit + events + definition.  
 - Auto-bugs: impossible pair, 15× shift, apply didn’t land, silent sanitize would rewrite, pending on Home, Review essay with empty `modificationCommand`.  
-- Replay = frozen medical log **or** same-agent on frozen slice. Not food NEW Analyze.  
+- Replay = **class unit test first**, then frozen example. Not food NEW Analyze.  
 - Gate: empty `modificationCommand` still yields the five converts; Apply lands; SI history unchanged.
 
 ---
