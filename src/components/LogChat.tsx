@@ -2978,7 +2978,18 @@ ${logsText}`);
             creditSettled: false,
             requestId: currentReqId,
             serverSubmittedAt: undefined,
-            clientSubmitPending: true,
+            // FIX: medical jobs are submitted to the server exclusively by
+            // JobQueueRunner's executor (App.tsx), unlike food_log/food_compare
+            // where LogChat calls fetch('/api/jobs/submit') itself right after this.
+            // JobQueueRunner treats clientSubmitPending:true as "the client already
+            // submitted this, don't submit again" (see clientOwnsSubmit in App.tsx).
+            // Leaving this true here made the executor silently skip the submit
+            // fetch on the very first attempt for every medical/biomarker job —
+            // no request ever reached /api/gemini/medical-analyze, no Gemini
+            // usage appeared, and the job just polled a status that never
+            // changed until a retry (isRetryAttempt) forced clientOwnsSubmit
+            // false and the submit finally fired.
+            clientSubmitPending: false,
             statusMessage: 'Uploading to server… Keep this tab open',
             ...(isDifferentBiomarkerAction ? { attemptCount: 1, maxAttempts: 3 } : {}),
           });
@@ -2993,7 +3004,10 @@ ${logsText}`);
             creditSettled: false,
             requestId: currentReqId,
             serverSubmittedAt: undefined,
-            clientSubmitPending: true,
+            // FIX: see matching comment in the JobStore.updateJob branch above —
+            // medical jobs rely on JobQueueRunner to perform the actual
+            // /api/jobs/submit fetch, so this must be false, not true.
+            clientSubmitPending: false,
             statusMessage: 'Uploading to server… Keep this tab open',
           });
         }
