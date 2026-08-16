@@ -28,6 +28,7 @@ function formatLabelText(val: any): string {
 }
 
 export default function GoldenInboxPanel() {
+  const [domainTab, setDomainTab] = useState<'food' | 'biomarkers'>('food');
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -238,10 +239,36 @@ export default function GoldenInboxPanel() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-bold text-white">Golden inbox</p>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-sm font-bold text-white">Golden Inbox</p>
+            <div className="flex bg-slate-800 rounded-lg p-0.5 border border-white/10 text-xs">
+              <button
+                type="button"
+                onClick={() => setDomainTab('food')}
+                className={`px-2.5 py-0.5 rounded-md font-medium transition ${domainTab === 'food' ? 'bg-indigo-600 text-white shadow' : 'text-white/60 hover:text-white'}`}
+              >
+                Food
+              </button>
+              <button
+                type="button"
+                onClick={() => setDomainTab('biomarkers')}
+                className={`px-2.5 py-0.5 rounded-md font-medium transition ${domainTab === 'biomarkers' ? 'bg-indigo-600 text-white shadow' : 'text-white/60 hover:text-white'}`}
+              >
+                Biomarkers
+              </button>
+            </div>
+          </div>
           <p className="text-[11px] text-white/60">
-            <span className="text-emerald-300 font-semibold">No agent:</span> Replay log (re-score the saved tape) · Replay catalog (dictionary only).{' '}
-            <span className="text-amber-300 font-semibold">May call Curator/Dietitian (quota):</span> Pipeline · Run until green. Neither calls Vision Scout.
+            {domainTab === 'food' ? (
+              <>
+                <span className="text-emerald-300 font-semibold">No agent:</span> Replay log (re-score the saved tape) · Replay catalog (dictionary only).{' '}
+                <span className="text-amber-300 font-semibold">May call Curator/Dietitian (quota):</span> Pipeline · Run until green.
+              </>
+            ) : (
+              <>
+                <span className="text-emerald-300 font-semibold">Class-first verification:</span> Unit conformance, identity resolution, review modification locks, and ingest trace audits.
+              </>
+            )}
           </p>
         </div>
         <button type="button" onClick={load} className="p-2 rounded-lg bg-slate-800 border border-white/15 text-white">
@@ -249,13 +276,75 @@ export default function GoldenInboxPanel() {
         </button>
       </div>
 
-      {error && (
+      {domainTab === 'biomarkers' && (
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-indigo-500/30 bg-slate-800/90 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white">G-B1 — Five Locked Unit Conversions</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  Frozen
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  APPLY_MISS
+                </span>
+              </div>
+            </div>
+            <p className="text-[11px] text-white/70">
+              Pins the 5 locked unit conversions (HDL 50→1.293, TG 125→1.411, LDL 130→3.362, Creatinine 0.9→79.56, Total Bilirubin 0.8→13.68) and ensures older SI history rows remain untouched.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-1 text-[10px]">
+              <div className="bg-black/30 p-1.5 rounded border border-white/5">
+                <div className="text-white/50">HDL (mg/dL → mmol/L)</div>
+                <div className="font-mono text-emerald-300 font-bold">50 → 1.293</div>
+              </div>
+              <div className="bg-black/30 p-1.5 rounded border border-white/5">
+                <div className="text-white/50">TG (mg/dL → mmol/L)</div>
+                <div className="font-mono text-emerald-300 font-bold">125 → 1.411</div>
+              </div>
+              <div className="bg-black/30 p-1.5 rounded border border-white/5">
+                <div className="text-white/50">LDL (mg/dL → mmol/L)</div>
+                <div className="font-mono text-emerald-300 font-bold">130 → 3.362</div>
+              </div>
+              <div className="bg-black/30 p-1.5 rounded border border-white/5">
+                <div className="text-white/50">Creatinine (mg/dL → umol/L)</div>
+                <div className="font-mono text-emerald-300 font-bold">0.9 → 79.56</div>
+              </div>
+              <div className="bg-black/30 p-1.5 rounded border border-white/5">
+                <div className="text-white/50">Bilirubin (mg/dL → umol/L)</div>
+                <div className="font-mono text-emerald-300 font-bold">0.8 → 13.68</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-slate-800/50 p-3 space-y-2">
+            <p className="text-xs font-bold text-white">Biomarker Failure Classes</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[10px]">
+              {[
+                { name: 'IDENTITY_FALSE_FRIEND', desc: 'Wrong analyte match' },
+                { name: 'CONFORMANCE_UNIT', desc: 'Unit family mismatch' },
+                { name: 'APPLY_MISS', desc: 'Modification not applied' },
+                { name: 'SILENT_REWRITE', desc: 'Older rows overwritten' },
+                { name: 'UPSERT_IDENTITY', desc: 'Key aliasing conflict' },
+                { name: 'PLAUSIBILITY', desc: 'Out-of-bound physiological value' },
+              ].map((c) => (
+                <div key={c.name} className="p-2 rounded-lg bg-black/20 border border-white/5 space-y-0.5">
+                  <div className="font-mono font-bold text-indigo-300">{c.name}</div>
+                  <div className="text-white/50 text-[9px]">{c.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {domainTab === 'food' && error && (
         <div className="p-2.5 rounded-xl bg-rose-900/60 text-xs text-white flex gap-2">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           {error}
         </div>
       )}
-      {loopMsg && (
+      {domainTab === 'food' && loopMsg && (
         <div
           className={`p-2.5 rounded-xl border text-xs ${
             /no agent/i.test(loopMsg)
@@ -267,11 +356,11 @@ export default function GoldenInboxPanel() {
         </div>
       )}
 
-      {cases.length === 0 && !loading && (
+      {domainTab === 'food' && cases.length === 0 && !loading && (
         <p className="text-xs text-white/60">No golden cases yet. Snapshot a meal and tick “Save as golden meal”.</p>
       )}
 
-      {cases.map((c) => (
+      {domainTab === 'food' && cases.map((c) => (
         <div key={c.id} className="rounded-2xl border border-white/15 bg-slate-800/80 overflow-hidden">
           <button
             type="button"

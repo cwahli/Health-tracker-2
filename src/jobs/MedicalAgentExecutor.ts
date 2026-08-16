@@ -19,6 +19,7 @@ export interface MedicalAgentExecutorInput {
   currentBatch?: number;
   extractedData?: any;
   remainingText?: string;
+  lastProcessedIndex?: number | null;
   bucketMapping?: string;
   reviewBiomarkerKey?: string;
   batchSize?: number;
@@ -59,6 +60,7 @@ export async function* executeMedicalAgent(input: MedicalAgentExecutorInput): As
     currentBatch,
     extractedData,
     remainingText,
+    lastProcessedIndex,
     bucketMapping,
     reviewBiomarkerKey,
     batchSize
@@ -74,6 +76,7 @@ export async function* executeMedicalAgent(input: MedicalAgentExecutorInput): As
     numberOfBatches,
     extractedData,
     remainingText,
+    lastProcessedIndex,
     bucketMapping,
     estimatedTotalMarkers,
     currentBatch,

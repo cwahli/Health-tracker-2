@@ -61,6 +61,8 @@ import fs from "fs";
 import path from "path";
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { submitServerJob, recoverInterruptedServerJobs } from './serverJobs';
+import { biomarkerRouter } from './server_routes_biomarkers.js';
+import { foodRouter } from './server_routes_food.js';
 
 export const BEVERAGE_RAW_PATTERN = /\b(beverage|drink|water|juice|beer|wine|soda|cola|tea|coffee|cappuccino|espresso|latte|mocha|macchiato|boba|smoothie|shake|milk|oat\s*milk|oatmilk|almond\s*milk|almondmilk|soy\s*milk|soymilk|coconut\s*milk|dairy|yogurt|fruit|melon|watermelon|apple|orange|banana|berry|berries|grape|citrus|salad|raw|fresh|broth|soup)\b/i;
 
@@ -1236,6 +1238,8 @@ const app = express();
 
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+app.use(biomarkerRouter);
+app.use(foodRouter);
 
 app.post('/api/jobs/upsert', async (req, res) => {
   try {
@@ -11044,14 +11048,13 @@ let {
                 description: "The canonical key of the biomarker. If matching EXISTING DATABASE KEYS, use that exact key. If it is a new or custom biomarker (e.g. Blood Pressure, Ferritin, Cortisol), generate a clean lowercase snake_case key for it (e.g., 'blood_pressure', 'ferritin')."
               },
               date: { type: Type.STRING, description: "Format: YYYY-MM-DD" },
-              updated_at: { type: Type.INTEGER },
               numeric_value: { type: Type.NUMBER, description: "The exact numerical value if quantitative. Leave null if qualitative.", nullable: true },
               qualitative_value: { type: Type.STRING, description: "The exact string if qualitative (e.g., '109 / 53', 'NEGATIVE'). Leave null if quantitative.", nullable: true },
               unit: { type: Type.STRING, description: "The exact unit verbatim from the text. Leave empty string if none." },
               explanation: { type: Type.STRING, description: "Why or how it was mapped or created." },
               display_name: { type: Type.STRING, nullable: true, description: "REQUIRED whenever 'biomarker' is a new/custom key not in EXISTING DATABASE KEYS. The official clinical term (e.g. 'Hematochezia', 'Hemorrhoids'), never a plain-English fragment. Set to null when 'biomarker' already matches an EXISTING DATABASE KEY." }
             },
-            required: ["biomarker", "date", "updated_at", "unit", "explanation", "display_name"]
+            required: ["biomarker", "date", "unit", "explanation", "display_name"]
           }
         },
         unmappedTests: {
@@ -11072,10 +11075,11 @@ let {
         },
         text: { type: Type.STRING, description: "Friendly clinical conversational message to the user." },
         hasMoreMarkers: { type: Type.BOOLEAN },
-        remainingText: { type: Type.STRING },
+        lastProcessedIndex: { type: Type.INTEGER, nullable: true, description: "The exact character index or row count where extraction stopped. Used for server-side continuation instead of echoing remaining text." },
+        isWrongDoor: { type: Type.BOOLEAN, description: "True ONLY if the user input is entirely food logging, dietary journals, or completely unrelated to medical/biomarker data. Set to false for ANY medical data or symptoms." },
         estimatedTotalMarkers: { type: Type.INTEGER }
       },
-      required: ["extractedData", "text", "hasMoreMarkers", "remainingText", "estimatedTotalMarkers"]
+      required: ["extractedData", "text", "hasMoreMarkers", "estimatedTotalMarkers"]
     };
     const dataReviewSchema = {
       type: Type.OBJECT,
@@ -11226,6 +11230,15 @@ let {
       addDebugLog(`[Medical Analyze Agent] Diagnostic Agent (agent4) data isolated: other conversations and food log entries removed.`, explicitSessionId);
     }
 
+    // B2 2.1: Prompt hygiene — one raw injection. We do not inject chat history for extractor steps 
+    // (agent1_step1, lab_extract, symptom_diary) to prevent double payload costs.
+    const isExtractor = agentType === 'agent1_step1' || agentType === 'lab_extract' || agentType === 'symptom_diary' || agentType === 'agent1';
+    
+    if (isExtractor) {
+      addDebugLog(`[Medical Analyze Agent] Extractor agent detected (${agentType}). Chat history omitted for token hygiene.`, explicitSessionId);
+      history = []; // One raw injection only.
+    }
+
     addDebugLog(`[Medical Analyze Agent] Request received for agentType: ${agentType || 'None'}. Message: "${String(message).substring(0, 100)}..."`, explicitSessionId);
     sendLog('status', `Analyzing your message${agentType ? ` (${agentType})` : ''}...`);
     if (history && history.length > 0) {
@@ -11252,13 +11265,14 @@ You MUST output ONLY a valid JSON object matching the exact schema:
 - "mode": "discussion"
 - "status": "active"`;
         mockData = { text: "I have reviewed your medical records.", mode: "discussion", status: "active" };
-      } else if (agentType === "agent1_step1") {
+      } else if (agentType === "agent1_step1" || agentType === "lab_extract" || agentType === "symptom_diary") {
         const itemsPerBatch = (typeof batchSize === 'number' && batchSize > 0) ? Math.min(Math.floor(batchSize), 200) : 50;
         
         systemInstruction = `{
   "agent_profile": {
     "role": "Expert Clinical Data Extractor and Lossless Data Conduit",
-    "objective": "Parse raw medical reports/text/images, isolate distinct biomarker measurements, and structure them verbatim into standard clinical format."
+    "objective": "Parse raw medical reports/text/images, isolate distinct biomarker measurements, and structure them verbatim into standard clinical format.",
+    "routing_context": "If agentType='symptom_diary', strictly process prose and patient-reported entries. If agentType='lab_extract', strictly process tabular clinical reports. Do NOT mix them up."
   },
   "critical_extraction_rules": {
     "zero_math_verbatim_extraction": "You are strictly forbidden from performing any calculations, normalizations, or unit conversions. Extract the exact numerical value and the exact unit provided in the text.",
@@ -11283,14 +11297,14 @@ You MUST output ONLY a valid JSON object matching the exact schema:
     "behavior": [
       "Extract ONLY the first ${itemsPerBatch} biomarker entries in this chunk.",
       "If you reach the limit of ${itemsPerBatch} extracted biomarkers, set 'hasMoreMarkers' to true in your JSON response.",
-      "Copy ALL remaining unparsed report text/context verbatim from the very next character after the last extracted entry to the absolute end of the input raw medical data into 'remainingText'. Do NOT truncate, summarize, or skip this text. It is critical that all remaining lines are kept in 'remainingText' so they can be parsed in the next chunk.",
+      "Return the exact string index or document position where you stopped extracting in 'lastProcessedIndex'. The server will slice the input text automatically for the next batch using this offset, saving tokens.",
       "In the 'text' response, kindly inform the user you have completed this chunk and ask to continue.",
-      "If total remaining biomarkers <= ${itemsPerBatch}, set 'hasMoreMarkers' to false and 'remainingText' to empty string."
+      "If total remaining biomarkers <= ${itemsPerBatch}, set 'hasMoreMarkers' to false and 'lastProcessedIndex' to null."
     ]
   },
   "required_output_format": {
     "response_schema": {
-      "extractedData": "A JSON array of objects, containing the newly extracted biomarker entries. If the user message is 'continue', parse the next batch from the 'REMAINING UNPARSED TEXT' and do NOT repeat or duplicate the entries from 'PREVIOUSLY EXTRACTED JSON'.",
+      "extractedData": "A JSON array of objects, containing the newly extracted biomarker entries. If the user message is 'continue', parse the next batch from the text starting at the offset.",
       "unmappedTests": [
         {
           "raw_name": "string (For structured lab/report data: the exact test name as it literally appears in the text, e.g. 'Blood Pressure'. For self-reported symptoms/conditions in free text: a clean, descriptive, Title Case biomarker/symptom name that matches the meaning of the report — e.g. 'Blood in Stool', NOT a single fragment word like 'blood'. This is shown to the patient as the biomarker's display name, so it must read as a real clinical term, never a truncated word.)",
@@ -11304,7 +11318,7 @@ You MUST output ONLY a valid JSON object matching the exact schema:
       ],
       "text": "string (Friendly clinical conversational message)",
       "hasMoreMarkers": "boolean",
-      "remainingText": "string",
+      "lastProcessedIndex": "number (The text offset where parsing paused)",
       "estimatedTotalMarkers": "number (Realistic, non-hallucinated estimate of total distinct biomarker readings present in original report text.)"
     }
   },
@@ -11313,7 +11327,6 @@ You MUST output ONLY a valid JSON object matching the exact schema:
       "biomarker": "string (Match from EXISTING DATABASE KEYS, OR a clean lowercase snake_case key for a new/custom biomarker e.g. 'blood_pressure', 'pulse_rate'.)",
       "display_name": "string or null. REQUIRED whenever 'biomarker' is a NEW/custom key not in EXISTING DATABASE KEYS. Provide the official, clinically-correct name for this biomarker/symptom/condition — use your own medical knowledge to pick the term a clinician would actually write in a chart (e.g. 'Hematochezia' for visible blood in stool, 'Melena' if described as dark/tarry, 'Hemorrhoids'). If no distinct clinical term applies, fall back to a clean, Title Case descriptive name. This becomes the PERMANENT display name saved to the patient's biomarker dictionary, so pick deliberately and reuse the exact SAME display_name every time this same biomarker key recurs in this conversation. Set to null for biomarkers already in EXISTING DATABASE KEYS (they already have an official name).",
       "date": "YYYY-MM-DD",
-      "updated_at": "number (Unix timestamp of extraction)",
       "numeric_value": "number or null",
       "qualitative_value": "string or null",
       "unit": "string (verbatim from text)",
@@ -11323,7 +11336,7 @@ You MUST output ONLY a valid JSON object matching the exact schema:
   "rules_for_inputs": {
     "raw_data_extraction": "Extract only from raw text/report. Do NOT extract from pre-existing logs.",
     "unmapped_data_handling": "You MUST extract ALL distinct biomarker measurements and patient-reported symptoms/conditions present in raw data into 'extractedData'. Generate clean lowercase snake_case keys for new tests/symptoms (e.g. 'blood_pressure', 'hemorrhoids'). For self-reported symptoms and conditions, follow self_reported_symptom_diary_rules — ALL entries must have dated logs with multi_day_expansion applied.",
-    "continue_extracting": "If the user message is 'continue', you MUST find the position of the last extracted entry from 'PREVIOUSLY EXTRACTED JSON' inside the 'USER RAW DATA' or 'REMAINING UNPARSED TEXT'. Then, parse the NEXT batch of up to ${itemsPerBatch} biomarkers starting EXACTLY from that point. You MUST NOT repeat, duplicate, or include ANY entries that are already present in the 'PREVIOUSLY EXTRACTED JSON'.",
+    "continue_extracting": "If the user message is 'continue', parse the NEXT batch of up to ${itemsPerBatch} biomarkers starting EXACTLY from the provided offset. You MUST NOT repeat, duplicate, or include ANY entries that are already present in the 'PREVIOUSLY EXTRACTED JSON'.",
     "update_data": "Support editing, adding, or deleting biomarkers in the array."
   }
 }
@@ -11979,12 +11992,17 @@ Your output MUST be a valid JSON object matching the schema provided.`;
         }
 
         let dataContext = "";
-        if (agentType === "agent1_step1") {
+        if (agentType === "agent1_step1" || agentType === "lab_extract" || agentType === "symptom_diary") {
           const prevJson = jsonStr ? `\n\nPREVIOUSLY EXTRACTED JSON:\n${jsonStr}` : "";
+          
+          let reportSource = req.body.originalReportText || message;
+          if (typeof req.body.lastProcessedIndex === 'number' && req.body.lastProcessedIndex > 0 && req.body.lastProcessedIndex < reportSource.length) {
+            reportSource = reportSource.slice(req.body.lastProcessedIndex);
+          }
+          
           const remText = req.body.remainingText ? `\n\nREMAINING UNPARSED TEXT:\n${req.body.remainingText}` : "";
           const prevTotal = req.body.estimatedTotalMarkers ? `\n\nPREVIOUSLY ESTIMATED TOTAL MARKERS:\n${req.body.estimatedTotalMarkers}` : "";
           const baseData = customVariableData ? `\n\n${customVariableData}\n` : `\n\nUSER PROFILE:\n${JSON.stringify(cleanProfile, null, 2)}\n`;
-          const reportSource = req.body.originalReportText || message;
           const step1Timezone = req.body.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
           let step1LocalDateStr;
           try {
@@ -12081,7 +12099,7 @@ Your output MUST be a valid JSON object matching the schema provided.`;
           foodLogsPrompt = `PATIENT'S RECENT LOGGED MEALS HISTORY (Last ${recentLogs.length} meals):\n${mealLines}\n\n`;
         }
 
-        let promptText = `Chat History:\n${historyText}${foodLogsPrompt}${imageCtx}\nUser message: "${message}"${dataContext}`;
+        let promptText = `Chat History:\n${(agentType === "agent1_step1" || agentType === "lab_extract" || agentType === "symptom_diary") ? "Omitted for extraction step." : historyText}${foodLogsPrompt}${imageCtx}\nUser message: "${message}"${dataContext}`;
         fullPromptSent = `System Instruction:\n${systemInstruction}\n\n${promptText}`;
 
         let isYaml = false; // agent1 now uses structured JSON output, not YAML
@@ -12206,18 +12224,16 @@ Your output MUST be a valid JSON object matching the schema provided.`;
         }
       }
 
-      if (agentType === "agent1_step1") {
+      if (agentType === "agent1_step1" || agentType === "lab_extract" || agentType === "symptom_diary") {
         let cleanJson: any = textOutput;
         let text = "I have extracted the biomarkers. Please review the output.";
         let hasMoreMarkers = false;
-        let remainingText = "";
+        let lastProcessedIndex: number | null = null;
         let estimatedTotalMarkers: number | null = null;
         let unmappedTests: any[] = [];
         try {
           const parsed = JSON.parse(textOutput.replace(/```(?:json)?/gi, "").trim());
           if (parsed.extractedData) {
-            cleanJson = parsed.extractedData;
-          } else if (parsed.extractedData) {
             cleanJson = parsed.extractedData;
           }
           if (parsed.text) {
@@ -12259,8 +12275,8 @@ Your output MUST be a valid JSON object matching the schema provided.`;
           if (parsed.hasMoreMarkers !== undefined) {
             hasMoreMarkers = !!parsed.hasMoreMarkers;
           }
-          if (parsed.remainingText) {
-            remainingText = parsed.remainingText;
+          if (parsed.lastProcessedIndex !== undefined) {
+            lastProcessedIndex = parsed.lastProcessedIndex;
           }
           if (parsed.estimatedTotalMarkers !== undefined) {
             estimatedTotalMarkers = Number(parsed.estimatedTotalMarkers);
@@ -12273,7 +12289,7 @@ Your output MUST be a valid JSON object matching the schema provided.`;
           agentType,
           extractedData: cleanJson,
           hasMoreMarkers,
-          remainingText,
+          lastProcessedIndex,
           estimatedTotalMarkers,
           unmappedTests,
           currentBatch: req.body.currentBatch || 1,
@@ -12350,9 +12366,11 @@ Your output MUST be a valid JSON object matching the schema provided.`;
 
             if (agentType === "agent1") {
         let parsedRows = [];
+        let isWrongDoor = false;
         try {
           const parsed = JSON.parse(textOutput.replace(/```(?:json)?/gi, "").trim());
           if (parsed.extractedData) parsedRows = parsed.extractedData;
+          if (parsed.isWrongDoor === true) isWrongDoor = true;
         } catch (e) {
           console.error("agent1 JSON parse error", e);
         }
@@ -12361,8 +12379,9 @@ Your output MUST be a valid JSON object matching the schema provided.`;
           agentType,
           extractedData: parsedRows,
           hasMoreMarkers: false,
-          remainingText: "",
+          lastProcessedIndex: null,
           estimatedTotalMarkers: 0,
+          isWrongDoor,
           agentPrompt: fullPromptSent,
           apiCalls: [{ type: 'gemini', label: `Medical History Agent (${engine || 'gemini-3.5-flash-lite'})` }]
         });
@@ -12435,7 +12454,7 @@ Your output MUST be a valid JSON object matching the schema provided.`;
           agentType,
           extractedData: textOutput,
           hasMoreMarkers: false,
-          remainingText: "",
+          lastProcessedIndex: null,
           estimatedTotalMarkers: 0,
           agentPrompt: fullPromptSent,
           apiCalls: [{ type: 'gemini', label: `Medical History Agent (${engine || 'gemini-3.5-flash-lite'})` }]

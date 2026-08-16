@@ -89,6 +89,7 @@ export type DebugReportInput = {
   stageLedger?: any[];
   historyLog?: any[];
   version?: number;
+  ingestTrace?: any;
 };
 
 /**
@@ -113,6 +114,36 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   }
   if (input.error) lines.push(`- **Error:** ${input.error}`);
   lines.push('');
+
+  // Biomarker Ingest Trace (if medical job / ingest trace present)
+  if (input.ingestTrace && typeof input.ingestTrace === 'object') {
+    const trace = input.ingestTrace;
+    lines.push(`## 🧬 Biomarker Ingest Trace (v${trace.version || 1})`);
+    lines.push('');
+    lines.push(`- **Source Kind:** ${trace.sourceKind || 'unknown'}`);
+    lines.push(`- **Total Rows:** ${trace.totalInputRows ?? (trace.rows?.length || 0)}`);
+    lines.push(`- **High Confidence:** ${trace.highConfidenceCount ?? 0} | **Flagged:** ${trace.flaggedCount ?? 0} | **Unmatched:** ${trace.unmatchedCount ?? 0} | **Skipped:** ${trace.skippedCount ?? 0}`);
+    if (trace.handoff) {
+      lines.push(`- **Handoff:** Dual Raw Injection: \`${trace.handoff.dualRawInjection ? 'true' : 'false'}\` | Sent to Parser: ${trace.handoff.sentToParserCount ?? 0} | Sent to Review: ${trace.handoff.sentToReviewCount ?? 0}`);
+    }
+    if (Array.isArray(trace.rows) && trace.rows.length > 0) {
+      lines.push('');
+      lines.push(`| # | Printed Name | Raw Value | Raw Unit | Canonical Key | Bucket | Class | Reason / Notes |`);
+      lines.push(`|---|--------------|-----------|----------|---------------|--------|-------|----------------|`);
+      for (const r of trace.rows.slice(0, 60)) {
+        const idx = r.sourceRowIndex ?? '—';
+        const name = String(r.printedName || '—').replace(/\|/g, '/');
+        const val = r.rawValue != null ? String(r.rawValue).replace(/\|/g, '/') : '—';
+        const unit = String(r.rawUnit || '—').replace(/\|/g, '/');
+        const key = String(r.canonicalKey || '—').replace(/\|/g, '/');
+        const bucket = String(r.bucket || '—').replace(/\|/g, '/');
+        const cls = String(r.class || '—').replace(/\|/g, '/');
+        const why = String(r.why || r.comment || '—').replace(/\|/g, '/');
+        lines.push(`| ${idx} | ${name} | ${val} | ${unit} | ${key} | ${bucket} | ${cls} | ${why} |`);
+      }
+    }
+    lines.push('');
+  }
 
   // 1. Last User Action
   lines.push(`## 👤 Last User Action`);
@@ -417,7 +448,8 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
     brandSearchResults: result.brandSearchResults,
     comprehensiveNutrients: result.comprehensiveNutrients || food?.nutrients,
     stageLedger: result.stageLedger,
-    historyLog: result.historyLog
+    historyLog: result.historyLog,
+    ingestTrace: result.ingestTrace || msg?.data?.ingestTrace || msg?.data?.agentResult?.ingestTrace || job?.clean_result?.ingestTrace
   };
 }
 

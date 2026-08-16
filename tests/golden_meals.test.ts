@@ -56,7 +56,7 @@ describe('Golden meals — fixture set', () => {
 
   it('registers exactly the official goldens', () => {
     expect(manifest.goldens.map((g: { id: string }) => g.id)).toEqual([
-      'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8'
+      'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9'
     ]);
   });
 

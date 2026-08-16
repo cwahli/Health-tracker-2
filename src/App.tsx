@@ -1229,13 +1229,13 @@ export default function App() {
                   const snapAgentType = (job.inputSnapshot as any)?.agentType;
                   const isMedicalJob = job.kind === 'medical';
                   const isReviewJob = snapAgentType === 'biomarker_review' || cleanResult.agentType === 'biomarker_review';
-                  const reviewCmds = isReviewJob
+                  const reviewCmds = (cleanResult.modificationCommand || cleanResult.agentResult?.modificationCommand)
                     ? enrichReviewModificationCommands(
                         cleanResult.modificationCommand || cleanResult.agentResult?.modificationCommand || [],
                         (job.inputSnapshot as any)?.biomarkerHistory || [],
                         collectCatalogUnitMap(profileRef.current)
                       )
-                    : (cleanResult.modificationCommand || null);
+                    : null;
                   const agentResult = {
                     scoutScratchpad: cleanResult.dietitianScratchpad ? undefined : cleanResult.scoutScratchpad,
                     dietitianScratchpad: cleanResult.dietitianScratchpad || '',
@@ -1255,7 +1255,7 @@ export default function App() {
                     estimatedTotalMarkers: cleanResult.estimatedTotalMarkers,
                     unmappedTests: cleanResult.unmappedTests,
                     ...(cleanResult.agentResult || {}),
-                    modificationCommand: isReviewJob ? reviewCmds : (cleanResult.agentResult?.modificationCommand || cleanResult.modificationCommand),
+                    modificationCommand: reviewCmds,
                     proposal: cleanResult.proposal || cleanResult.agentResult?.proposal || null,
                     reply: cleanResult.reply || cleanResult.text || cleanResult.message,
                   };
@@ -1295,7 +1295,7 @@ export default function App() {
                       pendingFoodLog,
                       photoUrl: serverJob.photo_url || cleanResult.photoUrl,
                       debugUrl: serverJob.debug_url || cleanResult.debugUrl,
-                      modificationCommand: isReviewJob ? reviewCmds : cleanResult.modificationCommand,
+                      modificationCommand: reviewCmds,
                       proposal: cleanResult.proposal,
                       reply: cleanResult.reply || cleanResult.text,
                       agentType: isMedicalJob ? normalizedAgentType : cleanResult.agentType,
@@ -4567,10 +4567,24 @@ export default function App() {
                 ...updatedHistory[logIdx].biomarkers,
                 [cmd.keyName]: cmd.newValue
               },
-              sync_state: 'update',
+              sync_state: 'update' as any,
               updated_at: Date.now()
             };
             modifiedLogIds.push(updatedHistory[logIdx].id);
+            madeChanges = true;
+            hasNewBiomarkers = true;
+          } else if (logIdx < 0 && cmd.newValue !== undefined && cmd.date) {
+            const newLog = {
+              id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+              date: cmd.date,
+              biomarkers: {
+                [cmd.keyName]: cmd.newValue
+              },
+              sync_state: 'update' as const,
+              updated_at: Date.now()
+            };
+            updatedHistory.push(newLog);
+            modifiedLogIds.push(newLog.id);
             madeChanges = true;
             hasNewBiomarkers = true;
           }

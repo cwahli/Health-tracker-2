@@ -333,8 +333,35 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
       // Prepare request body for loopback / in-process execution
       const port = process.env.PORT || 3000;
       const baseUrl = process.env.INTERNAL_BASE_URL || `http://127.0.0.1:${port}`;
+      
+      let finalMessage = text || '';
+      let prebuiltIngestTrace: any = null;
+
+      if (dbKind === 'medical' && !images && !photoUrls.length && !photoUrl && !imageUrls?.length) {
+        // Attempt table extraction if no images
+        const { lexTable, buildIngestBatch, shouldAbortTablePath } = await import('./src/utils/biomarkerLifecycle.js');
+        const parsedRows = lexTable(finalMessage);
+        
+        // Basic heuristic: if it looks like a table
+        const multiColRows = parsedRows.filter(r => r.length > 1);
+        if (multiColRows.length > 1) {
+          const trace = buildIngestBatch(parsedRows, jobId);
+          if (shouldAbortTablePath(trace)) {
+             trace.abortedTablePath = true;
+          } else {
+             prebuiltIngestTrace = trace;
+             const unmatchedRows = trace.rows?.filter(r => r.bucket === 'unmatched') || [];
+             if (unmatchedRows.length > 0) {
+               finalMessage = unmatchedRows.map(r => r.comment || '').join('\n');
+             } else {
+               finalMessage = ''; // Nothing left for LLM
+             }
+          }
+        }
+      }
+
       const bodyData = {
-        message: text || '',
+        message: finalMessage,
         images: images,
         imageUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : imageUrls),
         history: payload.history || [],
@@ -355,10 +382,9 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         biomarkers: payload.biomarkers || {},
         biomarkerHistory: payload.biomarkerHistory || [],
         dataReviewBatchKeys: payload.dataReviewBatchKeys || [],
-        // Task 6: Carry pre-resolved DB candidates from turn-1 portionClarify payload so
-        // turn-2 skips the DB re-scan and uses the already-resolved context.
         resolvedDbCandidates: payload.resolvedDbCandidates || [],
         imageDates: payload.imageDates || [],
+        ingestTrace: prebuiltIngestTrace,
       };
       // Note: priorLogsUrl is kept in payload separately for log stitching in persistSucceeded.
 
@@ -389,9 +415,41 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         );
       }
 
-      let response: Response;
-      const endpoint = dbKind === 'medical' ? '/api/gemini/medical-analyze?stream=true' : '/api/gemini/food-analyze?stream=true';
-      try {
+      let response: Response | null = null;
+      if (prebuiltIngestTrace && !finalMessage && (!images || images.length === 0) && (!photoUrls || photoUrls.length === 0)) {
+        accumulatedLogs.push(`[System] Intercepted table. 0 unmatched rows. Skipping LLM.`);
+        
+        const highConfRows = prebuiltIngestTrace.rows?.filter((r: any) => r.bucket === 'high_confidence') || [];
+        const flaggedRows = prebuiltIngestTrace.rows?.filter((r: any) => r.bucket === 'flagged') || [];
+        
+        let extractedDate = new Date().toISOString().split('T')[0];
+        if (payload.imageDates && payload.imageDates.length > 0) {
+          extractedDate = payload.imageDates[0];
+        }
+        
+        const modificationCommand = flaggedRows.map((r: any) => ({
+          action: 'update_biomarker',
+          keyName: r.canonicalKey,
+          date: extractedDate,
+          oldValue: r.rawValue,
+          reason: r.comment || 'Flagged for review'
+        }));
+
+        finalData = {
+          extractedData: highConfRows.map((r: any) => ({
+            name: r.printedName,
+            value: r.rawValue,
+            unit: r.rawUnit,
+            biomarker: r.canonicalKey,
+            date: extractedDate
+          })),
+          modificationCommand: modificationCommand.length > 0 ? modificationCommand : undefined,
+          text: 'I have parsed the structured table. No leftover rows to extract.',
+          ingestTrace: prebuiltIngestTrace
+        };
+      } else {
+        const endpoint = dbKind === 'medical' ? '/api/gemini/medical-analyze?stream=true' : '/api/gemini/food-analyze?stream=true';
+        try {
         response = await fetch(`${baseUrl}${endpoint}`, {
           method: 'POST',
           headers: {
@@ -510,6 +568,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         if (chunkTimer) clearTimeout(chunkTimer);
         clearTimeout(globalTimeout);
       }
+      } // CLOSE ELSE BLOCK
 
       if (!finalData) {
         const lastErr = [...accumulatedLogs].reverse().find(l => l.startsWith('[error]'));
@@ -657,6 +716,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           degradedStages: finalPayload?.degradedStages,
           lastUserAction: payload.lastUserAction || (text ? { action: 'chat_submit', prompt: text, timestamp: new Date().toISOString() } : undefined),
           clientConsoleLogs: payload.clientConsoleLogs || [],
+          modificationCommand: finalPayload?.modificationCommand || finalPayload?.agentResult?.modificationCommand || undefined,
           networkErrors: payload.networkErrors || [],
           userActionBreadcrumbs: payload.userActionBreadcrumbs || [],
           // M-FIX1: Medical/biomarker agents (agent1_step1 and friends) return these
@@ -672,6 +732,36 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           estimatedTotalMarkers: finalPayload?.estimatedTotalMarkers ?? undefined,
           unmappedTests: finalPayload?.unmappedTests || undefined,
           currentBatch: finalPayload?.currentBatch || undefined,
+          ingestTrace: finalPayload?.ingestTrace || prebuiltIngestTrace || (dbKind === 'medical' || kind === 'medical' || finalPayload?.agentType ? {
+            version: 1,
+            jobId,
+            sourceKind: 'prose',
+            totalInputRows: Array.isArray(finalPayload?.extractedData) ? finalPayload.extractedData.length : (finalPayload?.isWrongDoor ? 1 : 0),
+            highConfidenceCount: 0,
+            flaggedCount: 0,
+            unmatchedCount: Array.isArray(finalPayload?.extractedData) && !finalPayload?.isWrongDoor ? finalPayload.extractedData.length : 0,
+            skippedCount: finalPayload?.isWrongDoor ? 1 : 0,
+            rows: finalPayload?.isWrongDoor ? [{
+              sourceRowIndex: 0,
+              bucket: 'skip' as const,
+              class: 'WRONG_DOOR' as const,
+              comment: 'Detected food or non-medical input'
+            }] : (Array.isArray(finalPayload?.extractedData) ? finalPayload.extractedData.map((item: any, idx: number) => ({
+              sourceRowIndex: idx,
+              printedName: item?.name || item?.biomarker || item?.keyName || '',
+              rawValue: item?.value ?? item?.numeric_value ?? null,
+              rawUnit: item?.unit || '',
+              canonicalKey: item?.biomarker || undefined,
+              bucket: 'unmatched' as const,
+              class: 'COMPLETENESS' as const,
+            })) : []),
+            handoff: {
+              dualRawInjection: false,
+              sentToParserCount: Array.isArray(finalPayload?.extractedData) ? finalPayload.extractedData.length : 0,
+              sentToReviewCount: 0,
+            },
+            createdAt: new Date().toISOString()
+          } : undefined),
           agentResult: {
             extractedData: finalPayload?.extractedData || undefined,
             hasMoreMarkers: finalPayload?.hasMoreMarkers || undefined,
@@ -679,6 +769,36 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
             estimatedTotalMarkers: finalPayload?.estimatedTotalMarkers ?? undefined,
             unmappedTests: finalPayload?.unmappedTests || undefined,
             currentBatch: finalPayload?.currentBatch || undefined,
+            ingestTrace: finalPayload?.ingestTrace || prebuiltIngestTrace || (dbKind === 'medical' || kind === 'medical' || finalPayload?.agentType ? {
+              version: 1,
+              jobId,
+              sourceKind: 'prose',
+              totalInputRows: Array.isArray(finalPayload?.extractedData) ? finalPayload.extractedData.length : (finalPayload?.isWrongDoor ? 1 : 0),
+              highConfidenceCount: 0,
+              flaggedCount: 0,
+              unmatchedCount: Array.isArray(finalPayload?.extractedData) && !finalPayload?.isWrongDoor ? finalPayload.extractedData.length : 0,
+              skippedCount: finalPayload?.isWrongDoor ? 1 : 0,
+              rows: finalPayload?.isWrongDoor ? [{
+                sourceRowIndex: 0,
+                bucket: 'skip' as const,
+                class: 'WRONG_DOOR' as const,
+                comment: 'Detected food or non-medical input'
+              }] : (Array.isArray(finalPayload?.extractedData) ? finalPayload.extractedData.map((item: any, idx: number) => ({
+                sourceRowIndex: idx,
+                printedName: item?.name || item?.biomarker || item?.keyName || '',
+                rawValue: item?.value ?? item?.numeric_value ?? null,
+                rawUnit: item?.unit || '',
+                canonicalKey: item?.biomarker || undefined,
+                bucket: 'unmatched' as const,
+                class: 'COMPLETENESS' as const,
+              })) : []),
+              handoff: {
+                dualRawInjection: false,
+                sentToParserCount: Array.isArray(finalPayload?.extractedData) ? finalPayload.extractedData.length : 0,
+                sentToReviewCount: 0,
+              },
+              createdAt: new Date().toISOString()
+            } : undefined),
           },
         };
 

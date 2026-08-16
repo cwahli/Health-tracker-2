@@ -481,6 +481,7 @@ interface LogChatProps {
   dataReviewBatchIdx?: number | string | null;
   dataReviewBatchKeys?: string[];
   remainingText?: string;
+  lastProcessedIndex?: number | null;
   extractedData?: any[];
   currentBatch?: number;
   estimatedTotalMarkers?: number | null;
@@ -530,6 +531,7 @@ export default function LogChat({
   dataReviewBatchIdx = null,
   dataReviewBatchKeys = [],
   remainingText = '',
+  lastProcessedIndex = null,
   extractedData = [],
   currentBatch = 1,
   estimatedTotalMarkers = null,
@@ -2941,6 +2943,7 @@ ${logsText}`);
           numberOfBatches,
           extractedData,
           remainingText,
+          lastProcessedIndex,
           bucketMapping: bucketMappingStr,
           estimatedTotalMarkers,
           currentBatch,
@@ -3578,9 +3581,12 @@ ${logsText}`);
       } else if (isAgent('medical')) {
         bodyData.existingBiomarkers = Array.from(new Set([...(biomarkers ? Object.keys(biomarkers) : []), ...Object.keys(profile?.customBiomarkers || {})]));
         bodyData.numberOfBatches = numberOfBatches;
-        const lastMsg = [...messages].reverse().find(m => m.lastProcessedItem !== undefined);
+        const lastMsg = [...messages].reverse().find(m => m.lastProcessedItem !== undefined || m.lastProcessedIndex !== undefined);
         if (lastMsg && lastMsg.lastProcessedItem) {
           bodyData.lastProcessedItem = lastMsg.lastProcessedItem;
+        }
+        if (lastMsg && lastMsg.lastProcessedIndex !== undefined) {
+          bodyData.lastProcessedIndex = lastMsg.lastProcessedIndex;
         }
         if (agentType) {
           let currentStep = 'agent1_step1';
@@ -4167,6 +4173,8 @@ ${logsText}`);
         if (activeAgentType) {
           assistantMsg.agentType = (activeAgentType === 'agent1_step1' ? 'agent1' : activeAgentType) as AgentType;
           assistantMsg.agentResult = resData;
+          assistantMsg.lastProcessedIndex = resData.lastProcessedIndex;
+          assistantMsg.lastProcessedItem = resData.lastProcessedItem;
           const unitMap = collectCatalogUnitMap(profile);
           const isBiomarkerReviewTurn = activeAgentType === 'biomarker_review' || agentType === 'biomarker_review';
           const serverCmds = Array.isArray(resData.modificationCommand) ? resData.modificationCommand : [];
@@ -4205,6 +4213,7 @@ ${logsText}`);
           assistantMsg.status = resData.status;
           assistantMsg.planningDetails = resData.planningDetails;
           assistantMsg.lastProcessedItem = resData.lastProcessedItem;
+          assistantMsg.lastProcessedIndex = resData.lastProcessedIndex;
           assistantMsg.modificationCommand = resData.modificationCommand;
           if (Array.isArray(resData.modificationCommand) && resData.modificationCommand.length) {
             assistantMsg.data = {
@@ -4216,7 +4225,7 @@ ${logsText}`);
               }
             };
           }
-          assistantMsg.pendingBiomarkerEntries = resData.entries || [];
+          assistantMsg.pendingBiomarkerEntries = resData.entries || resData.extractedData || [];
           // Legacy fallback
           assistantMsg.pendingBiomarkers = resData.biomarkers;
           assistantMsg.pendingDate = resData.date;
@@ -4521,6 +4530,7 @@ ${logsText}`);
         currentBatch: nextBatch,
         extractedData: msg.data?.agentResult?.extractedData || msg.extractedData,
         remainingText: msg.data?.agentResult?.remainingText || '',
+        lastProcessedIndex: msg.data?.agentResult?.lastProcessedIndex ?? null,
         estimatedTotalMarkers: msg.data?.agentResult?.estimatedTotalMarkers,
         numberOfBatches: numberOfBatches,
         engine: selectedModelId,
@@ -4695,6 +4705,7 @@ ${logsText}`);
                 extractedData: combinedJsonStr,
                 hasMoreMarkers: resData.hasMoreMarkers,
                 remainingText: resData.remainingText || '',
+                lastProcessedIndex: resData.lastProcessedIndex ?? null,
                 currentBatch: resData.currentBatch || nextBatch,
                 unmappedTests: combinedUnmappedTests,
                 estimatedTotalMarkers: resData.estimatedTotalMarkers !== undefined ? resData.estimatedTotalMarkers : m.data?.agentResult?.estimatedTotalMarkers

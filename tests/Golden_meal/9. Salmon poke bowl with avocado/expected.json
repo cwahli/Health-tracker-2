@@ -1,0 +1,38 @@
+{
+  "id": "G9",
+  "title": "Salmon Poke Bowl with Avocado and Edamame",
+  "mode": "new_log",
+  "passes": [
+    {
+      "id": "replay",
+      "prompt": "Salmon poke bowl with sushi rice, fresh salmon, avocado, edamame and sesame dressing",
+      "photos": [],
+      "kind": "replay_scout"
+    }
+  ],
+  "resolveLocks": [
+    {
+      "query": "salmon",
+      "expectFdcId": "175167",
+      "from": "curator_parametric",
+      "foodName": "atlantic salmon raw"
+    },
+    {
+      "query": "avocado",
+      "expectFdcId": "171705",
+      "from": "curator_parametric",
+      "foodName": "avocados raw california"
+    }
+  ],
+  "neverMatch": [
+    {
+      "query": "salmon",
+      "forbiddenNames": [
+        "salmon canned with bones"
+      ]
+    }
+  ],
+  "invariants": [
+    "Composite meal multi-component accuracy lock"
+  ]
+}

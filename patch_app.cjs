@@ -1,21 +1,49 @@
 const fs = require('fs');
 let code = fs.readFileSync('src/App.tsx', 'utf8');
 
-const targetMedicalStart = `          if (job.kind === 'medical') {`;
-const targetFoodLocal = `          if ((job.kind === 'food_log' || job.kind === 'food_compare') && (job.resumeStage || job.statusMessage?.includes('Retry'))) {`;
-const targetServerOwned = `          // Durable food jobs execute on server via /api/jobs/submit
-          if ((job.kind === 'food_log' || job.kind === 'food_compare') && !job.resumeStage && !job.statusMessage?.includes('Retry')) {`;
+const target = `          if (logIdx >= 0 && cmd.newValue !== undefined) {
+            updatedHistory[logIdx] = {
+              ...updatedHistory[logIdx],
+              biomarkers: {
+                ...updatedHistory[logIdx].biomarkers,
+                [cmd.keyName]: cmd.newValue
+              },
+              sync_state: 'update',
+              updated_at: Date.now()
+            };
+            modifiedLogIds.push(updatedHistory[logIdx].id);
+            madeChanges = true;
+            hasNewBiomarkers = true;
+          }`;
 
-const startIndex = code.indexOf(targetMedicalStart);
-const endIndex = code.indexOf(targetServerOwned);
+const replacement = `          if (logIdx >= 0 && cmd.newValue !== undefined) {
+            updatedHistory[logIdx] = {
+              ...updatedHistory[logIdx],
+              biomarkers: {
+                ...updatedHistory[logIdx].biomarkers,
+                [cmd.keyName]: cmd.newValue
+              },
+              sync_state: 'update',
+              updated_at: Date.now()
+            };
+            modifiedLogIds.push(updatedHistory[logIdx].id);
+            madeChanges = true;
+            hasNewBiomarkers = true;
+          } else if (logIdx < 0 && cmd.newValue !== undefined && cmd.date) {
+            const newLog = {
+              id: \`log_\${Date.now()}_\${Math.random().toString(36).slice(2, 9)}\`,
+              date: cmd.date,
+              biomarkers: {
+                [cmd.keyName]: cmd.newValue
+              },
+              sync_state: 'update',
+              updated_at: Date.now()
+            };
+            updatedHistory.push(newLog);
+            modifiedLogIds.push(newLog.id);
+            madeChanges = true;
+            hasNewBiomarkers = true;
+          }`;
 
-if (startIndex !== -1 && endIndex !== -1) {
-  const replacement = `          // Durable jobs execute on server via /api/jobs/submit
-          if (job.kind === 'food_log' || job.kind === 'food_compare' || job.kind === 'medical') {
-`;
-  code = code.substring(0, startIndex) + replacement + code.substring(endIndex + targetServerOwned.length + 1);
-  fs.writeFileSync('src/App.tsx', code);
-  console.log('Patched src/App.tsx');
-} else {
-  console.log('Targets not found');
-}
+code = code.replace(target, replacement);
+fs.writeFileSync('src/App.tsx', code);

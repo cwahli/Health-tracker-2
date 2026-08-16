@@ -115,7 +115,7 @@ export const BiomarkerCard: React.FC<AgentCardProps> = ({
                               if (isContinuation && !hasScopeKeys && !forceApplyNow) {
                                 await handleContinueExtractionChunk(msg);
                               } else {
-                                await onAgentFinish(msg.agentType!, msg.data?.agentResult, acceptedActions);
+                                await onAgentFinish(msg.agentType === 'medical' ? 'agent1' : msg.agentType!, msg.data?.agentResult, acceptedActions);
                                 if (!isContinuation || hasScopeKeys) {
                                   setLoggedMessageIds?.(prev => [...prev, msg.id]);
                                 }

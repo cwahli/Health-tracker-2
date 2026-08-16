@@ -437,6 +437,7 @@ export interface ChatMessage {
     maxMetricsPerBatch: number;
   };
   lastProcessedItem?: string | null;
+  lastProcessedIndex?: number | null;
   modificationCommand?: {
     action: 'update_biomarker' | 'update_profile' | 'remove_biomarker';
     keyName: string;
@@ -449,6 +450,59 @@ export interface ChatMessage {
   agentTypeStep?: string;
   extractedData?: string;
   isLive?: boolean;
+  ingestTrace?: IngestTrace;
+}
+
+export type BiomarkerClassId =
+  | 'IDENTITY_FALSE_FRIEND'
+  | 'IDENTITY_PARALLEL_KEY'
+  | 'CONFORMANCE_UNIT'
+  | 'CONFORMANCE_SHAPE'
+  | 'PLAUSIBILITY'
+  | 'COMPLETENESS'
+  | 'SILENT_REWRITE'
+  | 'APPLY_MISS'
+  | 'USE_SURFACE_LEAK'
+  | 'WRONG_DOOR'
+  | 'UPSERT_IDENTITY'
+  | 'HALLUCINATED_KEY'
+  | 'CURRENCY';
+
+export type ClassId = BiomarkerClassId;
+
+export interface IngestTraceRow {
+  sourceRowIndex?: number;
+  printedName?: string;
+  rawValue?: number | string | null;
+  rawUnit?: string;
+  canonicalKey?: string;
+  bucket?: 'high_confidence' | 'flagged' | 'unmatched' | 'skip';
+  class?: ClassId;
+  why?: string;
+  date?: string | null;
+  qualitativeValue?: string;
+  printedRange?: string;
+  comment?: string;
+}
+
+export interface IngestTrace {
+  version: number;
+  jobId?: string;
+  sourceKind?: 'table' | 'prose' | 'image' | 'structured' | 'symptom';
+  totalInputRows?: number;
+  highConfidenceCount?: number;
+  flaggedCount?: number;
+  unmatchedCount?: number;
+  skippedCount?: number;
+  rows?: IngestTraceRow[];
+  handoff?: {
+    dualRawInjection?: boolean;
+    sentToParserCount?: number;
+    sentToReviewCount?: number;
+  };
+  abortedTablePath?: boolean;
+  warnings?: string[];
+  createdAt?: string;
 }
 
 export interface DbInteraction {

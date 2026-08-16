@@ -3,7 +3,7 @@
  * Relabel vs convert, Review apply, overlay fingerprint, convert table.
  */
 import { toYYYYMMDD } from './dateUtils';
-import { getMappedBiomarkerKey, isBiomarkerApproved, detectFlaggedTelemetryErrors, biomarkerDefinitions, parseNormalRangeBounds } from './biomarkers';
+import { getMappedBiomarkerKey, isBiomarkerApproved, detectFlaggedTelemetryErrors, biomarkerDefinitions, parseNormalRangeBounds, isBiomarkerValueImprobable } from './biomarkers';
 import type { BiomarkerLog } from '../types';
 
 export type UnitChangeMode = 'relabel' | 'convert';
@@ -50,6 +50,159 @@ const RANGE_VARIES_BY: Record<string, RangeVariesBy[]> = {
   estradiol: ['sex', 'age'],
   alkaline_phosphatase: ['age', 'sex'],
 };
+
+import type { IngestTrace, IngestTraceRow, ClassId } from '../types';
+
+export function lexTable(text: string): string[][] {
+  if (!text) return [];
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  return lines.map((line) => {
+    // Strip trailing OCR noise or carriage returns
+    const cleanLine = line.trim();
+    // RFC 4180 / tab / pipe / multi-space delimiter
+    if (cleanLine.includes('\t')) return cleanLine.split('\t').map((c) => c.trim());
+    if (cleanLine.includes('|')) return cleanLine.split('|').map((c) => c.trim()).filter(Boolean);
+    if (cleanLine.includes(',')) {
+      // Basic CSV field parse
+      const fields: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < cleanLine.length; i++) {
+        const char = cleanLine[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          fields.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      fields.push(current.trim());
+      return fields;
+    }
+    return cleanLine.split(/\s{2,}/).map((c) => c.trim());
+  });
+}
+
+export function buildIngestBatch(rows: string[][], jobId?: string): IngestTrace {
+  const trace: IngestTrace = {
+    version: 1,
+    jobId,
+    sourceKind: 'table',
+    totalInputRows: rows.length,
+    highConfidenceCount: 0,
+    flaggedCount: 0,
+    unmatchedCount: 0,
+    skippedCount: 0,
+    rows: [],
+    handoff: {
+      dualRawInjection: false,
+      sentToParserCount: 0,
+      sentToReviewCount: 0
+    }
+  };
+
+  rows.forEach((row, idx) => {
+    const rawRowString = row.join(' ');
+    
+    // Skip panel headers, page footers, or non-data lab metadata rows
+    const isLabMeta = /^(page\s+\d+|lab\s+ref|patient\s+id|dob:|date\s+of\s+birth|test\s+name|reference\s+range|\*\*\*)/i.test(rawRowString.trim());
+    if (row.length <= 1 || isLabMeta) {
+      trace.skippedCount = (trace.skippedCount || 0) + 1;
+      trace.rows!.push({ 
+        sourceRowIndex: idx, 
+        bucket: 'skip', 
+        why: isLabMeta ? 'Lab metadata / header line' : 'Too few columns',
+        printedName: row[0] || ''
+      });
+      return;
+    }
+
+    // Heuristics for NHS/EMIS printout
+    let printedName = '';
+    let rawValueStr = '';
+    let rawUnit = '';
+    
+    let matchedKey = '';
+    for (let i = 0; i < row.length; i++) {
+      const mapped = getMappedBiomarkerKey(row[i]);
+      if (mapped) {
+        matchedKey = mapped;
+        printedName = row[i];
+        rawValueStr = row[i + 1] || '';
+        rawUnit = row[i + 2] || '';
+        break;
+      }
+    }
+    
+    if (!matchedKey) {
+      trace.unmatchedCount = (trace.unmatchedCount || 0) + 1;
+      trace.rows!.push({
+        sourceRowIndex: idx,
+        bucket: 'unmatched',
+        printedName: row[0] || row[1] || '',
+        rawValue: row[2] || row[1] || null,
+        comment: rawRowString
+      });
+      return;
+    }
+
+    const valNum = parseFloat(rawValueStr);
+    const catalogDef = biomarkerDefinitions.find(d => d.key === matchedKey);
+    const catalogUnit = catalogDef?.unit || '';
+    
+    let bucket: 'high_confidence' | 'flagged' | 'unmatched' = 'high_confidence';
+    let classTag: string = 'IDENTITY_PARALLEL_KEY';
+    let why = '';
+    
+    if (!isNaN(valNum)) {
+      if (catalogUnit && rawUnit && normUnit(catalogUnit) !== normUnit(rawUnit)) {
+         bucket = 'flagged';
+         classTag = 'CONFORMANCE_UNIT';
+         why = `Unit mismatch: ${rawUnit} vs catalog ${catalogUnit}`;
+      } else if (isBiomarkerValueImprobable(matchedKey, valNum, catalogDef?.normalRange)) {
+         bucket = 'flagged';
+         classTag = 'PLAUSIBILITY';
+         why = `Implausible value for ${matchedKey}`;
+      }
+    }
+    
+    if (bucket === 'flagged') {
+      trace.flaggedCount = (trace.flaggedCount || 0) + 1;
+    } else if (bucket === 'high_confidence') {
+      trace.highConfidenceCount = (trace.highConfidenceCount || 0) + 1;
+    } else {
+      trace.unmatchedCount = (trace.unmatchedCount || 0) + 1;
+    }
+
+    trace.rows!.push({
+      sourceRowIndex: idx,
+      printedName,
+      rawValue: isNaN(valNum) ? rawValueStr : valNum,
+      rawUnit,
+      canonicalKey: matchedKey,
+      bucket,
+      class: classTag as any,
+      comment: why ? why : undefined
+    });
+  });
+  
+  return trace;
+}
+
+export function shouldAbortTablePath(trace: any): boolean {
+  if (!trace) return true;
+  // If source kind is table/tabular but 0 high confidence rows were found, abort table path
+  if (trace.sourceKind === 'table' && (trace.highConfidenceCount === 0 || !trace.highConfidenceCount)) {
+    return true;
+  }
+  // Abort if shape conformance is invalid (all unmatched)
+  if (trace.unmatchedCount > 0 && (trace.highConfidenceCount || 0) === 0) {
+    return true;
+  }
+  return false;
+}
 
 export function getRangeVariesBy(key: string): RangeVariesBy[] {
   const mapped = getMappedBiomarkerKey(key) || key;
