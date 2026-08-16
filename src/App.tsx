@@ -1243,6 +1243,17 @@ export default function App() {
                     globalLiveLogs: cleanResult.backendLogs || '',
                     dietitianAnswer: cleanResult.message || cleanResult.text || '',
                     scoutItems: cleanResult.scoutItems,
+                    // FIX: server.ts's medical-analyze responses (agent1_step1, agent1,
+                    // biomarker_review, data_review) are flat top-level objects — they
+                    // never set a nested "agentResult" key. The spread below was always
+                    // a no-op for medical jobs, so extractedData (and the batch-continue
+                    // fields) never reached the message, and AgentResultTable — which
+                    // reads agentResult.extractedData — had nothing to render.
+                    extractedData: cleanResult.extractedData,
+                    hasMoreMarkers: cleanResult.hasMoreMarkers,
+                    remainingText: cleanResult.remainingText || '',
+                    estimatedTotalMarkers: cleanResult.estimatedTotalMarkers,
+                    unmappedTests: cleanResult.unmappedTests,
                     ...(cleanResult.agentResult || {}),
                     modificationCommand: isReviewJob ? reviewCmds : (cleanResult.agentResult?.modificationCommand || cleanResult.modificationCommand),
                     proposal: cleanResult.proposal || cleanResult.agentResult?.proposal || null,
