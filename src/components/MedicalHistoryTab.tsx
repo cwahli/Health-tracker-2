@@ -6,6 +6,7 @@ import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart a
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill } from '../utils/biomarkers';
 import { getAgentCalibration, formatOptimalTargetValue } from '../utils/agentCalibration';
+import { handleUnitChange } from '../utils/biomarkerLifecycle';
 
 const getBiomarkerDef = (key: string) => biomarkerDefinitions.find(d => d.key === key);
 
@@ -919,7 +920,16 @@ export default function MedicalHistoryTab({
                               onDismissAlert={def.key === 'bmi' ? onDismissBmiAlert : undefined}
                               hideSensitive={hideSensitive}
                               onEditBiomarkerDef={(key, range, unit) => {
-                                const newCustom = { ...profile.customBiomarkers };
+                                const currentUnit = profile.customBiomarkers?.[key]?.unit || getBiomarkerDef(key)?.unit || '';
+                                const res = handleUnitChange({
+                                  key,
+                                  fromUnit: currentUnit,
+                                  toUnit: unit,
+                                  mode: 'relabel',
+                                  profile,
+                                  history: activeHistory,
+                                });
+                                const newCustom = { ...res.profile.customBiomarkers };
                                 const existing = newCustom[key] || { name: key, unit: unit, normalRange: range, description: '' };
                                 newCustom[key] = { ...existing, normalRange: range, unit: unit };
                                 if (onUpdateProfile) {

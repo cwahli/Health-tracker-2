@@ -8,7 +8,7 @@
 ## Current Status & Verification
 - **`scripts/assert-biomarker-ingest.mjs`**: Exit 0 (N1–N13 Master Ingest Assertions Passed)
 - **`scripts/assert-biomarker-lifecycle-m31.mjs`**: Exit 0 (P0–P8 Master Biomarker Lifecycle Assertions Passed)
-- **Vitest Suite**: 465 passed tests across all suites, including `tests/golden_biomarker.test.ts`, `src/utils/biomarkerIdentity.test.ts`, and `src/utils/biomarkerLifecycle.test.ts`.
+- **Vitest Suite**: 551 passed tests across 61 test files, including `tests/golden_biomarker.test.ts`, `src/utils/biomarkerIdentity.test.ts`, and `src/utils/biomarkerLifecycle.test.ts`.
 - **TypeScript Compilation**: `npx tsc --noEmit` clean exit 0
 
 ---
@@ -27,5 +27,34 @@
 9. **Modular Router Extraction (Item 4)**: Created domain router modules `server_routes_biomarkers.ts` and `server_routes_food.ts` and registered them on Express app in `server.ts`.
 
 ---
+## Track B Wave B7 Progress (Items 7.1, 7.2, 7.3, 7.4, 7.8)
+10. **Profile Data Hygiene (Item 7.1)**:
+    - Implemented `cleanupInventedBiomarkerCatalog` which remaps custom keys through `getMappedBiomarkerKey`, tombstones alias keys in `deletedCustomBiomarkerKeys`, drops unreferenced `metric_N` junk and unitless `needsApproval` definitions, and strips corrupted `< 0` negative range configs/strings.
+11. **Relabel XOR Convert UI (Item 7.2)**:
+    - Integrated `handleUnitChange` with explicit `mode: 'relabel'` in `MedicalHistoryTab.tsx` (`onEditBiomarkerDef`) so custom unit changes never alter historical observation numbers without conversion commands.
+12. **Historical observationMeta Backfill (Item 7.3)**:
+    - Enhanced `attachObservationMeta` in `src/utils/biomarkerLifecycle.ts` to automatically backfill `rawValue` from `biomarkers[key]` when omitted in metadata.
+13. **Dedicated Pending Store Isolation (Item 7.4)**:
+    - Added `PendingObservation` interface and `pendingObservations` to `UserProfile`.
+    - Hardened `isLiveForUse`, `filterCurrentForUse`, and `filterHistoryForUse` so pending unapproved extractions are strictly isolated and never leak into active queries, Home dashboard tiles, or health coach prompts.
+14. **Drop Legacy Dictionary Store (Item 7.8)**:
+    - Deprecated `biomarker_dictionary_store` local storage access in `biomarkerStore.ts` and `biomarkers.ts` in favor of `profile.customBiomarkers`.
+
+---
+## Track F Food Identity Quality Progress (Items F-1, F-2, F-4)
+15. **Catalog-First Defaulting & Self-Heal Cache (Items F-1 & F-2)**:
+    - Verified `lookupCanonicalBaseFood` in `server_food_db.ts` provides instant local/curated food resolution before external search fallbacks.
+    - Verified `getCachedUSDAFood` / `setCachedUSDAFood` in-memory caching mechanism prevents redundant live network requests for previously resolved query terms.
+16. **Food DB & Catalog Unit Tests (Item F-4)**:
+    - Added automated unit tests in `server_food_db.test.ts` for catalog-first lookup and USDA caching, ensuring 100% test pass rate across all 61 test suites.
+
+---
+## Track R Modular Router Extraction Progress (Item R-4)
+17. **Jobs Router Extraction (`server_routes_jobs.ts`)**:
+    - Extracted all `/api/jobs/*` endpoints (`/upsert`, `/delete`, `/submit`, `/status`, `/debug`) into dedicated Express router module `server_routes_jobs.ts`.
+    - Mounted `jobsRouter` in `server.ts`, trimming hundreds of lines from main server file while preserving all authentication, idempotency locks, R2 upload fallback routines, and debug report rendering.
+
+---
 ## Next Steps
-- Continue with Track F food identity quality refinement or Track B Wave B7 profile data hygiene passes.
+- Continue with Track R system performance monitoring and remaining infrastructure maintenance.
+

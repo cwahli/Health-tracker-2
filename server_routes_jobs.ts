@@ -1,0 +1,348 @@
+import { Router } from 'express';
+import { verifyFirebaseIdToken } from './server_auth.js';
+import { supabaseAdmin } from './supabaseAdmin.js';
+import { uploadPhotoToR2 } from './src/utils/r2Storage.js';
+
+export const jobsRouter = Router();
+
+/**
+ * Express router for /api/jobs/* operations
+ */
+jobsRouter.post('/api/jobs/upsert', async (req, res) => {
+  try {
+    const authData = await verifyFirebaseIdToken(req);
+    console.log('[FreeTier] requireAuth supabase-push');
+
+    const { payload } = req.body;
+    if (!payload || !payload.id || !payload.user_id) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    const { error } = await supabaseAdmin.from('agent_jobs').upsert(payload, { onConflict: 'id' });
+    
+    if (error) {
+      console.error('Failed to upsert job to Supabase via server:', error);
+      return res.status(500).json({ error: error.message });
+    }
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to upsert job:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+jobsRouter.post('/api/jobs/delete', async (req, res) => {
+  const { jobId } = req.body || {};
+  if (!jobId) {
+    return res.status(400).json({ error: 'jobId is required' });
+  }
+  try {
+    await verifyFirebaseIdToken(req).catch(() => null);
+    const { deleteInMemoryServerJob } = await import('./serverJobs.js');
+    deleteInMemoryServerJob(String(jobId));
+  } catch (memErr: any) {
+    console.warn('[jobs/delete] in-memory delete skipped:', memErr?.message || memErr);
+  }
+  try {
+    const { supabaseAdmin, isSupabaseConfigured } = await import('./supabaseAdmin.js');
+    if (isSupabaseConfigured) {
+      const { error } = await supabaseAdmin.from('agent_jobs').delete().eq('id', String(jobId));
+      if (error) console.warn('[jobs/delete] supabase:', error.message);
+    }
+  } catch (dbErr: any) {
+    console.warn('[jobs/delete] supabase skipped:', dbErr?.message || dbErr);
+  }
+  res.json({ success: true });
+});
+
+jobsRouter.post('/api/jobs/submit', async (req, res) => {
+  try {
+    const { jobId, userId, kind, mode, text, history, userProfile, engine, biomarkersNeedingImprovement, remainingAllowance, activeMeal, foodLogs, userSelectedMode, activeScoutItems } = req.body;
+    let { images, imageUrls } = req.body;
+    if (!jobId) {
+      return res.status(400).json({ error: 'jobId is required' });
+    }
+
+    if (images && Array.isArray(images) && images.length > 0) {
+      imageUrls = Array.isArray(imageUrls) ? [...imageUrls] : [];
+      for (let i = 0; i < images.length; i++) {
+        if (typeof images[i] === 'string' && images[i].startsWith('data:image/')) {
+          console.log(`[POST /api/jobs/submit] Uploading image ${i} to R2 for job ${jobId}...`);
+          try {
+            const r2Url = await uploadPhotoToR2(`${jobId}_${i}`, images[i]);
+            if (r2Url && r2Url.startsWith('http')) {
+              imageUrls.push(r2Url);
+            }
+          } catch (e) {
+            console.error(`[POST /api/jobs/submit] Failed to upload image ${i} to R2`, e);
+          }
+        }
+      }
+    }
+
+    const { checkOrRegisterIdempotentSubmission, submitServerJob } = await import('./serverJobs.js');
+
+    const idempResult = await checkOrRegisterIdempotentSubmission({
+      ...req.body,
+      jobId,
+      userId: userId || 'anonymous',
+      kind,
+      mode,
+      text,
+      images,
+      imageUrls
+    });
+
+    if (idempResult.isDuplicate) {
+      return res.json({
+        success: true,
+        jobId: idempResult.jobId,
+        status: idempResult.status || 'queued',
+        duplicatePrevented: true,
+        message: 'Duplicate submission blocked by idempotency lock; reusing existing job.'
+      });
+    }
+
+    await submitServerJob({
+      ...req.body,
+      jobId,
+      userId: userId || 'anonymous',
+    });
+    res.json({ success: true, jobId, status: 'queued' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to submit job to cloud' });
+  }
+});
+
+jobsRouter.get('/api/jobs/status', async (req, res) => {
+  try {
+    const { jobId, userId } = req.query;
+    const { getInMemoryServerJob, listInMemoryServerJobs } = await import('./serverJobs.js');
+
+    if (jobId) {
+      const memJob = getInMemoryServerJob(String(jobId));
+      if (memJob && (memJob.status === 'running' || memJob.status === 'awaiting_user' || memJob.status === 'succeeded')) {
+        return res.json({ jobs: [memJob] });
+      }
+    }
+
+    const { isSupabaseConfigured } = await import('./src/utils/supabaseClient.js');
+    if (!isSupabaseConfigured) {
+      if (jobId) {
+        const memJob = getInMemoryServerJob(String(jobId));
+        return res.json({ jobs: memJob ? [memJob] : [] });
+      }
+      return res.json({ jobs: listInMemoryServerJobs(userId ? String(userId) : undefined) });
+    }
+
+    try {
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const isFull = req.query.full === 'true';
+      const columns = isFull ? '*' : 'id, status, progress_percent, status_message, updated_at';
+      let query = supabaseAdmin.from('agent_jobs').select(columns);
+      if (jobId) {
+        query = query.eq('id', String(jobId));
+      } else if (userId) {
+        query = query.eq('user_id', String(userId));
+      } else {
+        return res.status(400).json({ error: 'jobId or userId parameter is required' });
+      }
+      query = query.order('updated_at', { ascending: false }).limit(20);
+
+      const queryPromise = Promise.resolve(query);
+      const timeoutPromise = new Promise<{ data: any; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error('Supabase query timed out after 3500ms')), 3500)
+      );
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const now = Date.now();
+        const staleThresholdMs = 180000;
+        const processedJobs = await Promise.all((data || []).map(async (job: any) => {
+          if (jobId && job.clean_result && typeof job.clean_result === 'object' && (job.clean_result as any).is_r2) {
+            try {
+              const { fetchJobResultFromR2 } = await import('./src/utils/r2Storage.js');
+              const r2Promise = fetchJobResultFromR2(job.id);
+              const r2Timeout = new Promise<null>((resolve) =>
+                setTimeout(() => resolve(null), 5000)
+              );
+              const fullResult = await Promise.race([r2Promise, r2Timeout]);
+              if (fullResult) {
+                job.clean_result = fullResult;
+              }
+            } catch (r2FetchErr) {
+              console.error(`[JobsStatus] Failed to transparently fetch R2 clean_result for ${job.id}:`, r2FetchErr);
+            }
+          }
+
+          if (job.status === 'running' && job.updated_at) {
+            const updatedAtTime = new Date(job.updated_at).getTime();
+            if (now - updatedAtTime > staleThresholdMs) {
+              console.warn(`[JobsStatus] Auto-failing stale running job ${job.id} (updated ${Math.round((now - updatedAtTime) / 1000)}s ago)`);
+              const failedJob = {
+                ...job,
+                status: 'failed',
+                status_message: 'Analysis timed out on server (>3 min). Tap Retry to try again.',
+                updated_at: new Date().toISOString()
+              };
+              Promise.resolve(
+                supabaseAdmin.from('agent_jobs').update({
+                  status: 'failed',
+                  status_message: 'Analysis timed out on server (>3 min). Tap Retry to try again.',
+                  updated_at: new Date().toISOString()
+                }).eq('id', job.id)
+              ).catch((uErr: any) => {
+                console.error('[JobsStatus] Failed to update stale job status in DB:', uErr);
+              });
+              return failedJob;
+            }
+          }
+          return job;
+        }));
+
+        return res.json({ jobs: processedJobs });
+      }
+    } catch (dbErr) {
+      console.warn('[JobsStatus] Supabase query failed or timed out, falling back to in-memory store:', dbErr);
+    }
+
+    if (jobId) {
+      const memJob = getInMemoryServerJob(String(jobId));
+      return res.json({ jobs: memJob ? [memJob] : [] });
+    }
+    return res.json({ jobs: listInMemoryServerJobs(userId ? String(userId) : undefined) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to fetch job status' });
+  }
+});
+
+jobsRouter.get('/api/jobs/debug', async (req, res) => {
+  try {
+    const { jobId, userId } = req.query;
+    if (!jobId) {
+      return res.status(400).json({ error: 'jobId query parameter is required' });
+    }
+
+    const cleanJobId = String(jobId).trim();
+    const { getInMemoryServerJob } = await import('./serverJobs.js');
+    let job: any = getInMemoryServerJob(cleanJobId);
+
+    if (!job) {
+      const { isSupabaseConfigured } = await import('./src/utils/supabaseClient.js');
+      if (isSupabaseConfigured) {
+        try {
+          const { supabaseAdmin } = await import('./supabaseAdmin.js');
+          let query = supabaseAdmin
+            .from('agent_jobs')
+            .select('*')
+            .eq('id', cleanJobId);
+          if (userId && String(userId) !== 'anonymous') {
+            query = query.eq('user_id', String(userId));
+          }
+          const { data, error } = await query.maybeSingle();
+          if (!error && data) {
+            job = data;
+          }
+        } catch (dbErr) {
+          console.warn('[JobsDebug] Supabase lookup error:', dbErr);
+        }
+      }
+    }
+
+    let debugPayload = null;
+    const { fetchDebugPayloadFromR2, fetchLogsFromR2 } = await import('./src/utils/r2Storage.js');
+
+    try {
+      debugPayload = await fetchDebugPayloadFromR2(cleanJobId, userId ? String(userId) : undefined);
+    } catch (r2Err) {
+      console.warn('[JobsDebug] R2 direct debug payload fetch failed:', r2Err);
+    }
+
+    if (!debugPayload && job?.debug_url) {
+      try {
+        const response = await fetch(job.debug_url);
+        if (response.ok) {
+          debugPayload = await response.json();
+        }
+      } catch (err) {
+        console.warn('Failed to fetch from debug_url, using DB fallback:', err);
+      }
+    }
+
+    if (!debugPayload) {
+      if (!job) {
+        return res.status(404).json({ error: 'Job or debug payload not found' });
+      }
+      const accumulated = Array.isArray(job.accumulatedLogs) ? job.accumulatedLogs.join('\n') : (Array.isArray(job.turn1Logs) ? job.turn1Logs.join('\n') : '');
+      debugPayload = {
+        jobId: job.id,
+        userId: job.user_id,
+        kind: job.kind,
+        mode: job.mode,
+        status: job.status,
+        photoUrl: job.photo_url,
+        debugUrl: job.debug_url,
+        result: job.clean_result,
+        backendLogsUrl: job.clean_result?.backendLogsUrl || undefined,
+        backendLogs: job.clean_result?.backendLogs || accumulated || '',
+        createdAt: job.created_at,
+        updatedAt: job.updated_at,
+        source: 'server-job'
+      };
+    }
+
+    if (!debugPayload.backendLogs || String(debugPayload.backendLogs).startsWith('[Logs stored in R2') || String(debugPayload.backendLogs).startsWith('http')) {
+      try {
+        const logsFromR2 = await fetchLogsFromR2(cleanJobId);
+        if (logsFromR2) {
+          debugPayload.backendLogs = logsFromR2;
+        }
+      } catch (logFetchErr) {
+        console.warn(`[JobsDebug] Failed to fetch full logs from R2 for ${cleanJobId}:`, logFetchErr);
+      }
+    }
+
+    if ((!debugPayload.backendLogs || String(debugPayload.backendLogs).startsWith('[Logs stored in R2')) && job && Array.isArray(job.accumulatedLogs)) {
+      debugPayload.backendLogs = job.accumulatedLogs.join('\n');
+    }
+
+    const { stripHeavyImages, buildDebugMarkdownReport } = await import('./src/utils/debugPayload.js');
+    const safePayload = stripHeavyImages(debugPayload);
+
+    if (req.query.format === 'markdown' || req.query.format === 'md') {
+      const mdReport = buildDebugMarkdownReport({
+        jobId: cleanJobId,
+        status: safePayload.status,
+        mode: safePayload.mode,
+        message: safePayload.result?.message || safePayload.result?.text,
+        backendLogs: safePayload.backendLogs,
+        pendingFoodLog: safePayload.result?.pendingFoodLog || safePayload.result,
+        scoutItems: safePayload.result?.scoutItems,
+        receiptTable: safePayload.result?.receiptTable || safePayload.result?.pendingFoodLog?.receiptTable,
+        error: safePayload.error,
+        debugUrl: safePayload.debugUrl,
+        photoUrl: safePayload.photoUrl,
+        lastUserAction: safePayload.result?.lastUserAction || safePayload.lastUserAction,
+        userActionBreadcrumbs: safePayload.result?.userActionBreadcrumbs || safePayload.userActionBreadcrumbs,
+        clientConsoleLogs: safePayload.result?.clientConsoleLogs || safePayload.clientConsoleLogs,
+        networkErrors: safePayload.result?.networkErrors || safePayload.networkErrors,
+        usdaSearchResults: safePayload.result?.usdaSearchResults,
+        brandSearchResults: safePayload.result?.brandSearchResults,
+        comprehensiveNutrients: safePayload.result?.comprehensiveNutrients || safePayload.result?.pendingFoodLog?.nutrients,
+        stageLedger: safePayload.result?.stageLedger,
+        historyLog: safePayload.result?.historyLog
+      });
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.md"`);
+      return res.send(mdReport);
+    }
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.json"`);
+    return res.json(safePayload);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to fetch debug payload' });
+  }
+});

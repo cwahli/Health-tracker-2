@@ -16,6 +16,8 @@ import {
   formatBiomarkersForPrompt,
   attachObservationMeta,
   getObservationUnit,
+  cleanupInventedBiomarkerCatalog,
+  isLiveForUse,
 } from './biomarkerLifecycle';
 import { isValEmpty, sanitizeBiomarkerHistoryOnLoad } from './biomarkers';
 
@@ -362,3 +364,72 @@ describe('sanitizeBiomarkerHistoryOnLoad — flag only', () => {
     expect(fixedCount).toBeGreaterThan(0);
   });
 });
+
+describe('cleanupInventedBiomarkerCatalog (7.1 Profile Data Cleanup)', () => {
+  it('remaps alias slugs, drops metric_N with no history, and strips negative < 0 ranges', () => {
+    const profile = {
+      customBiomarkers: {
+        serum_total_cholesterol: { name: 'Serum Total Cholesterol', unit: 'mmol/L' },
+        metric_12: { name: 'metric 12', unit: '' },
+        unapproved_marker: { name: 'Unapproved Marker', needsApproval: true },
+        corrupted_range_marker: { name: 'Corrupted', unit: 'U/L', normalRange: '< 0 U/L' },
+      },
+      customRanges: {
+        bad_range: { range: '< 0 U/L' },
+        empty_range: {},
+        valid_range: { range: '1.0 - 2.0' },
+      },
+      pendingObservations: [
+        { printedName: 'Unknown Marker', date: '2026-08-16', rawValue: 42, rawUnit: 'mg/dL' }
+      ]
+    };
+
+    const res = cleanupInventedBiomarkerCatalog(profile, []);
+    expect(res.remappedKeys['serum_total_cholesterol']).toBe('total_cholesterol');
+    expect(res.droppedKeys).toContain('metric_12');
+    expect(res.droppedKeys).toContain('unapproved_marker');
+    expect(res.strippedRanges).toContain('bad_range');
+    expect(res.strippedRanges).toContain('empty_range');
+    expect(res.profile.customRanges['valid_range']).toBeDefined();
+    expect(res.profile.customBiomarkers['corrupted_range_marker']?.normalRange).toBeUndefined();
+    expect(res.profile.pendingObservations).toHaveLength(1);
+    expect(res.profile.pendingObservations[0].printedName).toBe('Unknown Marker');
+  });
+});
+
+describe('Pending Store Isolation (7.4 Home Dashboard / Coach Query Guard)', () => {
+  it('prevents pending observations from being live for use on Home or prompts', () => {
+    const profile = {
+      pendingObservations: [
+        { suggestedKey: 'pending_enzyme', printedName: 'Pending Enzyme', date: '2026-08-16', rawValue: 120 }
+      ]
+    };
+    const history = [
+      { id: '1', date: '2026-08-16', biomarkers: { pending_enzyme: 120, hdl: 1.4 } }
+    ];
+    const current = { pending_enzyme: 120, hdl: 1.4 };
+
+    expect(isLiveForUse('pending_enzyme', profile, history)).toBe(false);
+    expect(isLiveForUse('hdl', profile, history)).toBe(true);
+
+    const filteredHistory = filterHistoryForUse(history, profile);
+    expect(filteredHistory[0].biomarkers.pending_enzyme).toBeUndefined();
+    expect(filteredHistory[0].biomarkers.hdl).toBe(1.4);
+
+    const filteredCurrent = filterCurrentForUse(current, profile, history);
+    expect(filteredCurrent.pending_enzyme).toBeUndefined();
+    expect(filteredCurrent.hdl).toBe(1.4);
+  });
+});
+
+describe('attachObservationMeta (7.3 Historical observationMeta backfill)', () => {
+  it('backfills rawValue from biomarkers[key] when rawValue is omitted in meta', () => {
+    const log: any = { date: '2026-08-16', biomarkers: { creatinine: 88 } };
+    attachObservationMeta(log, 'creatinine', { unit: 'umol/L', printedRange: '60 - 110' });
+    expect(log.observationMeta.creatinine.rawUnit).toBe('umol/L');
+    expect(log.observationMeta.creatinine.printedRange).toBe('60 - 110');
+    expect(log.observationMeta.creatinine.rawValue).toBe(88);
+  });
+});
+
+

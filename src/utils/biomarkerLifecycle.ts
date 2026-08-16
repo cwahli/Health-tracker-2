@@ -806,6 +806,11 @@ export function flaggedKeySet(profile: any, history?: any[], resolved?: Record<s
 
 export function isLiveForUse(key: string, profile: any, history?: any[], resolved?: Record<string, any>, flagged?: Set<string>): boolean {
   if (!isBiomarkerApproved(key, profile, history)) return false;
+  if (profile?.pendingObservations?.some((p: any) => p.suggestedKey === key || p.printedName === key)) {
+    const isBuiltIn = biomarkerDefinitions.some((d: any) => d.key === key);
+    const custom = profile?.customBiomarkers?.[key];
+    if (!isBuiltIn && custom?.catalogApproved !== true) return false;
+  }
   const bad = flagged || flaggedKeySet(profile, history, resolved);
   return !bad.has(key);
 }
@@ -853,12 +858,14 @@ export function attachObservationMeta(
   meta: { unit?: string; printedRange?: string; labFlag?: string; rawValue?: string | number }
 ): void {
   if (!log.observationMeta) log.observationMeta = {};
+  const existing = log.observationMeta[key] || {};
+  const backfillVal = meta.rawValue !== undefined ? meta.rawValue : (existing.rawValue !== undefined ? existing.rawValue : log.biomarkers?.[key]);
   log.observationMeta[key] = {
-    ...(log.observationMeta[key] || {}),
+    ...existing,
     ...(meta.unit ? { rawUnit: meta.unit } : {}),
     ...(meta.printedRange ? { printedRange: meta.printedRange } : {}),
     ...(meta.labFlag ? { labFlag: meta.labFlag } : {}),
-    ...(meta.rawValue !== undefined ? { rawValue: meta.rawValue } : {}),
+    ...(backfillVal !== undefined ? { rawValue: backfillVal } : {}),
   };
 }
 
@@ -978,6 +985,22 @@ export function cleanupInventedBiomarkerCatalog(
       strippedRanges.push(key);
     }
   });
+
+  // Also clean negative/invalid normalRange strings inside customBiomarkers definitions
+  Object.entries(nextProfile.customBiomarkers).forEach(([key, def]: [string, any]) => {
+    if (def?.normalRange) {
+      const bounds = parseNormalRangeBounds(def.normalRange);
+      if ((bounds && ((bounds.min !== undefined && bounds.min < 0) || (bounds.max !== undefined && bounds.max < 0))) ||
+          def.normalRange.includes('< 0') || def.normalRange.includes('<0')) {
+        delete def.normalRange;
+        strippedRanges.push(`customBiomarkers.${key}.normalRange`);
+      }
+    }
+  });
+
+  if (Array.isArray(profile?.pendingObservations)) {
+    nextProfile.pendingObservations = [...profile.pendingObservations];
+  }
 
   return {
     profile: nextProfile,

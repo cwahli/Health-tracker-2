@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getTraceNutrientsForFoodType, getCookingMethodModifier } from './server_food_db';
+import { getTraceNutrientsForFoodType, getCookingMethodModifier, lookupCanonicalBaseFood, getCachedUSDAFood, setCachedUSDAFood } from './server_food_db';
 
 describe('getTraceNutrientsForFoodType', () => {
   it('returns base values at 100g', () => {
@@ -58,6 +58,30 @@ describe('getCookingMethodModifier', () => {
 
     const unrecognized = getCookingMethodModifier('magical_spell');
     expect(unrecognized.addedFatPer100g).toBe(0.0);
+  });
+});
+
+describe('lookupCanonicalBaseFood (F-1 & F-2 Catalog-First Resolution)', () => {
+  it('resolves canonical base foods instantly without network calls', () => {
+    const salmon = lookupCanonicalBaseFood('Grilled Salmon');
+    expect(salmon).toBeDefined();
+    expect(salmon.fdcId).toBe('175168');
+    expect(salmon.foodType).toBe('fish_fatty');
+
+    const oats = lookupCanonicalBaseFood('Rolled Oats');
+    expect(oats).toBeDefined();
+    expect(oats.foodType).toBe('grain');
+
+    const avocado = lookupCanonicalBaseFood('Fresh Avocado');
+    expect(avocado).toBeDefined();
+    expect(avocado.fdcId).toBe('171705');
+  });
+
+  it('manages local USDA lookup cache for repeat queries', () => {
+    setCachedUSDAFood('custom_greek_salad', { fdcId: 'custom_999', calories: 150 });
+    const cached = getCachedUSDAFood('custom_greek_salad');
+    expect(cached).toBeDefined();
+    expect(cached.fdcId).toBe('custom_999');
   });
 });
 

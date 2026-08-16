@@ -1,0 +1,365 @@
+import { Router } from 'express';
+import { getAuth as getAdminAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
+import { supabaseAdmin } from './supabaseAdmin.js';
+import { pushTranslationsToSheets, pullTranslationsFromSheets } from './server_translations.js';
+import { getCatalogSyncStatus, mergeFoodCatalogItems, quarantineAtwaterFailures } from './server_food_catalog.js';
+import { selfCleanBrandDatabase } from './serverBrandMenu.js';
+
+export const adminRouter = Router();
+
+const ADMIN_EMAILS = ["cwah.liu@gmail.com", "chiwah.liu@gmail.com"];
+
+function getAdmin() {
+  try {
+    return getAdminAuth();
+  } catch (err) {
+    return null;
+  }
+}
+
+async function requireAdmin(req: any, res: any): Promise<string | null> {
+  const idToken = req.headers.authorization?.split('Bearer ')[1];
+  if (!idToken) {
+    res.status(401).json({ error: 'Unauthorized: missing token' });
+    return null;
+  }
+  const adminAuth = getAdmin();
+  if (!adminAuth) {
+    res.status(500).json({ error: 'Admin auth not available' });
+    return null;
+  }
+  try {
+    const decoded = await adminAuth.verifyIdToken(idToken);
+    const email = decoded.email?.toLowerCase().trim() || '';
+    if (!ADMIN_EMAILS.includes(email)) {
+      res.status(403).json({ error: 'Forbidden: admin access only' });
+      return null;
+    }
+    return email;
+  } catch (e) {
+    res.status(401).json({ error: 'Unauthorized: invalid token' });
+    return null;
+  }
+}
+
+// List all registered Firebase Auth users
+adminRouter.get("/api/admin/users", async (req, res) => {
+  try {
+    const adminEmail = await requireAdmin(req, res);
+    if (!adminEmail) return;
+    const adminAuth = getAdmin();
+    if (!adminAuth) return res.status(500).json({ error: "Admin Auth not initialized" });
+
+    const allUsers: any[] = [];
+    let pageToken: string | undefined = undefined;
+    do {
+      const result: any = await adminAuth.listUsers(1000, pageToken);
+      result.users.forEach((u: any) => {
+        allUsers.push({
+          uid: u.uid,
+          email: u.email || '',
+          emailVerified: !!u.emailVerified,
+          disabled: !!u.disabled,
+          createdAt: u.metadata?.creationTime || null,
+          lastSignInAt: u.metadata?.lastSignInTime || null,
+          providers: (u.providerData || []).map((p: any) => p.providerId)
+        });
+      });
+      pageToken = result.pageToken;
+    } while (pageToken);
+
+    console.log(`[Admin] ${adminEmail} listed ${allUsers.length} users`);
+    res.json({ success: true, users: allUsers });
+  } catch (error: any) {
+    console.error("[Admin] Failed to list users:", error);
+    res.status(500).json({ error: error.message || "Failed to list users" });
+  }
+});
+
+// Delete Auth user
+adminRouter.delete("/api/admin/user/auth", async (req, res) => {
+  try {
+    const adminEmail = await requireAdmin(req, res);
+    if (!adminEmail) return;
+    const adminAuth = getAdmin();
+    if (!adminAuth) return res.status(500).json({ error: "Admin Auth not initialized" });
+
+    const { uid } = req.body;
+    if (!uid) return res.status(400).json({ error: "Missing uid" });
+    await adminAuth.deleteUser(uid);
+    console.log(`[Admin] ${adminEmail} deleted Auth user ${uid}`);
+    res.json({ success: true, message: `Auth user ${uid} deleted` });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to delete Auth user" });
+  }
+});
+
+// Delete Firestore User Data
+adminRouter.delete("/api/admin/user/data", async (req, res) => {
+  try {
+    const adminEmail = await requireAdmin(req, res);
+    if (!adminEmail) return;
+    const { uid } = req.body;
+    if (!uid) return res.status(400).json({ error: "Missing uid" });
+    
+    const db = getFirestore();
+    await db.collection("users").doc(uid).delete();
+    console.log(`[Admin] ${adminEmail} deleted Firestore user data ${uid}`);
+    res.json({ success: true, message: `User data for ${uid} deleted` });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to delete user data" });
+  }
+});
+
+// Resend Verification Email Link
+adminRouter.post("/api/admin/user/resend-verification", async (req, res) => {
+  try {
+    const adminEmail = await requireAdmin(req, res);
+    if (!adminEmail) return;
+    const adminAuth = getAdmin();
+    if (!adminAuth) return res.status(500).json({ error: "Admin Auth not initialized" });
+
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Missing email" });
+    const link = await adminAuth.generateEmailVerificationLink(email);
+    console.log(`[Admin] Generated verification link for ${email}`);
+    res.json({ success: true, link });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to generate verification link" });
+  }
+});
+
+// Generate Password Reset Link
+adminRouter.post("/api/admin/user/send-password-reset", async (req, res) => {
+  try {
+    const adminEmail = await requireAdmin(req, res);
+    if (!adminEmail) return;
+    const adminAuth = getAdmin();
+    if (!adminAuth) return res.status(500).json({ error: "Admin Auth not initialized" });
+
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Missing email" });
+    const link = await adminAuth.generatePasswordResetLink(email);
+    console.log(`[Admin] Generated password reset link for ${email}`);
+    res.json({ success: true, link });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to generate password reset link" });
+  }
+});
+
+adminRouter.post('/api/admin/user/reset-email', async (req, res) => {
+  res.json({ success: true, message: "Email sent" });
+});
+
+adminRouter.post('/api/admin/user/reset-password', async (req, res) => {
+  res.json({ success: true, message: "Password reset sent" });
+});
+
+// Translation Sync Endpoints
+adminRouter.post('/api/admin/translations/push', async (req, res) => {
+  await pushTranslationsToSheets(req.body?.keys || {});
+  res.json({ success: true });
+});
+
+adminRouter.post('/api/admin/translations/pull', async (req, res) => {
+  const data = await pullTranslationsFromSheets();
+  res.json({ success: true, data });
+});
+
+// Food Catalog Admin Endpoints
+adminRouter.get('/api/admin/food-catalog', async (req, res) => {
+  try {
+    const itemType = (req.query.type as string) || 'food';
+    const statusFilter = (req.query.status as string) || 'all';
+    const searchQuery = ((req.query.search as string) || '').toLowerCase().trim();
+
+    if (itemType === 'dish') {
+      let query = supabaseAdmin.from('dish_cache').select('*');
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+      if (searchQuery) {
+        query = query.ilike('display_name', `%${searchQuery}%`);
+      }
+      const { data, error } = await query.order('updated_at', { ascending: false }).limit(100);
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json({ items: data || [] });
+    } else {
+      let query = supabaseAdmin.from('food_items').select('*');
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+      if (searchQuery) {
+        query = query.ilike('display_name', `%${searchQuery}%`);
+      }
+      const { data, error } = await query.order('updated_at', { ascending: false }).limit(100);
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json({ items: data || [] });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+adminRouter.post('/api/admin/food-catalog/ensure-schema', async (req, res) => {
+  try {
+    const { resetFoodCatalogSchemaEnsure, ensureFoodCatalogSchema } = await import('./server_food_catalog_schema.js');
+    resetFoodCatalogSchemaEnsure();
+    const result = await ensureFoodCatalogSchema();
+    if (!result.ok) return res.status(503).json({ success: false, ...result });
+    res.json({ success: true, ...result });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || String(e) });
+  }
+});
+
+adminRouter.post('/api/admin/food-catalog/promote', async (req, res) => {
+  try {
+    const { itemType, key } = req.body || {};
+    if (!key) return res.status(400).json({ error: 'Missing item key' });
+
+    if (itemType === 'dish') {
+      const { data: existing } = await supabaseAdmin.from('dish_cache').select('version').eq('dish_key', key).maybeSingle();
+      const currentVer = existing?.version || 1;
+      const { error } = await supabaseAdmin.from('dish_cache').update({
+        status: 'active',
+        version: currentVer + 1,
+        updated_at: new Date().toISOString()
+      }).eq('dish_key', key);
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json({ success: true, message: `Promoted dish ${key} to active` });
+    } else {
+      const { data: existing } = await supabaseAdmin.from('food_items').select('version').eq('food_key', key).maybeSingle();
+      const currentVer = existing?.version || 1;
+      const { error } = await supabaseAdmin.from('food_items').update({
+        status: 'active',
+        version: currentVer + 1,
+        updated_at: new Date().toISOString()
+      }).eq('food_key', key);
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json({ success: true, message: `Promoted food ${key} to active` });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+adminRouter.post('/api/admin/food-catalog/quarantine', async (req, res) => {
+  try {
+    const { itemType, key } = req.body || {};
+    if (!key) return res.status(400).json({ error: 'Missing item key' });
+
+    const targetTable = itemType === 'dish' ? 'dish_cache' : 'food_items';
+    const targetKeyCol = itemType === 'dish' ? 'dish_key' : 'food_key';
+
+    const { error } = await supabaseAdmin.from(targetTable).update({
+      status: 'quarantine',
+      updated_at: new Date().toISOString()
+    }).eq(targetKeyCol, key);
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ success: true, message: `Quarantined ${key}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+adminRouter.post('/api/admin/food-catalog/update-serving', async (req, res) => {
+  try {
+    const { itemType, key, basisType, servingGrams } = req.body || {};
+    if (!key) return res.status(400).json({ error: 'Missing item key' });
+
+    const targetTable = itemType === 'dish' ? 'dish_cache' : 'food_items';
+    const targetKeyCol = itemType === 'dish' ? 'dish_key' : 'food_key';
+
+    const { error } = await supabaseAdmin.from(targetTable).update({
+      basis_type: basisType || null,
+      serving_grams: servingGrams === '' || servingGrams == null ? null : Number(servingGrams),
+      updated_at: new Date().toISOString()
+    }).eq(targetKeyCol, key);
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ success: true, message: `Updated serving size of ${key}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+adminRouter.get('/api/admin/food-catalog-sync-status', async (req, res) => {
+  const result = await getCatalogSyncStatus();
+  if (!result.success) return res.status(500).json(result);
+  res.json(result);
+});
+
+adminRouter.post('/api/admin/food-catalog/merge', async (req, res) => {
+  const { sourceKey, targetKey } = req.body || {};
+  if (!sourceKey || !targetKey) {
+    return res.status(400).json({ error: 'sourceKey and targetKey required' });
+  }
+  const result = await mergeFoodCatalogItems(sourceKey, targetKey);
+  if (!result.success) return res.status(500).json(result);
+  res.json(result);
+});
+
+adminRouter.post('/api/admin/food-catalog/quarantine-check', async (req, res) => {
+  const result = await quarantineAtwaterFailures();
+  if (!result.success) return res.status(500).json(result);
+  res.json(result);
+});
+
+adminRouter.post('/api/admin/db-clean', async (req, res) => {
+  try {
+    const countryCode = req.body?.countryCode || 'GB';
+    const cleanRes = await selfCleanBrandDatabase(supabaseAdmin, countryCode, console.log);
+    return res.json({
+      success: true,
+      chainStats: {
+        updatedChainsCount: cleanRes.updatedChainsCount,
+        deletedDuplicatesCount: cleanRes.deletedDuplicatesCount,
+        purgedUnofficialCount: cleanRes.removedUnofficialCount,
+        details: cleanRes.details
+      },
+      catalogStats: {
+        purgedBrandedCount: cleanRes.removedUnofficialCount
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+adminRouter.post('/api/admin/brand-menu/cleanup', async (req, res) => {
+  try {
+    const countryCode = req.body?.countryCode || 'GB';
+    const cleanRes = await selfCleanBrandDatabase(supabaseAdmin, countryCode, console.log);
+    return res.json({
+      success: true,
+      countryCode,
+      deletedDuplicatesCount: cleanRes.deletedDuplicatesCount,
+      removedUnofficialCount: cleanRes.removedUnofficialCount,
+      updatedChainsCount: cleanRes.updatedChainsCount,
+      details: cleanRes.details
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+adminRouter.get('/api/admin/food-catalog/metrics', async (req, res) => {
+  try {
+    const status = await getCatalogSyncStatus();
+    res.json({
+      success: true,
+      metrics: {
+        resolver_call_count: status.resolver_call_count ?? 0,
+        active_items_count: status.food_items?.active,
+        candidate_items_count: status.food_items?.candidate,
+        deferred_gaps_count: status.open_deferred_gaps,
+        sync_failures_count: status.sync_failures
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});

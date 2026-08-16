@@ -40,6 +40,19 @@ export interface AgentAnalysis {
   archived?: boolean;
   agentType?: string;
 }
+export interface PendingObservation {
+  id?: string;
+  printedName: string;
+  suggestedKey?: string;
+  date: string;
+  rawValue: number | string;
+  rawUnit?: string;
+  sourceJobId?: string;
+  printedRange?: string;
+  labFlag?: string;
+  createdAt?: number;
+}
+
 export interface UserProfile {
   uid?: string;
   email?: string;
@@ -166,6 +179,7 @@ export interface UserProfile {
   deletedNotUsedBiomarkerKeys?: Record<string, number>;
   notUsedInMedicalHistory?: Record<string, { flaggedAt: number }>;
   bmiAutoLogged?: boolean;
+  pendingObservations?: PendingObservation[];
   approved_agent1_batches?: { [key: string]: boolean };
   approved_data_review_batches?: { [key: string]: boolean };
   userType?: 'Admin' | 'Demo' | 'Standard';
