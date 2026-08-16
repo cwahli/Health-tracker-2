@@ -1046,6 +1046,21 @@ export default function App() {
                     })
                   });
                   if (res.ok) {
+                    // M-FIX2: A 200 here does not guarantee THIS job was actually queued.
+                    // The server's per-user in-flight lock can silently redirect a new
+                    // submission onto an older, unrelated, still-running job and return
+                    // duplicatePrevented:true with that OLDER job's id. Previously this
+                    // was indistinguishable from a real success, so the client polled a
+                    // jobId the server never created and only found out 3 minutes later
+                    // via the generic timeout message, with no real analysis ever run.
+                    let resBody: any = null;
+                    try { resBody = await res.clone().json(); } catch { /* non-JSON body, treat as normal success */ }
+                    if (resBody && resBody.duplicatePrevented) {
+                      throw new Error(
+                        `An earlier analysis for your account is still ${resBody.status || 'in progress'}. ` +
+                        `Please wait a moment for it to finish, then retry.`
+                      );
+                    }
                     submitOk = true;
                     break;
                   }

@@ -652,6 +652,27 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           clientConsoleLogs: payload.clientConsoleLogs || [],
           networkErrors: payload.networkErrors || [],
           userActionBreadcrumbs: payload.userActionBreadcrumbs || [],
+          // M-FIX1: Medical/biomarker agents (agent1_step1 and friends) return these
+          // fields directly on finalPayload. They were previously dropped here because
+          // this cleanResult builder was written only for the food-log shape. Carrying
+          // them through — both top-level and nested under agentResult — lets the
+          // client's existing agentResult spread (src/App.tsx, succeeded-status handler)
+          // pick them up without any client-side changes.
+          agentType: finalPayload?.agentType || undefined,
+          extractedData: finalPayload?.extractedData || undefined,
+          hasMoreMarkers: finalPayload?.hasMoreMarkers || undefined,
+          remainingText: finalPayload?.remainingText || undefined,
+          estimatedTotalMarkers: finalPayload?.estimatedTotalMarkers ?? undefined,
+          unmappedTests: finalPayload?.unmappedTests || undefined,
+          currentBatch: finalPayload?.currentBatch || undefined,
+          agentResult: {
+            extractedData: finalPayload?.extractedData || undefined,
+            hasMoreMarkers: finalPayload?.hasMoreMarkers || undefined,
+            remainingText: finalPayload?.remainingText || undefined,
+            estimatedTotalMarkers: finalPayload?.estimatedTotalMarkers ?? undefined,
+            unmappedTests: finalPayload?.unmappedTests || undefined,
+            currentBatch: finalPayload?.currentBatch || undefined,
+          },
         };
 
         try {
