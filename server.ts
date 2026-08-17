@@ -10938,7 +10938,7 @@ Your output MUST be a valid JSON object matching the schema provided.`;
         } catch (e) {
           cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
         }
-        return res.json(mergeStagedExtract({
+        const mergedResult = mergeStagedExtract({
           text,
           agentType,
           extractedData: cleanJson,
@@ -10949,7 +10949,9 @@ Your output MUST be a valid JSON object matching the schema provided.`;
           currentBatch: req.body.currentBatch || 1,
           agentPrompt: fullPromptSent,
           apiCalls: [{ type: 'gemini', label: `Medical History Agent (${engine || 'gemini-3.5-flash-lite'})` }]
-        }, ingestTrace));
+        }, ingestTrace);
+        addDebugLog(`[Medical Analyze Agent] Post-merge extractedData: ${Array.isArray(mergedResult.extractedData) ? mergedResult.extractedData.length : 'not-array'} row(s) sent to client (LLM leftover parsed: ${Array.isArray(cleanJson) ? cleanJson.length : 'not-array'}, ingestTrace present: ${!!ingestTrace}, ingestTrace rows: ${ingestTrace?.rows?.length ?? 0}).`, explicitSessionId);
+        return res.json(mergedResult);
       }
 
       if (agentType === "biomarker_review") {
