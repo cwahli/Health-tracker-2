@@ -28,6 +28,23 @@ export default function TaskPlaceholderCard({
 }: TaskPlaceholderCardProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [nowTs, setNowTs] = useState(() => Date.now());
+
+  // Tick once per second while this job is actively in-flight, so the
+  // "elapsed" readout below stays live. Cleared automatically once the job
+  // leaves an active state (effect re-runs and the old interval is cleared).
+  useEffect(() => {
+    const isActive = job.status === 'running' || job.status === 'processing' || job.status === 'queued';
+    if (!isActive) return;
+    const interval = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [job.status]);
+
+  const elapsedSeconds = job.createdAt ? Math.max(0, Math.floor((nowTs - new Date(job.createdAt).getTime()) / 1000)) : null;
+  const elapsedLabel = elapsedSeconds !== null
+    ? `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, '0')}`
+    : null;
+  const elapsedIsLong = (elapsedSeconds ?? 0) >= 180; // 3 minutes
 
   const handleLocalSave = async () => {
     if (!pendingFoodLog || isSaving) return;
@@ -438,9 +455,14 @@ export default function TaskPlaceholderCard({
                     <span>Uploaded to server • Safe to close browser & check back later</span>
                   </div>
                 ) : (
-                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/60">
-                    <AlertTriangle className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                  <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${elapsedIsLong ? 'text-red-800 dark:text-red-200 bg-red-50 dark:bg-red-950/40 border-red-200/60 dark:border-red-800/60' : 'text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border-amber-200/60 dark:border-amber-800/60'}`}>
+                    <AlertTriangle className={`w-3 h-3 flex-shrink-0 ${elapsedIsLong ? 'text-red-500' : 'text-amber-500'}`} />
                     <span>Uploading to server… Keep this tab open</span>
+                  </div>
+                )}
+                {elapsedLabel && (
+                  <div className={`text-[10px] font-mono ${elapsedIsLong ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
+                    {elapsedIsLong ? `Stuck for ${elapsedLabel} — this is longer than normal` : `${elapsedLabel} elapsed`}
                   </div>
                 )}
               </div>

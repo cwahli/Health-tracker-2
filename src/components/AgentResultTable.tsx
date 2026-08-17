@@ -989,7 +989,8 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
             } else if (isValueMatch && dictUnit && !isSameUnit(rowUnit, dictUnit)) {
               isUnitChanged = true;
               oldUnit = dictUnit;
-              changeReason = `It looks like you have the wrong metric (${rowUnit}). Would you like to convert it to IS (${dictUnit})?`;
+              console.warn(`[UnitCompare] ${biomarkerName} (${key}): extracted unit=${rowUnit}, saved unit=${dictUnit} (source: profile.customBiomarkers, last updated ${customDef?.updatedAt || 'unknown'}). Saved unit is not a verified clinical/SI standard — it is simply the unit first recorded for this biomarker.`);
+              changeReason = `Unit differs from your saved record: this extracted value uses ${rowUnit}, your saved history uses ${dictUnit}. Convert this new value to match your saved unit (${dictUnit})?`;
             } else {
               oldValue = matchVal;
               isChanged = true;
@@ -1255,7 +1256,8 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
             } else if (isValueMatch && dictUnit && !isSameUnit(rowUnit, dictUnit)) {
               isUnitChanged = true;
               oldUnit = dictUnit;
-              changeReason = `It looks like you have the wrong metric (${rowUnit}). Would you like to convert it to IS (${dictUnit})?`;
+              console.warn(`[UnitCompare] ${biomarkerName} (${key}): extracted unit=${rowUnit}, saved unit=${dictUnit} (source: profile.customBiomarkers, last updated ${customDef?.updatedAt || 'unknown'}). Saved unit is not a verified clinical/SI standard — it is simply the unit first recorded for this biomarker.`);
+              changeReason = `Unit differs from your saved record: this extracted value uses ${rowUnit}, your saved history uses ${dictUnit}. Convert this new value to match your saved unit (${dictUnit})?`;
             } else {
               oldValue = matchVal;
               isChanged = true;
@@ -2335,7 +2337,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                                 onClick={() => onSendMessage(`Please update the current extraction: mathematically convert the value of ${row.biomarker} from ${row.unit} to ${row.oldUnit}. Return the full updated data in the 'entries' array and set mode to 'extract_chunk'.`)}
                                 className="self-start text-[9px] bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-800/60 text-amber-700 dark:text-amber-300 font-bold py-0.5 px-2 rounded transition-colors"
                               >
-                                Convert to IS ({row.oldUnit})
+                                Match saved unit ({row.oldUnit})
                               </button>
                             )}
                           </div>

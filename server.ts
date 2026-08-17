@@ -10826,7 +10826,7 @@ Your output MUST be a valid JSON object matching the schema provided.`;
                   : undefined
           });
           
-          addDebugLog(`[Medical Analyze Agent] Response Received:\n${textOutput}`, explicitSessionId);
+          addDebugLog(`[Medical Analyze Agent] Response received (${textOutput?.length || 0} chars). Full payload already logged above by [UnifiedLLM-Response].`, explicitSessionId);
           sendLog('status', 'Response received, finalizing...');
 
           if (agentType === "agent1_step3") {
@@ -10951,6 +10951,15 @@ Your output MUST be a valid JSON object matching the schema provided.`;
           apiCalls: [{ type: 'gemini', label: `Medical History Agent (${engine || 'gemini-3.5-flash-lite'})` }]
         }, ingestTrace);
         addDebugLog(`[Medical Analyze Agent] Post-merge extractedData: ${Array.isArray(mergedResult.extractedData) ? mergedResult.extractedData.length : 'not-array'} row(s) sent to client (LLM leftover parsed: ${Array.isArray(cleanJson) ? cleanJson.length : 'not-array'}, ingestTrace present: ${!!ingestTrace}, ingestTrace rows: ${ingestTrace?.rows?.length ?? 0}).`, explicitSessionId);
+        try {
+          const __rowsForLog = Array.isArray(mergedResult.extractedData) ? mergedResult.extractedData : [];
+          const __tableLog = __rowsForLog.slice(0, 200).map((r: any) =>
+            `${r.biomarker ?? '—'} | ${r.date ?? '—'} | value=${r.numeric_value ?? r.value ?? r.qualitative_value ?? '—'} | unit=${r.unit ?? '—'}`
+          ).join('\n');
+          addDebugLog(`[Medical Analyze Agent] Extracted rows table (${__rowsForLog.length} total, showing up to 200):\n${__tableLog}`, explicitSessionId);
+        } catch (e: any) {
+          addDebugLog(`[Medical Analyze Agent] Failed to log extracted rows table: ${e?.message || e}`, explicitSessionId);
+        }
         return res.json(mergedResult);
       }
 
