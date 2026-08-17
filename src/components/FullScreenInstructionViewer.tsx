@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Copy, Check, Terminal, ShieldAlert, BookOpen, BrainCircuit, Edit2, RotateCcw, Save, Search, Code, Info, Sparkles, Plus, ChevronRight } from 'lucide-react';
+import { X, Copy, Check, Terminal, ShieldAlert, BookOpen, BrainCircuit, Edit2, RotateCcw, Save, Search, Code, Info, Sparkles, Plus, ChevronRight, Activity } from 'lucide-react';
 import { auth } from '../firebase';
 import { readAliasedInstruction } from '../utils/biomarkerLifecycle';
 
@@ -575,6 +575,44 @@ JSON Schema:
   {
     "key": "alanine_aminotransferase",
     "name": "Alanine Aminotransferase (ALT)"
+  }
+]`;
+    } else if (key === 'calibrate_ranges' || key === 'calibrate') {
+      title = "Clinical Reference Range Calibration Agent";
+      subtitle = "Calibrates evidence-based clinical population reference intervals, standardized units, optimal brackets, and medical practice categories.";
+      icon = Activity;
+      defaultSystemInstruction = `You are an automated Clinical Reference Range Calibration Agent operating at the Biomarker Reference Dictionary level.
+Your mission is to calibrate standard, evidence-based clinical population reference intervals, standardized units, optimal brackets, medical practice groupings, and risk classifications for medical laboratory biomarkers, biometric readings, clinical questionnaires, and symptom scores.
+
+=== OBJECTIVE ===
+For each provided biomarker, determine:
+1. Standardized Unit: Accurate clinical unit according to preferred metric system. For questionnaires/scores use "score" or "points". For qualitative tests use "qualitative".
+2. Normal Reference Range (Population Baseline):
+   - minRange: Lower bound of normal (numeric float/integer, or null if single-sided upper bound, e.g. < 5.0 or qualitative).
+   - maxRange: Upper bound of normal (numeric float/integer, or null if single-sided lower bound, e.g. > 1.0 or qualitative).
+   - normalRange: Exact human-readable normal interval string (e.g., "10 - 40", "< 5.0", "> 1.0", "Negative", "0 - 7", "135 - 145").
+3. Optimal / Functional Range:
+   - optimalMin: Numeric lower optimal threshold (or null).
+   - optimalMax: Numeric upper optimal threshold (or null).
+   - optimalRange: Human-readable optimal interval string (e.g., "15 - 30", "< 2.5", "0 - 4", or null if identical to normal range).
+4. Clinical Classification:
+   - standardMedicalGrouping: Clinical practice area ('Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Cardiology', 'Endocrinology', 'Immunology', 'Neurology & Cognitive', 'Behavioral & Mental Health', 'Toxicology & Addiction', 'Screenings & Assessments', 'Gastroenterology', 'Musculoskeletal', 'Pulmonology', 'Wellness & Lifestyle', 'Other').
+   - riskCategories: Array of clinical risk category tags.
+   - potentialMedicalConditions: Array of associated conditions / clinical indications.
+5. Clinical Reasoning:
+   - notes: Clear, concise clinical reasoning citing standard reference authorities.
+   - confidence: "high", "medium", or "low".
+
+=== SYSTEM CONSTRAINTS ===
+Return a single flat JSON array of objects inside the "calibratedBiomarkers" key.
+Output ONLY the raw JSON text.`;
+      defaultVariableData = `BIOMARKERS TO PROCESS:
+[
+  {
+    "key": "alkaline_phosphatase",
+    "name": "Alkaline Phosphatase",
+    "currentUnit": "U/L",
+    "currentRange": ""
   }
 ]`;
     } else if (key === 'data_accuracy') {

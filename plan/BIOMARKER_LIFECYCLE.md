@@ -1077,3 +1077,33 @@ Each line is a test that must not high-confidence-write the wrong thing:
 ### 13.10 Key decision (handoff)
 
 **Layer 1 may only commit when it is boring.** Anything incomplete, specimen-ambiguous, unit-mismatched, implausible, unparseable, or not-a-report goes to Parser as structured leftovers — or to reject. Parser may not invent analytes or numbers. Completely wrong *but well-formed* labs (wrong patient) are a **batch confirm** problem, not an LLM problem.
+
+---
+
+## 14. Structural Architectural Improvements (Planned)
+
+*These concepts are planned to systemically address edge cases in range rendering, demographic branching, and ingestion formatting noise across all biomarkers.*
+
+### 14.1 Demographic-Aware Reference Range Engine
+**Goal:** Replace single, combined string ranges (`"normalRange": "202 - 416"`) with dynamic resolution branches.
+- **Schema Addition:** `BiomarkerDemographicRange` containing specific limits for `male`, `female`, and `ageStratified` thresholds.
+- **Execution:** The central assessment engine (`getEffectiveNormalRange`) will resolve boundaries in real-time utilizing the user profile's `gender` and `age`, allowing precision evaluations of sex-dependent markers (e.g., Uric Acid, Creatinine, Ferritin).
+
+### 14.2 Multi-Line Token & OCR Ingestion Sanitizer
+**Goal:** Eliminate parser artifacts globally.
+- **Sanitization Filter:** A universal pre-processing gate on all ingested lab strings.
+- **Unit Prioritization:** Stripping legacy unit lines when SI lines are present in the same cell stack.
+- **Noise Removal:** Programmatic removal of tokens like `Unknown`, `—`, `(count)`, and `(score)` before database insertion.
+
+### 14.3 Universal Range Archetype & Zero-Width Bound Handler
+**Goal:** Stop division-by-zero errors and scale anomalies on binary/qualitative readouts.
+- **Archetype Classes:** Define discrete rendering logic for four range types:
+  1. Continuous Interval (`[min, max]`)
+  2. Single-Sided Threshold (`< X` or `> Y`)
+  3. Zero-Baseline / Absent (where optimal is strict 0)
+  4. Qualitative / Discrete State (e.g., `Negative`)
+
+### 14.4 Multi-Tier Interval Ranges & Assessment Scale Standardization
+**Goal:** Extend single binary intervals to clinical multi-tier classification.
+- **Tiered Schema:** Introduce `RangeTier[]` to `BiomarkerDefinition` (e.g. tracking BMI stages: Normal, Overweight, Obesity I, II, III).
+- **Assessment Metadata Protocol:** Standardize clinical questionnaires (AUDIT, PHQ, HDSS) with explicit instrument properties: `scaleMin`, `scaleMax`, and `interpretationTiers` ensuring consistent UI scale rendering independent of the specific test limits.

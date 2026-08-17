@@ -366,6 +366,102 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     }
   },
   {
+    key: 'hemoglobin',
+    name: 'Hemoglobin',
+    category: 'hematology',
+    unit: 'g/dL',
+    normalRange: '12.0 - 17.5',
+    descriptions: {
+      en: 'Oxygen-carrying protein in red blood cells.',
+      fr: 'Protéine transporteuse d\'oxygène dans les globules rouges.',
+      zh: '红细胞中携带氧气的关键蛋白质（血红蛋白）。',
+      id: 'Protein pembawa oksigen dalam sel darah merah.'
+    },
+    riskCategories: ['Hematology'],
+    standardMedicalGrouping: 'Hematology',
+    aliases: ['haemoglobin', 'hgb', 'hb', 'hemoglobin_g_l', 'haemoglobinestimation', 'hemoglobingl', 'hemoglobingdl']
+  },
+  {
+    key: 'mean_corpuscular_hemoglobin',
+    name: 'Mean Corpuscular Hemoglobin (MCH)',
+    category: 'hematology',
+    unit: 'pg',
+    normalRange: '27 - 33',
+    descriptions: {
+      en: 'Average amount of hemoglobin per red blood cell.',
+      fr: 'Quantité moyenne d\'hémoglobine par globule rouge.',
+      zh: '每个红细胞内平均含有的血红蛋白量（平均红细胞血红蛋白量）。',
+      id: 'Jumlah rata-rata hemoglobin per sel darah merah.'
+    },
+    riskCategories: ['Hematology'],
+    standardMedicalGrouping: 'Hematology',
+    aliases: ['mch', 'mean_corpuscular_hemoglobin_pg', 'meancorpuscularhemoglobin', 'meancorpuscularhemoglobinpg', 'meancorpuschaemoglobinmch', 'haemoglobin_mch']
+  },
+  {
+    key: 'mean_corpuscular_volume',
+    name: 'Mean Corpuscular Volume (MCV)',
+    category: 'hematology',
+    unit: 'fL',
+    normalRange: '80 - 100',
+    descriptions: {
+      en: 'Average volume or size of red blood cells.',
+      fr: 'Volume globulaire moyen reflétant la taille des globules rouges.',
+      zh: '红细胞平均体积（MCV），反映红细胞大小。',
+      id: 'Volume rata-rata atau ukuran sel darah merah.'
+    },
+    riskCategories: ['Hematology'],
+    standardMedicalGrouping: 'Hematology',
+    aliases: ['mcv', 'mean_corpuscular_volume_fl', 'meancorpuscularvolume', 'meancorpuscularvolumemcv']
+  },
+  {
+    key: 'mean_corpuscular_hemoglobin_concentration',
+    name: 'Mean Corpuscular Hemoglobin Concentration (MCHC)',
+    category: 'hematology',
+    unit: 'g/dL',
+    normalRange: '32 - 36',
+    descriptions: {
+      en: 'Average concentration of hemoglobin inside red blood cells.',
+      fr: 'Concentration corpusculaire moyenne en hémoglobine.',
+      zh: '平均红细胞血红蛋白浓度（MCHC）。',
+      id: 'Konsentrasi rata-rata hemoglobin di dalam sel darah merah.'
+    },
+    riskCategories: ['Hematology'],
+    standardMedicalGrouping: 'Hematology',
+    aliases: ['mchc', 'mean_corpuscular_hb_conc_g_l', 'meancorpuschbconcmchc', 'mean_corpuscular_hemoglobin_concentration_g_l']
+  },
+  {
+    key: 'rdw',
+    name: 'Red Cell Distribution Width (RDW)',
+    category: 'hematology',
+    unit: '%',
+    normalRange: '11.5 - 14.5',
+    descriptions: {
+      en: 'Measurement of the variation in red blood cell size and volume.',
+      fr: 'Indice de distribution des globules rouges mesurant l\'anisocytose.',
+      zh: '红细胞体积分布宽度，反映红细胞大小的一致性。',
+      id: 'Variasi ukuran dan volume sel darah merah.'
+    },
+    riskCategories: ['Hematology'],
+    standardMedicalGrouping: 'Hematology',
+    aliases: ['red_blood_cell_distribution_width', 'redbloodcelldistributwidth', 'red_blood_cell_distribution_width_percent']
+  },
+  {
+    key: 'serum_albumin',
+    name: 'Serum Albumin',
+    category: 'liver',
+    unit: 'g/L',
+    normalRange: '35 - 50',
+    descriptions: {
+      en: 'Main protein produced by the liver, keeping fluid balance in vessels.',
+      fr: 'Principale protéine produite par le foie maintenant la pression oncotique.',
+      zh: '肝脏合成的主要蛋白质，维持血管内胶体渗透压及营养状态。',
+      id: 'Protein utama yang diproduksi oleh hati.'
+    },
+    riskCategories: ['Liver', 'Kidney'],
+    standardMedicalGrouping: 'Hepatic',
+    aliases: ['albumin', 'serumalbumin', 'serum_albumin_g_l']
+  },
+  {
     key: 'total_protein',
     name: 'Total Protein',
     category: 'other',
@@ -490,7 +586,7 @@ export const COMMON_PREFIXES = [
 ];
 export const COMMON_SUFFIXES = [
   '_level', '_count', '_serum', '_rate', '_ratio', '_percent', '_percentage', 
-  '_val', '_value', '_score', '_concentration', '_estimation', '_standardised', '_conc'
+  '_val', '_value', '_score', '_estimation', '_standardised'
 ];
 export const COMMON_UNIT_SUFFIXES = [
   '_umol_l', '_umoll', '_u_l', '_ul', '_iu_l', '_iul', '_iu_ml', '_iuml',
@@ -498,7 +594,7 @@ export const COMMON_UNIT_SUFFIXES = [
   '_g_l', '_gl', '_g_dl', '_gdl', '_ug_dl', '_ugdl', '_ug_l', '_ugl', '_mcg_dl', '_mcgdl', '_mcg_l', '_mcgl',
   '_fl', '_k_ul', '_kul', '_m_ul', '_mul',
   '_ml_min_1_73m2', '_ml_min_173m2', '_mlmin173m2', '_mlmin_173m2', '_ml_min_173_m2', '_ml_min', '_mlmin',
-  '_pg_ml', '_pgml', '_ng_dl', '_ngdl', '_ng_ml', '_ngml', '_uiu_ml', '_uiuml', '_miu_l', '_miul', '_beats_min', '_bpm',
+  '_pg_ml', '_pgml', '_pg', '_ng_dl', '_ngdl', '_ng_ml', '_ngml', '_uiu_ml', '_uiuml', '_miu_l', '_miul', '_beats_min', '_bpm',
   '_10_9_l', '_109l', '_10_12_l', '_1012l', '_10_6_ul', '_106ul',
   '_kg_m2', '_kgm2', '_points', '_percent', '_percentage', '_pct', '_fraction', '_l_l', '_ratio', '_score'
 ];
@@ -610,19 +706,23 @@ export const CLINICAL_SYNONYM_MAP: Record<string, string> = {
   'platelets': 'platelets',
   'plateletcount': 'platelets',
   'plt': 'platelets',
-  'mcv': 'mcv',
-  'meancorpuscularvolume': 'mcv',
-  'mch': 'mch',
-  'meancorpuscularhemoglobin': 'mch',
-  'meancorpuscularhaemoglobin': 'mch',
-  'mchc': 'mchc',
-  'meancorpuscularhemoglobinconcentration': 'mchc',
-  'meancorpuscularhaemoglobinconcentration': 'mchc',
+  'mcv': 'mean_corpuscular_volume',
+  'meancorpuscularvolume': 'mean_corpuscular_volume',
+  'mch': 'mean_corpuscular_hemoglobin',
+  'meancorpuscularhemoglobin': 'mean_corpuscular_hemoglobin',
+  'meancorpuscularhaemoglobin': 'mean_corpuscular_hemoglobin',
+  'meancorpuscularhemoglobinpg': 'mean_corpuscular_hemoglobin',
+  'meancorpuschaemoglobinmch': 'mean_corpuscular_hemoglobin',
+  'mchc': 'mean_corpuscular_hemoglobin_concentration',
+  'meancorpuscularhemoglobinconcentration': 'mean_corpuscular_hemoglobin_concentration',
+  'meancorpuscularhaemoglobinconcentration': 'mean_corpuscular_hemoglobin_concentration',
   'rdw': 'rdw',
   'redcelldistributionwidth': 'rdw',
   'redbloodcelldistributionwidth': 'rdw',
   'mpv': 'mean_platelet_volume',
   'meanplateletvolume': 'mean_platelet_volume',
+  'pdw': 'platelet_distribution_width',
+  'plateletdistributionwidth': 'platelet_distribution_width',
   'neutrophil': 'neutrophil_count',
   'neutrophils': 'neutrophil_count',
   'neutrophilcount': 'neutrophil_count',
@@ -723,6 +823,28 @@ export function normalizeStemKey(key: string): string {
   return stem.replace(/^_+|_+$/g, '');
 }
 
+/**
+ * Normalizes a human-readable biomarker name into a standardized comparable string
+ * stripping unit suffixes, parenthetical abbreviations, and clinical filler words.
+ */
+export function normalizeBiomarkerName(name?: string): string {
+  if (!name) return '';
+  let clean = name.toLowerCase().trim();
+
+  // Strip parenthetical abbreviations e.g. "Body Mass Index (BMI)" => "Body Mass Index", "AST (SGOT)" => "AST"
+  clean = clean.replace(/\([^)]*\)/g, ' ');
+
+  // Strip common trailing unit tokens
+  clean = clean.replace(/\b(?:pg(?:\/ml)?|ng\/(?:ml|dl)|mg\/(?:dl|l)|mmol\/(?:l|mol)|µmol\/l|umol\/l|u\/l|iu\/l|miu\/l|uiu\/ml|k\/ul|10\^9\/l|10\^12\/l|fl|kg\/m2|kg\/m²|ml\/min(?:\/1\.73m²)?|ml\/min\/1\.73m2|g\/l|g\/dl|score|points|steps|beats\/min|bpm|percent|%)\b/gi, ' ');
+
+  // Strip clinical filler words
+  clean = clean.replace(/\b(?:serum|plasma|blood|total|level|levels|count|estimation|calculated|rate|ratio|index|score|test)\b/gi, ' ');
+
+  // Collapse spaces and symbols
+  clean = clean.replace(/[^a-z0-9]+/g, ' ').trim();
+  return clean;
+}
+
 const CUSTOM_KEY_ALIASES: Record<string, string> = {
   'hemorrhoids': 'hemorrhoidal_symptom_score',
   'blood_in_stool': 'hemorrhoidal_symptom_score',
@@ -735,6 +857,8 @@ const CUSTOM_KEY_ALIASES: Record<string, string> = {
   'audit_c_score': 'audit_c_total_score',
   'hematocrit_l_l': 'hematocrit',
   'hemoglobin_g_l': 'hemoglobin',
+  'hemoglobingl': 'hemoglobin',
+  'hemoglobingdl': 'hemoglobin',
   'serum_albumin_2': 'serum_albumin',
   'serum_albumin_g_l': 'serum_albumin',
   'serum_globulin_g_l': 'serum_globulin',
@@ -763,6 +887,8 @@ const CUSTOM_KEY_ALIASES: Record<string, string> = {
   'aspartate_aminotransferase': 'ast',
   'fasting_blood_glucose': 'fasting_glucose',
   'body_mass_index': 'bmi',
+  'bmi_kg_m2': 'bmi',
+  'bmikgm2': 'bmi',
   'weight_kg': 'weight',
   'mean_platelet_volume_fl': 'mean_platelet_volume',
   'neutrophil_count_10_9_l': 'neutrophil_count',
@@ -774,6 +900,8 @@ const CUSTOM_KEY_ALIASES: Record<string, string> = {
   'mean_corpuscular_hemoglobin_concentration_mchc': 'mean_corpuscular_hemoglobin_concentration',
   'serum_adjusted_calcium_mmol_l': 'serum_adjusted_calcium',
   'mean_corpuscular_hemoglobin_pg': 'mean_corpuscular_hemoglobin',
+  'meancorpuscularhemoglobinpg': 'mean_corpuscular_hemoglobin',
+  'meancorpuscularhemoglobin': 'mean_corpuscular_hemoglobin',
   'platelet_distribution_width_fl': 'platelet_distribution_width',
   'platelet_distribution_width_pdw': 'platelet_distribution_width',
   'serum_inorganic_phosphate_mmol_l': 'serum_inorganic_phosphate',
@@ -786,6 +914,10 @@ const CUSTOM_KEY_ALIASES: Record<string, string> = {
   'serumpotassium': 'serum_potassium',
   'serumcreatinine': 'creatinine',
   'egfrcreatckdepi173m2': 'egfr',
+  'egfr_mlmin173m2': 'egfr',
+  'egfr_ml_min_1_73m2': 'egfr',
+  'egfr_mlmin_173m2': 'egfr',
+  'egfr_ml_min_173_m2': 'egfr',
   'egfrmlmin173m2': 'egfr',
   'egfrmlmin173': 'egfr',
   'serumalbumin': 'serum_albumin',
@@ -802,9 +934,9 @@ const CUSTOM_KEY_ALIASES: Record<string, string> = {
   'redbloodcellrbccount': 'rbc',
   'haemoglobinestimation': 'hemoglobin',
   'haematocrit': 'hematocrit',
-  'meancorpuscularvolumemcv': 'mcv',
-  'meancorpuschaemoglobinmch': 'mch',
-  'meancorpuschbconcmchc': 'mchc',
+  'meancorpuscularvolumemcv': 'mean_corpuscular_volume',
+  'meancorpuschaemoglobinmch': 'mean_corpuscular_hemoglobin',
+  'meancorpuschbconcmchc': 'mean_corpuscular_hemoglobin_concentration',
   'redbloodcelldistributwidth': 'rdw',
   'plateletcount': 'platelets',
   'meanplateletvolume': 'mean_platelet_volume',
@@ -873,11 +1005,24 @@ export function getMappedBiomarkerKey(rawKey: string, rawName?: string): string 
       if (cleanNoUnderscore === 'albumin') return 'serum_albumin';
     }
 
+    // eGFR guards
+    if (cleanNoUnderscore.startsWith('egfr') || clean.startsWith('egfr')) {
+      return 'egfr';
+    }
+
     // MCH / Hemoglobin guard
-    if (clean === 'mch' || (clean.includes('mean_corpuscular_hemoglobin') && !clean.includes('concentration'))) {
+    if (
+      clean === 'mch' || 
+      (clean.includes('mean_corpuscular_hemoglobin') && !clean.includes('concentration')) ||
+      (cleanNoUnderscore.includes('meancorpuscularhemoglobin') && !cleanNoUnderscore.includes('concentration') && !cleanNoUnderscore.includes('volume'))
+    ) {
       return 'mean_corpuscular_hemoglobin';
     }
-    if (cleanNoUnderscore === 'hemoglobin' || cleanNoUnderscore === 'haemoglobin') {
+    if (
+      (cleanNoUnderscore === 'hemoglobin' || cleanNoUnderscore === 'haemoglobin' || cleanNoUnderscore.startsWith('hemoglobing') || cleanNoUnderscore.startsWith('haemoglobing')) &&
+      !cleanNoUnderscore.includes('meancorpuscular') &&
+      !cleanNoUnderscore.includes('a1c')
+    ) {
       return 'hemoglobin';
     }
 
@@ -929,6 +1074,199 @@ export function getMappedBiomarkerKey(rawKey: string, rawName?: string): string 
   const clean = primaryInput.toLowerCase().replace(/[^a-z0-9_]/g, '');
   const rawClean = clean.replace(/^_+|_+$/g, '');
   return rawClean || clean || primaryInput;
+}
+
+/**
+ * Checks if two biomarker definitions/records are duplicates of each other using
+ * key stems, normalized names, unit compatibility, and range/value similarity.
+ */
+export function isBiomarkerDuplicateCandidate(
+  bioA: { key: string; name?: string; unit?: string; normalRange?: string; values?: any[]; category?: string },
+  bioB: { key: string; name?: string; unit?: string; normalRange?: string; values?: any[]; category?: string }
+): { isMatch: boolean; confidence: number; reason: string; matchType: string } {
+  if (!bioA || !bioB || !bioA.key || !bioB.key) {
+    return { isMatch: false, confidence: 0, reason: 'Invalid biomarker entries', matchType: 'none' };
+  }
+
+  if (bioA.key === bioB.key) {
+    return { isMatch: true, confidence: 1.0, reason: 'Exact key identity', matchType: 'exact_key' };
+  }
+
+  const stemA = normalizeStemKey(bioA.key);
+  const stemB = normalizeStemKey(bioB.key);
+
+  const rawCleanA = (bioA.name || bioA.key).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const rawCleanB = (bioB.name || bioB.key).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  const normNameA = normalizeBiomarkerName(bioA.name || bioA.key);
+  const normNameB = normalizeBiomarkerName(bioB.name || bioB.key);
+
+  // 1. Canonical Stem Match (e.g. egfr and egfr_mlmin173m2, ast and ast_serum_level_u_l)
+  if (stemA && stemB && stemA === stemB) {
+    return {
+      isMatch: true,
+      confidence: 0.98,
+      reason: `Shared canonical stem "${stemA}"`,
+      matchType: 'canonical_stem'
+    };
+  }
+
+  // 2. Exact Normalized Name Match (e.g. Name: "eGFR" vs Name: "eGFR", "Body Mass Index" vs "Body Mass Index")
+  if (rawCleanA && rawCleanB && rawCleanA === rawCleanB) {
+    return {
+      isMatch: true,
+      confidence: 0.99,
+      reason: `Exact identical biomarker name "${bioA.name || bioA.key}"`,
+      matchType: 'exact_name'
+    };
+  }
+
+  // 3. Unit-Stripped Normalized Name Match (e.g. "Mean Corpuscular Hemoglobin Pg" vs "Mean Corpuscular Hemoglobin")
+  if (normNameA && normNameB && (normNameA === normNameB || normNameA.replace(/\s+/g, '') === normNameB.replace(/\s+/g, ''))) {
+    return {
+      isMatch: true,
+      confidence: 0.95,
+      reason: `Standardized name match "${normNameA}" after unit/abbreviation normalization`,
+      matchType: 'normalized_name'
+    };
+  }
+
+  // 4. Clinical Synonym Dictionary match
+  const synA = CLINICAL_SYNONYM_MAP[rawCleanA] || CLINICAL_SYNONYM_MAP[stemA];
+  const synB = CLINICAL_SYNONYM_MAP[rawCleanB] || CLINICAL_SYNONYM_MAP[stemB];
+  if (synA && synB && synA === synB) {
+    return {
+      isMatch: true,
+      confidence: 0.96,
+      reason: `Clinical synonym match resolving to "${synA}"`,
+      matchType: 'clinical_synonym'
+    };
+  }
+
+  // 5. Close Substring / Stem Ingestion with unit/category compatibility check
+  const isSubstring = (rawCleanA.length > 5 && rawCleanB.includes(rawCleanA)) || (rawCleanB.length > 5 && rawCleanA.includes(rawCleanB));
+  const isNameSubstring = (normNameA.length > 4 && normNameB.includes(normNameA)) || (normNameB.length > 4 && normNameA.includes(normNameB));
+
+  if (isSubstring || isNameSubstring) {
+    // Check for distinct clinical discriminators (false friends)
+    const hasConcentrationConflict = (rawCleanA.includes('concentration') !== rawCleanB.includes('concentration')) ||
+      (rawCleanA.includes('conc') !== rawCleanB.includes('conc')) ||
+      (rawCleanA.includes('mchc') !== rawCleanB.includes('mchc'));
+    const hasVolumeConflict = rawCleanA.includes('volume') !== rawCleanB.includes('volume');
+    const hasWidthConflict = (rawCleanA.includes('width') !== rawCleanB.includes('width')) || (rawCleanA.includes('distribution') !== rawCleanB.includes('distribution'));
+    const hasFluidConflict = (rawCleanA.includes('urine') !== rawCleanB.includes('urine')) || (rawCleanA.includes('serum') !== rawCleanB.includes('serum') && (rawCleanA.includes('urine') || rawCleanB.includes('urine')));
+    const hasFreeTotalConflict = (rawCleanA.includes('free') !== rawCleanB.includes('free')) || (rawCleanA.includes('total') !== rawCleanB.includes('total'));
+    const hasLipidTypeConflict = (rawCleanA.includes('hdl') !== rawCleanB.includes('hdl')) || (rawCleanA.includes('ldl') !== rawCleanB.includes('ldl')) || (rawCleanA.includes('vldl') !== rawCleanB.includes('vldl'));
+
+    const isFalseFriend = hasConcentrationConflict || hasVolumeConflict || hasWidthConflict || hasFluidConflict || hasFreeTotalConflict || hasLipidTypeConflict;
+
+    if (!isFalseFriend) {
+      // Confirm with unit or category or range if available
+      const unitA = (bioA.unit || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const unitB = (bioB.unit || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const unitMatch = !unitA || !unitB || unitA === unitB || unitA.includes(unitB) || unitB.includes(unitA);
+      
+      const rangeA = (bioA.normalRange || '').toLowerCase().trim();
+      const rangeB = (bioB.normalRange || '').toLowerCase().trim();
+      const rangeMatch = !rangeA || !rangeB || rangeA === 'unknown' || rangeB === 'unknown' || rangeA === rangeB;
+
+      if (unitMatch && rangeMatch) {
+        return {
+          isMatch: true,
+          confidence: 0.88,
+          reason: `High substring name similarity with compatible units and clinical ranges`,
+          matchType: 'close_name_match'
+        };
+      }
+    }
+  }
+
+  return { isMatch: false, confidence: 0, reason: 'No significant duplicate signature detected', matchType: 'none' };
+}
+
+/**
+ * Searches across the entire dictionary universe (built-in catalog, active custom biomarkers,
+ * not-used biomarkers, and logged historical entries) to identify if a new biomarker candidate
+ * is already present or duplicates an existing entry.
+ */
+export function findDuplicateOrExistingBiomarker(
+  input: string,
+  profile?: any,
+  biomarkerHistory?: any[]
+): {
+  isDuplicate: boolean;
+  matchedKey: string;
+  matchedName: string;
+  isNotUsed: boolean;
+  isBuiltIn: boolean;
+  reason: string;
+} | null {
+  if (!input || !input.trim()) return null;
+  const target = input.trim();
+  const targetStem = normalizeStemKey(target);
+  const targetNormName = normalizeBiomarkerName(target);
+  const mappedKey = getMappedBiomarkerKey(target);
+
+  const customBiomarkers = profile?.customBiomarkers || {};
+  const notUsedBiomarkers = Array.isArray(profile?.notUsedBiomarkers) ? profile.notUsedBiomarkers : [];
+  const notUsedMedical = Array.isArray(profile?.notUsedInMedicalHistory) ? profile.notUsedInMedicalHistory : [];
+  const allNotUsed = new Set([...notUsedBiomarkers, ...notUsedMedical]);
+
+  // Candidate Pool:
+  // 1. Check Built-in Catalog
+  for (const def of biomarkerDefinitions) {
+    const match = isBiomarkerDuplicateCandidate(
+      { key: target, name: target },
+      { key: def.key, name: def.name, unit: def.unit, normalRange: def.normalRange }
+    );
+    if (match.isMatch || def.key === mappedKey || (def.aliases && def.aliases.includes(target))) {
+      const isNotUsed = allNotUsed.has(def.key);
+      return {
+        isDuplicate: true,
+        matchedKey: def.key,
+        matchedName: def.name,
+        isNotUsed,
+        isBuiltIn: true,
+        reason: match.reason || `Direct match with standard biomarker catalog (${def.name})`
+      };
+    }
+  }
+
+  // 2. Check Custom Biomarkers (active & not-used)
+  for (const [key, def] of Object.entries(customBiomarkers)) {
+    const customDef = def as any;
+    const match = isBiomarkerDuplicateCandidate(
+      { key: target, name: target },
+      { key, name: customDef.name || key, unit: customDef.unit, normalRange: customDef.normalRange }
+    );
+    if (match.isMatch || key === mappedKey || normalizeStemKey(key) === targetStem) {
+      const isNotUsed = allNotUsed.has(key);
+      return {
+        isDuplicate: true,
+        matchedKey: key,
+        matchedName: customDef.name || key,
+        isNotUsed,
+        isBuiltIn: false,
+        reason: match.reason || `Direct match with existing custom biomarker (${customDef.name || key})`
+      };
+    }
+  }
+
+  // 3. Check Not-Used Biomarker Keys that might not be in customBiomarkers
+  for (const notUsedKey of allNotUsed) {
+    if (notUsedKey === mappedKey || normalizeStemKey(notUsedKey) === targetStem) {
+      return {
+        isDuplicate: true,
+        matchedKey: notUsedKey,
+        matchedName: notUsedKey,
+        isNotUsed: true,
+        isBuiltIn: false,
+        reason: `Matched archived/not-used biomarker key (${notUsedKey})`
+      };
+    }
+  }
+
+  return null;
 }
 
 export function getCustomBiomarkerDef(profile: any, coreKey: string) {

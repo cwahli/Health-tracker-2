@@ -12606,7 +12606,7 @@ ${JSON.stringify(selectedBiomarkers, null, 2)}`;
     });
 
     let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
-    addDebugLog(`[Standardize Units Agent] Agent output payload:
+    addDebugLog(`[Medical Categorisation Agent] Agent output payload:
 ${cleanJson}`, explicitSessionId);
     res.json({ jsonResponse: cleanJson });
   } catch (error: any) {
@@ -12614,6 +12614,332 @@ ${cleanJson}`, explicitSessionId);
     addDebugLog(`[Medical Categorisation Agent] Error: ${error.message}`, explicitSessionId);
     console.error("[Medical Categorisation Agent Error]:", error);
     res.status(500).json({ error: "Failed to categorise biomarkers: " + error.message });
+  }
+});
+
+app.post("/api/gemini/calibrate-reference-ranges", async (req, res) => {
+  try {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    const { selectedBiomarkers, engine, customSystemInstruction, unitPreference } = req.body;
+    const modelId = (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite";
+    const isUS = unitPreference === "US";
+    addDebugLog(`[Reference Range Calibration Agent] Request received to calibrate ${selectedBiomarkers?.length} biomarkers using model: ${modelId} with unit preference: ${unitPreference || 'SI'}.`, explicitSessionId);
+
+    const targetUnitSystem = isUS 
+      ? "US Standard Units (Lipids in mg/dL, Proteins in g/dL, Bilirubin in mg/dL, Fasting Glucose in mg/dL, Uric Acid in mg/dL, CBC in k/µL or 10^3/µL, lbs for weight, inches/cm for height)" 
+      : "SI / International Metric Units (Lipids in mmol/L, Proteins in g/L, Bilirubin in µmol/L, Fasting Glucose in mmol/L, Uric Acid in µmol/L, Electrolytes in mmol/L, CBC in 10^9/L, kg for weight, cm for height)";
+
+    let systemInstruction = `You are an automated Clinical Reference Range Calibration Agent operating at the Biomarker Reference Dictionary level.
+Your mission is to calibrate standard, evidence-based clinical population reference intervals, standardized units, optimal brackets, medical practice groupings, and risk classifications for medical laboratory biomarkers, biometric readings, clinical questionnaires, and symptom scores.
+
+=== STRICT UNIT CONSISTENCY DIRECTIVE ===
+You MUST maintain 100% internal unit consistency according to the requested locale: ${targetUnitSystem}.
+- In SI Mode:
+  * Lipids (Total, HDL, LDL, VLDL, Non-HDL, Triglycerides): ALWAYS mmol/L (Never mg/dL).
+  * Proteins (Total Protein, Albumin, Globulin): ALWAYS g/L (e.g. Total protein: 60 - 83 g/L; Albumin: 35 - 50 g/L).
+  * Bilirubin (Total Bilirubin, Direct Bilirubin): ALWAYS µmol/L (e.g. Total bilirubin: 3.4 - 20.5 µmol/L; Direct: 0.0 - 5.0 µmol/L).
+  * Fasting Glucose: mmol/L. Uric Acid: µmol/L (or mmol/L).
+  * Electrolytes & Minerals: mmol/L.
+  * CBC Differential & Counts: 10^9/L.
+- In US Mode:
+  * Lipids, Glucose, Uric Acid, Bilirubin: mg/dL.
+  * Proteins: g/dL (e.g. Total protein: 6.0 - 8.3 g/dL).
+
+=== OBJECTIVE ===
+For each provided biomarker, you MUST determine:
+1. Standardized Unit: The accurate clinical unit according to the selected system. For questionnaires/scores use "score" or "points". For qualitative tests use "qualitative".
+2. Normal Reference Range (Population Baseline):
+   - minRange: Lower bound of normal (numeric float/integer, or null if single-sided upper bound, e.g. < 5.0 or qualitative).
+   - maxRange: Upper bound of normal (numeric float/integer, or null if single-sided lower bound, e.g. > 1.0 or qualitative).
+   - normalRange: Exact human-readable normal interval string (e.g., "10 - 40", "< 3.4", "Negative", "0 - 7", "135 - 145").
+3. Optimal / Functional Range:
+   - optimalMin: Numeric lower optimal threshold (or null).
+   - optimalMax: Numeric upper optimal threshold (or null).
+   - optimalRange: Human-readable optimal interval string (e.g., "15 - 30", "< 2.6", "0 - 3", or null if identical to normal range).
+4. Clinical Classification:
+   - standardMedicalGrouping: Clinical practice area ('Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Cardiology', 'Endocrinology', 'Immunology', 'Neurology & Cognitive', 'Behavioral & Mental Health', 'Toxicology & Addiction', 'Screenings & Assessments', 'Gastroenterology', 'Musculoskeletal', 'Pulmonology', 'Wellness & Lifestyle', 'Other').
+   - riskCategories: Array of clinical risk category tags.
+   - potentialMedicalConditions: Array of associated conditions / clinical indications.
+5. Clinical Reasoning & Guideline Reference:
+   - notes: Clear, concise clinical reasoning citing standard reference authorities (e.g., WHO, KDIGO, ADA, AHA, standard clinical pathology reference manuals). Include sex-stratified ranges where applicable (e.g., uric acid, PSA, creatinine, hemoglobin).
+   - confidence: "high", "medium", or "low".
+
+=== SPECIAL GUIDELINES FOR SCORES, SURVEYS & ANTHROPOMETRICS ===
+- For AUDIT alcohol scores (audit_total_score, audit_c_total_score, audit_binge_drinking_score, audit_guilt_remorse_score, audit_others_concerned_score, audit_memory_loss_score, audit_drinking_frequency, audit_typical_consumption):
+  - Grouping: "Behavioral & Mental Health" or "Toxicology & Addiction", unit: "score" or "points".
+  - Normal range: audit_total_score: "0 - 7", audit_c_total_score: "0 - 3". Subscores: "0" or "0 - 1" (minRange: 0, maxRange: 0 or 1).
+  - In notes: Explicitly document the instrument scale domain (e.g. "Instrument Scale: 0 to 4 points; 0 = Normal / Symptom Absent").
+- For symptom scores (gerd_symptom_score, joint_pain_severity_score, hemorrhoidal_symptom_score):
+  - Normal range: "0" or "0 - 2", unit: "score". Notes must cite instrument scale.
+- For biometric & anthropometric metrics:
+  - steps: normalRange: "7000 - 12000", optimalRange: "8000 - 10000", unit: "steps/day".
+  - height: Provide general population height range (e.g. "140 - 200 cm"), set optimalRange to null (height has no population optimal).
+  - weight: Provide population adult range; optimalRange should cite "BMI 18.5 - 24.9 kg/m²".
+- For qualitative tests (chlamydia_dna_detection, sars_cov_2_rna_detection, hiv_1_2_antibody_antigen, n_gonorrhoeae_nucl_acid_detn):
+  - normalRange: "Negative", optimalRange: "Negative", unit: "qualitative".
+
+=== SYSTEM CONSTRAINTS ===
+Return a single flat JSON array of objects inside the "calibratedBiomarkers" key.
+Output ONLY the raw JSON text.
+
+Biomarkers to process:
+${JSON.stringify(selectedBiomarkers, null, 2)}`;
+
+    if (customSystemInstruction) {
+      addDebugLog(`[Reference Range Calibration Agent] Overriding system instruction with custom version (${customSystemInstruction.length} chars).`, explicitSessionId);
+      systemInstruction = customSystemInstruction;
+    }
+
+    addDebugLog(`[Reference Range Calibration Agent] Dispatched System Instruction (Length: ${systemInstruction.length})`, explicitSessionId);
+    addDebugLog(`[Reference Range Calibration Agent] Dispatched Model ID: ${modelId}`, explicitSessionId);
+
+    const rangeCalibrationSchema = {
+      type: Type.OBJECT,
+      properties: {
+        _internalReasoning: { type: Type.STRING, description: "Think step-by-step: analyze the biomarker, identify international reference standards, determine normal and optimal reference brackets and units." },
+        calibratedBiomarkers: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              originalKey: { type: Type.STRING },
+              name: { type: Type.STRING },
+              standardizedUnit: { type: Type.STRING },
+              dataType: { type: Type.STRING, description: "'numeric' | 'qualitative' | 'score' | 'composite'" },
+              minRange: { type: Type.NUMBER },
+              maxRange: { type: Type.NUMBER },
+              normalRange: { type: Type.STRING },
+              optimalMin: { type: Type.NUMBER },
+              optimalMax: { type: Type.NUMBER },
+              optimalRange: { type: Type.STRING },
+              instrumentScale: { type: Type.STRING, description: "Valid allowable input range for questionnaires, e.g. '0 - 45' for GERD-SS, '0 - 40' for AUDIT" },
+              potentialDuplicateOf: { type: Type.STRING, description: "Canonical key if this biomarker is an abbreviation or duplicate of another entity, e.g. 'lactate_dehydrogenase' for 'ldh'" },
+              duplicateFlagReason: { type: Type.STRING },
+              allowedValues: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              standardMedicalGrouping: { type: Type.STRING },
+              riskCategories: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              potentialMedicalConditions: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              confidence: { type: Type.STRING },
+              notes: { type: Type.STRING }
+            },
+            required: ["originalKey", "standardizedUnit", "normalRange", "standardMedicalGrouping", "riskCategories", "potentialMedicalConditions"]
+          }
+        }
+      },
+      required: ["_internalReasoning", "calibratedBiomarkers"]
+    };
+
+    const textOutput = await callUnifiedLLM({
+      modelId,
+      systemInstruction,
+      promptText: "Please output the reference range calibration in JSON format following the schema exactly.",
+      responseMimeType: "application/json",
+      responseSchema: rangeCalibrationSchema,
+      skipThinking: true
+    });
+
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+
+    // TypeScript Middleware Post-Processing Sanitizer (Anti-patch & Structural Invariants)
+    try {
+      const parsed = JSON.parse(cleanJson);
+      if (parsed && Array.isArray(parsed.calibratedBiomarkers)) {
+        // Collect requested keys for mutual duplicate cross-referencing
+        const requestedKeys = parsed.calibratedBiomarkers.map((b: any) => (b.originalKey || '').toLowerCase());
+
+        parsed.calibratedBiomarkers = parsed.calibratedBiomarkers.map((item: any) => {
+          const k = (item.originalKey || '').toLowerCase();
+          let unit = (item.standardizedUnit || '').trim();
+
+          // Unit casing and format normalizations
+          if (unit.toLowerCase() === 'qualitative') unit = 'qualitative';
+          if (unit === '(count)' || unit === 'count' || (k === 'steps' && !unit)) unit = 'steps/day';
+          if (unit.toLowerCase() === 'mmhg') unit = 'mmHg';
+          if (unit.toLowerCase() === 'ratio') unit = 'ratio';
+
+          // Structural SI unit coherence enforcement
+          if (!isUS) {
+            if (k === 'total_protein' && (unit.toLowerCase() === 'g/dl' || item.minRange < 15)) {
+              unit = 'g/L';
+              item.minRange = 60.0;
+              item.maxRange = 83.0;
+              item.normalRange = '60 - 83';
+              item.optimalMin = 65.0;
+              item.optimalMax = 75.0;
+              item.optimalRange = '65 - 75';
+            } else if ((k === 'vldl_cholesterol' || k === 'vldl') && (unit.toLowerCase() === 'mg/dl' || item.maxRange > 5)) {
+              unit = 'mmol/L';
+              item.minRange = 0.1;
+              item.maxRange = 0.78;
+              item.normalRange = '0.10 - 0.78';
+              item.optimalMin = 0.1;
+              item.optimalMax = 0.5;
+              item.optimalRange = '0.10 - 0.50';
+            } else if ((k === 'total_bilirubin' || k === 'bilirubin') && (unit.toLowerCase() === 'mg/dl' || item.maxRange < 3)) {
+              unit = 'µmol/L';
+              item.minRange = 3.4;
+              item.maxRange = 20.5;
+              item.normalRange = '3.4 - 20.5';
+              item.optimalMin = 5.0;
+              item.optimalMax = 15.0;
+              item.optimalRange = '5.0 - 15.0';
+            } else if (k === 'direct_bilirubin' && (unit.toLowerCase() === 'mg/dl' || item.maxRange < 1)) {
+              unit = 'µmol/L';
+              item.minRange = 0.0;
+              item.maxRange = 5.0;
+              item.normalRange = '0.0 - 5.0';
+              item.optimalMin = 0.0;
+              item.optimalMax = 3.4;
+              item.optimalRange = '0.0 - 3.4';
+            } else if (k === 'uric_acid' && (unit.toLowerCase() === 'mg/dl' || (item.maxRange && item.maxRange < 15))) {
+              unit = 'µmol/L';
+              item.minRange = 142.0;
+              item.maxRange = 416.0;
+              item.normalRange = '142 - 416';
+              item.optimalMin = 180.0;
+              item.optimalMax = 350.0;
+              item.optimalRange = '180 - 350';
+            } else if (k === 'free_t4' && (unit.toLowerCase() === 'ng/dl' || (item.maxRange && item.maxRange < 5))) {
+              unit = 'pmol/L';
+              item.minRange = 12.0;
+              item.maxRange = 22.0;
+              item.normalRange = '12.0 - 22.0';
+              item.optimalMin = 14.0;
+              item.optimalMax = 19.0;
+              item.optimalRange = '14.0 - 19.0';
+            } else if (k === 'free_t3' && (unit.toLowerCase() === 'pg/ml' || (item.maxRange && item.maxRange < 2))) {
+              unit = 'pmol/L';
+              item.minRange = 3.5;
+              item.maxRange = 6.5;
+              item.normalRange = '3.5 - 6.5';
+              item.optimalMin = 4.0;
+              item.optimalMax = 5.5;
+              item.optimalRange = '4.0 - 5.5';
+            }
+          }
+
+          // Qualitative test normalization
+          const isQualitative = unit === 'qualitative' || 
+            k.includes('dna_detection') || 
+            k.includes('rna_detection') || 
+            k.includes('antibody_antigen') || 
+            k.includes('nucl_acid_detn') ||
+            (item.normalRange && item.normalRange.toLowerCase().includes('negative'));
+
+          if (isQualitative) {
+            unit = 'qualitative';
+            item.dataType = 'qualitative';
+            item.minRange = null;
+            item.maxRange = null;
+            item.optimalMin = null;
+            item.optimalMax = null;
+            item.normalRange = 'Negative';
+            item.optimalRange = 'Negative';
+            item.allowedValues = ['Negative', 'Positive', 'Equivocal'];
+          }
+
+          // Anthropometric guardrails
+          if (k === 'height') {
+            item.optimalRange = null;
+            item.optimalMin = null;
+            item.optimalMax = null;
+          } else if (k === 'weight') {
+            if (!item.optimalRange || !item.optimalRange.toLowerCase().includes('bmi')) {
+              item.optimalRange = 'BMI 18.5 - 24.9 kg/m²';
+            }
+          }
+
+          // Blood pressure composite handling
+          if (k === 'blood_pressure') {
+            item.dataType = 'composite';
+            item.normalRange = '< 120 / < 80';
+            item.optimalRange = '< 120 / < 80';
+            item.minRange = null;
+            item.maxRange = null;
+            item.optimalMin = null;
+            item.optimalMax = null;
+          }
+
+          // Questionnaire & Score scale guardrails (Separate allowable input range from normal target)
+          if (k.startsWith('audit_') || k.endsWith('_score') || k.includes('symptom_score')) {
+            item.dataType = 'score';
+            if (unit !== 'score' && unit !== 'points') unit = 'score';
+
+            if (k === 'gerd_symptom_score') {
+              item.instrumentScale = '0 - 45';
+              item.normalRange = '0 - 2';
+              item.minRange = 0;
+              item.maxRange = 2;
+            } else if (k === 'hemorrhoidal_symptom_score') {
+              item.instrumentScale = '0 - 20';
+              item.normalRange = '0 - 2';
+              item.minRange = 0;
+              item.maxRange = 2;
+            } else if (k === 'joint_pain_severity_score') {
+              item.instrumentScale = '0 - 10';
+              item.normalRange = '0 - 1';
+              item.minRange = 0;
+              item.maxRange = 1;
+            } else if (k === 'audit_total_score') {
+              item.instrumentScale = '0 - 40';
+              item.normalRange = '0 - 7';
+              item.minRange = 0;
+              item.maxRange = 7;
+              item.optimalRange = '0 - 3';
+            } else if (k === 'audit_c_total_score') {
+              item.instrumentScale = '0 - 12';
+              item.normalRange = '0 - 3';
+              item.minRange = 0;
+              item.maxRange = 3;
+              item.optimalRange = '0 - 1';
+            } else if (k.startsWith('audit_')) {
+              item.instrumentScale = '0 - 4';
+              if (item.minRange === undefined || item.minRange === null) item.minRange = 0;
+            }
+          }
+
+          // Duplicate Entity Identification & Flagging for Alias Groups
+          if (k === 'ldh') {
+            item.potentialDuplicateOf = 'lactate_dehydrogenase';
+            item.duplicateFlagReason = 'Abbreviation / alias of lactate_dehydrogenase';
+          } else if (k === 'vldl' && requestedKeys.includes('vldl_cholesterol')) {
+            item.potentialDuplicateOf = 'vldl_cholesterol';
+            item.duplicateFlagReason = 'Synonym of vldl_cholesterol';
+          } else if (k === 'globulin' && requestedKeys.includes('serum_globulin')) {
+            item.potentialDuplicateOf = 'serum_globulin';
+            item.duplicateFlagReason = 'Synonym of serum_globulin';
+          } else if (k === 'albumin' && requestedKeys.includes('serum_albumin')) {
+            item.potentialDuplicateOf = 'serum_albumin';
+            item.duplicateFlagReason = 'Synonym of serum_albumin';
+          }
+
+          return {
+            ...item,
+            standardizedUnit: unit
+          };
+        });
+        cleanJson = JSON.stringify(parsed, null, 2);
+      }
+    } catch (sanitizerErr) {
+      console.warn("[Reference Range Calibration Agent] Sanitizer pass warning:", sanitizerErr);
+    }
+
+    addDebugLog(`[Reference Range Calibration Agent] Agent output payload:\n${cleanJson}`, explicitSessionId);
+    res.json({ jsonResponse: cleanJson });
+  } catch (error: any) {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    addDebugLog(`[Reference Range Calibration Agent] Error: ${error.message}`, explicitSessionId);
+    console.error("[Reference Range Calibration Agent Error]:", error);
+    res.status(500).json({ error: "Failed to calibrate reference ranges: " + error.message });
   }
 });
 

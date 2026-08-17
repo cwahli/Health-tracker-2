@@ -18,6 +18,9 @@ import {
   getMappedBiomarkerKey,
   CLINICAL_SYNONYM_MAP,
   normalizeStemKey,
+  normalizeBiomarkerName,
+  isBiomarkerDuplicateCandidate,
+  findDuplicateOrExistingBiomarker,
   COMMON_PREFIXES,
   COMMON_SUFFIXES,
   COMMON_UNIT_SUFFIXES
@@ -27,6 +30,9 @@ import { CONVERSION_FACTORS } from './unitConversion';
 export {
   CLINICAL_SYNONYM_MAP,
   normalizeStemKey,
+  normalizeBiomarkerName,
+  isBiomarkerDuplicateCandidate,
+  findDuplicateOrExistingBiomarker,
   COMMON_PREFIXES,
   COMMON_SUFFIXES,
   COMMON_UNIT_SUFFIXES
@@ -336,13 +342,78 @@ export function runGeneralizedBiomarkerAudit(
     }
   });
 
-  // 2. Canonical stem grouping to discover duplicate candidates
-  const stemMap: { [stem: string]: string[] } = {};
+  // 2. Multi-strategy duplicate clustering across canonical stems, exact names, and morphological candidates
+  const adjacency: { [key: string]: Set<string> } = {};
+  const matchReasons: { [pairKey: string]: string } = {};
+  allKeys.forEach(k => { adjacency[k] = new Set([k]); });
+
+  for (let i = 0; i < allKeys.length; i++) {
+    for (let j = i + 1; j < allKeys.length; j++) {
+      const keyA = allKeys[i];
+      const keyB = allKeys[j];
+      const defA = customBiomarkers[keyA] || {};
+      const defB = customBiomarkers[keyB] || {};
+
+      const stemA = getCanonicalBiomarkerStem(keyA, defA.name);
+      const stemB = getCanonicalBiomarkerStem(keyB, defB.name);
+
+      let isDuplicate = false;
+      let reason = '';
+
+      if (stemA && stemB && stemA === stemB) {
+        isDuplicate = true;
+        reason = `Shares canonical biomarker stem "${stemA}"`;
+      } else {
+        const candidateCheck = isBiomarkerDuplicateCandidate(
+          { key: keyA, name: defA.name || keyA, unit: defA.unit, normalRange: defA.normalRange },
+          { key: keyB, name: defB.name || keyB, unit: defB.unit, normalRange: defB.normalRange }
+        );
+        if (candidateCheck.isMatch) {
+          isDuplicate = true;
+          reason = candidateCheck.reason;
+        }
+      }
+
+      if (isDuplicate) {
+        adjacency[keyA].add(keyB);
+        adjacency[keyB].add(keyA);
+        const pairKey = [keyA, keyB].sort().join(':::');
+        matchReasons[pairKey] = reason;
+      }
+    }
+  }
+
+  // Find connected components in the adjacency graph
+  const visited = new Set<string>();
+  const clusterMap: { [key: string]: string[] } = {};
+  const clusterReasonMap: { [key: string]: string } = {};
+
   allKeys.forEach(k => {
-    const def = customBiomarkers[k] || {};
-    const stem = getCanonicalBiomarkerStem(k, def.name);
-    if (!stemMap[stem]) stemMap[stem] = [];
-    stemMap[stem].push(k);
+    if (!visited.has(k)) {
+      const component: string[] = [];
+      const queue = [k];
+      visited.add(k);
+      while (queue.length > 0) {
+        const curr = queue.shift()!;
+        component.push(curr);
+        adjacency[curr]?.forEach(neighbor => {
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            queue.push(neighbor);
+          }
+        });
+      }
+      
+      const componentStem = getCanonicalBiomarkerStem(k, customBiomarkers[k]?.name);
+      const compReason = component.length > 1 
+        ? `Morphological & clinical match cluster for "${componentStem}" across ${component.length} entries`
+        : '';
+
+      component.forEach(memberKey => {
+        clusterMap[memberKey] = component;
+        clusterReasonMap[memberKey] = compReason;
+      });
+    }
   });
 
   // 3. Evaluate each biomarker
@@ -350,8 +421,7 @@ export function runGeneralizedBiomarkerAudit(
     const def = customBiomarkers[key] || {};
     const name = def.name || key;
     const currentUnit = def.unit || '';
-    const stem = getCanonicalBiomarkerStem(key, name);
-    const siblings = stemMap[stem] || [];
+    const siblings = clusterMap[key] || [key];
     const thisLogCount = logCounts[key] || 0;
     const catalogMatchDef = findCatalogDefinition(key, name);
 
@@ -451,12 +521,14 @@ export function runGeneralizedBiomarkerAudit(
       const targetDef = customBiomarkers[bestKey] || {};
       const candidateAliases = siblings.filter(sk => sk !== bestKey);
 
+      const clusterReason = clusterReasonMap[key] || `Matches cluster across ${siblings.length} entries`;
+
       duplicateCluster = {
         targetKey: bestKey,
         targetName: targetDef.name || bestKey,
         clusterKeys: siblings,
         candidateAliases,
-        reason: `Matches morphological cluster "${stem}" across ${siblings.length} entries`,
+        reason: clusterReason,
         isPrimary
       };
 
@@ -535,51 +607,57 @@ export function runGeneralizedBiomarkerAudit(
 
   // Extract deduplicated group list with full alias analytics
   const duplicateGroups: DuplicateGroupAudit[] = [];
-  const processedStems = new Set<string>();
+  const processedClusters = new Set<string>();
 
-  Object.entries(stemMap).forEach(([stem, keys]) => {
-    if (keys.length > 1 && !processedStems.has(stem)) {
-      processedStems.add(stem);
-      // Determine master key
-      let bestKey = keys[0];
-      let bestScore = -1;
-      keys.forEach(sk => {
-        const sDef = customBiomarkers[sk] || {};
-        const score = calculateCompletenessScore(sDef, logCounts[sk] || 0);
-        if (score > bestScore) {
-          bestScore = score;
-          bestKey = sk;
-        }
-      });
-      const masterDef = customBiomarkers[bestKey] || {};
-      const candidateAliases = keys.filter(k => k !== bestKey);
+  Object.values(clusterMap).forEach(keys => {
+    if (keys.length > 1) {
+      const clusterSig = [...keys].sort().join(':::');
+      if (!processedClusters.has(clusterSig)) {
+        processedClusters.add(clusterSig);
 
-      let totalLogsInCluster = 0;
-      const emptyAliasKeys: string[] = [];
-      const populatedAliasKeys: string[] = [];
-
-      keys.forEach(k => {
-        const count = logCounts[k] || 0;
-        totalLogsInCluster += count;
-        if (k !== bestKey) {
-          if (count === 0) {
-            emptyAliasKeys.push(k);
-          } else {
-            populatedAliasKeys.push(k);
+        // Determine master key
+        let bestKey = keys[0];
+        let bestScore = -1;
+        keys.forEach(sk => {
+          const sDef = customBiomarkers[sk] || {};
+          const score = calculateCompletenessScore(sDef, logCounts[sk] || 0);
+          if (score > bestScore) {
+            bestScore = score;
+            bestKey = sk;
           }
-        }
-      });
+        });
+        const masterDef = customBiomarkers[bestKey] || {};
+        const candidateAliases = keys.filter(k => k !== bestKey);
 
-      duplicateGroups.push({
-        suggestedMasterKey: bestKey,
-        suggestedMasterName: masterDef.name || bestKey,
-        memberKeys: keys,
-        candidateAliases,
-        reason: `Shares common biomarker stem "${stem}" across ${keys.length} entries`,
-        totalLogsInCluster,
-        emptyAliasKeys,
-        populatedAliasKeys
-      });
+        let totalLogsInCluster = 0;
+        const emptyAliasKeys: string[] = [];
+        const populatedAliasKeys: string[] = [];
+
+        keys.forEach(k => {
+          const count = logCounts[k] || 0;
+          totalLogsInCluster += count;
+          if (k !== bestKey) {
+            if (count === 0) {
+              emptyAliasKeys.push(k);
+            } else {
+              populatedAliasKeys.push(k);
+            }
+          }
+        });
+
+        const clusterReason = clusterReasonMap[bestKey] || `Matches duplicate cluster across ${keys.length} entries`;
+
+        duplicateGroups.push({
+          suggestedMasterKey: bestKey,
+          suggestedMasterName: masterDef.name || bestKey,
+          memberKeys: keys,
+          candidateAliases,
+          reason: clusterReason,
+          totalLogsInCluster,
+          emptyAliasKeys,
+          populatedAliasKeys
+        });
+      }
     }
   });
 

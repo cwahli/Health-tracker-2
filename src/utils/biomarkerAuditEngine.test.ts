@@ -5,6 +5,12 @@ import {
   runGeneralizedBiomarkerAudit,
   findCatalogDefinition
 } from './biomarkerAuditEngine';
+import {
+  normalizeBiomarkerName,
+  isBiomarkerDuplicateCandidate,
+  findDuplicateOrExistingBiomarker,
+  biomarkerDefinitions
+} from './biomarkers';
 
 describe('Biomarker Audit & Deduplication Engine', () => {
   it('correctly maps AST, SGOT, aspartate aminotransferase and serum levels to canonical AST stem', () => {
@@ -178,5 +184,41 @@ describe('Biomarker Audit & Deduplication Engine', () => {
     expect(egfrGroup.totalLogsInCluster).toBe(1);
     expect(egfrGroup.emptyAliasKeys).toContain('egfr_mlmin173m2');
     expect(egfrGroup.emptyAliasKeys).toContain('egfr_ml_min_1_73m2');
+  });
+
+  it('correctly normalizes biomarker names and strips units/parentheses', () => {
+    expect(normalizeBiomarkerName('Body Mass Index (BMI)')).toBe('body mass');
+    expect(normalizeBiomarkerName('Mean Corpuscular Hemoglobin (MCH) pg')).toBe('mean corpuscular hemoglobin');
+    expect(normalizeBiomarkerName('eGFR (mL/min/1.73m²)')).toBe('egfr');
+    expect(normalizeBiomarkerName('Aspartate Aminotransferase (AST/SGOT) U/L')).toBe('aspartate aminotransferase');
+  });
+
+  it('detects duplicate candidates and existing dictionary items accurately', () => {
+    const res1 = isBiomarkerDuplicateCandidate(
+      { key: 'egfr', name: 'eGFR' },
+      { key: 'egfr_mlmin173m2', name: 'eGFR', unit: 'mL/min/1.73m2' }
+    );
+    expect(res1.isMatch).toBe(true);
+
+    const res2 = isBiomarkerDuplicateCandidate(
+      { key: 'mean_corpuscular_hemoglobin', name: 'Mean Corpuscular Hemoglobin (MCH)', unit: 'pg' },
+      { key: 'mean_corpuscular_hemoglobin_pg', name: 'Mean Corpuscular Hemoglobin', unit: 'pg' }
+    );
+    expect(res2.isMatch).toBe(true);
+
+    // Differentiates MCH from MCHC (no false friend matching)
+    const resMchc = isBiomarkerDuplicateCandidate(
+      { key: 'mean_corpuscular_hemoglobin', name: 'Mean Corpuscular Hemoglobin' },
+      { key: 'mean_corpuscular_hemoglobin_concentration', name: 'Mean Corpuscular Hemoglobin Concentration (MCHC)' }
+    );
+    expect(resMchc.isMatch).toBe(false);
+
+    // Detects duplicate in catalog via findDuplicateOrExistingBiomarker
+    const dupCheck = findDuplicateOrExistingBiomarker('Hemoglobin (g/dL)', {
+      customBiomarkers: {}
+    });
+    expect(dupCheck?.isDuplicate).toBe(true);
+    expect(dupCheck?.matchedKey).toBe('hemoglobin');
+    expect(dupCheck?.isBuiltIn).toBe(true);
   });
 });

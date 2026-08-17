@@ -4,7 +4,7 @@ import { toYYYYMMDD } from "../utils/dateUtils";
 import React, { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import { UserProfile, BiomarkerLog } from '../types';
-import { biomarkerDefinitions, BIOMARKER_GROUPING_OPTIONS, getBiomarkerMetadata, getMergedBiomarkerDef, isPendingCatalogApproval } from '../utils/biomarkers';
+import { biomarkerDefinitions, BIOMARKER_GROUPING_OPTIONS, getBiomarkerMetadata, getMergedBiomarkerDef, isPendingCatalogApproval, findDuplicateOrExistingBiomarker } from '../utils/biomarkers';
 import { X, CheckCircle, Check, AlertCircle, Edit2, Loader, Save, ArrowRight, CheckSquare, Square, MessageSquare, Send, ChevronLeft, ChevronDown, FileCode, Merge, Copy, Upload, Trash, Paperclip, Calendar, Info, Terminal, BrainCircuit, Clock, Zap } from 'lucide-react';
 import BiomarkerRangeBuilder, { parseNormalRangeStr } from './BiomarkerRangeBuilder';
 import CombineBiomarkersModal from './CombineBiomarkersModal';
@@ -1170,6 +1170,9 @@ export default function BiomarkerDictionaryModal({
   const [isMedicalCategorisationMode, setIsMedicalCategorisationMode] = useState<boolean>(() => {
     try { return localStorage.getItem('dict_is_medical_categorisation_mode') === 'true'; } catch (e) {} return false;
   });
+  const [isRangeCalibrationMode, setIsRangeCalibrationMode] = useState<boolean>(() => {
+    try { return localStorage.getItem('dict_is_range_calibration_mode') === 'true'; } catch (e) {} return false;
+  });
   const [editName, setEditName] = useState('');
 
   // Inline confirmation states (iframe safety)
@@ -1255,6 +1258,7 @@ export default function BiomarkerDictionaryModal({
   const activeModel = selectedModelId || 'gemini-3.5-flash-lite';
   const [standardizeModel, setStandardizeModelRaw] = useState<string>(activeModel);
   const [medicalCategoriseModel, setMedicalCategoriseModelRaw] = useState<string>(activeModel);
+  const [calibrateRangesModel, setCalibrateRangesModelRaw] = useState<string>(activeModel);
   const [dataAccuracyModel, setDataAccuracyModelRaw] = useState<string>(activeModel);
   const [nameConsolidationModel, setNameConsolidationModelRaw] = useState<string>(activeModel);
 
@@ -1262,6 +1266,7 @@ export default function BiomarkerDictionaryModal({
     if (selectedModelId) {
       setStandardizeModelRaw(selectedModelId);
       setMedicalCategoriseModelRaw(selectedModelId);
+      setCalibrateRangesModelRaw(selectedModelId);
       setDataAccuracyModelRaw(selectedModelId);
       setNameConsolidationModelRaw(selectedModelId);
     }
@@ -1276,12 +1281,14 @@ export default function BiomarkerDictionaryModal({
 
   const setStandardizeModel = (id: string) => handleUpdateModel(id, setStandardizeModelRaw);
   const setMedicalCategoriseModel = (id: string) => handleUpdateModel(id, setMedicalCategoriseModelRaw);
+  const setCalibrateRangesModel = (id: string) => handleUpdateModel(id, setCalibrateRangesModelRaw);
   const setDataAccuracyModel = (id: string) => handleUpdateModel(id, setDataAccuracyModelRaw);
   const setNameConsolidationModel = (id: string) => handleUpdateModel(id, setNameConsolidationModelRaw);
 
   // Instruction View states
   const [showStandardizeInstructions, setShowStandardizeInstructions] = useState<boolean>(false);
   const [showMedicalInstructions, setShowMedicalInstructions] = useState<boolean>(false);
+  const [showCalibrateInstructions, setShowCalibrateInstructions] = useState<boolean>(false);
   const [showDataAccuracyInstructions, setShowDataAccuracyInstructions] = useState<boolean>(false);
   const [showConsolidationInstructions, setShowConsolidationInstructions] = useState<boolean>(false);
 
@@ -1329,6 +1336,10 @@ export default function BiomarkerDictionaryModal({
   useEffect(() => {
     localStorage.setItem('dict_is_medical_categorisation_mode', isMedicalCategorisationMode ? 'true' : 'false');
   }, [isMedicalCategorisationMode]);
+
+  useEffect(() => {
+    localStorage.setItem('dict_is_range_calibration_mode', isRangeCalibrationMode ? 'true' : 'false');
+  }, [isRangeCalibrationMode]);
 
   useEffect(() => {
     if (standardizationYaml) {
@@ -1700,6 +1711,7 @@ export default function BiomarkerDictionaryModal({
   const handleBulkReviewCategories = () => {
     setSelectedKeys(keysNeedingCategory);
     setIsMedicalCategorisationMode(true);
+    setIsRangeCalibrationMode(false);
     setIsAgentMode(true);
     setIsDataAccuracyMode(false);
     setIsNameConsolidationMode(false);
@@ -1713,6 +1725,7 @@ export default function BiomarkerDictionaryModal({
     const keysToStandardize = (keysNeedingUnit.length > 0 ? keysNeedingUnit : (selectedKeys.length > 0 ? selectedKeys : historyKeys));
     setSelectedKeys(keysToStandardize);
     setIsMedicalCategorisationMode(false);
+    setIsRangeCalibrationMode(false);
     setIsAgentMode(true);
     setIsDataAccuracyMode(false);
     setIsNameConsolidationMode(false);
@@ -1720,6 +1733,22 @@ export default function BiomarkerDictionaryModal({
     setStandardizationYaml(null);
     setStandardizationSummary(null);
     handleRunStandardizationAgent(keysToStandardize, 'standardize');
+  };
+
+  const handleBulkCalibrateRanges = (keysToCalibrate?: string[]) => {
+    const keys = (keysToCalibrate && keysToCalibrate.length > 0) 
+      ? keysToCalibrate 
+      : (selectedKeys.length > 0 ? selectedKeys : historyKeys);
+    setSelectedKeys(keys);
+    setIsRangeCalibrationMode(true);
+    setIsMedicalCategorisationMode(false);
+    setIsAgentMode(true);
+    setIsDataAccuracyMode(false);
+    setIsNameConsolidationMode(false);
+    setIsChatMode(false);
+    setStandardizationYaml(null);
+    setStandardizationSummary(null);
+    handleRunStandardizationAgent(keys, 'calibrate');
   };
 
   const handleBulkConsolidateNames = () => {
@@ -2285,9 +2314,11 @@ I can analyze these, compare them with our database keys, and find standard mapp
     }
   };
 
-  // Run Clinical Unit Standardization Agent
-  const handleRunStandardizationAgent = async (keysOverride?: string[], modeOverride?: 'categorise' | 'standardize') => {
-    const isCategorise = modeOverride ? modeOverride === 'categorise' : isMedicalCategorisationMode;
+  // Run Clinical Unit Standardization / Categorisation / Range Calibration Agent
+  const handleRunStandardizationAgent = async (keysOverride?: string[], modeOverride?: 'categorise' | 'standardize' | 'calibrate') => {
+    const currentMode = modeOverride || (isRangeCalibrationMode ? 'calibrate' : isMedicalCategorisationMode ? 'categorise' : 'standardize');
+    const isCalibrate = currentMode === 'calibrate';
+    const isCategorise = currentMode === 'categorise';
     const keysToUse = (keysOverride && keysOverride.length > 0) ? keysOverride : selectedKeys;
     if (keysToUse.length === 0) return;
     setAgentLoading(true);
@@ -2301,14 +2332,21 @@ I can analyze these, compare them with our database keys, and find standard mapp
           key: k,
           name: customDef?.name || k,
           currentUnit: customDef?.unit || '',
+          currentRange: customDef?.normalRange || '',
+          currentGrouping: customDef?.standardMedicalGrouping || '',
+          description: (customDef as any)?.description || ''
         };
       });
 
       // Get session ID for telemetry / backend logging isolation
       const sessionId = generateQueryId();
 
-      const endpoint = isCategorise ? '/api/gemini/medical-categorise' : '/api/gemini/standardize-units';
-      const agentKey = isCategorise ? 'medical_categorise' : 'standardize';
+      const endpoint = isCalibrate 
+        ? '/api/gemini/calibrate-reference-ranges' 
+        : (isCategorise ? '/api/gemini/medical-categorise' : '/api/gemini/standardize-units');
+      const agentKey = isCalibrate ? 'calibrate_ranges' : (isCategorise ? 'medical_categorise' : 'standardize');
+      const chosenEngine = isCalibrate ? calibrateRangesModel : (isCategorise ? medicalCategoriseModel : standardizeModel);
+
       trackApiCall('gemini', `${endpoint}`);
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -2319,15 +2357,17 @@ I can analyze these, compare them with our database keys, and find standard mapp
         body: JSON.stringify({
           selectedBiomarkers: selectedBiomarkerDetails,
           metricSystem: targetMetric,
-          unitPreference: profile.unitPreference || 'SI',
-          engine: isCategorise ? medicalCategoriseModel : standardizeModel,
+          unitPreference: targetMetric === 'us' ? 'US' : (profile.unitPreference || 'SI'),
+          engine: chosenEngine,
           customSystemInstruction: localStorage.getItem(`custom_system_instruction_${agentKey}`) || undefined
         })
       });
 
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
-        let errMsg = isCategorise ? `Medical categorisation error (${res.status})` : `Standardization error (${res.status})`;
+        let errMsg = isCalibrate 
+          ? `Reference range calibration error (${res.status})` 
+          : (isCategorise ? `Medical categorisation error (${res.status})` : `Standardization error (${res.status})`);
         try {
           const errJson = JSON.parse(errText);
           if (errJson && errJson.error) errMsg = errJson.error;
@@ -2344,7 +2384,6 @@ I can analyze these, compare them with our database keys, and find standard mapp
       } catch {
         throw new Error("Server returned an invalid non-JSON response.");
       }
-      
       
       let jsonData;
       try {
@@ -2367,9 +2406,9 @@ I can analyze these, compare them with our database keys, and find standard mapp
       if (Array.isArray(jsonData)) {
         parsed = jsonData;
       } else {
-        parsed = jsonData.mappedBiomarkers || jsonData.categorisedBiomarkers || [];
+        parsed = jsonData.calibratedBiomarkers || jsonData.mappedBiomarkers || jsonData.categorisedBiomarkers || [];
       }
-      // Normalize key + unit field name & robust categorisation fallbacks
+      // Normalize key + unit field name & robust categorisation/range fallbacks
       parsed = parsed.map((item: any) => {
         const itemKey = item.originalKey || item.key;
         const customDef = profile.customBiomarkers?.[itemKey] || biomarkerDefinitions.find((b: any) => b.key === itemKey);
@@ -2403,13 +2442,20 @@ I can analyze these, compare them with our database keys, and find standard mapp
           key: itemKey,
           name: itemName,
           unit: item.standardizedUnit !== undefined ? item.standardizedUnit : item.unit,
+          normalRange: item.normalRange !== undefined ? item.normalRange : (customDef as any)?.normalRange,
+          minRange: item.minRange !== undefined ? item.minRange : (customDef as any)?.minRange,
+          maxRange: item.maxRange !== undefined ? item.maxRange : (customDef as any)?.maxRange,
+          optimalRange: item.optimalRange !== undefined ? item.optimalRange : (customDef as any)?.optimalRange,
+          optimalMin: item.optimalMin !== undefined ? item.optimalMin : (customDef as any)?.optimalMin,
+          optimalMax: item.optimalMax !== undefined ? item.optimalMax : (customDef as any)?.optimalMax,
+          notes: item.notes || (customDef as any)?.notes,
           standardMedicalGrouping: grouping,
           riskCategories: risks,
           potentialMedicalConditions: conds
         };
       });
 
-      if (!isCategorise) {
+      if (!isCategorise && !isCalibrate) {
         // Filter out items where the proposed unit matches the existing unit
         parsed = parsed.filter((item: any) => {
           const key = item.key;
@@ -2431,9 +2477,11 @@ I can analyze these, compare them with our database keys, and find standard mapp
           const logsText = await logsRes.text().catch(() => "");
           const logsData = logsText ? JSON.parse(logsText) : null;
           if (logsData && logsData.logs && logsData.logs.length > 0) {
-            const summaryText = isCategorise 
-              ? `[Categorisation] Processed ${selectedKeys.length} biomarker(s)`
-              : `[Standardization] Standardized ${selectedKeys.length} biomarker(s)`;
+            const summaryText = isCalibrate
+              ? `[Range Calibration] Calibrated ${selectedKeys.length} biomarker(s)`
+              : isCategorise 
+                ? `[Categorisation] Processed ${selectedKeys.length} biomarker(s)`
+                : `[Standardization] Standardized ${selectedKeys.length} biomarker(s)`;
             saveAgentRequestLog({
               id: sessionId,
               timestamp: new Date().toISOString(),
@@ -2446,9 +2494,8 @@ I can analyze these, compare them with our database keys, and find standard mapp
         console.warn("Could not save agent request logs", e);
       }
 
-      // Persist the agent call/result so it survives modal close and appears in agent history,
-      // matching the pattern already used by Data Accuracy and Name Consolidation agents.
-      const agentTypeForLog = isCategorise ? 'medical_categorise' : 'standardize_units';
+      // Persist the agent call/result so it survives modal close and appears in agent history
+      const agentTypeForLog = isCalibrate ? 'calibrate_ranges' : (isCategorise ? 'medical_categorise' : 'standardize_units');
       const newAnalysis = {
         id: `analysis_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         agentType: agentTypeForLog,
@@ -2468,13 +2515,13 @@ I can analyze these, compare them with our database keys, and find standard mapp
       }
     } catch (error: any) {
       console.error(error);
-      alert("Error running standardization agent: " + error.message);
+      alert("Error running agent: " + error.message);
     } finally {
       setAgentLoading(false);
     }
   };
 
-  // Approve & Apply Agent Standardization / Medical Categorisation
+  // Approve & Apply Agent Standardization / Medical Categorisation / Range Calibration
   const handleApplyStandardization = async () => {
     if (!standardizationSummary || !onStandardizeUnits) return;
     try {
@@ -2505,6 +2552,33 @@ I can analyze these, compare them with our database keys, and find standard mapp
         if (item.normalRange !== undefined && item.normalRange !== null && String(item.normalRange).trim() !== '') {
           updatesToApply[applyKey].normalRange = item.normalRange;
         }
+        if (item.minRange !== undefined && item.minRange !== null) {
+          updatesToApply[applyKey].minRange = item.minRange;
+        }
+        if (item.maxRange !== undefined && item.maxRange !== null) {
+          updatesToApply[applyKey].maxRange = item.maxRange;
+        }
+        if (item.optimalRange !== undefined && item.optimalRange !== null && String(item.optimalRange).trim() !== '') {
+          updatesToApply[applyKey].optimalRange = item.optimalRange;
+        }
+        if (item.optimalMin !== undefined && item.optimalMin !== null) {
+          updatesToApply[applyKey].optimalMin = item.optimalMin;
+        }
+        if (item.optimalMax !== undefined && item.optimalMax !== null) {
+          updatesToApply[applyKey].optimalMax = item.optimalMax;
+        }
+        if (item.instrumentScale !== undefined && item.instrumentScale !== null && String(item.instrumentScale).trim() !== '') {
+          updatesToApply[applyKey].instrumentScale = item.instrumentScale;
+        }
+        if (item.dataType !== undefined && item.dataType !== null && String(item.dataType).trim() !== '') {
+          updatesToApply[applyKey].dataType = item.dataType;
+        }
+        if (item.potentialDuplicateOf !== undefined && item.potentialDuplicateOf !== null && String(item.potentialDuplicateOf).trim() !== '') {
+          updatesToApply[applyKey].potentialDuplicateOf = item.potentialDuplicateOf;
+        }
+        if (item.notes !== undefined && item.notes !== null && String(item.notes).trim() !== '') {
+          updatesToApply[applyKey].notes = item.notes;
+        }
         if (item.standardMedicalGrouping !== undefined && item.standardMedicalGrouping !== null && String(item.standardMedicalGrouping).trim() !== '') {
           updatesToApply[applyKey].standardMedicalGrouping = item.standardMedicalGrouping;
         }
@@ -2519,11 +2593,11 @@ I can analyze these, compare them with our database keys, and find standard mapp
               ? item.riskCategories.split(',').map((s: string) => s.trim())
               : [];
           }
-        } else if (isMedicalCategorisationMode) {
+        } else if (isMedicalCategorisationMode || isRangeCalibrationMode) {
           const existing = profile.customBiomarkers?.[applyKey]?.riskCategories;
           updatesToApply[applyKey].riskCategories = Array.isArray(existing) && existing.length > 0 ? existing : ['Screenings'];
         }
-        if (isMedicalCategorisationMode && Array.isArray(updatesToApply[applyKey].riskCategories)) {
+        if ((isMedicalCategorisationMode || isRangeCalibrationMode) && Array.isArray(updatesToApply[applyKey].riskCategories)) {
           const filtered = updatesToApply[applyKey].riskCategories.filter((r: string) => allowedRisks.includes(r));
           updatesToApply[applyKey].riskCategories = filtered.length > 0
             ? filtered
@@ -2542,7 +2616,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
               ? item.potentialMedicalConditions.split(',').map((s: string) => s.trim())
               : [];
           }
-        } else if (isMedicalCategorisationMode) {
+        } else if (isMedicalCategorisationMode || isRangeCalibrationMode) {
           const existing = profile.customBiomarkers?.[applyKey]?.potentialMedicalConditions;
           updatesToApply[applyKey].potentialMedicalConditions = Array.isArray(existing) && existing.length > 0
             ? existing
@@ -2551,16 +2625,20 @@ I can analyze these, compare them with our database keys, and find standard mapp
       });
 
       await onStandardizeUnits(updatesToApply);
-      alert(isMedicalCategorisationMode
-        ? "Selected biomarkers successfully categorised!"
-        : "Selected units successfully standardized and converted!");
+      alert(isRangeCalibrationMode
+        ? "Selected biomarkers successfully calibrated with reference ranges & units!"
+        : isMedicalCategorisationMode
+          ? "Selected biomarkers successfully categorised!"
+          : "Selected units successfully standardized and converted!");
       setIsAgentMode(false);
+      setIsRangeCalibrationMode(false);
+      setIsMedicalCategorisationMode(false);
       setSelectedKeys([]);
       setStandardizationYaml(null);
       setStandardizationSummary(null);
     } catch (e: any) {
       console.error(e);
-      alert("Error applying standardization: " + e.message);
+      alert("Error applying changes: " + e.message);
     }
   };
 
@@ -3094,13 +3172,27 @@ I can analyze these, compare them with our database keys, and find standard mapp
             )}
             <div>
               <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 font-sans tracking-tight">
-                {isChatMode ? "Route Agent Chat" : isAgentMode ? (isMedicalCategorisationMode ? "Clinical Categorisation Agent" : "Clinical Unit Standardization Agent") : isDataAccuracyMode ? "Data Accuracy Agent" : isNameConsolidationMode ? "Name Consolidation Agent" : isBatchPasteMode ? "Batch Consolidation" : "Biomarker Dictionary"}
+                {isChatMode 
+                  ? "Route Agent Chat" 
+                  : isAgentMode 
+                    ? (isRangeCalibrationMode ? "Clinical Reference Range Calibration Agent" : isMedicalCategorisationMode ? "Clinical Categorisation Agent" : "Clinical Unit Standardization Agent") 
+                    : isDataAccuracyMode 
+                      ? "Data Accuracy Agent" 
+                      : isNameConsolidationMode 
+                        ? "Name Consolidation Agent" 
+                        : isBatchPasteMode 
+                          ? "Batch Consolidation" 
+                          : "Biomarker Dictionary"}
               </h2>
               <p className="text-xs text-theme-text-secondary">
                 {isChatMode 
                   ? `Discussing standard mappings for ${selectedKeys.length} selected biomarkers` 
                   : isAgentMode
-                    ? (isMedicalCategorisationMode ? `Determine medical groupings and risk categories for ${selectedKeys.length} selected biomarkers` : `Standardize units and convert ranges for ${selectedKeys.length} selected biomarkers`)
+                    ? (isRangeCalibrationMode 
+                        ? `Calibrate population reference intervals, optimal ranges, and units for ${selectedKeys.length} selected biomarkers`
+                        : isMedicalCategorisationMode 
+                          ? `Determine medical groupings and risk categories for ${selectedKeys.length} selected biomarkers` 
+                          : `Standardize units and convert ranges for ${selectedKeys.length} selected biomarkers`)
                     : isDataAccuracyMode
                       ? "Analyze and resolve data discrepancies across dictionary definitions and logs"
                       : isNameConsolidationMode
@@ -4584,15 +4676,15 @@ I can analyze these, compare them with our database keys, and find standard mapp
               <div className="bg-theme-bg-card border border-theme-border rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
                 <div className="w-full sm:w-64">
                   <LLMSelector
-                    selectedModelId={isMedicalCategorisationMode ? medicalCategoriseModel : standardizeModel}
-                    onChangeModelId={isMedicalCategorisationMode ? setMedicalCategoriseModel : setStandardizeModel}
-                    label={isMedicalCategorisationMode ? "Categorization Engine" : "Standardization Engine"}
+                    selectedModelId={isRangeCalibrationMode ? calibrateRangesModel : (isMedicalCategorisationMode ? medicalCategoriseModel : standardizeModel)}
+                    onChangeModelId={isRangeCalibrationMode ? setCalibrateRangesModel : (isMedicalCategorisationMode ? setMedicalCategoriseModel : setStandardizeModel)}
+                    label={isRangeCalibrationMode ? "Calibration Engine" : (isMedicalCategorisationMode ? "Categorization Engine" : "Standardization Engine")}
                   />
                 </div>
                 <div className="flex items-center gap-3 shrink-0 self-center">
                   <button
                     type="button"
-                    onClick={() => isMedicalCategorisationMode ? setShowMedicalInstructions(true) : setShowStandardizeInstructions(true)}
+                    onClick={() => isRangeCalibrationMode ? setShowCalibrateInstructions(true) : (isMedicalCategorisationMode ? setShowMedicalInstructions(true) : setShowStandardizeInstructions(true))}
                     className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer flex items-center gap-1.5"
                   >
                     <span>ℹ️ View Programmed Agent Instructions &rarr;</span>
@@ -4610,7 +4702,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                         Step 1: Choose Target Metric System
                       </h3>
                       <p className="text-xs text-theme-text-secondary mt-1">
-                        Select whether the standardization agent should target the International System of Units (SI/Metric) or US Customary units.
+                        Select whether the agent should target the International System of Units (SI/Metric) or US Customary units for reference ranges and standardized units.
                       </p>
                     </div>
 
@@ -4664,12 +4756,16 @@ I can analyze these, compare them with our database keys, and find standard mapp
                     {agentLoading ? (
                       <>
                         <Loader className="w-4 h-4 animate-spin" />
-                        {isMedicalCategorisationMode ? 'Agent Working in JSON to Add Categorisations...' : 'Agent Working in JSON to Add Standardized Units...'}
+                        {isRangeCalibrationMode 
+                          ? 'Agent Working in JSON to Calibrate Reference Ranges...' 
+                          : (isMedicalCategorisationMode ? 'Agent Working in JSON to Add Categorisations...' : 'Agent Working in JSON to Add Standardized Units...')}
                       </>
                     ) : (
                       <>
                         <ArrowRight className="w-4 h-4" />
-                        {isMedicalCategorisationMode ? 'Run Clinical Categorisation Agent' : 'Run Clinical Unit Standardization Agent'}
+                        {isRangeCalibrationMode 
+                          ? 'Run Reference Range Calibration Agent' 
+                          : (isMedicalCategorisationMode ? 'Run Clinical Categorisation Agent' : 'Run Clinical Unit Standardization Agent')}
                       </>
                     )}
                   </button>
@@ -4725,21 +4821,25 @@ I can analyze these, compare them with our database keys, and find standard mapp
                       <div>
                         <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                           <CheckCircle className="w-4 h-4 text-emerald-500" />
-                          {isMedicalCategorisationMode ? "Step 2: Review Proposed Categorisations" : "Step 2: Review Proposed Standardizations"}
+                          {isRangeCalibrationMode 
+                            ? "Step 2: Review Proposed Reference Ranges & Units" 
+                            : (isMedicalCategorisationMode ? "Step 2: Review Proposed Categorisations" : "Step 2: Review Proposed Standardizations")}
                         </h4>
                         <p className="text-xs text-theme-text-secondary mt-1">
-                          {isMedicalCategorisationMode 
-                            ? "Review the physiological groupings and risk categories computed by the clinical categorisation agent. If approved, these will be applied to your active biomarker dictionary." 
-                            : "Review the units and reference ranges computed by the clinical standardization agent. If approved, these will be applied to your active biomarker dictionary."}
+                          {isRangeCalibrationMode
+                            ? "Review standard population reference intervals, optimal ranges, standardized units, and clinical classifications computed by the Reference Range Calibration Agent."
+                            : isMedicalCategorisationMode 
+                              ? "Review the physiological groupings and risk categories computed by the clinical categorisation agent. If approved, these will be applied to your active biomarker dictionary." 
+                              : "Review the units and reference ranges computed by the clinical standardization agent. If approved, these will be applied to your active biomarker dictionary."}
                         </p>
                       </div>
 
                       {standardizationSummary.length === 0 ? (
                         <div className="p-8 text-center bg-emerald-50/50 dark:bg-emerald-950/20 border border-dashed border-emerald-200 dark:border-emerald-800/60 rounded-xl space-y-3">
                           <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto" />
-                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">All Selected Biomarkers are Already Standardized!</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">All Selected Biomarkers are Already Complete!</p>
                           <p className="text-xs text-theme-text-secondary max-w-md mx-auto">
-                            The clinical unit standardization agent confirmed that all selected biomarkers are already using the recommended standardized units. No adjustments are needed.
+                            The agent confirmed that all selected biomarkers already match the recommended parameters. No adjustments needed.
                           </p>
                           <div className="pt-2 flex justify-center">
                             <button
@@ -4757,11 +4857,19 @@ I can analyze these, compare them with our database keys, and find standard mapp
                       ) : (
                         <>
                           <div className="border border-theme-border rounded-xl overflow-x-auto max-w-full">
-                            <table className="w-full min-w-[650px] text-left border-collapse text-xs">
+                            <table className="w-full min-w-[750px] text-left border-collapse text-xs">
                               <thead>
                                 <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-theme-border text-slate-700 dark:text-slate-200 font-semibold">
-                                  <th className="p-3 min-w-[140px]">Biomarker</th>
-                                  {isMedicalCategorisationMode ? (
+                                  <th className="p-3 min-w-[130px]">Biomarker</th>
+                                  {isRangeCalibrationMode ? (
+                                    <>
+                                      <th className="p-3 min-w-[100px]">Unit</th>
+                                      <th className="p-3 min-w-[160px]">Normal Range</th>
+                                      <th className="p-3 min-w-[140px]">Optimal Range</th>
+                                      <th className="p-3 min-w-[150px]">Medical Area & Risks</th>
+                                      <th className="p-3 min-w-[200px]">Clinical Guidelines & Notes</th>
+                                    </>
+                                  ) : isMedicalCategorisationMode ? (
                                     <>
                                       <th className="p-3 min-w-[140px]">Medical Practice</th>
                                       <th className="p-3 min-w-[160px]">Risk Categories</th>
@@ -4787,11 +4895,76 @@ I can analyze these, compare them with our database keys, and find standard mapp
                                   
                                   return (
                                     <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20">
-                                      <td className="p-3 font-medium min-w-[120px]">
+                                      <td className="p-3 font-medium min-w-[140px]">
                                         <div className="font-bold text-slate-800 dark:text-slate-100">{item.name || item.key}</div>
                                         <div className="text-[10px] text-slate-400 font-mono">{item.key}</div>
+                                        {item.potentialDuplicateOf && (
+                                          <div className="mt-1 flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800/60 font-sans">
+                                            <span>⚠️ Potential duplicate of <span className="font-mono font-bold">{item.potentialDuplicateOf}</span> — will be flagged for Duplicate & Alias Group</span>
+                                          </div>
+                                        )}
                                       </td>
-                                      {isMedicalCategorisationMode ? (
+                                      {isRangeCalibrationMode ? (
+                                        <>
+                                          <td className="p-3 font-mono">
+                                            <div className="flex flex-col gap-0.5">
+                                              {originalDef?.unit && originalDef.unit !== item.unit && (
+                                                <span className="text-slate-400 line-through text-[10px] font-mono">{originalDef.unit}</span>
+                                              )}
+                                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">{item.unit || 'score'}</span>
+                                            </div>
+                                          </td>
+                                          <td className="p-3">
+                                            <div className="flex flex-col gap-0.5">
+                                              {originalDef?.normalRange && originalDef.normalRange !== item.normalRange && (
+                                                <span className="text-slate-400 line-through text-[10px]">{originalDef.normalRange}</span>
+                                              )}
+                                              <span className="text-emerald-700 dark:text-emerald-300 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                                                {item.normalRange || (item.minRange !== undefined && item.maxRange !== undefined ? `${item.minRange} - ${item.maxRange}` : 'Standard')}
+                                              </span>
+                                              {item.dataType === 'qualitative' || item.unit === 'qualitative' ? (
+                                                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono font-medium">
+                                                  Qualitative (Negative / Positive)
+                                                </span>
+                                              ) : item.dataType === 'composite' || item.key === 'blood_pressure' ? (
+                                                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                                  Systolic: 90 - 120 | Diastolic: 60 - 80 mmHg
+                                                </span>
+                                              ) : item.instrumentScale ? (
+                                                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-mono font-medium">
+                                                  Scale: {item.instrumentScale} points
+                                                </span>
+                                              ) : (item.minRange !== null && item.minRange !== undefined || item.maxRange !== null && item.maxRange !== undefined) ? (
+                                                <span className="text-[10px] text-slate-400 font-mono">
+                                                  Min: {item.minRange ?? '—'} | Max: {item.maxRange ?? '—'}
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                          </td>
+                                          <td className="p-3">
+                                            {item.optimalRange ? (
+                                              <span className="text-indigo-700 dark:text-indigo-300 font-medium bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-[11px]">
+                                                {item.optimalRange}
+                                              </span>
+                                            ) : (
+                                              <span className="text-slate-400 text-[11px]">—</span>
+                                            )}
+                                          </td>
+                                          <td className="p-3">
+                                            <div className="flex flex-col gap-1">
+                                              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">{item.standardMedicalGrouping}</span>
+                                              <div className="flex flex-wrap gap-1">
+                                                {(Array.isArray(parsedRisks) ? parsedRisks : []).slice(0, 3).map((r: string, i: number) => (
+                                                  <span key={i} className="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded text-[9px]">{r}</span>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          </td>
+                                          <td className="p-3 text-[11px] text-slate-600 dark:text-slate-300 min-w-[240px]">
+                                            <p className="whitespace-normal leading-relaxed text-slate-700 dark:text-slate-200 break-words">{item.notes || 'Evidence-based population reference interval.'}</p>
+                                          </td>
+                                        </>
+                                      ) : isMedicalCategorisationMode ? (
                                         <>
                                           <td className="p-3">
                                             <div className="flex flex-col gap-1">
@@ -4858,7 +5031,9 @@ I can analyze these, compare them with our database keys, and find standard mapp
                               className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/10"
                             >
                               <CheckCircle className="w-4 h-4" />
-                              {isMedicalCategorisationMode ? "Approve & Apply Categorisation" : "Approve & Apply Unit Standardization"}
+                              {isRangeCalibrationMode 
+                                ? "Approve & Apply Range Calibrations" 
+                                : (isMedicalCategorisationMode ? "Approve & Apply Categorisation" : "Approve & Apply Unit Standardization")}
                             </button>
                           </div>
                         </>
@@ -5207,7 +5382,21 @@ I can analyze these, compare them with our database keys, and find standard mapp
                         <button
                           onClick={() => {
                             setShowCleaningDropdown(false);
+                            setIsRangeCalibrationMode(true);
                             setIsMedicalCategorisationMode(false);
+                            setIsAgentMode(true);
+                            setStandardizationYaml(null);
+                            setStandardizationSummary(null);
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/25"
+                        >
+                          ⚖️ Calibrate Ranges
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowCleaningDropdown(false);
+                            setIsMedicalCategorisationMode(false);
+                            setIsRangeCalibrationMode(false);
                             setIsAgentMode(true);
                             setStandardizationYaml(null);
                             setStandardizationSummary(null);
@@ -5777,6 +5966,34 @@ I can analyze these, compare them with our database keys, and find standard mapp
                     <div className="mt-4">
                       <button
                         onClick={() => {
+                          const dupMatch = findDuplicateOrExistingBiomarker(searchQuery, profile, biomarkerHistory);
+                          if (dupMatch) {
+                            if (dupMatch.isNotUsed) {
+                              const proceed = window.confirm(
+                                `"${searchQuery}" matches an existing biomarker "${dupMatch.matchedName}" in your Not-Used list.\n\nWould you like to restore it to your active dictionary instead of creating a duplicate?`
+                              );
+                              if (proceed) {
+                                if (onRestoreNotUsedGlobal) {
+                                  onRestoreNotUsedGlobal(dupMatch.matchedKey);
+                                } else {
+                                  const currentNotUsed = { ...(profile.notUsedBiomarkers || {}) };
+                                  delete currentNotUsed[dupMatch.matchedKey];
+                                  onUpdateProfile({
+                                    notUsedBiomarkers: currentNotUsed
+                                  });
+                                }
+                                setSearchQuery('');
+                                return;
+                              }
+                            } else {
+                              alert(
+                                `A matching biomarker "${dupMatch.matchedName}" (Key: ${dupMatch.matchedKey}) already exists in your dictionary (${dupMatch.reason}).\n\nDirecting to existing biomarker entry.`
+                              );
+                              setSearchQuery(dupMatch.matchedName);
+                              return;
+                            }
+                          }
+
                           const newKey = searchQuery.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
                           const newCustomBiomarkers = { ...profile.customBiomarkers };
                           newCustomBiomarkers[newKey] = {
@@ -5835,6 +6052,12 @@ I can analyze these, compare them with our database keys, and find standard mapp
         isOpen={showMedicalInstructions}
         onClose={() => setShowMedicalInstructions(false)}
         agentType="medical_categorise"
+        profile={profile}
+      />
+      <FullScreenInstructionViewer
+        isOpen={showCalibrateInstructions}
+        onClose={() => setShowCalibrateInstructions(false)}
+        agentType="calibrate_ranges"
         profile={profile}
       />
       <FullScreenInstructionViewer
@@ -5955,13 +6178,22 @@ I can analyze these, compare them with our database keys, and find standard mapp
         onLaunchMedicalCategorisation={(keys) => {
           setSelectedKeys(keys);
           setIsMedicalCategorisationMode(true);
+          setIsRangeCalibrationMode(false);
           setIsAgentMode(true);
           handleRunStandardizationAgent(keys, 'categorise');
         }}
-        onLaunchRangeCalibrator={onReviewWithAgent ? (keys) => {
+        onLaunchRangeCalibrator={(keys) => {
           setSelectedKeys(keys);
-          onReviewWithAgent(keys);
-        } : undefined}
+          setIsRangeCalibrationMode(true);
+          setIsMedicalCategorisationMode(false);
+          setIsNameConsolidationMode(false);
+          setIsDataAccuracyMode(false);
+          setIsChatMode(false);
+          setIsAgentMode(true);
+          setStandardizationYaml(null);
+          setStandardizationSummary(null);
+          handleRunStandardizationAgent(keys, 'calibrate');
+        }}
         onSelectBiomarkerKeys={(keys) => {
           setSelectedKeys(keys);
         }}

@@ -21,7 +21,12 @@
 ---
 ## Summary of Accomplishments in Track B & Biomarker Pipeline
 1. **Specimen False Friend Guard (G-B4)**: Integrated urine vs serum specimen separation preventing cross-mapping between `urine_albumin`, `microalbumin_urine`, and `serum_albumin`.
-2. **Master Ingest Gate (N1–N13)**: Fully established and verified in `scripts/assert-biomarker-ingest.mjs` covering trace definitions, locked conversion outputs, lexer exports (`lexTable`, `buildIngestBatch`), table abort guard (`shouldAbortTablePath`), `sourceReportId` deduplication, and Inbox domain tab grouping.
+2. **Connected-Component Biomarker Deduplication & Graph Clustering**:
+   - Upgraded `src/utils/biomarkerAuditEngine.ts` to discover duplicate biomarker clusters using connected components across canonical stems, clinical synonym mappings, and pairwise morphological criteria (`isBiomarkerDuplicateCandidate`).
+   - Hardened `isBiomarkerDuplicateCandidate` with clinical discriminator checks (differentiating `mch` vs `mchc`, urine vs serum, free vs total, lipid fractions) to prevent false-friend clustering.
+   - Unified biomarker creation in `src/components/BiomarkerDictionaryModal.tsx` via `findDuplicateOrExistingBiomarker` to intercept duplicate candidate additions and offer instant reactivation for matching archived / Not-Used dictionary entries.
+   - Expanded hematology definitions in `src/utils/biomarkers.ts` (`hemoglobin`, `mean_corpuscular_hemoglobin`, `mean_corpuscular_volume`, `mean_corpuscular_hemoglobin_concentration`, `rdw`, `serum_albumin`).
+3. **Master Ingest Gate (N1–N13)**: Fully established and verified in `scripts/assert-biomarker-ingest.mjs` covering trace definitions, locked conversion outputs, lexer exports (`lexTable`, `buildIngestBatch`), table abort guard (`shouldAbortTablePath`), `sourceReportId` deduplication, and Inbox domain tab grouping.
 3. **Outer Regression Test Cases**: Verified G-B1 conversion harness, G-B2 EMIS/NHS printout table class counts harness, G-B6 symptom diary classification, G-B7 incomplete reading detection, and G-B9 vision N/A image handling in `tests/golden_biomarker.test.ts`.
 4. **Food in Medical Guard (G-B5)**: Implemented the `WRONG_DOOR` class assignment and trace generation in `server.ts` and `serverJobs.ts` when a user payload contains food or non-medical information.
 5. **Flagged Review & Staged Apply (Wave B5 & B6)**:
