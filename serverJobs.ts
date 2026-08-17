@@ -752,6 +752,13 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           estimatedTotalMarkers: finalPayload?.estimatedTotalMarkers ?? undefined,
           unmappedTests: finalPayload?.unmappedTests || undefined,
           currentBatch: finalPayload?.currentBatch || undefined,
+          // Range Calibrator (data_review) fix: these three fields are returned by
+          // server.ts's data_review handler but were never carried through this
+          // whitelist, so the client always saw an empty reviewedBiomarkers array
+          // even when the agent call succeeded.
+          reviewedBiomarkers: finalPayload?.reviewedBiomarkers || undefined,
+          extremeDivergences: finalPayload?.extremeDivergences || undefined,
+          batchIdx: finalPayload?.batchIdx !== undefined ? finalPayload.batchIdx : undefined,
           ingestTrace: finalPayload?.ingestTrace || prebuiltIngestTrace || (dbKind === 'medical' || kind === 'medical' || finalPayload?.agentType ? {
             version: 1,
             jobId,
@@ -788,6 +795,10 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
             estimatedTotalMarkers: finalPayload?.estimatedTotalMarkers ?? undefined,
             unmappedTests: finalPayload?.unmappedTests || undefined,
             currentBatch: finalPayload?.currentBatch || undefined,
+            // Range Calibrator (data_review) fix — see matching comment above.
+            reviewedBiomarkers: finalPayload?.reviewedBiomarkers || undefined,
+            extremeDivergences: finalPayload?.extremeDivergences || undefined,
+            batchIdx: finalPayload?.batchIdx !== undefined ? finalPayload.batchIdx : undefined,
             ingestTrace: finalPayload?.ingestTrace || prebuiltIngestTrace || (dbKind === 'medical' || kind === 'medical' || finalPayload?.agentType ? {
               version: 1,
               jobId,

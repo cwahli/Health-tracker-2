@@ -1259,6 +1259,14 @@ export default function App() {
                     modificationCommand: reviewCmds,
                     proposal: cleanResult.proposal || cleanResult.agentResult?.proposal || null,
                     reply: cleanResult.reply || cleanResult.text || cleanResult.message,
+                    // Range Calibrator (data_review) fix: AgentResultTable reads
+                    // agentResult.reviewedBiomarkers directly, and the profile-update
+                    // handler (agentType === 'data_review') reads it too to write
+                    // calibrated ranges into customBiomarkers. Neither worked because
+                    // this whitelist never copied it from cleanResult.
+                    reviewedBiomarkers: cleanResult.reviewedBiomarkers || cleanResult.agentResult?.reviewedBiomarkers || undefined,
+                    extremeDivergences: cleanResult.extremeDivergences || cleanResult.agentResult?.extremeDivergences || undefined,
+                    batchIdx: cleanResult.batchIdx !== undefined ? cleanResult.batchIdx : (cleanResult.agentResult?.batchIdx !== undefined ? cleanResult.agentResult.batchIdx : undefined),
                   };
 
                   const rawAgentType = snapAgentType || cleanResult.agentType || (isMedicalJob ? 'agent1' : 'food');
