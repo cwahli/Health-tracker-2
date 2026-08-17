@@ -79,4 +79,20 @@ describe('namesReferToSameFood', () => {
   it('matches Cereal Bar to raspberry white chocolate cereal bar', () => {
     expect(namesReferToSameFood('Cereal Bar', 'raspberry white chocolate cereal bar')).toBe(true);
   });
+
+  it('rejects different proteins sharing the word sandwich', () => {
+    expect(namesReferToSameFood('Yolk Chicken Sandwich', 'Yolk Steak Chimi 2.0 Sandwich')).toBe(false);
+    expect(namesReferToSameFood('Chicken Sandwich', 'Steak Sandwich')).toBe(false);
+    expect(namesReferToSameFood('Chicken Sandwich', 'Tuna Sandwich')).toBe(false);
+  });
+
+  it('rejects generic container single-token overlaps with different foods', () => {
+    expect(namesReferToSameFood('Caesar Salad', 'Fruit Salad')).toBe(false);
+    expect(namesReferToSameFood('Falafel Wrap', 'Beef Wrap')).toBe(false);
+    expect(namesReferToSameFood('Cheeseburger', 'Veggie Burger')).toBe(false);
+  });
+
+  it('accepts same protein dishes with modifier changes', () => {
+    expect(namesReferToSameFood('Crispy Chicken Sandwich', 'Grilled Chicken Sandwich')).toBe(true);
+  });
 });

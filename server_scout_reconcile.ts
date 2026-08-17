@@ -12,14 +12,35 @@ export function normalizeFoodName(s: unknown): string {
     .trim();
 }
 
+const CONFLICTING_PROTEINS = new Set([
+  'chicken', 'turkey', 'duck', 'poultry', 'ayam',
+  'beef', 'steak', 'pork', 'bacon', 'ham', 'sausage', 'lamb', 'mutton', 'veal', 'daging', 'salami', 'pepperoni', 'prosciutto',
+  'fish', 'salmon', 'tuna', 'cod', 'halibut', 'snapper', 'tilapia', 'mackerel', 'sardine', 'trout', 'ikan',
+  'shrimp', 'prawn', 'crab', 'lobster', 'squid', 'octopus', 'clam', 'mussel', 'oyster', 'scallop', 'udang',
+  'tofu', 'tempeh', 'falafel', 'paneer', 'seitan',
+  'egg', 'telur', 'omelet', 'omelette'
+]);
+
 export function namesReferToSameFood(a: unknown, b: unknown): boolean {
   const na = normalizeFoodName(a);
   const nb = normalizeFoodName(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
-  if (na.length >= 6 && nb.length >= 6 && (na.includes(nb) || nb.includes(na))) return true;
+
   const ta = new Set(na.split(' ').filter((t) => t.length >= 3));
   const tb = new Set(nb.split(' ').filter((t) => t.length >= 3));
+
+  // Check conflicting main protein/food types (e.g. chicken vs steak/beef)
+  const proteinsA = Array.from(ta).filter((t) => CONFLICTING_PROTEINS.has(t));
+  const proteinsB = Array.from(tb).filter((t) => CONFLICTING_PROTEINS.has(t));
+  if (proteinsA.length > 0 && proteinsB.length > 0) {
+    const hasCommonProtein = proteinsA.some((p) => proteinsB.includes(p));
+    if (!hasCommonProtein) {
+      return false;
+    }
+  }
+
+  if (na.length >= 6 && nb.length >= 6 && (na.includes(nb) || nb.includes(na))) return true;
   if (ta.size === 0 || tb.size === 0) return false;
   let overlap = 0;
   ta.forEach((t) => {
@@ -27,18 +48,14 @@ export function namesReferToSameFood(a: unknown, b: unknown): boolean {
   });
   
   // Specific single-token key food forms or common food category names
+  // (generic container words like sandwich, burger, wrap, salad must not match on single-token overlap alone)
   if (
     overlap >= 2 ||
     (overlap === 1 && (
-      ta.has('croissant') || tb.has('croissant') ||
-      ta.has('cinnamon') || tb.has('cinnamon') ||
+      (ta.has('croissant') && tb.has('croissant')) ||
+      (ta.has('cinnamon') && tb.has('cinnamon')) ||
       (ta.has('cereal') && tb.has('cereal')) ||
-      (ta.has('bar') && tb.has('bar')) ||
-      (ta.has('cookie') && tb.has('cookie')) ||
-      (ta.has('salad') && tb.has('salad')) ||
-      (ta.has('wrap') && tb.has('wrap')) ||
-      (ta.has('burger') && tb.has('burger')) ||
-      (ta.has('sandwich') && tb.has('sandwich'))
+      (ta.has('cookie') && tb.has('cookie'))
     ))
   ) {
     return true;

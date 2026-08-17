@@ -7008,7 +7008,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         labelProductName: item.labelProductName || null,
         pieceCount: pieceCount,
         visualIngredients: item.visualIngredients || null,
-        components: item.components || null
+        components: item.components || null,
+        boundingBox2D: item.boundingBox2D || null,
+        sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0
       };
     });
 
@@ -7807,8 +7809,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         ];
         rawFoodData.itemsBreakdown = rawFoodData.itemsBreakdown.map((newItem: any, idx: number) => {
           let origItem: any = null;
+          let spatialOrig: any = null;
           if (newItem.scoutIndex !== undefined && newItem.scoutIndex !== null) {
-            origItem = origItems.find((o: any) => o.scoutIndex === newItem.scoutIndex);
+            spatialOrig = origItems.find((o: any) => o.scoutIndex === newItem.scoutIndex);
+            origItem = spatialOrig;
             if (origItem && !namesReferToSameFood(
               newItem.canonicalDbName || newItem.name || newItem.originalName,
               origItem.canonicalDbName || origItem.name || origItem.originalName
@@ -7822,9 +7826,21 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               o.canonicalDbName || o.name || o.originalName
             )) || null;
           }
-          if (!origItem) return newItem;
 
           const merged = { ...newItem };
+
+          // Always preserve spatial crop coordinates for the same scout item slot
+          if (spatialOrig) {
+            if ((merged.boundingBox2D === undefined || merged.boundingBox2D === null) && spatialOrig.boundingBox2D) {
+              merged.boundingBox2D = spatialOrig.boundingBox2D;
+            }
+            if ((merged.sourceImageIndex === undefined || merged.sourceImageIndex === null) && spatialOrig.sourceImageIndex !== undefined) {
+              merged.sourceImageIndex = spatialOrig.sourceImageIndex;
+            }
+          }
+
+          if (!origItem) return merged;
+
           for (const key of PRESERVE_KEYS) {
             if ((merged[key] === undefined || merged[key] === null) && origItem[key] !== undefined && origItem[key] !== null) {
               merged[key] = origItem[key];
@@ -8037,7 +8053,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                   truthNutrients: preCalc.truthNutrients || {},
                   lockedNutrientKeys: preCalc.lockedNutrientKeys || [],
                   ingredientsList: preCalc.ingredientsList || item.ingredientsList || match.ingredientsList || null,
-                  labelNutrientsPerServing: preCalc.labelNutrientsPerServing || preCalc.primaryBase100g || item.labelNutrientsPerServing || null
+                  labelNutrientsPerServing: preCalc.labelNutrientsPerServing || preCalc.primaryBase100g || item.labelNutrientsPerServing || null,
+                  boundingBox2D: item.boundingBox2D || match.boundingBox2D || preCalc.boundingBox2D || null,
+                  sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : (typeof match.sourceImageIndex === 'number' ? match.sourceImageIndex : (typeof preCalc.sourceImageIndex === 'number' ? preCalc.sourceImageIndex : 0))
                 };
               }
               return {
@@ -8050,7 +8068,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                 keyword: match.keyword || item.keyword || null,
                 visualIngredients: item.visualIngredients || match.visualIngredients || null,
                 cookingMethod: (match.cookingMethod && match.cookingMethod !== 'unknown') ? match.cookingMethod : (item.cookingMethod || null),
-                components: item.components || match.components || null
+                components: item.components || match.components || null,
+                boundingBox2D: item.boundingBox2D || match.boundingBox2D || null,
+                sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : (typeof match.sourceImageIndex === 'number' ? match.sourceImageIndex : 0)
               };
             }
             return {
@@ -8105,7 +8125,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                     labelNutrientsPerServing: preCalc.primaryBase100g || null,
                     cookingMethod: (sItem.cookingMethod && sItem.cookingMethod !== 'unknown') ? sItem.cookingMethod : 'raw',
                     components: sItem.components || null,
-                    rawNutritionLabel: sItem.rawNutritionLabel || null
+                    rawNutritionLabel: sItem.rawNutritionLabel || null,
+                    boundingBox2D: sItem.boundingBox2D || preCalc.boundingBox2D || null,
+                    sourceImageIndex: typeof sItem.sourceImageIndex === 'number' ? sItem.sourceImageIndex : (typeof preCalc.sourceImageIndex === 'number' ? preCalc.sourceImageIndex : 0)
                   });
                 }
               }
@@ -8257,7 +8279,14 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         parsedData.itemsBreakdown = itemsBreakdown.map((item: any, idx: number) => {
           let preMatch = preCalculatedItems.find((p: any) => {
             if (item.scoutIndex !== undefined && item.scoutIndex !== null && p.scoutIndex !== undefined && p.scoutIndex !== null) {
-              return item.scoutIndex === p.scoutIndex;
+              if (item.scoutIndex === p.scoutIndex) {
+                const itemLower = (item.canonicalDbName || item.name || "").trim().toLowerCase();
+                const pOrigLower = (p.originalName || "").trim().toLowerCase();
+                const pKwLower = (p.keyword || "").trim().toLowerCase();
+                if (!itemLower || !pOrigLower) return true;
+                return namesReferToSameFood(itemLower, pOrigLower) || namesReferToSameFood(itemLower, pKwLower);
+              }
+              return false;
             }
             const itemLower = (item.canonicalDbName || item.name || "").trim().toLowerCase();
             const pOrigLower = (p.originalName || "").trim().toLowerCase();
@@ -8279,20 +8308,30 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             const itemLower = (item.canonicalDbName || item.name || "").trim().toLowerCase();
             const pOrigLower = (preMatch.originalName || "").trim().toLowerCase();
             const pKwLower = (preMatch.keyword || "").trim().toLowerCase();
+            const namesMatch = namesReferToSameFood(itemLower, pOrigLower) || namesReferToSameFood(itemLower, pKwLower);
             const hasKeywordMatch = itemLower.includes(pOrigLower) || itemLower.includes(pKwLower) || pOrigLower.includes(itemLower) || pKwLower.includes(itemLower);
             const stripPunctForTokens = (s: string) => s.replace(/[^a-z0-9\s]/g, ' ');
             const itemTokens = stripPunctForTokens(itemLower).split(/\s+/).filter((t: string) => t.length > 2);
             const pTokens = stripPunctForTokens(pOrigLower + " " + pKwLower).split(/\s+/).filter((t: string) => t.length > 2);
             const hasTokenOverlap = itemTokens.some((t: string) => pTokens.includes(t));
             
-            if (!hasKeywordMatch && !hasTokenOverlap && itemLower && (pOrigLower || pKwLower)) {
+            if ((!hasKeywordMatch && !hasTokenOverlap && itemLower && (pOrigLower || pKwLower)) || (!namesMatch && itemLower && (pOrigLower || pKwLower))) {
                preMatch = null;
             }
           }
 
           const rawItem = rawFoodData.itemsBreakdown?.[idx] || {};
 
-          // Reconcile item nutrients: prefer preMatch nutrients if available, or item/rawItem nutrients
+          let fallbackMatch: any = null;
+          if (!preMatch) {
+            const itemQuery = item.canonicalDbName || item.name || item.keyword || item.originalName || '';
+            if (itemQuery) {
+              fallbackMatch = pickQueryScopedMatch(itemQuery, databaseMatchesArray, [itemQuery], quarantinedIdsSet) ||
+                             databaseMatchesArray.find((m: any) => namesReferToSameFood(itemQuery, m.name || m.searchQuery));
+            }
+          }
+
+          // Reconcile item nutrients: prefer preMatch nutrients if available, then fallbackMatch, or item/rawItem nutrients
           const baseNutrients = item.nutrients || rawItem.nutrients || {};
           const preNutrients = preMatch?.nutrients || {};
           const finalItemNutrients: Record<string, number> = {};
@@ -8307,18 +8346,49 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             }
           });
 
+          // If calories are still 0, apply fallbackMatch or getFallbackCategoryProfile
+          const itemWeightG = Number(item.weightGrams || rawItem.weightGrams || 100) || 100;
+          const itemQueryStr = item.canonicalDbName || item.name || item.keyword || item.originalName || '';
+
+          if ((finalItemNutrients.calories || 0) <= 0) {
+            if (fallbackMatch) {
+              const fbNut = fallbackMatch.nutrients || dbMatchMap.get(fallbackMatch.id || fallbackMatch.food_id) || {};
+              const fbCal = Number(fallbackMatch.calories || fbNut.calories || 0);
+              const fbFactor = (fallbackMatch.servingGrams || fbNut.servingSizeGrams) ? itemWeightG / (fallbackMatch.servingGrams || fbNut.servingSizeGrams) : (itemWeightG / 100);
+              NUTRIENT_KEYS.forEach((k: string) => {
+                const val = fbNut[k] !== undefined ? Number(fbNut[k]) : Number(fallbackMatch[k] || 0);
+                if (val > 0) {
+                  finalItemNutrients[k] = Math.round(val * fbFactor * 10) / 10;
+                }
+              });
+              if (fbCal > 0 && !finalItemNutrients.calories) {
+                finalItemNutrients.calories = Math.round(fbCal * fbFactor);
+              }
+            }
+            if ((finalItemNutrients.calories || 0) <= 0 && itemQueryStr) {
+              const catProfile = getFallbackCategoryProfile(itemQueryStr);
+              const catFactor = itemWeightG / 100;
+              NUTRIENT_KEYS.forEach((k: string) => {
+                const val = Number(catProfile[k] || 0);
+                if (val > 0) {
+                  finalItemNutrients[k] = Math.round(val * catFactor * 10) / 10;
+                }
+              });
+            }
+          }
+
           return {
             ...rawItem,
             ...item,
             nutrients: finalItemNutrients,
-            chainName: item.chainName || preMatch?.chainName || rawItem.chainName || null,
+            chainName: item.chainName || preMatch?.chainName || fallbackMatch?.chainName || rawItem.chainName || null,
             rawNutritionLabel: item.rawNutritionLabel || preMatch?.rawNutritionLabel || rawItem.rawNutritionLabel || null,
-            originalName: item.originalName || preMatch?.originalName || rawItem.originalName || null,
-            keyword: item.keyword || preMatch?.keyword || rawItem.keyword || null,
+            originalName: item.originalName || preMatch?.originalName || fallbackMatch?.name || rawItem.originalName || null,
+            keyword: item.keyword || preMatch?.keyword || fallbackMatch?.searchQuery || rawItem.keyword || null,
             visualIngredients: item.visualIngredients || rawItem.visualIngredients || preMatch?.visualIngredients || null,
             components: item.components || rawItem.components || preMatch?.components || null,
-            dbSource: (preMatch && preMatch.dbSource) || item.dbSource || "estimated",
-            dbId: (preMatch && preMatch.dbId) || item.dbId || null,
+            dbSource: (preMatch && preMatch.dbSource) || (fallbackMatch && (fallbackMatch.source || fallbackMatch.dbSource)) || item.dbSource || "estimated",
+            dbId: (preMatch && preMatch.dbId) || (fallbackMatch && (fallbackMatch.id || fallbackMatch.food_id)) || item.dbId || null,
             hasComponents: Boolean(
               (preMatch && preMatch.hasComponents) ||
               item.hasComponents ||
@@ -8326,13 +8396,15 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               (Array.isArray(item.componentsDetailList) && item.componentsDetailList.length >= 2)
             ),
             primaryBase100g: preMatch?.primaryBase100g || item.primaryBase100g || null,
-            primaryBaseMatchName: preMatch?.primaryBaseMatchName || item.primaryBaseMatchName || null,
+            primaryBaseMatchName: preMatch?.primaryBaseMatchName || fallbackMatch?.name || item.primaryBaseMatchName || null,
             primaryBaseWeightG: preMatch?.primaryBaseWeightG || item.weightGrams,
             componentsDetailList: preMatch?.componentsDetailList || item.componentsDetailList || [],
             cookingAdded: preMatch?.cookingAdded || { calories: 0, fat: 0, satFat: 0, sodium: 0 },
             truthNutrients: item.truthNutrients || preMatch?.truthNutrients || {},
             lockedNutrientKeys: item.lockedNutrientKeys || preMatch?.lockedNutrientKeys || [],
-            ingredientsList: preMatch?.ingredientsList || item.ingredientsList || rawItem.ingredientsList || null
+            ingredientsList: preMatch?.ingredientsList || item.ingredientsList || rawItem.ingredientsList || null,
+            boundingBox2D: item.boundingBox2D || rawItem.boundingBox2D || preMatch?.boundingBox2D || null,
+            sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : (typeof rawItem.sourceImageIndex === 'number' ? rawItem.sourceImageIndex : (typeof preMatch?.sourceImageIndex === 'number' ? preMatch.sourceImageIndex : 0))
           };
         });
 
