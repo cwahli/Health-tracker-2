@@ -15,10 +15,19 @@ export const BiomarkerCard: React.FC<AgentCardProps> = ({
   setActiveInstructionPrompt, onLogMedical, isAnalyzing
 }) => {
   const t = translations[language || "en"] || translations.en;
+  const effectiveAgentResult = React.useMemo(() => {
+    if (msg.data?.agentResult) return msg.data.agentResult;
+    if (msg.agentResult) return msg.agentResult;
+    if (msg.modificationCommand && Array.isArray(msg.modificationCommand) && msg.modificationCommand.length > 0) {
+      return { modificationCommand: msg.modificationCommand, reply: msg.content };
+    }
+    return null;
+  }, [msg.data?.agentResult, msg.agentResult, msg.modificationCommand, msg.content]);
+
   const hasValidAgentResult = React.useMemo(() => {
     if (msg.isLive) return false;
-    if (!msg.data?.agentResult) return false;
-    const res = msg.data.agentResult;
+    if (!effectiveAgentResult) return false;
+    const res = effectiveAgentResult;
 
     if (msg.agentType === 'agent4') {
       const rawSum = res.summary || res.primaryDiagnosis || res.text;
@@ -37,7 +46,7 @@ export const BiomarkerCard: React.FC<AgentCardProps> = ({
       k !== 'dietitianInstruction'
     );
     return keys.length > 0;
-  }, [msg.isLive, msg.data?.agentResult, msg.agentType]);
+  }, [msg.isLive, effectiveAgentResult, msg.agentType]);
 
   return (
     <>
@@ -65,7 +74,7 @@ export const BiomarkerCard: React.FC<AgentCardProps> = ({
                       </div>
 
                       {/* Content details based on Agent type */}
-                      {msg.agentType && (AGENT_REGISTRY[msg.agentType as AgentType]?.capabilities?.includes('biomarker_table_view') || msg.agentType === 'agent1' || msg.agentType === 'agent1_step1' || msg.agentType === 'medical' || msg.agentType === 'medical_extract' || msg.agentType === 'biomarker_review' || msg.agentType === 'data_review') && msg.data?.agentResult && (
+                      {msg.agentType && (AGENT_REGISTRY[msg.agentType as AgentType]?.capabilities?.includes('biomarker_table_view') || msg.agentType === 'agent1' || msg.agentType === 'agent1_step1' || msg.agentType === 'medical' || msg.agentType === 'medical_extract' || msg.agentType === 'biomarker_review' || msg.agentType === 'data_review') && effectiveAgentResult && (
                         <ErrorBoundary>
                         <AgentResultTable
                           agentType={
@@ -74,7 +83,7 @@ export const BiomarkerCard: React.FC<AgentCardProps> = ({
                             msg.agentTypeStep === 'agent1_step3' ? 'agent3' :
                             (msg.agentType === 'medical' || msg.agentType === 'medical_extract' || msg.agentType === 'agent1_step1' ? 'agent1' : msg.agentType) as any
                           }
-                          agentResult={msg.data?.agentResult}
+                          agentResult={effectiveAgentResult}
                           profile={profile}
                           biomarkerHistory={biomarkerHistory || []}
                           isApplying={!!isAnalyzing}

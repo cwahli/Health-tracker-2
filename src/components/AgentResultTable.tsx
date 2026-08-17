@@ -1294,10 +1294,13 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
         catalogUnits
       );
 
-      if (commands.length === 0 && (candidate?.reply || candidate?.text || initialRawText)) {
-        commands = extractFallbackModifications(candidate?.reply || candidate?.text || initialRawText || '', biomarkerHistory || [], profile);
-        if (commands.length > 0) {
-          commands = enrichReviewModificationCommands(commands, biomarkerHistory || [], catalogUnits);
+      if (commands.length === 0) {
+        const textCandidate = candidate?.reply || candidate?.text || candidate?.message || candidate?.content || candidate?.summary || candidate?.globalSummary || candidate?.explanation || candidate?.agentResult?.reply || candidate?.agentResult?.text || candidate?.agentResult?.message || initialRawText || '';
+        if (textCandidate) {
+          commands = extractFallbackModifications(textCandidate, biomarkerHistory || [], profile);
+          if (commands.length > 0) {
+            commands = enrichReviewModificationCommands(commands, biomarkerHistory || [], catalogUnits);
+          }
         }
       }
 
@@ -1327,6 +1330,29 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
             reason: cmd.reason || 'Scaling and notation calibration',
             description: cmd.reason || 'Scaling and notation calibration',
             insight: agentResult?.proposal?.medicalInsight || ''
+          };
+        });
+      }
+
+      const reviewed = candidate?.reviewedBiomarkers || candidate?.biomarkers || candidate?.extractedBiomarkers || candidate?.agentResult?.reviewedBiomarkers || candidate?.agentResult?.biomarkers;
+      if (Array.isArray(reviewed) && reviewed.length > 0) {
+        return reviewed.map((bm: any) => {
+          const isAtRisk = bm.status === 'At Risk' || bm.status === 'high' || bm.status === 'critical';
+          const unit = bm.unit || profile?.customBiomarkers?.[bm.key]?.unit || '';
+          return {
+            biomarker: bm.name || (bm.key ? String(bm.key).replace(/_/g, ' ').toUpperCase() : '') || 'Unknown',
+            key: bm.key,
+            date: bm.date || '',
+            value: bm.userValue !== undefined ? bm.userValue : (bm.newValue !== undefined ? bm.newValue : (bm.value !== undefined ? bm.value : '')),
+            unit,
+            group: bm.standardMedicalGrouping || 'Clinical Calibration',
+            isAtRisk,
+            isChanged: true,
+            isNew: false,
+            status: 'Calibrated',
+            reason: bm.reason || bm.insight || 'Clinical calibration review',
+            description: bm.description || bm.insight || '',
+            insight: bm.insight || ''
           };
         });
       }
