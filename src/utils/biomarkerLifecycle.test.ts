@@ -567,4 +567,44 @@ describe('Layer-1 EMIS / NHS table ingest', () => {
   });
 });
 
+describe('Layer-1 double-escaped EMIS table ingest (spreadsheet round-trip)', () => {
+  const emisDoubleEscaped = [
+    '"""Date"",""Test Name"",""Result"",""Normal Range"",""Comment"""',
+    '"""09-Jun-2026"",""Sample site"","""",""""",""(AlyssaFRS) - 01. Satisfactory - No Action Urine"""',
+    '"""09-Jun-2026"",""Chlamydia DNA detection"","""",""""",""NEGATIVE"""',
+    '"""05-Jun-2026"",""HbA1c levl - IFCC standardised"",""40 mmol/mol"",""20 - 41 mmol/mol"",""""""',
+    '"""05-Jun-2026"",""Renal profile"","""",""""",""(OlaFRS) - 01. Satisfactory - No Action"""',
+    '"""05-Jun-2026"",""Serum sodium"",""143 mmol/L"",""133 - 146 mmol/L"",""""""',
+    '"""05-Jun-2026"",""Serum creatinine"",""100 umol/L"",""64 - 104 umol/L"",""""""',
+    '"""05-Jun-2026"",""Serum HDL cholesterol level"",""1.5 mmol/L"",""0.9 - 1.7 mmol/L"",""""""',
+    '"""03-Jun-2026"",""Serum triglycerides"",""1.7 mmol/L"",""- mmol/L"",""."""',
+    '"""03-Jun-2026"",""Calculated LDL cholesterol lev"",""4.3 mmol/L"",""- mmol/L"",""""""',
+  ].join(' ');
+
+  it('splits and un-escapes double-quoted EMIS records with no newlines', () => {
+    expect(emisDoubleEscaped.includes('\n')).toBe(false);
+    const rows = lexTable(emisDoubleEscaped);
+    expect(rows.length).toBeGreaterThanOrEqual(9);
+    expect(rows[0][0].toLowerCase()).toContain('date');
+    expect(rows[0].length).toBe(5);
+    const sodiumRow = rows.find((r) => /serum sodium/i.test(r.join(' ')));
+    expect(sodiumRow).toBeTruthy();
+    expect(sodiumRow?.[2]).toBe('143 mmol/L');
+    // Fields must not contain leftover stray quote characters from
+    // incomplete un-escaping.
+    rows.forEach((r) => r.forEach((cell) => expect(cell).not.toMatch(/"/)));
+  });
+
+  it('stages known SI rows from the double-escaped format same as the single-escaped format', () => {
+    const trace = buildIngestBatch(lexTable(emisDoubleEscaped), 'job_emis_double');
+    expect(shouldAbortTablePath(trace)).toBe(false);
+    expect(trace.highConfidenceCount).toBeGreaterThanOrEqual(3);
+    const sodium = trace.rows?.find((r) => r.canonicalKey === 'serum_sodium');
+    expect(sodium?.bucket).toBe('high_confidence');
+    expect(sodium?.rawValue).toBe(143);
+    const hba1c = trace.rows?.find((r) => r.canonicalKey === 'hba1c');
+    expect(hba1c?.rawValue).toBe(40);
+  });
+});
+
 

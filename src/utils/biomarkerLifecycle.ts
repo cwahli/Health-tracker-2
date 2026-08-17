@@ -54,8 +54,13 @@ const RANGE_VARIES_BY: Record<string, RangeVariesBy[]> = {
 import type { IngestTrace, IngestTraceRow, ClassId } from '../types';
 
 /** EMIS/NHS Web pastes often concatenate quoted CSV records with a space, not a newline. */
-const QUOTED_DMY_RECORD = /"\s+"(?=\d{1,2}-[A-Za-z]{3}-\d{2,4}")/g;
-const QUOTED_ISO_RECORD = /"\s+"(?=\d{4}-\d{2}-\d{2}")/g;
+/** Some NHS/EMIS export paths double-escape the row wrapper (row-within-row
+ * quoting), leaving extra quote characters between the boundary quote and
+ * the date. The `"*` in each lookahead allows those extra quotes without
+ * consuming them, so downstream field-doubling is left intact for lexTable
+ * to unwrap per-row. */
+const QUOTED_DMY_RECORD = /"\s+"(?="*\d{1,2}-[A-Za-z]{3}-\d{2,4}")/g;
+const QUOTED_ISO_RECORD = /"\s+"(?="*\d{4}-\d{2}-\d{2}")/g;
 const PANEL_NAME_RE = /^(renal profile|liver function(?: test)?|bone profile|full blood count.*|fbc|serum lipids|lipid profile|point of care testing|urea and electrolytes|u(?:and|&)?e)$/i;
 const HEADER_CELL_RE = /^(date|test name|result|normal range|comment|reference range|value|unit)$/i;
 const MONTHS: Record<string, string> = {
@@ -99,7 +104,19 @@ export function lexTable(text: string): string[][] {
   if (!text) return [];
   const lines = normalizeLabTableText(text).split(/\r?\n/).filter((l) => l.trim().length > 0);
   return lines.map((line) => {
-    const cleanLine = line.trim();
+    let cleanLine = line.trim();
+    // Double-escaped CSV-within-CSV: some NHS/EMIS export paths wrap each
+    // row in its own quote AND double the row's internal quotes a second
+    // time (e.g. because the row passed through a spreadsheet cell before
+    // being copied). Detected by a doubled quote immediately inside the
+    // row's own wrap quote. Strip the outer wrap and undo one level of
+    // quote-doubling before handing the row to parseCsvLine. Rows that are
+    // already single-escaped (the original EMIS format) do not match this
+    // condition and are left completely unchanged.
+    if (cleanLine.length > 1 && cleanLine[0] === '"' && cleanLine[1] === '"' && cleanLine.endsWith('"')) {
+      const unwrapped = cleanLine.slice(1, -1);
+      return unwrapped.split('","').map(cell => cell.replace(/^"+|"+$/g, ''));
+    }
     if (cleanLine.includes('\t')) return cleanLine.split('\t').map((c) => c.trim());
     if (cleanLine.includes('|')) return cleanLine.split('|').map((c) => c.trim()).filter(Boolean);
     if (cleanLine.includes(',')) return parseCsvLine(cleanLine);
