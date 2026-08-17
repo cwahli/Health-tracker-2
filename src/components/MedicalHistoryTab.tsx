@@ -143,18 +143,6 @@ export default function MedicalHistoryTab({
   const isKeyNotUsedInMedicalHistory = useCallback((k: string) => {
     return isKeyNotUsedGlobal(k) || isKeyNotUsedLocal(k);
   }, [isKeyNotUsedGlobal, isKeyNotUsedLocal]);
-
-  const totalUniqueBiomarkers = useMemo(() => {
-    const keys = new Set(Object.keys(biomarkers || {}));
-    activeHistory.forEach(h => {
-      Object.keys(h.biomarkers || {}).forEach(k => keys.add(k));
-    });
-    let count = 0;
-    keys.forEach(k => {
-      if (!isKeyNotUsedInMedicalHistory(k)) count++;
-    });
-    return count;
-  }, [biomarkers, activeHistory, isKeyNotUsedInMedicalHistory]);
   const [viewType, setViewType] = useState<'risk' | 'condition' | 'practice'>('risk');
   const [selectedSubCategory, setSelectedSubCategory] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'risk' | 'name'>('risk');
@@ -326,6 +314,10 @@ export default function MedicalHistoryTab({
     return withMetadata.filter(d => !isKeyNotUsedInMedicalHistory(d.key));
   }, [biomarkers, activeHistory, profile.customBiomarkers, profile.ethnicity, profile.gender, profile.height, isKeyNotUsedInMedicalHistory]);
 
+  const totalUniqueBiomarkers = useMemo(() => {
+    return allDefinitions.length;
+  }, [allDefinitions]);
+
   const checkIsPending = (def: any) => {
     return !isBiomarkerApproved(def.key, profile, activeHistory);
   };
@@ -466,13 +458,8 @@ export default function MedicalHistoryTab({
         return isBiomarkerNeedingReview(def.key, profile, activeHistory, biomarkers, allDefinitions);
       }
 
-      // If pending approval, exclude from all standard medical groupings/categories until approved
+      // If pending approval, exclude from standard medical groupings/categories (they appear under Pending Approval)
       if (isPending) {
-        return false;
-      }
-
-      // Rule 7: If a biomarker has no logged value and is approved (categorisation + unit + range), it is ONLY in the biomarker dictionary (exclude from medical history categories)
-      if (!hasVal && isApproved) {
         return false;
       }
 
@@ -683,7 +670,25 @@ export default function MedicalHistoryTab({
 
       {/* Accordions Group of Biomarkers */}
       <div className="space-y-2.5 mt-[20px]">
-        {activeCategories.map((cat) => {
+        {activeCategories.length === 0 ? (
+          <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-dashed border-theme-border">
+            <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+              {searchQuery.trim() !== ''
+                ? `No biomarkers found matching "${searchQuery}"`
+                : 'No biomarkers available in this view.'}
+            </p>
+            {searchQuery.trim() !== '' && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="mt-3 px-3 py-1.5 text-xs font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors cursor-pointer shadow-xs"
+              >
+                Clear Search
+              </button>
+            )}
+          </div>
+        ) : (
+          activeCategories.map((cat) => {
           const isOpen = searchQuery.trim() !== '' || !!openSubCategories[cat];
           const riskInfo = getSubCategoryRiskInfo(cat);
           const markers = getSortedBiomarkersForSubCategory(cat);
@@ -949,7 +954,7 @@ export default function MedicalHistoryTab({
               )}
             </div>
           );
-        })}
+        }))}
       </div>
 
       <div className="mt-8 pt-6 border-t border-theme-border/80 flex flex-col sm:flex-row items-center justify-between gap-4 px-4">

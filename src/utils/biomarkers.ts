@@ -484,6 +484,235 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
   }
 ];
 
+export const COMMON_PREFIXES = [
+  'serum_', 'plasma_', 'blood_', 'total_', 'free_', 'fasting_', 'estimated_', 'intact_', 
+  'calculated_', 'senon_', 'se_'
+];
+export const COMMON_SUFFIXES = [
+  '_level', '_count', '_serum', '_rate', '_ratio', '_percent', '_percentage', 
+  '_val', '_value', '_score', '_concentration', '_estimation', '_standardised', '_conc'
+];
+export const COMMON_UNIT_SUFFIXES = [
+  '_umol_l', '_u_l', '_mg_dl', '_mmol_l', '_mmol_mol', '_g_l', '_g_dl', '_fl', '_k_ul', 
+  '_ml_min_1_73m2', '_ml_min_173m2', '_ml_min', '_pg_ml', '_ng_dl', '_ng_ml', '_uiu_ml', '_beats_min',
+  '_10_9_l', '_10_12_l', '_kg_m2', '_m_ul', '_points', '_percent', '_fraction', '_l_l'
+];
+
+/**
+ * Standard clinical abbreviation synonym mappings so medical aliases resolve
+ * to a shared canonical stem (e.g. AST <=> SGOT <=> Aspartate Aminotransferase).
+ */
+export const CLINICAL_SYNONYM_MAP: Record<string, string> = {
+  // Liver
+  'ast': 'ast',
+  'sgot': 'ast',
+  'aspartateaminotransferase': 'ast',
+  'aspartatetransaminase': 'ast',
+  'alt': 'alt',
+  'sgpt': 'alt',
+  'alanineaminotransferase': 'alt',
+  'alaninetransaminase': 'alt',
+  'alp': 'alkaline_phosphatase',
+  'alkalinephosphatase': 'alkaline_phosphatase',
+  'alkphos': 'alkaline_phosphatase',
+  'ggt': 'gamma_gt',
+  'gammaglutamyltransferase': 'gamma_gt',
+  'gammaglutamyltranspeptidase': 'gamma_gt',
+  'bilirubin': 'total_bilirubin',
+  'totalbilirubin': 'total_bilirubin',
+  'directbilirubin': 'direct_bilirubin',
+  'indirectbilirubin': 'indirect_bilirubin',
+
+  // Lipids
+  'hdl': 'hdl',
+  'hdlc': 'hdl',
+  'hdlcholesterol': 'hdl',
+  'highdensitylipoprotein': 'hdl',
+  'ldl': 'ldl',
+  'ldlc': 'ldl',
+  'ldlcholesterol': 'ldl',
+  'lowdensitylipoprotein': 'ldl',
+  'cholesterol': 'total_cholesterol',
+  'totalcholesterol': 'total_cholesterol',
+  'trig': 'triglycerides',
+  'trigs': 'triglycerides',
+  'triglyceride': 'triglycerides',
+  'triglycerides': 'triglycerides',
+  'apob': 'apob',
+  'apolipoproteinb': 'apob',
+  'apoa1': 'apoa1',
+  'apolipoproteina1': 'apoa1',
+  'lpa': 'lp_a',
+  'lipoprotein_a': 'lp_a',
+  'lipoproteina': 'lp_a',
+  'nonhdl': 'non_hdl_cholesterol',
+  'nonhdlcholesterol': 'non_hdl_cholesterol',
+  'cholesterolhdlratio': 'cholesterol_hdl_ratio',
+
+  // Blood Sugar & Metabolic
+  'hba1c': 'hba1c',
+  'glycatedhemoglobin': 'hba1c',
+  'glycatedhaemoglobin': 'hba1c',
+  'hemoglobina1c': 'hba1c',
+  'haemoglobina1c': 'hba1c',
+  'glucose': 'fasting_glucose',
+  'fastingglucose': 'fasting_glucose',
+  'bloodglucose': 'fasting_glucose',
+  'bloodsugar': 'fasting_glucose',
+  'insulin': 'fasting_insulin',
+  'fastinginsulin': 'fasting_insulin',
+
+  // Kidneys & Electrolytes
+  'egfr': 'egfr',
+  'egfrcreat': 'egfr',
+  'egfrcreatckdepi': 'egfr',
+  'creatinine': 'creatinine',
+  'bun': 'bun',
+  'bloodureanitrogen': 'bun',
+  'urea': 'bun',
+  'uricacid': 'uric_acid',
+  'urate': 'uric_acid',
+  'sodium': 'serum_sodium',
+  'potassium': 'serum_potassium',
+  'calcium': 'serum_calcium',
+  'chloride': 'serum_chloride',
+  'magnesium': 'serum_magnesium',
+  'phosphate': 'serum_inorganic_phosphate',
+  'phosphorus': 'serum_inorganic_phosphate',
+  'albumin': 'serum_albumin',
+  'globulin': 'serum_globulin',
+  'totalprotein': 'total_protein',
+
+  // Hematology (CBC)
+  'wbc': 'wbc',
+  'whitebloodcell': 'wbc',
+  'whitebloodcells': 'wbc',
+  'whitebloodcellcount': 'wbc',
+  'totalwhitecell': 'wbc',
+  'rbc': 'rbc',
+  'redbloodcell': 'rbc',
+  'redbloodcells': 'rbc',
+  'redbloodcellcount': 'rbc',
+  'hemoglobin': 'hemoglobin',
+  'haemoglobin': 'hemoglobin',
+  'hgb': 'hemoglobin',
+  'hb': 'hemoglobin',
+  'hematocrit': 'hematocrit',
+  'haematocrit': 'hematocrit',
+  'hct': 'hematocrit',
+  'platelet': 'platelets',
+  'platelets': 'platelets',
+  'plateletcount': 'platelets',
+  'plt': 'platelets',
+  'mcv': 'mcv',
+  'meancorpuscularvolume': 'mcv',
+  'mch': 'mch',
+  'meancorpuscularhemoglobin': 'mch',
+  'meancorpuscularhaemoglobin': 'mch',
+  'mchc': 'mchc',
+  'meancorpuscularhemoglobinconcentration': 'mchc',
+  'meancorpuscularhaemoglobinconcentration': 'mchc',
+  'rdw': 'rdw',
+  'redcelldistributionwidth': 'rdw',
+  'redbloodcelldistributionwidth': 'rdw',
+  'mpv': 'mean_platelet_volume',
+  'meanplateletvolume': 'mean_platelet_volume',
+  'neutrophil': 'neutrophil_count',
+  'neutrophils': 'neutrophil_count',
+  'neutrophilcount': 'neutrophil_count',
+  'lymphocyte': 'lymphocyte_count',
+  'lymphocytes': 'lymphocyte_count',
+  'monocyte': 'monocyte_count',
+  'monocytes': 'monocyte_count',
+  'eosinophil': 'eosinophil_count',
+  'eosinophils': 'eosinophil_count',
+  'basophil': 'basophil_count',
+  'basophils': 'basophil_count',
+
+  // Inflammation & Hormones & Vitamins
+  'crp': 'hscrp',
+  'hscrp': 'hscrp',
+  'creactiveprotein': 'hscrp',
+  'highsensitivitycreactiveprotein': 'hscrp',
+  'ferritin': 'ferritin',
+  'serumferritin': 'ferritin',
+  'iron': 'serum_iron',
+  'tsh': 'tsh',
+  'thyroidstimulatinghormone': 'tsh',
+  'ft4': 'free_t4',
+  'freet4': 'free_t4',
+  'freethyroxine': 'free_t4',
+  'ft3': 'free_t3',
+  'freet3': 'free_t3',
+  'freetriiodothyronine': 'free_t3',
+  'testosterone': 'testosterone',
+  'totaltestosterone': 'testosterone',
+  'freetestosterone': 'free_testosterone',
+  'vitamind': 'vitamin_d',
+  'vitd': 'vitamin_d',
+  '25ohvitamind': 'vitamin_d',
+  'vitaminb12': 'vitamin_b12',
+  'vitb12': 'vitamin_b12',
+  'folate': 'folate',
+  'folicacid': 'folate',
+  'psa': 'prostate_specific_antigen',
+  'prostatespecificantigen': 'prostate_specific_antigen',
+  'bmi': 'bmi',
+  'bodymassindex': 'bmi',
+  'weight': 'weight',
+  'bodyweight': 'weight',
+  'height': 'height',
+  'standingheight': 'height'
+};
+
+/**
+ * Normalizes an arbitrary key stem for generalized morphological clustering and alias resolution
+ */
+export function normalizeStemKey(key: string): string {
+  let stem = key.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  
+  // Iteratively strip known unit suffixes
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const suf of COMMON_UNIT_SUFFIXES) {
+      if (stem.endsWith(suf)) {
+        stem = stem.slice(0, -suf.length);
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  // Iteratively strip known prefixes
+  changed = true;
+  while (changed) {
+    changed = false;
+    for (const pre of COMMON_PREFIXES) {
+      if (stem.startsWith(pre)) {
+        stem = stem.slice(pre.length);
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  // Iteratively strip known suffixes
+  changed = true;
+  while (changed) {
+    changed = false;
+    for (const suf of COMMON_SUFFIXES) {
+      if (stem.endsWith(suf)) {
+        stem = stem.slice(0, -suf.length);
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  return stem;
+}
+
 const CUSTOM_KEY_ALIASES: Record<string, string> = {
   'hemorrhoids': 'hemorrhoidal_symptom_score',
   'blood_in_stool': 'hemorrhoidal_symptom_score',
@@ -592,10 +821,11 @@ const CUSTOM_KEY_ALIASES: Record<string, string> = {
   'ngonorrhoeanuclaciddetn': 'n_gonorrhoeae_nucl_acid_detn',
 };
 
-export function getMappedBiomarkerKey(rawKey: string): string {
-  if (!rawKey) return '';
-  const clean = rawKey.toLowerCase().replace(/[^a-z0-9_]/g, ''); // Keep underscores for exact matching
-  const cleanNoUnderscore = rawKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+export function getMappedBiomarkerKey(rawKey: string, rawName?: string): string {
+  if (!rawKey && !rawName) return '';
+  const inputStr = rawKey || rawName || '';
+  const clean = inputStr.toLowerCase().replace(/[^a-z0-9_]/g, ''); // Keep underscores for exact matching
+  const cleanNoUnderscore = inputStr.toLowerCase().replace(/[^a-z0-9]/g, '');
 
   // 1. Exact match on definitions
   for (const def of biomarkerDefinitions) {
@@ -620,16 +850,11 @@ export function getMappedBiomarkerKey(rawKey: string): string {
   if (CUSTOM_KEY_ALIASES[clean]) return CUSTOM_KEY_ALIASES[clean];
   if (CUSTOM_KEY_ALIASES[cleanNoUnderscore]) return CUSTOM_KEY_ALIASES[cleanNoUnderscore];
 
-  // 3. Specimen Guard & Fuzzy match (IDENTITY_FALSE_FRIEND)
-  // If the raw key contains 'urine', it must not map to 'serum' equivalents.
-  const isUrine = clean.includes('urine');
-  const isSerum = clean.includes('serum') || clean.includes('plasma') || clean.includes('blood');
-  
+  // 3. Specimen Guard & False Friend Guard (IDENTITY_FALSE_FRIEND)
+  const isUrine = clean.includes('urine') || clean.includes('urinary');
   if (isUrine) {
     if (clean.includes('albumin') && !clean.includes('microalbumin')) return 'urine_albumin';
-    // Let other urine markers pass through without matching serum counterparts
   } else {
-    // If not urine, we can safely map 'albumin' to 'serum_albumin'
     if (cleanNoUnderscore === 'albumin') return 'serum_albumin';
   }
 
@@ -640,6 +865,11 @@ export function getMappedBiomarkerKey(rawKey: string): string {
   if (cleanNoUnderscore === 'hemoglobin' || cleanNoUnderscore === 'haemoglobin') {
     return 'hemoglobin';
   }
+
+  // 4. Clinical Synonym Dictionary match
+  if (CLINICAL_SYNONYM_MAP[cleanNoUnderscore]) return CLINICAL_SYNONYM_MAP[cleanNoUnderscore];
+  const stem = normalizeStemKey(inputStr);
+  if (CLINICAL_SYNONYM_MAP[stem]) return CLINICAL_SYNONYM_MAP[stem];
 
   // Substring mapping for common clinical names that were dropped
   for (const def of biomarkerDefinitions) {
@@ -656,7 +886,8 @@ export function getMappedBiomarkerKey(rawKey: string): string {
 
   // Canonicalize unknown keys to lowercase slug form so "Hemoglobin" and "hemoglobin"
   // cannot become parallel dictionary identities.
-  return clean || rawKey;
+  const rawClean = clean.replace(/^_+|_+$/g, '');
+  return rawClean || clean || inputStr;
 }
 
 export function getCustomBiomarkerDef(profile: any, coreKey: string) {

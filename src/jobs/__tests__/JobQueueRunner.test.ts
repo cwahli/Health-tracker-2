@@ -113,4 +113,22 @@ describe('JobQueueRunner', () => {
     expect(runCount).toBe(0);
     expect(JobStore.getJob('w1')?.status).toBe('queued');
   });
+
+  it('does not overwrite job status to succeeded if executor sets status to failed', async () => {
+    JobStore.createJob({ id: 'f_executor' });
+    JobStore.updateJob('f_executor', { status: 'queued' });
+
+    JobQueueRunner.setExecutor(async (job) => {
+      JobStore.updateJob(job.id, {
+        status: 'failed',
+        error: { class: 'transient', message: 'Stream stalled: Vision Scout timed out' }
+      });
+    });
+
+    JobQueueRunner.start();
+    await new Promise(r => setTimeout(r, 100));
+
+    expect(JobStore.getJob('f_executor')?.status).toBe('failed');
+    expect(JobStore.getJob('f_executor')?.error?.message).toContain('Stream stalled');
+  });
 });

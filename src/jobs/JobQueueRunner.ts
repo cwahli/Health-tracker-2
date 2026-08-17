@@ -40,6 +40,8 @@ class JobQueueRunnerImpl {
 
   stop() {
     this.isRunning = false;
+    this.circuitBreakerPaused = false;
+    this.consecutiveFailures = 0;
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     }
@@ -90,6 +92,14 @@ class JobQueueRunnerImpl {
       const currentJobState = JobStore.getJob(job.id);
       if (currentJobState?.status === 'awaiting_user') {
         this.consecutiveFailures = 0;
+        return;
+      }
+      if (currentJobState?.status === 'failed' || currentJobState?.status === 'cancelled') {
+        if (currentJobState.status === 'failed') {
+          this.consecutiveFailures++;
+        } else {
+          this.consecutiveFailures = 0;
+        }
         return;
       }
 

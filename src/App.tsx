@@ -5262,11 +5262,14 @@ export default function App() {
     
     combinations.forEach(combo => {
       const { targetKey, targetDef, mergedLogs, sourceKeysToDelete } = combo;
+      const keysToDelete = sourceKeysToDelete.filter(k => k !== targetKey);
       
-      sourceKeysToDelete.forEach(k => {
+      keysToDelete.forEach(k => {
         delete updatedCustomBiomarkers[k];
         deletedCustomBiomarkerKeys[k] = Date.now();
       });
+      delete deletedCustomBiomarkerKeys[targetKey];
+
       const builtIn = biomarkerDefinitions.find(d => d.key === targetKey);
       const existingCustom = updatedCustomBiomarkers[targetKey];
       
@@ -5286,12 +5289,49 @@ export default function App() {
 
       updatedHistory = updatedHistory.map(log => {
         const cleanBiomarkers = { ...log.biomarkers };
-        sourceKeysToDelete.forEach(k => {
-          delete cleanBiomarkers[k];
+        let logChanged = false;
+        keysToDelete.forEach(k => {
+          if (cleanBiomarkers[k] !== undefined) {
+            delete cleanBiomarkers[k];
+            logChanged = true;
+          }
         });
+
+        // Update tests array and observationMeta
+        let updatedTests = log.tests;
+        if (Array.isArray(log.tests)) {
+          const testMap = new Map<string, any>();
+          log.tests.forEach((t: any) => {
+            const mappedKey = keysToDelete.includes(t.key) ? targetKey : t.key;
+            if (!testMap.has(mappedKey)) {
+              testMap.set(mappedKey, { ...t, key: mappedKey });
+            } else {
+              testMap.set(mappedKey, { ...testMap.get(mappedKey), ...t, key: mappedKey });
+            }
+          });
+          updatedTests = Array.from(testMap.values());
+          logChanged = true;
+        }
+
+        let updatedMeta = log.observationMeta ? { ...log.observationMeta } : undefined;
+        if (updatedMeta) {
+          keysToDelete.forEach(k => {
+            if (updatedMeta![k]) {
+              if (!updatedMeta![targetKey]) {
+                updatedMeta![targetKey] = updatedMeta![k];
+              }
+              delete updatedMeta![k];
+              logChanged = true;
+            }
+          });
+        }
+
         return {
           ...log,
-          biomarkers: cleanBiomarkers
+          biomarkers: cleanBiomarkers,
+          ...(updatedTests ? { tests: updatedTests } : {}),
+          ...(updatedMeta ? { observationMeta: updatedMeta } : {}),
+          ...(logChanged ? { sync_state: 'update' as const, updated_at: Date.now() } : {})
         };
       });
 
@@ -5309,7 +5349,9 @@ export default function App() {
             biomarkers: {
               ...updatedHistory[existingIndex].biomarkers,
               [targetKey]: ml.value
-            }
+            },
+            sync_state: 'update' as const,
+            updated_at: Date.now()
           };
         } else {
           updatedHistory.push({
@@ -5317,23 +5359,37 @@ export default function App() {
             date: ml.date,
             biomarkers: {
               [targetKey]: ml.value
-            }
+            },
+            sync_state: 'new' as const,
+            updated_at: Date.now()
           });
         }
       });
     });
 
-    updatedHistory = updatedHistory.filter(h => Object.keys(h.biomarkers).length > 0);
-    updatedHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
+    const logsToDelete: string[] = [];
+    updatedHistory = updatedHistory.map(h => {
+      if (Object.keys(h.biomarkers).length === 0 && !h.note) {
+        logsToDelete.push(h.id);
+        return { ...h, sync_state: 'delete' as const, updated_at: Date.now() };
+      }
+      return h;
+    });
 
     const updatedProfile: UserProfile = {
       ...profile as any,
       customBiomarkers: updatedCustomBiomarkers,
-      deletedCustomBiomarkerKeys
+      deletedCustomBiomarkerKeys,
+      deletedBiomarkerLogIds: {
+        ...(profile?.deletedBiomarkerLogIds || {}),
+        ...Object.fromEntries(logsToDelete.map(id => [id, Date.now()]))
+      }
     };
 
+    updatedHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
+
     const recomputedBiomarkers: { [key: string]: number | string } = {};
-    [...updatedHistory].filter(b => b.sync_state !== 'delete' && !(profile?.deletedBiomarkerLogIds?.[b.id] && (profile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0))).sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
+    [...updatedHistory].filter(b => b.sync_state !== 'delete' && !(updatedProfile?.deletedBiomarkerLogIds?.[b.id] && (updatedProfile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0))).sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
         recomputedBiomarkers[k] = v as string | number;
       });
@@ -5343,9 +5399,8 @@ export default function App() {
     setBiomarkerHistory(updatedHistory);
     setBiomarkers(recomputedBiomarkers);
 
-// Deferred to manual sync
-    const changedLogIds = updatedHistory.map(l => l.id);
-    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: changedLogIds });
+    const changedLogIds = updatedHistory.filter(l => l.sync_state !== 'delete').map(l => l.id);
+    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: changedLogIds, deletedIds: logsToDelete });
   };
 
 
@@ -5358,10 +5413,13 @@ export default function App() {
     // 1. Remove old custom definitions, and add the new one if custom
     const updatedCustomBiomarkers = { ...(profile?.customBiomarkers || {}) };
     const deletedCustomBiomarkerKeys = { ...(profile?.deletedCustomBiomarkerKeys || {}) };
-    sourceKeysToDelete.forEach(k => {
+    const keysToDelete = sourceKeysToDelete.filter(k => k !== targetKey);
+    keysToDelete.forEach(k => {
       delete updatedCustomBiomarkers[k];
       deletedCustomBiomarkerKeys[k] = Date.now();
     });
+    delete deletedCustomBiomarkerKeys[targetKey];
+
     const builtIn = biomarkerDefinitions.find(d => d.key === targetKey);
     const existingCustom = profile?.customBiomarkers?.[targetKey];
     
@@ -5387,16 +5445,48 @@ export default function App() {
     let updatedHistory = biomarkerHistory.map(log => {
       const cleanBiomarkers = { ...log.biomarkers };
       let changed = false;
-      sourceKeysToDelete.forEach(k => {
+      keysToDelete.forEach(k => {
         if (cleanBiomarkers[k] !== undefined) {
           delete cleanBiomarkers[k];
           changed = true;
         }
       });
+
+      // Update tests array and observationMeta
+      let updatedTests = log.tests;
+      if (Array.isArray(log.tests)) {
+        const testMap = new Map<string, any>();
+        log.tests.forEach((t: any) => {
+          const mappedKey = keysToDelete.includes(t.key) ? targetKey : t.key;
+          if (!testMap.has(mappedKey)) {
+            testMap.set(mappedKey, { ...t, key: mappedKey });
+          } else {
+            testMap.set(mappedKey, { ...testMap.get(mappedKey), ...t, key: mappedKey });
+          }
+        });
+        updatedTests = Array.from(testMap.values());
+        changed = true;
+      }
+
+      let updatedMeta = log.observationMeta ? { ...log.observationMeta } : undefined;
+      if (updatedMeta) {
+        keysToDelete.forEach(k => {
+          if (updatedMeta![k]) {
+            if (!updatedMeta![targetKey]) {
+              updatedMeta![targetKey] = updatedMeta![k];
+            }
+            delete updatedMeta![k];
+            changed = true;
+          }
+        });
+      }
+
       if (changed) {
         return {
           ...log,
           biomarkers: cleanBiomarkers,
+          ...(updatedTests ? { tests: updatedTests } : {}),
+          ...(updatedMeta ? { observationMeta: updatedMeta } : {}),
           sync_state: 'update' as const,
           updated_at: Date.now()
         };
@@ -5429,7 +5519,7 @@ export default function App() {
           biomarkers: {
             [targetKey]: ml.value
           },
-          sync_state: 'update' as const,
+          sync_state: 'new' as const,
           updated_at: Date.now()
         });
       }
@@ -5451,7 +5541,7 @@ export default function App() {
     updatedHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
     // 3. Recompute latest biomarkers
     const recomputedBiomarkers: { [key: string]: number | string } = {};
-    [...updatedHistory].filter(b => b.sync_state !== 'delete' && !(profile?.deletedBiomarkerLogIds?.[b.id] && (profile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0))).sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
+    [...updatedHistory].filter(b => b.sync_state !== 'delete' && !(updatedProfile?.deletedBiomarkerLogIds?.[b.id] && (updatedProfile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0))).sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
         recomputedBiomarkers[k] = v as string | number;
       });
@@ -5460,9 +5550,8 @@ export default function App() {
     setBiomarkerHistory(updatedHistory);
     setBiomarkers(recomputedBiomarkers);
 
-// Sync deferred to manual button click
-    const changedLogIds = updatedHistory.map(l => l.id);
-    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: changedLogIds });
+    const changedLogIds = updatedHistory.filter(l => l.sync_state !== 'delete').map(l => l.id);
+    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: changedLogIds, deletedIds: logsToDelete });
   };
   const handleBatchConsolidate = async (mapping: { [key: string]: string }) => {
     const targetGroups: { [targetKey: string]: string[] } = {};

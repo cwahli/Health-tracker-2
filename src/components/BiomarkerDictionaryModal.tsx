@@ -12,6 +12,7 @@ import LLMSelector from './LLMSelector';
 import FullScreenInstructionViewer from './FullScreenInstructionViewer';
 const FullScreenLogViewer = lazyWithRetry(() => import('./FullScreenLogViewer'));
 import NotUsedBiomarkersModal from './NotUsedBiomarkersModal';
+import { BiomarkerAuditModal } from './BiomarkerAuditModal';
 import { saveAgentRequestLog } from '../utils/agentLogsTracker';
 
 interface BiomarkerDictionaryModalProps {
@@ -1164,6 +1165,7 @@ export default function BiomarkerDictionaryModal({
   }, []);
   const [editMode, setEditMode] = useState<string | null>(null);
   const [showCombineModal, setShowCombineModal] = useState(false);
+  const [showAuditModal, setShowAuditModal] = useState(false);
   const [showCleaningDropdown, setShowCleaningDropdown] = useState(false);
   const [isMedicalCategorisationMode, setIsMedicalCategorisationMode] = useState<boolean>(() => {
     try { return localStorage.getItem('dict_is_medical_categorisation_mode') === 'true'; } catch (e) {} return false;
@@ -1635,13 +1637,13 @@ export default function BiomarkerDictionaryModal({
 
   const allApprovedKeys = useMemo(() => {
     return allApprovedKeysUnfiltered.filter(filterFn);
-  }, [allApprovedKeysUnfiltered, searchQuery, profile.customBiomarkers, filterOption]);
+  }, [allApprovedKeysUnfiltered, searchQuery, profile.customBiomarkers, filterOption, filterTag]);
 
   const toApproveKeys = useMemo(() => {
     if (filterOption === 'missing_units') return [];
     const keys = new Set([...historyKeys, ...customKeys]);
     return Array.from(keys).filter(k => checkKeyNeedsApproval(k)).filter(filterFn);
-  }, [historyKeys, customKeys, searchQuery, profile.customBiomarkers, filterOption, biomarkerHistory]);
+  }, [historyKeys, customKeys, searchQuery, profile.customBiomarkers, filterOption, biomarkerHistory, filterTag]);
 
   const { allGroupings, allRisks, allConditions } = useMemo(() => {
     const groupings = new Set<string>();
@@ -5075,6 +5077,14 @@ I can analyze these, compare them with our database keys, and find standard mapp
                   </optgroup>
                 </select>
                 <button
+                  onClick={() => setShowAuditModal(true)}
+                  className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm flex items-center gap-1 transition-all cursor-pointer"
+                  title="Run generalized structural & quality audit on all biomarkers"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-200" />
+                  Check Biomarkers
+                </button>
+                <button
                   onClick={() => setIsBatchPasteMode(true)}
                   className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-theme-border rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
                 >
@@ -5114,6 +5124,47 @@ I can analyze these, compare them with our database keys, and find standard mapp
                 </button>
               </div>
 
+              {(filterTag || searchQuery.trim() !== '' || filterOption !== 'all') && (
+                <div className="flex flex-wrap items-center gap-2 p-2.5 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-800/50 rounded-xl text-xs text-indigo-900 dark:text-indigo-200 mb-2 animation-fade-in">
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">Active Filters:</span>
+                  {filterTag && (
+                    <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-300/60 dark:border-indigo-700/60 rounded-md font-bold flex items-center gap-1">
+                      Tag: {filterTag}
+                      <button type="button" onClick={() => setFilterTag(null)} className="hover:text-rose-500 font-bold ml-1 cursor-pointer">✕</button>
+                    </span>
+                  )}
+                  {searchQuery.trim() !== '' && (
+                    <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-300/60 dark:border-indigo-700/60 rounded-md font-bold flex items-center gap-1">
+                      Search: "{searchQuery}"
+                      <button type="button" onClick={() => setSearchQuery('')} className="hover:text-rose-500 font-bold ml-1 cursor-pointer">✕</button>
+                    </span>
+                  )}
+                  {filterOption === 'missing_units' && (
+                    <span className="px-2 py-0.5 bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800/80 rounded-md font-bold flex items-center gap-1">
+                      Missing Units / Ranges
+                      <button type="button" onClick={() => setFilterOption('all')} className="hover:text-rose-500 font-bold ml-1 cursor-pointer">✕</button>
+                    </span>
+                  )}
+                  {filterOption === 'overrides' && (
+                    <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800/80 rounded-md font-bold flex items-center gap-1">
+                      Custom Overrides
+                      <button type="button" onClick={() => setFilterOption('all')} className="hover:text-rose-500 font-bold ml-1 cursor-pointer">✕</button>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterTag(null);
+                      setSearchQuery('');
+                      setFilterOption('all');
+                    }}
+                    className="ml-auto px-2.5 py-1 text-[11px] font-bold bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-xs"
+                  >
+                    Reset Filters (Show All)
+                  </button>
+                </div>
+              )}
+
               {selectedKeys.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 animation-fade-in pb-2 w-full">
                   <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 shrink-0">{selectedKeys.length} selected</span>
@@ -5143,6 +5194,16 @@ I can analyze these, compare them with our database keys, and find standard mapp
                     </button>
                      {showCleaningDropdown && (
                       <div className="absolute top-full mt-1 left-0 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-theme-border py-1.5 min-w-[220px] z-[100] animate-in fade-in slide-in-from-top-2">
+                        <button
+                          onClick={() => {
+                            setShowCleaningDropdown(false);
+                            setShowAuditModal(true);
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/50 pb-2 mb-1"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          ⚡ Check Biomarkers (Audit)
+                        </button>
                         <button
                           onClick={() => {
                             setShowCleaningDropdown(false);
@@ -5863,6 +5924,45 @@ I can analyze these, compare them with our database keys, and find standard mapp
         getDisplayName={(k) => profile?.customBiomarkers?.[k]?.name || biomarkerDefinitions.find((b: any) => b.key === k || (Array.isArray(b.aliases) && b.aliases.some((a: string) => a.toLowerCase() === k.toLowerCase())))?.name || k}
         onRestore={(k) => {
           if (onRestoreNotUsedGlobal) onRestoreNotUsedGlobal(k);
+        }}
+      />
+
+      {/* BIOMARKER HEALTH & QUALITY AUDIT MODAL */}
+      <BiomarkerAuditModal
+        isOpen={showAuditModal}
+        onClose={() => setShowAuditModal(false)}
+        profile={profile}
+        biomarkerHistory={biomarkerHistory}
+        onUpdateProfile={onUpdateProfile}
+        onCombineBiomarkers={onCombineBiomarkers}
+        onBatchCombineBiomarkers={onBatchCombineBiomarkers}
+        onLaunchNameConsolidation={(keys) => {
+          setSelectedKeys(keys);
+          setIsNameConsolidationMode(true);
+          setIsAgentMode(false);
+          setIsMedicalCategorisationMode(false);
+          setIsDataAccuracyMode(false);
+          setIsChatMode(false);
+          handleRunConsolidationAgent(true, keys);
+        }}
+        onLaunchUnitStandardization={(keys) => {
+          setSelectedKeys(keys);
+          setIsMedicalCategorisationMode(false);
+          setIsAgentMode(true);
+          handleRunStandardizationAgent(keys, 'standardize');
+        }}
+        onLaunchMedicalCategorisation={(keys) => {
+          setSelectedKeys(keys);
+          setIsMedicalCategorisationMode(true);
+          setIsAgentMode(true);
+          handleRunStandardizationAgent(keys, 'categorise');
+        }}
+        onLaunchRangeCalibrator={onReviewWithAgent ? (keys) => {
+          setSelectedKeys(keys);
+          onReviewWithAgent(keys);
+        } : undefined}
+        onSelectBiomarkerKeys={(keys) => {
+          setSelectedKeys(keys);
         }}
       />
 

@@ -181,13 +181,13 @@ describe('approval / missing range gates', () => {
  */
 describe('dedupe pressure — alias fan-in', () => {
   it('hemoglobin family collapses to one canonical key', () => {
-    const keys = ['hemoglobin', 'hemoglobin_g_l', 'Hemoglobin'].map(getMappedBiomarkerKey);
+    const keys = ['hemoglobin', 'hemoglobin_g_l', 'Hemoglobin'].map(k => getMappedBiomarkerKey(k));
     expect(new Set(keys).size).toBe(1);
     expect(keys[0]).toBe('hemoglobin');
   });
 
   it('albumin family collapses', () => {
-    const keys = ['serum_albumin', 'serum_albumin_g_l', 'serum_albumin_2'].map(getMappedBiomarkerKey);
+    const keys = ['serum_albumin', 'serum_albumin_g_l', 'serum_albumin_2'].map(k => getMappedBiomarkerKey(k));
     expect(new Set(keys).size).toBe(1);
   });
 });
