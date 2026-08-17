@@ -493,9 +493,14 @@ export const COMMON_SUFFIXES = [
   '_val', '_value', '_score', '_concentration', '_estimation', '_standardised', '_conc'
 ];
 export const COMMON_UNIT_SUFFIXES = [
-  '_umol_l', '_u_l', '_mg_dl', '_mmol_l', '_mmol_mol', '_g_l', '_g_dl', '_fl', '_k_ul', 
-  '_ml_min_1_73m2', '_ml_min_173m2', '_ml_min', '_pg_ml', '_ng_dl', '_ng_ml', '_uiu_ml', '_beats_min',
-  '_10_9_l', '_10_12_l', '_kg_m2', '_m_ul', '_points', '_percent', '_fraction', '_l_l'
+  '_umol_l', '_umoll', '_u_l', '_ul', '_iu_l', '_iul', '_iu_ml', '_iuml',
+  '_mg_dl', '_mgdl', '_mg_l', '_mgl', '_mmol_l', '_mmoll', '_mmol_mol', '_mmolmol',
+  '_g_l', '_gl', '_g_dl', '_gdl', '_ug_dl', '_ugdl', '_ug_l', '_ugl', '_mcg_dl', '_mcgdl', '_mcg_l', '_mcgl',
+  '_fl', '_k_ul', '_kul', '_m_ul', '_mul',
+  '_ml_min_1_73m2', '_ml_min_173m2', '_mlmin173m2', '_mlmin_173m2', '_ml_min_173_m2', '_ml_min', '_mlmin',
+  '_pg_ml', '_pgml', '_ng_dl', '_ngdl', '_ng_ml', '_ngml', '_uiu_ml', '_uiuml', '_miu_l', '_miul', '_beats_min', '_bpm',
+  '_10_9_l', '_109l', '_10_12_l', '_1012l', '_10_6_ul', '_106ul',
+  '_kg_m2', '_kgm2', '_points', '_percent', '_percentage', '_pct', '_fraction', '_l_l', '_ratio', '_score'
 ];
 
 /**
@@ -566,6 +571,7 @@ export const CLINICAL_SYNONYM_MAP: Record<string, string> = {
   'egfr': 'egfr',
   'egfrcreat': 'egfr',
   'egfrcreatckdepi': 'egfr',
+  'egfrcreatckdepi173m2': 'egfr',
   'creatinine': 'creatinine',
   'bun': 'bun',
   'bloodureanitrogen': 'bun',
@@ -669,6 +675,7 @@ export const CLINICAL_SYNONYM_MAP: Record<string, string> = {
  * Normalizes an arbitrary key stem for generalized morphological clustering and alias resolution
  */
 export function normalizeStemKey(key: string): string {
+  if (!key) return '';
   let stem = key.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   
   // Iteratively strip known unit suffixes
@@ -683,6 +690,9 @@ export function normalizeStemKey(key: string): string {
       }
     }
   }
+
+  // Regex-based unit trailing strip for arbitrary delimiter variants (e.g. _mlmin173m2, _mmol_mol, _g_dl)
+  stem = stem.replace(/_(?:ml_?min(?:_?1_?73m2)?|mmol_?mol|mmol_?l|umol_?l|pmol_?l|nmol_?l|mg_?dl|mg_?l|g_?l|g_?dl|ug_?dl|ug_?l|mcg_?dl|mcg_?l|pg_?ml|ng_?ml|ng_?dl|uiu_?ml|miu_?l|u_?l|iu_?l|iu_?ml|k_?ul|10_?9_?l|10_?12_?l|10_?6_?ul|m_?ul|fl|beats_?min|bpm|kg_?m2|points|percent|fraction|l_?l)$/i, '');
 
   // Iteratively strip known prefixes
   changed = true;
@@ -710,7 +720,7 @@ export function normalizeStemKey(key: string): string {
     }
   }
 
-  return stem;
+  return stem.replace(/^_+|_+$/g, '');
 }
 
 const CUSTOM_KEY_ALIASES: Record<string, string> = {
@@ -776,6 +786,8 @@ const CUSTOM_KEY_ALIASES: Record<string, string> = {
   'serumpotassium': 'serum_potassium',
   'serumcreatinine': 'creatinine',
   'egfrcreatckdepi173m2': 'egfr',
+  'egfrmlmin173m2': 'egfr',
+  'egfrmlmin173': 'egfr',
   'serumalbumin': 'serum_albumin',
   'serumaltlevel': 'alt',
   'serumalkalinephosphatase': 'alkaline_phosphatase',
@@ -823,71 +835,100 @@ const CUSTOM_KEY_ALIASES: Record<string, string> = {
 
 export function getMappedBiomarkerKey(rawKey: string, rawName?: string): string {
   if (!rawKey && !rawName) return '';
-  const inputStr = rawKey || rawName || '';
-  const clean = inputStr.toLowerCase().replace(/[^a-z0-9_]/g, ''); // Keep underscores for exact matching
-  const cleanNoUnderscore = inputStr.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const primaryInput = rawKey || rawName || '';
 
-  // 1. Exact match on definitions
-  for (const def of biomarkerDefinitions) {
-    const defKeyNoUnderscore = def.key.replace(/[^a-z0-9]/g, '');
-    const defNameNoUnderscore = (def.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (
-      def.key === clean ||
-      def.key === cleanNoUnderscore ||
-      defKeyNoUnderscore === cleanNoUnderscore ||
-      defNameNoUnderscore === cleanNoUnderscore
-    )
-      return def.key;
-    if (def.aliases) {
-      for (const alias of def.aliases) {
-        const aliasNoUnderscore = alias.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (alias === clean || alias === cleanNoUnderscore || aliasNoUnderscore === cleanNoUnderscore) return def.key;
+  const resolveCandidate = (inputStr: string): string | null => {
+    if (!inputStr) return null;
+    const clean = inputStr.toLowerCase().replace(/[^a-z0-9_]/g, ''); // Keep underscores for exact matching
+    const cleanNoUnderscore = inputStr.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // 1. Exact match on definitions
+    for (const def of biomarkerDefinitions) {
+      const defKeyNoUnderscore = def.key.replace(/[^a-z0-9]/g, '');
+      const defNameNoUnderscore = (def.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (
+        def.key === clean ||
+        def.key === cleanNoUnderscore ||
+        defKeyNoUnderscore === cleanNoUnderscore ||
+        defNameNoUnderscore === cleanNoUnderscore
+      )
+        return def.key;
+      if (def.aliases) {
+        for (const alias of def.aliases) {
+          const aliasNoUnderscore = alias.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (alias === clean || alias === cleanNoUnderscore || aliasNoUnderscore === cleanNoUnderscore) return def.key;
+        }
       }
     }
-  }
 
-  // 2. Exact match on explicit aliases
-  if (CUSTOM_KEY_ALIASES[clean]) return CUSTOM_KEY_ALIASES[clean];
-  if (CUSTOM_KEY_ALIASES[cleanNoUnderscore]) return CUSTOM_KEY_ALIASES[cleanNoUnderscore];
+    // 2. Exact match on explicit aliases
+    if (CUSTOM_KEY_ALIASES[clean]) return CUSTOM_KEY_ALIASES[clean];
+    if (CUSTOM_KEY_ALIASES[cleanNoUnderscore]) return CUSTOM_KEY_ALIASES[cleanNoUnderscore];
 
-  // 3. Specimen Guard & False Friend Guard (IDENTITY_FALSE_FRIEND)
-  const isUrine = clean.includes('urine') || clean.includes('urinary');
-  if (isUrine) {
-    if (clean.includes('albumin') && !clean.includes('microalbumin')) return 'urine_albumin';
-  } else {
-    if (cleanNoUnderscore === 'albumin') return 'serum_albumin';
-  }
-
-  // MCH / Hemoglobin guard
-  if (clean === 'mch' || (clean.includes('mean_corpuscular_hemoglobin') && !clean.includes('concentration'))) {
-    return 'mean_corpuscular_hemoglobin';
-  }
-  if (cleanNoUnderscore === 'hemoglobin' || cleanNoUnderscore === 'haemoglobin') {
-    return 'hemoglobin';
-  }
-
-  // 4. Clinical Synonym Dictionary match
-  if (CLINICAL_SYNONYM_MAP[cleanNoUnderscore]) return CLINICAL_SYNONYM_MAP[cleanNoUnderscore];
-  const stem = normalizeStemKey(inputStr);
-  if (CLINICAL_SYNONYM_MAP[stem]) return CLINICAL_SYNONYM_MAP[stem];
-
-  // Substring mapping for common clinical names that were dropped
-  for (const def of biomarkerDefinitions) {
-    const defNameNoUnderscore = (def.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    // If the input explicitly contains the clinical name, and isn't guarded
-    if (defNameNoUnderscore.length > 5 && cleanNoUnderscore.includes(defNameNoUnderscore)) {
-       // Guard against false friends:
-       if (isUrine && def.key.includes('serum')) continue;
-       if (cleanNoUnderscore.includes('meancorpuscular') && def.key === 'hemoglobin') continue;
-       
-       return def.key;
+    // 3. Specimen Guard & False Friend Guard (IDENTITY_FALSE_FRIEND)
+    const isUrine = clean.includes('urine') || clean.includes('urinary');
+    if (isUrine) {
+      if (clean.includes('albumin') && !clean.includes('microalbumin')) return 'urine_albumin';
+    } else {
+      if (cleanNoUnderscore === 'albumin') return 'serum_albumin';
     }
+
+    // MCH / Hemoglobin guard
+    if (clean === 'mch' || (clean.includes('mean_corpuscular_hemoglobin') && !clean.includes('concentration'))) {
+      return 'mean_corpuscular_hemoglobin';
+    }
+    if (cleanNoUnderscore === 'hemoglobin' || cleanNoUnderscore === 'haemoglobin') {
+      return 'hemoglobin';
+    }
+
+    // 4. Clinical Synonym Dictionary match
+    if (CLINICAL_SYNONYM_MAP[cleanNoUnderscore]) return CLINICAL_SYNONYM_MAP[cleanNoUnderscore];
+    const stem = normalizeStemKey(inputStr);
+    if (CLINICAL_SYNONYM_MAP[stem]) return CLINICAL_SYNONYM_MAP[stem];
+
+    // 5. Match by stem on definitions and aliases
+    if (stem) {
+      const stemDef = biomarkerDefinitions.find(d => 
+        d.key === stem || 
+        normalizeStemKey(d.key) === stem ||
+        (Array.isArray(d.aliases) && d.aliases.some(a => normalizeStemKey(a) === stem))
+      );
+      if (stemDef) return stemDef.key;
+    }
+
+    // Substring mapping for common clinical names that were dropped
+    for (const def of biomarkerDefinitions) {
+      const defNameNoUnderscore = (def.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      // If the input explicitly contains the clinical name, and isn't guarded
+      if (defNameNoUnderscore.length > 5 && cleanNoUnderscore.includes(defNameNoUnderscore)) {
+         // Guard against false friends:
+         if (isUrine && def.key.includes('serum')) continue;
+         if (cleanNoUnderscore.includes('meancorpuscular') && def.key === 'hemoglobin') continue;
+         
+         return def.key;
+      }
+    }
+
+    return null;
+  };
+
+  // Try rawKey first
+  if (rawKey) {
+    const resKey = resolveCandidate(rawKey);
+    if (resKey) return resKey;
+  }
+
+  // Try rawName if rawKey didn't resolve to a known biomarker definition
+  if (rawName && rawName !== rawKey) {
+    const resName = resolveCandidate(rawName);
+    if (resName) return resName;
   }
 
   // Canonicalize unknown keys to lowercase slug form so "Hemoglobin" and "hemoglobin"
   // cannot become parallel dictionary identities.
+  const clean = primaryInput.toLowerCase().replace(/[^a-z0-9_]/g, '');
   const rawClean = clean.replace(/^_+|_+$/g, '');
-  return rawClean || clean || inputStr;
+  return rawClean || clean || primaryInput;
 }
 
 export function getCustomBiomarkerDef(profile: any, coreKey: string) {

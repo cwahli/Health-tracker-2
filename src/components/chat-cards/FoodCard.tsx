@@ -23,14 +23,10 @@ function foodCardName(item: any): string {
 function scoutCardName(s: any): string {
   return s?.originalName || s?.keyword || s?.name || '';
 }
-/** Index is only a hint. Name must agree or the crop/box is the wrong dish. */
+/** Scout index matches the exact visual detected slot for the dish */
 function scoutIndexAgrees(item: any, s: any): boolean {
-  if (s?.scoutIndex === undefined || item?.scoutIndex === undefined) return false;
-  if (Number(s.scoutIndex) !== Number(item.scoutIndex)) return false;
-  const a = foodCardName(item);
-  const b = scoutCardName(s);
-  if (!a || !b) return true;
-  return namesReferToSameFood(a, b);
+  if (s?.scoutIndex === undefined || item?.scoutIndex === undefined || s?.scoutIndex === null || item?.scoutIndex === null) return false;
+  return Number(s.scoutIndex) === Number(item.scoutIndex);
 }
 
 function parseLabelCalories(raw: any): number | null {
@@ -1988,23 +1984,10 @@ export const FoodCard: React.FC<AgentCardProps & {
     const groups = rawGroups.map((g: any) => {
       const items = (g.items || []).map((item: any) => {
         const matchingScout = (resolvedScoutItems || []).find((s: any) => {
-          const itemName = (item.name || "").toLowerCase();
-          const sKw = (s.keyword || "").toLowerCase();
-          const sOrig = (s.originalName || "").toLowerCase();
-          return (
-            (itemName && sKw && (itemName.includes(sKw) || sKw.includes(itemName))) ||
-            (itemName && sOrig && (itemName.includes(sOrig) || sOrig.includes(itemName))) ||
-            (itemName.split(' ')[0] === sKw.split(' ')[0])
-          );
+          if (scoutIndexAgrees(item, s)) return true;
+          return namesReferToSameFood(item.name, s.keyword || s.originalName);
         }) || (resolvedScoutItems || []).find((s: any) => {
-          const gName = (g.groupName || "").toLowerCase();
-          const sKw = (s.keyword || "").toLowerCase();
-          const sOrig = (s.originalName || "").toLowerCase();
-          return (
-            (gName && sKw && (gName.includes(sKw) || sKw.includes(gName))) ||
-            (gName && sOrig && (gName.includes(sOrig) || sOrig.includes(gName))) ||
-            (gName.split(' ')[0] === sKw.split(' ')[0])
-          );
+          return namesReferToSameFood(g.groupName, s.keyword || s.originalName);
         });
 
         return {

@@ -3847,8 +3847,8 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         const extractedQueries = extractFoodSearchQueriesFromText(message);
         if (extractedQueries.length > 0) {
           addDebugLog(`[Text Search Extraction] Extracted clean food search queries: ${JSON.stringify(extractedQueries)}`);
+          queriesToSearch.push(...extractedQueries);
           if (!isExplicitModify && !isPureWeightModification) {
-            queriesToSearch.push(...extractedQueries);
             scoutRecommendedMode = "new_log";
             visionScoutItems = extractedQueries.map((q, idx) => ({
               scoutIndex: idx,
@@ -7010,7 +7010,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         visualIngredients: item.visualIngredients || null,
         components: item.components || null,
         boundingBox2D: item.boundingBox2D || null,
-        sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0
+        sourceImageIndex: typeof item.sourceImageIndex === "number" ? item.sourceImageIndex : (item.sourceImageIndex ? Number(item.sourceImageIndex) : 0),
       };
     });
 
@@ -7790,7 +7790,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         rawFoodData.itemsBreakdown.length > 0
       ) {
         const origItems = activeMeal.itemsBreakdown;
-        const PRESERVE_KEYS = [
+        const SPATIAL_PRESERVE_KEYS = ['boundingBox2D', 'sourceImageIndex'];
+        const IDENTITY_PRESERVE_KEYS = [
           'primaryBase100g',
           'primaryBaseWeightG',
           'componentsDetailList',
@@ -7804,24 +7805,19 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           'visualIngredients',
           'components',
           'cookingAdded',
-          'boundingBox2D',
-          'sourceImageIndex',
         ];
         rawFoodData.itemsBreakdown = rawFoodData.itemsBreakdown.map((newItem: any, idx: number) => {
-          let origItem: any = null;
-          let spatialOrig: any = null;
-          if (newItem.scoutIndex !== undefined && newItem.scoutIndex !== null) {
-            spatialOrig = origItems.find((o: any) => o.scoutIndex === newItem.scoutIndex);
-            origItem = spatialOrig;
-            if (origItem && !namesReferToSameFood(
-              newItem.canonicalDbName || newItem.name || newItem.originalName,
-              origItem.canonicalDbName || origItem.name || origItem.originalName
-            )) {
-              origItem = null;
-            }
-          }
-          if (!origItem) {
-            origItem = origItems.find((o: any) => namesReferToSameFood(
+          const origItemByScout = (newItem.scoutIndex !== undefined && newItem.scoutIndex !== null)
+            ? origItems.find((o: any) => o.scoutIndex === newItem.scoutIndex)
+            : (origItems[idx] || null);
+
+          let origItemSameFood = origItemByScout && namesReferToSameFood(
+            newItem.canonicalDbName || newItem.name || newItem.originalName,
+            origItemByScout.canonicalDbName || origItemByScout.name || origItemByScout.originalName
+          ) ? origItemByScout : null;
+
+          if (!origItemSameFood) {
+            origItemSameFood = origItems.find((o: any) => namesReferToSameFood(
               newItem.canonicalDbName || newItem.name || newItem.originalName,
               o.canonicalDbName || o.name || o.originalName
             )) || null;
@@ -7829,32 +7825,31 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
           const merged = { ...newItem };
 
-          // Always preserve spatial crop coordinates for the same scout item slot
-          if (spatialOrig) {
-            if ((merged.boundingBox2D === undefined || merged.boundingBox2D === null) && spatialOrig.boundingBox2D) {
-              merged.boundingBox2D = spatialOrig.boundingBox2D;
-            }
-            if ((merged.sourceImageIndex === undefined || merged.sourceImageIndex === null) && spatialOrig.sourceImageIndex !== undefined) {
-              merged.sourceImageIndex = spatialOrig.sourceImageIndex;
+          // Always preserve spatial crop coordinates for the corresponding photo region/scoutIndex
+          if (origItemByScout) {
+            for (const key of SPATIAL_PRESERVE_KEYS) {
+              if ((merged[key] === undefined || merged[key] === null) && origItemByScout[key] !== undefined && origItemByScout[key] !== null) {
+                merged[key] = origItemByScout[key];
+              }
             }
           }
 
-          if (!origItem) return merged;
-
-          for (const key of PRESERVE_KEYS) {
-            if ((merged[key] === undefined || merged[key] === null) && origItem[key] !== undefined && origItem[key] !== null) {
-              merged[key] = origItem[key];
+          // Only preserve database resolution and food composition if it refers to the same food
+          if (origItemSameFood) {
+            for (const key of IDENTITY_PRESERVE_KEYS) {
+              if ((merged[key] === undefined || merged[key] === null) && origItemSameFood[key] !== undefined && origItemSameFood[key] !== null) {
+                merged[key] = origItemSameFood[key];
+              }
+            }
+            if ((merged.dbSource === 'estimated' || !merged.dbId) && origItemSameFood.dbId) {
+              merged.dbId = origItemSameFood.dbId;
+              merged.dbSource = origItemSameFood.dbSource;
             }
           }
-          // Only reuse the original dbId/dbSource if the edit still looks unresolved
-          // (i.e. the AI didn't provide its own new database match for this item).
-          if ((merged.dbSource === 'estimated' || !merged.dbId) && origItem.dbId) {
-            merged.dbId = origItem.dbId;
-            merged.dbSource = origItem.dbSource;
-          }
+
           return merged;
         });
-        addDebugLog(`[Edit Merge] Re-attached preserved database resolution fields from original activeMeal items (matched by scoutIndex) to prevent nutrient zero-out on edit.`);
+        addDebugLog(`[Edit Merge] Preserved spatial bounding boxes by scoutIndex and database resolution for matching food items.`);
       }
 
       if (!rawFoodData.itemsBreakdown || rawFoodData.itemsBreakdown.length === 0) {
@@ -8053,9 +8048,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                   truthNutrients: preCalc.truthNutrients || {},
                   lockedNutrientKeys: preCalc.lockedNutrientKeys || [],
                   ingredientsList: preCalc.ingredientsList || item.ingredientsList || match.ingredientsList || null,
-                  labelNutrientsPerServing: preCalc.labelNutrientsPerServing || preCalc.primaryBase100g || item.labelNutrientsPerServing || null,
-                  boundingBox2D: item.boundingBox2D || match.boundingBox2D || preCalc.boundingBox2D || null,
-                  sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : (typeof match.sourceImageIndex === 'number' ? match.sourceImageIndex : (typeof preCalc.sourceImageIndex === 'number' ? preCalc.sourceImageIndex : 0))
+                  labelNutrientsPerServing: preCalc.labelNutrientsPerServing || preCalc.primaryBase100g || item.labelNutrientsPerServing || null
                 };
               }
               return {
@@ -8068,9 +8061,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                 keyword: match.keyword || item.keyword || null,
                 visualIngredients: item.visualIngredients || match.visualIngredients || null,
                 cookingMethod: (match.cookingMethod && match.cookingMethod !== 'unknown') ? match.cookingMethod : (item.cookingMethod || null),
-                components: item.components || match.components || null,
-                boundingBox2D: item.boundingBox2D || match.boundingBox2D || null,
-                sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : (typeof match.sourceImageIndex === 'number' ? match.sourceImageIndex : 0)
+                components: item.components || match.components || null
               };
             }
             return {
@@ -8125,9 +8116,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                     labelNutrientsPerServing: preCalc.primaryBase100g || null,
                     cookingMethod: (sItem.cookingMethod && sItem.cookingMethod !== 'unknown') ? sItem.cookingMethod : 'raw',
                     components: sItem.components || null,
-                    rawNutritionLabel: sItem.rawNutritionLabel || null,
-                    boundingBox2D: sItem.boundingBox2D || preCalc.boundingBox2D || null,
-                    sourceImageIndex: typeof sItem.sourceImageIndex === 'number' ? sItem.sourceImageIndex : (typeof preCalc.sourceImageIndex === 'number' ? preCalc.sourceImageIndex : 0)
+                    rawNutritionLabel: sItem.rawNutritionLabel || null
                   });
                 }
               }
@@ -8279,14 +8268,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         parsedData.itemsBreakdown = itemsBreakdown.map((item: any, idx: number) => {
           let preMatch = preCalculatedItems.find((p: any) => {
             if (item.scoutIndex !== undefined && item.scoutIndex !== null && p.scoutIndex !== undefined && p.scoutIndex !== null) {
-              if (item.scoutIndex === p.scoutIndex) {
-                const itemLower = (item.canonicalDbName || item.name || "").trim().toLowerCase();
-                const pOrigLower = (p.originalName || "").trim().toLowerCase();
-                const pKwLower = (p.keyword || "").trim().toLowerCase();
-                if (!itemLower || !pOrigLower) return true;
-                return namesReferToSameFood(itemLower, pOrigLower) || namesReferToSameFood(itemLower, pKwLower);
-              }
-              return false;
+              return item.scoutIndex === p.scoutIndex;
             }
             const itemLower = (item.canonicalDbName || item.name || "").trim().toLowerCase();
             const pOrigLower = (p.originalName || "").trim().toLowerCase();
@@ -8308,30 +8290,20 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             const itemLower = (item.canonicalDbName || item.name || "").trim().toLowerCase();
             const pOrigLower = (preMatch.originalName || "").trim().toLowerCase();
             const pKwLower = (preMatch.keyword || "").trim().toLowerCase();
-            const namesMatch = namesReferToSameFood(itemLower, pOrigLower) || namesReferToSameFood(itemLower, pKwLower);
             const hasKeywordMatch = itemLower.includes(pOrigLower) || itemLower.includes(pKwLower) || pOrigLower.includes(itemLower) || pKwLower.includes(itemLower);
             const stripPunctForTokens = (s: string) => s.replace(/[^a-z0-9\s]/g, ' ');
             const itemTokens = stripPunctForTokens(itemLower).split(/\s+/).filter((t: string) => t.length > 2);
             const pTokens = stripPunctForTokens(pOrigLower + " " + pKwLower).split(/\s+/).filter((t: string) => t.length > 2);
             const hasTokenOverlap = itemTokens.some((t: string) => pTokens.includes(t));
             
-            if ((!hasKeywordMatch && !hasTokenOverlap && itemLower && (pOrigLower || pKwLower)) || (!namesMatch && itemLower && (pOrigLower || pKwLower))) {
+            if (!hasKeywordMatch && !hasTokenOverlap && itemLower && (pOrigLower || pKwLower)) {
                preMatch = null;
             }
           }
 
           const rawItem = rawFoodData.itemsBreakdown?.[idx] || {};
 
-          let fallbackMatch: any = null;
-          if (!preMatch) {
-            const itemQuery = item.canonicalDbName || item.name || item.keyword || item.originalName || '';
-            if (itemQuery) {
-              fallbackMatch = pickQueryScopedMatch(itemQuery, databaseMatchesArray, [itemQuery], quarantinedIdsSet) ||
-                             databaseMatchesArray.find((m: any) => namesReferToSameFood(itemQuery, m.name || m.searchQuery));
-            }
-          }
-
-          // Reconcile item nutrients: prefer preMatch nutrients if available, then fallbackMatch, or item/rawItem nutrients
+          // Reconcile item nutrients: prefer preMatch nutrients if available, or item/rawItem nutrients
           const baseNutrients = item.nutrients || rawItem.nutrients || {};
           const preNutrients = preMatch?.nutrients || {};
           const finalItemNutrients: Record<string, number> = {};
@@ -8346,49 +8318,36 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             }
           });
 
-          // If calories are still 0, apply fallbackMatch or getFallbackCategoryProfile
-          const itemWeightG = Number(item.weightGrams || rawItem.weightGrams || 100) || 100;
-          const itemQueryStr = item.canonicalDbName || item.name || item.keyword || item.originalName || '';
-
-          if ((finalItemNutrients.calories || 0) <= 0) {
-            if (fallbackMatch) {
-              const fbNut = fallbackMatch.nutrients || dbMatchMap.get(fallbackMatch.id || fallbackMatch.food_id) || {};
-              const fbCal = Number(fallbackMatch.calories || fbNut.calories || 0);
-              const fbFactor = (fallbackMatch.servingGrams || fbNut.servingSizeGrams) ? itemWeightG / (fallbackMatch.servingGrams || fbNut.servingSizeGrams) : (itemWeightG / 100);
-              NUTRIENT_KEYS.forEach((k: string) => {
-                const val = fbNut[k] !== undefined ? Number(fbNut[k]) : Number(fallbackMatch[k] || 0);
-                if (val > 0) {
-                  finalItemNutrients[k] = Math.round(val * fbFactor * 10) / 10;
-                }
-              });
-              if (fbCal > 0 && !finalItemNutrients.calories) {
-                finalItemNutrients.calories = Math.round(fbCal * fbFactor);
-              }
-            }
-            if ((finalItemNutrients.calories || 0) <= 0 && itemQueryStr) {
-              const catProfile = getFallbackCategoryProfile(itemQueryStr);
-              const catFactor = itemWeightG / 100;
-              NUTRIENT_KEYS.forEach((k: string) => {
-                const val = Number(catProfile[k] || 0);
-                if (val > 0) {
-                  finalItemNutrients[k] = Math.round(val * catFactor * 10) / 10;
-                }
-              });
-            }
-          }
-
           return {
             ...rawItem,
             ...item,
             nutrients: finalItemNutrients,
-            chainName: item.chainName || preMatch?.chainName || fallbackMatch?.chainName || rawItem.chainName || null,
-            rawNutritionLabel: item.rawNutritionLabel || preMatch?.rawNutritionLabel || rawItem.rawNutritionLabel || null,
-            originalName: item.originalName || preMatch?.originalName || fallbackMatch?.name || rawItem.originalName || null,
-            keyword: item.keyword || preMatch?.keyword || fallbackMatch?.searchQuery || rawItem.keyword || null,
+            chainName: item.chainName || preMatch?.chainName || rawItem.chainName || null,
+            rawNutritionLabel: item.rawNutritionLabel || preMatch?.rawNutritionLabel || rawItem.rawNutritionLabel || (item.primaryBase100g ? {
+              servingSize: "100g",
+              basisType: "per_100g",
+              calories: `${item.primaryBase100g.calories} kcal`,
+              protein: `${item.primaryBase100g.protein || 0}g`,
+              totalFat: `${item.primaryBase100g.totalFat || 0}g`,
+              saturatedFat: `${item.primaryBase100g.saturatedFat || 0}g`,
+              totalCarbohydrate: `${item.primaryBase100g.carbohydrates || 0}g`,
+              sodium: `${item.primaryBase100g.sodium || 0}mg`
+            } : (finalItemNutrients.calories > 0 ? {
+              servingSize: "100g",
+              basisType: "per_100g",
+              calories: `${Math.round(finalItemNutrients.calories / ((item.weightGrams || 100) / 100))} kcal`,
+              protein: `${parseFloat(((finalItemNutrients.protein || 0) / ((item.weightGrams || 100) / 100)).toFixed(1))}g`,
+              totalFat: `${parseFloat(((finalItemNutrients.totalFat || 0) / ((item.weightGrams || 100) / 100)).toFixed(1))}g`,
+              saturatedFat: `${parseFloat(((finalItemNutrients.saturatedFat || 0) / ((item.weightGrams || 100) / 100)).toFixed(1))}g`,
+              totalCarbohydrate: `${parseFloat(((finalItemNutrients.carbohydrates || 0) / ((item.weightGrams || 100) / 100)).toFixed(1))}g`,
+              sodium: `${Math.round((finalItemNutrients.sodium || 0) / ((item.weightGrams || 100) / 100))}mg`
+            } : null)),
+            originalName: item.originalName || preMatch?.originalName || rawItem.originalName || null,
+            keyword: item.keyword || preMatch?.keyword || rawItem.keyword || null,
             visualIngredients: item.visualIngredients || rawItem.visualIngredients || preMatch?.visualIngredients || null,
             components: item.components || rawItem.components || preMatch?.components || null,
-            dbSource: (preMatch && preMatch.dbSource) || (fallbackMatch && (fallbackMatch.source || fallbackMatch.dbSource)) || item.dbSource || "estimated",
-            dbId: (preMatch && preMatch.dbId) || (fallbackMatch && (fallbackMatch.id || fallbackMatch.food_id)) || item.dbId || null,
+            dbSource: (preMatch && preMatch.dbSource) || item.dbSource || "estimated",
+            dbId: (preMatch && preMatch.dbId) || item.dbId || null,
             hasComponents: Boolean(
               (preMatch && preMatch.hasComponents) ||
               item.hasComponents ||
@@ -8396,15 +8355,15 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               (Array.isArray(item.componentsDetailList) && item.componentsDetailList.length >= 2)
             ),
             primaryBase100g: preMatch?.primaryBase100g || item.primaryBase100g || null,
-            primaryBaseMatchName: preMatch?.primaryBaseMatchName || fallbackMatch?.name || item.primaryBaseMatchName || null,
+            primaryBaseMatchName: preMatch?.primaryBaseMatchName || item.primaryBaseMatchName || null,
             primaryBaseWeightG: preMatch?.primaryBaseWeightG || item.weightGrams,
             componentsDetailList: preMatch?.componentsDetailList || item.componentsDetailList || [],
             cookingAdded: preMatch?.cookingAdded || { calories: 0, fat: 0, satFat: 0, sodium: 0 },
             truthNutrients: item.truthNutrients || preMatch?.truthNutrients || {},
             lockedNutrientKeys: item.lockedNutrientKeys || preMatch?.lockedNutrientKeys || [],
             ingredientsList: preMatch?.ingredientsList || item.ingredientsList || rawItem.ingredientsList || null,
-            boundingBox2D: item.boundingBox2D || rawItem.boundingBox2D || preMatch?.boundingBox2D || null,
-            sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : (typeof rawItem.sourceImageIndex === 'number' ? rawItem.sourceImageIndex : (typeof preMatch?.sourceImageIndex === 'number' ? preMatch.sourceImageIndex : 0))
+            boundingBox2D: item.boundingBox2D || preMatch?.boundingBox2D || rawItem.boundingBox2D || null,
+            sourceImageIndex: typeof item.sourceImageIndex === "number" ? item.sourceImageIndex : (typeof preMatch?.sourceImageIndex === "number" ? preMatch.sourceImageIndex : (typeof rawItem.sourceImageIndex === "number" ? rawItem.sourceImageIndex : 0)),
           };
         });
 
@@ -9164,19 +9123,19 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
           updatedScoutItems = updatedScoutItems.map((sItem: any, sIdx: number) => {
             const bItem = parsedData.itemsBreakdown.find((b: any) =>
-              b.scoutIndex === sItem.scoutIndex && namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword)
+              b.scoutIndex !== undefined && b.scoutIndex !== null && b.scoutIndex === sItem.scoutIndex
             ) || parsedData.itemsBreakdown.find((b: any) => namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword));
-              if (bItem && (bItem.canonicalDbName || bItem.name)) {
-                const newName = bItem.canonicalDbName || bItem.name;
-                return {
-                  ...sItem,
-                  originalName: newName,
-                  keyword: newName,
-                  estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams
-                };
-              }
-              return sItem;
-            });
+            if (bItem && (bItem.canonicalDbName || bItem.name)) {
+              const newName = bItem.canonicalDbName || bItem.name;
+              return {
+                ...sItem,
+                originalName: newName,
+                keyword: newName,
+                estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams
+              };
+            }
+            return sItem;
+          });
         }
 
         return res.json({
@@ -9211,7 +9170,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       if (parsedData && Array.isArray(parsedData.itemsBreakdown) && parsedData.itemsBreakdown.length > 0) {
         finalScoutItems = finalScoutItems.map((sItem: any, sIdx: number) => {
           const bItem = parsedData.itemsBreakdown.find((b: any) =>
-            b.scoutIndex === sItem.scoutIndex && namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword)
+            b.scoutIndex !== undefined && b.scoutIndex !== null && b.scoutIndex === sItem.scoutIndex
           ) || parsedData.itemsBreakdown.find((b: any) => namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword));
           if (bItem && (bItem.canonicalDbName || bItem.name)) {
             const newName = bItem.canonicalDbName || bItem.name;
@@ -9775,7 +9734,7 @@ let {
           items: {
             type: Type.OBJECT,
             properties: {
-              key: { type: Type.STRING, enum: allBiomarkerKeys.length > 0 ? allBiomarkerKeys : ["unknown_biomarker"] },
+              key: { type: Type.STRING, description: "Biomarker key identifier" },
               originalValue: { type: Type.NUMBER },
               unit: { type: Type.STRING },
               reason: { type: Type.STRING, description: "Explain why it seems anomalous or unit mismatched" },
@@ -9789,7 +9748,7 @@ let {
           items: {
             type: Type.OBJECT,
             properties: {
-              key: { type: Type.STRING, enum: allBiomarkerKeys.length > 0 ? allBiomarkerKeys : ["unknown_biomarker"] },
+              key: { type: Type.STRING, description: "Canonical identifier of the biomarker" },
               name: { type: Type.STRING, description: "Standard clinical name of the biomarker" },
               userValue: { type: Type.STRING, description: "Exact value from the input data. MUST preserve qualitative strings exactly (e.g. 'NEGATIVE', 'POSITIVE') as strings, or numerical values formatted as string." },
               unit: { type: Type.STRING, description: "Exact unit from the input data" },
@@ -10781,11 +10740,111 @@ Your output MUST be a valid JSON object matching the schema provided.`;
             dataContext += `\n\nFOCUS BIOMARKERS TO REVIEW (BATCH): ${batchKeys.join(', ')}\n`;
           }
         } else if (agentType === "data_review") {
-          const batchData = req.body.batchBiomarkers || [];
+          let batchData = req.body.batchBiomarkers || [];
+          if (!Array.isArray(batchData) || batchData.length === 0) {
+            let keys: string[] = [];
+            if (Array.isArray(req.body.batchKeys) && req.body.batchKeys.length > 0) {
+              keys = req.body.batchKeys;
+            } else if (Array.isArray(req.body.dataReviewBatchKeys) && req.body.dataReviewBatchKeys.length > 0) {
+              keys = req.body.dataReviewBatchKeys;
+            } else if (typeof req.body.message === 'string' && req.body.message.includes(':')) {
+              const parts = req.body.message.split(':');
+              const candidateKeys = parts.slice(1).join(':').split(/[\n,]/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+              if (candidateKeys.length > 0) {
+                keys = candidateKeys;
+              }
+            } else if (biomarkers && typeof biomarkers === 'object') {
+              keys = Object.keys(biomarkers);
+            }
+
+            const customDefs = (cleanProfile as any)?.customBiomarkers || {};
+            batchData = keys.map(k => {
+              const customDef = customDefs[k] || {};
+              const stdDef = biomarkerDefinitions.find((d: any) => d.key === k || (Array.isArray(d.aliases) && d.aliases.some((a: string) => a.toLowerCase() === k.toLowerCase())));
+              const name = customDef.name || stdDef?.name || k;
+              const historyEntries: { date: string; value: any }[] = [];
+              (biomarkerHistory || []).forEach((h: any) => {
+                if (h.biomarkers && h.biomarkers[k] !== undefined && h.biomarkers[k] !== null && h.biomarkers[k] !== '') {
+                  historyEntries.push({ date: h.date || 'unknown', value: h.biomarkers[k] });
+                }
+              });
+              const rawVal = (biomarkers && biomarkers[k] !== undefined && biomarkers[k] !== null && biomarkers[k] !== '')
+                ? biomarkers[k]
+                : (historyEntries[0]?.value ?? '');
+              const val = rawVal !== '' && rawVal !== undefined && rawVal !== null ? rawVal : 'Baseline / Unrecorded';
+              const unit = customDef.unit || stdDef?.unit || (k.endsWith('_score') || k.endsWith('_risk') || k.endsWith('_index') ? 'score' : (k === 'steps' ? 'steps' : 'standard'));
+              const normalRange = customDef.normalRange || stdDef?.normalRange || '';
+              return {
+                key: k,
+                name,
+                userValue: val,
+                value: val,
+                unit,
+                normalRange,
+                historicalEntries: historyEntries,
+                historicalSummary: historyEntries.map(e => `${e.date}: ${e.value}`).join(' → ')
+              };
+            });
+          } else {
+            // Sanitize existing batchData items to ensure non-empty userValues and standard names
+            const customDefs = (cleanProfile as any)?.customBiomarkers || {};
+            batchData = batchData.map((bm: any) => {
+              const k = bm.key || bm.name || '';
+              const customDef = customDefs[k] || {};
+              const stdDef = biomarkerDefinitions.find((d: any) => d.key === k || (Array.isArray(d.aliases) && d.aliases.some((a: string) => a.toLowerCase() === k.toLowerCase())));
+              const name = bm.name && bm.name !== k ? bm.name : (customDef.name || stdDef?.name || k);
+              const rawVal = bm.userValue !== undefined && bm.userValue !== null && bm.userValue !== '' ? bm.userValue : bm.value;
+              const val = rawVal !== '' && rawVal !== undefined && rawVal !== null ? rawVal : 'Baseline / Unrecorded';
+              const unit = bm.unit || customDef.unit || stdDef?.unit || (k.endsWith('_score') || k.endsWith('_risk') || k.endsWith('_index') ? 'score' : (k === 'steps' ? 'steps' : 'standard'));
+              const normalRange = bm.normalRange || customDef.normalRange || stdDef?.normalRange || '';
+              return {
+                ...bm,
+                key: k,
+                name,
+                userValue: val,
+                value: val,
+                unit,
+                normalRange
+              };
+            });
+          }
           const baseData = customVariableData ? `\n\n${customVariableData}\n` : `\n\nUSER PROFILE:\n${JSON.stringify(cleanProfile, null, 2)}\n`;
           dataContext = `${baseData}\n\nBIOMARKERS BATCH FOR REVIEW:\n${JSON.stringify(batchData, null, 2)}\n`;
         } else if (agentType === "agent1") {
-          const batchData = req.body.batchBiomarkers || [];
+          let batchData = req.body.batchBiomarkers || [];
+          if (!Array.isArray(batchData) || batchData.length === 0) {
+            let keys: string[] = [];
+            if (Array.isArray(req.body.batchKeys) && req.body.batchKeys.length > 0) {
+              keys = req.body.batchKeys;
+            } else if (Array.isArray(req.body.dataReviewBatchKeys) && req.body.dataReviewBatchKeys.length > 0) {
+              keys = req.body.dataReviewBatchKeys;
+            }
+            if (keys.length > 0) {
+              const customDefs = (cleanProfile as any)?.customBiomarkers || {};
+              batchData = keys.map(k => {
+                const customDef = customDefs[k] || {};
+                const historyEntries: { date: string; value: any }[] = [];
+                (biomarkerHistory || []).forEach((h: any) => {
+                  if (h.biomarkers && h.biomarkers[k] !== undefined && h.biomarkers[k] !== null && h.biomarkers[k] !== '') {
+                    historyEntries.push({ date: h.date || 'unknown', value: h.biomarkers[k] });
+                  }
+                });
+                const val = (biomarkers && biomarkers[k] !== undefined && biomarkers[k] !== null && biomarkers[k] !== '')
+                  ? biomarkers[k]
+                  : (historyEntries[0]?.value ?? '');
+                return {
+                  key: k,
+                  name: customDef.name || k,
+                  userValue: val,
+                  value: val,
+                  unit: customDef.unit || '',
+                  normalRange: customDef.normalRange || '',
+                  historicalEntries: historyEntries,
+                  historicalSummary: historyEntries.map(e => `${e.date}: ${e.value}`).join(' → ')
+                };
+              });
+            }
+          }
           const baseData = customVariableData ? `\n\n${customVariableData}\n` : `\n\nUSER PROFILE:\n${JSON.stringify(cleanProfile, null, 2)}\n`;
           dataContext = `${baseData}\n\nBIOMARKERS BATCH FOR CLEANING:\n${JSON.stringify(batchData, null, 2)}\n`;
         } else {

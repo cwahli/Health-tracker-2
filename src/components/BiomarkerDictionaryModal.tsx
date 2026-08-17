@@ -5934,6 +5934,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
         profile={profile}
         biomarkerHistory={biomarkerHistory}
         onUpdateProfile={onUpdateProfile}
+        onDeleteBiomarker={onDeleteBiomarker}
         onCombineBiomarkers={onCombineBiomarkers}
         onBatchCombineBiomarkers={onBatchCombineBiomarkers}
         onLaunchNameConsolidation={(keys) => {

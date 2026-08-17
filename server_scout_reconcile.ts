@@ -12,14 +12,53 @@ export function normalizeFoodName(s: unknown): string {
     .trim();
 }
 
-const CONFLICTING_PROTEINS = new Set([
-  'chicken', 'turkey', 'duck', 'poultry', 'ayam',
-  'beef', 'steak', 'pork', 'bacon', 'ham', 'sausage', 'lamb', 'mutton', 'veal', 'daging', 'salami', 'pepperoni', 'prosciutto',
-  'fish', 'salmon', 'tuna', 'cod', 'halibut', 'snapper', 'tilapia', 'mackerel', 'sardine', 'trout', 'ikan',
-  'shrimp', 'prawn', 'crab', 'lobster', 'squid', 'octopus', 'clam', 'mussel', 'oyster', 'scallop', 'udang',
-  'tofu', 'tempeh', 'falafel', 'paneer', 'seitan',
-  'egg', 'telur', 'omelet', 'omelette'
+const CONTAINER_FORM_TOKENS = new Set([
+  'sandwich', 'sandwiches', 'burger', 'burgers', 'wrap', 'wraps', 'salad', 'salads',
+  'bowl', 'bowls', 'sub', 'subs', 'roll', 'rolls', 'bar', 'bars', 'cookie', 'cookies',
+  'biscuit', 'biscuits', 'soup', 'soups', 'pizza', 'pizzas', 'pot', 'pots', 'plate',
+  'box', 'meal', 'dish', 'side', 'shake', 'platter', 'pasta', 'pie'
 ]);
+
+const DISCRIMINATOR_CANONICAL: Record<string, string> = {
+  chicken: 'chicken',
+  poultry: 'chicken',
+  turkey: 'turkey',
+  duck: 'duck',
+  beef: 'beef',
+  steak: 'beef',
+  veal: 'beef',
+  pork: 'pork',
+  bacon: 'bacon',
+  ham: 'ham',
+  sausage: 'sausage',
+  lamb: 'lamb',
+  mutton: 'lamb',
+  salmon: 'salmon',
+  tuna: 'tuna',
+  cod: 'cod',
+  haddock: 'cod',
+  trout: 'trout',
+  prawn: 'shrimp',
+  prawns: 'shrimp',
+  shrimp: 'shrimp',
+  crab: 'crab',
+  lobster: 'lobster',
+  squid: 'squid',
+  calamari: 'squid',
+  octopus: 'octopus',
+  tofu: 'tofu',
+  tempeh: 'tempeh',
+  falafel: 'falafel',
+  halloumi: 'halloumi',
+  paneer: 'paneer',
+  egg: 'egg',
+  eggs: 'egg',
+  vegan: 'vegan',
+  veggie: 'vegetarian',
+  vegetarian: 'vegetarian',
+  chimi: 'chimi',
+  chimichurri: 'chimi'
+};
 
 export function namesReferToSameFood(a: unknown, b: unknown): boolean {
   const na = normalizeFoodName(a);
@@ -29,37 +68,75 @@ export function namesReferToSameFood(a: unknown, b: unknown): boolean {
 
   const ta = new Set(na.split(' ').filter((t) => t.length >= 3));
   const tb = new Set(nb.split(' ').filter((t) => t.length >= 3));
+  if (ta.size === 0 || tb.size === 0) return false;
 
-  // Check conflicting main protein/food types (e.g. chicken vs steak/beef)
-  const proteinsA = Array.from(ta).filter((t) => CONFLICTING_PROTEINS.has(t));
-  const proteinsB = Array.from(tb).filter((t) => CONFLICTING_PROTEINS.has(t));
-  if (proteinsA.length > 0 && proteinsB.length > 0) {
-    const hasCommonProtein = proteinsA.some((p) => proteinsB.includes(p));
-    if (!hasCommonProtein) {
+  // 1. Protein / core ingredient discriminator conflict check
+  const discA = new Set<string>();
+  ta.forEach((t) => {
+    if (DISCRIMINATOR_CANONICAL[t]) discA.add(DISCRIMINATOR_CANONICAL[t]);
+  });
+  const discB = new Set<string>();
+  tb.forEach((t) => {
+    if (DISCRIMINATOR_CANONICAL[t]) discB.add(DISCRIMINATOR_CANONICAL[t]);
+  });
+
+  if (discA.size > 0 && discB.size > 0) {
+    let hasSharedDisc = false;
+    discA.forEach((d) => {
+      if (discB.has(d)) hasSharedDisc = true;
+    });
+    if (!hasSharedDisc) {
+      // Disjoint core protein/ingredient discriminators — cannot be the same food
       return false;
     }
   }
 
-  if (na.length >= 6 && nb.length >= 6 && (na.includes(nb) || nb.includes(na))) return true;
-  if (ta.size === 0 || tb.size === 0) return false;
-  let overlap = 0;
-  ta.forEach((t) => {
-    if (tb.has(t)) overlap++;
-  });
-  
-  // Specific single-token key food forms or common food category names
-  // (generic container words like sandwich, burger, wrap, salad must not match on single-token overlap alone)
-  if (
-    overlap >= 2 ||
-    (overlap === 1 && (
-      (ta.has('croissant') && tb.has('croissant')) ||
-      (ta.has('cinnamon') && tb.has('cinnamon')) ||
-      (ta.has('cereal') && tb.has('cereal')) ||
-      (ta.has('cookie') && tb.has('cookie'))
-    ))
-  ) {
+  // 2. Exact substring match (when non-conflicting)
+  if (na.length >= 6 && nb.length >= 6 && (na.includes(nb) || nb.includes(na))) {
     return true;
   }
+
+  // 3. Token overlap check
+  const commonTokens: string[] = [];
+  ta.forEach((t) => {
+    if (tb.has(t)) commonTokens.push(t);
+  });
+
+  if (commonTokens.length === 0) return false;
+
+  // If ALL overlapping tokens are purely generic container/form words (e.g. only 'sandwich' or only 'wrap'),
+  // and neither name is a single generic word, do NOT match.
+  const allCommonAreContainers = commonTokens.every((t) => CONTAINER_FORM_TOKENS.has(t));
+  if (allCommonAreContainers) {
+    if (ta.size >= 2 && tb.size >= 2) {
+      // e.g. "Steak Sandwich" vs "Cheese Sandwich" -> both size >= 2 and only overlap on "sandwich"
+      return false;
+    }
+  }
+
+  // If there are 2 or more non-conflicting overlapping tokens, it's a match
+  if (commonTokens.length >= 2) {
+    return true;
+  }
+
+  // For 1 overlapping token: only match if that token is a specific distinguishing food name
+  // (e.g. croissant, cinnamon, cereal) and NOT a generic container word
+  const singleToken = commonTokens[0];
+  if (!CONTAINER_FORM_TOKENS.has(singleToken)) {
+    if (
+      singleToken === 'croissant' ||
+      singleToken === 'cinnamon' ||
+      singleToken === 'cereal' ||
+      singleToken === 'granola' ||
+      singleToken === 'oatmeal' ||
+      singleToken === 'porridge' ||
+      ta.size === 1 ||
+      tb.size === 1
+    ) {
+      return true;
+    }
+  }
+
   return false;
 }
 

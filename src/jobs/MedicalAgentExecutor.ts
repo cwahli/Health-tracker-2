@@ -111,9 +111,32 @@ export async function* executeMedicalAgent(input: MedicalAgentExecutorInput): As
       .map(m => ({ role: m.role, content: m.content || '' }));
   }
 
-  // Set up batchKeys if needed (matching LogChat fallback / custom batch setup)
+  // Set up batchKeys and batchBiomarkers if needed (matching LogChat fallback / custom batch setup)
   if (dataReviewBatchKeys && dataReviewBatchKeys.length > 0) {
     bodyData.batchKeys = dataReviewBatchKeys;
+    bodyData.dataReviewBatchKeys = dataReviewBatchKeys;
+    bodyData.batchBiomarkers = dataReviewBatchKeys.map(k => {
+      const customDef = profile?.customBiomarkers?.[k];
+      const historyEntries: { date: string; value: any }[] = [];
+      (biomarkerHistory || []).forEach((h: any) => {
+        if (h.biomarkers && h.biomarkers[k] !== undefined && h.biomarkers[k] !== null && h.biomarkers[k] !== '') {
+          historyEntries.push({ date: h.date || 'unknown', value: h.biomarkers[k] });
+        }
+      });
+      const val = (biomarkers && biomarkers[k] !== undefined && biomarkers[k] !== null && biomarkers[k] !== '')
+        ? biomarkers[k]
+        : (historyEntries[0]?.value ?? '');
+      return {
+        key: k,
+        name: customDef?.name || k,
+        userValue: val,
+        value: val,
+        unit: customDef?.unit || '',
+        normalRange: customDef?.normalRange || '',
+        historicalEntries: historyEntries,
+        historicalSummary: historyEntries.map(e => `${e.date}: ${e.value}`).join(' → ')
+      };
+    });
   }
 
   yield {

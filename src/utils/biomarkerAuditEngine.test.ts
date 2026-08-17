@@ -126,4 +126,57 @@ describe('Biomarker Audit & Deduplication Engine', () => {
     expect(enrichedMaster.riskCategories).toEqual(['Cardiovascular', 'Hyperlipidemia']);
     expect(enrichedMaster.optimalValue).toBe('< 4.5 mmol/L');
   });
+
+  it('correctly maps and clusters eGFR variants (egfr, egfr_mlmin173m2, egfr_ml_min_1_73m2)', () => {
+    const s1 = getCanonicalBiomarkerStem('egfr');
+    const s2 = getCanonicalBiomarkerStem('egfr_mlmin173m2');
+    const s3 = getCanonicalBiomarkerStem('egfr_ml_min_1_73m2');
+    const s4 = getCanonicalBiomarkerStem('egfrcreatckdepi173m2');
+
+    expect(s1).toBe('egfr');
+    expect(s2).toBe('egfr');
+    expect(s3).toBe('egfr');
+    expect(s4).toBe('egfr');
+
+    const customBiomarkers = {
+      egfr: {
+        name: 'egfr',
+        unit: 'mL/min/1.73m2',
+        normalRange: 'over 90',
+        category: 'kidneys',
+        riskCategories: ['Kidney', 'Chronic Kidney Disease']
+      },
+      egfr_mlmin173m2: {
+        name: 'eGFR',
+        unit: 'mL/min/1.73m²',
+        normalRange: 'over 90',
+        category: 'wellness'
+      },
+      egfr_ml_min_1_73m2: {
+        name: 'eGFR',
+        unit: 'mL/min/1.73m²',
+        normalRange: 'over 90',
+        category: 'wellness'
+      }
+    };
+
+    const biomarkerHistory = [
+      {
+        id: 'log1',
+        date: '2026-08-16',
+        biomarkers: { egfr: 95 }
+      }
+    ];
+
+    const report = runGeneralizedBiomarkerAudit(customBiomarkers, biomarkerHistory);
+    expect(report.duplicateGroups.length).toBe(1);
+
+    const egfrGroup = report.duplicateGroups[0];
+    expect(egfrGroup.suggestedMasterKey).toBe('egfr');
+    expect(egfrGroup.candidateAliases).toContain('egfr_mlmin173m2');
+    expect(egfrGroup.candidateAliases).toContain('egfr_ml_min_1_73m2');
+    expect(egfrGroup.totalLogsInCluster).toBe(1);
+    expect(egfrGroup.emptyAliasKeys).toContain('egfr_mlmin173m2');
+    expect(egfrGroup.emptyAliasKeys).toContain('egfr_ml_min_1_73m2');
+  });
 });

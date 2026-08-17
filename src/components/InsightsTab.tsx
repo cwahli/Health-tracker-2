@@ -2752,10 +2752,20 @@ export default function InsightsTab({
               </button>
               <button 
                 type="button" 
-                onClick={() => setShowCustomBatchModal(false)} 
-                className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/10 rounded-xl transition-colors"
+                onClick={() => {
+                  setShowCustomBatchModal(false);
+                  if (onOpenAgentChat && customBatchKeys.length > 0) {
+                    onOpenAgentChat('data_review', {
+                      dataReviewBatchKeys: customBatchKeys,
+                      dataReviewBatchIdx: 'custom',
+                      prefillMessage: `Please calibrate and review reference ranges, units, and categories for these ${customBatchKeys.length} selected biomarkers:\n${customBatchKeys.join(', ')}`
+                    });
+                  }
+                }} 
+                className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/10 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                Done ({customBatchKeys.length})
+                <Sparkles className="w-3.5 h-3.5" />
+                Done & Calibrate ({customBatchKeys.length})
               </button>
             </div>
           </div>
@@ -2995,11 +3005,21 @@ export default function InsightsTab({
                 Clear
               </button>
               <button 
-                type="button"
-                onClick={() => setShowCustomDataReviewBatchModal(false)}
-                className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/10 rounded-xl transition-colors"
+                type="button" 
+                onClick={() => {
+                  setShowCustomDataReviewBatchModal(false);
+                  if (onOpenAgentChat && customDataReviewBatchKeys.length > 0) {
+                    onOpenAgentChat('data_review', {
+                      dataReviewBatchKeys: customDataReviewBatchKeys,
+                      dataReviewBatchIdx: 'custom',
+                      prefillMessage: `Please calibrate and review reference ranges, units, and categories for these ${customDataReviewBatchKeys.length} selected biomarkers:\n${customDataReviewBatchKeys.join(', ')}`
+                    });
+                  }
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/10 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                Done ({customDataReviewBatchKeys.length})
+                <Sparkles className="w-3.5 h-3.5" />
+                Done & Calibrate ({customDataReviewBatchKeys.length})
               </button>
             </div>
           </div>

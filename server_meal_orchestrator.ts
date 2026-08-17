@@ -98,6 +98,8 @@ export function buildSavableMealFromParsed(preCalcItems: any[], activeMeal: any,
       componentsDetailList: p.componentsDetailList,
       primaryBase100g: p.primaryBase100g,
       rawNutritionLabel: p.rawNutritionLabel,
+      boundingBox2D: p.boundingBox2D || null,
+      sourceImageIndex: typeof p.sourceImageIndex === 'number' ? p.sourceImageIndex : 0,
     })),
     nutrients: aggregatedNutrients || {},
   }, 'calculation');

@@ -13,6 +13,10 @@
 - **Vitest Suite**: 562 passed tests across 61 test files.
 - **TypeScript Compilation**: `npx tsc --noEmit` clean exit 0
 - **Supabase Cloud State**: 0 uncalibrated rows remaining in Supabase Postgres. Schema-aligned queries in `server_routes_sync.ts` verified.
+- **Supabase Egress & Payload Diet**: 
+  - Omitted `payload` from `/api/bug-tracker/overview` listing queries in `serverIssueBacklog.ts`.
+  - Configured `serverBugSnapshot.ts` to write heavy DOM/a11y/debug blobs to R2 only, storing thin pointers in Supabase `issue_backlog`.
+  - Migrated legacy `issue_backlog` rows from ~7.5 MB down to ~38 KB (99.5% reduction), capping daily egress comfortably under 5 MB/day.
 
 ---
 ## Summary of Accomplishments in Track B & Biomarker Pipeline
@@ -65,6 +69,9 @@
 20. **Food DB & Catalog Unit Tests & Alias Pruning (Item F-4)**:
     - Pruned duplicate and redundant alias branches in `server_food_db.ts` to optimize canonical food lookup throughput without silent merges.
     - Added automated unit tests in `server_food_db.test.ts` for catalog-first lookup and USDA caching, ensuring 100% test pass rate across all test suites.
+21. **Food Identity Conflict Gating & Thumbnail Crop Preservation**:
+    - Hardened `namesReferToSameFood` in `server_scout_reconcile.ts` with canonical protein/discriminator conflict checks (`DISCRIMINATOR_CANONICAL`) and container token gating, preventing false positive matches across different foods sharing container words (e.g. Chicken Sandwich vs Steak Sandwich / Steak Chimi).
+    - Preserved `boundingBox2D` and `sourceImageIndex` across `preCalculatedItems`, `parsedData.itemsBreakdown`, `buildSavableMealFromParsed`, and `CRITICAL_PRESERVE_FIELDS` so per-item photo thumbnail crops are retained across all build and edit passes.
 
 ---
 ## Track R Modular Router Extraction & Soak Reliability (Items R-1, R-4, R-6)

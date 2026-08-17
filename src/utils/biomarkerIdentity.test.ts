@@ -190,4 +190,10 @@ describe('dedupe pressure — alias fan-in', () => {
     const keys = ['serum_albumin', 'serum_albumin_g_l', 'serum_albumin_2'].map(k => getMappedBiomarkerKey(k));
     expect(new Set(keys).size).toBe(1);
   });
+
+  it('egfr family collapses to one canonical key across lab unit suffixes', () => {
+    const keys = ['egfr', 'egfr_mlmin173m2', 'egfr_ml_min_1_73m2', 'egfrcreatckdepi173m2', 'eGFR'].map(k => getMappedBiomarkerKey(k));
+    expect(new Set(keys).size).toBe(1);
+    expect(keys[0]).toBe('egfr');
+  });
 });

@@ -35,6 +35,7 @@ interface BiomarkerAuditModalProps {
   profile: any;
   biomarkerHistory: any[];
   onUpdateProfile: (updates: any) => void;
+  onDeleteBiomarker?: (key: string) => void;
   onCombineBiomarkers?: (
     targetKey: string,
     targetDef: any,
@@ -62,6 +63,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
   profile,
   biomarkerHistory,
   onUpdateProfile,
+  onDeleteBiomarker,
   onCombineBiomarkers,
   onBatchCombineBiomarkers,
   onLaunchNameConsolidation,
@@ -80,8 +82,70 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
   });
   const [selectedFixKeys, setSelectedFixKeys] = useState<{ [key: string]: boolean }>(() => savedSession?.selectedFixes || {});
   const [showApplyConfirm, setShowApplyConfirm] = useState(false);
+  const [showCatalogApproveConfirm, setShowCatalogApproveConfirm] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [appliedMessage, setAppliedMessage] = useState<string | null>(null);
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
+
+  const handleDeleteBiomarkerKey = (key: string) => {
+    if (onDeleteBiomarker) {
+      onDeleteBiomarker(key);
+    } else {
+      const updatedCustom = { ...(profile?.customBiomarkers || {}) };
+      delete updatedCustom[key];
+      onUpdateProfile({ customBiomarkers: updatedCustom });
+    }
+    setAppliedMessage(`Deleted biomarker "${key}"`);
+    setTimeout(() => setAppliedMessage(null), 3000);
+  };
+
+  const renderDeleteButton = (key: string, name?: string) => {
+    if (confirmDeleteKey === key) {
+      return (
+        <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800/80 rounded-md px-1.5 py-0.5 z-10 shrink-0 shadow-xs">
+          <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">Delete?</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteBiomarkerKey(key);
+              setConfirmDeleteKey(null);
+            }}
+            className="p-0.5 hover:bg-rose-200 dark:hover:bg-rose-900/80 text-rose-700 dark:text-rose-300 rounded font-bold text-[10px] cursor-pointer"
+            title="Confirm delete biomarker"
+          >
+            <Check className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirmDeleteKey(null);
+            }}
+            className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 rounded text-[10px] cursor-pointer"
+            title="Cancel"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setConfirmDeleteKey(key);
+        }}
+        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-md transition-colors cursor-pointer shrink-0"
+        title={`Delete ${name || key}`}
+        aria-label={`Delete biomarker ${name || key}`}
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    );
+  };
 
   // Compute live report from profile & history
   const report: BiomarkerAuditReport = useMemo(() => {
@@ -377,7 +441,37 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
     }
   };
 
-  // 1-Click Automated Fix for Catalog-Matched Missing Ranges & Categories
+  // 1-Click Automated Fix for Single Catalog Range & Category
+  const handleApplySingleCatalogRangeFix = (item: BiomarkerAuditItem) => {
+    const match = item.missingMetadata?.catalogMatch;
+    if (!match) return;
+    setIsApplying(true);
+    try {
+      const updatedCustom = { ...(profile?.customBiomarkers || {}) };
+      const currentDef = updatedCustom[item.key] || {};
+      updatedCustom[item.key] = {
+        ...currentDef,
+        ...(match.normalRange ? { normalRange: match.normalRange } : {}),
+        ...(match.category ? { category: match.category } : {}),
+        ...(match.standardMedicalGrouping ? { standardMedicalGrouping: match.standardMedicalGrouping } : {}),
+        ...(match.unit && !currentDef.unit ? { unit: match.unit } : {}),
+        ...(match.descriptions ? { descriptions: match.descriptions } : {}),
+        needsApproval: false,
+        catalogApproved: true,
+        updatedAt: Date.now()
+      };
+
+      onUpdateProfile({ customBiomarkers: updatedCustom });
+      setAppliedMessage(`Updated "${item.name}" with standard range "${match.normalRange}"!`);
+      setTimeout(() => setAppliedMessage(null), 3000);
+    } catch (e: any) {
+      alert(`Error applying catalog range: ${e.message}`);
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  // Automated Fix for Catalog-Matched Missing Ranges & Categories
   const handleApplyCatalogRangeFixes = () => {
     const catalogMatchItems = report.items.filter(i => i.missingMetadata?.catalogMatch);
     if (catalogMatchItems.length === 0) return;
@@ -397,13 +491,17 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
           ...(match.standardMedicalGrouping ? { standardMedicalGrouping: match.standardMedicalGrouping } : {}),
           ...(match.unit && !currentDef.unit ? { unit: match.unit } : {}),
           ...(match.descriptions ? { descriptions: match.descriptions } : {}),
+          needsApproval: false,
+          catalogApproved: true,
           updatedAt: Date.now()
         };
         count++;
       });
 
       onUpdateProfile({ customBiomarkers: updatedCustom });
+      setShowCatalogApproveConfirm(false);
       setAppliedMessage(`Enriched ${count} biomarkers with standard clinical reference ranges and categories!`);
+      setTimeout(() => setAppliedMessage(null), 3000);
     } catch (e: any) {
       alert(`Error applying catalog ranges: ${e.message}`);
     } finally {
@@ -912,22 +1010,25 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                           className="mt-1 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-xs text-slate-800 dark:text-slate-100">{item.name}</span>
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded">
-                              {item.key}
-                            </span>
-                            <span className="text-[11px] text-rose-600 dark:text-rose-400 line-through font-mono">
-                              current: "{item.currentUnit || 'blank'}"
-                            </span>
-                            <ArrowRight className="w-3 h-3 text-slate-400" />
-                            {proposal?.proposedUnit ? (
-                              <span className="text-[11px] font-bold font-mono px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 rounded">
-                                {proposal.proposedUnit}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
+                              <span className="font-bold text-xs text-slate-800 dark:text-slate-100">{item.name}</span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded">
+                                {item.key}
                               </span>
-                            ) : (
-                              <span className="text-[10px] text-amber-600 font-semibold italic">Needs AI Agent review</span>
-                            )}
+                              <span className="text-[11px] text-rose-600 dark:text-rose-400 line-through font-mono">
+                                current: "{item.currentUnit || 'blank'}"
+                              </span>
+                              <ArrowRight className="w-3 h-3 text-slate-400" />
+                              {proposal?.proposedUnit ? (
+                                <span className="text-[11px] font-bold font-mono px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 rounded">
+                                  {proposal.proposedUnit}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-amber-600 font-semibold italic">Needs AI Agent review</span>
+                              )}
+                            </div>
+                            {renderDeleteButton(item.key, item.name)}
                           </div>
                           {proposal?.reason && (
                             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
@@ -1030,6 +1131,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                               <Bot className="w-3 h-3 text-violet-500" />
                               Ask Deduper Agent
                             </button>
+                            {renderDeleteButton(group.suggestedMasterKey, group.suggestedMasterName)}
                           </div>
                         </div>
 
@@ -1065,6 +1167,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                                       Has lab records
                                     </span>
                                   )}
+                                  {renderDeleteButton(k, aliasDef.name || k)}
                                 </div>
                               );
                             })}
@@ -1097,7 +1200,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                 <div className="flex items-center gap-2">
                   {catalogMatchCount > 0 && (
                     <button
-                      onClick={handleApplyCatalogRangeFixes}
+                      onClick={() => setShowCatalogApproveConfirm(true)}
                       disabled={isApplying}
                       className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
                     >
@@ -1126,34 +1229,60 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
 
                   return (
                     <div key={item.key} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-bold text-xs text-slate-800 dark:text-slate-100">{item.name}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">{item.key} • Unit: {item.currentUnit || 'None'}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">{item.name}</div>
+                          <div className="text-[10px] text-slate-400 font-mono truncate">
+                            {item.key} • Unit: {item.currentUnit || 'None'}
+                            {item.missingMetadata?.currentRange && (
+                              <span className="ml-1.5 text-slate-500 font-sans">• Current Range: <strong className="text-slate-700 dark:text-slate-300">{item.missingMetadata.currentRange}</strong></span>
+                            )}
+                          </div>
                         </div>
-                        {match ? (
-                          <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 rounded border border-emerald-200 dark:border-emerald-800">
-                            Catalog Match Found
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 rounded">
-                            Range: Unknown
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {match ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 rounded border border-emerald-200 dark:border-emerald-800">
+                              Catalog Match Found
+                            </span>
+                          ) : item.missingMetadata?.missingRange ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 rounded">
+                              Range: Unknown
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 rounded">
+                              Category / Brackets Needed
+                            </span>
+                          )}
+                          {renderDeleteButton(item.key, item.name)}
+                        </div>
                       </div>
 
                       {match && (
-                        <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 text-[11px] space-y-0.5">
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Proposed Standard Range:</span>
-                            <span className="font-bold text-slate-700 dark:text-slate-200">{match.normalRange} {match.unit || ''}</span>
-                          </div>
-                          {match.category && (
+                        <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 text-[11px] space-y-2">
+                          <div className="space-y-1">
                             <div className="flex justify-between">
-                              <span className="text-slate-500">Organ Category:</span>
-                              <span className="font-semibold text-indigo-600 dark:text-indigo-400 capitalize">{match.category}</span>
+                              <span className="text-slate-500">Proposed Standard Range:</span>
+                              <span className="font-bold text-emerald-700 dark:text-emerald-300 font-mono">{match.normalRange} {match.unit || ''}</span>
                             </div>
-                          )}
+                            {match.category && (
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Organ Category:</span>
+                                <span className="font-semibold text-indigo-600 dark:text-indigo-400 capitalize">{match.category}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="pt-1.5 border-t border-slate-200/60 dark:border-slate-800 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleApplySingleCatalogRangeFix(item)}
+                              disabled={isApplying}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-bold flex items-center gap-1 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              <Check className="w-3 h-3" />
+                              Approve Standard Range
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1231,6 +1360,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                             <Bot className="w-3 h-3 text-rose-500" />
                             Ask Agent
                           </button>
+                          {renderDeleteButton(item.key, item.name)}
                         </div>
                       </div>
 
@@ -1298,7 +1428,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
             )}
             {activeTab === 'missing_metadata' && catalogMatchCount > 0 && (
               <button
-                onClick={handleApplyCatalogRangeFixes}
+                onClick={() => setShowCatalogApproveConfirm(true)}
                 disabled={isApplying}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
               >
@@ -1355,6 +1485,62 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                 >
                   {isApplying ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                   Confirm & Apply Updates
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* EXPLICIT PREVIEW & CONFIRMATION MODAL FOR CATALOG RANGE APPROVAL */}
+        {showCatalogApproveConfirm && (
+          <div className="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 max-w-lg w-full shadow-2xl space-y-4">
+              <div className="flex items-center gap-3 text-blue-600 dark:text-blue-400">
+                <Zap className="w-6 h-6 shrink-0" />
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                  Approve Standard Catalog Ranges ({catalogMatchCount})
+                </h3>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                The following <strong>{catalogMatchCount}</strong> biomarkers match standard medical catalog definitions. Review the exact reference ranges and organ categories that will be enriched:
+              </p>
+              <div className="max-h-64 overflow-y-auto p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
+                {report.items.filter(i => i.missingMetadata?.catalogMatch).map(i => {
+                  const match = i.missingMetadata?.catalogMatch;
+                  return (
+                    <div key={i.key} className="p-2 bg-white dark:bg-slate-900/80 rounded-lg border border-slate-100 dark:border-slate-800 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-800 dark:text-slate-100 text-xs">{i.name}</span>
+                        <span className="font-mono text-[10px] text-slate-400">({i.key})</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-500">Standard Range:</span>
+                        <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">{match?.normalRange} {match?.unit || ''}</span>
+                      </div>
+                      {match?.category && (
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-500">Organ Category:</span>
+                          <span className="font-semibold text-indigo-600 dark:text-indigo-400 capitalize">{match.category}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setShowCatalogApproveConfirm(false)}
+                  className="px-3.5 py-1.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-lg hover:bg-slate-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleApplyCatalogRangeFixes}
+                  disabled={isApplying}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isApplying ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Confirm & Apply All ({catalogMatchCount}) Ranges
                 </button>
               </div>
             </div>

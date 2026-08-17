@@ -273,6 +273,12 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   mixed_vegetables: { fdcId: "170447", calories: 65, protein: 2.6, totalFat: 0.2, saturatedFat: 0.05, transFat: 0, carbohydrates: 14.1, sugar: 4.0, sodium: 42, potassium: 230, totalFibre: 4.1, foodType: 'veg' },
   cooked_prawns: { fdcId: "175179", calories: 99, protein: 24.0, totalFat: 0.3, saturatedFat: 0.08, transFat: 0, carbohydrates: 0.2, sugar: 0, sodium: 111, potassium: 220, totalFibre: 0, foodType: 'shellfish' },
   marie_rose_sauce: { fdcId: "marie_rose_canonical", calories: 320, protein: 1.0, totalFat: 30.0, saturatedFat: 4.5, transFat: 0, carbohydrates: 10.0, sugar: 8.0, sodium: 700, potassium: 40, totalFibre: 0, foodType: 'ultra_processed' },
+  chicken_sandwich: { fdcId: "canonical_chicken_sandwich", calories: 230, protein: 12.5, totalFat: 10.2, saturatedFat: 2.1, transFat: 0.1, carbohydrates: 22.0, sugar: 2.5, sodium: 450, potassium: 180, totalFibre: 1.5, foodType: 'poultry' },
+  steak_sandwich: { fdcId: "canonical_steak_sandwich", calories: 240, protein: 13.5, totalFat: 12.0, saturatedFat: 4.5, transFat: 0.2, carbohydrates: 19.5, sugar: 2.0, sodium: 480, potassium: 200, totalFibre: 1.2, foodType: 'red_meat' },
+  beef_burger: { fdcId: "canonical_beef_burger", calories: 250, protein: 13.0, totalFat: 13.5, saturatedFat: 5.0, transFat: 0.5, carbohydrates: 19.0, sugar: 3.0, sodium: 460, potassium: 210, totalFibre: 1.2, foodType: 'red_meat' },
+  tuna_sandwich: { fdcId: "canonical_tuna_sandwich", calories: 210, protein: 13.0, totalFat: 8.5, saturatedFat: 1.5, transFat: 0, carbohydrates: 20.0, sugar: 2.0, sodium: 420, potassium: 190, totalFibre: 1.5, foodType: 'fish_fatty' },
+  egg_sandwich: { fdcId: "canonical_egg_sandwich", calories: 220, protein: 10.5, totalFat: 11.0, saturatedFat: 2.8, transFat: 0, carbohydrates: 20.0, sugar: 2.5, sodium: 430, potassium: 160, totalFibre: 1.5, foodType: 'egg' },
+  chicken_wrap: { fdcId: "canonical_chicken_wrap", calories: 215, protein: 12.0, totalFat: 8.5, saturatedFat: 2.0, transFat: 0.1, carbohydrates: 23.0, sugar: 2.0, sodium: 460, potassium: 170, totalFibre: 1.8, foodType: 'poultry' },
   serrano_ham: { fdcId: "172551", calories: 235, protein: 22.0, totalFat: 15.0, saturatedFat: 5.5, transFat: 0, carbohydrates: 1.0, sugar: 0, sodium: 1200, potassium: 300, totalFibre: 0, foodType: 'processed' },
   mixed_berries: { fdcId: "171711", calories: 45, protein: 0.7, totalFat: 0.3, saturatedFat: 0.02, transFat: 0, carbohydrates: 11.0, sugar: 7.0, sodium: 1, potassium: 120, totalFibre: 2.5, foodType: 'fruit' },
   low_fat_yogurt: { fdcId: "170903", calories: 63, protein: 5.25, totalFat: 1.55, saturatedFat: 1.0, transFat: 0, carbohydrates: 7.04, sugar: 7.04, sodium: 70, potassium: 230, totalFibre: 0, foodType: 'dairy' },
@@ -282,6 +288,12 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
 export function lookupCanonicalBaseFood(name: string): any | null {
   
   const normalized = name.toLowerCase().trim();
+  if (normalized.includes('chicken') && (normalized.includes('sandwich') || normalized.includes('sub') || normalized.includes('bap') || normalized.includes('bun') || normalized.includes('bagel') || normalized.includes('toastie'))) return CANONICAL_BASE_FOODS.chicken_sandwich;
+  if ((normalized.includes('steak') || normalized.includes('beef')) && (normalized.includes('sandwich') || normalized.includes('sub') || normalized.includes('bap') || normalized.includes('toastie'))) return CANONICAL_BASE_FOODS.steak_sandwich;
+  if (normalized.includes('tuna') && (normalized.includes('sandwich') || normalized.includes('melt') || normalized.includes('sub') || normalized.includes('wrap'))) return CANONICAL_BASE_FOODS.tuna_sandwich;
+  if (normalized.includes('egg') && (normalized.includes('sandwich') || normalized.includes('mayo sandwich') || normalized.includes('sub') || normalized.includes('bap'))) return CANONICAL_BASE_FOODS.egg_sandwich;
+  if (normalized.includes('chicken') && normalized.includes('wrap')) return CANONICAL_BASE_FOODS.chicken_wrap;
+  if (normalized.includes('burger') || normalized.includes('cheeseburger')) return CANONICAL_BASE_FOODS.beef_burger;
   if (normalized.includes('sweet chilli') || normalized.includes('sweet chili') || normalized.includes('chilli sauce') || normalized.includes('chili sauce')) return CANONICAL_BASE_FOODS.sweet_chilli_sauce;
   if (normalized.includes('kalamata') || normalized.includes('olive')) return CANONICAL_BASE_FOODS.kalamata_olives;
   if (normalized.includes('balsamic')) return CANONICAL_BASE_FOODS.balsamic_dressing;

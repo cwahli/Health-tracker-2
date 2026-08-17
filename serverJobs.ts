@@ -28,6 +28,16 @@ export interface ServerJobPayload {
   biomarkers?: { [key: string]: number | string };
   biomarkerHistory?: any[];
   dataReviewBatchKeys?: string[];
+  batchKeys?: string[];
+  batchBiomarkers?: any[];
+  dataReviewBatchIdx?: number | string | null;
+  extractedData?: any;
+  bucketMapping?: string;
+  remainingText?: string;
+  estimatedTotalMarkers?: number | null;
+  currentBatch?: number;
+  numberOfBatches?: number;
+  batchSize?: number;
   portionChoices?: any;
   skipScout?: boolean;
   scoutContentType?: 'ambiguous' | 'branded_single' | 'whole_food' | 'recipe';
@@ -389,6 +399,16 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         biomarkers: payload.biomarkers || {},
         biomarkerHistory: payload.biomarkerHistory || [],
         dataReviewBatchKeys: payload.dataReviewBatchKeys || [],
+        batchKeys: payload.batchKeys || payload.dataReviewBatchKeys || [],
+        batchBiomarkers: payload.batchBiomarkers || [],
+        dataReviewBatchIdx: payload.dataReviewBatchIdx,
+        extractedData: payload.extractedData,
+        bucketMapping: payload.bucketMapping,
+        remainingText: payload.remainingText,
+        estimatedTotalMarkers: payload.estimatedTotalMarkers,
+        currentBatch: payload.currentBatch,
+        numberOfBatches: payload.numberOfBatches,
+        batchSize: payload.batchSize,
         resolvedDbCandidates: payload.resolvedDbCandidates || [],
         imageDates: payload.imageDates || [],
         ingestTrace: prebuiltIngestTrace,

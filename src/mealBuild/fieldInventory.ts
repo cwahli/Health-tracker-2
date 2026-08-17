@@ -21,11 +21,11 @@ export const MEAL_ITEM_FIELDS: string[] = [
   'truthNutrients', 'cookingAdded', 'ingredientsList', 'chainName',
   'foodType', 'warnings', 'confidenceRating', 'confidenceComment',
   'physicalFormClassification', 'matchReasonInfo', 'diningEnvironment',
-  'saucesDetailList', 'portionChoiceApplied', 'fill'
+  'saucesDetailList', 'portionChoiceApplied', 'fill', 'boundingBox2D', 'sourceImageIndex'
 ];
 
 export const CRITICAL_PRESERVE_FIELDS: string[] = [
   'rawNutritionLabel', 'estimatedCalories', 'estimatedWeightGrams', 'components',
   'componentsDetailList', 'dbId', 'dbSource', 'lockedNutrientKeys', 'itemLockedKeys',
-  'primaryBase100g', 'scoutIndex', 'itemId', 'diningEnvironment'
+  'primaryBase100g', 'scoutIndex', 'itemId', 'diningEnvironment', 'boundingBox2D', 'sourceImageIndex'
 ];

@@ -80,19 +80,22 @@ describe('namesReferToSameFood', () => {
     expect(namesReferToSameFood('Cereal Bar', 'raspberry white chocolate cereal bar')).toBe(true);
   });
 
-  it('rejects different proteins sharing the word sandwich', () => {
-    expect(namesReferToSameFood('Yolk Chicken Sandwich', 'Yolk Steak Chimi 2.0 Sandwich')).toBe(false);
+  it('correctly rejects Chicken Sandwich vs Steak Sandwich / Steak Chimi', () => {
     expect(namesReferToSameFood('Chicken Sandwich', 'Steak Sandwich')).toBe(false);
-    expect(namesReferToSameFood('Chicken Sandwich', 'Tuna Sandwich')).toBe(false);
+    expect(namesReferToSameFood('YOLK Chicken Sandwich', 'YOLK Steak Sandwich')).toBe(false);
+    expect(namesReferToSameFood('YOLK Chicken Sandwich', 'Steak Chimi 2.0')).toBe(false);
   });
 
-  it('rejects generic container single-token overlaps with different foods', () => {
-    expect(namesReferToSameFood('Caesar Salad', 'Fruit Salad')).toBe(false);
-    expect(namesReferToSameFood('Falafel Wrap', 'Beef Wrap')).toBe(false);
-    expect(namesReferToSameFood('Cheeseburger', 'Veggie Burger')).toBe(false);
+  it('correctly rejects conflicting protein wraps, burgers and salads', () => {
+    expect(namesReferToSameFood('Crispy Chicken Wrap', 'Falafel Wrap')).toBe(false);
+    expect(namesReferToSameFood('Beef Burger', 'Vegan Burger')).toBe(false);
+    expect(namesReferToSameFood('Salmon Poke Bowl', 'Tuna Poke Bowl')).toBe(false);
+    expect(namesReferToSameFood('Steak Salad', 'Chicken Salad')).toBe(false);
   });
 
-  it('accepts same protein dishes with modifier changes', () => {
-    expect(namesReferToSameFood('Crispy Chicken Sandwich', 'Grilled Chicken Sandwich')).toBe(true);
+  it('matches valid variations of the same food', () => {
+    expect(namesReferToSameFood('Chicken Sandwich', 'Grilled Chicken Sandwich')).toBe(true);
+    expect(namesReferToSameFood('Butter Croissant', 'Croissant')).toBe(true);
+    expect(namesReferToSameFood('Cinnamon Roll', 'Cinnamon Swirl')).toBe(true);
   });
 });

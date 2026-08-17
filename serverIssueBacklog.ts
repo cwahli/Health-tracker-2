@@ -14,7 +14,7 @@ import type { Express, Request, Response } from 'express';
 import crypto from 'crypto';
 import { normalizeChainKey } from './serverBrandMenu.js';
 
-async function uploadBacklogPayloadToR2(id: string, payload: any): Promise<string> {
+export async function uploadBacklogPayloadToR2(id: string, payload: any, customKey?: string): Promise<string> {
   try {
     const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
     const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
@@ -23,7 +23,8 @@ async function uploadBacklogPayloadToR2(id: string, payload: any): Promise<strin
     const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
     const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
 
-    const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/backlogs/${id}.json`;
+    const targetKey = customKey || `backlogs/${id}.json`;
+    const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/${targetKey}`;
     if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
       console.warn('[Backlog R2] Credentials missing, skipping R2 upload');
       return publicUrl;
@@ -43,7 +44,7 @@ async function uploadBacklogPayloadToR2(id: string, payload: any): Promise<strin
 
     const command = new PutObjectCommand({
       Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-      Key: `backlogs/${id}.json`,
+      Key: targetKey,
       Body: body,
       ContentType: 'application/json',
     });
@@ -55,10 +56,15 @@ async function uploadBacklogPayloadToR2(id: string, payload: any): Promise<strin
   }
 }
 
-async function fetchPayloadFromR2(id: string): Promise<any> {
+export async function fetchPayloadFromR2(id: string, customKeyOrPrefix?: string): Promise<any> {
   try {
     const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
     const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
+
+    let targetKey = `backlogs/${id}.json`;
+    if (customKeyOrPrefix) {
+      targetKey = customKeyOrPrefix.endsWith('.json') ? customKeyOrPrefix : `${customKeyOrPrefix}/payload.json`;
+    }
 
     if (CLOUDFLARE_R2_ACCESS_KEY_ID && CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
       try {
@@ -76,7 +82,7 @@ async function fetchPayloadFromR2(id: string): Promise<any> {
         });
         const command = new GetObjectCommand({
           Bucket: CLOUDFLARE_R2_BUCKET_NAME,
-          Key: `backlogs/${id}.json`,
+          Key: targetKey,
         });
         const response = await client.send(command);
         if (response.Body) {
@@ -84,12 +90,37 @@ async function fetchPayloadFromR2(id: string): Promise<any> {
           return JSON.parse(bodyString);
         }
       } catch (s3Err) {
-        // Fallback to fetch
+        // Fallback to fetch or default key
+        if (targetKey !== `backlogs/${id}.json`) {
+          try {
+            const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
+            const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
+            const CLOUDFLARE_R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
+            const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+            const client = new S3Client({
+              region: 'auto',
+              endpoint: s3Endpoint,
+              credentials: {
+                accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
+                secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+              },
+            });
+            const command = new GetObjectCommand({
+              Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+              Key: `backlogs/${id}.json`,
+            });
+            const response = await client.send(command);
+            if (response.Body) {
+              const bodyString = await response.Body.transformToString();
+              return JSON.parse(bodyString);
+            }
+          } catch {}
+        }
       }
     }
 
     const CLOUDFLARE_R2_PUBLIC_URL = (process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
-    const url = `${CLOUDFLARE_R2_PUBLIC_URL}/backlogs/${id}.json`;
+    const url = `${CLOUDFLARE_R2_PUBLIC_URL}/${targetKey}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(2500) });
     if (res.ok) {
       return await res.json();
@@ -390,7 +421,7 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
         const r = await supabaseAdmin
           .from('issue_backlog')
           .select(
-            'id, created_at, status, issue_type, severity, country_code, chain_key, dish_query, context, source_url, user_note, resolution_note, ever_tagged, payload'
+            'id, created_at, status, issue_type, severity, country_code, chain_key, dish_query, context, source_url, user_note, resolution_note, ever_tagged'
           )
           .order('created_at', { ascending: false })
           .limit(200);
@@ -401,7 +432,7 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
           const r2 = await supabaseAdmin
             .from('issue_backlog')
             .select(
-              'id, created_at, status, issue_type, severity, country_code, chain_key, dish_query, context, source_url, user_note, resolution_note, payload'
+              'id, created_at, status, issue_type, severity, country_code, chain_key, dish_query, context, source_url, user_note, resolution_note'
             )
             .order('created_at', { ascending: false })
             .limit(200);
@@ -955,10 +986,11 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
         .single();
       if (error) return res.status(404).json({ error: error.message });
 
-      if (data && data.payload && typeof data.payload === 'object' && (data.payload as any).is_r2) {
-        const r2Payload = await fetchPayloadFromR2(data.id);
+      if (data && data.payload && typeof data.payload === 'object' && ((data.payload as any).is_r2 || (data.payload as any).r2_prefix || (data.payload as any).r2_url)) {
+        const prefix = (data.payload as any).r2_prefix ? `${(data.payload as any).r2_prefix}/payload.json` : undefined;
+        const r2Payload = await fetchPayloadFromR2(data.id, prefix);
         if (r2Payload) {
-          data.payload = r2Payload;
+          data.payload = { ...data.payload, ...r2Payload };
         }
       }
 

@@ -2936,6 +2936,88 @@ ${logsText}`);
             : JSON.stringify(mapMsg.agentResult?.bucketMapping || mapMsg.bucketMapping))
           : undefined;
 
+        let effectiveBatchKeys: string[] = [];
+        if (typeof textToSend === 'string' && textToSend.includes(':')) {
+          const parts = textToSend.split(':');
+          const candidateKeys = parts.slice(1).join(':').split(/[\n,]/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+          if (candidateKeys.length > 0 && candidateKeys.length <= 200) {
+            effectiveBatchKeys = candidateKeys;
+          }
+        }
+        if (effectiveBatchKeys.length === 0 && dataReviewBatchKeys && dataReviewBatchKeys.length > 0) {
+          effectiveBatchKeys = dataReviewBatchKeys;
+        } else if (effectiveBatchKeys.length === 0 && dataReviewBatchIdx === 'custom') {
+          if (dataReviewSharedState?.customDataReviewBatchKeys?.length > 0) {
+            effectiveBatchKeys = dataReviewSharedState.customDataReviewBatchKeys;
+          } else {
+            try {
+              const drKey = `datareview_custom_batch_keys_${userIdentifier}`;
+              const a1Key = `agent1_custom_batch_keys_${userIdentifier}`;
+              const raw = localStorage.getItem(drKey) || localStorage.getItem(a1Key);
+              effectiveBatchKeys = JSON.parse(raw || '[]');
+            } catch(e) {}
+          }
+        } else if (effectiveBatchKeys.length === 0 && dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined) {
+          const sharedBatches = dataReviewSharedState?.batches || [];
+          if (typeof dataReviewBatchIdx === 'number' && sharedBatches[dataReviewBatchIdx]?.length > 0) {
+            effectiveBatchKeys = sharedBatches[dataReviewBatchIdx];
+          } else {
+            const allKnownKeys = new Set<string>();
+            (biomarkerHistory || []).forEach((h: any) => {
+              if (h.biomarkers) {
+                Object.keys(h.biomarkers).forEach(k => {
+                  if (h.biomarkers[k] !== undefined && h.biomarkers[k] !== null && h.biomarkers[k] !== '') {
+                    allKnownKeys.add(k);
+                  }
+                });
+              }
+            });
+            if (biomarkers) {
+              Object.keys(biomarkers).forEach(k => {
+                if (biomarkers[k] !== undefined && biomarkers[k] !== null && biomarkers[k] !== '') {
+                  allKnownKeys.add(k);
+                }
+              });
+            }
+            const markerKeysList = Array.from(allKnownKeys).sort((a, b) => a.localeCompare(b));
+            const bSize = localBatchSize || batchSize || 20;
+            const batchRes: string[][] = [];
+            for (let i = 0; i < markerKeysList.length; i += bSize) {
+              batchRes.push(markerKeysList.slice(i, i + bSize));
+            }
+            effectiveBatchKeys = batchRes[dataReviewBatchIdx as number] || [];
+          }
+        }
+
+        const stagedBatchBiomarkers = effectiveBatchKeys.length > 0
+          ? effectiveBatchKeys.map(k => {
+              const customDef = profile?.customBiomarkers?.[k];
+              const stdDef = biomarkerDefinitions.find(d => d.key === k || (Array.isArray(d.aliases) && d.aliases.some((a: string) => a.toLowerCase() === k.toLowerCase())));
+              const merged = getMergedBiomarkerDef(k, stdDef, customDef);
+              const historyEntries: { date: string; value: any }[] = [];
+              (biomarkerHistory || []).forEach((h: any) => {
+                if (h.biomarkers && h.biomarkers[k] !== undefined && h.biomarkers[k] !== null && h.biomarkers[k] !== '') {
+                  historyEntries.push({ date: h.date || 'unknown', value: h.biomarkers[k] });
+                }
+              });
+              const rawVal = biomarkers?.[k] !== undefined && biomarkers?.[k] !== null && biomarkers?.[k] !== ''
+                ? biomarkers[k]
+                : (historyEntries[0]?.value ?? '');
+              const val = rawVal !== '' && rawVal !== undefined && rawVal !== null ? rawVal : 'Baseline / Unrecorded';
+              const unit = merged.unit || (k.endsWith('_score') || k.endsWith('_risk') || k.endsWith('_index') ? 'score' : (k === 'steps' ? 'steps' : 'standard'));
+              return {
+                key: k,
+                name: merged.name || k,
+                userValue: val,
+                value: val,
+                unit,
+                normalRange: merged.normalRange || '',
+                historicalEntries: historyEntries,
+                historicalSummary: historyEntries.map(e => `${e.date}: ${e.value}`).join(' → ')
+              };
+            })
+          : undefined;
+
         const inputSnapshot = {
           text: textToSend,
           imageRefs: [],
@@ -2951,7 +3033,9 @@ ${logsText}`);
           biomarkerKey: reviewBiomarkerKey,
           biomarkers: biomarkers || {},
           biomarkerHistory: biomarkerHistory || [],
-          dataReviewBatchKeys,
+          dataReviewBatchKeys: effectiveBatchKeys.length > 0 ? effectiveBatchKeys : dataReviewBatchKeys,
+          batchKeys: effectiveBatchKeys.length > 0 ? effectiveBatchKeys : undefined,
+          batchBiomarkers: stagedBatchBiomarkers,
           dataReviewBatchIdx,
           batchSize
         };
@@ -3639,9 +3723,16 @@ ${logsText}`);
 
           if (currentStep === 'data_review' || currentStep === 'agent1') {
             let batchKeys: string[] = [];
-            if (dataReviewBatchKeys && dataReviewBatchKeys.length > 0) {
+            if (typeof textToSend === 'string' && textToSend.includes(':')) {
+              const parts = textToSend.split(':');
+              const candidateKeys = parts.slice(1).join(':').split(/[\n,]/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+              if (candidateKeys.length > 0 && candidateKeys.length <= 200) {
+                batchKeys = candidateKeys;
+              }
+            }
+            if (batchKeys.length === 0 && dataReviewBatchKeys && dataReviewBatchKeys.length > 0) {
               batchKeys = dataReviewBatchKeys;
-            } else if (dataReviewBatchIdx === 'custom') {
+            } else if (batchKeys.length === 0 && dataReviewBatchIdx === 'custom') {
               try {
                 const drKey = `datareview_custom_batch_keys_${userIdentifier}`;
                 const a1Key = `agent1_custom_batch_keys_${userIdentifier}`;
@@ -3650,7 +3741,7 @@ ${logsText}`);
                          || localStorage.getItem(a1Key);
                 batchKeys = JSON.parse(raw || '[]');
               } catch(e) {}
-            } else if (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined) {
+            } else if (batchKeys.length === 0 && dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined) {
               const allKnownKeys = new Set<string>();
               (biomarkerHistory || []).forEach((h: any) => {
                 if (h.biomarkers) {
@@ -3719,9 +3810,11 @@ ${logsText}`);
                 }
               });
 
-              const val = biomarkers?.[k] !== undefined && biomarkers?.[k] !== null && biomarkers?.[k] !== ''
+              const rawVal = biomarkers?.[k] !== undefined && biomarkers?.[k] !== null && biomarkers?.[k] !== ''
                 ? biomarkers[k]
                 : (historyEntries[0]?.value ?? '');
+              const val = rawVal !== '' && rawVal !== undefined && rawVal !== null ? rawVal : 'Baseline / Unrecorded';
+              const unit = merged.unit || (k.endsWith('_score') || k.endsWith('_risk') || k.endsWith('_index') ? 'score' : (k === 'steps' ? 'steps' : 'standard'));
 
               const flaggedItem = flaggedErrorsMap.get(k);
 
@@ -3730,7 +3823,7 @@ ${logsText}`);
                 name: merged.name || k,
                 userValue: val,
                 value: val,
-                unit: merged.unit || '',
+                unit,
                 normalRange: merged.normalRange || '',
                 historicalEntries: historyEntries,
                 historicalSummary: historyEntries.map(e => `${e.date}: ${e.value}`).join(' → '),
@@ -3739,15 +3832,8 @@ ${logsText}`);
               };
             });
             bodyData.batchIdx = dataReviewBatchIdx;
-
-            // Unit Enforcement Check
-            if (currentStep === 'data_review') {
-              const missing = bodyData.batchBiomarkers.filter((bm: any) => !bm.unit || bm.unit.trim() === '');
-              if (missing.length > 0) {
-                const names = missing.map((bm: any) => bm.name).join(', ');
-                throw new Error(`The following biomarkers in this batch are missing clinical units: ${names}. Please configure their units in the Reference Ranges / Calibration tab under Insights before executing calibration.`);
-              }
-            }
+            bodyData.batchKeys = batchKeys;
+            bodyData.dataReviewBatchKeys = batchKeys;
           }
         }
       }

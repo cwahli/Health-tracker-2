@@ -55,7 +55,10 @@ export interface BiomarkerAuditItem {
   missingMetadata?: {
     missingRange: boolean;
     missingCategory: boolean;
+    missingBrackets?: boolean;
     missingDescription: boolean;
+    currentRange?: string;
+    currentCategory?: string;
     catalogMatch?: {
       normalRange?: string;
       category?: string;
@@ -119,7 +122,22 @@ export interface AuditSessionState {
 export function getCanonicalBiomarkerStem(key: string, name?: string): string {
   if (!key && !name) return '';
   const mapped = getMappedBiomarkerKey(key, name);
-  return normalizeStemKey(mapped || key);
+  if (mapped) {
+    const norm = normalizeStemKey(mapped);
+    if (norm) return norm;
+  }
+  const normKey = normalizeStemKey(key);
+  if (normKey && CLINICAL_SYNONYM_MAP[normKey]) {
+    return CLINICAL_SYNONYM_MAP[normKey];
+  }
+  if (name) {
+    const normName = normalizeStemKey(name);
+    if (normName && CLINICAL_SYNONYM_MAP[normName]) {
+      return CLINICAL_SYNONYM_MAP[normName];
+    }
+    if (normName) return normName;
+  }
+  return normKey || key.toLowerCase().trim();
 }
 
 /**
@@ -448,15 +466,21 @@ export function runGeneralizedBiomarkerAudit(
     }
 
     // Check Missing Metadata & Catalog Matches
-    const isRangeMissing = !def.normalRange || def.normalRange === 'Unknown' || (Array.isArray(def.rangeBrackets) && def.rangeBrackets.length === 0);
-    const isCategoryMissing = !def.category || def.category === 'other' || def.category === 'wellness' || def.needsApproval;
+    const hasNormalRange = !!def.normalRange && def.normalRange !== 'Unknown' && def.normalRange.trim() !== '';
+    const hasRangeBrackets = Array.isArray(def.rangeBrackets) && def.rangeBrackets.length > 0;
+    const isRangeMissing = !hasNormalRange && !hasRangeBrackets;
+    const isCategoryMissing = !def.category || def.category === 'other' || def.category === 'wellness' || def.needsApproval || !def.standardMedicalGrouping || def.standardMedicalGrouping === 'Other';
+    const isBracketsMissing = hasNormalRange && !hasRangeBrackets;
     const isDescriptionMissing = !def.description && !def.descriptions?.en;
 
-    if (isRangeMissing || isCategoryMissing || isDescriptionMissing) {
+    if (isRangeMissing || isCategoryMissing || isDescriptionMissing || isBracketsMissing) {
       missingMetadata = {
         missingRange: !!isRangeMissing,
         missingCategory: !!isCategoryMissing,
+        missingBrackets: !!isBracketsMissing,
         missingDescription: !!isDescriptionMissing,
+        currentRange: hasNormalRange ? def.normalRange : undefined,
+        currentCategory: def.category && def.category !== 'other' && def.category !== 'wellness' ? def.category : undefined,
         catalogMatch: catalogMatchDef ? {
           normalRange: catalogMatchDef.normalRange,
           category: catalogMatchDef.category,

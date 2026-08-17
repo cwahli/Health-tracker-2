@@ -1,7 +1,8 @@
 import { NUTRIENT_KEYS } from "./src/utils/nutrients";
-import { getTraceNutrientsForFoodType, getCookingMethodModifier, calculateUniversalAddedNutrients, BEVERAGE_PATTERN } from "./server_food_db";
+import { getTraceNutrientsForFoodType, getCookingMethodModifier, calculateUniversalAddedNutrients, BEVERAGE_PATTERN, lookupCanonicalBaseFood } from "./server_food_db";
 import { classifyUniversalPhysicalFormV3 } from "./server_matching_engine";
 import { decidePrepAddition } from "./server_prep_policy";
+import { namesReferToSameFood } from "./server_scout_reconcile";
 import { 
   sanitizeMealWeight, 
   sanitizeString,
@@ -328,6 +329,82 @@ export function aggregateItemsNutrients(
             }
           }
           addDebugLog(`[Nutrient] "${canonicalName}" core-11 reinforced by match object.`);
+        }
+      }
+
+      // STEP 2.1: Fallback to canonical base food or database lookup if nutrients are zero or placeholder-zero macros
+      const isZeroMacros = (itemNutrients.calories === 0) ||
+        (itemNutrients.calories > 0 && itemNutrients.protein === 0 && itemNutrients.totalFat === 0 && itemNutrients.carbohydrates === 0);
+
+      if (isZeroMacros) {
+        if (itemNutrients.calories === 0 && Array.isArray(databaseMatchesArray) && databaseMatchesArray.length > 0) {
+          const matchQuery = (canonicalName || item.keyword || item.originalName || '').toLowerCase();
+          const dbMatch = databaseMatchesArray.find((m: any) => {
+            const mName = (m.name || m.description || '').toLowerCase();
+            return mName.includes(matchQuery) || matchQuery.includes(mName) || namesReferToSameFood(mName, matchQuery);
+          });
+          if (dbMatch && dbMatch.calories && Number(dbMatch.calories) > 0) {
+            itemNutrients.calories = Number(dbMatch.calories);
+            if (dbMatch.id && !item.dbId) item.dbId = dbMatch.id;
+            if (dbMatch.brandName && !item.chainName) item.chainName = dbMatch.brandName;
+          }
+        }
+
+        const canonical = lookupCanonicalBaseFood(canonicalName || item.keyword || item.originalName || '');
+        if (canonical) {
+          addDebugLog(`[Nutrient Fallback] "${canonicalName}" resolved from canonical base food: ${JSON.stringify(canonical)}`);
+          const targetKcal = itemNutrients.calories > 0 ? itemNutrients.calories : Math.round(canonical.calories * (itemWeight / 100));
+          const base100Kcal = Math.round(targetKcal / (itemWeight / 100));
+          const ratio = canonical.calories > 0 ? (base100Kcal / canonical.calories) : 1;
+
+          item.primaryBase100g = {
+            servingSizeGrams: 100,
+            basisType: 'per_100g',
+            calories: base100Kcal,
+            protein: parseFloat((canonical.protein * ratio).toFixed(1)),
+            totalFat: parseFloat((canonical.totalFat * ratio).toFixed(1)),
+            saturatedFat: parseFloat((canonical.saturatedFat * ratio).toFixed(1)),
+            carbohydrates: parseFloat((canonical.carbohydrates * ratio).toFixed(1)),
+            sodium: Math.round(canonical.sodium * ratio),
+            sugar: canonical.sugar ? parseFloat((canonical.sugar * ratio).toFixed(1)) : 0,
+            totalFibre: canonical.totalFibre ? parseFloat((canonical.totalFibre * ratio).toFixed(1)) : 0,
+            potassium: canonical.potassium ? Math.round(canonical.potassium * ratio) : 0
+          };
+          item.primaryBaseMatchName = canonicalName;
+
+          const fPortion = itemWeight / 100;
+          for (const key of NUTRIENT_KEYS) {
+            if (item.primaryBase100g[key] !== undefined && item.primaryBase100g[key] !== null) {
+              itemNutrients[key] = parseFloat((item.primaryBase100g[key] * fPortion).toFixed(2));
+            }
+          }
+          itemNutrients.calories = Math.round(targetKcal);
+        } else if (itemNutrients.calories > 0) {
+          // Has calories (e.g. 783 kcal from brand OCR) but 0 macros: extrapolate macros from foodType/generic ratios
+          const base100Kcal = Math.round(itemNutrients.calories / (itemWeight / 100));
+          const defaultP = (itemWeight * 0.12);
+          const defaultF = (itemNutrients.calories * 0.40) / 9;
+          const defaultC = (itemNutrients.calories - (defaultP * 4) - (defaultF * 9)) / 4;
+          const f100 = 100 / itemWeight;
+
+          item.primaryBase100g = {
+            servingSizeGrams: 100,
+            basisType: 'per_100g',
+            calories: base100Kcal,
+            protein: parseFloat((defaultP * f100).toFixed(1)),
+            totalFat: parseFloat((defaultF * f100).toFixed(1)),
+            saturatedFat: parseFloat((defaultF * 0.25 * f100).toFixed(1)),
+            carbohydrates: parseFloat((defaultC * f100).toFixed(1)),
+            sodium: Math.round((itemNutrients.calories * 1.8) * f100)
+          };
+          item.primaryBaseMatchName = canonicalName;
+
+          itemNutrients.protein = parseFloat(Math.max(5, defaultP).toFixed(1));
+          itemNutrients.totalFat = parseFloat(Math.max(5, defaultF).toFixed(1));
+          itemNutrients.saturatedFat = parseFloat((itemNutrients.totalFat * 0.25).toFixed(1));
+          itemNutrients.carbohydrates = parseFloat(Math.max(10, defaultC).toFixed(1));
+          itemNutrients.sodium = Math.round(itemNutrients.calories * 1.8);
+          addDebugLog(`[Nutrient Backfill] "${canonicalName}" extrapolated macros for ${itemNutrients.calories} kcal: P=${itemNutrients.protein}g, F=${itemNutrients.totalFat}g, C=${itemNutrients.carbohydrates}g, Na=${itemNutrients.sodium}mg.`);
         }
       }
     }

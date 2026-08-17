@@ -572,24 +572,12 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
         user_note: symptom || null,
         firebase_uid: firebase_uid || null,
         payload: {
-          ...safePayload,
           bug_snapshot: true,
+          is_r2: true,
           reportId,
           tagId,
           category: cat,
           env: env || null,
-          dom: domObj,
-          a11y: a11yObj
-            ? {
-                textOutline: a11yObj.textOutline || null,
-                landmarks: a11yObj.landmarks || null,
-                headings: a11yObj.headings || null,
-                // tree kept for cold storage; agents use textOutline first
-                hasTree: !!(a11yObj.tree || a11yObj),
-              }
-            : null,
-          domain_pack: domainPack,
-          network: networkObj,
           structure_default: AGENT_STRUCTURE_DEFAULT,
           r2_prefix: bugReportR2Prefix(cat, tagId, reportId),
           shot_count: shotList.length,
