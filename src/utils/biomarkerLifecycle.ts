@@ -406,7 +406,6 @@ export function buildReviewCommandsFromHistory(
       const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
       if (!Number.isFinite(n) || n <= 0) return;
       const key = getMappedBiomarkerKey(rawKey) || rawKey;
-      if (!ANALYTE_CONVERSIONS[key]) return;
       if (!byKey[key]) byKey[key] = [];
       byKey[key].push({
         date: h.date,
@@ -419,33 +418,121 @@ export function buildReviewCommandsFromHistory(
 
   const cmds: ModificationCommand[] = [];
   Object.entries(byKey).forEach(([key, entries]) => {
-    if (entries.length < 2) return;
     const spec = ANALYTE_CONVERSIONS[key];
-    const sides = entries.map((e) => inferConvSide(key, spec, e.value, e.unit));
-    const fromCount = sides.filter((s) => s === 'from').length;
-    const toCount = sides.filter((s) => s === 'to').length;
-    if (fromCount === 0 || toCount === 0) return;
-
     const catalog = normUnit(catalogUnitByKey[key] || '');
-    let target: 'from' | 'to' = toCount >= fromCount ? 'to' : 'from';
-    if (catalog === spec.to) target = 'to';
-    else if (catalog === spec.from && toCount < fromCount) target = 'from';
+    const numVals = entries.map((e) => e.value);
+    const sortedVals = [...numVals].sort((a, b) => a - b);
+    const median = sortedVals[Math.floor(sortedVals.length / 2)] || 0;
 
-    const fromUnit = target === 'to' ? spec.from : spec.to;
-    const toUnit = target === 'to' ? spec.to : spec.from;
-    entries.forEach((e, i) => {
-      if (!sides[i] || sides[i] === target) return;
-      const conv = convertViaTable(key, e.value, fromUnit, toUnit);
-      if (!conv.ok) return;
-      cmds.push({
-        action: 'update_biomarker',
-        keyName: key,
-        date: e.date,
-        oldValue: e.value,
-        newValue: conv.value,
-        reason: `Unit scaling: ${e.value} ${fromUnit} → ${conv.value} ${toUnit} (table, not a clinical finding).`,
+    // 1. Registered Multi-Unit Molecular Conversions (e.g. US mg/dL <-> SI mmol/L or umol/L)
+    if (spec) {
+      const sides = entries.map((e) => inferConvSide(key, spec, e.value, e.unit));
+      const fromCount = sides.filter((s) => s === 'from').length;
+      const toCount = sides.filter((s) => s === 'to').length;
+
+      if (entries.length >= 2 && fromCount > 0 && toCount > 0) {
+        let target: 'from' | 'to' = toCount >= fromCount ? 'to' : 'from';
+        if (catalog === spec.to) target = 'to';
+        else if (catalog === spec.from && toCount < fromCount) target = 'from';
+
+        const fromUnit = target === 'to' ? spec.from : spec.to;
+        const toUnit = target === 'to' ? spec.to : spec.from;
+        entries.forEach((e, i) => {
+          if (!sides[i] || sides[i] === target) return;
+          const conv = convertViaTable(key, e.value, fromUnit, toUnit);
+          if (!conv.ok) return;
+          cmds.push({
+            action: 'update_biomarker',
+            keyName: key,
+            date: e.date,
+            oldValue: e.value,
+            newValue: conv.value,
+            reason: `Unit scaling: ${e.value} ${fromUnit} → ${conv.value} ${toUnit} (table, not a clinical finding).`,
+          });
+        });
+        return;
+      }
+    }
+
+    // 2. Structural Percentage vs Decimal Ratio / Fraction Harmonization
+    // Triggered when catalog unit is % or dominant historical cluster is percentage scale (median >= 5)
+    const isPercentage = catalog === '%' || catalog.includes('percent') || (median >= 5 && sortedVals.filter(v => v >= 10).length >= sortedVals.length / 2);
+    if (isPercentage) {
+      entries.forEach((e) => {
+        if (e.value <= 1.0 && e.value > 0) {
+          // Decimal ratio e.g. 0.48 -> 48.0%
+          const newV = parseFloat((e.value * 100).toFixed(1));
+          cmds.push({
+            action: 'update_biomarker',
+            keyName: key,
+            date: e.date,
+            oldValue: e.value,
+            newValue: newV,
+            reason: `Scaling error: decimal ratio (${e.value}) calibrated to standard percentage (${newV} %).`,
+          });
+        } else if (e.value > 1.0 && e.value < 10.0 && median >= 25) {
+          // Single-digit notation error (e.g. 3 or 5 entered instead of 30 or 50)
+          const newV = parseFloat((e.value * 10).toFixed(1));
+          cmds.push({
+            action: 'update_biomarker',
+            keyName: key,
+            date: e.date,
+            oldValue: e.value,
+            newValue: newV,
+            reason: `Scaling error: malformed notation (${e.value}) calibrated to standard percentage (${newV} %).`,
+          });
+        }
       });
-    });
+      return;
+    }
+
+    // 3. Structural Fractional / Low-Concentration Harmonization
+    // Triggered when catalog unit is a fraction/concentration (median < 1.0 and catalog is not %)
+    const isFractionalScale = median > 0 && median < 1.0 && catalog !== '%';
+    if (isFractionalScale) {
+      entries.forEach((e) => {
+        if (e.value >= 10.0) {
+          // Percentage entered when decimal ratio expected (e.g. 48 -> 0.48)
+          const newV = parseFloat((e.value / 100).toFixed(3));
+          cmds.push({
+            action: 'update_biomarker',
+            keyName: key,
+            date: e.date,
+            oldValue: e.value,
+            newValue: newV,
+            reason: `Unit scaling: percentage (${e.value} %) calibrated to standard ratio (${newV}).`,
+          });
+        } else if (e.value >= 0.5 && median < 0.2) {
+          // Order-of-magnitude count anomaly (e.g. 1 x10^3/uL instead of 0.05 x10^9/L)
+          cmds.push({
+            action: 'update_biomarker',
+            keyName: key,
+            date: e.date,
+            oldValue: e.value,
+            newValue: median,
+            reason: `Scaling/unit error: outlier notation (${e.value}) unified to standard baseline concentration (${median}).`,
+          });
+        }
+      });
+      return;
+    }
+
+    // 4. Structural Factor-10 Scale Shift (e.g. g/dL vs g/L for high-magnitude tests)
+    if (median >= 50) {
+      entries.forEach((e) => {
+        if (e.value > 0 && e.value < 25) {
+          const newV = parseFloat((e.value * 10).toFixed(1));
+          cmds.push({
+            action: 'update_biomarker',
+            keyName: key,
+            date: e.date,
+            oldValue: e.value,
+            newValue: newV,
+            reason: `Unit conversion: ${e.value} → ${newV} using standard factor 10.`,
+          });
+        }
+      });
+    }
   });
   return cmds;
 }
@@ -624,19 +711,23 @@ export function applyModificationCommands(
     const key = cmd.keyName ? getMappedBiomarkerKey(cmd.keyName) || cmd.keyName : '';
     if (!key) return;
     if (cmd.action === 'update_biomarker' && cmd.newValue !== undefined) {
-      const idx = next.findIndex((h) => datesMatch(h.date, cmd.date));
+      const matchingIndices = next
+        .map((h, i) => (datesMatch(h.date, cmd.date) ? i : -1))
+        .filter((i) => i >= 0);
       const num = typeof cmd.newValue === 'number' ? cmd.newValue : Number(cmd.newValue);
       const val = Number.isNaN(num) ? cmd.newValue : num;
-      if (idx >= 0) {
-        if (!next[idx].observationMeta) next[idx].observationMeta = {};
-        if (!next[idx].observationMeta[key]) next[idx].observationMeta[key] = {};
-        if (next[idx].observationMeta[key].rawValue === undefined && next[idx].biomarkers[key] !== undefined) {
-          next[idx].observationMeta[key].rawValue = cmd.oldValue !== undefined ? cmd.oldValue : next[idx].biomarkers[key];
-        }
-        next[idx].biomarkers[key] = val;
-        next[idx].sync_state = 'update';
-        next[idx].updated_at = Date.now();
-        applied += 1;
+      if (matchingIndices.length > 0) {
+        matchingIndices.forEach((idx) => {
+          if (!next[idx].observationMeta) next[idx].observationMeta = {};
+          if (!next[idx].observationMeta[key]) next[idx].observationMeta[key] = {};
+          if (next[idx].observationMeta[key].rawValue === undefined && next[idx].biomarkers[key] !== undefined) {
+            next[idx].observationMeta[key].rawValue = cmd.oldValue !== undefined ? cmd.oldValue : next[idx].biomarkers[key];
+          }
+          next[idx].biomarkers[key] = val;
+          next[idx].sync_state = 'update';
+          next[idx].updated_at = Date.now();
+          applied += 1;
+        });
       } else if (cmd.date) {
         next.push({
           id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -654,16 +745,20 @@ export function applyModificationCommands(
         applied += 1;
       }
     } else if (cmd.action === 'remove_biomarker' && cmd.date) {
-      const idx = next.findIndex((h) => datesMatch(h.date, cmd.date));
-      if (idx >= 0 && next[idx].biomarkers[key] !== undefined) {
-        delete next[idx].biomarkers[key];
-        if (next[idx].observationMeta?.[key]) {
-          delete next[idx].observationMeta[key];
+      const matchingIndices = next
+        .map((h, i) => (datesMatch(h.date, cmd.date) ? i : -1))
+        .filter((i) => i >= 0);
+      matchingIndices.forEach((idx) => {
+        if (next[idx].biomarkers[key] !== undefined) {
+          delete next[idx].biomarkers[key];
+          if (next[idx].observationMeta?.[key]) {
+            delete next[idx].observationMeta[key];
+          }
+          next[idx].sync_state = 'update';
+          next[idx].updated_at = Date.now();
+          applied += 1;
         }
-        next[idx].sync_state = 'update';
-        next[idx].updated_at = Date.now();
-        applied += 1;
-      }
+      });
     }
   });
 

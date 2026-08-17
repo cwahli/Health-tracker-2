@@ -83,7 +83,7 @@ export async function resolveInternalFood(query: string): Promise<InternalFoodMa
   try {
     const { data: itemData, error: itemError } = await supabaseAdmin
       .from('food_items')
-      .select('*')
+      .select('food_id, food_key, display_name, nutrients_per_100g, status, confidence, fdc_id, form_tags, state')
       .eq('food_key', key)
       .maybeSingle();
 
@@ -109,7 +109,7 @@ export async function resolveInternalFood(query: string): Promise<InternalFoodMa
             display_name: itemData.display_name,
             nutrients_per_100g: itemData.nutrients_per_100g,
             source: 'supabase_candidate',
-            confidence: itemData.confidence || 0.7,
+            confidence: itemData.confidence || 0.5,
             fdc_id: itemData.fdc_id,
             form_tags: itemData.form_tags,
             state: itemData.state,
@@ -117,7 +117,6 @@ export async function resolveInternalFood(query: string): Promise<InternalFoodMa
         }
       }
     }
-
     // Check alias
     const { data: aliasData, error: aliasError } = await supabaseAdmin
       .from('food_aliases')
@@ -128,14 +127,13 @@ export async function resolveInternalFood(query: string): Promise<InternalFoodMa
     if (aliasData && aliasData.food_items) {
       const fi = aliasData.food_items;
       if (fi.status === 'active' || (fi.status === 'candidate' && (fi.confidence || 0.5) >= 0.65 && checkAtwaterValidity(fi.nutrients_per_100g).valid)) {
-console.log(`[AliasHit] Found alias mapping for ${key} -> ${fi.food_id}`);
+        console.log(`[AliasHit] Found alias mapping for ${key} -> ${fi.food_id}`);
         return {
           food_id: fi.food_id,
           food_key: fi.food_key,
           display_name: fi.display_name,
           nutrients_per_100g: fi.nutrients_per_100g,
           source: fi.status === 'active' ? 'alias_active' : 'supabase_candidate',
-
           confidence: (fi.confidence || 0.9) * (aliasData.weight || 1.0),
           fdc_id: fi.fdc_id,
           form_tags: fi.form_tags,
@@ -146,6 +144,32 @@ console.log(`[AliasHit] Found alias mapping for ${key} -> ${fi.food_id}`);
   } catch (err) {
     // Fail-open logging
     console.warn('[resolveInternalFood] DB resolution error (fallback to external):', err);
+  }
+
+  return null;
+}
+
+/**
+ * Direct lookup of a compiled dish by canonical key.
+ */
+export async function lookupDishInCatalog(key: string): Promise<any | null> {
+  if (!isSupabaseConfigured) {
+    return null;
+  }
+
+  try {
+    const { data: dish, error } = await supabaseAdmin
+      .from('dish_cache')
+      .select('dish_key, display_name, core_nutrients, basis_type, components, confidence')
+      .eq('dish_key', key)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (dish && !error) {
+      return dish;
+    }
+  } catch (err) {
+    console.warn(`[FoodCatalog] Supabase dish lookup error for key ${key}:`, err);
   }
 
   return null;

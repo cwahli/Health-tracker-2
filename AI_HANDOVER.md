@@ -1,15 +1,18 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-16
-**Status:** ALL GATES & REGRESSION SUITES GREEN
+**Updated:** 2026-08-17
+**Status:** ALL GATES & REGRESSION SUITES GREEN (562 tests across 61 test suites)
 **Governance & Laws:** Follow `docs/agent/` domain rules and ship code via AI Studio only.
 
 ---
 ## Current Status & Verification
 - **`scripts/assert-biomarker-ingest.mjs`**: Exit 0 (N1–N13 Master Ingest Assertions Passed)
 - **`scripts/assert-biomarker-lifecycle-m31.mjs`**: Exit 0 (P0–P8 Master Biomarker Lifecycle Assertions Passed)
-- **Vitest Suite**: 551 passed tests across 61 test files, including `tests/golden_biomarker.test.ts`, `src/utils/biomarkerIdentity.test.ts`, and `src/utils/biomarkerLifecycle.test.ts`.
+- **`scripts/assert-free-tier-complete.mjs`**: Exit 0 (M23–M28 Master Free-Tier Reliability Assertions Passed)
+- **`scripts/assert-food-curator-m30.mjs`**: Exit 0 (M30 Food Curator Assertions Passed)
+- **Vitest Suite**: 562 passed tests across 61 test files.
 - **TypeScript Compilation**: `npx tsc --noEmit` clean exit 0
+- **Supabase Cloud State**: 0 uncalibrated rows remaining in Supabase Postgres. Schema-aligned queries in `server_routes_sync.ts` verified.
 
 ---
 ## Summary of Accomplishments in Track B & Biomarker Pipeline
@@ -29,6 +32,8 @@
     - Extended `resolveAgentDestination` in `src/utils/biomarkerLifecycle.ts` to handle explicit `isWrongDoor` and `destination` overrides (Item B2.4), and updated G-B2 in `tests/golden_biomarker.test.ts` to lex and ingest 140-row NHS print table fixtures (Item B2.6 / B4.3).
 9. **Modular Router Extraction (Item 4)**: Created domain router modules `server_routes_biomarkers.ts` and `server_routes_food.ts` and registered them on Express app in `server.ts`.
 10. **Inbox Failure Class Grouping (Track B / Q Item B6)**: Updated `GoldenInboxPanel.tsx` Biomarker tab to render all golden biomarker cases (`G-B1` through `G-B9`) grouped with failure class badges (`APPLY_MISS`, `CONFORMANCE_SHAPE`, `IDENTITY_FALSE_FRIEND`, `WRONG_DOOR`, `COMPLETENESS`, `UPSERT_IDENTITY`).
+11. **Canonical AgentResultTable Unification for Biomarker Review**:
+    - Routed `biomarker_review` directly into the universal `AgentResultTable` (the same component used by Lab Parser `agent1` and Range Calibrator `agent2`), providing consistent multi-column sorting, diff highlighting (old value strikethrough in red, new value bold), checkbox batch selection, and single-click staging.
 
 ---
 ## Track B Wave B7 Progress (Items 7.1, 7.2, 7.3, 7.4, 7.8)
@@ -70,6 +75,11 @@
     - Mounted `jobsRouter` in `server.ts`, trimming hundreds of lines from main server file while preserving all authentication, idempotency locks, R2 upload fallback routines, and debug report rendering.
 23. **Job Recovery Soak Testing (Item R-6)**:
     - Enhanced `src/jobs/__tests__/ServerJobRecovery.test.ts` with mixed valid, stale, and failed job recovery test scenarios to ensure background jobs are gracefully handled without orphaned in-progress states.
+24. **Biomarker Telemetry & Review Table Extraction**:
+    - Upgraded `AgentResultTable.tsx` and `App.tsx` (`onAgentFinish`) with robust multi-container command unpacking (`candidate.modificationCommand`, `clean_result`, `agentResult`, `data.agentResult`, JSON string parsing).
+    - Added dedicated scaling synthesis for `hematocrit` (decimal ratio 0.48 -> 48% or 3/5 -> 30%/50%) and `basophil_count` in `buildReviewCommandsFromHistory` (`src/utils/biomarkerLifecycle.ts`).
+    - Added Pattern 4 support to `extractFallbackModifications` in `BiomarkerReviewCard.tsx` for narrative `DATE BIOMARKER OLD_VALUE [UNIT] → NEW_VALUE [UNIT]`.
+    - Hardened `checkForDbChanges` initial sync hydration in `App.tsx` to ensure full history is loaded when local cache is uninitialized.
 
 ---
 ## Next Steps

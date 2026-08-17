@@ -733,7 +733,7 @@ export default function MedicalHistoryTab({
                                 return `- ${m.name}: ${flaggedSamples.join(', ')}`;
                               }).join('\n');
 
-                            onOpenAgentChat('data_review', {
+                            onOpenAgentChat('biomarker_review', {
                               dataReviewBatchKeys: keys,
                               prefillMessage: prefillMsg
                             });

@@ -4456,12 +4456,10 @@ ${logsText}`);
       if (agentType === 'agent1' || agentType === 'agent2' || agentType === 'agent3' || agentType === 'agent4' || agentType === 'agent5' || agentType === 'agent7') {
         return;
       }
-      if (agentType === 'data_review') {
+      if (agentType === 'data_review' || agentType === 'biomarker_review') {
         setInputText(autoSendMessage);
         return;
       }
-      // B1 FIX: biomarker_review has a dedicated "Run AI Diagnostic" button — never auto-fire
-      if (agentType === 'biomarker_review') return;
 
       const currentSendKey = `${agentType || 'med'}_${reviewBiomarkerKey || ''}_${autoSendMessage}`;
       if (lastAutoSendKeyRef.current !== currentSendKey) {

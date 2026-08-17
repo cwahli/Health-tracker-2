@@ -70,7 +70,8 @@ import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, getDocFromServer, 
 import { sanitizeForFirestore, checkQuotaFlag, handleRetryQuota } from './utils/firestoreUtils';
 import { getCurrentDateInTimezone, toYYYYMMDD, normalizeBiomarkerHistory } from './utils/dateUtils';
 import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint, isValEmpty, getMappedBiomarkerKey } from './utils/biomarkers';
-import { applyModificationCommands, overlayFingerprint, resolveAgentDestination, shouldRunCalibrator, attachObservationMeta, enrichReviewModificationCommands, collectCatalogUnitMap, type ModificationCommand } from './utils/biomarkerLifecycle';
+import { applyModificationCommands, overlayFingerprint, resolveAgentDestination, shouldRunCalibrator, attachObservationMeta, enrichReviewModificationCommands, collectCatalogUnitMap, cleanupInventedBiomarkerCatalog, type ModificationCommand } from './utils/biomarkerLifecycle';
+import { extractFallbackModifications } from './components/chat-cards/BiomarkerReviewCard';
 import { formatOptimalTargetValue } from './utils/agentCalibration';
 import { standardizeUnit, CONVERSION_FACTORS } from './utils/unitConversion';
 import { get, set, pruneLocalStorageToFreeSpace, getStorageKey, getSnapshotKey, saveLocalSnapshot, loadLocalSnapshots, deleteLocalSnapshot, safeSaveToLocalStorage, getAggregatedAppData } from './utils/storageUtils';
@@ -1656,25 +1657,28 @@ export default function App() {
   const [manualFoodLogError, setManualFoodLogError] = useState<string | null>(null);
   const [isMedicalChatOpen, setIsMedicalChatOpen] = useState(false);
 
+  const handleOpenJob = (jobId: string) => {
+    setActiveJobId(jobId);
+    const job = JobStore.getJob(jobId);
+    if (job && job.kind === 'medical') {
+      const jobAgentType = (job.inputSnapshot as any)?.agentType;
+      if (jobAgentType && jobAgentType !== 'agent1_step1') {
+        const validTypes = ['agent1','agent2','agent3','agent4','agent5','health_baseline','agent7','data_review','biomarker_review'] as const;
+        const matched = validTypes.find(t => t === jobAgentType);
+        if (matched) {
+          setActiveAgentType(matched);
+        }
+      }
+      if ((job.inputSnapshot as any)?.reviewBiomarkerKey) {
+        setActiveReviewBiomarkerKey((job.inputSnapshot as any).reviewBiomarkerKey);
+      }
+      setIsMedicalChatOpen(true);
+    }
+  };
+
   useEffect(() => {
     if (activeJobId) {
-      const job = JobStore.getJob(activeJobId);
-      if (job && job.kind === 'medical') {
-        // B4 FIX: Restore agentType from job snapshot so biomarker_review UI renders correctly
-        const jobAgentType = (job.inputSnapshot as any)?.agentType;
-        if (jobAgentType && jobAgentType !== 'agent1_step1') {
-          // Map stored agentType string to the correct state type
-          const validTypes = ['agent1','agent2','agent3','agent4','agent5','health_baseline','agent7','data_review','biomarker_review'] as const;
-          const matched = validTypes.find(t => t === jobAgentType);
-          if (matched) {
-            setActiveAgentType(matched);
-          }
-        }
-        if ((job.inputSnapshot as any)?.reviewBiomarkerKey) {
-          setActiveReviewBiomarkerKey((job.inputSnapshot as any).reviewBiomarkerKey);
-        }
-        setIsMedicalChatOpen(true);
-      }
+      handleOpenJob(activeJobId);
     }
   }, [activeJobId]);
   const [isFrontDeskOpen, setIsFrontDeskOpen] = useState(false);
@@ -2027,7 +2031,15 @@ export default function App() {
         });
 
         const userEmail = profile?.email || auth.currentUser?.email || undefined;
-        const { serverFoods, serverBiomarkers, serverProfile, serverActions, serverBenefits, serverReport } = await fetchAllConsolidatedLogs(db, uid, deletedFoods, deletedBios, deletedCustomKeys, userEmail);
+        const { serverFoods, serverBiomarkers, serverProfile, serverActions, serverBenefits, serverReport } = await fetchAllConsolidatedLogs(
+          db,
+          uid,
+          deletedFoods,
+          deletedBios,
+          deletedCustomKeys,
+          userEmail,
+          { lastSyncTime: (forcePull || forceReplaceLocal) ? undefined : (parsedLocal.lastSyncedAt || 0) }
+        );
         
         let mergedBioHist = sb;
         if (serverFoods.length > 0) {
@@ -2132,8 +2144,9 @@ export default function App() {
           (serverFoods || []).filter(f => f.sync_state !== 'delete' && !delFoods[f.id]),
           []
         );
-        mergedFoods = rehydrateFoodImagesFromDonors(mergedFoods, foodLogsRef.current || []);
         const mergedBioHistory = (serverBiomarkers || []).filter(b => b.sync_state !== 'delete' && !delBios[b.id]);
+        const cleanedAuth = cleanupInventedBiomarkerCatalog(authProfile, mergedBioHistory);
+        authProfile = cleanedAuth.profile as UserProfile;
         const mergedActions = Array.isArray(serverActions) ? serverActions : [];
         const mergedBenefits = Array.isArray(serverBenefits) ? serverBenefits : [];
         const resolvedReport = serverReport != null ? serverReport : null;
@@ -2343,10 +2356,6 @@ export default function App() {
           // By using getDocs and getDoc (not FromServer), Firestore can utilize its local cache if configured,
           // and won't throw if offline, gracefully degrading to cached data.
           try {
-            if (checkQuotaFlag()) {
-              abortWithLocalFallback();
-              return;
-            }
             try {
               const { serverFoods, serverBiomarkers, serverProfile, serverActions, serverBenefits, serverReport } = await fetchAllConsolidatedLogs(
                 checkQuotaFlag() ? null : db, 
@@ -2355,7 +2364,11 @@ export default function App() {
                 cloudProfile?.deletedBiomarkerLogIds || localProfile?.deletedBiomarkerLogIds || {},
                 {},
                 activeEmail,
-                { timeoutMs: forcePull ? 90000 : 60000, skipFirebaseFallback: forcePull || checkQuotaFlag() }
+                {
+                  timeoutMs: forcePull ? 90000 : 60000,
+                  skipFirebaseFallback: forcePull || checkQuotaFlag(),
+                  lastSyncTime: (forcePull || forceReplaceLocal || !parsedLocal.lastSyncedAt || !localBioHistory.length) ? undefined : (parsedLocal.lastSyncedAt || 0)
+                }
               );
               v2Foods = serverFoods;
               v2Logs = serverBiomarkers;
@@ -2864,6 +2877,8 @@ export default function App() {
           });
         }
 
+        const cleanedMerged = cleanupInventedBiomarkerCatalog(mergedProfile, mergedBioHistory);
+        mergedProfile = cleanedMerged.profile as UserProfile;
         setProfile(sanitizeProfile(mergedProfile, activeEmail));
         // Final safety: dedupe + rehydrate once more before React state / IndexedDB
         mergedFoods = mergeFoodLogsDeduped(rehydrateFoodImagesFromDonors(mergedFoods, localFoods), []);
@@ -3406,7 +3421,8 @@ export default function App() {
                 deletedFoods, 
                 deletedBios, 
                 deletedCustomKeys, 
-                activeEmail
+                activeEmail,
+                { lastSyncTime: Date.now() - 60000 }
               );
               if (serverFoods.length > 0) setFoodLogs(prevFoods => mergeFoodLogsDeduped(prevFoods, serverFoods));
               if (serverBiomarkers.length > 0) setBiomarkerHistory(prevBio => mergeByRecency(prevBio, serverBiomarkers));
@@ -3735,7 +3751,8 @@ export default function App() {
       actions: currActions,
       dailyBenefits: currBenefits,
       foodIdeas: currFoodIdeas,
-      report: currReport
+      report: currReport,
+      lastSyncedAt: now
     };
     await safeSaveToLocalStorage(getStorageKey(updatedProfile?.email || profile?.email || auth.currentUser?.email), bundle);
 
@@ -3777,13 +3794,6 @@ export default function App() {
       !specificUpdate.isAutoLog &&
       !(specificUpdate.type === 'biomarkerLog' && String(specificUpdate.targetId).startsWith('med_log_bmi_init_'));
 
-    // Never block Force Push on Firebase quota — Supabase is the authority path.
-    // isFirestoreQuotaExceeded React state may still be true in this closure after clear.
-    if (!isExplicitSync && (isFirestoreQuotaExceeded || checkQuotaFlag())) {
-      setSyncState('local');
-      return;
-    }
-
     // Intercept automatic writes if manual sync mode is enabled to save quota
     const isManualSyncOnly = localStorage.getItem('auto_sync_disabled') === 'true';
     if (isManualSyncOnly && !isExplicitSync && !isUserTriggered) {
@@ -3813,17 +3823,19 @@ export default function App() {
         // Also merge the full profile's schema definition structures (customBiomarkers,
         // notUsedBiomarkers) to Firestore so any local biomarker schema adjustments are synchronized, 
         // preventing empty schema states in multi-device sync.
-        setDoc(doc(db, 'users', uid), sanitizeForFirestore({
-          lastUpdatedAt: now,
-          deletedFoodLogIds: updatedProfile?.deletedFoodLogIds || {},
-          deletedBiomarkerLogIds: updatedProfile?.deletedBiomarkerLogIds || {},
-          deletedCustomBiomarkerKeys: updatedProfile?.deletedCustomBiomarkerKeys || {},
-          customBiomarkers: updatedProfile?.customBiomarkers || {},
-          notUsedBiomarkers: updatedProfile?.notUsedBiomarkers || {},
-          notUsedInMedicalHistory: updatedProfile?.notUsedInMedicalHistory || {}
-        }), { merge: true }).catch(err => {
-          console.warn("Failed to touch lastUpdatedAt timestamp in cloud:", err);
-        });
+        if (!checkQuotaFlag() && !isFirestoreQuotaExceeded && db) {
+          setDoc(doc(db, 'users', uid), sanitizeForFirestore({
+            lastUpdatedAt: now,
+            deletedFoodLogIds: updatedProfile?.deletedFoodLogIds || {},
+            deletedBiomarkerLogIds: updatedProfile?.deletedBiomarkerLogIds || {},
+            deletedCustomBiomarkerKeys: updatedProfile?.deletedCustomBiomarkerKeys || {},
+            customBiomarkers: updatedProfile?.customBiomarkers || {},
+            notUsedBiomarkers: updatedProfile?.notUsedBiomarkers || {},
+            notUsedInMedicalHistory: updatedProfile?.notUsedInMedicalHistory || {}
+          }), { merge: true }).catch(err => {
+            console.warn('[Firestore] Profile setDoc skipped or failed:', err);
+          });
+        }
         if (specificUpdate.type === 'analysis' && specificUpdate.targetId) {
           const analysis = updatedProfile?.agentAnalyses?.find(a => a.id === specificUpdate.targetId);
           if (analysis) {
@@ -3884,18 +3896,18 @@ export default function App() {
               }).catch(err => console.error(err));
             }
           }
-        } else if (specificUpdate.type === 'biomarkerLog' && specificUpdate.targetId) {
+        } else if (specificUpdate.type === 'biomarkerLog' || specificUpdate.type === 'biomarkerLogsBatch') {
           const deletedFoods = updatedProfile?.deletedFoodLogIds || profile?.deletedFoodLogIds || {};
           const deletedBioLogs = updatedProfile?.deletedBiomarkerLogIds || profile?.deletedBiomarkerLogIds || {};
-          await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, deletedFoods, deletedBioLogs, (sf, sb) => {
+          await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, deletedFoods, deletedBioLogs, async (sf, sb) => {
             finalFoodsToSave = sf; finalBioToSave = sb; setFoodLogs(sf); setBiomarkerHistory(sb);
-          });
-        } else if (specificUpdate.type === 'biomarkerLogsBatch' && (specificUpdate.targetIds || specificUpdate.deletedIds)) {
-          const deletedFoods = updatedProfile?.deletedFoodLogIds || profile?.deletedFoodLogIds || {};
-          const deletedBioLogs = updatedProfile?.deletedBiomarkerLogIds || profile?.deletedBiomarkerLogIds || {};
-          await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, deletedFoods, deletedBioLogs, (sf, sb) => {
-            finalFoodsToSave = sf; finalBioToSave = sb; setFoodLogs(sf); setBiomarkerHistory(sb);
-          });
+            const updatedBundle = {
+              ...bundle,
+              biomarkers: currBiomarkers,
+              biomarkerHistory: sb
+            };
+            await safeSaveToLocalStorage(getStorageKey(updatedProfile?.email || profile?.email || auth.currentUser?.email), updatedBundle);
+          }, { forceAllBiomarkers: specificUpdate.type === 'biomarkerLogsBatch' });
           const profilePromise = Promise.resolve();
           console.log('[FreeTier] profile single-writer');
           await withTimeout(profilePromise, 3000, 'biomarkerLogsBatch');
@@ -5938,9 +5950,7 @@ export default function App() {
             biomarkers={biomarkers}
             biomarkerHistory={biomarkerHistory}
             actions={actions}
-            onViewJob={(jobId) => {
-              setActiveJobId(jobId);
-            }}
+            onViewJob={handleOpenJob}
             onLogFood={handleLogFood}
             isLoadingProfile={isInitialDataLoading || syncState === 'syncing'}
             syncState={syncState}
@@ -6006,9 +6016,7 @@ export default function App() {
             report={report}
             initiallyExpandedFoodId={initiallyExpandedFoodId}
             onClearInitiallyExpandedFoodId={() => setInitiallyExpandedFoodId(null)}
-            onViewJob={(jobId) => {
-              setActiveJobId(jobId);
-            }}
+            onViewJob={handleOpenJob}
           />
           </ErrorBoundary>
         )}
@@ -6049,9 +6057,7 @@ export default function App() {
                 biomarkerHistory={biomarkerHistory}
                 foodLogs={foodLogs}
                 hideSensitive={hideSensitive}
-                onViewJob={(jobId) => {
-                  setActiveJobId(jobId);
-                }}
+                onViewJob={handleOpenJob}
                 onApplyDataSanitize={async (selected: SanitizeProposal[]) => {
                   const { applyDataSanitizePlan: applyPlan, buildDataSanitizePlan } = await import('./utils/dataSanitize');
                   const plan = buildDataSanitizePlan({
@@ -6457,10 +6463,46 @@ export default function App() {
 
           // Review: apply modificationCommand (dated) and/or flat corrections
           if ((agentType as string) === 'biomarker_review') {
-            const commands = Array.isArray(agentResult?.modificationCommand)
-              ? agentResult.modificationCommand
-              : [];
+            let candidate = agentResult;
+            if (typeof candidate === 'string') {
+              try {
+                candidate = JSON.parse(candidate.replace(/```(?:json)?/gi, '').trim());
+              } catch (e) {}
+            }
+
+            const rawCmds = Array.isArray(candidate?.modificationCommand)
+              ? candidate.modificationCommand
+              : (Array.isArray(candidate?.result?.modificationCommand)
+                ? candidate.result.modificationCommand
+                : (Array.isArray(candidate?.agentResult?.modificationCommand)
+                  ? candidate.agentResult.modificationCommand
+                  : (Array.isArray((candidate as any)?.clean_result?.modificationCommand)
+                    ? (candidate as any).clean_result.modificationCommand
+                    : (Array.isArray((candidate as any)?.data?.modificationCommand)
+                      ? (candidate as any).data.modificationCommand
+                      : (Array.isArray((candidate as any)?.data?.agentResult?.modificationCommand)
+                        ? (candidate as any).data.agentResult.modificationCommand
+                        : [])))));
+
             const unitMap = collectCatalogUnitMap(updatedProfile);
+            let commands = enrichReviewModificationCommands(
+              rawCmds,
+              currentHistory || [],
+              unitMap
+            );
+
+            if (commands.length === 0 && (candidate?.reply || candidate?.text || candidate?.initialRawText || (typeof candidate === 'string' ? candidate : ''))) {
+              commands = extractFallbackModifications(candidate?.reply || candidate?.text || candidate?.initialRawText || (typeof candidate === 'string' ? candidate : '') || '', currentHistory || [], updatedProfile);
+              if (commands.length > 0) {
+                commands = enrichReviewModificationCommands(commands, currentHistory || [], unitMap);
+              }
+            }
+
+            const unselected = Array.isArray(candidate?.unselectedRowKeys) ? candidate.unselectedRowKeys : [];
+            if (unselected.length > 0) {
+              commands = commands.filter((cmd: any) => !unselected.includes(cmd.keyName || cmd.key || cmd.biomarker));
+            }
+
             const { history: afterCommands, applied } = applyModificationCommands(currentHistory, commands, unitMap);
             currentHistory = afterCommands;
 
@@ -6501,7 +6543,7 @@ export default function App() {
               }
             }
 
-            if (applied > 0 || Object.keys(corrections).length > 0) {
+            if (applied > 0 || Object.keys(corrections).length > 0 || commands.length > 0) {
               const recomputed: { [key: string]: number | string } = {};
               [...currentHistory]
                 .filter((b: any) => b.sync_state !== 'delete')
@@ -6513,9 +6555,18 @@ export default function App() {
                 });
               setBiomarkers(recomputed);
               setBiomarkerHistory(currentHistory);
-              setProfile(updatedProfile);
-              await saveAndSync(updatedProfile, foodLogs, recomputed, currentHistory, actions, dailyBenefits, report, { type: 'biomarkerLog' });
+              await saveAndSync(updatedProfile, foodLogs, recomputed, currentHistory, actions, dailyBenefits, report, {
+                type: 'biomarkerLogsBatch',
+                targetIds: currentHistory.map((h: any) => h.id)
+              });
             }
+
+            if (activeJobId) {
+              await JobStore.deleteJob(activeJobId);
+              setActiveJobId(null);
+            }
+            setIsMedicalChatOpen(false);
+            setActiveAgentType(null);
             setCalibratingAgentType(null);
             return;
           }

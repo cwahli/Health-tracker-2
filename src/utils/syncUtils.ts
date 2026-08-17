@@ -2,7 +2,7 @@ import { auth } from '../firebase';
 import { trackApiCall } from './apiTracker';
 import { doc, getDoc, setDoc, collection, getDocs, Firestore } from 'firebase/firestore';
 import { FoodLog, BiomarkerLog, HealthAction, DailyBenefit, FoodIdea, RecommendationReport, UserProfile } from '../types';
-import { toYYYYMMDD } from './dateUtils';
+import { toYYYYMMDD, formatToDDMMYYYY } from './dateUtils';
 import { sanitizeForFirestore } from './firestoreUtils';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { isCatalogBuiltIn } from './biomarkers';
@@ -190,8 +190,9 @@ export function biomarkerLogToSupabaseRow(bio: BiomarkerLog, uid: string) {
 export function supabaseRowToBiomarkerLog(row: any): BiomarkerLog {
   return {
     id: row.id,
-    date: row.date || '',
+    date: formatToDDMMYYYY(row.date) || row.date || '',
     biomarkers: row.biomarkers || {},
+    observationMeta: row.observation_meta || row.observationMeta || undefined,
     note: row.note || '',
     summary: row.summary || '',
     tests: Array.isArray(row.tests) ? row.tests : [],

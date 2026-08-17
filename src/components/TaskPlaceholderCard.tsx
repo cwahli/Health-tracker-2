@@ -220,11 +220,13 @@ export default function TaskPlaceholderCard({
     job.status === 'failed' ||
     job.status === 'cancelled' ||
     job.status === 'cancel_requested' ||
-    !!job.error ||
-    (typeof job.statusMessage === 'string' && /timed out|failed|error/i.test(job.statusMessage)) ||
-    (typeof job.result?.message === 'string' && /timed out|failed|error/i.test(job.result.message)) ||
-    (typeof job.result?.error === 'string' && !!job.result.error) ||
-    (typeof lastMsgContent === 'string' && /timed out|failed|error/i.test(lastMsgContent) && !job.result?.pendingFoodLog);
+    (job.status !== 'succeeded' && (
+      !!job.error ||
+      (typeof job.statusMessage === 'string' && /(?:timed out|analysis failed|server error)/i.test(job.statusMessage) && !/analysis complete/i.test(job.statusMessage)) ||
+      (typeof job.result?.message === 'string' && /(?:timed out|analysis failed)/i.test(job.result.message)) ||
+      (typeof job.result?.error === 'string' && !!job.result.error) ||
+      (typeof lastMsgContent === 'string' && /(?:timed out|analysis failed|server error)/i.test(lastMsgContent) && !job.result?.pendingFoodLog && !job.result?.modificationCommand && !job.result?.extractedData)
+    ));
 
   const getStatusLabel = () => {
     if (job.status === 'succeeded' && Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) {

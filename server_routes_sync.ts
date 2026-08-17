@@ -178,7 +178,7 @@ syncRouter.post("/api/sync/supabase-pull", async (req, res) => {
 
     let foodQuery = supabaseAdmin
       .from('food_logs')
-      .select('*')
+      .select('id, firebase_uid, date, name, composition, weight_grams, quantity, consumed_amount, benefits, risks, health_impact, recommendation, calories, saturated_fat, sodium, added_sugar, nutrients, items_breakdown, scout_items, image_urls, updated_at, verdict, description, message')
       .in('firebase_uid', possibleUids)
       .order('updated_at', { ascending: false })
       .order('id', { ascending: false })
@@ -186,7 +186,7 @@ syncRouter.post("/api/sync/supabase-pull", async (req, res) => {
 
     let bioQuery = supabaseAdmin
       .from('biomarker_logs')
-      .select('*')
+      .select('id, firebase_uid, date, biomarkers, note, summary, tests, updated_at')
       .in('firebase_uid', possibleUids)
       .order('updated_at', { ascending: false })
       .order('id', { ascending: false })
@@ -204,7 +204,7 @@ syncRouter.post("/api/sync/supabase-pull", async (req, res) => {
     const [foodRes, bioRes, profileRes] = await Promise.all([
       foodQuery,
       bioQuery,
-      supabaseAdmin.from('profiles').select('*').in('firebase_uid', possibleUids)
+      supabaseAdmin.from('profiles').select('firebase_uid, data, updated_at').in('firebase_uid', possibleUids)
     ]);
 
     if (foodRes.error) console.error('[Supabase Pull] food query error:', foodRes.error.message);

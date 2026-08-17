@@ -1,4 +1,4 @@
-import { get as idbGet, set as idbSet } from 'idb-keyval';
+import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 import { UserProfile, FoodLog, BiomarkerLog, HealthAction, DailyBenefit, RecommendationReport, FoodIdea } from '../types';
 import { migrateMealSchema } from '../mealBuild';
 
@@ -247,9 +247,10 @@ export const getAggregatedAppData = async (email?: string | null): Promise<any> 
 
   const hasPrimaryFoods = Array.isArray(primaryData.foodLogs) && primaryData.foodLogs.length > 0;
   const hasPrimaryBio = Array.isArray(primaryData.biomarkerHistory) && primaryData.biomarkerHistory.length > 0;
+  const hasPrimaryProfile = !!primaryData.profile;
 
-  // If primary key has both food logs or biomarker history, trust it completely — do NOT merge legacy keys.
-  if (hasPrimaryFoods && hasPrimaryBio) {
+  // If primary key has food logs, biomarker history, or profile, trust it completely — do NOT merge legacy keys.
+  if (hasPrimaryFoods || hasPrimaryBio || hasPrimaryProfile) {
     const migratedFoods = (primaryData.foodLogs || []).map((f: any) => {
       if (f.mealBuild) return { ...f, mealBuild: migrateMealSchema(f.mealBuild) };
       return f;
@@ -342,6 +343,14 @@ export const getAggregatedAppData = async (email?: string | null): Promise<any> 
   }
 
   console.log(`[Storage] One-time migration: merging ${migratedFoods.length} food logs and ${migratedBio.length} biomarker logs from guest/legacy into primary key.`);
+
+  // Once migrated into primary key, clear legacy and guest stores so they are never continuously merged again
+  try {
+    localStorage.removeItem(legacyKey);
+    localStorage.removeItem(guestKey);
+    await idbDel(legacyKey).catch(() => {});
+    await idbDel(guestKey).catch(() => {});
+  } catch {}
 
   return {
     ...legacyData,

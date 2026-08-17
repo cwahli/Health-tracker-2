@@ -165,7 +165,7 @@ export async function recoverInterruptedServerJobs(): Promise<number> {
     if (isSupabaseConfigured && isSupabaseAdminConfigured) {
       const { data: stuckJobs, error } = await supabaseAdmin
         .from('agent_jobs')
-        .select('*')
+        .select('id, user_id, kind, mode, status, progress_percent, status_message, photo_url, updated_at, clean_result')
         .in('status', ['running', 'pending']);
 
       if (error) {
@@ -187,7 +187,7 @@ export async function recoverInterruptedServerJobs(): Promise<number> {
               userId: dbJob.user_id,
               kind: dbJob.kind,
               mode: dbJob.mode,
-              text: dbJob.input_snapshot?.message || dbJob.clean_result?.text || '',
+              text: (dbJob as any).input_snapshot?.message || dbJob.clean_result?.text || '',
               imageUrls: dbJob.photo_url ? [dbJob.photo_url] : [],
               activeMeal: dbJob.clean_result?.mealBuild || dbJob.clean_result?.pendingFoodLog
             }).catch(e => console.error(`[ServerJobs Worker] Error resuming Supabase job ${dbJob.id}:`, e));
@@ -715,8 +715,10 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           mealBuild: finalPayload?.mealBuild,
           degradedStages: finalPayload?.degradedStages,
           lastUserAction: payload.lastUserAction || (text ? { action: 'chat_submit', prompt: text, timestamp: new Date().toISOString() } : undefined),
-          clientConsoleLogs: payload.clientConsoleLogs || [],
           modificationCommand: finalPayload?.modificationCommand || finalPayload?.agentResult?.modificationCommand || undefined,
+          proposal: finalPayload?.proposal || finalPayload?.agentResult?.proposal || undefined,
+          reply: finalPayload?.reply || finalPayload?.text || finalPayload?.agentResult?.reply || undefined,
+          targetBiomarkerKey: finalPayload?.targetBiomarkerKey || finalPayload?.biomarkerKey || finalPayload?.agentResult?.targetBiomarkerKey || undefined,
           networkErrors: payload.networkErrors || [],
           userActionBreadcrumbs: payload.userActionBreadcrumbs || [],
           // M-FIX1: Medical/biomarker agents (agent1_step1 and friends) return these
@@ -797,6 +799,10 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
               },
               createdAt: new Date().toISOString()
             } : undefined),
+            modificationCommand: finalPayload?.modificationCommand || finalPayload?.agentResult?.modificationCommand || undefined,
+            proposal: finalPayload?.proposal || finalPayload?.agentResult?.proposal || undefined,
+            reply: finalPayload?.reply || finalPayload?.text || finalPayload?.agentResult?.reply || undefined,
+            targetBiomarkerKey: finalPayload?.targetBiomarkerKey || finalPayload?.biomarkerKey || finalPayload?.agentResult?.targetBiomarkerKey || undefined,
           },
         };
 

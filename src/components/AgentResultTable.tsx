@@ -4,6 +4,8 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { biomarkerDefinitions } from '../utils/biomarkers';
 import { formatOptimalTargetValue, evaluateRangeBracketMatch } from '../utils/agentCalibration';
 import { HealthPlanningResultView } from './HealthPlanningResultView';
+import { extractFallbackModifications } from './chat-cards/BiomarkerReviewCard';
+import { enrichReviewModificationCommands, collectCatalogUnitMap } from '../utils/biomarkerLifecycle';
 import { 
   Maximize2, 
   Minimize2, 
@@ -20,7 +22,7 @@ import {
 } from 'lucide-react';
 
 interface AgentResultTableProps {
-  agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'data_review' | 'medical_extract';
+  agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'data_review' | 'biomarker_review' | 'medical_extract';
   agentResult: any;
   profile?: any;
   biomarkerHistory?: any[];
@@ -1263,8 +1265,75 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       });
     }
 
+    if (agentType === 'biomarker_review') {
+      let candidate = agentResult;
+      if (typeof candidate === 'string') {
+        try {
+          candidate = JSON.parse(candidate.replace(/```(?:json)?/gi, '').trim());
+        } catch (e) {}
+      }
+
+      const rawCmds = Array.isArray(candidate?.modificationCommand)
+        ? candidate.modificationCommand
+        : (Array.isArray(candidate?.result?.modificationCommand)
+          ? candidate.result.modificationCommand
+          : (Array.isArray(candidate?.agentResult?.modificationCommand)
+            ? candidate.agentResult.modificationCommand
+            : (Array.isArray((candidate as any)?.clean_result?.modificationCommand)
+              ? (candidate as any).clean_result.modificationCommand
+              : (Array.isArray((candidate as any)?.data?.modificationCommand)
+                ? (candidate as any).data.modificationCommand
+                : (Array.isArray((candidate as any)?.data?.agentResult?.modificationCommand)
+                  ? (candidate as any).data.agentResult.modificationCommand
+                  : [])))));
+
+      const catalogUnits = collectCatalogUnitMap(profile);
+      let commands = enrichReviewModificationCommands(
+        rawCmds,
+        biomarkerHistory || [],
+        catalogUnits
+      );
+
+      if (commands.length === 0 && (candidate?.reply || candidate?.text || initialRawText)) {
+        commands = extractFallbackModifications(candidate?.reply || candidate?.text || initialRawText || '', biomarkerHistory || [], profile);
+        if (commands.length > 0) {
+          commands = enrichReviewModificationCommands(commands, biomarkerHistory || [], catalogUnits);
+        }
+      }
+
+      if (commands.length > 0) {
+        return commands.map((cmd: any, idx: number) => {
+          const rawKey = cmd.keyName || cmd.key || cmd.biomarker || `marker_${idx}`;
+          const customDef = profile?.customBiomarkers?.[rawKey];
+          const stdDef = biomarkerDefinitions.find(d => d.key === rawKey || d.name.toLowerCase() === String(rawKey).toLowerCase());
+          const name = customDef?.name || stdDef?.name || (cmd.name || rawKey.replace(/_/g, ' ').toUpperCase());
+          const unit = cmd.unit || customDef?.unit || stdDef?.unit || '';
+          const oldUnit = cmd.oldUnit && cmd.oldUnit !== unit ? cmd.oldUnit : undefined;
+          const group = customDef?.group || (stdDef as any)?.group || (stdDef as any)?.category || 'Clinical Calibration';
+
+          return {
+            biomarker: name,
+            key: rawKey,
+            date: cmd.date || '',
+            value: cmd.newValue !== undefined ? cmd.newValue : '',
+            oldValue: cmd.oldValue !== undefined ? cmd.oldValue : '',
+            unit,
+            oldUnit,
+            isUnitChanged: !!oldUnit,
+            group,
+            isChanged: true,
+            isNew: false,
+            status: 'Calibrated',
+            reason: cmd.reason || 'Scaling and notation calibration',
+            description: cmd.reason || 'Scaling and notation calibration',
+            insight: agentResult?.proposal?.medicalInsight || ''
+          };
+        });
+      }
+    }
+
     return [];
-  }, [agentResult, agentType, biomarkerHistory, profile]);
+  }, [agentResult, agentType, biomarkerHistory, profile, initialRawText]);
 
   // Status counts memo
   const counts = useMemo(() => {
@@ -1607,9 +1676,9 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
       <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10 border-b border-theme-border">
         <tr>
           {tableHeader('Biomarker', 'biomarker')}
-          {(agentType === 'agent1' || agentType === 'medical_extract') && tableHeader('Log Date', 'date')}
-          {(agentType === 'agent1' || agentType === 'medical_extract') && tableHeader('Value', 'value')}
-          {(agentType === 'agent1' || agentType === 'medical_extract') && tableHeader('Unit', 'unit')}
+          {(agentType === 'agent1' || agentType === 'medical_extract' || agentType === 'biomarker_review') && tableHeader('Log Date', 'date')}
+          {(agentType === 'agent1' || agentType === 'medical_extract' || agentType === 'biomarker_review') && tableHeader('Value', 'value')}
+          {(agentType === 'agent1' || agentType === 'medical_extract' || agentType === 'biomarker_review') && tableHeader('Unit', 'unit')}
           {agentType === 'data_review' && tableHeader('User Value', 'value')}
           {agentType === 'data_review' && tableHeader('Optimal Value / Range', 'optimalValue')}
           {(agentType === 'agent2' || agentType === 'agent3') && tableHeader('Medical Practice', 'group')}
@@ -1654,7 +1723,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
               <tr key={idx} className={`${bgClass} hover:bg-slate-50/50 dark:hover:bg-slate-900/40 transition-colors`}>
                 <td className="px-3 py-2 font-semibold">
                   <div className="flex items-center gap-2">
-                    {(row.isMissing || row.isNew || row.isChanged || row.isRenamed || row.isUnitChanged || row.isGroupChanged) && !isToDelete && !row.isSynced && !row.isNotUsed && (agentType === 'medical_extract' || agentType === 'agent1') && (
+                    {(row.isMissing || row.isNew || row.isChanged || row.isRenamed || row.isUnitChanged || row.isGroupChanged) && !isToDelete && !row.isSynced && !row.isNotUsed && (agentType === 'medical_extract' || agentType === 'agent1' || agentType === 'biomarker_review') && (
                       <input
                       type="checkbox"
                       checked={row.isMissing ? effectiveSelectedMissingKeys.includes(row.key) : !unselectedRowKeys.includes(row.key)}
@@ -1720,7 +1789,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                 </div>
               </td>
               
-              {(agentType === 'agent1' || agentType === 'medical_extract') && (
+              {(agentType === 'agent1' || agentType === 'medical_extract' || agentType === 'biomarker_review') && (
                 <>
                   <td className={`px-3 py-2 font-mono ${isToDelete ? 'text-white' : 'text-theme-text-secondary'}`}>
                     {typeof row.date === 'object' ? JSON.stringify(row.date) : String(row.date || '')}
@@ -2152,6 +2221,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
         <div className="flex flex-col gap-0.5">
           <span className="text-[10px] uppercase font-mono font-extrabold text-indigo-600 dark:text-indigo-400 tracking-wider">
             {(agentType === 'agent1' || agentType === 'medical_extract') && 'Biomarker Extraction Stream'}
+            {agentType === 'biomarker_review' && 'Biomarker Telemetry & Scaling Review'}
             {agentType === 'agent2' && 'Unified Ontology Mapping'}
             {agentType === 'agent3' && 'Data Assembly Diagnostics'}
             {(agentType as string) === 'agent4' && 'Prognostic Diagnostics Assessment'}
@@ -2473,6 +2543,7 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
                   <h3 className="font-bold text-theme-text text-sm font-display">
                     Fullscreen Explorer — 
                     {(agentType === 'agent1' || agentType === 'medical_extract') && ' Biomarker Extraction'}
+                    {agentType === 'biomarker_review' && ' Biomarker Review & Calibration'}
                     {agentType === 'agent2' && ' Category Mapping'}
                     {agentType === 'agent3' && ' Data Assembly'}
                     {(agentType as string) === 'agent4' && ' Prognostic diagnostics'}

@@ -55,13 +55,145 @@ const findOldValInHistory = (history: any[], modDate: string, keyName: string) =
   return null;
 };
 
+const STOPWORDS = new Set([
+  'through', 'from', 'to', 'until', 'between', 'and', 'or', 'on', 'at', 'in',
+  'entry', 'entries', 'log', 'logs', 'error', 'errors', 'date', 'dates'
+]);
+
+export function extractFallbackModifications(text: string, history: any[], profile: any): any[] {
+  if (!text || typeof text !== 'string') return [];
+  const results: any[] = [];
+  const cleanText = text.replace(/[*_]/g, '');
+
+  const chunks = cleanText.split(/(?:[•\n;\r]|(?:\d+[\.\)]\s+))/);
+  for (const chunk of chunks) {
+    const trimmed = chunk.trim();
+    if (!trimmed || !/(?:->|→)/.test(trimmed)) continue;
+
+    // Pattern 1: date (biomarker): old [unit] -> new [unit]
+    let m = trimmed.match(/(\d{2}[-\/]\d{2}[-\/]\d{4})\s*\(([^)]+)\)[:\s]*([+-]?\d+(?:\.\d+)?)\s*([a-zA-Z\/%^0-9*]*)\s*(?:->|→)\s*([+-]?\d+(?:\.\d+)?)\s*([a-zA-Z\/%^0-9*]*)/);
+    if (m) {
+      const date = m[1].replace(/\//g, '-');
+      const rawName = m[2].trim();
+      const matchedDef = biomarkerDefinitions.find(d => d.name.toLowerCase() === rawName.toLowerCase() || d.key.toLowerCase() === rawName.toLowerCase());
+      const keyName = matchedDef ? matchedDef.key : rawName.toLowerCase().replace(/\s+/g, '_');
+      const oldUnit = m[4].trim() || undefined;
+      const newUnit = m[6].trim() || undefined;
+      results.push({
+        action: 'update_biomarker',
+        keyName,
+        date,
+        oldValue: m[3],
+        oldUnit,
+        newValue: m[5],
+        unit: newUnit || oldUnit,
+        reason: 'Scaling and notation calibration'
+      });
+      continue;
+    }
+
+    // Pattern 2: biomarker date: old [unit] -> new [unit]
+    m = trimmed.match(/([a-zA-Z_]+(?:\s+[a-zA-Z_]+)?)\s+(?:on\s+)?(\d{2}[-\/]\d{2}[-\/]\d{4})[:\s]*([+-]?\d+(?:\.\d+)?)\s*([a-zA-Z\/%^0-9*]*)\s*(?:->|→)\s*([+-]?\d+(?:\.\d+)?)\s*([a-zA-Z\/%^0-9*]*)/);
+    if (m) {
+      const rawName = m[1].trim();
+      if (STOPWORDS.has(rawName.toLowerCase())) continue;
+      const date = m[2].replace(/\//g, '-');
+      const matchedDef = biomarkerDefinitions.find(d => d.name.toLowerCase() === rawName.toLowerCase() || d.key.toLowerCase() === rawName.toLowerCase());
+      const keyName = matchedDef ? matchedDef.key : rawName.toLowerCase().replace(/\s+/g, '_');
+      const oldUnit = m[4].trim() || undefined;
+      const newUnit = m[6].trim() || undefined;
+      results.push({
+        action: 'update_biomarker',
+        keyName,
+        date,
+        oldValue: m[3],
+        oldUnit,
+        newValue: m[5],
+        unit: newUnit || oldUnit,
+        reason: 'Scaling and notation calibration'
+      });
+      continue;
+    }
+
+    // Pattern 3: Range dates, e.g. "hemoglobin 03-08-2026 through 05-06-2026: 166 g/L -> 16.6 g/dL"
+    m = trimmed.match(/([a-zA-Z_]+(?:\s+[a-zA-Z_]+)?)\s+(\d{2}[-\/]\d{2}[-\/]\d{4})\s+(?:through|to|until|-)\s+(\d{2}[-\/]\d{2}[-\/]\d{4})[:\s]*([+-]?\d+(?:\.\d+)?)\s*([a-zA-Z\/%^0-9*]*)\s*(?:->|→)\s*([+-]?\d+(?:\.\d+)?)\s*([a-zA-Z\/%^0-9*]*)/);
+    if (m) {
+      const rawName = m[1].trim();
+      if (!STOPWORDS.has(rawName.toLowerCase())) {
+        const matchedDef = biomarkerDefinitions.find(d => d.name.toLowerCase() === rawName.toLowerCase() || d.key.toLowerCase() === rawName.toLowerCase());
+        const keyName = matchedDef ? matchedDef.key : rawName.toLowerCase().replace(/\s+/g, '_');
+        const oldUnit = m[5].trim() || undefined;
+        const newUnit = m[7].trim() || undefined;
+        const d1 = m[2].replace(/\//g, '-');
+        const d2 = m[3].replace(/\//g, '-');
+
+        const matchedHistory = (history || []).filter(h => {
+          if (!h || !h.date) return false;
+          return h.biomarkers && (h.biomarkers[keyName] !== undefined || Object.keys(h.biomarkers).some(k => k.toLowerCase().replace(/\s+/g, '_') === keyName));
+        });
+
+        if (matchedHistory.length > 0) {
+          matchedHistory.forEach(h => {
+            results.push({
+              action: 'update_biomarker',
+              keyName,
+              date: h.date,
+              oldValue: m[4],
+              oldUnit,
+              newValue: m[6],
+              unit: newUnit || oldUnit,
+              reason: 'Scaling and notation calibration'
+            });
+          });
+        } else {
+          results.push({
+            action: 'update_biomarker',
+            keyName,
+            date: d1,
+            oldValue: m[4],
+            oldUnit,
+            newValue: m[6],
+            unit: newUnit || oldUnit,
+            reason: 'Scaling and notation calibration'
+          });
+        }
+        continue;
+      }
+    }
+
+    // Pattern 4: date biomarker old [unit] -> new [unit] (e.g. "03-08-2026 Hematocrit 0.48 -> 48.0 %" or "02-08-2026 LDL-C 4.2 mmol/L -> 162 mg/dL")
+    m = trimmed.match(/^(\d{2}[-\/]\d{2}[-\/]\d{4})\s+([a-zA-Z0-9_\-\s]+?)\s+([+-]?\d+(?:\.\d+)?)\s*([a-zA-Z\/%^0-9*]*)\s*(?:->|→)\s*([+-]?\d+(?:\.\d+)?)\s*([a-zA-Z\/%^0-9*]*)/);
+    if (m) {
+      const date = m[1].replace(/\//g, '-');
+      const rawName = m[2].trim();
+      const matchedDef = biomarkerDefinitions.find(d => d.name.toLowerCase() === rawName.toLowerCase() || d.key.toLowerCase() === rawName.toLowerCase());
+      const keyName = matchedDef ? matchedDef.key : rawName.toLowerCase().replace(/[\s\-]+/g, '_');
+      const oldUnit = m[4].trim() || undefined;
+      const newUnit = m[6].trim() || undefined;
+      results.push({
+        action: 'update_biomarker',
+        keyName,
+        date,
+        oldValue: m[3],
+        oldUnit,
+        newValue: m[5],
+        unit: newUnit || oldUnit,
+        reason: 'Scaling and notation calibration'
+      });
+      continue;
+    }
+  }
+
+  return results;
+}
+
 export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedical, profile, biomarkerHistory }) => {
-  const targetKey = msg.data?.targetBiomarkerKey || msg.data?.agentResult?.proposal?.name || msg.data?.proposal?.name || '';
+  const targetKey = msg.data?.targetBiomarkerKey || msg.data?.agentResult?.targetBiomarkerKey || msg.data?.agentResult?.proposal?.name || msg.data?.proposal?.name || (msg.agentResult as any)?.targetBiomarkerKey || '';
   const currentDef = profile?.customBiomarkers?.[targetKey] || biomarkerDefinitions.find(d => d.key === targetKey) || {};
 
-  const proposal = msg.data?.agentResult?.proposal || msg.data?.proposal;
-  const mods = msg.data?.agentResult?.modificationCommand || msg.data?.modificationCommand || msg.modificationCommand;
-  const reply = msg.data?.agentResult?.reply || msg.content;
+  const proposal = msg.data?.agentResult?.proposal || msg.data?.proposal || (msg.agentResult as any)?.proposal || null;
+  const mods = msg.data?.agentResult?.modificationCommand || msg.data?.modificationCommand || msg.modificationCommand || (msg.agentResult as any)?.modificationCommand || null;
+  const reply = msg.data?.agentResult?.reply || msg.data?.agentResult?.text || msg.content;
 
   const [localMods, setLocalMods] = React.useState<any[]>([]);
   const [localProposal, setLocalProposal] = React.useState<any>(null);
@@ -69,7 +201,11 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
   const [isEditingProposal, setIsEditingProposal] = React.useState(false);
 
   React.useEffect(() => {
-    setLocalMods(mods ? JSON.parse(JSON.stringify(mods)) : []);
+    let initialMods = (mods && Array.isArray(mods) && mods.length > 0) ? mods : [];
+    if (initialMods.length === 0 && reply) {
+      initialMods = extractFallbackModifications(reply, biomarkerHistory || [], profile);
+    }
+    setLocalMods(initialMods ? JSON.parse(JSON.stringify(initialMods)) : []);
     setLocalProposal(proposal ? JSON.parse(JSON.stringify(proposal)) : null);
     
     // Initialize units
@@ -77,8 +213,8 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
     if (proposal && proposal.metric) {
       initialUnits[targetKey] = proposal.metric;
     }
-    if (mods) {
-      mods.forEach((m: any) => {
+    if (initialMods) {
+      initialMods.forEach((m: any) => {
         if (m.keyName && !initialUnits[m.keyName]) {
           const currentDef = profile?.customBiomarkers?.[m.keyName] || biomarkerDefinitions.find(d => d.key === m.keyName) || {};
           initialUnits[m.keyName] = currentDef.unit || '';
@@ -86,7 +222,7 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
       });
     }
     setLocalUnits(initialUnits);
-  }, [msg, mods, proposal, profile, targetKey]);
+  }, [msg, mods, proposal, profile, targetKey, reply, biomarkerHistory]);
 
   if (msg.role !== 'assistant') return null;
   if (!proposal && (!mods || mods.length === 0) && !reply) return null;

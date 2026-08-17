@@ -10702,7 +10702,10 @@ Your output MUST be a valid JSON object matching the schema provided.`;
           foodLogsPrompt = `PATIENT'S RECENT LOGGED MEALS HISTORY (Last ${recentLogs.length} meals):\n${mealLines}\n\n`;
         }
 
-        let promptText = `Chat History:\n${(agentType === "agent1_step1" || agentType === "lab_extract" || agentType === "symptom_diary") ? "Omitted for extraction step." : historyText}${foodLogsPrompt}${imageCtx}\nUser message: "${message}"${dataContext}`;
+        const isExtractStep = agentType === "agent1_step1" || agentType === "lab_extract" || agentType === "symptom_diary";
+        let promptText = isExtractStep
+          ? `${foodLogsPrompt}${imageCtx}User message: "${message}"${dataContext}`
+          : `Chat History:\n${historyText}${foodLogsPrompt}${imageCtx}\nUser message: "${message}"${dataContext}`;
         fullPromptSent = `System Instruction:\n${systemInstruction}\n\n${promptText}`;
 
         let isYaml = false; // agent1 now uses structured JSON output, not YAML
@@ -10903,19 +10906,19 @@ Your output MUST be a valid JSON object matching the schema provided.`;
 
       if (agentType === "biomarker_review") {
         try {
-          const cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
-          const parsed = JSON.parse(cleanJson);
+          const parsed = safeExtractJsonObject(textOutput) || {};
           const unitMap: Record<string, string> = { ...(req.body.catalogUnitByKey || {}) };
           Object.entries(userProfile?.customBiomarkers || {}).forEach(([k, v]: [string, any]) => {
             if (v?.unit) unitMap[k] = v.unit;
           });
+          const rawCmds = Array.isArray(parsed.modificationCommand) ? parsed.modificationCommand : [];
           const cmds = enrichReviewModificationCommands(
-            parsed.modificationCommand || [],
+            rawCmds,
             biomarkerHistory || [],
             unitMap
           );
           const sanitizedReply = sanitizeReviewReply(
-            parsed.reply || parsed.text || "",
+            parsed.reply || parsed.text || (typeof parsed === 'string' ? parsed : textOutput),
             cmds,
             biomarkerHistory || [],
             unitMap
@@ -10924,7 +10927,7 @@ Your output MUST be a valid JSON object matching the schema provided.`;
             text: sanitizedReply,
             reply: sanitizedReply,
             proposal: parsed.proposal || null,
-            modificationCommand: cmds.length ? cmds : parsed.modificationCommand || null,
+            modificationCommand: cmds.length ? cmds : (rawCmds.length ? rawCmds : null),
             agentType,
             agentPrompt: fullPromptSent,
             apiCalls: [{ type: 'gemini', label: `Biomarker Review Agent (${engine || 'gemini-3.5-flash-lite'})` }]

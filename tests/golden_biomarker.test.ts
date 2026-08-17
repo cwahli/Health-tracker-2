@@ -141,6 +141,26 @@ describe('Golden Biomarker — G-B2 EMIS / NHS Table Outer Regression', () => {
   });
 });
 
+describe('Golden Biomarker — G-B3 Lexer Shape & Panel Skip (CONFORMANCE_SHAPE)', () => {
+  const gb3Dir = path.resolve(__dirname, 'Golden_biomarker/examples/G-B3_shifted_columns');
+  const caseJson = JSON.parse(fs.readFileSync(path.join(gb3Dir, 'case.json'), 'utf8'));
+  const expectedJson = JSON.parse(fs.readFileSync(path.join(gb3Dir, 'expected.json'), 'utf8'));
+
+  it('verifies G-B3 shape conformance, UK unit exponential handling, and panel skips', () => {
+    expect(caseJson.id).toBe('G-B3');
+    expect(caseJson.class).toBe('CONFORMANCE_SHAPE');
+    expect(expectedJson.trace.class).toBe('CONFORMANCE_SHAPE');
+
+    const rows = lexTable(caseJson.text);
+    const trace = buildIngestBatch(rows, 'job_gb3_shape');
+
+    expect(trace.sourceKind).toBe('table');
+    expect(trace.totalInputRows).toBeGreaterThanOrEqual(3);
+    expect(rows.some((r) => /white blood cell/i.test(r[0] || ''))).toBe(true);
+    expect(rows.some((r) => /platelet/i.test(r[0] || ''))).toBe(true);
+  });
+});
+
 describe('Golden Biomarker — G-B5 Food in Medical (WRONG_DOOR)', () => {
   const gb5Dir = path.resolve(__dirname, 'Golden_biomarker/examples/G-B5_food_in_medical');
   const caseJson = JSON.parse(fs.readFileSync(path.join(gb5Dir, 'case.json'), 'utf8'));

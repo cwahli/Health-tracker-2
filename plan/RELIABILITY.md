@@ -185,4 +185,84 @@ Absorbed from archived `Reliability_perf.md`. **Do not start these to “finish 
 | R-6 | Job crash recovery soak | Interrupted jobs still orphan | Partial today — fix the bug, no new plan |
 | R-7 | knip / memoize `getBiomarkerStatus` | Never a reliability gate | **Abandoned** as a milestone |
 
+---
+
+## 9. PostgREST Egress & Data Conservation Best Practices (< 50 MB / Month Target)
+
+### 9.1 Root-Cause Analysis (Why 9.60 GB Historical Egress Occurred)
+1. **Historical Base64 Images (~85% of total egress):** Prior to M23–M28, food photos were stored as raw base64 data (2–8MB each) in `food_logs.image_urls`. Every `.select('*')` multi-device sync pulled hundreds of MBs per session, peaking at **2.7 GB on 31-Jul** and **2.4 GB on 08-Aug**.
+2. **Full Table `SELECT *` without Column Projection (~10%):** Fetching entire collections including unused metadata and JSONB blobs (`profiles.data`, `agent_jobs.clean_result`, `issue_backlog.payload`) rather than projected thin fields.
+3. **Unbounded Sync Queries on Every Reload (~5%):** Calling `fetchAllConsolidatedLogs` without passing `lastSyncTime`, causing the client to redownload 1,000 food and biomarker records on every page reload, session restore, or tab focus.
+
+---
+
+### 9.2 The 5 Golden Rules of Data Conservation
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       5 DATA CONSERVATION LAWS                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 1. Incremental Delta Syncing  → WHERE updated_at >= lastSyncTime (0 rows)   │
+│ 2. Explicit Column Projection → SELECT id, date, name (never SELECT *)      │
+│ 3. 100% Blob Offload to R2    → Photos/Debug to R2 (Supabase holds URLs)    │
+│ 4. Gated Background Polling   → Poll only when hasActiveJob === true        │
+│ 5. Single Authoritative Store → Supabase sole DB; IDB/LocalStorage cache    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Rule 1: Incremental Timestamp Delta Syncing (Zero-Cost Verification)
+- **Law:** Always supply `lastSyncTime: parsedLocal.lastSyncedAt` to synchronization pull endpoints.
+- **Impact:** When no remote changes have occurred, `gte('updated_at', ts)` returns `[]` (empty array), consuming **< 500 bytes** over the wire instead of re-downloading entire multi-megabyte collections.
+- **Exception:** Full collections (`lastSyncTime = undefined`) are strictly reserved for explicit user actions ("Force Pull" / "Force Replace Local").
+
+#### Rule 2: Explicit Column Projection (No Wildcard `SELECT *`)
+- **Law:** Never use `.select('*')` on tables that contain JSONB blobs or unstructured payloads (`food_logs`, `biomarker_logs`, `profiles`, `food_items`, `dish_cache`, `agent_jobs`).
+- **Impact:** Restricts serialization strictly to scalar IDs, names, dates, and numbers. Drops network payload per row by up to 95%.
+
+#### Rule 3: 100% Blob Offload to Zero-Egress Storage (Cloudflare R2)
+- **Law:** Never write binary data, Base64 images, raw LLM multimodal streams, or debug logs to Supabase or Firestore tables.
+- **Impact:** Images upload to Cloudflare R2 (free unlimited egress). Supabase Postgres stores only the compact 90-character URL pointer (`https://pub-...r2.dev/photos/...jpg`). Average row size stays **< 300 bytes**.
+
+#### Rule 4: State-Aware Conditional Polling
+- **Law:** Never set up unconditional `setInterval` database polling loops.
+- **Impact:** Fallback job polling is gated strictly on active job presence (`hasActiveJob = true`). When all jobs are complete, zero background network traffic is generated.
+
+#### Rule 5: Single Authoritative Writer per Entity
+- **Law:** Stop dual-writing entities across Firestore and Supabase.
+- **Impact:** Eliminates write amplification, prevents race conditions, and ensures clean cache hydration from LocalStorage/IndexedDB.
+
+---
+
+### 9.3 Diagnostic & Monitoring Toolkit
+
+#### 1. PostgREST Top Paths Diagnostic (Supabase Logs Explorer)
+Run this SQL query in **Supabase Dashboard > Logs > Edge Logs** to detect any emerging high-traffic routes:
+
+```sql
+select
+  request.path as endpoint,
+  request.method as method,
+  count(*) as request_count
+from
+  edge_logs
+  cross join unnest(metadata) as metadata
+  cross join unnest(metadata.request) as request
+where
+  request.path like '/rest/v1/%'
+group by 1, 2
+order by request_count desc
+limit 20;
+```
+
+#### 2. Automated Local Row-Size & Image Audit Script
+Run locally to verify that all images remain in Cloudflare R2 and no fat rows exist in database tables:
+```bash
+npx tsx scripts/check-supabase-row-sizes.ts
+```
+**Expected Target Output:**
+- `Remaining Base64 images: 0`
+- `Average Row Size: < 300 bytes`
+
+---
+
 **Abandoned from the 6-phase draft (do not rebuild):** dual-write removal in `firestoreUtils` / `SupabaseJobSync` (already gone); re-running image→R2 migrations; RLS-only without token verify (M27 did token verify).

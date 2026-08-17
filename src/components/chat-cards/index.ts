@@ -40,5 +40,5 @@ export const agentCardRegistry: Record<string, React.FC<any>> = {
   medical: BiomarkerCard,
   medical_extract: BiomarkerCard,
   welcome: WelcomeCard,
-  biomarker_review: BiomarkerReviewCard
+  biomarker_review: BiomarkerCard
 };

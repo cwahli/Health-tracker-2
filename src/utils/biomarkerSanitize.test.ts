@@ -48,7 +48,9 @@ describe('sanitizeBiomarkerHistoryOnLoad', () => {
 
   it('flags hematocrit 42.1 but leaves the stored value', () => {
     const history = [{ id: '1', date: '08-08-2026', biomarkers: { hematocrit: 42.1 } }];
-    const { history: cleaned, fixedCount } = sanitizeBiomarkerHistoryOnLoad(history, {});
+    const { history: cleaned, fixedCount } = sanitizeBiomarkerHistoryOnLoad(history, {
+      customBiomarkers: { hematocrit: { normalRange: '0.36-0.50' } }
+    });
     expect(fixedCount).toBeGreaterThan(0);
     expect(Number(cleaned[0].biomarkers.hematocrit)).toBeCloseTo(42.1, 1);
   });

@@ -662,36 +662,38 @@ export function isBiomarkerValueImprobable(key: string, val: number | string, no
     rangeStr = def?.normalRange;
   }
 
-  // Hematocrit is stored as a decimal ratio (0.36-0.50) while its normalRange
-  // string is expressed as a percentage (36-50). Normalize the comparison value
-  // to the range's scale before running the outlier thresholds below.
-  let evalNum = num;
-  if (key === 'hematocrit' && evalNum > 10) {
-    return true; // 42.1 as % when expecting ratio 0.36-0.50
+  const bounds = parseNormalRangeBounds(rangeStr);
+  const refMax = bounds.max !== undefined ? bounds.max : bounds.min;
+  const refMin = bounds.min !== undefined ? bounds.min : 0;
+
+  // Structural check 1: Unit scale mismatch (e.g. decimal ratio entered when normal range is percentage or whole numbers)
+  if (refMax !== undefined && refMax >= 10 && num > 0 && num < 1.0) {
+    return true; // Decimal fraction entered when reference range is whole unit (e.g., 0.48 for 36-50%)
   }
-  if (key === 'hemoglobin' && evalNum > 0 && evalNum < 20) {
-    return true; // 14.5 g/dL when range is 120-180 g/L
+
+  // Structural check 2: Unit scale mismatch (e.g. percentage or whole number entered when normal range is ratio <= 1.0)
+  if (refMax !== undefined && refMax > 0 && refMax <= 1.0 && num >= 10) {
+    return true; // Percentage entered when reference range is a fraction (e.g., 42.1 for 0.36-0.50 L/L)
   }
-  if (evalNum < 1 && rangeStr) {
-    const m = rangeStr.match(/([\d.]+)\s*-\s*([\d.]+)/);
-    if (m && parseFloat(m[2]) > 1) {
-      evalNum = evalNum * 100;
+
+  // Structural check 3: Unit mismatch for high-baseline analytes with bounded clinical ranges
+  if (bounds.min !== undefined && bounds.max !== undefined && refMin >= 50 && num > 0 && num < refMin * 0.45) {
+    return true; // e.g. Hemoglobin 14.5 g/dL when range is 120-180 g/L, or Sodium 30 when range is 135-145
+  }
+
+  // Structural check 4: Severe physiological outliers (> 25x max or < 0.1x min)
+  if (bounds.min !== undefined && bounds.max !== undefined && refMin > 0 && num < refMin * 0.1) {
+    return true;
+  }
+  if (refMax !== undefined && refMax > 0) {
+    if (refMax <= 5.0 && num > refMax * 15) {
+      return true; // e.g. Total Cholesterol 195 when reference is <= 5.0 mmol/L
+    }
+    if (bounds.min !== undefined && bounds.max !== undefined && num > refMax * 25) {
+      return true;
     }
   }
 
-  const bounds = parseNormalRangeBounds(rangeStr);
-  if (bounds.min !== undefined && bounds.max !== undefined) {
-    const min = bounds.min;
-    const max = bounds.max;
-    
-    // If min >= 50 and val < min * 0.45 (e.g., Sodium min 135, val 30 -> 30 < 60.75 -> true)
-    if (min >= 50 && evalNum < min * 0.45) return true;
-    // Extreme outlier check
-    if (min > 0 && evalNum < min * 0.1) return true;
-    if (max > 0 && evalNum > max * 25) return true;
-  } else if (bounds.max !== undefined && bounds.max > 0) {
-    if (evalNum > bounds.max * 10) return true;
-  }
   return false;
 }
 
@@ -717,6 +719,7 @@ export function detectFlaggedTelemetryErrors(
     if (val === undefined || val === null || val === '') return;
     if (profile?.notUsedBiomarkers?.[key] || profile?.notUsedInMedicalHistory?.[key] || (profile?.customBiomarkers?.[key] && profile?.deletedCustomBiomarkerKeys?.[key])) return;
     const def = (allDefinitions || []).find((d: any) => d.key === key) || biomarkerDefinitions.find((d: any) => d.key === key);
+    if (def?.category === 'other' || key === 'steps' || key === 'weight' || key === 'active_minutes' || key === 'sleep_duration' || key === 'resting_heart_rate') return;
     const custom = profile?.customBiomarkers?.[key];
     const range = custom?.normalRange || def?.normalRange;
     const name = custom?.name || def?.name || key;
@@ -749,6 +752,7 @@ export function detectFlaggedTelemetryErrors(
   Object.entries(historyByKey).forEach(([key, entries]) => {
     if (profile?.notUsedBiomarkers?.[key] || profile?.notUsedInMedicalHistory?.[key] || (profile?.customBiomarkers?.[key] && profile?.deletedCustomBiomarkerKeys?.[key])) return;
     const def = (allDefinitions || []).find((d: any) => d.key === key) || biomarkerDefinitions.find((d: any) => d.key === key);
+    if (def?.category === 'other' || key === 'steps' || key === 'weight' || key === 'active_minutes' || key === 'sleep_duration' || key === 'resting_heart_rate') return;
     const custom = profile?.customBiomarkers?.[key];
     const range = custom?.normalRange || def?.normalRange;
     const name = custom?.name || def?.name || key;
@@ -985,7 +989,8 @@ export const getBiomarkerStatus = (key: string, val: number | string, normalRang
 
 
   let valueToEvaluate = num;
-  if (key === 'hematocrit' && valueToEvaluate < 1) {
+  const rangeBounds = parseNormalRangeBounds(rangeStr);
+  if (rangeBounds.max !== undefined && rangeBounds.max >= 10 && valueToEvaluate > 0 && valueToEvaluate < 1.0) {
     valueToEvaluate *= 100;
   }
 

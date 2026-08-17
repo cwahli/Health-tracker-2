@@ -42,7 +42,7 @@ export const BiomarkerCard: React.FC<AgentCardProps> = ({
   return (
     <>
       {/* Render Agent Result Blocks */}
-                  {msg.agentType && hasValidAgentResult && !(loggedMessageIds || []).includes(msg.id) && (
+                  {msg.agentType && hasValidAgentResult && (
                     <div className="bg-white dark:bg-slate-800 border border-theme-border rounded-2xl p-4 shadow-md space-y-4 animation-fade-in w-full max-w-full min-w-0 overflow-hidden">
                       <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-theme-border/50">
                         <div className="flex items-center gap-1.5">
@@ -65,13 +65,14 @@ export const BiomarkerCard: React.FC<AgentCardProps> = ({
                       </div>
 
                       {/* Content details based on Agent type */}
-                      {msg.agentType && (AGENT_REGISTRY[msg.agentType as AgentType]?.capabilities?.includes('biomarker_table_view') || msg.agentType === 'agent1' || msg.agentType === 'agent1_step1' || msg.agentType === 'medical' || msg.agentType === 'medical_extract') && msg.data?.agentResult && (
+                      {msg.agentType && (AGENT_REGISTRY[msg.agentType as AgentType]?.capabilities?.includes('biomarker_table_view') || msg.agentType === 'agent1' || msg.agentType === 'agent1_step1' || msg.agentType === 'medical' || msg.agentType === 'medical_extract' || msg.agentType === 'biomarker_review' || msg.agentType === 'data_review') && msg.data?.agentResult && (
                         <ErrorBoundary>
                         <AgentResultTable
                           agentType={
+                            msg.agentType === 'biomarker_review' ? 'biomarker_review' :
                             msg.agentTypeStep === 'agent1_step2' ? 'agent2' :
                             msg.agentTypeStep === 'agent1_step3' ? 'agent3' :
-                            (msg.agentType === 'medical' || msg.agentType === 'medical_extract' || msg.agentType === 'agent1_step1' ? 'agent1' : msg.agentType) as 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'data_review'
+                            (msg.agentType === 'medical' || msg.agentType === 'medical_extract' || msg.agentType === 'agent1_step1' ? 'agent1' : msg.agentType) as any
                           }
                           agentResult={msg.data?.agentResult}
                           profile={profile}

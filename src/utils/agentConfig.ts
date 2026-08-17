@@ -138,7 +138,7 @@ export const AGENT_REGISTRY: Record<AgentType, AgentConfig> = {
     category: 'medical',
     displayName: 'Review',
     description: 'Fixes 1–few biomarker logs: unit mix-ups, dates, and compact range proposals.',
-    capabilities: ['biomarker_analysis'],
+    capabilities: ['biomarker_analysis', 'biomarker_table_view'],
     welcomeMessage: 'Let us review your biomarker.',
     rolloutStatus: 'unified',
   },
