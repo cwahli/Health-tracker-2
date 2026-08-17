@@ -899,10 +899,248 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
 
         return finalRows;
       }
+
+      // Fallback standard mapping when batchBiomarkers is not available
+      const finalRowsFallback = parsedRows.map((row: any) => {
+        const biomarkerName = row.biomarker || row.name || row.key || 'Unknown';
+        const cleanName = (n: string): string => n.split('(')[0].split('[')[0].trim();
+        const cleaned = cleanName(String(biomarkerName));
+        const safeKey = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        let key = resolveBiomarkerKey(safeKey || String(biomarkerName), biomarkerName, profile);
+
+        const existingEntries = (biomarkerHistory || []).filter((h: any) => h?.biomarkers?.[key] !== undefined);
+        const hasLegacyProfileData = profile?.biomarkers?.[key] !== undefined;
+        let isNew = row.noChangeNeeded ? false : (existingEntries.length === 0 && !hasLegacyProfileData);
+
+        const customDef = profile?.customBiomarkers?.[key];
+        const normalRange = customDef?.normalRange || '';
+        const valueNum = parseFloat(row.value);
+        let isAtRisk = false;
+
+        if (false) {
+          const rangeMatch = normalRange.match(/([\d.]+)\s*-\s*([\d.]+)/);
+          if (rangeMatch) {
+            const min = parseFloat(rangeMatch[1]);
+            const max = parseFloat(rangeMatch[2]);
+            if (valueNum < min || valueNum > max) {
+              isAtRisk = true;
+            }
+          }
+        }
+
+        let rowUnit = row.unit || row.metric || '';
+        const dictUnit = customDef?.unit || '';
+        if (rowUnit.trim() === '' || rowUnit.trim() === '-' || rowUnit.trim().toLowerCase() === 'n/a') {
+            rowUnit = dictUnit;
+        }
+        const newGroup = row.standardMedicalGrouping || 'Other';
+        const oldGroup = customDef?.standardMedicalGrouping || 'Other';
+        const isGroupChanged = false;
+
+        const isSameUnit = (unit1: string, unit2: string) => {
+          if (!unit1 || !unit2) return unit1 === unit2;
+          return sanitizeUnitText(unit1) === sanitizeUnitText(unit2);
+        };
+        const normalizeDate = (d: string) => {
+          if (!d) return d;
+          return toYYYYMMDD(d);
+        };
+        const normalizedRowDate = normalizeDate(row.date);
+
+        let changeReason = row.noChangeNeeded
+          ? `No changes needed. Entry is already up-to-date.`
+          : `Extracted new ${biomarkerName}: ${typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value || '')} ${rowUnit}`;
+        let oldValue: any = undefined;
+        let oldUnit: any = undefined;
+        let isChanged = false;
+        let isSynced = false;
+        let isUnitChanged = false;
+
+        if (!row.noChangeNeeded && !isNew && existingEntries.length > 0) {
+          const exactMatch = existingEntries.find((h: any) => normalizeDate(h.date) === normalizedRowDate && h?.biomarkers?.[key] !== undefined);
+          if (exactMatch) {
+            const matchVal = exactMatch.biomarkers?.[key];
+            const dictUnit = customDef?.unit || '';
+            const numMatchVal = parseFloat(matchVal);
+            const numRowVal = parseFloat(row.value);
+            let isValueMatch = (!isNaN(numMatchVal) && !isNaN(numRowVal) && numMatchVal === numRowVal) || String(matchVal).toLowerCase().trim() === String(row.value).toLowerCase().trim();
+
+            if (!isValueMatch && !isNaN(numMatchVal) && !isNaN(numRowVal)) {
+              if (key === "hematocrit") {
+                if (Math.abs(numMatchVal * 100 - numRowVal) < 0.01 || Math.abs(numRowVal * 100 - numMatchVal) < 0.01) {
+                  isValueMatch = true;
+                }
+              } else if (key === "total_cholesterol" || key === "cholesterol" || key.includes("cholesterol") || key === "hdl_cholesterol" || key === "ldl_cholesterol") {
+                const ratio = numMatchVal / numRowVal;
+                if (Math.abs(ratio - 0.02586) < 0.001 || Math.abs(ratio - (1 / 0.02586)) < 0.05) {
+                  isValueMatch = true;
+                }
+              } else if (key === "triglycerides") {
+                const ratio = numMatchVal / numRowVal;
+                if (Math.abs(ratio - 0.0113) < 0.001 || Math.abs(ratio - (1 / 0.0113)) < 0.05) {
+                  isValueMatch = true;
+                }
+              }
+            }
+
+            if (isValueMatch && (!dictUnit || isSameUnit(rowUnit, dictUnit))) {
+              isSynced = true;
+              changeReason = "Already logged";
+            } else if (isValueMatch && dictUnit && !isSameUnit(rowUnit, dictUnit)) {
+              isUnitChanged = true;
+              oldUnit = dictUnit;
+              changeReason = `It looks like you have the wrong metric (${rowUnit}). Would you like to convert it to IS (${dictUnit})?`;
+            } else {
+              oldValue = matchVal;
+              isChanged = true;
+              changeReason = `Value discrepancy for ${row.date}: existing was ${matchVal}, extracted is ${row.value}`;
+            }
+          } else {
+            const sortedHistory = [...existingEntries].sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
+            const latestVal = sortedHistory[0]?.biomarkers?.[key];
+            if (latestVal !== undefined) {
+              isNew = true;
+              isChanged = false;
+              changeReason = "New reading";
+            }
+          }
+        }
+
+        const riskReason = isAtRisk
+          ? `Value ${typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value || '')} ${rowUnit} is outside normal range (${normalRange})`
+          : '';
+
+        const explanation = row.explanation || row.changeReason || row.description || '';
+
+        return {
+          key,
+          biomarker: biomarkerName,
+          date: row.date || 'N/A',
+          value: row.value ?? 'N/A',
+          unit: rowUnit,
+          isNew,
+          isNewBiomarker: isNew && existingEntries.length === 0 && !hasLegacyProfileData,
+          isNotUsed: isKeyMarkedNotUsed(key, biomarkerName),
+          isChanged,
+          isSynced,
+          isUnitChanged,
+          oldValue,
+          oldUnit,
+          isAtRisk,
+          severity: isAtRisk ? 1 : 0,
+          normalRange,
+          changeReason,
+          riskReason,
+          description: explanation,
+          standardMedicalGrouping: row.standardMedicalGrouping || 'Other',
+          isGroupChanged,
+          oldGroup,
+          riskCategories: row.riskCategories || [],
+          potentialMedicalConditions: row.potentialMedicalConditions || []
+        };
+      });
+
+      // Find missing biomarkers if fallback
+      const initialMarkers = getInitialMarkersFromText(initialRawText);
+      const missingList = initialMarkers.filter(initName => {
+        const cleanInit = String(initName).toLowerCase().replace(/[^a-z0-9]/g, '');
+        return !finalRowsFallback.some((row: any) => {
+          const cleanRow = String(row.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const cleanOld = String(row.oldName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          return cleanRow === cleanInit || cleanOld === cleanInit;
+        });
+      });
+
+      missingList.forEach(name => {
+        const key = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        (finalRowsFallback as any[]).push({
+          key,
+          biomarker: name,
+          oldName: name,
+          isRenamed: false,
+          isUnitChanged: false,
+          oldUnit: '',
+          date: 'N/A',
+          value: 'N/A',
+          unit: '',
+          isNew: false,
+          isChanged: false,
+          isAtRisk: false,
+          isSecondary: false,
+          isMissing: true,
+          status: 'Missing',
+          severity: 0,
+          normalRange: '',
+          changeReason: `Omitted during extraction. Select checkbox to move to next batch.`,
+          riskReason: '',
+          description: `Missing raw reading from source text.`,
+          standardMedicalGrouping: 'Other',
+          riskCategories: [],
+          potentialMedicalConditions: []
+        });
+      });
+
+      // Also append any unmappedTests that are not already in finalRowsFallback!
+      if (agentResult?.unmappedTests && Array.isArray(agentResult.unmappedTests)) {
+        agentResult.unmappedTests.forEach((test: any) => {
+          const rawName = test?.raw_name || (typeof test === 'string' ? test : '');
+          if (!rawName) return;
+          const suggested_key = test?.suggested_key || rawName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+          const cleanRawName = rawName.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const cleanSuggestedKey = suggested_key.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+          const alreadyExists = (finalRowsFallback as any[]).some(row => {
+            const cleanRow = String(row.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const cleanOld = String(row.oldName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const cleanKey = String(row.key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return cleanRow === cleanRawName || cleanOld === cleanRawName || cleanKey === cleanSuggestedKey || cleanKey === cleanRawName;
+          });
+
+          if (!alreadyExists) {
+            const testVal = test?.numeric_value ?? test?.qualitative_value ?? test?.value ?? 'N/A';
+            const testDate = test?.date || test?.logDate || 'N/A';
+            const testUnit = test?.unit || '';
+            const isHasValue = testVal !== 'N/A' && testVal !== null && testVal !== '';
+
+            (finalRowsFallback as any[]).push({
+              key: suggested_key,
+              biomarker: rawName,
+              oldName: rawName,
+              isRenamed: false,
+              isUnitChanged: false,
+              oldUnit: testUnit,
+              date: testDate,
+              value: testVal,
+              unit: testUnit,
+              isNew: true,
+              isNewBiomarker: true,
+              isNotUsed: isKeyMarkedNotUsed(suggested_key, rawName),
+              isChanged: false,
+              isAtRisk: false,
+              isSecondary: false,
+              isMissing: !isHasValue,
+              status: isHasValue ? 'New' : 'Unmapped',
+              severity: 0,
+              normalRange: '',
+              changeReason: isHasValue
+                ? `New custom biomarker reading extracted from source text.`
+                : `Detected in source text. Select checkbox to approve/add as custom biomarker.`,
+              riskReason: '',
+              description: test?.explanation || `Unmapped biomarker found in raw clinical records.`,
+              standardMedicalGrouping: test?.standardMedicalGrouping || 'Other',
+              riskCategories: test?.riskCategories || [],
+              potentialMedicalConditions: test?.potentialMedicalConditions || []
+            });
+          }
+        });
+      }
+
+      return finalRowsFallback;
     }
 
     // Fallback standard mapping when batchBiomarkers is not available
-          if (agentType === 'medical_extract') {
+    if (agentType === 'medical_extract') {
       let parsedRows: any[] = [];
       const entries = Array.isArray(agentResult) ? agentResult : [];
       entries.forEach(entry => {
