@@ -319,17 +319,18 @@ export function runGeneralizedBiomarkerAudit(
   customBiomarkers: { [key: string]: any } = {},
   biomarkerHistory: any[] = []
 ): BiomarkerAuditReport {
-  const allKeys = Object.keys(customBiomarkers);
   const items: BiomarkerAuditItem[] = [];
 
   // 1. Calculate log activity counts per key
   const logCounts: { [key: string]: number } = {};
   const logUnits: { [key: string]: { [unit: string]: number } } = {};
+  const allKeysSet = new Set<string>(Object.keys(customBiomarkers));
 
   biomarkerHistory.forEach(log => {
     if (log && log.biomarkers) {
       Object.keys(log.biomarkers).forEach(k => {
         logCounts[k] = (logCounts[k] || 0) + 1;
+        allKeysSet.add(k);
       });
     }
     if (log && log.tests && Array.isArray(log.tests)) {
@@ -337,10 +338,21 @@ export function runGeneralizedBiomarkerAudit(
         if (t && t.key && t.unit && !isCorruptedUnit(t.unit)) {
           if (!logUnits[t.key]) logUnits[t.key] = {};
           logUnits[t.key][t.unit] = (logUnits[t.key][t.unit] || 0) + 1;
+          allKeysSet.add(t.key);
         }
       });
     }
   });
+
+  // Also include built-in keys so we can detect duplicates against the standard catalog
+  biomarkerDefinitions.forEach(d => allKeysSet.add(d.key));
+
+  const allKeys = Array.from(allKeysSet);
+
+  // Helper to get definition
+  const getDef = (key: string) => {
+    return customBiomarkers[key] || biomarkerDefinitions.find((b: any) => b.key === key) || {};
+  };
 
   // 2. Multi-strategy duplicate clustering across canonical stems, exact names, and morphological candidates
   const adjacency: { [key: string]: Set<string> } = {};
@@ -351,8 +363,8 @@ export function runGeneralizedBiomarkerAudit(
     for (let j = i + 1; j < allKeys.length; j++) {
       const keyA = allKeys[i];
       const keyB = allKeys[j];
-      const defA = customBiomarkers[keyA] || {};
-      const defB = customBiomarkers[keyB] || {};
+      const defA = getDef(keyA);
+      const defB = getDef(keyB);
 
       const stemA = getCanonicalBiomarkerStem(keyA, defA.name);
       const stemB = getCanonicalBiomarkerStem(keyB, defB.name);
@@ -404,7 +416,7 @@ export function runGeneralizedBiomarkerAudit(
         });
       }
       
-      const componentStem = getCanonicalBiomarkerStem(k, customBiomarkers[k]?.name);
+      const componentStem = getCanonicalBiomarkerStem(k, getDef(k).name);
       const compReason = component.length > 1 
         ? `Morphological & clinical match cluster for "${componentStem}" across ${component.length} entries`
         : '';
@@ -418,7 +430,7 @@ export function runGeneralizedBiomarkerAudit(
 
   // 3. Evaluate each biomarker
   allKeys.forEach(key => {
-    const def = customBiomarkers[key] || {};
+    const def = getDef(key);
     const name = def.name || key;
     const currentUnit = def.unit || '';
     const siblings = clusterMap[key] || [key];
@@ -509,7 +521,7 @@ export function runGeneralizedBiomarkerAudit(
       let bestKey = siblings[0];
       let bestScore = -1;
       siblings.forEach(sk => {
-        const sDef = customBiomarkers[sk] || {};
+        const sDef = getDef(sk);
         const score = calculateCompletenessScore(sDef, logCounts[sk] || 0);
         if (score > bestScore) {
           bestScore = score;
@@ -518,7 +530,7 @@ export function runGeneralizedBiomarkerAudit(
       });
 
       const isPrimary = key === bestKey;
-      const targetDef = customBiomarkers[bestKey] || {};
+      const targetDef = getDef(bestKey);
       const candidateAliases = siblings.filter(sk => sk !== bestKey);
 
       const clusterReason = clusterReasonMap[key] || `Matches cluster across ${siblings.length} entries`;
@@ -619,23 +631,27 @@ export function runGeneralizedBiomarkerAudit(
         let bestKey = keys[0];
         let bestScore = -1;
         keys.forEach(sk => {
-          const sDef = customBiomarkers[sk] || {};
+          const sDef = getDef(sk);
           const score = calculateCompletenessScore(sDef, logCounts[sk] || 0);
           if (score > bestScore) {
             bestScore = score;
             bestKey = sk;
           }
         });
-        const masterDef = customBiomarkers[bestKey] || {};
+        const masterDef = getDef(bestKey);
         const candidateAliases = keys.filter(k => k !== bestKey);
 
         let totalLogsInCluster = 0;
         const emptyAliasKeys: string[] = [];
         const populatedAliasKeys: string[] = [];
+        let hasCustomOrLogs = false;
 
         keys.forEach(k => {
           const count = logCounts[k] || 0;
           totalLogsInCluster += count;
+          if (count > 0 || customBiomarkers[k] !== undefined) {
+            hasCustomOrLogs = true;
+          }
           if (k !== bestKey) {
             if (count === 0) {
               emptyAliasKeys.push(k);
@@ -644,6 +660,9 @@ export function runGeneralizedBiomarkerAudit(
             }
           }
         });
+
+        // Skip clusters that consist entirely of built-in keys that the user hasn't interacted with
+        if (!hasCustomOrLogs) return;
 
         const clusterReason = clusterReasonMap[bestKey] || `Matches duplicate cluster across ${keys.length} entries`;
 

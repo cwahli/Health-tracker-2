@@ -835,7 +835,7 @@ export function normalizeBiomarkerName(name?: string): string {
   clean = clean.replace(/\([^)]*\)/g, ' ');
 
   // Strip common trailing unit tokens
-  clean = clean.replace(/\b(?:pg(?:\/ml)?|ng\/(?:ml|dl)|mg\/(?:dl|l)|mmol\/(?:l|mol)|µmol\/l|umol\/l|u\/l|iu\/l|miu\/l|uiu\/ml|k\/ul|10\^9\/l|10\^12\/l|fl|kg\/m2|kg\/m²|ml\/min(?:\/1\.73m²)?|ml\/min\/1\.73m2|g\/l|g\/dl|score|points|steps|beats\/min|bpm|percent|%)\b/gi, ' ');
+  clean = clean.replace(/\b(?:pg(?:\/ml)?|ng\/(?:ml|dl)|mg\/(?:dl|l)|mmol\/(?:l|mol)|µmol\/l|umol\/l|u\/l|iu\/l|miu\/l|uiu\/ml|k\/ul|10\^9\/l|10\^12\/l|fl|kg\/m2|kg\/m²|ml\/min\/1\.73m2|ml\/min(?:\/1\.73m²)?|g\/l|g\/dl|score|points|steps|beats\/min|bpm|percent|%)\b/gi, ' ');
 
   // Strip clinical filler words
   clean = clean.replace(/\b(?:serum|plasma|blood|total|level|levels|count|estimation|calculated|rate|ratio|index|score|test)\b/gi, ' ');
