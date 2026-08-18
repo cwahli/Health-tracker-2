@@ -12,6 +12,10 @@
 - **`scripts/assert-food-curator-m30.mjs`**: Exit 0 (M30 Food Curator Assertions Passed)
 - **Vitest Suite**: 562 passed tests across 61 test files.
 - **TypeScript Compilation**: `npx tsc --noEmit` clean exit 0
+- **Biomarker Dictionary & Health Tab Performance**:
+  - Replaced $O(N^2)$ pairwise loop in `runGeneralizedBiomarkerAudit` with $O(N)$ candidate-bucketed clustering (reducing clustering from ~45,000 checks down to sub-10ms).
+  - Replaced repetitive $O(K \times H)$ `biomarkerHistory` full-array scans in `BiomarkerDictionaryModal` and `MedicalHistoryTab` with pre-indexed $O(1)$ inverted hash maps.
+  - Wrapped `DictionaryItem` in `React.memo` and windowed approved biomarker rendering slice to prevent UI thread lockups.
 - **Supabase Cloud State**: 0 uncalibrated rows remaining in Supabase Postgres. Schema-aligned queries in `server_routes_sync.ts` verified.
 - **Supabase Egress & Payload Diet**: 
   - Omitted `payload` from `/api/bug-tracker/overview` listing queries in `serverIssueBacklog.ts`.

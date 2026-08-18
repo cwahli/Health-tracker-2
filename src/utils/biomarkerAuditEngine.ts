@@ -362,46 +362,103 @@ export function runGeneralizedBiomarkerAudit(
     return customBiomarkers[key] || biomarkerDefinitions.find((b: any) => b.key === key) || {};
   };
 
-  // 2. Multi-strategy duplicate clustering across canonical stems, exact names, and morphological candidates
+  // 2. Multi-strategy candidate-bucketed duplicate clustering (O(N) bucketing with bounded intra-bucket matching)
   const adjacency: { [key: string]: Set<string> } = {};
   const matchReasons: { [pairKey: string]: string } = {};
   allKeys.forEach(k => { adjacency[k] = new Set([k]); });
 
-  for (let i = 0; i < allKeys.length; i++) {
-    for (let j = i + 1; j < allKeys.length; j++) {
-      const keyA = allKeys[i];
-      const keyB = allKeys[j];
-      const defA = getDef(keyA);
-      const defB = getDef(keyB);
+  // Pre-index keys by stem, canonical mapped key, exact name token, and clinical synonym
+  const buckets: { [bucketKey: string]: string[] } = {};
+  const addToBucket = (bucket: string | undefined | null, key: string) => {
+    if (!bucket) return;
+    const b = bucket.trim().toLowerCase();
+    if (!b || b.length < 2) return;
+    if (!buckets[b]) buckets[b] = [];
+    if (!buckets[b].includes(key)) buckets[b].push(key);
+  };
 
-      const stemA = getCanonicalBiomarkerStem(keyA, defA.name);
-      const stemB = getCanonicalBiomarkerStem(keyB, defB.name);
+  const keyMetaMap = new Map<string, { stem: string; name: string; rawClean: string; normName: string; def: any }>();
+  allKeys.forEach(k => {
+    const def = getDef(k);
+    const stem = getCanonicalBiomarkerStem(k, def.name);
+    const rawClean = (def.name || k).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normName = normalizeBiomarkerName(def.name || k);
+    keyMetaMap.set(k, { stem, name: def.name || k, rawClean, normName, def });
 
-      let isDuplicate = false;
-      let reason = '';
+    addToBucket(`stem:${stem}`, k);
+    addToBucket(`name:${rawClean}`, k);
+    addToBucket(`norm:${normName.replace(/\s+/g, '')}`, k);
+    const synKey = lookupClinicalSynonym(rawClean) || lookupClinicalSynonym(stem);
+    if (synKey) addToBucket(`syn:${synKey}`, k);
+    const mapped = getMappedBiomarkerKey(k, def.name);
+    if (mapped) addToBucket(`mapped:${mapped}`, k);
+  });
 
-      if (stemA && stemB && stemA === stemB) {
+  const checkedPairs = new Set<string>();
+  const evaluatePair = (keyA: string, keyB: string) => {
+    if (keyA === keyB) return;
+    const pairKey = keyA < keyB ? `${keyA}:::${keyB}` : `${keyB}:::${keyA}`;
+    if (checkedPairs.has(pairKey)) return;
+    checkedPairs.add(pairKey);
+
+    const metaA = keyMetaMap.get(keyA)!;
+    const metaB = keyMetaMap.get(keyB)!;
+    const stemA = metaA.stem;
+    const stemB = metaB.stem;
+
+    let isDuplicate = false;
+    let reason = '';
+
+    if (stemA && stemB && stemA === stemB) {
+      isDuplicate = true;
+      reason = `Shares canonical biomarker stem "${stemA}"`;
+    } else {
+      const candidateCheck = isBiomarkerDuplicateCandidate(
+        { key: keyA, name: metaA.name, unit: metaA.def.unit, normalRange: metaA.def.normalRange },
+        { key: keyB, name: metaB.name, unit: metaB.def.unit, normalRange: metaB.def.normalRange }
+      );
+      if (candidateCheck.isMatch) {
         isDuplicate = true;
-        reason = `Shares canonical biomarker stem "${stemA}"`;
-      } else {
-        const candidateCheck = isBiomarkerDuplicateCandidate(
-          { key: keyA, name: defA.name || keyA, unit: defA.unit, normalRange: defA.normalRange },
-          { key: keyB, name: defB.name || keyB, unit: defB.unit, normalRange: defB.normalRange }
-        );
-        if (candidateCheck.isMatch) {
-          isDuplicate = true;
-          reason = candidateCheck.reason;
-        }
-      }
-
-      if (isDuplicate) {
-        adjacency[keyA].add(keyB);
-        adjacency[keyB].add(keyA);
-        const pairKey = [keyA, keyB].sort().join(':::');
-        matchReasons[pairKey] = reason;
+        reason = candidateCheck.reason;
       }
     }
-  }
+
+    if (isDuplicate) {
+      adjacency[keyA].add(keyB);
+      adjacency[keyB].add(keyA);
+      matchReasons[pairKey] = reason;
+    }
+  };
+
+  // Compare candidates within matching buckets
+  Object.values(buckets).forEach(bucketKeys => {
+    if (bucketKeys.length > 1) {
+      for (let i = 0; i < bucketKeys.length; i++) {
+        for (let j = i + 1; j < bucketKeys.length; j++) {
+          evaluatePair(bucketKeys[i], bucketKeys[j]);
+        }
+      }
+    }
+  });
+
+  // Check user-active biomarkers against catalog for substring/close name matches
+  const activeUserKeys = allKeys.filter(k => (logCounts[k] || 0) > 0 || customBiomarkers[k] !== undefined);
+  activeUserKeys.forEach(userKey => {
+    const metaU = keyMetaMap.get(userKey);
+    if (!metaU) return;
+    allKeys.forEach(catalogKey => {
+      if (userKey === catalogKey) return;
+      const metaC = keyMetaMap.get(catalogKey);
+      if (!metaC) return;
+      const isSub = (metaU.rawClean.length > 5 && metaC.rawClean.includes(metaU.rawClean)) ||
+                    (metaC.rawClean.length > 5 && metaU.rawClean.includes(metaC.rawClean)) ||
+                    (metaU.normName.length > 4 && metaC.normName.includes(metaU.normName)) ||
+                    (metaC.normName.length > 4 && metaU.normName.includes(metaC.normName));
+      if (isSub) {
+        evaluatePair(userKey, catalogKey);
+      }
+    });
+  });
 
   // Find connected components in the adjacency graph
   const visited = new Set<string>();

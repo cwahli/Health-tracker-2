@@ -131,40 +131,59 @@ export default function MedicalHistoryTab({
     return keys;
   }, [auditReport]);
   
-  const getLatestValue = useCallback((key: string) => {
-    const aliases = auditReport?.duplicateGroups?.find((g: any) => g.suggestedMasterKey.toLowerCase() === key.toLowerCase())?.candidateAliases || [];
+  // Pre-indexed latest value map by key for instant O(1) lookups
+  const latestValueMap = useMemo(() => {
+    const map = new Map<string, any>();
+    const sorted = [...activeHistory].sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
     
-    // Check history logs
-    const historyLogs = activeHistory.filter(h => {
-      if (!h.biomarkers) return false;
-      if (h.biomarkers[key] !== undefined) return true;
-      for (const alias of aliases) {
-        if (h.biomarkers[alias] !== undefined) return true;
-      }
-      return false;
-    });
-    
-    if (historyLogs.length > 0) {
-      const sortedLogs = [...historyLogs].sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
-      let val = sortedLogs[0].biomarkers[key];
-      if (val === undefined) {
-        for (const alias of aliases) {
-          if (sortedLogs[0].biomarkers[alias] !== undefined) {
-            val = sortedLogs[0].biomarkers[alias];
-            break;
+    // Fill from history logs from oldest to newest so newest overwrites
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const log = sorted[i];
+      if (log.biomarkers) {
+        Object.entries(log.biomarkers).forEach(([k, v]) => {
+          if (v !== undefined) {
+            map.set(k, v);
+            map.set(k.toLowerCase(), v);
           }
-        }
+        });
       }
-      return val;
     }
-    
-    // Fallback to today's biomarkers map
-    if (biomarkers?.[key] !== undefined) return biomarkers[key];
+
+    // Fill current biomarkers fallback
+    if (biomarkers) {
+      Object.entries(biomarkers).forEach(([k, v]) => {
+        if (!map.has(k) && v !== undefined) {
+          map.set(k, v);
+          map.set(k.toLowerCase(), v);
+        }
+      });
+    }
+
+    return map;
+  }, [activeHistory, biomarkers]);
+
+  const aliasMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    auditReport?.duplicateGroups?.forEach((g: any) => {
+      if (g.suggestedMasterKey && Array.isArray(g.candidateAliases)) {
+        map.set(g.suggestedMasterKey.toLowerCase(), g.candidateAliases);
+      }
+    });
+    return map;
+  }, [auditReport]);
+
+  const getLatestValue = useCallback((key: string) => {
+    const kLower = key.toLowerCase();
+    const val = latestValueMap.get(key) ?? latestValueMap.get(kLower);
+    if (val !== undefined) return val;
+
+    const aliases = aliasMap.get(kLower) || [];
     for (const alias of aliases) {
-      if (biomarkers?.[alias] !== undefined) return biomarkers[alias];
+      const aliasVal = latestValueMap.get(alias) ?? latestValueMap.get(alias.toLowerCase());
+      if (aliasVal !== undefined) return aliasVal;
     }
     return undefined;
-  }, [activeHistory, biomarkers, auditReport]);
+  }, [latestValueMap, aliasMap]);
   const isKeyNotUsedGlobal = useCallback((k: string) => {
     if (!profile?.notUsedBiomarkers) return false;
     if (profile.notUsedBiomarkers[k]) return true;

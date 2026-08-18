@@ -493,7 +493,7 @@ const AutoCalibrateApprovalModal: React.FC<AutoCalibrateApprovalModalProps> = ({
   );
 };
 
-const DictionaryItem = ({
+const DictionaryItem = React.memo(({
   approvalReason,
   itemKey,
   builtInDef,
@@ -531,10 +531,20 @@ const DictionaryItem = ({
   isProcessing?: boolean;
   key?: string | number;
 }) => {
-  const def = getMergedBiomarkerDef(itemKey, builtInDef, customDef, itemLogs);
+  const def = useMemo(() => getMergedBiomarkerDef(itemKey, builtInDef, customDef, itemLogs), [itemKey, builtInDef, customDef, itemLogs]);
   const missingGrouping = !def.standardMedicalGrouping || def.standardMedicalGrouping.trim() === '' || def.standardMedicalGrouping === 'Other' || def.standardMedicalGrouping === 'By Medical Practice';
   const missingRisk = !Array.isArray(def.riskCategories) || def.riskCategories.length === 0 || def.riskCategories.includes('Uncategorized');
   const hasMissingCategory = missingGrouping || missingRisk;
+
+  const initialName = def.name || itemKey;
+  const initialUnit = def.unit || '';
+  const initialNormalRange = def.normalRange || '';
+  const initialGrouping = def.standardMedicalGrouping || '';
+  const initialRisk = Array.isArray(def.riskCategories) ? def.riskCategories.join(', ') : (def.riskCategories || '');
+  const initialConditions = Array.isArray(def.potentialMedicalConditions) ? def.potentialMedicalConditions.join(', ') : (def.potentialMedicalConditions || '');
+  const displayCustomRanges = customDef?.customRanges || ensureCustomRanges(itemKey, initialNormalRange, []);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
 
   const handleStartEdit = () => {
     setEditState({
@@ -551,21 +561,9 @@ const DictionaryItem = ({
     setIsEditing(true);
   };
 
-  const initialName = def.name || itemKey;
-  const initialUnit = def.unit || '';
-  const initialNormalRange = def.normalRange || '';
-  const initialGrouping = def.standardMedicalGrouping || '';
-  const initialRisk = Array.isArray(def.riskCategories) ? def.riskCategories.join(', ') : (def.riskCategories || '');
-  const initialConditions = Array.isArray(def.potentialMedicalConditions) ? def.potentialMedicalConditions.join(', ') : (def.potentialMedicalConditions || '');
-  const displayCustomRanges = customDef?.customRanges || ensureCustomRanges(itemKey, initialNormalRange, []);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
-
   const missingUnit = !initialUnit || initialUnit.trim() === '';
   const missingRange = !initialNormalRange || initialNormalRange.trim() === '' || initialNormalRange === 'Unknown';
   const hasCalibrationIssues = approvalReason || missingUnit || missingRange || hasMissingCategory;
-  const calibrationDiff = getBiomarkerCalibrationDiff(itemKey, builtInDef, customDef, itemLogs);
-  const hasCalibrationChanges = calibrationDiff.changes.length > 0;
 
   const handleAutoCalibrateAndApprove = () => {
     const calibrated = autoCalibrateBiomarkerDef(itemKey, builtInDef, customDef);
@@ -956,7 +954,6 @@ const DictionaryItem = ({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                      {false && hasCalibrationChanges && null}
                       <button
                         type="button"
                         onClick={handleStartEdit}
@@ -1146,7 +1143,7 @@ const DictionaryItem = ({
 
     </div>
   );
-}
+});
 
 export default function BiomarkerDictionaryModal({
   profile,
@@ -1502,39 +1499,80 @@ export default function BiomarkerDictionaryModal({
     return val !== undefined && val !== null && val !== '' && !Number.isNaN(val) && !(typeof val === 'string' && val.trim() === '');
   };
 
-  const collectItemLogs = (k: string) => {
-    const kLower = k.toLowerCase();
-    const result: any[] = [];
-    const aliases = auditReport?.duplicateGroups?.find((g: any) => g.suggestedMasterKey.toLowerCase() === k.toLowerCase())?.candidateAliases || [];
-    biomarkerHistory.forEach((h: any) => {
+  // Pre-indexed log history map for O(1) item log lookup
+  const historyLogsByKey = useMemo(() => {
+    const map = new Map<string, any[]>();
+    (biomarkerHistory || []).forEach((h: any) => {
       if (!h.biomarkers) return;
-      let val = h.biomarkers[k];
-      let foundKey = k;
-      if (val === undefined) {
-        val = h.biomarkers[kLower];
-        foundKey = kLower;
-      }
-      if (val === undefined) {
-        for (const alias of aliases) {
-          if (h.biomarkers[alias] !== undefined) {
-            val = h.biomarkers[alias];
-            foundKey = alias;
-            break;
+      Object.entries(h.biomarkers).forEach(([k, val]) => {
+        if (isUsefulBiomarkerValue(val)) {
+          const entry = {
+            date: h.date,
+            value: val,
+            unit: (h as any).units?.[k] || (h as any).unit,
+            normalRange: (h as any).normalRanges?.[k] || (h as any).normalRange
+          };
+          const kLower = k.toLowerCase();
+          
+          if (!map.has(k)) map.set(k, []);
+          map.get(k)!.push(entry);
+
+          if (kLower !== k) {
+            if (!map.has(kLower)) map.set(kLower, []);
+            map.get(kLower)!.push(entry);
           }
         }
-      }
-      if (isUsefulBiomarkerValue(val)) {
+      });
+    });
+    return map;
+  }, [biomarkerHistory]);
 
-        result.push({
-          date: h.date,
-          value: val,
-          unit: (h as any).units?.[foundKey] || (h as any).units?.[k] || (h as any).units?.[kLower] || (h as any).unit,
-          normalRange: (h as any).normalRanges?.[foundKey] || (h as any).normalRanges?.[k] || (h as any).normalRanges?.[kLower] || (h as any).normalRange
-        });
+  const aliasMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    auditReport?.duplicateGroups?.forEach((g: any) => {
+      if (g.suggestedMasterKey && Array.isArray(g.candidateAliases)) {
+        map.set(g.suggestedMasterKey.toLowerCase(), g.candidateAliases);
       }
     });
+    return map;
+  }, [auditReport]);
+
+  const collectItemLogs = useCallback((k: string) => {
+    const kLower = k.toLowerCase();
+    const directLogs = historyLogsByKey.get(k) || historyLogsByKey.get(kLower) || [];
+    const aliases = aliasMap.get(kLower) || [];
+    if (aliases.length === 0) {
+      return directLogs;
+    }
+    
+    // Combine logs if aliases exist
+    const seenDates = new Set<string>();
+    const result: any[] = [];
+    
+    directLogs.forEach(l => {
+      seenDates.add(l.date);
+      result.push(l);
+    });
+
+    for (const alias of aliases) {
+      const aliasLogs = historyLogsByKey.get(alias) || historyLogsByKey.get(alias.toLowerCase()) || [];
+      aliasLogs.forEach(l => {
+        if (!seenDates.has(l.date)) {
+          seenDates.add(l.date);
+          result.push(l);
+        }
+      });
+    }
+
     return result;
-  };
+  }, [historyLogsByKey, aliasMap]);
+
+  const [visibleApprovedCount, setVisibleApprovedCount] = useState<number>(40);
+
+  // Reset visible approved count on query or filter change
+  useEffect(() => {
+    setVisibleApprovedCount(40);
+  }, [searchQuery, filterOption, filterTag]);
 
   const historyKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -5944,11 +5982,11 @@ I can analyze these, compare them with our database keys, and find standard mapp
                     {filterOption === 'all' && "These approved biomarkers are mapped to your profile. You can select them to consolidate multiple biomarkers using Route Agent, or edit their normal ranges and properties."}
                   </p>
                   <div className="space-y-2">
-                    {allApprovedKeys.map(key => {
+                    {allApprovedKeys.slice(0, visibleApprovedCount).map(key => {
                       const builtIn = biomarkerDefinitions.find((d: any) => d.key === key || (Array.isArray(d.aliases) && d.aliases.some((a: string) => a.toLowerCase() === key.toLowerCase())));
                       const custom = profile.customBiomarkers?.[key];
                       const isSelected = selectedKeys.includes(key);
-                      const itemLogs = collectItemLogs(key).sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
+                      const itemLogs = collectItemLogs(key);
                       const logsCount = itemLogs.length;
                       return (
                         <DictionaryItem
@@ -6005,6 +6043,17 @@ I can analyze these, compare them with our database keys, and find standard mapp
                       );
                     })}
                   </div>
+                  {visibleApprovedCount < allApprovedKeys.length && (
+                    <div className="pt-3 pb-1 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setVisibleApprovedCount(prev => prev + 50)}
+                        className="px-4 py-2 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                      >
+                        Load More Biomarkers ({allApprovedKeys.length - visibleApprovedCount} remaining)
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-xs">
