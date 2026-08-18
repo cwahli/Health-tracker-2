@@ -14,6 +14,7 @@ const FullScreenLogViewer = lazyWithRetry(() => import('./FullScreenLogViewer'))
 import NotUsedBiomarkersModal from './NotUsedBiomarkersModal';
 import { BiomarkerAuditModal } from './BiomarkerAuditModal';
 import { saveAgentRequestLog } from '../utils/agentLogsTracker';
+import { runGeneralizedBiomarkerAudit } from '../utils/biomarkerAuditEngine';
 
 interface BiomarkerDictionaryModalProps {
   profile: UserProfile;
@@ -279,6 +280,7 @@ interface AutoCalibrateApprovalModalProps {
   biomarkerDefinitions: any[];
   biomarkerHistory: BiomarkerLog[];
   onConfirm: (approvedKeys: string[]) => void;
+  auditReport?: any;
 }
 
 const AutoCalibrateApprovalModal: React.FC<AutoCalibrateApprovalModalProps> = ({
@@ -288,7 +290,8 @@ const AutoCalibrateApprovalModal: React.FC<AutoCalibrateApprovalModalProps> = ({
   profile,
   biomarkerDefinitions,
   biomarkerHistory,
-  onConfirm
+  onConfirm,
+  auditReport
 }) => {
   if (!isOpen) return null;
 
@@ -296,10 +299,13 @@ const AutoCalibrateApprovalModal: React.FC<AutoCalibrateApprovalModalProps> = ({
     return val !== undefined && val !== null && val !== '' && !Number.isNaN(val) && !(typeof val === 'string' && val.trim() === '');
   };
 
+  
+  
   const collectItemLogs = (k: string) => {
     const kLower = k.toLowerCase();
     const result: any[] = [];
-    biomarkerHistory.forEach(h => {
+    const aliases = auditReport?.duplicateGroups?.find((g: any) => g.suggestedMasterKey.toLowerCase() === k.toLowerCase())?.candidateAliases || [];
+    biomarkerHistory.forEach((h: any) => {
       if (!h.biomarkers) return;
       let val = h.biomarkers[k];
       let foundKey = k;
@@ -307,7 +313,17 @@ const AutoCalibrateApprovalModal: React.FC<AutoCalibrateApprovalModalProps> = ({
         val = h.biomarkers[kLower];
         foundKey = kLower;
       }
+      if (val === undefined) {
+        for (const alias of aliases) {
+          if (h.biomarkers[alias] !== undefined) {
+            val = h.biomarkers[alias];
+            foundKey = alias;
+            break;
+          }
+        }
+      }
       if (isUsefulBiomarkerValue(val)) {
+
         result.push({
           date: h.date,
           value: val,
@@ -1469,6 +1485,18 @@ export default function BiomarkerDictionaryModal({
 
   const builtInKeys = biomarkerDefinitions.map(d => d.key);
   const customKeys = Object.keys(profile.customBiomarkers || {});
+
+  const auditReport = useMemo(() => {
+    return runGeneralizedBiomarkerAudit(profile?.customBiomarkers || {}, biomarkerHistory || [], biomarkers || {});
+  }, [profile?.customBiomarkers, biomarkerHistory, biomarkers]);
+
+  const aliasKeysToHide = useMemo(() => {
+    const keys = new Set<string>();
+    auditReport.duplicateGroups.forEach(g => {
+      g.candidateAliases.forEach(a => keys.add(a));
+    });
+    return keys;
+  }, [auditReport]);
   
   const isUsefulBiomarkerValue = (val: any) => {
     return val !== undefined && val !== null && val !== '' && !Number.isNaN(val) && !(typeof val === 'string' && val.trim() === '');
@@ -1477,7 +1505,8 @@ export default function BiomarkerDictionaryModal({
   const collectItemLogs = (k: string) => {
     const kLower = k.toLowerCase();
     const result: any[] = [];
-    biomarkerHistory.forEach(h => {
+    const aliases = auditReport?.duplicateGroups?.find((g: any) => g.suggestedMasterKey.toLowerCase() === k.toLowerCase())?.candidateAliases || [];
+    biomarkerHistory.forEach((h: any) => {
       if (!h.biomarkers) return;
       let val = h.biomarkers[k];
       let foundKey = k;
@@ -1485,7 +1514,17 @@ export default function BiomarkerDictionaryModal({
         val = h.biomarkers[kLower];
         foundKey = kLower;
       }
+      if (val === undefined) {
+        for (const alias of aliases) {
+          if (h.biomarkers[alias] !== undefined) {
+            val = h.biomarkers[alias];
+            foundKey = alias;
+            break;
+          }
+        }
+      }
       if (isUsefulBiomarkerValue(val)) {
+
         result.push({
           date: h.date,
           value: val,
@@ -1647,14 +1686,14 @@ export default function BiomarkerDictionaryModal({
   }, [historyKeys, customKeys, builtInKeys, profile.customBiomarkers, biomarkerHistory, isKeyNotUsed]);
 
   const allApprovedKeys = useMemo(() => {
-    return allApprovedKeysUnfiltered.filter(filterFn);
-  }, [allApprovedKeysUnfiltered, searchQuery, profile.customBiomarkers, filterOption, filterTag]);
+    return allApprovedKeysUnfiltered.filter(filterFn).filter(k => !aliasKeysToHide.has(k));
+  }, [allApprovedKeysUnfiltered, searchQuery, profile.customBiomarkers, filterOption, filterTag, aliasKeysToHide]);
 
   const toApproveKeys = useMemo(() => {
     if (filterOption === 'missing_units') return [];
     const keys = new Set([...historyKeys, ...customKeys]);
-    return Array.from(keys).filter(k => checkKeyNeedsApproval(k)).filter(filterFn);
-  }, [historyKeys, customKeys, searchQuery, profile.customBiomarkers, filterOption, biomarkerHistory, filterTag]);
+    return Array.from(keys).filter(k => checkKeyNeedsApproval(k)).filter(filterFn).filter(k => !aliasKeysToHide.has(k));
+  }, [historyKeys, customKeys, searchQuery, profile.customBiomarkers, filterOption, biomarkerHistory, filterTag, aliasKeysToHide]);
 
   const { allGroupings, allRisks, allConditions } = useMemo(() => {
     const groupings = new Set<string>();
@@ -1677,14 +1716,22 @@ export default function BiomarkerDictionaryModal({
     };
   }, [builtInKeys, customKeys, historyKeys, profile.customBiomarkers, isKeyNotUsed]);
 
+  
+
+
   const allAvailableKeys = useMemo(() => {
-    return [...toApproveKeys, ...allApprovedKeys];
-  }, [toApproveKeys, allApprovedKeys]);
+    return [...toApproveKeys, ...allApprovedKeys].filter(k => !aliasKeysToHide.has(k));
+  }, [toApproveKeys, allApprovedKeys, aliasKeysToHide]);
 
   const totalUniqueCount = useMemo(() => {
-    const keys = new Set<string>([...historyKeys, ...customKeys]);
+    const keys = new Set<string>();
+    [...historyKeys, ...customKeys].forEach(k => {
+      if (!isKeyNotUsed(k) && !aliasKeysToHide.has(k)) {
+        keys.add(k);
+      }
+    });
     return keys.size;
-  }, [historyKeys, customKeys]);
+  }, [historyKeys, customKeys, isKeyNotUsed, aliasKeysToHide]);
 
   const pendingBiomarkersCount = toApproveKeys.length;
 

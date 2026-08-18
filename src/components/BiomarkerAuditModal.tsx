@@ -34,6 +34,7 @@ interface BiomarkerAuditModalProps {
   onClose: () => void;
   profile: any;
   biomarkerHistory: any[];
+  biomarkers?: { [key: string]: any };
   onUpdateProfile: (updates: any) => void;
   onDeleteBiomarker?: (key: string) => void;
   onCombineBiomarkers?: (
@@ -62,6 +63,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
   onClose,
   profile,
   biomarkerHistory,
+  biomarkers,
   onUpdateProfile,
   onDeleteBiomarker,
   onCombineBiomarkers,
@@ -149,8 +151,8 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
 
   // Compute live report from profile & history
   const report: BiomarkerAuditReport = useMemo(() => {
-    return runGeneralizedBiomarkerAudit(profile?.customBiomarkers || {}, biomarkerHistory || []);
-  }, [profile?.customBiomarkers, biomarkerHistory]);
+    return runGeneralizedBiomarkerAudit(profile?.customBiomarkers || {}, biomarkerHistory || [], biomarkers || {});
+  }, [profile?.customBiomarkers, biomarkerHistory, biomarkers]);
 
   // Automatic background continuity persistence on any change (no manual button required)
   useEffect(() => {

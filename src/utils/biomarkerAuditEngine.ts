@@ -320,16 +320,21 @@ export function deriveConflictResolution(
  */
 export function runGeneralizedBiomarkerAudit(
   customBiomarkers: { [key: string]: any } = {},
-  biomarkerHistory: any[] = []
+  biomarkerHistory: any[] = [],
+  currentBiomarkers: { [key: string]: any } = {}
 ): BiomarkerAuditReport {
   const items: BiomarkerAuditItem[] = [];
 
   // 1. Calculate log activity counts per key
+  const combinedHistory = [...biomarkerHistory];
+  if (currentBiomarkers && Object.keys(currentBiomarkers).length > 0) {
+    combinedHistory.push({ date: new Date().toISOString().split('T')[0], biomarkers: currentBiomarkers });
+  }
   const logCounts: { [key: string]: number } = {};
   const logUnits: { [key: string]: { [unit: string]: number } } = {};
   const allKeysSet = new Set<string>(Object.keys(customBiomarkers));
 
-  biomarkerHistory.forEach(log => {
+  combinedHistory.forEach(log => {
     if (log && log.biomarkers) {
       Object.keys(log.biomarkers).forEach(k => {
         logCounts[k] = (logCounts[k] || 0) + 1;

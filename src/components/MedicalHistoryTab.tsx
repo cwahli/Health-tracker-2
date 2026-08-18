@@ -6,6 +6,7 @@ import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart a
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill } from '../utils/biomarkers';
 import { getAgentCalibration, formatOptimalTargetValue } from '../utils/agentCalibration';
+import { runGeneralizedBiomarkerAudit } from '../utils/biomarkerAuditEngine';
 import { handleUnitChange } from '../utils/biomarkerLifecycle';
 
 const getBiomarkerDef = (key: string) => biomarkerDefinitions.find(d => d.key === key);
@@ -117,15 +118,53 @@ export default function MedicalHistoryTab({
   }, [jobs]);
 
   const activeHistory = useMemo(() => (biomarkerHistory || []).filter(h => h.sync_state !== 'delete'), [biomarkerHistory]);
+
+  const auditReport = useMemo(() => {
+    return runGeneralizedBiomarkerAudit(profile?.customBiomarkers || {}, activeHistory || [], biomarkers || {});
+  }, [profile?.customBiomarkers, activeHistory, biomarkers]);
+
+  const aliasKeysToHide = useMemo(() => {
+    const keys = new Set<string>();
+    auditReport.duplicateGroups.forEach(g => {
+      g.candidateAliases.forEach(a => keys.add(a));
+    });
+    return keys;
+  }, [auditReport]);
   
   const getLatestValue = useCallback((key: string) => {
-    const historyLogs = activeHistory.filter(h => h.biomarkers && h.biomarkers[key] !== undefined);
+    const aliases = auditReport?.duplicateGroups?.find((g: any) => g.suggestedMasterKey.toLowerCase() === key.toLowerCase())?.candidateAliases || [];
+    
+    // Check history logs
+    const historyLogs = activeHistory.filter(h => {
+      if (!h.biomarkers) return false;
+      if (h.biomarkers[key] !== undefined) return true;
+      for (const alias of aliases) {
+        if (h.biomarkers[alias] !== undefined) return true;
+      }
+      return false;
+    });
+    
     if (historyLogs.length > 0) {
       const sortedLogs = [...historyLogs].sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
-      return sortedLogs[0].biomarkers[key];
+      let val = sortedLogs[0].biomarkers[key];
+      if (val === undefined) {
+        for (const alias of aliases) {
+          if (sortedLogs[0].biomarkers[alias] !== undefined) {
+            val = sortedLogs[0].biomarkers[alias];
+            break;
+          }
+        }
+      }
+      return val;
     }
-    return biomarkers?.[key];
-  }, [activeHistory, biomarkers]);
+    
+    // Fallback to today's biomarkers map
+    if (biomarkers?.[key] !== undefined) return biomarkers[key];
+    for (const alias of aliases) {
+      if (biomarkers?.[alias] !== undefined) return biomarkers[alias];
+    }
+    return undefined;
+  }, [activeHistory, biomarkers, auditReport]);
   const isKeyNotUsedGlobal = useCallback((k: string) => {
     if (!profile?.notUsedBiomarkers) return false;
     if (profile.notUsedBiomarkers[k]) return true;
@@ -311,8 +350,11 @@ export default function MedicalHistoryTab({
         potentialMedicalConditions: meta.potentialMedicalConditions
       };
     });
-    return withMetadata.filter(d => !isKeyNotUsedInMedicalHistory(d.key));
-  }, [biomarkers, activeHistory, profile.customBiomarkers, profile.ethnicity, profile.gender, profile.height, isKeyNotUsedInMedicalHistory]);
+    return withMetadata.filter(d => !isKeyNotUsedInMedicalHistory(d.key) && !aliasKeysToHide.has(d.key));
+  }, [biomarkers, activeHistory, profile.customBiomarkers, profile.ethnicity, profile.gender, profile.height, isKeyNotUsedInMedicalHistory, aliasKeysToHide]);
+
+  
+
 
   const totalUniqueBiomarkers = useMemo(() => {
     return allDefinitions.length;
@@ -961,7 +1003,7 @@ export default function MedicalHistoryTab({
         <div className="flex flex-wrap items-center gap-6 text-xs text-theme-text-secondary font-medium">
           <div className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-indigo-500" />
-            <span>Total Unique Biomarkers: <strong className="text-slate-800 dark:text-slate-200 font-bold">{totalUniqueBiomarkers}</strong></span>
+            <span>Tracked Biomarkers: <strong className="text-slate-800 dark:text-slate-200 font-bold">{totalUniqueBiomarkers}</strong></span>
           </div>
           <div className="flex items-center gap-2">
             <BrainCircuit className="w-4 h-4 text-indigo-500" />

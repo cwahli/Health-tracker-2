@@ -103,3 +103,17 @@
     - Fixed a bug where `body_mass_index` and `bmi` falsely reported 2 aliases instead of deduplicating down to 1 (`bmi`).
     - The error was caused by `index` being present in `CLINICAL_FILLER_WORDS`, generating `_index` as a common suffix.
     - Repaired `normalizeStemKey` and `biomarkers.ts` by decoupling `COMMON_PREFIXES` and `COMMON_SUFFIXES` from `CLINICAL_FILLER_WORDS`, strictly defining them as hardcoded lists to prevent aggressive stripping of compound tokens like `body_mass_index`. All tests including `biomarkerIdentity.test.ts` pass.
+
+26. **Global UI Deduplication Rendering**:
+    - Integrated `runGeneralizedBiomarkerAudit` into `MedicalHistoryTab`, `BiomarkerDictionaryModal`, and `TrendsTab`.
+    - Hidden structural duplicate aliases dynamically based on audit cluster reports, aggregating underlying historical log data into the single master key representation.
+27. **Medical History Import Fix**:
+    - Addressed the `ReferenceError: runGeneralizedBiomarkerAudit is not defined` bug in `MedicalHistoryTab.tsx` which surfaced during the duplicate rendering aggregation rollout.
+    - Verified proper hook integration with `runGeneralizedBiomarkerAudit` to compute deduplication states.
+27. **Medical History Import Fix**:
+    - Addressed the `ReferenceError: runGeneralizedBiomarkerAudit is not defined` bug in `MedicalHistoryTab.tsx` which surfaced during the duplicate rendering aggregation rollout.
+    - Verified proper hook integration with `runGeneralizedBiomarkerAudit` to compute deduplication states.
+28. **Temporal Dead Zone (TDZ) Fix**:
+    - Fixed `ReferenceError: Cannot access 'auditReport' before initialization` in `BiomarkerDictionaryModal.tsx` and `TrendsTab.tsx`.
+    - Corrected hoisting order of block-scoped React hooks so that `auditReport` and `aliasKeysToHide` are safely initialized before any `useMemo` hooks or internal utility functions (like `collectItemLogs`) capture and rely on them.
+    - Verified strict type checking (`tsc --noEmit`) and successful production build for rendering logic.

@@ -1,9 +1,87 @@
-import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
+import { get as idbGet, set as idbSet, del as idbDel, createStore, UseStore } from 'idb-keyval';
 import { UserProfile, FoodLog, BiomarkerLog, HealthAction, DailyBenefit, RecommendationReport, FoodIdea } from '../types';
 import { migrateMealSchema } from '../mealBuild';
 
+// In-memory fast cache to prevent data loss even if both IDB and localStorage are restricted
+const memoryStorageCache = new Map<string, any>();
+
+// IDB circuit-breaker state
+const IDB_TIMEOUT_MS = 1500;
+const IDB_DEGRADED_COOLDOWN_MS = 25000;
+let isIdbDegraded = false;
+let lastIdbFailureTime = 0;
+let customStore: UseStore | undefined;
+
+const getStore = (): UseStore | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  if (!customStore) {
+    try {
+      customStore = createStore('health_cockpit_db', 'keyval');
+    } catch {
+      customStore = undefined;
+    }
+  }
+  return customStore;
+};
+
+const resetStore = () => {
+  customStore = undefined;
+};
+
+const markIdbDegraded = (reason: any) => {
+  const wasHealthy = !isIdbDegraded;
+  isIdbDegraded = true;
+  lastIdbFailureTime = Date.now();
+  resetStore();
+  if (typeof window !== 'undefined') (window as any)._idbFailed = true;
+  if (wasHealthy) {
+    console.warn('[Storage] IndexedDB unresponsive or timed out; activating fast localStorage/memory fallback.', reason?.message || reason);
+  }
+};
+
+const markIdbHealthy = () => {
+  if (isIdbDegraded) {
+    isIdbDegraded = false;
+    if (typeof window !== 'undefined') (window as any)._idbFailed = false;
+    console.log('[Storage] IndexedDB connection recovered and verified healthy.');
+  }
+};
+
+const runWithTimeout = async <T>(promise: Promise<T>, ms: number, errMsg: string): Promise<T> => {
+  let timer: any;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(errMsg)), ms);
+  });
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timer);
+    return result;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+};
+
+const getLocalStorageItem = (key: string): string | null => {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem(key);
+    }
+  } catch {}
+  return null;
+};
+
+const removeLocalStorageItem = (key: string): void => {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(key);
+    }
+  } catch {}
+};
+
 export const pruneLocalStorageToFreeSpace = () => {
   try {
+    if (typeof localStorage === 'undefined') return;
     localStorage.removeItem('agent1_batch_results');
     localStorage.removeItem('batch_analysis_results');
     // DO NOT remove 'agent_request_logs' here; it is safely managed by agentLogsTracker and needed for the log viewer filter
@@ -36,105 +114,179 @@ export const pruneLocalStorageToFreeSpace = () => {
   }
 };
 
-export const get = async (key: string): Promise<any> => {
-  const isHeavyKey = key.startsWith('health_cockpit_app_data_') || key.startsWith('health_cockpit_snapshots_');
-  try {
-    const result = await Promise.race([
-      idbGet(key),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout")), 8000))
-    ]);
-    if (result !== undefined) {
-      return result;
-    }
-    // Fall back to localStorage if IDB doesn't have it or returned undefined
-    const val = localStorage.getItem(key);
-    return val ? JSON.parse(val) : undefined;
-  } catch (e) {
-    console.log("get timeout/error (falling back to localStorage):", e);
-    if (typeof window !== 'undefined') (window as any)._idbFailed = true;
-    try {
-      const val = localStorage.getItem(key);
-      return val ? JSON.parse(val) : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-};
-
 export const sanitizeForIdb = (val: any): any => {
   try {
     return JSON.parse(JSON.stringify(val, (key, value) => {
       if (typeof value === 'function' || typeof value === 'symbol') return undefined;
-      if (value && typeof value === 'object' && (value instanceof Element || value instanceof HTMLElement || value.$$typeof)) return undefined;
+      if (value && typeof value === 'object') {
+        if (typeof Element !== 'undefined' && value instanceof Element) return undefined;
+        if (typeof HTMLElement !== 'undefined' && value instanceof HTMLElement) return undefined;
+        if (value.$$typeof) return undefined;
+      }
       return value;
     }));
   } catch (e) {
     try {
-      const cleanObj: any = Array.isArray(val) ? [] : {};
-      for (const k of Object.keys(val || {})) {
-        if (typeof val[k] !== 'function' && typeof val[k] !== 'symbol') {
-          cleanObj[k] = val[k];
+      const cleanRecursive = (item: any): any => {
+        if (item === null || typeof item !== 'object') {
+          return (typeof item === 'function' || typeof item === 'symbol') ? undefined : item;
         }
-      }
-      return cleanObj;
+        if (Array.isArray(item)) {
+          return item.map(cleanRecursive).filter(x => x !== undefined);
+        }
+        const cleanObj: any = {};
+        for (const k of Object.keys(item)) {
+          if (typeof item[k] !== 'function' && typeof item[k] !== 'symbol') {
+            cleanObj[k] = cleanRecursive(item[k]);
+          }
+        }
+        return cleanObj;
+      };
+      return cleanRecursive(val);
     } catch {
       return val;
     }
   }
 };
 
+const createLightweightPayload = (val: any): any => {
+  if (!val || typeof val !== 'object') return val;
+  try {
+    const clone = JSON.parse(JSON.stringify(val));
+    if (Array.isArray(clone.foodLogs)) {
+      clone.foodLogs = clone.foodLogs.map((f: any) => {
+        if (f && typeof f.imageUrl === 'string' && f.imageUrl.startsWith('data:image/')) {
+          return { ...f, imageUrl: '[image_removed_for_snapshot]' };
+        }
+        return f;
+      });
+    }
+    return clone;
+  } catch {
+    return val;
+  }
+};
+
+const writeToLocalStorageSafe = (key: string, val: any) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch (err) {
+    // Quota exceeded: try with lightweight payload (strip heavy data URIs)
+    try {
+      pruneLocalStorageToFreeSpace();
+      const light = createLightweightPayload(val);
+      localStorage.setItem(key, JSON.stringify(light));
+    } catch {
+      // Ignore if localStorage is completely blocked
+    }
+  }
+};
+
 export const safeIdbSet = async (key: string, val: any): Promise<void> => {
   const sanitized = sanitizeForIdb(val);
-  await idbSet(key, sanitized);
+  const store = getStore();
+  if (store) {
+    await idbSet(key, sanitized, store);
+  } else {
+    await idbSet(key, sanitized);
+  }
+};
+
+export const get = async (key: string): Promise<any> => {
+  // Check in-memory cache first if available
+  if (memoryStorageCache.has(key)) {
+    const memVal = memoryStorageCache.get(key);
+    if (memVal !== undefined) return memVal;
+  }
+
+  // If IDB is currently degraded and within cooldown, directly use localStorage
+  const now = Date.now();
+  if (isIdbDegraded && (now - lastIdbFailureTime < IDB_DEGRADED_COOLDOWN_MS)) {
+    try {
+      const val = getLocalStorageItem(key);
+      if (val) {
+        const parsed = JSON.parse(val);
+        memoryStorageCache.set(key, parsed);
+        return parsed;
+      }
+    } catch {}
+    return undefined;
+  }
+
+  try {
+    const store = getStore();
+    const idbPromise = store ? idbGet(key, store) : idbGet(key);
+    const result = await runWithTimeout(idbPromise, IDB_TIMEOUT_MS, "IndexedDB timeout");
+    
+    if (result !== undefined) {
+      markIdbHealthy();
+      memoryStorageCache.set(key, result);
+      return result;
+    }
+    
+    // Fall back to localStorage if IDB doesn't have it or returned undefined
+    const val = getLocalStorageItem(key);
+    const parsed = val ? JSON.parse(val) : undefined;
+    if (parsed !== undefined) {
+      memoryStorageCache.set(key, parsed);
+    }
+    return parsed;
+  } catch (e) {
+    markIdbDegraded(e);
+    try {
+      const val = getLocalStorageItem(key);
+      const parsed = val ? JSON.parse(val) : undefined;
+      if (parsed !== undefined) {
+        memoryStorageCache.set(key, parsed);
+      }
+      return parsed;
+    } catch {
+      return undefined;
+    }
+  }
 };
 
 export const set = async (key: string, val: any): Promise<void> => {
   const isHeavyKey = key.startsWith('health_cockpit_app_data_') || key.startsWith('health_cockpit_snapshots_');
   
-  if (!isHeavyKey) {
-    try {
-      localStorage.setItem(key, JSON.stringify(val));
-    } catch {}
+  // 1. Immediately store in memory cache
+  memoryStorageCache.set(key, val);
+
+  // 2. Synchronously write to localStorage as instant fallback
+  writeToLocalStorageSafe(key, val);
+
+  // 3. If IDB is degraded and in cooldown, skip blocking IDB write (attempt in background)
+  const now = Date.now();
+  if (isIdbDegraded && (now - lastIdbFailureTime < IDB_DEGRADED_COOLDOWN_MS)) {
+    // Non-blocking background attempt to avoid freezing UI
+    safeIdbSet(key, val)
+      .then(() => markIdbHealthy())
+      .catch(() => {});
+    return;
   }
-  
+
+  // 4. Attempt IDB write with quick timeout
   try {
-    await Promise.race([
-      safeIdbSet(key, val),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout")), 8000))
-    ]);
-    if (typeof window !== 'undefined') (window as any)._idbFailed = false;
+    await runWithTimeout(safeIdbSet(key, val), IDB_TIMEOUT_MS, "IndexedDB timeout");
+    markIdbHealthy();
+    
     // On success, clean up localStorage for heavy keys to save quota
     if (isHeavyKey) {
-      try {
-        localStorage.removeItem(key);
-      } catch {}
+      removeLocalStorageItem(key);
     }
   } catch (idbError) {
-    console.warn("IndexedDB set failed once, retrying:", idbError);
+    // Retry once with quick timeout
     try {
-      await Promise.race([
-        safeIdbSet(key, val),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB timeout (retry)")), 8000))
-      ]);
-      if (typeof window !== 'undefined') (window as any)._idbFailed = false;
+      await runWithTimeout(safeIdbSet(key, val), IDB_TIMEOUT_MS, "IndexedDB timeout (retry)");
+      markIdbHealthy();
       if (isHeavyKey) {
-        try {
-          localStorage.removeItem(key);
-        } catch {}
+        removeLocalStorageItem(key);
       }
     } catch (retryError) {
-      console.error("IndexedDB set failed twice, giving up on this write:", retryError);
-      if (typeof window !== 'undefined') (window as any)._idbFailed = true;
-      // Fallback to localStorage for heavy keys if they fit within quota
+      markIdbDegraded(retryError);
+      // Ensure localStorage backup is present for heavy key
       if (isHeavyKey) {
-        try {
-          const stringified = JSON.stringify(val);
-          if (stringified.length < 4.5 * 1024 * 1024) {
-            localStorage.setItem(key, stringified);
-          }
-        } catch (e) {
-          console.error("localStorage fallback failed:", e);
-        }
+        writeToLocalStorageSafe(key, val);
       }
     }
   }
@@ -346,10 +498,16 @@ export const getAggregatedAppData = async (email?: string | null): Promise<any> 
 
   // Once migrated into primary key, clear legacy and guest stores so they are never continuously merged again
   try {
-    localStorage.removeItem(legacyKey);
-    localStorage.removeItem(guestKey);
-    await idbDel(legacyKey).catch(() => {});
-    await idbDel(guestKey).catch(() => {});
+    removeLocalStorageItem(legacyKey);
+    removeLocalStorageItem(guestKey);
+    const store = getStore();
+    if (store) {
+      await idbDel(legacyKey, store).catch(() => {});
+      await idbDel(guestKey, store).catch(() => {});
+    } else {
+      await idbDel(legacyKey).catch(() => {});
+      await idbDel(guestKey).catch(() => {});
+    }
   } catch {}
 
   return {

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { UserProfile, FoodLog, BiomarkerLog, RecommendationReport, NutrientBreakdown } from '../types';
 import { nutrientDefinitions } from '../utils/nutrition';
 import { translations } from '../utils/translations';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { TrendingUp, BarChart2, Calendar, EyeOff, Copy, Check } from 'lucide-react';
 import { toYYYYMMDD, formatTimelineDate } from '../utils/dateUtils';
+import { runGeneralizedBiomarkerAudit } from '../utils/biomarkerAuditEngine';
 import { getBiomarkerStatus, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity } from '../utils/biomarkers';
 const parseTargetBounds = (targetStr: string | undefined, nutrientKey: string, defaultMin: number = 0, defaultMax: number = Infinity) => {
   if (!targetStr) return { min: defaultMin, max: defaultMax };
@@ -113,6 +114,18 @@ export default function TrendsTab({
 }: TrendsTabProps) {
   const t = translations[profile.language] || translations.en;
   const activeHistory = React.useMemo(() => (biomarkerHistory || []).filter(h => h.sync_state !== 'delete'), [biomarkerHistory]);
+
+  const auditReport = useMemo(() => {
+    return runGeneralizedBiomarkerAudit(profile?.customBiomarkers || {}, activeHistory || [], (profile as any)?.currentBiomarkers || {});
+  }, [profile?.customBiomarkers, activeHistory, profile]);
+
+  const aliasKeysToHide = useMemo(() => {
+    const keys = new Set<string>();
+    auditReport.duplicateGroups.forEach(g => {
+      g.candidateAliases.forEach(a => keys.add(a));
+    });
+    return keys;
+  }, [auditReport]);
   const activeFoodLogs = React.useMemo(() => (foodLogs || []).filter(f => f.sync_state !== 'delete'), [foodLogs]);
   const [selectedMetric, setSelectedMetric] = useState<string>(() => {
     return localStorage.getItem('trends_selected_metric') || 'calories';
@@ -139,7 +152,7 @@ export default function TrendsTab({
   };
 
   // Generate continuous or logged timeline data for the chart
-  const getChartData = () => {
+  const getChartData = useCallback(() => {
     // Collect all unique dates from both logs normalized to YYYY-MM-DD
     const emailSuffix = profile?.email ? `_${profile.email.toLowerCase().trim()}` : '_guest';
     const datesSet = new Set<string>();
@@ -168,9 +181,19 @@ export default function TrendsTab({
 
       // Extract biomarker if logged on this day
       const dayBio = activeHistory.find(b => toYYYYMMDD(b.date) === dateStr);
-      const ldlVal = dayBio?.biomarkers.ldl;
-      const hba1cVal = dayBio?.biomarkers.hba1c;
-      const egfrVal = dayBio?.biomarkers.egfr;
+      const getBioVal = (k: string) => {
+        if (!dayBio?.biomarkers) return undefined;
+        if (dayBio.biomarkers[k] !== undefined) return dayBio.biomarkers[k];
+        const aliases = auditReport.duplicateGroups.find(g => g.suggestedMasterKey === k)?.candidateAliases || [];
+        for (const alias of aliases) {
+          if (dayBio.biomarkers[alias] !== undefined) return dayBio.biomarkers[alias];
+        }
+        return undefined;
+      };
+      
+      const ldlVal = getBioVal('ldl');
+      const hba1cVal = getBioVal('hba1c');
+      const egfrVal = getBioVal('egfr');
 
       let value = 0;
       const isNutrient = nutrientDefinitions.some(n => n.key === selectedMetric);
@@ -236,7 +259,8 @@ export default function TrendsTab({
     }
 
     return activeCompiled;
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFoodLogs, activeHistory, selectedMetric, report, profile, auditReport, aliasKeysToHide]);
 
   const chartData = getChartData();
 
@@ -259,7 +283,7 @@ export default function TrendsTab({
   };
   const metricMeta = getMetricMeta();
 
-  const getSummaryData = () => {
+  const getSummaryData = useCallback(() => {
     const days = typeof summaryDays === 'number' ? summaryDays : 7;
     const dateStrs: string[] = [];
     const today = new Date();
@@ -292,14 +316,30 @@ export default function TrendsTab({
     const bioAverages: { [key: string]: number } = {};
     const allBioKeys = new Set<string>(['ldl', 'hba1c', 'egfr']);
     activeHistory.forEach(b => {
-      Object.keys(b.biomarkers).forEach(k => allBioKeys.add(k));
+      Object.keys(b.biomarkers).forEach(k => {
+        if (!aliasKeysToHide.has(k)) {
+          allBioKeys.add(k);
+        } else {
+          const master = auditReport.duplicateGroups.find(g => g.candidateAliases.includes(k))?.suggestedMasterKey;
+          if (master) allBioKeys.add(master);
+        }
+      });
     });
     
     const sortedHistory = [...activeHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     Array.from(allBioKeys).forEach(k => {
       for (const log of sortedHistory) {
-        const v = log.biomarkers[k];
+        let v = log.biomarkers[k];
+        if (v === undefined) {
+          const aliases = auditReport.duplicateGroups.find(g => g.suggestedMasterKey === k)?.candidateAliases || [];
+          for (const alias of aliases) {
+            if (log.biomarkers[alias] !== undefined) {
+              v = log.biomarkers[alias];
+              break;
+            }
+          }
+        }
         if (v !== undefined) {
           if (typeof v === 'number') {
              bioAverages[k] = v;
@@ -334,7 +374,8 @@ export default function TrendsTab({
     allBioKeys.add('steps');
     
     return { nutrientAverages, bioAverages, allBioKeys: Array.from(allBioKeys) };
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFoodLogs, activeHistory, selectedMetric, summaryDays, report, profile, auditReport, aliasKeysToHide]);
   const summaryData = activeSubTab === 'summary' ? getSummaryData() : null;
   const nutrientDots = summaryData ? nutrientDefinitions.map(nut => {
     const value = summaryData.nutrientAverages[nut.key] || 0;
