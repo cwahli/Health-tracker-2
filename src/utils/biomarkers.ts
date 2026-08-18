@@ -580,13 +580,23 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
   }
 ];
 
+export const CLINICAL_FILLER_WORDS = [
+  'serum', 'plasma', 'blood', 'total', 'fasting', 'estimated', 'intact', 
+  'calculated', 'senon', 'se', 'level', 'levels', 'count', 'rate', 'ratio', 
+  'percent', 'percentage', 'val', 'value', 'score', 'estimation', 'standardised', 
+  'index', 'test'
+];
+// NOTE: 'free' is intentionally excluded from generic prefix stripping. Free vs Total
+// forms (e.g. Free Testosterone vs Total Testosterone, Free PSA vs Total PSA) are
+// clinically distinct analytes with different units/ranges and must never collapse
+// onto the same canonical stem. See hasFreeTotalConflict guard below for the
+// name-similarity path, and CLINICAL_SYNONYM_MAP for the explicit "free_x" -> "free_x" aliases.
+
 export const COMMON_PREFIXES = [
-  'serum_', 'plasma_', 'blood_', 'total_', 'free_', 'fasting_', 'estimated_', 'intact_', 
-  'calculated_', 'senon_', 'se_'
+  'serum_', 'plasma_', 'blood_', 'total_', 'fasting_', 'estimated_', 'intact_', 'calculated_', 'senon_', 'se_'
 ];
 export const COMMON_SUFFIXES = [
-  '_level', '_count', '_serum', '_rate', '_ratio', '_percent', '_percentage', 
-  '_val', '_value', '_score', '_estimation', '_standardised'
+  '_level', '_count', '_serum', '_rate', '_ratio', '_percent', '_percentage', '_val', '_value', '_score', '_estimation', '_standardised'
 ];
 export const COMMON_UNIT_SUFFIXES = [
   '_umol_l', '_umoll', '_u_l', '_ul', '_iu_l', '_iul', '_iu_ml', '_iuml',
@@ -668,6 +678,12 @@ export const CLINICAL_SYNONYM_MAP: Record<string, string> = {
   'egfrcreat': 'egfr',
   'egfrcreatckdepi': 'egfr',
   'egfrcreatckdepi173m2': 'egfr',
+  'gfr': 'egfr',
+  'estimatedgfr': 'egfr',
+  'estimatedglomerularfiltrationrate': 'egfr',
+  'glomerularfiltrationrate': 'egfr',
+  'glomerularfiltrationrateestimated': 'egfr',
+  'kidneyfunctionegfr': 'egfr',
   'creatinine': 'creatinine',
   'bun': 'bun',
   'bloodureanitrogen': 'bun',
@@ -772,6 +788,64 @@ export const CLINICAL_SYNONYM_MAP: Record<string, string> = {
 };
 
 /**
+ * Clinical qualifier terms that change a biomarker's identity, unit, or reference
+ * range when present. If exactly one of two candidate biomarker strings contains a
+ * term from this list, they are treated as distinct tests — never auto-merged by the
+ * substring/stem-similarity fallback (rule 5 in isBiomarkerDuplicateCandidate).
+ *
+ * This list is the SINGLE place to extend false-friend protection. To protect a new
+ * pair of frequently-confused biomarkers (e.g. "Direct Bilirubin" vs "Indirect
+ * Bilirubin", "Ionized Calcium" vs "Total Calcium"), add the discriminating word(s)
+ * here — do not write a new hasXConflict boolean. Grouped by category for
+ * maintainability; the grouping is documentation only, all terms are checked
+ * identically (XOR presence = conflict).
+ */
+export const CLINICAL_DISCRIMINATOR_TERMS: string[] = [
+  // Specimen / fluid type — same analyte name, different sample source
+  'urine', 'urinary', 'serum', 'plasma', 'csf', 'saliva', 'stool', 'faecal', 'fecal', 'sweat', 'capillary',
+  // Fraction / binding state
+  'free', 'total', 'bound', 'direct', 'indirect', 'conjugated', 'unconjugated', 'ionized', 'ionised',
+  // Measurement type on the same base analyte (e.g. red-cell indices)
+  'concentration', 'conc', 'mchc', 'volume', 'width', 'distribution', 'corpuscular',
+  // Lipoprotein fraction
+  'hdl', 'ldl', 'vldl', 'nonhdl',
+  // Glycation / averaging window
+  'a1c', 'fructosamine',
+  // Timing / physiological state
+  'fasting', 'random', 'postprandial', 'basal', 'peak', 'trough',
+  // Laterality (imaging-adjacent biomarkers, e.g. paired organ measures)
+  'left', 'right',
+];
+
+/**
+ * Generic false-friend check: true if a discriminator term from
+ * CLINICAL_DISCRIMINATOR_TERMS appears in exactly one of the two cleaned strings.
+ */
+export function hasDiscriminatorConflict(cleanA: string, cleanB: string): boolean {
+  for (const term of CLINICAL_DISCRIMINATOR_TERMS) {
+    if (cleanA.includes(term) !== cleanB.includes(term)) return true;
+  }
+  return false;
+}
+
+/**
+ * Looks up a canonical synonym for a stem/name fragment, tolerating both the
+ * contiguous form CLINICAL_SYNONYM_MAP is authored in (e.g. "bodymassindex")
+ * and the underscored form normalizeStemKey() can still return for multi-word
+ * compounds that don't fully collapse to a single recognized token
+ * (e.g. "body_mass_index"). Without this, any compound stem that retains an
+ * underscore silently fails synonym resolution even though the no-underscore
+ * form is a known entry.
+ */
+export function lookupClinicalSynonym(s?: string | null): string | undefined {
+  if (!s) return undefined;
+  if (CLINICAL_SYNONYM_MAP[s]) return CLINICAL_SYNONYM_MAP[s];
+  const noUnderscore = s.replace(/_/g, '');
+  if (noUnderscore !== s && CLINICAL_SYNONYM_MAP[noUnderscore]) return CLINICAL_SYNONYM_MAP[noUnderscore];
+  return undefined;
+}
+
+/**
  * Normalizes an arbitrary key stem for generalized morphological clustering and alias resolution
  */
 export function normalizeStemKey(key: string): string {
@@ -838,7 +912,8 @@ export function normalizeBiomarkerName(name?: string): string {
   clean = clean.replace(/\b(?:pg(?:\/ml)?|ng\/(?:ml|dl)|mg\/(?:dl|l)|mmol\/(?:l|mol)|µmol\/l|umol\/l|u\/l|iu\/l|miu\/l|uiu\/ml|k\/ul|10\^9\/l|10\^12\/l|fl|kg\/m2|kg\/m²|ml\/min\/1\.73m2|ml\/min(?:\/1\.73m²)?|g\/l|g\/dl|score|points|steps|beats\/min|bpm|percent|%)\b/gi, ' ');
 
   // Strip clinical filler words
-  clean = clean.replace(/\b(?:serum|plasma|blood|total|level|levels|count|estimation|calculated|rate|ratio|index|score|test)\b/gi, ' ');
+  const fillerRegex = new RegExp(`\\b(?:${CLINICAL_FILLER_WORDS.join('|')})\\b`, 'gi');
+  clean = clean.replace(fillerRegex, ' ');
 
   // Collapse spaces and symbols
   clean = clean.replace(/[^a-z0-9]+/g, ' ').trim();
@@ -1027,9 +1102,11 @@ export function getMappedBiomarkerKey(rawKey: string, rawName?: string): string 
     }
 
     // 4. Clinical Synonym Dictionary match
-    if (CLINICAL_SYNONYM_MAP[cleanNoUnderscore]) return CLINICAL_SYNONYM_MAP[cleanNoUnderscore];
+    const directSyn = lookupClinicalSynonym(cleanNoUnderscore);
+    if (directSyn) return directSyn;
     const stem = normalizeStemKey(inputStr);
-    if (CLINICAL_SYNONYM_MAP[stem]) return CLINICAL_SYNONYM_MAP[stem];
+    const stemSyn = lookupClinicalSynonym(stem);
+    if (stemSyn) return stemSyn;
 
     // 5. Match by stem on definitions and aliases
     if (stem) {
@@ -1047,7 +1124,11 @@ export function getMappedBiomarkerKey(rawKey: string, rawName?: string): string 
       // If the input explicitly contains the clinical name, and isn't guarded
       if (defNameNoUnderscore.length > 5 && cleanNoUnderscore.includes(defNameNoUnderscore)) {
          // Guard against false friends:
-         if (isUrine && def.key.includes('serum')) continue;
+         const SPECIMENS = ['urine', 'csf', 'saliva', 'stool'];
+         const hasSpecimenConflict = SPECIMENS.some(specimen => 
+           cleanNoUnderscore.includes(specimen) !== (def.key.includes(specimen) || defNameNoUnderscore.includes(specimen))
+         );
+         if (hasSpecimenConflict) continue;
          if (cleanNoUnderscore.includes('meancorpuscular') && def.key === 'hemoglobin') continue;
          
          return def.key;
@@ -1132,8 +1213,8 @@ export function isBiomarkerDuplicateCandidate(
   }
 
   // 4. Clinical Synonym Dictionary match
-  const synA = CLINICAL_SYNONYM_MAP[rawCleanA] || CLINICAL_SYNONYM_MAP[stemA];
-  const synB = CLINICAL_SYNONYM_MAP[rawCleanB] || CLINICAL_SYNONYM_MAP[stemB];
+  const synA = lookupClinicalSynonym(rawCleanA) || lookupClinicalSynonym(stemA);
+  const synB = lookupClinicalSynonym(rawCleanB) || lookupClinicalSynonym(stemB);
   if (synA && synB && synA === synB) {
     return {
       isMatch: true,
@@ -1143,22 +1224,47 @@ export function isBiomarkerDuplicateCandidate(
     };
   }
 
+  // 4b. Canonical Mapped-Key Match — reuses the single source-of-truth resolver
+  // (getMappedBiomarkerKey), which additionally applies specimen/false-friend guards
+  // (e.g. any "egfr*" variant, MCH-vs-hemoglobin disambiguation) that the stem/synonym
+  // checks above don't cover on their own. Only trusted when it lands on a REAL
+  // catalog key (not the raw-slug fallback getMappedBiomarkerKey returns for
+  // completely unrecognized input), so two unrelated unknown markers can't
+  // coincidentally "match" just because neither resolved to anything.
+  const mappedA = getMappedBiomarkerKey(bioA.key, bioA.name);
+  const mappedB = getMappedBiomarkerKey(bioB.key, bioB.name);
+  const isKnownCatalogKey = (k: string) => biomarkerDefinitions.some(d => d.key === k);
+  if (mappedA && mappedB && mappedA === mappedB && isKnownCatalogKey(mappedA)) {
+    return {
+      isMatch: true,
+      confidence: 0.94,
+      reason: `Both resolve to the same catalog biomarker "${mappedA}"`,
+      matchType: 'canonical_mapped_key'
+    };
+  }
+
   // 5. Close Substring / Stem Ingestion with unit/category compatibility check
   const isSubstring = (rawCleanA.length > 5 && rawCleanB.includes(rawCleanA)) || (rawCleanB.length > 5 && rawCleanA.includes(rawCleanB));
   const isNameSubstring = (normNameA.length > 4 && normNameB.includes(normNameA)) || (normNameB.length > 4 && normNameA.includes(normNameB));
 
   if (isSubstring || isNameSubstring) {
     // Check for distinct clinical discriminators (false friends)
-    const hasConcentrationConflict = (rawCleanA.includes('concentration') !== rawCleanB.includes('concentration')) ||
-      (rawCleanA.includes('conc') !== rawCleanB.includes('conc')) ||
-      (rawCleanA.includes('mchc') !== rawCleanB.includes('mchc'));
-    const hasVolumeConflict = rawCleanA.includes('volume') !== rawCleanB.includes('volume');
-    const hasWidthConflict = (rawCleanA.includes('width') !== rawCleanB.includes('width')) || (rawCleanA.includes('distribution') !== rawCleanB.includes('distribution'));
-    const hasFluidConflict = (rawCleanA.includes('urine') !== rawCleanB.includes('urine')) || (rawCleanA.includes('serum') !== rawCleanB.includes('serum') && (rawCleanA.includes('urine') || rawCleanB.includes('urine')));
-    const hasFreeTotalConflict = (rawCleanA.includes('free') !== rawCleanB.includes('free')) || (rawCleanA.includes('total') !== rawCleanB.includes('total'));
-    const hasLipidTypeConflict = (rawCleanA.includes('hdl') !== rawCleanB.includes('hdl')) || (rawCleanA.includes('ldl') !== rawCleanB.includes('ldl')) || (rawCleanA.includes('vldl') !== rawCleanB.includes('vldl'));
-
-    const isFalseFriend = hasConcentrationConflict || hasVolumeConflict || hasWidthConflict || hasFluidConflict || hasFreeTotalConflict || hasLipidTypeConflict;
+    const DISCRIMINATOR_CANONICAL = [
+      ['concentration', 'conc', 'mchc'],
+      ['volume'], ['width', 'distribution'],
+      ['urine'], ['csf'], ['saliva'], ['stool'],
+      ['free'], ['total'],
+      ['hdl'], ['ldl'], ['vldl'],
+      ['corpuscular'], ['a1c', 'hba1c'],
+      ['fasting'], ['random'],
+      ['direct'], ['indirect'], ['unconjugated'], ['ionized']
+    ];
+    
+    const isFalseFriend = DISCRIMINATOR_CANONICAL.some(group => {
+      const aHas = group.some(token => rawCleanA.includes(token));
+      const bHas = group.some(token => rawCleanB.includes(token));
+      return aHas !== bHas;
+    });
 
     if (!isFalseFriend) {
       // Confirm with unit or category or range if available

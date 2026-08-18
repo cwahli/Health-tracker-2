@@ -99,3 +99,7 @@
 
 
 - Pack M23 Free Tier Reliability and M31 Biomarker Lifecycle have been fully completed, verified against master gates, and safely archived. Ready to receive the chat prompt for the next active pack (M30 Food Curator).
+25. **Biomarker Identity Deduplication Engine Fix**:
+    - Fixed a bug where `body_mass_index` and `bmi` falsely reported 2 aliases instead of deduplicating down to 1 (`bmi`).
+    - The error was caused by `index` being present in `CLINICAL_FILLER_WORDS`, generating `_index` as a common suffix.
+    - Repaired `normalizeStemKey` and `biomarkers.ts` by decoupling `COMMON_PREFIXES` and `COMMON_SUFFIXES` from `CLINICAL_FILLER_WORDS`, strictly defining them as hardcoded lists to prevent aggressive stripping of compound tokens like `body_mass_index`. All tests including `biomarkerIdentity.test.ts` pass.

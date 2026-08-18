@@ -17,6 +17,7 @@ import {
   BiomarkerDefinition,
   getMappedBiomarkerKey,
   CLINICAL_SYNONYM_MAP,
+  lookupClinicalSynonym,
   normalizeStemKey,
   normalizeBiomarkerName,
   isBiomarkerDuplicateCandidate,
@@ -133,13 +134,15 @@ export function getCanonicalBiomarkerStem(key: string, name?: string): string {
     if (norm) return norm;
   }
   const normKey = normalizeStemKey(key);
-  if (normKey && CLINICAL_SYNONYM_MAP[normKey]) {
-    return CLINICAL_SYNONYM_MAP[normKey];
+  const normKeySyn = lookupClinicalSynonym(normKey);
+  if (normKeySyn) {
+    return normKeySyn;
   }
   if (name) {
     const normName = normalizeStemKey(name);
-    if (normName && CLINICAL_SYNONYM_MAP[normName]) {
-      return CLINICAL_SYNONYM_MAP[normName];
+    const normNameSyn = lookupClinicalSynonym(normName);
+    if (normNameSyn) {
+      return normNameSyn;
     }
     if (normName) return normName;
   }

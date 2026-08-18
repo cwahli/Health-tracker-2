@@ -11,6 +11,7 @@ import {
   isBiomarkerMissingRange,
   isPendingCatalogApproval,
   shouldStampExtractedDefPending,
+  isBiomarkerDuplicateCandidate,
   biomarkerDefinitions,
 } from './biomarkers';
 
@@ -195,5 +196,49 @@ describe('dedupe pressure — alias fan-in', () => {
     const keys = ['egfr', 'egfr_mlmin173m2', 'egfr_ml_min_1_73m2', 'egfrcreatckdepi173m2', 'eGFR'].map(k => getMappedBiomarkerKey(k));
     expect(new Set(keys).size).toBe(1);
     expect(keys[0]).toBe('egfr');
+  });
+
+  it('egfr collapses across plain-English and specimen-prefixed name variants (dedup engine review)', () => {
+    const keys = ['egfr', 'Estimated GFR', 'GFR', 'Glomerular Filtration Rate', 'egfr_creatinine'].map(k => getMappedBiomarkerKey(k));
+    expect(new Set(keys).size).toBe(1);
+    expect(keys[0]).toBe('egfr');
+  });
+
+  it('bmi collapses across full-name and unit-suffixed key variants (dedup engine review)', () => {
+    const keys = ['bmi', 'Body Mass Index', 'body_mass_index_kg_m2', 'BMI (kg/m2)'].map(k => getMappedBiomarkerKey(k));
+    expect(new Set(keys).size).toBe(1);
+    expect(keys[0]).toBe('bmi');
+  });
+});
+
+describe('isBiomarkerDuplicateCandidate — false-friend guards (dedup engine review)', () => {
+  it('does NOT merge plain Hemoglobin with Mean Corpuscular Hemoglobin (different analytes/units)', () => {
+    const m = isBiomarkerDuplicateCandidate({ key: 'hemoglobin', name: 'Hemoglobin' }, { key: 'mch', name: 'Mean Corpuscular Hemoglobin' });
+    expect(m.isMatch).toBe(false);
+  });
+
+  it('does NOT merge Hemoglobin with Hemoglobin A1c (glycated Hb is a distinct test)', () => {
+    const m = isBiomarkerDuplicateCandidate({ key: 'hemoglobin', name: 'Hemoglobin' }, { key: 'hba1c_alt', name: 'Hemoglobin A1c' });
+    expect(m.isMatch).toBe(false);
+  });
+
+  it('does NOT merge Testosterone with Free Testosterone (distinct clinical values)', () => {
+    const m = isBiomarkerDuplicateCandidate({ key: 'testosterone', name: 'Testosterone' }, { key: 'free_t', name: 'Free Testosterone' });
+    expect(m.isMatch).toBe(false);
+  });
+
+  it('does NOT merge blood Creatinine with Urine Creatinine (different specimen types)', () => {
+    const m = isBiomarkerDuplicateCandidate({ key: 'creatinine', name: 'Creatinine' }, { key: 'ucreat', name: 'Urine Creatinine' });
+    expect(m.isMatch).toBe(false);
+  });
+
+  it('DOES merge Mean Corpuscular Hemoglobin with its unit-suffixed lab variant', () => {
+    const m = isBiomarkerDuplicateCandidate({ key: 'mean_corpuscular_hemoglobin', name: 'Mean Corpuscular Hemoglobin' }, { key: 'mch_pg', name: 'Mean Corpuscular Hemoglobin Pg' });
+    expect(m.isMatch).toBe(true);
+  });
+
+  it('DOES merge eGFR with an unrecognized creatinine-suffixed key via canonical mapped-key match', () => {
+    const m = isBiomarkerDuplicateCandidate({ key: 'egfr', name: 'eGFR' }, { key: 'egfr_creatinine', name: 'eGFR Creatinine' });
+    expect(m.isMatch).toBe(true);
   });
 });
