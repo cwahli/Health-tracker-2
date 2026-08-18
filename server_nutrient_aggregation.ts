@@ -513,11 +513,21 @@ export function aggregateItemsNutrients(
     }
 
     const itemFactor = itemWeight / 100;
+    // NUTRIENT SOURCE TRACKING (Aug 2026): record, per trace-nutrient key, whether the value
+    // came from a matched database entry or the food-type heuristic fallback, so the UI can
+    // show an accurate source instead of a blanket "estimated by AI agent" label (no LLM is
+    // involved in producing any of these trace-20 values).
+    const nutrientSourceMap: Record<string, string> = { ...(item.nutrientSourceMap || {}) };
     for (const key of Object.keys(traceNutrients)) {
       if (baseRef100g && baseRef100g[key] !== undefined && baseRef100g[key] !== null) {
         itemNutrients[key] = parseFloat((baseRef100g[key] * itemFactor).toFixed(2));
+        nutrientSourceMap[key] = dbSource === "usda" ? "usda_database"
+          : dbSource === "off" ? "openfoodfacts_database"
+          : dbSource === "brand_official" || dbSource === "label" ? "brand_label_data"
+          : "matched_database_entry";
       } else if (itemNutrients[key] === undefined || itemNutrients[key] === 0) {
         itemNutrients[key] = (traceNutrients as any)[key];
+        nutrientSourceMap[key] = "foodtype_estimate";
       }
     }
     addDebugLog(`[Nutrient] "${canonicalName}" trace-20 computed from ${baseRef100g ? 'authentic DB nutrients with fallback' : 'foodType=' + foodType}.`);
@@ -617,6 +627,7 @@ export function aggregateItemsNutrients(
       totalFibre: itemNutrients.totalFibre || itemNutrients.fiber || itemNutrients.fibre || itemNutrients.serat || 0,
       solubleFibre: itemNutrients.solubleFibre || 0,
       nutrients: itemNutrients,
+      nutrientSourceMap,
       labelNutrientsPerServing: item.labelNutrientsPerServing || null,
       dbSource,
       dbId,

@@ -1598,7 +1598,8 @@ export const FoodCard: React.FC<AgentCardProps & {
         labelNutrientsPerServing: item.labelNutrientsPerServing || item.primaryBase100g || item.nutrients || matchingScout?.labelNutrientsPerServing || null,
         primaryBase100g: item.primaryBase100g || item.labelNutrientsPerServing || null,
         primaryBaseMatchName: item.primaryBaseMatchName || item.canonicalDbName || null,
-        componentsDetailList: item.componentsDetailList || item.componentsDetail || matchingScout?.componentsDetailList || []
+        componentsDetailList: item.componentsDetailList || item.componentsDetail || matchingScout?.componentsDetailList || [],
+        nutrientSourceMap: item.nutrientSourceMap || matchingScout?.nutrientSourceMap || null
       };
     });
   }, [activeScoutItems, msg.data]);

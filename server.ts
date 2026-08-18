@@ -6366,7 +6366,16 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           if (itemWeight > 0) {
             const compositeBase100g: Record<string, number> = {};
             NUTRIENT_KEYS.forEach(key => {
-              compositeBase100g[key] = parseFloat(((aggregatedNutrients[key] || 0) / (itemWeight / 100)).toFixed(3));
+              // ZERO-COLLAPSE FIX (Aug 2026): only carry a key into compositeBase100g if at least
+              // one matched component's raw per-100g data actually had it defined. Otherwise the
+              // key is left out entirely, so the trace-nutrient fallback in
+              // server_nutrient_aggregation.ts (baseRef100g[key] !== undefined check) correctly
+              // falls through to the food-type heuristic instead of treating a component data gap
+              // as an authentic zero.
+              const anyComponentHasKey = componentsDetailList.some((c: any) => c.baseNutrients100g && c.baseNutrients100g[key] !== undefined && c.baseNutrients100g[key] !== null);
+              if (anyComponentHasKey) {
+                compositeBase100g[key] = parseFloat(((aggregatedNutrients[key] || 0) / (itemWeight / 100)).toFixed(3));
+              }
             });
             addDebugLog(`[Assembly] Recomputed primaryBase100g as weighted composite density for "${item.originalName || item.keyword}" (was: first-component-only density).`);
             primaryBase100g = compositeBase100g;

@@ -1685,7 +1685,16 @@ export default function FoodHistoryTab({
                                   <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold block mb-1">
                                     📋 Nutrition Labels & Reference Data
                                   </span>
-                                  <NutritionLabelTable activeScoutItems={log.scoutItems} />
+                                  <NutritionLabelTable activeScoutItems={log.scoutItems.map((item: any) => ({
+                                    ...item,
+                                    // HISTORY NUTRITIONFACTS BRIDGE (Aug 2026): NutritionLabelTable's row
+                                    // list only reads item.rawNutritionLabel / item.nutritionFacts, but
+                                    // saved log items only carry the computed set under item.nutrients.
+                                    // Mirrors the same bridge FoodCard.tsx's displayedScoutItems applies
+                                    // for the live chat view, so History shows the full computed table
+                                    // instead of an empty/truncated one.
+                                    nutritionFacts: item.nutritionFacts || item.nutrients,
+                                  }))} />
                                 </div>
                               )}
 

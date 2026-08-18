@@ -692,6 +692,14 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
 
                           const isSodium = k.toLowerCase().includes('sodium') || k.toLowerCase().includes('salt');
 
+                          const sourceKey = item.nutrientSourceMap?.[k] || item.nutrientSourceMap?.[normKey];
+                          const estimateTooltipText = sourceKey === 'usda_database' ? 'From a matched USDA database entry, not the printed label'
+                            : sourceKey === 'openfoodfacts_database' ? 'From a matched Open Food Facts database entry, not the printed label'
+                            : sourceKey === 'brand_label_data' ? 'From the brand\'s published nutrition data, not this specific printed label'
+                            : sourceKey === 'matched_database_entry' ? 'From a matched food database entry, not the printed label'
+                            : sourceKey === 'foodtype_estimate' ? 'Estimated from typical values for this type of food — not from a database or label'
+                            : 'Estimated — not from a verified label or database';
+
                           return (
                             <tr key={k} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
                               <td className="py-1.5 px-2 font-medium text-theme-neutral capitalize">
@@ -713,7 +721,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                             !
                                           </div>
                                         }
-                                        content="The value is estimated by the AI agent"
+                                        content={estimateTooltipText}
                                         contentClassName="bg-slate-900/95 dark:bg-slate-950/95 text-amber-200 border-amber-500/30 text-center text-[10px]"
                                       />
                                     </div>

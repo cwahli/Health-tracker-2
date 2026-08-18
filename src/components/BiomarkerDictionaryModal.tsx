@@ -4,7 +4,7 @@ import { toYYYYMMDD } from "../utils/dateUtils";
 import React, { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import { UserProfile, BiomarkerLog } from '../types';
-import { biomarkerDefinitions, BIOMARKER_GROUPING_OPTIONS, getBiomarkerMetadata, getMergedBiomarkerDef, isPendingCatalogApproval, isBiomarkerNeedingReview, findDuplicateOrExistingBiomarker } from '../utils/biomarkers';
+import { biomarkerDefinitions, BIOMARKER_GROUPING_OPTIONS, getBiomarkerMetadata, getMergedBiomarkerDef, isPendingCatalogApproval, isBiomarkerNeedingReview, findDuplicateOrExistingBiomarker, detectFlaggedTelemetryErrors } from '../utils/biomarkers';
 import { X, CheckCircle, Check, AlertCircle, Edit2, Loader, Save, ArrowRight, CheckSquare, Square, MessageSquare, Send, ChevronLeft, ChevronDown, FileCode, Merge, Copy, Upload, Trash, Paperclip, Calendar, Info, Terminal, BrainCircuit, Clock, Zap } from 'lucide-react';
 import BiomarkerRangeBuilder, { parseNormalRangeStr } from './BiomarkerRangeBuilder';
 import CombineBiomarkersModal from './CombineBiomarkersModal';
@@ -530,7 +530,8 @@ const DictionaryItem = React.memo(({
   onRouteAgent,
   onTagClick,
   onFlagNotUsed,
-  isProcessing
+  isProcessing,
+  telemetryFlag
 }: {
   approvalReason?: string;
   itemKey: string;
@@ -549,6 +550,7 @@ const DictionaryItem = React.memo(({
   onTagClick?: (tag: string) => void;
   onFlagNotUsed?: (key: string) => void;
   isProcessing?: boolean;
+  telemetryFlag?: any;
   key?: string | number;
 }) => {
   const def = useMemo(() => getMergedBiomarkerDef(itemKey, builtInDef, customDef, itemLogs), [itemKey, builtInDef, customDef, itemLogs]);
@@ -583,7 +585,21 @@ const DictionaryItem = React.memo(({
 
   const missingUnit = !initialUnit || initialUnit.trim() === '';
   const missingRange = !initialNormalRange || initialNormalRange.trim() === '' || initialNormalRange === 'Unknown';
-  const hasCalibrationIssues = approvalReason || missingUnit || missingRange || hasMissingCategory;
+  const hasCalibrationIssues = approvalReason || missingUnit || missingRange || hasMissingCategory || telemetryFlag;
+
+  let issueTitle = "Action Required";
+  const issueTypes = [];
+  if (missingUnit) issueTypes.push("Unit");
+  if (missingRange) issueTypes.push("Range");
+  if (hasMissingCategory) issueTypes.push("Category");
+  
+  if (telemetryFlag) {
+    issueTitle = "Telemetry Issue (Unit Scale / Improbable Value)";
+  } else if (issueTypes.length > 0) {
+    issueTitle = `Missing Metadata (${issueTypes.join(", ")})`;
+  } else if (approvalReason) {
+    issueTitle = "Pending Agent Review";
+  }
 
   const handleAutoCalibrateAndApprove = () => {
     const calibrated = autoCalibrateBiomarkerDef(itemKey, builtInDef, customDef);
@@ -962,13 +978,14 @@ const DictionaryItem = React.memo(({
                       <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                       <div>
                         <div className="font-bold flex items-center gap-1.5">
-                          Incomplete definition
+                          {issueTitle}
                         </div>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {missingUnit && <span className="px-1.5 py-0.5 text-[10px] bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300 rounded font-bold">Missing Unit</span>}
                           {missingRange && <span className="px-1.5 py-0.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 rounded font-bold">Missing Range</span>}
                           {hasMissingCategory && <span className="px-1.5 py-0.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 rounded font-bold">Missing Category</span>}
                           {approvalReason && <span className="px-1.5 py-0.5 text-[10px] bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 rounded font-bold">Pending Review</span>}
+                          {telemetryFlag && <span className="px-1.5 py-0.5 text-[10px] bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300 rounded font-bold">Scale / Unit Error</span>}
                         </div>
                       </div>
                     </div>
@@ -1189,6 +1206,9 @@ export default function BiomarkerDictionaryModal({
   onChangeModelId
 }: BiomarkerDictionaryModalProps) {
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
+  const allTelemetryFlags = useMemo(() => {
+    return detectFlaggedTelemetryErrors(biomarkers || {}, profile, biomarkerHistory || [], biomarkerDefinitions);
+  }, [biomarkers, profile, biomarkerHistory]);
   useEffect(() => {
     const qid = generateQueryId();
     setActiveQueryId(qid);
@@ -5967,6 +5987,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                           customDef={custom}
                           logsCount={logsCount}
                           isSelected={isSelected}
+                          telemetryFlag={allTelemetryFlags.find(f => f.key === key)}
                           onTagClick={setFilterTag}
                           onFlagNotUsed={onFlagNotUsed}
                           allGroupings={allGroupings}
@@ -6055,6 +6076,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                           customDef={custom}
                           logsCount={logsCount}
                           isSelected={isSelected}
+                          telemetryFlag={allTelemetryFlags.find(f => f.key === key)}
                           onTagClick={setFilterTag}
                           onFlagNotUsed={onFlagNotUsed}
                           allGroupings={allGroupings}
