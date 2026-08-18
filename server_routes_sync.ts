@@ -177,9 +177,9 @@ syncRouter.post("/api/sync/supabase-pull", async (req, res) => {
     ].filter(Boolean) as string[]));
 
     // Lightweight columns for list view (always included)
-    const lightColumns = 'id, firebase_uid, date, name, weight_grams, quantity, consumed_amount, benefits, risks, health_impact, recommendation, calories, saturated_fat, sodium, added_sugar, nutrients, updated_at, verdict, description, message, debug_url';
+    const lightColumns = 'id, firebase_uid, date, name, weight_grams, quantity, consumed_amount, benefits, risks, health_impact, recommendation, calories, saturated_fat, sodium, added_sugar, nutrients, updated_at, verdict, description, message, debug_url, image_urls';
     // Heavy JSON blob columns only included when listOnly is false
-    const fullColumns = lightColumns + ', composition, items_breakdown, scout_items, image_urls, chat_transcript';
+    const fullColumns = lightColumns + ', composition, items_breakdown, scout_items, chat_transcript';
     const foodSelectColumns = listOnly ? lightColumns : fullColumns;
 
     let foodQuery = supabaseAdmin
@@ -273,7 +273,7 @@ syncRouter.post("/api/sync/food-log-detail", async (req, res) => {
 
     const { data, error } = await supabaseAdmin
       .from('food_logs')
-      .select('id, composition, items_breakdown, scout_items, image_urls, chat_transcript')
+      .select('id, composition, items_breakdown, scout_items, chat_transcript')
       .eq('id', logId)
       .in('firebase_uid', possibleUids)
       .single();

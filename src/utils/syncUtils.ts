@@ -186,7 +186,6 @@ export async function fetchFoodLogDetail(
   composition?: string;
   items_breakdown?: any[];
   scout_items?: any[];
-  image_urls?: string[];
   chat_transcript?: any[];
 } | null> {
   try {

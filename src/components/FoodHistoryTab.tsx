@@ -101,8 +101,8 @@ export default function FoodHistoryTab({
   const t = translations[profile.language] || translations.en;
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
-  // Lazy-fetched heavy detail fields per log id (composition, scoutItems, itemsBreakdown, imageUrls, chatTranscript)
-  const [detailOverrides, setDetailOverrides] = useState<Record<string, { composition?: string; scoutItems?: any[]; itemsBreakdown?: any[]; imageUrls?: string[]; chatTranscript?: any[] }>>({});
+  // Lazy-fetched heavy detail fields per log id (composition, scoutItems, itemsBreakdown, chatTranscript)
+  const [detailOverrides, setDetailOverrides] = useState<Record<string, { composition?: string; scoutItems?: any[]; itemsBreakdown?: any[]; chatTranscript?: any[] }>>({});
 
   // Fetch heavy detail fields when a log is expanded and we don't already have them
   useEffect(() => {
@@ -120,7 +120,6 @@ export default function FoodHistoryTab({
           composition: detail.composition || undefined,
           scoutItems: Array.isArray(detail.scout_items) ? detail.scout_items : undefined,
           itemsBreakdown: Array.isArray(detail.items_breakdown) ? detail.items_breakdown : undefined,
-          imageUrls: Array.isArray(detail.image_urls) ? detail.image_urls : undefined,
           chatTranscript: Array.isArray(detail.chat_transcript) ? detail.chat_transcript : undefined,
         }
       }));
