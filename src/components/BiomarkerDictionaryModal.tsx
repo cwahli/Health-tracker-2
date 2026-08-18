@@ -390,6 +390,17 @@ const AutoCalibrateApprovalModal: React.FC<AutoCalibrateApprovalModalProps> = ({
     );
   }
 
+  const [isApplying, setIsApplying] = useState(false);
+
+  const handleConfirm = async () => {
+    setIsApplying(true);
+    try {
+      await onConfirm(selectedKeys);
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
   return (
     <UniversalModal isOpen={isOpen} onClose={onClose} title="Auto-Calibration Approval">
       <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
@@ -405,7 +416,7 @@ const AutoCalibrateApprovalModal: React.FC<AutoCalibrateApprovalModalProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-xs font-bold text-theme-neutral border-b border-theme-border pb-2">
+        <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300 px-1">
           <span>
             Biomarkers to Calibrate ({selectedKeys.length} of {items.length} selected)
           </span>
@@ -480,12 +491,21 @@ const AutoCalibrateApprovalModal: React.FC<AutoCalibrateApprovalModalProps> = ({
           </button>
           <button
             type="button"
-            disabled={selectedKeys.length === 0}
-            onClick={() => onConfirm(selectedKeys)}
+            disabled={selectedKeys.length === 0 || isApplying}
+            onClick={handleConfirm}
             className="px-4 py-2 bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
           >
-            <Zap className="w-4 h-4 fill-current" />
-            Approve & Apply ({selectedKeys.length})
+            {isApplying ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Applying...</span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-4 h-4 fill-current" />
+                <span>Approve & Apply ({selectedKeys.length})</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -1484,8 +1504,13 @@ export default function BiomarkerDictionaryModal({
   const customKeys = Object.keys(profile.customBiomarkers || {});
 
   const auditReport = useMemo(() => {
-    return runGeneralizedBiomarkerAudit(profile?.customBiomarkers || {}, biomarkerHistory || [], biomarkers || {});
-  }, [profile?.customBiomarkers, biomarkerHistory, biomarkers]);
+    return runGeneralizedBiomarkerAudit(
+      profile?.customBiomarkers || {},
+      biomarkerHistory || [],
+      biomarkers || {},
+      profile?.deletedCustomBiomarkerKeys || {}
+    );
+  }, [profile?.customBiomarkers, profile?.deletedCustomBiomarkerKeys, biomarkerHistory, biomarkers]);
 
   const aliasKeysToHide = useMemo(() => {
     const keys = new Set<string>();
@@ -1576,18 +1601,21 @@ export default function BiomarkerDictionaryModal({
 
   const historyKeys = useMemo(() => {
     const keys = new Set<string>();
+    // Keys tombstoned via combine/delete must never resurface in the visible dictionary,
+    // even when stale cloud history logs still carry the old alias key.
+    const tombstoned = profile?.deletedCustomBiomarkerKeys || {};
     Object.entries(biomarkers || {}).forEach(([k, v]) => {
-      if (isUsefulBiomarkerValue(v)) keys.add(k);
+      if (isUsefulBiomarkerValue(v) && !tombstoned[k]) keys.add(k);
     });
     biomarkerHistory.forEach(log => {
       if (log.biomarkers) {
         Object.entries(log.biomarkers).forEach(([k, v]) => {
-          if (isUsefulBiomarkerValue(v)) keys.add(k);
+          if (isUsefulBiomarkerValue(v) && !tombstoned[k]) keys.add(k);
         });
       }
     });
     return Array.from(keys);
-  }, [biomarkerHistory, biomarkers]);
+  }, [biomarkerHistory, biomarkers, profile?.deletedCustomBiomarkerKeys]);
 
   const hasActualOverride = React.useCallback((key: string): boolean => {
     // These keys have auto-generated custom overrides
@@ -2534,6 +2562,8 @@ I can analyze these, compare them with our database keys, and find standard mapp
           optimalMin: item.optimalMin !== undefined ? item.optimalMin : (customDef as any)?.optimalMin,
           optimalMax: item.optimalMax !== undefined ? item.optimalMax : (customDef as any)?.optimalMax,
           notes: item.notes || (customDef as any)?.notes,
+          description: item.description || (customDef as any)?.description || (customDef as any)?.descriptions?.en,
+          descriptions: item.descriptions || (customDef as any)?.descriptions || (item.description ? { en: item.description } : undefined),
           standardMedicalGrouping: grouping,
           riskCategories: risks,
           potentialMedicalConditions: conds
@@ -2609,12 +2639,12 @@ I can analyze these, compare them with our database keys, and find standard mapp
   // Approve & Apply Agent Standardization / Medical Categorisation / Range Calibration
   const handleApplyStandardization = async () => {
     if (!standardizationSummary || !onStandardizeUnits) return;
+    setAgentLoading(true);
     try {
-      // MUST match server medical-categorise risk enums.
+      // MUST match canonical 8 risk domains
       const allowedRisks = [
-        "Cardiovascular", "Kidney", "Metabolic", "Liver", "Hematology",
-        "Wellness", "Screenings", "Neurological", "Behavioral & Mental",
-        "Toxicology", "Immunological", "Gastrointestinal", "Respiratory", "Endocrine"
+        "Cardiovascular", "Metabolic", "Liver", "Kidney", "Hematology",
+        "Immunological", "Endocrine", "Screenings & Wellness"
       ];
       const updatesToApply: any = {};
       standardizationSummary.forEach((item: any) => {
@@ -2652,6 +2682,35 @@ I can analyze these, compare them with our database keys, and find standard mapp
         if (item.optimalMax !== undefined && item.optimalMax !== null) {
           updatesToApply[applyKey].optimalMax = item.optimalMax;
         }
+        if (item.notes !== undefined && item.notes !== null && String(item.notes).trim() !== '') {
+          updatesToApply[applyKey].notes = item.notes;
+        }
+        if (item.rangeConfig) {
+          updatesToApply[applyKey].rangeConfig = item.rangeConfig;
+        }
+        if (item.customRanges) {
+          updatesToApply[applyKey].customRanges = item.customRanges;
+        }
+
+        // Synthesize rangeBrackets if missing so the audit engine immediately marks the range fully calibrated
+        if (item.rangeBrackets && Array.isArray(item.rangeBrackets) && item.rangeBrackets.length > 0) {
+          updatesToApply[applyKey].rangeBrackets = item.rangeBrackets;
+        } else if (item.normalRange && String(item.normalRange).trim() !== '') {
+          const normStr = String(item.normalRange).trim();
+          const unitStr = item.unit ? ` ${item.unit}` : '';
+          const brackets: any[] = [];
+          if (item.minRange !== undefined && item.minRange !== null && item.maxRange !== undefined && item.maxRange !== null) {
+            brackets.push({ label: 'Low', range: `< ${item.minRange}${unitStr}`, interpretation: 'Below normal range' });
+            brackets.push({ label: 'Normal', range: `${item.minRange} - ${item.maxRange}${unitStr}`, interpretation: 'Normal physiological range' });
+            brackets.push({ label: 'High', range: `> ${item.maxRange}${unitStr}`, interpretation: 'Above normal range' });
+          } else {
+            brackets.push({ label: 'Normal', range: `${normStr}${unitStr}`, interpretation: 'Standard reference interval' });
+          }
+          if (item.optimalRange) {
+            brackets.push({ label: 'Optimal', range: `${item.optimalRange}${unitStr}`, interpretation: 'Target optimal range' });
+          }
+          updatesToApply[applyKey].rangeBrackets = brackets;
+        }
         if (item.instrumentScale !== undefined && item.instrumentScale !== null && String(item.instrumentScale).trim() !== '') {
           updatesToApply[applyKey].instrumentScale = item.instrumentScale;
         }
@@ -2661,12 +2720,24 @@ I can analyze these, compare them with our database keys, and find standard mapp
         if (item.potentialDuplicateOf !== undefined && item.potentialDuplicateOf !== null && String(item.potentialDuplicateOf).trim() !== '') {
           updatesToApply[applyKey].potentialDuplicateOf = item.potentialDuplicateOf;
         }
-        if (item.notes !== undefined && item.notes !== null && String(item.notes).trim() !== '') {
-          updatesToApply[applyKey].notes = item.notes;
-        }
         if (item.standardMedicalGrouping !== undefined && item.standardMedicalGrouping !== null && String(item.standardMedicalGrouping).trim() !== '') {
           updatesToApply[applyKey].standardMedicalGrouping = item.standardMedicalGrouping;
+          // Synchronize legacy/organ category with standardMedicalGrouping
+          const groupLow = item.standardMedicalGrouping.toLowerCase();
+          if (groupLow.includes('cardio')) updatesToApply[applyKey].category = 'heart';
+          else if (groupLow.includes('liver') || groupLow.includes('hepatic')) updatesToApply[applyKey].category = 'liver';
+          else if (groupLow.includes('kidney') || groupLow.includes('renal')) updatesToApply[applyKey].category = 'kidneys';
+          else if (groupLow.includes('hematolog') || groupLow.includes('blood')) updatesToApply[applyKey].category = 'hematology';
+          else if (groupLow.includes('metabolic') || groupLow.includes('sugar') || groupLow.includes('lipid')) updatesToApply[applyKey].category = 'metabolic';
+          else if (groupLow.includes('endocrine') || groupLow.includes('thyroid') || groupLow.includes('hormone')) updatesToApply[applyKey].category = 'endocrinology';
+          else if (groupLow.includes('biometric') || groupLow.includes('anthropometric')) updatesToApply[applyKey].category = 'biometrics';
+          else updatesToApply[applyKey].category = groupLow.replace(/[^a-z0-9_]/g, '_');
+        } else if (item.category) {
+          updatesToApply[applyKey].category = item.category;
         }
+
+        updatesToApply[applyKey].needsApproval = false;
+        updatesToApply[applyKey].catalogApproved = true;
 
         if (item.riskCategories !== undefined) {
           try {
@@ -2680,15 +2751,21 @@ I can analyze these, compare them with our database keys, and find standard mapp
           }
         } else if (isMedicalCategorisationMode || isRangeCalibrationMode) {
           const existing = profile.customBiomarkers?.[applyKey]?.riskCategories;
-          updatesToApply[applyKey].riskCategories = Array.isArray(existing) && existing.length > 0 ? existing : ['Screenings'];
+          updatesToApply[applyKey].riskCategories = Array.isArray(existing) && existing.length > 0 ? existing : ['Screenings & Wellness'];
         }
         if ((isMedicalCategorisationMode || isRangeCalibrationMode) && Array.isArray(updatesToApply[applyKey].riskCategories)) {
-          const filtered = updatesToApply[applyKey].riskCategories.filter((r: string) => allowedRisks.includes(r));
-          updatesToApply[applyKey].riskCategories = filtered.length > 0
-            ? filtered
-            : (updatesToApply[applyKey].riskCategories.length > 0
-                ? updatesToApply[applyKey].riskCategories
-                : ['Screenings']);
+          const canonical = updatesToApply[applyKey].riskCategories.map((r: string) => {
+            const low = (r || '').toLowerCase();
+            if (low.includes('cardio') || low.includes('heart') || low.includes('lipid')) return 'Cardiovascular';
+            if (low.includes('metabol') || low.includes('sugar') || low.includes('glycem') || low.includes('beta-cell')) return 'Metabolic';
+            if (low.includes('liver') || low.includes('hepatic')) return 'Liver';
+            if (low.includes('kidney') || low.includes('renal')) return 'Kidney';
+            if (low.includes('hematolog') || low.includes('blood')) return 'Hematology';
+            if (low.includes('immuno') || low.includes('inflam') || low.includes('respirat')) return 'Immunological';
+            if (low.includes('endocrine') || low.includes('thyroid') || low.includes('hormone')) return 'Endocrine';
+            return 'Screenings & Wellness';
+          });
+          updatesToApply[applyKey].riskCategories = Array.from(new Set(canonical));
         }
 
         if (item.potentialMedicalConditions !== undefined) {
@@ -2707,14 +2784,27 @@ I can analyze these, compare them with our database keys, and find standard mapp
             ? existing
             : ['General Health Assessment'];
         }
+
+        if (item.description || item.descriptions) {
+          if (item.description) updatesToApply[applyKey].description = item.description;
+          if (item.descriptions) updatesToApply[applyKey].descriptions = item.descriptions;
+        } else {
+          const customBiomarkerAny = profile.customBiomarkers?.[applyKey] as any;
+          const existingDesc = customBiomarkerAny?.description || customBiomarkerAny?.descriptions?.en;
+          const fallbackDesc = existingDesc || `${item.name || applyKey} clinical assessment metric`;
+          updatesToApply[applyKey].description = fallbackDesc;
+          updatesToApply[applyKey].descriptions = { en: fallbackDesc };
+        }
       });
 
       await onStandardizeUnits(updatesToApply);
-      alert(isRangeCalibrationMode
-        ? "Selected biomarkers successfully calibrated with reference ranges & units!"
-        : isMedicalCategorisationMode
-          ? "Selected biomarkers successfully categorised!"
-          : "Selected units successfully standardized and converted!");
+      
+      // Clean up localStorage agent states
+      try {
+        localStorage.removeItem('dict_standardization_yaml');
+        localStorage.removeItem('dict_standardization_summary');
+      } catch (e) {}
+
       setIsAgentMode(false);
       setIsRangeCalibrationMode(false);
       setIsMedicalCategorisationMode(false);
@@ -2724,6 +2814,8 @@ I can analyze these, compare them with our database keys, and find standard mapp
     } catch (e: any) {
       console.error(e);
       alert("Error applying changes: " + e.message);
+    } finally {
+      setAgentLoading(false);
     }
   };
 
@@ -2800,17 +2892,29 @@ I can analyze these, compare them with our database keys, and find standard mapp
     setConsolidationLiveThought('');
 
     try {
-      const selectedBiomarkerDetails = keysToUse.map(k => {
-        const customDef: any = profile.customBiomarkers?.[k] || biomarkerDefinitions.find((b: any) => b.key === k);
-        const log = biomarkerHistory.find(h => h.biomarkers && h.biomarkers[k] !== undefined);
-        const value = log ? log.biomarkers[k] : '';
-        return {
-          key: k,
-          name: customDef?.name || k,
-          unit: customDef?.unit || '',
-          value: value
-        };
+      // Exclude keys already auto-detected as alias candidates by the deterministic audit engine.
+      // These are handled by the engine's auto-apply flow and should not be re-suggested by the AI.
+      const engineDetectedAliases = new Set<string>();
+      auditReport.duplicateGroups.forEach(g => {
+        g.candidateAliases.forEach(a => engineDetectedAliases.add(a));
+        // Also exclude the master key from the consolidated cluster if it has no other alias
+        // (the AI shouldn't re-deduplicate what the engine has already grouped)
+        if (g.candidateAliases.length > 0) engineDetectedAliases.add(g.suggestedMasterKey);
       });
+
+      const selectedBiomarkerDetails = keysToUse
+        .filter(k => !engineDetectedAliases.has(k))
+        .map(k => {
+          const customDef: any = profile.customBiomarkers?.[k] || biomarkerDefinitions.find((b: any) => b.key === k);
+          const log = biomarkerHistory.find(h => h.biomarkers && h.biomarkers[k] !== undefined);
+          const value = log ? log.biomarkers[k] : '';
+          return {
+            key: k,
+            name: customDef?.name || k,
+            unit: customDef?.unit || '',
+            value: value
+          };
+        });
 
       // The reference set the agent compares candidates against: every already-approved
       // key (built-in + custom biomarkers that don't have needsApproval), excluding
@@ -5112,13 +5216,25 @@ I can analyze these, compare them with our database keys, and find standard mapp
                             </button>
                             <button
                               type="button"
+                              disabled={agentLoading}
                               onClick={handleApplyStandardization}
-                              className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/10"
+                              className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/10 disabled:opacity-60 cursor-pointer"
                             >
-                              <CheckCircle className="w-4 h-4" />
-                              {isRangeCalibrationMode 
-                                ? "Approve & Apply Range Calibrations" 
-                                : (isMedicalCategorisationMode ? "Approve & Apply Categorisation" : "Approve & Apply Unit Standardization")}
+                              {agentLoading ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  <span>Applying Changes...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-4 h-4" />
+                                  <span>
+                                    {isRangeCalibrationMode 
+                                      ? "Approve & Apply Range Calibrations" 
+                                      : (isMedicalCategorisationMode ? "Approve & Apply Categorisation" : "Approve & Apply Unit Standardization")}
+                                  </span>
+                                </>
+                              )}
                             </button>
                           </div>
                         </>
@@ -5298,20 +5414,6 @@ I can analyze these, compare them with our database keys, and find standard mapp
                     className="px-2.5 py-1.5 bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900 border border-amber-300 dark:border-amber-800/80 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
                   >
                     <span>Not used ({notUsedCount})</span>
-                  </button>
-                )}
-                {missingUnitsCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setFilterOption(filterOption === 'missing_units' ? 'all' : 'missing_units')}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                      filterOption === 'missing_units'
-                        ? 'bg-rose-600 text-white shadow-xs'
-                        : 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 hover:bg-rose-200 border border-rose-300 dark:border-rose-800/80'
-                    }`}
-                  >
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-500 dark:text-rose-400" />
-                    <span>{missingUnitsCount} Missing Unit / Range{missingUnitsCount !== 1 ? 's' : ''}</span>
                   </button>
                 )}
                 <select
@@ -5530,18 +5632,6 @@ I can analyze these, compare them with our database keys, and find standard mapp
                         >
                           🤝 Name Deduper
                         </button>
-                        {onReviewWithAgent && (
-                          <button
-                            onClick={() => {
-                              setShowCleaningDropdown(false);
-                              const keysToReview = selectedKeys.length > 0 ? selectedKeys : Object.keys(profile.customBiomarkers || {});
-                              onReviewWithAgent(keysToReview);
-                            }}
-                            className="w-full text-left px-3 py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-950/25 border-t border-slate-100 dark:border-slate-700/50 mt-1 pt-2"
-                          >
-                            🧪 Range Calibrator
-                          </button>
-                        )}
                       </div>
                     )}
                   </div>
@@ -5799,43 +5889,6 @@ I can analyze these, compare them with our database keys, and find standard mapp
                       </div>
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* Dynamic Bulk Action Bar for Pending Biomarkers */}
-              {pendingBiomarkersCount > 0 && (
-                <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-indigo-950/40 border border-indigo-800/50 rounded-xl">
-                  <span className="text-xs font-semibold text-indigo-300">
-                    {pendingBiomarkersCount} biomarker(s) pending approval:
-                  </span>
-                  <div className="flex flex-wrap items-center gap-1.5 ml-auto">
-                    {false && calibratablePendingKeys.length > 0 && null}
-                    {keysNeedingCategory.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleBulkReviewCategories}
-                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors shadow-sm cursor-pointer"
-                      >
-                        Review categories ({keysNeedingCategory.length})
-                      </button>
-                    )}
-                    {keysNeedingUnit.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleBulkStandardizeUnits}
-                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                      >
-                        Standardize Units ({keysNeedingUnit.length})
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleBulkConsolidateNames}
-                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                    >
-                      Consolidate Names
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -6251,6 +6304,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
         isOpen={showAuditModal}
         onClose={() => setShowAuditModal(false)}
         profile={profile}
+        biomarkers={biomarkers}
         biomarkerHistory={biomarkerHistory}
         onUpdateProfile={onUpdateProfile}
         onDeleteBiomarker={onDeleteBiomarker}
