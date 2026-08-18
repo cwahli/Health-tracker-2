@@ -4,7 +4,7 @@ import { UserProfile, BiomarkerLog, ChatMessage, FoodLog } from '../types';
 import { translations } from '../utils/translations';
 import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart as LineChartIcon, BrainCircuit, AlertCircle, Clock, CheckCircle2, EyeOff } from 'lucide-react';
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
-import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill } from '../utils/biomarkers';
+import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, canonicalizeRiskCategory } from '../utils/biomarkers';
 import { getAgentCalibration, formatOptimalTargetValue } from '../utils/agentCalibration';
 import { runGeneralizedBiomarkerAudit } from '../utils/biomarkerAuditEngine';
 import { handleUnitChange } from '../utils/biomarkerLifecycle';
@@ -120,8 +120,13 @@ export default function MedicalHistoryTab({
   const activeHistory = useMemo(() => (biomarkerHistory || []).filter(h => h.sync_state !== 'delete'), [biomarkerHistory]);
 
   const auditReport = useMemo(() => {
-    return runGeneralizedBiomarkerAudit(profile?.customBiomarkers || {}, activeHistory || [], biomarkers || {});
-  }, [profile?.customBiomarkers, activeHistory, biomarkers]);
+    return runGeneralizedBiomarkerAudit(
+      profile?.customBiomarkers || {},
+      activeHistory || [],
+      biomarkers || {},
+      profile?.deletedCustomBiomarkerKeys || {}
+    );
+  }, [profile?.customBiomarkers, profile?.deletedCustomBiomarkerKeys, activeHistory, biomarkers]);
 
   const aliasKeysToHide = useMemo(() => {
     const keys = new Set<string>();
@@ -245,11 +250,14 @@ export default function MedicalHistoryTab({
 
   // Combine definitions with dynamic ones from `biomarkers` object and profile.customBiomarkers
   const allDefinitions = useMemo(() => {
-    // Clone biomarkerDefinitions so we don't mutate the original static array
-    // ONLY show standard definitions if they have data!
+    // ONLY show definitions in MedicalHistoryTab if they have recorded non-empty data!
     const hasData = (key: string) => {
-      if (biomarkers && biomarkers[key] !== undefined) return true;
-      return (activeHistory || []).some(h => h.biomarkers && h.biomarkers[key] !== undefined);
+      const v = biomarkers ? biomarkers[key] : undefined;
+      if (v !== undefined && v !== null && !isValEmpty(v)) return true;
+      return (activeHistory || []).some(h => {
+        const val = h.biomarkers ? h.biomarkers[key] : undefined;
+        return val !== undefined && val !== null && !isValEmpty(val);
+      });
     };
     const combined = biomarkerDefinitions.filter(d => hasData(d.key)).map(d => {
       if (d.key === 'bmi') {
@@ -369,7 +377,7 @@ export default function MedicalHistoryTab({
         potentialMedicalConditions: meta.potentialMedicalConditions
       };
     });
-    return withMetadata.filter(d => !isKeyNotUsedInMedicalHistory(d.key) && !aliasKeysToHide.has(d.key));
+    return withMetadata.filter(d => hasData(d.key) && !isKeyNotUsedInMedicalHistory(d.key) && !aliasKeysToHide.has(d.key));
   }, [biomarkers, activeHistory, profile.customBiomarkers, profile.ethnicity, profile.gender, profile.height, isKeyNotUsedInMedicalHistory, aliasKeysToHide]);
 
   
@@ -391,18 +399,14 @@ export default function MedicalHistoryTab({
     let baseCategories: string[] = [];
     if (viewType === 'risk') {
       const allRisks = new Set<string>();
-      let hasUncategorized = false;
       allDefinitions.forEach(def => {
-        if (!def.riskCategories || def.riskCategories.length === 0) {
-           hasUncategorized = true;
-        } else {
-          def.riskCategories.forEach(r => {
-            if (r) allRisks.add(r);
-          });
-        }
+        const meta = getBiomarkerMetadata(def.key, profile.customBiomarkers?.[def.key] || def);
+        const risks = (meta.riskCategories && meta.riskCategories.length > 0) ? meta.riskCategories : ['Screenings & Wellness'];
+        risks.forEach(r => {
+          allRisks.add(canonicalizeRiskCategory(r));
+        });
       });
       const arr = Array.from(allRisks).sort();
-      if (hasUncategorized) arr.push('Uncategorized');
       baseCategories = ['all', ...arr];
     } else if (viewType === 'condition') {
       const allConditions = new Set<string>();
@@ -455,7 +459,10 @@ export default function MedicalHistoryTab({
 
       if (selectedSubCategory === 'all') return true;
       if (viewType === 'risk') {
-        return def.riskCategories?.includes(selectedSubCategory);
+        const meta = getBiomarkerMetadata(def.key, profile.customBiomarkers?.[def.key] || def);
+        const risks = (meta.riskCategories && meta.riskCategories.length > 0) ? meta.riskCategories : ['Screenings & Wellness'];
+        const canonical = risks.map(r => canonicalizeRiskCategory(r));
+        return canonical.includes(selectedSubCategory as any);
       } else if (viewType === 'condition') {
         return def.potentialMedicalConditions?.includes(selectedSubCategory);
       } else {
@@ -525,8 +532,10 @@ export default function MedicalHistoryTab({
       }
 
       if (viewType === 'risk') {
-        if (cat === 'Uncategorized') return !def.riskCategories || def.riskCategories.length === 0 || def.riskCategories.includes('Uncategorized');
-        return def.riskCategories?.includes(cat);
+        const meta = getBiomarkerMetadata(def.key, profile.customBiomarkers?.[def.key] || def);
+        const risks = (meta.riskCategories && meta.riskCategories.length > 0) ? meta.riskCategories : ['Screenings & Wellness'];
+        const canonical = risks.map(r => canonicalizeRiskCategory(r));
+        return canonical.includes(cat as any);
       } else if (viewType === 'condition') {
         if (cat === 'Unknown') return !def.potentialMedicalConditions || def.potentialMedicalConditions.length === 0;
         return def.potentialMedicalConditions?.includes(cat);
@@ -826,7 +835,7 @@ export default function MedicalHistoryTab({
                       const riskTag = (hasVal && !isEmptyVal) ? getBiomarkerRiskTag(def.key, status, customDef, val, profile) : null;
                       const isNeedsApproval = !!(def as any).needsApproval || !!profile.customBiomarkers?.[def.key]?.needsApproval;
                       const isMissingUnit = !def.unit || def.unit.trim() === '';
-                      const isMissingCategory = !def.standardMedicalGrouping || def.standardMedicalGrouping.trim() === '' || def.standardMedicalGrouping === 'Other' || !def.riskCategories || def.riskCategories.length === 0 || def.riskCategories.includes('Uncategorized');
+                      const isMissingCategory = !def.standardMedicalGrouping || def.standardMedicalGrouping.trim() === '' || def.standardMedicalGrouping === 'Other' || !def.riskCategories || def.riskCategories.length === 0 || (def.riskCategories as string[]).includes('Uncategorized');
                       const isPendingApproval = !isBiomarkerApproved(def.key, profile, activeHistory);
                       
                       const latestLogForUnit = [...(activeHistory || [])]

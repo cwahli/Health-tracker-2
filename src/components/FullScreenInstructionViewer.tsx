@@ -130,7 +130,7 @@ Your primary objective is to parse raw health reports, standardize clinical term
 4. **Metadata Preservation:** Always extract the exact lab baseline/range into \`referenceRange\` and any physician notes, lab comments, or status flags (e.g., "(AlyssaFRS) - 01. Satisfactory - No Action") into \`doctorComment\`. If none exist, output null.
 5. **1-to-1 Parsing:** Output exactly one YAML entry for every biomarker provided in the source text. Do NOT attempt to merge multiple dates or deduplicate entries across time. Your job is extraction, not database management.
 6. **Clinical Mapping:** For every processed biomarker, analyze and map the following based on standard clinical guidelines:
-   - \`riskCategories\`: Array of matching physiological risk categories (Choose from: Cardiovascular, Kidney, Metabolic, Liver, Hematology, Biometrics, Other).
+   - \`riskCategories\`: Array of matching physiological risk categories (Choose from: Cardiovascular, Metabolic, Liver, Kidney, Hematology, Immunological, Endocrine, Screenings & Wellness).
    - \`standardMedicalGrouping\`: Exactly ONE main medical division (Choose from: Metabolic, Hepatic, Renal, Hematology, Biometrics, Other).
    - \`potentialMedicalConditions\`: Array of broad diagnostic associations.
 
@@ -553,7 +553,7 @@ BIOMARKERS TO PROCESS:
 === OBJECTIVE ===
 For each provided biomarker, determine:
 1. Standard Medical Grouping. Allowed values ONLY: 'Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Other'
-2. Risk Categories. A JSON array of string tags representing associated risks. YOU MUST ONLY CHOOSE FROM THESE EXACT CATEGORIES: "Cardiovascular", "Kidney", "Metabolic", "Liver", "Hematology", "Biometric", "Psychologic", "Other". Do NOT invent new ones.
+2. Risk Categories. A JSON array of string tags representing associated risks. YOU MUST ONLY CHOOSE FROM THESE 8 EXACT CANONICAL CATEGORIES: "Cardiovascular", "Metabolic", "Liver", "Kidney", "Hematology", "Immunological", "Endocrine", "Screenings & Wellness". Do NOT invent new ones.
 3. Potential Medical Conditions. A JSON array of string tags (e.g. ["Fatty Liver", "Obesity"]) representing associated conditions.
 
 === SYSTEM CONSTRAINTS ===

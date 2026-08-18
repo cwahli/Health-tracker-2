@@ -75,11 +75,12 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
   onSelectBiomarkerKeys
 }) => {
   const savedSession = useMemo(() => loadSavedAuditSession(), []);
-  const [activeTab, setActiveTab] = useState<'overview' | 'corrupted_units' | 'duplicates' | 'missing_metadata' | 'conflicts'>(() => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'corrupted_units' | 'duplicates' | 'missing_metadata' | 'conflicts' | 'clean'>(() => {
     if (savedSession?.step === 'units_review') return 'corrupted_units';
     if (savedSession?.step === 'duplicates_review') return 'duplicates';
     if (savedSession?.step === 'ranges_review') return 'missing_metadata';
     if (savedSession?.step === 'conflicts_review') return 'conflicts';
+    if ((savedSession?.step as any) === 'clean_review') return 'clean';
     return 'overview';
   });
   const [selectedFixKeys, setSelectedFixKeys] = useState<{ [key: string]: boolean }>(() => savedSession?.selectedFixes || {});
@@ -88,6 +89,8 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
   const [isApplying, setIsApplying] = useState(false);
   const [appliedMessage, setAppliedMessage] = useState<string | null>(null);
   const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
+  const [unitFilter, setUnitFilter] = useState<'all' | 'auto_proposals' | 'agent_review'>('all');
+  const [metadataFilter, setMetadataFilter] = useState<'all' | 'catalog' | 'categorise' | 'calibrate' | 'custom_calibrate'>('all');
 
   const handleDeleteBiomarkerKey = (key: string) => {
     if (onDeleteBiomarker) {
@@ -151,8 +154,13 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
 
   // Compute live report from profile & history
   const report: BiomarkerAuditReport = useMemo(() => {
-    return runGeneralizedBiomarkerAudit(profile?.customBiomarkers || {}, biomarkerHistory || [], biomarkers || {});
-  }, [profile?.customBiomarkers, biomarkerHistory, biomarkers]);
+    return runGeneralizedBiomarkerAudit(
+      profile?.customBiomarkers || {},
+      biomarkerHistory || [],
+      biomarkers || {},
+      profile?.deletedCustomBiomarkerKeys || {}
+    );
+  }, [profile?.customBiomarkers, profile?.deletedCustomBiomarkerKeys, biomarkerHistory, biomarkers]);
 
   // Automatic background continuity persistence on any change (no manual button required)
   useEffect(() => {
@@ -189,6 +197,56 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
     }
   }, [report]);
 
+  const corruptedUnitItems = report.items.filter(i => i.status === 'corrupted_unit');
+  const targetAutoUnitItems = useMemo(() => corruptedUnitItems.filter(i => !!i.corruptedUnitProposal?.proposedUnit), [corruptedUnitItems]);
+  const targetAgentUnitItems = useMemo(() => corruptedUnitItems.filter(i => !i.corruptedUnitProposal?.proposedUnit), [corruptedUnitItems]);
+  const targetAutoUnitKeys = useMemo(() => targetAutoUnitItems.map(i => i.key), [targetAutoUnitItems]);
+  const targetAgentUnitKeys = useMemo(() => targetAgentUnitItems.map(i => i.key), [targetAgentUnitItems]);
+
+  const filteredCorruptedUnitItems = useMemo(() => {
+    if (unitFilter === 'auto_proposals') {
+      return targetAutoUnitItems;
+    }
+    if (unitFilter === 'agent_review') {
+      return targetAgentUnitItems;
+    }
+    return corruptedUnitItems;
+  }, [corruptedUnitItems, unitFilter, targetAutoUnitItems, targetAgentUnitItems]);
+
+  const duplicateCandidateItems = report.items.filter(i => i.status === 'duplicate_candidate' || i.duplicateCluster);
+  const missingMetadataItems = report.items.filter(i => i.status === 'missing_ranges');
+  const conflictItems = report.items.filter(i => i.status === 'conflict');
+  const cleanItems = report.items.filter(i => i.status === 'clean');
+  const catalogMatchCount = missingMetadataItems.filter(i => i.missingMetadata?.catalogMatch).length;
+
+  const targetCategoriseKeys = useMemo(() => missingMetadataItems.filter(i => !!i.missingMetadata?.missingCategory).map(i => i.key), [missingMetadataItems]);
+  const targetCatalogItems = useMemo(() => missingMetadataItems.filter(i => !!i.missingMetadata?.catalogMatch), [missingMetadataItems]);
+  const targetCustomCalibrateItems = useMemo(() => missingMetadataItems.filter(i => !!i.missingMetadata?.missingRange || !!i.missingMetadata?.missingBrackets), [missingMetadataItems]);
+  const targetCalibrateItems = useMemo(() => missingMetadataItems.filter(i => !!i.missingMetadata?.missingRange || !!i.missingMetadata?.missingBrackets), [missingMetadataItems]);
+  const targetCustomCalibrateKeys = useMemo(() => targetCustomCalibrateItems.map(i => i.key), [targetCustomCalibrateItems]);
+
+  const filteredMissingMetadataItems = useMemo(() => {
+    if (metadataFilter === 'catalog') {
+      return targetCatalogItems;
+    }
+    if (metadataFilter === 'custom_calibrate') {
+      return targetCustomCalibrateItems;
+    }
+    if (metadataFilter === 'calibrate') {
+      return targetCalibrateItems;
+    }
+    if (metadataFilter === 'categorise') {
+      return missingMetadataItems.filter(i => !!i.missingMetadata?.missingCategory);
+    }
+    return missingMetadataItems;
+  }, [missingMetadataItems, metadataFilter, targetCatalogItems, targetCustomCalibrateItems, targetCalibrateItems]);
+
+  // Candidate keys for agent handoffs
+  const duplicateKeys = Array.from(new Set(duplicateCandidateItems.flatMap(i => i.duplicateCluster?.clusterKeys || [i.key])));
+  const missingUnitKeys = corruptedUnitItems.map(i => i.key);
+  const missingRangeKeys = missingMetadataItems.map(i => i.key);
+  const conflictKeys = conflictItems.map(i => i.key);
+
   if (!isOpen) return null;
 
   const handleToggleFix = (key: string) => {
@@ -208,7 +266,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
   };
 
   // Safe apply for user-confirmed unit repairs
-  const handleApplySelectedUnitFixes = () => {
+  const handleApplySelectedUnitFixes = async () => {
     setIsApplying(true);
     try {
       const newCustomBiomarkers = { ...(profile?.customBiomarkers || {}) };
@@ -222,12 +280,14 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
             unit: item.corruptedUnitProposal.proposedUnit,
             updatedAt: Date.now()
           };
+          delete newCustomBiomarkers[item.key].needsApproval;
           fixed++;
         }
       });
 
-      onUpdateProfile({ customBiomarkers: newCustomBiomarkers });
-      setAppliedMessage(`Successfully applied ${fixed} biomarker unit repairs!`);
+      await onUpdateProfile({ customBiomarkers: newCustomBiomarkers });
+      setSelectedFixKeys({});
+      setAppliedMessage(`Successfully applied ${fixed} biomarker unit repair(s)!`);
       setShowApplyConfirm(false);
 
       saveAuditSession({
@@ -589,18 +649,6 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
     }
   };
 
-  const corruptedUnitItems = report.items.filter(i => i.status === 'corrupted_unit');
-  const duplicateCandidateItems = report.items.filter(i => i.status === 'duplicate_candidate' || i.duplicateCluster);
-  const missingMetadataItems = report.items.filter(i => i.status === 'missing_ranges');
-  const conflictItems = report.items.filter(i => i.status === 'conflict');
-  const catalogMatchCount = missingMetadataItems.filter(i => i.missingMetadata?.catalogMatch).length;
-
-  // Candidate keys for agent handoffs
-  const duplicateKeys = Array.from(new Set(duplicateCandidateItems.flatMap(i => i.duplicateCluster?.clusterKeys || [i.key])));
-  const missingUnitKeys = corruptedUnitItems.map(i => i.key);
-  const missingRangeKeys = missingMetadataItems.map(i => i.key);
-  const conflictKeys = conflictItems.map(i => i.key);
-
   return (
     <div className="fixed inset-0 z-[120] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-0 animate-in fade-in">
       <div className="bg-white dark:bg-slate-900 w-full h-full rounded-none flex flex-col overflow-hidden text-slate-800 dark:text-slate-100">
@@ -707,6 +755,17 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
               Scale & Unit Conflicts ({report.conflictsCount})
             </button>
           )}
+          <button
+            onClick={() => setActiveTab('clean')}
+            className={`py-3 px-3 border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'clean'
+                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+            Fully Clean ({report.cleanCount})
+          </button>
         </div>
 
         {/* CONTENT BODY */}
@@ -765,11 +824,18 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                   <div className="text-xs font-bold text-rose-900 dark:text-rose-300 mt-1">Unit Conflicts</div>
                   <div className="text-[10px] text-rose-700/80 dark:text-rose-400/70">Declared vs Bracket (Click to view)</div>
                 </button>
-                <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 text-left">
-                  <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400">{report.cleanCount}</div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('clean')}
+                  className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 hover:border-emerald-400 dark:hover:border-emerald-700/80 hover:shadow-md transition-all text-left cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400">{report.cleanCount}</div>
+                    <ChevronRight className="w-4 h-4 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
                   <div className="text-xs font-bold text-emerald-900 dark:text-emerald-300 mt-1">Fully Clean</div>
-                  <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/70">Valid unit & brackets</div>
-                </div>
+                  <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/70">Valid unit & brackets (Click to view)</div>
+                </button>
               </div>
 
               {/* EXPLANATION NOTE ON WHY INITIAL COUNT WAS 0 CLEAN BIOMARKERS */}
@@ -949,51 +1015,88 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
           {/* TAB 2: CORRUPTED UNITS */}
           {activeTab === 'corrupted_units' && (
             <div className="space-y-4 max-w-7xl mx-auto">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                    Corrupted & Missing Units ({corruptedUnitItems.length})
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Review and approve extracted unit proposals, or route to the Unit Relabel Agent.
-                  </p>
+              <div className="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+                {/* FILTER PILLS */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setUnitFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      unitFilter === 'all'
+                        ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    All ({corruptedUnitItems.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUnitFilter('auto_proposals')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      unitFilter === 'auto_proposals'
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200/60 dark:border-amber-800/60'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
+                    <span>Auto-Proposals ({targetAutoUnitItems.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUnitFilter('agent_review')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      unitFilter === 'agent_review'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200/60 dark:border-indigo-800/60'
+                    }`}
+                  >
+                    <Bot className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+                    <span>Needs Agent Review ({targetAgentUnitItems.length})</span>
+                  </button>
                 </div>
+
+                {/* HEADER ACTIONS */}
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleSelectAllFixes(corruptedUnitItems)}
+                    onClick={() => handleSelectAllFixes(filteredCorruptedUnitItems)}
                     className="text-xs text-slate-600 dark:text-slate-400 hover:underline px-2 py-1 font-semibold cursor-pointer"
                   >
                     Toggle All
                   </button>
-                  <button
-                    onClick={() => setShowApplyConfirm(true)}
-                    disabled={Object.values(selectedFixKeys).filter(Boolean).length === 0}
-                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    Approve Selected ({Object.values(selectedFixKeys).filter(Boolean).length})
-                  </button>
-                  <button
-                    onClick={() => {
-                      onClose();
-                      onLaunchUnitStandardization(missingUnitKeys);
-                    }}
-                    className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                  >
-                    <Bot className="w-3.5 h-3.5 text-amber-500" />
-                    Ask Unit Relabel Agent
-                  </button>
+                  {targetAutoUnitItems.length > 0 && (
+                    <button
+                      onClick={() => setShowApplyConfirm(true)}
+                      disabled={Object.values(selectedFixKeys).filter(Boolean).length === 0}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      Approve Auto Proposals ({Object.values(selectedFixKeys).filter(Boolean).length})
+                    </button>
+                  )}
+                  {targetAgentUnitItems.length > 0 && (
+                    <button
+                      onClick={() => {
+                        onClose();
+                        onLaunchUnitStandardization(targetAgentUnitKeys);
+                      }}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
+                    >
+                      <Bot className="w-3.5 h-3.5" />
+                      Ask Unit Relabel Agent ({targetAgentUnitKeys.length})
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {corruptedUnitItems.length === 0 ? (
+              {filteredCorruptedUnitItems.length === 0 ? (
                 <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 text-xs">
-                  ✨ Zero corrupted units detected! All units are valid.
+                  ✨ No unit issues found in this filter view.
                 </div>
               ) : (
                 <div className="space-y-2.5">
-                  {corruptedUnitItems.map(item => {
+                  {filteredCorruptedUnitItems.map(item => {
                     const proposal = item.corruptedUnitProposal;
+                    const hasAutoProposal = !!proposal?.proposedUnit;
                     const isSelected = !!selectedFixKeys[item.key];
 
                     return (
@@ -1002,6 +1105,8 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                         className={`p-3.5 rounded-xl border transition-all flex items-start gap-3 ${
                           isSelected
                             ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/60'
+                            : hasAutoProposal
+                            ? 'bg-white dark:bg-slate-800/40 border-amber-100 dark:border-amber-950/40'
                             : 'bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
                         }`}
                       >
@@ -1027,7 +1132,9 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                                   {proposal.proposedUnit}
                                 </span>
                               ) : (
-                                <span className="text-[10px] text-amber-600 font-semibold italic">Needs AI Agent review</span>
+                                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 rounded border border-indigo-200/50 dark:border-indigo-800/50">
+                                  Needs AI Agent review
+                                </span>
                               )}
                             </div>
                             {renderDeleteButton(item.key, item.name)}
@@ -1190,44 +1297,69 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
           {/* TAB 4: MISSING METADATA / RANGES */}
           {activeTab === 'missing_metadata' && (
             <div className="space-y-4 max-w-7xl mx-auto">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                    Missing Reference Ranges & Categories ({missingMetadataItems.length})
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {catalogMatchCount} items match standard medical catalog reference brackets and organ groupings.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {catalogMatchCount > 0 && (
+              <div className="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+                {/* FILTER PILLS */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setMetadataFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      metadataFilter === 'all'
+                        ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    All ({missingMetadataItems.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMetadataFilter('catalog')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      metadataFilter === 'catalog'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200/60 dark:border-blue-800/60'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
+                    <span>Catalog Matches ({targetCatalogItems.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMetadataFilter('custom_calibrate')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      metadataFilter === 'custom_calibrate'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/60 dark:border-emerald-800/60'
+                    }`}
+                  >
+                    <Bot className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+                    <span>Needs Calibrate ({targetCustomCalibrateItems.length})</span>
+                  </button>
+                  {targetCategoriseKeys.length > 0 && (
                     <button
-                      onClick={() => setShowCatalogApproveConfirm(true)}
-                      disabled={isApplying}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                      type="button"
+                      onClick={() => setMetadataFilter('categorise')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        metadataFilter === 'categorise'
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200/60 dark:border-indigo-800/60'
+                      }`}
                     >
-                      <Zap className="w-3.5 h-3.5" />
-                      Approve Catalog Ranges ({catalogMatchCount})
-                    </button>
-                  )}
-                  {onLaunchRangeCalibrator && (
-                    <button
-                      onClick={() => {
-                        onClose();
-                        onLaunchRangeCalibrator(missingRangeKeys);
-                      }}
-                      className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <Bot className="w-3.5 h-3.5 text-blue-500" />
-                      Calibrate with AI Agent
+                      <Bot className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+                      <span>Needs Category ({targetCategoriseKeys.length})</span>
                     </button>
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {missingMetadataItems.map(item => {
-                  const match = item.missingMetadata?.catalogMatch;
+              {filteredMissingMetadataItems.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-xs bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                  No biomarkers found in this filter view.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {filteredMissingMetadataItems.map(item => {
+                    const match = item.missingMetadata?.catalogMatch;
 
                   return (
                     <div key={item.key} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 space-y-2">
@@ -1250,9 +1382,13 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                             <span className="text-[10px] font-bold px-2 py-0.5 bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 rounded">
                               Range: Unknown
                             </span>
+                          ) : item.missingMetadata?.missingCategory ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 rounded">
+                              Category Needed
+                            </span>
                           ) : (
                             <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 rounded">
-                              Category / Brackets Needed
+                              Brackets Needed
                             </span>
                           )}
                           {renderDeleteButton(item.key, item.name)}
@@ -1291,8 +1427,9 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                   );
                 })}
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
           {/* TAB 5: CONFLICTS */}
           {activeTab === 'conflicts' && (
@@ -1394,11 +1531,105 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* TAB 6: FULLY CLEAN BIOMARKERS */}
+          {activeTab === 'clean' && (
+            <div className="space-y-4 max-w-7xl mx-auto">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>Fully Clean & Validated Biomarkers ({cleanItems.length})</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    These biomarkers have valid unit definitions, calibrated reference ranges/brackets, correct medical categorisation, and no unresolved duplicate aliases.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 text-xs font-bold rounded-lg border border-emerald-200/80 dark:border-emerald-800/80">
+                    {cleanItems.length} Passed Quality Gates
+                  </span>
+                </div>
+              </div>
+
+              {cleanItems.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-slate-400 text-xs">
+                  No biomarkers currently marked as fully clean. Complete the triage steps to standardize your dictionary.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {cleanItems.map(item => {
+                    const customDef = profile?.customBiomarkers?.[item.key] || {};
+                    const normalRangeStr = customDef.normalRange || (customDef.rangeBrackets && customDef.rangeBrackets.find((b: any) => b.type === 'normal')?.range) || '';
+                    const optimalRangeStr = customDef.optimalRange || (customDef.rangeBrackets && customDef.rangeBrackets.find((b: any) => b.type === 'optimal')?.range) || '';
+                    const category = customDef.category || customDef.standardMedicalGrouping || '';
+
+                    return (
+                      <div
+                        key={item.key}
+                        className="p-3.5 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 bg-white dark:bg-slate-800/60 shadow-xs space-y-2 hover:border-emerald-400 dark:hover:border-emerald-700/80 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">
+                                {item.name || item.key}
+                              </span>
+                              <span className="px-1.5 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-mono text-[10px] font-bold rounded">
+                                {item.currentUnit || 'unitless'}
+                              </span>
+                            </div>
+                            <div className="font-mono text-[10px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                              {item.key}
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 bg-emerald-100/70 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 text-[10px] font-semibold rounded-full shrink-0 flex items-center gap-1">
+                            <Check className="w-2.5 h-2.5" /> Clean
+                          </span>
+                        </div>
+
+                        {/* RANGES & METADATA DETAILS */}
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px] space-y-1">
+                          {normalRangeStr && (
+                            <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                              <span className="text-[10px] text-slate-400">Normal Range:</span>
+                              <span className="font-mono font-medium">{normalRangeStr} {item.currentUnit}</span>
+                            </div>
+                          )}
+                          {optimalRangeStr && (
+                            <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400">
+                              <span className="text-[10px] text-slate-400">Optimal:</span>
+                              <span className="font-mono font-medium">{optimalRangeStr} {item.currentUnit}</span>
+                            </div>
+                          )}
+                          {category && (
+                            <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                              <span className="text-[10px]">Category:</span>
+                              <span className="capitalize font-medium text-indigo-600 dark:text-indigo-400">{category}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center text-slate-400 text-[10px] pt-0.5">
+                            <span>Historical Logs:</span>
+                            <span className="font-mono">{item.logCount} {item.logCount === 1 ? 'log' : 'logs'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* MODAL FOOTER */}
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-center justify-between gap-3">
-          <div className="text-xs text-slate-500 dark:text-slate-400">
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-center justify-between gap-3 shrink-0">
+          <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            {activeTab === 'missing_metadata' && (
+              <span>
+                Showing {filteredMissingMetadataItems.length} of {missingMetadataItems.length} items
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -1408,16 +1639,76 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
             >
               Close
             </button>
-            {activeTab === 'corrupted_units' && report.corruptedUnitsCount > 0 && (
-              <button
-                onClick={() => setShowApplyConfirm(true)}
-                disabled={isApplying || Object.values(selectedFixKeys).filter(Boolean).length === 0}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>Apply ({Object.values(selectedFixKeys).filter(Boolean).length}) Selected Unit Repairs</span>
-              </button>
+
+            {/* TAB 4 ACTIONS NEXT TO CLOSE */}
+            {activeTab === 'missing_metadata' && (
+              <>
+                {(metadataFilter === 'all' || metadataFilter === 'catalog') && targetCatalogItems.length > 0 && (
+                  <button
+                    onClick={() => setShowCatalogApproveConfirm(true)}
+                    disabled={isApplying}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Auto-Calibrate ({targetCatalogItems.length}) Catalog Ranges</span>
+                  </button>
+                )}
+                {(metadataFilter === 'all' || metadataFilter === 'categorise') && onLaunchMedicalCategorisation && targetCategoriseKeys.length > 0 && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onLaunchMedicalCategorisation(targetCategoriseKeys);
+                    }}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Bot className="w-3.5 h-3.5" />
+                    <span>Categorise ({targetCategoriseKeys.length}) with Agent</span>
+                  </button>
+                )}
+                {(metadataFilter === 'all' || metadataFilter === 'custom_calibrate' || metadataFilter === 'calibrate') && onLaunchRangeCalibrator && (metadataFilter === 'custom_calibrate' ? targetCustomCalibrateItems.length > 0 : targetCalibrateItems.length > 0) && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onLaunchRangeCalibrator((metadataFilter === 'custom_calibrate' ? targetCustomCalibrateItems : targetCalibrateItems).map(i => i.key));
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Bot className="w-3.5 h-3.5" />
+                    <span>Calibrate ({metadataFilter === 'custom_calibrate' ? targetCustomCalibrateItems.length : targetCalibrateItems.length}) with AI Agent</span>
+                  </button>
+                )}
+              </>
             )}
+
+            {/* TAB 2 ACTIONS */}
+            {activeTab === 'corrupted_units' && (
+              <>
+                {(unitFilter === 'all' || unitFilter === 'auto_proposals') && targetAutoUnitItems.length > 0 && (
+                  <button
+                    onClick={() => setShowApplyConfirm(true)}
+                    disabled={isApplying || Object.values(selectedFixKeys).filter(Boolean).length === 0}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Apply ({Object.values(selectedFixKeys).filter(Boolean).length}) Selected Unit Repairs</span>
+                  </button>
+                )}
+                {(unitFilter === 'all' || unitFilter === 'agent_review') && targetAgentUnitKeys.length > 0 && onLaunchUnitStandardization && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onLaunchUnitStandardization(targetAgentUnitKeys);
+                    }}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Bot className="w-3.5 h-3.5" />
+                    <span>Ask Unit Relabel Agent ({targetAgentUnitKeys.length})</span>
+                  </button>
+                )}
+              </>
+            )}
+
+            {/* TAB 3 ACTIONS */}
             {activeTab === 'duplicates' && report.duplicateGroups.length > 0 && (
               <button
                 onClick={handleApplyAllDuplicateConsolidations}
@@ -1428,16 +1719,8 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                 <span>Approve All Duplicate Consolidations</span>
               </button>
             )}
-            {activeTab === 'missing_metadata' && catalogMatchCount > 0 && (
-              <button
-                onClick={() => setShowCatalogApproveConfirm(true)}
-                disabled={isApplying}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Zap className="w-3.5 h-3.5" />
-                <span>Approve ({catalogMatchCount}) Catalog Ranges</span>
-              </button>
-            )}
+
+            {/* TAB 5 ACTIONS */}
             {activeTab === 'conflicts' && report.conflictsCount > 0 && (
               <button
                 onClick={handleApplyAllConflictFixes}

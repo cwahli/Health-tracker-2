@@ -2211,12 +2211,54 @@ export function getPhysiologicalBucket(category: string, key?: string): 'metabol
   return 'other';
 }
 
+export const CANONICAL_RISK_CATEGORIES = [
+  'Cardiovascular',
+  'Metabolic',
+  'Liver',
+  'Kidney',
+  'Hematology',
+  'Immunological',
+  'Endocrine',
+  'Screenings & Wellness'
+] as const;
+
+export type CanonicalRiskCategory = typeof CANONICAL_RISK_CATEGORIES[number];
+
+/**
+ * Normalizes any free-form clinical risk category or sub-specialty tag into one of the 8 canonical domains.
+ */
+export function canonicalizeRiskCategory(category: string): CanonicalRiskCategory {
+  const cat = (category || '').toLowerCase().trim();
+  if (cat.includes('cardio') || cat.includes('heart') || cat.includes('lipid') || cat.includes('cholesterol') || cat.includes('blood pressure') || cat.includes('vascular')) {
+    return 'Cardiovascular';
+  }
+  if (cat.includes('metabol') || cat.includes('sugar') || cat.includes('glucose') || cat.includes('glycem') || cat.includes('beta-cell') || cat.includes('insulin') || cat.includes('diabetes') || cat.includes('hba1c')) {
+    return 'Metabolic';
+  }
+  if (cat.includes('liver') || cat.includes('hepatic') || cat.includes('biliary') || cat.includes('bilirubin') || cat.includes('alt') || cat.includes('ast') || cat.includes('alp') || cat.includes('ggt')) {
+    return 'Liver';
+  }
+  if (cat.includes('kidney') || cat.includes('renal') || cat.includes('creatinine') || cat.includes('egfr') || cat.includes('bun') || cat.includes('urea') || cat.includes('nephr')) {
+    return 'Kidney';
+  }
+  if (cat.includes('hematolog') || cat.includes('blood') || cat.includes('cbc') || cat.includes('anemia') || cat.includes('platelet') || cat.includes('wbc') || cat.includes('rbc') || cat.includes('hemoglobin') || cat.includes('haemoglobin')) {
+    return 'Hematology';
+  }
+  if (cat.includes('immuno') || cat.includes('inflam') || cat.includes('infect') || cat.includes('autoimmun') || cat.includes('respirat') || cat.includes('pulmon') || cat.includes('lung') || cat.includes('allerg') || cat.includes('hscrp')) {
+    return 'Immunological';
+  }
+  if (cat.includes('endocrine') || cat.includes('thyroid') || cat.includes('hormone') || cat.includes('cortisol') || cat.includes('testosterone') || cat.includes('estrogen') || cat.includes('adrenal') || cat.includes('pituitary')) {
+    return 'Endocrine';
+  }
+  return 'Screenings & Wellness';
+}
+
 export function getDerivedCategoryDefaults(category: string, key?: string) {
   const cat = (category || '').toLowerCase();
   const k = (key || '').toLowerCase();
   
   let grouping = 'Other';
-  let risks = ['Wellness'];
+  let risks: string[] = ['Screenings & Wellness'];
   let conditions: string[] = [];
 
   if (cat === 'blood_sugar' || cat === 'metabolic' || k === 'hba1c' || k === 'fasting_glucose') {
@@ -2241,23 +2283,23 @@ export function getDerivedCategoryDefaults(category: string, key?: string) {
     conditions = ['Anemia', 'Infection', 'Blood Disorder'];
   } else if (cat === 'inflammation' || k === 'hscrp') {
     grouping = 'Immunology';
-    risks = ['Wellness'];
+    risks = ['Immunological'];
     conditions = ['Systemic Inflammation', 'Cardiovascular Risk'];
   } else if (cat === 'thyroid' || cat === 'hormones') {
     grouping = 'Endocrinology';
-    risks = ['Metabolic'];
+    risks = ['Endocrine'];
     conditions = ['Hormonal Imbalance', 'Thyroid Dysfunction'];
   } else if (cat === 'vitamins') {
     grouping = 'Nutrition & Metabolism';
-    risks = ['Wellness'];
+    risks = ['Screenings & Wellness'];
     conditions = ['Vitamin Deficiency'];
   } else if (k === 'bmi' || k === 'weight' || k === 'height') {
     grouping = 'Biometrics';
-    risks = ['Wellness'];
+    risks = ['Screenings & Wellness'];
     conditions = ['Weight Management'];
   }
 
-  return { grouping, risks, conditions };
+  return { grouping, risks: Array.from(new Set(risks.map(canonicalizeRiskCategory))), conditions };
 }
 
 export function inferUnitFromKeyOrName(key: string, name?: string): string {
@@ -2339,9 +2381,10 @@ export function getMergedBiomarkerDef(key: string, builtIn?: any, custom?: any, 
     ? custom.standardMedicalGrouping
     : (centralDef?.standardMedicalGrouping && centralDef.standardMedicalGrouping !== 'Other' ? centralDef.standardMedicalGrouping : defaults.grouping);
 
-  const riskCategories = (Array.isArray(custom?.riskCategories) && custom.riskCategories.length > 0 && !custom.riskCategories.includes('Uncategorized'))
+  const rawRisks = (Array.isArray(custom?.riskCategories) && custom.riskCategories.length > 0 && !custom.riskCategories.includes('Uncategorized'))
     ? custom.riskCategories
     : (Array.isArray(centralDef?.riskCategories) && centralDef.riskCategories.length > 0 ? centralDef.riskCategories : defaults.risks);
+  const riskCategories = Array.from(new Set(rawRisks.map(canonicalizeRiskCategory)));
 
   const potentialMedicalConditions = (Array.isArray(custom?.potentialMedicalConditions) && custom.potentialMedicalConditions.length > 0)
     ? custom.potentialMedicalConditions
@@ -2383,6 +2426,8 @@ export function getBiomarkerMetadata(key: string, customDef?: any) {
   if (risks.length === 0 || risks.includes('Uncategorized')) {
     risks = defaults.risks;
   }
+  const canonicalRisks = Array.from(new Set(risks.map(canonicalizeRiskCategory)));
+
   if (group.trim() === '' || group === 'Other') {
     group = defaults.grouping;
   }
@@ -2391,7 +2436,7 @@ export function getBiomarkerMetadata(key: string, customDef?: any) {
   }
 
   return {
-    riskCategories: risks,
+    riskCategories: canonicalRisks,
     standardMedicalGrouping: group,
     potentialMedicalConditions: conditions
   };

@@ -1,6 +1,6 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-17
+**Updated:** 2026-08-18
 **Status:** ALL GATES & REGRESSION SUITES GREEN (562 tests across 61 test suites)
 **Governance & Laws:** Follow `docs/agent/` domain rules and ship code via AI Studio only.
 
@@ -10,17 +10,16 @@
 - **`scripts/assert-biomarker-lifecycle-m31.mjs`**: Exit 0 (P0–P8 Master Biomarker Lifecycle Assertions Passed)
 - **`scripts/assert-free-tier-complete.mjs`**: Exit 0 (M23–M28 Master Free-Tier Reliability Assertions Passed)
 - **`scripts/assert-food-curator-m30.mjs`**: Exit 0 (M30 Food Curator Assertions Passed)
-- **Vitest Suite**: 562 passed tests across 61 test files.
+- **Vitest Suite**: 562 passed tests across 61 test files (100% green).
 - **TypeScript Compilation**: `npx tsc --noEmit` clean exit 0
-- **Biomarker Dictionary & Health Tab Performance**:
-  - Replaced $O(N^2)$ pairwise loop in `runGeneralizedBiomarkerAudit` with $O(N)$ candidate-bucketed clustering (reducing clustering from ~45,000 checks down to sub-10ms).
-  - Replaced repetitive $O(K \times H)$ `biomarkerHistory` full-array scans in `BiomarkerDictionaryModal` and `MedicalHistoryTab` with pre-indexed $O(1)$ inverted hash maps.
-  - Wrapped `DictionaryItem` in `React.memo` and windowed approved biomarker rendering slice to prevent UI thread lockups.
-- **Supabase Cloud State**: 0 uncalibrated rows remaining in Supabase Postgres. Schema-aligned queries in `server_routes_sync.ts` verified.
-- **Supabase Egress & Payload Diet**: 
-  - Omitted `payload` from `/api/bug-tracker/overview` listing queries in `serverIssueBacklog.ts`.
-  - Configured `serverBugSnapshot.ts` to write heavy DOM/a11y/debug blobs to R2 only, storing thin pointers in Supabase `issue_backlog`.
-  - Migrated legacy `issue_backlog` rows from ~7.5 MB down to ~38 KB (99.5% reduction), capping daily egress comfortably under 5 MB/day.
+- **Biomarker Health & Quality Audit Suite**:
+  - Structured **Corrupted & Missing Units** tab with distinct filter pills matching Missing Ranges (`All`, `Auto-Proposals`, `Needs Agent Review`) to clearly distinguish automatic 1-click repairs from AI agent handoffs.
+  - Eliminated duplicate cluster re-indexing on sync by feeding `profile.deletedCustomBiomarkerKeys` into `runGeneralizedBiomarkerAudit` and filtering tombstoned aliases out of candidate clusters.
+  - Fixed "Needs Calibrate" filter in `BiomarkerAuditModal.tsx` to include reference bracket gaps.
+  - Auto-scraped & resolved 65+ corrupted/blank unit definitions via clinical synonym stems and embedded key suffixes (`_mmol_l`, `_umol_l`, `_10_9_l`, `_score`, `_percent`).
+  - Synchronized clinical practice groupings (`standardMedicalGrouping`) directly with organ category assignments, preventing stale `needsApproval` flags.
+  - Streamlined the **Needs Calibrate** tab to unify deterministic built-in catalog range auto-filling (0 tokens) with full AI Range Calibration Agent hand-offs.
+  - Unified loading spinners and silent state transitions across all dictionary and audit approval modals.
 
 ---
 ## Summary of Accomplishments in Track B & Biomarker Pipeline
@@ -121,3 +120,16 @@
     - Fixed `ReferenceError: Cannot access 'auditReport' before initialization` in `BiomarkerDictionaryModal.tsx` and `TrendsTab.tsx`.
     - Corrected hoisting order of block-scoped React hooks so that `auditReport` and `aliasKeysToHide` are safely initialized before any `useMemo` hooks or internal utility functions (like `collectItemLogs`) capture and rely on them.
     - Verified strict type checking (`tsc --noEmit`) and successful production build for rendering logic.
+
+29. **Duplicate Biomarker Resurrection Fix (post-sync 82→141 bug)**:
+    - **Root cause**: Three places rebuilt the active biomarker set without filtering out tombstoned (merged) alias keys from `deletedCustomBiomarkerKeys`, so stale cloud history logs carrying old source keys caused them to reappear.
+    - **Fix A** (`App.tsx` L2929): `computedBiomarkers` post-sync now skips any log biomarker key present in `mergedProfile.deletedCustomBiomarkerKeys`.
+    - **Fix B** (`App.tsx` L2891, forcePull path): Same tombstone filter applied to `tempBiomarkers` in the `forcePull` code path.
+    - **Fix C** (`App.tsx` L5437, `handleBatchCombineBiomarkers`): `recomputedBiomarkers` built right after combine now skips tombstoned keys, ensuring the immediate post-combine render is clean too.
+    - **Fix D** (`BiomarkerDictionaryModal.tsx` L1602): `historyKeys` memo now receives `profile.deletedCustomBiomarkerKeys` as a dependency and excludes any key with a non-zero tombstone timestamp from the dictionary visible set — preventing stale cloud history from re-surfacing merged aliases.
+    - `tsc --noEmit` exit 0.
+
+30. **Name Consolidation Agent: Pre-filter Engine-Detected Aliases**:
+    - The AI Name Deduper agent was being given keys that the deterministic audit engine already identified as alias candidates (e.g. `egfr_mlmin173m2`, `red_blood_cell_count`, `basophil_count`).
+    - Fixed `handleRunConsolidationAgent` (`BiomarkerDictionaryModal.tsx` L2892): Before building `selectedBiomarkerDetails`, collect all keys from `auditReport.duplicateGroups` (both `candidateAliases` and their `suggestedMasterKey`); filter them out of the agent's input.
+    - Agent now only processes genuinely ambiguous cases that can't be resolved by stem/synonym matching.

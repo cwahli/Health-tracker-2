@@ -826,12 +826,20 @@ export function mergeProfiles(cloudProfile: UserProfile | null, localProfile: Us
 
     const dispName = newerDef.display_name || newerDef.displayName || olderDef.display_name || olderDef.displayName;
     const stdGrouping = newerDef.standardMedicalGrouping || olderDef.standardMedicalGrouping;
+    const catVal = newerDef.category || olderDef.category;
     const desc = newerDef.description || olderDef.description;
+    const descs = newerDef.descriptions || olderDef.descriptions;
     const benRisk = newerDef.benefitRisk || olderDef.benefitRisk;
     const normRange = newerDef.normalRange || olderDef.normalRange;
     const unitVal = newerDef.unit || olderDef.unit;
     const rngCfg = newerDef.rangeConfig || olderDef.rangeConfig;
     const cstRanges = newerDef.customRanges || olderDef.customRanges;
+    const rngBrackets = newerDef.rangeBrackets || olderDef.rangeBrackets;
+    const optRange = newerDef.optimalRange || olderDef.optimalRange;
+    const minR = newerDef.minRange !== undefined ? newerDef.minRange : olderDef.minRange;
+    const maxR = newerDef.maxRange !== undefined ? newerDef.maxRange : olderDef.maxRange;
+    const optMin = newerDef.optimalMin !== undefined ? newerDef.optimalMin : olderDef.optimalMin;
+    const optMax = newerDef.optimalMax !== undefined ? newerDef.optimalMax : olderDef.optimalMax;
     const maxTime = Math.max(priKeyTime, secKeyTime);
 
     const mergedDef: any = {
@@ -841,12 +849,20 @@ export function mergeProfiles(cloudProfile: UserProfile | null, localProfile: Us
     };
     if (dispName) mergedDef.display_name = dispName; else delete mergedDef.display_name;
     if (stdGrouping) mergedDef.standardMedicalGrouping = stdGrouping; else delete mergedDef.standardMedicalGrouping;
+    if (catVal) mergedDef.category = catVal; else delete mergedDef.category;
     if (desc) mergedDef.description = desc; else delete mergedDef.description;
+    if (descs) mergedDef.descriptions = descs; else delete mergedDef.descriptions;
     if (benRisk) mergedDef.benefitRisk = benRisk; else delete mergedDef.benefitRisk;
     if (normRange) mergedDef.normalRange = normRange; else delete mergedDef.normalRange;
     if (unitVal) mergedDef.unit = unitVal; else delete mergedDef.unit;
     if (rngCfg) mergedDef.rangeConfig = rngCfg; else delete mergedDef.rangeConfig;
     if (cstRanges) mergedDef.customRanges = cstRanges; else delete mergedDef.customRanges;
+    if (rngBrackets) mergedDef.rangeBrackets = rngBrackets; else delete mergedDef.rangeBrackets;
+    if (optRange) mergedDef.optimalRange = optRange; else delete mergedDef.optimalRange;
+    if (minR !== undefined) mergedDef.minRange = minR; else delete mergedDef.minRange;
+    if (maxR !== undefined) mergedDef.maxRange = maxR; else delete mergedDef.maxRange;
+    if (optMin !== undefined) mergedDef.optimalMin = optMin; else delete mergedDef.optimalMin;
+    if (optMax !== undefined) mergedDef.optimalMax = optMax; else delete mergedDef.optimalMax;
     if (maxTime > 0) mergedDef.updatedAt = maxTime; else delete mergedDef.updatedAt;
     if (combinedRisks.length > 0) mergedDef.riskCategories = combinedRisks;
     if (combinedConditions.length > 0) mergedDef.potentialMedicalConditions = combinedConditions;

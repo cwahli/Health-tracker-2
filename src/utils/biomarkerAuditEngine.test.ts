@@ -221,4 +221,20 @@ describe('Biomarker Audit & Deduplication Engine', () => {
     expect(dupCheck?.matchedKey).toBe('hemoglobin');
     expect(dupCheck?.isBuiltIn).toBe(true);
   });
+
+  it('filters out tombstoned custom biomarker aliases even if historical logs contain old keys', () => {
+    const customBiomarkers = {
+      alt: { name: 'Alanine Aminotransferase', unit: 'U/L' }
+    };
+    const biomarkerHistory = [
+      { id: 'log1', date: '2026-08-16', biomarkers: { alt: 35, serum_alt: 35 } }
+    ];
+    const deletedCustomBiomarkerKeys = {
+      serum_alt: Date.now()
+    };
+
+    const report = runGeneralizedBiomarkerAudit(customBiomarkers, biomarkerHistory, {}, deletedCustomBiomarkerKeys);
+    expect(report.duplicateGroups.length).toBe(0);
+    expect(report.items.find(i => i.key === 'serum_alt')).toBeUndefined();
+  });
 });

@@ -203,18 +203,32 @@ export function findCatalogDefinition(key: string, name?: string): BiomarkerDefi
   if (!key) return undefined;
   const normKey = key.toLowerCase().trim();
   const stem = normalizeStemKey(key);
+  const mapped = getMappedBiomarkerKey(key, name);
   
   // Exact key match
   let found = biomarkerDefinitions.find(d => d.key.toLowerCase() === normKey);
   if (found) return found;
 
+  // Mapped canonical key match
+  if (mapped) {
+    found = biomarkerDefinitions.find(d => d.key.toLowerCase() === mapped.toLowerCase());
+    if (found) return found;
+  }
+
   // Stem match
   found = biomarkerDefinitions.find(d => normalizeStemKey(d.key) === stem);
   if (found) return found;
 
+  // Clinical Synonym match
+  const synKey = lookupClinicalSynonym(normKey) || lookupClinicalSynonym(stem);
+  if (synKey) {
+    found = biomarkerDefinitions.find(d => d.key.toLowerCase() === synKey.toLowerCase() || normalizeStemKey(d.key) === normalizeStemKey(synKey));
+    if (found) return found;
+  }
+
   // Alias match
   found = biomarkerDefinitions.find(d => 
-    Array.isArray(d.aliases) && d.aliases.some(a => a.toLowerCase() === normKey || normalizeStemKey(a) === stem)
+    Array.isArray(d.aliases) && d.aliases.some(a => a.toLowerCase() === normKey || normalizeStemKey(a) === stem || (synKey && normalizeStemKey(a) === normalizeStemKey(synKey)))
   );
   if (found) return found;
 
@@ -321,7 +335,8 @@ export function deriveConflictResolution(
 export function runGeneralizedBiomarkerAudit(
   customBiomarkers: { [key: string]: any } = {},
   biomarkerHistory: any[] = [],
-  currentBiomarkers: { [key: string]: any } = {}
+  currentBiomarkers: { [key: string]: any } = {},
+  deletedCustomBiomarkerKeys: { [key: string]: number } = {}
 ): BiomarkerAuditReport {
   const items: BiomarkerAuditItem[] = [];
 
@@ -332,11 +347,17 @@ export function runGeneralizedBiomarkerAudit(
   }
   const logCounts: { [key: string]: number } = {};
   const logUnits: { [key: string]: { [unit: string]: number } } = {};
-  const allKeysSet = new Set<string>(Object.keys(customBiomarkers));
+  const allKeysSet = new Set<string>(
+    Object.keys(customBiomarkers).filter(k => !(deletedCustomBiomarkerKeys[k] && deletedCustomBiomarkerKeys[k] > 0))
+  );
 
   combinedHistory.forEach(log => {
     if (log && log.biomarkers) {
       Object.keys(log.biomarkers).forEach(k => {
+        // Skip counting or adding keys tombstoned as deleted/consolidated aliases
+        if (deletedCustomBiomarkerKeys[k] && deletedCustomBiomarkerKeys[k] > 0 && !customBiomarkers[k]) {
+          return;
+        }
         logCounts[k] = (logCounts[k] || 0) + 1;
         allKeysSet.add(k);
       });
@@ -344,6 +365,9 @@ export function runGeneralizedBiomarkerAudit(
     if (log && log.tests && Array.isArray(log.tests)) {
       log.tests.forEach((t: any) => {
         if (t && t.key && t.unit && !isCorruptedUnit(t.unit)) {
+          if (deletedCustomBiomarkerKeys[t.key] && deletedCustomBiomarkerKeys[t.key] > 0 && !customBiomarkers[t.key]) {
+            return;
+          }
           if (!logUnits[t.key]) logUnits[t.key] = {};
           logUnits[t.key][t.unit] = (logUnits[t.key][t.unit] || 0) + 1;
           allKeysSet.add(t.key);
@@ -561,6 +585,35 @@ export function runGeneralizedBiomarkerAudit(
         reason = `Standard medical catalog unit for ${catalogMatchDef.name}`;
       }
 
+      // 6. Extract unit directly embedded in key name (e.g. height_cm -> cm, serum_sodium_mmol_l -> mmol/L, psa_ug_l -> ug/L)
+      if (!proposedUnit) {
+        const kLow = key.toLowerCase();
+        if (kLow.endsWith('_mmol_l') || kLow.endsWith('_mmol_per_l')) { proposedUnit = 'mmol/L'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_umol_l') || kLow.endsWith('_umol_per_l')) { proposedUnit = 'umol/L'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_pmol_l')) { proposedUnit = 'pmol/L'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_nmol_l')) { proposedUnit = 'nmol/L'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_mg_dl')) { proposedUnit = 'mg/dL'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_mg_l')) { proposedUnit = 'mg/L'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_ug_l') || kLow.endsWith('_mcg_l')) { proposedUnit = 'ug/L'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_g_l') || kLow.endsWith('_g_per_l')) { proposedUnit = 'g/L'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_g_dl')) { proposedUnit = 'g/dL'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_pg') || kLow.endsWith('_pg_ml')) { proposedUnit = 'pg'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_ng_ml') || kLow.endsWith('_ng_dl')) { proposedUnit = 'ng/mL'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_fl')) { proposedUnit = 'fL'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_u_l') || kLow.endsWith('_iu_l')) { proposedUnit = 'U/L'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_10_9_l') || kLow.endsWith('_10_9_per_l')) { proposedUnit = '10^9/L'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_10_12_l') || kLow.endsWith('_10_12_per_l')) { proposedUnit = '10^12/L'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_cm')) { proposedUnit = 'cm'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_kg') || kLow.includes('_kg_m2')) { proposedUnit = kLow.includes('_kg_m2') ? 'kg/m2' : 'kg'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_percent') || kLow.endsWith('_pct')) { proposedUnit = '%'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_score') || kLow.includes('audit_c_') || kLow.includes('audit_score')) { proposedUnit = 'points'; reason = 'Clinical assessment scoring scale'; }
+        else if (kLow.includes('weekly_alcohol')) { proposedUnit = 'units/week'; reason = 'Standard alcohol telemetry unit'; }
+        
+        if (proposedUnit) {
+          source = 'optimalValue';
+        }
+      }
+
       if (proposedUnit) {
         status = 'corrupted_unit';
         corruptedUnitProposal = {
@@ -596,21 +649,28 @@ export function runGeneralizedBiomarkerAudit(
 
       const isPrimary = key === bestKey;
       const targetDef = getDef(bestKey);
-      const candidateAliases = siblings.filter(sk => sk !== bestKey);
+      const allCandidateAliases = siblings.filter(sk => sk !== bestKey);
+      const candidateAliases = allCandidateAliases.filter(sk => {
+        const hasLogs = (logCounts[sk] || 0) > 0;
+        const isCustom = customBiomarkers[sk] !== undefined;
+        return hasLogs || isCustom;
+      });
 
       const clusterReason = clusterReasonMap[key] || `Matches cluster across ${siblings.length} entries`;
 
-      duplicateCluster = {
-        targetKey: bestKey,
-        targetName: targetDef.name || bestKey,
-        clusterKeys: siblings,
-        candidateAliases,
-        reason: clusterReason,
-        isPrimary
-      };
+      if (candidateAliases.length > 0 || isPrimary) {
+        duplicateCluster = {
+          targetKey: bestKey,
+          targetName: targetDef.name || bestKey,
+          clusterKeys: siblings,
+          candidateAliases,
+          reason: clusterReason,
+          isPrimary
+        };
 
-      if (!isPrimary && status === 'clean') {
-        status = 'duplicate_candidate';
+        if (!isPrimary && status === 'clean' && candidateAliases.includes(key)) {
+          status = 'duplicate_candidate';
+        }
       }
     }
 
@@ -704,19 +764,15 @@ export function runGeneralizedBiomarkerAudit(
           }
         });
         const masterDef = getDef(bestKey);
-        const candidateAliases = keys.filter(k => k !== bestKey);
+        const allCandidateAliases = keys.filter(k => k !== bestKey);
 
         let totalLogsInCluster = 0;
         const emptyAliasKeys: string[] = [];
         const populatedAliasKeys: string[] = [];
-        let hasCustomOrLogs = false;
 
         keys.forEach(k => {
           const count = logCounts[k] || 0;
           totalLogsInCluster += count;
-          if (count > 0 || customBiomarkers[k] !== undefined) {
-            hasCustomOrLogs = true;
-          }
           if (k !== bestKey) {
             if (count === 0) {
               emptyAliasKeys.push(k);
@@ -726,8 +782,15 @@ export function runGeneralizedBiomarkerAudit(
           }
         });
 
-        // Skip clusters that consist entirely of built-in keys that the user hasn't interacted with
-        if (!hasCustomOrLogs) return;
+        // Only report as a duplicate cluster if there is at least one active candidate alias
+        // that exists in customBiomarkers or has historical observations (>0 logs)
+        const activeCandidateAliases = allCandidateAliases.filter(k => {
+          const hasLogs = (logCounts[k] || 0) > 0;
+          const isCustom = customBiomarkers[k] !== undefined;
+          return hasLogs || isCustom;
+        });
+
+        if (activeCandidateAliases.length === 0) return;
 
         const clusterReason = clusterReasonMap[bestKey] || `Matches duplicate cluster across ${keys.length} entries`;
 
@@ -735,11 +798,11 @@ export function runGeneralizedBiomarkerAudit(
           suggestedMasterKey: bestKey,
           suggestedMasterName: masterDef.name || bestKey,
           memberKeys: keys,
-          candidateAliases,
+          candidateAliases: activeCandidateAliases,
           reason: clusterReason,
           totalLogsInCluster,
-          emptyAliasKeys,
-          populatedAliasKeys
+          emptyAliasKeys: emptyAliasKeys.filter(k => activeCandidateAliases.includes(k)),
+          populatedAliasKeys: populatedAliasKeys.filter(k => activeCandidateAliases.includes(k))
         });
       }
     }
