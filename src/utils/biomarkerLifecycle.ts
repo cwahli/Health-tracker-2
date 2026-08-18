@@ -154,15 +154,35 @@ export function parsePrintedDate(raw: string): string | null {
 export function parseResultCell(raw: string): { numeric: number | null; unit: string; qualitative: string | null } {
   const s = String(raw || '').trim();
   if (!s) return { numeric: null, unit: '', qualitative: null };
-  if (/^(negative|positive|trace|not detected|detected|nil|n\/a|na)$/i.test(s)) {
+  if (/^(negative|positive|trace|not detected|detected|nil|n\/a|na|-|--|none)$/i.test(s)) {
     return { numeric: null, unit: '', qualitative: s };
   }
-  const bp = s.match(/^(\d+)\s*\/\s*(\d+)\s*(.*)$/);
-  if (bp && /mmhg|mm\s*hg/i.test(bp[3] || 'mmHg')) {
-    return { numeric: null, unit: (bp[3] || 'mmHg').trim() || 'mmHg', qualitative: `${bp[1]} / ${bp[2]}` };
+
+  // Check for fractional / composite format: e.g. "109 / 53 mmHg", "3 / 12", "8/12", "120/80"
+  const fractionOrBp = s.match(/^(\d+)\s*\/\s*(\d+)\s*(.*)$/);
+  if (fractionOrBp) {
+    const num1 = parseInt(fractionOrBp[1], 10);
+    const num2 = parseInt(fractionOrBp[2], 10);
+    const rawUnitPart = (fractionOrBp[3] || '').trim();
+
+    // Explicit mmHg or blood pressure ranges (e.g. 109 / 53)
+    if (/mmhg|mm\s*hg/i.test(rawUnitPart) || (num1 >= 60 && num2 >= 35 && num2 !== 12 && num2 !== 10 && num2 !== 20 && num2 !== 40 && num2 !== 100)) {
+      return { numeric: null, unit: 'mmHg', qualitative: `${num1} / ${num2}` };
+    }
+
+    // Fractional scores like AUDIT-C (e.g. 3 / 12, 8 / 12, 5 / 12)
+    const scoreUnit = rawUnitPart && !/mmhg/i.test(rawUnitPart) ? rawUnitPart : `/${num2}`;
+    return { numeric: num1, unit: scoreUnit, qualitative: `${num1} / ${num2}` };
   }
+
   const m = s.match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
-  if (m) return { numeric: parseFloat(m[1]), unit: (m[2] || '').trim(), qualitative: null };
+  if (m) {
+    let unit = (m[2] || '').trim();
+    if (/^(n\/a|na|-|--|nil|none)$/i.test(unit)) {
+      unit = '';
+    }
+    return { numeric: parseFloat(m[1]), unit, qualitative: null };
+  }
   return { numeric: null, unit: '', qualitative: s };
 }
 
@@ -265,6 +285,14 @@ export function buildIngestBatch(rows: string[][], jobId?: string): IngestTrace 
       return;
     }
 
+    // Fix AUDIT-C score unit bleed if any mmHg was carried over
+    const keyLow = matchedKey.toLowerCase();
+    if (keyLow.startsWith('audit_') || keyLow.endsWith('_score')) {
+      if (/mmhg/i.test(rawUnit)) {
+        rawUnit = 'score';
+      }
+    }
+
     const valNum = parseFloat(rawValueStr);
     const catalogDef = biomarkerDefinitions.find((d) => d.key === matchedKey);
     const catalogUnit = catalogDef?.unit || '';
@@ -273,7 +301,10 @@ export function buildIngestBatch(rows: string[][], jobId?: string): IngestTrace 
     let classTag: string = 'IDENTITY_PARALLEL_KEY';
     let why = '';
 
-    if (qualitative && isNaN(valNum)) {
+    if (matchedKey === 'blood_pressure' && qualitative) {
+      bucket = 'high_confidence';
+      classTag = 'IDENTITY_PARALLEL_KEY';
+    } else if (qualitative && isNaN(valNum)) {
       bucket = 'unmatched';
       classTag = 'COMPLETENESS';
       why = 'Qualitative result — leftover Parser';
@@ -371,19 +402,86 @@ export function leftoverTextFromTrace(trace: IngestTrace): string {
 }
 
 export function stagedRowsToExtractedData(trace: IngestTrace): any[] {
-  return (trace.rows || [])
+  const result: any[] = [];
+  (trace.rows || [])
     .filter((r) => r.bucket === 'high_confidence' || r.bucket === 'flagged')
-    .map((r) => ({
-      biomarker: r.canonicalKey,
-      display_name: r.printedName || null,
-      date: r.date || null,
-      numeric_value: typeof r.rawValue === 'number' ? r.rawValue : null,
-      qualitative_value: r.qualitativeValue || null,
-      value: r.rawValue,
-      unit: r.rawUnit || '',
-      explanation: r.bucket === 'flagged' ? (r.why || r.comment || 'Flagged for review') : 'Layer-1 table match',
-      printedRange: r.printedRange,
-    }));
+    .forEach((r) => {
+      let unit = r.rawUnit || '';
+      if (/^(n\/a|na|-|--|nil|none)$/i.test(unit)) {
+        unit = '';
+      }
+      const keyLow = (r.canonicalKey || '').toLowerCase();
+      if (keyLow.startsWith('audit_') || keyLow.endsWith('_score')) {
+        if (/mmhg/i.test(unit)) {
+          unit = 'score';
+        }
+      }
+
+      // Handle Blood Pressure composite & separate readings
+      if (keyLow === 'blood_pressure' || (r.printedName && /blood\s*pressure/i.test(r.printedName))) {
+        let sys: number | null = null;
+        let dia: number | null = null;
+        const valStr = String(r.qualitativeValue || r.rawValue || '');
+        const bpMatch = valStr.match(/(\d+)\s*\/\s*(\d+)/);
+        if (bpMatch) {
+          sys = parseInt(bpMatch[1], 10);
+          dia = parseInt(bpMatch[2], 10);
+        }
+
+        // Add composite entry
+        result.push({
+          biomarker: 'blood_pressure',
+          display_name: 'Blood Pressure',
+          date: r.date || null,
+          numeric_value: null,
+          qualitative_value: bpMatch ? `${sys} / ${dia}` : (r.qualitativeValue || String(r.rawValue)),
+          value: bpMatch ? `${sys} / ${dia}` : r.rawValue,
+          unit: 'mmHg',
+          explanation: 'Layer-1 composite blood pressure',
+          printedRange: r.printedRange || '< 120 / < 80',
+        });
+
+        // Also emit separate systolic and diastolic readings so no truncation occurs!
+        if (sys !== null && dia !== null) {
+          result.push({
+            biomarker: 'systolic_blood_pressure',
+            display_name: 'Systolic Blood Pressure',
+            date: r.date || null,
+            numeric_value: sys,
+            qualitative_value: null,
+            value: sys,
+            unit: 'mmHg',
+            explanation: 'Extracted from blood pressure reading',
+            printedRange: '< 120',
+          });
+          result.push({
+            biomarker: 'diastolic_blood_pressure',
+            display_name: 'Diastolic Blood Pressure',
+            date: r.date || null,
+            numeric_value: dia,
+            qualitative_value: null,
+            value: dia,
+            unit: 'mmHg',
+            explanation: 'Extracted from blood pressure reading',
+            printedRange: '< 80',
+          });
+        }
+        return;
+      }
+
+      result.push({
+        biomarker: r.canonicalKey,
+        display_name: r.printedName || null,
+        date: r.date || null,
+        numeric_value: typeof r.rawValue === 'number' ? r.rawValue : (r.rawValue && !isNaN(Number(r.rawValue)) ? Number(r.rawValue) : null),
+        qualitative_value: r.qualitativeValue || null,
+        value: r.rawValue,
+        unit,
+        explanation: r.bucket === 'flagged' ? (r.why || r.comment || 'Flagged for review') : 'Layer-1 table match',
+        printedRange: r.printedRange,
+      });
+    });
+  return result;
 }
 
 export function flaggedRowsToModificationCommands(trace: IngestTrace): any[] {
@@ -402,16 +500,33 @@ export function mergeStagedExtract(payload: any, trace?: IngestTrace | null): an
   if (!trace || !trace.rows?.length) return payload;
   const staged = stagedRowsToExtractedData(trace);
   const llm = Array.isArray(payload?.extractedData) ? payload.extractedData : [];
-  const seen = new Set(staged.map((s) => `${s.biomarker}|${s.date}|${s.numeric_value}`));
-  const extra = llm.filter((item: any) => {
-    const key = `${item.biomarker}|${item.date}|${item.numeric_value ?? item.value ?? ''}`;
-    return !seen.has(key);
+  
+  // Exact-match deduplication on (biomarker, date, value)
+  const seen = new Set<string>();
+  const deduplicatedStaged: any[] = [];
+  
+  staged.forEach((item: any) => {
+    const valKey = item.numeric_value ?? item.value ?? item.qualitative_value ?? '';
+    const key = `${item.biomarker}|${item.date || ''}|${valKey}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduplicatedStaged.push(item);
+    }
   });
+
+  const extra = llm.filter((item: any) => {
+    const valKey = item.numeric_value ?? item.value ?? item.qualitative_value ?? '';
+    const key = `${item.biomarker}|${item.date || ''}|${valKey}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
   const cmds = [
     ...(Array.isArray(payload?.modificationCommand) ? payload.modificationCommand : []),
     ...flaggedRowsToModificationCommands(trace),
   ];
-  const extractedData = [...staged, ...extra];
+  const extractedData = [...deduplicatedStaged, ...extra];
   return {
     ...payload,
     extractedData,
@@ -421,7 +536,7 @@ export function mergeStagedExtract(payload: any, trace?: IngestTrace | null): an
     modificationCommand: cmds.length ? cmds : payload?.modificationCommand,
     text: payload?.text && extra.length
       ? payload.text
-      : `I matched ${staged.length} lab row${staged.length === 1 ? '' : 's'} automatically${extra.length ? ` and extracted ${extra.length} leftover name${extra.length === 1 ? '' : 's'}` : ''}. Review the table and Apply.`,
+      : `I matched ${deduplicatedStaged.length} lab row${deduplicatedStaged.length === 1 ? '' : 's'} automatically${extra.length ? ` and extracted ${extra.length} leftover name${extra.length === 1 ? '' : 's'}` : ''}. Review the table and Apply.`,
   };
 }
 

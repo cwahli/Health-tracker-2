@@ -7054,12 +7054,20 @@ export default function App() {
                 const maps = [profile?.notUsedBiomarkers, profile?.notUsedInMedicalHistory];
                 return maps.some(m => !!m && (!!m[key1] || !!m[key2] || Object.keys(m).some(nok => nok.toLowerCase() === key1)));
               };
+              const seenEntryKeys = new Set<string>();
               const filteredEntries = entries.filter(entry => {
                 const key1 = String(entry.biomarker || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
                 const key2 = String(entry.biomarker || '').toLowerCase().trim();
                 if (unselected.includes(key1) || unselected.includes(key2)) return false;
                 if (isFlaggedNotUsed(key1, key2)) return false;
                 if (scopeKeys && !scopeKeys.includes(key1) && !scopeKeys.includes(key2)) return false;
+                
+                // Exact-match deduplication on (biomarker, date, value)
+                const dKey = String(entry.date || '').split('T')[0].trim();
+                const valKey = String(entry.value ?? '');
+                const dedupeKey = `${key1}|${dKey}|${valKey}`;
+                if (seenEntryKeys.has(dedupeKey)) return false;
+                seenEntryKeys.add(dedupeKey);
                 return true;
               });
               
@@ -7068,8 +7076,20 @@ export default function App() {
                 const bioName = getMappedBiomarkerKey(rawSlug) || rawSlug;
                 const isBuiltIn = biomarkerDefinitions.some((d) => d.key === bioName);
                 let finalValue = entry.value;
-                let finalUnit = (entry.unit || '').replace(/µ/g, 'u');
+                let finalUnit = (entry.unit || '').replace(/µ/g, 'u').trim();
                 let finalRange = (entry.referenceRange || '').replace(/µ/g, 'u');
+
+                // Sanitize dimensionless units
+                if (/^(n\/a|na|-|--|nil|none)$/i.test(finalUnit)) {
+                  finalUnit = '';
+                }
+
+                // Guard AUDIT-C score unit bleed
+                if (bioName === 'audit_c_total_score' || bioName.startsWith('audit_') || bioName.endsWith('_score')) {
+                  if (/mmhg/i.test(finalUnit)) {
+                    finalUnit = 'score';
+                  }
+                }
 
                 // No math middleware: raw values only
                 const standardDate = String(entry.date).split('T')[0].trim();
@@ -7087,8 +7107,20 @@ export default function App() {
                     printedRange: finalRange,
                     rawValue: finalValue,
                   });
+                  // If composite blood pressure, also store separate systolic & diastolic
+                  if (bioName === 'blood_pressure' && typeof finalValue === 'string') {
+                    const bpMatch = finalValue.match(/(\d+)\s*\/\s*(\d+)/);
+                    if (bpMatch) {
+                      const s = parseInt(bpMatch[1], 10);
+                      const d = parseInt(bpMatch[2], 10);
+                      currentHistory[existingLogIndex].biomarkers['systolic_blood_pressure'] = s;
+                      attachObservationMeta(currentHistory[existingLogIndex], 'systolic_blood_pressure', { unit: 'mmHg', rawValue: s, printedRange: '< 120' });
+                      currentHistory[existingLogIndex].biomarkers['diastolic_blood_pressure'] = d;
+                      attachObservationMeta(currentHistory[existingLogIndex], 'diastolic_blood_pressure', { unit: 'mmHg', rawValue: d, printedRange: '< 80' });
+                    }
+                  }
                 } else {
-                  const newLog = {
+                  const newLog: any = {
                     id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                     date: standardDate,
                     biomarkers: { [bioName]: finalValue },
@@ -7099,6 +7131,17 @@ export default function App() {
                     printedRange: finalRange,
                     rawValue: finalValue,
                   });
+                  if (bioName === 'blood_pressure' && typeof finalValue === 'string') {
+                    const bpMatch = finalValue.match(/(\d+)\s*\/\s*(\d+)/);
+                    if (bpMatch) {
+                      const s = parseInt(bpMatch[1], 10);
+                      const d = parseInt(bpMatch[2], 10);
+                      newLog.biomarkers['systolic_blood_pressure'] = s;
+                      attachObservationMeta(newLog, 'systolic_blood_pressure', { unit: 'mmHg', rawValue: s, printedRange: '< 120' });
+                      newLog.biomarkers['diastolic_blood_pressure'] = d;
+                      attachObservationMeta(newLog, 'diastolic_blood_pressure', { unit: 'mmHg', rawValue: d, printedRange: '< 80' });
+                    }
+                  }
                   currentHistory.push(newLog);
                 }
                 

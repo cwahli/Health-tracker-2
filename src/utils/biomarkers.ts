@@ -577,6 +577,61 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     riskCategories: ['Musculoskeletal'],
     standardMedicalGrouping: 'Other',
     aliases: ['joint_pain_score', 'arthritis_symptom_score']
+  },
+  {
+    key: 'blood_pressure',
+    name: 'Blood Pressure',
+    category: 'other',
+    unit: 'mmHg',
+    normalRange: '< 120 / < 80',
+    descriptions: { en: 'Combined systolic and diastolic arterial blood pressure.' },
+    riskCategories: ['Cardiovascular'],
+    standardMedicalGrouping: 'Biometrics',
+    aliases: ['bloodpressure', 'arterial_blood_pressure', 'bp', 'sitting_blood_pressure', 'standing_blood_pressure']
+  },
+  {
+    key: 'systolic_blood_pressure',
+    name: 'Systolic Blood Pressure',
+    category: 'other',
+    unit: 'mmHg',
+    normalRange: '< 120',
+    descriptions: { en: 'Peak arterial pressure during cardiac contraction (systole).' },
+    riskCategories: ['Cardiovascular'],
+    standardMedicalGrouping: 'Biometrics',
+    aliases: ['systolic', 'sbp', 'systolic_bp', 'systolicbloodpressure', 'sitting_systolic_blood_pressure']
+  },
+  {
+    key: 'diastolic_blood_pressure',
+    name: 'Diastolic Blood Pressure',
+    category: 'other',
+    unit: 'mmHg',
+    normalRange: '< 80',
+    descriptions: { en: 'Minimum arterial pressure during cardiac relaxation (diastole).' },
+    riskCategories: ['Cardiovascular'],
+    standardMedicalGrouping: 'Biometrics',
+    aliases: ['diastolic', 'dbp', 'diastolic_bp', 'diastolicbloodpressure', 'sitting_diastolic_blood_pressure']
+  },
+  {
+    key: 'audit_c_total_score',
+    name: 'AUDIT-C Alcohol Consumption Score',
+    category: 'other',
+    unit: 'score',
+    normalRange: '0 - 3',
+    descriptions: { en: 'Alcohol Use Disorders Identification Test Consumption 3-item screening score (0 to 12).' },
+    riskCategories: ['Screenings & Wellness'],
+    standardMedicalGrouping: 'Other',
+    aliases: ['audit_c_score', 'audit_c', 'auditctotalscore', 'audit_c_consumption_score', 'alcohol_use_disorders_identification_test_c']
+  },
+  {
+    key: 'ideal_body_weight',
+    name: 'Ideal Body Weight (Target)',
+    category: 'other',
+    unit: 'kg',
+    normalRange: 'Varies',
+    descriptions: { en: 'Calculated or target ideal body weight goal, distinct from measured historical weight.' },
+    riskCategories: ['Screenings & Wellness'],
+    standardMedicalGrouping: 'Biometrics',
+    aliases: ['idealbodyweight', 'target_weight', 'targetbodyweight', 'goal_weight', 'ideal_weight', 'reference_weight']
   }
 ];
 
@@ -1038,6 +1093,22 @@ const CUSTOM_KEY_ALIASES: Record<string, string> = {
   'auditcalcoholusedisordersidentificationtestconsumptionscore': 'audit_c_total_score',
   'chlamydiadnadetection': 'chlamydia_dna_detection',
   'ngonorrhoeanuclaciddetn': 'n_gonorrhoeae_nucl_acid_detn',
+  'ideal_body_weight': 'ideal_body_weight',
+  'idealbodyweight': 'ideal_body_weight',
+  'target_weight': 'target_weight',
+  'targetbodyweight': 'target_weight',
+  'goal_weight': 'goal_weight',
+  'goalbodyweight': 'goal_weight',
+  'ideal_weight': 'ideal_body_weight',
+  'idealweight': 'ideal_body_weight',
+  'systolic_blood_pressure': 'systolic_blood_pressure',
+  'systolicbloodpressure': 'systolic_blood_pressure',
+  'diastolic_blood_pressure': 'diastolic_blood_pressure',
+  'diastolicbloodpressure': 'diastolic_blood_pressure',
+  'systolic': 'systolic_blood_pressure',
+  'diastolic': 'diastolic_blood_pressure',
+  'audit_c_total_score': 'audit_c_total_score',
+  'auditctotalscore': 'audit_c_total_score',
 };
 
 export function getMappedBiomarkerKey(rawKey: string, rawName?: string): string {
@@ -1048,6 +1119,18 @@ export function getMappedBiomarkerKey(rawKey: string, rawName?: string): string 
     if (!inputStr) return null;
     const clean = inputStr.toLowerCase().replace(/[^a-z0-9_]/g, ''); // Keep underscores for exact matching
     const cleanNoUnderscore = inputStr.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Ideal / Target / Goal Weight Guard: must never map to measured 'weight'
+    if (
+      cleanNoUnderscore.includes('idealbodyweight') ||
+      cleanNoUnderscore.includes('targetbodyweight') ||
+      cleanNoUnderscore.includes('idealweight') ||
+      cleanNoUnderscore.includes('targetweight') ||
+      cleanNoUnderscore.includes('goalweight') ||
+      cleanNoUnderscore.includes('referenceweight')
+    ) {
+      return 'ideal_body_weight';
+    }
 
     // 1. Exact match on definitions
     for (const def of biomarkerDefinitions) {
