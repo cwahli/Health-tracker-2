@@ -241,4 +241,29 @@ describe('isBiomarkerDuplicateCandidate — false-friend guards (dedup engine re
     const m = isBiomarkerDuplicateCandidate({ key: 'egfr', name: 'eGFR' }, { key: 'egfr_creatinine', name: 'eGFR Creatinine' });
     expect(m.isMatch).toBe(true);
   });
+
+  it('STRUCTURAL: does NOT merge Direct Bilirubin with Indirect Bilirubin — never explicitly coded, proves the discriminator list generalizes', () => {
+    const m = isBiomarkerDuplicateCandidate({ key: 'bilirubin_direct', name: 'Direct Bilirubin' }, { key: 'bilirubin_indirect', name: 'Indirect Bilirubin' });
+    expect(m.isMatch).toBe(false);
+  });
+
+  it('STRUCTURAL: does NOT merge Calcium with Ionized Calcium — never explicitly coded, proves the discriminator list generalizes', () => {
+    const m = isBiomarkerDuplicateCandidate({ key: 'calcium', name: 'Calcium' }, { key: 'calcium_ionized', name: 'Ionized Calcium' });
+    expect(m.isMatch).toBe(false);
+  });
+
+  it('STRUCTURAL: does NOT merge PSA with Free PSA — never explicitly coded, proves the discriminator list generalizes', () => {
+    const m = isBiomarkerDuplicateCandidate({ key: 'psa', name: 'PSA' }, { key: 'free_psa', name: 'Free PSA' });
+    expect(m.isMatch).toBe(false);
+  });
+
+  it('REGRESSION: does NOT merge Cortisol with Cortisol Peak — caught a dead-code wiring defect where CLINICAL_DISCRIMINATOR_TERMS was declared but never called', () => {
+    const m = isBiomarkerDuplicateCandidate({ key: 'cortisol', name: 'Cortisol' }, { key: 'cortisol_peak', name: 'Cortisol Peak' });
+    expect(m.isMatch).toBe(false);
+  });
+
+  it('REGRESSION: does NOT merge Creatinine with Fecal Creatinine — specimen guard must cover fecal/faecal, not just urine/csf/saliva/stool', () => {
+    const m = isBiomarkerDuplicateCandidate({ key: 'creatinine', name: 'Creatinine' }, { key: 'fecal_creatinine', name: 'Fecal Creatinine' });
+    expect(m.isMatch).toBe(false);
+  });
 });

@@ -1124,7 +1124,7 @@ export function getMappedBiomarkerKey(rawKey: string, rawName?: string): string 
       // If the input explicitly contains the clinical name, and isn't guarded
       if (defNameNoUnderscore.length > 5 && cleanNoUnderscore.includes(defNameNoUnderscore)) {
          // Guard against false friends:
-         const SPECIMENS = ['urine', 'csf', 'saliva', 'stool'];
+         const SPECIMENS = ['urine', 'urinary', 'csf', 'saliva', 'stool', 'faecal', 'fecal', 'sweat', 'capillary'];
          const hasSpecimenConflict = SPECIMENS.some(specimen => 
            cleanNoUnderscore.includes(specimen) !== (def.key.includes(specimen) || defNameNoUnderscore.includes(specimen))
          );
@@ -1248,23 +1248,11 @@ export function isBiomarkerDuplicateCandidate(
   const isNameSubstring = (normNameA.length > 4 && normNameB.includes(normNameA)) || (normNameB.length > 4 && normNameA.includes(normNameB));
 
   if (isSubstring || isNameSubstring) {
-    // Check for distinct clinical discriminators (false friends)
-    const DISCRIMINATOR_CANONICAL = [
-      ['concentration', 'conc', 'mchc'],
-      ['volume'], ['width', 'distribution'],
-      ['urine'], ['csf'], ['saliva'], ['stool'],
-      ['free'], ['total'],
-      ['hdl'], ['ldl'], ['vldl'],
-      ['corpuscular'], ['a1c', 'hba1c'],
-      ['fasting'], ['random'],
-      ['direct'], ['indirect'], ['unconjugated'], ['ionized']
-    ];
-    
-    const isFalseFriend = DISCRIMINATOR_CANONICAL.some(group => {
-      const aHas = group.some(token => rawCleanA.includes(token));
-      const bHas = group.some(token => rawCleanB.includes(token));
-      return aHas !== bHas;
-    });
+    // Check for distinct clinical discriminators (false friends). Uses the single
+    // declarative CLINICAL_DISCRIMINATOR_TERMS list above — do not reintroduce a local
+    // array here. To extend false-friend protection for a new confusable pair, add the
+    // word to CLINICAL_DISCRIMINATOR_TERMS, not here.
+    const isFalseFriend = hasDiscriminatorConflict(rawCleanA, rawCleanB);
 
     if (!isFalseFriend) {
       // Confirm with unit or category or range if available
