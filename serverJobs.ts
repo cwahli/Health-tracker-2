@@ -677,8 +677,8 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           if (!pendingFoodLog.message && (finalPayload?.message || finalPayload?.text)) {
             pendingFoodLog.message = finalPayload.message || finalPayload.text;
           }
-          if (!pendingFoodLog.description && finalPayload?.data?.description) {
-            pendingFoodLog.description = finalPayload.data.description;
+          if (!pendingFoodLog.description && (finalPayload?.description || finalPayload?.data?.description)) {
+            pendingFoodLog.description = finalPayload.description || finalPayload.data.description;
           }
           if (!pendingFoodLog.recommendation && finalPayload?.verdict?.level) {
             pendingFoodLog.recommendation = finalPayload.verdict.level;
