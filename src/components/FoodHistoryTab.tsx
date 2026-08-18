@@ -12,6 +12,7 @@ import { getCurrentDateInTimezone, toYYYYMMDD } from '../utils/dateUtils';
 import ImageSlider from './ImageSlider';
 import { resolveFoodImage, resolveFoodImages } from '../utils/imageResolver';
 import { mergeFoodLogsDeduped, foodLogFingerprint } from '../utils/foodLogDedupe';
+import { fetchFoodLogDetail } from '../utils/syncUtils';
 
 /** B13 — only this many history rows mount image sliders at once */
 export const FOOD_HISTORY_PAGE_SIZE = 15;
@@ -100,6 +101,32 @@ export default function FoodHistoryTab({
   const t = translations[profile.language] || translations.en;
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  // Lazy-fetched heavy detail fields per log id (composition, scoutItems, itemsBreakdown, imageUrls, chatTranscript)
+  const [detailOverrides, setDetailOverrides] = useState<Record<string, { composition?: string; scoutItems?: any[]; itemsBreakdown?: any[]; imageUrls?: string[]; chatTranscript?: any[] }>>({});
+
+  // Fetch heavy detail fields when a log is expanded and we don't already have them
+  useEffect(() => {
+    if (!expandedLogId) return;
+    if (detailOverrides[expandedLogId]) return; // already fetched
+    const uid = auth.currentUser?.uid || profile?.uid;
+    const email = auth.currentUser?.email || profile?.email;
+    if (!uid) return;
+    let cancelled = false;
+    fetchFoodLogDetail(expandedLogId, uid, email || undefined).then(detail => {
+      if (cancelled || !detail) return;
+      setDetailOverrides(prev => ({
+        ...prev,
+        [expandedLogId]: {
+          composition: detail.composition || undefined,
+          scoutItems: Array.isArray(detail.scout_items) ? detail.scout_items : undefined,
+          itemsBreakdown: Array.isArray(detail.items_breakdown) ? detail.items_breakdown : undefined,
+          imageUrls: Array.isArray(detail.image_urls) ? detail.image_urls : undefined,
+          chatTranscript: Array.isArray(detail.chat_transcript) ? detail.chat_transcript : undefined,
+        }
+      }));
+    });
+    return () => { cancelled = true; };
+  }, [expandedLogId]);
   const [currentPage, setCurrentPage] = useState(1);
   /** B13 — page size for history list + image loads (free-tier / capacity) */
   const itemsPerPage = FOOD_HISTORY_PAGE_SIZE;
@@ -1039,6 +1066,11 @@ export default function FoodHistoryTab({
             const log = item.data;
             const isExpanded = expandedLogId === log.id;
             const isEditing = editingLogId === log.id;
+            // Merge lazy-fetched detail overrides with the (possibly lightweight) log object
+            const overrides = detailOverrides[log.id];
+            const effectiveComposition = overrides?.composition || log.composition;
+            const effectiveScoutItems = (overrides?.scoutItems && overrides.scoutItems.length > 0) ? overrides.scoutItems : log.scoutItems;
+            const effectiveItemsBreakdown = (overrides?.itemsBreakdown && overrides.itemsBreakdown.length > 0) ? overrides.itemsBreakdown : log.itemsBreakdown;
             const resolvedImgs = resolveFoodImages(log.imageUrls, activeFoodLogs, log);
             const resolvedImg =
               resolvedImgs[0] ||
@@ -1623,10 +1655,10 @@ export default function FoodHistoryTab({
                           </div>
 
                           {/* Composition Block inside Show-Hide */}
-                          {log.composition && (
+                          {effectiveComposition && (
                             <div className="bg-slate-50 dark:bg-slate-900/40 rounded-xl p-3 text-left space-y-1">
                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Composition & Ingredients</span>
-                              <p className="text-xs text-slate-750 dark:text-slate-300 font-semibold leading-relaxed">{log.composition}</p>
+                              <p className="text-xs text-slate-750 dark:text-slate-300 font-semibold leading-relaxed">{effectiveComposition}</p>
                             </div>
                           )}
 
@@ -1685,14 +1717,14 @@ export default function FoodHistoryTab({
                           </div>
 
                           {/* Component Contribution & Nutrition Label Tables */}
-                          {((log.scoutItems && log.scoutItems.length > 0) || (log.itemsBreakdown && log.itemsBreakdown.length > 0)) && (
+                          {((effectiveScoutItems && effectiveScoutItems.length > 0) || (effectiveItemsBreakdown && effectiveItemsBreakdown.length > 0)) && (
                             <div className="space-y-4 pt-4 border-t border-slate-200/50 dark:border-slate-800/50">
-                              {log.scoutItems && log.scoutItems.length > 0 && (
+                              {effectiveScoutItems && effectiveScoutItems.length > 0 && (
                                 <div className="space-y-2 text-left">
                                   <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold block mb-1">
                                     📋 Nutrition Labels & Reference Data
                                   </span>
-                                  <NutritionLabelTable activeScoutItems={log.scoutItems.map((item: any) => ({
+                                  <NutritionLabelTable activeScoutItems={effectiveScoutItems.map((item: any) => ({
                                     ...item,
                                     // HISTORY NUTRITIONFACTS BRIDGE (Aug 2026): NutritionLabelTable's row
                                     // list only reads item.rawNutritionLabel / item.nutritionFacts, but
@@ -1705,7 +1737,7 @@ export default function FoodHistoryTab({
                                 </div>
                               )}
 
-                              {Array.isArray(log.itemsBreakdown) && log.itemsBreakdown.length > 0 && (
+                              {Array.isArray(effectiveItemsBreakdown) && effectiveItemsBreakdown.length > 0 && (
                                 <div className="border border-theme-border/80 rounded-xl overflow-hidden bg-theme-bg-card shadow-sm">
                                   <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border-b border-theme-border">
                                     <span className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider">
@@ -1724,7 +1756,7 @@ export default function FoodHistoryTab({
                                         </tr>
                                       </thead>
                                       <tbody>
-                                        {log.itemsBreakdown.map((item: any, itemIdx: number) => {
+                                        {effectiveItemsBreakdown.map((item: any, itemIdx: number) => {
                                           const formatNutVal = (v: any, unit: string) => {
                                             if (v === undefined || v === null) return '--';
                                             const num = typeof v === 'string' ? parseFloat(v.replace(/[^\d.]/g, '')) : v;

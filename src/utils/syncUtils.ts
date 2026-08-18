@@ -174,6 +174,39 @@ export function supabaseRowToFoodLog(row: any): FoodLog {
   };
 }
 
+/**
+ * Lazy-fetch the heavy blob columns for a single food log.
+ * Returns the raw detail fields or null on failure.
+ */
+export async function fetchFoodLogDetail(
+  logId: string,
+  uid: string,
+  email?: string
+): Promise<{
+  composition?: string;
+  items_breakdown?: any[];
+  scout_items?: any[];
+  image_urls?: string[];
+  chat_transcript?: any[];
+} | null> {
+  try {
+    const res = await fetch('/api/sync/food-log-detail', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(auth.currentUser ? { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` } : {})
+      },
+      body: JSON.stringify({ uid, email, logId })
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.success ? json.detail : null;
+  } catch (e) {
+    console.warn('[fetchFoodLogDetail] Failed:', e);
+    return null;
+  }
+}
+
 export function biomarkerLogToSupabaseRow(bio: BiomarkerLog, uid: string) {
   return {
     id: bio.id,

@@ -156,37 +156,6 @@ These files define how **all** agents work. Random edits dilute process and brea
 
 ---
 
-## 4. Git / GitHub: commits only via AI Studio
-
-**Binding (agents forget this — read twice):**
-
-
-Local agents **must not**:
-
-- `git commit` / `git push` / force-push / amend published history to GitHub  
-- “Just ship it” after a chat fix  
-
-Local agents **may**:
-
-- Edit the working tree  
-- Run tests/gates  
-- Update `AI_HANDOVER.md` WIP notes  
-- Author `studio/M*.md` for the human to upload  
-
-**Ship path:**
-
-```text
-Local agent prepares code + studio pack
-  → human uploads pack (+ docs if needed) to AI Studio
-  → AI Studio applies / verifies gate exit 0
-  → AI Studio commits + pushes to GitHub
-  → board (AI_HANDOVER) updated; pack archived
-```
-
-Full pack craft: `docs/agent/PACKS.md`.
-
----
-
 ## 5. Change classes
 
 | Class | Examples | Process |

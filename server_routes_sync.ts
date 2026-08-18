@@ -176,9 +176,15 @@ syncRouter.post("/api/sync/supabase-pull", async (req, res) => {
       isCwah ? 'admin_chiwah_liu_gmail_com' : null
     ].filter(Boolean) as string[]));
 
+    // Lightweight columns for list view (always included)
+    const lightColumns = 'id, firebase_uid, date, name, weight_grams, quantity, consumed_amount, benefits, risks, health_impact, recommendation, calories, saturated_fat, sodium, added_sugar, nutrients, updated_at, verdict, description, message, debug_url';
+    // Heavy JSON blob columns only included when listOnly is false
+    const fullColumns = lightColumns + ', composition, items_breakdown, scout_items, image_urls, chat_transcript';
+    const foodSelectColumns = listOnly ? lightColumns : fullColumns;
+
     let foodQuery = supabaseAdmin
       .from('food_logs')
-      .select('id, firebase_uid, date, name, composition, weight_grams, quantity, consumed_amount, benefits, risks, health_impact, recommendation, calories, saturated_fat, sodium, added_sugar, nutrients, items_breakdown, scout_items, image_urls, updated_at, verdict, description, message, debug_url, chat_transcript')
+      .select(foodSelectColumns)
       .in('firebase_uid', possibleUids)
       .order('updated_at', { ascending: false })
       .order('id', { ascending: false })
@@ -238,6 +244,49 @@ syncRouter.post("/api/sync/supabase-pull", async (req, res) => {
   } catch (error: any) {
     console.error("[Supabase Pull] Error:", error);
     res.status(500).json({ error: error.message || "Failed to pull from Supabase" });
+  }
+});
+
+// Lazy detail endpoint: fetch only the heavy blob columns for a single food log
+syncRouter.post("/api/sync/food-log-detail", async (req, res) => {
+  try {
+    await verifyFirebaseIdToken(req).catch(() => null);
+
+    const { uid, email, logId } = req.body;
+    if (!logId) {
+      return res.status(400).json({ error: "logId is required" });
+    }
+
+    const normalizedEmailUid = email ? 'admin_' + email.toLowerCase().trim().replace(/[^a-z0-9]/gi, '_') : null;
+    const isCwah = (email && (email.toLowerCase().includes('cwah.liu') || email.toLowerCase().includes('chiwah.liu'))) || 
+                   (uid && (uid.includes('cwah_liu') || uid.includes('chiwah_liu') || uid === 'hiJun2hTdDTk2igwerun2LKvwb42'));
+    const possibleUids = Array.from(new Set([
+      uid,
+      email,
+      normalizedEmailUid,
+      isCwah ? 'hiJun2hTdDTk2igwerun2LKvwb42' : null,
+      isCwah ? 'cwah.liu@gmail.com' : null,
+      isCwah ? 'chiwah.liu@gmail.com' : null,
+      isCwah ? 'admin_cwah_liu_gmail_com' : null,
+      isCwah ? 'admin_chiwah_liu_gmail_com' : null
+    ].filter(Boolean) as string[]));
+
+    const { data, error } = await supabaseAdmin
+      .from('food_logs')
+      .select('id, composition, items_breakdown, scout_items, image_urls, chat_transcript')
+      .eq('id', logId)
+      .in('firebase_uid', possibleUids)
+      .single();
+
+    if (error) {
+      console.error('[FoodLogDetail] query error:', error.message);
+      return res.status(404).json({ error: 'Log not found or access denied' });
+    }
+
+    res.json({ success: true, detail: data });
+  } catch (error: any) {
+    console.error('[FoodLogDetail] Error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch food log detail' });
   }
 });
 
