@@ -393,7 +393,6 @@ export default function MedicalHistoryTab({
 
   // Dynamic list of subcategories based on current viewType
   const subCategories = useMemo(() => {
-    const hasPendingApproval = allDefinitions.some(def => checkIsPending(def));
     const hasBiomarkersToReview = allDefinitions.some(def => isBiomarkerNeedingReview(def.key, profile, activeHistory, biomarkers, allDefinitions));
 
     let baseCategories: string[] = [];
@@ -437,7 +436,6 @@ export default function MedicalHistoryTab({
     }
 
     if (hasBiomarkersToReview) baseCategories.push('Biomarkers to Review');
-    if (hasPendingApproval) baseCategories.push('Pending Approval');
 
     return baseCategories;
   }, [allDefinitions, viewType, profile.customBiomarkers, biomarkers, activeHistory]);
@@ -518,15 +516,11 @@ export default function MedicalHistoryTab({
       const isPending = !isApproved;
       const hasVal = getLatestValue(def.key) !== undefined;
 
-      if (cat === 'Pending Approval') {
-        return isPending;
-      }
-
       if (cat === 'Biomarkers to Review' || cat === 'Unknown Range') {
         return isBiomarkerNeedingReview(def.key, profile, activeHistory, biomarkers, allDefinitions);
       }
 
-      // If pending approval, exclude from standard medical groupings/categories (they appear under Pending Approval)
+      // If pending approval, exclude from standard medical groupings/categories (they appear under Biomarkers to Review)
       if (isPending) {
         return false;
       }
@@ -551,9 +545,6 @@ export default function MedicalHistoryTab({
 
   // Helper to calculate highest risk info for a subcategory
   const getSubCategoryRiskInfo = (cat: string) => {
-    if (cat === 'Pending Approval') {
-      return { label: 'Pending Approval', bg: 'bg-amber-500', text: 'text-white' };
-    }
     if (cat === 'Biomarkers to Review' || cat === 'Unknown Range') {
       return { label: 'Biomarkers to Review', bg: 'bg-amber-600', text: 'text-white' };
     }
@@ -592,13 +583,13 @@ export default function MedicalHistoryTab({
     const cats = subCategories.filter(cat => cat !== 'all' && getBiomarkersForSubCategory(cat).length > 0);
     if (sortBy === 'name') {
       return [...cats].sort((a, b) => {
-        if (a === 'Pending Approval') return 1;
-        if (b === 'Pending Approval') return -1;
+        if (a === 'Biomarkers to Review') return 1;
+        if (b === 'Biomarkers to Review') return -1;
         return a.localeCompare(b);
       });
     } else {
       const getCatScore = (cat: string) => {
-        if (cat === 'Pending Approval') return -1;
+        if (cat === 'Biomarkers to Review') return -1;
         const groupMarkers = getBiomarkersForSubCategory(cat);
         let maxScore = 0;
         groupMarkers.forEach(def => {
@@ -910,7 +901,7 @@ export default function MedicalHistoryTab({
                                 {isNeedsApproval && (
                                   <span className="px-1.5 py-0.5 text-[8px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 rounded-md border border-amber-300/80 dark:border-amber-700/60 whitespace-nowrap flex items-center gap-1 animate-pulse">
                                     <Clock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
-                                    Pending Approval
+                                    Biomarker to Review
                                   </span>
                                 )}
                                 {isMissingUnit && (

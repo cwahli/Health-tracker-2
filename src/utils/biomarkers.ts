@@ -2611,9 +2611,14 @@ export function isBiomarkerNeedingReview(
   allDefinitions?: any[]
 ): boolean {
   if (!key) return false;
-  // 1. Missing normal reference range
+  
+  // 1. Pending Approval
+  if (!isBiomarkerApproved(key, profile, activeHistory)) return true;
+
+  // 2. Missing normal reference range
   if (isBiomarkerMissingRange(key, profile, activeHistory)) return true;
-  // 2. Flagged by telemetry / scaling / unit notation errors or improbable values
+  
+  // 3. Flagged by telemetry / scaling / unit notation errors or improbable values
   const flagged = detectFlaggedTelemetryErrors(
     resolvedBiomarkers || {},
     profile,

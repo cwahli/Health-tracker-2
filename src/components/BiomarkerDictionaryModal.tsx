@@ -4,7 +4,7 @@ import { toYYYYMMDD } from "../utils/dateUtils";
 import React, { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import { UserProfile, BiomarkerLog } from '../types';
-import { biomarkerDefinitions, BIOMARKER_GROUPING_OPTIONS, getBiomarkerMetadata, getMergedBiomarkerDef, isPendingCatalogApproval, findDuplicateOrExistingBiomarker } from '../utils/biomarkers';
+import { biomarkerDefinitions, BIOMARKER_GROUPING_OPTIONS, getBiomarkerMetadata, getMergedBiomarkerDef, isPendingCatalogApproval, isBiomarkerNeedingReview, findDuplicateOrExistingBiomarker } from '../utils/biomarkers';
 import { X, CheckCircle, Check, AlertCircle, Edit2, Loader, Save, ArrowRight, CheckSquare, Square, MessageSquare, Send, ChevronLeft, ChevronDown, FileCode, Merge, Copy, Upload, Trash, Paperclip, Calendar, Info, Terminal, BrainCircuit, Clock, Zap } from 'lucide-react';
 import BiomarkerRangeBuilder, { parseNormalRangeStr } from './BiomarkerRangeBuilder';
 import CombineBiomarkersModal from './CombineBiomarkersModal';
@@ -1711,7 +1711,7 @@ export default function BiomarkerDictionaryModal({
     return k.toLowerCase().includes(q) || (def.name || '').toLowerCase().includes(q) || hasTagMatch;
   };
 
-  const checkKeyNeedsApproval = (k: string) => isPendingCatalogApproval(k, profile);
+  const checkKeyNeedsApproval = (k: string) => isBiomarkerNeedingReview(k, profile, biomarkerHistory, biomarkers, biomarkerDefinitions);
 
   const allApprovedKeysUnfiltered = useMemo(() => {
     const keys = new Set<string>();
@@ -5904,9 +5904,9 @@ I can analyze these, compare them with our database keys, and find standard mapp
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                       <Clock className="w-4 h-4 text-amber-500 animate-pulse" />
-                      Pending Approval ({toApproveKeys.length})
+                      Biomarkers To Review ({toApproveKeys.length})
                       <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                        In Process of Being Approved
+                        Needing Review or Approval
                       </span>
                     </h3>
                     {toApproveKeys.length > 0 && (
@@ -5921,7 +5921,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                     )}
                   </div>
                   <p className="text-xs text-theme-text-secondary mb-4">
-                    These biomarkers were extracted or added as custom entries and are in the process of being approved. Once approved, they will automatically move into their relevant medical groupings in Medical History.
+                    These biomarkers are pending approval, have missing reference ranges, or have recently logged values that fall outside physiological bounds (indicating possible unit scaling errors).
                   </p>
                   <div className="space-y-2">
                     {toApproveKeys.map(key => {

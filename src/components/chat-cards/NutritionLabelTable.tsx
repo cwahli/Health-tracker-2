@@ -2,6 +2,7 @@ import React from 'react';
 import { Camera, Search } from 'lucide-react';
 import { nutrientDefinitions } from '../../utils/nutrition';
 import { translations } from '../../utils/translations';
+import { PositionedTooltip } from '../ui/PositionedTooltip';
 
 function parseLabelCalories(raw: any): number | null {
   if (raw == null) return null;
@@ -151,7 +152,7 @@ function getSourceBadge(item: any) {
   }
   if (isComposite) {
     return {
-      text: 'Composite',
+      text: 'AI Ingredient Breakdown',
       className: 'bg-violet-100/90 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800'
     };
   }
@@ -697,37 +698,39 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                 <div className="flex items-center gap-1">
                                   <span>{k.replace(/([A-Z])/g, ' $1').trim()}</span>
                                   {isLocked ? null : (!isServingField && (
-                                    <div className="relative group/estTooltip inline-flex items-center ml-1 z-20">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                        }}
-                                        className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 focus:outline-none cursor-pointer transition-colors"
-                                        aria-label="Estimated value notice"
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-500">
-                                          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
-                                          <path d="M12 9v4"></path>
-                                          <path d="M12 17h.01"></path>
-                                        </svg>
-                                        !
-                                      </button>
-                                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 opacity-0 group-hover/estTooltip:opacity-100 group-focus-within/estTooltip:opacity-100 group-active/estTooltip:opacity-100 transition-opacity pointer-events-none whitespace-normal min-w-[160px] w-max max-w-[200px] p-1.5 bg-slate-900/95 dark:bg-slate-950/95 text-amber-200 text-[10px] font-normal normal-case rounded-md shadow-lg text-center z-50 border border-amber-500/30 backdrop-blur-sm">
-                                        The value is estimated by the AI agent
-                                      </div>
+                                    <div className="inline-flex items-center ml-1 z-20">
+                                      <PositionedTooltip
+                                        trigger={
+                                          <div
+                                            className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 cursor-pointer transition-colors"
+                                            aria-label="Estimated value notice"
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-500">
+                                              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                                              <path d="M12 9v4"></path>
+                                              <path d="M12 17h.01"></path>
+                                            </svg>
+                                            !
+                                          </div>
+                                        }
+                                        content="The value is estimated by the AI agent"
+                                        contentClassName="bg-slate-900/95 dark:bg-slate-950/95 text-amber-200 border-amber-500/30 text-center text-[10px]"
+                                      />
                                     </div>
                                   ))}
                                   {isSodium && saltConversionNoteText && (
-                                    <div className="relative group/saltTooltip inline-flex items-center z-20">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 hover:text-blue-600 cursor-help shrink-0">
-                                        <circle cx="12" cy="12" r="10"></circle>
-                                        <line x1="12" y1="16" x2="12" y2="12"></line>
-                                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                      </svg>
-                                      <div className="absolute left-0 bottom-full mb-1 opacity-0 group-hover/saltTooltip:opacity-100 transition-opacity pointer-events-none whitespace-normal min-w-[210px] w-max max-w-[260px] p-2 bg-slate-800 text-white text-[10px] rounded shadow-lg text-left z-50 font-normal normal-case">
-                                        {saltConversionNoteText}
-                                      </div>
+                                    <div className="inline-flex items-center z-20 ml-1">
+                                      <PositionedTooltip
+                                        trigger={
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 hover:text-blue-600 cursor-help shrink-0">
+                                            <circle cx="12" cy="12" r="10"></circle>
+                                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                          </svg>
+                                        }
+                                        content={saltConversionNoteText}
+                                        contentClassName="bg-slate-800 text-white text-[10px]"
+                                      />
                                     </div>
                                   )}
                                 </div>
@@ -736,15 +739,18 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                 <div className="flex items-center gap-1">
                                   {originalDisplay}
                                   {k.toLowerCase().includes('calories') && item.autoCorrectedCalories && (
-                                    <div className="relative z-50">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 cursor-help">
-                                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
-                                        <path d="M12 9v4"></path>
-                                        <path d="M12 17h.01"></path>
-                                      </svg>
-                                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-normal min-w-[200px] w-max max-w-[250px] p-2 bg-slate-800 text-white text-[10px] rounded shadow-lg text-center">
-                                        {t.abnormalValueMsg.replace("{item.originalCalories}", item.originalCalories).replace("{originalDisplay}", originalDisplay)}
-                                      </div>
+                                    <div className="inline-flex items-center z-50 ml-1">
+                                      <PositionedTooltip
+                                        trigger={
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 cursor-help">
+                                            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                                            <path d="M12 9v4"></path>
+                                            <path d="M12 17h.01"></path>
+                                          </svg>
+                                        }
+                                        content={t.abnormalValueMsg.replace("{item.originalCalories}", item.originalCalories).replace("{originalDisplay}", originalDisplay)}
+                                        contentClassName="bg-slate-800 text-white text-[10px] text-center"
+                                      />
                                     </div>
                                   )}
                                 </div>
@@ -772,7 +778,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                         >
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                         </svg>
-                        <span>Composite Dish Ingredients</span>
+                        <span>Estimated Ingredient Breakdown</span>
                       </summary>
                       <div className="space-y-1.5 mt-2 ml-1">
                         {item.compositeSiblings.map((sib: any, sibIdx: number) => {
@@ -1033,7 +1039,6 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
       try { parsedRaw = JSON.parse(parsedRaw.replace(/'/g, '"')); } catch (e) { parsedRaw = null; }
     }
     let correctedRaw = normalizeNutritionKeys(parsedRaw);
-
     const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
     const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients;
     if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && labelSource) {
@@ -1070,6 +1075,19 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
     };
   });
 
-  if (processedItems.length > 0) return true;
-  return Array.isArray(items) && items.length > 0;
+  const hasAnyMeaningfulLabel = processedItems.some(item => {
+    if (!item || !item.rawNutritionLabel || typeof item.rawNutritionLabel !== 'object') return false;
+    const meaningfulKeys = Object.keys(item.rawNutritionLabel).filter(k => 
+      !NON_NUTRIENT_LABEL_KEYS.has(k) &&
+      !NON_NUTRIENT_LABEL_KEYS.has(k.toLowerCase()) &&
+      item.rawNutritionLabel[k] !== undefined &&
+      item.rawNutritionLabel[k] !== null &&
+      item.rawNutritionLabel[k] !== '' &&
+      item.rawNutritionLabel[k] !== '-' &&
+      item.rawNutritionLabel[k] !== '--'
+    );
+    return meaningfulKeys.length > 0;
+  });
+
+  return hasAnyMeaningfulLabel;
 }

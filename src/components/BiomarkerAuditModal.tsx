@@ -740,7 +740,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
             }`}
           >
             <BookOpen className="w-3.5 h-3.5 text-blue-500" />
-            Missing Ranges ({report.missingRangesCount})
+            Missing Metadata ({report.missingRangesCount})
           </button>
           {report.conflictsCount > 0 && (
             <button
@@ -809,7 +809,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                     <div className="text-2xl font-black text-blue-700 dark:text-blue-400">{report.missingRangesCount}</div>
                     <ChevronRight className="w-4 h-4 text-blue-400 group-hover:translate-x-0.5 transition-transform" />
                   </div>
-                  <div className="text-xs font-bold text-blue-900 dark:text-blue-300 mt-1">Missing Ranges</div>
+                  <div className="text-xs font-bold text-blue-900 dark:text-blue-300 mt-1">Missing Metadata</div>
                   <div className="text-[10px] text-blue-700/80 dark:text-blue-400/70">{catalogMatchCount} match catalog (Click to view)</div>
                 </button>
                 <button

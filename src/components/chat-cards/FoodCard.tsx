@@ -6,6 +6,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { PositionedTooltip } from '../ui/PositionedTooltip';
 import { AgentCardProps } from './types';
 import { Plus, Check, ChevronDown, ChevronUp, Sparkles, Search, X, Trash2, Eye, Camera, Copy, Flag, Download, Loader2 } from 'lucide-react';
 import { UniversalModal } from '../UniversalModal';
@@ -83,164 +84,65 @@ function isItemUnclearOrLowConfidence(item: any): boolean {
 }
 
 const InfoTooltipBadge: React.FC<{ title?: string }> = ({ title }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
-
-  const [coords, setCoords] = useState<{
-    top: number;
-    left: number;
-    isAbove: boolean;
-    arrowLeft: number;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setCoords(null);
-      return;
-    }
-
-    const updatePos = () => {
-      if (!buttonRef.current) return;
-      const btnRect = buttonRef.current.getBoundingClientRect();
-
-      let tooltipWidth = 280;
-      let tooltipHeight = 120;
-      if (tooltipRef.current) {
-        const tr = tooltipRef.current.getBoundingClientRect();
-        if (tr.width > 0) tooltipWidth = tr.width;
-        if (tr.height > 0) tooltipHeight = tr.height;
-      }
-
-      const padding = 12;
-      const gap = 8;
-
-      const spaceAbove = btnRect.top;
-      const spaceBelow = window.innerHeight - btnRect.bottom;
-
-      let isAbove = true;
-      if (spaceAbove >= tooltipHeight + gap + padding) {
-        isAbove = true;
-      } else if (spaceBelow >= tooltipHeight + gap + padding) {
-        isAbove = false;
-      } else {
-        isAbove = spaceAbove >= spaceBelow;
-      }
-
-      let top = isAbove ? btnRect.top - tooltipHeight - gap : btnRect.bottom + gap;
-      top = Math.max(padding, Math.min(window.innerHeight - tooltipHeight - padding, top));
-
-      const btnCenterX = btnRect.left + btnRect.width / 2;
-      let left = btnCenterX - tooltipWidth / 2;
-      left = Math.max(padding, Math.min(window.innerWidth - tooltipWidth - padding, left));
-
-      const arrowLeft = Math.max(16, Math.min(tooltipWidth - 16, btnCenterX - left));
-
-      setCoords({ top, left, isAbove, arrowLeft });
-    };
-
-    updatePos();
-    const timer = setTimeout(updatePos, 10);
-
-    window.addEventListener('resize', updatePos);
-    window.addEventListener('scroll', updatePos, true);
-
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', updatePos);
-      window.removeEventListener('scroll', updatePos, true);
-    };
-  }, [isOpen, title]);
-
   if (!title) return null;
 
   const decodedTitle = title.replace(/&quot;/g, '"');
   const parts = decodedTitle.split(/\s*;;;\s*|\s*;;\s*/);
 
+  const content = parts.length > 1 ? (
+    <div className="space-y-1 font-sans">
+      {parts.map((part, idx) => {
+        const trimmed = part.trim();
+        const lower = trimmed.toLowerCase();
+        if (lower.startsWith('classification:')) {
+          return (
+            <div key={idx} className="font-mono font-bold text-[10px] text-cyan-300 border-b border-slate-700/80 pb-1 tracking-wider">
+              {trimmed}
+            </div>
+          );
+        }
+        if (lower.startsWith('matched keywords:')) {
+          const kwVal = trimmed.substring(trimmed.indexOf(':') + 1).trim();
+          return (
+            <div key={idx} className="text-[10px] text-slate-300">
+              <span className="font-bold text-slate-400 uppercase tracking-wider">Matched Keywords: </span>
+              <span className="font-mono text-emerald-300">{kwVal}</span>
+            </div>
+          );
+        }
+        if (idx === 1 || trimmed.startsWith('"') || trimmed.startsWith("'")) {
+          const rawName = trimmed.replace(/^["']|["']$/g, '');
+          return (
+            <div key={idx} className="font-semibold text-indigo-300 text-[11px]">
+              "{rawName}"
+            </div>
+          );
+        }
+        return (
+          <div key={idx} className="pt-0.5 border-t border-slate-700/60 text-[9px] font-mono text-slate-400">
+            {trimmed}
+          </div>
+        );
+      })}
+    </div>
+  ) : (
+    <div className="text-[11px] leading-relaxed">{decodedTitle}</div>
+  );
+
   return (
-    <span className="relative inline-block ml-1 align-middle">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
-        onMouseEnter={() => setIsOpen(true)}
-        onMouseLeave={() => setIsOpen(false)}
-        className="inline-flex items-center justify-center w-3.5 h-3.5 text-[9px] font-bold text-indigo-600 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/80 hover:bg-indigo-200 dark:hover:bg-indigo-800 rounded-full cursor-pointer transition-all select-none border border-indigo-300/50 dark:border-indigo-700/50 focus:outline-none"
-        aria-label="Info explanation"
-      >
-        ℹ️
-      </button>
-
-      {isOpen &&
-        createPortal(
+    <span className="inline-block ml-1">
+      <PositionedTooltip
+        trigger={
           <div
-            ref={tooltipRef}
-            className="fixed p-3 bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur text-white text-[11px] font-normal leading-relaxed rounded-xl shadow-2xl border border-slate-700/80 z-[99999] pointer-events-none transition-opacity duration-150 block text-left w-72 sm:w-80"
-            style={{
-              top: coords ? `${coords.top}px` : '-9999px',
-              left: coords ? `${coords.left}px` : '-9999px',
-              opacity: coords ? 1 : 0,
-              whiteSpace: 'normal',
-              wordBreak: 'break-word',
-            }}
+            className="inline-flex items-center justify-center w-3.5 h-3.5 text-[9px] font-bold text-indigo-600 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/80 hover:bg-indigo-200 dark:hover:bg-indigo-800 rounded-full cursor-pointer transition-all select-none border border-indigo-300/50 dark:border-indigo-700/50 focus:outline-none"
+            aria-label="Info explanation"
           >
-            {parts.length > 1 ? (
-              <div className="space-y-1 font-sans">
-                {parts.map((part, idx) => {
-                  const trimmed = part.trim();
-                  const lower = trimmed.toLowerCase();
-                  if (lower.startsWith('classification:')) {
-                    return (
-                      <div key={idx} className="font-mono font-bold text-[10px] text-cyan-300 border-b border-slate-700/80 pb-1 tracking-wider">
-                        {trimmed}
-                      </div>
-                    );
-                  }
-                  if (lower.startsWith('matched keywords:')) {
-                    const kwVal = trimmed.substring(trimmed.indexOf(':') + 1).trim();
-                    return (
-                      <div key={idx} className="text-[10px] text-slate-300">
-                        <span className="font-bold text-slate-400 uppercase tracking-wider">Matched Keywords: </span>
-                        <span className="font-mono text-emerald-300">{kwVal}</span>
-                      </div>
-                    );
-                  }
-                  if (idx === 1 || trimmed.startsWith('"') || trimmed.startsWith("'")) {
-                    const rawName = trimmed.replace(/^["']|["']$/g, '');
-                    return (
-                      <div key={idx} className="font-semibold text-indigo-300 text-[11px]">
-                        "{rawName}"
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={idx} className="pt-0.5 border-t border-slate-700/60 text-[9px] font-mono text-slate-400">
-                      {trimmed}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-[11px] leading-relaxed">{decodedTitle}</div>
-            )}
-
-            {coords && (
-              <span
-                className={`absolute border-4 border-transparent ${
-                  coords.isAbove
-                    ? 'top-full -mt-0.5 border-t-slate-900 dark:border-t-slate-800'
-                    : 'bottom-full -mb-0.5 border-b-slate-900 dark:border-b-slate-800'
-                }`}
-                style={{ left: `${coords.arrowLeft}px`, transform: 'translateX(-50%)' }}
-              />
-            )}
-          </div>,
-          document.body
-        )}
+            ℹ️
+          </div>
+        }
+        content={content}
+        contentClassName="bg-slate-900/95 dark:bg-slate-800/95 text-white border-slate-700/80"
+      />
     </span>
   );
 };
@@ -3471,15 +3373,18 @@ export const FoodCard: React.FC<AgentCardProps & {
                                                 <div className="flex items-center justify-end gap-1">
                                                   <span>{formatNutrientValue(item.sodium, 'mg')}</span>
                                                   {(item.saltConversionNote || (item.rawNutritionLabel?.salt && (item.rawNutritionLabel?.sodium || item.nutritionFacts?.sodium))) && (
-                                                    <div className="relative group/saltTooltip inline-flex items-center">
-                                                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 hover:text-blue-600 cursor-help shrink-0">
-                                                        <circle cx="12" cy="12" r="10"></circle>
-                                                        <line x1="12" y1="16" x2="12" y2="12"></line>
-                                                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                                      </svg>
-                                                      <div className="absolute right-0 bottom-full mb-1 opacity-0 group-hover/saltTooltip:opacity-100 transition-opacity pointer-events-none whitespace-normal min-w-[200px] w-max max-w-[250px] p-2 bg-slate-800 text-white text-[10px] rounded shadow-lg text-left z-50 font-sans font-normal normal-case">
-                                                        {item.saltConversionNote || `Converted printed salt (${item.rawNutritionLabel?.salt}) to sodium. Formula: 1g salt = 400mg sodium.`}
-                                                      </div>
+                                                    <div className="inline-flex items-center">
+                                                      <PositionedTooltip
+                                                        trigger={
+                                                          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 hover:text-blue-600 cursor-help shrink-0">
+                                                            <circle cx="12" cy="12" r="10"></circle>
+                                                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                                                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                                          </svg>
+                                                        }
+                                                        content={item.saltConversionNote || `Converted printed salt (${item.rawNutritionLabel?.salt}) to sodium. Formula: 1g salt = 400mg sodium.`}
+                                                        contentClassName="bg-slate-800 text-white text-[10px] font-sans"
+                                                      />
                                                     </div>
                                                   )}
                                                 </div>

@@ -22,6 +22,7 @@ import {
   normalizeBiomarkerName,
   isBiomarkerDuplicateCandidate,
   findDuplicateOrExistingBiomarker,
+  detectFlaggedTelemetryErrors,
   COMMON_PREFIXES,
   COMMON_SUFFIXES,
   COMMON_UNIT_SUFFIXES
@@ -386,6 +387,14 @@ export function runGeneralizedBiomarkerAudit(
     return customBiomarkers[key] || biomarkerDefinitions.find((b: any) => b.key === key) || {};
   };
 
+  const fakeProfile = { customBiomarkers, deletedCustomBiomarkerKeys };
+  const telemetryFlags = detectFlaggedTelemetryErrors(
+    currentBiomarkers,
+    fakeProfile,
+    biomarkerHistory,
+    allKeys.map(k => getDef(k))
+  );
+
   // 2. Multi-strategy candidate-bucketed duplicate clustering (O(N) bucketing with bounded intra-bucket matching)
   const adjacency: { [key: string]: Set<string> } = {};
   const matchReasons: { [pairKey: string]: string } = {};
@@ -532,8 +541,10 @@ export function runGeneralizedBiomarkerAudit(
     let missingMetadata: BiomarkerAuditItem['missingMetadata'] = undefined;
     let conflictInfo: BiomarkerAuditItem['conflictInfo'] = undefined;
 
-    // Check Unit Corruption
-    if (isCorruptedUnit(currentUnit)) {
+    const tFlag = telemetryFlags.find(f => f.key === key);
+
+    // Check Unit Corruption or Improbable Telemetry
+    if (isCorruptedUnit(currentUnit) || tFlag) {
       // Attempt internal scraping or catalog lookup
       let proposedUnit: string | null = null;
       let source: BiomarkerAuditItem['corruptedUnitProposal']['sourceField'] = 'optimalValue';
@@ -621,6 +632,14 @@ export function runGeneralizedBiomarkerAudit(
           sourceField: source,
           confidence: 0.95,
           reason
+        };
+      } else if (tFlag && !isCorruptedUnit(currentUnit)) {
+        status = 'corrupted_unit';
+        corruptedUnitProposal = {
+          proposedUnit: currentUnit,
+          sourceField: 'logHistory',
+          confidence: 0.8,
+          reason: tFlag.reason
         };
       } else {
         status = 'corrupted_unit';
