@@ -9,11 +9,9 @@
 
 | Pack | Role |
 |------|------|
-| **[M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md](./M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md)** | **Biomarker remaining work (§13) — multipass autonomous (PRE-APPROVAL in §A)** |
-| [M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md](./M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md) | Food catalog curator — separate track; do not mix into M31 |
-| [M23_FULL_FREE_TIER_RELIABILITY.md](./M23_FULL_FREE_TIER_RELIABILITY.md) | Free-tier continuous M23→M28 (separate track) |
-| [M23_FIRESTORE_WRITE_KILL_SWITCH.md](./M23_FIRESTORE_WRITE_KILL_SWITCH.md) | Nested detail for phase M23 only |
+| [M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md](./M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md) | Food catalog curator — separate track |
 | [M22_MEAL_BUILD_TRUE_COMPLETE.md](./M22_MEAL_BUILD_TRUE_COMPLETE.md) | Prior product pack |
+| **Archived** | M23 Free Tier Reliability, M31 Biomarker Lifecycle |
 
 **Plans**
 

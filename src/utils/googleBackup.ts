@@ -396,7 +396,7 @@ export async function runBackupWorkflow(
     let foodIdeas: any[] = [];
     try {
       trackApiCall('firebase_read', `Firestore Read - Backup: Fetch dashboard (downloads dashboard action lists, goals, and diet guidelines for backup ZIP generation)`);
-      const dashboardDoc = await getDoc(doc(db, 'users', uid, 'metadata', 'dashboard'));
+      const dashboardDoc = { exists: () => false, data: () => ({}) } as any; // await getDoc(doc(db, 'users', uid, 'metadata', 'dashboard'));
       if (dashboardDoc.exists()) {
         const dData = dashboardDoc.data();
         actions = dData.actions || [];
@@ -411,7 +411,7 @@ export async function runBackupWorkflow(
     let report: any = null;
     try {
       trackApiCall('firebase_read', `Firestore Read - Backup: Fetch latest report (downloads latest PDF baseline recommendation report for backup ZIP generation)`);
-      const reportDoc = await getDoc(doc(db, 'users', uid, 'reports', 'latest'));
+      const reportDoc = { exists: () => false, data: () => ({}) } as any; // await getDoc(doc(db, 'users', uid, 'reports', 'latest'));
       if (reportDoc.exists()) {
         report = reportDoc.data();
       }

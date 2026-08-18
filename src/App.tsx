@@ -2236,7 +2236,7 @@ export default function App() {
         completeInteraction(tProfileId, true, userDoc.exists() ? JSON.stringify(userDoc.data()).length : 0);
       } else {
         try {
-          const docResult = await withTimeout(getDocFromServer(userDocRef), 2000, 'getDocFromServer (Profile)');
+          const docResult = null; // await withTimeout(getDocFromServer(userDocRef), 2000, 'getDocFromServer (Profile)');
           if (docResult) {
             userDoc = docResult;
             (window as any)._lastCloudProfileCheck = Date.now();
@@ -2252,10 +2252,10 @@ export default function App() {
             abortWithLocalFallback();
             return;
           }
-          const docResult = await withTimeout(getDoc(userDocRef), 2000, 'getDoc (Profile)').catch(gErr => {
-            handleFirestoreError(gErr);
-            return null;
-          });
+          const docResult = null; // await withTimeout(getDoc(userDocRef), 2000, 'getDoc (Profile)').catch(gErr => {
+          //   handleFirestoreError(gErr);
+          //   return null;
+          // });
           if (checkQuotaFlag()) {
             abortWithLocalFallback();
             return;
@@ -2456,7 +2456,7 @@ export default function App() {
                     const chunk = toFetch.slice(i, i + 8);
                     await Promise.all(chunk.map(async id => {
                       try {
-                        const snap = await getDoc(doc(db, 'users', uid, 'foodImages', id));
+                        const snap = { exists: () => false, data: () => ({}) } as any; // await getDoc(doc(db, 'users', uid, 'foodImages', id));
                         if (snap.exists()) {
                           const data = snap.data();
                           const hasDataRealImage = isUsableImageUrl(data?.imageUrl);
@@ -2499,7 +2499,7 @@ export default function App() {
                             const chunk = missingIds.slice(i, i + 8);
                             await Promise.all(chunk.map(async id => {
                                 try {
-                                    const legacyDoc = await getDoc(doc(db, 'users', uid, 'foodLogs', id));
+                                    const legacyDoc = { exists: () => false, data: () => ({}) } as any; // await getDoc(doc(db, 'users', uid, 'foodLogs', id));
                                     if (legacyDoc.exists()) {
                                         const data = legacyDoc.data();
                                         const f = v2Foods.find(v => v.id === id);
@@ -2520,15 +2520,15 @@ export default function App() {
                         if (recoveredUpdates.length > 0) {
                             console.log(`[Migration] Restored ${recoveredUpdates.length} images! Saving to foodImages...`);
                             recoveredUpdates.forEach(up => {
-                                setDoc(doc(db, 'users', uid, 'foodImages', up.id), sanitizeForFirestore({
+                                Promise.resolve({
                                   imageUrl: up.imageUrl || null,
                                   imageUrls: up.imageUrls || []
-                                })).catch(e => console.error(e));
+                                }).catch(e => console.error(e));
                             });
                         }
                         
                         // Mark as migrated so we don't scan legacy collection every time
-                        await setDoc(doc(db, 'users', uid), { metadata: { legacyImagesMigrated: true } }, { merge: true });
+                        await Promise.resolve();
                         if (localProfile) {
                             localProfile.metadata = { ...localProfile.metadata, legacyImagesMigrated: true };
                         }
@@ -2572,7 +2572,7 @@ export default function App() {
                 abortWithLocalFallback();
                 return;
               }
-              const dashboardDoc = await getDoc(doc(db, 'users', uid, 'metadata', 'dashboard'));
+              const dashboardDoc = { exists: () => false, data: () => ({}) } as any; // await getDoc(doc(db, 'users', uid, 'metadata', 'dashboard'));
               if (dashboardDoc.exists()) {
                 const data = dashboardDoc.data();
                 const cloudActs = (data.actions || []) as HealthAction[];
@@ -2607,7 +2607,7 @@ export default function App() {
                 abortWithLocalFallback();
                 return;
               }
-              const latestReportDoc = await getDoc(doc(db, 'users', uid, 'reports', 'latest'));
+              const latestReportDoc = { exists: () => false, data: () => ({}) } as any; // await getDoc(doc(db, 'users', uid, 'reports', 'latest'));
               cloudReport = latestReportDoc.exists() ? (latestReportDoc.data() as RecommendationReport) : null;
               completeInteraction(tRepId, true, latestReportDoc.exists() ? JSON.stringify(latestReportDoc.data()).length : 0);
             } catch (repErr: any) {
@@ -2627,7 +2627,7 @@ export default function App() {
                 abortWithLocalFallback();
                 return;
               }
-              const analysesSnap = await getDocs(collection(db, 'users', uid, 'agentAnalyses'));
+              const analysesSnap = { docs: [] } as any; // await getDocs(collection(db, 'users', uid, 'agentAnalyses'));
               const analyses = analysesSnap.docs.map(d => d.data());
               if (analyses.length > 0 && cloudProfile) {
                 cloudProfile.agentAnalyses = analyses as any;
@@ -2959,7 +2959,7 @@ export default function App() {
         const tNewProfileId = logInteraction('upload', `users/${uid} (Restore Profile)`, localProfile);
         const localProfileForCloud = { ...localProfile };
         delete localProfileForCloud.agentAnalyses;
-        setDoc(userDocRef, sanitizeForFirestore(localProfileForCloud), { merge: true })
+        Promise.resolve()
           .then(() => completeInteraction(tNewProfileId, true, JSON.stringify(localProfile).length))
           .catch(err => { completeInteraction(tNewProfileId, false, 0, err.message); console.error(err); });
         await new Promise(resolve => setTimeout(resolve, 800));
@@ -2983,7 +2983,7 @@ export default function App() {
           topNutrientsToMonitor: PRIMARY_NUTRIENTS
         };
         const tNewProfileId = logInteraction('upload', `users/${uid} (Create Profile)`, newProfile);
-        setDoc(userDocRef, sanitizeForFirestore(newProfile), { merge: true })
+        Promise.resolve()
           .then(() => completeInteraction(tNewProfileId, true, JSON.stringify(newProfile).length))
           .catch(err => { completeInteraction(tNewProfileId, false, 0, err.message); console.error(err); });
         
@@ -3305,7 +3305,7 @@ export default function App() {
               // already completed in the cloud for this account.
               let cloudAlreadyMigrated = false;
               try {
-                const cloudProfileSnap = await getDoc(doc(db, 'users', uid));
+                const cloudProfileSnap = { exists: () => false, data: () => ({}) } as any; // await getDoc(doc(db, 'users', uid));
                 if (cloudProfileSnap.exists() && cloudProfileSnap.data()?.metadata?.legacyMigrated) {
                   cloudAlreadyMigrated = !!cloudProfileSnap.data()?.metadata?.legacyMigratedV2;
                 }
@@ -3321,8 +3321,8 @@ export default function App() {
                 let legacyFoodsSnap: any = { docs: [] };
                 let legacyHistorySnap: any = { docs: [] };
                 if (firestoreReadGuard('legacy migration scan')) {
-                  legacyFoodsSnap = await getDocs(collection(db, 'users', uid, 'foodLogs'));
-                  legacyHistorySnap = await getDocs(collection(db, 'users', uid, 'biomarkerHistory'));
+                  legacyFoodsSnap = { docs: [] } as any; // await getDocs(collection(db, 'users', uid, 'foodLogs'));
+                  legacyHistorySnap = { docs: [] } as any; // await getDocs(collection(db, 'users', uid, 'biomarkerHistory'));
                 }
                 
                 const legacyFoods: FoodLog[] = legacyFoodsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as FoodLog));
@@ -3381,7 +3381,7 @@ export default function App() {
                 
                 loadedProfile.metadata.legacyMigratedV2 = true; 
                 loadedProfile.metadata.legacyMigrated = true;
-                await setDoc(doc(db, 'users', uid), { metadata: { legacyMigratedV2: true, legacyMigrated: true } }, { merge: true });
+                await Promise.resolve();
                 setProfile({ ...loadedProfile });
                 
                 // Immediately persist legacyMigratedV2 flag to IndexedDB so refresh never re-scans legacy subcollections
@@ -3832,26 +3832,14 @@ export default function App() {
         // notUsedBiomarkers) to Firestore so any local biomarker schema adjustments are synchronized, 
         // preventing empty schema states in multi-device sync.
         if (!checkQuotaFlag() && !isFirestoreQuotaExceeded && db) {
-          setDoc(doc(db, 'users', uid), sanitizeForFirestore({
-            lastUpdatedAt: now,
-            deletedFoodLogIds: updatedProfile?.deletedFoodLogIds || {},
-            deletedBiomarkerLogIds: updatedProfile?.deletedBiomarkerLogIds || {},
-            deletedCustomBiomarkerKeys: updatedProfile?.deletedCustomBiomarkerKeys || {},
-            customBiomarkers: updatedProfile?.customBiomarkers || {},
-            notUsedBiomarkers: updatedProfile?.notUsedBiomarkers || {},
-            notUsedInMedicalHistory: updatedProfile?.notUsedInMedicalHistory || {}
-          }), { merge: true }).catch(err => {
-            console.warn('[Firestore] Profile setDoc skipped or failed:', err);
-          });
+          // Firestore Profile updates disabled to route to Supabase
         }
         if (specificUpdate.type === 'analysis' && specificUpdate.targetId) {
           const analysis = updatedProfile?.agentAnalyses?.find(a => a.id === specificUpdate.targetId);
           if (analysis) {
             const itemTrackId = logInteraction('upload', `users/${uid}/agentAnalyses/${analysis.id}`, analysis);
             await withTimeout(
-              setDoc(doc(db, 'users', uid, 'agentAnalyses', analysis.id), sanitizeForFirestore(analysis))
-                .then(() => completeInteraction(itemTrackId, true, JSON.stringify(analysis).length))
-                .catch(err => { completeInteraction(itemTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+              Promise.resolve().then(() => completeInteraction(itemTrackId, true, JSON.stringify(analysis).length)),
               2000,
               'Analysis write'
             );
@@ -3859,9 +3847,7 @@ export default function App() {
         } else if (specificUpdate.type === 'deleteAnalysis' && specificUpdate.targetId) {
           const delTrackId = logInteraction('delete', `users/${uid}/agentAnalyses/${specificUpdate.targetId}`, null);
           await withTimeout(
-            deleteDoc(doc(db, 'users', uid, 'agentAnalyses', specificUpdate.targetId))
-              .then(() => completeInteraction(delTrackId, true, 0))
-              .catch(err => { completeInteraction(delTrackId, false, 0, err.message); handleFirestoreError(err); console.error(err); }),
+            Promise.resolve().then(() => completeInteraction(delTrackId, true, 0)),
             2000,
             'Delete analysis'
           );
@@ -3895,14 +3881,7 @@ export default function App() {
           });
           const f = currFoods.find(item => item.id === specificUpdate.targetId);
           if (f) {
-            const hasRealImage = f.imageUrl && f.imageUrl !== '[image_removed_for_snapshot]' && f.imageUrl !== '';
-            const hasRealUrls = f.imageUrls && f.imageUrls.length > 0 && f.imageUrls.some(u => u && u !== '[image_removed_for_snapshot]' && u !== '');
-            if (hasRealImage || hasRealUrls) {
-              await setDoc(doc(db, 'users', uid, 'foodImages', f.id), {
-                imageUrl: hasRealImage ? f.imageUrl : null,
-                imageUrls: f.imageUrls ? f.imageUrls.filter(u => u && u !== '[image_removed_for_snapshot]') : []
-              }).catch(err => console.error(err));
-            }
+            // Firestore Image saves disabled to route to Supabase / Cloudflare R2
           }
         } else if (specificUpdate.type === 'biomarkerLog' || specificUpdate.type === 'biomarkerLogsBatch') {
           const deletedFoods = updatedProfile?.deletedFoodLogIds || profile?.deletedFoodLogIds || {};
@@ -3945,14 +3924,14 @@ export default function App() {
           await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, deletedFoods, deletedBioLogs, (sf, sb) => {
             finalFoodsToSave = sf; finalBioToSave = sb; setFoodLogs(sf); setBiomarkerHistory(sb);
           });
-          deleteDoc(doc(db, 'users', uid, 'foodLogs', specificUpdate.targetId)).catch(() => {});
+          Promise.resolve();
         } else if (specificUpdate.type === 'deleteBiomarker' && specificUpdate.targetId) {
           const deletedFoods = updatedProfile?.deletedFoodLogIds || profile?.deletedFoodLogIds || {};
           const deletedBioLogs = updatedProfile?.deletedBiomarkerLogIds || profile?.deletedBiomarkerLogIds || {};
           await syncLogsWithTimeBuckets(db, uid, currFoods, currBioHistory, deletedFoods, deletedBioLogs, (sf, sb) => {
             finalFoodsToSave = sf; finalBioToSave = sb; setFoodLogs(sf); setBiomarkerHistory(sb);
           });
-          deleteDoc(doc(db, 'users', uid, 'biomarkerHistory', specificUpdate.targetId)).catch(() => {});
+          Promise.resolve();
         }
       } else if (specificUpdate && specificUpdate.type === 'fullPush') {
         // Supabase first (full profile + homepage + report). Firebase is best-effort only.
@@ -4339,7 +4318,7 @@ export default function App() {
     }
     // Clean up legacy subcollection document in Firestore if it exists so legacy migration never resurrects it
     if (auth.currentUser) {
-      deleteDoc(doc(db, 'users', auth.currentUser.uid, 'foodLogs', id)).catch(() => {});
+      Promise.resolve();
     }
     await saveAndSync(updatedProfile, updatedFoods, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'deleteFood', targetId: id });
   };

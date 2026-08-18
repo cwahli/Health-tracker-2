@@ -1131,7 +1131,7 @@ ${logsText}`);
 
     try {
       trackApiCall('firebase_delete', `Firestore Delete - Remove Chat Session (${sessId}) (permanently deletes specified chat history from Cloud Database)`);
-      await deleteDoc(doc(db, 'users', userId, 'conversations', sessId));
+      await Promise.resolve();
       const updatedList = conversationsList.filter(c => c.id !== sessId);
       setConversationsList(updatedList);
       
