@@ -178,7 +178,7 @@ syncRouter.post("/api/sync/supabase-pull", async (req, res) => {
 
     let foodQuery = supabaseAdmin
       .from('food_logs')
-      .select('id, firebase_uid, date, name, composition, weight_grams, quantity, consumed_amount, benefits, risks, health_impact, recommendation, calories, saturated_fat, sodium, added_sugar, nutrients, items_breakdown, scout_items, image_urls, updated_at, verdict, description, message')
+      .select('id, firebase_uid, date, name, composition, weight_grams, quantity, consumed_amount, benefits, risks, health_impact, recommendation, calories, saturated_fat, sodium, added_sugar, nutrients, items_breakdown, scout_items, image_urls, updated_at, verdict, description, message, debug_url, chat_transcript')
       .in('firebase_uid', possibleUids)
       .order('updated_at', { ascending: false })
       .order('id', { ascending: false })
@@ -409,6 +409,11 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
       risks: food.risks || '',
       health_impact: food.healthImpact || '',
       recommendation: food.recommendation || 'good',
+      verdict: food.verdict || null,
+      description: food.description || '',
+      message: food.message || '',
+      debug_url: food.debugUrl || '',
+      chat_transcript: food.chatTranscript || [],
       calories: food.calories || food.nutrients?.calories || 0,
       saturated_fat: food.saturatedFat || food.nutrients?.saturatedFat || 0,
       sodium: food.sodium || food.nutrients?.sodium || 0,
@@ -449,7 +454,11 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
                 console.log(`[R2 Auto-upload] Uploading push-sync base64 image for food log ${food.id} (index ${i}) to R2...`);
                 try {
                   const uploadedUrl = await uploadPhotoToR2(`${food.id}_${i}`, url);
-                  updatedUrls.push(uploadedUrl);
+                  if (uploadedUrl && uploadedUrl.startsWith('http')) {
+                    updatedUrls.push(uploadedUrl);
+                  } else {
+                    updatedUrls.push(url);
+                  }
                 } catch (e: any) {
                   console.error(`[R2 Auto-upload] Failed for food log ${food.id}:`, e?.message || e);
                   updatedUrls.push(url);

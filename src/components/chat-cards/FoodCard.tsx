@@ -1636,7 +1636,7 @@ export const FoodCard: React.FC<AgentCardProps & {
 
   const displayedScoutItems = React.useMemo(() => {
     const itemsBreakdown = msg.data?.pendingFoodLog?.itemsBreakdown || msg.data?.data?.itemsBreakdown || msg.data?.itemsBreakdown || msg.data?.agentResult?.data?.itemsBreakdown;
-    if (!itemsBreakdown || itemsBreakdown.length === 0 || itemsBreakdown.length < (activeScoutItems || []).length) {
+    if (!itemsBreakdown || itemsBreakdown.length === 0) {
       return activeScoutItems;
     }
     
@@ -1677,7 +1677,8 @@ export const FoodCard: React.FC<AgentCardProps & {
         chainName: matchingScout?.chainName || item.chainName || null,
         scoutOriginalName: matchingScout?.originalName || null,
         labelProductName: matchingScout?.labelProductName || item.labelProductName || null,
-        estimatedWeightGrams: item.weightGrams,
+        estimatedWeightGrams: item.weightGrams || item.estimatedWeightGrams || matchingScout?.estimatedWeightGrams,
+        weightGrams: item.weightGrams || item.estimatedWeightGrams,
         boundingBox2D: item.boundingBox2D || (matchingScout ? matchingScout.boundingBox2D : null),
         sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : (matchingScout ? matchingScout.sourceImageIndex : null),
         itemConfidence: matchingScout ? matchingScout.itemConfidence : "High (>90%)",
@@ -1686,13 +1687,14 @@ export const FoodCard: React.FC<AgentCardProps & {
         rawNutritionLabel: matchingScout?.rawNutritionLabel || item.rawNutritionLabel,
         ingredientsList: matchingScout?.ingredientsList || item.ingredientsList,
         visualIngredients: matchingScout?.visualIngredients || item.visualIngredients,
-        nutritionFacts: matchingScout?.nutritionFacts || item.nutritionFacts,
+        nutritionFacts: item.nutritionFacts || item.nutrients || matchingScout?.nutritionFacts,
+        nutrients: item.nutrients || item.nutritionFacts || matchingScout?.nutrients,
         source: matchingScout?.source || item.source,
-        dbSource: item.dbSource || matchingScout?.dbSource || null,
+        dbSource: item.dbSource || (item.componentsDetailList?.length ? 'composite' : matchingScout?.dbSource) || null,
         dbId: item.dbId || matchingScout?.dbId || null,
         isRealTruth: item.dbSource !== 'composite' && (item.isRealTruth || item.dbSource === 'brand_official' || item.dbSource === 'label' || item.dbSource === 'label_partial'),
-        labelNutrientsPerServing: item.labelNutrientsPerServing || (item.dbSource !== 'composite' ? item.primaryBase100g : null) || matchingScout?.labelNutrientsPerServing || null,
-        primaryBase100g: item.primaryBase100g || null,
+        labelNutrientsPerServing: item.labelNutrientsPerServing || item.primaryBase100g || item.nutrients || matchingScout?.labelNutrientsPerServing || null,
+        primaryBase100g: item.primaryBase100g || item.labelNutrientsPerServing || null,
         primaryBaseMatchName: item.primaryBaseMatchName || item.canonicalDbName || null,
         componentsDetailList: item.componentsDetailList || item.componentsDetail || matchingScout?.componentsDetailList || []
       };

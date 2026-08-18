@@ -1323,7 +1323,7 @@ ${logsText}`);
   useEffect(() => {
     if ((type !== 'food' && type !== 'medical') || !jobId || !isOpen) return;
     const loadJobMessages = async () => {
-      const job = JobStore.getJob(jobId);
+      let job = JobStore.getJob(jobId);
       if (!job) {
         setIsAnalyzing(false);
         isSendingRef.current = false;
@@ -1346,6 +1346,36 @@ ${logsText}`);
         (job as any).photo_url;
 
       if (job.status === 'succeeded' && type === 'food') {
+        let currentResult = job.result?.clean_result || job.result || (job as any).clean_result || {};
+        if (currentResult.is_r2 || (job as any).clean_result?.is_r2 || !resolvePendingFoodLog(job)) {
+          try {
+            const baseUrl = typeof window !== 'undefined' ? '' : 'http://localhost:3000';
+            const r = await fetch(`${baseUrl}/api/jobs/status?jobId=${jobId}&full=true`);
+            if (r.ok) {
+              const fullData = await r.json();
+              const backendJob = fullData.jobs?.[0];
+              if (backendJob && backendJob.clean_result && !backendJob.clean_result.is_r2) {
+                currentResult = backendJob.clean_result;
+                job = {
+                  ...job,
+                  result: currentResult,
+                  mealBuild: currentResult.mealBuild || job.mealBuild,
+                  photoUrl: currentResult.photoUrl || job.photoUrl,
+                  debugUrl: currentResult.debugUrl || job.debugUrl
+                };
+                JobStore.updateJob(jobId, {
+                  result: currentResult,
+                  mealBuild: currentResult.mealBuild || job.mealBuild,
+                  photoUrl: currentResult.photoUrl || job.photoUrl,
+                  debugUrl: currentResult.debugUrl || job.debugUrl
+                });
+              }
+            }
+          } catch (e) {
+            console.warn('[LogChat] Failed to fetch full R2 result:', e);
+          }
+        }
+
         const welcome = getWelcomeMessage();
         
         // Find existing user message or construct one
@@ -1407,7 +1437,7 @@ ${logsText}`);
           }
         }
 
-        const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
+        const raw = currentResult.raw || (currentResult as any)?.clean_result || currentResult || job.result?.raw || (job.result as any)?.clean_result || job.result || {};
         const snapAgent = (job.inputSnapshot as any)?.agentType;
         const reviewCmds = raw.modificationCommand || raw.agentResult?.modificationCommand;
         const resolvedType = (type === 'food' || foodLog || raw.agentType === 'food' || raw.agentType === 'food_log' || raw.agentType === 'food_analyze' || raw.agentType === 'front_desk')
@@ -1418,7 +1448,7 @@ ${logsText}`);
         const cmds = isReview
           ? enrichReviewModificationCommands(Array.isArray(reviewCmds) ? reviewCmds : [], biomarkerHistory || [], unitMap)
           : reviewCmds;
-        const rawContent = raw.message || raw.text || raw.reply || raw.globalSummary || 'Analysis complete.';
+        const rawContent = raw.message || raw.text || raw.reply || raw.globalSummary || foodLog?.message || 'Analysis complete.';
         const assistantMsg: ChatMessage = {
           id: `msg_assistant_${jobId}`,
           role: 'assistant',

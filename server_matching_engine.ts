@@ -121,10 +121,15 @@ export function classifyUniversalPhysicalFormV3(item: {
   const BAKERY_CONTAINER_TERMS = [
     'pie', 'pies', 'cobbler', 'cobblers', 'tart', 'tarts', 'cake', 'cakes', 'muffin', 'muffins',
     'cookie', 'cookies', 'croissant', 'croissants', 'cheesecake', 'cheesecakes', 'cupcake', 'cupcakes',
-    'brownie', 'brownies', 'shortcake', 'crumble', 'strudel', 'turnover', 'danish', 'pudding',
-    'custard', 'praline', 'pralines', 'truffle', 'truffles', 'fudge', 'toffee', 'bonbon', 'bonbons', 'pattie', 'patties', 'patty'
+    'brownie', 'brownies', 'shortcake', 'crumble', 'strudel', 'turnover', 'turnovers', 'danish', 'pudding',
+    'custard', 'praline', 'pralines', 'truffle', 'truffles', 'fudge', 'toffee', 'bonbon', 'bonbons', 'pattie', 'patties', 'patty',
+    'pastry', 'pastries', 'swirl', 'swirls', 'brioche', 'scone', 'scones', 'waffle', 'waffles', 'pancake', 'pancakes',
+    'eclair', 'eclairs', 'macaron', 'macarons', 'macaroon', 'macaroons', 'churros', 'biscuit', 'biscuits',
+    'chocolatine', 'pain suisse'
   ];
-  const hasBakeryContainer = BAKERY_CONTAINER_TERMS.some(w => primaryHasWord(w));
+  const hasBakeryPhrase = /\b(pain au\b|pain aux\b|pain suisse\b|chausson\b|cinnamon roll\b|cinnamon bun\b|cinnamon swirl\b|danish pastry\b|fruit danish\b|apple turnover\b|raisin swirl\b|raisin pastry\b)/i.test(primaryName) ||
+    /\b(pain au\b|pain aux\b|pain suisse\b|chausson\b|cinnamon roll\b|cinnamon bun\b|cinnamon swirl\b|danish pastry\b|fruit danish\b|apple turnover\b|raisin swirl\b|raisin pastry\b)/i.test(textCorpus);
+  const hasBakeryContainer = BAKERY_CONTAINER_TERMS.some(w => primaryHasWord(w)) || hasBakeryPhrase;
   const isExplicitCandy = primaryHasWord('candy') || primaryHasWord('candies') || primaryHasWord('chocolate');
   const isDoughnutWord = primaryHasWord('donut') || primaryHasWord('doughnut');
   // Donut/Doughnut word indicates a pastry UNLESS a produce item (e.g. donut peach, doughnut nectarine) is present

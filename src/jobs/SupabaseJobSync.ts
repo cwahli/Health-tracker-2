@@ -28,9 +28,9 @@ async function fetchAndPopulateR2Job(jobId: string) {
         const fetchedWrapper = await r.json();
         if (fetchedWrapper && fetchedWrapper.jobs && fetchedWrapper.jobs.length > 0) {
           const backendJob = fetchedWrapper.jobs[0];
-          if (backendJob && backendJob.clean_result) {
+          if (backendJob && backendJob.clean_result && !backendJob.clean_result.is_r2) {
             const existing = JobStore.getJob(jobId);
-            if (existing && !existing.result) {
+            if (existing && (!existing.result || (existing.result as any).is_r2)) {
               const updatedResult = backendJob.clean_result;
               JobStore.updateJob(jobId, {
                 result: updatedResult,
@@ -48,13 +48,13 @@ async function fetchAndPopulateR2Job(jobId: string) {
   }
 }
 
-export async function hydrateUserJobs(userId: string = 'anonymous'): Promise<void> {
+export async function hydrateUserJobs(userId: string = 'anonymous', isFull: boolean = true): Promise<void> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
     let res: Response;
     try {
-      res = await fetch(`/api/jobs/status?userId=${encodeURIComponent(userId)}`, { signal: controller.signal });
+      res = await fetch(`/api/jobs/status?userId=${encodeURIComponent(userId)}&full=${isFull}`, { signal: controller.signal });
     } finally {
       clearTimeout(timeoutId);
     }
@@ -229,11 +229,23 @@ export function initSupabaseJobSync(userId?: string): () => void {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       return;
     }
-    const hasActiveJob = JobStore.getAllJobs().some(
-      (j: any) => j.status === 'running' || j.status === 'pending'
-    );
+    
+    const now = Date.now();
+    let hasActiveJob = false;
+    
+    JobStore.getAllJobs().forEach((j: any) => {
+      if (j.status === 'running' || j.status === 'pending') {
+        const startedAt = new Date(j.createdAt || j.updatedAt || now).getTime();
+        if (now - startedAt > 10 * 60 * 1000) {
+          JobStore.updateJob(j.id, { status: 'failed', statusMessage: 'Job timed out after 10 minutes' });
+        } else {
+          hasActiveJob = true;
+        }
+      }
+    });
+
     if (hasActiveJob) {
-      hydrateUserJobs(userId).catch(() => {});
+      hydrateUserJobs(userId, false).catch(() => {});
     }
   }, 8000);
 

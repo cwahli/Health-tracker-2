@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAndHealVisionScout, mergeScoutItems, canMergeScoutLabelIntoFood, resolvePackageAndContextItems } from "./server_vision_scout";
+import { parseAndHealVisionScout, mergeScoutItems, canMergeScoutLabelIntoFood, resolvePackageAndContextItems, reconcileIngredientsToComponents } from "./server_vision_scout";
 
 describe("server_vision_scout", () => {
   describe("mergeScoutItems", () => {
@@ -336,6 +336,51 @@ describe("server_vision_scout", () => {
       expect(result.items).toHaveLength(2);
       expect(result.items[0].originalName).toBe("Sweet Chilli Chicken Wrap");
       expect(result.items[1].originalName).toBe("Sweet Chilli Mini Fillets");
+    });
+  });
+
+  describe("reconcileIngredientsToComponents", () => {
+    it("allocates non-zero volume percentage for detected ranch dressing in ingredients list", () => {
+      const item = {
+        keyword: "chicken avocado salad",
+        originalName: "Chicken Cobb Salad",
+        ingredientsList: "Feta cheese, avocado, bacon, chicken, red onion, cherry tomato, eggs, mix leaves, ranch dressing",
+        components: [
+          { searchQuery: "mixed salad leaves", volumePercentage: 35 },
+          { searchQuery: "grilled chicken breast", volumePercentage: 20 },
+          { searchQuery: "avocado", volumePercentage: 15 },
+          { searchQuery: "hard boiled egg", volumePercentage: 10 },
+          { searchQuery: "feta cheese", volumePercentage: 10 },
+          { searchQuery: "cherry tomato", volumePercentage: 5 },
+          { searchQuery: "bacon bits", volumePercentage: 3 },
+          { searchQuery: "red onion", volumePercentage: 2 },
+        ]
+      };
+
+      reconcileIngredientsToComponents(item);
+
+      const ranchComp = item.components.find((c: any) => c.searchQuery.includes("ranch"));
+      expect(ranchComp).toBeDefined();
+      expect(ranchComp?.volumePercentage).toBeGreaterThanOrEqual(5);
+
+      const totalPct = item.components.reduce((sum: number, c: any) => sum + (c.volumePercentage || 0), 0);
+      expect(totalPct).toBeGreaterThanOrEqual(95);
+      expect(totalPct).toBeLessThanOrEqual(105);
+    });
+
+    it("does not duplicate condiment if already present in components", () => {
+      const item = {
+        keyword: "salad with ranch",
+        components: [
+          { searchQuery: "mixed greens", volumePercentage: 80 },
+          { searchQuery: "ranch dressing", volumePercentage: 20 }
+        ],
+        ingredientsList: "mixed greens, ranch dressing"
+      };
+
+      const initialCount = item.components.length;
+      reconcileIngredientsToComponents(item);
+      expect(item.components.length).toBe(initialCount);
     });
   });
 });

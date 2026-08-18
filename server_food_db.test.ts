@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getTraceNutrientsForFoodType, getCookingMethodModifier, lookupCanonicalBaseFood, getCachedUSDAFood, setCachedUSDAFood } from './server_food_db';
+import { classifyUniversalPhysicalFormV3 } from './server_matching_engine';
 
 describe('getTraceNutrientsForFoodType', () => {
   it('returns base values at 100g', () => {
@@ -75,6 +76,22 @@ describe('lookupCanonicalBaseFood (F-1 & F-2 Catalog-First Resolution)', () => {
     const avocado = lookupCanonicalBaseFood('Fresh Avocado');
     expect(avocado).toBeDefined();
     expect(avocado.fdcId).toBe('171705');
+
+    const painAuRaisin = lookupCanonicalBaseFood('Pain au Raisin');
+    expect(painAuRaisin).toBeDefined();
+    expect(painAuRaisin.fdcId).toBe('canonical_pain_au_raisin');
+    expect(painAuRaisin.foodType).toBe('grain');
+    expect(painAuRaisin.calories).toBe(355);
+
+    const cinnamonSwirl = lookupCanonicalBaseFood('Cinnamon Swirl');
+    expect(cinnamonSwirl).toBeDefined();
+    expect(cinnamonSwirl.fdcId).toBe('canonical_cinnamon_swirl');
+    expect(cinnamonSwirl.foodType).toBe('grain');
+
+    const plainRaisins = lookupCanonicalBaseFood('Raisins');
+    expect(plainRaisins).toBeDefined();
+    expect(plainRaisins.fdcId).toBe('169641');
+    expect(plainRaisins.foodType).toBe('fruit');
   });
 
   it('manages local USDA lookup cache for repeat queries', () => {
@@ -82,6 +99,18 @@ describe('lookupCanonicalBaseFood (F-1 & F-2 Catalog-First Resolution)', () => {
     const cached = getCachedUSDAFood('custom_greek_salad');
     expect(cached).toBeDefined();
     expect(cached.fdcId).toBe('custom_999');
+  });
+
+  it('classifies bakery/pastries with fruit in name as bakery_dessert rather than fruit_vegetable', () => {
+    const pastryForm = classifyUniversalPhysicalFormV3({ name: 'Pain au Raisin' });
+    expect(pastryForm.primaryCategory).toBe('bakery_dessert');
+    expect(pastryForm.physicalForm).toBe('SOLID_GRAIN_BAKERY');
+
+    const swirlForm = classifyUniversalPhysicalFormV3({ name: 'Cinnamon Swirl' });
+    expect(swirlForm.primaryCategory).toBe('bakery_dessert');
+
+    const rawFruitForm = classifyUniversalPhysicalFormV3({ name: 'Raisins' });
+    expect(rawFruitForm.primaryCategory).toBe('fruit_vegetable');
   });
 });
 

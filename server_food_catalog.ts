@@ -439,40 +439,136 @@ export function checkAtwaterValidity(nutrients: Record<string, number>): { valid
 }
 
 export const DEFAULT_CATEGORY_PROFILES: Record<string, Record<string, number>> = {
-  produce: { calories: 40, protein: 1, carbohydrates: 9, totalFat: 0.2, totalFibre: 2, sodium: 5 },
-  meat: { calories: 200, protein: 22, carbohydrates: 0, totalFat: 12, saturatedFat: 4, sodium: 70 },
-  poultry: { calories: 165, protein: 31, carbohydrates: 0, totalFat: 3.6, saturatedFat: 1, sodium: 74 },
-  fish: { calories: 140, protein: 20, carbohydrates: 0, totalFat: 6, saturatedFat: 1.2, sodium: 60 },
-  egg: { calories: 155, protein: 13, carbohydrates: 1.1, totalFat: 11, saturatedFat: 3.3, sodium: 124 },
-  nuts_seeds: { calories: 580, protein: 20, carbohydrates: 20, totalFat: 50, saturatedFat: 7, totalFibre: 8, sodium: 5 },
-  dairy: { calories: 60, protein: 3.2, carbohydrates: 4.8, totalFat: 3.2, saturatedFat: 2, sodium: 40 },
-  cheese: { calories: 300, protein: 22, carbohydrates: 2, totalFat: 24, saturatedFat: 15, sodium: 600 },
-  beverage: { calories: 0, protein: 0, carbohydrates: 0, totalFat: 0, sodium: 5 },
-  starch: { calories: 130, protein: 2.7, carbohydrates: 28, totalFat: 0.3, totalFibre: 1, sodium: 1 },
-  cereal: { calories: 420, protein: 12, carbohydrates: 65, totalFat: 12, totalFibre: 8, sodium: 50 },
-  legume: { calories: 160, protein: 8, carbohydrates: 25, totalFat: 3, totalFibre: 7, sodium: 200 },
-  pastry: { calories: 410, protein: 8, carbohydrates: 46, totalFat: 21, saturatedFat: 12, totalFibre: 2, sodium: 450 },
-  dessert: { calories: 450, protein: 5, carbohydrates: 55, totalFat: 24, saturatedFat: 12, totalFibre: 2, sodium: 200 },
-  general_dish: { calories: 150, protein: 6, carbohydrates: 18, totalFat: 6, saturatedFat: 1.5, totalFibre: 1.5, sodium: 300 }
+  leafy_greens: {
+    calories: 20, protein: 1.5, carbohydrates: 3.5, totalFat: 0.2, saturatedFat: 0.03, unsaturatedFat: 0.15,
+    sugar: 1.2, addedSugar: 0, totalFibre: 2.0, solubleFibre: 0.4, sodium: 25,
+    potassium: 250, magnesium: 15, calcium: 40, iron: 1.0, zinc: 0.3, phosphorus: 30, selenium: 0.6, iodine: 3,
+    vitaminA: 150, vitaminC: 15, vitaminK: 120, vitaminE: 0.5, folate: 60, vitaminB6: 0.08, thiamine: 0.05, riboflavin: 0.07, niacin: 0.4, vitaminD: 0, vitaminB12: 0
+  },
+  berries: {
+    calories: 50, protein: 1.0, carbohydrates: 12.0, totalFat: 0.4, saturatedFat: 0.05, unsaturatedFat: 0.35,
+    sugar: 7.5, addedSugar: 0, totalFibre: 4.5, solubleFibre: 0.9, sodium: 2,
+    potassium: 160, magnesium: 18, calcium: 25, iron: 0.6, zinc: 0.3, phosphorus: 25, selenium: 0.5, iodine: 2,
+    vitaminC: 25, vitaminA: 5, vitaminE: 0.7, vitaminK: 15, folate: 24, vitaminB6: 0.06, thiamine: 0.03, riboflavin: 0.04, niacin: 0.5, vitaminD: 0, vitaminB12: 0
+  },
+  dressing: {
+    calories: 430, protein: 1.5, carbohydrates: 6.5, totalFat: 45.0, saturatedFat: 7.0, unsaturatedFat: 36.0,
+    sugar: 3.5, addedSugar: 2.5, totalFibre: 0.2, solubleFibre: 0, sodium: 850,
+    potassium: 75, calcium: 35, magnesium: 5, phosphorus: 40, iron: 0.3, zinc: 0.2, selenium: 1.5, iodine: 5,
+    vitaminE: 3.5, vitaminK: 45, vitaminA: 20, vitaminB12: 0.1, vitaminB6: 0.02, folate: 6, riboflavin: 0.03, niacin: 0.1, thiamine: 0.02, vitaminC: 0.5, vitaminD: 0.1
+  },
+  produce: {
+    calories: 40, protein: 1.0, carbohydrates: 9.0, totalFat: 0.2, saturatedFat: 0.05, unsaturatedFat: 0.15,
+    sugar: 6.0, addedSugar: 0, totalFibre: 2.2, solubleFibre: 0.5, sodium: 10,
+    potassium: 200, calcium: 25, magnesium: 15, phosphorus: 25, iron: 0.5, zinc: 0.2, selenium: 0.5, iodine: 2,
+    vitaminC: 15, vitaminA: 30, folate: 25, vitaminK: 10, vitaminE: 0.4, vitaminB6: 0.08, thiamine: 0.04, riboflavin: 0.04, niacin: 0.5, vitaminB12: 0, vitaminD: 0
+  },
+  meat: {
+    calories: 210, protein: 24.0, carbohydrates: 0, totalFat: 12.0, saturatedFat: 4.5, unsaturatedFat: 6.5,
+    sugar: 0, addedSugar: 0, totalFibre: 0, solubleFibre: 0, sodium: 65,
+    potassium: 310, phosphorus: 200, magnesium: 22, zinc: 4.5, iron: 2.2, selenium: 25, calcium: 12, iodine: 8,
+    vitaminB12: 2.2, niacin: 5.5, vitaminB6: 0.4, riboflavin: 0.2, thiamine: 0.1, folate: 8, vitaminA: 5, vitaminE: 0.2, vitaminK: 1.2, vitaminD: 0.1, vitaminC: 0
+  },
+  poultry: {
+    calories: 165, protein: 31.0, carbohydrates: 0, totalFat: 3.6, saturatedFat: 1.0, unsaturatedFat: 2.3,
+    sugar: 0, addedSugar: 0, totalFibre: 0, solubleFibre: 0, sodium: 74,
+    potassium: 256, magnesium: 29, calcium: 15, iron: 1.0, zinc: 1.0, phosphorus: 228, selenium: 27.6, iodine: 10,
+    vitaminB6: 0.6, vitaminB12: 0.34, niacin: 13.7, riboflavin: 0.12, thiamine: 0.07, folate: 4, vitaminA: 6, vitaminD: 0.1, vitaminE: 0.3, vitaminK: 0.3, vitaminC: 0
+  },
+  fish: {
+    calories: 140, protein: 20.0, carbohydrates: 0, totalFat: 6.0, saturatedFat: 1.2, unsaturatedFat: 4.5, omega3: 1.2,
+    sugar: 0, addedSugar: 0, totalFibre: 0, solubleFibre: 0, sodium: 60,
+    potassium: 380, phosphorus: 240, magnesium: 30, calcium: 15, iron: 0.8, zinc: 0.6, selenium: 36.5, iodine: 40,
+    vitaminB12: 3.0, vitaminD: 4.5, niacin: 8.5, vitaminB6: 0.5, riboflavin: 0.15, thiamine: 0.1, folate: 10, vitaminA: 25, vitaminE: 1.0, vitaminK: 0.5, vitaminC: 0
+  },
+  egg: {
+    calories: 155, protein: 12.6, carbohydrates: 1.1, totalFat: 10.6, saturatedFat: 3.3, unsaturatedFat: 6.5,
+    sugar: 1.1, addedSugar: 0, totalFibre: 0, solubleFibre: 0, sodium: 124,
+    potassium: 126, magnesium: 10, calcium: 50, iron: 1.2, zinc: 1.1, phosphorus: 172, selenium: 30.8, iodine: 49,
+    vitaminA: 149, vitaminD: 2.2, vitaminE: 1.0, vitaminB12: 1.1, riboflavin: 0.5, folate: 44, vitaminB6: 0.12, thiamine: 0.07, niacin: 0.06, vitaminK: 0.3, vitaminC: 0
+  },
+  nuts_seeds: {
+    calories: 580, protein: 20.0, carbohydrates: 20.0, totalFat: 50.0, saturatedFat: 7.0, unsaturatedFat: 41.0,
+    sugar: 4.5, addedSugar: 0, totalFibre: 8.0, solubleFibre: 1.5, sodium: 5,
+    potassium: 600, magnesium: 220, calcium: 100, iron: 3.5, zinc: 3.2, phosphorus: 450, selenium: 10, iodine: 2,
+    vitaminE: 12.0, folate: 80, vitaminB6: 0.3, thiamine: 0.4, riboflavin: 0.2, niacin: 3.0, vitaminK: 5.0, vitaminA: 2, vitaminB12: 0, vitaminC: 0.5, vitaminD: 0
+  },
+  dairy: {
+    calories: 60, protein: 3.2, carbohydrates: 4.8, totalFat: 3.2, saturatedFat: 2.0, unsaturatedFat: 1.0,
+    sugar: 4.8, addedSugar: 0, totalFibre: 0, solubleFibre: 0, sodium: 45,
+    potassium: 145, calcium: 120, magnesium: 11, phosphorus: 95, zinc: 0.4, selenium: 3.5, iodine: 30, iron: 0.05,
+    vitaminB12: 0.45, riboflavin: 0.18, vitaminA: 35, vitaminD: 1.2, folate: 5, vitaminB6: 0.04, thiamine: 0.04, niacin: 0.1, vitaminC: 1.0, vitaminE: 0.05, vitaminK: 0.2
+  },
+  cheese: {
+    calories: 300, protein: 18.0, carbohydrates: 2.0, totalFat: 24.0, saturatedFat: 15.0, unsaturatedFat: 7.5,
+    sugar: 1.5, addedSugar: 0, totalFibre: 0, solubleFibre: 0, sodium: 750,
+    calcium: 450, phosphorus: 320, potassium: 70, magnesium: 15, zinc: 2.8, selenium: 14, iron: 0.4, iodine: 30,
+    vitaminA: 180, vitaminB12: 1.4, riboflavin: 0.4, folate: 20, vitaminB6: 0.06, thiamine: 0.03, niacin: 0.2, vitaminD: 0.4, vitaminE: 0.3, vitaminK: 2.0, vitaminC: 0
+  },
+  beverage: {
+    calories: 0, protein: 0, carbohydrates: 0, totalFat: 0, saturatedFat: 0, unsaturatedFat: 0,
+    sugar: 0, addedSugar: 0, totalFibre: 0, solubleFibre: 0, sodium: 5,
+    potassium: 10, calcium: 5, magnesium: 2, phosphorus: 0, iron: 0, zinc: 0, selenium: 0, iodine: 0,
+    vitaminA: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0, folate: 0, vitaminB6: 0, thiamine: 0, riboflavin: 0, niacin: 0, vitaminE: 0, vitaminK: 0
+  },
+  starch: {
+    calories: 130, protein: 2.7, carbohydrates: 28.0, totalFat: 0.3, saturatedFat: 0.1, unsaturatedFat: 0.15,
+    sugar: 0.5, addedSugar: 0, totalFibre: 1.5, solubleFibre: 0.3, sodium: 2,
+    potassium: 120, magnesium: 25, phosphorus: 60, calcium: 10, iron: 0.8, zinc: 0.7, selenium: 8.0, iodine: 2,
+    thiamine: 0.15, niacin: 1.5, riboflavin: 0.03, vitaminB6: 0.1, folate: 35, vitaminE: 0.1, vitaminK: 0.2, vitaminA: 0, vitaminB12: 0, vitaminC: 0, vitaminD: 0
+  },
+  cereal: {
+    calories: 420, protein: 12.0, carbohydrates: 65.0, totalFat: 12.0, saturatedFat: 2.5, unsaturatedFat: 9.0,
+    sugar: 16.0, addedSugar: 10.0, totalFibre: 7.5, solubleFibre: 2.2, sodium: 120,
+    potassium: 350, magnesium: 95, phosphorus: 260, iron: 3.5, zinc: 2.5, calcium: 60, selenium: 15, iodine: 5,
+    thiamine: 0.4, riboflavin: 0.3, niacin: 4.0, vitaminB6: 0.3, folate: 60, vitaminE: 2.0, vitaminB12: 0, vitaminC: 0.5, vitaminA: 10, vitaminD: 0, vitaminK: 2
+  },
+  legume: {
+    calories: 160, protein: 8.5, carbohydrates: 25.0, totalFat: 3.0, saturatedFat: 0.4, unsaturatedFat: 2.3,
+    sugar: 2.0, addedSugar: 0, totalFibre: 7.0, solubleFibre: 2.0, sodium: 200,
+    potassium: 320, magnesium: 45, phosphorus: 140, calcium: 45, iron: 2.5, zinc: 1.4, selenium: 4.0, iodine: 3,
+    folate: 120, thiamine: 0.12, vitaminB6: 0.15, riboflavin: 0.06, niacin: 0.8, vitaminE: 0.5, vitaminK: 5.0, vitaminA: 5, vitaminB12: 0, vitaminC: 1.0, vitaminD: 0
+  },
+  pastry: {
+    calories: 410, protein: 8.0, carbohydrates: 46.0, totalFat: 21.0, saturatedFat: 12.0, unsaturatedFat: 8.0,
+    sugar: 11.0, addedSugar: 6.5, totalFibre: 2.5, solubleFibre: 0.5, sodium: 450,
+    potassium: 120, calcium: 40, iron: 2.2, magnesium: 16, phosphorus: 105, zinc: 0.8, selenium: 18.0, iodine: 12,
+    thiamine: 0.35, riboflavin: 0.22, niacin: 2.4, folate: 70, vitaminA: 190, vitaminB6: 0.05, vitaminB12: 0.16, vitaminE: 0.9, vitaminK: 3.5, vitaminD: 0.2, vitaminC: 0.2
+  },
+  dessert: {
+    calories: 450, protein: 5.0, carbohydrates: 55.0, totalFat: 24.0, saturatedFat: 12.0, unsaturatedFat: 10.5,
+    sugar: 35.0, addedSugar: 30.0, totalFibre: 2.0, solubleFibre: 0.4, sodium: 200,
+    potassium: 160, calcium: 60, iron: 1.8, magnesium: 25, phosphorus: 90, zinc: 0.7, selenium: 8.0, iodine: 10,
+    thiamine: 0.15, riboflavin: 0.18, niacin: 1.2, folate: 35, vitaminA: 90, vitaminB6: 0.04, vitaminB12: 0.2, vitaminE: 0.8, vitaminK: 2.5, vitaminD: 0.1, vitaminC: 0.2
+  },
+  general_dish: {
+    calories: 150, protein: 7.0, carbohydrates: 18.0, totalFat: 5.5, saturatedFat: 1.8, unsaturatedFat: 3.2,
+    sugar: 3.5, addedSugar: 1.0, totalFibre: 2.0, solubleFibre: 0.5, sodium: 320,
+    potassium: 220, calcium: 40, magnesium: 20, phosphorus: 90, iron: 1.2, zinc: 0.8, selenium: 8.0, iodine: 10,
+    folate: 25, vitaminC: 4.0, vitaminA: 35, vitaminB6: 0.12, vitaminB12: 0.3, thiamine: 0.08, riboflavin: 0.08, niacin: 1.2, vitaminE: 0.6, vitaminK: 8.0, vitaminD: 0.1
+  }
 };
 
 export function getFallbackCategoryProfile(query: string): Record<string, number> {
   const q = (query || '').toLowerCase();
   let base: Record<string, number> = { ...DEFAULT_CATEGORY_PROFILES.general_dish };
   if (/\b(beverage|drink|water|tea|coffee|soda)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.beverage };
+  else if (/\b(ranch|dressing|vinaigrette|mayo|mayonnaise|sauce|caesar|condiment|gravy|aioli|dip|pesto)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dressing };
+  else if (/\b(berr(?:y|ies)|strawberr(?:y|ies)|blueberr(?:y|ies)|raspberr(?:y|ies)|blackberr(?:y|ies)|cranberr(?:y|ies)|acai)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.berries };
+  else if (/\b(salads?|mix\s*leaves|mixed\s*leaves|salad\s*leaves|lettuce|spinach|kale|arugula|greens|romaine|cabbage|slaw|watercress)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.leafy_greens };
   else if (/\b(brownies?|cakes?|cookies?|chocolates?|cand(?:y|ies)|pies?|tarts?|fudge|desserts?|sweets?|biscuits?|puddings?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dessert };
-  else if (/\b(croissants?|pastr(?:y|ies)|danish(?:es)?|muffins?|donuts?|doughnuts?|brioche|scones?|puffs?|bakery|bakeries)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.pastry };
+  else if (/\b(croissants?|pastr(?:y|ies)|danish(?:es)?|muffins?|donuts?|doughnuts?|brioche|scones?|puffs?|bakery|bakeries|roll|swirl)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.pastry };
   else if (/\b(eggs?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.egg };
   else if (/\b(chicken|turkey|poultry)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.poultry };
   else if (/\b(fish|salmon|tuna|cod|shrimp|seafood)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.fish };
-  else if (/\b(beef|pork|steak|lamb|mutton|meat)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.meat };
+  else if (/\b(beef|pork|steak|lamb|mutton|meat|bacon)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.meat };
   else if (/\b(feta|cheddar|mozzarella|parmesan|cheese)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cheese };
   else if (/\b(milk|yogurt|yoghurt|greek|cream|butter|dairy)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dairy };
   else if (/\b(granola|muesli|oats?|cereals?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cereal };
   else if (/\b(chickpeas?|hummus|lentils?|beans?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.legume };
   else if (/\b(rice|bread|pasta|potatoe?s?|noodles?|starch)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.starch };
   else if (/\b(sesame|almonds?|walnuts?|cashews?|pistachios?|peanuts?|pecans?|hazelnuts?|seeds?|nuts?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.nuts_seeds };
-  else if (/\b(cucumbers?|tomatoe?s?|apples?|bananas?|berr(?:y|ies)|carrots?|salads?|spinach|lettuce|olives?|broccoli|vegetables?|fruits?|produce|clementines?|oranges?|citrus|mandarins?|tangerines?|lemons?|limes?|grapefruits?|grapes?|peaches?|plums?|pears?|mangoes?|mangos?|kiwis?|pineapples?|melons?|watermelons?|cantaloupes?|honeydews?|nectarines?|apricots?|cherries|cherry|figs?|dates?|raisins?|avocados?|onions?|peppers?|garlics?|mushrooms?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.produce };
+  else if (/\b(cucumbers?|tomatoe?s?|apples?|bananas?|carrots?|olives?|broccoli|vegetables?|fruits?|produce|clementines?|oranges?|citrus|mandarins?|tangerines?|lemons?|limes?|grapefruits?|grapes?|peaches?|plums?|pears?|mangoes?|mangos?|kiwis?|pineapples?|melons?|watermelons?|cantaloupes?|honeydews?|nectarines?|apricots?|cherries|cherry|figs?|dates?|raisins?|avocados?|onions?|peppers?|garlics?|mushrooms?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.produce };
 
   const fullProfile: Record<string, number> = {};
   for (const k of NUTRIENT_KEYS) {

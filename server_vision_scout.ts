@@ -104,7 +104,7 @@ STEP 3: COMPONENT DECOMPOSITION, CLINICAL QUERIES & LABELS
 - REALISTIC SEASONING RATIOS: Salt, baking soda, baking powder, yeast, and dry spices are potent by weight and are never a large share of a recipe's mass. For baked/dough items specifically, salt is typically only 1.5-2% of the flour weight — do NOT assign it a mass percentage anywhere near the flour or liquid components. As a general rule, a single seasoning component should rarely exceed ~2-3% of the total dish mass unless the item is literally a seasoning blend or condiment itself.
 - BRAND SEPARATION: Keep brand names in 'originalName' or 'chainName'. Do not mash brand names into the 'keyword' or 'searchQuery' for generic components unless it's a specific branded component (e.g., "Sainsbury oat").
 - COMPONENT DECOMPOSITION (< 15 items): Decompose cooked dishes into raw 'components' (volume % totaling 100%, including oils, dressings, and sauces). Set precise boundingBox2D [ymin, xmin, ymax, xmax].
-- PRECISE COUNTING & OCCLUSION: Pay close attention to item counts. Do not assume there is only one item just because they are stacked or overlapping (e.g. multiple croissants on a plate, overlapping slices of bread). Extract each distinct item or specify a combined mass/weight representation for the true quantity. If grouping multiple identical countable items into a single entry, you MUST prepend the count to the 'keyword' and 'originalName' (e.g., "2 butter croissants", "3 slices of bacon") so the quantity is unambiguous in the breakdown.
+- PRECISE COUNTING, BAG INSPECTION & OCCLUSION: Inspect inside open pastry bags, boxes, trays, or packaging for stacked, nested, or distinct items (e.g. a croissant resting on a cinnamon swirl/pain aux raisins) before treating a container as a single item. If multiple distinct baked goods or pastries are present, split them into individual items with realistic weights (e.g. Croissant ~65g, Danish/Swirl ~100g) rather than aggregating into an ambiguous category fallback. If grouping identical items, prepend count (e.g., "2 butter croissants").
 - COMPACT MODE (>= 15 items): Group high-density menus by category blocks or shelf rows.
 - PACKAGE LABELS (HARDENED FOR UK/EU & MULTI-COLUMN FORMATS):
   - PRESERVE BRAND IN COMPONENTS: If the user explicitly mentions a brand name for an ingredient (e.g., "Sainsbury oat"), you MUST preserve that brand name in the component's 'searchQuery' (e.g., "Sainsbury rolled oats" or "Sainsbury oat"). Do not strip the brand name from the component query.
@@ -519,6 +519,69 @@ export function resolvePackageAndContextItems(
   }
 
   return items.filter((_, idx) => !contextItemIndices.has(idx));
+}
+
+export const CONDIMENT_DRESSING_REGEX = /\b(ranch(?:\s+dressing)?|caesar(?:\s+dressing)?|vinaigrette|mayonnaise|mayo|salad\s+dressing|dressing|tahini|aioli|pesto|honey\s+mustard|blue\s+cheese\s+dressing|thousand\s+island|french\s+dressing|italian\s+dressing|gravy|sour\s+cream|guacamole|hummus|olive\s+oil|vinaigre|sauce)\b/i;
+
+export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: string) => void): void {
+  if (!item || !item.components || !Array.isArray(item.components) || item.components.length === 0) {
+    return;
+  }
+
+  const candidateIngredients: string[] = [];
+  if (item.ingredientsList && typeof item.ingredientsList === 'string') {
+    item.ingredientsList.split(/[,;\n•]+/).forEach((part: string) => {
+      const clean = part.replace(/[()\[\]{}]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (clean) candidateIngredients.push(clean);
+    });
+  }
+  if (Array.isArray(item.visualIngredients)) {
+    item.visualIngredients.forEach((v: any) => {
+      if (typeof v === 'string' && v.trim()) candidateIngredients.push(v.trim());
+    });
+  }
+
+  if (candidateIngredients.length === 0) return;
+
+  const currentCompNames = item.components.map((c: any) => {
+    return String(typeof c === 'string' ? c : (c.searchQuery || c.name || c.keyword || '')).toLowerCase();
+  });
+
+  const missingCondiments: string[] = [];
+  for (const ing of candidateIngredients) {
+    const match = ing.match(CONDIMENT_DRESSING_REGEX);
+    if (match) {
+      const matchedName = match[0].toLowerCase();
+      const alreadyPresent = currentCompNames.some((cName) => cName.includes(matchedName) || matchedName.includes(cName));
+      if (!alreadyPresent && !missingCondiments.some(m => m.toLowerCase().includes(matchedName))) {
+        missingCondiments.push(ing);
+      }
+    }
+  }
+
+  if (missingCondiments.length > 0) {
+    for (const missing of missingCondiments) {
+      const allocatedPct = 8;
+      const currentPctSum = item.components.reduce((acc: number, c: any) => acc + (Number(c.volumePercentage) || 0), 0) || 100;
+      const scaleFactor = (100 - allocatedPct) / currentPctSum;
+      
+      item.components.forEach((c: any) => {
+        if (typeof c === 'object' && c !== null) {
+          c.volumePercentage = Math.max(1, Math.round((Number(c.volumePercentage) || 0) * scaleFactor));
+        }
+      });
+
+      const newComp = {
+        searchQuery: missing.toLowerCase(),
+        volumePercentage: allocatedPct,
+        suggestedFdcId: null
+      };
+      item.components.push(newComp);
+      if (addDebugLog) {
+        addDebugLog(`[Label-to-Component Reconciliation] Injected detected dressing/condiment "${missing}" at ${allocatedPct}% volume into components for "${item.originalName || item.keyword}".`);
+      }
+    }
+  }
 }
 
 export function parseAndHealVisionScout(
@@ -1084,6 +1147,9 @@ export function parseAndHealVisionScout(
       visionScoutItems = resolvePackageAndContextItems(visionScoutItems, addDebugLog, userMessage, isCompareMode);
 
       for (const item of visionScoutItems) {
+        // Enforce Label-to-Component reconciliation for dressings/sauces/condiments detected via OCR or vision
+        reconcileIngredientsToComponents(item, addDebugLog);
+
         // Issue #6: Persistent Web Search Override on Generic Items.
         // Restrict queriesToSearch strictly to detected restaurant chains or packaged brand names (chainName !== null).
         if (item.chainName) {

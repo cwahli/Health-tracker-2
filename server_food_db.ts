@@ -183,6 +183,13 @@ export function setCachedUSDAFood(query: string, match: any): void {
 
 export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: number; protein: number; totalFat: number; saturatedFat: number; transFat: number; carbohydrates: number; sugar: number; sodium: number; potassium: number; totalFibre: number; vitaminC?: number; vitaminA?: number; calcium?: number; magnesium?: number; iron?: number; zinc?: number; folate?: number; vitaminB6?: number; vitaminD?: number; vitaminE?: number; vitaminK?: number; selenium?: number; phosphorus?: number; vitaminB12?: number; foodType: string }> = {
   plain_yogurt: { fdcId: "170903", calories: 61, protein: 3.47, totalFat: 3.25, saturatedFat: 2.09, transFat: 0, carbohydrates: 4.66, sugar: 4.66, sodium: 46, potassium: 155, totalFibre: 0, foodType: 'dairy' },
+  pain_au_raisin: { fdcId: "canonical_pain_au_raisin", calories: 355, protein: 6.2, totalFat: 14.5, saturatedFat: 8.5, transFat: 0.1, carbohydrates: 49.5, sugar: 21.0, sodium: 340, potassium: 160, totalFibre: 2.2, foodType: 'grain' },
+  cinnamon_swirl: { fdcId: "canonical_cinnamon_swirl", calories: 430, protein: 5.5, totalFat: 19.5, saturatedFat: 11.5, transFat: 0.1, carbohydrates: 55.0, sugar: 24.0, sodium: 320, potassium: 120, totalFibre: 1.8, foodType: 'grain' },
+  pain_au_chocolat: { fdcId: "canonical_pain_au_chocolat", calories: 414, protein: 7.1, totalFat: 23.5, saturatedFat: 13.8, transFat: 0.1, carbohydrates: 44.0, sugar: 14.5, sodium: 430, potassium: 130, totalFibre: 2.4, foodType: 'grain' },
+  almond_croissant: { fdcId: "canonical_almond_croissant", calories: 420, protein: 9.0, totalFat: 24.0, saturatedFat: 12.0, transFat: 0.1, carbohydrates: 42.0, sugar: 16.0, sodium: 380, potassium: 190, totalFibre: 3.0, foodType: 'grain' },
+  danish_pastry: { fdcId: "172836", calories: 374, protein: 6.0, totalFat: 20.0, saturatedFat: 9.2, transFat: 0.1, carbohydrates: 43.0, sugar: 18.0, sodium: 320, potassium: 110, totalFibre: 1.5, foodType: 'grain' },
+  apple_turnover: { fdcId: "canonical_apple_turnover", calories: 330, protein: 3.5, totalFat: 17.0, saturatedFat: 8.0, transFat: 0.1, carbohydrates: 42.0, sugar: 16.0, sodium: 280, potassium: 90, totalFibre: 1.6, foodType: 'grain' },
+  raisin_bread: { fdcId: "172689", calories: 274, protein: 7.9, totalFat: 4.2, saturatedFat: 0.9, transFat: 0, carbohydrates: 52.4, sugar: 15.6, sodium: 342, potassium: 204, totalFibre: 3.1, foodType: 'grain' },
   raisins: { fdcId: "169641", calories: 299, protein: 3.07, totalFat: 0.46, saturatedFat: 0.05, transFat: 0, carbohydrates: 79.18, sugar: 59.19, sodium: 11, potassium: 749, totalFibre: 3.7, foodType: 'fruit' },
   almonds: { fdcId: "170567", calories: 579, protein: 21.15, totalFat: 49.93, saturatedFat: 3.8, transFat: 0, carbohydrates: 21.55, sugar: 4.35, sodium: 1, potassium: 733, totalFibre: 12.5, foodType: 'nut' },
   croissant: { fdcId: "172242", calories: 406, protein: 8.2, totalFat: 21.0, saturatedFat: 11.66, transFat: 0.16, carbohydrates: 45.8, sugar: 11.26, sodium: 467, potassium: 118, totalFibre: 2.6, foodType: 'processed' },
@@ -319,9 +326,38 @@ export function lookupCanonicalBaseFood(name: string): any | null {
 
   if (normalized.includes('doughnut') || normalized.includes('donut')) return CANONICAL_BASE_FOODS.fried_ring_doughnut;
 
-  if (normalized.includes('raisin')) return CANONICAL_BASE_FOODS.raisins;
+  // Specific compound pastries & baked goods (checked before single-ingredient keywords)
+  if (normalized.includes('pain au raisin') || normalized.includes('pain aux raisins') || normalized.includes('escargot pastry') || (normalized.includes('raisin') && (normalized.includes('pastry') || normalized.includes('swirl') || normalized.includes('danish') || normalized.includes('roll') || normalized.includes('bun')))) {
+    return CANONICAL_BASE_FOODS.pain_au_raisin;
+  }
+  if (normalized.includes('pain au chocolat') || normalized.includes('chocolatine') || (normalized.includes('chocolate') && normalized.includes('croissant'))) {
+    return CANONICAL_BASE_FOODS.pain_au_chocolat;
+  }
+  if (normalized.includes('almond croissant') || (normalized.includes('almond') && (normalized.includes('croissant') || normalized.includes('pastry')))) {
+    return CANONICAL_BASE_FOODS.almond_croissant;
+  }
+  if (normalized.includes('cinnamon swirl') || normalized.includes('cinnamon roll') || normalized.includes('cinnamon bun') || normalized.includes('cinnamon pastry')) {
+    return CANONICAL_BASE_FOODS.cinnamon_swirl;
+  }
+  if (normalized.includes('apple turnover') || normalized.includes('chausson aux pommes') || (normalized.includes('apple') && normalized.includes('turnover'))) {
+    return CANONICAL_BASE_FOODS.apple_turnover;
+  }
+  if (normalized.includes('danish pastry') || (normalized.includes('danish') && !normalized.includes('cheese') && !normalized.includes('ham'))) {
+    return CANONICAL_BASE_FOODS.danish_pastry;
+  }
+  if (normalized.includes('raisin bread') || normalized.includes('raisin toast') || normalized.includes('raisin bagel')) {
+    return CANONICAL_BASE_FOODS.raisin_bread;
+  }
+
+  const isBakedOrCompositeContext = /\b(bread|toast|bagel|muffin|bran|cookie|scone|cereal|pastry|swirl|cake|roll|bun|pie|tart|loaf|croissant|flour|milk|butter)\b/i.test(normalized);
+
+  if (!isBakedOrCompositeContext && normalized.includes('raisin')) {
+    return CANONICAL_BASE_FOODS.raisins;
+  }
   
-  if (normalized.includes('almond')) return CANONICAL_BASE_FOODS.almonds;
+  if (!isBakedOrCompositeContext && normalized.includes('almond')) {
+    return CANONICAL_BASE_FOODS.almonds;
+  }
   
   if (normalized.includes('croissant')) return CANONICAL_BASE_FOODS.croissant;
   

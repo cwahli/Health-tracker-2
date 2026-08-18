@@ -32,31 +32,45 @@ import { toPendingFoodLog } from './mealBuild/adapters';
 
 function extractPendingFoodLogFromCleanResult(cleanResult: any, photoUrl?: string): any {
   if (!cleanResult) return null;
-  if (cleanResult.pendingFoodLog) return cleanResult.pendingFoodLog;
-  if (cleanResult.foodData) return cleanResult.foodData;
-  if (cleanResult.mealBuild) return toPendingFoodLog(cleanResult.mealBuild);
-  if (cleanResult.data && typeof cleanResult.data === 'object' && (cleanResult.data.itemsBreakdown || cleanResult.data.name || cleanResult.data.nutrients)) {
-    return cleanResult.data;
+  let log: any = null;
+  
+  if (cleanResult.pendingFoodLog) {
+    log = cleanResult.pendingFoodLog;
+  } else if (cleanResult.foodData) {
+    log = cleanResult.foodData;
+  } else if (cleanResult.mealBuild) {
+    log = toPendingFoodLog(cleanResult.mealBuild);
+  } else if (cleanResult.data && typeof cleanResult.data === 'object' && (cleanResult.data.itemsBreakdown || cleanResult.data.name || cleanResult.data.nutrients)) {
+    log = cleanResult.data;
+  } else {
+    const items = cleanResult.scoutItems || cleanResult.itemsBreakdown || cleanResult.items || [];
+    if (items.length > 0 || cleanResult.name || cleanResult.title) {
+      log = {
+        itemsBreakdown: items,
+        items: items,
+        nutrients: cleanResult.nutrients || {},
+        name: cleanResult.name || cleanResult.title || 'Meal',
+        title: cleanResult.name || cleanResult.title || 'Meal',
+        benefits: cleanResult.benefits || [],
+        risks: cleanResult.risks || [],
+        recommendation: cleanResult.recommendation || '',
+        verdict: cleanResult.verdict || '',
+        message: cleanResult.message || cleanResult.text || '',
+        receiptTable: cleanResult.receiptTable,
+        weightGrams: cleanResult.weightGrams,
+        quantity: cleanResult.quantity
+      };
+    }
   }
-  const items = cleanResult.scoutItems || cleanResult.itemsBreakdown || cleanResult.items || [];
-  if (items.length > 0 || cleanResult.name || cleanResult.title) {
-    return {
-      itemsBreakdown: items,
-      items: items,
-      nutrients: cleanResult.nutrients || {},
-      name: cleanResult.name || cleanResult.title || 'Meal',
-      title: cleanResult.name || cleanResult.title || 'Meal',
-      benefits: cleanResult.benefits || [],
-      risks: cleanResult.risks || [],
-      recommendation: cleanResult.recommendation || '',
-      verdict: cleanResult.verdict || '',
-      message: cleanResult.message || cleanResult.text || '',
-      imageUrls: cleanResult.imageUrls || (photoUrl ? [photoUrl] : []),
-      photoUrl: photoUrl || cleanResult.photoUrl,
-      receiptTable: cleanResult.receiptTable,
-      weightGrams: cleanResult.weightGrams,
-      quantity: cleanResult.quantity
-    };
+
+  if (log) {
+    if (!log.imageUrls || log.imageUrls.length === 0) {
+      log.imageUrls = cleanResult.imageUrls || (photoUrl ? [photoUrl] : []);
+    }
+    if (!log.photoUrl) {
+      log.photoUrl = photoUrl || cleanResult.photoUrl;
+    }
+    return log;
   }
   return null;
 }
@@ -1140,7 +1154,7 @@ export default function App() {
                 });
 
                 if (serverJob.status === 'awaiting_user' || serverJob.status === 'succeeded' || serverJob.status === 'failed') {
-                  if (serverJob.clean_result === undefined) {
+                  if (serverJob.clean_result === undefined || (serverJob.clean_result && (serverJob.clean_result as any).is_r2)) {
                      const cachedJob = JobStore.getJob(job.id);
                      if (cachedJob && cachedJob.result && !cachedJob.result.is_r2) {
                         serverJob.clean_result = cachedJob.result;
@@ -2395,7 +2409,7 @@ export default function App() {
                 {
                   timeoutMs: forcePull ? 90000 : 60000,
                   skipFirebaseFallback: forcePull || checkQuotaFlag(),
-                  lastSyncTime: (forcePull || forceReplaceLocal || !parsedLocal.lastSyncedAt || !localBioHistory.length) ? undefined : (parsedLocal.lastSyncedAt || 0)
+                  lastSyncTime: (forcePull || forceReplaceLocal || !parsedLocal.lastSyncedAt) ? undefined : (parsedLocal.lastSyncedAt || 0)
                 }
               );
               v2Foods = serverFoods;

@@ -122,6 +122,63 @@ function normalizeNutritionKeys(obj: any) {
   return normalized;
 }
 
+function getSourceBadge(item: any) {
+  const isGenuineOcr = (item.dbSource === 'label' || (item.source === 'label' && !item.isComponentOfComposite)) && Boolean(item.rawNutritionLabel && !item.dbSource?.includes('fallback') && !item.dbSource?.includes('composite'));
+  const isBrand = item.dbSource === 'brand_official' || item.source === 'brand_official' || Boolean(item.chainName);
+  const isOFF = item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts';
+  const isFallback = item.dbSource === 'category_fallback' || item.dbSource === 'estimated' || String(item.dbId || '').startsWith('fallback_') || String(item.originalName || item.name || '').toLowerCase().includes('category fallback');
+  const isComposite = item.dbSource === 'composite' || item.isComposite || (Array.isArray(item.componentsDetailList || item.components) && (item.componentsDetailList || item.components).length >= 2);
+  const isUsda = (item.dbSource === 'usda' || item.dbSource === 'canonical_dict') && !isGenuineOcr && !isBrand && !isOFF && !isFallback && !isComposite;
+  const isVisual = item.source === 'visual' || item.isVisualIdentification || (!isGenuineOcr && !isBrand && !isOFF && !isUsda && !isFallback && !isComposite);
+
+  if (isBrand) {
+    return {
+      text: item.chainName ? `${item.chainName} Official` : 'Brand Official Menu',
+      className: 'bg-indigo-100/90 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+    };
+  }
+  if (isGenuineOcr) {
+    return {
+      text: 'Nutrition Facts (OCR Label)',
+      className: 'bg-emerald-100/90 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+    };
+  }
+  if (isOFF) {
+    return {
+      text: 'Open Food Facts',
+      className: 'bg-sky-100/90 dark:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800'
+    };
+  }
+  if (isComposite) {
+    return {
+      text: 'Composite',
+      className: 'bg-violet-100/90 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800'
+    };
+  }
+  if (isUsda) {
+    return {
+      text: 'USDA FoodData Central',
+      className: 'bg-blue-100/90 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+    };
+  }
+  if (isFallback) {
+    return {
+      text: 'Estimated: Category Baseline',
+      className: 'bg-amber-100/90 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+    };
+  }
+  if (isVisual) {
+    return {
+      text: 'Visual Identification',
+      className: 'bg-purple-100/90 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+    };
+  }
+  return {
+    text: 'Visual Identification',
+    className: 'bg-purple-100/90 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+  };
+}
+
 export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOpen = true, hideOwnToggle = false, language = "en" }: { activeScoutItems: any[], onConfirmItem?: (idx: any) => void, defaultOpen?: boolean, hideOwnToggle?: boolean, language?: string }) {
   const t = translations[language || "en"] || translations.en;
   let items = activeScoutItems;
@@ -232,17 +289,45 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
           compositeSiblings: siblings
         });
       });
-    } else {
-      const isMultiCompComposite = Array.isArray(subComps) && subComps.length >= 2;
-      const isItemRealTruth = (item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth)) && item.dbSource !== 'composite' && !isMultiCompComposite;
-      const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || (item.dbSource !== 'composite' && !isMultiCompComposite ? item.primaryBase100g : null);
-      const hasOwnExplicitLabel = Boolean(item.rawNutritionLabel && Object.keys(normalizeNutritionKeys(item.rawNutritionLabel) || {}).length > 0) || Boolean(isItemRealTruth && itemLabelSource);
-      if (hasOwnExplicitLabel) {
-        expandedItems.push({
-          ...item,
-          compositeSiblings: isMultiCompComposite ? allDishComps.filter(c => c !== item) : []
-        });
+    }
+
+    // Always include the top-level dish/item as well
+    const isMultiCompComposite = (Array.isArray(subComps) && subComps.length >= 2) || item.dbSource === 'composite';
+    const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients;
+    let itemRawLabel = item.rawNutritionLabel;
+    
+    if ((!itemRawLabel || Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length === 0) && itemLabelSource && typeof itemLabelSource === 'object') {
+      const cals = itemLabelSource.calories ?? itemLabelSource.energy;
+      if (cals != null && cals !== '') {
+        const isDishBasis = itemLabelSource.basisType === 'per_dish' || itemLabelSource.basisType === 'total' || itemLabelSource.basisType === 'per_portion' || itemLabelSource.basisType === 'per_serving' || itemLabelSource.basisType === 'per_pack';
+        const servingSizeStr = itemLabelSource.servingSizeGrams 
+          ? `${itemLabelSource.servingSizeGrams}g` 
+          : (isDishBasis ? `${item.estimatedWeightGrams || item.weightGrams || 100}g` : '100g');
+        const calNum = parseLabelCalories(cals) ?? Number(cals);
+        itemRawLabel = {
+          servingSize: servingSizeStr,
+          basisType: itemLabelSource.basisType || (isDishBasis ? 'per_dish' : 'per_100g'),
+          calories: !isNaN(calNum) ? `${calNum} kcal` : `${cals}`,
+          protein: itemLabelSource.protein != null ? `${itemLabelSource.protein}g` : undefined,
+          totalFat: (itemLabelSource.totalFat ?? itemLabelSource.fat) != null ? `${itemLabelSource.totalFat ?? itemLabelSource.fat}g` : undefined,
+          saturatedFat: itemLabelSource.saturatedFat != null ? `${itemLabelSource.saturatedFat}g` : undefined,
+          totalCarbohydrate: (itemLabelSource.totalCarbohydrate ?? itemLabelSource.carbohydrates ?? itemLabelSource.carbs) != null ? `${itemLabelSource.totalCarbohydrate ?? itemLabelSource.carbohydrates ?? itemLabelSource.carbs}g` : undefined,
+          sugar: itemLabelSource.sugar != null ? `${itemLabelSource.sugar}g` : (itemLabelSource.addedSugar != null ? `${itemLabelSource.addedSugar}g` : undefined),
+          addedSugar: itemLabelSource.addedSugar != null ? `${itemLabelSource.addedSugar}g` : undefined,
+          totalFibre: (itemLabelSource.totalFibre ?? itemLabelSource.fiber) != null ? `${itemLabelSource.totalFibre ?? itemLabelSource.fiber}g` : undefined,
+          sodium: itemLabelSource.sodium != null ? `${itemLabelSource.sodium}mg` : undefined,
+          salt: itemLabelSource.salt != null ? `${itemLabelSource.salt}g` : undefined
+        };
       }
+    }
+
+    if (itemRawLabel && Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length > 0) {
+      expandedItems.push({
+        ...item,
+        rawNutritionLabel: itemRawLabel,
+        dbSource: item.dbSource || (isMultiCompComposite ? 'composite' : (item.source === 'label' ? 'label' : 'visual')),
+        compositeSiblings: isMultiCompComposite ? allDishComps : []
+      });
     }
   });
 
@@ -262,13 +347,9 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
     let correctedRaw = normalizeNutritionKeys(parsedRaw);
     let correctedFacts = normalizeNutritionKeys(parsedFacts);
 
-    // Only build a displayed "label" from labelNutrientsPerServing when dbSource
-    // confirms it is real truth (OCR label or curated brand/chain data). Estimated or
-    // component-summed reference data must never render in the label card — it belongs
-    // only in the calculation table as clearly-marked estimates.
     const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
-    const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g;
-    if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && isRealTruth && labelSource) {
+    const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients;
+    if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && labelSource) {
       const source = labelSource;
       if (source && typeof source === 'object') {
         const cals = source.calories ?? source.energy;
@@ -276,7 +357,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
           const isDishBasis = source.basisType === 'per_dish' || source.basisType === 'total' || source.basisType === 'per_portion' || source.basisType === 'per_serving' || source.basisType === 'per_pack';
           const servingSizeStr = source.servingSizeGrams 
             ? `${source.servingSizeGrams}g` 
-            : (isDishBasis ? '1 dish' : '100g');
+            : (isDishBasis ? `${item.estimatedWeightGrams || item.weightGrams || 100}g` : '100g');
           const calNum = parseLabelCalories(cals) ?? Number(cals);
           correctedRaw = {
             servingSize: servingSizeStr,
@@ -410,20 +491,34 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
               return true;
             });
 
-            return (
-              <div
-                key={`nut-${i}`}
-                className="text-[10px] text-theme-text-secondary bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-theme-border/80"
-              >
-                <strong className="block text-slate-800 dark:text-slate-200 mb-2 font-display text-xs">
-                  {item.chainName ? (
-                    <>
-                      <span className="text-indigo-500 dark:text-indigo-400">{item.chainName}</span>
-                      {' · '}
-                    </>
-                  ) : null}
-                  {item.primaryBaseMatchName || item.labelProductName || item.scoutOriginalName || item.originalName || item.keyword}
-                </strong>
+              const rawTitle = item.primaryBaseMatchName || item.labelProductName || item.scoutOriginalName || item.originalName || item.keyword || 'Food Item';
+              const cleanTitle = String(rawTitle)
+                .replace(/^Estimated:\s*/i, '')
+                .replace(/\s*\(category fallback\)/gi, '')
+                .trim();
+              const sourceBadge = getSourceBadge(item);
+
+              return (
+                <div
+                  key={`nut-${i}`}
+                  className="text-[10px] text-theme-text-secondary bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-theme-border/80"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <strong className="block text-slate-800 dark:text-slate-200 font-display text-xs">
+                      {item.chainName ? (
+                        <>
+                          <span className="text-indigo-500 dark:text-indigo-400">{item.chainName}</span>
+                          {' · '}
+                        </>
+                      ) : null}
+                      {cleanTitle}
+                    </strong>
+                    {sourceBadge && (
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium shrink-0 ${sourceBadge.className}`}>
+                        {sourceBadge.text}
+                      </span>
+                    )}
+                  </div>
 
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 text-[10px]">
                   {item.isRealTruth && (
@@ -892,14 +987,42 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
       officialSubComps.forEach((comp) => {
         expandedItems.push(comp);
       });
-    } else {
-      const isMultiCompComposite = Array.isArray(subComps) && subComps.length >= 2;
-      const isItemRealTruth = (item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth)) && item.dbSource !== 'composite' && !isMultiCompComposite;
-      const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || (item.dbSource !== 'composite' && !isMultiCompComposite ? item.primaryBase100g : null);
-      const hasOwnExplicitLabel = Boolean(item.rawNutritionLabel && Object.keys(normalizeNutritionKeys(item.rawNutritionLabel) || {}).length > 0) || Boolean(isItemRealTruth && itemLabelSource);
-      if (hasOwnExplicitLabel) {
-        expandedItems.push(item);
+    }
+
+    const isMultiCompComposite = (Array.isArray(subComps) && subComps.length >= 2) || item.dbSource === 'composite';
+    const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients;
+    let itemRawLabel = item.rawNutritionLabel;
+    
+    if ((!itemRawLabel || Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length === 0) && itemLabelSource && typeof itemLabelSource === 'object') {
+      const cals = itemLabelSource.calories ?? itemLabelSource.energy;
+      if (cals != null && cals !== '') {
+        const isDishBasis = itemLabelSource.basisType === 'per_dish' || itemLabelSource.basisType === 'total' || itemLabelSource.basisType === 'per_portion' || itemLabelSource.basisType === 'per_serving' || itemLabelSource.basisType === 'per_pack';
+        const servingSizeStr = itemLabelSource.servingSizeGrams 
+          ? `${itemLabelSource.servingSizeGrams}g` 
+          : (isDishBasis ? `${item.estimatedWeightGrams || item.weightGrams || 100}g` : '100g');
+        const calNum = parseLabelCalories(cals) ?? Number(cals);
+        itemRawLabel = {
+          servingSize: servingSizeStr,
+          basisType: itemLabelSource.basisType || (isDishBasis ? 'per_dish' : 'per_100g'),
+          calories: !isNaN(calNum) ? `${calNum} kcal` : `${cals}`,
+          protein: itemLabelSource.protein != null ? `${itemLabelSource.protein}g` : undefined,
+          totalFat: (itemLabelSource.totalFat ?? itemLabelSource.fat) != null ? `${itemLabelSource.totalFat ?? itemLabelSource.fat}g` : undefined,
+          saturatedFat: itemLabelSource.saturatedFat != null ? `${itemLabelSource.saturatedFat}g` : undefined,
+          totalCarbohydrate: (itemLabelSource.totalCarbohydrate ?? itemLabelSource.carbohydrates ?? itemLabelSource.carbs) != null ? `${itemLabelSource.totalCarbohydrate ?? itemLabelSource.carbohydrates ?? itemLabelSource.carbs}g` : undefined,
+          sugar: itemLabelSource.sugar != null ? `${itemLabelSource.sugar}g` : (itemLabelSource.addedSugar != null ? `${itemLabelSource.addedSugar}g` : undefined),
+          addedSugar: itemLabelSource.addedSugar != null ? `${itemLabelSource.addedSugar}g` : undefined,
+          totalFibre: (itemLabelSource.totalFibre ?? itemLabelSource.fiber) != null ? `${itemLabelSource.totalFibre ?? itemLabelSource.fiber}g` : undefined,
+          sodium: itemLabelSource.sodium != null ? `${itemLabelSource.sodium}mg` : undefined,
+          salt: itemLabelSource.salt != null ? `${itemLabelSource.salt}g` : undefined
+        };
       }
+    }
+
+    if (itemRawLabel && Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length > 0) {
+      expandedItems.push({
+        ...item,
+        rawNutritionLabel: itemRawLabel
+      });
     }
   });
 
@@ -912,8 +1035,8 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
     let correctedRaw = normalizeNutritionKeys(parsedRaw);
 
     const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
-    const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g;
-    if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && isRealTruth && labelSource) {
+    const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients;
+    if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && labelSource) {
       const source = labelSource;
       if (source && typeof source === 'object') {
         const cals = source.calories ?? source.energy;
@@ -921,7 +1044,7 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
           const isDishBasis = source.basisType === 'per_dish' || source.basisType === 'total' || source.basisType === 'per_portion' || source.basisType === 'per_serving' || source.basisType === 'per_pack';
           const servingSizeStr = source.servingSizeGrams 
             ? `${source.servingSizeGrams}g` 
-            : (isDishBasis ? '1 dish' : '100g');
+            : (isDishBasis ? `${item.estimatedWeightGrams || item.weightGrams || 100}g` : '100g');
           const calNum = parseLabelCalories(cals) ?? Number(cals);
           correctedRaw = {
             servingSize: servingSizeStr,
@@ -947,16 +1070,6 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
     };
   });
 
-  return processedItems.some((item: any) => {
-    if (!item) return false;
-    if (!item.rawNutritionLabel || typeof item.rawNutritionLabel !== 'object') {
-      return false;
-    }
-    const keys = Object.keys(item.rawNutritionLabel).filter(k => !NON_NUTRIENT_LABEL_KEYS.has(k) && !NON_NUTRIENT_LABEL_KEYS.has(k.toLowerCase()));
-    if (keys.length === 0) return false;
-    return keys.some(k => {
-      const val = item.rawNutritionLabel[k];
-      return val !== undefined && val !== null && val !== '' && val !== '-' && val !== '--';
-    });
-  });
+  if (processedItems.length > 0) return true;
+  return Array.isArray(items) && items.length > 0;
 }

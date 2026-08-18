@@ -28,6 +28,7 @@ import sharp from 'sharp';
 import { pushTranslationsToSheets, pullTranslationsFromSheets } from './server_translations';
 import { buildFoodAnalyzeInstruction, buildModeAReviewInstruction, buildModeAEditInstruction, buildModeDCompareInstruction, buildModeDEditInstruction, } from './agents/index.js';
 import { ensureFoodCatalogSchema, resetFoodCatalogSchemaEnsure } from "./server_food_catalog_schema.js";
+import { reconcileIngredientsToComponents } from './server_vision_scout.js';
 import { resolveInternalFood, resolveDishCache, upsertFoodItemCandidate, upsertFoodAlias, upsertDishCacheCandidate, recordFoodObservation, recordSyncEvent, normalizeFoodKey, normalizeDishKey, getCatalogSyncStatus, mergeFoodCatalogItems, quarantineAtwaterFailures, checkAtwaterValidity, getFallbackCategoryProfile } from './server_food_catalog.js';
 import { sanitizeDishTitle, cleanupDuplicateBrandMenuItems, isGroceryBrandSync, selfCleanBrandDatabase, isUnofficialOrCompositeDish } from './serverBrandMenu.js';
 import {
@@ -5922,6 +5923,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
       if (!isTruthAnchored) {
         if (item.components && Array.isArray(item.components) && item.components.length > 0) {
         hasComponents = true;
+        reconcileIngredientsToComponents(item, addDebugLog);
 
         // L2: Incomplete multi-component assembly detection
         const itemNameStr = (item.originalName || item.keyword || item.name || '').toLowerCase();
@@ -6240,7 +6242,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             compLabel = `Estimated ${cleanName}`;
           } else if (sourceUpper === 'CANONICAL_DICT') {
             const cleanName = bestMatch.name ? bestMatch.name.replace(' (Canonical Base)', '') : query;
-            const dictFdcId = canonicalData && canonicalData.fdcId ? canonicalData.fdcId : null;
+            const dictFdcId = canonicalData && canonicalData.fdcId && !String(canonicalData.fdcId).startsWith('canonical_') && !isNaN(Number(canonicalData.fdcId)) ? canonicalData.fdcId : null;
             compLabel = dictFdcId
               ? `📖 [${cleanName}](https://fdc.nal.usda.gov/fdc-app.html#/food-details/${dictFdcId}/nutrients)`
               : `📖 ${cleanName}`;
@@ -8647,9 +8649,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             dbRefTag = `Printed Packaging Label (${cleanItemName})`;
           } else if (dbSourceUpper === 'BRAND_OFFICIAL') {
             dbRefTag = `Official Brand/Menu Data (${cleanItemName})`;
-          } else if (canonicalBase && canonicalBase.fdcId) {
+          } else if (canonicalBase && canonicalBase.fdcId && !String(canonicalBase.fdcId).startsWith('canonical_') && !isNaN(Number(canonicalBase.fdcId))) {
             dbRefTag = `📖 [${cleanItemName}](https://fdc.nal.usda.gov/fdc-app.html#/food-details/${canonicalBase.fdcId}/nutrients)`;
-          } else if (realFdcId) {
+          } else if (canonicalBase) {
+            dbRefTag = `📖 ${cleanItemName}`;
+          } else if (realFdcId && !String(realFdcId).startsWith('canonical_') && !isNaN(Number(realFdcId))) {
             dbRefTag = `[USDA #${realFdcId}](https://fdc.nal.usda.gov/fdc-app.html#/food-details/${realFdcId}/nutrients) (${cleanItemName})`;
           } else if (dbSourceUpper === 'OFF' && it.dbId) {
             dbRefTag = `[OFF #${it.dbId}](https://world.openfoodfacts.org/product/${it.dbId}) (${cleanItemName})`;
@@ -12718,7 +12722,7 @@ ${JSON.stringify(selectedBiomarkers, null, 2)}`;
               optimalMax: { type: Type.NUMBER },
               optimalRange: { type: Type.STRING },
               instrumentScale: { type: Type.STRING, description: "Valid allowable input range for questionnaires, e.g. '0 - 45' for GERD-SS, '0 - 40' for AUDIT" },
-              potentialDuplicateOf: { type: Type.STRING, description: "Canonical key if this biomarker is an abbreviation or duplicate of another entity, e.g. 'lactate_dehydrogenase' for 'ldh'" },
+              potentialDuplicateOf: { type: Type.STRING, description: "Canonical key ONLY if this biomarker is a non-standard abbreviation or duplicate of a DIFFERENT entity (e.g. 'lactate_dehydrogenase' for 'ldh'). Must be null or omitted if this is already the canonical biomarker itself." },
               duplicateFlagReason: { type: Type.STRING },
               allowedValues: {
                 type: Type.ARRAY,
@@ -12909,6 +12913,17 @@ ${JSON.stringify(selectedBiomarkers, null, 2)}`;
             } else if (k.startsWith('audit_')) {
               item.instrumentScale = '0 - 4';
               if (item.minRange === undefined || item.minRange === null) item.minRange = 0;
+            }
+          }
+
+          // Clean false positive self-duplicates (e.g. bmi -> bmi, rbc -> rbc, fasting_glucose -> fasting_glucose)
+          if (item.potentialDuplicateOf) {
+            const dupKey = String(item.potentialDuplicateOf).trim().toLowerCase();
+            const selfKey = k.trim().toLowerCase();
+            const selfName = (item.name || '').trim().toLowerCase();
+            if (dupKey === selfKey || dupKey === selfName || dupKey === '' || dupKey === 'null' || dupKey === 'none') {
+              item.potentialDuplicateOf = null;
+              item.duplicateFlagReason = null;
             }
           }
 
@@ -14380,13 +14395,6 @@ async function compressImagesInObject(obj: any, report: any): Promise<boolean> {
     if (isSupabaseConfigured) {
       fetchAllDatabaseBrands().then(async ({ allBrands }) => {
         console.log(`[BrandCache] Loaded ${allBrands.size} brands dynamically from database.`);
-        try {
-          const chainStats = await consolidateBrandMenuItemsAndChains(supabaseAdmin);
-          const catalogStats = await cleanUnbrandedFoodCatalog(supabaseAdmin);
-          console.log(`[SelfCleaning] Initial database maintenance complete:`, chainStats, catalogStats);
-        } catch (e) {
-          console.warn('[SelfCleaning] Startup maintenance warning:', e);
-        }
       }).catch((err) => {
         console.warn('[BrandCache] Warmup warning:', err);
       });

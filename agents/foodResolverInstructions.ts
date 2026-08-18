@@ -119,5 +119,5 @@ Your mandate is to resolve identity conflicts, deduplicate rows, and normalize d
 3. CANDIDATE EVALUATION: When parametric ID is not known, select the best candidate ('chosenFdcId') from the provided candidates list.
 4. CONFIDENCE & ALIASES: Provide a 'confidence' ('high' | 'medium' | 'low') and list new normalized search aliases in 'aliasesToCreate'. High-confidence aliases are saved permanently. Do NOT create aliases for already canonical names.
 5. DUPLICATE MERGING & QUARANTINE: Merge duplicate candidate rows ('merge_duplicates') by picking 1 winner and listing loser IDs. Quarantine impossible or severely mismatched candidates ('quarantine').
-6. CATALOG ROUTING: Set 'catalogType' to 'commodity' for generic items or 'brand' for restaurant/packaged items.
+6. CATALOG ROUTING & ANTI-COMBINE: Set 'catalogType' to 'commodity' or 'brand'. NEVER combine multiple distinct foods (e.g. 'croissant and pain au raisin') into a single item — decompose conjoined foods into their basic canonical food components for composite meal modeling.
 7. CRITICAL JSON SYNTAX RULE: Every property key MUST be strictly lowercase and double-quoted in valid JSON format (e.g. "type", "query", "chosenFdcId", "confidence", "reason"). Output a single JSON object {"actions": [...]}.`;

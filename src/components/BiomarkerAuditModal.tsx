@@ -1058,33 +1058,12 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                 {/* HEADER ACTIONS */}
                 <div className="flex items-center gap-2">
                   <button
+                    type="button"
                     onClick={() => handleSelectAllFixes(filteredCorruptedUnitItems)}
-                    className="text-xs text-slate-600 dark:text-slate-400 hover:underline px-2 py-1 font-semibold cursor-pointer"
+                    className="text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:underline px-2.5 py-1 font-semibold cursor-pointer"
                   >
                     Toggle All
                   </button>
-                  {targetAutoUnitItems.length > 0 && (
-                    <button
-                      onClick={() => setShowApplyConfirm(true)}
-                      disabled={Object.values(selectedFixKeys).filter(Boolean).length === 0}
-                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      Approve Auto Proposals ({Object.values(selectedFixKeys).filter(Boolean).length})
-                    </button>
-                  )}
-                  {targetAgentUnitItems.length > 0 && (
-                    <button
-                      onClick={() => {
-                        onClose();
-                        onLaunchUnitStandardization(targetAgentUnitKeys);
-                      }}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
-                    >
-                      <Bot className="w-3.5 h-3.5" />
-                      Ask Unit Relabel Agent ({targetAgentUnitKeys.length})
-                    </button>
-                  )}
                 </div>
               </div>
 

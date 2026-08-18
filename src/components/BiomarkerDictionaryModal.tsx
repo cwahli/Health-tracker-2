@@ -2718,7 +2718,11 @@ I can analyze these, compare them with our database keys, and find standard mapp
           updatesToApply[applyKey].dataType = item.dataType;
         }
         if (item.potentialDuplicateOf !== undefined && item.potentialDuplicateOf !== null && String(item.potentialDuplicateOf).trim() !== '') {
-          updatesToApply[applyKey].potentialDuplicateOf = item.potentialDuplicateOf;
+          const dupVal = String(item.potentialDuplicateOf).trim().toLowerCase();
+          const targetKey = applyKey.trim().toLowerCase();
+          if (dupVal !== targetKey && dupVal !== 'null' && dupVal !== 'none' && dupVal !== '') {
+            updatesToApply[applyKey].potentialDuplicateOf = item.potentialDuplicateOf;
+          }
         }
         if (item.standardMedicalGrouping !== undefined && item.standardMedicalGrouping !== null && String(item.standardMedicalGrouping).trim() !== '') {
           updatesToApply[applyKey].standardMedicalGrouping = item.standardMedicalGrouping;
@@ -5087,7 +5091,9 @@ I can analyze these, compare them with our database keys, and find standard mapp
                                       <td className="p-3 font-medium min-w-[140px]">
                                         <div className="font-bold text-slate-800 dark:text-slate-100">{item.name || item.key}</div>
                                         <div className="text-[10px] text-slate-400 font-mono">{item.key}</div>
-                                        {item.potentialDuplicateOf && (
+                                        {item.potentialDuplicateOf && 
+                                         String(item.potentialDuplicateOf).trim().toLowerCase() !== String(item.key || '').trim().toLowerCase() && 
+                                         String(item.potentialDuplicateOf).trim().toLowerCase() !== String(item.name || '').trim().toLowerCase() && (
                                           <div className="mt-1 flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800/60 font-sans">
                                             <span>⚠️ Potential duplicate of <span className="font-mono font-bold">{item.potentialDuplicateOf}</span> — will be flagged for Duplicate & Alias Group</span>
                                           </div>

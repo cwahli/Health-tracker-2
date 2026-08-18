@@ -73,9 +73,12 @@ jobsRouter.post('/api/jobs/submit', async (req, res) => {
             const r2Url = await uploadPhotoToR2(`${jobId}_${i}`, images[i]);
             if (r2Url && r2Url.startsWith('http')) {
               imageUrls.push(r2Url);
+            } else {
+              imageUrls.push(images[i]);
             }
           } catch (e) {
             console.error(`[POST /api/jobs/submit] Failed to upload image ${i} to R2`, e);
+            imageUrls.push(images[i]);
           }
         }
       }
@@ -161,7 +164,7 @@ jobsRouter.get('/api/jobs/status', async (req, res) => {
         const now = Date.now();
         const staleThresholdMs = 180000;
         const processedJobs = await Promise.all((data || []).map(async (job: any) => {
-          if (jobId && job.clean_result && typeof job.clean_result === 'object' && (job.clean_result as any).is_r2) {
+          if (job.clean_result && typeof job.clean_result === 'object' && (job.clean_result as any).is_r2) {
             try {
               const { fetchJobResultFromR2 } = await import('./src/utils/r2Storage.js');
               const r2Promise = fetchJobResultFromR2(job.id);

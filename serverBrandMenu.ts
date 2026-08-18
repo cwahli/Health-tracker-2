@@ -148,6 +148,9 @@ export function isUnofficialOrCompositeDish(
   return { isUnofficial: false };
 }
 
+let lastSelfCleanTime = 0;
+const SELF_CLEAN_THROTTLE_MS = 60 * 60 * 1000; // 1 hour
+
 export async function selfCleanBrandDatabase(
   supabaseAdmin: any,
   countryCode: string = 'GB',
@@ -158,6 +161,11 @@ export async function selfCleanBrandDatabase(
   updatedChainsCount: number;
   details: string[];
 }> {
+  const now = Date.now();
+  if (now - lastSelfCleanTime < SELF_CLEAN_THROTTLE_MS) {
+    return { removedUnofficialCount: 0, deletedDuplicatesCount: 0, updatedChainsCount: 0, details: [] };
+  }
+  lastSelfCleanTime = now;
   const log = addDebugLog || console.log;
   let removedUnofficialCount = 0;
   let deletedDuplicatesCount = 0;
@@ -498,6 +506,7 @@ export async function autoRegisterChainMenuItem(
         if (insertErr) {
           addDebugLog(`[AutoChainRegister] insert failed for "${dishName}": ${insertErr.message}`);
         } else {
+          invalidateBrandCache();
           addDebugLog(`[AutoChainRegister] Registered new dish "${dishName}" for chain "${chain_key}" with ${Object.keys(nutrients).length} official fields.`);
         }
       } else {
@@ -1022,6 +1031,7 @@ export function registerBrandMenuRoutes(app: Express) {
       if (error) {
         return runLocalFallback();
       }
+      invalidateBrandCache();
       res.json({ success: true, upserted: (data || []).length, items: data });
     } catch (err: any) {
       return runLocalFallback();
@@ -1087,6 +1097,7 @@ export function registerBrandMenuRoutes(app: Express) {
       try {
         await maybeMarkChainReady(supabaseAdmin, chain_key, country_code);
       } catch (_) {}
+      invalidateBrandCache();
       res.json({ success: true, item: { ...data, _source: 'supabase' }, parsed });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'paste failed' });
@@ -1857,7 +1868,7 @@ export async function cleanUnbrandedFoodCatalog(
 let cachedBrandSet: Set<string> | null = null;
 let cachedGroceryBrandSet: Set<string> | null = null;
 let lastBrandCacheTime = 0;
-const BRAND_CACHE_TTL_MS = 60000; // 1 minute TTL
+const BRAND_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours TTL
 
 export async function fetchAllDatabaseBrands(): Promise<{ allBrands: Set<string>; groceryBrands: Set<string> }> {
   const now = Date.now();
@@ -1999,7 +2010,15 @@ export function isGroceryBrandSync(text: string): boolean {
 
 let cachedAllBrandItems: any[] | null = null;
 let lastBrandItemsCacheTime = 0;
-const BRAND_ITEMS_CACHE_TTL_MS = 60000; // 1 minute TTL
+const BRAND_ITEMS_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours TTL
+
+export function invalidateBrandCache() {
+  cachedAllBrandItems = null;
+  cachedBrandSet = null;
+  cachedGroceryBrandSet = null;
+  lastBrandItemsCacheTime = 0;
+  lastBrandCacheTime = 0;
+}
 
 export async function fetchAllBrandMenuItems(): Promise<any[]> {
   const now = Date.now();
