@@ -1824,6 +1824,11 @@ export const FoodCard: React.FC<AgentCardProps & {
       }
     }
 
+    // If portion clarification is currently pending user selection, do not synthesize a premature pendingFoodLog
+    if (msg.data?.portionClarify || msg.data?.needsPortionClarify || (msg as any).portionClarify || (msg as any).needsPortionClarify) {
+      return null;
+    }
+
     const items = msg.data?.scoutItems || raw.scoutItems || raw.itemsBreakdown || raw.items || [];
     if (items.length > 0 || raw.name || raw.title) {
       return {
@@ -3287,12 +3292,25 @@ export const FoodCard: React.FC<AgentCardProps & {
                             </div>
                           );
                         })()}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 px-2.5 py-0.5 rounded-full font-bold font-sans">
-                            {msg.data?.pendingFoodLog.weightGrams}g ({msg.data?.pendingFoodLog.quantity})
-                          </span>
-                          <span className="font-mono text-[10px] text-slate-400">{msg.data?.pendingFoodLog.date}</span>
-                        </div>
+                        {(() => {
+                          const wGrams = msg.data?.pendingFoodLog?.weightGrams;
+                          const hasWeight = wGrams != null && !isNaN(Number(wGrams)) && Number(wGrams) > 0;
+                          const rawQty = msg.data?.pendingFoodLog?.quantity;
+                          const hasQty = !!rawQty && String(rawQty).trim() !== '' && String(rawQty).trim() !== 'undefined' && String(rawQty).trim() !== 'null';
+                          const dt = msg.data?.pendingFoodLog?.date;
+                          if (!hasWeight && !hasQty && !dt) return null;
+                          return (
+                            <div className="flex flex-wrap items-center gap-2">
+                              {(hasWeight || hasQty) && (
+                                <span className="text-[11px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 px-2.5 py-0.5 rounded-full font-bold font-sans">
+                                  {hasWeight ? `${wGrams}g` : ''}
+                                  {hasQty ? (hasWeight ? ` (${rawQty})` : `${rawQty}`) : ''}
+                                </span>
+                              )}
+                              {dt && <span className="font-mono text-[10px] text-slate-400">{dt}</span>}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {((msg.content && msg.content !== 'null') || (msg.data?.agentResult?.message && msg.data?.agentResult?.message !== 'null')) && (

@@ -24,6 +24,36 @@ describe('detectPortionAmbiguity & buildPortionClarifyPayload', () => {
     expect(res?.options.some((o) => o.weightGrams === 38)).toBe(true);
   });
 
+  it('correctly labels Whole pack as actual pack weight (85g) when label is per 100g', () => {
+    const item = {
+      scoutIndex: 1,
+      originalName: 'Southern Style Chicken Bites',
+      keyword: 'southern fried chicken bites',
+      estimatedWeightGrams: 85,
+      rawNutritionLabel: {
+        servingSize: '100g',
+        calories: '210 kcal',
+        protein: '19.0g',
+        totalFat: '9.5g',
+        totalCarbohydrate: '12g',
+      },
+    };
+    const res = detectPortionAmbiguity(item, 1);
+    expect(res).not.toBeNull();
+    expect(res?.name).toBe('Southern Style Chicken Bites');
+    // Whole pack option should be 85g, NOT 100g
+    const wholePackOpt = res?.options.find((o) => o.label.startsWith('Whole pack'));
+    expect(wholePackOpt).toBeDefined();
+    expect(wholePackOpt?.weightGrams).toBe(85);
+    expect(wholePackOpt?.label).toBe('Whole pack (85g)');
+
+    // 100g option should be labeled as nutrition panel basis
+    const panelOpt = res?.options.find((o) => o.weightGrams === 100);
+    expect(panelOpt).toBeDefined();
+    expect(panelOpt?.label).toContain('100g');
+    expect(panelOpt?.label).not.toContain('Whole pack');
+  });
+
   it('builds generic multi-item clarification payload when multiple foods have ambiguous portions', () => {
     const items = [
       {

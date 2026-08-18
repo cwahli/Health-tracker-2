@@ -226,8 +226,9 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
     }
 
     const cleanJobId = String(jobId).trim();
+    const rawJobId = cleanJobId.replace(/^clarify_/, '');
     const { getInMemoryServerJob } = await import('./serverJobs.js');
-    let job: any = getInMemoryServerJob(cleanJobId);
+    let job: any = getInMemoryServerJob(cleanJobId) || getInMemoryServerJob(rawJobId);
 
     if (!job) {
       const { isSupabaseConfigured } = await import('./src/utils/supabaseClient.js');
@@ -237,7 +238,7 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
           let query = supabaseAdmin
             .from('agent_jobs')
             .select('*')
-            .eq('id', cleanJobId);
+            .in('id', [cleanJobId, rawJobId]);
           if (userId && String(userId) !== 'anonymous') {
             query = query.eq('user_id', String(userId));
           }

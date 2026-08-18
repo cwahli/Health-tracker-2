@@ -1,11 +1,15 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-18
-**Status:** ALL GATES & REGRESSION SUITES GREEN (562 tests across 61 test suites)
+**Status:** ALL GATES & REGRESSION SUITES GREEN (604 tests across 62 test suites)
 **Governance & Laws:** Follow `docs/agent/` domain rules and ship code via AI Studio only.
 
 ---
 ## Current Status & Verification
+- **Portion Ambiguity & Food Logging Fixes (2026-08-18)**:
+  - Fixed "Whole pack" portion option mislabeling: `detectPortionAmbiguity` in `server_portion_clarify.ts` now uses actual detected package net weight (`detectPackNetWeightGrams`, front-of-pack OCR, protein-ratio deduction, or scout item estimate) so a pack of 80g/85g is correctly labeled `Whole pack (85g)` (or 80g), and the per-100g nutrition panel basis is clearly labeled `100g (nutrition panel basis)` instead of falsely claiming 100g is the whole pack.
+  - Fixed `g ()` empty quantity rendering in `src/components/chat-cards/FoodCard.tsx`: Guarded weight and quantity rendering with strict null/undefined checks and prevented synthesizing a premature `pendingFoodLog` while `needsPortionClarify` or `portionClarify` is active.
+  - Enhanced `/api/jobs/debug` in `server_routes_jobs.ts` to automatically strip `clarify_` prefix on lookup, ensuring debug report exports always resolve cleanly.
 - **`scripts/assert-biomarker-ingest.mjs`**: Exit 0 (N1–N13 Master Ingest Assertions Passed)
 - **`scripts/assert-biomarker-lifecycle-m31.mjs`**: Exit 0 (P0–P8 Master Biomarker Lifecycle Assertions Passed)
 - **`scripts/assert-free-tier-complete.mjs`**: Exit 0 (M23–M28 Master Free-Tier Reliability Assertions Passed)

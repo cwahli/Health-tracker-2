@@ -56,6 +56,64 @@ function hasEnoughLabelFields(raw: any): boolean {
   return filled >= 4;
 }
 
+export function detectPackNetWeightGrams(item: any): number | null {
+  if (!item) return null;
+  // 1. Explicit package weight fields
+  if (item.packageWeightGrams != null && Number(item.packageWeightGrams) > 0) {
+    return Math.round(Number(item.packageWeightGrams));
+  }
+  if (item.netWeightGrams != null && Number(item.netWeightGrams) > 0) {
+    return Math.round(Number(item.netWeightGrams));
+  }
+  if (item.packWeight != null && Number(item.packWeight) > 0) {
+    return Math.round(Number(item.packWeight));
+  }
+
+  const raw = item.rawNutritionLabel || {};
+  const rawServing = String(raw.servingSize || raw.serving || '').trim();
+  const rawServingGrams = parseServingGramsFromLabel(rawServing);
+  if (rawServingGrams && rawServingGrams > 0 && rawServingGrams !== 100) {
+    if (/\b(?:pack|pot|bag|tub|pouch|can|bottle|container)\b/i.test(rawServing)) {
+      return Math.round(rawServingGrams);
+    }
+  }
+
+  const name = String(item.originalName || item.keyword || item.name || '').trim();
+  const ing = String(item.ingredientsList || item.ingredients || '').trim();
+  const blob = `${name} ${ing} ${String(item.keyword || '')} ${JSON.stringify(raw)}`;
+
+  // 2. Front of pack net weight OCR: e.g. "80g", "85g", "net weight 80g", "e 85g", "80 g e"
+  const netMatch = blob.match(/\b(?:net\s*wt\.?|net\s*weight|pack\s*size|netto|weight|e\s*|\b)(\d{2,3})\s*(?:g|grams)\b(?:\s*e\b)?/i);
+  if (netMatch) {
+    const parsedG = parseInt(netMatch[1], 10);
+    if (parsedG >= 25 && parsedG <= 500 && parsedG !== 100) {
+      return parsedG;
+    }
+  }
+
+  // 3. Front of pack printed protein deduction against per-100g label
+  // e.g. "16.2g Protein" on front and 19.0g Protein per 100g on label -> 16.2 / 19.0 * 100 = 85.2g
+  const frontProteinMatch = blob.match(/\b(\d+(?:\.\d+)?)\s*g\s*protein\b/i);
+  const labelProtein = raw.protein ? parseFloat(String(raw.protein).replace(/[^0-9.]/g, '')) : null;
+  if (frontProteinMatch && labelProtein && labelProtein > 5 && rawServingGrams === 100) {
+    const frontProtein = parseFloat(frontProteinMatch[1]);
+    if (frontProtein > 0 && Math.abs(frontProtein - labelProtein) > 0.5) {
+      const derived = Math.round((frontProtein / labelProtein) * 100);
+      if (derived >= 25 && derived <= 500) {
+        return derived;
+      }
+    }
+  }
+
+  // 4. Scout estimatedWeightGrams
+  const estW = Math.round(Number(item.estimatedWeightGrams) || 0);
+  if (estW > 0 && estW <= 500) {
+    return estW;
+  }
+
+  return null;
+}
+
 /**
  * Multi-serve grocery packs, multipacks, or items with ambiguous unit counts.
  * Single-serve pots (yogurt ~215g) with clear container size are NOT ambiguous.
@@ -119,46 +177,96 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
     (ssG === 100 &&
       w > 0 &&
       w < 100 &&
-      /\b(beef|chicken|ham|turkey|cheese|salmon|bacon|meat|fish|salad)\b/i.test(nameL));
+      /\b(beef|chicken|ham|turkey|cheese|salmon|bacon|meat|fish|salad|bites)\b/i.test(nameL));
 
   if (!(ssG === 100 && looksMultiServePack)) {
     return null;
   }
 
-  const unit =
-    servings != null && servings >= 2 && servings <= 12
-      ? Math.max(5, Math.round(100 / servings))
-      : 25;
-  const maxN =
-    servings != null && servings >= 2 && servings <= 12 ? servings : Math.max(2, Math.round(100 / unit));
+  const detectedPackWeight = detectPackNetWeightGrams(item) || w || 100;
+  const isActual100gPack = detectedPackWeight === 100;
 
   const options: PortionOption[] = [];
   const seen = new Set<number>();
-  for (let n = 1; n <= maxN; n++) {
-    const grams = unit * n;
-    if (grams > 500) break;
-    if (seen.has(grams)) continue;
-    seen.add(grams);
-    let label: string;
-    if (n === 1) label = `1 slice / portion (${grams}g)`;
-    else if (n === maxN && grams === 100) label = `Whole pack (${grams}g)`;
-    else if (n === maxN) label = `All servings (${grams}g)`;
-    else label = `${n} slices / portions (${grams}g)`;
-    options.push({ id: `n${n}_${grams}`, label, weightGrams: grams });
-  }
 
-  // Always offer whole 100g panel pack when unit math didn't land on 100
-  if (!seen.has(100)) {
-    options.push({ id: 'pack_100', label: 'Whole pack / 100g (panel)', weightGrams: 100 });
-    seen.add(100);
+  // If we know the actual pack weight (e.g. 80g or 85g)
+  if (detectedPackWeight > 0 && detectedPackWeight !== 100) {
+    // 1. Offer the actual whole pack
+    options.push({
+      id: `pack_${detectedPackWeight}`,
+      label: `Whole pack (${detectedPackWeight}g)`,
+      weightGrams: detectedPackWeight,
+    });
+    seen.add(detectedPackWeight);
+
+    // 2. Portion fractions based on actual pack size or servings
+    if (servings != null && servings >= 2 && servings <= 12) {
+      const sliceGrams = Math.max(5, Math.round(detectedPackWeight / servings));
+      for (let n = 1; n < servings; n++) {
+        const grams = sliceGrams * n;
+        if (!seen.has(grams) && grams > 0) {
+          seen.add(grams);
+          const label = n === 1 ? `1 slice / portion (${grams}g)` : `${n} slices / portions (${grams}g)`;
+          options.push({ id: `n${n}_${grams}`, label, weightGrams: grams });
+        }
+      }
+    } else {
+      const half = Math.round(detectedPackWeight / 2);
+      if (half >= 15 && !seen.has(half)) {
+        seen.add(half);
+        options.push({ id: `half_${half}`, label: `Half pack (${half}g)`, weightGrams: half });
+      }
+      const quarter = Math.round(detectedPackWeight / 4);
+      if (quarter >= 15 && !seen.has(quarter)) {
+        seen.add(quarter);
+        options.push({ id: `quarter_${quarter}`, label: `1/4 pack (${quarter}g)`, weightGrams: quarter });
+      }
+    }
+
+    // 3. Always offer 100g as the panel reference (clearly labeled as panel basis)
+    if (!seen.has(100)) {
+      seen.add(100);
+      options.push({
+        id: 'panel_100',
+        label: '100g (nutrition panel basis)',
+        weightGrams: 100,
+      });
+    }
+  } else {
+    // Pack weight is 100g or unknown
+    const unit =
+      servings != null && servings >= 2 && servings <= 12
+        ? Math.max(5, Math.round(100 / servings))
+        : 25;
+    const maxN =
+      servings != null && servings >= 2 && servings <= 12 ? servings : Math.max(2, Math.round(100 / unit));
+
+    for (let n = 1; n <= maxN; n++) {
+      const grams = unit * n;
+      if (grams > 500) break;
+      if (seen.has(grams)) continue;
+      seen.add(grams);
+      let label: string;
+      if (n === 1) label = `1 slice / portion (${grams}g)`;
+      else if (n === maxN && grams === 100) label = `Whole pack (${grams}g)`;
+      else if (n === maxN) label = `All servings (${grams}g)`;
+      else label = `${n} slices / portions (${grams}g)`;
+      options.push({ id: `n${n}_${grams}`, label, weightGrams: grams });
+    }
+
+    if (!seen.has(100)) {
+      options.push({ id: 'pack_100', label: 'Whole pack / 100g (panel)', weightGrams: 100 });
+      seen.add(100);
+    }
   }
 
   if (w > 0 && !seen.has(w)) {
-    options.unshift({
+    options.push({
       id: `photo_${w}`,
       label: `Photo estimate (${w}g)`,
       weightGrams: w,
     });
+    seen.add(w);
   }
 
   if (options.length < 2) return null;
@@ -166,7 +274,7 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   return {
     scoutIndex,
     name,
-    estimatedWeightGrams: w || unit,
+    estimatedWeightGrams: detectedPackWeight || w || 100,
     labelServingGrams: ssG,
     options,
     reason:
