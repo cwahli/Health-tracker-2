@@ -2629,6 +2629,23 @@ export function isBiomarkerNeedingReview(
   return false;
 }
 
+export function isBiomarkerCorruptedUnit(
+  key: string,
+  profile: any,
+  activeHistory?: any[],
+  resolvedBiomarkers?: Record<string, any>,
+  allDefinitions?: any[]
+): boolean {
+  if (!key) return false;
+  const flagged = detectFlaggedTelemetryErrors(
+    resolvedBiomarkers || {},
+    profile,
+    activeHistory || [],
+    allDefinitions || biomarkerDefinitions
+  );
+  return flagged.some(f => f.key === key);
+}
+
 export function approvePendingBiomarker(biomarkerKey: string, targetCategory?: string) {
   // Dead store — callers must set profile.customBiomarkers[key].catalogApproved.
   try {

@@ -608,12 +608,12 @@ export function runGeneralizedBiomarkerAudit(
         else if (kLow.endsWith('_ug_l') || kLow.endsWith('_mcg_l')) { proposedUnit = 'ug/L'; reason = 'Extracted from key name unit suffix'; }
         else if (kLow.endsWith('_g_l') || kLow.endsWith('_g_per_l')) { proposedUnit = 'g/L'; reason = 'Extracted from key name unit suffix'; }
         else if (kLow.endsWith('_g_dl')) { proposedUnit = 'g/dL'; reason = 'Extracted from key name unit suffix'; }
-        else if (kLow.endsWith('_pg') || kLow.endsWith('_pg_ml')) { proposedUnit = 'pg'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_pg') || kLow.endsWith('_pg_ml')) { proposedUnit = 'pg/mL'; reason = 'Extracted from key name unit suffix'; }
         else if (kLow.endsWith('_ng_ml') || kLow.endsWith('_ng_dl')) { proposedUnit = 'ng/mL'; reason = 'Extracted from key name unit suffix'; }
         else if (kLow.endsWith('_fl')) { proposedUnit = 'fL'; reason = 'Extracted from key name unit suffix'; }
         else if (kLow.endsWith('_u_l') || kLow.endsWith('_iu_l')) { proposedUnit = 'U/L'; reason = 'Extracted from key name unit suffix'; }
-        else if (kLow.endsWith('_10_9_l') || kLow.endsWith('_10_9_per_l')) { proposedUnit = '10^9/L'; reason = 'Extracted from key name unit suffix'; }
-        else if (kLow.endsWith('_10_12_l') || kLow.endsWith('_10_12_per_l')) { proposedUnit = '10^12/L'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_10_9_l') || kLow.endsWith('_10_9_per_l') || kLow.endsWith('_10e9_l')) { proposedUnit = '10^9/L'; reason = 'Extracted from key name unit suffix'; }
+        else if (kLow.endsWith('_10_12_l') || kLow.endsWith('_10_12_per_l') || kLow.endsWith('_10e12_l')) { proposedUnit = '10^12/L'; reason = 'Extracted from key name unit suffix'; }
         else if (kLow.endsWith('_cm')) { proposedUnit = 'cm'; reason = 'Extracted from key name unit suffix'; }
         else if (kLow.endsWith('_kg') || kLow.includes('_kg_m2')) { proposedUnit = kLow.includes('_kg_m2') ? 'kg/m2' : 'kg'; reason = 'Extracted from key name unit suffix'; }
         else if (kLow.endsWith('_percent') || kLow.endsWith('_pct')) { proposedUnit = '%'; reason = 'Extracted from key name unit suffix'; }
@@ -625,7 +625,7 @@ export function runGeneralizedBiomarkerAudit(
         }
       }
 
-      if (proposedUnit) {
+      if (proposedUnit && proposedUnit !== currentUnit) {
         status = 'corrupted_unit';
         corruptedUnitProposal = {
           proposedUnit,
@@ -636,12 +636,12 @@ export function runGeneralizedBiomarkerAudit(
       } else if (tFlag && !isCorruptedUnit(currentUnit)) {
         status = 'corrupted_unit';
         corruptedUnitProposal = {
-          proposedUnit: currentUnit,
+          proposedUnit: '',
           sourceField: 'logHistory',
           confidence: 0.8,
           reason: tFlag.reason
         };
-      } else {
+      } else if (!proposedUnit || proposedUnit !== currentUnit) {
         status = 'corrupted_unit';
         corruptedUnitProposal = {
           proposedUnit: '',
@@ -737,14 +737,19 @@ export function runGeneralizedBiomarkerAudit(
       }
 
       if (bracketUnit && bracketUnit.toLowerCase() !== currentUnit.toLowerCase()) {
-        status = 'conflict';
-        const suggestedResolution = deriveConflictResolution(key, currentUnit, bracketUnit, def);
-        conflictInfo = {
-          declaredUnit: currentUnit,
-          bracketUnit,
-          optimalUnit: optimalUnit || undefined,
-          suggestedResolution
-        };
+        const uCurrent = currentUnit.toLowerCase().replace(/2/g, '²').replace(/3/g, '³').replace(/\^2/g, '²');
+        const uBracket = bracketUnit.toLowerCase().replace(/2/g, '²').replace(/3/g, '³').replace(/\^2/g, '²');
+        
+        if (uCurrent !== uBracket) {
+          status = 'conflict';
+          const suggestedResolution = deriveConflictResolution(key, currentUnit, bracketUnit, def);
+          conflictInfo = {
+            declaredUnit: currentUnit,
+            bracketUnit,
+            optimalUnit: optimalUnit || undefined,
+            suggestedResolution
+          };
+        }
       }
     }
 
