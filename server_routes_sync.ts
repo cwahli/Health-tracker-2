@@ -618,6 +618,15 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
           if (flaggedAt > 0) unionNotUsedBiomarkers[k] = { flaggedAt };
         });
 
+        const mergedDeletedBiomarkerLogIds = {
+          ...(existingData.profile?.deletedBiomarkerLogIds || {}),
+          ...(profile?.deletedBiomarkerLogIds || {})
+        };
+        const mergedDeletedFoodLogIds = {
+          ...(existingData.profile?.deletedFoodLogIds || {}),
+          ...(profile?.deletedFoodLogIds || {})
+        };
+
         const mergedProfile = profile
           ? {
               ...deepMergeObjectShallow(existingData.profile, profile, [
@@ -629,6 +638,8 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
               deletedCustomBiomarkerKeys: mergedDeletedCustomBiomarkerKeys,
               notUsedBiomarkers: unionNotUsedBiomarkers,
               deletedNotUsedBiomarkerKeys: mergedDeletedNotUsedBiomarkerKeys,
+              deletedFoodLogIds: mergedDeletedFoodLogIds,
+              deletedBiomarkerLogIds: mergedDeletedBiomarkerLogIds,
               targets: {
                 ...(existingData.profile?.targets || {}),
                 ...(profile.targets || {})

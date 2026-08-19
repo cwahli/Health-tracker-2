@@ -169,3 +169,8 @@
     - The AI Name Deduper agent was being given keys that the deterministic audit engine already identified as alias candidates (e.g. `egfr_mlmin173m2`, `red_blood_cell_count`, `basophil_count`).
     - Fixed `handleRunConsolidationAgent` (`BiomarkerDictionaryModal.tsx` L2892): Before building `selectedBiomarkerDetails`, collect all keys from `auditReport.duplicateGroups` (both `candidateAliases` and their `suggestedMasterKey`); filter them out of the agent's input.
     - Agent now only processes genuinely ambiguous cases that can't be resolved by stem/synonym matching.
+
+31. **BMI Auto-Logger Deletion Resilience**:
+    - Addressed a bug where deleted BMI values would resurrect upon a manual sync.
+    - **Root cause**: `med_log_bmi_init_` logs were explicitly skipped in `App.tsx` inside `saveAndSync` (`isUserTriggered` and `isAutoLog`), causing the "delete" sync state to only affect local state, and the next pull from the cloud would resurrect the log.
+    - **Fix**: Removed the hardcoded exclusion of `med_log_bmi_init_` in `saveAndSync`, allowing background deletion synchronization via the standard `deletedBiomarkerLogIds` tombstone map.

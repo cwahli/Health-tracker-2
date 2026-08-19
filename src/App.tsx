@@ -3746,7 +3746,6 @@ export default function App() {
     let finalBioToSave = currBioHistory;
     const now = Date.now();
     const isAutoLog = !!(specificUpdate?.isAutoLog || 
-      (specificUpdate?.type === 'biomarkerLog' && String(specificUpdate.targetId).startsWith('med_log_bmi_init_')) ||
       specificUpdate?.type === 'googleSteps');
 
     const foodImagesToSave: { id: string; imageUrl?: string; imageUrls?: string[] }[] = [];
@@ -3881,8 +3880,7 @@ export default function App() {
     // We only block background/automatic updates or if the database quota is explicitly exceeded.
     const isUserTriggered = specificUpdate && 
       specificUpdate.type !== 'googleSteps' && 
-      !specificUpdate.isAutoLog &&
-      !(specificUpdate.type === 'biomarkerLog' && String(specificUpdate.targetId).startsWith('med_log_bmi_init_'));
+      !specificUpdate.isAutoLog;
 
     // Intercept automatic writes if manual sync mode is enabled to save quota
     const isManualSyncOnly = localStorage.getItem('auto_sync_disabled') === 'true';
@@ -5145,18 +5143,25 @@ export default function App() {
     const targetLog = biomarkerHistory.find(b => b.id === id);
     if (!targetLog) return;
 
-    const remainingKeys = Object.keys(targetLog.biomarkers).filter(k => k !== key);
+    const canonicalKeyToDelete = (getMappedBiomarkerKey(key) || key).toLowerCase().replace(/[\s_]/g, '');
+    const keysToDelete = Object.keys(targetLog.biomarkers || {}).filter(k => {
+      const canK = (getMappedBiomarkerKey(k) || k).toLowerCase().replace(/[\s_]/g, '');
+      return k === key || canK === canonicalKeyToDelete || k.toLowerCase().replace(/[\s_]/g, '') === canonicalKeyToDelete;
+    });
+
+    const remainingKeys = Object.keys(targetLog.biomarkers || {}).filter(k => !keysToDelete.includes(k));
     
     if (remainingKeys.length > 0) {
+      const now = Date.now();
       const updatedHistory = biomarkerHistory.map(log => {
         if (log.id === id) {
           const newBiomarkers = { ...log.biomarkers };
-          delete newBiomarkers[key];
+          keysToDelete.forEach(k => delete newBiomarkers[k]);
           return {
             ...log,
             biomarkers: newBiomarkers,
             sync_state: 'update' as const,
-            updated_at: Date.now()
+            updated_at: now
           };
         }
         return log;

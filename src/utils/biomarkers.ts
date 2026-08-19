@@ -2001,8 +2001,12 @@ export function detectFlaggedTelemetryErrors(
       const diag = diagnoseTelemetryIssue(canonicalKey, name, targetVal, unit, range, entries);
       const autoFix = buildAutoFixProposal(canonicalKey, targetVal, range);
 
+      const prioritizedSamples = worstEntry && isBiomarkerValueImprobable(canonicalKey, typeof worstEntry.val === 'number' ? worstEntry.val : parseFloat(String(worstEntry.val)), range)
+        ? [`${worstEntry.date}: ${worstEntry.val}`, ...sampleStrs.filter(s => s !== `${worstEntry?.date}: ${worstEntry?.val}`).slice(0, 4)]
+        : sampleStrs.slice(0, 5);
+
       if (existing) {
-        sampleStrs.forEach(s => {
+        prioritizedSamples.forEach(s => {
           if (!existing.samples.includes(s)) existing.samples.push(s);
         });
         if (!existing.preciseCause && diag.preciseCause) {
@@ -2025,7 +2029,7 @@ export function detectFlaggedTelemetryErrors(
           preciseCause: diag.preciseCause,
           suggestedFix: diag.suggestedFix,
           badgeLabel: diag.badgeLabel,
-          samples: sampleStrs.slice(0, 5),
+          samples: prioritizedSamples,
           proposedAutoFix: autoFix
         });
       }
