@@ -32,6 +32,7 @@ import {
   decideLoop,
   emptyLoopState,
   fingerprintReds,
+  loopRefusedPayload,
   loopStopMessage,
   nextLoopState,
   type GoldenLoopState,
@@ -1359,74 +1360,6 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
       const { data, error } = await gcGet(id);
       if (error || !data) return res.status(404).json({ error: error || 'not found' });
       const board = await loadBoard(deps, id);
-      if (!board) return res.status(404).json({ error: 'scoreboard missing on R2' });
-
-      const scoutRaw = await getR2Text(deps, `${casePrefix(id)}/scout.json`);
-      let storedScout: any = null;
-      try {
-        storedScout = scoutRaw ? JSON.parse(scoutRaw) : null;
-      } catch {
-        storedScout = null;
-      }
-      const hasScout = normalizeScoutItems(storedScout).length > 0;
-      const attempts = await loadAttempts(deps, id);
-      const loopState = await loadLoopState(deps, id);
-      const lastHumanAttempt = [...attempts].reverse().find((a) => a.actor && a.actor !== 'system');
-      const lastAttemptAt = lastHumanAttempt?.at || null;
-      const hasNewAttemptSinceLastLoop = !!(
-        lastAttemptAt &&
-        loopState.lastLoopAt &&
-        Date.parse(lastAttemptAt) > Date.parse(loopState.lastLoopAt)
-      );
-
-      if (loopState.locked && !hasNewAttemptSinceLastLoop && req.body?.unlock !== true) {
-        return res.status(409).json({
-          error: loopStopMessage('locked'),
-          stopReason: 'locked',
-          allGreen: false,
-          iteration: data.iteration,
-        });
-      }
-
-      const beforePlan = studioLoopPlan(board.outcomes);
-      if (!beforePlan.mayLoop) {
-        const stop = beforePlan.stopReason || 'needs_new_analyze';
-        const stopped = nextLoopState(loopState, {
-          fingerprint: fingerprintReds({ outcomes: board.outcomes, omitAccept: true }),
-          stop,
-          pipelineRan: false,
-          attemptAt: lastAttemptAt,
-        });
-        stopped.locked = false;
-        await saveLoopState(deps, id, stopped);
-        return res.json({
-          id,
-          replayMode: board.replayMode || 'log',
-          allGreen: beforePlan.promoteGreen,
-          stopReason: stop,
-          canContinue: false,
-          pipelineSkipped: true,
-          message: beforePlan.instructions,
-          studioMayClaim: beforePlan.studioMayClaim,
-          iteration: data.iteration,
-        });
-      }
-
-      if (!hasScout) {
-        const stopped = nextLoopState(loopState, {
-          fingerprint: fingerprintReds({}),
-          stop: 'no_scout',
-          pipelineRan: false,
-          attemptAt: lastAttemptAt,
-        });
-        await saveLoopState(deps, id, stopped);
-        return res.status(409).json({
-          error: loopStopMessage('no_scout'),
-          stopReason: 'no_scout',
-          allGreen: false,
-        });
-      }
-
       const fixtureRaw = await getR2Text(deps, `${casePrefix(id)}/fixture.json`);
       let fixture: any = null;
       try {
@@ -1434,142 +1367,26 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
       } catch {
         fixture = null;
       }
-      const extraIssues = (board.outcomes || [])
-        .filter((o) => o.source === 'user')
-        .map((o) => String(o.label || ''));
-
-      const pipe = await runSkipScoutPipeline({
-        caseId: id,
-        scout: storedScout,
-        query: fixture?.query,
-      });
-      if (pipe.ok && pipe.foodLog) {
-        await putR2(deps, `${casePrefix(id)}/foodLog.json`, JSON.stringify(pipe.foodLog, null, 2), 'application/json');
-      }
-      if (pipe.logText) {
-        await putR2(deps, `${casePrefix(id)}/backend.live.log`, pipe.logText.slice(0, 400_000), 'text/plain');
-      }
-
-      const scored = scoreGoldenRun({
-        logText: pipe.logText || (await getR2Text(deps, `${casePrefix(id)}/backend.log`)) || '',
-        foodLog: pipe.foodLog || board.observedMeal,
-        scout: storedScout,
-        expectedMeal: board.expectedMeal,
-        extraIssues,
-        errorText: pipe.ok ? '' : pipe.errorText,
-        jobStatus: pipe.status,
-        replayMode: 'loop',
-        previousOutcomes: board.outcomes,
-      });
-
-      const meal = scored.meal;
-      const afterPlan = studioLoopPlan(scored.board.outcomes);
-      const fingerprint = fingerprintReds({
-        outcomes: scored.board.outcomes,
-        mealMisses: meal.misses,
-        journey: scored.board.journey,
-      });
-      const iteration = Math.min(
-        GOLDEN_LOOP_MAX_ITERS,
-        Math.max((data.iteration || 0) + 1, (loopState.pipelineRuns || 0) + 1)
-      );
-      const decision = decideLoop({
-        allGreen: afterPlan.promoteGreen || scored.summary.allGreen,
-        fingerprint,
-        previousFingerprints: loopState.fingerprints,
-        iteration,
-        maxIterations: GOLDEN_LOOP_MAX_ITERS,
-        transportFailed: !pipe.ok,
-        hasScout: true,
-        locked: loopState.locked && !hasNewAttemptSinceLastLoop,
-        hasNewAttemptSinceLastLoop,
-        mayLoop: afterPlan.mayLoop,
-      });
-
-      const stopReason = decision.action === 'stop' ? decision.reason : null;
-      const nextState = nextLoopState(loopState, {
-        fingerprint,
-        stop: stopReason,
-        pipelineRan: true,
-        attemptAt: lastAttemptAt,
-      });
-      await saveLoopState(deps, id, nextState);
-
-      board.outcomes = scored.board.outcomes;
-      board.observedMeal = scored.board.observedMeal;
-      board.journey = scored.board.journey;
-      board.invariants = scored.board.invariants;
-      board.replayMode = 'loop';
-      await putR2(deps, `${casePrefix(id)}/scoreboard.json`, JSON.stringify(board, null, 2), 'application/json');
-
-      const autoAttempt: GoldenAttempt = {
-        n: attempts.length + 1,
-        at: new Date().toISOString(),
-        actor: 'system',
-        tried: pipe.ok
-          ? 'skipScout pipeline replay from frozen scout (no Gemini scout)'
-          : `pipeline replay failed: ${pipe.errorText}`.slice(0, 2000),
-        learned: scored.summary.allGreen
-          ? 'Board is green on current code + catalog'
-          : `Still red: ${(scored.board.outcomes || [])
-              .filter((o) => o.pass === false)
-              .map((o) => o.id)
-              .slice(0, 8)
-              .join(', ')}`,
-        next: stopReason && stopReason !== 'green' ? loopStopMessage(stopReason) : 'If still red, change one thing, POST /attempt, then /loop again',
-        replaySummary: `pipeline ${pipe.ok ? 'ok' : 'fail'} · ${scored.summary.passCount} pass / ${scored.summary.failCount} fail`,
-      };
-      const nextAttempts = [...attempts, autoAttempt];
-      await putR2(deps, `${casePrefix(id)}/attempts.json`, JSON.stringify(nextAttempts, null, 2), 'application/json');
-
-      const status = scored.summary.allGreen
-        ? 'green'
-        : stopReason === 'max_iterations' || stopReason === 'no_progress'
-          ? 'stalled'
-          : data.status === 'promoted'
-            ? 'promoted'
-            : 'in_progress';
-      await gcUpdate(id, {
-        pass_count: scored.summary.passCount,
-        fail_count: scored.summary.failCount,
-        all_green: scored.summary.allGreen,
-        iteration,
-        status,
-        last_replay_at: nowIso(),
-        updated_at: nowIso(),
-      });
-
+      let filed: { tag_id?: string; public_n?: number } = {};
       try {
-        writeInboxCase({
-          jobId: data.job_id || id,
+        const { tryAutoFileGolden } = await import('./serverBugAutoFile.js');
+        const out = await tryAutoFileGolden({
+          caseId: id,
           title: data.title,
-          scout: storedScout,
-          journey: scored.board.journey || [],
-          d1Id: id,
+          query: fixture?.query,
+          jobId: data.job_id,
+          debugUrl: `${r2Base(deps)}/${casePrefix(id)}/scout.json`,
+          photoUrls: Array.isArray(fixture?.photos) ? fixture.photos : [],
+          outcomes: board?.outcomes,
+          mealMisses: (board?.outcomes || [])
+            .filter((o) => o.pass === false && /missing item/i.test(String(o.label || '')))
+            .map((o) => String(o.label || o.id || '')),
         });
-      } catch {
-        /* disk optional */
+        if (out?.tag_id) filed = { tag_id: out.tag_id, public_n: out.public_n };
+      } catch (autoErr: any) {
+        console.warn('[golden/loop] auto-file skipped:', autoErr?.message || autoErr);
       }
-
-      res.json({
-        id,
-        replayMode: 'loop',
-        allGreen: scored.summary.allGreen,
-        passCount: scored.summary.passCount,
-        failCount: scored.summary.failCount,
-        mealMisses: meal.misses,
-        outcomes: scored.board.outcomes,
-        journey: scored.board.journey,
-        status,
-        stopReason,
-        canContinue: decision.action === 'continue',
-        message: loopStopMessage(stopReason),
-        iteration,
-        remaining: Math.max(0, GOLDEN_LOOP_MAX_ITERS - iteration),
-        fingerprint,
-        pipelineOk: pipe.ok,
-        pipelineError: pipe.ok ? undefined : pipe.errorText,
-      });
+      return res.status(410).json(loopRefusedPayload(filed));
     } catch (e: any) {
       res.status(500).json({ error: e?.message || 'loop failed' });
     }

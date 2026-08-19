@@ -127,6 +127,21 @@ export function nextLoopState(
   };
 }
 
+/** Q-6.7 — POST /loop is not inner COMPLETE. */
+export function loopRefusedPayload(filed?: { tag_id?: string; public_n?: number }) {
+  return {
+    error: 'loop_refused',
+    stopReason: 'loop_refused' as const,
+    allGreen: false,
+    canContinue: false,
+    use: 'GET /api/bugs/next',
+    how_to_end: 'POST /api/bugs/:tagId/attempts { hyp, file, test, result, burned, note }',
+    message: 'POST /loop is not inner COMPLETE. Say Next bug. End every loop with /attempts.',
+    tag_id: filed?.tag_id || null,
+    public_id: filed?.public_n ? `#${filed.public_n}` : null,
+  };
+}
+
 export function loopStopMessage(reason: GoldenLoopStopReason | null): string {
   switch (reason) {
     case 'green':

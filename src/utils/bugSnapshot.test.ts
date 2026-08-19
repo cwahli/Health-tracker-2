@@ -87,6 +87,8 @@ describe('bugSnapshot', () => {
     });
     expect(b.identified_problems).toContain('Symptom');
     expect(b.r2_prefix).toBe('bugs/biomarker/t1');
+    expect(b.public_id).toBeTruthy();
+    expect(b.queue).toBe('ready');
   });
 
   it('parseDataUrl', () => {

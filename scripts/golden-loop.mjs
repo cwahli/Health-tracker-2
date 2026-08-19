@@ -18,6 +18,10 @@ const res = await fetch(`${base}/api/golden/cases/${encodeURIComponent(id)}/loop
 });
 const json = await res.json().catch(() => ({}));
 console.log(JSON.stringify(json, null, 2));
+if (res.status === 410 || json.error === 'loop_refused' || json.stopReason === 'loop_refused') {
+  console.error('POST /loop refused. Say Next bug (GET /api/bugs/next). End with POST /api/bugs/:id/attempts.');
+  process.exit(2);
+}
 if (json.allGreen || json.stopReason === 'green') process.exit(0);
 if (['max_iterations', 'no_progress', 'locked', 'transport', 'no_scout', 'needs_attempt'].includes(json.stopReason)) {
   process.exit(2);

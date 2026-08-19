@@ -917,6 +917,26 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
             updated_at: new Date().toISOString(),
           }).eq('id', jobId);
         }
+
+        try {
+          const { tryAutoFileJob } = await import('./serverBugAutoFile.js');
+          void tryAutoFileJob({
+            jobId,
+            status: 'succeeded',
+            kind,
+            text,
+            debugUrl: cleanResult.debugUrl,
+            photoUrls: pendingFoodLog?.imageUrls || (photoUrl ? [photoUrl] : []),
+            pendingFoodLog,
+            result: {
+              ...cleanResult,
+              pipelineErrors: finalPayload?.pipelineErrors,
+              scoutItems: finalPayload?.scoutItems || cleanResult.scoutItems,
+            },
+          }).catch((e: any) => console.warn('[ServerJobs] auto-file:', e?.message || e));
+        } catch (autoErr: any) {
+          console.warn('[ServerJobs] auto-file skipped:', autoErr?.message || autoErr);
+        }
       };
 
       if (persistSucceeded) {
@@ -1010,6 +1030,22 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         } catch (uErr) {
           console.error('[ServerJobs] Failed to update error state in Supabase:', uErr);
         }
+      }
+
+      try {
+        const { tryAutoFileJob } = await import('./serverBugAutoFile.js');
+        void tryAutoFileJob({
+          jobId,
+          status: 'failed',
+          kind,
+          text,
+          error: abortReason,
+          debugUrl: errorCleanResult.debugUrl,
+          photoUrls: photoUrl ? [photoUrl] : [],
+          result: errorCleanResult,
+        }).catch((e: any) => console.warn('[ServerJobs] auto-file fail path:', e?.message || e));
+      } catch (autoErr: any) {
+        console.warn('[ServerJobs] auto-file fail skipped:', autoErr?.message || autoErr);
       }
     }
   });

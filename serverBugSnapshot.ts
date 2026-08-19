@@ -38,6 +38,8 @@ import {
   prefillBug,
   sortReadyQueue,
 } from './src/utils/bugWorkItem';
+import { shouldHoldR2 } from './src/utils/bugAutoFile';
+import { tryAutoFileGolden, tryAutoFileJob } from './serverBugAutoFile.js';
 
 async function persistWorkItem(tagId: string, item: ReturnType<typeof hydrateWorkItem>): Promise<boolean> {
   try {
@@ -887,10 +889,21 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
             };
             await supabaseAdmin.from('issue_backlog').update({ payload: nextPayload }).eq('id', o.id);
             if (i >= 3 && p.reportId) {
-              // Cap: prune R2 for very old instances (beyond 3 previous)
+              // Cap: prune R2 for very old instances (beyond 3 previous) unless held
               const keys: string[] = [];
               if (Array.isArray(p.r2_shots)) for (const s of p.r2_shots) if (s?.key) keys.push(s.key);
               if (Array.isArray(p.r2_files)) for (const f of p.r2_files) if (f?.key) keys.push(f.key);
+              const holdWi = hydrateWorkItem(tagRow);
+              const held = shouldHoldR2(holdWi, [
+                p.reportId,
+                p.r2_prefix,
+                p.jobId || p.job_id,
+                ...keys,
+              ]);
+              if (held) {
+                log(`${BUG_SNAPSHOT_LOG} hold skip prune report=${p.reportId}`);
+                continue;
+              }
               for (const k of keys) await deleteR2Object(deps, k);
               await supabaseAdmin
                 .from('issue_backlog')
@@ -996,7 +1009,7 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       const r1 = await supabaseAdmin
         .from('issue_tags')
         .select(
-          'id, created_at, title, title_key, category, status, resolution_note, whats_still_open, identified_problems, comments, resolved_at'
+          'id, created_at, title, title_key, category, status, resolution_note, whats_still_open, identified_problems, comments, resolved_at, work_item'
         )
         .eq('status', 'to_fix')
         .order('created_at', { ascending: false })
@@ -1008,13 +1021,25 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
         const r2 = await supabaseAdmin
           .from('issue_tags')
           .select(
-            'id, created_at, title, title_key, category, status, resolution_note, whats_still_open, comments, resolved_at'
+            'id, created_at, title, title_key, category, status, resolution_note, whats_still_open, comments, resolved_at, work_item'
           )
           .eq('status', 'to_fix')
           .order('created_at', { ascending: false })
           .limit(100);
         tags = r2.data;
         error = r2.error;
+      }
+      if (error && /work_item/i.test(String(error.message || ''))) {
+        const r3 = await supabaseAdmin
+          .from('issue_tags')
+          .select(
+            'id, created_at, title, title_key, category, status, resolution_note, whats_still_open, comments, resolved_at'
+          )
+          .eq('status', 'to_fix')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        tags = r3.data;
+        error = r3.error;
       }
       if (error) return res.status(500).json({ error: error.message });
 
@@ -1039,6 +1064,7 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
 
       res.json({
         bugs,
+        unmatched: bugs.filter((b: any) => b.unmatched),
         count: bugs.length,
         note: 'Brief only. Use GET /api/bugs/:tagId/artifacts for deep fetch. Prefer GET /api/bugs/next.',
         generated_at: new Date().toISOString(),
@@ -1074,6 +1100,57 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       res.json({ empty: false, ...start });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'bugs next failed' });
+    }
+  });
+
+  /** GET /api/bugs/unmatched — auto-file that could not fingerprint-merge */
+  app.get('/api/bugs/unmatched', async (_req: Request, res: Response) => {
+    try {
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const r1 = await supabaseAdmin
+        .from('issue_tags')
+        .select('*')
+        .in('status', ['to_fix', 'in_progress'])
+        .limit(200);
+      if (r1.error) return res.status(500).json({ error: r1.error.message });
+      const unmatched = (r1.data || [])
+        .map((t: any) => briefFromTag({ ...t, identified_problems: readIdentifiedProblems(t) }))
+        .filter((b: any) => b.unmatched);
+      res.json({ unmatched, count: unmatched.length });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'unmatched failed' });
+    }
+  });
+
+  /** POST /api/bugs/auto-file — job finalize / golden reds */
+  app.post('/api/bugs/auto-file', async (req: Request, res: Response) => {
+    try {
+      const body = req.body || {};
+      const filed = body.caseId
+        ? await tryAutoFileGolden({
+            caseId: String(body.caseId),
+            title: body.title,
+            query: body.query || body.text,
+            jobId: body.job_id || body.jobId,
+            debugUrl: body.debug_url || body.debugUrl,
+            photoUrls: body.photo_urls || body.photoUrls,
+            outcomes: body.outcomes,
+            mealMisses: body.mealMisses,
+          })
+        : await tryAutoFileJob({
+            jobId: body.job_id || body.jobId,
+            status: body.status,
+            kind: body.kind,
+            text: body.text,
+            error: body.error,
+            debugUrl: body.debug_url || body.debugUrl,
+            photoUrls: body.photo_urls || body.photoUrls,
+            pendingFoodLog: body.pendingFoodLog,
+            result: body.result,
+          });
+      res.json(filed);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'auto-file failed' });
     }
   });
 
@@ -1183,6 +1260,49 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       res.json(buildStartPayload({ ...tag, work_item: item, id: tag.id }));
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'patch failed' });
+    }
+  });
+
+  /** POST /api/bugs/:tagId/attach — Flag / Snap Open #n (auto-match failed) */
+  app.post('/api/bugs/:tagId/attach', async (req: Request, res: Response) => {
+    try {
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const tag = await findTagByParam(supabaseAdmin, req.params.tagId);
+      if (!tag) return res.status(404).json({ error: 'not found' });
+      const body = req.body || {};
+      const jobId = String(body.job_id || body.jobId || '').trim() || null;
+      let debugUrl = body.debug_url || body.debugUrl || null;
+      let photoUrls: string[] = Array.isArray(body.photo_urls || body.photoUrls)
+        ? (body.photo_urls || body.photoUrls).map(String)
+        : [];
+      if (jobId && !debugUrl) {
+        const { data: job } = await supabaseAdmin
+          .from('agent_jobs')
+          .select('debug_url, photo_url, clean_result')
+          .eq('id', jobId)
+          .maybeSingle();
+        debugUrl = job?.debug_url || job?.clean_result?.debugUrl || debugUrl;
+        if (!photoUrls.length && job?.photo_url) photoUrls = [job.photo_url];
+      }
+      let item = hydrateWorkItem(tag);
+      item = appendEvidenceCommit(item, {
+        actor: 'you',
+        kind: 'snap',
+        summary: String(body.summary || jobId || 'attached evidence').slice(0, 200),
+        evidence: {
+          job_id: jobId,
+          debug_url: debugUrl,
+          photo_urls: photoUrls,
+          hold: true,
+        },
+        remaining: Array.isArray(body.remaining) ? body.remaining.map(String) : undefined,
+      });
+      item.unmatched = false;
+      if (jobId) item.hold_refs = [...new Set([...(item.hold_refs || []), jobId, debugUrl].filter(Boolean))] as string[];
+      await persistWorkItem(tag.id, item);
+      res.json(buildStartPayload({ ...tag, work_item: item, id: tag.id }));
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'attach failed' });
     }
   });
 
@@ -1311,7 +1431,7 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
 
       const { data: tag } = await supabaseAdmin
         .from('issue_tags')
-        .select('id, category')
+        .select('id, category, work_item, status')
         .eq('id', tagId)
         .maybeSingle();
       const cat = tag?.category || 'foodcart';
@@ -1326,6 +1446,23 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       if (p.r2_manifest_key) keys.push(p.r2_manifest_key);
       if (p.reportId) {
         keys.push(bugManifestKey(cat, tagId, p.reportId));
+      }
+
+      const holdWi = hydrateWorkItem(tag || {});
+      if (
+        shouldHoldR2(holdWi, [
+          p.reportId,
+          p.r2_prefix,
+          p.jobId || p.job_id,
+          issueId,
+          ...keys,
+        ])
+      ) {
+        return res.status(409).json({
+          error: 'held',
+          message: 'R2 stay until the work item is done. Do not prune while held.',
+          public_id: holdWi.public_n ? `#${holdWi.public_n}` : null,
+        });
       }
 
       let deleted = 0;

@@ -144,3 +144,14 @@ describe('formatGoldenShare', () => {
     expect(md).toContain('Photos: 6');
   });
 });
+
+describe('Q-6.7 loop refuse', () => {
+  it('points agents at Next bug instead of /loop', async () => {
+    const { loopRefusedPayload } = await import('./goldenLoop');
+    const p = loopRefusedPayload({ tag_id: 't', public_n: 18 });
+    expect(p.error).toBe('loop_refused');
+    expect(p.use).toBe('GET /api/bugs/next');
+    expect(p.public_id).toBe('#18');
+    expect(p.how_to_end).toMatch(/\/attempts/);
+  });
+});

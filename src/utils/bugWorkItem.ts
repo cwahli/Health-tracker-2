@@ -55,6 +55,7 @@ export type BugWorkItem = {
   commits: BugCommit[];
   current_evidence: BugEvidence | null;
   hold_refs: string[];
+  unmatched?: boolean;
 };
 
 export const CLASS_SEVERITY: Record<string, number> = {
@@ -64,9 +65,11 @@ export const CLASS_SEVERITY: Record<string, number> = {
   OPENING_WRONG: 40,
   SILENT_REPAIR: 50,
   CALL_BUDGET: 60,
+  INFRA_LATENCY: 65,
   F_1: 70,
   IDENTITY_FALSE_FRIEND: 80,
   CLONE_UI: 90,
+  UNMATCHED: 900,
 };
 
 export function emptyWorkItem(partial?: Partial<BugWorkItem>): BugWorkItem {
@@ -82,6 +85,7 @@ export function emptyWorkItem(partial?: Partial<BugWorkItem>): BugWorkItem {
     commits: [],
     current_evidence: null,
     hold_refs: [],
+    unmatched: false,
     ...partial,
   };
 }

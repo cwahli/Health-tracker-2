@@ -3,6 +3,8 @@
  * Pure browser/Node-safe utilities: R2 keys, DOM slim, a11y tree, browser console & network ring, digest budget, settings.
  */
 
+import { hydrateWorkItem, publicId } from './bugWorkItem';
+
 export const BUG_SNAPSHOT_SETTINGS_KEY = 'bug_snapshot_enabled';
 export const BUG_SNAPSHOT_MAX_SHOTS = 5;
 export const BUG_SNAPSHOT_LOG = '[BugSnapshot]';
@@ -738,8 +740,16 @@ export function briefFromTag(tag: any): {
   linked_count: number;
   r2_prefix: string;
   updated_at: string;
+  public_n: number;
+  public_id: string;
+  queue: string;
+  bug: string;
+  class: string | null;
+  occurrences: number;
+  unmatched: boolean;
 } {
   const comments = Array.isArray(tag.comments) ? tag.comments : [];
+  const wi = hydrateWorkItem(tag);
   return {
     id: tag.id,
     title: tag.title || '',
@@ -752,6 +762,13 @@ export function briefFromTag(tag: any): {
     linked_count: tag.linked_count ?? tag.linked_issues?.length ?? 0,
     r2_prefix: bugTagR2Prefix(tag.category || 'foodcart', tag.id),
     updated_at: tag.resolved_at || tag.created_at || new Date().toISOString(),
+    public_n: wi.public_n || 0,
+    public_id: publicId(wi, tag.id),
+    queue: wi.queue,
+    bug: wi.bug || '',
+    class: wi.class || null,
+    occurrences: wi.occurrences || tag.linked_count || 1,
+    unmatched: !!wi.unmatched,
   };
 }
 

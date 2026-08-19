@@ -37,6 +37,8 @@ jobsRouter.post('/api/jobs/delete', async (req, res) => {
   if (!jobId) {
     return res.status(400).json({ error: 'jobId is required' });
   }
+  // Q-6.6: diary/job delete must not prune R2 debug while a work item holds this job.
+  // This route only drops the agent_jobs row — R2 keys stay. Do not add DeleteObject here.
   try {
     await verifyFirebaseIdToken(req).catch(() => null);
     const { deleteInMemoryServerJob } = await import('./serverJobs.js');
