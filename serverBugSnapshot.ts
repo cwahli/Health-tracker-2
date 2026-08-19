@@ -1303,19 +1303,24 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
    */
   app.get('/api/bugs/:tagId/artifacts', async (req: Request, res: Response) => {
     try {
-      const tagId = req.params.tagId;
-      const reportId = String(req.query.reportId || '');
-      const name = String(req.query.name || 'manifest.json');
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const tag = await findTagByParam(supabaseAdmin, req.params.tagId);
+      if (!tag) return res.status(404).json({ error: 'tag not found' });
+      const tagId = tag.id;
+      let reportId = String(req.query.reportId || '');
+      let name = String(req.query.name || 'manifest.json');
       if (!reportId) return res.status(400).json({ error: 'reportId required' });
 
-      const { supabaseAdmin } = await import('./supabaseAdmin.js');
-      const { data: tag } = await supabaseAdmin
-        .from('issue_tags')
-        .select('id, category')
-        .eq('id', tagId)
+      // Dashboard used to pass issue_backlog.id; R2 folders use snapshot reportId.
+      const { data: issueRow } = await supabaseAdmin
+        .from('issue_backlog')
+        .select('id, payload')
+        .eq('id', reportId)
         .maybeSingle();
-      if (!tag) return res.status(404).json({ error: 'tag not found' });
+      if (issueRow?.payload?.reportId) reportId = String(issueRow.payload.reportId);
+
       const cat = tag.category || 'foodcart';
+      if (name === 'logs.txt') name = 'console.logs.txt';
 
       let key = `${bugReportR2Prefix(cat, tagId, reportId)}/${name.replace(/\.\./g, '')}`;
       // Allow full key if provided

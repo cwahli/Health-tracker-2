@@ -10,6 +10,8 @@ import {
   buildBugTriageUserPrompt,
   briefFromTag,
   parseDataUrl,
+  bugArtifactUrl,
+  evidencePhotoSrc,
   BUG_SNAPSHOT_MAX_SHOTS,
 } from './bugSnapshot';
 
@@ -21,6 +23,14 @@ describe('bugSnapshot', () => {
       'bugs/foodcart/tag-1/reports/rep-2/shot-01.jpg'
     );
     expect(sanitizePathSegment('a/b c!')).toMatch(/^a_b_c/);
+  });
+
+  it('evidence photos go through /api/bugs artifacts, not raw R2 keys', () => {
+    const key = 'bugs/Home/tag-1/reports/rep-2/shot-01.jpg';
+    expect(evidencePhotoSrc('tag-1', key)).toContain('/api/bugs/tag-1/artifacts');
+    expect(evidencePhotoSrc('tag-1', key)).toContain('reportId=rep-2');
+    expect(evidencePhotoSrc('tag-1', key)).toContain('key=bugs%2FHome');
+    expect(bugArtifactUrl('tag-1', 'rep-2', 'payload.json')).toContain('name=payload.json');
   });
 
   it('caps shots constant', () => {

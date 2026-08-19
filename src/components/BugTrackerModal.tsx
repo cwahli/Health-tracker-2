@@ -31,6 +31,7 @@ import { BugCategory } from '../utils/issueBacklog';
 import { AVAILABLE_LLMS } from '../utils/llm';
 import { saveAgentRequestLog } from '../utils/agentLogsTracker';
 import GoldenInboxPanel from './GoldenInboxPanel';
+import { bugArtifactUrl, evidencePhotoSrc } from '../utils/bugSnapshot';
 import {
   hydrateWorkItem,
   publicId,
@@ -124,8 +125,8 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
     return () => clearInterval(id);
   }, [analyzeModalTag]);
 
-  const artifactUrl = (tagId: string, reportId: string, name: string) =>
-    `/api/bugs/${tagId}/artifacts?reportId=${encodeURIComponent(reportId)}&name=${encodeURIComponent(name)}`;
+  const artifactUrl = (tagId: string, reportId: string, name: string, key?: string) =>
+    bugArtifactUrl(tagId, reportId, name, key);
 
   const viewTextArtifact = async (tagId: string, reportId: string, name: string) => {
     setArtifactLoading(true);
@@ -1330,10 +1331,19 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                               {photos.map((p, pIdx) => (
                                                 <div
                                                   key={pIdx}
-                                                  onClick={() => setLightboxImage({ url: p, caption: `Photo ${pIdx + 1} for ${commit.id || 'snap'}` })}
+                                                  onClick={() =>
+                                                    setLightboxImage({
+                                                      url: evidencePhotoSrc(selectedTag.id, p),
+                                                      caption: `Photo ${pIdx + 1} for ${commit.id || 'snap'}`,
+                                                    })
+                                                  }
                                                   className="w-20 h-20 rounded-xl bg-slate-800 border-2 border-indigo-500/40 hover:border-indigo-400 overflow-hidden cursor-pointer relative group flex items-end p-1 shadow-sm transition-transform active:scale-95"
                                                 >
-                                                  <img src={p} alt="evidence" className="absolute inset-0 w-full h-full object-cover" />
+                                                  <img
+                                                    src={evidencePhotoSrc(selectedTag.id, p)}
+                                                    alt="evidence"
+                                                    className="absolute inset-0 w-full h-full object-cover"
+                                                  />
                                                   <span className="relative text-[9px] font-bold bg-black/70 text-white px-1 rounded z-10">
                                                     {pIdx + 1}/{photos.length}
                                                   </span>
@@ -1422,7 +1432,9 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                   <div className="flex items-center gap-2 shrink-0">
                                     <button
                                       type="button"
-                                      onClick={() => viewTextArtifact(selectedTag.id, rep.id, 'payload.json')}
+                                      onClick={() =>
+                                        viewTextArtifact(selectedTag.id, rep.reportId || rep.id, 'payload.json')
+                                      }
                                       className="px-2 py-1 text-[10px] rounded-lg bg-slate-800 text-white/80 hover:bg-slate-700"
                                     >
                                       Payload

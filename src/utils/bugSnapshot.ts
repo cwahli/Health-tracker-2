@@ -54,6 +54,25 @@ export function bugShotKey(category: string, tagId: string, reportId: string, in
   return `${bugReportR2Prefix(category, tagId, reportId)}/shot-${n}.${ext}`;
 }
 
+/** Dashboard / agent fetch URL. Never use a raw `bugs/...` R2 key as an <img src>. */
+export function bugArtifactUrl(tagId: string, reportId: string, name: string, key?: string | null): string {
+  const q = new URLSearchParams({
+    reportId: String(reportId || ''),
+    name: String(name || 'manifest.json'),
+  });
+  if (key && String(key).startsWith('bugs/')) q.set('key', String(key));
+  return `/api/bugs/${encodeURIComponent(tagId)}/artifacts?${q.toString()}`;
+}
+
+export function evidencePhotoSrc(tagId: string, photo: string): string {
+  const p = String(photo || '');
+  if (/^https?:\/\//i.test(p) || p.startsWith('data:') || p.startsWith('/api/')) return p;
+  const name = p.split('/').pop() || 'shot-01.jpg';
+  const m = p.match(/\/reports\/([^/]+)\//);
+  const reportId = m?.[1] || '';
+  return bugArtifactUrl(tagId, reportId, name, p.startsWith('bugs/') ? p : null);
+}
+
 export function bugManifestKey(category: string, tagId: string, reportId: string): string {
   return `${bugReportR2Prefix(category, tagId, reportId)}/manifest.json`;
 }
