@@ -1240,6 +1240,8 @@ export default function BiomarkerDictionaryModal({
   selectedModelId,
   onChangeModelId
 }: BiomarkerDictionaryModalProps) {
+  const __perfMountStartTs = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+  const [__perfDisplay, __setPerfDisplay] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
   const allTelemetryFlags = useMemo(() => {
     return detectFlaggedTelemetryErrors(biomarkers || {}, profile, biomarkerHistory || [], biomarkerDefinitions);
@@ -1255,6 +1257,10 @@ export default function BiomarkerDictionaryModal({
     return () => {
       setActiveQueryId(null);
     };
+  }, []);
+  useEffect(() => {
+    const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+    __setPerfDisplay(`${(now - __perfMountStartTs).toFixed(0)}ms`);
   }, []);
   const [editMode, setEditMode] = useState<string | null>(null);
   const [showCombineModal, setShowCombineModal] = useState(false);
@@ -3511,7 +3517,14 @@ I can analyze these, compare them with our database keys, and find standard mapp
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-0">
       <div className="bg-theme-bg-card w-full h-full flex flex-col overflow-hidden">
-        
+        {__perfDisplay && (
+          <div
+            onClick={() => __setPerfDisplay(null)}
+            className="w-full bg-amber-500 text-black text-center text-xs font-bold py-2 px-3 shrink-0 cursor-pointer"
+          >
+            [PERF DIAGNOSTIC] Render took {__perfDisplay} — tap to dismiss
+          </div>
+        )}
         {/* MODAL HEADER */}
         <div className="p-4 sm:p-5 border-b border-theme-border flex justify-between items-center bg-slate-50 dark:bg-slate-900">
           <div className="flex items-center gap-3">
