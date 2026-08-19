@@ -5,7 +5,7 @@ import { translations } from '../utils/translations';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { TrendingUp, BarChart2, Calendar, EyeOff, Copy, Check } from 'lucide-react';
 import { toYYYYMMDD, formatTimelineDate } from '../utils/dateUtils';
-import { runGeneralizedBiomarkerAudit } from '../utils/biomarkerAuditEngine';
+import { getDuplicateAliasGroups } from '../utils/biomarkerAuditEngine';
 import { getBiomarkerStatus, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity } from '../utils/biomarkers';
 const parseTargetBounds = (targetStr: string | undefined, nutrientKey: string, defaultMin: number = 0, defaultMax: number = Infinity) => {
   if (!targetStr) return { min: defaultMin, max: defaultMax };
@@ -115,17 +115,17 @@ export default function TrendsTab({
   const t = translations[profile.language] || translations.en;
   const activeHistory = React.useMemo(() => (biomarkerHistory || []).filter(h => h.sync_state !== 'delete'), [biomarkerHistory]);
 
-  const auditReport = useMemo(() => {
-    return runGeneralizedBiomarkerAudit(profile?.customBiomarkers || {}, activeHistory || [], (profile as any)?.currentBiomarkers || {});
+  const duplicateGroups = useMemo(() => {
+    return getDuplicateAliasGroups(profile?.customBiomarkers || {}, activeHistory || [], (profile as any)?.currentBiomarkers || {});
   }, [profile?.customBiomarkers, activeHistory, profile]);
 
   const aliasKeysToHide = useMemo(() => {
     const keys = new Set<string>();
-    auditReport.duplicateGroups.forEach(g => {
+    duplicateGroups.forEach(g => {
       g.candidateAliases.forEach(a => keys.add(a));
     });
     return keys;
-  }, [auditReport]);
+  }, [duplicateGroups]);
   const activeFoodLogs = React.useMemo(() => (foodLogs || []).filter(f => f.sync_state !== 'delete'), [foodLogs]);
   const [selectedMetric, setSelectedMetric] = useState<string>(() => {
     return localStorage.getItem('trends_selected_metric') || 'calories';
@@ -184,7 +184,7 @@ export default function TrendsTab({
       const getBioVal = (k: string) => {
         if (!dayBio?.biomarkers) return undefined;
         if (dayBio.biomarkers[k] !== undefined) return dayBio.biomarkers[k];
-        const aliases = auditReport.duplicateGroups.find(g => g.suggestedMasterKey === k)?.candidateAliases || [];
+        const aliases = duplicateGroups.find(g => g.suggestedMasterKey === k)?.candidateAliases || [];
         for (const alias of aliases) {
           if (dayBio.biomarkers[alias] !== undefined) return dayBio.biomarkers[alias];
         }
@@ -260,7 +260,7 @@ export default function TrendsTab({
 
     return activeCompiled;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFoodLogs, activeHistory, selectedMetric, report, profile, auditReport, aliasKeysToHide]);
+  }, [activeFoodLogs, activeHistory, selectedMetric, report, profile, duplicateGroups, aliasKeysToHide]);
 
   const chartData = getChartData();
 
@@ -320,7 +320,7 @@ export default function TrendsTab({
         if (!aliasKeysToHide.has(k)) {
           allBioKeys.add(k);
         } else {
-          const master = auditReport.duplicateGroups.find(g => g.candidateAliases.includes(k))?.suggestedMasterKey;
+          const master = duplicateGroups.find(g => g.candidateAliases.includes(k))?.suggestedMasterKey;
           if (master) allBioKeys.add(master);
         }
       });
@@ -332,7 +332,7 @@ export default function TrendsTab({
       for (const log of sortedHistory) {
         let v = log.biomarkers[k];
         if (v === undefined) {
-          const aliases = auditReport.duplicateGroups.find(g => g.suggestedMasterKey === k)?.candidateAliases || [];
+          const aliases = duplicateGroups.find(g => g.suggestedMasterKey === k)?.candidateAliases || [];
           for (const alias of aliases) {
             if (log.biomarkers[alias] !== undefined) {
               v = log.biomarkers[alias];
@@ -375,7 +375,7 @@ export default function TrendsTab({
     
     return { nutrientAverages, bioAverages, allBioKeys: Array.from(allBioKeys) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFoodLogs, activeHistory, selectedMetric, summaryDays, report, profile, auditReport, aliasKeysToHide]);
+  }, [activeFoodLogs, activeHistory, selectedMetric, summaryDays, report, profile, duplicateGroups, aliasKeysToHide]);
   const summaryData = activeSubTab === 'summary' ? getSummaryData() : null;
   const nutrientDots = summaryData ? nutrientDefinitions.map(nut => {
     const value = summaryData.nutrientAverages[nut.key] || 0;

@@ -3,7 +3,10 @@ import {
   normalizeStemKey,
   getCanonicalBiomarkerStem,
   runGeneralizedBiomarkerAudit,
-  findCatalogDefinition
+  findCatalogDefinition,
+  extractUnitFromString,
+  normalizeUnitEquivalence,
+  deriveConflictResolution
 } from './biomarkerAuditEngine';
 import {
   normalizeBiomarkerName,
@@ -236,5 +239,58 @@ describe('Biomarker Audit & Deduplication Engine', () => {
     const report = runGeneralizedBiomarkerAudit(customBiomarkers, biomarkerHistory, {}, deletedCustomBiomarkerKeys);
     expect(report.duplicateGroups.length).toBe(0);
     expect(report.items.find(i => i.key === 'serum_alt')).toBeUndefined();
+  });
+
+  it('correctly extracts units with unicode superscripts and micro signs without truncation', () => {
+    expect(extractUnitFromString('100 mL/min/1.73m²')).toBe('mL/min/1.73m²');
+    expect(extractUnitFromString('> 90 mL/min/1.73m²')).toBe('mL/min/1.73m²');
+    expect(extractUnitFromString('18.5 - 24.9 kg/m²')).toBe('kg/m²');
+    expect(extractUnitFromString('4.5 - 11.0 10^9/L')).toBe('10^9/L');
+    expect(extractUnitFromString('0.37 - 0.50 L/L')).toBe('L/L');
+    expect(extractUnitFromString('120 - 160 g/dL')).toBe('g/dL');
+    expect(extractUnitFromString('kg')).toBe('kg');
+  });
+
+  it('correctly treats eGFR unit variations as equivalent with zero false conflicts', () => {
+    const u1 = normalizeUnitEquivalence('mL/min/1.73m²');
+    const u2 = normalizeUnitEquivalence('mL/min/1.73m2');
+    const u3 = normalizeUnitEquivalence('mL/min/1.73 m²');
+    const u4 = normalizeUnitEquivalence('mL/min/1.73m');
+    expect(u1).toBe(u2);
+    expect(u1).toBe(u3);
+    expect(u1).toBe(u4);
+
+    const customBiomarkers = {
+      egfr: {
+        name: 'eGFR',
+        unit: 'mL/min/1.73m²',
+        normalRange: '> 90 mL/min/1.73m²',
+        rangeBrackets: [
+          { range: '> 90 mL/min/1.73m²', label: 'Normal' },
+          { range: '60 - 89 mL/min/1.73m²', label: 'Mildly Decreased' }
+        ]
+      }
+    };
+    const report = runGeneralizedBiomarkerAudit(customBiomarkers, []);
+    const egfrItem = report.items.find(i => i.key === 'egfr');
+    expect(egfrItem?.status).not.toBe('conflict');
+    expect(egfrItem?.conflictInfo).toBeUndefined();
+  });
+
+  it('does NOT propose destructive auto-fixes converting valid body weight units into invalid/bracket strings', () => {
+    const customBiomarkers = {
+      ideal_body_weight: {
+        name: 'Ideal Body Weight (Target)',
+        unit: 'kg',
+        normalRange: 'Varies',
+        rangeBrackets: [
+          { range: '18.5 - 24.9 kg/m²', label: 'Normal BMI' }
+        ]
+      }
+    };
+    const report = runGeneralizedBiomarkerAudit(customBiomarkers, []);
+    const ibwItem = report.items.find(i => i.key === 'ideal_body_weight');
+    // Even if bracket mismatch is flagged as conflict, no destructive align_declared_to_brackets auto-fix proposal is created
+    expect(ibwItem?.conflictInfo?.suggestedResolution).toBeUndefined();
   });
 });

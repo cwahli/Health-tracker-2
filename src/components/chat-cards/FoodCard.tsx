@@ -3189,7 +3189,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                           </h4>
                         </div>
                         {(() => {
-                          const desc = msg.data?.pendingFoodLog?.description || msg.data?.agentResult?.description || (msg.data?.pendingFoodLog?.healthImpact && !msg.data.pendingFoodLog.healthImpact.includes("Contributes to daily macro") ? msg.data.pendingFoodLog.healthImpact : null);
+                          const desc = msg.data?.pendingFoodLog?.message || msg.data?.agentResult?.message || msg.data?.pendingFoodLog?.description || msg.data?.agentResult?.description || (msg.data?.pendingFoodLog?.healthImpact && !msg.data.pendingFoodLog.healthImpact.includes("Contributes to daily macro") ? msg.data.pendingFoodLog.healthImpact : null);
                           if (!desc) return null;
                           return (
                             <div className="text-[11.5px] text-slate-700 dark:text-slate-300 font-sans leading-relaxed bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/80 my-1 text-left w-full">
@@ -3439,8 +3439,10 @@ export const FoodCard: React.FC<AgentCardProps & {
                                 imageUrls: (logTarget.imageUrls && logTarget.imageUrls.length > 0)
                                   ? logTarget.imageUrls
                                   : (messageImages.length > 0 ? messageImages : undefined),
-                                verdict: logTarget.verdict || msg.data?.agentResult?.verdict,
-                                message: logTarget.message || msg.data?.agentResult?.message,
+                                verdict: logTarget.verdict || msg.data?.agentResult?.verdict || msg.data?.verdict,
+                                message: logTarget.message || msg.data?.agentResult?.message || msg.data?.message || logTarget.description || msg.data?.agentResult?.description || msg.data?.description,
+                                healthImpact: logTarget.healthImpact || msg.data?.agentResult?.healthImpact || msg.data?.healthImpact || msg.data?.agentResult?.data?.healthImpact,
+                                composition: logTarget.composition || msg.data?.agentResult?.composition || msg.data?.composition,
                                 chatTranscript: (messages || []).map((m: any) => ({
                                   role: m.role,
                                   content: m.content || '',

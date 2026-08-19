@@ -202,7 +202,6 @@ You MUST write the "message" narrative strictly using a 4-beat structure:
   "foodData": {
     "date": "2026-08-03",
     "name": "Grilled Salmon with Macaroni and Cheese, Avocado, and Lettuce",
-    "description": "Grilled salmon fillet served alongside macaroni and cheese, avocado chunks, and fresh lettuce greens.",
     "itemsBreakdown": [
       {
         "scoutIndex": 0,
@@ -257,7 +256,6 @@ const REQUIRED_OUTPUT_JSON_SCHEMA = `
   "foodData": {
     "date": "string (YYYY-MM-DD)",
     "name": "string (Meal title. Must match the singular/plural form of each item exactly as it appears in that item's own itemsBreakdown entry below — e.g. if itemsBreakdown lists a single item as 'Croissant', the title must say 'Croissant', not 'Croissants', and vice versa.)",
-    "description": "string (Short dish summary. Same singular/plural consistency rule as the title above.)",
     "itemsBreakdown": [
       {
         "scoutIndex": 0,

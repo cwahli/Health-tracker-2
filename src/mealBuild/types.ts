@@ -58,6 +58,8 @@ export interface MealFoodItem {
 
 export interface MealContent {
   name?: string;
+  description?: string;
+  healthImpact?: string;
   benefits?: string[];
   risks?: string[];
   recommendation?: string;
@@ -121,6 +123,10 @@ export interface MealBuild {
   weightGrams?: number;
   quantity?: number;
   basis_type?: string;
+  composition?: string;
+  message?: string;
+  description?: string;
+  healthImpact?: string;
   serving_grams?: number;
   updatedAt?: string;
   deletedItemIds?: string[];

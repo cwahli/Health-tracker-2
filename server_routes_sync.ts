@@ -177,9 +177,9 @@ syncRouter.post("/api/sync/supabase-pull", async (req, res) => {
     ].filter(Boolean) as string[]));
 
     // Lightweight columns for list view (always included)
-    const lightColumns = 'id, firebase_uid, date, name, weight_grams, quantity, consumed_amount, benefits, risks, health_impact, recommendation, calories, saturated_fat, sodium, added_sugar, nutrients, updated_at, verdict, description, message, debug_url, image_urls';
+    const lightColumns = 'id, firebase_uid, date, name, composition, weight_grams, quantity, consumed_amount, benefits, risks, health_impact, recommendation, calories, saturated_fat, sodium, added_sugar, nutrients, updated_at, verdict, description, message, debug_url, image_urls';
     // Heavy JSON blob columns only included when listOnly is false
-    const fullColumns = lightColumns + ', composition, items_breakdown, scout_items, chat_transcript';
+    const fullColumns = lightColumns + ', items_breakdown, scout_items, chat_transcript';
     const foodSelectColumns = listOnly ? lightColumns : fullColumns;
 
     let foodQuery = supabaseAdmin
@@ -485,13 +485,16 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
       updated_at: bio.updated_at ? new Date(bio.updated_at).toISOString() : new Date().toISOString()
     });
 
+    const profileDelFoodIds = Object.keys(profile?.deletedFoodLogIds || {});
+    const foodsToDeleteIds = Array.from(new Set([
+      ...(Array.isArray(foods) ? foods.filter((f: any) => f.sync_state === 'delete').map((f: any) => f.id) : []),
+      ...profileDelFoodIds
+    ]));
+
     if (Array.isArray(foods) && foods.length > 0) {
       const foodsToUpsert = foods
         .filter((f: any) => f.sync_state !== 'delete')
         .map((f: any) => mapFoodRow(f, canonicalUid));
-      const foodsToDeleteIds = foods
-        .filter((f: any) => f.sync_state === 'delete')
-        .map((f: any) => f.id);
 
       if (foodsToUpsert.length > 0) {
         for (const food of foodsToUpsert) {
@@ -524,10 +527,11 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
         if (error) console.error('[Supabase Push] Food upsert error:', error.message);
         else foodCount += foodsToUpsert.length;
       }
-      if (foodsToDeleteIds.length > 0) {
-        const { error } = await supabaseAdmin.from('food_logs').delete().in('id', foodsToDeleteIds);
-        if (error) console.error('[Supabase Push] Food delete error:', error.message);
-      }
+    }
+
+    if (foodsToDeleteIds.length > 0) {
+      const { error } = await supabaseAdmin.from('food_logs').delete().in('id', foodsToDeleteIds);
+      if (error) console.error('[Supabase Push] Food delete error:', error.message);
     }
 
     const profileDelBioIds = Object.keys(profile?.deletedBiomarkerLogIds || {});

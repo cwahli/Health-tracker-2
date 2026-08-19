@@ -32,6 +32,8 @@ import {
 interface BiomarkerAuditModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialTab?: 'overview' | 'corrupted_units' | 'duplicates' | 'missing_metadata' | 'conflicts' | 'clean';
+  initialFocusKey?: string | null;
   profile: any;
   biomarkerHistory: any[];
   biomarkers?: { [key: string]: any };
@@ -61,6 +63,8 @@ interface BiomarkerAuditModalProps {
 export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
   isOpen,
   onClose,
+  initialTab,
+  initialFocusKey,
   profile,
   biomarkerHistory,
   biomarkers,
@@ -76,6 +80,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
 }) => {
   const savedSession = useMemo(() => loadSavedAuditSession(), []);
   const [activeTab, setActiveTab] = useState<'overview' | 'corrupted_units' | 'duplicates' | 'missing_metadata' | 'conflicts' | 'clean'>(() => {
+    if (initialTab) return initialTab;
     if (savedSession?.step === 'units_review') return 'corrupted_units';
     if (savedSession?.step === 'duplicates_review') return 'duplicates';
     if (savedSession?.step === 'ranges_review') return 'missing_metadata';
@@ -83,6 +88,18 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
     if ((savedSession?.step as any) === 'clean_review') return 'clean';
     return 'overview';
   });
+
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
+
+  useEffect(() => {
+    if (isOpen && initialFocusKey) {
+      setSelectedFixKeys(prev => ({ ...prev, [initialFocusKey]: true }));
+    }
+  }, [isOpen, initialFocusKey]);
   const [selectedFixKeys, setSelectedFixKeys] = useState<{ [key: string]: boolean }>(() => savedSession?.selectedFixes || {});
   const [showApplyConfirm, setShowApplyConfirm] = useState(false);
   const [showCatalogApproveConfirm, setShowCatalogApproveConfirm] = useState(false);
@@ -152,15 +169,28 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
     );
   };
 
-  // Compute live report from profile & history
+  // Compute live report from profile & history only when modal is open
   const report: BiomarkerAuditReport = useMemo(() => {
+    if (!isOpen) {
+      return {
+        timestamp: '',
+        totalScanned: 0,
+        corruptedUnitsCount: 0,
+        duplicateCandidatesCount: 0,
+        missingRangesCount: 0,
+        conflictsCount: 0,
+        cleanCount: 0,
+        items: [],
+        duplicateGroups: []
+      };
+    }
     return runGeneralizedBiomarkerAudit(
       profile?.customBiomarkers || {},
       biomarkerHistory || [],
       biomarkers || {},
       profile?.deletedCustomBiomarkerKeys || {}
     );
-  }, [profile?.customBiomarkers, profile?.deletedCustomBiomarkerKeys, biomarkerHistory, biomarkers]);
+  }, [isOpen, profile?.customBiomarkers, profile?.deletedCustomBiomarkerKeys, biomarkerHistory, biomarkers]);
 
   // Automatic background continuity persistence on any change (no manual button required)
   useEffect(() => {
@@ -184,12 +214,12 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
     saveAuditSession(sessionState);
   }, [isOpen, activeTab, selectedFixKeys, savedSession?.createdAt]);
 
-  // Initialize selected fixes for high-confidence corrupted unit proposals
+  // Initialize selected fixes for corrupted unit items (both auto-proposals and agent review)
   useEffect(() => {
     if (report && report.items) {
       const initial: { [key: string]: boolean } = {};
       report.items.forEach(item => {
-        if (item.status === 'corrupted_unit' && item.corruptedUnitProposal?.proposedUnit) {
+        if (item.status === 'corrupted_unit') {
           initial[item.key] = true;
         }
       });
@@ -202,6 +232,9 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
   const targetAgentUnitItems = useMemo(() => corruptedUnitItems.filter(i => !i.corruptedUnitProposal?.proposedUnit), [corruptedUnitItems]);
   const targetAutoUnitKeys = useMemo(() => targetAutoUnitItems.map(i => i.key), [targetAutoUnitItems]);
   const targetAgentUnitKeys = useMemo(() => targetAgentUnitItems.map(i => i.key), [targetAgentUnitItems]);
+
+  const selectedAutoUnitKeys = useMemo(() => targetAutoUnitKeys.filter(k => selectedFixKeys[k]), [targetAutoUnitKeys, selectedFixKeys]);
+  const selectedAgentUnitKeys = useMemo(() => targetAgentUnitKeys.filter(k => selectedFixKeys[k]), [targetAgentUnitKeys, selectedFixKeys]);
 
   const filteredCorruptedUnitItems = useMemo(() => {
     if (unitFilter === 'auto_proposals') {
@@ -1082,6 +1115,8 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                       <div
                         key={item.key}
                         className={`p-3.5 rounded-xl border transition-all flex items-start gap-3 ${
+                          item.key === initialFocusKey ? 'ring-2 ring-amber-500 shadow-md' : ''
+                        } ${
                           isSelected
                             ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/60'
                             : hasAutoProposal
@@ -1116,14 +1151,55 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                                 </span>
                               )}
                             </div>
-                            {renderDeleteButton(item.key, item.name)}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onClose();
+                                  onLaunchUnitStandardization([item.key]);
+                                }}
+                                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                                title="Launch AI Agent to review and fix this biomarker"
+                              >
+                                <Bot className="w-3 h-3" />
+                                <span>Fix with Agent</span>
+                              </button>
+                              {renderDeleteButton(item.key, item.name)}
+                            </div>
                           </div>
-                          {proposal?.reason && (
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-                              <Info className="w-3 h-3 text-slate-400 shrink-0" />
-                              {proposal.reason}
-                            </p>
+
+                          {/* Unified Rich Diagnostic Box (matching BiomarkerDictionaryModal layout style) */}
+                          {proposal?.preciseCause && (
+                            <div className="text-xs text-rose-800 dark:text-rose-200 font-medium leading-relaxed bg-rose-50/80 dark:bg-rose-950/40 p-2.5 rounded-lg border border-rose-200/80 dark:border-rose-900/50 mt-2">
+                              {proposal.preciseCause}
+                            </div>
                           )}
+                          {!proposal?.preciseCause && proposal?.reason && (
+                            <div className="text-xs text-rose-800 dark:text-rose-200 font-medium leading-relaxed bg-rose-50/80 dark:bg-rose-950/40 p-2.5 rounded-lg border border-rose-200/80 dark:border-rose-900/50 mt-2">
+                              {proposal.reason}
+                            </div>
+                          )}
+                          {proposal?.suggestedFix && (
+                            <div className="text-[11px] text-amber-900/90 dark:text-amber-200/90 font-normal mt-1.5">
+                              <span className="font-bold text-amber-950 dark:text-amber-100">Action:</span> {proposal.suggestedFix}
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {proposal?.badgeLabel && (
+                              <span className="px-1.5 py-0.5 text-[10px] bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300 rounded font-bold">
+                                {proposal.badgeLabel}
+                              </span>
+                            )}
+                            {proposal?.proposedUnit ? (
+                              <span className="px-1.5 py-0.5 text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 rounded font-bold">
+                                Auto-Proposal Available
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 text-[10px] bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 rounded font-bold">
+                                Needs AI Review
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -1665,23 +1741,24 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                 {(unitFilter === 'all' || unitFilter === 'auto_proposals') && targetAutoUnitItems.length > 0 && (
                   <button
                     onClick={() => setShowApplyConfirm(true)}
-                    disabled={isApplying || Object.values(selectedFixKeys).filter(Boolean).length === 0}
+                    disabled={isApplying || selectedAutoUnitKeys.length === 0}
                     className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>Apply ({Object.values(selectedFixKeys).filter(Boolean).length}) Selected Unit Repairs</span>
+                    <span>Apply ({selectedAutoUnitKeys.length}) Selected Unit Repairs</span>
                   </button>
                 )}
-                {(unitFilter === 'all' || unitFilter === 'agent_review') && targetAgentUnitKeys.length > 0 && onLaunchUnitStandardization && (
+                {(unitFilter === 'all' || unitFilter === 'agent_review') && targetAgentUnitItems.length > 0 && onLaunchUnitStandardization && (
                   <button
                     onClick={() => {
                       onClose();
-                      onLaunchUnitStandardization(targetAgentUnitKeys);
+                      onLaunchUnitStandardization(selectedAgentUnitKeys);
                     }}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                    disabled={selectedAgentUnitKeys.length === 0}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
                     <Bot className="w-3.5 h-3.5" />
-                    <span>Ask Unit Relabel Agent ({targetAgentUnitKeys.length})</span>
+                    <span>Ask Unit Relabel Agent ({selectedAgentUnitKeys.length})</span>
                   </button>
                 )}
               </>

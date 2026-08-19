@@ -502,6 +502,61 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     aliases: ['whitebloodcell', 'total_white_cell_count', 'total_white_cell_count_10_9_l', 'white_blood_cell_count']
   },
   {
+    key: 'neutrophil_count',
+    name: 'Neutrophils',
+    category: 'hematology',
+    unit: '10^9/L',
+    normalRange: '2.0 - 7.5',
+    descriptions: { en: 'Essential white blood cells for fighting bacterial infections.' },
+    riskCategories: ['Hematology'],
+    standardMedicalGrouping: 'Hematology',
+    aliases: ['neutrophils', 'neutrophil', 'neutrophils_10_9_l', 'abs_neutrophil_count', 'neutrophil_count_10_9_l']
+  },
+  {
+    key: 'lymphocyte_count',
+    name: 'Lymphocytes',
+    category: 'hematology',
+    unit: '10^9/L',
+    normalRange: '1.0 - 3.5',
+    descriptions: { en: 'White blood cells critical for adaptive viral and antibody immunity.' },
+    riskCategories: ['Hematology'],
+    standardMedicalGrouping: 'Hematology',
+    aliases: ['lymphocytes', 'lymphocyte', 'lymphocytes_10_9_l', 'abs_lymphocyte_count', 'lymphocyte_count_10_9_l']
+  },
+  {
+    key: 'monocyte_count',
+    name: 'Monocyte Count',
+    category: 'hematology',
+    unit: '10^9/L',
+    normalRange: '0.1 - 0.6',
+    descriptions: { en: 'Phagocytic white blood cells that clear cellular debris and respond to chronic inflammation.' },
+    riskCategories: ['Hematology'],
+    standardMedicalGrouping: 'Hematology',
+    aliases: ['monocytes', 'monocyte', 'monocytes_10_9_l', 'abs_monocyte_count', 'monocyte_count_10_9_l']
+  },
+  {
+    key: 'eosinophil_count',
+    name: 'Eosinophils',
+    category: 'hematology',
+    unit: '10^9/L',
+    normalRange: '0.02 - 0.50',
+    descriptions: { en: 'White blood cells involved in allergic responses and parasitic defense.' },
+    riskCategories: ['Hematology'],
+    standardMedicalGrouping: 'Hematology',
+    aliases: ['eosinophils', 'eosinophil', 'eosinophils_10_9_l', 'abs_eosinophil_count', 'eosinophil_count_10_9_l']
+  },
+  {
+    key: 'basophil_count',
+    name: 'Basophils',
+    category: 'hematology',
+    unit: '10^9/L',
+    normalRange: '0.0 - 0.1',
+    descriptions: { en: 'Granulocytes responsible for histamine release and inflammatory reactions.' },
+    riskCategories: ['Hematology'],
+    standardMedicalGrouping: 'Hematology',
+    aliases: ['basophils', 'basophil', 'basophils_10_9_l', 'abs_basophil_count', 'basophil_count_10_9_l']
+  },
+  {
     key: 'alt',
     name: 'ALT (SGPT)',
     category: 'liver',
@@ -1502,6 +1557,7 @@ export function isBiomarkerValueImprobable(key: string, val: number | string, no
   const bounds = parseNormalRangeBounds(rangeStr);
   const refMax = bounds.max !== undefined ? bounds.max : bounds.min;
   const refMin = bounds.min !== undefined ? bounds.min : 0;
+  const normalizedKey = (key || '').toLowerCase();
 
   // Structural check 1: Unit scale mismatch (e.g. decimal ratio entered when normal range is percentage or whole numbers)
   if (refMax !== undefined && refMax >= 10 && num > 0 && num < 1.0) {
@@ -1513,22 +1569,25 @@ export function isBiomarkerValueImprobable(key: string, val: number | string, no
     return true; // Percentage entered when reference range is a fraction (e.g., 42.1 for 0.36-0.50 L/L)
   }
 
-  // Structural check 3: Unit mismatch for high-baseline analytes with bounded clinical ranges
+  // Structural check 3: WBC Differential cell count / percentage mismatch (Basophils, Eosinophils, Monocytes, Lymphocytes, Neutrophils)
+  const isWbc = /basophil|eosinophil|monocyte|lymphocyte|neutrophil/.test(normalizedKey);
+  if (isWbc && refMax !== undefined && refMax <= 8.0) {
+    if (num >= 50 && refMax <= 2.0) return true; // e.g. 100 cells/µL for basophils
+    if (num > refMax * 3) return true; // e.g. 55 for neutrophils (2.0-6.3), 32 for lymphocytes (1.0-3.2), 7 for monocytes (0.1-0.6), 4 for eosinophils (0.02-0.52)
+    if (num >= 1.5 && refMax <= 1.0) return true;
+  }
+
+  // Structural check 4: Unit mismatch for high-baseline analytes with bounded clinical ranges
   if (bounds.min !== undefined && bounds.max !== undefined && refMin >= 50 && num > 0 && num < refMin * 0.45) {
     return true; // e.g. Hemoglobin 14.5 g/dL when range is 120-180 g/L, or Sodium 30 when range is 135-145
   }
 
-  // Structural check 4: Severe physiological outliers (> 25x max or < 0.1x min)
-  if (bounds.min !== undefined && bounds.max !== undefined && refMin > 0 && num < refMin * 0.1) {
+  // Structural check 5: Extreme physiological outliers (> 4x max or < 0.25x min)
+  if (bounds.min !== undefined && bounds.max !== undefined && refMin > 0 && num < refMin * 0.25) {
     return true;
   }
-  if (refMax !== undefined && refMax > 0) {
-    if (refMax <= 5.0 && num > refMax * 15) {
-      return true; // e.g. Total Cholesterol 195 when reference is <= 5.0 mmol/L
-    }
-    if (bounds.min !== undefined && bounds.max !== undefined && num > refMax * 25) {
-      return true;
-    }
+  if (refMax !== undefined && refMax > 0 && num > refMax * 4) {
+    return true;
   }
 
   return false;
@@ -1540,7 +1599,248 @@ export interface FlaggedTelemetryError {
   value: any;
   unit: string;
   reason: string;
+  issueTitle?: string;
+  preciseCause?: string;
+  suggestedFix?: string;
+  badgeLabel?: string;
   samples: string[];
+  proposedAutoFix?: {
+    canAutoFix: boolean;
+    proposedValue: number;
+    proposedMultiplier: number;
+    fixLabel: string;
+    reason: string;
+  };
+}
+
+export interface TelemetryDiagnosis {
+  issueTitle: string;
+  preciseCause: string;
+  suggestedFix: string;
+  badgeLabel: string;
+}
+
+export function diagnoseTelemetryIssue(
+  key: string,
+  name: string,
+  val: any,
+  unit: string,
+  rangeStr?: string,
+  historyEntries?: { date: string; val: any }[]
+): TelemetryDiagnosis {
+  const num = typeof val === 'number' ? val : parseFloat(String(val));
+  const bounds = parseNormalRangeBounds(rangeStr);
+  const refMax = bounds.max !== undefined ? bounds.max : bounds.min;
+  const refMin = bounds.min !== undefined ? bounds.min : 0;
+  const normalizedKey = (key || '').toLowerCase();
+  const displayUnit = unit || '';
+
+  // 1. WBC Differential Count Scale Mismatch (Basophils, Eosinophils, Monocytes, Lymphocytes, Neutrophils)
+  const isWbcDifferential = /basophil|eosinophil|monocyte|lymphocyte|neutrophil/.test(normalizedKey);
+  if (isWbcDifferential && !isNaN(num) && refMax !== undefined && refMax <= 8.0) {
+    if (num >= 50 && refMax <= 2.0) {
+      // e.g. 100 logged for basophils (range 0.0 - 0.1 10^9/L)
+      const multiple = Math.round(num / (refMax || 0.1));
+      return {
+        issueTitle: `Unit Scale Error: Cell Count vs 10^9/L`,
+        preciseCause: `Logged value (${val} ${displayUnit || '10^9/L'}) is ${multiple}× above reference range (${rangeStr || '0.0 - 0.1'}). This was likely entered as total cells/µL (or /mm³), where ${val} cells/µL = ${(num / 1000).toFixed(2)} 10^9/L.`,
+        suggestedFix: `Update value to ${(num / 1000).toFixed(2)} 10^9/L, or update biomarker unit if recording raw cells/µL.`,
+        badgeLabel: `Scale: /µL vs 10^9/L`
+      };
+    }
+    if (num > refMax * 3 || (num >= 1.5 && refMax <= 1.0)) {
+      // e.g. 55 for neutrophils, 32 for lymphocytes, 7 for monocytes, 4 for eosinophils
+      const multiple = Math.round(num / refMax);
+      return {
+        issueTitle: `Unit Scale Error: Percentage Differential vs Absolute Count`,
+        preciseCause: `Logged value (${val} ${displayUnit || '10^9/L'}) is ${multiple}× above reference range (${rangeStr || ''}). This was likely recorded as a differential percentage (${val}%) rather than an absolute cell count (${(num * 0.1).toFixed(2)} 10^9/L).`,
+        suggestedFix: `If this represents ${val}%, convert to absolute count (${(num * 0.1).toFixed(2)} 10^9/L) or change unit to % differential.`,
+        badgeLabel: `Scale: % vs 10^9/L`
+      };
+    }
+  }
+
+  // 2. Ratio vs Percentage scale mismatch (e.g. Hematocrit 0.48 vs 48%)
+  if (refMax !== undefined && refMax > 0 && refMax <= 1.0 && !isNaN(num) && num >= 10) {
+    return {
+      issueTitle: `Unit Scale Error: Percentage (${val}%) vs Decimal Ratio (0.xx L/L)`,
+      preciseCause: `Logged value (${val}) was entered as a percentage (${val}%) while reference range (${rangeStr}) uses decimal fraction notation (0.xx L/L).`,
+      suggestedFix: `Convert value to ${(num / 100).toFixed(2)} or change reference range to percentage (e.g. 36 - 50 %).`,
+      badgeLabel: `Scale: % vs Ratio`
+    };
+  }
+
+  if (refMax !== undefined && refMax >= 10 && !isNaN(num) && num > 0 && num < 1.0) {
+    return {
+      issueTitle: `Unit Scale Error: Decimal Ratio (${val}) vs Percentage`,
+      preciseCause: `Logged value (${val}) was entered as a decimal ratio (0.xx) while reference range (${rangeStr}) uses whole percentage notation (${refMin}-${refMax}%).`,
+      suggestedFix: `Convert value to ${(num * 100).toFixed(1)}% or update reference range to decimal ratio (L/L).`,
+      badgeLabel: `Scale: Ratio vs %`
+    };
+  }
+
+  // 3. High-baseline unit multiplier mismatch (e.g. Hemoglobin 14.5 g/dL vs 120-180 g/L, or Cholesterol mg/dL vs mmol/L)
+  if (bounds.min !== undefined && bounds.max !== undefined && refMin >= 50 && !isNaN(num) && num > 0 && num < refMin * 0.45) {
+    return {
+      issueTitle: `Unit Multiplier Mismatch: 10× Scale Error (g/dL vs g/L)`,
+      preciseCause: `Logged value (${val}) is ~10× lower than reference range (${rangeStr}). It appears to be in g/dL (e.g. 14.5 g/dL) instead of g/L (145 g/L).`,
+      suggestedFix: `Convert value to ${(num * 10).toFixed(0)} g/L or change unit to g/dL with range ${(refMin / 10).toFixed(1)} - ${(bounds.max / 10).toFixed(1)} g/dL.`,
+      badgeLabel: `Unit: 10× Multiplier`
+    };
+  }
+
+  // 4. Very High Outlier (>3.5x normal max)
+  if (refMax !== undefined && refMax > 0 && num > refMax * 3.5) {
+    const ratio = Math.round(num / refMax);
+    return {
+      issueTitle: 'Potentially Improbable High Reading',
+      preciseCause: `Logged value (${val} ${displayUnit}) is ${ratio}× higher than the normal upper limit (${refMax} ${displayUnit}). Check for decimal point placement or unit discrepancy.`,
+      suggestedFix: `Verify lab report value and correct any missing decimal places.`,
+      badgeLabel: `Outlier: ${ratio}× High`
+    };
+  }
+
+  // 5. Very Low Outlier (<0.25x normal min)
+  if (refMin !== undefined && refMin > 0 && num < refMin * 0.25) {
+    return {
+      issueTitle: 'Potentially Improbable Low Reading',
+      preciseCause: `Logged value (${val} ${displayUnit}) is far below the normal lower limit (${refMin} ${displayUnit}). Check for missing digits or unit discrepancy.`,
+      suggestedFix: `Verify lab report value and correct any missing decimal places.`,
+      badgeLabel: 'Outlier: Low Value'
+    };
+  }
+
+  // 6. Historical Shift Check
+  if (historyEntries && historyEntries.length >= 2) {
+    const numValues = historyEntries
+      .map(e => (typeof e.val === 'number' ? e.val : parseFloat(String(e.val))))
+      .filter(n => !isNaN(n));
+    if (numValues.length >= 2) {
+      const maxVal = Math.max(...numValues);
+      const minVal = Math.min(...numValues.filter(v => v > 0));
+      if (minVal > 0 && maxVal / minVal >= 15) {
+        return {
+          issueTitle: 'Telemetry Scale Inconsistency Across History',
+          preciseCause: `Historical readings fluctuate drastically between ${minVal} and ${maxVal} (${Math.round(maxVal / minVal)}× gap). Mixed units or decimal notations detected.`,
+          suggestedFix: `Standardize all historical logs to a consistent clinical unit.`,
+          badgeLabel: 'Mixed Scale History'
+        };
+      }
+    }
+  }
+
+  return {
+    issueTitle: 'Biomarker Telemetry Error',
+    preciseCause: `Value ${val} deviates significantly from normal clinical intervals (${rangeStr || 'unknown'}).`,
+    suggestedFix: 'Standardize unit or verify lab report entry.',
+    badgeLabel: 'Telemetry Error'
+  };
+}
+
+export function computeBiomarkerTelemetryMultiplier(
+  key: string,
+  val: any,
+  rangeStr?: string
+): { multiplier: number; reason: string } | null {
+  const num = typeof val === 'number' ? val : parseFloat(String(val));
+  if (isNaN(num) || num <= 0) return null;
+  const bounds = parseNormalRangeBounds(rangeStr);
+  const refMax = bounds.max !== undefined ? bounds.max : bounds.min;
+  const refMin = bounds.min !== undefined ? bounds.min : 0;
+  const normalizedKey = (key || '').toLowerCase().replace(/[\s_]/g, '');
+
+  // 1. Glucose / Fasting Blood Sugar: US (mg/dL) <-> SI (mmol/L) (Factor: 18.0182)
+  if (normalizedKey.includes('glucose') || normalizedKey.includes('bloodsugar') || normalizedKey.includes('fastingbloodglucose')) {
+    if (refMax !== undefined && refMax <= 15.0 && num >= 45) {
+      return { multiplier: 1 / 18.0182, reason: `Converted US unit (mg/dL) to SI unit (mmol/L) (/18.02)` };
+    }
+    if (refMin >= 50 && num <= 25) {
+      return { multiplier: 18.0182, reason: `Converted SI unit (mmol/L) to US unit (mg/dL) (*18.02)` };
+    }
+  }
+
+  // 2. Cholesterol (Total, LDL, HDL, Non-HDL, VLDL): US (mg/dL) <-> SI (mmol/L) (Factor: 38.67)
+  if (normalizedKey.includes('cholesterol') || normalizedKey === 'ldl' || normalizedKey === 'hdl' || normalizedKey === 'vldl' || normalizedKey === 'nonhdl') {
+    if (refMax !== undefined && refMax <= 12.0 && num >= 45) {
+      return { multiplier: 1 / 38.67, reason: `Converted US unit (mg/dL) to SI unit (mmol/L) (/38.67)` };
+    }
+    if (refMin >= 80 && num <= 15) {
+      return { multiplier: 38.67, reason: `Converted SI unit (mmol/L) to US unit (mg/dL) (*38.67)` };
+    }
+  }
+
+  // 3. Triglycerides: US (mg/dL) <-> SI (mmol/L) (Factor: 88.57)
+  if (normalizedKey.includes('triglyceride')) {
+    if (refMax !== undefined && refMax <= 10.0 && num >= 40) {
+      return { multiplier: 1 / 88.57, reason: `Converted US unit (mg/dL) to SI unit (mmol/L) (/88.57)` };
+    }
+    if (refMin >= 50 && num <= 12) {
+      return { multiplier: 88.57, reason: `Converted SI unit (mmol/L) to US unit (mg/dL) (*88.57)` };
+    }
+  }
+
+  // 4. Uric Acid: US (mg/dL) <-> SI (µmol/L) (Factor: 59.48)
+  if (normalizedKey.includes('uric')) {
+    if ((refMin >= 100 || (refMax && refMax >= 100)) && num <= 20) {
+      return { multiplier: 59.48, reason: `Converted US unit (mg/dL) to SI unit (µmol/L) (*59.48)` };
+    }
+    if (refMax !== undefined && refMax <= 12.0 && num >= 80) {
+      return { multiplier: 1 / 59.48, reason: `Converted SI unit (µmol/L) to US unit (mg/dL) (/59.48)` };
+    }
+  }
+
+  // 5. Creatinine: US (mg/dL) <-> SI (µmol/L) (Factor: 88.4)
+  if (normalizedKey.includes('creatinine')) {
+    if ((refMin >= 40 || (refMax && refMax >= 40)) && num <= 5.0) {
+      return { multiplier: 88.4, reason: `Converted US unit (mg/dL) to SI unit (µmol/L) (*88.4)` };
+    }
+    if (refMax !== undefined && refMax <= 3.0 && num >= 30) {
+      return { multiplier: 1 / 88.4, reason: `Converted SI unit (µmol/L) to US unit (mg/dL) (/88.4)` };
+    }
+  }
+
+  // 6. Bilirubin (Total / Direct): US (mg/dL) <-> SI (µmol/L) (Factor: 17.1)
+  if (normalizedKey.includes('bilirubin')) {
+    if ((refMin >= 10 || (refMax && refMax >= 10)) && num <= 4.0) {
+      return { multiplier: 17.1, reason: `Converted US unit (mg/dL) to SI unit (µmol/L) (*17.1)` };
+    }
+    if (refMax !== undefined && refMax <= 2.5 && num >= 8.0) {
+      return { multiplier: 1 / 17.1, reason: `Converted SI unit (µmol/L) to US unit (mg/dL) (/17.1)` };
+    }
+  }
+
+  // 7. Hemoglobin / Total Protein / Albumin / Globulin: US (g/dL) <-> SI (g/L) (Factor: 10)
+  if (normalizedKey.includes('hemoglobin') || normalizedKey.includes('protein') || normalizedKey.includes('albumin') || normalizedKey.includes('globulin')) {
+    if (refMin >= 50 && num <= 30) {
+      return { multiplier: 10, reason: `Converted US unit (g/dL) to SI unit (g/L) (*10)` };
+    }
+    if (refMax !== undefined && refMax <= 25.0 && num >= 50) {
+      return { multiplier: 0.1, reason: `Converted SI unit (g/L) to US unit (g/dL) (/10)` };
+    }
+  }
+
+  // 8. Calcium: US (mg/dL) <-> SI (mmol/L) (Factor: 0.2495)
+  if (normalizedKey.includes('calcium')) {
+    if (refMax !== undefined && refMax <= 4.0 && num >= 6.0) {
+      return { multiplier: 0.2495, reason: `Converted US unit (mg/dL) to SI unit (mmol/L) (*0.2495)` };
+    }
+    if (refMin >= 6.0 && num <= 4.0) {
+      return { multiplier: 1 / 0.2495, reason: `Converted SI unit (mmol/L) to US unit (mg/dL) (/0.2495)` };
+    }
+  }
+
+  // 9. Phosphate: US (mg/dL) <-> SI (mmol/L) (Factor: 0.3229)
+  if (normalizedKey.includes('phosphate')) {
+    if (refMax !== undefined && refMax <= 3.0 && num >= 4.0) {
+      return { multiplier: 0.3229, reason: `Converted US unit (mg/dL) to SI unit (mmol/L) (*0.3229)` };
+    }
+    if (refMin >= 4.0 && num <= 3.0) {
+      return { multiplier: 1 / 0.3229, reason: `Converted SI unit (mmol/L) to US unit (mg/dL) (/0.3229)` };
+    }
+  }
+
+  // All other discrepancies (WBC differentials %, missing digits, manual entry errors) are not US<->SI unit conversions and must go to AI Review / Manual Edit
+  return null;
 }
 
 export function detectFlaggedTelemetryErrors(
@@ -1551,48 +1851,102 @@ export function detectFlaggedTelemetryErrors(
 ): FlaggedTelemetryError[] {
   const flaggedMap = new Map<string, FlaggedTelemetryError>();
 
+  // Helper to resolve def & custom case-insensitively and canonicalize key
+  const resolveDefAndCustom = (k: string) => {
+    const canonical = getMappedBiomarkerKey(k) || k;
+    const kClean = (k || '').toLowerCase().replace(/[\s_]/g, '');
+    const canClean = canonical.toLowerCase().replace(/[\s_]/g, '');
+    const custom = profile?.customBiomarkers?.[k] ||
+      profile?.customBiomarkers?.[canonical] ||
+      Object.entries(profile?.customBiomarkers || {}).find(([ck]) => ck.toLowerCase() === k.toLowerCase() || ck.toLowerCase().replace(/[\s_]/g, '') === kClean || ck.toLowerCase().replace(/[\s_]/g, '') === canClean)?.[1];
+    const def = (allDefinitions || []).find((d: any) => d.key === canonical || d.key?.toLowerCase() === k.toLowerCase() || d.key?.toLowerCase().replace(/[\s_]/g, '') === kClean || d.name?.toLowerCase() === k.toLowerCase() || d.name?.toLowerCase().replace(/[\s_]/g, '') === kClean) ||
+      biomarkerDefinitions.find((d: any) => d.key === canonical || d.key?.toLowerCase() === k.toLowerCase() || d.key?.toLowerCase().replace(/[\s_]/g, '') === kClean || d.name?.toLowerCase() === k.toLowerCase() || d.name?.toLowerCase().replace(/[\s_]/g, '') === kClean);
+    return { custom, def, canonicalKey: canonical };
+  };
+
+  const isExcludedDeviceMetric = (k: string) => {
+    return /^(steps|weight|active_minutes|sleep_duration|resting_heart_rate|water_intake|distance)$/i.test(k);
+  };
+
+  // Compute automated conversion proposal for an outlier
+  const buildAutoFixProposal = (key: string, val: any, range?: string) => {
+    const num = typeof val === 'number' ? val : parseFloat(String(val));
+    if (isNaN(num)) return undefined;
+    const fix = computeBiomarkerTelemetryMultiplier(key, num, range);
+    if (!fix) {
+      return {
+        canAutoFix: false,
+        proposedValue: num,
+        proposedMultiplier: 1,
+        fixLabel: 'Needs AI Review',
+        reason: 'Ambiguous scaling discrepancy; requires AI Review Agent'
+      };
+    }
+    let converted = num * fix.multiplier;
+    if (converted >= 100) converted = Math.round(converted);
+    else if (converted >= 10) converted = parseFloat(converted.toFixed(1));
+    else converted = parseFloat(converted.toFixed(3));
+
+    return {
+      canAutoFix: true,
+      proposedValue: converted,
+      proposedMultiplier: fix.multiplier,
+      fixLabel: fix.reason,
+      reason: fix.reason
+    };
+  };
+
   // 1. Check current resolved biomarkers
   Object.entries(resolvedBiomarkers || {}).forEach(([key, val]) => {
     if (val === undefined || val === null || val === '') return;
+    if (isExcludedDeviceMetric(key)) return;
     if (profile?.notUsedBiomarkers?.[key] || profile?.notUsedInMedicalHistory?.[key] || (profile?.customBiomarkers?.[key] && profile?.deletedCustomBiomarkerKeys?.[key])) return;
-    const def = (allDefinitions || []).find((d: any) => d.key === key) || biomarkerDefinitions.find((d: any) => d.key === key);
-    if (def?.category === 'other' || key === 'steps' || key === 'weight' || key === 'active_minutes' || key === 'sleep_duration' || key === 'resting_heart_rate') return;
-    const custom = profile?.customBiomarkers?.[key];
+    
+    const { custom, def, canonicalKey } = resolveDefAndCustom(key);
     const range = custom?.normalRange || def?.normalRange;
-    const name = custom?.name || def?.name || key;
+    const name = custom?.name || def?.name || canonicalKey;
     const unit = custom?.unit || def?.unit || '';
 
     const num = typeof val === 'number' ? val : parseFloat(String(val));
-    if (!isNaN(num) && isBiomarkerValueImprobable(key, num, range)) {
-      flaggedMap.set(key, {
-        key,
+    if (!isNaN(num) && isBiomarkerValueImprobable(canonicalKey, num, range)) {
+      const diag = diagnoseTelemetryIssue(canonicalKey, name, val, unit, range);
+      const autoFix = buildAutoFixProposal(canonicalKey, val, range);
+      flaggedMap.set(canonicalKey, {
+        key: canonicalKey,
         name,
         value: val,
         unit,
-        reason: 'Current value is an improbable outlier or unit scaling error',
-        samples: [`Current: ${val} ${unit}`]
+        reason: diag.preciseCause,
+        issueTitle: diag.issueTitle,
+        preciseCause: diag.preciseCause,
+        suggestedFix: diag.suggestedFix,
+        badgeLabel: diag.badgeLabel,
+        samples: [`Current: ${val} ${unit}`.trim()],
+        proposedAutoFix: autoFix
       });
     }
   });
 
-  // 2. Check historical logs for ratio/percentage/unit notation shifts (e.g. 48 vs 0.48 or 3)
-  const historyByKey: Record<string, { date: string; val: any }[]> = {};
+  // 2. Check historical logs for ratio/percentage/unit notation shifts and outliers
+  const historyByKey: Record<string, { date: string; val: any; rawKey: string }[]> = {};
   (activeHistory || []).forEach((log: any) => {
     if (log.biomarkers) {
       Object.entries(log.biomarkers).forEach(([key, val]) => {
-        if (!historyByKey[key]) historyByKey[key] = [];
-        historyByKey[key].push({ date: log.date || 'log', val });
+        if (isExcludedDeviceMetric(key)) return;
+        const { canonicalKey } = resolveDefAndCustom(key);
+        if (!historyByKey[canonicalKey]) historyByKey[canonicalKey] = [];
+        historyByKey[canonicalKey].push({ date: log.date || 'log', val, rawKey: key });
       });
     }
   });
 
   Object.entries(historyByKey).forEach(([key, entries]) => {
+    if (isExcludedDeviceMetric(key)) return;
     if (profile?.notUsedBiomarkers?.[key] || profile?.notUsedInMedicalHistory?.[key] || (profile?.customBiomarkers?.[key] && profile?.deletedCustomBiomarkerKeys?.[key])) return;
-    const def = (allDefinitions || []).find((d: any) => d.key === key) || biomarkerDefinitions.find((d: any) => d.key === key);
-    if (def?.category === 'other' || key === 'steps' || key === 'weight' || key === 'active_minutes' || key === 'sleep_duration' || key === 'resting_heart_rate') return;
-    const custom = profile?.customBiomarkers?.[key];
+    
+    const { custom, def, canonicalKey } = resolveDefAndCustom(key);
     const range = custom?.normalRange || def?.normalRange;
-    const name = custom?.name || def?.name || key;
+    const name = custom?.name || def?.name || canonicalKey;
     const unit = custom?.unit || def?.unit || '';
 
     const numValues = entries
@@ -1600,12 +1954,14 @@ export function detectFlaggedTelemetryErrors(
       .filter(n => !isNaN(n));
 
     let hasImprobableEntry = false;
+    let worstEntry: { date: string; val: any; rawKey: string } | null = null;
     const sampleStrs: string[] = [];
     entries.forEach(e => {
       const n = typeof e.val === 'number' ? e.val : parseFloat(String(e.val));
       if (!isNaN(n)) {
-        if (isBiomarkerValueImprobable(key, n, range)) {
+        if (isBiomarkerValueImprobable(canonicalKey, n, range)) {
           hasImprobableEntry = true;
+          if (!worstEntry) worstEntry = e;
         }
         sampleStrs.push(`${e.date}: ${e.val}`);
       }
@@ -1621,25 +1977,77 @@ export function detectFlaggedTelemetryErrors(
     }
 
     if (hasImprobableEntry || hasLargeShift) {
-      const existing = flaggedMap.get(key);
+      const existing = flaggedMap.get(canonicalKey);
+      const targetVal = worstEntry ? worstEntry.val : entries[0]?.val;
+      const diag = diagnoseTelemetryIssue(canonicalKey, name, targetVal, unit, range, entries);
+      const autoFix = buildAutoFixProposal(canonicalKey, targetVal, range);
+
       if (existing) {
         sampleStrs.forEach(s => {
           if (!existing.samples.includes(s)) existing.samples.push(s);
         });
+        if (!existing.preciseCause && diag.preciseCause) {
+          existing.preciseCause = diag.preciseCause;
+          existing.issueTitle = diag.issueTitle;
+          existing.suggestedFix = diag.suggestedFix;
+          existing.badgeLabel = diag.badgeLabel;
+        }
+        if (!existing.proposedAutoFix && autoFix) {
+          existing.proposedAutoFix = autoFix;
+        }
       } else {
-        flaggedMap.set(key, {
-          key,
+        flaggedMap.set(canonicalKey, {
+          key: canonicalKey,
           name,
-          value: entries[0]?.val,
+          value: targetVal,
           unit,
-          reason: hasLargeShift 
-            ? 'Historical log contains scale/unit shifts (e.g. percentage vs decimal ratio notation)' 
-            : 'Historical log contains an improbable outlier or decimal error',
-          samples: sampleStrs.slice(0, 5)
+          reason: diag.preciseCause,
+          issueTitle: diag.issueTitle,
+          preciseCause: diag.preciseCause,
+          suggestedFix: diag.suggestedFix,
+          badgeLabel: diag.badgeLabel,
+          samples: sampleStrs.slice(0, 5),
+          proposedAutoFix: autoFix
         });
       }
     }
   });
+
+  // 3. Check custom biomarker definitions for corrupted/missing unit declarations
+  if (profile?.customBiomarkers) {
+    Object.entries(profile.customBiomarkers).forEach(([key, customDef]: [string, any]) => {
+      if (isExcludedDeviceMetric(key)) return;
+      if (profile?.notUsedBiomarkers?.[key] || profile?.notUsedInMedicalHistory?.[key] || profile?.deletedCustomBiomarkerKeys?.[key]) return;
+      const { canonicalKey, def } = resolveDefAndCustom(key);
+      if (flaggedMap.has(canonicalKey)) return;
+
+      const unit = String(customDef?.unit || '').trim().toLowerCase();
+      const isCorrupted = !unit || unit === 'null' || unit === 'undefined' || unit === 'unknown' || unit === 'none';
+      if (isCorrupted) {
+        const name = customDef?.name || def?.name || canonicalKey;
+        const range = customDef?.normalRange || def?.normalRange;
+        flaggedMap.set(canonicalKey, {
+          key: canonicalKey,
+          name,
+          value: customDef?.optimalValue || 'Unspecified',
+          unit: customDef?.unit || '',
+          reason: 'Biomarker definition has missing or corrupted unit declaration.',
+          issueTitle: 'Corrupted or Missing Unit',
+          preciseCause: 'Unit definition is null or missing in custom biomarker profile.',
+          suggestedFix: 'Standardize unit or calibrate normal range with AI Review Agent.',
+          badgeLabel: 'Missing Unit',
+          samples: ['Definition: Corrupted Unit'],
+          proposedAutoFix: {
+            canAutoFix: false,
+            proposedValue: 0,
+            proposedMultiplier: 1,
+            fixLabel: 'Needs AI Review',
+            reason: 'Unit is missing in custom definition; requires standardization'
+          }
+        });
+      }
+    });
+  }
 
   return Array.from(flaggedMap.values());
 }

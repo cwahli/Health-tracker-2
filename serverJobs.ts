@@ -674,11 +674,14 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           if (!pendingFoodLog.verdict && finalPayload?.verdict) {
             pendingFoodLog.verdict = finalPayload.verdict;
           }
-          if (!pendingFoodLog.message && (finalPayload?.message || finalPayload?.text)) {
-            pendingFoodLog.message = finalPayload.message || finalPayload.text;
+          if (!pendingFoodLog.message && (finalPayload?.message || finalPayload?.text || finalPayload?.description)) {
+            pendingFoodLog.message = finalPayload.message || finalPayload.text || finalPayload.description;
           }
-          if (!pendingFoodLog.description && (finalPayload?.description || finalPayload?.data?.description)) {
-            pendingFoodLog.description = finalPayload.description || finalPayload.data.description;
+          if (!pendingFoodLog.healthImpact && (finalPayload?.healthImpact || finalPayload?.data?.healthImpact)) {
+            pendingFoodLog.healthImpact = finalPayload.healthImpact || finalPayload.data.healthImpact;
+          }
+          if (!pendingFoodLog.composition && (finalPayload?.composition || finalPayload?.data?.composition)) {
+            pendingFoodLog.composition = finalPayload.composition || finalPayload.data.composition;
           }
           if (!pendingFoodLog.recommendation && finalPayload?.verdict?.level) {
             pendingFoodLog.recommendation = finalPayload.verdict.level;

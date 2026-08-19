@@ -6,7 +6,7 @@ import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart a
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, canonicalizeRiskCategory } from '../utils/biomarkers';
 import { getAgentCalibration, formatOptimalTargetValue } from '../utils/agentCalibration';
-import { runGeneralizedBiomarkerAudit } from '../utils/biomarkerAuditEngine';
+import { getDuplicateAliasGroups } from '../utils/biomarkerAuditEngine';
 import { handleUnitChange } from '../utils/biomarkerLifecycle';
 
 const getBiomarkerDef = (key: string) => biomarkerDefinitions.find(d => d.key === key);
@@ -119,8 +119,8 @@ export default function MedicalHistoryTab({
 
   const activeHistory = useMemo(() => (biomarkerHistory || []).filter(h => h.sync_state !== 'delete'), [biomarkerHistory]);
 
-  const auditReport = useMemo(() => {
-    return runGeneralizedBiomarkerAudit(
+  const duplicateGroups = useMemo(() => {
+    return getDuplicateAliasGroups(
       profile?.customBiomarkers || {},
       activeHistory || [],
       biomarkers || {},
@@ -130,11 +130,11 @@ export default function MedicalHistoryTab({
 
   const aliasKeysToHide = useMemo(() => {
     const keys = new Set<string>();
-    auditReport.duplicateGroups.forEach(g => {
+    duplicateGroups.forEach(g => {
       g.candidateAliases.forEach(a => keys.add(a));
     });
     return keys;
-  }, [auditReport]);
+  }, [duplicateGroups]);
   
   // Pre-indexed latest value map by key for instant O(1) lookups
   const latestValueMap = useMemo(() => {
@@ -169,13 +169,13 @@ export default function MedicalHistoryTab({
 
   const aliasMap = useMemo(() => {
     const map = new Map<string, string[]>();
-    auditReport?.duplicateGroups?.forEach((g: any) => {
+    duplicateGroups?.forEach((g: any) => {
       if (g.suggestedMasterKey && Array.isArray(g.candidateAliases)) {
         map.set(g.suggestedMasterKey.toLowerCase(), g.candidateAliases);
       }
     });
     return map;
-  }, [auditReport]);
+  }, [duplicateGroups]);
 
   const getLatestValue = useCallback((key: string) => {
     const kLower = key.toLowerCase();

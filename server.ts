@@ -1172,7 +1172,6 @@ JSON SCHEMA STRICT REQUIREMENT:
     "level": "good | warning | alert | neutral"
   },
   "message": "A highly personalized conversational response detailing the clinical rationale. Focus on actionable guidance and avoid repeating raw macro numbers.",
-  "description": "Short 1-sentence actionable meal summary guidance (e.g. 'Limit fast-food fried sandwiches and opt for grilled options or home-prepared whole foods to better control sodium and lipid levels.'). Do NOT put generic filler like 'Contributes to daily macro and micronutrient requirements.'",
   "modificationCommand": [
     {
       "action": "update_weight | remove_item | add_item | rename_item",
@@ -1185,7 +1184,6 @@ JSON SCHEMA STRICT REQUIREMENT:
   "foodData": {
     "date": "YYYY-MM-DD",
     "name": "Literal food name",
-    "description": "Short 1-sentence actionable meal summary guidance.",
     "verdict": {
       "label": "Bad for cholesterol | High Saturated Fat | High Sodium | Healthy Choice | Moderate Saturated Fat",
       "level": "good | warning | alert | neutral"
@@ -2021,7 +2019,6 @@ const VerdictSchema = z.object({
 const FoodDataSchema = z.object({
   date: z.string().optional(),
   name: z.string().optional(),
-  description: z.string().optional(),
   itemsBreakdown: z.array(ItemBreakdownSchema).optional()
 }).passthrough();
 
@@ -7294,7 +7291,6 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           properties: {
             date: { type: Type.STRING, description: "YYYY-MM-DD" },
             name: { type: Type.STRING },
-            description: { type: Type.STRING, description: "Short actionable summary" },
             itemsBreakdown: {
               type: Type.ARRAY,
               items: {
@@ -7317,7 +7313,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
               }
             }
           },
-          required: ["date", "name", "description", "itemsBreakdown"],
+          required: ["date", "name", "itemsBreakdown"],
           nullable: true
         },
         comparison: {
@@ -7449,7 +7445,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           _internalReasoning: "",
           verdict: { label: "Meal Logged", level: "neutral" },
           message: "I have analyzed your food log.",
-          foodData: { date: new Date().toISOString().split('T')[0], name: "Meal", description: "Logged meal", itemsBreakdown: [] }
+          foodData: { date: new Date().toISOString().split('T')[0], name: "Meal", itemsBreakdown: [] }
         });
         
         if (!rawParsed._internalReasoning && extractedScratchpad) {
@@ -7941,7 +7937,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       parsedData.risks = sanitizeString(rawFoodData.risks, "");
       parsedData.healthImpact = sanitizeString(rawFoodData.healthImpact, "");
       parsedData.recommendation = sanitizeString(rawFoodData.recommendation, "");
-      parsedData.description = sanitizeString(rawFoodData.description || rawParsed.description || rawFoodData.risks || "", "");
+      parsedData.message = sanitizeString(rawParsed.message || rawFoodData.message || "", "");
 
       const rawVerdict = rawParsed.verdict || rawFoodData.verdict;
       if (rawVerdict && typeof rawVerdict === 'object') {
@@ -8407,9 +8403,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           }
           if (rawParsed && rawParsed.message) {
             rawParsed.message = synchronizeNarrativeText(rawParsed.message, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
-          }
-          if (parsedData.description) {
-            parsedData.description = synchronizeNarrativeText(parsedData.description, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
           }
           if (parsedData.benefits) {
             parsedData.benefits = synchronizeNarrativeText(parsedData.benefits, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
@@ -12388,9 +12381,23 @@ mappedBiomarkers (array of objects):
 
 originalKey (string): Exact match to input key.
 
-standardizedUnit (string): The exact, pure abbreviation (e.g., "cm", "kg", "score", "mmol/L").
+standardizedUnit (string): The exact, pure abbreviation (e.g., "cm", "kg", "score", "mmol/L", "10^9/L").
 
-conversionFactor (number): The numeric conversion multiplier. Use 1 if unknown.
+conversionFactor (number): The numeric conversion multiplier for the unit definition. Use 1 if unchanged.
+
+valueMultiplier (number): The numeric multiplier to apply to historical unstandardized outlier readings to convert them to the standardized unit scale. E.g.:
+- Differential WBC percentage to 10^9/L: 0.1 (e.g. 55% neutrophils -> 5.5, 32% lymphocytes -> 3.2, 7% monocytes -> 0.7, 4% eosinophils -> 0.4).
+- Raw cells/µL to 10^9/L: 0.001 (e.g. 100 cells/µL -> 0.10).
+- Weight lbs to kg: 0.453592 (or kg to lbs: 2.20462).
+- Glucose mg/dL to mmol/L: 0.0555.
+- Cholesterol mg/dL to mmol/L: 0.02586 (or 1/38.67).
+- Uric Acid mg/dL to µmol/L: 59.48.
+- Vitamin D ng/mL to nmol/L: 2.496.
+- Testosterone ng/dL to nmol/L: 0.0347.
+- Missing decimal place / 10x scale shift: 10 or 0.1.
+- No historical log correction needed / readings already standard: 1.
+
+valueAdjustmentReason (string): Short explanation of the value conversion multiplier (e.g. "Scaled differential percentage to 10^9/L (*0.1)").
 
 confidence (string): "high", "medium", or "low".
 
@@ -12398,16 +12405,16 @@ notes (string): Clinical reasoning.
 
 === EXAMPLES ===
 
-Example 1: Converting a known unit
+Example 1: Converting a known unit and scaling outlier logs
 Input:
-
-key: "weight", name: "Body Weight", currentUnit: "lbs"
-
-key: "height", name: "Height", currentUnit: "Unknown"
+key: "weight", name: "Body Weight", currentUnit: "lbs", sampleLogs: [2026-08-01: 165]
+key: "basophil_count", name: "Basophil Count", currentUnit: "10^9/L", normalRange: "0.0 - 0.1", sampleLogs: [2026-08-16: 100]
+key: "neutrophil_count", name: "Neutrophil Count", currentUnit: "10^9/L", normalRange: "2.0 - 6.3", sampleLogs: [2026-08-16: 55]
 
 Output:
-Weight is lbs. Standard is kg. Conversion is 0.453592. Confidence high.
-Height is Unknown. Default to cm. Conversion 1. Confidence low.
+Weight is lbs. Standard is kg. Conversion 0.453592. Value multiplier 0.453592. Confidence high.
+Basophil Count is standard 10^9/L. Log 100 was entered as cells/µL. Value multiplier 0.001. Confidence high.
+Neutrophil Count is standard 10^9/L. Log 55 was entered as percentage differential 55%. Value multiplier 0.1. Confidence high.
 
 {
 "mappedBiomarkers": [
@@ -12415,15 +12422,28 @@ Height is Unknown. Default to cm. Conversion 1. Confidence low.
 "originalKey": "weight",
 "standardizedUnit": "kg",
 "conversionFactor": 0.453592,
+"valueMultiplier": 0.453592,
+"valueAdjustmentReason": "Converted weight from lbs to kg (*0.453592).",
 "confidence": "high",
 "notes": "Converted from lbs to kg."
 },
 {
-"originalKey": "height",
-"standardizedUnit": "cm",
+"originalKey": "basophil_count",
+"standardizedUnit": "10^9/L",
 "conversionFactor": 1,
-"confidence": "low",
-"notes": "Unit unknown. Defaulted to cm."
+"valueMultiplier": 0.001,
+"valueAdjustmentReason": "Scaled raw cells/µL to 10^9/L (/1000).",
+"confidence": "high",
+"notes": "Standard SI unit is 10^9/L. Historical entry 100 cells/µL scaled to 0.10 10^9/L."
+},
+{
+"originalKey": "neutrophil_count",
+"standardizedUnit": "10^9/L",
+"conversionFactor": 1,
+"valueMultiplier": 0.1,
+"valueAdjustmentReason": "Scaled differential percentage (55%) to 10^9/L (*0.1).",
+"confidence": "high",
+"notes": "Standard SI unit is 10^9/L. Historical entry 55% scaled to 5.5 10^9/L."
 }
 ]
 }
@@ -12444,14 +12464,18 @@ Ensure EVERY JSON field is correctly separated by a comma and that all strings a
     let promptText = `Biomarkers to process:\n`;
     if (selectedBiomarkers && selectedBiomarkers.length > 0) {
       selectedBiomarkers.forEach((b: any) => {
-        promptText += `- key: "${b.key}", name: "${b.name}", currentUnit: "${b.currentUnit || 'Unknown'}"\n`;
+        const samplesStr = Array.isArray(b.sampleLogs) && b.sampleLogs.length > 0
+          ? `, sampleLogs: [${b.sampleLogs.map((l: any) => `${l.date}: ${l.value}`).join(', ')}]`
+          : '';
+        const rangeStr = b.normalRange ? `, normalRange: "${b.normalRange}"` : '';
+        promptText += `- key: "${b.key}", name: "${b.name}", currentUnit: "${b.currentUnit || 'Unknown'}"${rangeStr}${samplesStr}\n`;
       });
     }
 
     const standardizeUnitsSchema = {
       type: Type.OBJECT,
       properties: {
-        _internalReasoning: { type: Type.STRING, description: "Think step-by-step: analyze current units, determine standard metric units, perform conversions, check constraints." },
+        _internalReasoning: { type: Type.STRING, description: "Think step-by-step: analyze current units, inspect sample logs for scale/unit mismatches, determine standard metric units, compute valueMultiplier for outlier logs, perform conversions, check constraints." },
         mappedBiomarkers: {
           type: Type.ARRAY,
           items: {
@@ -12460,6 +12484,8 @@ Ensure EVERY JSON field is correctly separated by a comma and that all strings a
               originalKey: { type: Type.STRING },
               standardizedUnit: { type: Type.STRING },
               conversionFactor: { type: Type.NUMBER },
+              valueMultiplier: { type: Type.NUMBER, description: "Multiplier to convert legacy/outlier historical log readings to standard scale (e.g. 0.001 for cells/µL to 10^9/L, 1 if no conversion needed)." },
+              valueAdjustmentReason: { type: Type.STRING, description: "Short clinical reason for valueMultiplier." },
               confidence: { type: Type.STRING },
               notes: { type: Type.STRING }
             }
@@ -12480,6 +12506,7 @@ Ensure EVERY JSON field is correctly separated by a comma and that all strings a
           systemInstruction,
           promptText,
           responseMimeType: "application/json",
+          responseSchema: standardizeUnitsSchema,
           skipThinking: true
         });
         

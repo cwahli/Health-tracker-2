@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { getMappedBiomarkerKey } from "../src/utils/biomarkers";
+import { getMappedBiomarkerKey, computeBiomarkerTelemetryMultiplier, detectFlaggedTelemetryErrors } from "../src/utils/biomarkers";
 import {
   convertViaTable,
   enrichReviewModificationCommands,
@@ -242,6 +242,80 @@ describe('Golden Biomarker — G-B8 Repaste Identity (UPSERT_IDENTITY)', () => {
     const existing = caseJson.input.existingHistory[0];
     const match = caseJson.input.sourceReportId === existing.sourceReportId;
     expect(match).toBe(true);
+  });
+});
+
+describe('Golden Biomarker — Telemetry Multiplier & Auto-Fix Proposals', () => {
+  it('correctly computes deterministic conversion proposals strictly for US <-> SI unit differences', () => {
+    // 1. Glucose US mg/dL -> SI mmol/L (110 mg/dL -> ~6.1 mmol/L)
+    const glucFix = computeBiomarkerTelemetryMultiplier('fasting_glucose', 110, '3.9 - 5.6');
+    expect(glucFix).not.toBeNull();
+    expect(glucFix?.multiplier).toBeCloseTo(1 / 18.0182, 4);
+
+    // 2. Cholesterol US mg/dL -> SI mmol/L (190 mg/dL -> ~4.91 mmol/L)
+    const cholFix = computeBiomarkerTelemetryMultiplier('cholesterol', 190, '3.0 - 5.0');
+    expect(cholFix).not.toBeNull();
+    expect(cholFix?.multiplier).toBeCloseTo(1 / 38.67, 4);
+
+    // 3. Triglycerides US mg/dL -> SI mmol/L (150 mg/dL -> ~1.69 mmol/L)
+    const tgFix = computeBiomarkerTelemetryMultiplier('triglycerides', 150, '0.5 - 1.7');
+    expect(tgFix).not.toBeNull();
+    expect(tgFix?.multiplier).toBeCloseTo(1 / 88.57, 4);
+
+    // 4. Uric Acid US mg/dL -> SI µmol/L (8.0 mg/dL -> ~475 µmol/L)
+    const uricFix = computeBiomarkerTelemetryMultiplier('uric_acid', 8.0, '200 - 430');
+    expect(uricFix).not.toBeNull();
+    expect(uricFix?.multiplier).toBe(59.48);
+
+    // 5. Creatinine US mg/dL -> SI µmol/L (1.2 mg/dL -> ~106 µmol/L)
+    const creatFix = computeBiomarkerTelemetryMultiplier('creatinine', 1.2, '60 - 110');
+    expect(creatFix).not.toBeNull();
+    expect(creatFix?.multiplier).toBe(88.4);
+
+    // 6. Hemoglobin US g/dL -> SI g/L (14.5 g/dL -> 145 g/L)
+    const hbFix = computeBiomarkerTelemetryMultiplier('hemoglobin', 14.5, '120 - 160');
+    expect(hbFix).not.toBeNull();
+    expect(hbFix?.multiplier).toBe(10);
+
+    // 7. WBC Differentials (Lymphocytes 32, Monocytes 7, Eosinophils 4) are NOT unit conversions -> MUST return null (Needs AI Review)
+    expect(computeBiomarkerTelemetryMultiplier('lymphocyte_count', 32, '1.0 - 3.2')).toBeNull();
+    expect(computeBiomarkerTelemetryMultiplier('monocyte_count', 7, '0.1 - 0.6')).toBeNull();
+    expect(computeBiomarkerTelemetryMultiplier('eosinophil_count', 4, '0.02 - 0.52')).toBeNull();
+    expect(computeBiomarkerTelemetryMultiplier('basophil_count', 100, '0.0 - 0.1')).toBeNull();
+
+    // 8. BMI missing digit (2) is NOT a unit conversion -> MUST return null (Needs AI Review)
+    expect(computeBiomarkerTelemetryMultiplier('bmi', 2, '18.5 - 24.9')).toBeNull();
+
+    // 9. Other arbitrary discrepancies -> MUST return null
+    expect(computeBiomarkerTelemetryMultiplier('red_blood_cells', 0.8, '4.2 - 5.8')).toBeNull();
+  });
+
+  it('detects flagged telemetry errors and correctly separates auto-fixable US/SI units from AI review cases', () => {
+    const activeHistory = [
+      { id: 'log-1', date: '04-11-2020', biomarkers: { 'Fasting Blood Glucose': 110, 'Lymphocyte Count': 32, 'Body Mass Index': 2 } },
+      { id: 'log-2', date: '10-05-2023', biomarkers: { 'fasting_glucose': 5.2, 'lymphocyte_count': 1.97, 'bmi': 22.4 } }
+    ];
+    const profile = { customBiomarkers: {} };
+    const allDefinitions: any[] = [];
+
+    const flags = detectFlaggedTelemetryErrors({}, profile, activeHistory, allDefinitions);
+    const glucoseFlag = flags.find(f => f.key === 'fasting_glucose');
+    const lymphFlag = flags.find(f => f.key === 'lymphocyte_count');
+    const bmiFlag = flags.find(f => f.key === 'bmi');
+
+    // Glucose has an SI reading (5.2 mmol/L) against standard US catalog range (70-99 mg/dL): converted via *18.0182
+    expect(glucoseFlag).toBeDefined();
+    expect(glucoseFlag?.proposedAutoFix?.canAutoFix).toBe(true);
+    expect(glucoseFlag?.proposedAutoFix?.proposedMultiplier).toBeCloseTo(18.0182, 2);
+
+    // Lymphocytes (% diff vs count) and BMI (missing digit) are non-unit fixes: canAutoFix = false (AI Review only)
+    expect(lymphFlag).toBeDefined();
+    expect(lymphFlag?.proposedAutoFix?.canAutoFix).toBe(false);
+    expect(lymphFlag?.proposedAutoFix?.fixLabel).toBe('Needs AI Review');
+
+    expect(bmiFlag).toBeDefined();
+    expect(bmiFlag?.proposedAutoFix?.canAutoFix).toBe(false);
+    expect(bmiFlag?.proposedAutoFix?.fixLabel).toBe('Needs AI Review');
   });
 });
 

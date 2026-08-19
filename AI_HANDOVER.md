@@ -1,11 +1,36 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-18
-**Status:** ALL GATES & REGRESSION SUITES GREEN (604 tests across 62 test suites)
+**Updated:** 2026-08-19
+**Status:** ALL GATES & REGRESSION SUITES GREEN (609 tests across 62 test suites)
 **Governance & Laws:** Follow `docs/agent/` domain rules and ship code via AI Studio only.
 
 ---
-## Current Status & Verification
+- **Internal Scale & Unit Conflict Auto-Resolution Fix (2026-08-19)**:
+  - **Unicode Superscript & Scientific Notation Extraction**: Updated `extractUnitFromString` in `src/utils/biomarkerAuditEngine.ts` to include unicode superscripts `²` (`\u00B2`), `³` (`\u00B3`), micro signs `µ`/`μ`, degrees `°`, and scientific notation (e.g. `10^9/L`, `10^12/L`). This eliminated truncation defects where `mL/min/1.73m²` and `kg/m²` were truncated into `mL/min/1.73m` and `kg/m`.
+  - **Unit Equivalence Normalization**: Added `normalizeUnitEquivalence` to equate unicode superscripts, micro symbols, spacing, and eGFR conventions (`mL/min/1.73m²` $\equiv$ `mL/min/1.73m2` $\equiv$ `mL/min/1.73 m²` $\equiv$ `mL/min/1.73m`). Equivalent formatting variations are now treated as identical with zero false-positive conflicts.
+  - **Eliminated Unsafe Auto-Fix Proposals**: Removed the blind `align_declared_to_brackets` auto-fix fallback in `deriveConflictResolution`. Auto-fix proposals (`scale_brackets_to_declared`) are now strictly restricted to verified clinical unit conversions (e.g. Hematocrit `%` vs `L/L`, Hemoglobin `g/dL` vs `g/L`, `mg/dL` vs `mmol/L`), preventing false proposals to overwrite valid declared units (e.g. body weight in `kg`) with mismatched bracket strings (`kg/m`).
+- **Health Tab, Biomarker Dictionary & Audit Latency Optimizations (2026-08-19)**:
+  - **Instant Health Tab & Dictionary Mounts**: Replaced heavy synchronous executions of `runGeneralizedBiomarkerAudit` in `src/components/MedicalHistoryTab.tsx`, `src/components/BiomarkerDictionaryModal.tsx`, and `src/components/TrendsTab.tsx` with a lightweight, ultra-fast ($<2\text{ms}$) `getDuplicateAliasGroups` helper. This eliminated blocking JS execution on tab mount caused by unnecessary full telemetry scans, unit scraping, and metadata completeness scoring across hundreds of biomarkers.
+  - **Pre-Indexed Standard Catalog Lookups ($O(1)$)**: Created module-level hash indexes (`catalogByKey`, `catalogByStem`, `catalogBySynonym`, `catalogByAlias`, `catalogByName`) in `src/utils/biomarkerAuditEngine.ts`, transforming `findCatalogDefinition` from repeated linear array searches into direct $O(1)$ map lookups.
+  - **Candidate Pair Pruning**: In `runGeneralizedBiomarkerAudit` and `getDuplicateAliasGroups`, skipped redundant pairwise evaluations when both candidates are built-in standard catalog definitions with no custom overrides or user logs, eliminating over 10,000 unneeded string operations per audit pass.
+  - **Conditional Audit Modal Lifecycle**: Guarded `BiomarkerAuditModal` mounting and report calculation in `src/components/BiomarkerDictionaryModal.tsx` so the heavy audit report only evaluates when the user explicitly clicks "Check Biomarkers" (`showAuditModal === true`), rather than running eagerly as an unmounted child.
+  - **$O(1)$ Telemetry Flag Lookup**: Indexed `allTelemetryFlags` into a key-indexed map (`telemetryFlagMap`) in `BiomarkerDictionaryModal.tsx` to eliminate linear `.find()` operations across each rendered item row.
+- **Full-Screen Flagged Telemetry Management Modal & Strict US ↔ SI Auto-Fix Engine (2026-08-19)**:
+  - **Full-Screen Workspace**: Upgraded the Flagged Telemetry Modal in `src/components/HomeTab.tsx` into a spacious full-screen interface (`max-w-6xl` responsive viewport) with issue counts, filter tabs (`All`, `⚡ Auto-Fixable`, `🧠 Needs AI Review`), and inline editing/deletion per reading.
+  - **Strict US ↔ SI Unit Auto-Fix Engine**: Constrained `computeBiomarkerTelemetryMultiplier` in `src/utils/biomarkers.ts` strictly and exclusively to validated standard US $\leftrightarrow$ SI unit conversions:
+    - Glucose US (mg/dL) $\leftrightarrow$ SI (mmol/L) ($\div 18.0182$ / $\times 18.0182$).
+    - Cholesterol (Total, LDL, HDL, Non-HDL, VLDL) US (mg/dL) $\leftrightarrow$ SI (mmol/L) ($\div 38.67$ / $\times 38.67$).
+    - Triglycerides US (mg/dL) $\leftrightarrow$ SI (mmol/L) ($\div 88.57$ / $\times 88.57$).
+    - Uric acid US (mg/dL) $\leftrightarrow$ SI (µmol/L) ($\times 59.48$ / $\div 59.48$).
+    - Creatinine US (mg/dL) $\leftrightarrow$ SI (µmol/L) ($\times 88.4$ / $\div 88.4$).
+    - Bilirubin (Total / Direct) US (mg/dL) $\leftrightarrow$ SI (µmol/L) ($\times 17.1$ / $\div 17.1$).
+    - Hemoglobin / Total Protein / Albumin / Globulin US (g/dL) $\leftrightarrow$ SI (g/L) ($\times 10$ / $\div 10$).
+    - Calcium US (mg/dL) $\leftrightarrow$ SI (mmol/L) ($\times 0.2495$ / $\div 0.2495$).
+    - Phosphate US (mg/dL) $\leftrightarrow$ SI (mmol/L) ($\times 0.3229$ / $\div 0.3229$).
+  - **Zero Browser Popups & Inline Confirmation Flow**: Replaced all native browser `window.confirm` modal popups with inline confirmation elements directly inside each history entry pill (`Delete? [Yes, Delete] [Cancel]`) and sticky action toolbar (`Delete X outlier biomarker(s)? [Yes, Delete] [Cancel]`).
+  - **Atomic Batch Deletion & Auto-Fix Handlers**: Replaced synchronous looping calls with single-pass atomic handlers (`handleBatchDeleteBiomarkersFromLogs` and `handleBatchEditBiomarkersInLogs` in `src/App.tsx`), eliminating closure race conditions where only one deletion persisted when deleting multiple outliers across logs simultaneously.
+  - **Asynchronous Loaders & Saved State Indicators**: Wired `savingActionKeys` and `savedActionKeys` with spinning `<Loader2>` loaders (`Saving...`, `Deleting...`, `Converting...`) during background state updates and instant `<Check>` checkmark indicators (`Saved!`, `Deleted!`) upon completion.
+  - **Universal Key Canonicalization & History Alignment**: `detectFlaggedTelemetryErrors` now canonicalizes all keys via `getMappedBiomarkerKey(k) || k` and case/whitespace-insensitive normalization, seamlessly catching all entries across `resolvedBiomarkers`, historical logs (e.g. `Monocyte Count` vs `monocyte_count`), and custom definitions.
 - **Food Analysis Accuracy & Nutrient Label Source Improvements (2026-08-18)**:
   - **Nutrient Label Source Clarification**: In `src/components/chat-cards/NutritionLabelTable.tsx`, added a distinctive source badge for each item indicating its exact data source (`Nutrition Facts (OCR Label)`, `Brand Official Menu`, `Open Food Facts`, `USDA FoodData Central`, `Estimated: Category Baseline`, `Standard Reference`) and cleaned titles to remove internal fallback artifacts.
   - **Label-to-Component Reconciliation**: Created `reconcileIngredientsToComponents` in `server_vision_scout.ts` and wired it into both the scout pipeline and `server.ts` component decomposition. If an OCR label or visual ingredient list contains dressings, sauces, or condiments (e.g. ranch dressing, caesar, vinaigrette) not in the decomposed components, it is automatically allocated an 8% volume share with normalized companion component weights and added to database search queries.

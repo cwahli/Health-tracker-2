@@ -51,6 +51,10 @@ export interface BiomarkerAuditItem {
     sourceField: 'optimalValue' | 'rangeBrackets' | 'logHistory' | 'normalRange' | 'catalog';
     confidence: number;
     reason: string;
+    issueTitle?: string;
+    preciseCause?: string;
+    suggestedFix?: string;
+    badgeLabel?: string;
   };
   duplicateCluster?: {
     targetKey: string;
@@ -151,6 +155,27 @@ export function getCanonicalBiomarkerStem(key: string, name?: string): string {
 }
 
 /**
+ * Normalizes a unit string for equivalence comparison (handles unicode superscripts, micro, spaces, eGFR conventions)
+ */
+export function normalizeUnitEquivalence(unit?: string | null): string {
+  if (!unit || typeof unit !== 'string') return '';
+  return unit
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/²/g, '2')
+    .replace(/³/g, '3')
+    .replace(/\^2/g, '2')
+    .replace(/\^3/g, '3')
+    .replace(/µ/g, 'u')
+    .replace(/μ/g, 'u')
+    .replace(/1\.73m2/g, '1.73m2')
+    .replace(/1\.73m\b/g, '1.73m2') // eGFR 1.73m shorthand is equivalent to 1.73m2
+    .replace(/percent/g, '%')
+    .replace(/pct/g, '%');
+}
+
+/**
  * Extracts a unit token from arbitrary string text using heuristic regex
  */
 export function extractUnitFromString(text?: string | null): string | null {
@@ -160,14 +185,25 @@ export function extractUnitFromString(text?: string | null): string | null {
     return null;
   }
 
-  // Look for patterns like "100 mL/min/1.73m2", "35 mmol/mol", "15 - 30 U/L", "220 K/uL"
-  const match = cleaned.match(/(?:[\d\.]+|\bto\b|\-|\>|\<|\>\=|\<\=)\s*([a-zA-Z%][a-zA-Z0-9%\/\^\._\-]*)/);
+  // Look for patterns like "100 mL/min/1.73m²", "> 90 mL/min/1.73m²", "35 mmol/mol", "15 - 30 U/L", "4.5 - 11.0 10^9/L", "18.5 - 24.9 kg/m²"
+  // Includes unicode superscripts ² (\u00B2), ³ (\u00B3), µ (\u00B5), μ (\u03BC), degrees ° (\u00B0), and scientific units like 10^9/L
+  const match = cleaned.match(/(?:[\d\.]+|\bto\b|\-|\>|\<|\>\=|\<\=)\s*(10(?:\^|\*|e|\_)\d+\/[a-zA-Z%µμ°²³]+|[a-zA-Z%µμ°²³][a-zA-Z0-9%µμ°²³\/\^\._\-]*)/);
   if (match && match[1]) {
     const candidate = match[1].trim();
     if (!['to', 'and', 'or', 'null', 'undefined', 'min', 'max', 'range', 'unknown'].includes(candidate.toLowerCase())) {
       return candidate;
     }
   }
+
+  // Also check if the string itself is a direct unit token like "mL/min/1.73m²", "10^9/L", "kg", "mg/dL", "U/L"
+  const directMatch = cleaned.match(/^(10(?:\^|\*|e|\_)\d+\/[a-zA-Z%µμ°²³]+|[a-zA-Z%µμ°²³][a-zA-Z0-9%µμ°²³\/\^\._\-]*)$/);
+  if (directMatch && directMatch[1]) {
+    const candidate = directMatch[1].trim();
+    if (!['to', 'and', 'or', 'null', 'undefined', 'min', 'max', 'range', 'unknown'].includes(candidate.toLowerCase())) {
+      return candidate;
+    }
+  }
+
   return null;
 }
 
@@ -197,46 +233,85 @@ export function calculateCompletenessScore(def: any, logCount: number): number {
   return score;
 }
 
+const catalogByKey = new Map<string, BiomarkerDefinition>();
+const catalogByStem = new Map<string, BiomarkerDefinition>();
+const catalogBySynonym = new Map<string, BiomarkerDefinition>();
+const catalogByAlias = new Map<string, BiomarkerDefinition>();
+const catalogByName = new Map<string, BiomarkerDefinition>();
+
+let catalogIndexed = false;
+function ensureCatalogIndexed() {
+  if (catalogIndexed) return;
+  catalogIndexed = true;
+  biomarkerDefinitions.forEach(d => {
+    const kLow = d.key.toLowerCase().trim();
+    const stem = normalizeStemKey(d.key);
+    const nameLow = d.name.toLowerCase().trim();
+
+    catalogByKey.set(kLow, d);
+    if (stem && !catalogByStem.has(stem)) catalogByStem.set(stem, d);
+    if (nameLow && !catalogByName.has(nameLow)) catalogByName.set(nameLow, d);
+
+    const synKey = lookupClinicalSynonym(kLow) || (stem ? lookupClinicalSynonym(stem) : undefined);
+    if (synKey) {
+      catalogBySynonym.set(synKey.toLowerCase(), d);
+      const normSyn = normalizeStemKey(synKey);
+      if (normSyn) catalogBySynonym.set(normSyn, d);
+    }
+
+    if (Array.isArray(d.aliases)) {
+      d.aliases.forEach(a => {
+        const aLow = a.toLowerCase().trim();
+        catalogByAlias.set(aLow, d);
+        const aStem = normalizeStemKey(a);
+        if (aStem) catalogByAlias.set(aStem, d);
+      });
+    }
+  });
+}
+ensureCatalogIndexed();
+
 /**
  * Finds a matching standard biomarker catalog definition by key, stem, alias, or name
  */
 export function findCatalogDefinition(key: string, name?: string): BiomarkerDefinition | undefined {
   if (!key) return undefined;
+  ensureCatalogIndexed();
   const normKey = key.toLowerCase().trim();
   const stem = normalizeStemKey(key);
   const mapped = getMappedBiomarkerKey(key, name);
   
   // Exact key match
-  let found = biomarkerDefinitions.find(d => d.key.toLowerCase() === normKey);
+  let found = catalogByKey.get(normKey);
   if (found) return found;
 
   // Mapped canonical key match
   if (mapped) {
-    found = biomarkerDefinitions.find(d => d.key.toLowerCase() === mapped.toLowerCase());
+    found = catalogByKey.get(mapped.toLowerCase());
     if (found) return found;
   }
 
   // Stem match
-  found = biomarkerDefinitions.find(d => normalizeStemKey(d.key) === stem);
-  if (found) return found;
+  if (stem) {
+    found = catalogByStem.get(stem);
+    if (found) return found;
+  }
 
   // Clinical Synonym match
-  const synKey = lookupClinicalSynonym(normKey) || lookupClinicalSynonym(stem);
+  const synKey = lookupClinicalSynonym(normKey) || (stem ? lookupClinicalSynonym(stem) : undefined);
   if (synKey) {
-    found = biomarkerDefinitions.find(d => d.key.toLowerCase() === synKey.toLowerCase() || normalizeStemKey(d.key) === normalizeStemKey(synKey));
+    found = catalogBySynonym.get(synKey.toLowerCase()) || (stem ? catalogBySynonym.get(stem) : undefined) || catalogByKey.get(synKey.toLowerCase());
     if (found) return found;
   }
 
   // Alias match
-  found = biomarkerDefinitions.find(d => 
-    Array.isArray(d.aliases) && d.aliases.some(a => a.toLowerCase() === normKey || normalizeStemKey(a) === stem || (synKey && normalizeStemKey(a) === normalizeStemKey(synKey)))
-  );
+  found = catalogByAlias.get(normKey) || (stem ? catalogByAlias.get(stem) : undefined);
   if (found) return found;
 
   // Name match
   if (name) {
     const cleanName = name.toLowerCase().trim();
-    found = biomarkerDefinitions.find(d => d.name.toLowerCase() === cleanName);
+    found = catalogByName.get(cleanName);
     if (found) return found;
   }
 
@@ -257,6 +332,12 @@ export function deriveConflictResolution(
   const bUnit = (bracketUnit || '').trim();
   const dLow = dUnit.toLowerCase();
   const bLow = bUnit.toLowerCase();
+
+  const dNorm = normalizeUnitEquivalence(declaredUnit);
+  const bNorm = normalizeUnitEquivalence(bracketUnit);
+  if (dNorm === bNorm) {
+    return undefined;
+  }
 
   // Hematocrit % vs L/L
   if (k.includes('hematocrit') || k.includes('hct')) {
@@ -322,12 +403,221 @@ export function deriveConflictResolution(
     }
   }
 
-  // Fallback: Align declared unit to reference brackets
-  return {
-    action: 'align_declared_to_brackets',
-    targetUnit: bracketUnit,
-    description: `Update declared biomarker unit from "${declaredUnit}" to "${bracketUnit}" to match reference range brackets`
+  // If no verified clinical conversion exists, never propose a destructive auto-fix that overwrites
+  // the declared unit with an arbitrary/corrupted bracket string.
+  return undefined;
+}
+
+/**
+ * Ultra-fast duplicate & alias grouping for view components (MedicalHistoryTab, BiomarkerDictionaryModal, TrendsTab)
+ * Runs in <2ms by skipping unnecessary full telemetry scans, unit scraping, and metadata completeness passes.
+ */
+export function getDuplicateAliasGroups(
+  customBiomarkers: { [key: string]: any } = {},
+  biomarkerHistory: any[] = [],
+  currentBiomarkers: { [key: string]: any } = {},
+  deletedCustomBiomarkerKeys: { [key: string]: number } = {}
+): DuplicateGroupAudit[] {
+  ensureCatalogIndexed();
+  const combinedHistory = [...biomarkerHistory];
+  if (currentBiomarkers && Object.keys(currentBiomarkers).length > 0) {
+    combinedHistory.push({ date: new Date().toISOString().split('T')[0], biomarkers: currentBiomarkers });
+  }
+  const logCounts: { [key: string]: number } = {};
+  const allKeysSet = new Set<string>(
+    Object.keys(customBiomarkers).filter(k => !(deletedCustomBiomarkerKeys[k] && deletedCustomBiomarkerKeys[k] > 0))
+  );
+
+  combinedHistory.forEach(log => {
+    if (log && log.biomarkers) {
+      Object.keys(log.biomarkers).forEach(k => {
+        if (deletedCustomBiomarkerKeys[k] && deletedCustomBiomarkerKeys[k] > 0 && !customBiomarkers[k]) {
+          return;
+        }
+        logCounts[k] = (logCounts[k] || 0) + 1;
+        allKeysSet.add(k);
+      });
+    }
+  });
+
+  biomarkerDefinitions.forEach(d => allKeysSet.add(d.key));
+  const allKeys = Array.from(allKeysSet);
+
+  const getDef = (key: string) => {
+    return customBiomarkers[key] || catalogByKey.get(key.toLowerCase()) || biomarkerDefinitions.find((b: any) => b.key === key) || {};
   };
+
+  const adjacency: { [key: string]: Set<string> } = {};
+  allKeys.forEach(k => { adjacency[k] = new Set([k]); });
+
+  const buckets: { [bucketKey: string]: string[] } = {};
+  const addToBucket = (bucket: string | undefined | null, key: string) => {
+    if (!bucket) return;
+    const b = bucket.trim().toLowerCase();
+    if (!b || b.length < 2) return;
+    if (!buckets[b]) buckets[b] = [];
+    if (!buckets[b].includes(key)) buckets[b].push(key);
+  };
+
+  const keyMetaMap = new Map<string, { stem: string; name: string; rawClean: string; normName: string; def: any; isCustomOrHistory: boolean }>();
+  allKeys.forEach(k => {
+    const def = getDef(k);
+    const stem = getCanonicalBiomarkerStem(k, def.name);
+    const rawClean = (def.name || k).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normName = normalizeBiomarkerName(def.name || k);
+    const isCustomOrHistory = (logCounts[k] || 0) > 0 || customBiomarkers[k] !== undefined;
+    keyMetaMap.set(k, { stem, name: def.name || k, rawClean, normName, def, isCustomOrHistory });
+
+    addToBucket(`stem:${stem}`, k);
+    addToBucket(`name:${rawClean}`, k);
+    addToBucket(`norm:${normName.replace(/\s+/g, '')}`, k);
+    const synKey = lookupClinicalSynonym(rawClean) || lookupClinicalSynonym(stem);
+    if (synKey) addToBucket(`syn:${synKey}`, k);
+    const mapped = getMappedBiomarkerKey(k, def.name);
+    if (mapped) addToBucket(`mapped:${mapped}`, k);
+  });
+
+  const checkedPairs = new Set<string>();
+  const evaluatePair = (keyA: string, keyB: string) => {
+    if (keyA === keyB) return;
+    const metaA = keyMetaMap.get(keyA)!;
+    const metaB = keyMetaMap.get(keyB)!;
+    if (!metaA.isCustomOrHistory && !metaB.isCustomOrHistory) return;
+
+    const pairKey = keyA < keyB ? `${keyA}:::${keyB}` : `${keyB}:::${keyA}`;
+    if (checkedPairs.has(pairKey)) return;
+    checkedPairs.add(pairKey);
+
+    const stemA = metaA.stem;
+    const stemB = metaB.stem;
+
+    let isDuplicate = false;
+    if (stemA && stemB && stemA === stemB) {
+      isDuplicate = true;
+    } else {
+      const candidateCheck = isBiomarkerDuplicateCandidate(
+        { key: keyA, name: metaA.name, unit: metaA.def.unit, normalRange: metaA.def.normalRange },
+        { key: keyB, name: metaB.name, unit: metaB.def.unit, normalRange: metaB.def.normalRange }
+      );
+      if (candidateCheck.isMatch) {
+        isDuplicate = true;
+      }
+    }
+
+    if (isDuplicate) {
+      adjacency[keyA].add(keyB);
+      adjacency[keyB].add(keyA);
+    }
+  };
+
+  Object.values(buckets).forEach(bucketKeys => {
+    if (bucketKeys.length > 1) {
+      for (let i = 0; i < bucketKeys.length; i++) {
+        for (let j = i + 1; j < bucketKeys.length; j++) {
+          evaluatePair(bucketKeys[i], bucketKeys[j]);
+        }
+      }
+    }
+  });
+
+  const activeUserKeys = allKeys.filter(k => (logCounts[k] || 0) > 0 || customBiomarkers[k] !== undefined);
+  activeUserKeys.forEach(userKey => {
+    const metaU = keyMetaMap.get(userKey);
+    if (!metaU) return;
+    allKeys.forEach(catalogKey => {
+      if (userKey === catalogKey) return;
+      const metaC = keyMetaMap.get(catalogKey);
+      if (!metaC) return;
+      const isSub = (metaU.rawClean.length > 5 && metaC.rawClean.includes(metaU.rawClean)) ||
+                    (metaC.rawClean.length > 5 && metaU.rawClean.includes(metaC.rawClean)) ||
+                    (metaU.normName.length > 4 && metaC.normName.includes(metaU.normName)) ||
+                    (metaC.normName.length > 4 && metaU.normName.includes(metaC.normName));
+      if (isSub) {
+        evaluatePair(userKey, catalogKey);
+      }
+    });
+  });
+
+  const visited = new Set<string>();
+  const clusterMap: { [key: string]: string[] } = {};
+  const clusterReasonMap: { [key: string]: string } = {};
+
+  allKeys.forEach(k => {
+    if (!visited.has(k)) {
+      const component: string[] = [];
+      const queue = [k];
+      visited.add(k);
+      while (queue.length > 0) {
+        const curr = queue.shift()!;
+        component.push(curr);
+        adjacency[curr]?.forEach(neighbor => {
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            queue.push(neighbor);
+          }
+        });
+      }
+      
+      const componentStem = getCanonicalBiomarkerStem(k, getDef(k).name);
+      const compReason = component.length > 1 
+        ? `Morphological & clinical match cluster for "${componentStem}" across ${component.length} entries`
+        : '';
+
+      component.forEach(memberKey => {
+        clusterMap[memberKey] = component;
+        clusterReasonMap[memberKey] = compReason;
+      });
+    }
+  });
+
+  const duplicateGroups: DuplicateGroupAudit[] = [];
+  const processedMasters = new Set<string>();
+
+  allKeys.forEach(key => {
+    const siblings = clusterMap[key] || [key];
+    if (siblings.length > 1) {
+      let bestKey = siblings[0];
+      let bestScore = -1;
+      siblings.forEach(sk => {
+        const sDef = getDef(sk);
+        const score = calculateCompletenessScore(sDef, logCounts[sk] || 0);
+        if (score > bestScore) {
+          bestScore = score;
+          bestKey = sk;
+        }
+      });
+
+      if (!processedMasters.has(bestKey)) {
+        processedMasters.add(bestKey);
+        const targetDef = getDef(bestKey);
+        const allCandidateAliases = siblings.filter(sk => sk !== bestKey);
+        const candidateAliases = allCandidateAliases.filter(sk => {
+          const hasLogs = (logCounts[sk] || 0) > 0;
+          const isCustom = customBiomarkers[sk] !== undefined;
+          return hasLogs || isCustom;
+        });
+
+        if (candidateAliases.length > 0) {
+          const emptyAliasKeys = candidateAliases.filter(sk => (logCounts[sk] || 0) === 0);
+          const populatedAliasKeys = candidateAliases.filter(sk => (logCounts[sk] || 0) > 0);
+          const totalLogsInCluster = siblings.reduce((sum, sk) => sum + (logCounts[sk] || 0), 0);
+
+          duplicateGroups.push({
+            suggestedMasterKey: bestKey,
+            suggestedMasterName: targetDef.name || bestKey,
+            memberKeys: siblings,
+            candidateAliases,
+            reason: clusterReasonMap[bestKey] || `Matches cluster for ${bestKey}`,
+            totalLogsInCluster,
+            emptyAliasKeys,
+            populatedAliasKeys
+          });
+        }
+      }
+    }
+  });
+
+  return duplicateGroups;
 }
 
 /**
@@ -339,6 +629,7 @@ export function runGeneralizedBiomarkerAudit(
   currentBiomarkers: { [key: string]: any } = {},
   deletedCustomBiomarkerKeys: { [key: string]: number } = {}
 ): BiomarkerAuditReport {
+  ensureCatalogIndexed();
   const items: BiomarkerAuditItem[] = [];
 
   // 1. Calculate log activity counts per key
@@ -384,7 +675,7 @@ export function runGeneralizedBiomarkerAudit(
 
   // Helper to get definition
   const getDef = (key: string) => {
-    return customBiomarkers[key] || biomarkerDefinitions.find((b: any) => b.key === key) || {};
+    return customBiomarkers[key] || catalogByKey.get(key.toLowerCase()) || biomarkerDefinitions.find((b: any) => b.key === key) || {};
   };
 
   const fakeProfile = { customBiomarkers, deletedCustomBiomarkerKeys };
@@ -410,13 +701,14 @@ export function runGeneralizedBiomarkerAudit(
     if (!buckets[b].includes(key)) buckets[b].push(key);
   };
 
-  const keyMetaMap = new Map<string, { stem: string; name: string; rawClean: string; normName: string; def: any }>();
+  const keyMetaMap = new Map<string, { stem: string; name: string; rawClean: string; normName: string; def: any; isCustomOrHistory: boolean }>();
   allKeys.forEach(k => {
     const def = getDef(k);
     const stem = getCanonicalBiomarkerStem(k, def.name);
     const rawClean = (def.name || k).toLowerCase().replace(/[^a-z0-9]/g, '');
     const normName = normalizeBiomarkerName(def.name || k);
-    keyMetaMap.set(k, { stem, name: def.name || k, rawClean, normName, def });
+    const isCustomOrHistory = (logCounts[k] || 0) > 0 || customBiomarkers[k] !== undefined;
+    keyMetaMap.set(k, { stem, name: def.name || k, rawClean, normName, def, isCustomOrHistory });
 
     addToBucket(`stem:${stem}`, k);
     addToBucket(`name:${rawClean}`, k);
@@ -430,12 +722,14 @@ export function runGeneralizedBiomarkerAudit(
   const checkedPairs = new Set<string>();
   const evaluatePair = (keyA: string, keyB: string) => {
     if (keyA === keyB) return;
+    const metaA = keyMetaMap.get(keyA)!;
+    const metaB = keyMetaMap.get(keyB)!;
+    if (!metaA.isCustomOrHistory && !metaB.isCustomOrHistory) return;
+
     const pairKey = keyA < keyB ? `${keyA}:::${keyB}` : `${keyB}:::${keyA}`;
     if (checkedPairs.has(pairKey)) return;
     checkedPairs.add(pairKey);
 
-    const metaA = keyMetaMap.get(keyA)!;
-    const metaB = keyMetaMap.get(keyB)!;
     const stemA = metaA.stem;
     const stemB = metaB.stem;
 
@@ -631,7 +925,11 @@ export function runGeneralizedBiomarkerAudit(
           proposedUnit,
           sourceField: source,
           confidence: 0.95,
-          reason
+          reason,
+          issueTitle: tFlag?.issueTitle || 'Unit Multiplier / Format Correction',
+          preciseCause: tFlag?.preciseCause || reason,
+          suggestedFix: tFlag?.suggestedFix || `Convert unit to ${proposedUnit}.`,
+          badgeLabel: tFlag?.badgeLabel || `Unit: ${proposedUnit}`
         };
       } else if (tFlag && !isCorruptedUnit(currentUnit)) {
         status = 'corrupted_unit';
@@ -639,7 +937,11 @@ export function runGeneralizedBiomarkerAudit(
           proposedUnit: '',
           sourceField: 'logHistory',
           confidence: 0.8,
-          reason: tFlag.reason
+          reason: tFlag.preciseCause || tFlag.reason,
+          issueTitle: tFlag.issueTitle || 'Unit Scale / Differential Mismatch',
+          preciseCause: tFlag.preciseCause || tFlag.reason,
+          suggestedFix: tFlag.suggestedFix,
+          badgeLabel: tFlag.badgeLabel || 'Scale / Unit Error'
         };
       } else if (!proposedUnit || proposedUnit !== currentUnit) {
         status = 'corrupted_unit';
@@ -647,7 +949,11 @@ export function runGeneralizedBiomarkerAudit(
           proposedUnit: '',
           sourceField: 'optimalValue',
           confidence: 0.2,
-          reason: 'Unit is corrupted and no internal reference unit could be discovered'
+          reason: 'Unit is corrupted and no internal reference unit could be discovered',
+          issueTitle: 'Unspecified or Missing Unit',
+          preciseCause: 'Biomarker definition has an invalid or corrupted unit declaration.',
+          suggestedFix: 'Standardize unit with AI Agent or manually assign reference unit.',
+          badgeLabel: 'Missing Unit'
         };
       }
     }
@@ -736,11 +1042,11 @@ export function runGeneralizedBiomarkerAudit(
         }
       }
 
-      if (bracketUnit && bracketUnit.toLowerCase() !== currentUnit.toLowerCase()) {
-        const uCurrent = currentUnit.toLowerCase().replace(/2/g, '²').replace(/3/g, '³').replace(/\^2/g, '²');
-        const uBracket = bracketUnit.toLowerCase().replace(/2/g, '²').replace(/3/g, '³').replace(/\^2/g, '²');
-        
-        if (uCurrent !== uBracket) {
+      if (bracketUnit) {
+        const uNormCurrent = normalizeUnitEquivalence(currentUnit);
+        const uNormBracket = normalizeUnitEquivalence(bracketUnit);
+
+        if (uNormCurrent && uNormBracket && uNormCurrent !== uNormBracket) {
           status = 'conflict';
           const suggestedResolution = deriveConflictResolution(key, currentUnit, bracketUnit, def);
           conflictInfo = {

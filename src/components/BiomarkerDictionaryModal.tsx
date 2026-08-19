@@ -4,8 +4,8 @@ import { toYYYYMMDD } from "../utils/dateUtils";
 import React, { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import { UserProfile, BiomarkerLog } from '../types';
-import { biomarkerDefinitions, BIOMARKER_GROUPING_OPTIONS, getBiomarkerMetadata, getMergedBiomarkerDef, isPendingCatalogApproval, isBiomarkerNeedingReview, findDuplicateOrExistingBiomarker, detectFlaggedTelemetryErrors } from '../utils/biomarkers';
-import { X, CheckCircle, Check, AlertCircle, Edit2, Loader, Save, ArrowRight, CheckSquare, Square, MessageSquare, Send, ChevronLeft, ChevronDown, FileCode, Merge, Copy, Upload, Trash, Paperclip, Calendar, Info, Terminal, BrainCircuit, Clock, Zap } from 'lucide-react';
+import { biomarkerDefinitions, BIOMARKER_GROUPING_OPTIONS, getBiomarkerMetadata, getMergedBiomarkerDef, isPendingCatalogApproval, isBiomarkerNeedingReview, findDuplicateOrExistingBiomarker, detectFlaggedTelemetryErrors, isBiomarkerValueImprobable, computeBiomarkerTelemetryMultiplier } from '../utils/biomarkers';
+import { X, CheckCircle, Check, AlertCircle, Edit2, Loader, Save, ArrowRight, CheckSquare, Square, MessageSquare, Send, ChevronLeft, ChevronDown, FileCode, Merge, Copy, Upload, Trash, Paperclip, Calendar, Info, Terminal, BrainCircuit, Clock, Zap, Sliders, Bot } from 'lucide-react';
 import BiomarkerRangeBuilder, { parseNormalRangeStr } from './BiomarkerRangeBuilder';
 import CombineBiomarkersModal from './CombineBiomarkersModal';
 import LLMSelector from './LLMSelector';
@@ -14,7 +14,7 @@ const FullScreenLogViewer = lazyWithRetry(() => import('./FullScreenLogViewer'))
 import NotUsedBiomarkersModal from './NotUsedBiomarkersModal';
 import { BiomarkerAuditModal } from './BiomarkerAuditModal';
 import { saveAgentRequestLog } from '../utils/agentLogsTracker';
-import { runGeneralizedBiomarkerAudit } from '../utils/biomarkerAuditEngine';
+import { getDuplicateAliasGroups } from '../utils/biomarkerAuditEngine';
 
 interface BiomarkerDictionaryModalProps {
   profile: UserProfile;
@@ -33,7 +33,7 @@ interface BiomarkerDictionaryModalProps {
     sourceKeysToDelete: string[]
   ) => void;
   onBatchConsolidate?: (mapping: { [key: string]: string }) => void;
-  onStandardizeUnits?: (updates: { [key: string]: { unit: string; normalRange: string; name: string } }) => Promise<void>;
+  onStandardizeUnits?: (updates: { [key: string]: any }, logValueCorrections?: { logId?: string; date: string; key: string; newValue: number }[]) => Promise<void>;
   initialSearchQuery?: string;
   onLogMedical?: (biomarkers: { [key: string]: number | string }, profileUpdates?: Partial<UserProfile>, date?: string, entries?: any, modificationCommand?: any, skipClose?: boolean) => void;
   onAgentAnalysisSaved?: (agentType: string, agentResult: any, existingId?: string) => Promise<string | void>;
@@ -528,6 +528,7 @@ const DictionaryItem = React.memo(({
   onSave,
   onRequestCalibrateKeys,
   onRouteAgent,
+  onOpenAudit,
   onTagClick,
   onFlagNotUsed,
   isProcessing,
@@ -547,6 +548,7 @@ const DictionaryItem = React.memo(({
   onSave: (updates: any) => void;
   onRequestCalibrateKeys?: (keys: string[]) => void;
   onRouteAgent?: () => void;
+  onOpenAudit?: (tab?: 'overview' | 'corrupted_units' | 'duplicates' | 'missing_metadata' | 'conflicts' | 'clean') => void;
   onTagClick?: (tag: string) => void;
   onFlagNotUsed?: (key: string) => void;
   isProcessing?: boolean;
@@ -594,7 +596,7 @@ const DictionaryItem = React.memo(({
   if (hasMissingCategory) issueTypes.push("Category");
   
   if (telemetryFlag) {
-    issueTitle = "Telemetry Issue (Unit Scale / Improbable Value)";
+    issueTitle = telemetryFlag.issueTitle || "Scale / Unit Discrepancy";
   } else if (issueTypes.length > 0) {
     issueTitle = `Missing Metadata (${issueTypes.join(", ")})`;
   } else if (approvalReason) {
@@ -973,24 +975,57 @@ const DictionaryItem = React.memo(({
 
                 {/* Unified Calibration & Approval Banner */}
                 {hasCalibrationIssues && (
-                  <div className="mt-2.5 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
-                    <div className="flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200">
+                  <div className="mt-2.5 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 rounded-xl p-3 flex flex-col sm:flex-row sm:items-start justify-between gap-3 shadow-2xs">
+                    <div className="flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200 flex-1">
                       <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                      <div>
-                        <div className="font-bold flex items-center gap-1.5">
+                      <div className="space-y-1 w-full">
+                        <div className="font-bold flex items-center gap-1.5 text-amber-950 dark:text-amber-100">
                           {issueTitle}
                         </div>
-                        <div className="flex flex-wrap gap-1 mt-1">
+                        {telemetryFlag?.preciseCause && (
+                          <div className="text-xs text-rose-800 dark:text-rose-200 font-medium leading-relaxed bg-rose-50/80 dark:bg-rose-950/40 p-2 rounded-lg border border-rose-200/80 dark:border-rose-900/50">
+                            {telemetryFlag.preciseCause}
+                          </div>
+                        )}
+                        {telemetryFlag?.suggestedFix && (
+                          <div className="text-[11px] text-amber-900/90 dark:text-amber-200/90 font-normal">
+                            <span className="font-bold text-amber-950 dark:text-amber-100">Action:</span> {telemetryFlag.suggestedFix}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-1 pt-0.5">
                           {missingUnit && <span className="px-1.5 py-0.5 text-[10px] bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300 rounded font-bold">Missing Unit</span>}
                           {missingRange && <span className="px-1.5 py-0.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 rounded font-bold">Missing Range</span>}
                           {hasMissingCategory && <span className="px-1.5 py-0.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 rounded font-bold">Missing Category</span>}
                           {approvalReason && <span className="px-1.5 py-0.5 text-[10px] bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 rounded font-bold">Pending Review</span>}
-                          {telemetryFlag && <span className="px-1.5 py-0.5 text-[10px] bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300 rounded font-bold">Scale / Unit Error</span>}
+                          {telemetryFlag && <span className="px-1.5 py-0.5 text-[10px] bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300 rounded font-bold">{telemetryFlag.badgeLabel || "Scale / Unit Error"}</span>}
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto pt-0.5">
+                      {telemetryFlag && onOpenAudit && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenAudit('corrupted_units')}
+                          className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                          title="Open in Biomarker Health & Quality Audit to resolve corrupted unit"
+                        >
+                          <Sliders className="w-3.5 h-3.5" />
+                          <span>Audit & Fix Unit</span>
+                        </button>
+                      )}
+                      {onRouteAgent && (
+                        <button
+                          type="button"
+                          onClick={onRouteAgent}
+                          disabled={isProcessing}
+                          className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                          title="Ask AI Agent to review and propose standard fixes"
+                        >
+                          <Bot className="w-3.5 h-3.5" />
+                          <span>Fix with Agent</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={handleStartEdit}
@@ -1209,6 +1244,11 @@ export default function BiomarkerDictionaryModal({
   const allTelemetryFlags = useMemo(() => {
     return detectFlaggedTelemetryErrors(biomarkers || {}, profile, biomarkerHistory || [], biomarkerDefinitions);
   }, [biomarkers, profile, biomarkerHistory]);
+  const telemetryFlagMap = useMemo(() => {
+    const map = new Map<string, any>();
+    allTelemetryFlags.forEach(f => map.set(f.key, f));
+    return map;
+  }, [allTelemetryFlags]);
   useEffect(() => {
     const qid = generateQueryId();
     setActiveQueryId(qid);
@@ -1219,6 +1259,14 @@ export default function BiomarkerDictionaryModal({
   const [editMode, setEditMode] = useState<string | null>(null);
   const [showCombineModal, setShowCombineModal] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
+  const [auditInitialTab, setAuditInitialTab] = useState<'overview' | 'corrupted_units' | 'duplicates' | 'missing_metadata' | 'conflicts' | 'clean'>('overview');
+  const [auditInitialFocusKey, setAuditInitialFocusKey] = useState<string | null>(null);
+
+  const handleOpenAuditForBiomarker = (key: string, tab: 'overview' | 'corrupted_units' | 'duplicates' | 'missing_metadata' | 'conflicts' | 'clean' = 'corrupted_units') => {
+    setAuditInitialTab(tab);
+    setAuditInitialFocusKey(key);
+    setShowAuditModal(true);
+  };
   const [showCleaningDropdown, setShowCleaningDropdown] = useState(false);
   const [isMedicalCategorisationMode, setIsMedicalCategorisationMode] = useState<boolean>(() => {
     try { return localStorage.getItem('dict_is_medical_categorisation_mode') === 'true'; } catch (e) {} return false;
@@ -1279,6 +1327,7 @@ export default function BiomarkerDictionaryModal({
     } catch (e) {}
     return {};
   });
+  const [selectedLogFixKeys, setSelectedLogFixKeys] = useState<{ [logKey: string]: boolean }>({});
 
   // Automatically persist Data Accuracy Agent States
   useEffect(() => {
@@ -1523,8 +1572,8 @@ export default function BiomarkerDictionaryModal({
   const builtInKeys = biomarkerDefinitions.map(d => d.key);
   const customKeys = Object.keys(profile.customBiomarkers || {});
 
-  const auditReport = useMemo(() => {
-    return runGeneralizedBiomarkerAudit(
+  const duplicateGroups = useMemo(() => {
+    return getDuplicateAliasGroups(
       profile?.customBiomarkers || {},
       biomarkerHistory || [],
       biomarkers || {},
@@ -1534,11 +1583,11 @@ export default function BiomarkerDictionaryModal({
 
   const aliasKeysToHide = useMemo(() => {
     const keys = new Set<string>();
-    auditReport.duplicateGroups.forEach(g => {
+    duplicateGroups.forEach(g => {
       g.candidateAliases.forEach(a => keys.add(a));
     });
     return keys;
-  }, [auditReport]);
+  }, [duplicateGroups]);
   
   const isUsefulBiomarkerValue = (val: any) => {
     return val !== undefined && val !== null && val !== '' && !Number.isNaN(val) && !(typeof val === 'string' && val.trim() === '');
@@ -1574,13 +1623,13 @@ export default function BiomarkerDictionaryModal({
 
   const aliasMap = useMemo(() => {
     const map = new Map<string, string[]>();
-    auditReport?.duplicateGroups?.forEach((g: any) => {
+    duplicateGroups?.forEach((g: any) => {
       if (g.suggestedMasterKey && Array.isArray(g.candidateAliases)) {
         map.set(g.suggestedMasterKey.toLowerCase(), g.candidateAliases);
       }
     });
     return map;
-  }, [auditReport]);
+  }, [duplicateGroups]);
 
   const collectItemLogs = useCallback((k: string) => {
     const kLower = k.toLowerCase();
@@ -2461,13 +2510,20 @@ I can analyze these, compare them with our database keys, and find standard mapp
     try {
       const selectedBiomarkerDetails = keysToUse.map(k => {
         const customDef = profile.customBiomarkers?.[k] || biomarkerDefinitions.find((b: any) => b.key === k);
+        const rawLogs = collectItemLogs(k);
+        const sampleLogs = rawLogs.map((l: any) => ({
+          date: l.date,
+          value: l.value !== undefined ? l.value : l.val,
+          logId: l.logId || l.id
+        })).sort((a: any, b: any) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
         return {
           key: k,
           name: customDef?.name || k,
           currentUnit: customDef?.unit || '',
           currentRange: customDef?.normalRange || '',
           currentGrouping: customDef?.standardMedicalGrouping || '',
-          description: (customDef as any)?.description || ''
+          description: (customDef as any)?.description || '',
+          sampleLogs: sampleLogs.slice(0, 8)
         };
       });
 
@@ -2518,34 +2574,48 @@ I can analyze these, compare them with our database keys, and find standard mapp
         throw new Error("Server returned an invalid non-JSON response.");
       }
       
-      let jsonData;
+      let jsonData: any = null;
       try {
-        let rawText = typeof data.jsonResponse === 'string' 
-          ? data.jsonResponse 
-          : JSON.stringify(data.jsonResponse);
-
-        // Strip potential markdown wrappers (the silent killer of JSON.parse)
-        rawText = rawText.replace(/```(?:json)?/gi, '').replace(/```/gi, '').trim();
-
-        // Safely parse the cleaned string
-        jsonData = JSON.parse(rawText);
-        
+        if (data && typeof data.jsonResponse === 'object' && data.jsonResponse !== null) {
+          jsonData = data.jsonResponse;
+        } else if (data && typeof data.jsonResponse === 'string') {
+          let rawText = data.jsonResponse.replace(/```(?:json)?/gi, '').replace(/```/gi, '').trim();
+          jsonData = JSON.parse(rawText);
+        } else if (data && typeof data === 'object' && !data.error) {
+          jsonData = data;
+        }
       } catch (error) {
         console.error("Failed to parse agent JSON output:", error);
       }
-      setStandardizationYaml(JSON.stringify(jsonData, null, 2));
+      setStandardizationYaml(jsonData ? JSON.stringify(jsonData, null, 2) : null);
       
-      let parsed = [];
+      let parsed: any[] = [];
       if (Array.isArray(jsonData)) {
         parsed = jsonData;
-      } else {
+      } else if (jsonData && typeof jsonData === 'object') {
         parsed = jsonData.calibratedBiomarkers || jsonData.mappedBiomarkers || jsonData.categorisedBiomarkers || [];
       }
+
+      // If agent returned empty array or parsing failed, fallback gracefully to selected keys
+      if (parsed.length === 0 && keysToUse.length > 0) {
+        parsed = keysToUse.map(k => ({
+          originalKey: k,
+          standardizedUnit: profile.customBiomarkers?.[k]?.unit || biomarkerDefinitions.find((b: any) => b.key === k)?.unit || '',
+          conversionFactor: 1,
+          valueMultiplier: 1,
+          confidence: 'medium',
+          notes: 'Standardized using active profile definition'
+        }));
+      }
+
+      const initialSelectedLogFixes: { [key: string]: boolean } = {};
+
       // Normalize key + unit field name & robust categorisation/range fallbacks
       parsed = parsed.map((item: any) => {
         const itemKey = item.originalKey || item.key;
         const customDef = profile.customBiomarkers?.[itemKey] || biomarkerDefinitions.find((b: any) => b.key === itemKey);
         const itemName = item.name || customDef?.name || itemKey;
+        const range = item.normalRange !== undefined ? item.normalRange : (customDef as any)?.normalRange;
         
         let grouping = item.standardMedicalGrouping;
         if (!grouping || grouping === 'N/A' || grouping.trim() === '') {
@@ -2570,12 +2640,82 @@ I can analyze these, compare them with our database keys, and find standard mapp
           conds = customDef?.potentialMedicalConditions && customDef.potentialMedicalConditions.length > 0 ? customDef.potentialMedicalConditions : ["General Health Assessment"];
         }
 
+        // Programmatic batch calculation of affected historical logs using agent's valueMultiplier / telemetry multiplier
+        let multiplier = typeof item.valueMultiplier === 'number' && item.valueMultiplier > 0 ? item.valueMultiplier : 1;
+        let adjustmentReason = item.valueAdjustmentReason;
+
+        // Hybrid Intelligence: if the agent returned multiplier 1, check if telemetry detection finds an obvious scale mismatch
+        const rawItemLogs = collectItemLogs(itemKey);
+        if (multiplier === 1 && rawItemLogs.length > 0) {
+          const outlierEntry = rawItemLogs.find((l: any) => {
+            const val = l.value !== undefined ? l.value : l.val;
+            const num = typeof val === 'number' ? val : parseFloat(String(val));
+            return !isNaN(num) && isBiomarkerValueImprobable(itemKey, num, range);
+          });
+          if (outlierEntry) {
+            const rawVal = outlierEntry.value !== undefined ? outlierEntry.value : outlierEntry.val;
+            const telemetryFix = computeBiomarkerTelemetryMultiplier(itemKey, rawVal, range);
+            if (telemetryFix) {
+              multiplier = telemetryFix.multiplier;
+              adjustmentReason = telemetryFix.reason;
+            }
+          }
+        }
+
+        const isUnitConversion = Boolean(
+          item.standardizedUnit &&
+          customDef?.unit &&
+          item.standardizedUnit.toLowerCase() !== String(customDef.unit).toLowerCase() &&
+          item.conversionFactor &&
+          item.conversionFactor !== 1
+        );
+
+        const affectedLogs: any[] = [];
+        if (multiplier !== 1 && Array.isArray(biomarkerHistory)) {
+          biomarkerHistory.forEach(log => {
+            if (!log.biomarkers) return;
+            const matchingKey = Object.keys(log.biomarkers).find(k => k.toLowerCase() === itemKey.toLowerCase());
+            if (matchingKey && log.biomarkers[matchingKey] !== undefined && log.biomarkers[matchingKey] !== null && log.biomarkers[matchingKey] !== '') {
+              const rawVal = log.biomarkers[matchingKey];
+              const numVal = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal));
+              if (!isNaN(numVal)) {
+                const isOutlier = isBiomarkerValueImprobable(itemKey, numVal, range);
+
+                // If it's a global unit conversion (e.g. lbs -> kg), convert all logs.
+                // If unit is unchanged, ONLY outlier entries need the scale multiplier!
+                if (isUnitConversion || isOutlier) {
+                  let convertedVal = numVal * multiplier;
+                  if (Number.isFinite(convertedVal)) {
+                    if (convertedVal >= 100) convertedVal = Math.round(convertedVal);
+                    else if (convertedVal >= 10) convertedVal = parseFloat(convertedVal.toFixed(1));
+                    else convertedVal = parseFloat(convertedVal.toFixed(3));
+                  }
+                  const logKey = log.id || `${itemKey}_${log.date}`;
+                  initialSelectedLogFixes[logKey] = true;
+                  affectedLogs.push({
+                    logId: log.id,
+                    date: log.date,
+                    key: matchingKey,
+                    oldValue: rawVal,
+                    newValue: convertedVal,
+                    isClearlyErroneous: isOutlier
+                  });
+                }
+              }
+            }
+          });
+        }
+
         return {
           ...item,
           key: itemKey,
           name: itemName,
           unit: item.standardizedUnit !== undefined ? item.standardizedUnit : item.unit,
-          normalRange: item.normalRange !== undefined ? item.normalRange : (customDef as any)?.normalRange,
+          isUnitConversion,
+          affectedLogs,
+          valueMultiplier: multiplier,
+          valueAdjustmentReason: adjustmentReason,
+          normalRange: range,
           minRange: item.minRange !== undefined ? item.minRange : (customDef as any)?.minRange,
           maxRange: item.maxRange !== undefined ? item.maxRange : (customDef as any)?.maxRange,
           optimalRange: item.optimalRange !== undefined ? item.optimalRange : (customDef as any)?.optimalRange,
@@ -2590,19 +2730,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
         };
       });
 
-      if (!isCategorise && !isCalibrate) {
-        // Filter out items where the proposed unit matches the existing unit
-        parsed = parsed.filter((item: any) => {
-          const key = item.key;
-          if (!key) return true;
-          const customDef = profile.customBiomarkers?.[key] || biomarkerDefinitions.find((b: any) => b.key === key);
-          const currentUnit = customDef?.unit || '';
-          const normProposed = (item.unit || '').trim().toLowerCase();
-          const normCurrent = (currentUnit).trim().toLowerCase();
-          return normProposed !== normCurrent;
-        });
-      }
-
+      setSelectedLogFixKeys(initialSelectedLogFixes);
       setStandardizationSummary(parsed);
 
       // Capture and save agent debug logs for this request
@@ -2821,7 +2949,24 @@ I can analyze these, compare them with our database keys, and find standard mapp
         }
       });
 
-      await onStandardizeUnits(updatesToApply);
+      const logValueCorrections: { logId?: string; date: string; key: string; newValue: number }[] = [];
+      standardizationSummary.forEach((item: any) => {
+        if (Array.isArray(item.affectedLogs)) {
+          item.affectedLogs.forEach((log: any) => {
+            const logKey = log.logId || `${item.key}_${log.date}`;
+            if (selectedLogFixKeys[logKey]) {
+              logValueCorrections.push({
+                logId: log.logId,
+                date: log.date,
+                key: log.key || item.key,
+                newValue: log.newValue
+              });
+            }
+          });
+        }
+      });
+
+      await onStandardizeUnits(updatesToApply, logValueCorrections);
       
       // Clean up localStorage agent states
       try {
@@ -2919,7 +3064,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
       // Exclude keys already auto-detected as alias candidates by the deterministic audit engine.
       // These are handled by the engine's auto-apply flow and should not be re-suggested by the AI.
       const engineDetectedAliases = new Set<string>();
-      auditReport.duplicateGroups.forEach(g => {
+      duplicateGroups.forEach(g => {
         g.candidateAliases.forEach(a => engineDetectedAliases.add(a));
         // Also exclude the master key from the consolidated cluster if it has no other alias
         // (the AI shouldn't re-deduplicate what the engine has already grouped)
@@ -5107,18 +5252,19 @@ I can analyze these, compare them with our database keys, and find standard mapp
                                   }
                                   
                                   return (
-                                    <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20">
-                                      <td className="p-3 font-medium min-w-[140px]">
-                                        <div className="font-bold text-slate-800 dark:text-slate-100">{item.name || item.key}</div>
-                                        <div className="text-[10px] text-slate-400 font-mono">{item.key}</div>
-                                        {item.potentialDuplicateOf && 
-                                         String(item.potentialDuplicateOf).trim().toLowerCase() !== String(item.key || '').trim().toLowerCase() && 
-                                         String(item.potentialDuplicateOf).trim().toLowerCase() !== String(item.name || '').trim().toLowerCase() && (
-                                          <div className="mt-1 flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800/60 font-sans">
-                                            <span>⚠️ Potential duplicate of <span className="font-mono font-bold">{item.potentialDuplicateOf}</span> — will be flagged for Duplicate & Alias Group</span>
-                                          </div>
-                                        )}
-                                      </td>
+                                    <React.Fragment key={idx}>
+                                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20">
+                                        <td className="p-3 font-medium min-w-[140px]">
+                                          <div className="font-bold text-slate-800 dark:text-slate-100">{item.name || item.key}</div>
+                                          <div className="text-[10px] text-slate-400 font-mono">{item.key}</div>
+                                          {item.potentialDuplicateOf && 
+                                            String(item.potentialDuplicateOf).trim().toLowerCase() !== String(item.key || '').trim().toLowerCase() && 
+                                            String(item.potentialDuplicateOf).trim().toLowerCase() !== String(item.name || '').trim().toLowerCase() && (
+                                            <div className="mt-1 flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800/60 font-sans">
+                                              <span>⚠️ Potential duplicate of <span className="font-mono font-bold">{item.potentialDuplicateOf}</span> — will be flagged for Duplicate & Alias Group</span>
+                                            </div>
+                                          )}
+                                        </td>
                                       {isRangeCalibrationMode ? (
                                         <>
                                           <td className="p-3 font-mono">
@@ -5215,15 +5361,99 @@ I can analyze these, compare them with our database keys, and find standard mapp
                                       ) : (
                                         <td className="p-3 font-mono">
                                           <div className="flex items-center gap-1.5">
-                                            <span className="text-slate-400 line-through text-[10px]">{originalDef?.unit || "none"}</span>
-                                            <span className="text-slate-500">→</span>
-                                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">{item.unit}</span>
+                                            {originalDef?.unit && originalDef.unit.trim().toLowerCase() !== (item.unit || '').trim().toLowerCase() ? (
+                                              <>
+                                                <span className="text-slate-400 line-through text-[10px]">{originalDef.unit}</span>
+                                                <span className="text-slate-500">→</span>
+                                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">{item.unit}</span>
+                                              </>
+                                            ) : (
+                                              <span className="text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 text-[11px]">
+                                                {item.unit || 'Standard'} (Verified)
+                                              </span>
+                                            )}
                                           </div>
                                         </td>
                                       )}
                                     </tr>
-                                  );
-                                })}
+
+                                    {/* Sub-row for batch log value conversions */}
+                                    {!isRangeCalibrationMode && !isMedicalCategorisationMode && item.affectedLogs && item.affectedLogs.length > 0 && (
+                                      <tr key={`logs-${idx}`} className="bg-amber-50/40 dark:bg-amber-950/20 border-b border-amber-200/50 dark:border-amber-900/30">
+                                        <td colSpan={2} className="p-3 pl-6">
+                                          <div className="space-y-2">
+                                            <div className="flex items-center justify-between text-xs">
+                                              <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-200">
+                                                <span>🔄 {item.isUnitConversion ? "Batch Unit Conversion" : "Outlier Reading Correction"} ({item.valueAdjustmentReason || `Scale ×${item.valueMultiplier}`}):</span>
+                                                <span className="text-[10px] bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 px-1.5 py-0.5 rounded-full font-mono font-bold">
+                                                  {item.affectedLogs.filter((l: any) => selectedLogFixKeys[l.logId || `${item.key}_${l.date}`]).length} / {item.affectedLogs.length} selected
+                                                </span>
+                                              </div>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const allSelected = item.affectedLogs.every((l: any) => selectedLogFixKeys[l.logId || `${item.key}_${l.date}`]);
+                                                  setSelectedLogFixKeys(prev => {
+                                                    const next = { ...prev };
+                                                    item.affectedLogs.forEach((l: any) => {
+                                                      next[l.logId || `${item.key}_${l.date}`] = !allSelected;
+                                                    });
+                                                    return next;
+                                                  });
+                                                }}
+                                                className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                                              >
+                                                {item.affectedLogs.every((l: any) => selectedLogFixKeys[l.logId || `${item.key}_${l.date}`]) ? "Deselect All Logs" : "Select All Logs"}
+                                              </button>
+                                            </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                              {item.affectedLogs.map((log: any, logIdx: number) => {
+                                                const logKey = log.logId || `${item.key}_${log.date}`;
+                                                const isChecked = !!selectedLogFixKeys[logKey];
+                                                return (
+                                                  <label
+                                                    key={logIdx}
+                                                    className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                                                      isChecked
+                                                        ? 'bg-amber-100/70 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700 text-slate-800 dark:text-slate-100'
+                                                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 opacity-60'
+                                                    }`}
+                                                  >
+                                                    <input
+                                                      type="checkbox"
+                                                      checked={isChecked}
+                                                      onChange={() => {
+                                                        setSelectedLogFixKeys(prev => ({
+                                                          ...prev,
+                                                          [logKey]: !prev[logKey]
+                                                        }));
+                                                      }}
+                                                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                                                    />
+                                                    <div className="flex-1 min-w-0 font-mono text-[11px]">
+                                                      <div className="font-bold text-slate-700 dark:text-slate-300 truncate">{log.date}</div>
+                                                      <div className="flex items-center gap-1">
+                                                        <span className="line-through text-slate-400">{log.oldValue}</span>
+                                                        <span className="text-slate-500">→</span>
+                                                        <span className="font-bold text-emerald-600 dark:text-emerald-400">{log.newValue} {item.unit}</span>
+                                                      </div>
+                                                    </div>
+                                                    {log.isClearlyErroneous && (
+                                                      <span className="text-[9px] bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold px-1.5 py-0.5 rounded shrink-0">
+                                                        Outlier
+                                                      </span>
+                                                    )}
+                                                  </label>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
                               </tbody>
                             </table>
                           </div>
@@ -5987,7 +6217,8 @@ I can analyze these, compare them with our database keys, and find standard mapp
                           customDef={custom}
                           logsCount={logsCount}
                           isSelected={isSelected}
-                          telemetryFlag={allTelemetryFlags.find(f => f.key === key)}
+                          telemetryFlag={telemetryFlagMap.get(key)}
+                          onOpenAudit={(tab) => handleOpenAuditForBiomarker(key, tab)}
                           onTagClick={setFilterTag}
                           onFlagNotUsed={onFlagNotUsed}
                           allGroupings={allGroupings}
@@ -6076,7 +6307,8 @@ I can analyze these, compare them with our database keys, and find standard mapp
                           customDef={custom}
                           logsCount={logsCount}
                           isSelected={isSelected}
-                          telemetryFlag={allTelemetryFlags.find(f => f.key === key)}
+                          telemetryFlag={telemetryFlagMap.get(key)}
+                          onOpenAudit={(tab) => handleOpenAuditForBiomarker(key, tab)}
                           onTagClick={setFilterTag}
                           onFlagNotUsed={onFlagNotUsed}
                           allGroupings={allGroupings}
@@ -6328,54 +6560,72 @@ I can analyze these, compare them with our database keys, and find standard mapp
       />
 
       {/* BIOMARKER HEALTH & QUALITY AUDIT MODAL */}
-      <BiomarkerAuditModal
-        isOpen={showAuditModal}
-        onClose={() => setShowAuditModal(false)}
-        profile={profile}
-        biomarkers={biomarkers}
-        biomarkerHistory={biomarkerHistory}
-        onUpdateProfile={onUpdateProfile}
-        onDeleteBiomarker={onDeleteBiomarker}
-        onCombineBiomarkers={onCombineBiomarkers}
-        onBatchCombineBiomarkers={onBatchCombineBiomarkers}
-        onLaunchNameConsolidation={(keys) => {
-          setSelectedKeys(keys);
-          setIsNameConsolidationMode(true);
-          setIsAgentMode(false);
-          setIsMedicalCategorisationMode(false);
-          setIsDataAccuracyMode(false);
-          setIsChatMode(false);
-          handleRunConsolidationAgent(true, keys);
-        }}
-        onLaunchUnitStandardization={(keys) => {
-          setSelectedKeys(keys);
-          setIsMedicalCategorisationMode(false);
-          setIsAgentMode(true);
-          handleRunStandardizationAgent(keys, 'standardize');
-        }}
-        onLaunchMedicalCategorisation={(keys) => {
-          setSelectedKeys(keys);
-          setIsMedicalCategorisationMode(true);
-          setIsRangeCalibrationMode(false);
-          setIsAgentMode(true);
-          handleRunStandardizationAgent(keys, 'categorise');
-        }}
-        onLaunchRangeCalibrator={(keys) => {
-          setSelectedKeys(keys);
-          setIsRangeCalibrationMode(true);
-          setIsMedicalCategorisationMode(false);
-          setIsNameConsolidationMode(false);
-          setIsDataAccuracyMode(false);
-          setIsChatMode(false);
-          setIsAgentMode(true);
-          setStandardizationYaml(null);
-          setStandardizationSummary(null);
-          handleRunStandardizationAgent(keys, 'calibrate');
-        }}
-        onSelectBiomarkerKeys={(keys) => {
-          setSelectedKeys(keys);
-        }}
-      />
+      {showAuditModal && (
+        <BiomarkerAuditModal
+          isOpen={showAuditModal}
+          onClose={() => {
+            setShowAuditModal(false);
+            setAuditInitialFocusKey(null);
+          }}
+          initialTab={auditInitialTab}
+          initialFocusKey={auditInitialFocusKey}
+          profile={profile}
+          biomarkers={biomarkers}
+          biomarkerHistory={biomarkerHistory}
+          onUpdateProfile={onUpdateProfile}
+          onDeleteBiomarker={onDeleteBiomarker}
+          onCombineBiomarkers={onCombineBiomarkers}
+          onBatchCombineBiomarkers={onBatchCombineBiomarkers}
+          onLaunchNameConsolidation={(keys) => {
+            setSelectedKeys(keys);
+            setIsNameConsolidationMode(true);
+            setIsAgentMode(false);
+            setIsMedicalCategorisationMode(false);
+            setIsDataAccuracyMode(false);
+            setIsChatMode(false);
+            handleRunConsolidationAgent(true, keys);
+          }}
+          onLaunchUnitStandardization={(keys) => {
+            setSelectedKeys(keys);
+            setIsRangeCalibrationMode(false);
+            setIsMedicalCategorisationMode(false);
+            setIsNameConsolidationMode(false);
+            setIsDataAccuracyMode(false);
+            setIsChatMode(false);
+            setIsAgentMode(true);
+            setStandardizationYaml(null);
+            setStandardizationSummary(null);
+            handleRunStandardizationAgent(keys, 'standardize');
+          }}
+          onLaunchMedicalCategorisation={(keys) => {
+            setSelectedKeys(keys);
+            setIsMedicalCategorisationMode(true);
+            setIsRangeCalibrationMode(false);
+            setIsNameConsolidationMode(false);
+            setIsDataAccuracyMode(false);
+            setIsChatMode(false);
+            setIsAgentMode(true);
+            setStandardizationYaml(null);
+            setStandardizationSummary(null);
+            handleRunStandardizationAgent(keys, 'categorise');
+          }}
+          onLaunchRangeCalibrator={(keys) => {
+            setSelectedKeys(keys);
+            setIsRangeCalibrationMode(true);
+            setIsMedicalCategorisationMode(false);
+            setIsNameConsolidationMode(false);
+            setIsDataAccuracyMode(false);
+            setIsChatMode(false);
+            setIsAgentMode(true);
+            setStandardizationYaml(null);
+            setStandardizationSummary(null);
+            handleRunStandardizationAgent(keys, 'calibrate');
+          }}
+          onSelectBiomarkerKeys={(keys) => {
+            setSelectedKeys(keys);
+          }}
+        />
+      )}
 
       {/* AUTO-CALIBRATE PREVIEW & APPROVAL MODAL */}
       {false && calibrationModalKeys && null}

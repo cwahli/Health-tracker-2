@@ -496,9 +496,11 @@ export default function FoodHistoryTab({
       if (item.type === 'log') {
         const log = item.data;
         const name = log.name || '';
+        const message = log.message || log.description || '';
         const composition = log.composition || '';
         const healthImpact = log.healthImpact || '';
         return name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+               message.toLowerCase().includes(searchTerm.toLowerCase()) ||
                composition.toLowerCase().includes(searchTerm.toLowerCase()) ||
                healthImpact.toLowerCase().includes(searchTerm.toLowerCase());
       } else {
@@ -1505,7 +1507,7 @@ export default function FoodHistoryTab({
 
                       {/* AI Diagnostic Summary */}
                       {(() => {
-                        const summaryText = log.description || log.message || (log.healthImpact && !log.healthImpact.includes("Contributes to daily macro") ? log.healthImpact : null);
+                        const summaryText = log.message || log.description || (log.healthImpact && !log.healthImpact.includes("Contributes to daily macro") ? log.healthImpact : null) || effectiveComposition || log.composition;
                         if (!summaryText) return null;
                         return (
                           <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium text-left bg-indigo-50/40 dark:bg-indigo-950/20 p-3 rounded-xl border border-indigo-100/30 dark:border-indigo-900/20 my-1">

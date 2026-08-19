@@ -298,6 +298,15 @@ const sanitizeFoodsForSync = (foods: FoodLog[], opts?: { stripAllDataImages?: bo
     return stripAllDataImages || url.length > 500000;
   };
   return foods.map(food => {
+    if (food.sync_state === 'delete') {
+      return {
+        id: food.id,
+        date: food.date || '',
+        name: food.name || '',
+        sync_state: 'delete' as const,
+        updated_at: food.updated_at || Date.now()
+      } as any;
+    }
     let imageUrl = food.imageUrl;
     let imageUrls = food.imageUrls;
     if (shouldStrip(imageUrl)) {
@@ -331,41 +340,44 @@ export const upsertProfileToSupabase = async (
 
   return new Promise<void>((resolve) => {
     profilePushTimeout = setTimeout(async () => {
-      if (!latestProfilePushArgs) return resolve();
-      const { profile: p, uid: u, extras: e } = latestProfilePushArgs;
+      if (!latestProfilePushArgs) {
+        resolve();
+        return;
+      }
+      const { profile: currentProf, uid: currentUid, extras: currentExtras } = latestProfilePushArgs;
       latestProfilePushArgs = null;
-      profilePushTimeout = null;
 
-      const trackId = dispatchDbInteraction('upload', `users/${u} (Profile)`, p, 'Supabase');
       try {
+        const payload: any = {
+          uid: currentUid,
+          profile: currentProf,
+          email: currentExtras?.email || currentProf?.email
+        };
+        if (currentExtras?.actions) payload.actions = currentExtras.actions;
+        if (currentExtras?.dailyBenefits) payload.dailyBenefits = currentExtras.dailyBenefits;
+        if (currentExtras?.report) payload.report = currentExtras.report;
+        if (currentExtras?.forceOverwrite) payload.forceOverwrite = true;
+
         const res = await fetchWithRetry('/api/sync/supabase-push', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(auth.currentUser ? { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` } : {}) },
-          body: JSON.stringify({
-            uid: u,
-            email: e?.email,
-            profile: p,
-            actions: e?.actions,
-            dailyBenefits: e?.dailyBenefits,
-            report: e?.report,
-            forceOverwrite: e?.forceOverwrite
-          })
+          headers: {
+            'Content-Type': 'application/json',
+            ...(auth.currentUser ? { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` } : {})
+          },
+          body: JSON.stringify(payload)
         });
-        if (res.ok) {
-          completeDbInteraction(trackId, true, p ? JSON.stringify(p).length : 0, undefined, 1);
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          console.warn('[Supabase Profile Sync] Failed to upsert profile:', res.status, errText);
         } else {
-          const txt = await res.text().catch(() => '');
-          completeDbInteraction(trackId, false, 0, txt, 1);
-          if (res.status !== 429) {
-            console.warn('[Supabase Sync] Profile push warning:', res.status, txt);
-          }
+          console.log('[Supabase Profile Sync] Successfully updated profile & dashboard on Supabase');
         }
       } catch (err: any) {
-        completeDbInteraction(trackId, false, 0, err.message || String(err), 1);
-        console.warn('[Supabase Sync] Profile push currently unavailable:', err.message || String(err));
+        console.warn('[Supabase Profile Sync] Network error during profile push:', err?.message || err);
+      } finally {
+        resolve();
       }
-      resolve();
-    }, 1000);
+    }, 250);
   });
 };
 
@@ -374,22 +386,42 @@ export const syncLogsWithTimeBuckets = async (
   uid: string, 
   localFoods: FoodLog[], 
   localBiomarkers: BiomarkerLog[],
-  deletedFoodLogIds: Record<string, number>,
-  deletedBiomarkerLogIds: Record<string, number>,
+  deletedFoodLogIds: Record<string, number> = {},
+  deletedBiomarkerLogIds: Record<string, number> = {},
   onSyncComplete: (syncedFoods: FoodLog[], syncedBiomarkers: BiomarkerLog[]) => void,
   options?: { forceAll?: boolean; forceAllBiomarkers?: boolean; forceAllFoods?: boolean }
 ) => {
   const forceAllFoods = !!options?.forceAllFoods;
   const forceAllBiomarkers = !!(options?.forceAllBiomarkers || options?.forceAll);
 
-  // forceAllFoods/forceAllBiomarkers (Force Push): re-upload every non-deleted log so other devices can catch up.
-  // Normal path: anything not explicitly 'synced' (including undefined sync_state) must upload.
+  const deletedFoodLogsFromMap: FoodLog[] = Object.keys(deletedFoodLogIds || {}).map(id => ({
+    id,
+    date: '',
+    name: '',
+    sync_state: 'delete' as const,
+    updated_at: deletedFoodLogIds[id]
+  } as any));
+
   const unsyncedFoods = forceAllFoods
     ? localFoods.filter(f => f && f.id && f.sync_state !== 'delete')
-    : localFoods.filter(f => f && f.id && f.sync_state !== 'delete' && f.sync_state !== 'synced');
+    : [
+        ...localFoods.filter(f => f && f.id && f.sync_state !== 'synced'),
+        ...deletedFoodLogsFromMap.filter(d => !localFoods.some(f => f.id === d.id))
+      ];
+
+  const deletedBioLogsFromMap: BiomarkerLog[] = Object.keys(deletedBiomarkerLogIds || {}).map(id => ({
+    id,
+    date: '',
+    sync_state: 'delete' as const,
+    updated_at: deletedBiomarkerLogIds[id]
+  } as any));
+
   const unsyncedBiomarkers = forceAllBiomarkers
     ? localBiomarkers.filter(b => b && b.id && b.sync_state !== 'delete')
-    : localBiomarkers.filter(b => b && b.id && b.sync_state !== 'delete' && b.sync_state !== 'synced');
+    : [
+        ...localBiomarkers.filter(b => b && b.id && b.sync_state !== 'synced'),
+        ...deletedBioLogsFromMap.filter(d => !localBiomarkers.some(b => b.id === d.id))
+      ];
   
   if (unsyncedFoods.length === 0 && unsyncedBiomarkers.length === 0) {
     onSyncComplete(
@@ -414,23 +446,23 @@ export const syncLogsWithTimeBuckets = async (
 
     if (pushRes.ok) {
       // Update local state flags ONLY on successful response
-      const syncedFoodIds = new Set(unsyncedFoods.filter(f => f.sync_state !== 'delete').map(f => f.id));
-      const deletedFoodIds = new Set(unsyncedFoods.filter(f => f.sync_state === 'delete').map(f => f.id));
+      const syncedFoodIds = new Set(unsyncedFoods.map(f => f.id));
       for (let i = updatedLocalFoods.length - 1; i >= 0; i--) {
-        if (deletedFoodIds.has(updatedLocalFoods[i].id)) {
+        const item = updatedLocalFoods[i];
+        if (item.sync_state === 'delete' || (deletedFoodLogIds[item.id] && (item.updated_at || 0) <= deletedFoodLogIds[item.id])) {
           updatedLocalFoods.splice(i, 1);
-        } else if (syncedFoodIds.has(updatedLocalFoods[i].id)) {
-          updatedLocalFoods[i] = { ...updatedLocalFoods[i], sync_state: 'synced' };
+        } else if (syncedFoodIds.has(item.id)) {
+          updatedLocalFoods[i] = { ...item, sync_state: 'synced' };
         }
       }
 
-      const syncedBioIds = new Set(unsyncedBiomarkers.filter(b => b.sync_state !== 'delete').map(b => b.id));
-      const deletedBioIds = new Set(unsyncedBiomarkers.filter(b => b.sync_state === 'delete').map(b => b.id));
+      const syncedBioIds = new Set(unsyncedBiomarkers.map(b => b.id));
       for (let i = updatedLocalBiomarkers.length - 1; i >= 0; i--) {
-        if (deletedBioIds.has(updatedLocalBiomarkers[i].id)) {
+        const item = updatedLocalBiomarkers[i];
+        if (item.sync_state === 'delete' || (deletedBiomarkerLogIds[item.id] && (item.updated_at || 0) <= deletedBiomarkerLogIds[item.id])) {
           updatedLocalBiomarkers.splice(i, 1);
-        } else if (syncedBioIds.has(updatedLocalBiomarkers[i].id)) {
-          updatedLocalBiomarkers[i] = { ...updatedLocalBiomarkers[i], sync_state: 'synced' };
+        } else if (syncedBioIds.has(item.id)) {
+          updatedLocalBiomarkers[i] = { ...item, sync_state: 'synced' };
         }
       }
       completeDbInteraction(trackId, true, JSON.stringify(sanitizedFoods).length + JSON.stringify(unsyncedBiomarkers).length, undefined, unsyncedFoods.length + unsyncedBiomarkers.length);

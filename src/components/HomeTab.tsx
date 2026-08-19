@@ -1,13 +1,13 @@
 import React from 'react';
 import { UserProfile, FoodLog, HealthAction, DailyBenefit, RecommendationReport, BiomarkerLog, ChatMessage, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
-import { CheckCircle2, Circle, AlertCircle, AlertTriangle, ShieldAlert, Wrench, ArrowRight, Heart, ChevronDown, ChevronUp, Calendar, MapPin, Search, Sparkles, Trash2, Clock, Settings, X, TrendingUp, Activity, Copy, FlaskConical, Plus, BrainCircuit, Loader } from 'lucide-react';
+import { CheckCircle2, Circle, AlertCircle, AlertTriangle, ShieldAlert, Wrench, ArrowRight, Heart, ChevronDown, ChevronUp, Calendar, MapPin, Search, Sparkles, Trash2, Clock, Settings, X, TrendingUp, Activity, Copy, FlaskConical, Plus, BrainCircuit, Loader, Loader2, CheckSquare, Square, Edit2, Save, Check, Zap } from 'lucide-react';
 import { parseActionDetails, getDynamicTimeTag, sortActionsByDueDate } from '../utils/actionUtils';
-import { getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity, getBiomarkerMetadata, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, isBiomarkerApproved } from '../utils/biomarkers';
+import { getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity, getBiomarkerMetadata, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, isBiomarkerApproved, isBiomarkerValueImprobable, diagnoseTelemetryIssue, getMappedBiomarkerKey } from '../utils/biomarkers';
 
 const getBiomarkerDef = (key: string) => biomarkerDefinitions.find(d => d.key === key);
 import { getAgentCalibration, formatOptimalTargetValue } from '../utils/agentCalibration';
-import { getCurrentDateInTimezone } from '../utils/dateUtils';
+import { getCurrentDateInTimezone, toYYYYMMDD } from '../utils/dateUtils';
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { PRIMARY_NUTRIENTS, isCoreNutrient, isAdditionalNutrient } from '../utils/nutrients';
 import { nutrientDefinitions } from '../utils/nutrition';
@@ -66,6 +66,8 @@ interface HomeTabProps {
   onEditBiomarkerLog: (id: string, key: string, value: string | number, newDate?: string) => void;
   onDeleteBiomarkerLog: (id: string) => void;
   onDeleteBiomarkerFromLog?: (id: string, key: string) => void;
+  onBatchDeleteBiomarkersFromLogs?: (deletions: { id: string; key: string }[]) => Promise<void> | void;
+  onBatchEditBiomarkersInLogs?: (updates: { id: string; key: string; value: string | number }[]) => Promise<void> | void;
   onLogMedical?: (biomarkers: { [key: string]: number | string }, profileUpdates?: Partial<UserProfile>, date?: string, entries?: { date: string | null; biomarkers: { [key: string]: number | string } }[]) => void;
   onOpenAgentChat?: (agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'health_baseline' | 'agent7' | 'data_review' | 'biomarker_review', options?: { prefillMessage?: string; dataReviewBatchKeys?: string[]; dataReviewBatchIdx?: number | string; autoSendMessage?: string; biomarkerKey?: string }) => void;
   hideSensitive: boolean;
@@ -102,6 +104,8 @@ export default function HomeTab({
   onEditBiomarkerLog,
   onDeleteBiomarkerLog,
   onDeleteBiomarkerFromLog,
+  onBatchDeleteBiomarkersFromLogs,
+  onBatchEditBiomarkersInLogs,
   onLogMedical,
   onOpenAgentChat,
   hideSensitive,
@@ -410,7 +414,44 @@ export default function HomeTab({
   }, [flaggedTelemetryErrors, profile, allDefinitions]);
 
   const [showTelemetryModal, setShowTelemetryModal] = React.useState(false);
+  const [selectedErrorKeys, setSelectedErrorKeys] = React.useState<Set<string>>(new Set());
+  const [editingLogState, setEditingLogState] = React.useState<{ logId: string; date: string; key: string; val: string | number } | null>(null);
+  const [editingLogVal, setEditingLogVal] = React.useState<string>('');
+  const [telemetryFilterTab, setTelemetryFilterTab] = React.useState<'all' | 'auto_fix' | 'ai_review'>('all');
+  const [appliedToastMessage, setAppliedToastMessage] = React.useState<string | null>(null);
   const [pendingAgentTrigger, setPendingAgentTrigger] = React.useState<{ agentType: any; options?: any } | null>(null);
+  const [confirmDeleteEntryKey, setConfirmDeleteEntryKey] = React.useState<string | null>(null);
+  const [confirmBatchDelete, setConfirmBatchDelete] = React.useState(false);
+  const [savingActionKeys, setSavingActionKeys] = React.useState<Record<string, string>>({});
+  const [savedActionKeys, setSavedActionKeys] = React.useState<Set<string>>(new Set());
+
+  const markKeySaving = React.useCallback((key: string, label: string = 'Saving...') => {
+    setSavingActionKeys(prev => ({ ...prev, [key]: label }));
+  }, []);
+
+  const markKeySaved = React.useCallback((key: string) => {
+    setSavingActionKeys(prev => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setSavedActionKeys(prev => new Set(prev).add(key));
+    setTimeout(() => {
+      setSavedActionKeys(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }, 2200);
+  }, []);
+
+  React.useEffect(() => {
+    if (flaggedTelemetryErrors.length > 0) {
+      setSelectedErrorKeys(new Set(flaggedTelemetryErrors.map(e => e.key)));
+    } else {
+      setSelectedErrorKeys(new Set());
+    }
+  }, [flaggedTelemetryErrors]);
 
   const handleInterceptAgentCall = (agentType: any, options?: any) => {
     if (flaggedTelemetryErrors.length > 0 && (agentType === 'health_baseline' || agentType === 'agent1' || agentType === 'agent4')) {
@@ -1118,19 +1159,47 @@ export default function HomeTab({
               )}
             </p>
 
-            {/* Issue Details Chips */}
-            <div className="flex flex-wrap gap-2 pt-1">
+            {/* Issue Details Chips (Interactive) */}
+            <div className="flex flex-col sm:flex-row flex-wrap gap-2 pt-1">
               {flaggedTelemetryErrors.map(err => (
-                <div key={err.key} className="px-2.5 py-1 bg-amber-100/80 dark:bg-amber-950/50 border border-amber-300/40 dark:border-amber-700/50 rounded-lg text-xs font-medium text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
-                  <span className="font-bold">{err.name}:</span>
-                  <span className="font-mono text-[11px] text-amber-700 dark:text-amber-300">{err.samples.join(' → ')}</span>
-                </div>
+                <button
+                  key={err.key}
+                  type="button"
+                  onClick={() => {
+                    setSelectedErrorKeys(new Set([err.key]));
+                    setShowTelemetryModal(true);
+                  }}
+                  className="px-2.5 py-1.5 bg-amber-100/80 hover:bg-amber-200/80 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 border border-amber-300/40 dark:border-amber-700/50 rounded-lg text-xs font-medium text-amber-900 dark:text-amber-200 flex flex-col gap-1 text-left transition-all cursor-pointer shadow-2xs active:scale-98"
+                >
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-bold">{err.name}:</span>
+                    <span className="font-mono text-[11px] text-amber-700 dark:text-amber-300">{err.samples.join(' → ')}</span>
+                    {err.badgeLabel && (
+                      <span className="text-[10px] bg-rose-200/80 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200 px-1.5 py-0.5 rounded font-bold">
+                        {err.badgeLabel}
+                      </span>
+                    )}
+                  </div>
+                  {err.preciseCause && (
+                    <div className="text-[11px] text-rose-800 dark:text-rose-300 font-normal leading-tight">
+                      {err.preciseCause}
+                    </div>
+                  )}
+                </button>
               ))}
               {flaggedBiomarkers.filter(b => !flaggedTelemetryErrors.some(t => t.key === b.key)).map(b => (
-                <div key={b.key} className="px-2.5 py-1 bg-amber-100/80 dark:bg-amber-950/50 border border-amber-300/40 dark:border-amber-700/50 rounded-lg text-xs font-medium text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                <button
+                  key={b.key}
+                  type="button"
+                  onClick={() => {
+                    setSelectedErrorKeys(new Set([b.key]));
+                    setShowTelemetryModal(true);
+                  }}
+                  className="px-2.5 py-1 bg-amber-100/80 hover:bg-amber-200/80 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 border border-amber-300/40 dark:border-amber-700/50 rounded-lg text-xs font-medium text-amber-900 dark:text-amber-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-98"
+                >
                   <span className="font-bold">{b.def.name || b.key}:</span>
                   <span className="font-mono text-[11px] text-amber-700 dark:text-amber-300">Flagged for Review</span>
-                </div>
+                </button>
               ))}
             </div>
 
@@ -1162,10 +1231,22 @@ export default function HomeTab({
                     });
                   }
                 }}
-                className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5"
+                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5"
               >
                 <BrainCircuit className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
                 <span>Review with AI Agent</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedErrorKeys(new Set(flaggedTelemetryErrors.map(e => e.key)));
+                  setShowTelemetryModal(true);
+                }}
+                className="px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-slate-700 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700/60 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <span>Manage & Edit All Issues ({allFlaggedKeys.length})</span>
               </button>
             </div>
           </div>
@@ -2319,74 +2400,766 @@ export default function HomeTab({
         />
       )}
 
-      {/* Telemetry Warning Intercept Modal */}
-      {showTelemetryModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-theme-bg-card border border-amber-500/40 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in duration-150">
-            <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400">
-              <ShieldAlert className="w-7 h-7 shrink-0 text-amber-500" />
-              <div>
-                <h3 className="font-bold text-slate-900 dark:text-white text-base font-display">Flagged Telemetry Errors</h3>
-                <p className="text-xs text-slate-500">Improbable biomarker log entries detected</p>
-              </div>
-            </div>
+      {/* Flagged Biomarkers & Telemetry Error Management Modal */}
+      {showTelemetryModal && (() => {
+        const autoFixableCount = flaggedTelemetryErrors.filter(e => e.proposedAutoFix?.canAutoFix).length;
+        const aiReviewCount = flaggedTelemetryErrors.filter(e => !e.proposedAutoFix?.canAutoFix).length;
 
-            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              Your biometric records contain scaling or decimal notation errors (e.g. Hematocrit recorded as <span className="font-mono bg-amber-100 dark:bg-amber-950/60 px-1 py-0.5 rounded text-amber-900 dark:text-amber-300 font-bold">48 vs 0.48 / 3</span>, or Lymphocyte count <span className="font-mono bg-amber-100 dark:bg-amber-950/60 px-1 py-0.5 rounded text-amber-900 dark:text-amber-300 font-bold">11.8</span>).
-              Running the Health Coach or Diagnostic Agents on uncorrected data may result in skewed health advice.
-            </p>
+        const filteredErrors = flaggedTelemetryErrors.filter(e => {
+          if (telemetryFilterTab === 'auto_fix') return e.proposedAutoFix?.canAutoFix;
+          if (telemetryFilterTab === 'ai_review') return !e.proposedAutoFix?.canAutoFix;
+          return true;
+        });
 
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-xl space-y-1.5 text-xs">
-              <span className="text-[10px] uppercase tracking-wider font-bold text-amber-700 dark:text-amber-400 block">Flagged Logs:</span>
-              {flaggedTelemetryErrors.map(err => (
-                <div key={err.key} className="flex justify-between items-center">
-                  <span className="font-bold text-amber-950 dark:text-amber-200">{err.name}</span>
-                  <span className="font-mono text-[11px] text-amber-700 dark:text-amber-300">{err.samples.join(' | ')}</span>
+        const selectedAutoFixableCount = flaggedTelemetryErrors.filter(e => selectedErrorKeys.has(e.key) && e.proposedAutoFix?.canAutoFix).length;
+
+        const handleAutoFixBiomarker = (err: any) => {
+          if (!err.proposedAutoFix?.canAutoFix) return;
+          const mult = err.proposedAutoFix.proposedMultiplier;
+          const custom = profile.customBiomarkers?.[err.key];
+          const def = allDefinitions.find(d => d.key === err.key) || biomarkerDefinitions.find(d => d.key === err.key);
+          const range = custom?.normalRange || def?.normalRange;
+
+          const updatesToApply: { id: string; key: string; value: number }[] = [];
+          (activeHistory || []).forEach(log => {
+            if (!log.biomarkers || !log.id) return;
+            const rawKey = Object.keys(log.biomarkers).find(k => {
+              const canBk = getMappedBiomarkerKey(k) || k;
+              return canBk === err.key || canBk.toLowerCase().replace(/[\s_]/g, '') === err.key.toLowerCase().replace(/[\s_]/g, '') || k.toLowerCase().replace(/[\s_]/g, '') === err.key.toLowerCase().replace(/[\s_]/g, '');
+            }) || err.key;
+            const rawVal = log.biomarkers[rawKey];
+            if (rawVal === undefined || rawVal === null) return;
+            const num = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal));
+            if (!isNaN(num) && isBiomarkerValueImprobable(err.key, num, range)) {
+              let converted = num * mult;
+              if (converted >= 100) converted = Math.round(converted);
+              else if (converted >= 10) converted = parseFloat(converted.toFixed(1));
+              else converted = parseFloat(converted.toFixed(3));
+              updatesToApply.push({ id: log.id, key: rawKey, value: converted });
+            }
+          });
+
+          if (updatesToApply.length === 0) return;
+          if (onBatchEditBiomarkersInLogs) {
+            onBatchEditBiomarkersInLogs(updatesToApply);
+          } else {
+            updatesToApply.forEach(u => onEditBiomarkerLog(u.id, u.key, u.value));
+          }
+
+          setAppliedToastMessage(`⚡ Applied auto-fix to ${updatesToApply.length} reading(s) for ${err.name}`);
+          setTimeout(() => setAppliedToastMessage(null), 3500);
+        };
+
+        const handleAutoFixAllSelected = () => {
+          const keys = Array.from(selectedErrorKeys);
+          const targetErrors = flaggedTelemetryErrors.filter(e => keys.includes(e.key) && e.proposedAutoFix?.canAutoFix);
+          if (targetErrors.length === 0) return;
+
+          const updatesToApply: { id: string; key: string; value: number }[] = [];
+          targetErrors.forEach(err => {
+            const mult = err.proposedAutoFix!.proposedMultiplier;
+            const custom = profile.customBiomarkers?.[err.key];
+            const def = allDefinitions.find(d => d.key === err.key) || biomarkerDefinitions.find(d => d.key === err.key);
+            const range = custom?.normalRange || def?.normalRange;
+
+            (activeHistory || []).forEach(log => {
+              if (!log.biomarkers || !log.id) return;
+              const rawKey = Object.keys(log.biomarkers).find(k => {
+                const canBk = getMappedBiomarkerKey(k) || k;
+                return canBk === err.key || canBk.toLowerCase().replace(/[\s_]/g, '') === err.key.toLowerCase().replace(/[\s_]/g, '') || k.toLowerCase().replace(/[\s_]/g, '') === err.key.toLowerCase().replace(/[\s_]/g, '');
+              }) || err.key;
+              const rawVal = log.biomarkers[rawKey];
+              if (rawVal === undefined || rawVal === null) return;
+              const num = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal));
+              if (!isNaN(num) && isBiomarkerValueImprobable(err.key, num, range)) {
+                let converted = num * mult;
+                if (converted >= 100) converted = Math.round(converted);
+                else if (converted >= 10) converted = parseFloat(converted.toFixed(1));
+                else converted = parseFloat(converted.toFixed(3));
+                updatesToApply.push({ id: log.id, key: rawKey, value: converted });
+              }
+            });
+          });
+
+          if (updatesToApply.length === 0) return;
+          if (onBatchEditBiomarkersInLogs) {
+            onBatchEditBiomarkersInLogs(updatesToApply);
+          } else {
+            updatesToApply.forEach(u => onEditBiomarkerLog(u.id, u.key, u.value));
+          }
+
+          setAppliedToastMessage(`⚡ Batch converted ${updatesToApply.length} reading(s) across ${targetErrors.length} biomarker(s)!`);
+          setTimeout(() => setAppliedToastMessage(null), 3500);
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col p-2 sm:p-4 md:p-6 overflow-hidden animate-in fade-in duration-200">
+            <div className="bg-theme-bg-card border border-amber-500/30 rounded-3xl w-full h-full max-w-6xl mx-auto flex flex-col shadow-2xl overflow-hidden">
+              
+              {/* Header */}
+              <div className="p-4 sm:p-6 border-b border-theme-border flex items-start justify-between gap-4 bg-slate-50/80 dark:bg-slate-900/60 shrink-0">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 shadow-sm">
+                    <ShieldAlert className="w-6 h-6 text-amber-500 animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h2 className="font-bold text-slate-900 dark:text-white text-lg sm:text-xl font-display">
+                        Flagged Telemetry & Outlier Errors
+                      </h2>
+                      <span className="text-[11px] font-mono px-2.5 py-0.5 bg-amber-500/20 text-amber-800 dark:text-amber-300 rounded-full font-bold border border-amber-500/30">
+                        {flaggedTelemetryErrors.length} Issue{flaggedTelemetryErrors.length > 1 ? 's' : ''}
+                      </span>
+                      {autoFixableCount > 0 && (
+                        <span className="text-[11px] font-mono px-2.5 py-0.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded-full font-bold border border-emerald-500/30 flex items-center gap-1">
+                          <Zap className="w-3 h-3 text-emerald-500" />
+                          <span>{autoFixableCount} Auto-Fixable</span>
+                        </span>
+                      )}
+                      {aiReviewCount > 0 && (
+                        <span className="text-[11px] font-mono px-2.5 py-0.5 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 rounded-full font-bold border border-indigo-500/30 flex items-center gap-1">
+                          <BrainCircuit className="w-3 h-3 text-indigo-500" />
+                          <span>{aiReviewCount} Need AI Review</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-3xl leading-relaxed">
+                      Review improbable telemetry readings, scale shifts, and unit discrepancies. Apply deterministic mathematical auto-fixes (e.g. 10× scale shifts, percentage differentials, US to SI conversions) in 1 click, edit readings inline, or batch-review complex cases with the AI Agent.
+                    </p>
+                  </div>
                 </div>
-              ))}
-            </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTelemetryModal(false);
+                    setEditingLogState(null);
+                  }}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                  title="Close"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
 
-            <div className="flex flex-col gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTelemetryModal(false);
-                  if (onOpenAgentChat) {
-                    const errorKeys = flaggedTelemetryErrors.map(e => e.key);
-                    const names = flaggedTelemetryErrors.map(e => e.name).join(', ');
-                    const prefillMessage = `Please review my flagged biomarkers: ${names}\n\n` +
-                      flaggedTelemetryErrors.map(e => `• ${e.name}: Scaling/unit error detected. Recent logs: ${e.samples.join(' → ')}`).join('\n') +
-                      `\n\nPlease analyze all these flagged biomarkers simultaneously, evaluate my full log history, and propose diagnostic insights or corrections.`;
+              {/* Success Notification Banner */}
+              {appliedToastMessage && (
+                <div className="px-5 py-2.5 bg-emerald-500 text-white text-xs font-bold flex items-center justify-between shadow-sm animate-in slide-in-from-top duration-200 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-100" />
+                    <span>{appliedToastMessage}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAppliedToastMessage(null)}
+                    className="text-white/80 hover:text-white cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
 
-                    onOpenAgentChat('biomarker_review', {
-                      biomarkerKey: errorKeys.length === 1 ? errorKeys[0] : undefined,
-                      dataReviewBatchKeys: errorKeys,
-                      prefillMessage
-                    });
-                  }
-                }}
-                className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 active:scale-98 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
-              >
-                <BrainCircuit className="w-4 h-4 text-amber-300 animate-pulse" />
-                Review with AI Agent (Recommended)
-              </button>
+              {/* Filter Tabs & Selection Toolbar */}
+              <div className="px-4 sm:px-6 py-3 bg-slate-100/70 dark:bg-slate-900/80 border-b border-theme-border flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+                {/* Left: Filter Tabs */}
+                <div className="flex items-center gap-1.5 p-1 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => setTelemetryFilterTab('all')}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                      telemetryFilterTab === 'all'
+                        ? "bg-amber-500 text-white shadow-xs"
+                        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60"
+                    }`}
+                  >
+                    All ({flaggedTelemetryErrors.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTelemetryFilterTab('auto_fix')}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1 ${
+                      telemetryFilterTab === 'auto_fix'
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60"
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Auto-Fixable ({autoFixableCount})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTelemetryFilterTab('ai_review')}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1 ${
+                      telemetryFilterTab === 'ai_review'
+                        ? "bg-indigo-600 text-white shadow-xs"
+                        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60"
+                    }`}
+                  >
+                    <BrainCircuit className="w-3.5 h-3.5" />
+                    <span>Needs AI Review ({aiReviewCount})</span>
+                  </button>
+                </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTelemetryModal(false);
-                  if (pendingAgentTrigger && onOpenAgentChat) {
-                    onOpenAgentChat(pendingAgentTrigger.agentType, pendingAgentTrigger.options);
-                  }
-                }}
-                className="w-full py-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-[11px] font-medium transition-colors cursor-pointer"
-              >
-                Proceed Anyway without Fixing Data
-              </button>
+                {/* Right: Master Checkbox & Selection Stats */}
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const visibleKeys = filteredErrors.map(e => e.key);
+                      const allVisibleSelected = visibleKeys.every(k => selectedErrorKeys.has(k));
+                      if (allVisibleSelected) {
+                        setSelectedErrorKeys(prev => {
+                          const next = new Set(prev);
+                          visibleKeys.forEach(k => next.delete(k));
+                          return next;
+                        });
+                      } else {
+                        setSelectedErrorKeys(prev => {
+                          const next = new Set(prev);
+                          visibleKeys.forEach(k => next.add(k));
+                          return next;
+                        });
+                      }
+                    }}
+                    className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer"
+                  >
+                    {filteredErrors.length > 0 && filteredErrors.every(e => selectedErrorKeys.has(e.key)) ? (
+                      <CheckSquare className="w-4 h-4 text-emerald-600" />
+                    ) : (
+                      <Square className="w-4 h-4 text-slate-400" />
+                    )}
+                    <span>
+                      {filteredErrors.length > 0 && filteredErrors.every(e => selectedErrorKeys.has(e.key))
+                        ? "Deselect All"
+                        : `Select All (${filteredErrors.length})`}
+                    </span>
+                  </button>
+                  <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 hidden sm:inline">
+                    <strong className="text-emerald-600 dark:text-emerald-400">{selectedErrorKeys.size}</strong> of {flaggedTelemetryErrors.length} selected
+                  </span>
+                </div>
+              </div>
+
+              {/* Scrollable List of Flagged Cards */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+                {filteredErrors.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 space-y-3">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                      No biomarker issues matching the selected filter!
+                    </p>
+                  </div>
+                ) : (
+                  filteredErrors.map(err => {
+                    const isSelected = selectedErrorKeys.has(err.key);
+                    const custom = profile.customBiomarkers?.[err.key];
+                    const def = allDefinitions.find(d => d.key === err.key) || biomarkerDefinitions.find(d => d.key === err.key);
+                    const range = custom?.normalRange || def?.normalRange;
+                    const unit = err.unit || custom?.unit || def?.unit || '';
+
+                    // Find all matching historical logs for this biomarker
+                    const itemLogs = (activeHistory || []).filter(h => {
+                      if (!h.biomarkers) return false;
+                      return Object.keys(h.biomarkers).some(k => k.toLowerCase() === err.key.toLowerCase() || k.toLowerCase().replace(/[\s_]/g, '') === err.key.toLowerCase().replace(/[\s_]/g, ''));
+                    }).sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
+
+                    return (
+                      <div
+                        key={err.key}
+                        className={`p-5 rounded-2xl border transition-all shadow-xs ${
+                          isSelected
+                            ? "bg-amber-50/50 dark:bg-amber-950/25 border-amber-300 dark:border-amber-700/80 shadow-md"
+                            : "bg-white dark:bg-slate-800/70 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+                        }`}
+                      >
+                        {/* Top Header of Card */}
+                        <div className="flex items-start justify-between gap-4 flex-wrap sm:flex-nowrap">
+                          <div className="flex items-start gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedErrorKeys(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(err.key)) next.delete(err.key);
+                                  else next.add(err.key);
+                                  return next;
+                                });
+                              }}
+                              className="mt-1 text-slate-400 hover:text-indigo-600 cursor-pointer shrink-0"
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="w-5 h-5 text-emerald-600" />
+                              ) : (
+                                <Square className="w-5 h-5 text-slate-400" />
+                              )}
+                            </button>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-slate-900 dark:text-white text-base font-display">
+                                  {err.name}
+                                </span>
+                                <span className="text-[11px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-md font-semibold">
+                                  {err.key}
+                                </span>
+                                {unit && (
+                                  <span className="text-[11px] font-mono bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-md font-bold">
+                                    {unit}
+                                  </span>
+                                )}
+                                {range && (
+                                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono bg-slate-100/70 dark:bg-slate-800/60 px-2 py-0.5 rounded-md">
+                                    Ref Range: <strong>{range}</strong>
+                                  </span>
+                                )}
+                              </div>
+                              {err.badgeLabel && (
+                                <div className="mt-1.5">
+                                  <span className="text-[11px] bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 px-2.5 py-0.5 rounded-full font-bold border border-rose-200 dark:border-rose-800/60 inline-flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                                    <span>{err.badgeLabel}</span>
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Individual Review Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowTelemetryModal(false);
+                              if (onOpenAgentChat) {
+                                const prefillMessage = `Please review my flagged biomarker: ${err.name}\n\n` +
+                                  `• ${err.name}: ${err.badgeLabel || 'Scaling/unit error'}. Diagnostic cause: ${err.preciseCause || err.reason}\n` +
+                                  `Recent logs: ${err.samples.join(' → ')}\n\n` +
+                                  `Please evaluate my full history and propose the exact corrections needed.`;
+                                onOpenAgentChat('biomarker_review', {
+                                  biomarkerKey: err.key,
+                                  dataReviewBatchKeys: [err.key],
+                                  prefillMessage
+                                });
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1.5 border border-slate-200 dark:border-slate-700"
+                          >
+                            <BrainCircuit className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>Review with AI</span>
+                          </button>
+                        </div>
+
+                        {/* Precise Diagnostic Cause */}
+                        {err.preciseCause && (
+                          <div className="mt-2.5 p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/25 border border-rose-200/80 dark:border-rose-900/40 text-xs text-rose-900 dark:text-rose-200 leading-relaxed ml-8">
+                            <strong className="font-semibold block mb-0.5">Diagnostic Finding:</strong>
+                            {err.preciseCause}
+                          </div>
+                        )}
+
+                        {/* Automated Fix Proposal Box */}
+                        {err.proposedAutoFix?.canAutoFix ? (
+                          <div className="mt-3 ml-8 p-3.5 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-300 dark:border-emerald-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <Zap className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span className="font-bold text-xs text-emerald-900 dark:text-emerald-200">
+                                  ⚡ Deterministic Auto-Fix Available
+                                </span>
+                              </div>
+                              <p className="text-xs text-emerald-800 dark:text-emerald-300 pl-6">
+                                {err.proposedAutoFix.fixLabel} (Multiplier: <code className="font-mono font-bold bg-emerald-100 dark:bg-emerald-900/60 px-1 py-0.2 rounded">×{err.proposedAutoFix.proposedMultiplier}</code>) • <span className="font-semibold text-emerald-950 dark:text-emerald-100">Proposed New Value: <span className="line-through opacity-70">{err.value}</span> → <strong className="font-bold text-emerald-700 dark:text-emerald-300">{err.proposedAutoFix.proposedValue} {unit}</strong></span>
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleAutoFixBiomarker(err)}
+                              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5 shrink-0 self-start sm:self-center"
+                            >
+                              <Zap className="w-3.5 h-3.5 text-emerald-200" />
+                              <span>⚡ Apply Auto-Fix to All Logs</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="mt-3 ml-8 p-3 rounded-xl bg-slate-100/80 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 text-xs">
+                            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                              <BrainCircuit className="w-4 h-4 text-indigo-500 shrink-0" />
+                              <span>{err.proposedAutoFix?.reason || 'Discrepancy is non-standard and requires clinical AI Review'}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Log Readings Table / List */}
+                        <div className="mt-4 ml-8 space-y-2">
+                          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                            <span>Recorded History Entries ({itemLogs.length}):</span>
+                            <span className="hidden sm:inline">Click pencil to edit inline or trash to delete</span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
+                            {itemLogs.map((log: any) => {
+                              const rawKey = Object.keys(log.biomarkers || {}).find(k => k.toLowerCase() === err.key.toLowerCase() || k.toLowerCase().replace(/[\s_]/g, '') === err.key.toLowerCase().replace(/[\s_]/g, '')) || err.key;
+                              const rawVal = log.biomarkers?.[rawKey];
+                              const num = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal));
+                              const isOutlier = isBiomarkerValueImprobable(err.key, num, range);
+                              const isEditing = editingLogState?.logId === log.id && editingLogState?.key === rawKey;
+                              const entryKey = `${log.id || log.date}_${rawKey}`;
+                              const isSavingThis = savingActionKeys[entryKey];
+                              const isSavedThis = savedActionKeys.has(entryKey);
+                              const isConfirmingDelete = confirmDeleteEntryKey === entryKey;
+
+                              let previewConverted: number | null = null;
+                              if (isOutlier && err.proposedAutoFix?.canAutoFix && !isNaN(num)) {
+                                const mult = err.proposedAutoFix.proposedMultiplier;
+                                let c = num * mult;
+                                if (c >= 100) previewConverted = Math.round(c);
+                                else if (c >= 10) previewConverted = parseFloat(c.toFixed(1));
+                                else previewConverted = parseFloat(c.toFixed(2));
+                              }
+
+                              return (
+                                <div
+                                  key={entryKey}
+                                  className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs transition-all ${
+                                    isOutlier
+                                      ? "bg-rose-50/80 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/40 text-rose-900 dark:text-rose-200 font-medium shadow-2xs"
+                                      : "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
+                                    <span className="text-[10px] font-mono text-slate-500 bg-slate-200/50 dark:bg-slate-800/80 px-1.5 py-0.5 rounded shrink-0">
+                                      {log.date}
+                                    </span>
+                                    {isEditing ? (
+                                      <input
+                                        type="text"
+                                        value={editingLogVal}
+                                        onChange={(e) => setEditingLogVal(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            const numVal = parseFloat(editingLogVal);
+                                            markKeySaving(entryKey, 'Saving...');
+                                            onEditBiomarkerLog(log.id, rawKey, isNaN(numVal) ? editingLogVal : numVal);
+                                            setEditingLogState(null);
+                                            setTimeout(() => {
+                                              markKeySaved(entryKey);
+                                            }, 350);
+                                          }
+                                        }}
+                                        className="w-20 px-2 py-0.5 bg-white dark:bg-slate-800 border border-indigo-400 rounded text-xs font-mono font-bold"
+                                        autoFocus
+                                      />
+                                    ) : (
+                                      <span className="font-mono font-bold text-xs text-slate-900 dark:text-white whitespace-nowrap shrink-0">
+                                        {rawVal} {unit}
+                                      </span>
+                                    )}
+                                    {isOutlier && !isEditing && (
+                                      <span className="text-[9px] bg-rose-200 dark:bg-rose-900 text-rose-800 dark:text-rose-100 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide shrink-0">
+                                        Outlier
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                                    {isSavingThis ? (
+                                      <div className="flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold shrink-0 animate-pulse">
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
+                                        <span>{isSavingThis}</span>
+                                      </div>
+                                    ) : isSavedThis ? (
+                                      <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-bold shrink-0 animate-in fade-in duration-150">
+                                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                        <span>Saved!</span>
+                                      </div>
+                                    ) : isConfirmingDelete ? (
+                                      <div className="flex items-center gap-1 shrink-0 animate-in fade-in duration-150">
+                                        <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">Delete?</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setConfirmDeleteEntryKey(null);
+                                            markKeySaving(entryKey, 'Deleting...');
+                                            if (onDeleteBiomarkerFromLog) {
+                                              onDeleteBiomarkerFromLog(log.id, rawKey);
+                                            }
+                                            setTimeout(() => {
+                                              markKeySaved(entryKey);
+                                              setAppliedToastMessage(`🗑️ Deleted ${err.name} reading on ${log.date}`);
+                                              setTimeout(() => setAppliedToastMessage(null), 3000);
+                                            }, 350);
+                                          }}
+                                          className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[10px] font-bold shadow-2xs cursor-pointer transition-all"
+                                        >
+                                          Yes, Delete
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setConfirmDeleteEntryKey(null)}
+                                          className="px-1.5 py-0.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded text-[10px] font-medium cursor-pointer transition-all"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    ) : isEditing ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const numVal = parseFloat(editingLogVal);
+                                            markKeySaving(entryKey, 'Saving...');
+                                            onEditBiomarkerLog(log.id, rawKey, isNaN(numVal) ? editingLogVal : numVal);
+                                            setEditingLogState(null);
+                                            setTimeout(() => {
+                                              markKeySaved(entryKey);
+                                            }, 350);
+                                          }}
+                                          className="p-1 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-950/60 rounded cursor-pointer"
+                                          title="Save value"
+                                        >
+                                          <Check className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingLogState(null)}
+                                          className="p-1 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded cursor-pointer"
+                                          title="Cancel"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        {isOutlier && err.proposedAutoFix?.canAutoFix && previewConverted !== null && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              markKeySaving(entryKey, 'Converting...');
+                                              onEditBiomarkerLog(log.id, rawKey, previewConverted!);
+                                              setTimeout(() => {
+                                                markKeySaved(entryKey);
+                                                setAppliedToastMessage(`⚡ Converted ${rawVal} → ${previewConverted} ${unit}`);
+                                                setTimeout(() => setAppliedToastMessage(null), 3000);
+                                              }, 350);
+                                            }}
+                                            className="px-2 py-0.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-md text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 shadow-2xs shrink-0"
+                                            title={`Auto-fix ${rawVal} to ${previewConverted} ${unit}`}
+                                          >
+                                            <Zap className="w-2.5 h-2.5" />
+                                            <span>Fix (→ {previewConverted})</span>
+                                          </button>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setConfirmDeleteEntryKey(null);
+                                            setEditingLogState({ logId: log.id, date: log.date, key: rawKey, val: rawVal });
+                                            setEditingLogVal(String(rawVal));
+                                          }}
+                                          className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                          title="Edit reading value"
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                        {onDeleteBiomarkerFromLog && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingLogState(null);
+                                              setConfirmDeleteEntryKey(entryKey);
+                                            }}
+                                            className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                            title="Delete reading from log"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Bottom Sticky Action Toolbar */}
+              <div className="p-4 sm:p-5 border-t border-theme-border bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <strong className="text-emerald-600 dark:text-emerald-400">{selectedErrorKeys.size}</strong> of {flaggedTelemetryErrors.length} biomarkers selected
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+                  {selectedAutoFixableCount > 0 && (
+                    <button
+                      type="button"
+                      disabled={savingActionKeys['batch_autofix'] !== undefined}
+                      onClick={() => {
+                        markKeySaving('batch_autofix', 'Converting...');
+                        handleAutoFixAllSelected();
+                        setTimeout(() => {
+                          markKeySaved('batch_autofix');
+                        }, 400);
+                      }}
+                      className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5 disabled:opacity-75"
+                    >
+                      {savingActionKeys['batch_autofix'] ? (
+                        <>
+                          <Loader2 className="w-4 h-4 text-emerald-200 animate-spin" />
+                          <span>Converting...</span>
+                        </>
+                      ) : savedActionKeys.has('batch_autofix') ? (
+                        <>
+                          <Check className="w-4 h-4 text-white" />
+                          <span>Saved!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4 text-emerald-200" />
+                          <span>⚡ Auto-Fix Selected ({selectedAutoFixableCount})</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {onDeleteBiomarkerFromLog && (
+                    confirmBatchDelete ? (
+                      <div className="flex items-center gap-2 p-1 bg-rose-100/90 dark:bg-rose-950/90 border border-rose-300 dark:border-rose-800 rounded-xl animate-in fade-in duration-150">
+                        <span className="text-xs font-bold text-rose-800 dark:text-rose-200 pl-2">
+                          Delete {selectedErrorKeys.size} outlier biomarker(s)?
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmBatchDelete(false);
+                            markKeySaving('batch_delete', 'Deleting...');
+                            const keys = Array.from(selectedErrorKeys);
+                            const deletionsToDelete: { id: string; key: string }[] = [];
+                            (activeHistory || []).forEach(log => {
+                              if (!log.biomarkers || !log.id) return;
+                              keys.forEach(k => {
+                                const matchingKey = Object.keys(log.biomarkers).find(bk => {
+                                  const canBk = getMappedBiomarkerKey(bk) || bk;
+                                  return canBk === k || canBk.toLowerCase().replace(/[\s_]/g, '') === k.toLowerCase().replace(/[\s_]/g, '') || bk.toLowerCase().replace(/[\s_]/g, '') === k.toLowerCase().replace(/[\s_]/g, '');
+                                });
+                                if (matchingKey && log.biomarkers[matchingKey] !== undefined) {
+                                  const val = log.biomarkers[matchingKey];
+                                  const num = typeof val === 'number' ? val : parseFloat(String(val));
+                                  const custom = profile.customBiomarkers?.[k];
+                                  const def = allDefinitions.find(d => d.key === k) || biomarkerDefinitions.find(d => d.key === k);
+                                  const range = custom?.normalRange || def?.normalRange;
+                                  if (isBiomarkerValueImprobable(k, num, range)) {
+                                    deletionsToDelete.push({ id: log.id, key: matchingKey });
+                                  }
+                                }
+                              });
+                            });
+
+                            if (deletionsToDelete.length > 0) {
+                              if (onBatchDeleteBiomarkersFromLogs) {
+                                onBatchDeleteBiomarkersFromLogs(deletionsToDelete);
+                              } else if (onDeleteBiomarkerFromLog) {
+                                deletionsToDelete.forEach(d => onDeleteBiomarkerFromLog(d.id, d.key));
+                              }
+                            }
+
+                            setTimeout(() => {
+                              markKeySaved('batch_delete');
+                              setAppliedToastMessage(`🗑️ Deleted ${deletionsToDelete.length} outlier reading(s)`);
+                              setTimeout(() => setAppliedToastMessage(null), 3500);
+                            }, 400);
+                          }}
+                          className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all"
+                        >
+                          Yes, Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmBatchDelete(false)}
+                          className="px-2 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold cursor-pointer transition-all"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={selectedErrorKeys.size === 0 || savingActionKeys['batch_delete'] !== undefined}
+                        onClick={() => setConfirmBatchDelete(true)}
+                        className="px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-800/60 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                      >
+                        {savingActionKeys['batch_delete'] ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+                            <span>Deleting outliers...</span>
+                          </>
+                        ) : savedActionKeys.has('batch_delete') ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>Deleted!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete Outliers ({selectedErrorKeys.size})</span>
+                          </>
+                        )}
+                      </button>
+                    )
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={selectedErrorKeys.size === 0}
+                    onClick={() => {
+                      const keys = Array.from(selectedErrorKeys);
+                      if (keys.length === 0) return;
+                      setShowTelemetryModal(false);
+                      if (onOpenAgentChat) {
+                        const selectedErrors = flaggedTelemetryErrors.filter(e => keys.includes(e.key));
+                        const names = selectedErrors.map(e => e.name).join(', ');
+                        const prefillMessage = `Please review my flagged biomarkers: ${names}\n\n` +
+                          selectedErrors.map(e => {
+                            const autoInfo = e.proposedAutoFix?.canAutoFix
+                              ? ` (Auto-Fix Available: ${e.proposedAutoFix.fixLabel})`
+                              : ` (Needs AI Review: ${e.proposedAutoFix?.reason || 'Ambiguous scaling discrepancy'})`;
+                            return `• ${e.name}: ${e.badgeLabel || 'Scaling/unit error'}${autoInfo}.\n  Diagnostic cause: ${e.preciseCause || e.reason}\n  Recent logs: ${e.samples.join(' → ')}`;
+                          }).join('\n\n') +
+                          `\n\nPlease analyze all these flagged biomarkers simultaneously, evaluate my full log history, and propose diagnostic insights or exact corrections.`;
+
+                        onOpenAgentChat('biomarker_review', {
+                          biomarkerKey: keys.length === 1 ? keys[0] : undefined,
+                          dataReviewBatchKeys: keys,
+                          prefillMessage
+                        });
+                      }
+                    }}
+                    className="px-4 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <BrainCircuit className="w-4 h-4 text-amber-200 animate-pulse" />
+                    <span>Review ({selectedErrorKeys.size}) with AI Agent</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTelemetryModal(false);
+                      if (pendingAgentTrigger && onOpenAgentChat) {
+                        onOpenAgentChat(pendingAgentTrigger.agentType, pendingAgentTrigger.options);
+                      }
+                    }}
+                    className="px-3.5 py-2.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-theme-border rounded-xl text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
