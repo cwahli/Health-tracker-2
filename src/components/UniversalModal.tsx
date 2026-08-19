@@ -25,6 +25,8 @@ interface UniversalModalProps {
   onFlagSuccess?: (issueId: string) => void;
 }
 
+
+
 export function UniversalModal({
   isOpen,
   onClose,

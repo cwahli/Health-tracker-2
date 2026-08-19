@@ -5,13 +5,10 @@
 **Governance & Laws:** Follow `docs/agent/` domain rules. Local agents may `git commit` / `git push` after COMPLETE (tsc + named gates). AI Studio remains a valid ship path.
 
 ---
-- **Platform Anti-Bloat & Performance Milestone (Q-3, R-9, R-10, B8.2, B8.3) (2026-08-19)**:
-  - **Shared UI Primitive Kit (Q-3)**: Created `src/components/ui/FilterPills.tsx` and `src/components/ui/AppModal.tsx` ($\le 300$ lines, unit-tested). Replaced copy-pasted inline filter tab markups in `HomeTab.tsx` and `BiomarkerAuditModal.tsx` with canonical `<FilterPills />`, reducing component line counts and enforcing zero-code duplication.
-  - **Deferred Startup Ingestion (R-9)**: Wrapped `startGoldenIngestWatcher` and `hydrateUserJobs` in deferred timeouts ($1.5\text{s}$ post-mount) in `App.tsx` to eliminate startup network saturation and blocking tasks on first paint.
-  - **Header Code-Splitting (R-10)**: Converted `FoodCatalogAdminTab`, `GoogleHealthIntegration`, and `ApiCallTrackerModal` in `Header.tsx` to on-demand `lazyWithRetry` imports wrapped in `React.Suspense`, dropping initial header bundle weight.
-  - **One Check-Biomarkers Door (B8.2)**: Eliminated duplicate "Check Biomarkers" entry from the Cleaning dropdown menu in `BiomarkerDictionaryModal.tsx`, unifying the audit trigger strictly to the primary gradient toolbar.
-  - **Render & Telemetry Scan Memoization (B8.3)**: Unified `detectFlaggedTelemetryErrors` across `MedicalHistoryTab.tsx` to compute once per render cycle, preventing redundant $O(\text{history} \times \text{definitions})$ scans on user clicks.
-  - **Budget Ceiling Compliance (Q-1 / Q-2)**: Updated `CATALOG.json` with canonical primitive paths; all god-file line ceilings passing in `assert-budgets.mjs`.
+- **Platform kit (2026-08-19, honest status)**:
+  - **Done:** Q-1 budget gate · Q-2 `CATALOG.json` · B8.0 Option A (Home Flagged Telemetry is the only Auto-Fix) · B8.1 one `ANALYTE_CONVERSIONS` table · FilterPills on Home + Audit with restored labels · unused `AppModal` removed (`UniversalModal` is the catalog shell) · Dictionary one **Check Biomarkers** toolbar button · Audit footer no longer says Auto-Calibrate (apply catalog ranges + confirm only) · LogChat `data_review` / `agent1` path calls `detectFlaggedTelemetryErrors` once · R-9 defer golden ingest / job hydrate 1.5s · Q-5 root `patch_*.cjs` / one-shot test residue deleted.
+  - **Open:** R-8 (no TTI / request-count baseline — do not claim speed wins) · R-10 (`themeRegistry` + `googleBackup` still static in Header) · Q-4 (`AgentResultTable` still a god file) · F-6/F-7 (FoodCard / scout file ceilings only).
+  - **B8.1 note:** Handover bullets below that still mention `18.0182` / `38.67` describe the *old* private telemetry table. Live code uses `src/utils/analyteConversions.ts` only.
 - **Internal Scale & Unit Conflict Auto-Resolution Fix (2026-08-19)**:
   - **Unicode Superscript & Scientific Notation Extraction**: Updated `extractUnitFromString` in `src/utils/biomarkerAuditEngine.ts` to include unicode superscripts `²` (`\u00B2`), `³` (`\u00B3`), micro signs `µ`/`μ`, degrees `°`, and scientific notation (e.g. `10^9/L`, `10^12/L`). This eliminated truncation defects where `mL/min/1.73m²` and `kg/m²` were truncated into `mL/min/1.73m` and `kg/m`.
   - **Unit Equivalence Normalization**: Added `normalizeUnitEquivalence` to equate unicode superscripts, micro symbols, spacing, and eGFR conventions (`mL/min/1.73m²` $\equiv$ `mL/min/1.73m2` $\equiv$ `mL/min/1.73 m²` $\equiv$ `mL/min/1.73m`). Equivalent formatting variations are now treated as identical with zero false-positive conflicts.
@@ -140,11 +137,10 @@
 
 ---
 ## Next Steps
-- **B8.0 Option A (2026-08-19):** Flagged Telemetry modal on Home is the **only** Auto-Fix surface. Dictionary Auto-Calibrate / Quick Approve stay gone.
-- **Q-1 / Q-2 / B8.1 in progress:** `scripts/assert-budgets.mjs` + `src/components/CATALOG.json`; telemetry Auto-Fix uses `ANALYTE_CONVERSIONS` / `convertViaTable` only. Next: B8.2 one Check-Biomarkers; R-8 measure. Do **not** start FoodCard / App.tsx / Dictionary splits.
-- **Q-5 Patch Script Cleanup:** (COMPLETE) Deleted all one-shot `scripts/patch-*.ts`, `scripts/fix-*.ts`, and `scripts/test-*.ts` leftover maintenance files per ROADMAP.md.
-- **Nutrient Imputation Strategy:** (COMPLETE) Implemented bottom-up micronutrient aggregation in `server_nutrient_aggregation.ts` (STEP 2.2) so missing nutrients map to canonical base foods without destroying Atwater physics logic.
-- Ingest v1 / F-1 still follow the existing default track (B0 then G-B2) when the pain is correctness, not slowness.
+- **R-8 [OPEN]:** Measure client TTI + request count on Home / Health / first chat in DevTools. No speed claims until that baseline exists.
+- **R-10 [OPEN]:** Header still statically imports `themeRegistry` and `googleBackup`. Do not mark R-10 done.
+- **Default correctness track unchanged:** B0 Apply smoke, then G-B2, when the pain is ingest — not slowness.
+- Do **not** start FoodCard / App.tsx / Dictionary / `AgentResultTable` splits (Q-4 / F-6) until a budget is red on that file.
 
 
 - Pack M23 Free Tier Reliability and M31 Biomarker Lifecycle have been fully completed, verified against master gates, and safely archived. Ready to receive the chat prompt for the next active pack (M30 Food Curator).

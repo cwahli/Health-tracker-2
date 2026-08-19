@@ -67,7 +67,7 @@ const ensureCustomRanges = (
   _normalRangeStr: string,
   existingCustomRanges: any[]
 ): any[] => {
-  // Auto-calibrate tool removed: never invent ethnicity overrides (they became "< 0 U/L").
+  // One-click catalog range fill removed: never invent ethnicity overrides (they became "< 0 U/L").
   return Array.isArray(existingCustomRanges) ? existingCustomRanges : [];
 };
 
@@ -172,346 +172,6 @@ export const autoCalibrateBiomarkerDef = (key: string, builtInDef?: any, customD
   };
 };
 
-export interface CalibrationChange {
-  field: string;
-  label: string;
-  oldVal: string;
-  newVal: string;
-}
-
-export interface CalibrationDiff {
-  key: string;
-  name: string;
-  changes: CalibrationChange[];
-  calibratedDef: ReturnType<typeof autoCalibrateBiomarkerDef>;
-  needsApproval: boolean;
-}
-
-export const getBiomarkerCalibrationDiff = (
-  key: string,
-  builtInDef?: any,
-  customDef?: any,
-  itemLogs: any[] = []
-): CalibrationDiff => {
-  const merged = getMergedBiomarkerDef(key, builtInDef, customDef, itemLogs);
-  const calibrated = autoCalibrateBiomarkerDef(key, builtInDef, customDef);
-  
-  const changes: CalibrationChange[] = [];
-
-  const currentUnit = (merged.unit || '').trim();
-  const calibratedUnit = (calibrated.unit || '').trim();
-  if (calibratedUnit && calibratedUnit !== currentUnit) {
-    changes.push({
-      field: 'unit',
-      label: 'Clinical Unit',
-      oldVal: currentUnit || '(none)',
-      newVal: calibratedUnit
-    });
-  }
-
-  const currentRange = (merged.normalRange || '').trim();
-  const calibratedRange = (calibrated.normalRange || '').trim();
-  if (calibratedRange && calibratedRange !== currentRange && (currentRange === '' || currentRange === 'Unknown')) {
-    changes.push({
-      field: 'normalRange',
-      label: 'Reference Range',
-      oldVal: currentRange || '(none)',
-      newVal: calibratedRange
-    });
-  }
-
-  const currentGrouping = (merged.standardMedicalGrouping || '').trim();
-  const calibratedGrouping = (calibrated.standardMedicalGrouping || '').trim();
-  if (calibratedGrouping && calibratedGrouping !== currentGrouping) {
-    changes.push({
-      field: 'standardMedicalGrouping',
-      label: 'Medical Practice',
-      oldVal: currentGrouping || '(unassigned)',
-      newVal: calibratedGrouping
-    });
-  }
-
-  const currentRisks = Array.isArray(merged.riskCategories) ? merged.riskCategories.filter((r: string) => r && r !== 'Uncategorized') : [];
-  const calibratedRisks = calibrated.riskCategories || [];
-  if (calibratedRisks.length > 0 && (currentRisks.length === 0 || calibratedRisks.join(', ') !== currentRisks.join(', '))) {
-    changes.push({
-      field: 'riskCategories',
-      label: 'Risk Categories',
-      oldVal: currentRisks.length > 0 ? currentRisks.join(', ') : '(uncategorized)',
-      newVal: calibratedRisks.join(', ')
-    });
-  }
-
-  const currentConditions = Array.isArray(merged.potentialMedicalConditions) ? merged.potentialMedicalConditions : [];
-  const calibratedConditions = calibrated.potentialMedicalConditions || [];
-  if (calibratedConditions.length > 0 && (currentConditions.length === 0 || calibratedConditions.join(', ') !== currentConditions.join(', '))) {
-    changes.push({
-      field: 'potentialMedicalConditions',
-      label: 'Associated Conditions',
-      oldVal: currentConditions.length > 0 ? currentConditions.join(', ') : '(none)',
-      newVal: calibratedConditions.join(', ')
-    });
-  }
-
-  const needsApproval = !!(customDef?.needsApproval || (merged as any)?.needsApproval);
-  if (needsApproval) {
-    changes.push({
-      field: 'needsApproval',
-      label: 'Approval Status',
-      oldVal: 'Pending Review',
-      newVal: 'Approved'
-    });
-  }
-
-  return {
-    key,
-    name: merged.name || calibrated.name || key,
-    changes,
-    calibratedDef: calibrated,
-    needsApproval
-  };
-};
-
-interface AutoCalibrateApprovalModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  keysToCalibrate: string[];
-  profile: UserProfile;
-  biomarkerDefinitions: any[];
-  biomarkerHistory: BiomarkerLog[];
-  onConfirm: (approvedKeys: string[]) => void;
-  auditReport?: any;
-}
-
-const AutoCalibrateApprovalModal: React.FC<AutoCalibrateApprovalModalProps> = ({
-  isOpen,
-  onClose,
-  keysToCalibrate,
-  profile,
-  biomarkerDefinitions,
-  biomarkerHistory,
-  onConfirm,
-  auditReport
-}) => {
-  if (!isOpen) return null;
-
-  const isUsefulBiomarkerValue = (val: any) => {
-    return val !== undefined && val !== null && val !== '' && !Number.isNaN(val) && !(typeof val === 'string' && val.trim() === '');
-  };
-
-  
-  
-  const collectItemLogs = (k: string) => {
-    const kLower = k.toLowerCase();
-    const result: any[] = [];
-    const aliases = auditReport?.duplicateGroups?.find((g: any) => g.suggestedMasterKey.toLowerCase() === k.toLowerCase())?.candidateAliases || [];
-    biomarkerHistory.forEach((h: any) => {
-      if (!h.biomarkers) return;
-      let val = h.biomarkers[k];
-      let foundKey = k;
-      if (val === undefined) {
-        val = h.biomarkers[kLower];
-        foundKey = kLower;
-      }
-      if (val === undefined) {
-        for (const alias of aliases) {
-          if (h.biomarkers[alias] !== undefined) {
-            val = h.biomarkers[alias];
-            foundKey = alias;
-            break;
-          }
-        }
-      }
-      if (isUsefulBiomarkerValue(val)) {
-
-        result.push({
-          date: h.date,
-          value: val,
-          unit: (h as any).units?.[foundKey] || (h as any).units?.[k] || (h as any).units?.[kLower] || (h as any).unit,
-          normalRange: (h as any).normalRanges?.[foundKey] || (h as any).normalRanges?.[k] || (h as any).normalRanges?.[kLower] || (h as any).normalRange
-        });
-      }
-    });
-    return result;
-  };
-
-  const items = useMemo(() => {
-    return keysToCalibrate.map(k => {
-      const builtIn = biomarkerDefinitions.find((b: any) => b.key === k || (Array.isArray(b.aliases) && b.aliases.some((a: string) => a.toLowerCase() === k.toLowerCase())));
-      const custom = profile.customBiomarkers?.[k];
-      const logs = collectItemLogs(k);
-      const diff = getBiomarkerCalibrationDiff(k, builtIn, custom, logs);
-      return {
-        key: k,
-        builtIn,
-        custom,
-        diff
-      };
-    }).filter(item => item.diff.changes.length > 0);
-  }, [keysToCalibrate, profile.customBiomarkers, biomarkerDefinitions, biomarkerHistory]);
-
-  const [selectedKeys, setSelectedKeys] = useState<string[]>(() => items.map(i => i.key));
-
-  useEffect(() => {
-    setSelectedKeys(items.map(i => i.key));
-  }, [items]);
-
-  const toggleKey = (key: string) => {
-    setSelectedKeys(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
-  };
-
-  const toggleAll = () => {
-    if (selectedKeys.length === items.length) {
-      setSelectedKeys([]);
-    } else {
-      setSelectedKeys(items.map(i => i.key));
-    }
-  };
-
-  if (items.length === 0) {
-    return (
-      <UniversalModal isOpen={isOpen} onClose={onClose} title="Auto-Calibration Preview">
-        <div className="p-6 text-center space-y-4">
-          <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle className="w-6 h-6" />
-          </div>
-          <h3 className="text-base font-bold text-theme-neutral">All Biomarkers Calibrated</h3>
-          <p className="text-xs text-theme-text-secondary">
-            No calibration changes are required for the selected biomarkers. All definitions and medical categories are fully configured.
-          </p>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 cursor-pointer"
-          >
-            Close
-          </button>
-        </div>
-      </UniversalModal>
-    );
-  }
-
-  const [isApplying, setIsApplying] = useState(false);
-
-  const handleConfirm = async () => {
-    setIsApplying(true);
-    try {
-      await onConfirm(selectedKeys);
-    } finally {
-      setIsApplying(false);
-    }
-  };
-
-  return (
-    <UniversalModal isOpen={isOpen} onClose={onClose} title="Auto-Calibration Approval">
-      <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-        <div className="bg-gradient-to-r from-amber-50 to-emerald-50 dark:from-amber-950/30 dark:to-emerald-950/30 border border-amber-200/80 dark:border-amber-800/60 rounded-xl p-3.5 flex items-start gap-3">
-          <Zap className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-          <div className="text-xs space-y-1 text-slate-700 dark:text-slate-200">
-            <div className="font-bold text-amber-900 dark:text-amber-200">
-              Review Proposed Auto-Calibrations
-            </div>
-            <p>
-              The system analyzed {items.length} biomarker{items.length > 1 ? 's' : ''} and generated recommended clinical standards (units, reference ranges, medical practice categories, and risk profiles). Review the proposed changes below and approve to apply.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300 px-1">
-          <span>
-            Biomarkers to Calibrate ({selectedKeys.length} of {items.length} selected)
-          </span>
-          <button
-            onClick={toggleAll}
-            className="text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-          >
-            {selectedKeys.length === items.length ? 'Deselect All' : 'Select All'}
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          {items.map(item => {
-            const isChecked = selectedKeys.includes(item.key);
-            return (
-              <div
-                key={item.key}
-                className={`border rounded-xl p-3.5 space-y-2.5 transition-all ${
-                  isChecked
-                    ? 'border-indigo-300 dark:border-indigo-700/60 bg-white dark:bg-slate-800/80 shadow-xs'
-                    : 'border-theme-border bg-slate-50/50 dark:bg-slate-900/30 opacity-70'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer font-bold text-xs text-theme-neutral select-none">
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => toggleKey(item.key)}
-                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                    />
-                    <span>{item.diff.name}</span>
-                  </label>
-                  <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                    Key: {item.key}
-                  </span>
-                </div>
-
-                <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 rounded-lg p-2.5 text-xs space-y-1.5">
-                  <div className="grid grid-cols-12 text-[10px] font-bold text-slate-400 border-b border-slate-200 dark:border-slate-800 pb-1 mb-1">
-                    <span className="col-span-4">Field</span>
-                    <span className="col-span-4">Current Value</span>
-                    <span className="col-span-4">Proposed Value</span>
-                  </div>
-                  {item.diff.changes.map((change, idx) => (
-                    <div key={idx} className="grid grid-cols-12 text-xs items-center gap-1">
-                      <span className="col-span-4 font-medium text-slate-600 dark:text-slate-300">
-                        {change.label}
-                      </span>
-                      <span className="col-span-4 text-slate-400 line-through truncate" title={change.oldVal}>
-                        {change.oldVal}
-                      </span>
-                      <span className="col-span-4 font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 truncate" title={change.newVal}>
-                        <CheckCircle className="w-3 h-3 shrink-0" />
-                        {change.newVal}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-theme-border">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 border border-theme-border text-theme-neutral hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={selectedKeys.length === 0 || isApplying}
-            onClick={handleConfirm}
-            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-          >
-            {isApplying ? (
-              <>
-                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Applying...</span>
-              </>
-            ) : (
-              <>
-                <Zap className="w-4 h-4 fill-current" />
-                <span>Approve & Apply ({selectedKeys.length})</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </UniversalModal>
-  );
-};
 
 const DictionaryItem = React.memo(({
   approvalReason,
@@ -526,7 +186,7 @@ const DictionaryItem = React.memo(({
   itemLogs,
   onToggleSelect,
   onSave,
-  onRequestCalibrateKeys,
+
   onRouteAgent,
   onOpenAudit,
   onTagClick,
@@ -546,7 +206,7 @@ const DictionaryItem = React.memo(({
   itemLogs?: any[];
   onToggleSelect: () => void;
   onSave: (updates: any) => void;
-  onRequestCalibrateKeys?: (keys: string[]) => void;
+
   onRouteAgent?: () => void;
   onOpenAudit?: (tab?: 'overview' | 'corrupted_units' | 'duplicates' | 'missing_metadata' | 'conflicts' | 'clean') => void;
   onTagClick?: (tag: string) => void;
@@ -2990,52 +2650,9 @@ I can analyze these, compare them with our database keys, and find standard mapp
 
   const [editingGroupIdx, setEditingGroupIdx] = useState<number | null>(null);
   const [viewingLogsKey, setViewingLogsKey] = useState<{ key: string; name: string } | null>(null);
-  const [calibrationModalKeys, setCalibrationModalKeys] = useState<string[] | null>(null);
 
-  const calibratablePendingKeys = useMemo(() => {
-    return toApproveKeys.filter(k => {
-      const builtIn = biomarkerDefinitions.find((b: any) => b.key === k || (Array.isArray(b.aliases) && b.aliases.some((a: string) => a.toLowerCase() === k.toLowerCase())));
-      const custom = profile.customBiomarkers?.[k];
-      const logs = collectItemLogs(k);
-      const diff = getBiomarkerCalibrationDiff(k, builtIn, custom, logs);
-      return diff.changes.length > 0;
-    });
-  }, [toApproveKeys, profile.customBiomarkers, biomarkerDefinitions, biomarkerHistory]);
 
-  const calibratableSelectedKeys = useMemo(() => {
-    return selectedKeys.filter(k => {
-      const builtIn = biomarkerDefinitions.find((b: any) => b.key === k || (Array.isArray(b.aliases) && b.aliases.some((a: string) => a.toLowerCase() === k.toLowerCase())));
-      const custom = profile.customBiomarkers?.[k];
-      const logs = collectItemLogs(k);
-      const diff = getBiomarkerCalibrationDiff(k, builtIn, custom, logs);
-      return diff.changes.length > 0;
-    });
-  }, [selectedKeys, profile.customBiomarkers, biomarkerDefinitions, biomarkerHistory]);
 
-  const handleApplyCalibrationConfirmed = (approvedKeys: string[]) => {
-    const updatedCustom = { ...(profile.customBiomarkers || {}) };
-    approvedKeys.forEach(key => {
-      const builtIn = biomarkerDefinitions.find((b: any) => b.key === key || (Array.isArray(b.aliases) && b.aliases.some((a: string) => a.toLowerCase() === key.toLowerCase())));
-      const custom = profile.customBiomarkers?.[key];
-      const calibrated = autoCalibrateBiomarkerDef(key, builtIn, custom);
-      
-      updatedCustom[key] = {
-        ...profile.customBiomarkers?.[key],
-        ...calibrated,
-        updatedAt: Date.now()
-      };
-      delete updatedCustom[key].needsApproval;
-      updatedCustom[key].catalogApproved = true;
-    });
-
-    onUpdateProfile({
-      ...profile,
-      customBiomarkers: updatedCustom
-    });
-
-    setCalibrationModalKeys(null);
-    setSelectedKeys(prev => prev.filter(k => !approvedKeys.includes(k)));
-  };
 
 
   // Run Name Consolidation Agent (Chat Interface)
@@ -5785,7 +5402,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
               {selectedKeys.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 animation-fade-in pb-2 w-full">
                   <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 shrink-0">{selectedKeys.length} selected</span>
-                  {false && calibratableSelectedKeys.length > 0 && null}
+
                   <button
                     onClick={() => setShowCombineModal(true)}
                     className="shrink-0 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm"
@@ -6135,7 +5752,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                           allConditions={allConditions}
                           itemLogs={itemLogs}
                           onToggleSelect={() => handleToggleSelect(key)}
-                          onRequestCalibrateKeys={(keys) => setCalibrationModalKeys(keys)}
+
                           onSave={(updates) => {
                             const { newKey, ...restUpdates } = updates;
                             const newCustomBiomarkers = { ...profile.customBiomarkers };
@@ -6225,7 +5842,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
                           allConditions={allConditions}
                           itemLogs={itemLogs}
                           onToggleSelect={() => handleToggleSelect(key)}
-                          onRequestCalibrateKeys={(keys) => setCalibrationModalKeys(keys)}
+
                           onSave={(updates) => {
                             const combined = { ...builtIn, ...custom };
                             const { newKey, ...restUpdates } = updates;
@@ -6536,8 +6153,7 @@ I can analyze these, compare them with our database keys, and find standard mapp
         />
       )}
 
-      {/* AUTO-CALIBRATE PREVIEW & APPROVAL MODAL */}
-      {false && calibrationModalKeys && null}
+
     </div>
   );
 }

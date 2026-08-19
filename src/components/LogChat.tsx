@@ -3760,6 +3760,7 @@ ${logsText}`);
                 batchKeys = candidateKeys;
               }
             }
+            const flaggedList = detectFlaggedTelemetryErrors(biomarkers || {}, profile, biomarkerHistory || [], biomarkerDefinitions);
             if (batchKeys.length === 0 && dataReviewBatchKeys && dataReviewBatchKeys.length > 0) {
               batchKeys = dataReviewBatchKeys;
             } else if (batchKeys.length === 0 && dataReviewBatchIdx === 'custom') {
@@ -3796,10 +3797,8 @@ ${logsText}`);
                 batchRes.push(markerKeysList.slice(i, i + bSize));
               }
               batchKeys = batchRes[dataReviewBatchIdx as number] || [];
-            } else {
-              // Fallback when neither batch keys nor batch index were explicitly provided:
-              // Gather all flagged telemetry keys, or all known keys from history & current values
-              const flaggedList = detectFlaggedTelemetryErrors(biomarkers || {}, profile, biomarkerHistory || [], biomarkerDefinitions);
+            } else if (batchKeys.length === 0) {
+              // Fallback when neither batch keys nor batch index were explicitly provided
               if (flaggedList.length > 0) {
                 batchKeys = flaggedList.map(f => f.key);
               } else {
@@ -3824,9 +3823,7 @@ ${logsText}`);
               }
             }
 
-            const flaggedErrorsMap = new Map(
-              detectFlaggedTelemetryErrors(biomarkers || {}, profile, biomarkerHistory || [], biomarkerDefinitions).map(f => [f.key, f])
-            );
+            const flaggedErrorsMap = new Map(flaggedList.map(f => [f.key, f]));
 
             bodyData.batchBiomarkers = batchKeys.map(k => {
               const customDef = profile?.customBiomarkers?.[k];

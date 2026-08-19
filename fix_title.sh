@@ -1,1 +1,0 @@
-sed -i "s/: 'Analyzing Meal Photo...'));/: (job.status === 'succeeded' ? 'Analysis completed' : job.status === 'failed' ? 'Analysis failed' : 'Analyzing Meal Photo...')));/g" src/components/TaskPlaceholderCard.tsx

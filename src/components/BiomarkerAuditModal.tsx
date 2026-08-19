@@ -1674,7 +1674,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>Auto-Calibrate ({targetCatalogItems.length}) Catalog Ranges</span>
+                    <span>Apply catalog ranges ({targetCatalogItems.length})</span>
                   </button>
                 )}
                 {(metadataFilter === 'all' || metadataFilter === 'categorise') && onLaunchMedicalCategorisation && targetCategoriseKeys.length > 0 && (

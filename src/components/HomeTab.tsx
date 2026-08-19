@@ -2511,8 +2511,8 @@ export default function HomeTab({
                 <FilterPills<'all' | 'auto_fix' | 'ai_review'>
                   items={[
                     { id: 'all', label: 'All', activeColorClass: 'bg-amber-500 text-white shadow-xs' },
-                    { id: 'auto_fix', label: 'AutoFix', activeColorClass: 'bg-emerald-600 text-white shadow-xs' },
-                    { id: 'ai_review', label: 'Needs Ai', activeColorClass: 'bg-indigo-600 text-white shadow-xs' },
+                    { id: 'auto_fix', label: 'Auto-Fixable', activeColorClass: 'bg-emerald-600 text-white shadow-xs' },
+                    { id: 'ai_review', label: 'Needs AI Review', activeColorClass: 'bg-indigo-600 text-white shadow-xs' },
                   ]}
                   activeId={telemetryFilterTab}
                   onChange={setTelemetryFilterTab}

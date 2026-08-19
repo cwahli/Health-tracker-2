@@ -23,7 +23,7 @@ ok(fs.existsSync(catalogPath), 'Q2:catalog_exists', 'missing src/components/CATA
 
 const catalog = JSON.parse(read('src/components/CATALOG.json'));
 const requiredIds = [
-  'AppModal',
+  'UniversalModal',
   'DataGrid',
   'FilterPills',
   'ConfirmBar',
@@ -96,6 +96,11 @@ for (const file of walk(componentsDir)) {
   if (path.normalize(r) === allowedAutoFix) continue;
   const hasAutoFix = /Apply Auto-Fix|⚡ Auto-Fix|Quick Approve/i.test(text);
   ok(!hasAutoFix, 'CLONE_UI:auto_fix_surface', `Auto-Fix / Quick Approve found in ${r} (only HomeTab.tsx allowed)`);
+  ok(
+    !/Auto-Calibrate/i.test(text),
+    'CLONE_UI:auto_calibrate',
+    `Auto-Calibrate found in ${r} (B8.2 / B0.4: gone from Dictionary and Audit)`
+  );
 }
 
 ok(
