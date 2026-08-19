@@ -171,6 +171,32 @@ describe('bugDomainPacks', () => {
     expect(pack.kind).toBe('home');
   });
 
+  it('does not glue a leftover food job onto a Home / biomarker snap', () => {
+    const leftover = {
+      id: 'job_food_stale',
+      kind: 'food_log',
+      status: 'succeeded',
+      updatedAt: '2026-08-19T23:40:00.000Z',
+      result: { pendingFoodLog: { name: 'Prawn pasta salad', nutrients: { calories: 900 } } },
+    };
+    const pack = resolveDomainPack({
+      category: 'Home',
+      activeTab: 'home',
+      jobs: [leftover],
+      payload: { jobId: leftover.id, kind: 'food_log', pendingFoodLog: leftover.result.pendingFoodLog },
+      biomarkerHistory: [
+        { id: 'log_bmi_2020', date: '04-11-2020', biomarkers: { bmi: 2 }, sync_state: 'synced' },
+      ],
+      biomarkers: { bmi: 23 },
+      profile: {},
+    });
+    expect(pack.domain).toBe('biomarker');
+    expect(pack.food).toBeUndefined();
+    expect(pack.biomarker?.jobId).toBeFalsy();
+    expect(pack.summaryLine).not.toMatch(/Prawn/i);
+    expect(pack.biomarker?.keys).toContain('bmi');
+  });
+
   it('domainPackForAgent and overview mark a11y primary', () => {
     const pack = resolveDomainPack({
       category: 'foodcart',

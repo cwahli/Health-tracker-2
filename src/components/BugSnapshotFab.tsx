@@ -32,7 +32,7 @@ import {
   BUG_SNAPSHOT_LOG,
   AGENT_STRUCTURE_DEFAULT,
 } from '../utils/bugSnapshot';
-import { resolveDomainPack } from '../utils/bugDomainPacks';
+import { jobFitsSnap, resolveDomainPack } from '../utils/bugDomainPacks';
 import { compressImage } from '../utils/imageCompressor';
 import { CATEGORY_OPTIONS, saveBugTrackerCache } from './FlagIssueModal';
 import { BugCategory } from '../utils/issueBacklog';
@@ -628,9 +628,31 @@ export default function BugSnapshotFab({
       const browserLogs = getBrowserLogBuffer();
       const network = getRecentNetworkEntries();
       const jobs = typeof JobStore?.getAllJobs === 'function' ? JobStore.getAllJobs() : [];
+      const snapCat = snapshotType === 'meal' ? 'foodcart' : category;
+      if (payload?.jobId && !jobFitsSnap({ category: snapCat, activeTab, jobKind: payload.kind })) {
+        const {
+          jobId: _jid,
+          kind: _k,
+          mode: _m,
+          status: _st,
+          result: _r,
+          pendingFoodLog: _p,
+          backendLogs: _b,
+          scoutItems: _s,
+          photoUrl: _ph,
+          debugUrl: _d,
+          pipelineErrors: _e,
+          progressPercent: _pp,
+          ...rest
+        } = payload;
+        payload = rest;
+      }
 
       const contextJobId = (payload as any)?.jobId || viewingJobId || readOpenModalJobId() || null;
-      const activeJob = pickSnapshotJob(jobs, contextJobId);
+      const jobPool = jobs.filter((j: any) =>
+        jobFitsSnap({ category: snapCat, activeTab, jobKind: j?.kind })
+      );
+      const activeJob = pickSnapshotJob(jobPool, contextJobId);
 
       let debug_payload: any = null;
       let nutrition_table_md = '';
@@ -748,9 +770,9 @@ export default function BugSnapshotFab({
       }
 
       const domain_pack = resolveDomainPack({
-        category,
+        category: snapCat,
         activeTab,
-        jobs,
+        jobs: jobPool,
         payload,
         jobId: contextJobId,
         biomarkerHistory,

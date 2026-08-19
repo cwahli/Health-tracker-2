@@ -1500,12 +1500,23 @@ export default function Header({
             try {
               const jobs = JobStore.getAllJobs?.() || [];
               const fromModal = viewingJobId ? jobs.find((j) => j.id === viewingJobId) : null;
+              const tab = String(activeTab || '').toLowerCase();
+              const bioTab = ['home', 'health', 'medical', 'insights', 'trends', 'dictionary'].includes(tab);
+              const foodTab = tab === 'food';
               const candidates = [...jobs]
                 .filter((j) =>
                   j.kind !== 'bug_triage' &&
                   !String(j.id).startsWith('triage_') &&
                   !String(j.id).startsWith('bug_triage_')
                 )
+                .filter((j) => {
+                  const k = String(j.kind || '').toLowerCase();
+                  const isFood = k === 'food' || k.startsWith('food_');
+                  const isMed = k.includes('medical') || k.includes('biomarker');
+                  if (bioTab && !foodTab) return isMed;
+                  if (foodTab) return isFood;
+                  return true;
+                })
                 .sort((a, b) => String(b.id).localeCompare(String(a.id)));
               const active =
                 fromModal ||

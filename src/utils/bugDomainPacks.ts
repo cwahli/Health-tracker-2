@@ -5,6 +5,39 @@
 
 import { pickSnapshotJob } from './goldenFixture';
 
+export function isFoodJobKind(kind?: string | null): boolean {
+  const k = String(kind || '').toLowerCase();
+  return k === 'food' || k.startsWith('food_');
+}
+
+export function isBioJobKind(kind?: string | null): boolean {
+  const k = String(kind || '').toLowerCase();
+  return k.includes('medical') || k.includes('biomarker');
+}
+
+/** Which job class this snap is allowed to attach. */
+export function snapSurface(category?: string, activeTab?: string): 'food' | 'biomarker' | 'other' {
+  const cat = String(category || '').toLowerCase();
+  const tab = String(activeTab || '').toLowerCase();
+  if (cat === 'foodcart' || tab === 'food') return 'food';
+  if (
+    cat === 'home' ||
+    cat === 'biomarker' ||
+    ['home', 'health', 'medical', 'insights', 'trends', 'dictionary'].includes(tab)
+  ) {
+    return 'biomarker';
+  }
+  return 'other';
+}
+
+export function jobFitsSnap(opts: { category?: string; activeTab?: string; jobKind?: string | null }): boolean {
+  const surface = snapSurface(opts.category, opts.activeTab);
+  const kind = opts.jobKind;
+  if (surface === 'biomarker') return isBioJobKind(kind);
+  if (surface === 'food') return !kind || isFoodJobKind(kind);
+  return true;
+}
+
 export type BugDomain = 'food' | 'biomarker' | 'generic';
 
 export type DomainPack = {
@@ -410,23 +443,19 @@ export function resolveDomainPack(input: {
   const jobs = Array.isArray(input.jobs) ? input.jobs : [];
   const payload = input.payload || {};
 
-  const targetJobId = input.jobId || payload.jobId || payload.id || null;
+  const surface = snapSurface(cat, tab);
+  const rawTarget = input.jobId || payload.jobId || payload.id || null;
+  const targetFits = rawTarget && jobFitsSnap({ category: cat, activeTab: tab, jobKind: payload.kind || payload.jobKind });
+  const targetJobId = targetFits ? rawTarget : null;
 
   const live = (j: any) =>
     j &&
     (j.status === 'running' || j.status === 'succeeded' || j.status === 'awaiting_user' || j.status === 'failed');
-  const isFoodJob = (j: any) =>
-    live(j) &&
-    (j.kind === 'food_log' ||
-      j.kind === 'food_compare' ||
-      j.kind === 'food' ||
-      String(j.kind || '').startsWith('food'));
-  const isMedJob = (j: any) =>
-    live(j) &&
-    (j.kind === 'medical' || j.kind === 'biomarker' || String(j.kind || '').includes('medical'));
+  const isFoodJob = (j: any) => live(j) && isFoodJobKind(j.kind);
+  const isMedJob = (j: any) => live(j) && isBioJobKind(j.kind);
 
-  const activeFood = pickSnapshotJob(jobs.filter(isFoodJob), targetJobId);
-  const activeMed = pickSnapshotJob(jobs.filter(isMedJob), targetJobId);
+  const activeFood = surface === 'biomarker' ? null : pickSnapshotJob(jobs.filter(isFoodJob), targetJobId);
+  const activeMed = surface === 'food' ? null : pickSnapshotJob(jobs.filter(isMedJob), targetJobId);
 
   const preferFood =
     cat === 'foodcart' ||
@@ -468,7 +497,7 @@ export function resolveDomainPack(input: {
   // Both or neither: prefer category, then food if meal-like payload
   if (cat === 'biomarker' || cat === 'home' || (preferBio && cat !== 'foodcart')) {
     const biomarker = buildBiomarkerDomainPack({
-      job: activeMed || activeFood,
+      job: activeMed,
       payload,
       biomarkerHistory: input.biomarkerHistory,
       biomarkers: input.biomarkers,
