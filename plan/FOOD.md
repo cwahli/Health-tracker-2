@@ -8,7 +8,7 @@ Not a “lifecycle” in the biomarker sense: a meal is one-shot (scout → reso
 - **Part A** — identity / curator / catalog (was `FOOD_RESOLVER_CURATOR_AND_1PASS_CATALOG_PLAN.md`)
 - **Part B** — durable meal document (was `MEAL_BUILD_DURABLE_STATE.md`)
 
-Remaining execute IDs **F-1…F-4** are on `ROADMAP.md`.
+Remaining execute IDs **F-1…F-4** (identity) and **F-6 / F-7** (`FoodCard` ceiling + scout prompt gate) are on `ROADMAP.md`. F-6/F-7 start after **Q-1**. Do **not** rebuild the curator (M30 stays).
 
 ---
 

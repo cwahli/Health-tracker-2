@@ -42,13 +42,15 @@ Locked converts never change: `1.293` / `1.411` / `3.362` / `79.56` / `13.68`.
 
 | If you are… | Do |
 |---|---|
-| **Default** | **B0** (human Apply), then **B2 leftover hygiene**, then **real G-B2** |
+| **Default (correctness)** | **B0** (human Apply), then **B2 leftover hygiene**, then **real G-B2** |
+| Site is slow / UI keeps duplicating | **Q-1 budget gate**, then **B8.1** (one convert table), then **R-9** (defer mount). Do **not** start FoodCard / App.tsx / Dictionary splits first |
 | Food identity still wrong | **Track F** one class (`FALSE_FRIEND` first) |
 | Quota / egress spike | **Track R** R-1 measure, then only the matching R-id |
 | Golden is JSON-only / does not execute | **Track Q** — make that one example run the helper |
 
-Do **not** start B7.4 Pending-store, B7.5 Calibrator, Track R D1, or a curator rebuild to make another track look done.  
-Do **not** add more NHS aliases until G-B2 runs the lexer and G-B4 stays green.
+Do **not** start B7.4 Pending-store, B7.5 Calibrator, Track R D1, a curator rebuild, or a god-file rewrite to make another track look done.  
+Do **not** add more NHS aliases until G-B2 runs the lexer and G-B4 stays green.  
+Do **not** add a sixth plan file — platform / speed / kit IDs live here under **Q / R / B8 / F-6**.
 
 ---
 
@@ -110,6 +112,17 @@ B7.4 / B7.5 / B7.6 above. Helpers for 7.1–7.3, 7.7, 7.8 already exist — do n
 
 **Out of Track B:** food pipeline, rename agent ids, delete instruction packs, fuzzy auto-approve, `approve_all`, vision required, new health-planning agents until B0 + `USE_SURFACE_LEAK` are green.
 
+### B8 — One math path, one door (platform continuity)
+
+Does **not** replace B0–B7. Same pillar, same `convertViaTable` law. Trigger: second conversion table + restored Auto-Fix landed after B0.4. Method: `QUALITY.md` §7.
+
+| # | Item | Done when | Class | Who |
+|---|---|---|---|---|
+| **B8.0** | Human: one Auto-Fix surface | Choice written in `AI_HANDOVER.md`: **(A)** Flagged Telemetry modal is the only Auto-Fix, or **(B)** Auto-Fix banned again | product | Human |
+| **B8.1** | Telemetry Auto-Fix calls `convertViaTable` only | `computeBiomarkerTelemetryMultiplier` has no private factors; extra pairs live in `ANALYTE_CONVERSIONS`; locked `1.293` / `1.411` / `3.362` / `79.56` / `13.68` unchanged | `SECOND_MATH_PATH` | Grok (constants) |
+| **B8.2** | One Check-Biomarkers control | Dictionary toolbar **or** Cleaning menu, not both | `CLONE_UI` | Gemini |
+| **B8.3** | One audit mount | `runGeneralizedBiomarkerAudit` / `detectFlaggedTelemetryErrors` not re-run from Dictionary + Medical History + Trends + LogChat on the same paint | `EAGER_MOUNT` | Gemini after Grok names call sites |
+
 ---
 
 ## Track F — Food identity quality
@@ -126,8 +139,11 @@ M21/M22 meal document and M30 curator stay. F-5 TypeError `.calories` is **done*
 | **F-2** | Catalog-first as default | Analyze gaps hit catalog before live USDA; USDA still allowed for research | Ban USDA |
 | **F-3** | Golden meals still red in production | One class playbook per session (picnic / lassi / ham…). Fixture tests in `golden_meals.test.ts` are **not** this item | `POST /loop` until all-green |
 | **F-4** | Alias hit rate / duplicate active rows | Measured hit rate; dups gated, not silently merged | Silent merge |
+| **F-6** | `FoodCard.tsx` ceiling | Line count ≤ today’s 3813 unless the pack lists it **and** is net-zero; new portion/receipt UI goes in `PortionClarifyCard` / `NutritionLabelTable` / `ComprehensiveNutrientsTable` | New food table / +100 lines “enhance” |
+| **F-7** | Scout prompt budget as a gate | `server_vision_scout.ts` net-zero (L12 enforced by `assert-budgets.mjs`, not English) | Prompt-only unit math |
 
-Execute **one class** per session. Inner = vitest (`server_fdc_resolve` / scout merge). Outer = one golden example.
+Execute **one class** per session. Inner = vitest (`server_fdc_resolve` / scout merge). Outer = one golden example.  
+F-6 / F-7 start **after** Q-1. They do **not** rebuild the curator (M30 stays).
 
 ---
 
@@ -145,8 +161,14 @@ Execute **one class** per session. Inner = vitest (`server_fdc_resolve` / scout 
 | **R-4** | Finish `server.ts` router split | Already touching the monolith (`server_routes_{jobs,biomarkers,food}.ts` exist; `server.ts` still huge) |
 | **R-5** | D1 as primary SQL | **After** R-1 still fails free tier |
 | **R-6** | Job recovery soak | Interrupted jobs still orphan (unit test exists; not a soak) |
+| **R-8** | Measure client TTI + request count on Home / Health / first chat | Numbers in `AI_HANDOVER.md` (no “60% faster” claim) | Page feels slow (now true) |
+| **R-9** | Defer `startGoldenIngestWatcher` + full `hydrateUserJobs` past first paint | Not in the first `App` mount turn; `requestIdleCallback` or ≥1.5s | After R-8 baseline |
+| **R-10** | Header code-split | `themeRegistry` audit, Drive backup, `FoodCatalogAdminTab`, quota checkers lazy; Header line count may not grow | After R-9 |
+| **R-11** | `HomeTab` / `LogChat` stay out of other tabs’ first paint | Already lazy-tabbed; do not eagerly import them from Insights / History | Regression after R-10 |
 
-R-7 knip / `getBiomarkerStatus` memo as a reliability gate is **abandoned**.
+R-7 knip / `getBiomarkerStatus` memo as a reliability gate is **abandoned**.  
+R-8–R-11 are **client speed**, not a free-tier redo. Do not re-migrate images or re-kill Firestore writes.  
+`App.tsx` extract (`useSyncOrchestrator`) stays **parked inside R-4** — only if a later pack already touches that file. Grok owns any `App.tsx` / `LogChat.tsx` / `Header.tsx` split. Gemini may do R-9 FIND/REPLACE from a named pack.
 
 ---
 
@@ -162,9 +184,42 @@ Rules unchanged: work item = class · inner = vitest · outer = one example · h
 | Medical capture script | `golden-from-medical-debug.mjs` exists (never food’s `golden-from-debug.mjs`) |
 | Inbox by class | Biomarkers tab lists examples grouped by class, not a single G-B1 card |
 | Stale header in `QUALITY.md` | File no longer says “not started as code” |
+| **Q-1** Budget gate | `scripts/assert-budgets.mjs` exit 0; fails on god-file net growth, a second convert table, a second Auto-Fix surface, or scout prompt growth. Wired into later packs the way free-tier is | 
+| **Q-2** Component catalog | `src/components/CATALOG.json` lists the allowed primitive ids (`AppModal`, `DataGrid`, `FilterPills`, `ConfirmBar`, `NutritionLabelTable`, `ComprehensiveNutrientsTable`, `PortionClarifyCard`, `convertViaTable`, `lazyWithRetry`). A new `*Modal.tsx` / `*Card.tsx` / `*Table.tsx` without a catalog id fails Q-1 |
+| **Q-3** First kit extract | `AppModal` + `FilterPills` exist under `src/components/ui/`, each ≤300 lines, each with a vitest; Home + Audit pills call `FilterPills`; no third pill bar |
+| **Q-4** `AgentResultTable` thin | Grid behavior only; agent YAML / apply / localStorage missing-keys **out**. Call sites pass data. Grok-owned |
+| **Q-5** Delete one-shot patch scripts | `scripts/patch-*.ts` / `fix-*.ts` residue gone after the last class they served | 
 
 Session replay: **abandoned**.  
-Q work is usually **inside** B2/B4/B6 or F-3, not a separate calendar.
+Golden-execution Q work is usually **inside** B2/B4/B6 or F-3.  
+**Q-1 is the first platform pack.** It does not cancel B0. File-collision rule: B0 and R-9 both touch `App.tsx` → serialize those two only.
+
+### Platform program order (not a fifth pillar)
+
+Same reward change as class-first goldens (`QUALITY.md` §0): green means the **class** is closed, not “the page still works.”
+
+```text
+Q-1 budget + Q-2 catalog     ← stop the bleeding (Grok writes, Gemini may fill the assert)
+B8.0 human Auto-Fix choice
+B8.1 one convert table       ← first repair the new gate fails (Grok)
+Q-3 AppModal + FilterPills   ← Grok API, Gemini implement + wire
+R-8 measure → R-9 defer      ← Grok numbers, Gemini FIND/REPLACE
+B8.2 / B8.3 one door         ← Gemini
+F-6 / F-7 FoodCard + scout   ← Gemini from a Grok pack; net-zero
+Q-4 / R-10 / R-4 god files   ← Grok only (Studio/Gemini weak here)
+Q-5 patch-script cleanup     ← Gemini last
+```
+
+Do **not** open Q-4 or a Dictionary/FoodCard/App.tsx breakup until Q-1 is red on that file **and** the pack names a catalog id.
+
+### Who does which (Gemini vs Grok)
+
+| | **Gemini** (large context, FIND/REPLACE, Studio) | **Grok** (this workspace) |
+|---|---|---|
+| Prefer | Q-1 assert body from a spec; B8.2; B8.3; Q-3 implement+wire; R-9 defer; F-6 moves into **existing** cards; F-7 net-zero prompt; Q-5 delete residue | Audit / catalog ids; B8.1 factors; primitive **APIs**; Q-4; any split of `App.tsx` `LogChat.tsx` `Header.tsx` `BiomarkerDictionaryModal.tsx` `AgentResultTable.tsx`; R-8 measure; review Gemini push vs catalog |
+| Do not ask | “Refactor FoodCard / Dictionary / App”; invent `BiomarkerDataGrid`; add L15 prose; restore a third Auto-Fix | Parallel rewrite of the same god file Gemini is in |
+
+Packs stay ≤6 IDs. One class per pack. Grok authors the pack; Gemini (or Grok) implements; Grok reviews the push (line counts + catalog). Local ship is allowed after COMPLETE.
 
 ---
 
@@ -181,4 +236,6 @@ node scripts/assert-food-curator-m30.mjs
 # Track R (when touching sync)
 node scripts/assert-free-tier-complete.mjs
 npx vitest run src/utils/syncUtils.regression.test.ts
+# Track Q platform (after Q-1 lands; run on any UI / convert / scout pack)
+# node scripts/assert-budgets.mjs
 ```

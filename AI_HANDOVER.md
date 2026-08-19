@@ -133,7 +133,8 @@
 
 ---
 ## Next Steps
-- System in fully verified state with all master gates green.
+- **Platform continuity (2026-08-19, plan only):** Speed / reuse / de-dupe is **not** a fifth pillar. Execute IDs are on `plan/ROADMAP.md` (Q-1…Q-5, B8, R-8…R-11, F-6/F-7). Method: `plan/QUALITY.md` §13. Client speed: `plan/RELIABILITY.md` R-8+. **Do not start FoodCard / App.tsx / Dictionary splits.** First pack when implementation starts: **Q-1 budget gate + Q-2 catalog**. First repair: **B8.1** one convert table. **Human needed for B8.0:** Auto-Fix surface (A) Flagged Telemetry modal only, or (B) ban Auto-Fix again.
+- System gates remain green; ingest v1 / F-1 still follow the existing default track (B0 then G-B2) when the pain is correctness, not slowness.
 
 
 - Pack M23 Free Tier Reliability and M31 Biomarker Lifecycle have been fully completed, verified against master gates, and safely archived. Ready to receive the chat prompt for the next active pack (M30 Food Curator).

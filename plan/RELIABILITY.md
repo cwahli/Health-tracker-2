@@ -169,7 +169,7 @@ plan/RELIABILITY_FREE_TIER_PLAN.md
 studio/M23_FIRESTORE_WRITE_KILL_SWITCH.md  → m23 gate only (not full program)
 ```
 
-Local Grok/Claude/Cursor: prepare only; **no git push**.
+Local agents may commit/push after COMPLETE (`tsc` + named gates).
 
 ### After master COMPLETE — still optional later
 
@@ -184,6 +184,12 @@ Absorbed from archived `Reliability_perf.md`. **Do not start these to “finish 
 | R-5 | Investigate D1 as primary SQL | **After** R-1, free tier still fails | Default: stay on thin Supabase + R2 |
 | R-6 | Job crash recovery soak | Interrupted jobs still orphan | Partial today — fix the bug, no new plan |
 | R-7 | knip / memoize `getBiomarkerStatus` | Never a reliability gate | **Abandoned** as a milestone |
+| R-8 | Measure client TTI + request count (Home / Health / first chat) | Page feels slow (**now true**) | No unmeasured “60%” claims |
+| R-9 | Defer golden ingest + full job hydrate past first paint | After R-8 baseline | Do not extract `App.tsx` to do this |
+| R-10 | Header code-split (theme audit, Drive backup, catalog admin, quota) | After R-9 | Do not grow Header |
+| R-11 | Keep `HomeTab` / `LogChat` out of other tabs’ first paint | Regression check after R-10 | Do not eagerly re-import |
+
+R-8–R-11 are **client speed**. They do not reopen M23–M28. Method and catalog: `QUALITY.md` §13. Execute order: `ROADMAP.md` platform program.
 
 ---
 

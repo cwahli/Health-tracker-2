@@ -366,6 +366,7 @@ Walk this list in order. Do **not** start another agent rewrite, Calibrator UI, 
 - [ ] Confirm older SI rows are **untouched** (HDL 1.43, creat 100/72, bili 16/13).
 - [ ] Confirm Home no longer shows Auto-Fix Historical Scaling, Inspect Card, Review in Medical History, or Edit Logs in Medical History.
 - [ ] Confirm Dictionary no longer shows Auto-Calibrate, Auto-Fill Defaults, Quick Approve, Approve, Approve Selected, or Save & Approve.
+- **B8 continuity (2026-08-19):** Flagged Telemetry Auto-Fix later returned on Home, and `computeBiomarkerTelemetryMultiplier` is a second factor table next to `convertViaTable`. Reconcile under `ROADMAP.md` **B8.0–B8.1** / `QUALITY.md` §13 (`SECOND_MATH_PATH`). Do **not** add a third convert path. Locked numbers stay `1.293` / `1.411` / `3.362` / `79.56` / `13.68`.
 
 ### 13.2 Leftover data on this profile (cleanup, not new architecture)
 

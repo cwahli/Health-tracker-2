@@ -174,6 +174,7 @@ Copy the food lesson: Studio must not be allowed to edit the catalog to paint a 
 |---|---|---|
 | `IDENTITY_*` | `biomarkers.ts` (`getMappedBiomarkerKey` only), `biomarkerIngest.ts` decideRow, their tests | `ANALYTE_CONVERSIONS` numbers, `expected.json` locks, Review prompts, `customBiomarkers` seed |
 | `CONFORMANCE_UNIT` / `SILENT_REWRITE` / `APPLY_MISS` | `biomarkerLifecycle.ts` apply path, Review enrich, tests | Matcher aliases, Parser prompts, Home buttons |
+| `SECOND_MATH_PATH` | `ANALYTE_CONVERSIONS` + `convertViaTable` + callers | A new `compute*Multiplier` / second factor table |
 | `CONFORMANCE_SHAPE` / `COMPLETENESS` | `biomarkerIngest.ts` lexer/handoff | Convert table, Dictionary approve |
 | `PLAUSIBILITY` | `isBiomarkerValueImprobable` + flag wiring | Silent sanitize convert |
 | `USE_SURFACE_LEAK` | `filterHistoryForUse` call sites | New Auto-Fix |
@@ -374,6 +375,62 @@ Not “the EMIS file is 90% auto-parsed.”
 8. Rulebook write map updated when I5/I7 change who writes observations.
 
 Until then: do not claim token-reduction in product copy. The class tests say what happened.
+
+---
+
+## 13. Platform kit (UI / speed — same loop, not a fifth pillar)
+
+Execute IDs: `ROADMAP.md` **Q-1…Q-5**, **B8**, **R-8…R-11**, **F-6/F-7**.  
+This is the food-golden lesson applied to chrome: the reward was “it works,” so agents added a second button, a second convert table, and a 6,634-line modal. Change the reward.
+
+### 13.1 Classes (add to the spine; one per pack)
+
+| Class id | Law | Inner test | Honest residual |
+|---|---|---|---|
+| `SECOND_MATH_PATH` | One convert table | New analyte with an `ANALYTE_CONVERSIONS` row converts via `convertViaTable`; without a row → `ok: false`, no `if (key === '…')` | Flag, do not guess |
+| `CLONE_UI` | One control per job | `Check Biomarkers` / Auto-Fix / filter pills: one catalog id, N call sites | Extra label is a fail, not a feature |
+| `EAGER_MOUNT` | No extra work on first paint | Named watcher / full hydrate / full audit not in `App` first turn; Health tab does not call `runGeneralizedBiomarkerAudit` until the user opens Audit | Defer is success |
+| `PROMPT_GROWTH` | L12 as a gate | `server_vision_scout.ts` net-zero lines unless pack lists it | Logic in TS, not English |
+| `KIT_DRIFT` | New chrome names a catalog id | New `*Modal.tsx` / `*Card.tsx` / `*Table.tsx` without `CATALOG.json` id fails `assert-budgets.mjs` | Extend primitive, or justify |
+| `GOD_FILE_GROWTH` | Ceilings | `App.tsx` 7832 · Dictionary 6634 · `FoodCard` 3813 · `HomeTab` 3071 · `LogChat` 6688 · scout 1414 — net-zero unless in-scope **and** deletions ≥ additions | Extract only when Q-1 is red on that file |
+
+`USE_SURFACE_LEAK` playbook still forbids **new** Auto-Fix. B8.0 decides whether the Flagged Telemetry modal is the one allowed surface or none.
+
+### 13.2 Catalog (the reuse artifact)
+
+Allowed primitive ids (do not invent `BiomarkerDataGrid` next to `AgentResultTable`):
+
+```text
+AppModal                      shell only (title, close, children, actions)
+DataGrid                      sort / page / row select — no agent YAML
+FilterPills                   one pill bar
+ConfirmBar                    inline Yes/Cancel (no window.confirm)
+NutritionLabelTable           keep
+ComprehensiveNutrientsTable   keep
+PortionClarifyCard            keep
+convertViaTable               only math
+lazyWithRetry                 keep
+```
+
+Each new primitive: ≤300 lines, own vitest, frozen props. Feature screens compose; they do not own focus-trap, pill styles, or unit factors.
+
+**Inner-platform rule:** if a “shared” file grows past ~400 lines of `if (agentType === …)` (`AgentResultTable` today), it is **KIT_DRIFT**, not reuse. Split behavior out. Grok owns that split (Q-4).
+
+### 13.3 Playbook firewall (platform)
+
+| Class | May edit | Must not edit |
+|---|---|---|
+| `SECOND_MATH_PATH` | `ANALYTE_CONVERSIONS`, `convertViaTable` callers, their tests | New factor function, G-B1 lock numbers |
+| `CLONE_UI` | Call sites to the one catalog control | A second button with the same job |
+| `EAGER_MOUNT` | `App.tsx` mount effects, lazy imports (named pack) | New watcher on first paint |
+| `PROMPT_GROWTH` | `server_vision_scout.ts` with net-zero | Unit math in English |
+| `KIT_DRIFT` / `GOD_FILE_GROWTH` | Catalog primitive + tests, then thin call sites | God-file rewrite as the inner loop |
+
+### 13.4 Who (Gemini large-token vs Grok)
+
+Same table as `ROADMAP.md` “Who does which.” Packs are FIND/REPLACE + named assert. Gemini may hold a whole god file in context **only** to apply a Grok-authored range. Gemini must not design the catalog or choose a new primitive.
+
+Audit (living): line counts, duplicate labels, second math path, eager imports. Grok regenerates it; Gemini does not “search `src/components/`” as a substitute.
 
 ---
 
