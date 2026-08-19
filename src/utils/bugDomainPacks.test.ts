@@ -124,6 +124,35 @@ describe('bugDomainPacks', () => {
     expect(viewed.food?.jobId).toBe(prawn.id);
   });
 
+  it('Home snap includes BMI log ids and tombstones, not a generic empty pack', () => {
+    const pack = resolveDomainPack({
+      category: 'Home',
+      activeTab: 'home',
+      jobs: [],
+      payload: { activeTab: 'home', jobsCount: 0 },
+      biomarkers: { bmi: 23 },
+      biomarkerHistory: [
+        {
+          id: 'log_bmi_2020',
+          date: '04-11-2020',
+          sync_state: 'synced',
+          updated_at: 1,
+          biomarkers: { bmi: 2 },
+        },
+      ],
+      profile: {
+        deletedBiomarkerLogIds: { log_bmi_2020: 1700000000000 },
+        deletedCustomBiomarkerKeys: {},
+      },
+    });
+    expect(pack.domain).toBe('biomarker');
+    expect(pack.biomarker?.keys).toContain('bmi');
+    expect(pack.biomarker?.historySample?.[0].id).toBe('log_bmi_2020');
+    expect(pack.biomarker?.historySample?.[0].values?.bmi).toBe(2);
+    expect(pack.biomarker?.tombstones?.deletedBiomarkerLogIds?.log_bmi_2020).toBe(1700000000000);
+    expect(pack.summaryLine).toMatch(/bmi/i);
+  });
+
   it('domainPackForAgent and overview mark a11y primary', () => {
     const pack = resolveDomainPack({
       category: 'foodcart',

@@ -42,6 +42,15 @@ export type FoodDomainPack = {
   pipelineWarnings?: any[];
 };
 
+export type BiomarkerHistoryRow = {
+  id?: string;
+  date?: string | null;
+  sync_state?: string | null;
+  updated_at?: number | null;
+  keys: string[];
+  values?: Record<string, any>;
+};
+
 export type BiomarkerDomainPack = {
   jobId?: string | null;
   kind?: string | null;
@@ -58,6 +67,13 @@ export type BiomarkerDomainPack = {
   sanitizeHints?: string[];
   lastAgentMessage?: string | null;
   pipelineErrors?: any[];
+  tombstones?: {
+    deletedBiomarkerLogIds?: Record<string, number>;
+    deletedCustomBiomarkerKeys?: Record<string, number>;
+    deletedNotUsedBiomarkerKeys?: Record<string, number>;
+  };
+  historySample?: BiomarkerHistoryRow[];
+  historyCount?: number;
 };
 
 function coreNutrients(n: any): Record<string, any> | null {
@@ -236,15 +252,62 @@ export function buildBiomarkerDomainPack(input: {
     }
   }
 
-  // Recent history sample
-  if (Array.isArray(input.biomarkerHistory)) {
-    for (const row of input.biomarkerHistory.slice(0, 15)) {
-      const k = row.key || row.biomarkerKey || row.name;
-      if (k && keys.size < 40) {
-        pushEntry(k, row.value ?? row.val, row.unit, row.date || row.measuredAt);
+  const history = Array.isArray(input.biomarkerHistory) ? input.biomarkerHistory : [];
+  const historySample: BiomarkerHistoryRow[] = [];
+  for (const row of history.slice(-25).reverse()) {
+    const bm =
+      row?.biomarkers && typeof row.biomarkers === 'object' && !Array.isArray(row.biomarkers)
+        ? row.biomarkers
+        : null;
+    const rowKeys = bm
+      ? Object.keys(bm).slice(0, 24)
+      : [row?.key || row?.biomarkerKey || row?.name].filter(Boolean).map(String);
+    if (bm) {
+      for (const k of rowKeys) {
+        if (keys.size < 40) pushEntry(k, bm[k], null, row.date || row.measuredAt || null);
       }
+    } else {
+      const k = row?.key || row?.biomarkerKey || row?.name;
+      if (k && keys.size < 40) pushEntry(k, row.value ?? row.val, row.unit, row.date || row.measuredAt);
+    }
+    if (historySample.length < 25 && (row?.id || rowKeys.length)) {
+      const values: Record<string, any> = {};
+      if (bm) {
+        for (const k of rowKeys.slice(0, 12)) {
+          const v = bm[k];
+          values[k] = v != null && String(v).length < 40 ? v : String(v ?? '').slice(0, 40);
+        }
+      }
+      historySample.push({
+        id: row?.id ? String(row.id) : undefined,
+        date: row?.date || row?.measuredAt || null,
+        sync_state: row?.sync_state || null,
+        updated_at: typeof row?.updated_at === 'number' ? row.updated_at : null,
+        keys: rowKeys,
+        values: Object.keys(values).length ? values : undefined,
+      });
     }
   }
+
+  const capMap = (m: any, n = 40): Record<string, number> | undefined => {
+    if (!m || typeof m !== 'object') return undefined;
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(m).slice(0, n)) {
+      const ts = typeof v === 'number' ? v : Number(v);
+      if (k && Number.isFinite(ts)) out[k] = ts;
+    }
+    return Object.keys(out).length ? out : undefined;
+  };
+  const tombstones = {
+    deletedBiomarkerLogIds: capMap(input.profile?.deletedBiomarkerLogIds),
+    deletedCustomBiomarkerKeys: capMap(input.profile?.deletedCustomBiomarkerKeys),
+    deletedNotUsedBiomarkerKeys: capMap(input.profile?.deletedNotUsedBiomarkerKeys),
+  };
+  const hasTombstones = !!(
+    tombstones.deletedBiomarkerLogIds ||
+    tombstones.deletedCustomBiomarkerKeys ||
+    tombstones.deletedNotUsedBiomarkerKeys
+  );
 
   const sanitizeHints: string[] = [];
   if (p.sanitizeProposal || result.sanitizeProposal) {
@@ -275,6 +338,9 @@ export function buildBiomarkerDomainPack(input: {
       : Array.isArray(p.pipelineErrors)
         ? p.pipelineErrors.slice(0, 15)
         : undefined,
+    tombstones: hasTombstones ? tombstones : undefined,
+    historySample: historySample.length ? historySample : undefined,
+    historyCount: history.length,
   };
 }
 
@@ -286,7 +352,11 @@ export function foodSummaryLine(pack: FoodDomainPack): string {
 
 export function biomarkerSummaryLine(pack: BiomarkerDomainPack): string {
   const keys = (pack.keys || []).slice(0, 6).join(', ') || '—';
-  return `biomarker agent=${pack.agentLabel || pack.kind || '?'} keys=${keys} status=${pack.status || '?'}`;
+  const logs = pack.historyCount != null ? ` logs=${pack.historyCount}` : '';
+  const tombs = pack.tombstones?.deletedBiomarkerLogIds
+    ? ` tombstones=${Object.keys(pack.tombstones.deletedBiomarkerLogIds).length}`
+    : '';
+  return `biomarker agent=${pack.agentLabel || pack.kind || '?'} keys=${keys}${logs}${tombs} status=${pack.status || '?'}`;
 }
 
 /**
@@ -328,14 +398,18 @@ export function resolveDomainPack(input: {
   const preferFood =
     cat === 'foodcart' ||
     tab === 'food' ||
-    !!activeFood ||
-    !!(payload.pendingFoodLog || payload.receiptTable || payload.scoutItems);
+    ((!!activeFood || !!(payload.pendingFoodLog || payload.receiptTable || payload.scoutItems)) &&
+      cat !== 'home' &&
+      cat !== 'biomarker');
 
   const preferBio =
     cat === 'biomarker' ||
-    ['medical', 'insights', 'trends', 'biomarker', 'health'].includes(tab) ||
+    cat === 'home' ||
+    ['medical', 'insights', 'trends', 'biomarker', 'health', 'home', 'dictionary'].includes(tab) ||
     !!activeMed ||
-    !!(payload.biomarkers || payload.updatedBiomarkers);
+    !!(payload.biomarkers || payload.updatedBiomarkers) ||
+    (Array.isArray(input.biomarkerHistory) && input.biomarkerHistory.length > 0) ||
+    !!(input.profile?.deletedBiomarkerLogIds || input.profile?.deletedCustomBiomarkerKeys);
 
   const capturedAt = new Date().toISOString();
 
@@ -359,7 +433,7 @@ export function resolveDomainPack(input: {
     };
   }
   // Both or neither: prefer category, then food if meal-like payload
-  if (cat === 'biomarker' || (preferBio && cat !== 'foodcart')) {
+  if (cat === 'biomarker' || cat === 'home' || (preferBio && cat !== 'foodcart')) {
     const biomarker = buildBiomarkerDomainPack({
       job: activeMed || activeFood,
       payload,
@@ -438,6 +512,25 @@ export function buildOverviewMarkdown(input: {
     lines.push(`## Domain summary`);
     lines.push('');
     lines.push(input.domainPack.summaryLine);
+    lines.push('');
+  }
+  const bio = input.domainPack?.biomarker;
+  if (bio?.historySample?.length || bio?.tombstones) {
+    lines.push(`## Biomarker debug (sync / tombstones)`);
+    lines.push('');
+    lines.push(`- History logs sampled: ${bio.historySample?.length || 0} of ${bio.historyCount ?? '?'}`);
+    const dLogs = Object.keys(bio.tombstones?.deletedBiomarkerLogIds || {});
+    const dKeys = Object.keys(bio.tombstones?.deletedCustomBiomarkerKeys || {});
+    lines.push(`- Tombstoned log ids: ${dLogs.length ? dLogs.slice(0, 12).join(', ') : 'none'}`);
+    lines.push(`- Tombstoned custom keys: ${dKeys.length ? dKeys.slice(0, 12).join(', ') : 'none'}`);
+    for (const row of (bio.historySample || []).slice(0, 8)) {
+      const vals = row.values
+        ? Object.entries(row.values)
+            .map(([k, v]) => `${k}=${v}`)
+            .join(', ')
+        : row.keys.join(', ');
+      lines.push(`- log \`${row.id || '?'}\` ${row.date || ''} state=${row.sync_state || '—'} ${vals}`);
+    }
     lines.push('');
   }
   if (input.env) {

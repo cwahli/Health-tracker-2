@@ -1512,7 +1512,17 @@ export default function Header({
                 candidates.find((j) => j.status === 'running' || j.status === 'awaiting_user') ||
                 candidates.find((j) => j.status === 'succeeded' || j.status === 'failed') ||
                 candidates[0];
-              if (!active) return { activeTab, jobsCount: jobs.length };
+              if (!active) {
+                return {
+                  activeTab,
+                  jobsCount: jobs.length,
+                  biomarkers,
+                  biomarkerHistoryCount: Array.isArray(biomarkerHistory) ? biomarkerHistory.length : 0,
+                  deletedBiomarkerLogIds: profile?.deletedBiomarkerLogIds || {},
+                  deletedCustomBiomarkerKeys: profile?.deletedCustomBiomarkerKeys || {},
+                  deletedNotUsedBiomarkerKeys: profile?.deletedNotUsedBiomarkerKeys || {},
+                };
+              }
               return {
                 activeTab,
                 jobId: active.id,
