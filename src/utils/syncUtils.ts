@@ -292,10 +292,15 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 2, de
 }
 
 const sanitizeFoodsForSync = (foods: FoodLog[], opts?: { stripAllDataImages?: boolean }): FoodLog[] => {
-  const stripAllDataImages = !!opts?.stripAllDataImages;
+  // R2 AUTO-UPLOAD PRESERVATION (Aug 2026):
+  // We must NOT strip base64 "data:" URLs of images because the server needs them
+  // to upload to R2 storage! Stripping them on the client-side prevents R2 uploads
+  // and permanently replaces the images with "[image_removed_for_snapshot]" in the database,
+  // causing them to be lost upon pull. We only strip if the image URL is abnormally large
+  // (e.g. > 10MB) to protect against network overflow.
   const shouldStrip = (url: string | undefined) => {
     if (!url || !url.startsWith('data:')) return false;
-    return stripAllDataImages || url.length > 500000;
+    return url.length > 10000000;
   };
   return foods.map(food => {
     if (food.sync_state === 'delete') {
