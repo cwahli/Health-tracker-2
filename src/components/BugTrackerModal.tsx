@@ -470,10 +470,14 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
   const deleteTag = async (tagId: string, title: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!confirm(`Mark bug tag "${title}" as fixed and archive?`)) return;
+    if (!confirm(`Mark "${title}" done? The card stays in history (not hard-deleted).`)) return;
     setDeletingTagId(tagId);
     try {
-      const res = await fetch(`/api/issue-tags/${tagId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/issue-tags/${encodeURIComponent(tagId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'fixed', resolution_note: 'Marked done from queue' }),
+      });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error || `Failed (HTTP ${res.status})`);
@@ -484,7 +488,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
       }
       await load();
     } catch (err: any) {
-      alert(err?.message || 'Failed to delete bug tag');
+      alert(err?.message || 'Failed to mark bug done');
     } finally {
       setDeletingTagId(null);
     }

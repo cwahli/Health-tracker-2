@@ -27,7 +27,7 @@ import {
 } from './src/utils/bugSnapshot';
 import { domainPackForAgent, buildOverviewMarkdown } from './src/utils/bugDomainPacks';
 import { stripHeavyImages } from './src/utils/debugPayload';
-import { normalizeTagKey } from './serverIssueBacklog.js';
+import { findIssueTag, normalizeTagKey } from './serverIssueBacklog.js';
 import {
   appendEvidenceCommit,
   applyAttempt,
@@ -68,25 +68,7 @@ async function persistWorkItem(tagId: string, item: ReturnType<typeof hydrateWor
 }
 
 async function findTagByParam(supabaseAdmin: any, param: string): Promise<any | null> {
-  const raw = String(param || '').replace(/^#/, '');
-  const { data: byId } = await supabaseAdmin.from('issue_tags').select('*').eq('id', raw).maybeSingle();
-  if (byId) return byId;
-  if (param !== raw) {
-    const { data: byRaw } = await supabaseAdmin.from('issue_tags').select('*').eq('id', param).maybeSingle();
-    if (byRaw) return byRaw;
-  }
-  if (/^\d+$/.test(raw)) {
-    const n = Number(raw);
-    const { data: byN, error } = await supabaseAdmin
-      .from('issue_tags')
-      .select('*')
-      .filter('work_item->>public_n', 'eq', String(n))
-      .limit(1);
-    if (!error && byN?.[0]) return byN[0];
-    const { data: rows } = await supabaseAdmin.from('issue_tags').select('*').limit(200);
-    return (rows || []).find((t: any) => hydrateWorkItem(t).public_n === n) || null;
-  }
-  return null;
+  return findIssueTag(supabaseAdmin, param);
 }
 
 export type BugSnapshotDeps = {

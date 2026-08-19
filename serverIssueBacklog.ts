@@ -349,6 +349,26 @@ async function upsertTagByTitle(supabaseAdmin: any, titleRaw: string): Promise<{
   return created;
 }
 
+/** UUID, #18, or 18 — same lookup as GET /api/bugs/:tagId. */
+export async function findIssueTag(supabaseAdmin: any, param: string): Promise<any | null> {
+  const raw = String(param || '').replace(/^#/, '').trim();
+  if (!raw) return null;
+  const { data: byId } = await supabaseAdmin.from('issue_tags').select('*').eq('id', raw).maybeSingle();
+  if (byId) return byId;
+  if (/^\d+$/.test(raw)) {
+    const n = Number(raw);
+    const { data: byN, error } = await supabaseAdmin
+      .from('issue_tags')
+      .select('*')
+      .filter('work_item->>public_n', 'eq', String(n))
+      .limit(1);
+    if (!error && byN?.[0]) return byN[0];
+    const { data: rows } = await supabaseAdmin.from('issue_tags').select('*').limit(200);
+    return (rows || []).find((t: any) => hydrateWorkItem(t).public_n === n) || null;
+  }
+  return null;
+}
+
 async function loadBugTagsWithLinks(supabaseAdmin: any) {
   let tags: any[] = [];
   let links: any[] = [];
@@ -1095,12 +1115,12 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
   app.post('/api/issue-tags/:id/link', async (req: Request, res: Response) => {
     try {
       const { supabaseAdmin } = await import('./supabaseAdmin.js');
-      const tagId = req.params.id;
       const issueId = String(req.body?.issue_id || '').trim();
       if (!issueId) return res.status(400).json({ error: 'issue_id required' });
 
-      const { data: tag, error: tErr } = await supabaseAdmin.from('issue_tags').select('id').eq('id', tagId).maybeSingle();
-      if (tErr || !tag) return res.status(404).json({ error: 'tag not found' });
+      const tag = await findIssueTag(supabaseAdmin, req.params.id);
+      if (!tag) return res.status(404).json({ error: 'tag not found' });
+      const tagId = tag.id;
 
       const { error } = await supabaseAdmin
         .from('issue_tag_links')
@@ -1198,16 +1218,13 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
   app.delete('/api/issue-tags/:id', async (req: Request, res: Response) => {
     try {
       const { supabaseAdmin } = await import('./supabaseAdmin.js');
-      const id = req.params.id;
-      const { data: existing, error: loadErr } = await supabaseAdmin
-        .from('issue_tags')
-        .select('id, title')
-        .eq('id', id)
-        .maybeSingle();
-      if (loadErr || !existing) return res.status(404).json({ error: loadErr?.message || 'tag not found' });
+      const existing = await findIssueTag(supabaseAdmin, req.params.id);
+      if (!existing) return res.status(404).json({ error: 'tag not found' });
+      const id = existing.id;
 
       const { error } = await supabaseAdmin.from('issue_tags').delete().eq('id', id);
       if (error) return res.status(500).json({ error: error.message });
+      overviewCache = null;
       res.json({ success: true, deleted: true, id, title: existing.title });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'delete tag failed' });
@@ -1218,14 +1235,10 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
   app.patch('/api/issue-tags/:id', async (req: Request, res: Response) => {
     try {
       const { supabaseAdmin } = await import('./supabaseAdmin.js');
-      const id = req.params.id;
+      const existing = await findIssueTag(supabaseAdmin, req.params.id);
+      if (!existing) return res.status(404).json({ error: 'tag not found' });
+      const id = existing.id;
       const { resolution_note, append_note, title, whats_still_open, status, identified_problems } = req.body || {};
-      const { data: existing, error: loadErr } = await supabaseAdmin
-        .from('issue_tags')
-        .select('*')
-        .eq('id', id)
-        .single();
-      if (loadErr || !existing) return res.status(404).json({ error: loadErr?.message || 'not found' });
 
       const patch: any = {};
       if (title != null && String(title).trim()) {
@@ -1246,11 +1259,18 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
             ? `${existing.resolution_note}\n\n${line}`
             : line;
       }
+      if (status === 'fixed' || status === 'ignored') {
+        const wi = hydrateWorkItem(existing);
+        wi.queue = 'done';
+        patch.work_item = wi;
+        if (!patch.status) patch.status = 'fixed';
+      }
       if (Object.keys(patch).length === 0) {
         return res.status(400).json({ error: 'Provide resolution_note, whats_still_open, status, title, or identified_problems' });
       }
       const { data, error } = await supabaseAdmin.from('issue_tags').update(patch).eq('id', id).select('*').single();
       if (error) return res.status(500).json({ error: error.message });
+      overviewCache = null;
       res.json({ success: true, tag: data });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'update tag failed' });
@@ -1260,15 +1280,11 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
   app.post('/api/issue-tags/:id/comments', async (req: Request, res: Response) => {
     try {
       const { supabaseAdmin } = await import('./supabaseAdmin.js');
-      const id = req.params.id;
+      const existing = await findIssueTag(supabaseAdmin, req.params.id);
+      if (!existing) return res.status(404).json({ error: 'tag not found' });
+      const id = existing.id;
       const body = String(req.body?.body || '').trim();
       if (!body) return res.status(400).json({ error: 'body required' });
-      const { data: existing, error: loadErr } = await supabaseAdmin
-        .from('issue_tags')
-        .select('id, comments')
-        .eq('id', id)
-        .single();
-      if (loadErr || !existing) return res.status(404).json({ error: loadErr?.message || 'not found' });
       const comments = Array.isArray(existing.comments) ? [...existing.comments] : [];
       const comment = {
         id: crypto.randomUUID(),
@@ -1292,13 +1308,10 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
   app.delete('/api/issue-tags/:id/comments/:commentId', async (req: Request, res: Response) => {
     try {
       const { supabaseAdmin } = await import('./supabaseAdmin.js');
-      const { id, commentId } = req.params;
-      const { data: existing, error: loadErr } = await supabaseAdmin
-        .from('issue_tags')
-        .select('id, comments')
-        .eq('id', id)
-        .single();
-      if (loadErr || !existing) return res.status(404).json({ error: loadErr?.message || 'not found' });
+      const existing = await findIssueTag(supabaseAdmin, req.params.id);
+      if (!existing) return res.status(404).json({ error: 'tag not found' });
+      const id = existing.id;
+      const commentId = req.params.commentId;
       const prev = Array.isArray(existing.comments) ? existing.comments : [];
       const comments = prev.filter((c: any) => c && c.id !== commentId);
       if (comments.length === prev.length) return res.status(404).json({ error: 'comment not found' });
