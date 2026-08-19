@@ -114,3 +114,11 @@ describe('lookupCanonicalBaseFood (F-1 & F-2 Catalog-First Resolution)', () => {
   });
 });
 
+
+describe('FALSE_FRIEND class examples', () => {
+  it('pomegranate seeds does not steal sesame seed FDC ID (170150)', () => {
+    const p = lookupCanonicalBaseFood('pomegranate seeds');
+    // We changed it to 169134 (or brand_menu...) so it should not be 170150!
+    expect(p?.fdcId).not.toBe('170150');
+  });
+});

@@ -407,6 +407,51 @@ export function aggregateItemsNutrients(
           addDebugLog(`[Nutrient Backfill] "${canonicalName}" extrapolated macros for ${itemNutrients.calories} kcal: P=${itemNutrients.protein}g, F=${itemNutrients.totalFat}g, C=${itemNutrients.carbohydrates}g, Na=${itemNutrients.sodium}mg.`);
         }
       }
+
+      // STEP 2.2: Deep Micronutrient Imputation
+      // If we have calories (e.g. from LLM core-11 estimation or label), but deep micronutrients are still 0,
+      // we can scale the canonical/database nutrients to fill in the blanks.
+      if (!isZeroMacros && itemNutrients.calories > 0) {
+        let fallbackBase100g: Record<string, any> | null = null;
+        
+        if (Array.isArray(databaseMatchesArray) && databaseMatchesArray.length > 0) {
+          const matchQuery = (canonicalName || item.keyword || item.originalName || '').toLowerCase();
+          const dbMatch = databaseMatchesArray.find((m: any) => {
+            const mName = (m.name || m.description || '').toLowerCase();
+            return mName.includes(matchQuery) || matchQuery.includes(mName) || namesReferToSameFood(mName, matchQuery);
+          });
+          if (dbMatch) {
+            fallbackBase100g = dbSource === "usda" ? extractUSDANutrientsPer100g(dbMatch) : extractOFFNutrientsPer100g(dbMatch);
+          }
+        }
+        
+        if (!fallbackBase100g) {
+          const canonical = lookupCanonicalBaseFood(canonicalName || item.keyword || item.originalName || '');
+          if (canonical) fallbackBase100g = canonical;
+        }
+
+        if (fallbackBase100g) {
+          const canonicalKcal = Number(fallbackBase100g.calories) || 0;
+          const ratio = canonicalKcal > 0 ? (itemNutrients.calories / canonicalKcal) : (itemWeight / 100);
+          
+          let imputedCount = 0;
+          const excludeFromImputation = new Set(['calories', 'protein', 'totalFat', 'carbohydrates']);
+          
+          for (const key of NUTRIENT_KEYS) {
+            if (excludeFromImputation.has(key)) continue;
+            if ((itemNutrients[key] === 0 || itemNutrients[key] === undefined) && fallbackBase100g[key] !== undefined && fallbackBase100g[key] !== null) {
+              const val = parseFloat((Number(fallbackBase100g[key]) * ratio).toFixed(2));
+              if (val > 0) {
+                itemNutrients[key] = val;
+                imputedCount++;
+              }
+            }
+          }
+          if (imputedCount > 0) {
+            addDebugLog(`[Nutrient Imputation] "${canonicalName}" imputed ${imputedCount} missing micronutrients from fallback data.`);
+          }
+        }
+      }
     }
 
     // STEP 2.5: Apply cooking method modifiers (fat, calories, sodium)

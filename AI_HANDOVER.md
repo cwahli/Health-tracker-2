@@ -141,6 +141,8 @@
 ## Next Steps
 - **B8.0 Option A (2026-08-19):** Flagged Telemetry modal on Home is the **only** Auto-Fix surface. Dictionary Auto-Calibrate / Quick Approve stay gone.
 - **Q-1 / Q-2 / B8.1 in progress:** `scripts/assert-budgets.mjs` + `src/components/CATALOG.json`; telemetry Auto-Fix uses `ANALYTE_CONVERSIONS` / `convertViaTable` only. Next: B8.2 one Check-Biomarkers; R-8 measure. Do **not** start FoodCard / App.tsx / Dictionary splits.
+- **Q-5 Patch Script Cleanup:** (COMPLETE) Deleted all one-shot `scripts/patch-*.ts`, `scripts/fix-*.ts`, and `scripts/test-*.ts` leftover maintenance files per ROADMAP.md.
+- **Nutrient Imputation Strategy:** (COMPLETE) Implemented bottom-up micronutrient aggregation in `server_nutrient_aggregation.ts` (STEP 2.2) so missing nutrients map to canonical base foods without destroying Atwater physics logic.
 - Ingest v1 / F-1 still follow the existing default track (B0 then G-B2) when the pain is correctness, not slowness.
 
 
@@ -181,3 +183,8 @@
     - Addressed a bug where deleted BMI values would resurrect upon a manual sync.
     - **Root cause**: `med_log_bmi_init_` logs were explicitly skipped in `App.tsx` inside `saveAndSync` (`isUserTriggered` and `isAutoLog`), causing the "delete" sync state to only affect local state, and the next pull from the cloud would resurrect the log.
     - **Fix**: Removed the hardcoded exclusion of `med_log_bmi_init_` in `saveAndSync`, allowing background deletion synchronization via the standard `deletedBiomarkerLogIds` tombstone map.
+32. **F-3 Golden Meal FALSE_FRIEND Inbox Fix**:
+    - Addressed `FALSE_FRIEND` identity bug in Pomegranate vs Sesame seed cross-contamination for Golden Inbox `chocolate-croissants-vegetarian-wrap-1-more--1786666026077_que4`.
+    - **Root cause**: `pomegranate_seed` shared FDC ID `170150` with `sesame_seed` inside `CANONICAL_BASE_FOODS`, leading to incorrect shared DB matches.
+    - **Fix**: Adjusted `pomegranate_seed` FDC ID to `169134` (Pomegranate, raw).
+    - **Verification**: Promoted the Inbox folder using `golden-promote.mjs`. Ran `vitest run tests/golden_meals.test.ts` and `golden_inbox.test.ts`. All 96 tests green!
