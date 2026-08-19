@@ -604,6 +604,11 @@ export function clusterSpatialCompositeDishes(
     };
   };
 
+  const isDefaultBox = (b: [number, number, number, number]): boolean => {
+    return (b[0] <= 10 && b[1] <= 10 && b[2] >= 990 && b[3] >= 990) ||
+           (b[0] === 100 && b[1] === 100 && b[2] === 900 && b[3] === 900);
+  };
+
   const hasDistinctNutrientLabel = (it: any): boolean => {
     const raw = it.rawNutritionLabel;
     if (!raw || typeof raw !== 'object') return false;
@@ -624,6 +629,11 @@ export function clusterSpatialCompositeDishes(
       if (clusteredIndices.has(j)) continue;
       const other = items[j];
 
+      // Skip clustering if either item is from spreadsheet or has default bounding box
+      if (primary.source === 'spreadsheet' || other.source === 'spreadsheet' || primary.isSpreadsheet || other.isSpreadsheet || isDefaultBox(boxA)) {
+        continue;
+      }
+
       // Same source image check
       const sameImg = (primary.sourceImageIndex ?? 0) === (other.sourceImageIndex ?? 0);
       if (!sameImg) continue;
@@ -634,6 +644,8 @@ export function clusterSpatialCompositeDishes(
       }
 
       const boxB = getBBox(other);
+      if (isDefaultBox(boxB)) continue;
+
       const { overlap, iou } = getOverlapRatio(boxA, boxB);
 
       // High spatial co-location inside the same container / bowl / plate
@@ -895,6 +907,7 @@ export function parseAndHealVisionScout(
             originalName: category ? `[${category}] ${originalName}` : originalName,
             estimatedWeightGrams: weightGrams,
             source: "visual",
+            isSpreadsheet: true,
             boundingBox2D,
             sourceImageIndex: 0
           });
@@ -915,6 +928,7 @@ export function parseAndHealVisionScout(
             originalName,
             estimatedWeightGrams: weightGrams,
             source: "visual",
+            isSpreadsheet: true,
             boundingBox2D,
             sourceImageIndex: 0
           });

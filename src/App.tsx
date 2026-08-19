@@ -5117,34 +5117,28 @@ export default function App() {
     }
   };
   const handleDeleteBiomarkerLog = async (id: string) => {
-    const targetLog = biomarkerHistory.find(b => b.id === id);
-    if (targetLog) {
-      const hasLocked = Object.keys(targetLog.biomarkers).some(k => k === 'bmi' || k === 'weight' || k === 'height');
-      if (hasLocked) {
-        console.warn(`Prevented deletion of log ${id} containing locked biomarkers`);
-        return;
-      }
-    }
+    const now = Date.now();
     // Keep it in array but mark as delete so syncUtils can process it
-    const updatedHistory = biomarkerHistory.map(b => b.id === id ? { ...b, sync_state: 'delete' as const, updated_at: Date.now() } : b);
+    const updatedHistory = biomarkerHistory.map(b => b.id === id ? { ...b, sync_state: 'delete' as const, updated_at: now } : b);
     setBiomarkerHistory(updatedHistory);
     
+    let updatedProfile = profile ? {
+      ...profile,
+      deletedBiomarkerLogIds: { ...(profile.deletedBiomarkerLogIds || {}), [id]: now }
+    } : null;
+    if (updatedProfile) {
+      setProfile(updatedProfile);
+    }
+
     // We filter it out for the recomputed local state map
     const recomputedBiomarkers: { [key: string]: number | string } = {};
-    [...updatedHistory].filter(b => b.sync_state !== 'delete' && !(profile?.deletedBiomarkerLogIds?.[b.id] && (profile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0))).sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
+    [...updatedHistory].filter(b => b.sync_state !== 'delete' && !(updatedProfile?.deletedBiomarkerLogIds?.[b.id] && (updatedProfile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0))).sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
       Object.entries(log.biomarkers).forEach(([k, v]) => {
         recomputedBiomarkers[k] = v as string | number;
       });
     });
     setBiomarkers(recomputedBiomarkers);
     
-    let updatedProfile = profile ? {
-      ...profile,
-      deletedBiomarkerLogIds: { ...(profile.deletedBiomarkerLogIds || {}), [id]: Date.now() }
-    } : null;
-    if (updatedProfile) {
-      setProfile(updatedProfile);
-    }
     await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'deleteBiomarker', targetId: id });
   };
   const handleDeleteBiomarkerFromLog = async (id: string, key: string) => {
@@ -5289,7 +5283,12 @@ export default function App() {
       });
     setBiomarkers(recomputedBiomarkers);
 
-    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog' });
+    const targetUpdatedIds = Array.from(deletionsByLogId.keys()).filter(id => !deletedLogIds.includes(id));
+    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, {
+      type: 'biomarkerLogsBatch',
+      targetIds: targetUpdatedIds.length > 0 ? targetUpdatedIds : undefined,
+      deletedIds: deletedLogIds.length > 0 ? deletedLogIds : undefined
+    });
   };
   const handleBatchEditBiomarkersInLogs = async (updates: { id: string; key: string; value: string | number }[]) => {
     if (!updates || updates.length === 0) return;

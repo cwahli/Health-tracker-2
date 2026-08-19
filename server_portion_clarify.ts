@@ -178,14 +178,27 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
       else detectedUnits = 4;
     }
 
-    // Determine single unit weight
-    const singleUnitGrams = (w > 0 && w <= 95)
-      ? w
-      : (w > 95 && w <= detectedUnits * 120
-          ? Math.round(w / detectedUnits)
-          : (ssG && ssG > 0 && ssG < 100 ? ssG : (detectedUnits >= 4 ? 45 : 30)));
+    // Determine single unit weight and total pack weight
+    const isIndividualUnit = /\b(bar|biscuit|cookie|bagel|thin|wrap|slice|patty|fillet|sausage|pancake|muffin|crumpet|roll|bun)\b/i.test(unitNoun);
+    const explicitPackWeight = detectPackNetWeightGrams(item);
 
-    const totalPackGrams = singleUnitGrams * detectedUnits;
+    let singleUnitGrams: number;
+    let packGrams: number;
+    let packLabel: string;
+
+    if (isIndividualUnit && w > 0 && w <= 95) {
+      singleUnitGrams = w;
+      packGrams = explicitPackWeight || (singleUnitGrams * detectedUnits);
+      packLabel = `Whole pack of ${detectedUnits} (${packGrams}g)`;
+    } else if (unitCountMatch && w > 0 && w <= 95) {
+      singleUnitGrams = w;
+      packGrams = explicitPackWeight || (singleUnitGrams * detectedUnits);
+      packLabel = `Whole pack of ${detectedUnits} (${packGrams}g)`;
+    } else {
+      packGrams = explicitPackWeight || (w > 0 ? w : detectedUnits * 45);
+      singleUnitGrams = Math.max(5, Math.round(packGrams / detectedUnits));
+      packLabel = unitCountMatch ? `Whole pack of ${detectedUnits} (${packGrams}g)` : `Whole pack (${packGrams}g)`;
+    }
     const options: PortionOption[] = [];
     const pluralNoun = unitNoun.endsWith('s') ? unitNoun : `${unitNoun}s`;
 
@@ -196,7 +209,7 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
     if (detectedUnits >= 3 && detectedUnits !== 4) {
       options.push({ id: `unit_3_${singleUnitGrams * 3}`, label: `3 ${pluralNoun} (${singleUnitGrams * 3}g)`, weightGrams: singleUnitGrams * 3 });
     }
-    options.push({ id: `pack_${totalPackGrams}`, label: `Whole pack of ${detectedUnits} (${totalPackGrams}g)`, weightGrams: totalPackGrams });
+    options.push({ id: `pack_${packGrams}`, label: packLabel, weightGrams: packGrams });
     if (ssG === 100 || !ssG) {
       options.push({ id: 'panel_100', label: '100g (nutrition panel basis)', weightGrams: 100 });
     }

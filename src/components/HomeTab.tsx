@@ -297,14 +297,16 @@ export default function HomeTab({
 
   // Compute resolvedBiomarkers including BMI from profile if not explicitly defined in historical log
   const resolvedBiomarkers = React.useMemo(() => {
-    // Collect all keys from history + biomarkers
+    const hasHistory = Array.isArray(activeHistory) && activeHistory.length > 0;
+    // Collect all keys from history (or fallback dictionary if no history exists yet)
     const keys = new Set<string>();
-    (activeHistory || []).forEach(h => {
-      if (h.biomarkers) {
-        Object.keys(h.biomarkers).forEach(k => keys.add(k));
-      }
-    });
-    if (biomarkers) {
+    if (hasHistory) {
+      activeHistory.forEach(h => {
+        if (h.biomarkers) {
+          Object.keys(h.biomarkers).forEach(k => keys.add(k));
+        }
+      });
+    } else if (biomarkers) {
       Object.keys(biomarkers).forEach(k => keys.add(k));
     }
 
@@ -322,7 +324,7 @@ export default function HomeTab({
       return false;
     };
 
-    // Derive the latest value for each key from history, fallback to biomarkers
+    // Derive the latest value for each key from history, fallback to biomarkers only if no history exists
     const res: Record<string, number | string> = {};
     keys.forEach(key => {
       if (isKeyNotUsed(key)) return;
@@ -331,7 +333,7 @@ export default function HomeTab({
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       if (relevantLogs.length > 0) {
         res[key] = relevantLogs[0].biomarkers[key];
-      } else if (biomarkers && biomarkers[key] !== undefined) {
+      } else if (!hasHistory && biomarkers && biomarkers[key] !== undefined) {
         res[key] = biomarkers[key];
       }
     });

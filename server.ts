@@ -4570,22 +4570,13 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
                 c.brand = match.chainName || match.brand || c.brand;
               }
               if (match.rawNutritionLabel) {
+                // Only ever propagate a GENUINE label/OCR object here (Vision-Scout-sourced,
+                // or a verified brand_official printed serving). Do NOT synthesize a
+                // rawNutritionLabel-shaped object from ordinary USDA/canonical/estimated
+                // nutrient data — doing so previously caused fresh produce and generic
+                // USDA-matched ingredients to be mislabeled "(Package Label Truth)" /
+                // "Nutrition Facts (OCR Label)" downstream (see FIX_FALSE_PACKAGE_LABEL_TRUTH_BADGE.md).
                 c.rawNutritionLabel = match.rawNutritionLabel;
-              } else if (match.nutrients || match.baseNutrients100g || match.labelNutrientsPerServing) {
-                const srcNut = match.labelNutrientsPerServing || match.baseNutrients100g || match.nutrients;
-                c.rawNutritionLabel = {
-                  servingSize: '100g',
-                  basisType: 'per_100g',
-                  calories: srcNut.calories != null ? `${srcNut.calories} kcal` : undefined,
-                  protein: srcNut.protein != null ? `${srcNut.protein}g` : undefined,
-                  totalFat: (srcNut.totalFat ?? srcNut.fat) != null ? `${srcNut.totalFat ?? srcNut.fat}g` : undefined,
-                  saturatedFat: srcNut.saturatedFat != null ? `${srcNut.saturatedFat}g` : undefined,
-                  totalCarbohydrate: (srcNut.totalCarbohydrate ?? srcNut.carbohydrates ?? srcNut.carbs) != null ? `${srcNut.totalCarbohydrate ?? srcNut.carbohydrates ?? srcNut.carbs}g` : undefined,
-                  sugar: srcNut.sugar != null ? `${srcNut.sugar}g` : undefined,
-                  totalFibre: (srcNut.totalFibre ?? srcNut.fiber) != null ? `${srcNut.totalFibre ?? srcNut.fiber}g` : undefined,
-                  salt: srcNut.salt != null ? `${srcNut.salt}g` : undefined,
-                  sodium: srcNut.sodium != null ? `${srcNut.sodium}mg` : undefined
-                };
               }
             }
           });
@@ -6155,7 +6146,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           addDebugLog(`[Component Resolution Diagnostic] item="${item.originalName || item.keyword}" (scoutIndex=${itemIndex}) component[${cIdx}] query="${query}" -> canonicalMatch=${canonicalData ? JSON.stringify(canonicalData.fdcId || 'no-fdcid') : 'none'} bestMatch.source=${bestMatch?.source || 'null'} bestMatch.id=${bestMatch?.id || 'null'}`);
 
           let labelCompMatch: any = null;
-          if (comp.rawNutritionLabel && typeof comp.rawNutritionLabel === 'object') {
+          const compLabelIsGenuine = comp.rawNutritionLabel && typeof comp.rawNutritionLabel === 'object'
+            && comp.rawNutritionLabel.basisType !== 'per_100g'; // genuine OCR labels never carry this synthetic marker
+          if (compLabelIsGenuine) {
             const getLabelVal = (k: string) => {
               const v = comp.rawNutritionLabel[k];
               if (v === undefined || v === null || v === '' || v === '-' || v === '--') return 0;
