@@ -54,6 +54,7 @@ export function evaluateStructuredRange(num: number, customDef: any, profile?: a
 }
 
 import { UserProfile } from '../types';
+import { ANALYTE_CONVERSIONS } from './analyteConversions';
 
 export interface BiomarkerDefinition {
   key: string;
@@ -1756,6 +1757,15 @@ export function diagnoseTelemetryIssue(
   };
 }
 
+function rangeFit(value: number, min?: number, max?: number): number {
+  if (min === undefined && max === undefined) return Number.POSITIVE_INFINITY;
+  const lo = min ?? max as number;
+  const hi = max ?? min as number;
+  if (value >= lo && value <= hi) return 0;
+  if (value < lo) return (lo - value) / Math.max(Math.abs(lo), 1e-6);
+  return (value - hi) / Math.max(Math.abs(hi), 1e-6);
+}
+
 export function computeBiomarkerTelemetryMultiplier(
   key: string,
   val: any,
@@ -1763,102 +1773,35 @@ export function computeBiomarkerTelemetryMultiplier(
 ): { multiplier: number; reason: string } | null {
   const num = typeof val === 'number' ? val : parseFloat(String(val));
   if (isNaN(num) || num <= 0) return null;
+  const mapped = getMappedBiomarkerKey(key) || key;
+  const spec = ANALYTE_CONVERSIONS[mapped] || ANALYTE_CONVERSIONS[key];
+  if (!spec) return null;
+
   const bounds = parseNormalRangeBounds(rangeStr);
-  const refMax = bounds.max !== undefined ? bounds.max : bounds.min;
-  const refMin = bounds.min !== undefined ? bounds.min : 0;
-  const normalizedKey = (key || '').toLowerCase().replace(/[\s_]/g, '');
+  if (bounds.min === undefined && bounds.max === undefined) return null;
 
-  // 1. Glucose / Fasting Blood Sugar: US (mg/dL) <-> SI (mmol/L) (Factor: 18.0182)
-  if (normalizedKey.includes('glucose') || normalizedKey.includes('bloodsugar') || normalizedKey.includes('fastingbloodglucose')) {
-    if (refMax !== undefined && refMax <= 15.0 && num >= 45) {
-      return { multiplier: 1 / 18.0182, reason: `Converted US unit (mg/dL) to SI unit (mmol/L) (/18.02)` };
-    }
-    if (refMin >= 50 && num <= 25) {
-      return { multiplier: 18.0182, reason: `Converted SI unit (mmol/L) to US unit (mg/dL) (*18.02)` };
-    }
+  const fitNone = rangeFit(num, bounds.min, bounds.max);
+  if (fitNone === 0) return null;
+
+  const asSi = num * spec.multiply;
+  const asUs = num / spec.multiply;
+  const fitToSi = rangeFit(asSi, bounds.min, bounds.max);
+  const fitToUs = rangeFit(asUs, bounds.min, bounds.max);
+  const best = Math.min(fitToSi, fitToUs);
+  if (best >= fitNone || best > 2) return null;
+
+  if (fitToSi <= fitToUs && fitToSi * 4 < fitToUs) {
+    return {
+      multiplier: spec.multiply,
+      reason: `Converted ${spec.from} to ${spec.to} (×${spec.multiply})`,
+    };
   }
-
-  // 2. Cholesterol (Total, LDL, HDL, Non-HDL, VLDL): US (mg/dL) <-> SI (mmol/L) (Factor: 38.67)
-  if (normalizedKey.includes('cholesterol') || normalizedKey === 'ldl' || normalizedKey === 'hdl' || normalizedKey === 'vldl' || normalizedKey === 'nonhdl') {
-    if (refMax !== undefined && refMax <= 12.0 && num >= 45) {
-      return { multiplier: 1 / 38.67, reason: `Converted US unit (mg/dL) to SI unit (mmol/L) (/38.67)` };
-    }
-    if (refMin >= 80 && num <= 15) {
-      return { multiplier: 38.67, reason: `Converted SI unit (mmol/L) to US unit (mg/dL) (*38.67)` };
-    }
+  if (fitToUs < fitToSi && fitToUs * 4 < fitToSi) {
+    return {
+      multiplier: 1 / spec.multiply,
+      reason: `Converted ${spec.to} to ${spec.from} (÷${spec.multiply})`,
+    };
   }
-
-  // 3. Triglycerides: US (mg/dL) <-> SI (mmol/L) (Factor: 88.57)
-  if (normalizedKey.includes('triglyceride')) {
-    if (refMax !== undefined && refMax <= 10.0 && num >= 40) {
-      return { multiplier: 1 / 88.57, reason: `Converted US unit (mg/dL) to SI unit (mmol/L) (/88.57)` };
-    }
-    if (refMin >= 50 && num <= 12) {
-      return { multiplier: 88.57, reason: `Converted SI unit (mmol/L) to US unit (mg/dL) (*88.57)` };
-    }
-  }
-
-  // 4. Uric Acid: US (mg/dL) <-> SI (µmol/L) (Factor: 59.48)
-  if (normalizedKey.includes('uric')) {
-    if ((refMin >= 100 || (refMax && refMax >= 100)) && num <= 20) {
-      return { multiplier: 59.48, reason: `Converted US unit (mg/dL) to SI unit (µmol/L) (*59.48)` };
-    }
-    if (refMax !== undefined && refMax <= 12.0 && num >= 80) {
-      return { multiplier: 1 / 59.48, reason: `Converted SI unit (µmol/L) to US unit (mg/dL) (/59.48)` };
-    }
-  }
-
-  // 5. Creatinine: US (mg/dL) <-> SI (µmol/L) (Factor: 88.4)
-  if (normalizedKey.includes('creatinine')) {
-    if ((refMin >= 40 || (refMax && refMax >= 40)) && num <= 5.0) {
-      return { multiplier: 88.4, reason: `Converted US unit (mg/dL) to SI unit (µmol/L) (*88.4)` };
-    }
-    if (refMax !== undefined && refMax <= 3.0 && num >= 30) {
-      return { multiplier: 1 / 88.4, reason: `Converted SI unit (µmol/L) to US unit (mg/dL) (/88.4)` };
-    }
-  }
-
-  // 6. Bilirubin (Total / Direct): US (mg/dL) <-> SI (µmol/L) (Factor: 17.1)
-  if (normalizedKey.includes('bilirubin')) {
-    if ((refMin >= 10 || (refMax && refMax >= 10)) && num <= 4.0) {
-      return { multiplier: 17.1, reason: `Converted US unit (mg/dL) to SI unit (µmol/L) (*17.1)` };
-    }
-    if (refMax !== undefined && refMax <= 2.5 && num >= 8.0) {
-      return { multiplier: 1 / 17.1, reason: `Converted SI unit (µmol/L) to US unit (mg/dL) (/17.1)` };
-    }
-  }
-
-  // 7. Hemoglobin / Total Protein / Albumin / Globulin: US (g/dL) <-> SI (g/L) (Factor: 10)
-  if (normalizedKey.includes('hemoglobin') || normalizedKey.includes('protein') || normalizedKey.includes('albumin') || normalizedKey.includes('globulin')) {
-    if (refMin >= 50 && num <= 30) {
-      return { multiplier: 10, reason: `Converted US unit (g/dL) to SI unit (g/L) (*10)` };
-    }
-    if (refMax !== undefined && refMax <= 25.0 && num >= 50) {
-      return { multiplier: 0.1, reason: `Converted SI unit (g/L) to US unit (g/dL) (/10)` };
-    }
-  }
-
-  // 8. Calcium: US (mg/dL) <-> SI (mmol/L) (Factor: 0.2495)
-  if (normalizedKey.includes('calcium')) {
-    if (refMax !== undefined && refMax <= 4.0 && num >= 6.0) {
-      return { multiplier: 0.2495, reason: `Converted US unit (mg/dL) to SI unit (mmol/L) (*0.2495)` };
-    }
-    if (refMin >= 6.0 && num <= 4.0) {
-      return { multiplier: 1 / 0.2495, reason: `Converted SI unit (mmol/L) to US unit (mg/dL) (/0.2495)` };
-    }
-  }
-
-  // 9. Phosphate: US (mg/dL) <-> SI (mmol/L) (Factor: 0.3229)
-  if (normalizedKey.includes('phosphate')) {
-    if (refMax !== undefined && refMax <= 3.0 && num >= 4.0) {
-      return { multiplier: 0.3229, reason: `Converted US unit (mg/dL) to SI unit (mmol/L) (*0.3229)` };
-    }
-    if (refMin >= 4.0 && num <= 3.0) {
-      return { multiplier: 1 / 0.3229, reason: `Converted SI unit (mmol/L) to US unit (mg/dL) (/0.3229)` };
-    }
-  }
-
-  // All other discrepancies (WBC differentials %, missing digits, manual entry errors) are not US<->SI unit conversions and must go to AI Review / Manual Edit
   return null;
 }
 

@@ -9,7 +9,8 @@ import {
   lexTable,
   buildIngestBatch,
   resolveAgentDestination,
-  shouldAbortTablePath
+  shouldAbortTablePath,
+  ANALYTE_CONVERSIONS,
 } from '../src/utils/biomarkerLifecycle';
 import type { ClassId, IngestTrace } from '../src/types';
 
@@ -250,17 +251,17 @@ describe('Golden Biomarker — Telemetry Multiplier & Auto-Fix Proposals', () =>
     // 1. Glucose US mg/dL -> SI mmol/L (110 mg/dL -> ~6.1 mmol/L)
     const glucFix = computeBiomarkerTelemetryMultiplier('fasting_glucose', 110, '3.9 - 5.6');
     expect(glucFix).not.toBeNull();
-    expect(glucFix?.multiplier).toBeCloseTo(1 / 18.0182, 4);
+    expect(glucFix?.multiplier).toBeCloseTo(ANALYTE_CONVERSIONS.fasting_glucose.multiply, 5);
 
     // 2. Cholesterol US mg/dL -> SI mmol/L (190 mg/dL -> ~4.91 mmol/L)
     const cholFix = computeBiomarkerTelemetryMultiplier('cholesterol', 190, '3.0 - 5.0');
     expect(cholFix).not.toBeNull();
-    expect(cholFix?.multiplier).toBeCloseTo(1 / 38.67, 4);
+    expect(cholFix?.multiplier).toBeCloseTo(ANALYTE_CONVERSIONS.total_cholesterol.multiply, 5);
 
     // 3. Triglycerides US mg/dL -> SI mmol/L (150 mg/dL -> ~1.69 mmol/L)
     const tgFix = computeBiomarkerTelemetryMultiplier('triglycerides', 150, '0.5 - 1.7');
     expect(tgFix).not.toBeNull();
-    expect(tgFix?.multiplier).toBeCloseTo(1 / 88.57, 4);
+    expect(tgFix?.multiplier).toBeCloseTo(ANALYTE_CONVERSIONS.triglycerides.multiply, 5);
 
     // 4. Uric Acid US mg/dL -> SI µmol/L (8.0 mg/dL -> ~475 µmol/L)
     const uricFix = computeBiomarkerTelemetryMultiplier('uric_acid', 8.0, '200 - 430');
@@ -288,6 +289,12 @@ describe('Golden Biomarker — Telemetry Multiplier & Auto-Fix Proposals', () =>
 
     // 9. Other arbitrary discrepancies -> MUST return null
     expect(computeBiomarkerTelemetryMultiplier('red_blood_cells', 0.8, '4.2 - 5.8')).toBeNull();
+
+    // 10. SECOND_MATH_PATH: no table row → no private if (key === …) factor
+    expect(computeBiomarkerTelemetryMultiplier('brand_new_analyte_xyz', 110, '3.9 - 5.6')).toBeNull();
+    const hdlViaTable = convertViaTable('hdl', 50, 'mg/dL', 'mmol/L');
+    expect(hdlViaTable.ok).toBe(true);
+    if (hdlViaTable.ok) expect(hdlViaTable.value).toBeCloseTo(1.293, 2);
   });
 
   it('detects flagged telemetry errors and correctly separates auto-fixable US/SI units from AI review cases', () => {
@@ -303,10 +310,13 @@ describe('Golden Biomarker — Telemetry Multiplier & Auto-Fix Proposals', () =>
     const lymphFlag = flags.find(f => f.key === 'lymphocyte_count');
     const bmiFlag = flags.find(f => f.key === 'bmi');
 
-    // Glucose has an SI reading (5.2 mmol/L) against standard US catalog range (70-99 mg/dL): converted via *18.0182
+    // Glucose has an SI reading (5.2 mmol/L) against standard US catalog range (70-99 mg/dL)
     expect(glucoseFlag).toBeDefined();
     expect(glucoseFlag?.proposedAutoFix?.canAutoFix).toBe(true);
-    expect(glucoseFlag?.proposedAutoFix?.proposedMultiplier).toBeCloseTo(18.0182, 2);
+    expect(glucoseFlag?.proposedAutoFix?.proposedMultiplier).toBeCloseTo(
+      1 / ANALYTE_CONVERSIONS.fasting_glucose.multiply,
+      2
+    );
 
     // Lymphocytes (% diff vs count) and BMI (missing digit) are non-unit fixes: canAutoFix = false (AI Review only)
     expect(lymphFlag).toBeDefined();

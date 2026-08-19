@@ -236,6 +236,6 @@ node scripts/assert-food-curator-m30.mjs
 # Track R (when touching sync)
 node scripts/assert-free-tier-complete.mjs
 npx vitest run src/utils/syncUtils.regression.test.ts
-# Track Q platform (after Q-1 lands; run on any UI / convert / scout pack)
-# node scripts/assert-budgets.mjs
+# Track Q platform (UI / convert / scout pack)
+node scripts/assert-budgets.mjs
 ```

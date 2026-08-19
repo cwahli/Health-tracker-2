@@ -45,6 +45,12 @@ describe('convertViaTable', () => {
     const r = convertViaTable('hdl', 50, 'mg/dL', 'umol/L');
     expect(r.ok).toBe(false);
   });
+  it('SECOND_MATH_PATH: a new table row converts; a key without a row does not', () => {
+    expect(convertViaTable('brand_new_analyte_xyz', 110, 'mg/dL', 'mmol/L').ok).toBe(false);
+    const gluc = convertViaTable('fasting_glucose', 110, 'mg/dL', 'mmol/L');
+    expect(gluc.ok).toBe(true);
+    if (gluc.ok) expect(gluc.value).toBeCloseTo(110 * 0.0555, 2);
+  });
 });
 
 describe('buildReviewCommandsFromHistory', () => {
