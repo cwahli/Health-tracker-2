@@ -57,6 +57,7 @@ import {
   type GoldenInvariant,
 } from '../utils/goldenScoreboard';
 import { collectOriginalFixture, pickSnapshotJob } from '../utils/goldenFixture';
+import { hydrateWorkItem, publicId } from '../utils/bugWorkItem';
 
 export interface BugSnapshotFabProps {
   isAdmin: boolean;
@@ -423,8 +424,8 @@ export default function BugSnapshotFab({
 
     setSnapshotType(initialMode);
     setSaveAsGolden(initialMode === 'meal');
-    setCategory(getCategoryForTab(activeTab));
-    setTagId('');
+    const cat = getCategoryForTab(activeTab);
+    setCategory(cat);
     setError(null);
     setSuccess(null);
     setCapturing(true);
@@ -432,6 +433,23 @@ export default function BugSnapshotFab({
     // Extract active job context (captured meal processing problems + meal photo)
     const jobs = typeof JobStore?.getAllJobs === 'function' ? JobStore.getAllJobs() : [];
     const activeJob = pickSnapshotJob(jobs, modalJobId);
+
+    // Auto-match active job to existing bug tag if confident, else prompt open vs new
+    let autoMatchedTagId = '';
+    if (activeJob && Array.isArray(bugTags) && bugTags.length > 0) {
+      const activeJobId = activeJob.id;
+      const matched = bugTags.find((t: any) => {
+        if (t.status === 'fixed') return false;
+        if (activeJobId && t.hold_refs?.includes(activeJobId)) return true;
+        if (activeJobId && t.linked_issues?.some((l: any) => l.id === activeJobId || l.job_id === activeJobId)) return true;
+        const normTitle = String(t.title || '').toLowerCase();
+        const normJobTitle = String(activeJob.title || activeJob.inputSnapshot?.text || '').toLowerCase();
+        if (normTitle && normJobTitle && (normTitle.includes(normJobTitle) || normJobTitle.includes(normTitle))) return true;
+        return false;
+      });
+      if (matched) autoMatchedTagId = matched.id;
+    }
+    setTagId(autoMatchedTagId);
 
     // Pre-populate golden meal name from job context
     const derivedTitle = deriveGoldenTitle({
@@ -1194,27 +1212,31 @@ export default function BugSnapshotFab({
                         }}
                         className={inputCls}
                       >
-                        <option value="">— Select or create —</option>
+                        <option value="">— Select open #n or create new —</option>
                         <option value="new_bug">+ Create new bug…</option>
                         {pageTags.length > 0 && (
                           <optgroup label={`Active bugs for ${currentCategoryLabel}`}>
-                            {pageTags.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.title}
-                              </option>
-                            ))}
+                            {pageTags.map((t) => {
+                              const pub = publicId(hydrateWorkItem(t), t.id);
+                              return (
+                                <option key={t.id} value={t.id}>
+                                  Open {pub}: {t.title}
+                                </option>
+                              );
+                            })}
                           </optgroup>
                         )}
                         {otherTags.length > 0 && (
                           <optgroup label="Other active bugs">
                             {otherTags.map((t) => {
+                              const pub = publicId(hydrateWorkItem(t), t.id);
                               const catLabel =
                                 CATEGORY_OPTIONS.find(
                                   (c) => normalizeCat(c.key) === normalizeCat(t.category)
                                 )?.label || t.category || 'Other';
                               return (
                                 <option key={t.id} value={t.id}>
-                                  [{catLabel}] {t.title}
+                                  Open {pub} [{catLabel}]: {t.title}
                                 </option>
                               );
                             })}
@@ -1226,28 +1248,28 @@ export default function BugSnapshotFab({
                     {tagId && tagId !== 'new_bug' && (() => {
                       const selectedTag = bugTags.find((t) => t.id === tagId);
                       if (!selectedTag) return null;
-                      const problems = String(selectedTag.identified_problems || selectedTag.symptom || '').trim();
-                      const stillOpen = String(selectedTag.whats_still_open || '').trim();
-                      if (!problems && !stillOpen) return null;
+                      const item = hydrateWorkItem(selectedTag);
+                      const pub = publicId(item, selectedTag.id);
                       return (
-                        <div className="p-2.5 rounded-xl border border-violet-500/30 bg-violet-950/40 space-y-1 text-xs text-violet-100">
-                          {problems && (
-                            <>
-                              <div className="font-bold text-violet-300 flex items-center gap-1.5">
-                                <Sparkles className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                                <span>Previously identified problem:</span>
-                              </div>
-                              <div className="text-[11px] text-white/90 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto">
-                                {problems}
-                              </div>
-                            </>
-                          )}
-                          {stillOpen && (
-                            <div className="text-[10px] text-amber-200/90 pt-1 border-t border-violet-500/20">
-                              <span className="font-bold text-amber-300">Still open: </span>
-                              {stillOpen}
+                        <div className="p-3 rounded-xl border border-violet-500/40 bg-violet-950/40 space-y-2 text-xs text-violet-100">
+                          <div className="flex items-center justify-between gap-2 border-b border-violet-500/20 pb-1.5">
+                            <span className="font-bold text-violet-300 flex items-center gap-1.5">
+                              <Bug className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              Attaching to Open {pub}: {selectedTag.title}
+                            </span>
+                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-900 text-violet-200 border border-violet-500/30">
+                              Queue: {item.queue || selectedTag.status || 'ready'}
+                            </span>
+                          </div>
+                          {item.bug ? (
+                            <div className="text-[11px] text-white/95 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto bg-black/40 p-2 rounded-lg border border-white/10">
+                              <span className="font-bold text-amber-300">Pinned Bug: </span>
+                              {item.bug}
                             </div>
-                          )}
+                          ) : null}
+                          <p className="text-[10px] text-white/60">
+                            Snapshot will be appended as a new commit. Pinned bug instruction and previous loop commits will be preserved.
+                          </p>
                         </div>
                       );
                     })()}

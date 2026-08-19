@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertCircle, Bug, Camera, Check, Plus, Trash2, Upload, X } from 'lucide-react';
 import { BugCategory, ISSUE_TYPE_LABELS, IssueType } from '../utils/issueBacklog';
+import { hydrateWorkItem, publicId } from '../utils/bugWorkItem';
 
 export interface IssueEntry {
   id: string;
@@ -313,16 +314,19 @@ export function FlagIssueForm({
                   className={inputCls}
                 >
                   <option value="" className="bg-slate-900 text-white">
-                    -- Select identified bug or create new --
+                    -- Select open #n or create new --
                   </option>
                   <option value="new_bug" className="bg-indigo-900 text-amber-300 font-bold">
                     + Create new bug...
                   </option>
-                  {activeBugsForCategory.map((t: any) => (
-                    <option key={t.id} value={t.id} className="bg-slate-900 text-white">
-                      {t.title}
-                    </option>
-                  ))}
+                  {activeBugsForCategory.map((t: any) => {
+                    const pubId = publicId(hydrateWorkItem(t), t.id);
+                    return (
+                      <option key={t.id} value={t.id} className="bg-slate-900 text-white">
+                        Open {pubId}: {t.title}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -342,56 +346,65 @@ export function FlagIssueForm({
                 </div>
               )}
 
-              {/* If existing bug tag selected -> show bug status, progress, open points, comments */}
-              {selectedBugTag && (
-                <div className="p-3.5 rounded-xl bg-indigo-950/50 border border-indigo-500/40 space-y-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-bold text-indigo-200 text-xs flex items-center gap-1.5">
-                      <Bug className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      Identified Bug: {selectedBugTag.title}
-                    </p>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-900 text-indigo-200 border border-indigo-400/30 shrink-0">
-                      Status: {selectedBugTag.status || 'to_fix'}
-                    </span>
-                  </div>
-
-                  {selectedBugTag.resolution_note ? (
-                    <div className="text-[11px] bg-black/50 p-2.5 rounded-lg text-white/90 whitespace-pre-wrap border border-white/10">
-                      <span className="font-bold text-emerald-300">Progress / what's been tried & learnt: </span>
-                      {selectedBugTag.resolution_note}
+              {/* If existing bug tag selected -> show pinned bug status, progress, open points, comments */}
+              {selectedBugTag && (() => {
+                const item = hydrateWorkItem(selectedBugTag);
+                const pubId = publicId(item, selectedBugTag.id);
+                return (
+                  <div className="p-3.5 rounded-xl bg-indigo-950/50 border border-indigo-500/40 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-bold text-indigo-200 text-xs flex items-center gap-1.5">
+                        <Bug className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        Identified Bug: Open {pubId} — {selectedBugTag.title}
+                      </p>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-900 text-indigo-200 border border-indigo-400/30 shrink-0">
+                        Queue: {item.queue || selectedBugTag.status || 'ready'}
+                      </span>
                     </div>
-                  ) : (
-                    <p className="text-[10px] text-white/60 italic">No progress logged yet.</p>
-                  )}
 
-                  {selectedBugTag.whats_still_open && (
-                    <div className="text-[11px] bg-black/50 p-2.5 rounded-lg text-amber-200 whitespace-pre-wrap border border-white/10">
-                      <span className="font-bold text-amber-400">What's Still Open: </span>
-                      {selectedBugTag.whats_still_open}
-                    </div>
-                  )}
-
-                  {Array.isArray(selectedBugTag.comments) && selectedBugTag.comments.length > 0 && (
-                    <div className="space-y-1 text-[11px] bg-black/50 p-2.5 rounded-lg border border-white/10">
-                      <span className="font-bold text-indigo-200">Additional Notes / Comments ({selectedBugTag.comments.length}):</span>
-                      <div className="max-h-28 overflow-y-auto space-y-1 mt-1 pr-1">
-                        {selectedBugTag.comments.map((c: any, cIdx: number) => (
-                          <div key={c.id || cIdx} className="text-white/80 border-b border-white/10 pb-1">
-                            <span className="text-[9px] text-white/50 font-mono">
-                              [{c.created_at ? c.created_at.slice(0, 16).replace('T', ' ') : 'note'}]
-                            </span>{' '}
-                            {c.body}
-                          </div>
-                        ))}
+                    {item.bug && (
+                      <div className="text-[11px] bg-black/60 p-2.5 rounded-lg text-white/95 whitespace-pre-wrap border border-amber-500/30">
+                        <span className="font-bold text-amber-300">Pinned Bug Instruction: </span>
+                        {item.bug}
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  <p className="text-[10px] text-indigo-200/80 italic">
-                    Note entered below will attach directly to this identified bug.
-                  </p>
-                </div>
-              )}
+                    {selectedBugTag.resolution_note ? (
+                      <div className="text-[11px] bg-black/50 p-2.5 rounded-lg text-white/90 whitespace-pre-wrap border border-white/10">
+                        <span className="font-bold text-emerald-300">Progress / Attempts: </span>
+                        {selectedBugTag.resolution_note}
+                      </div>
+                    ) : null}
+
+                    {item.remaining.length > 0 && (
+                      <div className="text-[11px] bg-black/50 p-2.5 rounded-lg text-amber-200 whitespace-pre-wrap border border-white/10">
+                        <span className="font-bold text-amber-400">Remaining open items: </span>
+                        {item.remaining.join(' · ')}
+                      </div>
+                    )}
+
+                    {Array.isArray(selectedBugTag.comments) && selectedBugTag.comments.length > 0 && (
+                      <div className="space-y-1 text-[11px] bg-black/50 p-2.5 rounded-lg border border-white/10">
+                        <span className="font-bold text-indigo-200">Additional Notes / Comments ({selectedBugTag.comments.length}):</span>
+                        <div className="max-h-28 overflow-y-auto space-y-1 mt-1 pr-1">
+                          {selectedBugTag.comments.map((c: any, cIdx: number) => (
+                            <div key={c.id || cIdx} className="text-white/80 border-b border-white/10 pb-1">
+                              <span className="text-[9px] text-white/50 font-mono">
+                                [{c.created_at ? c.created_at.slice(0, 16).replace('T', ' ') : 'note'}]
+                              </span>{' '}
+                              {c.body}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-[10px] text-indigo-200/80 italic">
+                      Note entered below will attach directly to this identified bug.
+                    </p>
+                  </div>
+                );
+              })()}
 
               {/* Note */}
               <div className="space-y-1">
