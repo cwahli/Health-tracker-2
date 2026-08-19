@@ -752,6 +752,7 @@ export default function BugSnapshotFab({
         activeTab,
         jobs,
         payload,
+        jobId: contextJobId,
         biomarkerHistory,
         biomarkers,
         profile,

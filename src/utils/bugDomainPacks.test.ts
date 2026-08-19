@@ -91,6 +91,39 @@ describe('bugDomainPacks', () => {
     expect(bio.biomarker?.keys?.length).toBeGreaterThan(0);
   });
 
+  it('does not attach an older food job just because it is last in the array', () => {
+    const croissant = {
+      id: 'job_1786666026077_que4vcxxi',
+      kind: 'food_log',
+      status: 'succeeded',
+      updatedAt: '2026-08-14T00:33:00.000Z',
+      result: { pendingFoodLog: { name: 'Chocolate Croissants, Vegetarian Wrap, and Quinoa Salad', nutrients: { calories: 1711 } } },
+    };
+    const prawn = {
+      id: 'job_1786659764445_qulpm799r',
+      kind: 'food_log',
+      status: 'succeeded',
+      updatedAt: '2026-08-13T22:42:00.000Z',
+      result: { pendingFoodLog: { name: 'Prawn Layered Pasta Salad with Ham and Doughnut', nutrients: { calories: 903 } } },
+    };
+    // Array-end is the stale meal — the old walker picked this.
+    const pack = resolveDomainPack({
+      category: 'foodcart',
+      jobs: [croissant, prawn],
+      payload: {},
+    });
+    expect(pack.food?.jobId).toBe(croissant.id);
+    expect(pack.food?.mealName).toMatch(/Croissant/i);
+
+    const viewed = resolveDomainPack({
+      category: 'foodcart',
+      jobs: [croissant, prawn],
+      jobId: prawn.id,
+      payload: {},
+    });
+    expect(viewed.food?.jobId).toBe(prawn.id);
+  });
+
   it('domainPackForAgent and overview mark a11y primary', () => {
     const pack = resolveDomainPack({
       category: 'foodcart',

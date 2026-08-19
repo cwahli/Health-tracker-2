@@ -3,6 +3,8 @@
  * Food + Biomarker — pure helpers for capture + all-agent triage.
  */
 
+import { pickSnapshotJob } from './goldenFixture';
+
 export type BugDomain = 'food' | 'biomarker' | 'generic';
 
 export type DomainPack = {
@@ -295,6 +297,7 @@ export function resolveDomainPack(input: {
   activeTab?: string;
   jobs?: any[];
   payload?: any;
+  jobId?: string | null;
   biomarkerHistory?: any[];
   biomarkers?: any;
   profile?: any;
@@ -304,30 +307,23 @@ export function resolveDomainPack(input: {
   const jobs = Array.isArray(input.jobs) ? input.jobs : [];
   const payload = input.payload || {};
 
-  const targetJobId = payload.jobId || payload.id || null;
+  const targetJobId = input.jobId || payload.jobId || payload.id || null;
 
-  const findMatchingJob = (predicate: (j: any) => boolean) => {
-    if (targetJobId) {
-      const exact = jobs.find((j) => j.id === targetJobId);
-      if (exact && predicate(exact)) return exact;
-    }
-    // Search from newest to oldest
-    for (let i = jobs.length - 1; i >= 0; i--) {
-      if (predicate(jobs[i])) return jobs[i];
-    }
-    return undefined;
-  };
+  const live = (j: any) =>
+    j &&
+    (j.status === 'running' || j.status === 'succeeded' || j.status === 'awaiting_user' || j.status === 'failed');
+  const isFoodJob = (j: any) =>
+    live(j) &&
+    (j.kind === 'food_log' ||
+      j.kind === 'food_compare' ||
+      j.kind === 'food' ||
+      String(j.kind || '').startsWith('food'));
+  const isMedJob = (j: any) =>
+    live(j) &&
+    (j.kind === 'medical' || j.kind === 'biomarker' || String(j.kind || '').includes('medical'));
 
-  const activeFood = findMatchingJob(
-    (j) =>
-      (j.kind === 'food_log' || j.kind === 'food_compare' || j.kind === 'food' || String(j.kind || '').startsWith('food')) &&
-      (j.status === 'running' || j.status === 'succeeded' || j.status === 'awaiting_user' || j.status === 'failed')
-  );
-  const activeMed = findMatchingJob(
-    (j) =>
-      (j.kind === 'medical' || j.kind === 'biomarker' || String(j.kind || '').includes('medical')) &&
-      (j.status === 'running' || j.status === 'succeeded' || j.status === 'failed')
-  );
+  const activeFood = pickSnapshotJob(jobs.filter(isFoodJob), targetJobId);
+  const activeMed = pickSnapshotJob(jobs.filter(isMedJob), targetJobId);
 
   const preferFood =
     cat === 'foodcart' ||
