@@ -137,6 +137,7 @@
 
 ---
 ## Next Steps
+- **Q-6 Unified bug queue (next to build):** Snap + auto + golden → one `#n` card. **Bug** field pre-filled on snap, edited each loop, never wiped. Commits = history. `GET /api/bugs/next`. Mock: `studio/mockups/bug-queue-dashboard.html`. Spec: `QUALITY.md` §14. **Grok owns schema / next / hold / auto-file;** Gemini may implement the queue UI from the mock.
 - **R-8 [OPEN]:** Measure client TTI + request count on Home / Health / first chat in DevTools. No speed claims until that baseline exists.
 - **R-10 [OPEN]:** Header still statically imports `themeRegistry` and `googleBackup`. Do not mark R-10 done.
 - **Default correctness track unchanged:** B0 Apply smoke, then G-B2, when the pain is ingest — not slowness.

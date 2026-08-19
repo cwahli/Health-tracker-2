@@ -434,6 +434,54 @@ Audit (living): line counts, duplicate labels, second math path, eager imports. 
 
 ---
 
+## 14. Unified bug queue (snap · auto · golden)
+
+Execute: `ROADMAP.md` **Q-6**. Mock: `studio/mockups/bug-queue-dashboard.html`.  
+Not a fifth pillar. Same QUALITY loop: class → playbook → vitest → honest residual. Inner work is **not** `POST /loop`.
+
+### 14.1 One work item
+
+Manual Snapbug, auto-file on job finalize, and golden reds are **intakes** onto `issue_tags` (extend, do not add a fourth store). Evidence is **pointers** to the same job/R2 objects (`job_id`, `photo_urls[]`, `debug_url`). No payload copies.
+
+| Field | Rule |
+|---|---|
+| Public id | `#18` + short title. User never types UUIDs or APIs. |
+| **Bug** | Open text field. Snap **pre-fills** (already the snap note). You edit each review/loop. **Never deleted.** Latest value is the summary of the bug so far + what not to retry. Full original wording is commit 1. |
+| NOW | Bug + remaining + current job + **all** burns (not only latest). |
+| Commits | One per loop, GitHub-style. User snap/note **or** agent attempt. Click = that moment’s photos/debug/browser/actions. Agent iteration **does not** create a food/medical job. A new Analyze/snap does. |
+| `current_evidence` | Latest attached job only. Older jobs stay on the card. |
+| Fingerprint | `class + canonical query/key + week` → merge. 5 meals = `#18 ×5`, not 5 tags. |
+| Hold | If the diary meal is deleted, photo + debug stay until the work item is `done` / `ignored`. Do not prune R2 while held. |
+| Status | `ready` → `in_progress` → `blocked` (2 burns) \| `done` (named test green). Chat “all done” cannot set `done`. |
+
+**Next bug** = `GET /api/bugs/next` (ready only; sort: occurrences → class severity → oldest). User says **Next bug** or **#18**. Agents already know the GET.
+
+**Attach** (only if auto-match fails): meal card Flag → **Open #18**; or queue **Unmatched** → Attach to #n.
+
+### 14.2 Agent start / end
+
+Start payload = NOW (Bug field + remaining + current evidence URLs + **full** `burns[]`). Not Analyze essay. Not all historical debug files.
+
+End of every agent loop: `POST /api/bugs/:id/attempts` `{ hyp, file, test, result, burned, note }`. Required or the next agent will retry.
+
+Burns never collapse when `current_evidence` moves. Two burns → `blocked`.
+
+### 14.3 Who (Q-6)
+
+| Slice | Owner |
+|---|---|
+| Tag schema: Bug field, commits, burns, current_evidence, fingerprint, hold | **Grok** |
+| `GET /api/bugs/next` + Start JSON | **Grok** |
+| Queue UI (left list + NOW + commit timeline + clickable evidence) | Gemini from mock, Grok reviews |
+| Flag / Snap “Open #n” vs new | Gemini |
+| Auto-file + unmatched strip | **Grok** |
+| Delete hold (skip R2 GC while tag open) | **Grok** |
+| Refuse `/loop` as inner COMPLETE | **Grok** |
+
+Do not ask Gemini to design the contract or mark `done` from a chat claim.
+
+---
+
 ## 13. Key decisions
 
 1. **Lifecycle = UX/dispatch. Class = goldens.** Previous session stands.  

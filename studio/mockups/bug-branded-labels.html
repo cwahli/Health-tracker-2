@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bug #18 — branded labels · three moments</title>
+  <style>
+    :root {
+      --bg: #0b1220; --panel: #111827; --line: rgba(255,255,255,.12);
+      --text: #f8fafc; --muted: rgba(248,250,252,.62);
+      --emerald: #34d399; --rose: #fb7185; --amber: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 13px/1.45 ui-sans-serif, system-ui, sans-serif;
+      background: radial-gradient(1100px 520px at 0% 0%, #1e3a5f, var(--bg) 50%);
+      color: var(--text);
+    }
+    .app { max-width: 1120px; margin: 0 auto; padding: 20px 20px 64px; }
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    .sub { color: var(--muted); margin: 0 0 14px; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .tab {
+      border: 1px solid var(--line); background: #0f172a; color: var(--text);
+      border-radius: 999px; padding: 8px 12px; font-weight: 700; cursor: pointer;
+    }
+    .tab.on { background: #312e81; border-color: #818cf8; }
+    .page { display: none; }
+    .page.on { display: block; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+    .col {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; overflow: hidden;
+    }
+    .col h2 {
+      margin: 0; padding: 11px 14px; font-size: 11px; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line);
+    }
+    .pad { padding: 14px 16px 18px; }
+    .now, .say, .meal {
+      background: #0f172a; border: 1px solid #334155; border-radius: 12px;
+      padding: 12px; margin-bottom: 10px;
+    }
+    .say { border-color: #4f46e5; }
+    .bad { border-color: #b45309; }
+    .ok { color: var(--emerald); }
+    .burn { color: var(--rose); }
+    .park { color: var(--muted); }
+    .badge {
+      display: inline-block; font-size: 10px; font-weight: 800;
+      padding: 2px 7px; border-radius: 999px;
+    }
+    .ready { background: rgba(52,211,153,.15); color: var(--emerald); }
+    .progress { background: rgba(56,189,248,.16); color: #38bdf8; }
+    .blocked { background: rgba(251,113,133,.16); color: var(--rose); }
+    .done { background: rgba(148,163,184,.2); color: #cbd5e1; }
+    .photos { display: flex; gap: 8px; flex-wrap: wrap; }
+    .ph {
+      width: 86px; height: 86px; border-radius: 10px; cursor: pointer;
+      display: flex; align-items: flex-end; padding: 6px;
+      font-size: 10px; font-weight: 800; border: 2px solid transparent;
+    }
+    .ph.cur { border-color: #818cf8; }
+    .a { background: linear-gradient(160deg,#9a3412,#1e293b); }
+    .b { background: linear-gradient(160deg,#854d0e,#1e293b); }
+    .c { background: linear-gradient(160deg,#1e3a8a,#1e293b); }
+    button.link {
+      background: #1e293b; border: 1px solid var(--line); color: #c7d2fe;
+      border-radius: 8px; padding: 6px 10px; font-weight: 700; cursor: pointer; margin: 4px 4px 0 0;
+    }
+    pre {
+      display: none; background: #020617; border: 1px solid #334155;
+      border-radius: 10px; padding: 10px; font-size: 11px; white-space: pre-wrap;
+    }
+    pre.on { display: block; }
+    .lb {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7);
+      align-items: center; justify-content: center; z-index: 20;
+    }
+    .lb.on { display: flex; }
+    .lb .box {
+      width: min(400px,90vw); height: min(380px,65vh); border-radius: 16px;
+      background: linear-gradient(160deg,#7c2d12,#0f172a);
+      display: flex; align-items: flex-end; padding: 16px; font-weight: 800;
+    }
+    .meta { color: var(--muted); font-size: 11px; }
+    ul { margin: 6px 0 0; padding-left: 18px; }
+    h3 { font-size: 13px; margin: 0 0 6px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>#18 · Nutrition labels missing on branded food</h1>
+    <p class="sub">You snap. Studio claims fixed. You retest: labels still gone, and the photo crop is gone too. One card the whole way — switch the three moments.</p>
+    <div class="tabs">
+      <button class="tab on" type="button" data-p="m1">1 · You snap</button>
+      <button class="tab" type="button" data-p="m2">2 · Studio says “fixed”</button>
+      <button class="tab" type="button" data-p="m3">3 · You retest (still broken + crop)</button>
+    </div>
+
+    <!-- MOMENT 1 -->
+    <div id="m1" class="page on">
+      <div class="grid">
+        <section class="col">
+          <h2>What you did</h2>
+          <div class="pad">
+            <div class="say">
+              <h3>Snapbug on the meal card</h3>
+              <p>You type: <strong>“nutrition labels are missing with branded food”</strong></p>
+              <p class="meta">3 photos of a Tesco / brand pack · job <code>job_brand1</code> · Flag is not a new essay to Studio yet</p>
+            </div>
+            <div class="now">
+              <h3>NOW — after snap (status <span class="badge ready">ready</span>)</h3>
+              <ul>
+                <li><strong>Remaining:</strong> branded item has no Nutrition Facts / OCR label table</li>
+                <li class="ok"><strong>Done:</strong> —</li>
+                <li class="park"><strong>Parked:</strong> —</li>
+                <li><strong>Current meal:</strong> brand pack · job_brand1</li>
+                <li><strong>Tried:</strong> none · 0/2</li>
+              </ul>
+            </div>
+            <p class="meta">You say <strong>Next bug</strong>. You do not name Tesco or the job.</p>
+          </div>
+        </section>
+        <section class="col">
+          <h2>Evidence pack — click</h2>
+          <div class="pad">
+            <div class="photos">
+              <div class="ph a cur" data-c="Front of pack">1/3 pack</div>
+              <div class="ph b" data-c="Nutrition panel on box">2/3 panel</div>
+              <div class="ph c" data-c="Chat card — no label table">3/3 UI</div>
+            </div>
+            <button class="link" type="button" data-pre="d1">Debug job_brand1</button>
+            <button class="link" type="button" data-pre="b1">Browser + last actions</button>
+            <pre id="d1">{
+  "job": "job_brand1",
+  "brand": "tesco",
+  "scout.rawNutritionLabel": null,
+  "ui": "NutritionLabelTable not rendered",
+  "status": "succeeded"
+}</pre>
+            <pre id="b1">open chat → 3 photos → "tesco granola"
+card shows macros only · no label table
+console: 0 errors</pre>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- MOMENT 2 -->
+    <div id="m2" class="page">
+      <div class="grid">
+        <section class="col">
+          <h2>What Studio did (typical overclaim)</h2>
+          <div class="pad">
+            <div class="say">
+              <h3>Studio chat</h3>
+              <p>“Fixed. <code>NutritionLabelTable</code> now shows when <code>brand</code> is set. All done.”</p>
+              <p class="meta">They added a hard-pass / <code>includes('tesco')</code> or rendered an empty table. Predicted test did <strong>not</strong> flip on a <em>new</em> brand.</p>
+            </div>
+            <div class="now bad">
+              <h3>NOW after their POST attempt — card is still <span class="badge ready">ready</span></h3>
+              <ul>
+                <li><strong>Remaining:</strong> branded item has no label table</li>
+                <li class="ok"><strong>Done:</strong> —</li>
+                <li class="park"><strong>Parked:</strong> —</li>
+                <li><strong>Current meal:</strong> still job_brand1 (they did not log a new meal)</li>
+                <li class="burn"><strong>Tried 1/2:</strong> show table if brand truthy / tesco includes() · test “new brand pack” still red · <strong>do not retry</strong></li>
+              </ul>
+            </div>
+            <p class="meta">They cannot mark <span class="badge done">done</span> from chat. Done only if the named vitest goes green. You do not argue in the tracker — you retest the app.</p>
+          </div>
+        </section>
+        <section class="col">
+          <h2>Same evidence (no new job)</h2>
+          <div class="pad">
+            <p class="meta">Iteration 1 did <strong>not</strong> create job_brand2. Photos and debug are still job_brand1. Click the same pack.</p>
+            <div class="photos">
+              <div class="ph a cur" data-c="Front of pack">1/3</div>
+              <div class="ph b" data-c="Nutrition panel">2/3</div>
+              <div class="ph c" data-c="Chat card">3/3</div>
+            </div>
+            <button class="link" type="button" data-pre="d1b">Debug job_brand1</button>
+            <pre id="d1b">Unchanged meal debug. Studio only edited UI code.</pre>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- MOMENT 3 -->
+    <div id="m3" class="page">
+      <div class="grid">
+        <section class="col">
+          <h2>You retest — often worse</h2>
+          <div class="pad">
+            <div class="say">
+              <h3>You log another branded pack (or reopen the same card)</h3>
+              <p>Labels still missing. <strong>Photo crop on the item is gone</strong> (regression from their FoodCard edit).</p>
+              <p class="meta">New job <code>job_brand2</code> if you Analyze again. Banner: “Looks like #18 — attached” or you tap <strong>Flag → Open #18</strong>.</p>
+            </div>
+            <div class="now bad">
+              <h3>NOW after your retest · still <span class="badge ready">ready</span> · 1/2 burns</h3>
+              <ul>
+                <li><strong>Remaining:</strong>
+                  <ul>
+                    <li>branded item has no label table</li>
+                    <li>item photo crop missing <span class="meta">(new, same card — they broke it on this job)</span></li>
+                  </ul>
+                </li>
+                <li class="ok"><strong>Done:</strong> —</li>
+                <li class="park"><strong>Parked:</strong> —</li>
+                <li><strong>Current meal:</strong> job_brand2 · 2 photos · <em>use this</em></li>
+                <li class="burn"><strong>Tried 1/2:</strong> tesco includes() / empty table · still red · do not retry</li>
+              </ul>
+            </div>
+            <p class="meta">You say <strong>Next bug</strong> or <strong>Continue #18</strong>. You do <strong>not</strong> open a second ticket for the crop. It is a remaining row on #18 because it appeared while fixing this card.</p>
+          </div>
+        </section>
+        <section class="col">
+          <h2>Evidence — current job_brand2 (click) · brand1 held</h2>
+          <div class="pad">
+            <div class="meal" style="border-color:#6366f1">
+              <strong>Current · job_brand2</strong>
+              <div class="meta">labels still absent · crop empty · auto or Flag→#18</div>
+              <div class="photos" style="margin-top:8px">
+                <div class="ph a cur" data-c="brand2 pack">1/2 pack</div>
+                <div class="ph c" data-c="UI: no label, no crop">2/2 UI</div>
+              </div>
+              <button class="link" type="button" data-pre="d2">Debug job_brand2</button>
+              <button class="link" type="button" data-pre="b2">Browser + last actions</button>
+              <pre id="d2">{
+  "job": "job_brand2",
+  "rawNutritionLabel": "(present on pack photo 1)",
+  "NutritionLabelTable": false,
+  "item.thumbnail": null,
+  "note": "own debug — not a copy of brand1"
+}</pre>
+              <pre id="b2">open chat → 2 photos → branded yogurt
+card: no label table, crop box blank
+console: 1 warning thumbnail crop missing</pre>
+            </div>
+            <div class="meal">
+              <strong>History · job_brand1</strong>
+              <div class="meta">HOLD if you deleted that meal · 3 photos + debug stay until #18 is done</div>
+              <button class="link" type="button" data-pre="d1c">View brand1 debug (archive)</button>
+              <pre id="d1c">First snap. Agent must not treat this as the current repro.</pre>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div class="lb" id="lb"><div class="box" id="cap"></div></div>
+  <script>
+    document.querySelectorAll('.tab').forEach((t) => {
+      t.onclick = () => {
+        document.querySelectorAll('.tab').forEach((x) => x.classList.remove('on'));
+        document.querySelectorAll('.page').forEach((p) => p.classList.remove('on'));
+        t.classList.add('on');
+        document.getElementById(t.dataset.p).classList.add('on');
+      };
+    });
+    document.querySelectorAll('.ph').forEach((el) => {
+      el.onclick = () => {
+        document.getElementById('cap').textContent = el.dataset.c;
+        document.getElementById('lb').classList.add('on');
+      };
+    });
+    document.getElementById('lb').onclick = () => document.getElementById('lb').classList.remove('on');
+    document.querySelectorAll('[data-pre]').forEach((btn) => {
+      btn.onclick = () => document.getElementById(btn.dataset.pre)?.classList.toggle('on');
+    });
+  </script>
+</body>
+</html>

@@ -188,7 +188,8 @@ Rules unchanged: work item = class · inner = vitest · outer = one example · h
 | **Q-2** Component catalog | `src/components/CATALOG.json` lists the allowed primitive ids (`AppModal`, `DataGrid`, `FilterPills`, `ConfirmBar`, `NutritionLabelTable`, `ComprehensiveNutrientsTable`, `PortionClarifyCard`, `convertViaTable`, `lazyWithRetry`). A new `*Modal.tsx` / `*Card.tsx` / `*Table.tsx` without a catalog id fails Q-1 |
 | **Q-3** First kit extract | `AppModal` + `FilterPills` exist under `src/components/ui/`, each ≤300 lines, each with a vitest; Home + Audit pills call `FilterPills`; no third pill bar |
 | **Q-4** `AgentResultTable` thin | Grid behavior only; agent YAML / apply / localStorage missing-keys **out**. Call sites pass data. Grok-owned |
-| **Q-5** Delete one-shot patch scripts | `scripts/patch-*.ts` / `fix-*.ts` residue gone after the last class they served | 
+| **Q-5** Delete one-shot patch scripts | `scripts/patch-*.ts` / `fix-*.ts` residue gone after the last class they served |
+| **Q-6** Unified bug queue | Snap + auto-alert + golden are **one work item**. `GET /api/bugs/next`. Numbered `#18`. **Bug** field (snap-prefilled, user-editable, never wiped). Commits = each loop (your note + agent attempt + that job’s evidence). No `/loop` as inner work. See `QUALITY.md` §14 | 
 
 Session replay: **abandoned**.  
 Golden-execution Q work is usually **inside** B2/B4/B6 or F-3.  

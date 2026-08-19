@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bug queue — instruction pinned · commit history</title>
+  <style>
+    :root {
+      --bg: #0b1220; --panel: #111827; --line: rgba(255,255,255,.12);
+      --text: #f8fafc; --muted: rgba(248,250,252,.62);
+      --emerald: #34d399; --rose: #fb7185;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 13px/1.45 ui-sans-serif, system-ui, sans-serif;
+      background: radial-gradient(1200px 560px at 8% -8%, #1e3a5f, var(--bg) 52%);
+      color: var(--text);
+    }
+    .app { max-width: 1280px; margin: 0 auto; padding: 18px 18px 56px; }
+    h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.02em; }
+    .sub { color: var(--muted); margin-bottom: 14px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+    .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 11px 13px; }
+    .kpi b { display: block; font-size: 20px; }
+    .kpi span { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .next {
+      background: linear-gradient(135deg, #d97706, #4f46e5); border: 0; color: #fff;
+      font-weight: 800; padding: 10px 16px; border-radius: 12px;
+    }
+    header.top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 12px; }
+    .layout { display: grid; grid-template-columns: 0.95fr 1.15fr; gap: 12px; }
+    @media (max-width: 980px) { .layout, .kpis { grid-template-columns: 1fr; } }
+    .col { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+    .col h2 {
+      margin: 0; padding: 11px 14px; font-size: 11px; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line);
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 9px 11px; vertical-align: top; }
+    th { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+    tr.row { border-top: 1px solid var(--line); cursor: default; }
+    tr.sel { background: rgba(99,102,241,.16); }
+    .id { font-weight: 800; color: #c7d2fe; }
+    .title { font-weight: 700; }
+    .meta { color: var(--muted); font-size: 11px; }
+    .badge { display: inline-block; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
+    .ready { background: rgba(52,211,153,.15); color: var(--emerald); }
+    .blocked { background: rgba(251,113,133,.16); color: var(--rose); }
+    .done { background: rgba(148,163,184,.18); color: #cbd5e1; }
+    .pad { padding: 12px 14px 16px; }
+    .pin {
+      background: #1c1917; border: 1px solid #a16207; border-radius: 12px; padding: 11px 12px; margin-bottom: 10px;
+    }
+    .pin .lock { font-size: 10px; font-weight: 800; color: #fbbf24; letter-spacing: .04em; text-transform: uppercase; }
+    .pin p { margin: 6px 0 0; font-weight: 650; }
+    .now { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 11px 12px; margin-bottom: 12px; }
+    h3 { font-size: 13px; margin: 0 0 6px; }
+    ul { margin: 4px 0 0; padding-left: 18px; }
+    .burn { color: var(--rose); }
+    .ok { color: var(--emerald); }
+    .commits { list-style: none; margin: 0; padding: 0; }
+    .commits li {
+      border-left: 2px solid #334155; padding: 0 0 12px 14px; position: relative;
+    }
+    .commits li:last-child { padding-bottom: 0; }
+    .commits li::before {
+      content: ""; position: absolute; left: -6px; top: 6px; width: 10px; height: 10px;
+      border-radius: 50%; background: #64748b;
+    }
+    .commits li.cur::before { background: #818cf8; }
+    .commits li.fail::before { background: var(--rose); }
+    .sha { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #a5b4fc; }
+    button.link {
+      background: #1e293b; border: 1px solid var(--line); color: #c7d2fe;
+      border-radius: 8px; padding: 5px 9px; font-weight: 700; cursor: pointer; margin: 3px 3px 0 0;
+    }
+    .photos { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+    .ph {
+      width: 76px; height: 76px; border-radius: 10px; cursor: pointer; border: 2px solid transparent;
+      display: flex; align-items: flex-end; padding: 5px; font-size: 10px; font-weight: 800;
+    }
+    .ph.cur { border-color: #818cf8; }
+    .a { background: linear-gradient(160deg,#9a3412,#1e293b); }
+    .b { background: linear-gradient(160deg,#854d0e,#1e293b); }
+    .c { background: linear-gradient(160deg,#1e3a8a,#1e293b); }
+    pre {
+      display: none; background: #020617; border: 1px solid #334155; border-radius: 10px;
+      padding: 9px; font-size: 11px; white-space: pre-wrap; margin-top: 6px;
+    }
+    pre.on { display: block; }
+    .snap-view { display: none; margin-top: 8px; }
+    .snap-view.on { display: block; }
+    .lb {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7);
+      align-items: center; justify-content: center; z-index: 20;
+    }
+    .lb.on { display: flex; }
+    .lb .box {
+      width: min(380px,90vw); height: min(360px,62vh); border-radius: 16px;
+      background: linear-gradient(160deg,#7c2d12,#0f172a);
+      display: flex; align-items: flex-end; padding: 14px; font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div>
+        <h1>Bug queue</h1>
+        <div class="sub">Original instruction is pinned forever. Each loop is a commit you can open. <strong>Next bug</strong> takes the top ready row.</div>
+      </div>
+      <button class="next" type="button">Next bug → #18</button>
+    </header>
+
+    <section class="kpis">
+      <div class="kpi"><span>Ready now</span><b>3</b></div>
+      <div class="kpi"><span>Stuck</span><b>1</b></div>
+      <div class="kpi"><span>Meals on open cards</span><b>2</b></div>
+      <div class="kpi"><span>Done this week</span><b>1</b></div>
+    </section>
+
+    <div class="layout">
+      <section class="col">
+        <h2>Queue — sorted for “Next bug”</h2>
+        <table>
+          <thead>
+            <tr><th>#</th><th>What</th><th>From</th><th>State</th></tr>
+          </thead>
+          <tbody>
+            <tr class="row sel">
+              <td class="id">#18</td>
+              <td>
+                <div class="title">Nutrition labels missing on branded food</div>
+                <div class="meta">your words, pinned · 2 meals · burn 1/2</div>
+              </td>
+              <td class="meta">snap + auto</td>
+              <td><span class="badge ready">ready</span></td>
+            </tr>
+            <tr class="row">
+              <td class="id">#12</td>
+              <td>
+                <div class="title">Wrap missing from receipt</div>
+                <div class="meta">DISH_DROP · auto ×4</div>
+              </td>
+              <td class="meta">auto</td>
+              <td><span class="badge ready">ready</span></td>
+            </tr>
+            <tr class="row">
+              <td class="id">#9</td>
+              <td>
+                <div class="title">HDL 50 did not apply as 1.293</div>
+                <div class="meta">APPLY_MISS</div>
+              </td>
+              <td class="meta">snap</td>
+              <td><span class="badge ready">ready</span></td>
+            </tr>
+            <tr class="row">
+              <td class="id">#7</td>
+              <td>
+                <div class="title">Picnic 22 USDA queries</div>
+                <div class="meta">2/2 burns — needs you</div>
+              </td>
+              <td class="meta">golden</td>
+              <td><span class="badge blocked">blocked</span></td>
+            </tr>
+            <tr class="row">
+              <td class="id">#4</td>
+              <td>
+                <div class="title">Tortilla 0-kcal persist</div>
+                <div class="meta">class test green</div>
+              </td>
+              <td class="meta">auto</td>
+              <td><span class="badge done">done</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="col">
+        <h2>Open · #18 — what Next bug opens</h2>
+        <div class="pad">
+          <div class="now">
+            <h3>NOW — what the next agent sees first</h3>
+            <div class="pin">
+              <div class="lock">Bug — open field · snap pre-fills · you edit each loop · not deleted</div>
+              <p>Nutrition labels still missing on branded food. After Studio’s tesco includes() the label table is still empty and the item photo crop is gone. Do not retry brand-name hard-passes.</p>
+              <div class="meta">Started as your snap: “nutrition labels are missing with branded food” · you (or the summary) update this; full original + agent replies live in commits below</div>
+            </div>
+            <ul>
+              <li><strong>Remaining:</strong> no label table · item photo crop missing</li>
+              <li class="ok"><strong>Done:</strong> —</li>
+              <li><strong>Current meal:</strong> job_brand2 · 18:10</li>
+              <li class="burn"><strong>Tried:</strong> 1/2 tesco includes() / empty table · still red · do not retry</li>
+            </ul>
+          </div>
+
+          <h3>History — one commit per loop (click to view that snap)</h3>
+          <ul class="commits">
+            <li class="cur">
+              <span class="sha">c3</span>
+              <strong> You retested · new branded pack</strong>
+              <div class="meta">job_brand2 · attached to #18 · HEAD · current evidence</div>
+              <div>
+                <button class="link" type="button" data-snap="s3">View this snap</button>
+              </div>
+              <div class="snap-view on" id="s3">
+                <div class="photos">
+                  <div class="ph a cur" data-c="brand2 pack">1/2 pack</div>
+                  <div class="ph c" data-c="UI: no label, no crop">2/2 UI</div>
+                </div>
+                <button class="link" type="button" data-pre="p3d">Debug job_brand2</button>
+                <button class="link" type="button" data-pre="p3b">Browser + last actions</button>
+                <pre id="p3d">{ "job": "job_brand2", "labelTable": false, "thumbnail": null }</pre>
+                <pre id="p3b">18:09 chat → 2 photos → branded yogurt
+card: no labels, crop blank</pre>
+              </div>
+            </li>
+            <li class="fail">
+              <span class="sha">c2</span>
+              <strong> Studio loop 1 · claimed fixed</strong>
+              <div class="meta">no new job · burn 1 · tesco includes() · test still red</div>
+              <button class="link" type="button" data-snap="s2">View this commit</button>
+              <div class="snap-view" id="s2">
+                <p class="meta">Same photos/debug as c1 (they did not log a meal). Agent note: “all done” — card stayed ready because the vitest did not flip.</p>
+                <pre class="on">burn: show table if brand / tesco includes()
+file: FoodCard.tsx
+result: still_red · DO NOT RETRY</pre>
+              </div>
+            </li>
+            <li>
+              <span class="sha">c1</span>
+              <strong> You snapped · opened the card</strong>
+              <div class="meta">job_brand1 · 3 photos · original instruction above</div>
+              <button class="link" type="button" data-snap="s1">View this snap</button>
+              <div class="snap-view" id="s1">
+                <div class="photos">
+                  <div class="ph a" data-c="Front of pack">1/3 pack</div>
+                  <div class="ph b" data-c="Nutrition panel">2/3 panel</div>
+                  <div class="ph c" data-c="Chat: no label table">3/3 UI</div>
+                </div>
+                <button class="link" type="button" data-pre="p1d">Debug job_brand1 (held)</button>
+                <pre id="p1d">{ "job": "job_brand1", "rawNutritionLabel": null, "labelTable": false }
+Diary may delete this meal — R2 stays until #18 is done.</pre>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </div>
+  <div class="lb" id="lb"><div class="box" id="cap"></div></div>
+  <script>
+    document.querySelectorAll('[data-snap]').forEach((btn) => {
+      btn.onclick = () => document.getElementById(btn.dataset.snap)?.classList.toggle('on');
+    });
+    document.querySelectorAll('[data-pre]').forEach((btn) => {
+      btn.onclick = () => document.getElementById(btn.dataset.pre)?.classList.toggle('on');
+    });
+    document.querySelectorAll('.ph').forEach((el) => {
+      el.onclick = () => {
+        document.getElementById('cap').textContent = el.dataset.c;
+        document.getElementById('lb').classList.add('on');
+      };
+    });
+    document.getElementById('lb').onclick = () => document.getElementById('lb').classList.remove('on');
+  </script>
+</body>
+</html>
