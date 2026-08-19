@@ -1786,7 +1786,8 @@ export default function BiomarkerDictionaryModal({
     return k.toLowerCase().includes(q) || (def.name || '').toLowerCase().includes(q) || hasTagMatch;
   };
 
-  const checkKeyNeedsApproval = (k: string) => isBiomarkerNeedingReview(k, profile, biomarkerHistory, biomarkers, biomarkerDefinitions);
+  const telemetryFlaggedKeySet = useMemo(() => new Set(telemetryFlagMap.keys()), [telemetryFlagMap]);
+  const checkKeyNeedsApproval = (k: string) => isBiomarkerNeedingReview(k, profile, biomarkerHistory, biomarkers, biomarkerDefinitions, telemetryFlaggedKeySet);
 
   const allApprovedKeysUnfiltered = useMemo(() => {
     const keys = new Set<string>();

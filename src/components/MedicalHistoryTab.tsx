@@ -387,13 +387,23 @@ export default function MedicalHistoryTab({
     return allDefinitions.length;
   }, [allDefinitions]);
 
+  // PERF: compute the flagged-telemetry key set exactly ONCE per render.
+  // isBiomarkerNeedingReview() is called once per biomarker at multiple
+  // spots below (subcategory count, per-category filtering, per-card JSX);
+  // without this, each of those calls independently reran the full
+  // O(history x definitions) detectFlaggedTelemetryErrors scan.
+  const flaggedTelemetryKeys = useMemo(() => {
+    const flagged = detectFlaggedTelemetryErrors(biomarkers, profile, activeHistory, allDefinitions || []);
+    return new Set(flagged.map(f => f.key));
+  }, [biomarkers, profile, activeHistory, allDefinitions]);
+
   const checkIsPending = (def: any) => {
     return !isBiomarkerApproved(def.key, profile, activeHistory);
   };
 
   // Dynamic list of subcategories based on current viewType
   const subCategories = useMemo(() => {
-    const hasBiomarkersToReview = allDefinitions.some(def => isBiomarkerNeedingReview(def.key, profile, activeHistory, biomarkers, allDefinitions));
+    const hasBiomarkersToReview = allDefinitions.some(def => isBiomarkerNeedingReview(def.key, profile, activeHistory, biomarkers, allDefinitions, flaggedTelemetryKeys));
 
     let baseCategories: string[] = [];
     if (viewType === 'risk') {
@@ -438,7 +448,7 @@ export default function MedicalHistoryTab({
     if (hasBiomarkersToReview) baseCategories.push('Biomarkers to Review');
 
     return baseCategories;
-  }, [allDefinitions, viewType, profile.customBiomarkers, biomarkers, activeHistory]);
+  }, [allDefinitions, viewType, profile.customBiomarkers, biomarkers, activeHistory, flaggedTelemetryKeys]);
 
   const filteredBiomarkers = useMemo(() => {
     let filtered = allDefinitions.filter(def => {
@@ -517,7 +527,7 @@ export default function MedicalHistoryTab({
       const hasVal = getLatestValue(def.key) !== undefined;
 
       if (cat === 'Biomarkers to Review' || cat === 'Unknown Range') {
-        return isBiomarkerNeedingReview(def.key, profile, activeHistory, biomarkers, allDefinitions);
+        return isBiomarkerNeedingReview(def.key, profile, activeHistory, biomarkers, allDefinitions, flaggedTelemetryKeys);
       }
 
       // If pending approval, exclude from standard medical groupings/categories (they appear under Biomarkers to Review)
@@ -879,7 +889,7 @@ export default function MedicalHistoryTab({
                                     Zero / Empty Value (Flagged to Delete)
                                   </span>
                                 )}
-                                {isBiomarkerNeedingReview(def.key, profile, activeHistory, biomarkers, allDefinitions) && (
+                                {isBiomarkerNeedingReview(def.key, profile, activeHistory, biomarkers, allDefinitions, flaggedTelemetryKeys) && (
                                   <span className="px-1.5 py-0.5 text-[8px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300 rounded-md border border-amber-300/80 dark:border-amber-700/60 whitespace-nowrap flex items-center gap-1">
                                     <AlertCircle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
                                     Biomarker to Review

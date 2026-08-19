@@ -3016,7 +3016,8 @@ export function isBiomarkerNeedingReview(
   profile: any,
   activeHistory?: any[],
   resolvedBiomarkers?: Record<string, any>,
-  allDefinitions?: any[]
+  allDefinitions?: any[],
+  precomputedFlaggedKeys?: Set<string>
 ): boolean {
   if (!key) return false;
   
@@ -3027,6 +3028,14 @@ export function isBiomarkerNeedingReview(
   if (isBiomarkerMissingRange(key, profile, activeHistory)) return true;
   
   // 3. Flagged by telemetry / scaling / unit notation errors or improbable values
+  // PERF: if caller already ran detectFlaggedTelemetryErrors once for this render,
+  // it passes the resulting key set here so we don't rescan all history/definitions
+  // again for every single biomarker (this function is called once per biomarker,
+  // per render, at multiple call sites — recomputing the full scan each time is
+  // the #1 cause of Health tab / Biomarker Dictionary slow load).
+  if (precomputedFlaggedKeys) {
+    return precomputedFlaggedKeys.has(key);
+  }
   const flagged = detectFlaggedTelemetryErrors(
     resolvedBiomarkers || {},
     profile,
