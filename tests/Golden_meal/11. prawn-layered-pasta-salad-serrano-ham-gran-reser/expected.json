@@ -1,0 +1,26 @@
+{
+  "id": "G11",
+  "title": "Prawn Layered Pasta Salad + Serrano Ham Gran Reserva + 2 more",
+  "mode": "new_log",
+  "promotedFrom": "job_1786646310665_zszmh95lj",
+  "passes": [
+    {
+      "id": "replay",
+      "prompt": "",
+      "photos": [],
+      "kind": "replay_scout"
+    }
+  ],
+  "resolveLocks": [
+    {
+      "query": "pink sugar icing",
+      "expectFdcId": "169652",
+      "foodName": null
+    }
+  ],
+  "catalogGaps": [],
+  "neverMatch": [],
+  "invariants": [
+    "Promoted from inbox after replay went green"
+  ]
+}

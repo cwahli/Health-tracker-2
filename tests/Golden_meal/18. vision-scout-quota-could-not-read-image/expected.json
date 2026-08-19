@@ -1,0 +1,20 @@
+{
+  "id": "G18",
+  "title": "Vision Scout quota / could not read image",
+  "mode": "new_log",
+  "promotedFrom": "job_1786644359025_vmfg9riak",
+  "passes": [
+    {
+      "id": "replay",
+      "prompt": "",
+      "photos": [],
+      "kind": "replay_scout"
+    }
+  ],
+  "resolveLocks": [],
+  "catalogGaps": [],
+  "neverMatch": [],
+  "invariants": [
+    "Promoted from inbox after replay went green"
+  ]
+}

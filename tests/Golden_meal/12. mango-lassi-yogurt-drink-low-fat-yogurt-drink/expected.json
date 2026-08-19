@@ -1,0 +1,20 @@
+{
+  "id": "G12",
+  "title": "Mango Lassi Yogurt Drink + Low Fat Yogurt Drink",
+  "mode": "new_log",
+  "promotedFrom": "mango-lassi-yogurt-drink-low-fat-yogurt-drink--1786652981216_rdqp",
+  "passes": [
+    {
+      "id": "replay",
+      "prompt": "",
+      "photos": [],
+      "kind": "replay_scout"
+    }
+  ],
+  "resolveLocks": [],
+  "catalogGaps": [],
+  "neverMatch": [],
+  "invariants": [
+    "Promoted from inbox after replay went green"
+  ]
+}

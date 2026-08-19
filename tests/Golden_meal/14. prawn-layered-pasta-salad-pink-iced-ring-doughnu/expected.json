@@ -1,0 +1,31 @@
+{
+  "id": "G14",
+  "title": "Prawn Layered Pasta Salad + Pink Iced Ring Doughnut + 1 more",
+  "mode": "new_log",
+  "promotedFrom": "job_1786652199365_x1im90hgm",
+  "passes": [
+    {
+      "id": "replay",
+      "prompt": "",
+      "photos": [],
+      "kind": "replay_scout"
+    }
+  ],
+  "resolveLocks": [
+    {
+      "query": "fried ring doughnut",
+      "expectFdcId": "172813",
+      "foodName": null
+    },
+    {
+      "query": "pink sugar icing",
+      "expectFdcId": "169652",
+      "foodName": null
+    }
+  ],
+  "catalogGaps": [],
+  "neverMatch": [],
+  "invariants": [
+    "Promoted from inbox after replay went green"
+  ]
+}

@@ -217,8 +217,12 @@ export function fetchJobsFromSupabase(userId?: string) {
 }
 
 export function initSupabaseJobSync(userId?: string): () => void {
-  // Always hydrate initial jobs from server API on mount
-  hydrateUserJobs(userId);
+  // Always hydrate initial jobs from server API on mount (deferred to avoid blocking TTI)
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(() => { hydrateUserJobs(userId).catch(() => {}); }, { timeout: 2000 });
+  } else {
+    setTimeout(() => { hydrateUserJobs(userId).catch(() => {}); }, 1500);
+  }
 
   // Fallback poll: the realtime channel below is a single WebSocket subscription with
   // no reconnect logic. On flaky mobile connections it can silently drop, leaving jobs

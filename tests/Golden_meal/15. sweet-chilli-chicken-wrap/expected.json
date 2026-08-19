@@ -1,0 +1,41 @@
+{
+  "id": "G15",
+  "title": "Sweet Chilli Chicken Wrap",
+  "mode": "new_log",
+  "promotedFrom": "job_1786722855892_xjmij2w7v",
+  "passes": [
+    {
+      "id": "replay",
+      "prompt": "",
+      "photos": [],
+      "kind": "replay_scout"
+    }
+  ],
+  "resolveLocks": [
+    {
+      "query": "flour tortilla wrap",
+      "expectFdcId": "172522",
+      "foodName": "grain"
+    },
+    {
+      "query": "breaded chicken tender",
+      "expectFdcId": "171057",
+      "foodName": "poultry"
+    },
+    {
+      "query": "sweet chilli sauce",
+      "expectFdcId": "1099195",
+      "foodName": "ultra_processed"
+    },
+    {
+      "query": "mixed salad greens",
+      "expectFdcId": "169248",
+      "foodName": "leafy_veg"
+    }
+  ],
+  "catalogGaps": [],
+  "neverMatch": [],
+  "invariants": [
+    "Promoted from inbox after replay went green"
+  ]
+}

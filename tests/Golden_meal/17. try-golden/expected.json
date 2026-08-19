@@ -1,0 +1,91 @@
+{
+  "id": "G17",
+  "title": "Try golden",
+  "mode": "new_log",
+  "promotedFrom": "job_1786698595796_ghow99xbn",
+  "passes": [
+    {
+      "id": "replay",
+      "prompt": "",
+      "photos": [],
+      "kind": "replay_scout"
+    }
+  ],
+  "resolveLocks": [
+    {
+      "query": "plain Greek yogurt",
+      "expectFdcId": "170903",
+      "foodName": "dairy"
+    },
+    {
+      "query": "baked granola",
+      "expectFdcId": "170287",
+      "foodName": "grain"
+    },
+    {
+      "query": "mixed berries",
+      "expectFdcId": "171711",
+      "foodName": "fruit"
+    },
+    {
+      "query": "flour tortilla wrap",
+      "expectFdcId": "172522",
+      "foodName": "grain"
+    },
+    {
+      "query": "cooked falafel",
+      "expectFdcId": "falafel_canonical",
+      "foodName": "legume"
+    },
+    {
+      "query": "hummus",
+      "expectFdcId": "174289",
+      "foodName": "processed"
+    },
+    {
+      "query": "feta cheese",
+      "expectFdcId": "173420",
+      "foodName": "dairy"
+    },
+    {
+      "query": "mixed salad greens",
+      "expectFdcId": "169248",
+      "foodName": "leafy_veg"
+    },
+    {
+      "query": "garlic mayonnaise dressing",
+      "expectFdcId": "mayo_canonical",
+      "foodName": "ultra_processed"
+    },
+    {
+      "query": "mixed salad greens",
+      "expectFdcId": "169248",
+      "foodName": "leafy_veg"
+    },
+    {
+      "query": "grilled chicken breast",
+      "expectFdcId": "171077",
+      "foodName": "poultry"
+    },
+    {
+      "query": "raw avocado",
+      "expectFdcId": "171705",
+      "foodName": "fruit"
+    },
+    {
+      "query": "hard boiled egg",
+      "expectFdcId": "173424",
+      "foodName": "egg"
+    },
+    {
+      "query": "butter croissant",
+      "expectFdcId": "172242",
+      "foodName": "processed"
+    }
+  ],
+  "catalogGaps": [],
+  "neverMatch": [],
+  "invariants": [
+    "Promoted from inbox after replay went green"
+  ]
+}

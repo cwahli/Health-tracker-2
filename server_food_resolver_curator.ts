@@ -369,7 +369,9 @@ export async function executeFoodResolverCurator(
           // Add single-hop redirection alias
           await supabaseAdmin.from('food_aliases').upsert({
             alias_key: `legacy_merge_${loser}`,
-            target_food_id: String(merge.winnerFdcId),
+            food_id: String(merge.winnerFdcId),
+            weight: 1.0,
+            source: 'curator_legacy_merge',
             hit_count: 1
           }, { onConflict: 'alias_key' });
         } catch (e) {

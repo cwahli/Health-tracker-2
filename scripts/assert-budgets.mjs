@@ -111,6 +111,15 @@ ok(tableSrc.includes('0.02586'), 'B8.1:hdl_factor', 'ANALYTE_CONVERSIONS missing
 ok(tableSrc.includes('88.4'), 'B8.1:creat_factor', 'ANALYTE_CONVERSIONS missing 88.4');
 ok(tableSrc.includes('17.1'), 'B8.1:bili_factor', 'ANALYTE_CONVERSIONS missing 17.1');
 
+// Track F: F-7 Scout System Instruction budget check (L12 net-zero prompt ceiling: max 70 lines)
+const scoutSrc = read('server_vision_scout.ts');
+const sysInstMatch = scoutSrc.match(/export const scoutSystemInstruction = `([\s\S]*?)`;/);
+ok(sysInstMatch !== null, 'F7:scout_instruction_exists', 'scoutSystemInstruction missing in server_vision_scout.ts');
+if (sysInstMatch) {
+  const promptLines = sysInstMatch[1].split('\n').length;
+  ok(promptLines <= 70, 'PROMPT_BUDGET:scout_prompt', `scoutSystemInstruction has ${promptLines} lines; ceiling 70`);
+}
+
 if (failed) {
   console.error(`\nassert-budgets: ${failed} failure(s)`);
   process.exit(1);

@@ -1,0 +1,111 @@
+{
+  "id": "G13",
+  "title": "bug",
+  "mode": "new_log",
+  "promotedFrom": "job_1786666026077_que4vcxxi",
+  "passes": [
+    {
+      "id": "replay",
+      "prompt": "",
+      "photos": [],
+      "kind": "replay_scout"
+    }
+  ],
+  "resolveLocks": [
+    {
+      "query": "butter croissant",
+      "expectFdcId": "172242",
+      "foodName": "processed"
+    },
+    {
+      "query": "dark chocolate filling",
+      "expectFdcId": "170272",
+      "foodName": "processed"
+    },
+    {
+      "query": "flour tortilla",
+      "expectFdcId": "172522",
+      "foodName": "grain"
+    },
+    {
+      "query": "falafel",
+      "expectFdcId": "falafel_canonical",
+      "foodName": "legume"
+    },
+    {
+      "query": "hummus",
+      "expectFdcId": "174289",
+      "foodName": "processed"
+    },
+    {
+      "query": "feta cheese",
+      "expectFdcId": "173420",
+      "foodName": "dairy"
+    },
+    {
+      "query": "mixed salad leaves",
+      "expectFdcId": "169248",
+      "foodName": "leafy_veg"
+    },
+    {
+      "query": "red onion",
+      "expectFdcId": "11282",
+      "foodName": "veg"
+    },
+    {
+      "query": "bell pepper",
+      "expectFdcId": "170393",
+      "foodName": "veg"
+    },
+    {
+      "query": "hummus",
+      "expectFdcId": "174289",
+      "foodName": "processed"
+    },
+    {
+      "query": "cooked white quinoa",
+      "expectFdcId": "168917",
+      "foodName": "grain"
+    },
+    {
+      "query": "cucumber",
+      "expectFdcId": "168409",
+      "foodName": "leafy_veg"
+    },
+    {
+      "query": "cherry tomato",
+      "expectFdcId": "170010",
+      "foodName": "leafy_veg"
+    },
+    {
+      "query": "chickpeas",
+      "expectFdcId": "173800",
+      "foodName": "legume"
+    },
+    {
+      "query": "kalamata olives",
+      "expectFdcId": "1103091",
+      "foodName": "processed"
+    },
+    {
+      "query": "feta cheese",
+      "expectFdcId": "173420",
+      "foodName": "dairy"
+    },
+    {
+      "query": "pomegranate seeds",
+      "expectFdcId": "brand_menu_7dc1e5b0-2e01-44ad-a020-75efc8cdec5e",
+      "foodName": "fruit"
+    },
+    {
+      "query": "balsamic dressing",
+      "expectFdcId": "1099238",
+      "foodName": "ultra_processed"
+    }
+  ],
+  "catalogGaps": [],
+  "neverMatch": [],
+  "invariants": [
+    "Promoted from inbox after replay went green"
+  ]
+}

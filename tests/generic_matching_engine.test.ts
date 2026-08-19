@@ -56,3 +56,26 @@ describe('Generic Matching Engine Module', () => {
     expect(penFondant).toBeGreaterThanOrEqual(3000);
   });
 });
+
+  it('DISH_DROP: calculateGenericTokenCoverage handles structural synonyms like wrap -> tortilla and tender -> breast', () => {
+    // 1. Wrap -> Tortilla
+    const q1 = ['flour', 'tortilla', 'wrap'];
+    const c1 = ['tortillas', 'flour']; // e.g. "Tortillas, ready-to-bake or -fry, flour"
+    const res1 = calculateGenericTokenCoverage(q1, c1);
+    expect(res1.ratio).toBe(1.0);
+    expect(res1.allMatched).toBe(true);
+
+    // 2. Tender -> Breast
+    const q2 = ['breaded', 'chicken', 'tender'];
+    const c2 = ['chicken', 'breast', 'breaded']; // e.g. "Chicken, breast, meat only, breaded, fried"
+    const res2 = calculateGenericTokenCoverage(q2, c2);
+    expect(res2.ratio).toBe(1.0);
+    expect(res2.allMatched).toBe(true);
+    
+    // 3. Salad -> Lettuce/Greens
+    const q3 = ['mixed', 'salad', 'greens'];
+    const c3 = ['lettuce', 'mixed', 'greens']; // e.g. "Lettuce, mixed greens, raw"
+    const res3 = calculateGenericTokenCoverage(q3, c3);
+    expect(res3.ratio).toBe(1.0);
+    expect(res3.allMatched).toBe(true);
+  });
