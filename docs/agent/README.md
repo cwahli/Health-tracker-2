@@ -23,7 +23,7 @@
 
 Rulebooks **guide** evolution; they do not ban it. Changing an invariant requires tests + rulebook update together.
 
-**Commits/pushes to GitHub:** AI Studio only (`AGENTS.md` §4).
+**Commits/pushes to GitHub:** allowed after COMPLETE (`tsc` + named gates). AI Studio remains a valid ship path.
 
 ## Design goals
 

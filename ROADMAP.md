@@ -32,7 +32,7 @@ WIP: `AI_HANDOVER.md` · Studio: `studio/` · Completed/abandoned: `archive/`
 3. Allowed files only (`QUALITY.md` playbooks).
 4. Two burned hypotheses → STOP.
 5. Honest residual (pending / unmatched / flagged / MISS) is success.
-6. Local agents do not `git push`. IMPACT before coding.
+6. Ship after COMPLETE (`tsc` + named gates). IMPACT before coding.
 
 Locked converts never change: `1.293` / `1.411` / `3.362` / `79.56` / `13.68`.
 

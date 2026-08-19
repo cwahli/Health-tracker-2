@@ -2,7 +2,7 @@
 
 **Updated:** 2026-08-19
 **Status:** ALL GATES & REGRESSION SUITES GREEN (609 tests across 62 test suites)
-**Governance & Laws:** Follow `docs/agent/` domain rules and ship code via AI Studio only.
+**Governance & Laws:** Follow `docs/agent/` domain rules. Local agents may `git commit` / `git push` after COMPLETE (tsc + named gates). AI Studio remains a valid ship path.
 
 ---
 - **Internal Scale & Unit Conflict Auto-Resolution Fix (2026-08-19)**:

@@ -1,6 +1,6 @@
 # AGENTS.md — Always-on rules (keep short)
 
-**Updated:** 2026-08-15  
+**Updated:** 2026-08-19  
 
 **Token rule:** Read **this file first**. Load domain rulebooks (`docs/agent/**`) **only when the table below says so**. (Investigating application source code, debug logs, and relevant functions is always permitted and encouraged; do not dump unneeded rulebook docs).
 
@@ -172,7 +172,7 @@ These files define how **all** agents work. Random edits dilute process and brea
 1. One active pack under `studio/`.  
 2. ≤6 acceptance IDs by default; FIND→REPLACE / small swaps; machine gate exit 0.  
    **Multipass exception (L13):** packs marked PRE-APPROVED / MULTIPASS AUTONOMOUS may exceed 6 IDs when closed by one master gate — see `docs/agent/PACKS.md`.  
-3. **Commit/push = AI Studio only** (§4).  
+3. **Commit/push allowed** from this workspace after COMPLETE (`tsc` + named gates). AI Studio remains a valid ship path, not the only one.  
 4. After true COMPLETE: archive pack; update `AI_HANDOVER.md`.
 
 ---

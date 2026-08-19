@@ -12,9 +12,9 @@ Honesty / COMPLETE rules: embed a short COMPLETE block in each `studio/M*.md` (o
 
 1. Status from **`AI_HANDOVER.md`** (WIP). Architecture from **`plan/`** if design needed.  
 2. Write **one** pack into `studio/`.  
-3. Human uploads pack to **AI Studio** (and docs if the pack says so).  
-4. Studio implements + gate exit 0.  
-5. **AI Studio commits and pushes** to GitHub (local Grok/Claude/Cursor **must not** push).  
+3. Human uploads pack to **AI Studio** (and docs if the pack says so), **or** a local agent implements the pack.  
+4. Implement + gate exit 0.  
+5. **Commit and push** after COMPLETE (`tsc` + named gates). AI Studio is a valid ship path, not the only one.  
 6. Archive pack; update `AI_HANDOVER.md` board.
 
 | Step | Where |
@@ -25,15 +25,15 @@ Honesty / COMPLETE rules: embed a short COMPLETE block in each `studio/M*.md` (o
 | Active pack | `studio/` + `studio/ACTIVE_STATUS.md` |
 | Done packs | `archive/studio/` |
 
-**Do not:** leave finished packs in `studio/` forever · invent steps without board/plan audit · local-agent `git push`.
+**Do not:** leave finished packs in `studio/` forever · invent steps without board/plan audit · push before COMPLETE.
 
 ### Lifecycle
 
 ```text
 plan/ (design) + AI_HANDOVER (status)
   → studio/M*.md
-  → AI Studio gate 0
-  → AI Studio commit + push
+  → implement + gate 0
+  → commit + push after COMPLETE
   → archive/ + AI_HANDOVER update
 ```
 
@@ -43,7 +43,7 @@ plan/ (design) + AI_HANDOVER (status)
 |---------|-----------|
 | One pack file (may instruct multi-file tree if governance ship) | Open-ended “fix everything” |
 | FIND→REPLACE or listed full files | Random rewrite of protected docs without before→after |
-| Gate exit 0 then **Studio** commit/push | Local agent claimed COMPLETE + pushed |
+| Gate exit 0 then commit/push | Claimed COMPLETE without gate 0 |
 
 ### Other initiatives
 

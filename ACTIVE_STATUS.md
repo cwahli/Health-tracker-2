@@ -166,34 +166,17 @@ These files define how **all** agents work. Random edits dilute process and brea
 
 ---
 
-## 4. Git / GitHub: commits only via AI Studio
+## 4. Git / GitHub: ship after COMPLETE
 
-**Binding (agents forget this — read twice):**
+Local agents **may** `git commit` / `git push` after COMPLETE (`tsc` + named gates). AI Studio remains a valid ship path.
 
-| Who | May commit / push to `origin`? |
-|-----|--------------------------------|
-| **AI Studio** (Studio pack session with human) | **Yes** — after gate exit 0 |
-| Grok / Claude / Cursor / other local agents | **No** — prepare files, packs, gates only |
-
-Local agents **must not**:
-
-- `git commit` / `git push` / force-push / amend published history to GitHub  
-- “Just ship it” after a chat fix  
-
-Local agents **may**:
-
-- Edit the working tree  
-- Run tests/gates  
-- Update `AI_HANDOVER.md` WIP notes  
-- Author `studio/M*.md` for the human to upload  
+Do **not**: force-push, amend published history, or push before gates.
 
 **Ship path:**
 
 ```text
-Local agent prepares code + studio pack
-  → human uploads pack (+ docs if needed) to AI Studio
-  → AI Studio applies / verifies gate exit 0
-  → AI Studio commits + pushes to GitHub
+Implement + named gates exit 0
+  → commit + push
   → board (AI_HANDOVER) updated; pack archived
 ```
 
@@ -217,7 +200,7 @@ Full pack craft: `docs/agent/PACKS.md`.
 1. One active pack under `studio/`.  
 2. ≤6 acceptance IDs by default; FIND→REPLACE / small swaps; machine gate exit 0.  
    **Multipass exception (L13):** packs marked PRE-APPROVED / MULTIPASS AUTONOMOUS may exceed 6 IDs when closed by one master gate — see `docs/agent/PACKS.md`.  
-3. **Commit/push = AI Studio only** (§4).  
+3. **Commit/push allowed** after COMPLETE (`tsc` + named gates). AI Studio remains a valid ship path.  
 4. After true COMPLETE: archive pack; update `AI_HANDOVER.md`.
 
 ---
