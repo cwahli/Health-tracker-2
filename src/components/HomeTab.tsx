@@ -2493,46 +2493,22 @@ export default function HomeTab({
         };
 
         return (
-          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col p-2 sm:p-4 md:p-6 overflow-hidden animate-in fade-in duration-200">
-            <div className="bg-theme-bg-card border border-amber-500/30 rounded-3xl w-full h-full max-w-6xl mx-auto flex flex-col shadow-2xl overflow-hidden">
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col p-0 overflow-hidden animate-in fade-in duration-200">
+            <div className="bg-theme-bg-card rounded-none w-full h-full flex flex-col shadow-2xl overflow-hidden">
               
               {/* Header */}
-              <div className="p-4 sm:p-6 border-b border-theme-border flex items-start justify-between gap-4 bg-slate-50/80 dark:bg-slate-900/60 shrink-0">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 shadow-sm">
-                    <ShieldAlert className="w-6 h-6 text-amber-500 animate-pulse" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h2 className="font-bold text-slate-900 dark:text-white text-lg sm:text-xl font-display">
-                        Flagged Telemetry & Outlier Errors
-                      </h2>
-                      <span className="text-[11px] font-mono px-2.5 py-0.5 bg-amber-500/20 text-amber-800 dark:text-amber-300 rounded-full font-bold border border-amber-500/30">
-                        {flaggedTelemetryErrors.length} Issue{flaggedTelemetryErrors.length > 1 ? 's' : ''}
-                      </span>
-                      {autoFixableCount > 0 && (
-                        <span className="text-[11px] font-mono px-2.5 py-0.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded-full font-bold border border-emerald-500/30 flex items-center gap-1">
-                          <Zap className="w-3 h-3 text-emerald-500" />
-                          <span>{autoFixableCount} Auto-Fixable</span>
-                        </span>
-                      )}
-                      {aiReviewCount > 0 && (
-                        <span className="text-[11px] font-mono px-2.5 py-0.5 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 rounded-full font-bold border border-indigo-500/30 flex items-center gap-1">
-                          <BrainCircuit className="w-3 h-3 text-indigo-500" />
-                          <span>{aiReviewCount} Need AI Review</span>
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-3xl leading-relaxed">
-                      Review improbable telemetry readings, scale shifts, and unit discrepancies. Apply deterministic mathematical auto-fixes (e.g. 10× scale shifts, percentage differentials, US to SI conversions) in 1 click, edit readings inline, or batch-review complex cases with the AI Agent.
-                    </p>
-                  </div>
-                </div>
+              <div className="p-4 sm:p-6 border-b border-theme-border flex items-center justify-between gap-4 bg-slate-50/80 dark:bg-slate-900/60 shrink-0">
+                <h2 className="font-bold text-slate-900 dark:text-white text-lg sm:text-xl font-display">
+                  Flagged Telemetry & Outlier Errors
+                </h2>
                 <button
                   type="button"
                   onClick={() => {
                     setShowTelemetryModal(false);
                     setEditingLogState(null);
+                    if (pendingAgentTrigger && onOpenAgentChat) {
+                      onOpenAgentChat(pendingAgentTrigger.agentType, pendingAgentTrigger.options);
+                    }
                   }}
                   className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                   title="Close"
@@ -3141,18 +3117,7 @@ export default function HomeTab({
                     <span>Review ({selectedErrorKeys.size}) with AI Agent</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowTelemetryModal(false);
-                      if (pendingAgentTrigger && onOpenAgentChat) {
-                        onOpenAgentChat(pendingAgentTrigger.agentType, pendingAgentTrigger.options);
-                      }
-                    }}
-                    className="px-3.5 py-2.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-theme-border rounded-xl text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                  >
-                    Close
-                  </button>
+
                 </div>
               </div>
 

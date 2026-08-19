@@ -1166,8 +1166,27 @@ const CUSTOM_KEY_ALIASES: Record<string, string> = {
   'auditctotalscore': 'audit_c_total_score',
 };
 
+// PERF: getMappedBiomarkerKey is a pure function of (rawKey, rawName) given
+// biomarkerDefinitions/CUSTOM_KEY_ALIASES, which are static consts that never
+// change after module load. It is called extremely frequently from hot paths
+// like isBiomarkerDuplicateCandidate() (itself called O(n^2)-ish from
+// getDuplicateAliasGroups on every Health tab render), and on every call it
+// was doing 1-2 full linear scans over biomarkerDefinitions with per-entry
+// regex/string cleaning plus a nested loop over each definition's aliases.
+// Caching eliminates that repeated work with zero behavior change.
+const __mappedBiomarkerKeyCache = new Map<string, string>();
+
 export function getMappedBiomarkerKey(rawKey: string, rawName?: string): string {
   if (!rawKey && !rawName) return '';
+  const __cacheKey = (rawKey || '') + '\u0000' + (rawName || '');
+  const __cached = __mappedBiomarkerKeyCache.get(__cacheKey);
+  if (__cached !== undefined) return __cached;
+  const __result = __getMappedBiomarkerKeyUncached(rawKey, rawName);
+  __mappedBiomarkerKeyCache.set(__cacheKey, __result);
+  return __result;
+}
+
+function __getMappedBiomarkerKeyUncached(rawKey: string, rawName?: string): string {
   const primaryInput = rawKey || rawName || '';
 
   const resolveCandidate = (inputStr: string): string | null => {
