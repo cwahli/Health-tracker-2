@@ -31,6 +31,7 @@ import { normalizeTagKey } from './serverIssueBacklog.js';
 import {
   appendEvidenceCommit,
   applyAttempt,
+  assignMissingPublicNs,
   assignPublicN,
   buildNow,
   buildStartPayload,
@@ -40,6 +41,16 @@ import {
 } from './src/utils/bugWorkItem';
 import { shouldHoldR2 } from './src/utils/bugAutoFile';
 import { tryAutoFileGolden, tryAutoFileJob } from './serverBugAutoFile.js';
+
+async function persistMissingPublicNs(tags: any[]): Promise<any[]> {
+  const assigned = assignMissingPublicNs(tags);
+  for (const row of assigned) {
+    await persistWorkItem(row.id, row.item);
+    const hit = tags.find((t) => t.id === row.id);
+    if (hit) hit.work_item = row.item;
+  }
+  return tags;
+}
 
 async function persistWorkItem(tagId: string, item: ReturnType<typeof hydrateWorkItem>): Promise<boolean> {
   try {
@@ -1043,6 +1054,8 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       }
       if (error) return res.status(500).json({ error: error.message });
 
+      tags = await persistMissingPublicNs(tags || []);
+
       const tagIds = (tags || []).map((t: any) => t.id);
       let links: any[] = [];
       if (tagIds.length) {
@@ -1085,17 +1098,13 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
         .order('created_at', { ascending: true })
         .limit(100);
       if (r1.error) return res.status(500).json({ error: r1.error.message });
-      const tags = r1.data || [];
-      const usedNs = tags.map((t) => hydrateWorkItem(t).public_n).filter((n) => n > 0);
+      const tags = await persistMissingPublicNs(r1.data || []);
       const ready = sortReadyQueue(tags);
       if (!ready.length) {
         return res.json({ say: 'Next bug', empty: true, now: null, note: 'No ready bugs.' });
       }
       const tag = ready[0];
-      const item = assignPublicN(hydrateWorkItem(tag), usedNs);
-      if (item.public_n && item.public_n !== hydrateWorkItem(tag).public_n) {
-        await persistWorkItem(tag.id, item);
-      }
+      const item = hydrateWorkItem(tag);
       const start = buildStartPayload({ ...tag, work_item: item, id: tag.id });
       res.json({ empty: false, ...start });
     } catch (err: any) {

@@ -747,6 +747,7 @@ export function briefFromTag(tag: any): {
   class: string | null;
   occurrences: number;
   unmatched: boolean;
+  last_commit: any | null;
 } {
   const comments = Array.isArray(tag.comments) ? tag.comments : [];
   const wi = hydrateWorkItem(tag);
@@ -769,6 +770,7 @@ export function briefFromTag(tag: any): {
     class: wi.class || null,
     occurrences: wi.occurrences || tag.linked_count || 1,
     unmatched: !!wi.unmatched,
+    last_commit: wi.commits?.length ? wi.commits[wi.commits.length - 1] : null,
   };
 }
 

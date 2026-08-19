@@ -97,6 +97,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
   // Action states
   const [copiedTagId, setCopiedTagId] = useState<string | null>(null);
+  const [copiedHandoffId, setCopiedHandoffId] = useState<string | null>(null);
   const [deletingTagId, setDeletingTagId] = useState<string | null>(null);
   const [zippingTagId, setZippingTagId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -521,6 +522,43 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
     setTimeout(() => setCopiedTagId(null), 2000);
   };
 
+  const copyHandoff = async (tag: any, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const res = await fetch(`/api/bugs/${tag.id}`);
+    const json = await res.json().catch(() => ({}));
+    const pub = json.now?.public_id || publicId(hydrateWorkItem(tag), tag.id);
+    const last = (json.commits || []).slice(-1)[0];
+    const text = [
+      `Check this bug and fix it. ${pub} — ${tag.title}`,
+      '',
+      json.now?.bug || hydrateWorkItem(tag).bug || tag.title,
+      '',
+      `Remaining: ${(json.now?.remaining || []).join(' · ') || '—'}`,
+      `Tried / do not retry: ${(json.now?.tried || []).join('\n') || 'none yet'}`,
+      last
+        ? `Last loop: ${last.actor} · ${last.summary}${last.attempt ? ` · ${last.attempt.result} · ${last.attempt.file}` : ''}`
+        : 'Last loop: none',
+      '',
+      json.how_to_end || `POST /api/bugs/${tag.id}/attempts { hyp, file, test, result, burned, note }`,
+      'Do NOT POST /loop. Do not mark done from chat.',
+      '',
+      JSON.stringify(
+        {
+          say: 'Next bug',
+          tag_id: tag.id,
+          now: json.now,
+          commits: json.commits || [],
+          how_to_end: json.how_to_end,
+        },
+        null,
+        2
+      ),
+    ].join('\n');
+    await navigator.clipboard.writeText(text);
+    setCopiedHandoffId(tag.id);
+    setTimeout(() => setCopiedHandoffId(null), 2500);
+  };
+
   if (!isOpen) return null;
 
   const bugTags: any[] = data?.bugTags || [];
@@ -785,6 +823,15 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                     {(tag.linked_count || tag.linked_issues?.length || 1) === 1 ? '' : 's'}{' '}
                                     {burnedCount > 0 ? `· burn ${burnedCount}/${BURN_BUDGET}` : ''}
                                   </div>
+                                  {(tag.last_commit || item.commits[item.commits.length - 1]) && (
+                                    <div className="text-[10px] text-indigo-200/80 mt-0.5 truncate max-w-[210px]">
+                                      last:{' '}
+                                      {(tag.last_commit || item.commits[item.commits.length - 1]).actor} ·{' '}
+                                      {String(
+                                        (tag.last_commit || item.commits[item.commits.length - 1]).summary || ''
+                                      ).slice(0, 72)}
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="py-3 px-2 text-[10px] text-white/60 whitespace-nowrap">
                                   {tag.category || 'auto'}
@@ -863,6 +910,21 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                             )}
                           </button>
 
+                          {/* Copy handoff for the next agent */}
+                          <button
+                            type="button"
+                            onClick={(e) => copyHandoff(selectedTag, e)}
+                            className="px-2.5 py-1 text-[11px] font-bold text-amber-100 bg-amber-950/70 hover:bg-amber-900/80 border border-amber-500/40 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                            title="Copy Start JSON so another agent can take over"
+                          >
+                            {copiedHandoffId === selectedTag.id ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                            <span>{copiedHandoffId === selectedTag.id ? 'Copied' : 'Hand off'}</span>
+                          </button>
+
                           {/* Copy summary */}
                           <button
                             type="button"
@@ -908,6 +970,28 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                           <h3 className="text-xs font-extrabold uppercase tracking-wider text-indigo-300">
                             NOW — what the next agent sees first
                           </h3>
+                          {(selectedCommits[selectedCommits.length - 1] || selectedTag.last_commit) && (
+                            <div className="text-[11px] rounded-xl border border-indigo-500/30 bg-indigo-950/40 p-2.5 text-indigo-100">
+                              <div className="font-extrabold uppercase tracking-wider text-[10px] text-indigo-300 mb-1">
+                                Last loop
+                              </div>
+                              {(() => {
+                                const last = selectedCommits[selectedCommits.length - 1] || selectedTag.last_commit;
+                                return (
+                                  <div>
+                                    <span className="font-bold">{last.actor}</span>
+                                    {' · '}
+                                    {last.summary}
+                                    {last.attempt ? (
+                                      <div className="font-mono text-[10px] mt-1 text-indigo-200/90">
+                                        {last.attempt.result} · {last.attempt.file} · {last.attempt.test}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
 
                           {/* Pinned Bug Field */}
                           <div className="bg-[#1c1917] border border-[#a16207] rounded-2xl p-3.5 space-y-2">
@@ -1166,7 +1250,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                             {selectedCommits.length === 0 ? (
                               <li className="text-white/50 text-xs italic pl-4">No commits logged yet.</li>
                             ) : (
-                              selectedCommits.map((commit, idx) => {
+                              [...selectedCommits].reverse().map((commit, idx) => {
                                 const isCur = idx === 0;
                                 const isFail = commit.attempt?.burned;
                                 const snapOpen = Boolean(openSnapCommitIds[commit.id || `c${idx}`]);

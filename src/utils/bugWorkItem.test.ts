@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   applyAttempt,
   appendEvidenceCommit,
+  assignMissingPublicNs,
   assignPublicN,
   buildStartPayload,
   emptyWorkItem,
@@ -33,6 +34,15 @@ describe('bugWorkItem Q-6', () => {
   it('assigns the next public_n and never overwrites an existing one', () => {
     expect(assignPublicN(emptyWorkItem(), [1, 18]).public_n).toBe(19);
     expect(assignPublicN(emptyWorkItem({ public_n: 5 }), [1, 18]).public_n).toBe(5);
+  });
+
+  it('backfills missing public_n oldest-first without colliding with #1', () => {
+    const out = assignMissingPublicNs([
+      { id: 'wrap', created_at: '2026-08-10', work_item: { public_n: 0 } },
+      { id: 'first', created_at: '2026-08-01', work_item: { public_n: 1 } },
+      { id: 'label', created_at: '2026-08-12', work_item: {} },
+    ]);
+    expect(out.map((r) => `${r.id}#${r.item.public_n}`)).toEqual(['wrap#2', 'label#3']);
   });
 
   it('sorts ready queue: occurrences then severity then oldest', () => {

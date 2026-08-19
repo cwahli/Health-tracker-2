@@ -60,7 +60,12 @@ export function saveBugTrackerCache(json: any) {
           status: t.status,
           whats_still_open: t.whats_still_open,
           resolution_note: t.resolution_note,
-          comments: Array.isArray(t.comments) ? t.comments.slice(-5) : []
+          comments: Array.isArray(t.comments) ? t.comments.slice(-5) : [],
+          work_item: t.work_item || null,
+          public_n: t.public_n || 0,
+          public_id: t.public_id || null,
+          last_commit: t.last_commit || null,
+          linked_count: t.linked_count,
         }))
       : [];
     const pruned = {

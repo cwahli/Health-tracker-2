@@ -13,6 +13,7 @@ export const DEFAULT_ISSUE_TYPE = 'general_bug';
 import type { Express, Request, Response } from 'express';
 import crypto from 'crypto';
 import { normalizeChainKey } from './serverBrandMenu.js';
+import { assignMissingPublicNs, hydrateWorkItem, lastCommit, publicId } from './src/utils/bugWorkItem';
 
 export async function uploadBacklogPayloadToR2(id: string, payload: any, customKey?: string): Promise<string> {
   try {
@@ -354,7 +355,7 @@ async function loadBugTagsWithLinks(supabaseAdmin: any) {
   try {
     let { data: tagRows, error: tErr } = await supabaseAdmin
       .from('issue_tags')
-      .select('id, created_at, title, title_key, category, status, resolution_note, whats_still_open, comments, resolved_at')
+      .select('id, created_at, title, title_key, category, status, resolution_note, whats_still_open, comments, resolved_at, work_item')
       .eq('status', 'to_fix')
       .order('created_at', { ascending: false })
       .limit(200);
@@ -468,6 +469,24 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
           }));
         return { ...t, linked_issue_ids: linkedIds, linked_issues: linkedIssues, linked_count: linkedIds.length };
       });
+
+      const numbered = assignMissingPublicNs(bugTags);
+      for (const row of numbered) {
+        const hit = bugTags.find((t: any) => t.id === row.id);
+        if (hit) hit.work_item = row.item;
+        try {
+          await supabaseAdmin.from('issue_tags').update({ work_item: row.item }).eq('id', row.id);
+        } catch {
+          /* column missing — numbers still returned this request */
+        }
+      }
+
+      for (const t of bugTags) {
+        const wi = hydrateWorkItem(t);
+        t.public_n = wi.public_n;
+        t.public_id = publicId(wi, t.id);
+        t.last_commit = lastCommit(wi);
+      }
 
       // A report is a deletion candidate once it had a tag and now has none left.
       // Prefer ever_tagged; also treat any report that is currently unlinked but previously appeared in links is hard without history —

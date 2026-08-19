@@ -140,7 +140,7 @@
 ---
 ## Next Steps
 - **Q-6 Unified bug queue:** Schema + `/next` + auto-file + hold + `/loop` 410 + Gemini queue UI shipped. **#1** capture picker: `resolveDomainPack` now uses `pickSnapshotJob` (not array-end). Honest residual on #1: Firestore 2s profile timeout parked. Do not retry `useFoodJobSync.ts` (does not exist).
-- **Next bug:** say **Next bug**. End with `POST /api/bugs/:id/attempts`. Spec: `QUALITY.md` §14.
+- **Next bug:** Queue now backfills sequential `#n` (not UUID prefixes). **Hand off** copies Start JSON for the next agent. Last loop shows on the card. End with `POST /api/bugs/:id/attempts`. Spec: `QUALITY.md` §14.
 - **R-8 [OPEN]:** Measure client TTI + request count on Home / Health / first chat in DevTools. No speed claims until that baseline exists.
 - **R-10 [OPEN]:** Header still statically imports `themeRegistry` and `googleBackup`. Do not mark R-10 done.
 - **Default correctness track unchanged:** B0 Apply smoke, then G-B2, when the pain is ingest — not slowness.

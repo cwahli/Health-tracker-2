@@ -197,6 +197,28 @@ export function assignPublicN(item: BugWorkItem, used: number[]): BugWorkItem {
   return { ...item, public_n: max + 1 };
 }
 
+/** Oldest unnumbered cards get the next integers. Existing #n are never reused. */
+export function assignMissingPublicNs(tags: any[]): Array<{ id: string; item: BugWorkItem }> {
+  const used = (tags || []).map((t) => hydrateWorkItem(t).public_n).filter((n) => n > 0);
+  const need = (tags || [])
+    .filter((t) => t?.id && !hydrateWorkItem(t).public_n)
+    .slice()
+    .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+  const acc = [...used];
+  const out: Array<{ id: string; item: BugWorkItem }> = [];
+  for (const t of need) {
+    const item = assignPublicN(hydrateWorkItem(t), acc);
+    acc.push(item.public_n);
+    out.push({ id: t.id, item });
+  }
+  return out;
+}
+
+export function lastCommit(item: BugWorkItem): BugCommit | null {
+  const list = item.commits || [];
+  return list.length ? list[list.length - 1] : null;
+}
+
 export function applyAttempt(
   item: BugWorkItem,
   attempt: {
