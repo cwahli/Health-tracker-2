@@ -42,6 +42,41 @@ export function getAllAgentCalibrations(): Record<string, { specificRiskContext?
   return out;
 }
 
+// PERF: full-record variant of getAgentCalibration() for callers that need to
+// look up MANY biomarker keys in the same render pass (e.g. rendering a list
+// of biomarker cards). getAgentCalibration() re-reads + re-JSON.parses
+// localStorage on every single call, which is fine for a one-off lookup but
+// becomes a major main-thread bottleneck when called once per rendered item
+// in a list. Callers should call this ONCE per render, then do O(1) lookups
+// against the returned map (`records[key]`) instead of calling
+// getAgentCalibration() per item. Keeps the same "most recent batch wins"
+// precedence as getAgentCalibration(), and preserves the FULL bm object
+// (including fields like optimalValue/unit that getAllAgentCalibrations()
+// above does not carry).
+export function getAllAgentCalibrationRecords(): Record<string, any> {
+  const out: Record<string, any> = {};
+  try {
+    const saved = localStorage.getItem('batch_analysis_results');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const batchKeys = Object.keys(parsed).sort((a, b) => Number(a) - Number(b));
+      for (const bk of batchKeys) {
+        const batch = parsed[bk];
+        if (batch && Array.isArray(batch.reviewedBiomarkers)) {
+          batch.reviewedBiomarkers.forEach((bm: any) => {
+            if (bm && bm.key) {
+              out[bm.key] = bm;
+            }
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  return out;
+}
+
 export function formatOptimalTargetValue(bm: any): string {
   if (!bm) return '';
   const rawOpt = bm.optimalValue;

@@ -5,7 +5,7 @@ import { translations } from '../utils/translations';
 import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart as LineChartIcon, BrainCircuit, AlertCircle, Clock, CheckCircle2, EyeOff } from 'lucide-react';
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, canonicalizeRiskCategory } from '../utils/biomarkers';
-import { getAgentCalibration, formatOptimalTargetValue } from '../utils/agentCalibration';
+import { getAgentCalibration, getAllAgentCalibrationRecords, formatOptimalTargetValue } from '../utils/agentCalibration';
 import { getDuplicateAliasGroups } from '../utils/biomarkerAuditEngine';
 import { handleUnitChange } from '../utils/biomarkerLifecycle';
 
@@ -396,6 +396,17 @@ export default function MedicalHistoryTab({
     const flagged = detectFlaggedTelemetryErrors(biomarkers, profile, activeHistory, allDefinitions || []);
     return new Set(flagged.map(f => f.key));
   }, [biomarkers, profile, activeHistory, allDefinitions]);
+
+  // PERF: parse `batch_analysis_results` from localStorage exactly ONCE per
+  // render. The per-card "🎯 Target" badge used to call getAgentCalibration()
+  // once per rendered biomarker card (~65 cards), each call independently
+  // re-reading and JSON.parse-ing the same localStorage blob from scratch —
+  // this was the #1 remaining cause of Health tab load lag after the
+  // telemetry-scan fix. Deliberately NOT wrapped in useMemo with an empty
+  // dependency array — recomputing every render (cheaply, once) preserves
+  // the original "always fresh" behavior (e.g. right after the Data Accuracy
+  // Agent writes a new batch) without paying the per-card cost.
+  const agentCalibrationRecords = getAllAgentCalibrationRecords();
 
   const checkIsPending = (def: any) => {
     return !isBiomarkerApproved(def.key, profile, activeHistory);
@@ -897,7 +908,7 @@ export default function MedicalHistoryTab({
                                 )}
                                 {(() => {
                                   const customOpt = profile.customBiomarkers?.[def.key]?.optimalValue;
-                                  const agentCal = getAgentCalibration(def.key);
+                                  const agentCal = agentCalibrationRecords[def.key] || null;
                                   const optVal = customOpt || (agentCal ? formatOptimalTargetValue(agentCal) : null);
                                   if (optVal && optVal.trim() && optVal.trim() !== def.normalRange) {
                                     return (
