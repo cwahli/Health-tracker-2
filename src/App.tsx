@@ -6602,7 +6602,7 @@ export default function App() {
           setIsMedicalChatOpen(true);
         };
         return (
-          <ErrorBoundary><LogChat type="front_desk"
+          <ErrorBoundary>{isFrontDeskOpen && <LogChat type="front_desk"
             profile={profile}
             isOpen={isFrontDeskOpen}
             onOpenAgentFromFrontDesk={handleOpenAgentFromFrontDesk}
@@ -6653,10 +6653,10 @@ export default function App() {
           await saveAndSync(profile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: updatedHistory.slice(-logs.length).map(l => l.id) });
         }}
 
-      /></ErrorBoundary>
+      />}</ErrorBoundary>
         );
       })()}
-      <ErrorBoundary><LogChat type="food"
+      <ErrorBoundary>{isFoodChatOpen && <LogChat type="food"
         profile={profile}
         isOpen={isFoodChatOpen}
         jobId={activeJobId}
@@ -6699,8 +6699,8 @@ export default function App() {
           }
           setIsManualFoodLogOpen(true);
         }}
-      /></ErrorBoundary>
-      <ErrorBoundary><LogChat key={`medical_${activeAgentType || 'general'}`}
+      />}</ErrorBoundary>
+      <ErrorBoundary>{isMedicalChatOpen && <LogChat key={`medical_${activeAgentType || 'general'}`}
         type="medical"
         profile={profile}
         isOpen={isMedicalChatOpen}
@@ -7762,7 +7762,7 @@ export default function App() {
             }
           }
         }}
-      />
+      />}
 
  
 
