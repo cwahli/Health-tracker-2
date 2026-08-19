@@ -408,7 +408,10 @@ export const syncLogsWithTimeBuckets = async (
   } as any));
 
   const unsyncedFoods = forceAllFoods
-    ? localFoods.filter(f => f && f.id && f.sync_state !== 'delete')
+    ? [
+        ...localFoods.filter(f => f && f.id),
+        ...deletedFoodLogsFromMap.filter(d => !localFoods.some(f => f.id === d.id))
+      ]
     : [
         ...localFoods.filter(f => f && f.id && f.sync_state !== 'synced'),
         ...deletedFoodLogsFromMap.filter(d => !localFoods.some(f => f.id === d.id))
@@ -422,7 +425,10 @@ export const syncLogsWithTimeBuckets = async (
   } as any));
 
   const unsyncedBiomarkers = forceAllBiomarkers
-    ? localBiomarkers.filter(b => b && b.id && b.sync_state !== 'delete')
+    ? [
+        ...localBiomarkers.filter(b => b && b.id),
+        ...deletedBioLogsFromMap.filter(d => !localBiomarkers.some(b => b.id === d.id))
+      ]
     : [
         ...localBiomarkers.filter(b => b && b.id && b.sync_state !== 'synced'),
         ...deletedBioLogsFromMap.filter(d => !localBiomarkers.some(b => b.id === d.id))
