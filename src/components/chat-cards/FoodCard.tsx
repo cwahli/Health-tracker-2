@@ -2912,15 +2912,24 @@ export const FoodCard: React.FC<AgentCardProps & {
                         msg={msg}
                         profile={profile}
                       />
-                      {msg.data?.pendingFoodLog.dietitianUpdateSentence && (
-                        <div className="bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 rounded-xl p-3 text-left font-sans text-xs text-indigo-800 dark:text-indigo-300 mb-2 flex items-start gap-2">
-                          <span className="text-sm">💬</span>
-                          <div className="flex-1">
-                            <span className="font-bold text-indigo-900 dark:text-indigo-200 block mb-0.5">{t.dietitianUpdate}</span>
-                            <span className="leading-relaxed whitespace-pre-line">{msg.data.pendingFoodLog.dietitianUpdateSentence}</span>
+                      {(() => {
+                        const sentence = (msg.data?.pendingFoodLog.dietitianUpdateSentence || '').trim();
+                        const mainMsg = (msg.content || msg.data?.agentResult?.message || '').trim();
+                        if (!sentence) return null;
+                        // Deduplicate: if the update sentence is identical or already fully contained in the main message, skip the duplicate bubble
+                        if (mainMsg && (mainMsg === sentence || mainMsg.includes(sentence) || sentence.includes(mainMsg))) {
+                          return null;
+                        }
+                        return (
+                          <div className="bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 rounded-xl p-3 text-left font-sans text-xs text-indigo-800 dark:text-indigo-300 mb-2 flex items-start gap-2">
+                            <span className="text-sm">💬</span>
+                            <div className="flex-1">
+                              <span className="font-bold text-indigo-900 dark:text-indigo-200 block mb-0.5">{t.dietitianUpdate}</span>
+                              <span className="leading-relaxed whitespace-pre-line">{sentence}</span>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
                       {msg.data.correctionOf && (
                          <div className="flex justify-center pb-2">
                            <button 
@@ -3085,7 +3094,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                        return null;
                                      })()}
                                      {item.cookingMethod && (
-                                       <div className="flex justify-center w-full mt-0.5 scale-90 origin-top">
+                                       <div className="flex flex-wrap items-center justify-center gap-1 w-full mt-0.5 scale-90 origin-top">
                                          {getCookingMethodChip(item.cookingMethod, true)}
                                        </div>
                                      )}
@@ -3185,10 +3194,29 @@ export const FoodCard: React.FC<AgentCardProps & {
                       <div className="flex flex-col items-start border-b border-theme-border/50 pb-3 gap-2 text-left w-full">
                         <div className="flex items-center justify-between w-full">
                           <h4 className="font-bold text-theme-text text-sm font-display leading-tight">
-                            {msg.data?.pendingFoodLog.name}
+                            {(() => {
+                              if (msg.data?.portionClarify || msg.data?.needsPortionClarify) {
+                                return msg.data?.pendingFoodLog.name?.includes('?') ? 'Meal Analysis' : (msg.data?.pendingFoodLog.name || 'Meal Analysis');
+                              }
+                              const itemsBreakdown = msg.data?.pendingFoodLog?.itemsBreakdown || msg.data?.agentResult?.itemsBreakdown;
+                              if (Array.isArray(itemsBreakdown) && itemsBreakdown.length > 1) {
+                                const names = itemsBreakdown.map((it: any) => it.name || it.scoutOriginalName || it.keyword).filter(Boolean);
+                                if (names.length > 1) {
+                                  const baseName = names[0];
+                                  const others = names.slice(1).join(' & ');
+                                  const currentName = msg.data?.pendingFoodLog?.name || '';
+                                  if (!currentName.toLowerCase().includes(others.toLowerCase()) && !currentName.toLowerCase().includes('&')) {
+                                    return `${currentName || baseName} & ${others}`;
+                                  }
+                                }
+                              }
+                              return msg.data?.pendingFoodLog?.name || 'Meal Analysis';
+                            })()}
                           </h4>
                         </div>
                         {(() => {
+                          const isPortionClarifying = !!(msg.data?.portionClarify || msg.data?.needsPortionClarify || (msg as any).portionClarify || (msg as any).needsPortionClarify);
+                          if (isPortionClarifying) return null;
                           const desc = msg.data?.pendingFoodLog?.message || msg.data?.agentResult?.message || msg.data?.pendingFoodLog?.description || msg.data?.agentResult?.description || (msg.data?.pendingFoodLog?.healthImpact && !msg.data.pendingFoodLog.healthImpact.includes("Contributes to daily macro") ? msg.data.pendingFoodLog.healthImpact : null);
                           if (!desc) return null;
                           return (
@@ -3218,11 +3246,18 @@ export const FoodCard: React.FC<AgentCardProps & {
                         })()}
                       </div>
 
-                      {((msg.content && msg.content !== 'null') || (msg.data?.agentResult?.message && msg.data?.agentResult?.message !== 'null')) && (
-                        <div className="text-[11.5px] text-theme-neutral font-sans leading-relaxed text-left py-2 border-b border-theme-border/50 whitespace-pre-line break-words w-full">
-                          {formatMessageContent(msg.content !== 'null' ? msg.content : msg.data?.agentResult?.message, msg)}
-                        </div>
-                      )}
+                      {(() => {
+                        if (msg.data?.portionClarify || msg.data?.needsPortionClarify) return null;
+                        const desc = msg.data?.pendingFoodLog?.message || msg.data?.agentResult?.message || msg.data?.pendingFoodLog?.description || msg.data?.agentResult?.description || (msg.data?.pendingFoodLog?.healthImpact && !msg.data.pendingFoodLog.healthImpact.includes("Contributes to daily macro") ? msg.data.pendingFoodLog.healthImpact : null);
+                        const rawMsgContent = msg.content !== 'null' ? msg.content : msg.data?.agentResult?.message;
+                        if (!rawMsgContent || rawMsgContent === 'null') return null;
+                        if (desc && (rawMsgContent.trim() === desc.trim() || rawMsgContent.includes(desc.trim()))) return null;
+                        return (
+                          <div className="text-[11.5px] text-theme-neutral font-sans leading-relaxed text-left py-2 border-b border-theme-border/50 whitespace-pre-line break-words w-full">
+                            {formatMessageContent(rawMsgContent, msg)}
+                          </div>
+                        );
+                      })()}
 
                       {/* Verdict Tag rendered below the message */}
                       {(() => {
@@ -3414,53 +3449,55 @@ export const FoodCard: React.FC<AgentCardProps & {
                         </div>
                       )}
 
-                      {/* Log Action Button */}
-                      {isAlreadyLogged ? (
-                        <div className="w-full py-2 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 animation-fade-in font-sans">
-                          <Check className="w-4 h-4" />
-                          Saved to History
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (isLoggingRef.current) return;
-                            const logTarget = effectiveFoodLog || msg.data?.pendingFoodLog;
-                            if (logTarget && onLogFood) {
-                              isLoggingRef.current = true;
-                              const mostRecentImageDate = extractMostRecentImageDate(
-                                (logTarget as any).imageDates || msg.data?.imageDates || msg.data?.agentResult?.imageDates
-                              );
-                              const foodToLog = {
-                                ...logTarget,
-                                date: logTarget.date || mostRecentImageDate || (profile?.timezone ? getCurrentDateInTimezone(profile.timezone) : new Date().toISOString().split('T')[0]),
-                                scoutItems: msg.data?.scoutItems || logTarget.scoutItems || [],
-                                imageUrl: logTarget.imageUrl || (messageImages.length > 0 ? messageImages[0] : undefined),
-                                imageUrls: (logTarget.imageUrls && logTarget.imageUrls.length > 0)
-                                  ? logTarget.imageUrls
-                                  : (messageImages.length > 0 ? messageImages : undefined),
-                                verdict: logTarget.verdict || msg.data?.agentResult?.verdict || msg.data?.verdict,
-                                message: logTarget.message || msg.data?.agentResult?.message || msg.data?.message || logTarget.description || msg.data?.agentResult?.description || msg.data?.description,
-                                healthImpact: logTarget.healthImpact || msg.data?.agentResult?.healthImpact || msg.data?.healthImpact || msg.data?.agentResult?.data?.healthImpact,
-                                composition: logTarget.composition || msg.data?.agentResult?.composition || msg.data?.composition,
-                                chatTranscript: (messages || []).map((m: any) => ({
-                                  role: m.role,
-                                  content: m.content || '',
-                                  timestamp: m.timestamp
-                                })),
-                              };
-                              const logResult = onLogFood(foodToLog as FoodLog);
-                              setLoggedMessageIds?.(prev => [...prev, msg.id]);
-                              Promise.resolve(logResult).finally(() => {
-                                isLoggingRef.current = false;
-                              });
-                            }
-                          }}
-                          className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sans"
-                        >
-                          <Plus className="w-4 h-4" />
-                          {t.logThisFood}
-                        </button>
+                      {/* Log Action Button — hidden when portion clarification is pending user confirmation */}
+                      {!(msg.data?.portionClarify || msg.data?.needsPortionClarify || (msg as any).portionClarify || (msg as any).needsPortionClarify) && (
+                        isAlreadyLogged ? (
+                          <div className="w-full py-2 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 animation-fade-in font-sans">
+                            <Check className="w-4 h-4" />
+                            Saved to History
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isLoggingRef.current) return;
+                              const logTarget = effectiveFoodLog || msg.data?.pendingFoodLog;
+                              if (logTarget && onLogFood) {
+                                isLoggingRef.current = true;
+                                const mostRecentImageDate = extractMostRecentImageDate(
+                                  (logTarget as any).imageDates || msg.data?.imageDates || msg.data?.agentResult?.imageDates
+                                );
+                                const foodToLog = {
+                                  ...logTarget,
+                                  date: logTarget.date || mostRecentImageDate || (profile?.timezone ? getCurrentDateInTimezone(profile.timezone) : new Date().toISOString().split('T')[0]),
+                                  scoutItems: msg.data?.scoutItems || logTarget.scoutItems || [],
+                                  imageUrl: logTarget.imageUrl || (messageImages.length > 0 ? messageImages[0] : undefined),
+                                  imageUrls: (logTarget.imageUrls && logTarget.imageUrls.length > 0)
+                                    ? logTarget.imageUrls
+                                    : (messageImages.length > 0 ? messageImages : undefined),
+                                  verdict: logTarget.verdict || msg.data?.agentResult?.verdict || msg.data?.verdict,
+                                  message: logTarget.message || msg.data?.agentResult?.message || msg.data?.message || logTarget.description || msg.data?.agentResult?.description || msg.data?.description,
+                                  healthImpact: logTarget.healthImpact || msg.data?.agentResult?.healthImpact || msg.data?.healthImpact || msg.data?.agentResult?.data?.healthImpact,
+                                  composition: logTarget.composition || msg.data?.agentResult?.composition || msg.data?.composition,
+                                  chatTranscript: (messages || []).map((m: any) => ({
+                                    role: m.role,
+                                    content: m.content || '',
+                                    timestamp: m.timestamp
+                                  })),
+                                };
+                                const logResult = onLogFood(foodToLog as FoodLog);
+                                setLoggedMessageIds?.(prev => [...prev, msg.id]);
+                                Promise.resolve(logResult).finally(() => {
+                                  isLoggingRef.current = false;
+                                });
+                              }
+                            }}
+                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sans"
+                          >
+                            <Plus className="w-4 h-4" />
+                            {t.logThisFood}
+                          </button>
+                        )
                       )}
                     </div>
                   )}
@@ -3470,6 +3507,11 @@ export const FoodCard: React.FC<AgentCardProps & {
         const hasPendingLog = !!msg.data?.pendingFoodLog;
         const hasComparison = !!(mode === 'evaluation' && comparisonData && comparisonData.groups && comparisonData.groups.length > 0);
         if (hasPendingLog || hasComparison) return null;
+
+        // Suppress standalone fallback text when portion clarification is active (prevents duplicate prompt text)
+        if (msg.data?.portionClarify || msg.data?.needsPortionClarify || (msg as any).portionClarify || (msg as any).needsPortionClarify) {
+          return null;
+        }
 
         const rawText = msg.content || msg.data?.agentResult?.message || msg.data?.agentResult?.text || msg.data?.agentResult?.dietitianAnswer || msg.data?.agentResult?.scoutAnswer || (msg as any).text || (msg as any).message;
         let formattedText = '';

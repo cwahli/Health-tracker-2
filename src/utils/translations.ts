@@ -170,7 +170,7 @@ export const translations = {
     addFood: 'Log Food',
     addMedical: 'Add body information',
     selectLLM: 'Select LLM Engine',
-    chatPlaceholder: 'Type a message or describe food/biomarkers...',
+    chatPlaceholder: 'Type a message or describe food...',
     uploadPhoto: 'Upload Photo',
     send: 'Send',
     foodName: 'Food Name',

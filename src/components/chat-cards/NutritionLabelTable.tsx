@@ -125,23 +125,32 @@ function normalizeNutritionKeys(obj: any) {
 
 function getSourceBadge(item: any) {
   const isGenuineOcr = (item.dbSource === 'label' || (item.source === 'label' && !item.isComponentOfComposite)) && Boolean(item.rawNutritionLabel && !item.dbSource?.includes('fallback') && !item.dbSource?.includes('composite'));
-  const isBrand = item.dbSource === 'brand_official' || item.source === 'brand_official' || Boolean(item.chainName);
+  const isComposite = item.dbSource === 'composite' || item.isComposite || (Array.isArray(item.componentsDetailList || item.components) && (item.componentsDetailList || item.components).length >= 2);
+  const isBrand = (item.dbSource === 'brand_official' || item.source === 'brand_official' || Boolean(item.chainName)) && !isComposite;
   const isOFF = item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts';
   const isFallback = item.dbSource === 'category_fallback' || item.dbSource === 'estimated' || String(item.dbId || '').startsWith('fallback_') || String(item.originalName || item.name || '').toLowerCase().includes('category fallback');
-  const isComposite = item.dbSource === 'composite' || item.isComposite || (Array.isArray(item.componentsDetailList || item.components) && (item.componentsDetailList || item.components).length >= 2);
-  const isUsda = (item.dbSource === 'usda' || item.dbSource === 'canonical_dict') && !isGenuineOcr && !isBrand && !isOFF && !isFallback && !isComposite;
+  const isUsda = (item.dbSource === 'usda' || item.dbSource === 'canonical_dict' || item.dbSource === 'web_search') && !isGenuineOcr && !isBrand && !isOFF && !isFallback && !isComposite;
   const isVisual = item.source === 'visual' || item.isVisualIdentification || (!isGenuineOcr && !isBrand && !isOFF && !isUsda && !isFallback && !isComposite);
 
-  if (isBrand) {
-    return {
-      text: item.chainName ? `${item.chainName} Official` : 'Brand Official Menu',
-      className: 'bg-indigo-100/90 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
-    };
-  }
   if (isGenuineOcr) {
     return {
       text: 'Nutrition Facts (OCR Label)',
       className: 'bg-emerald-100/90 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+    };
+  }
+  if (isComposite) {
+    const subComps = item.componentsDetailList || item.componentsDetail || item.components || [];
+    const hasBranded = Array.isArray(subComps) && subComps.some((c: any) => c.chainName || c.brand || c.dbSource === 'brand_official');
+    const hasFresh = Array.isArray(subComps) && subComps.some((c: any) => !c.chainName && !c.brand && c.dbSource !== 'brand_official');
+    return {
+      text: hasBranded && hasFresh ? 'Composite (Brand + Fresh)' : 'Composite',
+      className: 'bg-purple-100/90 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+    };
+  }
+  if (isBrand && item.chainName) {
+    return {
+      text: `${item.chainName} Official`,
+      className: 'bg-indigo-100/90 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
     };
   }
   if (isOFF) {
@@ -150,33 +159,15 @@ function getSourceBadge(item: any) {
       className: 'bg-sky-100/90 dark:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800'
     };
   }
-  if (isComposite) {
-    return {
-      text: 'AI Ingredient Breakdown',
-      className: 'bg-violet-100/90 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800'
-    };
-  }
-  if (isUsda) {
+  if (isUsda || isVisual || !isFallback) {
     return {
       text: 'USDA FoodData Central',
       className: 'bg-blue-100/90 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
     };
   }
-  if (isFallback) {
-    return {
-      text: 'Estimated: Category Baseline',
-      className: 'bg-amber-100/90 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-    };
-  }
-  if (isVisual) {
-    return {
-      text: 'Visual Identification',
-      className: 'bg-purple-100/90 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
-    };
-  }
   return {
-    text: 'Visual Identification',
-    className: 'bg-purple-100/90 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+    text: 'Estimated: Category Baseline',
+    className: 'bg-amber-100/90 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
   };
 }
 
@@ -225,7 +216,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
       subComps.forEach((comp: any) => {
         if (!comp) return;
         allDishComps.push(comp);
-        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.dbSource === 'open_food_facts' || comp.dbSource === 'openfoodfacts' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel) || (comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_'));
+        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.dbSource === 'open_food_facts' || comp.dbSource === 'openfoodfacts' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel) || (comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_')) || Boolean(comp.chainName) || Boolean(comp.brand);
         const compLabelSource = comp.baseNutrients100g || comp.primaryBase100g || comp.labelNutrientsPerServing || comp.nutrients;
         if (isCompOfficial && (comp.rawNutritionLabel || compLabelSource)) {
           const rawName = comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || comp.dish_name;
@@ -260,16 +251,18 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
             keyword: cleanName,
             originalName: cleanName,
             name: cleanName,
+            chainName: comp.chainName || comp.brand || null,
+            brand: comp.brand || comp.chainName || null,
             primaryBaseMatchName: cleanName,
-            dbSource: comp.dbSource || comp.source || 'brand_official',
-            source: comp.source || comp.dbSource || 'brand_official',
+            dbSource: comp.dbSource || comp.source || (comp.chainName ? 'brand_official' : 'usda'),
+            source: comp.source || comp.dbSource || (comp.chainName ? 'brand_official' : 'usda'),
             rawNutritionLabel: compRawLabel,
             nutritionFacts: comp.nutritionFacts || compLabelSource || null,
             labelNutrientsPerServing: compLabelSource,
             primaryBase100g: compLabelSource,
             estimatedWeightGrams: compWeight,
             primaryBaseWeightG: compWeight,
-            isRealTruth: true,
+            isRealTruth: Boolean(comp.chainName || comp.brand || comp.dbSource === 'brand_official' || comp.rawNutritionLabel),
             isComponentOfComposite: true
           });
         }
@@ -960,7 +953,7 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
       subComps.forEach((comp: any) => {
         if (!comp) return;
         allDishComps.push(comp);
-        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.dbSource === 'open_food_facts' || comp.dbSource === 'openfoodfacts' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel) || (comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_'));
+        const isCompOfficial = comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.dbSource === 'open_food_facts' || comp.dbSource === 'openfoodfacts' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || Boolean(comp.rawNutritionLabel) || (comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_')) || Boolean(comp.chainName) || Boolean(comp.brand);
         const compLabelSource = comp.baseNutrients100g || comp.primaryBase100g || comp.labelNutrientsPerServing || comp.nutrients;
         if (isCompOfficial && (comp.rawNutritionLabel || compLabelSource)) {
           const rawName = comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || comp.dish_name;
@@ -991,6 +984,11 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
 
           officialSubComps.push({
             ...comp,
+            name: cleanName,
+            originalName: cleanName,
+            keyword: cleanName,
+            chainName: comp.chainName || comp.brand || null,
+            brand: comp.brand || comp.chainName || null,
             rawNutritionLabel: compRawLabel
           });
         }

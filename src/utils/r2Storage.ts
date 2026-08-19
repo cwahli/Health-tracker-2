@@ -422,7 +422,9 @@ export async function fetchLogsFromR2(jobId: string): Promise<string | null> {
       return await response.Body.transformToString();
     }
   } catch (err: any) {
-    console.debug(`[R2Storage] Skipping or failed to fetch logs for ${jobId}:`, err?.message || err);
+    if (err?.name !== 'NoSuchKey' && !err?.message?.includes('does not exist') && err?.$metadata?.httpStatusCode !== 404) {
+      console.debug(`[R2Storage] Skipping or failed to fetch logs for ${jobId}:`, err?.message || err);
+    }
   }
   return null;
 }

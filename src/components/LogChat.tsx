@@ -5769,18 +5769,20 @@ ${logsText}`);
                   {/* No switcher */}
                   <div className="w-full leading-relaxed font-size-body text-slate-850 dark:text-slate-100 font-medium break-words overflow-x-hidden bg-transparent border-none shadow-none">
                     <div className="animation-fade-in">
-                      {msg.imageUrls && msg.imageUrls.length > 0 ? (
-                        <div className="mb-2 overflow-hidden border border-theme-border/30 w-full rounded-2xl max-h-96">
-                          <ImageSlider images={msg.imageUrls} altText="Attached meal pictures" />
-                        </div>
-                      ) : msg.imageUrl ? (
-                        <div className="mb-2 overflow-hidden border border-theme-border/30 max-h-96 w-full rounded-2xl">
-                          <img src={(msg.imageUrls && msg.imageUrls.length > 0 && msg.imageUrls[0]) ? msg.imageUrls[0] : msg.imageUrl} alt="Attached meal" loading="lazy" decoding="async" className="object-contain max-h-96 w-full rounded-2xl" />
-                        </div>
-                      ) : null}
+                      {msg.role === 'user' && (
+                        msg.imageUrls && msg.imageUrls.length > 0 ? (
+                          <div className="mb-2 overflow-hidden border border-theme-border/30 w-full rounded-2xl max-h-96">
+                            <ImageSlider images={msg.imageUrls} altText="Attached meal pictures" />
+                          </div>
+                        ) : msg.imageUrl ? (
+                          <div className="mb-2 overflow-hidden border border-theme-border/30 max-h-96 w-full rounded-2xl">
+                            <img src={(msg.imageUrls && msg.imageUrls.length > 0 && msg.imageUrls[0]) ? msg.imageUrls[0] : msg.imageUrl} alt="Attached meal" loading="lazy" decoding="async" className="object-contain max-h-96 w-full rounded-2xl" />
+                          </div>
+                        ) : null
+                      )}
                       
                       {(() => {
-                        const isFoodMsg = msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'front_desk' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length);
+                        const isFoodMsg = msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'front_desk' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.portionClarify || msg.data?.needsPortionClarify);
                         if (isFoodMsg || msg.agentType === 'biomarker_review' || msg.modificationCommand?.length || msg.data?.agentResult?.modificationCommand?.length) return null;
                         const formatted = formatMessageContent(msg.content, msg);
                         if (!formatted || !formatted.trim()) return null;

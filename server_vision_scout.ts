@@ -450,6 +450,11 @@ export function resolvePackageAndContextItems(
     // Explicit User Gram & Volume Weight Anchor: Check if user message specifies portion weights/volumes (e.g. "Lassi is 1L the other is 500ml" or "50g of oats")
     const weightVolumeMatches = Array.from(cleanMsg.matchAll(/(\d+(?:\.\d+)?)\s*(g|grams?|ml|milliliters?|millilitres?|l|liters?|litres?)\b/gi));
     if (weightVolumeMatches.length > 0) {
+      const ANCHOR_STOPWORDS = new Set([
+        'with', 'and', 'for', 'from', 'the', 'plus', 'in', 'of', 'on', 'had', 'have', 'all', 'eat', 'ate',
+        'some', 'only', 'pack', 'sliced', 'piece', 'pieces', 'bowl', 'plate', 'dish', 'cup', 'cups',
+        'gram', 'grams', 'serving', 'servings', 'a', 'an', 'to', 'is', 'was', 'this', 'that', 'i', 'it'
+      ]);
       const claimedItems = new Set<number>();
       weightVolumeMatches.forEach((m, matchIndex) => {
         const valNum = parseFloat(m[1]);
@@ -460,57 +465,93 @@ export function resolvePackageAndContextItems(
         }
         if (explicitWeight > 0 && explicitWeight <= 5000) {
           const matchIdx = m.index || 0;
-          const contextBefore = cleanMsg.substring(Math.max(0, matchIdx - 40), matchIdx);
-          const contextAfter = cleanMsg.substring(matchIdx, Math.min(cleanMsg.length, matchIdx + m[0].length + 40));
-          const contextStr = `${contextBefore} ${contextAfter}`;
+          const matchEnd = matchIdx + m[0].length;
+          
+          // Extract immediate clause boundaries: stop at commas, pluses, semicolons, or sentence breaks
+          const rawBefore = cleanMsg.substring(Math.max(0, matchIdx - 30), matchIdx);
+          const rawAfter = cleanMsg.substring(matchEnd, Math.min(cleanMsg.length, matchEnd + 40));
+          
+          const clauseBefore = rawBefore.split(/[,;+.]/).pop() || '';
+          const clauseAfter = (rawAfter.split(/[,;+.]/)[0] || '').replace(/\b(with|and|then)\b.*$/i, '');
+          const immediatePhrase = `${clauseBefore} ${clauseAfter}`.toLowerCase();
+          const phraseTokens = immediatePhrase
+            .split(/[^a-z0-9]+/)
+            .filter(w => w.length >= 3 && !ANCHOR_STOPWORDS.has(w));
 
-          let matchedAnItem = false;
+          let bestItemIdx = -1;
+          let bestScore = 0;
+          let bestMatchedComp: any = null;
+
+          // PASS 1: Score items based on content word overlap with the immediate modifier phrase
           for (let i = 0; i < items.length; i++) {
-            if (contextItemIndices.has(i)) continue;
+            if (contextItemIndices.has(i) || claimedItems.has(i)) continue;
             const item = items[i];
             const nameStr = (item.originalName || item.keyword || '').toLowerCase();
-            const words = nameStr.split(/[^a-z0-9]+/);
-            const hasWordMatch = words.some(w => w.length >= 3 && contextStr.includes(w));
+            const itemWords = nameStr
+              .split(/[^a-z0-9]+/)
+              .filter((w: string) => w.length >= 3 && !ANCHOR_STOPWORDS.has(w));
             
-            // Context heuristic: e.g. "other" or position matching for multi-item user inputs
-            // "the other is 1L" must not match item 0 just because the phrase contains "other".
-            const isPositionalMatch = items.length > 1 && (
-              (matchIndex === 0 && (/\bfirst\b/.test(contextStr) || i === 0)) ||
-              (matchIndex >= 1 && (/\b(other|second|plain)\b/.test(contextStr) ? !claimedItems.has(i) : i === matchIndex))
-            );
-
-            if (!claimedItems.has(i) && (hasWordMatch || isPositionalMatch || items.length === 1)) {
-              if (item.components && Array.isArray(item.components) && item.components.length > 1) {
-                const matchedComp = item.components.find((c: any) => {
-                  const cQuery = (c.searchQuery || c.name || c.keyword || '').toLowerCase();
-                  return cQuery.split(/[^a-z0-9]+/).some((w: string) => w.length >= 3 && contextStr.includes(w));
-                });
-                if (matchedComp && Number(matchedComp.volumePercentage) > 0) {
-                  const compPct = Number(matchedComp.volumePercentage) / 100;
-                  const targetTotalWeight = Math.round(explicitWeight / compPct);
-                  addDebugLog(`[User Explicit Weight Anchor] User text specified ${explicitWeight}g/ml for sub-component "${matchedComp.searchQuery || matchedComp.name}" in composite dish "${item.originalName || item.keyword}". Updating total dish estimatedWeightGrams from ${item.estimatedWeightGrams}g to ${targetTotalWeight}g (component=${explicitWeight}g).`);
-                  item.estimatedWeightGrams = targetTotalWeight;
-                  claimedItems.add(i);
-                  matchedAnItem = true;
-                  break;
-                }
+            let itemScore = 0;
+            itemWords.forEach((w: string) => {
+              if (phraseTokens.some(pt => pt === w || (w.length >= 4 && (pt.includes(w) || w.includes(pt))))) {
+                itemScore += 2;
               }
-              addDebugLog(`[User Explicit Weight Anchor] User text specified ${explicitWeight}g/ml for "${item.originalName || item.keyword}". Updating estimatedWeightGrams from ${item.estimatedWeightGrams}g to ${explicitWeight}g.`);
-              item.estimatedWeightGrams = explicitWeight;
-              claimedItems.add(i);
-              matchedAnItem = true;
-              break;
+            });
+
+            let matchedCompForItem: any = null;
+            if (item.components && Array.isArray(item.components)) {
+              item.components.forEach((c: any) => {
+                const cQuery = (c.searchQuery || c.name || c.keyword || '').toLowerCase();
+                const cWords = cQuery
+                  .split(/[^a-z0-9]+/)
+                  .filter((w: string) => w.length >= 3 && !ANCHOR_STOPWORDS.has(w));
+                let compScore = 0;
+                cWords.forEach((w: string) => {
+                  if (phraseTokens.some(pt => pt === w || (w.length >= 4 && (pt.includes(w) || w.includes(pt))))) {
+                    compScore += 2;
+                  }
+                });
+                if (compScore > 0 && compScore >= itemScore) {
+                  itemScore = Math.max(itemScore, compScore + 1);
+                  matchedCompForItem = c;
+                }
+              });
+            }
+
+            if (itemScore > bestScore) {
+              bestScore = itemScore;
+              bestItemIdx = i;
+              bestMatchedComp = matchedCompForItem;
             }
           }
 
-          // Fallback positional assignment if no word match occurred
-          if (!matchedAnItem) {
-            const fallbackIdx = !claimedItems.has(matchIndex) ? matchIndex : items.findIndex((_, idx) => !claimedItems.has(idx));
-            if (fallbackIdx >= 0 && items[fallbackIdx]) {
-              const targetItem = items[fallbackIdx];
-              addDebugLog(`[User Explicit Weight Anchor Fallback] User text specified ${explicitWeight}g/ml for item index ${fallbackIdx} ("${targetItem.originalName || targetItem.keyword}"). Updating estimatedWeightGrams to ${explicitWeight}g.`);
-              targetItem.estimatedWeightGrams = explicitWeight;
-              claimedItems.add(fallbackIdx);
+          if (bestItemIdx >= 0 && bestScore > 0) {
+            const item = items[bestItemIdx];
+            if (bestMatchedComp && Number(bestMatchedComp.volumePercentage) > 0 && item.components && item.components.length > 1) {
+              const compPct = Number(bestMatchedComp.volumePercentage) / 100;
+              const targetTotalWeight = Math.round(explicitWeight / compPct);
+              if (addDebugLog) addDebugLog(`[User Explicit Weight Anchor] User text specified ${explicitWeight}g/ml for sub-component "${bestMatchedComp.searchQuery || bestMatchedComp.name}" in composite dish "${item.originalName || item.keyword}". Updating total dish estimatedWeightGrams from ${item.estimatedWeightGrams}g to ${targetTotalWeight}g (component=${explicitWeight}g).`);
+              item.estimatedWeightGrams = targetTotalWeight;
+            } else {
+              if (addDebugLog) addDebugLog(`[User Explicit Weight Anchor] User text specified ${explicitWeight}g/ml for "${item.originalName || item.keyword}". Updating estimatedWeightGrams from ${item.estimatedWeightGrams}g to ${explicitWeight}g.`);
+              item.estimatedWeightGrams = explicitWeight;
+            }
+            claimedItems.add(bestItemIdx);
+          } else {
+            // PASS 2: Positional matching ONLY if no word match occurred AND message has explicit positional markers (first, second, other, etc.) or there is only 1 item
+            const hasPositionalMarker = /\b(first|second|other|plain|1st|2nd)\b/i.test(immediatePhrase);
+            if (hasPositionalMarker || items.length === 1) {
+              const targetIdx = items.length === 1 ? 0 : (
+                (/\bfirst\b|\b1st\b/i.test(immediatePhrase) && !claimedItems.has(0)) ? 0 :
+                (/\b(second|2nd|other)\b/i.test(immediatePhrase)) ? items.findIndex((_, idx) => !claimedItems.has(idx)) :
+                matchIndex
+              );
+              if (targetIdx >= 0 && targetIdx < items.length && !claimedItems.has(targetIdx)) {
+                const targetItem = items[targetIdx];
+                if (addDebugLog) addDebugLog(`[User Explicit Weight Anchor Fallback] User text specified ${explicitWeight}g/ml for item index ${targetIdx} ("${targetItem.originalName || targetItem.keyword}"). Updating estimatedWeightGrams to ${explicitWeight}g.`);
+                targetItem.estimatedWeightGrams = explicitWeight;
+                claimedItems.add(targetIdx);
+              }
             }
           }
         }
@@ -519,6 +560,165 @@ export function resolvePackageAndContextItems(
   }
 
   return items.filter((_, idx) => !contextItemIndices.has(idx));
+}
+
+export function clusterSpatialCompositeDishes(
+  items: any[],
+  addDebugLog?: (msg: string) => void,
+  isCompareMode: boolean = false
+): any[] {
+  if (!items || items.length <= 1 || isCompareMode) return items || [];
+
+  const getBBox = (it: any): [number, number, number, number] => {
+    if (Array.isArray(it.boundingBox2D) && it.boundingBox2D.length === 4) {
+      return [
+        Number(it.boundingBox2D[0]) || 0,
+        Number(it.boundingBox2D[1]) || 0,
+        Number(it.boundingBox2D[2]) || 1000,
+        Number(it.boundingBox2D[3]) || 1000
+      ];
+    }
+    return [0, 0, 1000, 1000];
+  };
+
+  const getArea = (box: [number, number, number, number]): number => {
+    const h = Math.max(0, box[2] - box[0]);
+    const w = Math.max(0, box[3] - box[1]);
+    return h * w;
+  };
+
+  const getOverlapRatio = (boxA: [number, number, number, number], boxB: [number, number, number, number]): { overlap: number; iou: number } => {
+    const areaA = getArea(boxA);
+    const areaB = getArea(boxB);
+    if (areaA <= 0 || areaB <= 0) return { overlap: 0, iou: 0 };
+
+    const interH = Math.max(0, Math.min(boxA[2], boxB[2]) - Math.max(boxA[0], boxB[0]));
+    const interW = Math.max(0, Math.min(boxA[3], boxB[3]) - Math.max(boxA[1], boxB[1]));
+    const interArea = interH * interW;
+
+    const minArea = Math.min(areaA, areaB);
+    const unionArea = areaA + areaB - interArea;
+    return {
+      overlap: minArea > 0 ? interArea / minArea : 0,
+      iou: unionArea > 0 ? interArea / unionArea : 0
+    };
+  };
+
+  const hasDistinctNutrientLabel = (it: any): boolean => {
+    const raw = it.rawNutritionLabel;
+    if (!raw || typeof raw !== 'object') return false;
+    const c = raw.calories ?? raw.energiTotal;
+    return c != null && String(c).trim() !== '' && parseFloat(String(c).replace(/[^\d.]/g, '')) > 0;
+  };
+
+  const clusteredIndices = new Set<number>();
+  const resultDishes: any[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    if (clusteredIndices.has(i)) continue;
+    const primary = { ...items[i] };
+    const boxA = getBBox(primary);
+    const coLocatedIndices: number[] = [];
+
+    for (let j = i + 1; j < items.length; j++) {
+      if (clusteredIndices.has(j)) continue;
+      const other = items[j];
+
+      // Same source image check
+      const sameImg = (primary.sourceImageIndex ?? 0) === (other.sourceImageIndex ?? 0);
+      if (!sameImg) continue;
+
+      // Avoid clustering two distinct packaged commercial items that both have distinct printed nutrition labels
+      if (hasDistinctNutrientLabel(primary) && hasDistinctNutrientLabel(other)) {
+        continue;
+      }
+
+      const boxB = getBBox(other);
+      const { overlap, iou } = getOverlapRatio(boxA, boxB);
+
+      // High spatial co-location inside the same container / bowl / plate
+      if (overlap >= 0.60 || iou >= 0.45) {
+        coLocatedIndices.push(j);
+      }
+    }
+
+    if (coLocatedIndices.length > 0) {
+      // Aggregate into 1 composite dish
+      const clusterGroup = [primary, ...coLocatedIndices.map(idx => items[idx])];
+      coLocatedIndices.forEach(idx => clusteredIndices.add(idx));
+      clusteredIndices.add(i);
+
+      const totalWeight = clusterGroup.reduce((sum, it) => sum + (Math.max(10, Number(it.estimatedWeightGrams) || 100)), 0);
+
+      // Build unified components breakdown
+      const compositeComponents: any[] = [];
+      clusterGroup.forEach(it => {
+        const itWeight = Math.max(10, Number(it.estimatedWeightGrams) || 100);
+        const itPct = Math.max(1, Math.round((itWeight / totalWeight) * 100));
+
+        if (Array.isArray(it.components) && it.components.length > 0) {
+          it.components.forEach((c: any) => {
+            const cPct = Math.max(1, Math.round(((Number(c.volumePercentage) || 100) / 100) * itPct));
+            compositeComponents.push({
+              searchQuery: c.searchQuery || c.name || c.keyword || it.originalName || it.keyword,
+              volumePercentage: cPct,
+              suggestedFdcId: c.suggestedFdcId || null,
+              rawNutritionLabel: it.rawNutritionLabel || undefined
+            });
+          });
+        } else {
+          compositeComponents.push({
+            searchQuery: it.originalName || it.keyword,
+            volumePercentage: itPct,
+            suggestedFdcId: null,
+            rawNutritionLabel: it.rawNutritionLabel || undefined
+          });
+        }
+      });
+
+      // Normalize component percentages to 100%
+      const compSum = compositeComponents.reduce((acc, c) => acc + (c.volumePercentage || 0), 0);
+      if (compSum > 0 && compSum !== 100) {
+        const factor = 100 / compSum;
+        compositeComponents.forEach(c => {
+          c.volumePercentage = Math.max(1, Math.round((c.volumePercentage || 0) * factor));
+        });
+      }
+
+      // Union bounding box
+      const min0 = Math.min(...clusterGroup.map(it => getBBox(it)[0]));
+      const min1 = Math.min(...clusterGroup.map(it => getBBox(it)[1]));
+      const max2 = Math.max(...clusterGroup.map(it => getBBox(it)[2]));
+      const max3 = Math.max(...clusterGroup.map(it => getBBox(it)[3]));
+
+      // Composite clean dish title
+      const distinctNames = Array.from(new Set(clusterGroup.map(it => (it.originalName || it.keyword || '').trim()).filter(Boolean)));
+      const baseName = distinctNames[0] || 'Composed Dish';
+      const subNames = distinctNames.slice(1);
+      const compositeDishTitle = subNames.length > 0 ? `${baseName} with ${subNames.join(', ')}` : baseName;
+
+      primary.originalName = compositeDishTitle;
+      primary.keyword = compositeDishTitle;
+      primary.name = compositeDishTitle;
+      primary.estimatedWeightGrams = totalWeight;
+      primary.boundingBox2D = [min0, min1, max2, max3];
+      primary.components = compositeComponents;
+      primary.isCompositeDish = true;
+      primary.itemConfidence = 'High (>90%)';
+
+      if (addDebugLog) {
+        addDebugLog(
+          `[Spatial Clustering] Clustered ${clusterGroup.length} co-located ingredients into composite dish "${compositeDishTitle}" (${totalWeight}g) with ${compositeComponents.length} components.`
+        );
+      }
+
+      resultDishes.push(primary);
+    } else {
+      resultDishes.push(primary);
+    }
+  }
+
+  return resultDishes;
 }
 
 export const CONDIMENT_DRESSING_REGEX = /\b(ranch(?:\s+dressing)?|caesar(?:\s+dressing)?|vinaigrette|mayonnaise|mayo|salad\s+dressing|dressing|tahini|aioli|pesto|honey\s+mustard|blue\s+cheese\s+dressing|thousand\s+island|french\s+dressing|italian\s+dressing|gravy|sour\s+cream|guacamole|hummus|olive\s+oil|vinaigre|sauce)\b/i;
@@ -1145,6 +1345,7 @@ export function parseAndHealVisionScout(
       }
 
       visionScoutItems = resolvePackageAndContextItems(visionScoutItems, addDebugLog, userMessage, isCompareMode);
+      visionScoutItems = clusterSpatialCompositeDishes(visionScoutItems, addDebugLog, isCompareMode);
 
       for (const item of visionScoutItems) {
         // Enforce Label-to-Component reconciliation for dressings/sauces/condiments detected via OCR or vision

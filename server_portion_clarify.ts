@@ -115,6 +115,33 @@ export function detectPackNetWeightGrams(item: any): number | null {
 }
 
 /**
+ * Extract natural unit noun from food title, ingredient list, or serving description.
+ * Works across all categories: bakery, meats, snacks, dairy, seafood, ready meals, etc.
+ */
+export function extractFoodUnitNoun(name: string, blob: string, servingSizeStr?: string | null): string {
+  const text = `${name} ${blob} ${servingSizeStr || ''}`.toLowerCase();
+
+  // 1. Direct unit matches from serving string or name
+  if (/\b(bagel\s*thins?|thins?)\b/i.test(text)) return 'bagel thin';
+  if (/\b(bagels?)\b/i.test(text)) return 'bagel';
+  if (/\b(bars?|cereal\s*bar|snack\s*bar|protein\s*bar)\b/i.test(text)) return 'bar';
+  if (/\b(biscuits?|cookies?|crackers?)\b/i.test(text)) return 'biscuit';
+  if (/\b(slices?)\b/i.test(text)) return 'slice';
+  if (/\b(patties?|patty|burgers?)\b/i.test(text)) return 'patty';
+  if (/\b(fillets?|filets?)\b/i.test(text)) return 'fillet';
+  if (/\b(sausages?|bangers?|frankfurters?|hot\s*dogs?)\b/i.test(text)) return 'sausage';
+  if (/\b(wraps?|tortillas?|fajitas?)\b/i.test(text)) return 'wrap';
+  if (/\b(rolls?|bread\s*rolls?|buns?|baps?|barm\s*cakes?)\b/i.test(text)) return 'roll';
+  if (/\b(pancakes?|crepes?|waffles?)\b/i.test(text)) return 'pancake';
+  if (/\b(crumpets?|muffins?|scones?|croissants?|pastries?)\b/i.test(text)) return 'piece';
+  if (/\b(meatballs?|falafels?|nuggets?|bites?|strips?|wings?|tenders?|dumplings?|gyozas?|samosas?)\b/i.test(text)) return 'piece';
+  if (/\b(pouches?|sachets?|packets?)\b/i.test(text)) return 'pouch';
+  if (/\b(pots?|tubs?|cups?|tins?|cans?|jars?|bottles?)\b/i.test(text)) return 'serving';
+
+  return 'portion';
+}
+
+/**
  * Multi-serve grocery packs, multipacks, or items with ambiguous unit counts.
  * Single-serve pots (yogurt ~215g) with clear container size are NOT ambiguous.
  */
@@ -125,41 +152,62 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   const blob = `${nameL} ${ing} ${String(item.keyword || '').toLowerCase()}`;
   const w = Math.round(Number(item.estimatedWeightGrams) || 0);
   const raw = item?.rawNutritionLabel;
-  const ssG = parseServingGramsFromLabel(raw?.servingSize) ?? (raw ? 100 : null);
+  const rawServing = String(raw?.servingSize || raw?.serving || '').trim();
+  const ssG = parseServingGramsFromLabel(rawServing) ?? (raw ? 100 : null);
 
   // Clear single-serve container (pot/cup/bottle) with large estimated weight — trust scout
-  if (/\b(yogurt|yoghurt|pot|parfait|smoothie|drink|bottle|can of)\b/i.test(nameL) && w >= 150) {
+  if (/\b(yogurt|yoghurt|parfait|smoothie|drink|bottle|can of)\b/i.test(nameL) && w >= 150) {
     return null;
   }
   if (/\b(pot|cup|tub)\b/i.test(nameL) && w >= 180 && Math.abs(w - 215) < 40) {
     return null; // classic UK yogurt pot
   }
 
-  // 1. Multipack Snack / Bar / Confection detection (e.g. "5 bars", "box of 6", "multipack", "Skinny Crunch")
-  const multipackMatch = blob.match(/\b(\d+)\s*(?:pack|pk|bars?|bakes?|sachets?|pouches?|pieces?|pcs?|biscuits?|cookies?)\b/i);
-  const isSnackOrBarMultipack = /\b(bar|bars|cereal bar|snack bar|protein bar|cookie|biscuit|crisps|snack)\b/i.test(blob) &&
-    (multipackMatch || /\b(multipack|box|pack of|share size|multi pack)\b/i.test(blob) || (w > 0 && w <= 35 && raw));
+  // Universal Unit Count Match: matches any digit preceding common packaging / unit words
+  const unitCountMatch = blob.match(/\b(\d+)\s*(?:pack|pk|slices?|bagels?|rolls?|thins?|buns?|wraps?|tortillas?|pancakes?|muffins?|crumpets?|waffles?|pieces?|pcs?|bars?|bakes?|sachets?|pouches?|biscuits?|cookies?|patties?|fillets?|sausages?|cutlets?|meatballs?|servings?|units?)\b/i);
+  let detectedUnits = unitCountMatch ? parseInt(unitCountMatch[1], 10) : 0;
 
-  if (isSnackOrBarMultipack) {
-    const packUnits = multipackMatch ? parseInt(multipackMatch[1], 10) : 5;
-    const singleUnitGrams = (w > 0 && w <= 50) ? w : Math.round((ssG && ssG < 100) ? ssG : (ssG === 100 ? (w > 0 ? w : 20) : 20));
-    const totalBoxGrams = singleUnitGrams * Math.min(Math.max(packUnits, 3), 10);
+  const unitNoun = extractFoodUnitNoun(name, blob, rawServing);
+  const isDiscreteUnitFood = unitNoun !== 'portion' && unitNoun !== 'serving';
 
-    const options: PortionOption[] = [];
-    options.push({ id: `unit_1_${singleUnitGrams}`, label: `1 bar / piece (${singleUnitGrams}g)`, weightGrams: singleUnitGrams });
-    options.push({ id: `unit_2_${singleUnitGrams * 2}`, label: `2 bars / pieces (${singleUnitGrams * 2}g)`, weightGrams: singleUnitGrams * 2 });
-    if (packUnits >= 3) {
-      options.push({ id: `unit_3_${singleUnitGrams * 3}`, label: `3 bars / pieces (${singleUnitGrams * 3}g)`, weightGrams: singleUnitGrams * 3 });
+  // Check if item is a multi-unit or discrete food product
+  if (detectedUnits >= 2 || isDiscreteUnitFood) {
+    if (!detectedUnits || detectedUnits < 2 || detectedUnits > 24) {
+      if (/\b(bagel|thin|wrap|patty|fillet|muffin|crumpet|roll|bun)\b/i.test(unitNoun)) detectedUnits = 4;
+      else if (/\b(biscuit|cookie|piece|sausage)\b/i.test(unitNoun)) detectedUnits = 6;
+      else detectedUnits = 4;
     }
-    options.push({ id: `pack_all_${totalBoxGrams}`, label: `Entire pack / box (${totalBoxGrams}g)`, weightGrams: totalBoxGrams });
+
+    // Determine single unit weight
+    const singleUnitGrams = (w > 0 && w <= 95)
+      ? w
+      : (w > 95 && w <= detectedUnits * 120
+          ? Math.round(w / detectedUnits)
+          : (ssG && ssG > 0 && ssG < 100 ? ssG : (detectedUnits >= 4 ? 45 : 30)));
+
+    const totalPackGrams = singleUnitGrams * detectedUnits;
+    const options: PortionOption[] = [];
+    const pluralNoun = unitNoun.endsWith('s') ? unitNoun : `${unitNoun}s`;
+
+    options.push({ id: `unit_1_${singleUnitGrams}`, label: `1 ${unitNoun} (${singleUnitGrams}g)`, weightGrams: singleUnitGrams });
+    if (detectedUnits >= 2) {
+      options.push({ id: `unit_2_${singleUnitGrams * 2}`, label: `2 ${pluralNoun} (${singleUnitGrams * 2}g)`, weightGrams: singleUnitGrams * 2 });
+    }
+    if (detectedUnits >= 3 && detectedUnits !== 4) {
+      options.push({ id: `unit_3_${singleUnitGrams * 3}`, label: `3 ${pluralNoun} (${singleUnitGrams * 3}g)`, weightGrams: singleUnitGrams * 3 });
+    }
+    options.push({ id: `pack_${totalPackGrams}`, label: `Whole pack of ${detectedUnits} (${totalPackGrams}g)`, weightGrams: totalPackGrams });
+    if (ssG === 100 || !ssG) {
+      options.push({ id: 'panel_100', label: '100g (nutrition panel basis)', weightGrams: 100 });
+    }
 
     return {
       scoutIndex,
       name,
       estimatedWeightGrams: singleUnitGrams,
-      labelServingGrams: ssG,
+      labelServingGrams: ssG || 100,
       options,
-      reason: 'Multipack / multi-unit snack — confirm how many units were consumed',
+      reason: `Multi-serve pack (${detectedUnits} units) — confirm how much you ate`,
     };
   }
 
@@ -173,23 +221,21 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
 
   const looksMultiServePack =
     (servings != null && servings >= 2) ||
-    /\b(slice|sliced|topside|rashers|servings?|per slice|4 servings|pack of|tub|deli)\b/i.test(blob) ||
+    /\b(slice|sliced|topside|rashers|servings?|per slice|4 servings|pack of|tub|deli|pot|tray|bowl|bag)\b/i.test(blob) ||
     (ssG === 100 &&
       w > 0 &&
       w < 100 &&
-      /\b(beef|chicken|ham|turkey|cheese|salmon|bacon|meat|fish|salad|bites)\b/i.test(nameL));
+      /\b(beef|chicken|ham|turkey|cheese|salmon|bacon|meat|fish|salad|bites|dip|spread|hummus)\b/i.test(nameL));
 
   if (!(ssG === 100 && looksMultiServePack)) {
     return null;
   }
 
   const detectedPackWeight = detectPackNetWeightGrams(item) || w || 100;
-  const isActual100gPack = detectedPackWeight === 100;
-
   const options: PortionOption[] = [];
   const seen = new Set<number>();
 
-  // If we know the actual pack weight (e.g. 80g or 85g)
+  // If we know the actual pack weight (e.g. 80g, 150g, 200g, 350g, 400g)
   if (detectedPackWeight > 0 && detectedPackWeight !== 100) {
     // 1. Offer the actual whole pack
     options.push({

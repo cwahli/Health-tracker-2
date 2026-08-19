@@ -610,9 +610,13 @@ export function applyCommercialSodiumFloor(
   const isFastFoodOrChain =
     (ctx?.chainName != null && !isGroceryBrand) ||
     isKnownDatabaseBrandSync(identityForChecks) ||
-    /\b(kebab|tikka|wrap)\b/i.test(identityForChecks);
+    /\b(kebab|tikka|burger|fries|fried\s+chicken|pizza|fast\s+food)\b/i.test(identityForChecks);
 
-  const isWholeFood = ctx?.physicalForm === 'SOLID_FRUIT_VEG' || dbSource === 'canonical_dict';
+  const isWholeFood =
+    ctx?.physicalForm === 'SOLID_FRUIT_VEG' ||
+    dbSource === 'canonical_dict' ||
+    dbSource === 'label_raw' ||
+    /\b(oats?|oatmeal|rolled\s+oats|milk|cow\s+milk|berries|berry|blueberry|blueberries|strawberry|strawberries|raspberry|raspberries|blackberry|blackberries|fruit|apple|banana|orange|grape|plain\s+yogurt|greek\s+yogurt|nuts?|seeds?|almonds?|walnuts?|raw|fresh)\b/i.test(identityForChecks);
 
   if (isFastFoodOrChain && !isWholeFood && (itemNutrients.calories || 0) > 0) {
     const currentSodium = itemNutrients.sodium || 0;

@@ -4542,6 +4542,57 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       }
     }
 
+    // Enrich scout items & sub-components with resolved brand / database matches before portion clarification
+    if (Array.isArray(visionScoutItems) && Array.isArray(databaseMatchesArray) && databaseMatchesArray.length > 0) {
+      visionScoutItems.forEach((item: any) => {
+        if (Array.isArray(item.components)) {
+          item.components.forEach((c: any) => {
+            const cQuery = String(c.searchQuery || c.name || c.keyword || '').toLowerCase().trim();
+            if (!cQuery) return;
+            const match = databaseMatchesArray.find((m: any) => {
+              const mQuery = String(m.searchQuery || m.query || m.name || '').toLowerCase().trim();
+              if (!mQuery) return false;
+              const isParentDishMatch = item.originalName && mQuery === String(item.originalName).toLowerCase().trim();
+              if (isParentDishMatch && cQuery !== mQuery) return false;
+              return mQuery === cQuery || (m.name && m.name.toLowerCase().trim() === cQuery);
+            });
+            if (match) {
+              const isBrandMatch = Boolean(match.chainName) || match.source === 'brand_official' || match.dbSource === 'brand_official';
+              const queryHasBrand = isBrandMatch && (
+                (match.chainName && cQuery.includes(match.chainName.toLowerCase())) ||
+                (c.brand && cQuery.includes(String(c.brand).toLowerCase())) ||
+                (match.name && match.chainName && match.name.toLowerCase().includes(match.chainName.toLowerCase()))
+              );
+              c.dbSource = queryHasBrand ? (match.source || 'brand_official') : (match.source || 'usda');
+              c.primaryBaseMatchName = match.name || c.primaryBaseMatchName;
+              if (queryHasBrand) {
+                c.chainName = match.chainName || c.chainName;
+                c.brand = match.chainName || match.brand || c.brand;
+              }
+              if (match.rawNutritionLabel) {
+                c.rawNutritionLabel = match.rawNutritionLabel;
+              } else if (match.nutrients || match.baseNutrients100g || match.labelNutrientsPerServing) {
+                const srcNut = match.labelNutrientsPerServing || match.baseNutrients100g || match.nutrients;
+                c.rawNutritionLabel = {
+                  servingSize: '100g',
+                  basisType: 'per_100g',
+                  calories: srcNut.calories != null ? `${srcNut.calories} kcal` : undefined,
+                  protein: srcNut.protein != null ? `${srcNut.protein}g` : undefined,
+                  totalFat: (srcNut.totalFat ?? srcNut.fat) != null ? `${srcNut.totalFat ?? srcNut.fat}g` : undefined,
+                  saturatedFat: srcNut.saturatedFat != null ? `${srcNut.saturatedFat}g` : undefined,
+                  totalCarbohydrate: (srcNut.totalCarbohydrate ?? srcNut.carbohydrates ?? srcNut.carbs) != null ? `${srcNut.totalCarbohydrate ?? srcNut.carbohydrates ?? srcNut.carbs}g` : undefined,
+                  sugar: srcNut.sugar != null ? `${srcNut.sugar}g` : undefined,
+                  totalFibre: (srcNut.totalFibre ?? srcNut.fiber) != null ? `${srcNut.totalFibre ?? srcNut.fiber}g` : undefined,
+                  salt: srcNut.salt != null ? `${srcNut.salt}g` : undefined,
+                  sodium: srcNut.sodium != null ? `${srcNut.sodium}mg` : undefined
+                };
+              }
+            }
+          });
+        }
+      });
+    }
+
     // Task 2: portionClarify check — now placed AFTER DB search and Resolver so ALL candidates are available.
     // B1 — Pause before nutrient calculation when multi-serve pack portion is ambiguous.
     // Resume path: skipScout + activeScoutItems + portionChoices + resolvedDbCandidates (no second scout/DB).

@@ -1208,38 +1208,6 @@ export default function HomeTab({
               <button
                 type="button"
                 onClick={() => {
-                  if (onOpenAgentChat) {
-                    const names = allFlaggedKeys.map(k => getBiomarkerDef(k)?.name || k).join(', ');
-                    const prefillMessage = allFlaggedKeys.length === 1
-                      ? buildBiomarkerReviewPrefill(allFlaggedKeys[0], getBiomarkerDef(allFlaggedKeys[0]), resolvedBiomarkers, profile)
-                      : `Please review my flagged biomarkers: ${names}\n\n` +
-                        allFlaggedKeys.map(k => {
-                          const def = getBiomarkerDef(k);
-                          const name = def?.name || k;
-                          const te = flaggedTelemetryErrors.find(e => e.key === k);
-                          if (te) {
-                            return `• ${name}: Flagged for scaling shift / unit notation error. Recent logs: ${te.samples.join(' → ')}`;
-                          }
-                          return `• ${name}: Flagged for review (improbable value or unit mix-up).`;
-                        }).join('\n') +
-                        `\n\nPlease analyze all these flagged biomarkers simultaneously, evaluate my full log history, and propose diagnostic insights or corrections.`;
-
-                    onOpenAgentChat('biomarker_review', {
-                      biomarkerKey: allFlaggedKeys.length === 1 ? allFlaggedKeys[0] : undefined,
-                      dataReviewBatchKeys: allFlaggedKeys,
-                      prefillMessage
-                    });
-                  }
-                }}
-                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5"
-              >
-                <BrainCircuit className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                <span>Review with AI Agent</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
                   setSelectedErrorKeys(new Set(flaggedTelemetryErrors.map(e => e.key)));
                   setShowTelemetryModal(true);
                 }}
@@ -2535,9 +2503,9 @@ export default function HomeTab({
               )}
 
               {/* Filter Tabs & Selection Toolbar */}
-              <div className="px-4 sm:px-6 py-3 bg-slate-100/70 dark:bg-slate-900/80 border-b border-theme-border flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+              <div className="px-4 sm:px-6 py-2.5 bg-slate-100/70 dark:bg-slate-900/80 border-b border-theme-border flex items-center justify-between gap-3 text-xs shrink-0">
                 {/* Left: Filter Tabs */}
-                <div className="flex items-center gap-1.5 p-1 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+                <div className="flex items-center gap-1 p-1 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
                   <button
                     type="button"
                     onClick={() => setTelemetryFilterTab('all')}
@@ -2547,36 +2515,34 @@ export default function HomeTab({
                         : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60"
                     }`}
                   >
-                    All ({flaggedTelemetryErrors.length})
+                    All
                   </button>
                   <button
                     type="button"
                     onClick={() => setTelemetryFilterTab('auto_fix')}
-                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1 ${
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
                       telemetryFilterTab === 'auto_fix'
                         ? "bg-emerald-600 text-white shadow-xs"
                         : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60"
                     }`}
                   >
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>Auto-Fixable ({autoFixableCount})</span>
+                    <span>AutoFix</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setTelemetryFilterTab('ai_review')}
-                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1 ${
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
                       telemetryFilterTab === 'ai_review'
                         ? "bg-indigo-600 text-white shadow-xs"
                         : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60"
                     }`}
                   >
-                    <BrainCircuit className="w-3.5 h-3.5" />
-                    <span>Needs AI Review ({aiReviewCount})</span>
+                    <span>Needs Ai</span>
                   </button>
                 </div>
 
                 {/* Right: Master Checkbox & Selection Stats */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center shrink-0">
                   <button
                     type="button"
                     onClick={() => {
@@ -2596,7 +2562,7 @@ export default function HomeTab({
                         });
                       }
                     }}
-                    className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer"
+                    className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer text-xs"
                   >
                     {filteredErrors.length > 0 && filteredErrors.every(e => selectedErrorKeys.has(e.key)) ? (
                       <CheckSquare className="w-4 h-4 text-emerald-600" />
@@ -2606,12 +2572,9 @@ export default function HomeTab({
                     <span>
                       {filteredErrors.length > 0 && filteredErrors.every(e => selectedErrorKeys.has(e.key))
                         ? "Deselect All"
-                        : `Select All (${filteredErrors.length})`}
+                        : "Select All"}
                     </span>
                   </button>
-                  <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 hidden sm:inline">
-                    <strong className="text-emerald-600 dark:text-emerald-400">{selectedErrorKeys.size}</strong> of {flaggedTelemetryErrors.length} selected
-                  </span>
                 </div>
               </div>
 
@@ -2698,28 +2661,7 @@ export default function HomeTab({
                             </div>
                           </div>
 
-                          {/* Individual Review Button */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowTelemetryModal(false);
-                              if (onOpenAgentChat) {
-                                const prefillMessage = `Please review my flagged biomarker: ${err.name}\n\n` +
-                                  `• ${err.name}: ${err.badgeLabel || 'Scaling/unit error'}. Diagnostic cause: ${err.preciseCause || err.reason}\n` +
-                                  `Recent logs: ${err.samples.join(' → ')}\n\n` +
-                                  `Please evaluate my full history and propose the exact corrections needed.`;
-                                onOpenAgentChat('biomarker_review', {
-                                  biomarkerKey: err.key,
-                                  dataReviewBatchKeys: [err.key],
-                                  prefillMessage
-                                });
-                              }
-                            }}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1.5 border border-slate-200 dark:border-slate-700"
-                          >
-                            <BrainCircuit className="w-3.5 h-3.5 text-indigo-500" />
-                            <span>Review with AI</span>
-                          </button>
+
                         </div>
 
                         {/* Precise Diagnostic Cause */}
@@ -2961,10 +2903,7 @@ export default function HomeTab({
               </div>
 
               {/* Bottom Sticky Action Toolbar */}
-              <div className="p-4 sm:p-5 border-t border-theme-border bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-                <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                  <strong className="text-emerald-600 dark:text-emerald-400">{selectedErrorKeys.size}</strong> of {flaggedTelemetryErrors.length} biomarkers selected
-                </div>
+              <div className="p-4 sm:p-5 border-t border-theme-border bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur flex flex-col sm:flex-row items-center justify-end gap-3 shrink-0">
 
                 <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
                   {selectedAutoFixableCount > 0 && (

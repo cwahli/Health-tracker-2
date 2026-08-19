@@ -3336,23 +3336,27 @@ export default function App() {
           
           setIsAuthChecking(false);
 
-          // If signed in as a non-demo user, trigger background cloud sync to ensure cloud data is fetched & restored!
+          // If signed in as a non-demo user, trigger background cloud sync only when needed
           const uid = user.uid;
           if (!isDemoUser) {
             const hasSyncedThisSession = sessionStorage.getItem('synced_' + uid) === 'true';
-            // Only force a sync when there is truly nothing usable cached locally
-            // (fresh device / cleared storage / first login). A user who simply has
-            // zero biomarker entries (but real food logs) must NOT be treated as
-            // "empty" — that was forcing a full cloud re-sync on every page refresh.
-            const isLocalDataEmpty = !loadedProfile?.lastUpdatedAt && loadedFoods.length === 0 && loadedHistory.length === 0;
+            const isLocalDataEmpty = loadedFoods.length === 0 && loadedHistory.length === 0;
 
-            if (!hasSyncedThisSession || isLocalDataEmpty) {
-              console.log("[Auth] Signed in user detected. Syncing with Cloud Firestore to restore account data...");
+            if (!hasSyncedThisSession) {
+              // First time opening the app this session: sync only what is needed in background
+              console.log("[Auth] Signed in user detected. Checking for updates in background...");
               sessionStorage.setItem('synced_' + uid, 'true');
-              checkForDbChanges(uid, false).catch(err => console.warn("[Auth] Background sync error:", err)).finally(() => {
+              checkForDbChanges(uid, isLocalDataEmpty).catch(err => console.warn("[Auth] Background sync error:", err)).finally(() => {
+                setIsInitialDataLoading(false);
+              });
+            } else if (isLocalDataEmpty) {
+              // Local cache is completely empty: perform a restore
+              console.log("[Auth] Local cache empty, restoring from cloud...");
+              checkForDbChanges(uid, true).catch(err => console.warn("[Auth] Background sync error:", err)).finally(() => {
                 setIsInitialDataLoading(false);
               });
             } else {
+              // Already loaded from local storage and synced in this session: skip re-fetching
               setSyncState('synced');
               setIsInitialDataLoading(false);
             }
@@ -3532,9 +3536,14 @@ export default function App() {
               if (parsedLocal.dailyBenefits) setDailyBenefits(parsedLocal.dailyBenefits);
               if (parsedLocal.report) setReport(parsedLocal.report);
 
-              // Background sync with Supabase to restore latest data
+              // Background sync with Supabase only if not already synced this session or if local cache is empty
               const uid = parsedLocal.profile.uid || ('admin_' + lastActiveEmail.replace(/[^a-z0-9]/gi, '_'));
-              checkForDbChanges(uid, false).catch(err => console.warn("[Auth] Session restore sync error:", err));
+              const hasSynced = sessionStorage.getItem('synced_' + uid) === 'true';
+              const isLocalEmpty = (!parsedLocal.foodLogs || parsedLocal.foodLogs.length === 0) && (!parsedLocal.biomarkerHistory || parsedLocal.biomarkerHistory.length === 0);
+              if (!hasSynced || isLocalEmpty) {
+                sessionStorage.setItem('synced_' + uid, 'true');
+                checkForDbChanges(uid, isLocalEmpty).catch(err => console.warn("[Auth] Session restore sync error:", err));
+              }
             } catch (e) {
               console.error("Failed to restore cached local storage:", e);
             }
