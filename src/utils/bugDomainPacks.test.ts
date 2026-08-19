@@ -6,6 +6,7 @@ import {
   domainPackForAgent,
   buildOverviewMarkdown,
   foodSummaryLine,
+  capTombstoneMap,
 } from './bugDomainPacks';
 
 describe('bugDomainPacks', () => {
@@ -151,6 +152,23 @@ describe('bugDomainPacks', () => {
     expect(pack.biomarker?.historySample?.[0].values?.bmi).toBe(2);
     expect(pack.biomarker?.tombstones?.deletedBiomarkerLogIds?.log_bmi_2020).toBe(1700000000000);
     expect(pack.summaryLine).toMatch(/bmi/i);
+  });
+
+  it('keeps real tombstone ids and puts bmi on a crowded 2020 log', () => {
+    expect(capTombstoneMap({ log_real: 9, '0': 0, '1': 0 })).toEqual({ log_real: 9 });
+    expect(capTombstoneMap(['log_a', 'log_b'])).toMatchObject({ log_a: expect.any(Number), log_b: expect.any(Number) });
+    expect(capTombstoneMap([null, 0, undefined])).toBeUndefined();
+
+    const crowded: Record<string, number> = { height: 164, weight: 61.9 };
+    for (let i = 0; i < 20; i++) crowded[`audit_${i}`] = i;
+    crowded.bmi = 2;
+    const pack = buildBiomarkerDomainPack({
+      biomarkerHistory: [{ id: 'med_2020', date: '04-11-2020', biomarkers: crowded, sync_state: 'synced' }],
+      profile: { deletedBiomarkerLogIds: ['med_2020'] },
+    });
+    expect(pack.historySample?.[0].values?.bmi).toBe(2);
+    expect(pack.tombstones?.deletedBiomarkerLogIds?.med_2020).toBeTruthy();
+    expect(pack.kind).toBe('home');
   });
 
   it('domainPackForAgent and overview mark a11y primary', () => {

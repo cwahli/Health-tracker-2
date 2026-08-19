@@ -97,6 +97,33 @@ function coreNutrients(n: any): Record<string, any> | null {
   return Object.keys(out).length ? out : null;
 }
 
+/** Accept Record<id, ts> or string[] of ids. Drop 0/1/2 index artifacts. */
+export function capTombstoneMap(m: any, n = 50): Record<string, number> | undefined {
+  if (!m || typeof m !== 'object') return undefined;
+  const out: Record<string, number> = {};
+  const add = (id: any, ts: any) => {
+    const k = String(id ?? '').trim();
+    if (!k || k === 'undefined' || k === 'null') return;
+    if (/^\d+$/.test(k) && k.length <= 3) return;
+    const num = typeof ts === 'number' ? ts : Number(ts);
+    out[k] = Number.isFinite(num) && num > 1 ? num : Date.now();
+  };
+  if (Array.isArray(m)) {
+    for (const item of m.slice(0, n * 2)) {
+      if (typeof item === 'string' || typeof item === 'number') add(item, Date.now());
+      else if (item && typeof item === 'object') add((item as any).id || (item as any).key, (item as any).ts ?? (item as any).updated_at);
+    }
+  } else {
+    for (const [k, v] of Object.entries(m)) {
+      if (/^\d+$/.test(k) && k.length <= 3 && (typeof v === 'string' || typeof v === 'number')) add(v, Date.now());
+      else add(k, v);
+    }
+  }
+  const keys = Object.keys(out).slice(0, n);
+  if (!keys.length) return undefined;
+  return Object.fromEntries(keys.map((k) => [k, out[k]]));
+}
+
 function pickHttps(url: any): string | null {
   if (typeof url === 'string' && /^https?:\/\//i.test(url) && url.length < 500) return url;
   return null;
@@ -253,14 +280,22 @@ export function buildBiomarkerDomainPack(input: {
   }
 
   const history = Array.isArray(input.biomarkerHistory) ? input.biomarkerHistory : [];
+  const ranked = [...history].sort((a, b) => {
+    const abm = a?.biomarkers && typeof a.biomarkers === 'object' ? a.biomarkers : {};
+    const bbm = b?.biomarkers && typeof b.biomarkers === 'object' ? b.biomarkers : {};
+    const ap = Object.keys(abm).some((k) => /bmi|body_mass/i.test(k)) ? 1 : 0;
+    const bp = Object.keys(bbm).some((k) => /bmi|body_mass/i.test(k)) ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return String(b?.date || '').localeCompare(String(a?.date || ''));
+  });
   const historySample: BiomarkerHistoryRow[] = [];
-  for (const row of history.slice(-25).reverse()) {
+  for (const row of ranked.slice(0, 25)) {
     const bm =
       row?.biomarkers && typeof row.biomarkers === 'object' && !Array.isArray(row.biomarkers)
         ? row.biomarkers
         : null;
     const rowKeys = bm
-      ? Object.keys(bm).slice(0, 24)
+      ? Object.keys(bm).slice(0, 40)
       : [row?.key || row?.biomarkerKey || row?.name].filter(Boolean).map(String);
     if (bm) {
       for (const k of rowKeys) {
@@ -273,7 +308,9 @@ export function buildBiomarkerDomainPack(input: {
     if (historySample.length < 25 && (row?.id || rowKeys.length)) {
       const values: Record<string, any> = {};
       if (bm) {
-        for (const k of rowKeys.slice(0, 12)) {
+        const priority = rowKeys.filter((k) => /bmi|weight|height|body_mass/i.test(k));
+        const rest = rowKeys.filter((k) => !priority.includes(k));
+        for (const k of [...priority, ...rest].slice(0, 14)) {
           const v = bm[k];
           values[k] = v != null && String(v).length < 40 ? v : String(v ?? '').slice(0, 40);
         }
@@ -289,19 +326,10 @@ export function buildBiomarkerDomainPack(input: {
     }
   }
 
-  const capMap = (m: any, n = 40): Record<string, number> | undefined => {
-    if (!m || typeof m !== 'object') return undefined;
-    const out: Record<string, number> = {};
-    for (const [k, v] of Object.entries(m).slice(0, n)) {
-      const ts = typeof v === 'number' ? v : Number(v);
-      if (k && Number.isFinite(ts)) out[k] = ts;
-    }
-    return Object.keys(out).length ? out : undefined;
-  };
   const tombstones = {
-    deletedBiomarkerLogIds: capMap(input.profile?.deletedBiomarkerLogIds),
-    deletedCustomBiomarkerKeys: capMap(input.profile?.deletedCustomBiomarkerKeys),
-    deletedNotUsedBiomarkerKeys: capMap(input.profile?.deletedNotUsedBiomarkerKeys),
+    deletedBiomarkerLogIds: capTombstoneMap(input.profile?.deletedBiomarkerLogIds),
+    deletedCustomBiomarkerKeys: capTombstoneMap(input.profile?.deletedCustomBiomarkerKeys),
+    deletedNotUsedBiomarkerKeys: capTombstoneMap(input.profile?.deletedNotUsedBiomarkerKeys),
   };
   const hasTombstones = !!(
     tombstones.deletedBiomarkerLogIds ||
@@ -320,8 +348,13 @@ export function buildBiomarkerDomainPack(input: {
   if (crazy.length) sanitizeHints.push(`extreme_values:${crazy.map((c) => c.key).join(',')}`);
 
   return {
-    jobId: job.id || result.jobId || p.jobId || p.id || null,
-    kind: job.kind || p.kind || 'medical',
+    jobId: job.id && !/^food/i.test(String(job.kind || '')) ? job.id : null,
+    kind:
+      job.kind && !/^food/i.test(String(job.kind))
+        ? job.kind
+        : history.length
+          ? 'home'
+          : 'medical',
     agentLabel:
       result.agentLabel ||
       p.agentLabel ||
