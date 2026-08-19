@@ -5815,16 +5815,6 @@ I can analyze these, compare them with our database keys, and find standard mapp
                         <button
                           onClick={() => {
                             setShowCleaningDropdown(false);
-                            setShowAuditModal(true);
-                          }}
-                          className="w-full text-left px-3 py-2 text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/50 pb-2 mb-1"
-                        >
-                          <Zap className="w-3.5 h-3.5" />
-                          ⚡ Check Biomarkers (Audit)
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowCleaningDropdown(false);
                             setIsRangeCalibrationMode(true);
                             setIsMedicalCategorisationMode(false);
                             setIsAgentMode(true);

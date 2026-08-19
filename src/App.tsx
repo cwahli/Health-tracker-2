@@ -18,8 +18,6 @@ import { initSupabaseJobSync, hydrateUserJobs } from './jobs/SupabaseJobSync';
 import { ImageStore } from './jobs/ImageStore';
 import { refundCredits } from './jobs/credits';
 import { startGoldenIngestWatcher } from './utils/goldenIngestClient';
-
-
 import { getProgressPercent, getStepCeiling } from './jobs/progress';
 import FloatingActionSheet from './components/FloatingActionSheet';
 
@@ -66,24 +64,12 @@ function extractPendingFoodLogFromCleanResult(cleanResult: any, photoUrl?: strin
   }
 
   if (log) {
-    if (!log.message && (cleanResult.message || cleanResult.text || cleanResult.description || cleanResult.data?.description)) {
-      log.message = cleanResult.message || cleanResult.text || cleanResult.description || cleanResult.data?.description;
-    }
-    if (!log.healthImpact && (cleanResult.healthImpact || cleanResult.data?.healthImpact)) {
-      log.healthImpact = cleanResult.healthImpact || cleanResult.data?.healthImpact;
-    }
-    if (!log.composition && (cleanResult.composition || cleanResult.data?.composition)) {
-      log.composition = cleanResult.composition || cleanResult.data?.composition;
-    }
-    if (!log.verdict && (cleanResult.verdict || cleanResult.data?.verdict)) {
-      log.verdict = cleanResult.verdict || cleanResult.data?.verdict;
-    }
-    if (!log.imageUrls || log.imageUrls.length === 0) {
-      log.imageUrls = cleanResult.imageUrls || (photoUrl ? [photoUrl] : []);
-    }
-    if (!log.photoUrl) {
-      log.photoUrl = photoUrl || cleanResult.photoUrl;
-    }
+    log.message = log.message || cleanResult.message || cleanResult.text || cleanResult.description || cleanResult.data?.description || '';
+    log.healthImpact = log.healthImpact || cleanResult.healthImpact || cleanResult.data?.healthImpact || '';
+    log.composition = log.composition || cleanResult.composition || cleanResult.data?.composition || '';
+    log.verdict = log.verdict || cleanResult.verdict || cleanResult.data?.verdict || '';
+    log.imageUrls = log.imageUrls?.length ? log.imageUrls : (cleanResult.imageUrls || (photoUrl ? [photoUrl] : []));
+    log.photoUrl = log.photoUrl || photoUrl || cleanResult.photoUrl;
     return log;
   }
   return null;
@@ -976,10 +962,12 @@ export default function App() {
   const biomarkersRef = useRef(biomarkers);
   const biomarkerHistoryRef = useRef(biomarkerHistory);
 
-  useEffect(() => { profileRef.current = profile; }, [profile]);
-  useEffect(() => { foodLogsRef.current = foodLogs; }, [foodLogs]);
-  useEffect(() => { biomarkersRef.current = biomarkers; }, [biomarkers]);
-  useEffect(() => { biomarkerHistoryRef.current = biomarkerHistory; }, [biomarkerHistory]);
+  useEffect(() => {
+    profileRef.current = profile;
+    foodLogsRef.current = foodLogs;
+    biomarkersRef.current = biomarkers;
+    biomarkerHistoryRef.current = biomarkerHistory;
+  }, [profile, foodLogs, biomarkers, biomarkerHistory]);
 
   const currentUserId = auth.currentUser?.uid;
   useEffect(() => {
@@ -1645,7 +1633,10 @@ export default function App() {
     });
 
     JobQueueRunner.start();
-    const stopGoldenIngest = startGoldenIngestWatcher();
+    let stopGoldenIngest: (() => void) | null = null;
+    const ingestTimer = setTimeout(() => {
+      stopGoldenIngest = startGoldenIngestWatcher();
+    }, 1500);
 
     // Subscribe to JobStore to handle automated credit refund when a job transitions to failed/cancelled
     const unsubscribeJobStore = JobStore.subscribe(async () => {
@@ -1672,8 +1663,9 @@ export default function App() {
     });
 
     return () => {
+      clearTimeout(ingestTimer);
       JobQueueRunner.stop();
-      stopGoldenIngest();
+      if (stopGoldenIngest) stopGoldenIngest();
       unsubscribeJobStore();
     };
   }, []);
@@ -2395,8 +2387,8 @@ export default function App() {
               }
             }
           }
-          // Trigger job hydration to ensure server jobs and deleted placeholders stay in sync
-          hydrateUserJobs(uid).catch(() => {});
+          // Trigger job hydration past initial paint to prevent startup network bottleneck
+          setTimeout(() => { hydrateUserJobs(uid).catch(() => {}); }, 1500);
           tFoodsId = logInteraction('download', `users/${uid}/foodLogs`, null);
           tBioId = logInteraction('download', `users/${uid}/biomarkerHistory`, null);
           tActsId = logInteraction('download', `users/${uid}/actions`, null);

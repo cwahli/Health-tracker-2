@@ -28,6 +28,7 @@ import {
   loadSavedAuditSession,
   saveAuditSession
 } from '../utils/biomarkerAuditEngine';
+import { FilterPills } from './ui/FilterPills';
 
 interface BiomarkerAuditModalProps {
   isOpen: boolean;
@@ -1050,43 +1051,29 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
             <div className="space-y-4 max-w-7xl mx-auto">
               <div className="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
                 {/* FILTER PILLS */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setUnitFilter('all')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      unitFilter === 'all'
-                        ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    All ({corruptedUnitItems.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUnitFilter('auto_proposals')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                      unitFilter === 'auto_proposals'
-                        ? 'bg-amber-600 text-white shadow-xs'
-                        : 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200/60 dark:border-amber-800/60'
-                    }`}
-                  >
-                    <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-                    <span>Auto-Proposals ({targetAutoUnitItems.length})</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUnitFilter('agent_review')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                      unitFilter === 'agent_review'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200/60 dark:border-indigo-800/60'
-                    }`}
-                  >
-                    <Bot className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
-                    <span>Needs Agent Review ({targetAgentUnitItems.length})</span>
-                  </button>
-                </div>
+                <FilterPills<'all' | 'auto_proposals' | 'agent_review'>
+                  items={[
+                    {
+                      id: 'all',
+                      label: `All (${corruptedUnitItems.length})`,
+                      activeColorClass: 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs',
+                    },
+                    {
+                      id: 'auto_proposals',
+                      label: `Auto-Proposals (${targetAutoUnitItems.length})`,
+                      icon: <Zap className="w-3.5 h-3.5" />,
+                      activeColorClass: 'bg-amber-600 text-white shadow-xs',
+                    },
+                    {
+                      id: 'agent_review',
+                      label: `Needs Agent Review (${targetAgentUnitItems.length})`,
+                      icon: <Bot className="w-3.5 h-3.5" />,
+                      activeColorClass: 'bg-indigo-600 text-white shadow-xs',
+                    },
+                  ]}
+                  activeId={unitFilter}
+                  onChange={setUnitFilter}
+                />
 
                 {/* HEADER ACTIONS */}
                 <div className="flex items-center gap-2">
@@ -1354,57 +1341,39 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
             <div className="space-y-4 max-w-7xl mx-auto">
               <div className="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
                 {/* FILTER PILLS */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setMetadataFilter('all')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      metadataFilter === 'all'
-                        ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    All ({missingMetadataItems.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMetadataFilter('catalog')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                      metadataFilter === 'catalog'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200/60 dark:border-blue-800/60'
-                    }`}
-                  >
-                    <Zap className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
-                    <span>Catalog Matches ({targetCatalogItems.length})</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMetadataFilter('custom_calibrate')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                      metadataFilter === 'custom_calibrate'
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/60 dark:border-emerald-800/60'
-                    }`}
-                  >
-                    <Bot className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-                    <span>Needs Calibrate ({targetCustomCalibrateItems.length})</span>
-                  </button>
-                  {targetCategoriseKeys.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setMetadataFilter('categorise')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                        metadataFilter === 'categorise'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200/60 dark:border-indigo-800/60'
-                      }`}
-                    >
-                      <Bot className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
-                      <span>Needs Category ({targetCategoriseKeys.length})</span>
-                    </button>
-                  )}
-                </div>
+                <FilterPills<'all' | 'catalog' | 'custom_calibrate' | 'categorise'>
+                  items={[
+                    {
+                      id: 'all',
+                      label: `All (${missingMetadataItems.length})`,
+                      activeColorClass: 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs',
+                    },
+                    {
+                      id: 'catalog',
+                      label: `Catalog Matches (${targetCatalogItems.length})`,
+                      icon: <Zap className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />,
+                      activeColorClass: 'bg-blue-600 text-white shadow-xs',
+                    },
+                    {
+                      id: 'custom_calibrate',
+                      label: `Needs Calibrate (${targetCustomCalibrateItems.length})`,
+                      icon: <Bot className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />,
+                      activeColorClass: 'bg-emerald-600 text-white shadow-xs',
+                    },
+                    ...(targetCategoriseKeys.length > 0
+                      ? [
+                          {
+                            id: 'categorise' as const,
+                            label: `Needs Category (${targetCategoriseKeys.length})`,
+                            icon: <Bot className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />,
+                            activeColorClass: 'bg-indigo-600 text-white shadow-xs',
+                          },
+                        ]
+                      : []),
+                  ]}
+                  activeId={metadataFilter as any}
+                  onChange={(val) => setMetadataFilter(val as any)}
+                />
               </div>
 
               {filteredMissingMetadataItems.length === 0 ? (

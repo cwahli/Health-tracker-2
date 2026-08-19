@@ -392,10 +392,13 @@ export default function MedicalHistoryTab({
   // spots below (subcategory count, per-category filtering, per-card JSX);
   // without this, each of those calls independently reran the full
   // O(history x definitions) detectFlaggedTelemetryErrors scan.
-  const flaggedTelemetryKeys = useMemo(() => {
-    const flagged = detectFlaggedTelemetryErrors(biomarkers, profile, activeHistory, allDefinitions || []);
-    return new Set(flagged.map(f => f.key));
+  const flaggedTelemetryList = useMemo(() => {
+    return detectFlaggedTelemetryErrors(biomarkers, profile, activeHistory, allDefinitions || []);
   }, [biomarkers, profile, activeHistory, allDefinitions]);
+
+  const flaggedTelemetryKeys = useMemo(() => {
+    return new Set(flaggedTelemetryList.map(f => f.key));
+  }, [flaggedTelemetryList]);
 
   // PERF: parse `batch_analysis_results` from localStorage exactly ONCE per
   // render. The per-card "🎯 Target" badge used to call getAgentCalibration()
@@ -812,10 +815,9 @@ export default function MedicalHistoryTab({
                           if (onReviewWithAgent) {
                             onReviewWithAgent(keys);
                           } else if (onOpenAgentChat) {
-                            const telemetryErrors = detectFlaggedTelemetryErrors(biomarkers, profile, activeHistory, allDefinitions || []);
                             const prefillMsg = `Please help me review and correct scaling, unit, and notation errors in my historical biomarker logs:\n` +
                               markers.map(m => {
-                                const errInfo = telemetryErrors.find(e => e.key === m.key);
+                                const errInfo = flaggedTelemetryList.find(e => e.key === m.key);
                                 const flaggedSamples = errInfo ? errInfo.samples : [];
                                 return `- ${m.name}: ${flaggedSamples.join(', ')}`;
                               }).join('\n');

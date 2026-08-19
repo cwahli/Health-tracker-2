@@ -12,6 +12,7 @@ import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../u
 import { PRIMARY_NUTRIENTS, isCoreNutrient, isAdditionalNutrient } from '../utils/nutrients';
 import { nutrientDefinitions } from '../utils/nutrition';
 import { BiomarkerExpandedSection } from './BiomarkerExpandedSection';
+import { FilterPills } from './ui/FilterPills';
 
 import LogChat from './LogChat';
 import { JobStore } from '../jobs/JobStore';
@@ -2507,41 +2508,15 @@ export default function HomeTab({
               {/* Filter Tabs & Selection Toolbar */}
               <div className="px-4 sm:px-6 py-2.5 bg-slate-100/70 dark:bg-slate-900/80 border-b border-theme-border flex items-center justify-between gap-3 text-xs shrink-0">
                 {/* Left: Filter Tabs */}
-                <div className="flex items-center gap-1 p-1 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
-                  <button
-                    type="button"
-                    onClick={() => setTelemetryFilterTab('all')}
-                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                      telemetryFilterTab === 'all'
-                        ? "bg-amber-500 text-white shadow-xs"
-                        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60"
-                    }`}
-                  >
-                    All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTelemetryFilterTab('auto_fix')}
-                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                      telemetryFilterTab === 'auto_fix'
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60"
-                    }`}
-                  >
-                    <span>AutoFix</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTelemetryFilterTab('ai_review')}
-                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                      telemetryFilterTab === 'ai_review'
-                        ? "bg-indigo-600 text-white shadow-xs"
-                        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60"
-                    }`}
-                  >
-                    <span>Needs Ai</span>
-                  </button>
-                </div>
+                <FilterPills<'all' | 'auto_fix' | 'ai_review'>
+                  items={[
+                    { id: 'all', label: 'All', activeColorClass: 'bg-amber-500 text-white shadow-xs' },
+                    { id: 'auto_fix', label: 'AutoFix', activeColorClass: 'bg-emerald-600 text-white shadow-xs' },
+                    { id: 'ai_review', label: 'Needs Ai', activeColorClass: 'bg-indigo-600 text-white shadow-xs' },
+                  ]}
+                  activeId={telemetryFilterTab}
+                  onChange={setTelemetryFilterTab}
+                />
 
                 {/* Right: Master Checkbox & Selection Stats */}
                 <div className="flex items-center shrink-0">

@@ -2,9 +2,9 @@
   "version": 1,
   "note": "QUALITY.md §13 / ROADMAP Q-2. New *Modal/*Card/*Table must name an id here. Planned ids have path null until Q-3/Q-4.",
   "primitives": [
-    { "id": "AppModal", "path": "src/components/UniversalModal.tsx", "status": "partial" },
+    { "id": "AppModal", "path": "src/components/ui/AppModal.tsx", "status": "canonical" },
     { "id": "DataGrid", "path": "src/components/AgentResultTable.tsx", "status": "partial" },
-    { "id": "FilterPills", "path": null, "status": "planned" },
+    { "id": "FilterPills", "path": "src/components/ui/FilterPills.tsx", "status": "canonical" },
     { "id": "ConfirmBar", "path": null, "status": "planned" },
     { "id": "NutritionLabelTable", "path": "src/components/chat-cards/NutritionLabelTable.tsx", "status": "canonical" },
     { "id": "ComprehensiveNutrientsTable", "path": "src/components/chat-cards/ComprehensiveNutrientsTable.tsx", "status": "canonical" },

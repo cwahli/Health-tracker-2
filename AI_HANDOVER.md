@@ -5,6 +5,12 @@
 **Governance & Laws:** Follow `docs/agent/` domain rules. Local agents may `git commit` / `git push` after COMPLETE (tsc + named gates). AI Studio remains a valid ship path.
 
 ---
+- **Platform Anti-Bloat & Performance Milestone (Q-3, R-9, B8.2, B8.3) (2026-08-19)**:
+  - **Shared UI Primitive Kit (Q-3)**: Created `src/components/ui/FilterPills.tsx` and `src/components/ui/AppModal.tsx` ($\le 300$ lines, unit-tested). Replaced copy-pasted inline filter tab markups in `HomeTab.tsx` and `BiomarkerAuditModal.tsx` with canonical `<FilterPills />`, reducing component line counts and enforcing zero-code duplication.
+  - **Deferred Startup Ingestion (R-9)**: Wrapped `startGoldenIngestWatcher` and `hydrateUserJobs` in deferred timeouts ($1.5\text{s}$ post-mount) in `App.tsx` to eliminate startup network saturation and blocking tasks on first paint.
+  - **One Check-Biomarkers Door (B8.2)**: Eliminated duplicate "Check Biomarkers" entry from the Cleaning dropdown menu in `BiomarkerDictionaryModal.tsx`, unifying the audit trigger strictly to the primary gradient toolbar.
+  - **Render & Telemetry Scan Memoization (B8.3)**: Unified `detectFlaggedTelemetryErrors` across `MedicalHistoryTab.tsx` to compute once per render cycle, preventing redundant $O(\text{history} \times \text{definitions})$ scans on user clicks.
+  - **Budget Ceiling Compliance (Q-1 / Q-2)**: Updated `CATALOG.json` with canonical primitive paths; all god-file line ceilings passing in `assert-budgets.mjs`.
 - **Internal Scale & Unit Conflict Auto-Resolution Fix (2026-08-19)**:
   - **Unicode Superscript & Scientific Notation Extraction**: Updated `extractUnitFromString` in `src/utils/biomarkerAuditEngine.ts` to include unicode superscripts `²` (`\u00B2`), `³` (`\u00B3`), micro signs `µ`/`μ`, degrees `°`, and scientific notation (e.g. `10^9/L`, `10^12/L`). This eliminated truncation defects where `mL/min/1.73m²` and `kg/m²` were truncated into `mL/min/1.73m` and `kg/m`.
   - **Unit Equivalence Normalization**: Added `normalizeUnitEquivalence` to equate unicode superscripts, micro symbols, spacing, and eGFR conventions (`mL/min/1.73m²` $\equiv$ `mL/min/1.73m2` $\equiv$ `mL/min/1.73 m²` $\equiv$ `mL/min/1.73m`). Equivalent formatting variations are now treated as identical with zero false-positive conflicts.
