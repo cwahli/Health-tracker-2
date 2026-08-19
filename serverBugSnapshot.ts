@@ -28,6 +28,53 @@ import {
 import { domainPackForAgent, buildOverviewMarkdown } from './src/utils/bugDomainPacks';
 import { stripHeavyImages } from './src/utils/debugPayload';
 import { normalizeTagKey } from './serverIssueBacklog.js';
+import {
+  appendEvidenceCommit,
+  applyAttempt,
+  assignPublicN,
+  buildNow,
+  buildStartPayload,
+  hydrateWorkItem,
+  prefillBug,
+  sortReadyQueue,
+} from './src/utils/bugWorkItem';
+
+async function persistWorkItem(tagId: string, item: ReturnType<typeof hydrateWorkItem>): Promise<boolean> {
+  try {
+    const { supabaseAdmin } = await import('./supabaseAdmin.js');
+    const { error } = await supabaseAdmin.from('issue_tags').update({ work_item: item }).eq('id', tagId);
+    if (error) {
+      console.warn(`${BUG_SNAPSHOT_LOG} work_item persist skipped:`, error.message);
+      return false;
+    }
+    return true;
+  } catch (e: any) {
+    console.warn(`${BUG_SNAPSHOT_LOG} work_item persist failed:`, e?.message || e);
+    return false;
+  }
+}
+
+async function findTagByParam(supabaseAdmin: any, param: string): Promise<any | null> {
+  const raw = String(param || '').replace(/^#/, '');
+  const { data: byId } = await supabaseAdmin.from('issue_tags').select('*').eq('id', raw).maybeSingle();
+  if (byId) return byId;
+  if (param !== raw) {
+    const { data: byRaw } = await supabaseAdmin.from('issue_tags').select('*').eq('id', param).maybeSingle();
+    if (byRaw) return byRaw;
+  }
+  if (/^\d+$/.test(raw)) {
+    const n = Number(raw);
+    const { data: byN, error } = await supabaseAdmin
+      .from('issue_tags')
+      .select('*')
+      .filter('work_item->>public_n', 'eq', String(n))
+      .limit(1);
+    if (!error && byN?.[0]) return byN[0];
+    const { data: rows } = await supabaseAdmin.from('issue_tags').select('*').limit(200);
+    return (rows || []).find((t: any) => hydrateWorkItem(t).public_n === n) || null;
+  }
+  return null;
+}
 
 export type BugSnapshotDeps = {
   callUnifiedLLM?: (args: any) => Promise<any>;
@@ -771,6 +818,39 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
         /* ignore */
       }
 
+      let snapNow: ReturnType<typeof buildNow> | null = null;
+      if (tagRow) {
+        let wi = hydrateWorkItem(tagRow);
+        if (!wi.public_n) {
+          const { data: nRows } = await supabaseAdmin.from('issue_tags').select('work_item');
+          const usedNs = (nRows || []).map((t: any) => hydrateWorkItem(t).public_n).filter((n: number) => n > 0);
+          wi = assignPublicN(wi, usedNs);
+        }
+        wi.bug = prefillBug(wi.bug, symptom || tagTitle || tagRow.title || '');
+        if (!wi.remaining.length && symptom) wi.remaining = [String(symptom).slice(0, 300)];
+        const ev = {
+          job_id:
+            req.body?.job_id ||
+            req.body?.jobId ||
+            (safePayload as any)?.jobId ||
+            (safePayload as any)?.job_id ||
+            null,
+          report_id: reportId,
+          debug_url: req.body?.debug_url || (safePayload as any)?.debugUrl || null,
+          photo_urls: shotMeta.map((s) => s.key),
+          r2_prefix: bugReportR2Prefix(cat, tagId, reportId),
+          hold: true,
+        };
+        wi = appendEvidenceCommit(wi, {
+          actor: 'you',
+          kind: wi.commits.length ? 'retest' : 'snap',
+          summary: (symptom || 'snapshot').slice(0, 200),
+          evidence: ev,
+        });
+        wi.hold_refs = [...new Set([...(wi.hold_refs || []), ev.job_id, ev.r2_prefix].filter(Boolean))] as string[];
+        await persistWorkItem(tagId, wi);
+        snapNow = buildNow({ ...tagRow, work_item: wi, id: tagId });
+      }
       if (symptom && tagRow) {
         const prev = Array.isArray(tagRow.comments) ? [...tagRow.comments] : [];
         prev.push({
@@ -882,6 +962,8 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
           network: Array.isArray(networkObj) ? networkObj.length : 0,
         },
         triage_job_id,
+        public_id: snapNow?.public_id || null,
+        now: snapNow,
       });
     } catch (err: any) {
       console.error(`${BUG_SNAPSHOT_LOG} exception`, err);
@@ -958,7 +1040,7 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       res.json({
         bugs,
         count: bugs.length,
-        note: 'Brief only. Use GET /api/bugs/:tagId/artifacts for deep fetch.',
+        note: 'Brief only. Use GET /api/bugs/:tagId/artifacts for deep fetch. Prefer GET /api/bugs/next.',
         generated_at: new Date().toISOString(),
       });
     } catch (err: any) {
@@ -966,22 +1048,42 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
     }
   });
 
-  /** GET /api/bugs/:tagId — one brief + report manifests (no full payloads) */
+  /** GET /api/bugs/next — head of ready queue (user says "Next bug") */
+  app.get('/api/bugs/next', async (_req: Request, res: Response) => {
+    try {
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const r1 = await supabaseAdmin
+        .from('issue_tags')
+        .select('*')
+        .in('status', ['to_fix', 'in_progress'])
+        .order('created_at', { ascending: true })
+        .limit(100);
+      if (r1.error) return res.status(500).json({ error: r1.error.message });
+      const tags = r1.data || [];
+      const usedNs = tags.map((t) => hydrateWorkItem(t).public_n).filter((n) => n > 0);
+      const ready = sortReadyQueue(tags);
+      if (!ready.length) {
+        return res.json({ say: 'Next bug', empty: true, now: null, note: 'No ready bugs.' });
+      }
+      const tag = ready[0];
+      const item = assignPublicN(hydrateWorkItem(tag), usedNs);
+      if (item.public_n && item.public_n !== hydrateWorkItem(tag).public_n) {
+        await persistWorkItem(tag.id, item);
+      }
+      const start = buildStartPayload({ ...tag, work_item: item, id: tag.id });
+      res.json({ empty: false, ...start });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'bugs next failed' });
+    }
+  });
+
+  /** GET /api/bugs/:tagId — NOW + commits + report manifests */
   app.get('/api/bugs/:tagId', async (req: Request, res: Response) => {
     try {
       const { supabaseAdmin } = await import('./supabaseAdmin.js');
-      const tagId = req.params.tagId;
-      let { data: tag, error } = await supabaseAdmin
-        .from('issue_tags')
-        .select('*')
-        .eq('id', tagId)
-        .maybeSingle();
-      if (error && /identified_problems/i.test(String(error.message || ''))) {
-        const r2 = await supabaseAdmin.from('issue_tags').select('*').eq('id', tagId).maybeSingle();
-        tag = r2.data;
-        error = r2.error;
-      }
-      if (error || !tag) return res.status(404).json({ error: error?.message || 'not found' });
+      const tag = await findTagByParam(supabaseAdmin, req.params.tagId);
+      if (!tag) return res.status(404).json({ error: 'not found' });
+      const tagId = tag.id;
 
       const { data: linkRows } = await supabaseAdmin
         .from('issue_tag_links')
@@ -1010,16 +1112,77 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
         }));
       }
 
+      const item = hydrateWorkItem({ ...tag, linked_count: reports.length });
+      const start = buildStartPayload({ ...tag, work_item: item, id: tag.id });
       res.json({
         bug: briefFromTag({
           ...tag,
-          identified_problems: readIdentifiedProblems(tag),
+          identified_problems: readIdentifiedProblems(tag) || item.bug,
           linked_count: reports.length,
         }),
+        now: start.now,
+        commits: start.commits,
+        how_to_end: start.how_to_end,
+        say: start.say,
         reports,
       });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'bug get failed' });
+    }
+  });
+
+  /** POST /api/bugs/:tagId/attempts — required end of every agent loop */
+  app.post('/api/bugs/:tagId/attempts', async (req: Request, res: Response) => {
+    try {
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const tag = await findTagByParam(supabaseAdmin, req.params.tagId);
+      if (!tag) return res.status(404).json({ error: 'not found' });
+      const body = req.body || {};
+      const item = hydrateWorkItem(tag);
+      const { item: next, rejected } = applyAttempt(item, {
+        actor: String(body.actor || 'agent'),
+        hyp: String(body.hyp || ''),
+        file: String(body.file || ''),
+        test: String(body.test || ''),
+        result: String(body.result || ''),
+        burned: body.burned !== false && !/green|pass/i.test(String(body.result || '')),
+        note: body.note ? String(body.note) : undefined,
+      });
+      if (rejected === 'already_burned') {
+        return res.status(409).json({ error: 'already_burned', now: buildStartPayload({ ...tag, work_item: next }).now });
+      }
+      if (body.bug && String(body.bug).trim()) {
+        next.bug = String(body.bug).trim();
+      }
+      await persistWorkItem(tag.id, next);
+      if (next.queue === 'blocked') {
+        await supabaseAdmin.from('issue_tags').update({ status: 'to_fix' }).eq('id', tag.id);
+      }
+      if (next.queue === 'done') {
+        await supabaseAdmin.from('issue_tags').update({ status: 'fixed' }).eq('id', tag.id);
+      }
+      const start = buildStartPayload({ ...tag, work_item: next, id: tag.id });
+      res.json({ ok: true, rejected: rejected || null, ...start });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'attempt failed' });
+    }
+  });
+
+  /** PATCH /api/bugs/:tagId — update Bug field (never wipe if empty) */
+  app.patch('/api/bugs/:tagId', async (req: Request, res: Response) => {
+    try {
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const tag = await findTagByParam(supabaseAdmin, req.params.tagId);
+      if (!tag) return res.status(404).json({ error: 'not found' });
+      const item = hydrateWorkItem(tag);
+      const nextBug = String(req.body?.bug ?? '').trim();
+      if (nextBug) item.bug = nextBug;
+      if (Array.isArray(req.body?.remaining)) item.remaining = req.body.remaining.map(String);
+      if (Array.isArray(req.body?.parked)) item.parked = req.body.parked.map(String);
+      await persistWorkItem(tag.id, item);
+      res.json(buildStartPayload({ ...tag, work_item: item, id: tag.id }));
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'patch failed' });
     }
   });
 

@@ -1,0 +1,326 @@
+/**
+ * Q-6 work item: one card for snap / auto / golden.
+ * NOW = Bug field + remaining + current evidence + ALL burns.
+ * Commits = loop history. Agent iteration ≠ a new food/medical job.
+ */
+
+export const BURN_BUDGET = 2;
+
+export type BugQueueStatus = 'ready' | 'in_progress' | 'blocked' | 'done';
+
+export type BugAttempt = {
+  at: string;
+  actor: string;
+  hyp: string;
+  file: string;
+  test: string;
+  result: string;
+  burned: boolean;
+  note?: string;
+};
+
+export type BugEvidence = {
+  job_id?: string | null;
+  report_id?: string | null;
+  debug_url?: string | null;
+  photo_urls?: string[];
+  r2_prefix?: string | null;
+  browser_log?: string | null;
+  last_actions?: string | null;
+  error_status?: string | null;
+  hold?: boolean;
+};
+
+export type BugCommit = {
+  id: string;
+  at: string;
+  actor: string;
+  kind: 'snap' | 'auto' | 'agent' | 'retest' | 'note';
+  summary: string;
+  evidence?: BugEvidence | null;
+  attempt?: BugAttempt | null;
+};
+
+export type BugWorkItem = {
+  public_n: number;
+  bug: string;
+  class?: string;
+  fingerprint?: string;
+  occurrences: number;
+  queue: BugQueueStatus;
+  remaining: string[];
+  parked: string[];
+  done: string[];
+  burns: BugAttempt[];
+  commits: BugCommit[];
+  current_evidence: BugEvidence | null;
+  hold_refs: string[];
+};
+
+export const CLASS_SEVERITY: Record<string, number> = {
+  APPLY_MISS: 10,
+  DISH_DROP: 20,
+  FALSE_FRIEND: 30,
+  OPENING_WRONG: 40,
+  SILENT_REPAIR: 50,
+  CALL_BUDGET: 60,
+  F_1: 70,
+  IDENTITY_FALSE_FRIEND: 80,
+  CLONE_UI: 90,
+};
+
+export function emptyWorkItem(partial?: Partial<BugWorkItem>): BugWorkItem {
+  return {
+    public_n: 0,
+    bug: '',
+    occurrences: 1,
+    queue: 'ready',
+    remaining: [],
+    parked: [],
+    done: [],
+    burns: [],
+    commits: [],
+    current_evidence: null,
+    hold_refs: [],
+    ...partial,
+  };
+}
+
+/** Snap note / title → Bug field. Never wipe an existing Bug string. */
+export function prefillBug(existing: string | undefined, snapText: string): string {
+  const cur = (existing || '').trim();
+  if (cur) return cur;
+  return String(snapText || '').trim();
+}
+
+/** ISO week key so 5 meals in one week merge; next week is a new fingerprint. */
+export function isoWeekKey(at?: string | Date): string {
+  const d = at ? new Date(at) : new Date();
+  if (Number.isNaN(d.getTime())) return 'unknown';
+  const tmp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = tmp.getUTCDay() || 7;
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${tmp.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+export function fingerprint(cls: string, queryOrKey: string, at?: string | Date): string {
+  const c = String(cls || 'other').trim().toUpperCase().replace(/\s+/g, '_');
+  const q = String(queryOrKey || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 80);
+  return `${c}|${q || 'unknown'}|${isoWeekKey(at)}`;
+}
+
+export function isBurned(burns: BugAttempt[], hyp: string, file: string, test: string): boolean {
+  const h = norm(hyp);
+  const f = norm(file);
+  const t = norm(test);
+  return (burns || []).some((b) => {
+    if (!b.burned) return false;
+    if (h && norm(b.hyp) === h) return true;
+    if (f && t && norm(b.file) === f && norm(b.test) === t) return true;
+    return false;
+  });
+}
+
+function norm(s: string): string {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function hydrateWorkItem(tag: any): BugWorkItem {
+  const raw = tag?.work_item;
+  const parsed: Partial<BugWorkItem> =
+    raw && typeof raw === 'object' ? raw : typeof raw === 'string' ? safeJson(raw) : {};
+  const bug = prefillBug(parsed.bug, tag?.bug_text || tag?.identified_problems || tag?.title || '');
+  const status = mapLegacyStatus(tag?.status, parsed.queue);
+  return emptyWorkItem({
+    ...parsed,
+    public_n: Number(parsed.public_n || tag?.public_n || 0),
+    bug,
+    queue: status,
+    occurrences: Number(parsed.occurrences || tag?.linked_count || 1) || 1,
+    burns: Array.isArray(parsed.burns) ? parsed.burns : [],
+    commits: Array.isArray(parsed.commits) ? parsed.commits : [],
+  });
+}
+
+function mapLegacyStatus(legacy?: string, queue?: BugQueueStatus): BugQueueStatus {
+  if (queue === 'blocked' || queue === 'done' || queue === 'in_progress' || queue === 'ready') return queue;
+  if (legacy === 'fixed' || legacy === 'ignored') return 'done';
+  if (legacy === 'in_progress') return 'in_progress';
+  return 'ready';
+}
+
+function safeJson(s: string): Partial<BugWorkItem> {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return {};
+  }
+}
+
+export function sortReadyQueue<T extends { created_at?: string }>(
+  tags: T[],
+  hydrate: (t: T) => BugWorkItem = hydrateWorkItem as any
+): T[] {
+  const ready = tags.filter((t) => hydrate(t).queue === 'ready');
+  return ready.sort((a, b) => {
+    const wa = hydrate(a);
+    const wb = hydrate(b);
+    if (wb.occurrences !== wa.occurrences) return wb.occurrences - wa.occurrences;
+    const sa = CLASS_SEVERITY[wa.class || ''] ?? 500;
+    const sb = CLASS_SEVERITY[wb.class || ''] ?? 500;
+    if (sa !== sb) return sa - sb;
+    return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+  });
+}
+
+export function publicId(item: BugWorkItem, tagId?: string): string {
+  if (item.public_n > 0) return `#${item.public_n}`;
+  return `#${String(tagId || 'bug').slice(0, 8)}`;
+}
+
+export function assignPublicN(item: BugWorkItem, used: number[]): BugWorkItem {
+  if (item.public_n > 0) return item;
+  const max = used.reduce((m, n) => Math.max(m, n), 0);
+  return { ...item, public_n: max + 1 };
+}
+
+export function applyAttempt(
+  item: BugWorkItem,
+  attempt: {
+    at?: string;
+    actor?: string;
+    hyp: string;
+    file: string;
+    test: string;
+    result: string;
+    burned?: boolean;
+    note?: string;
+  }
+): { item: BugWorkItem; rejected?: string } {
+  if (item.queue === 'done') return { item, rejected: 'card_done' };
+  if (isBurned(item.burns, attempt.hyp, attempt.file, attempt.test)) {
+    return { item, rejected: 'already_burned' };
+  }
+  const row: BugAttempt = {
+    at: attempt.at || new Date().toISOString(),
+    actor: attempt.actor || 'agent',
+    hyp: attempt.hyp,
+    file: attempt.file,
+    test: attempt.test,
+    result: attempt.result,
+    burned: !!attempt.burned,
+    note: attempt.note,
+  };
+  const burns = row.burned ? [...item.burns, row] : item.burns;
+  const commit: BugCommit = {
+    id: `c${item.commits.length + 1}`,
+    at: row.at,
+    actor: row.actor,
+    kind: 'agent',
+    summary: row.burned ? `burn: ${row.hyp}` : `attempt: ${row.hyp}`,
+    evidence: item.current_evidence,
+    attempt: row,
+  };
+  let queue: BugQueueStatus = item.queue;
+  if (row.burned && burns.filter((b) => b.burned).length >= BURN_BUDGET) queue = 'blocked';
+  if (!row.burned && /green|pass/.test(String(row.result)) && item.remaining.length === 0) {
+    queue = 'done';
+  }
+  return {
+    item: {
+      ...item,
+      burns,
+      commits: [...item.commits, commit],
+      queue,
+    },
+  };
+}
+
+export function appendEvidenceCommit(
+  item: BugWorkItem,
+  opts: { actor: string; kind: BugCommit['kind']; summary: string; evidence: BugEvidence; remaining?: string[] }
+): BugWorkItem {
+  const commit: BugCommit = {
+    id: `c${item.commits.length + 1}`,
+    at: new Date().toISOString(),
+    actor: opts.actor,
+    kind: opts.kind,
+    summary: opts.summary,
+    evidence: opts.evidence,
+  };
+  const hold = [...new Set([...(item.hold_refs || []), opts.evidence.job_id, opts.evidence.debug_url].filter(Boolean))] as string[];
+  return {
+    ...item,
+    occurrences: item.occurrences + (item.commits.length ? 1 : 0),
+    current_evidence: opts.evidence,
+    commits: [...item.commits, commit],
+    remaining: opts.remaining || item.remaining,
+    hold_refs: hold,
+  };
+}
+
+export type BugNow = {
+  public_id: string;
+  bug: string;
+  class?: string;
+  remaining: string[];
+  done: string[];
+  parked: string[];
+  current_evidence: BugEvidence | null;
+  tried: string[];
+  burns_used: string;
+  queue: BugQueueStatus;
+  do_not: string[];
+};
+
+export function buildNow(tag: any): BugNow {
+  const item = hydrateWorkItem(tag);
+  const burned = item.burns.filter((b) => b.burned);
+  return {
+    public_id: publicId(item, tag?.id),
+    bug: item.bug,
+    class: item.class,
+    remaining: item.remaining,
+    done: item.done,
+    parked: item.parked,
+    current_evidence: item.current_evidence,
+    tried: burned.map(
+      (b) => `${b.hyp} | ${b.file} | ${b.test} | ${b.result} | DO NOT RETRY`
+    ),
+    burns_used: `${burned.length}/${BURN_BUDGET}`,
+    queue: item.queue,
+    do_not: [
+      'POST /api/golden/cases/:id/loop',
+      'edit expected.json to paint green',
+      'retry any line in tried',
+      'mark done from chat without the predicted test flipping',
+    ],
+  };
+}
+
+export function buildStartPayload(tag: any): {
+  say: string;
+  now: BugNow;
+  commits: BugCommit[];
+  how_to_end: string;
+  tag_id: string;
+} {
+  const item = hydrateWorkItem(tag);
+  const id = tag?.id || '';
+  return {
+    say: 'Next bug',
+    tag_id: id,
+    now: buildNow(tag),
+    commits: item.commits,
+    how_to_end: `POST /api/bugs/${id}/attempts { hyp, file, test, result, burned, note }`,
+  };
+}

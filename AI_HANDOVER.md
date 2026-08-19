@@ -6,8 +6,9 @@
 
 ---
 - **Platform kit (2026-08-19, honest status)**:
-  - **Done:** Q-1 budget gate · Q-2 `CATALOG.json` · B8.0 Option A (Home Flagged Telemetry is the only Auto-Fix) · B8.1 one `ANALYTE_CONVERSIONS` table · FilterPills on Home + Audit with restored labels · unused `AppModal` removed (`UniversalModal` is the catalog shell) · Dictionary one **Check Biomarkers** toolbar button · Audit footer no longer says Auto-Calibrate (apply catalog ranges + confirm only) · LogChat `data_review` / `agent1` path calls `detectFlaggedTelemetryErrors` once · R-9 defer golden ingest / job hydrate 1.5s · Q-5 root `patch_*.cjs` / one-shot test residue deleted.
-  - **Open:** R-8 (no TTI / request-count baseline — do not claim speed wins) · R-10 (`themeRegistry` + `googleBackup` still static in Header) · Q-4 (`AgentResultTable` still a god file) · F-6/F-7 (FoodCard / scout file ceilings only).
+  - **Done:** Q-1 budget gate · Q-2 `CATALOG.json` · B8.0 Option A (Home Flagged Telemetry is the only Auto-Fix) · B8.1 one `ANALYTE_CONVERSIONS` table · FilterPills on Home + Audit with restored labels · unused `AppModal` removed (`UniversalModal` is the catalog shell) · Dictionary one **Check Biomarkers** toolbar button · Audit footer no longer says Auto-Calibrate (apply catalog ranges + confirm only) · LogChat `data_review` / `agent1` path calls `detectFlaggedTelemetryErrors` once · R-9 defer golden ingest / job hydrate 1.5s · Q-5 root `patch_*.cjs` / one-shot test residue deleted · Q-6.1/Q-6.2 work-item schema + `GET /api/bugs/next`.
+  - **Q-6.1 / Q-6.2 (2026-08-19):** `issue_tags.work_item` JSONB + `src/utils/bugWorkItem.ts`. `GET /api/bugs/next` returns NOW (Bug + remaining + current evidence + **all** burns). `#n` lookup. `POST /api/bugs/:id/attempts` required end-of-loop. Snap prefills Bug and never wipes. 2 burns → `blocked`. Chat pass with remaining open does **not** mark `done`. Apply migration `supabase/migrations/20260819_issue_tags_work_item.sql`.
+  - **Open:** R-8 (no TTI / request-count baseline — do not claim speed wins) · R-10 (`themeRegistry` + `googleBackup` still static in Header) · Q-4 (`AgentResultTable` still a god file) · F-6/F-7 (FoodCard / scout file ceilings only) · Q-6.3 queue UI · Q-6.4 Flag attach · Q-6.5 auto-file · Q-6.6 delete hold · Q-6.7 `/loop` refuse.
   - **B8.1 note:** Handover bullets below that still mention `18.0182` / `38.67` describe the *old* private telemetry table. Live code uses `src/utils/analyteConversions.ts` only.
 - **Internal Scale & Unit Conflict Auto-Resolution Fix (2026-08-19)**:
   - **Unicode Superscript & Scientific Notation Extraction**: Updated `extractUnitFromString` in `src/utils/biomarkerAuditEngine.ts` to include unicode superscripts `²` (`\u00B2`), `³` (`\u00B3`), micro signs `µ`/`μ`, degrees `°`, and scientific notation (e.g. `10^9/L`, `10^12/L`). This eliminated truncation defects where `mL/min/1.73m²` and `kg/m²` were truncated into `mL/min/1.73m` and `kg/m`.
@@ -137,7 +138,7 @@
 
 ---
 ## Next Steps
-- **Q-6 Unified bug queue (next to build):** Snap + auto + golden → one `#n` card. **Bug** field pre-filled on snap, edited each loop, never wiped. Commits = history. `GET /api/bugs/next`. Mock: `studio/mockups/bug-queue-dashboard.html`. Spec: `QUALITY.md` §14. **Grok owns schema / next / hold / auto-file;** Gemini may implement the queue UI from the mock.
+- **Q-6 Unified bug queue:** **Q-6.1 schema + Q-6.2 `GET /api/bugs/next` shipped.** Say **Next bug** or **#18**. Start JSON = NOW + full burns + `how_to_end`. End every loop with `POST /api/bugs/:id/attempts`. Gemini may do queue UI from `studio/mockups/bug-queue-dashboard.html`. Grok still owns auto-file / hold / `/loop` refuse. Spec: `QUALITY.md` §14.
 - **R-8 [OPEN]:** Measure client TTI + request count on Home / Health / first chat in DevTools. No speed claims until that baseline exists.
 - **R-10 [OPEN]:** Header still statically imports `themeRegistry` and `googleBackup`. Do not mark R-10 done.
 - **Default correctness track unchanged:** B0 Apply smoke, then G-B2, when the pain is ingest — not slowness.
