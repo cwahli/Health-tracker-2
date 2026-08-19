@@ -14,15 +14,15 @@ import {
 import { db, auth } from '../firebase';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
-import GoogleHealthIntegration from './GoogleHealthIntegration';
+const GoogleHealthIntegration = lazyWithRetry(() => import('./GoogleHealthIntegration'));
 const FullScreenLogViewer = lazyWithRetry(() => import('./FullScreenLogViewer'));
-import ApiCallTrackerModal from './ApiCallTrackerModal';
+const ApiCallTrackerModal = lazyWithRetry(() => import('./ApiCallTrackerModal'));
 const NutritionDataBrowserModal = lazyWithRetry(() => import('./NutritionDataBrowserModal'));
 const BugTrackerModal = lazyWithRetry(() => import('./BugTrackerModal'));
 import BugSnapshotFab, { BugSnapshotSettingsToggle } from './BugSnapshotFab';
 const UserManagementTab = lazyWithRetry(() => import('./UserManagementTab'));
 const BackupRestoreTab = lazyWithRetry(() => import('./BackupRestoreTab'));
-import { FoodCatalogAdminTab } from './FoodCatalogAdminTab';
+const FoodCatalogAdminTab = lazyWithRetry(() => import('./FoodCatalogAdminTab').then(m => ({ default: m.FoodCatalogAdminTab })));
 import { Activity, Stethoscope, X, ChevronRight, Database, Bug, Loader } from 'lucide-react';
 import { JobStore } from '../jobs/JobStore';
 import {
@@ -3450,7 +3450,9 @@ export default function Header({
 
               {dbOverlayViewMode === 'admin' && activeAdminTab === 'catalog' ? (
                 <div className="max-h-[75vh] overflow-y-auto p-4">
-                  <FoodCatalogAdminTab />
+                  <React.Suspense fallback={<div className="p-4 flex items-center justify-center"><Loader className="w-5 h-5 animate-spin text-slate-400" /></div>}>
+                    <FoodCatalogAdminTab />
+                  </React.Suspense>
                 </div>
               ) : dbOverlayViewMode === 'admin' && activeAdminTab === 'users' ? (
                 <React.Suspense fallback={null}>
@@ -3507,7 +3509,9 @@ export default function Header({
                     <p className="text-sm text-slate-400 mb-4">
                       Connect your Google account to enable Google Drive backup and sync capabilities for your health data.
                     </p>
-                    <GoogleHealthIntegration profile={profile} />
+                    <React.Suspense fallback={<div className="p-2 flex items-center justify-center"><Loader className="w-4 h-4 animate-spin text-slate-400" /></div>}>
+                      <GoogleHealthIntegration profile={profile} />
+                    </React.Suspense>
                   </div>
                 </div>
               ) : (
@@ -4483,11 +4487,15 @@ export default function Header({
         </div>
       ), document.body)}
 
-      <ApiCallTrackerModal
-        isOpen={isTrackerOpen}
-        onClose={() => setIsTrackerOpen(false)}
-        userEmail={profile?.email || auth.currentUser?.email || 'guest'}
-      />
+      {isTrackerOpen && (
+        <React.Suspense fallback={null}>
+          <ApiCallTrackerModal
+            isOpen={isTrackerOpen}
+            onClose={() => setIsTrackerOpen(false)}
+            userEmail={profile?.email || auth.currentUser?.email || 'guest'}
+          />
+        </React.Suspense>
+      )}
 
       <React.Suspense fallback={null}>
       <NutritionDataBrowserModal

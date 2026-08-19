@@ -5,9 +5,10 @@
 **Governance & Laws:** Follow `docs/agent/` domain rules. Local agents may `git commit` / `git push` after COMPLETE (tsc + named gates). AI Studio remains a valid ship path.
 
 ---
-- **Platform Anti-Bloat & Performance Milestone (Q-3, R-9, B8.2, B8.3) (2026-08-19)**:
+- **Platform Anti-Bloat & Performance Milestone (Q-3, R-9, R-10, B8.2, B8.3) (2026-08-19)**:
   - **Shared UI Primitive Kit (Q-3)**: Created `src/components/ui/FilterPills.tsx` and `src/components/ui/AppModal.tsx` ($\le 300$ lines, unit-tested). Replaced copy-pasted inline filter tab markups in `HomeTab.tsx` and `BiomarkerAuditModal.tsx` with canonical `<FilterPills />`, reducing component line counts and enforcing zero-code duplication.
   - **Deferred Startup Ingestion (R-9)**: Wrapped `startGoldenIngestWatcher` and `hydrateUserJobs` in deferred timeouts ($1.5\text{s}$ post-mount) in `App.tsx` to eliminate startup network saturation and blocking tasks on first paint.
+  - **Header Code-Splitting (R-10)**: Converted `FoodCatalogAdminTab`, `GoogleHealthIntegration`, and `ApiCallTrackerModal` in `Header.tsx` to on-demand `lazyWithRetry` imports wrapped in `React.Suspense`, dropping initial header bundle weight.
   - **One Check-Biomarkers Door (B8.2)**: Eliminated duplicate "Check Biomarkers" entry from the Cleaning dropdown menu in `BiomarkerDictionaryModal.tsx`, unifying the audit trigger strictly to the primary gradient toolbar.
   - **Render & Telemetry Scan Memoization (B8.3)**: Unified `detectFlaggedTelemetryErrors` across `MedicalHistoryTab.tsx` to compute once per render cycle, preventing redundant $O(\text{history} \times \text{definitions})$ scans on user clicks.
   - **Budget Ceiling Compliance (Q-1 / Q-2)**: Updated `CATALOG.json` with canonical primitive paths; all god-file line ceilings passing in `assert-budgets.mjs`.
