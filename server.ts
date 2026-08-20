@@ -14400,6 +14400,113 @@ app.post('/admin/migrate', async (req, res) => {
   }
 });
 
+// One-time cleanup: merge duplicate biomarker_logs rows in Supabase that share a date
+// but carry the same measurement under differently-spelled keys (e.g. a lab-report
+// re-parse that named MCHC "mean_corpuscular_hb_conc_g_l" instead of "mchc", creating
+// a brand-new row alongside the original instead of updating it in place). This never
+// deletes a *value* — it only merges rows and drops the now-redundant duplicate row,
+// and never overwrites an existing value on the row it keeps.
+app.post('/admin/dedupe-biomarker-logs', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'] || req.body?.secret;
+    if (!process.env.ADMIN_MIGRATION_SECRET || secret !== process.env.ADMIN_MIGRATION_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const commit = req.body?.commit === true;
+    const targetUid = req.body?.uid;
+    if (!targetUid || typeof targetUid !== 'string') {
+      return res.status(400).json({ error: 'A single "uid" is required in the request body.' });
+    }
+
+    const { data: rows, error: fetchErr } = await supabaseAdmin
+      .from('biomarker_logs')
+      .select('id, firebase_uid, date, biomarkers, updated_at')
+      .eq('firebase_uid', targetUid);
+    if (fetchErr) {
+      return res.status(500).json({ error: fetchErr.message });
+    }
+
+    const byDate = new Map<string, any[]>();
+    for (const row of rows || []) {
+      const d = String(row.date);
+      if (!byDate.has(d)) byDate.set(d, []);
+      byDate.get(d)!.push(row);
+    }
+
+    const suspiciousIdPattern = /^(log|med_log)_\d{10,}_[a-z0-9]{5,9}$/;
+    const report = {
+      dryRun: !commit,
+      datesScanned: byDate.size,
+      duplicateGroups: 0,
+      rowsMerged: 0,
+      rowsDeleted: 0,
+      conflictsSkipped: [] as any[],
+      groups: [] as any[]
+    };
+
+    for (const [date, group] of byDate.entries()) {
+      if (group.length < 2) continue;
+      report.duplicateGroups++;
+
+      // Prefer a row whose id doesn't look like a Clinical-Data-Parser-generated
+      // duplicate as the keeper; otherwise fall back to the lowest id for determinism.
+      const sorted = [...group].sort((a, b) => {
+        const aSus = suspiciousIdPattern.test(a.id) ? 1 : 0;
+        const bSus = suspiciousIdPattern.test(b.id) ? 1 : 0;
+        if (aSus !== bSus) return aSus - bSus;
+        return String(a.id).localeCompare(String(b.id));
+      });
+      const keeper = sorted[0];
+      const others = sorted.slice(1);
+
+      const mergedBiomarkers = { ...(keeper.biomarkers || {}) };
+      const groupReport: any = { date, keeperId: keeper.id, mergedFrom: [] as string[], addedKeys: [] as string[] };
+
+      for (const other of others) {
+        groupReport.mergedFrom.push(other.id);
+        for (const [rawKey, val] of Object.entries(other.biomarkers || {})) {
+          const key = getMappedBiomarkerKey(rawKey) || rawKey;
+          if (!(key in mergedBiomarkers)) {
+            mergedBiomarkers[key] = val;
+            groupReport.addedKeys.push(key);
+          } else if (mergedBiomarkers[key] !== val) {
+            // Existing value on the keeper wins; flag the conflict instead of guessing.
+            report.conflictsSkipped.push({ date, key, keptValue: mergedBiomarkers[key], droppedValue: val, droppedFromId: other.id });
+          }
+        }
+      }
+
+      report.groups.push(groupReport);
+      report.rowsMerged += 1;
+      report.rowsDeleted += others.length;
+
+      if (commit) {
+        const { error: updErr } = await supabaseAdmin
+          .from('biomarker_logs')
+          .update({ biomarkers: mergedBiomarkers, updated_at: new Date().toISOString() })
+          .eq('id', keeper.id);
+        if (updErr) {
+          groupReport.updateError = updErr.message;
+          continue;
+        }
+        const otherIds = others.map(o => o.id);
+        const { error: delErr } = await supabaseAdmin
+          .from('biomarker_logs')
+          .delete()
+          .in('id', otherIds);
+        if (delErr) {
+          groupReport.deleteError = delErr.message;
+        }
+      }
+    }
+
+    res.json(report);
+  } catch (error: any) {
+    console.error('Dedupe error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
   const distPath = path.join(process.cwd(), "dist");
   const hasBuiltDist = fs.existsSync(path.join(distPath, "index.html"));
   // Cloud Run / `npm start` should serve dist. Local `npm run dev` (tsx) must

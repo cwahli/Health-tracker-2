@@ -897,8 +897,12 @@ export default function InsightsTab({
 
     // 2. Apply newly cleaned/standardized readings from parsedRows
     parsedRows.forEach((row: any) => {
-      const key = row.key || (row.name || row.biomarker || row.standardizedName || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
-      if (!key) return;
+      const rawKey = row.key || (row.name || row.biomarker || row.standardizedName || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+      if (!rawKey) return;
+      // Canonicalize against the existing biomarker dictionary so a lab-report re-parse
+      // that names the same measurement differently (e.g. "mean_corpuscular_hb_conc_g_l"
+      // vs "mchc") writes to the SAME key instead of creating a look-alike duplicate.
+      const key = getMappedBiomarkerKey(rawKey) || rawKey;
 
       const name = row.name || row.biomarker || row.standardizedName || 'Unknown';
       const unit = row.metric || row.unit || '';

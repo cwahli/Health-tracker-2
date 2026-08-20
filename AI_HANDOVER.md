@@ -17,6 +17,9 @@
 - **Bug #2 Permanent Fix & Key-Level Suppression (2026-08-20)**:
   - **Auto-Log Guard & Suppression Persistence**: In `src/App.tsx`, guarded the BMI initialization effect so that deleting BMI via Auto-Delete or Outlier Deletion explicitly marks `bmiAutoLogged: true` and writes `deletedCustomBiomarkerKeys: { bmi: now }`, preventing client-side re-generation loops.
   - **Sync-Safe Profile Merging**: In `src/utils/syncUtils.ts`, explicitly preserved `bmiAutoLogged` and `deletedCustomBiomarkerKeys` during `mergeProfiles` so cloud pulls never clobber local suppression flags. Unblocked Bug #2 in Supabase.
+- **Bug #2 Duplicate Rows from Unnormalized Lab-Report Keys (2026-08-20)**:
+  - **Clinical Data Parser Canonicalization**: In `src/components/InsightsTab.tsx`, canonicalized `rawKey` against the biomarker dictionary using `getMappedBiomarkerKey(rawKey) || rawKey` before saving definitions and log entries, preventing lab-report re-parses from storing identical clinical measurements under different key spellings and duplicate rows.
+  - **Supabase Deduplication Endpoint**: In `server.ts`, added `POST /admin/dedupe-biomarker-logs` admin endpoint (supporting dry-run reporting by default and `commit: true` execution) to merge duplicate same-date biomarker log rows and remove redundant records.
 - **Bug Snapshot Photo Deduplication & Session Isolation (2026-08-20)**:
   - **Fresh Capture Initialization**: In `src/components/BugSnapshotFab.tsx`, explicitly reset `shots` to `[]` and cleared lingering draft cache on modal open/close so previous meal photos and old screenshots never leak into new bug snapshots.
   - **Single Source Image Extraction**: In `src/utils/goldenFixture.ts` (`collectOriginalFixture`), prioritized local IndexedDB store images over remote R2 URL references when present, preventing the same meal image from being added twice (once as base64 blob and once as R2 URL).
