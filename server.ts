@@ -7059,23 +7059,10 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
       const effectiveParentDbSource = isMultiComp ? "composite" : (primaryDbSource || "estimated");
       const effectiveParentDbId = isMultiComp ? `composite_${item.scoutIndex}` : (primaryDbId || null);
 
-      let cleanDishOriginalName = item.originalName || item.keyword;
-      if (isMultiComp && !allShareBrand && cleanDishOriginalName) {
-        const brandNames = ['sainsbury', 'sainsbury\'s', 'tesco', 'mcdonald\'s', 'starbucks', 'pret', 'waitrose', 'm&s', 'asda', 'morrisons'];
-        for (const bn of brandNames) {
-          const regex = new RegExp(`^${bn}['s]*\\s+`, 'i');
-          if (regex.test(cleanDishOriginalName)) {
-            cleanDishOriginalName = cleanDishOriginalName.replace(regex, '').trim();
-            cleanDishOriginalName = cleanDishOriginalName.charAt(0).toUpperCase() + cleanDishOriginalName.slice(1);
-            break;
-          }
-        }
-      }
-
       return {
         scoutIndex: item.scoutIndex,
         keyword: item.keyword,
-        originalName: cleanDishOriginalName || item.originalName || item.keyword,
+        originalName: item.originalName || item.keyword,
         chainName: effectiveParentChain,
         brand: effectiveParentBrand,
         diningEnvironment: item.diningEnvironment || diningEnvironment || "unknown",
@@ -7087,7 +7074,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         bestMatchDbSource: effectiveParentDbSource,
         dbId: effectiveParentDbId,
         dbSource: effectiveParentDbSource,
-        primaryBaseMatchName: cleanDishOriginalName || primaryBaseMatchName || item.keyword,
+        primaryBaseMatchName: item.originalName || primaryBaseMatchName || item.keyword,
         primaryBase100g: primaryBase100g,
         primaryBaseWeightG: primaryBaseWeightG,
         componentsDetailList: componentsDetailList,
@@ -8428,22 +8415,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           const finalParentDbId = isMultiCompFinal ? (preMatch?.dbId || `composite_${idx}`) : ((preMatch && preMatch.dbId) || item.dbId || null);
 
           let finalOriginalName = preMatch?.originalName || item.originalName || rawItem.originalName || null;
-          let finalCanonicalDbName = preMatch?.primaryBaseMatchName || item.canonicalDbName || preMatch?.canonicalDbName || item.name;
-
-          if (isMultiCompFinal && !allSubCompsShareBrand) {
-            const brandNames = ['sainsbury', 'sainsbury\'s', 'tesco', 'mcdonald\'s', 'starbucks', 'pret', 'waitrose', 'm&s', 'asda', 'morrisons'];
-            for (const bn of brandNames) {
-              const regex = new RegExp(`^${bn}['s]*\\s+`, 'i');
-              if (finalOriginalName && regex.test(finalOriginalName)) {
-                finalOriginalName = finalOriginalName.replace(regex, '').trim();
-                finalOriginalName = finalOriginalName.charAt(0).toUpperCase() + finalOriginalName.slice(1);
-              }
-              if (finalCanonicalDbName && regex.test(finalCanonicalDbName)) {
-                finalCanonicalDbName = finalCanonicalDbName.replace(regex, '').trim();
-                finalCanonicalDbName = finalCanonicalDbName.charAt(0).toUpperCase() + finalCanonicalDbName.slice(1);
-              }
-            }
-          }
+          let finalCanonicalDbName = item.canonicalDbName || preMatch?.primaryBaseMatchName || preMatch?.canonicalDbName || item.name;
 
           return {
             ...rawItem,
