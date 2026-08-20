@@ -1837,18 +1837,16 @@ export default function BugSnapshotFab({
                           <span>Accessibility tree</span>
                         </label>
 
-                    <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={sendChecklist.photo}
-                        onChange={(e) => setSendChecklist((s) => ({ ...s, photo: e.target.checked }))}
-                        className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
-                      />
-                      <span>Screenshots ({shots.length})</span>
-                    </label>
+                        <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={sendChecklist.photo}
+                            onChange={(e) => setSendChecklist((s) => ({ ...s, photo: e.target.checked }))}
+                            className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                          />
+                          <span>Screenshots ({shots.length})</span>
+                        </label>
 
-                    {isFoodSurface ? (
-                      <>
                         <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
                           <input
                             type="checkbox"
@@ -1859,40 +1857,44 @@ export default function BugSnapshotFab({
                           <span>Overview & logs</span>
                         </label>
 
-                        <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={sendChecklist.nutrientCalculation}
-                            onChange={(e) => setSendChecklist((s) => ({ ...s, nutrientCalculation: e.target.checked }))}
-                            className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
-                          />
-                          <span>Nutrient calculation</span>
-                        </label>
+                        {!isFoodSurface && (
+                          <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={sendChecklist.sessionData}
+                              onChange={(e) => setSendChecklist((s) => ({ ...s, sessionData: e.target.checked }))}
+                              className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                            />
+                            <span>Session data</span>
+                          </label>
+                        )}
 
-                        <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={sendChecklist.debugJson}
-                            onChange={(e) => setSendChecklist((s) => ({ ...s, debugJson: e.target.checked }))}
-                            className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
-                          />
-                          <span>Debug JSON payload</span>
-                        </label>
-                      </>
-                    ) : (
-                      <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={sendChecklist.sessionData}
-                          onChange={(e) => setSendChecklist((s) => ({ ...s, sessionData: e.target.checked }))}
-                          className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
-                        />
-                        <span>Session data</span>
-                      </label>
-                    )}
-                  </div>
-                </div>
-              );
+                        {isFoodSurface && (
+                          <>
+                            <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={sendChecklist.nutrientCalculation}
+                                onChange={(e) => setSendChecklist((s) => ({ ...s, nutrientCalculation: e.target.checked }))}
+                                className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                              />
+                              <span>Nutrient calculation</span>
+                            </label>
+
+                            <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={sendChecklist.debugJson}
+                                onChange={(e) => setSendChecklist((s) => ({ ...s, debugJson: e.target.checked }))}
+                                className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                              />
+                              <span>Debug JSON payload</span>
+                            </label>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
             })()}
           </div>
 

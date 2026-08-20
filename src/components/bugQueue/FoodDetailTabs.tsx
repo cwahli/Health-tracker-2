@@ -20,8 +20,22 @@ export type FoodDetailTabsProps = {
  */
 export function computeBoardProgress(board?: any) {
   if (!board) return { passCount: 0, failCount: 0, total: 0, passPct: 0, failPct: 0 };
-  const invariants = Array.isArray(board.invariants) ? board.invariants : [];
-  const outcomes = Array.isArray(board.outcomes) ? board.outcomes : [];
+  const invariants = Array.isArray(board.invariants)
+    ? board.invariants.filter((i: any) => {
+        const text = `${i.id || ''} ${i.label || ''}`;
+        if (/scouted only/i.test(text)) return false;
+        if (/^j_/i.test(String(i.id || ''))) return false;
+        return true;
+      })
+    : [];
+  const outcomes = Array.isArray(board.outcomes)
+    ? board.outcomes.filter((o: any) => {
+        const text = `${o.id || ''} ${o.label || ''} ${o.name || ''}`;
+        if (/scouted only/i.test(text)) return false;
+        if (/^j_/i.test(String(o.id || ''))) return false;
+        return true;
+      })
+    : [];
 
   let passCount = 0;
   let failCount = 0;

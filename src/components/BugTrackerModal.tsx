@@ -298,25 +298,59 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
   const loadPreviewBoard = async (tagOrDetail: any) => {
     try {
+      const tagId = tagOrDetail?.id || tagOrDetail?.bug?.id;
+      const reports = tagOrDetail?.reports || [];
+      const primaryReportId = reports[0]?.reportId || reports[0]?.id;
       const now = tagOrDetail?.now;
       const ev =
         now?.current_evidence ||
         tagOrDetail?.bug?.current_evidence ||
-        tagOrDetail?.reports?.[0]?.payload ||
-        tagOrDetail?.reports?.[0];
-      const debugUrl =
-        ev?.debug_url ||
-        ev?.scout_url ||
-        ev?.backendLogsUrl ||
-        (ev?.reportId ? `/api/bugs/${tagOrDetail.id || tagOrDetail.bug?.id}/artifacts?reportId=${ev.reportId}&name=console.logs.txt` : '');
-      const jobId = ev?.job_id || ev?.jobId || tagOrDetail?.jobId;
+        reports[0]?.payload ||
+        reports[0];
 
-      if (debugUrl || jobId) {
+      let foodLog = ev?.pendingFoodLog || ev?.foodLog || tagOrDetail?.bug?.foodLog || null;
+      let scout = ev?.scoutItems || ev?.scout || tagOrDetail?.bug?.scout || null;
+      let logText = ev?.logText || ev?.backendLogs || '';
+      const extraIssues = tagOrDetail?.now?.remaining || tagOrDetail?.bug?.remaining || [];
+      let jobId = ev?.job_id || ev?.jobId || tagOrDetail?.jobId || null;
+      const debugUrl = ev?.debug_url || ev?.scout_url || ev?.backendLogsUrl || '';
+
+      // If foodLog or scout or logText missing and we have an artifact reportId, fetch payload.json and console.logs.txt
+      if (tagId && primaryReportId && (!foodLog || !scout || !logText)) {
+        try {
+          const [payloadRes, logsRes] = await Promise.all([
+            fetch(bugArtifactUrl(tagId, primaryReportId, 'payload.json')).catch(() => null),
+            fetch(bugArtifactUrl(tagId, primaryReportId, 'console.logs.txt')).catch(() => null),
+          ]);
+          if (payloadRes && payloadRes.ok) {
+            const pJson = await payloadRes.json().catch(() => null);
+            const pData = pJson?.data || pJson;
+            if (pData) {
+              if (!foodLog) foodLog = pData.pendingFoodLog || pData.foodLog || pData.result?.pendingFoodLog || pData.debug_payload?.pendingFoodLog || null;
+              if (!scout) scout = pData.scoutItems || pData.scout || pData.result?.scoutItems || pData.debug_payload?.scoutItems || null;
+              if (!jobId) jobId = pData.jobId || pData.debug_payload?.jobId || jobId;
+              if (!logText && pData.backendLogs) logText = pData.backendLogs;
+            }
+          }
+          if (logsRes && logsRes.ok && !logText) {
+            const lText = await logsRes.text().catch(() => '');
+            if (lText) logText = lText;
+          }
+        } catch {
+          /* ignore artifact probe error */
+        }
+      }
+
+      if (debugUrl || jobId || logText || foodLog || scout) {
         const pRes = await fetch('/api/golden/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            backendLogsUrl: debugUrl,
+            backendLogsUrl: /^https?:\/\//i.test(debugUrl) ? debugUrl : undefined,
+            logText: logText || undefined,
+            foodLog: foodLog || undefined,
+            scout: scout || undefined,
+            extraIssues,
             jobId,
           }),
         });
@@ -336,27 +370,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
     if (!tag) return;
     setReplayingLogId(tag.id);
     try {
-      const ev =
-        selectedTagDetail?.now?.current_evidence ||
-        selectedTagDetail?.bug?.current_evidence ||
-        selectedTagDetail?.reports?.[0]?.payload;
-      const debugUrl = ev?.debug_url || ev?.scout_url || ev?.backendLogsUrl;
-      const jobId = ev?.job_id || ev?.jobId;
-
-      const pRes = await fetch('/api/golden/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          backendLogsUrl: debugUrl,
-          jobId,
-        }),
-      });
-      if (pRes.ok) {
-        const board = await pRes.json().catch(() => null);
-        if (board) {
-          setSelectedTagDetail((prev) => (prev ? { ...prev, board } : prev));
-        }
-      }
+      await loadPreviewBoard(selectedTagDetail || tag);
     } catch (e) {
       console.warn('[BugTracker] Replay log failed:', e);
     } finally {
@@ -1181,27 +1195,6 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                     <span>Unblock ({burnedCount})</span>
                                   </button>
                                 )}
-                                  {/* Q-6.4 G2: Replay log on food card */}
-                                 {((selectedTag.category || '').toLowerCase() === 'foodcart' ||
-                                   (selectedTag.category || '').toLowerCase() === 'golden') && (
-                                   <button
-                                     type="button"
-                                     disabled={replayingLogId === selectedTag.id}
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       handleReplayLog(selectedTag);
-                                     }}
-                                     className="px-2 py-1 text-[10px] font-bold text-sky-200 bg-sky-950/70 hover:bg-sky-900 border border-sky-500/40 rounded-lg transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
-                                     title="Replay saved tape (preview only, no agent)"
-                                   >
-                                     {replayingLogId === selectedTag.id ? (
-                                       <Loader2 className="w-3 h-3 animate-spin text-sky-400" />
-                                     ) : (
-                                       <Play className="w-3 h-3 text-sky-400" />
-                                     )}
-                                     <span className="hidden sm:inline">Replay log</span>
-                                   </button>
-                                 )}
 
                                 {/* Hand Off */}
                                 <button

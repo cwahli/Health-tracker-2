@@ -375,4 +375,21 @@ describe('computeBoardProgress helper (G2-3)', () => {
     const res = computeBoardProgress(null);
     expect(res).toEqual({ passCount: 0, failCount: 0, total: 0, passPct: 0, failPct: 0 });
   });
+
+  it('filters out "Scouted only" and j_* journey entries so they do not count as failures', () => {
+    const board = {
+      invariants: [
+        { id: 'inv-1', label: 'Calories within bounds', pass: true },
+        { id: 'j_0', label: 'Scouted only: fresh blueberries', status: 'fail' }, // MUST BE DROPPED
+        { id: 'j_1', label: 'Scout query chicken', pass: false }, // MUST BE DROPPED
+        { id: 'inv-2', label: 'Weight non-zero', pass: false, status: 'fail' },
+      ],
+    };
+    const { passCount, failCount, total, passPct, failPct } = computeBoardProgress(board);
+    expect(passCount).toBe(1);
+    expect(failCount).toBe(1);
+    expect(total).toBe(2);
+    expect(passPct).toBe(50);
+    expect(failPct).toBe(50);
+  });
 });
