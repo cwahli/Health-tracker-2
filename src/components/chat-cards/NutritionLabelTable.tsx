@@ -303,45 +303,45 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
           compositeSiblings: siblings
         });
       });
-    }
-
-    // Always include the top-level dish/item as well
-    const isMultiCompComposite = (Array.isArray(subComps) && subComps.length >= 2) || item.dbSource === 'composite';
-    const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients;
-    let itemRawLabel = item.rawNutritionLabel;
-    
-    if ((!itemRawLabel || Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length === 0) && itemLabelSource && typeof itemLabelSource === 'object') {
-      const cals = itemLabelSource.calories ?? itemLabelSource.energy;
-      if (cals != null && cals !== '') {
-        const isDishBasis = itemLabelSource.basisType === 'per_dish' || itemLabelSource.basisType === 'total' || itemLabelSource.basisType === 'per_portion' || itemLabelSource.basisType === 'per_serving' || itemLabelSource.basisType === 'per_pack';
-        const servingSizeStr = itemLabelSource.servingSizeGrams 
-          ? `${itemLabelSource.servingSizeGrams}g` 
-          : (isDishBasis ? `${item.estimatedWeightGrams || item.weightGrams || 100}g` : '100g');
-        const calNum = parseLabelCalories(cals) ?? Number(cals);
-        itemRawLabel = {
-          servingSize: servingSizeStr,
-          basisType: itemLabelSource.basisType || (isDishBasis ? 'per_dish' : 'per_100g'),
-          calories: !isNaN(calNum) ? `${calNum} kcal` : `${cals}`,
-          protein: itemLabelSource.protein != null ? `${itemLabelSource.protein}g` : undefined,
-          totalFat: (itemLabelSource.totalFat ?? itemLabelSource.fat) != null ? `${itemLabelSource.totalFat ?? itemLabelSource.fat}g` : undefined,
-          saturatedFat: itemLabelSource.saturatedFat != null ? `${itemLabelSource.saturatedFat}g` : undefined,
-          totalCarbohydrate: (itemLabelSource.totalCarbohydrate ?? itemLabelSource.carbohydrates ?? itemLabelSource.carbs) != null ? `${itemLabelSource.totalCarbohydrate ?? itemLabelSource.carbohydrates ?? itemLabelSource.carbs}g` : undefined,
-          sugar: itemLabelSource.sugar != null ? `${itemLabelSource.sugar}g` : (itemLabelSource.addedSugar != null ? `${itemLabelSource.addedSugar}g` : undefined),
-          addedSugar: itemLabelSource.addedSugar != null ? `${itemLabelSource.addedSugar}g` : undefined,
-          totalFibre: (itemLabelSource.totalFibre ?? itemLabelSource.fiber) != null ? `${itemLabelSource.totalFibre ?? itemLabelSource.fiber}g` : undefined,
-          sodium: itemLabelSource.sodium != null ? `${itemLabelSource.sodium}mg` : undefined,
-          salt: itemLabelSource.salt != null ? `${itemLabelSource.salt}g` : undefined
-        };
+    } else {
+      // Include the top-level dish/item when there are no decomposed official subcomponents
+      const isMultiCompComposite = (Array.isArray(subComps) && subComps.length >= 2) || item.dbSource === 'composite';
+      const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients;
+      let itemRawLabel = item.rawNutritionLabel;
+      
+      if ((!itemRawLabel || Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length === 0) && itemLabelSource && typeof itemLabelSource === 'object') {
+        const cals = itemLabelSource.calories ?? itemLabelSource.energy;
+        if (cals != null && cals !== '') {
+          const isDishBasis = itemLabelSource.basisType === 'per_dish' || itemLabelSource.basisType === 'total' || itemLabelSource.basisType === 'per_portion' || itemLabelSource.basisType === 'per_serving' || itemLabelSource.basisType === 'per_pack';
+          const servingSizeStr = itemLabelSource.servingSizeGrams 
+            ? `${itemLabelSource.servingSizeGrams}g` 
+            : (isDishBasis ? `${item.estimatedWeightGrams || item.weightGrams || 100}g` : '100g');
+          const calNum = parseLabelCalories(cals) ?? Number(cals);
+          itemRawLabel = {
+            servingSize: servingSizeStr,
+            basisType: itemLabelSource.basisType || (isDishBasis ? 'per_dish' : 'per_100g'),
+            calories: !isNaN(calNum) ? `${calNum} kcal` : `${cals}`,
+            protein: itemLabelSource.protein != null ? `${itemLabelSource.protein}g` : undefined,
+            totalFat: (itemLabelSource.totalFat ?? itemLabelSource.fat) != null ? `${itemLabelSource.totalFat ?? itemLabelSource.fat}g` : undefined,
+            saturatedFat: itemLabelSource.saturatedFat != null ? `${itemLabelSource.saturatedFat}g` : undefined,
+            totalCarbohydrate: (itemLabelSource.totalCarbohydrate ?? itemLabelSource.carbohydrates ?? itemLabelSource.carbs) != null ? `${itemLabelSource.totalCarbohydrate ?? itemLabelSource.carbohydrates ?? itemLabelSource.carbs}g` : undefined,
+            sugar: itemLabelSource.sugar != null ? `${itemLabelSource.sugar}g` : (itemLabelSource.addedSugar != null ? `${itemLabelSource.addedSugar}g` : undefined),
+            addedSugar: itemLabelSource.addedSugar != null ? `${itemLabelSource.addedSugar}g` : undefined,
+            totalFibre: (itemLabelSource.totalFibre ?? itemLabelSource.fiber) != null ? `${itemLabelSource.totalFibre ?? itemLabelSource.fiber}g` : undefined,
+            sodium: itemLabelSource.sodium != null ? `${itemLabelSource.sodium}mg` : undefined,
+            salt: itemLabelSource.salt != null ? `${itemLabelSource.salt}g` : undefined
+          };
+        }
       }
-    }
 
-    if (itemRawLabel && Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length > 0) {
-      expandedItems.push({
-        ...item,
-        rawNutritionLabel: itemRawLabel,
-        dbSource: item.dbSource || (isMultiCompComposite ? 'composite' : (item.source === 'label' ? 'label' : 'visual')),
-        compositeSiblings: isMultiCompComposite ? allDishComps : []
-      });
+      if (itemRawLabel && Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length > 0) {
+        expandedItems.push({
+          ...item,
+          rawNutritionLabel: itemRawLabel,
+          dbSource: item.dbSource || (isMultiCompComposite ? 'composite' : (item.source === 'label' ? 'label' : 'visual')),
+          compositeSiblings: isMultiCompComposite ? allDishComps : []
+        });
+      }
     }
   });
 
