@@ -20,6 +20,10 @@
 - **Bug #2 Duplicate Rows from Unnormalized Lab-Report Keys (2026-08-20)**:
   - **Clinical Data Parser Canonicalization**: In `src/components/InsightsTab.tsx`, canonicalized `rawKey` against the biomarker dictionary using `getMappedBiomarkerKey(rawKey) || rawKey` before saving definitions and log entries, preventing lab-report re-parses from storing identical clinical measurements under different key spellings and duplicate rows.
   - **Supabase Deduplication Endpoint**: In `server.ts`, added `POST /admin/dedupe-biomarker-logs` admin endpoint (supporting dry-run reporting by default and `commit: true` execution) to merge duplicate same-date biomarker log rows and remove redundant records.
+- **Bug Snapshot Precision Floating Camera Shutter (2026-08-20)**:
+  - **In-Place Targeted Capture Mode**: In `src/components/BugSnapshotFab.tsx`, clicking "Take picture" temporarily minimizes the Bug Snapshot modal into a floating precision dock on the side of the screen (`#bug-precision-capture-dock`), allowing the user to navigate/scroll to the exact target UI view without modal obstruction.
+  - **State & Copy Preservation**: Preserves all existing attached photos, typed bug titles, problem descriptions, selected categories, and tags in memory and session draft.
+  - **Automatic Return**: Tapping the floating camera shutter snaps the clean page view, adds the new photo to the snapshot, and automatically re-opens the Bug Snapshot modal with all user copy and previous pictures intact.
 - **Bug Snapshot Photo Deduplication & Session Isolation (2026-08-20)**:
   - **Fresh Capture Initialization**: In `src/components/BugSnapshotFab.tsx`, explicitly reset `shots` to `[]` and cleared lingering draft cache on modal open/close so previous meal photos and old screenshots never leak into new bug snapshots.
   - **Single Source Image Extraction**: In `src/utils/goldenFixture.ts` (`collectOriginalFixture`), prioritized local IndexedDB store images over remote R2 URL references when present, preventing the same meal image from being added twice (once as base64 blob and once as R2 URL).

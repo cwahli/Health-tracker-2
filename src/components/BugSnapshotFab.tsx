@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, X, Plus, Trash2, Bug, Loader, Check, ImagePlus, CheckCircle2, Sparkles, Utensils, AlertCircle, MessageSquare } from 'lucide-react';
+import { Camera, X, Plus, Trash2, Bug, Loader, Check, ImagePlus, CheckCircle2, Sparkles, Utensils, AlertCircle, MessageSquare, ArrowLeft } from 'lucide-react';
 import {
   isBugSnapshotEnabled,
   setBugSnapshotEnabled,
@@ -240,6 +240,8 @@ export default function BugSnapshotFab({
   const [bugTags, setBugTags] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const [precisionCapture, setPrecisionCapture] = useState(false);
+  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -561,8 +563,67 @@ export default function BugSnapshotFab({
 
   const handleClose = () => {
     setOpen(false);
+    setPrecisionCapture(false);
     setShots([]);
     clearBugSnapshotDraft();
+  };
+
+  const handleStartPrecisionCapture = () => {
+    // Save draft state so nothing written or attached is lost
+    saveBugSnapshotDraft({
+      category,
+      tagId,
+      newTitle,
+      symptom: stripStaleStallLines(symptom),
+      shots,
+      snapshotType,
+      goldenTitle,
+    });
+    setPrecisionCapture(true);
+    setOpen(false);
+  };
+
+  const handleCancelPrecisionCapture = () => {
+    setPrecisionCapture(false);
+    setOpen(true);
+  };
+
+  const handleTakePrecisionShot = () => {
+    if (isCapturingFrame || shots.length >= BUG_SNAPSHOT_MAX_SHOTS) return;
+    setIsCapturingFrame(true);
+    setError(null);
+    const token = ++captureGenRef.current;
+
+    window.setTimeout(async () => {
+      try {
+        const frame = await capturePageScreenshot();
+        if (token !== captureGenRef.current) return;
+        if (!frame) {
+          setError('Could not capture the screen area. Please try again or use Add image.');
+        } else {
+          const webp = await compressToWebpOrJpeg(frame, 1280, 0.8);
+          lastCaptureLenRef.current = webp.length;
+          const nextShots = [webp, ...shots.filter((x) => x !== webp)].slice(0, BUG_SNAPSHOT_MAX_SHOTS);
+          setShots(nextShots);
+          saveBugSnapshotDraft({
+            category,
+            tagId,
+            newTitle,
+            symptom: stripStaleStallLines(symptom),
+            shots: nextShots,
+            snapshotType,
+            goldenTitle,
+          });
+          setSuccess('Picture captured and added to bug snapshot!');
+        }
+      } catch (err: any) {
+        setError(err?.message || 'Screenshot capture failed');
+      } finally {
+        setIsCapturingFrame(false);
+        setPrecisionCapture(false);
+        setOpen(true);
+      }
+    }, 60);
   };
 
   const handleCaptureScreen = () => {
@@ -1046,19 +1107,66 @@ export default function BugSnapshotFab({
 
   return (
     <>
-      {createPortal(
-        <button
-          type="button"
-          id="bug-snapshot-fab"
-          title="Capture bug snapshot"
-          onClick={handleOpenFab}
-          className="fixed right-3 bottom-24 md:right-4 md:bottom-28 z-[80] flex items-center gap-1.5 px-3 py-2.5 rounded-2xl shadow-lg border border-rose-400/40 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all hover:scale-[1.03]"
-        >
-          <Camera className="w-4 h-4" />
-          <span className="hidden sm:inline">Bug snap</span>
-        </button>,
-        document.body
-      )}
+      {!open && !precisionCapture &&
+        createPortal(
+          <button
+            type="button"
+            id="bug-snapshot-fab"
+            title="Capture bug snapshot"
+            onClick={handleOpenFab}
+            className="fixed right-3 bottom-24 md:right-4 md:bottom-28 z-[80] flex items-center gap-1.5 px-3 py-2.5 rounded-2xl shadow-lg border border-rose-400/40 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all hover:scale-[1.03]"
+          >
+            <Camera className="w-4 h-4" />
+            <span className="hidden sm:inline">Bug snap</span>
+          </button>,
+          document.body
+        )}
+
+      {precisionCapture &&
+        createPortal(
+          <div
+            id="bug-precision-capture-dock"
+            className="bug-snapshot-ignore fixed right-3 bottom-20 md:right-5 md:bottom-24 z-[99999] flex flex-col items-end gap-2 pointer-events-auto select-none animate-in fade-in slide-in-from-right-4 duration-200"
+          >
+            {/* Context Tooltip */}
+            <div className="bg-slate-950/95 backdrop-blur-md text-white text-[11px] font-medium px-3.5 py-2 rounded-xl shadow-2xl border border-indigo-500/40 max-w-[280px] flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
+              <span>Navigate or scroll to the exact area, then tap <strong>Snap area</strong>.</span>
+            </div>
+
+            {/* Precision Floating Shutter Bar */}
+            <div className="flex items-center gap-2 p-2 rounded-2xl bg-slate-900/95 backdrop-blur-md shadow-2xl border border-white/20">
+              <button
+                type="button"
+                title="Return to bug snapshot modal"
+                onClick={handleCancelPrecisionCapture}
+                className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors border border-white/10"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Return</span>
+              </button>
+
+              <button
+                type="button"
+                title="Snap this exact screen area"
+                disabled={isCapturingFrame || shots.length >= BUG_SNAPSHOT_MAX_SHOTS}
+                onClick={handleTakePrecisionShot}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-rose-600/30 transition-all border border-rose-400/50 group disabled:opacity-50"
+              >
+                {isCapturingFrame ? (
+                  <Loader className="w-4 h-4 animate-spin text-white" />
+                ) : (
+                  <Camera className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                )}
+                <span>{isCapturingFrame ? 'Capturing area…' : 'Snap area'}</span>
+                <span className="px-1.5 py-0.5 rounded bg-black/40 text-[10px] text-rose-200 font-mono">
+                  {shots.length}/{BUG_SNAPSHOT_MAX_SHOTS}
+                </span>
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {open &&
         createPortal(
@@ -1093,13 +1201,13 @@ export default function BugSnapshotFab({
                 <div className="flex flex-wrap gap-2 items-center">
                   <button
                     type="button"
-                    title="Take picture"
-                    disabled={capturing || shots.length >= BUG_SNAPSHOT_MAX_SHOTS}
-                    onClick={handleCaptureScreen}
-                    className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold disabled:opacity-40 flex items-center gap-1.5 text-white"
+                    title="Take picture of target screen area (minimizes modal)"
+                    disabled={shots.length >= BUG_SNAPSHOT_MAX_SHOTS}
+                    onClick={handleStartPrecisionCapture}
+                    className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold disabled:opacity-40 flex items-center gap-1.5 text-white shadow-sm transition-all hover:scale-[1.02] active:scale-95"
                   >
-                    {capturing ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
-                    {capturing ? 'Taking picture…' : 'Take picture'}
+                    <Camera className="w-3.5 h-3.5" />
+                    Take picture
                   </button>
                   <label className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-bold cursor-pointer flex items-center gap-1.5 text-white">
                     <ImagePlus className="w-3.5 h-3.5" />
