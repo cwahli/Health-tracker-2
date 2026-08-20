@@ -3488,10 +3488,11 @@ export default function App() {
               }
 
               console.log('[Supabase Realtime] Full database change detected, merging logs and profiles...');
-              const deletedFoods = profile?.deletedFoodLogIds || {};
-              const deletedBios = profile?.deletedBiomarkerLogIds || {};
-              const deletedCustomKeys = profile?.deletedCustomBiomarkerKeys || {};
-              const activeEmail = user?.email || profile?.email || auth.currentUser?.email;
+              const currentProfile = profileRef.current || profile;
+              const deletedFoods = currentProfile?.deletedFoodLogIds || {};
+              const deletedBios = currentProfile?.deletedBiomarkerLogIds || {};
+              const deletedCustomKeys = currentProfile?.deletedCustomBiomarkerKeys || {};
+              const activeEmail = user?.email || currentProfile?.email || auth.currentUser?.email;
               const { serverFoods, serverBiomarkers, serverProfile, serverActions, serverBenefits, serverReport } = await fetchAllConsolidatedLogs(
                 db, 
                 user.uid, 
