@@ -116,8 +116,17 @@ export function normalizeBiomarkerHistory<T extends MinimalBiomarkerLog>(history
     if (!log) continue;
     const rawDate = log.date || new Date().toISOString().split('T')[0];
     const normalizedDate = formatToDDMMYYYY(rawDate);
-    const sourceKey = (log as any).sourceReportId ? `${normalizedDate}::${(log as any).sourceReportId}` : normalizedDate;
-    if (seenDates.has(sourceKey)) {
+    const reportId = (log as any).sourceReportId;
+    // Only merge rows that share an explicit, matching sourceReportId.
+    // Do NOT fall back to date-only merging: rows without a sourceReportId
+    // (the vast majority of historical data) may be genuinely distinct
+    // Supabase rows for the same date, and silently collapsing them here
+    // hides real duplicate data from the UI, which makes it impossible to
+    // review or delete — this was causing "deleted" outlier biomarkers to
+    // silently reappear from a hidden duplicate row on the next sync.
+    const sourceKey = reportId ? `${normalizedDate}::${reportId}` : null;
+
+    if (sourceKey && seenDates.has(sourceKey)) {
       // Same calendar day AND same source extract: merge keys (last write wins, never average).
       const existing = seenDates.get(sourceKey)!;
       
@@ -146,7 +155,7 @@ export function normalizeBiomarkerHistory<T extends MinimalBiomarkerLog>(history
         summary: log.summary ? dedupeDelimitedText('', log.summary, '; ') : log.summary
       };
       
-      seenDates.set(sourceKey, copy);
+      if (sourceKey) seenDates.set(sourceKey, copy);
       results.push(copy);
     }
   }

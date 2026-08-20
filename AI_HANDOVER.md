@@ -17,6 +17,8 @@
 - **Bug #2 Permanent Fix & Key-Level Suppression (2026-08-20)**:
   - **Auto-Log Guard & Suppression Persistence**: In `src/App.tsx`, guarded the BMI initialization effect so that deleting BMI via Auto-Delete or Outlier Deletion explicitly marks `bmiAutoLogged: true` and writes `deletedCustomBiomarkerKeys: { bmi: now }`, preventing client-side re-generation loops.
   - **Sync-Safe Profile Merging**: In `src/utils/syncUtils.ts`, explicitly preserved `bmiAutoLogged` and `deletedCustomBiomarkerKeys` during `mergeProfiles` so cloud pulls never clobber local suppression flags. Unblocked Bug #2 in Supabase.
+- **Bug #2 Stop Silent Same-Date Biomarker Merging (`dateUtils.ts`) (2026-08-20)**:
+  - **Explicit `sourceReportId` Requirement**: In `src/utils/dateUtils.ts` (`normalizeBiomarkerHistory`), restricted in-memory record merging to only occur when rows share an explicit, matching `sourceReportId` (`${normalizedDate}::${reportId}`). Eliminated silent collapsing of distinct same-date Supabase rows that lacked `sourceReportId`, making all actual Supabase records visible and independently reviewable/deletable through the UI so outlier deletions stick permanently.
 - **Bug Snapshot Default Tab Initialization (2026-08-20)**:
   - **Default to Bug Report**: In `src/components/BugSnapshotFab.tsx`, updated `handleOpenFab` so opening the Bug Snapshot modal always defaults to the **Bug Report** tab (`snapshotType = 'bug'`, `saveAsGolden = false`), preventing unwanted auto-switching to Golden Meal mode when inspecting meals.
 - **Bug #8 Nutrition Label Composite Card Deduplication (2026-08-20)**:
