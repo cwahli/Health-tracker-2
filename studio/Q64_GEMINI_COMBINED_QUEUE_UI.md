@@ -1,67 +1,51 @@
-# Q-6.4 Gemini — combined queue bulk UI (G1)
+# Q-6.4 Gemini — G2 tape actions (food `#n`)
 
 **For:** Gemini 3.7 Flash High / AI Studio.  
 **Spec:** `plan/QUALITY.md` §14.4 (read, do not edit).  
-**Layout:** `studio/mockups/bug-queue-combined-flow.html` + `bug-queue-combined.html` + `studio/mockups/bug10/`.  
-**Inventory:** live `BugSnapshotFab.tsx`, `BugTrackerModal.tsx`, `GoldenInboxPanel.tsx`. Mock is looks. Live is the checklist.
+**Layout:** `studio/mockups/bug-queue-combined-flow.html` (review / iteration screens).  
+**Inventory:** live `BugTrackerModal.tsx`, `GoldenInboxPanel.tsx`, `BugSnapshotFab.tsx`, `src/components/bugQueue/*`.
 
-You **are** expected to edit the two large UI files and **mount** the new work. Last tracker/snap pass you already did this. Grok will finish schema, Promote, D1, and `snapSurface` home vs health — not the bulk layout.
-
-Grok item 8 is already in tree: `src/utils/bugAutoSpot.ts`, `buildScoreboard().autoSpot`.
+G1 UI and Grok contract work are **already in tree**. You are not starting the snap from scratch. You copy **Inbox tape actions** onto the bug card so Checks/Dishes/Scout/Balance are live, not empty shells.
 
 ---
 
-## A. Paste this as the Gemini prompt (replaces G0)
+## A. Paste this as the Gemini prompt (replaces G1)
 
 ```text
-You are implementing the BULK UI for Health-tracker Q-6.4 combined bug queue.
-Read studio/Q64_GEMINI_COMBINED_QUEUE_UI.md and execute G1 IDs (not G0 shells).
+You are doing G2 for Health-tracker Q-6.4. Read studio/Q64_GEMINI_COMBINED_QUEUE_UI.md and execute G2 IDs only.
 
-Layout: studio/mockups/bug-queue-combined-flow.html (snap → review → iteration, use case #10)
-         studio/mockups/bug-queue-combined.html (queue shell)
-Inventory: BugSnapshotFab.tsx, BugTrackerModal.tsx, GoldenInboxPanel.tsx
-Mock = looks. Live = every control that must still exist. Consolidate ≠ delete.
+Already done (do not rebuild): one snap form, remaining rows + pin shot, auto-spot, snapSurface food|home|health|other, line_photos persist, NOW always visible, Home thin pack, tracker tabs, Golden Inbox option.
 
 DO:
-1. Snap: one form. Move Bug Report + Golden Meal controls onto it (do not delete scout identity, top dishes, capture pack). + Add bug, film select, Pin shot to selected bug. Remaining = checklist rows (text + optional photo + comment) in React state.
-2. Under What’s wrong: AutoSpotList from previewBoard.autoSpot / autoSpotForSurface. Uncheck to drop. Parked = unchecked. Never “Scouted only”.
-3. Pack show/hide from existing category + activeTab (food vs home vs health vs other). Do NOT change snapSurface() or jobFitsSnap().
-4. Tracker #n: add tabs Checks · Dishes · Scout identity · Balance · History by copying panels from GoldenInboxPanel. Do not hide the Golden Inbox option. Do not add Promote-to-G*.
-5. Hand off copy includes the selected remaining LINE (text + its photo URLs + comment), not only the whole film strip. Same existing copy/POST. Do not invent a new API.
-6. Keep Take picture AND Add image AND paste. Anti-drop grep in pack §F.
+1. When a food #n is selected, POST /api/golden/preview using current_evidence.debug_url / scout_url / job_id (same body shape BugSnapshotFab already uses). Store the board on selectedTagDetail.board so FoodDetailTabs Checks/Dishes/Scout/Balance have data.
+2. On food #n action bar (next to Triage / Hand off): Replay log (preview, no agent) and Replay catalog if you can do it WITHOUT creating a golden_cases row. Catalog must not PATCH remaining or queue=done. Do not POST /loop.
+3. Green/red bar on food #n from board.outcomes (pass vs fail). Accept-class / Scouted only ≠ remaining. NOW remaining list stays the source of remaining.
+4. Capture pack in BugSnapshotFab: food keeps nutrient+debug JSON; home hides those and keeps a11y+screenshot; health keeps history-ish, hides food debug.
+5. Re-analyze / NEW Analyze on food #n only if an existing job_id path already exists. Do not invent a new analyze pipeline.
 
 DO NOT:
-- Change BugWorkItem.remaining off string[] (view state may be richer; persist text lines)
-- Add remaining: Array<{ to bugWorkItem / issue_tags / current_evidence
-- Edit snapSurface, jobFitsSnap, classifyJobResult, writeInboxCase, resolveDomainPack attach rules
-- Hide Inbox, Promote official G*, D1 migrate
+- Edit snapSurface, jobFitsSnap, resolveDomainPack, applySnapRemaining, classifyJobResult, writeInboxCase
+- Change remaining off string[] or invent remaining: Array<{
+- Hide Golden Inbox, Promote official G*, expand Make Golden → tests/Golden_meal/inbox/
+- Mint D1 golden_cases rows so you can call /api/golden/cases/:id/replay
 - POST /api/golden/cases/:id/loop
 - expected.json, food_aliases, server_food_db, dietitian prompts, AGENTS.md, docs/agent/**, plan/QUALITY.md
-- Mark Q-6.4 done. Product bugs #2 #3 #9 #10 are out of scope.
+- Product bugs #2 #3 #9 #10
+- Mark Q-6.4 done
 
-If a persistence field does not exist, keep it in React state and list it under Residual. Do not fake a schema.
-Gate: pack §F must exit 0.
+Anti-drop: Take picture AND Add image AND paste; Scout identity; Add Dish; NOW; Hand off; value="golden"; Make Golden may stay until Grok Promote.
+Gate: pack §F.
+Honest residual if catalog replay needs a new server route: skip catalog, ship Replay log + board load.
 ```
 
 ---
 
 ## B. Honesty / anti-miss
 
-- **You may edit** `BugSnapshotFab.tsx` and `BugTrackerModal.tsx`. Prefer extract-to-`src/components/bugQueue/` then thin call sites. Do not delete a live control because the mock forgot it.
-- **Take picture + Add image + paste** must remain in `BugSnapshotFab` after your turn (the mock only draws shutter).
-- Scout identity (full journey, not reds-only) and top dishes + Add dish stay on the **food** snap.
-- Capture pack stays, default 6/6, collapsed.
-- Golden Inbox tab stays until Grok Promote. Copy its panels into the tracker; do not delete the panel file.
-- Import without a mounted call site = FAIL. Unmounted shells are not G1.
-- Do not claim Q-6.4 complete.
-
-**Last-time redo (do not repeat):**
-
-| Miss | Rule this time |
-|------|----------------|
-| Job picker used array-end | Do not touch `pickSnapshotJob` / `resolveDomainPack` |
-| Home snap glued leftover `food_job` | Do not attach food debug on Home. Branch UI on `activeTab`/`category` only |
-| Mock omitted Add image | Keep file picker + paste even if mock has no button |
+- **Mock ≠ inventory.** Inbox still has Replay log, Replay catalog, NEW Analyze, Pipeline, Promote, Copy job. Tracker must **gain** Replay log (and catalog if possible). Do not delete Inbox to “combine.”
+- **Preview does not write queue status.** `POST /api/golden/preview` returns a board. Do not PATCH `/api/bugs/:id` with `all_green` or `remaining: []` because the board looks green.
+- **Do not mint D1.** `/api/golden/cases/:id/replay` is the Inbox (D1) path. Bug cards are `issue_tags`. Use **preview** (and artifacts) for `#n`.
+- Last G1 misses Grok had to fix: empty `autoSpotHome({})`, NOW hidden behind tab, remaining not POSTed. This time **mount** the board and buttons. Unmounted helpers = FAIL.
 
 ---
 
@@ -69,96 +53,54 @@ Gate: pack §F must exit 0.
 
 | Piece | Where |
 |-------|--------|
-| Queue, `/next`, work item | `bugWorkItem.ts`, tracker |
-| Take picture, Add image, paste, Open `#n` vs new | `BugSnapshotFab.tsx` |
-| Inbox tape (scout, dishes, Replay log, Balance) | `GoldenInboxPanel.tsx` |
-| Auto-spot detectors | `bugAutoSpot.ts` — **call**, do not rewrite |
-| `buildScoreboard().autoSpot` | suggestions only |
+| One snap, Add bug, pin shot, auto-spot | `BugSnapshotFab` + `bugQueue/` |
+| `snapSurface` food/home/health/other | `bugDomainPacks.ts` — **do not edit** |
+| Home = no job, thin bmi/weight/height | `resolveDomainPack` |
+| Remaining persist + `line_photos` | `applySnapRemaining` / snap POST `remaining_lines` |
+| NOW always on + selected-line hand off | `BugTrackerModal` |
+| Tabs Checks/Dishes/Scout/Balance/History | `FoodDetailTabs.tsx` (often empty — you load `board`) |
+| Auto-spot helper | `bugAutoSpot.ts` |
 | `/loop` 410 | leave it |
 
-`BugWorkItem.remaining` stays `string[]`. Per-line photo keys are **not** on `current_evidence` yet. Session state is enough for G1.
+`Make Golden` → `POST /api/bugs/:id/make-golden` still writes `tests/Golden_meal/inbox/`. **Leave the button.** Grok will replace it with official Promote. Do not hide Inbox.
 
 ---
 
-## D. Path matrix (UI only — do not change `snapSurface`)
+## D. How Replay log works on a bug card
 
-Use **existing** `category` + `activeTab`. Overlay: meal modal open → food pack (`isAnyMealModalOpen` already forces `foodcart`).
+`GET /api/bugs/:id` → `now.current_evidence` (`debug_url`, `scout_url`, `job_id`, `photo_urls`, `line_photos`).
 
-| UI pack | When | Show | Hide |
-|---------|------|------|------|
-| food | `category==='foodcart'` or `activeTab==='food'` or meal modal | Scout, dishes, Replay, food auto-spot | Biomarker history, BMI dump |
-| home | `activeTab==='home'` or `category==='home'` | Screenshot, thin tiles, tombstones for those keys | Food job, scout |
-| health | medical / insights / trends / dictionary | History + keys | Food job, scout, Replay catalog |
-| other | settings / database / unmatched | Screenshot + a11y | Food + bio packs |
+Replay log (no agent):
 
-`snapSurface()` still returns `'food' \| 'biomarker' \| 'other'`. **Do not change its signature.** Home vs health is a **render branch**, not a new enum. Grok will split the enum later.
-
-Auto-spot: `autoSpotForSurface('food'|'home'|'health'|'other', …)` from `bugAutoSpot.ts`. Map home/health yourself from `activeTab`. Do not call food detectors on Home.
-
----
-
-## E. Build (G1)
-
-New folder `src/components/bugQueue/`. Then mount.
-
-### E1. Remaining rows + pin shot (snap)
-
-- Replace the single What’s-wrong textarea with a list of rows + **+ Add bug**.
-- Film strip: click shot (blue ring), click row (blue border), **Pin selected shot to selected bug**. Same shot may pin to two rows.
-- Each row: checkbox, text, comment, pinned thumbnails, optional class chip.
-- On save/hand-off to existing bug APIs: `remaining` POST is still `string[]` of **text** (and you may append ` — ${comment}` if comment non-empty). Photos stay on the **card-level** `photo_urls` array already used by snap. Per-row pins live in component state until Grok item 2.
-
-Props for `RemainingBugRow` — keep this shape (view only):
-
-```ts
-{
-  id: string;
-  text: string;
-  checked: boolean;
-  photos: string[];
-  comment: string;
-  source: 'user' | 'auto';
-  classLabel?: string;
-  parked?: boolean;
-  selected?: boolean;
+```text
+POST /api/golden/preview
+body: {
+  backendLogsUrl or debugUrl: evidence.debug_url || evidence.scout_url,
+  jobId: evidence.job_id,
+  jobStatus: optional
 }
 ```
 
-### E2. Auto-spot (snap)
+Same shape as `BugSnapshotFab` preview fetch (~line 459). Put `board` on `selectedTagDetail`. Re-render `FoodDetailTabs`.
 
-Under the user rows: **Also spotted on tape — uncheck to drop**.
+Replay catalog: **only** if you can run dictionary lookup without a `golden_cases` id (e.g. scout JSON already on the tag payload). If not, residual: `Catalog replay skipped — needs Grok route, no D1 mint`.
 
-- Food: `previewBoard.autoSpot` if present, else `autoSpotFood({ foodLog, scout, logText, journey })`.
-- Home/health: `autoSpotHome` / `autoSpotHealth` with data already on the snap pack. If that data is missing, skip hits (residual), do not fetch a new history dump on food.
-- Parked (`hit.parked`, ledger SILENT_REPAIR) render unchecked.
-- Filter `/scouted only/i`.
+Re-analyze: Inbox `NEW Analyze` uses saved photos + query on a **case id**. On `#n`, if `job_id` exists, opening that food job is enough **only** if that open-job helper already exists in the app. Do not POST pipeline replay that calls Gemini from the tracker unless you copy an existing function.
 
-### E3. One snap form
+---
 
-Drop **tabs** Bug Report vs Golden Meal. **Move** every control that lived in those tabs onto the one form (title, Open `#n`, scout identity, top dishes, capture pack, golden meal name chip from the job). Do not leave a control only in dead code.
+## E. Capture pack slots (snap)
 
-### E4. Tracker `#n` tabs
+In `BugSnapshotFab` capture checkboxes, branch on `snapSurface(category, activeTab)` (import already possible). Meal modal open → food.
 
-For a **food** card, add tab strip: Checks · Dishes · Scout identity · Balance · History.
+| Surface | Show | Hide |
+|---------|------|------|
+| food | a11y, overview, photo, nutrient, debug JSON | full biomarker history |
+| home | a11y, screenshot/photo, session | nutrient calculation, food debug JSON |
+| health | a11y, photo, session (history is the HealthLogs panel) | food nutrient/debug |
+| other | a11y, photo, session | food + bio packs |
 
-- Copy behavior from `GoldenInboxPanel` (Replay log, catalog does not flip remaining, ledger `mayPromote` warning may show as text).
-- **Do not** wire Promote-to-G* / Make Golden.
-- **Do not** remove `<option value="golden">` Inbox.
-- History tab already exists — keep commits, lightbox, burns, NOW, remaining Done.
-- Home/health cards: no Replay catalog, no dish table. Show HomeState / HealthLogs placeholders or existing biomarker pack.
-
-### E5. Hand off
-
-Existing Hand off button: clipboard/text must include:
-
-```text
-Active line: <text>
-Photo: <urls or none>
-Comment: <comment or none>
-Remaining: <all remaining texts>
-```
-
-Use `POST /api/bugs/:id/attempts` only if that call already exists for hand off. No new endpoint.
+Do not stop sending a11y.
 
 ---
 
@@ -166,32 +108,26 @@ Use `POST /api/bugs/:id/attempts` only if that call already exists for hand off.
 
 ```bash
 npx tsc --noEmit
-npx vitest run src/utils/bugAutoSpot.food.test.ts src/utils/bugAutoSpot.home.test.ts src/utils/bugAutoSpot.health.test.ts src/utils/goldenScoreboard.test.ts src/utils/bugDomainPacks.test.ts src/utils/bugSnapshot.test.ts
+npx vitest run src/utils/bugDomainPacks.test.ts src/utils/bugWorkItem.test.ts src/utils/bugAutoSpot.food.test.ts src/utils/bugAutoSpot.home.test.ts src/utils/bugAutoSpot.health.test.ts src/components/bugQueue/__tests__/bugQueueComponents.test.tsx
 ```
 
-Add `src/components/bugQueue/*.test.tsx` (or `.test.ts`) covering: RemainingBugRow renders; AutoSpotList hides “Scouted only”; FoodTapePanel hidden when `surface` prop is `home`.
+Add a vitest that: FoodDetailTabs with a preview-shaped `board` (journey + invariants with `pass: true`) still renders; a helper that maps outcomes → bar percents treats `pass: true` as green and does not treat a label “Scouted only” as remaining.
 
-Grep **must still hit** in `BugSnapshotFab.tsx`:
+Grep still hit:
 
 ```bash
-rg -n "Take picture" src/components/BugSnapshotFab.tsx
-rg -n "Add image" src/components/BugSnapshotFab.tsx
-rg -n "addEventListener\\('paste'" src/components/BugSnapshotFab.tsx
-rg -n "Scout identity" src/components/BugSnapshotFab.tsx
-rg -n "Add [Dd]ish" src/components/BugSnapshotFab.tsx
+grep -n "Take picture" src/components/BugSnapshotFab.tsx
+grep -n "Add image" src/components/BugSnapshotFab.tsx
+grep -n "addEventListener('paste'" src/components/BugSnapshotFab.tsx
+grep -n "Scout identity" src/components/BugSnapshotFab.tsx
+grep -n "Hand off" src/components/BugTrackerModal.tsx
+grep -n 'value="golden"' src/components/BugTrackerModal.tsx
+grep -n "NOW" src/components/BugTrackerModal.tsx
 ```
 
-Grep **must still hit** in tracker:
+Diff must **not** include: `snapSurface(`, `jobFitsSnap`, `writeInboxCase`, `remaining: Array<{`, `/loop`.
 
-```bash
-rg -n "Hand off" src/components/BugTrackerModal.tsx
-rg -n "Next bug" src/components/BugTrackerModal.tsx
-rg -n "value=\"golden\"" src/components/BugTrackerModal.tsx
-```
-
-Diff must **not** include: `writeInboxCase` edits, `jobFitsSnap` edits, `snapSurface` signature change, `POST /loop`, `remaining: Array<{`, `all_green` as done.
-
-`git diff src/utils/bugDomainPacks.ts` should be **empty**. If you needed a UI helper, put it in `bugQueue/`, not in domain packs.
+`git diff src/utils/bugDomainPacks.ts src/utils/bugWorkItem.ts` should be **empty**.
 
 ---
 
@@ -199,25 +135,23 @@ Diff must **not** include: `writeInboxCase` edits, `jobFitsSnap` edits, `snapSur
 
 | ID | Work | Done when |
 |----|------|-----------|
-| G1-1 | One snap form + Add bug + pin shot + remaining rows | Mounted in `BugSnapshotFab`; textarea not the only What’s-wrong |
-| G1-2 | Auto-spot list | Real `AutoSpotHit[]`; parked unchecked; no Scouted only |
-| G1-3 | Pack show/hide | Food tape off on Home; no bio dump on food; `snapSurface` untouched |
-| G1-4 | Tracker tabs | Checks/Dishes/Scout/Balance/History on food `#n`; Inbox option remains |
-| G1-5 | Hand off active line | Copied text includes selected line + its photos/comment |
-| G1-6 | Anti-drop + gates | §F grep + tsc + named vitest exit 0 |
+| G2-1 | Load preview board onto food `#n` | `FoodDetailTabs` shows journey/invariants from evidence URLs, not only empty copy |
+| G2-2 | Replay log button on food `#n` | Calls preview; does not PATCH remaining/done |
+| G2-3 | Green/red bar | From board outcomes; remaining list unchanged |
+| G2-4 | Capture pack slots | Food vs home vs health checkboxes as table E |
+| G2-5 | Replay catalog / Re-analyze | Mounted **or** explicit residual (no D1 mint) |
+| G2-6 | Anti-drop + gates | §F grep + tsc + named vitest exit 0 |
 
 ---
 
-## H. Grok finish (do not start)
+## H. Grok only — blocked
 
 | Item | Why |
 |------|-----|
-| 2 Per-line photo keys on `current_evidence` | Schema / R2 |
-| `snapSurface` `'home' \| 'health'` + `jobFitsSnap` | Last glue bug; Grok |
-| 5 Promote → official G* / hide Inbox | Fail-safe goldens |
-| 6 D1 migrate / stop `writeInboxCase` | Data |
-| 7 Snap/promote tests beyond §F | After 2 and 5 |
-| `#2` `#3` `#9` `#10` product fixes | L14 |
+| 5 Promote official G* / hide Inbox / replace Make Golden | Fail-safe git goldens; photos required; `mayPromote` |
+| 6 D1 migrate / stop `writeInboxCase` | Data; do not create more Inbox rows |
+| `snapSurface` / `jobFitsSnap` / Home glue | Already split; do not touch |
+| `#2` `#3` `#9` `#10` | L14 class-first |
 
 **Do not build:** `/loop`, `all_green` as COMPLETE, catalog writing queue status, a sixth `plan/` file.
 
@@ -226,9 +160,10 @@ Diff must **not** include: `writeInboxCase` edits, `jobFitsSnap` edits, `snapSur
 ## Residual (required wrap-up)
 
 ```text
-G1: <IDs shipped>
-React-only (not persisted): <per-line photos / comments>
-Did not touch: snapSurface, jobFitsSnap, remaining JSON, Promote, Inbox, D1
+G2: <IDs shipped>
+Board source: preview from <debug_url|scout_url|job_id|none>
+Catalog replay: mounted / skipped because <reason>
+Did not touch: snapSurface, remaining JSON, Promote, Inbox, D1, writeInboxCase
 Anti-drop grep: pass / fail
-Q-6.4: not done — Grok items 2,5,6 remain
+Q-6.4: not done — Grok items 5–6 remain
 ```

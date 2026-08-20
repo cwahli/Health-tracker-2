@@ -19,6 +19,13 @@ export type BugAttempt = {
   note?: string;
 };
 
+export type RemainingLinePhoto = {
+  text: string;
+  comment?: string;
+  photo_urls?: string[];
+  source?: string;
+};
+
 export type BugEvidence = {
   job_id?: string | null;
   report_id?: string | null;
@@ -29,6 +36,11 @@ export type BugEvidence = {
   last_actions?: string | null;
   error_status?: string | null;
   hold?: boolean;
+  scout_url?: string | null;
+  fixture_query?: string | null;
+  expected_dishes?: string[];
+  /** Per remaining-line pins. Card-level photo_urls stay. */
+  line_photos?: RemainingLinePhoto[];
 };
 
 export type BugCommit = {
@@ -346,6 +358,47 @@ export function applyAttempt(
       queue,
     },
   };
+}
+
+/** Merge snap remaining texts + per-line photo pointers. Remaining stays string[]. */
+export function applySnapRemaining(
+  item: BugWorkItem,
+  opts: { remaining?: string[]; remaining_lines?: RemainingLinePhoto[]; symptom?: string }
+): BugWorkItem {
+  const incoming = (opts.remaining || []).map((s) => String(s).trim()).filter(Boolean);
+  let remaining = item.remaining.slice();
+  if (incoming.length) {
+    for (const r of incoming) {
+      if (!remaining.some((x) => x.toLowerCase() === r.toLowerCase())) remaining.push(r);
+    }
+  } else if (!remaining.length && opts.symptom) {
+    remaining = [String(opts.symptom).slice(0, 300)];
+  }
+  const lines = (opts.remaining_lines || [])
+    .map((l) => ({
+      text: String(l?.text || '').trim(),
+      comment: l?.comment ? String(l.comment) : undefined,
+      photo_urls: Array.isArray(l?.photo_urls) ? l.photo_urls.map(String).filter(Boolean) : [],
+      source: l?.source ? String(l.source) : undefined,
+    }))
+    .filter((l) => l.text);
+  let evidence = item.current_evidence;
+  if (lines.length) {
+    evidence = {
+      ...(evidence || {}),
+      line_photos: [...(evidence?.line_photos || []), ...lines],
+    };
+  }
+  return { ...item, remaining, current_evidence: evidence };
+}
+
+export function linePhotosForText(evidence: BugEvidence | null | undefined, text: string): RemainingLinePhoto | undefined {
+  const needle = String(text || '').trim().toLowerCase();
+  if (!needle || !evidence?.line_photos?.length) return undefined;
+  return evidence.line_photos.find((l) => {
+    const t = String(l.text || '').trim().toLowerCase();
+    return t === needle || needle.startsWith(t) || t.startsWith(needle.split(' — ')[0]);
+  });
 }
 
 export function appendEvidenceCommit(

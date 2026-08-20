@@ -1,5 +1,6 @@
 import React from 'react';
 import { PHASE_LABEL, groupJourneyByDish } from '../../utils/goldenScoreboard';
+import { Play, Loader2 } from 'lucide-react';
 
 export type FoodDetailTabsProps = {
   activeTab: 'checks' | 'dishes' | 'scout' | 'balance' | 'history';
@@ -7,11 +8,44 @@ export type FoodDetailTabsProps = {
   board?: any;
   goldenLines?: any[];
   onAddDish?: () => void;
+  onReplayLog?: () => void;
+  replayingLog?: boolean;
   className?: string;
 };
 
 /**
- * FoodDetailTabs — 5-tab navigation strip for food cards on BugTrackerModal (Q-6.4 G1-4).
+ * Computes pass vs fail breakdown from a scoreboard/board object.
+ * Maps outcomes/invariants into passCount, failCount, and percentage distributions.
+ * (Scouted only / label filters do not count as remaining issues).
+ */
+export function computeBoardProgress(board?: any) {
+  if (!board) return { passCount: 0, failCount: 0, total: 0, passPct: 0, failPct: 0 };
+  const invariants = Array.isArray(board.invariants) ? board.invariants : [];
+  const outcomes = Array.isArray(board.outcomes) ? board.outcomes : [];
+
+  let passCount = 0;
+  let failCount = 0;
+
+  if (invariants.length > 0) {
+    passCount = invariants.filter((i: any) => i.pass === true || i.status === 'pass').length;
+    failCount = invariants.filter((i: any) => i.pass !== true && i.status !== 'pass').length;
+  } else if (outcomes.length > 0) {
+    passCount = outcomes.filter((o: any) => o.pass === true || o.status === 'pass').length;
+    failCount = outcomes.filter((o: any) => o.pass !== true && o.status !== 'pass').length;
+  } else if (board.passCount != null || board.failCount != null) {
+    passCount = Number(board.passCount || 0);
+    failCount = Number(board.failCount || 0);
+  }
+
+  const total = passCount + failCount;
+  const passPct = total > 0 ? Math.round((passCount / total) * 100) : 0;
+  const failPct = total > 0 ? 100 - passPct : 0;
+
+  return { passCount, failCount, total, passPct, failPct };
+}
+
+/**
+ * FoodDetailTabs — 5-tab navigation strip for food cards on BugTrackerModal (Q-6.4 G1/G2).
  * Tabs: Checks · Dishes · Scout identity · Balance · History
  * (History renders the primary tracker commits timeline in parent).
  */
@@ -21,71 +55,125 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
   board,
   goldenLines = [],
   onAddDish,
+  onReplayLog,
+  replayingLog = false,
   className = '',
 }) => {
   const journey = Array.isArray(board?.journey) ? board.journey : [];
   const invariants = Array.isArray(board?.invariants) ? board.invariants : [];
   const ledger = board?.ledger;
+  const progress = computeBoardProgress(board);
+
+  const effectiveDishes = goldenLines.length > 0 ? goldenLines : (Array.isArray(board?.expectedMeal) ? board.expectedMeal : []);
 
   return (
-    <div className={`space-y-3 ${className}`} data-testid="food-detail-tabs">
+    <div className={`space-y-2.5 ${className}`} data-testid="food-detail-tabs">
+      {/* Green/Red Outcome Bar from Board (G2-3) */}
+      {board && progress.total > 0 && (
+        <div className="rounded-xl bg-slate-950 p-2.5 border border-white/15 space-y-1.5" data-testid="board-progress-bar">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-bold text-white flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${progress.failCount === 0 ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+              Board Outcomes
+            </span>
+            <div className="flex items-center gap-2 text-[10px]">
+              <span className="text-emerald-400 font-semibold">{progress.passCount} pass</span>
+              <span className="text-white/40">·</span>
+              <span className="text-rose-400 font-semibold">{progress.failCount} fail</span>
+              {board?.jobId && <span className="text-white/40">· job {String(board.jobId).slice(0, 8)}</span>}
+            </div>
+          </div>
+          <div className="h-1.5 rounded-full bg-black/60 overflow-hidden flex">
+            {progress.passCount > 0 && (
+              <div
+                className="bg-emerald-500 transition-all duration-300"
+                style={{ width: `${progress.passPct}%` }}
+                title={`${progress.passCount} passed`}
+              />
+            )}
+            {progress.failCount > 0 && (
+              <div
+                className="bg-rose-500 transition-all duration-300"
+                style={{ width: `${progress.failPct}%` }}
+                title={`${progress.failCount} failed`}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 5-Tab Navigation Strip */}
-      <div className="flex rounded-xl bg-slate-950 p-1 border border-white/15 gap-1 flex-wrap">
-        <button
-          type="button"
-          onClick={() => onTabChange('history')}
-          className={`flex-1 min-w-[70px] py-1.5 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-            activeTab === 'history'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'text-white/60 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          History
-        </button>
-        <button
-          type="button"
-          onClick={() => onTabChange('checks')}
-          className={`flex-1 min-w-[70px] py-1.5 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-            activeTab === 'checks'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'text-white/60 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          Checks
-        </button>
-        <button
-          type="button"
-          onClick={() => onTabChange('dishes')}
-          className={`flex-1 min-w-[70px] py-1.5 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-            activeTab === 'dishes'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'text-white/60 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          Dishes
-        </button>
-        <button
-          type="button"
-          onClick={() => onTabChange('scout')}
-          className={`flex-1 min-w-[70px] py-1.5 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-            activeTab === 'scout'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'text-white/60 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          Scout identity
-        </button>
-        <button
-          type="button"
-          onClick={() => onTabChange('balance')}
-          className={`flex-1 min-w-[70px] py-1.5 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
-            activeTab === 'balance'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'text-white/60 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          Balance
-        </button>
+      <div className="flex items-center justify-between gap-1 flex-wrap">
+        <div className="flex rounded-xl bg-slate-950 p-1 border border-white/15 gap-1 flex-1 flex-wrap">
+          <button
+            type="button"
+            onClick={() => onTabChange('history')}
+            className={`flex-1 min-w-[65px] py-1.5 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+              activeTab === 'history'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-white/60 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            History
+          </button>
+          <button
+            type="button"
+            onClick={() => onTabChange('checks')}
+            className={`flex-1 min-w-[65px] py-1.5 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+              activeTab === 'checks'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-white/60 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            Checks
+          </button>
+          <button
+            type="button"
+            onClick={() => onTabChange('dishes')}
+            className={`flex-1 min-w-[65px] py-1.5 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+              activeTab === 'dishes'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-white/60 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            Dishes
+          </button>
+          <button
+            type="button"
+            onClick={() => onTabChange('scout')}
+            className={`flex-1 min-w-[65px] py-1.5 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+              activeTab === 'scout'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-white/60 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            Scout identity
+          </button>
+          <button
+            type="button"
+            onClick={() => onTabChange('balance')}
+            className={`flex-1 min-w-[65px] py-1.5 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+              activeTab === 'balance'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-white/60 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            Balance
+          </button>
+        </div>
+
+        {onReplayLog && (
+          <button
+            type="button"
+            disabled={replayingLog}
+            onClick={onReplayLog}
+            className="py-1.5 px-2.5 rounded-xl bg-sky-950/70 hover:bg-sky-900 border border-sky-500/40 text-sky-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+            title="Replay saved tape (preview only, no agent)"
+          >
+            {replayingLog ? <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" /> : <Play className="w-3.5 h-3.5 text-sky-400" />}
+            <span>Replay log</span>
+          </button>
+        )}
       </div>
 
       {/* Pane: Checks */}
@@ -102,7 +190,7 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
           ) : (
             <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
               {invariants.map((inv: any, idx: number) => {
-                const isPass = inv.status === 'pass';
+                const isPass = inv.pass === true || inv.status === 'pass';
                 return (
                   <div
                     key={inv.id || idx}
@@ -118,7 +206,7 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
                         isPass ? 'bg-emerald-900/60 text-emerald-300' : 'bg-rose-900/60 text-rose-300'
                       }`}
                     >
-                      {inv.status || 'fail'}
+                      {isPass ? 'pass' : inv.status || 'fail'}
                     </span>
                   </div>
                 );
@@ -133,7 +221,7 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
         <div className="bg-[#0f172a] border border-slate-700/80 rounded-xl p-3 space-y-2.5 text-xs text-white">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-300">
-              Top Dishes Target Values ({goldenLines.length})
+              Top Dishes Target Values ({effectiveDishes.length})
             </span>
             {onAddDish && (
               <button
@@ -146,7 +234,7 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
             )}
           </div>
 
-          {goldenLines.length === 0 ? (
+          {effectiveDishes.length === 0 ? (
             <p className="text-[11px] text-white/50 italic">No target dishes defined for this meal.</p>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-white/10 bg-black/40">
@@ -161,7 +249,7 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {goldenLines.map((line: any, idx: number) => (
+                  {effectiveDishes.map((line: any, idx: number) => (
                     <tr key={idx} className="hover:bg-white/5">
                       <td className="py-1 px-2 text-emerald-400 font-bold">
                         {line.scored !== false ? '✓' : ''}

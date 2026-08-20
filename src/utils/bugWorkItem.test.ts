@@ -5,8 +5,10 @@ import {
   assignMissingPublicNs,
   assignPublicN,
   buildStartPayload,
+  applySnapRemaining,
   emptyWorkItem,
   fingerprint,
+  linePhotosForText,
   hydrateWorkItem,
   isBurned,
   prefillBug,
@@ -201,5 +203,18 @@ describe('bugWorkItem Q-6', () => {
       { hyp: 'named test', file: 'NutritionLabelTable.tsx', test: 'brand label', result: 'pass', burned: false }
     );
     expect(closed.item.queue).toBe('done');
+  });
+
+  it('applySnapRemaining appends remaining texts and line photo pointers', () => {
+    const base = emptyWorkItem({ remaining: ['yolk bind'] });
+    const next = applySnapRemaining(base, {
+      remaining: ['yolk bind', 'croissant pack 6 vs 1'],
+      remaining_lines: [
+        { text: 'croissant pack 6 vs 1', comment: 'shot 02', photo_urls: ['bugs/foodcart/t/reports/r/shot-02.jpg'] },
+      ],
+      symptom: 'ignored because remaining arrived',
+    });
+    expect(next.remaining).toEqual(['yolk bind', 'croissant pack 6 vs 1']);
+    expect(linePhotosForText(next.current_evidence, 'croissant pack 6 vs 1')?.photo_urls?.[0]).toMatch(/shot-02/);
   });
 });

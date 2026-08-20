@@ -9,6 +9,7 @@ import {
   HealthLogsPanel,
   BugSnapRemainingSection,
   FoodDetailTabs,
+  computeBoardProgress,
 } from '../index';
 import type { AutoSpotHit } from '../../../utils/bugAutoSpot';
 
@@ -252,6 +253,20 @@ describe('FoodDetailTabs component (G1-4)', () => {
     expect(html).toContain('wrap kcal within bounds');
   });
 
+  it('treats GoldenInvariant.pass boolean as a pass (not only status)', () => {
+    const html = renderToStaticMarkup(
+      <FoodDetailTabs
+        activeTab="checks"
+        onTabChange={() => {}}
+        board={{
+          invariants: [{ id: 'id_label', label: 'printed kcal locked', pass: true }],
+        }}
+      />
+    );
+    expect(html).toContain('printed kcal locked');
+    expect(html).toContain('pass');
+  });
+
   it('renders dishes pane when activeTab="dishes"', () => {
     const html = renderToStaticMarkup(
       <FoodDetailTabs
@@ -306,5 +321,58 @@ describe('FoodDetailTabs component (G1-4)', () => {
     expect(html).toContain('Meal Journey / Trial Balance');
     expect(html).toContain('balanced');
     expect(html).toContain('450 kcal');
+  });
+
+  it('renders green/red outcome progress bar and Replay log button (G2-1, G2-2, G2-3)', () => {
+    const previewBoard = {
+      jobId: 'job-12345678',
+      invariants: [
+        { id: 'inv-1', label: 'Calories within bounds', pass: true },
+        { id: 'inv-2', label: 'Identity matched', pass: true },
+        { id: 'inv-3', label: 'Weight non-zero', pass: false, status: 'fail' },
+      ],
+      journey: [
+        { id: 'j1', dish: 'Wrap', query: 'chicken', phase: 'scout', identityPass: true },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      <FoodDetailTabs
+        activeTab="checks"
+        onTabChange={() => {}}
+        board={previewBoard}
+        onReplayLog={() => {}}
+      />
+    );
+
+    expect(html).toContain('data-testid="board-progress-bar"');
+    expect(html).toContain('2 pass');
+    expect(html).toContain('1 fail');
+    expect(html).toContain('Replay log');
+    expect(html).toContain('job job-1234');
+  });
+});
+
+describe('computeBoardProgress helper (G2-3)', () => {
+  it('correctly maps invariants and outcomes with pass: true into passCount and percentages', () => {
+    const board = {
+      invariants: [
+        { id: 'inv-1', pass: true },
+        { id: 'inv-2', pass: true },
+        { id: 'inv-3', pass: false, status: 'fail' },
+        { id: 'inv-4', pass: true },
+      ],
+    };
+    const { passCount, failCount, total, passPct, failPct } = computeBoardProgress(board);
+    expect(passCount).toBe(3);
+    expect(failCount).toBe(1);
+    expect(total).toBe(4);
+    expect(passPct).toBe(75);
+    expect(failPct).toBe(25);
+  });
+
+  it('handles empty/null board gracefully without crashing', () => {
+    const res = computeBoardProgress(null);
+    expect(res).toEqual({ passCount: 0, failCount: 0, total: 0, passPct: 0, failPct: 0 });
   });
 });

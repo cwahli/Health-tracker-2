@@ -15,17 +15,22 @@ export function isBioJobKind(kind?: string | null): boolean {
   return k.includes('medical') || k.includes('biomarker');
 }
 
-/** Which job class this snap is allowed to attach. */
-export function snapSurface(category?: string, activeTab?: string): 'food' | 'biomarker' | 'other' {
+export type SnapSurface = 'food' | 'home' | 'health' | 'other';
+
+const HOME_TILE_RE = /^(bmi|weight|height|body_mass)$/i;
+
+/** Which pack this snap is allowed to attach. Overlay: foodcart / food tab wins. */
+export function snapSurface(category?: string, activeTab?: string): SnapSurface {
   const cat = String(category || '').toLowerCase();
   const tab = String(activeTab || '').toLowerCase();
   if (cat === 'foodcart' || tab === 'food') return 'food';
+  if (cat === 'home' || tab === 'home') return 'home';
   if (
-    cat === 'home' ||
     cat === 'biomarker' ||
-    ['home', 'health', 'medical', 'insights', 'trends', 'dictionary'].includes(tab)
+    cat === 'health' ||
+    ['health', 'medical', 'insights', 'trends', 'dictionary'].includes(tab)
   ) {
-    return 'biomarker';
+    return 'health';
   }
   return 'other';
 }
@@ -33,8 +38,9 @@ export function snapSurface(category?: string, activeTab?: string): 'food' | 'bi
 export function jobFitsSnap(opts: { category?: string; activeTab?: string; jobKind?: string | null }): boolean {
   const surface = snapSurface(opts.category, opts.activeTab);
   const kind = opts.jobKind;
-  if (surface === 'biomarker') return isBioJobKind(kind);
   if (surface === 'food') return !kind || isFoodJobKind(kind);
+  if (surface === 'health') return isBioJobKind(kind);
+  if (surface === 'home') return false;
   return true;
 }
 
@@ -266,6 +272,8 @@ export function buildBiomarkerDomainPack(input: {
   biomarkerHistory?: any[];
   biomarkers?: any;
   profile?: any;
+  /** Home: tiles + tombstones for bmi/weight/height only — not full history. */
+  thinHome?: boolean;
 }): BiomarkerDomainPack {
   const job = input.job || {};
   const p = input.payload || {};
@@ -316,7 +324,13 @@ export function buildBiomarkerDomainPack(input: {
     }
   }
 
-  const history = Array.isArray(input.biomarkerHistory) ? input.biomarkerHistory : [];
+  const historyRaw = Array.isArray(input.biomarkerHistory) ? input.biomarkerHistory : [];
+  const history = input.thinHome
+    ? historyRaw.filter((row) => {
+        const bm = row?.biomarkers && typeof row.biomarkers === 'object' ? row.biomarkers : {};
+        return Object.keys(bm).some((k) => HOME_TILE_RE.test(k)) || HOME_TILE_RE.test(String(row?.key || ''));
+      })
+    : historyRaw;
   const ranked = [...history].sort((a, b) => {
     const abm = a?.biomarkers && typeof a.biomarkers === 'object' ? a.biomarkers : {};
     const bbm = b?.biomarkers && typeof b.biomarkers === 'object' ? b.biomarkers : {};
@@ -384,14 +398,45 @@ export function buildBiomarkerDomainPack(input: {
   });
   if (crazy.length) sanitizeHints.push(`extreme_values:${crazy.map((c) => c.key).join(',')}`);
 
+  let outKeys = Array.from(keys).slice(0, 40);
+  let outValues = valuesSample;
+  let outTombs = tombstones;
+  let outHistory = historySample;
+  if (input.thinHome) {
+    outKeys = outKeys.filter((k) => HOME_TILE_RE.test(k));
+    outValues = (valuesSample || []).filter((v) => HOME_TILE_RE.test(String(v?.key || '')));
+    const custom = Object.fromEntries(
+      Object.entries(tombstones.deletedCustomBiomarkerKeys || {}).filter(([k]) => HOME_TILE_RE.test(k))
+    );
+    const keepLogIds = new Set(outHistory.map((r) => r.id).filter(Boolean) as string[]);
+    const logs = Object.fromEntries(
+      Object.entries(tombstones.deletedBiomarkerLogIds || {}).filter(([id]) => keepLogIds.has(id) || /bmi|weight|height/i.test(id))
+    );
+    outTombs = {
+      deletedBiomarkerLogIds: Object.keys(logs).length ? logs : undefined,
+      deletedCustomBiomarkerKeys: Object.keys(custom).length ? custom : undefined,
+      deletedNotUsedBiomarkerKeys: undefined,
+    };
+    outHistory = outHistory.slice(0, 8).map((row) => ({
+      ...row,
+      keys: (row.keys || []).filter((k) => HOME_TILE_RE.test(k)),
+      values: row.values
+        ? Object.fromEntries(Object.entries(row.values).filter(([k]) => HOME_TILE_RE.test(k)))
+        : undefined,
+    }));
+  }
+  const thinTombsOn = !!(outTombs.deletedBiomarkerLogIds || outTombs.deletedCustomBiomarkerKeys || outTombs.deletedNotUsedBiomarkerKeys);
+
   return {
-    jobId: job.id && !/^food/i.test(String(job.kind || '')) ? job.id : null,
+    jobId: input.thinHome ? null : job.id && !/^food/i.test(String(job.kind || '')) ? job.id : null,
     kind:
-      job.kind && !/^food/i.test(String(job.kind))
-        ? job.kind
-        : history.length
-          ? 'home'
-          : 'medical',
+      input.thinHome
+        ? 'home'
+        : job.kind && !/^food/i.test(String(job.kind))
+          ? job.kind
+          : history.length
+            ? 'home'
+            : 'medical',
     agentLabel:
       result.agentLabel ||
       p.agentLabel ||
@@ -399,8 +444,8 @@ export function buildBiomarkerDomainPack(input: {
       null,
     status: job.status || result.status || null,
     unitPreference: input.profile?.unitPreference || p.unitPreference || null,
-    keys: Array.from(keys).slice(0, 40),
-    valuesSample,
+    keys: outKeys,
+    valuesSample: outValues,
     sanitizeHints: sanitizeHints.length ? sanitizeHints : undefined,
     lastAgentMessage: msg ? String(msg).slice(0, 1200) : null,
     pipelineErrors: Array.isArray(result.pipelineErrors)
@@ -408,9 +453,9 @@ export function buildBiomarkerDomainPack(input: {
       : Array.isArray(p.pipelineErrors)
         ? p.pipelineErrors.slice(0, 15)
         : undefined,
-    tombstones: hasTombstones ? tombstones : undefined,
-    historySample: historySample.length ? historySample : undefined,
-    historyCount: history.length,
+    tombstones: (input.thinHome ? thinTombsOn : hasTombstones) ? outTombs : undefined,
+    historySample: outHistory.length ? outHistory : undefined,
+    historyCount: input.thinHome ? outHistory.length : history.length,
   };
 }
 
@@ -458,38 +503,23 @@ export function resolveDomainPack(input: {
   const isFoodJob = (j: any) => live(j) && isFoodJobKind(j.kind);
   const isMedJob = (j: any) => live(j) && isBioJobKind(j.kind);
 
-  const activeFood = surface === 'biomarker' ? null : pickSnapshotJob(jobs.filter(isFoodJob), targetJobId);
-  const activeMed = surface === 'food' ? null : pickSnapshotJob(jobs.filter(isMedJob), targetJobId);
-
-  const preferFood =
-    cat === 'foodcart' ||
-    tab === 'food' ||
-    ((!!activeFood || !!(payload.pendingFoodLog || payload.receiptTable || payload.scoutItems)) &&
-      cat !== 'home' &&
-      cat !== 'biomarker');
-
-  const preferBio =
-    cat === 'biomarker' ||
-    cat === 'home' ||
-    ['medical', 'insights', 'trends', 'biomarker', 'health', 'home', 'dictionary'].includes(tab) ||
-    !!activeMed ||
-    !!(payload.biomarkers || payload.updatedBiomarkers) ||
-    (Array.isArray(input.biomarkerHistory) && input.biomarkerHistory.length > 0) ||
-    !!(input.profile?.deletedBiomarkerLogIds || input.profile?.deletedCustomBiomarkerKeys);
+  const activeFood = surface === 'food' ? pickSnapshotJob(jobs.filter(isFoodJob), targetJobId) : null;
+  const activeMed = surface === 'health' ? pickSnapshotJob(jobs.filter(isMedJob), targetJobId) : null;
 
   const capturedAt = new Date().toISOString();
 
-  if (preferFood && !preferBio) {
+  if (surface === 'food') {
     const food = buildFoodDomainPack({ job: activeFood, payload, activeTab: tab });
     return { domain: 'food', capturedAt, summaryLine: foodSummaryLine(food), food };
   }
-  if (preferBio && !preferFood) {
+  if (surface === 'home' || surface === 'health') {
     const biomarker = buildBiomarkerDomainPack({
       job: activeMed,
       payload,
       biomarkerHistory: input.biomarkerHistory,
       biomarkers: input.biomarkers,
       profile: input.profile,
+      thinHome: surface === 'home',
     });
     return {
       domain: 'biomarker',
@@ -497,26 +527,6 @@ export function resolveDomainPack(input: {
       summaryLine: biomarkerSummaryLine(biomarker),
       biomarker,
     };
-  }
-  // Both or neither: prefer category, then food if meal-like payload
-  if (cat === 'biomarker' || cat === 'home' || (preferBio && cat !== 'foodcart')) {
-    const biomarker = buildBiomarkerDomainPack({
-      job: activeMed,
-      payload,
-      biomarkerHistory: input.biomarkerHistory,
-      biomarkers: input.biomarkers,
-      profile: input.profile,
-    });
-    return {
-      domain: 'biomarker',
-      capturedAt,
-      summaryLine: biomarkerSummaryLine(biomarker),
-      biomarker,
-    };
-  }
-  if (preferFood || cat === 'foodcart') {
-    const food = buildFoodDomainPack({ job: activeFood || activeMed, payload, activeTab: tab });
-    return { domain: 'food', capturedAt, summaryLine: foodSummaryLine(food), food };
   }
 
   return {

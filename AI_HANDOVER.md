@@ -1,13 +1,14 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-20
-**Status:** ALL GATES & REGRESSION SUITES GREEN (609 tests across 62 test suites)
+**Updated:** 2026-08-21
+**Status:** Q-6.4 Grok takeover of Gemini G1 — not Promote/D1
 
-- **Q-6.4 combined queue (2026-08-21):** Spec `plan/QUALITY.md` §14.4 & `studio/Q64_GEMINI_COMBINED_QUEUE_UI.md`. **Gemini G1 bulk UI complete & verified**:
-  - **One snap form (`BugSnapshotFab.tsx`):** Unified Bug Report and Golden Meal into a single scrollable form with multi-bug checklist rows (`BugSnapRemainingSection.tsx`), film shot selection with visual ring highlights, and `AutoSpotList` under user rows (auto-dropping `/scouted only/i`).
-  - **Surface-aware food pack:** Scout identity and Top dishes table show when category is foodcart/meal, and hide cleanly on Home/Health surfaces.
-  - **Tracker 5-Tab strip (`BugTrackerModal.tsx` & `FoodDetailTabs.tsx`):** `Checks`, `Dishes`, `Scout identity`, `Balance`, and `History` tabs ported for food cards while keeping Golden Inbox in the board filter.
-  - **Hand off formatting:** Copies active line, photo URLs, comment, and all remaining items.
+- **Q-6.4 combined queue (2026-08-21):** Gemini G1 bulk UI landed (`7427ea0`), Grok contract/schema updates verified. **Gemini G2 tape actions landed & verified**:
+  - **G2-1 Live Preview Board:** Selecting food `#n` invokes `loadPreviewBoard` (`POST /api/golden/preview`) using `current_evidence` (`debug_url` / `scout_url` / `job_id`), loading the live board onto `selectedTagDetail.board` and populating Checks, Dishes, Scout identity, and Balance tabs.
+  - **G2-2 Replay Log Action:** Added "Replay log" action button on food cards in `BugTrackerModal` and `FoodDetailTabs` (preview-only, no agent, does not mutate remaining or queue status).
+  - **G2-3 Board Outcome Bar:** Added green/red outcomes progress bar and pass/fail summary (`computeBoardProgress`) derived from board invariants/outcomes while leaving the NOW remaining checklist intact as the source of remaining.
+  - **G2-4 Capture Pack Slots:** Filtered `BugSnapshotFab` capture checkboxes by surface: food keeps nutrient calculation, debug JSON, overview, a11y, and photos; Home/Health hide food debug and nutrient calculation while preserving session/state data, a11y, and photos.
+  - **G2-5 Replay Catalog / Analyze:** Catalog replay is cleanly omitted/noted without D1 minting.
 
 - **Golden meal cleanup (2026-08-20):** Official set is **G1–G7** only (photos + Instruction + expected). Inbox promotions G8–G18 moved to `tests/Golden_meal/archive/` (`bug`, `Try golden`, quota, duplicate wraps, no-photo stubs). D1 inbox kept one card per unique meal (picnic, sweet-chilli wrap, promoted prawn doughnut, user label). Catalog replay no longer writes `all_green` / status. Disk `inbox/INDEX.md` is empty-by-design; UI is D1.
 

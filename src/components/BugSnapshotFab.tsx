@@ -32,7 +32,7 @@ import {
   BUG_SNAPSHOT_LOG,
   AGENT_STRUCTURE_DEFAULT,
 } from '../utils/bugSnapshot';
-import { jobFitsSnap, resolveDomainPack } from '../utils/bugDomainPacks';
+import { jobFitsSnap, resolveDomainPack, snapSurface } from '../utils/bugDomainPacks';
 import { compressImage } from '../utils/imageCompressor';
 import { CATEGORY_OPTIONS, saveBugTrackerCache } from './FlagIssueModal';
 import { BugCategory } from '../utils/issueBacklog';
@@ -58,7 +58,7 @@ import {
 } from '../utils/goldenScoreboard';
 import { collectOriginalFixture, pickSnapshotJob } from '../utils/goldenFixture';
 import { hydrateWorkItem, publicId } from '../utils/bugWorkItem';
-import { BugSnapRemainingSection, type BugSnapRowItem } from './bugQueue';
+import { BugSnapRemainingSection, HomeStatePanel, HealthLogsPanel, type BugSnapRowItem } from './bugQueue';
 import { autoSpotFood, autoSpotHome, autoSpotHealth, type AutoSpotHit } from '../utils/bugAutoSpot';
 
 export interface BugSnapshotFabProps {
@@ -148,7 +148,9 @@ export function getCategoryForTab(tab?: string, viewingJobId?: string | null): B
   ) {
     return 'biomarker';
   }
+  if (lower === 'dictionary') return 'biomarker';
   if (lower === 'database') return 'database';
+  if (lower === 'settings' || lower === 'unmatched') return 'Other';
   return 'Home';
 }
 
@@ -455,7 +457,8 @@ export default function BugSnapshotFab({
       setGoldenLines(lines.map((l) => ({ ...l, scored: l.calories != null })));
     }
 
-    if (isFood) {
+    const surface = isAnyMealModalOpen(viewingJobId, activeTab) ? 'food' : snapSurface(category, activeTab);
+    if (surface === 'food' || isFood) {
       fetch('/api/golden/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -492,15 +495,27 @@ export default function BugSnapshotFab({
           setAutoSpotHits(hits);
           setCheckedAutoSpotIds(new Set(spotted.remaining.map((h) => h.id)));
         });
-    } else if (category === 'Home' || activeTab === 'home') {
-      const spotted = autoSpotHome({});
+    } else if (surface === 'home') {
+      const tiles = ['bmi', 'weight', 'height']
+        .filter((k) => biomarkers?.[k] != null || profile?.[k] != null)
+        .map((k) => ({ key: k, value: biomarkers?.[k] ?? profile?.[k] }));
+      const spotted = autoSpotHome({ tiles, profile });
       const hits = spotted.remaining.concat(spotted.parked || []);
       setAutoSpotHits(hits);
       setCheckedAutoSpotIds(new Set(spotted.remaining.map((h) => h.id)));
       setPreviewJourney([]);
       setGoldenLines([]);
-    } else if (category === 'biomarker' || activeTab === 'medical') {
-      const spotted = autoSpotHealth({ history: biomarkerHistory });
+    } else if (surface === 'health') {
+      const spotted = autoSpotHealth({
+        history: (biomarkerHistory || []).map((row: any) => ({
+          id: row?.id,
+          date: row?.date,
+          keys: row?.biomarkers ? Object.keys(row.biomarkers) : row?.keys,
+          values: row?.biomarkers || row?.values,
+          sourceReportId: row?.sourceReportId,
+        })),
+        jobText: String(JobStore.getAllJobs?.()?.find((j: any) => /medical|biomarker/i.test(j?.kind || ''))?.inputSnapshot?.text || ''),
+      });
       const hits = spotted.remaining.concat(spotted.parked || []);
       setAutoSpotHits(hits);
       setCheckedAutoSpotIds(new Set(spotted.remaining.map((h) => h.id)));
@@ -1014,6 +1029,14 @@ export default function BugSnapshotFab({
         new_bug_title: effectiveNewTitle,
         user_symptom: effectiveSymptom || undefined,
         remaining: allRemainingLines.length > 0 ? allRemainingLines : undefined,
+        remaining_lines: remainingRows
+          .filter((r) => r.checked && r.text.trim())
+          .map((r) => ({
+            text: r.comment.trim() ? `${r.text.trim()} — ${r.comment.trim()}` : r.text.trim(),
+            comment: r.comment.trim() || undefined,
+            photo_urls: r.photos,
+            source: r.source,
+          })),
         shots,
         payload: {
           ...payload,
@@ -1541,7 +1564,9 @@ export default function BugSnapshotFab({
                         const activeJob = pickSnapshotJob(jobs, modalJobId);
                         const food = activeJob?.result?.pendingFoodLog || activeJob?.result?.data?.pendingFoodLog;
                         const mTitle = food?.name || activeJob?.title || activeJob?.inputSnapshot?.text || '';
-                        if (mTitle) {
+                        const foodSurface =
+                          isAnyMealModalOpen(viewingJobId, activeTab) || snapSurface(category, activeTab) === 'food';
+                        if (mTitle && foodSurface) {
                           return (
                             <span className="text-[10px] font-bold text-indigo-300 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700 truncate max-w-[220px]">
                               Meal · {mTitle}
@@ -1562,10 +1587,51 @@ export default function BugSnapshotFab({
                     />
                   </div>
 
-                  {/* Food Pack: Scout identity & Top dishes (show on food surface only) */}
                   {(() => {
-                    const isFood = category === 'foodcart' || activeTab === 'food' || isAnyMealModalOpen(viewingJobId, activeTab);
-                    if (!isFood) return null;
+                    const surface = isAnyMealModalOpen(viewingJobId, activeTab) ? 'food' : snapSurface(category, activeTab);
+                    if (surface === 'home') {
+                      const tiles = ['bmi', 'weight', 'height']
+                        .filter((k) => biomarkers?.[k] != null || profile?.[k] != null)
+                        .map((k) => ({
+                          key: k,
+                          label: k,
+                          value: biomarkers?.[k] ?? profile?.[k],
+                        }));
+                      const tombs = {
+                        ...(profile?.deletedCustomBiomarkerKeys || {}),
+                        ...(profile?.deletedBiomarkerLogIds || {}),
+                      };
+                      const thinTombs = Object.fromEntries(
+                        Object.entries(tombs).filter(([k]) => /bmi|weight|height/i.test(k))
+                      );
+                      return (
+                        <HomeStatePanel
+                          surface="home"
+                          tiles={tiles}
+                          tombstones={thinTombs as Record<string, string | number>}
+                        />
+                      );
+                    }
+                    if (surface === 'health') {
+                      const logs = (biomarkerHistory || []).slice(0, 12).flatMap((row: any) => {
+                        const bm = row?.biomarkers && typeof row.biomarkers === 'object' ? row.biomarkers : {};
+                        return Object.entries(bm).slice(0, 8).map(([key, value]) => ({
+                          id: row?.id,
+                          key,
+                          value: value as string | number,
+                          date: row?.date,
+                        }));
+                      });
+                      return (
+                        <HealthLogsPanel
+                          surface="health"
+                          keys={logs.map((l) => l.key)}
+                          historyCount={biomarkerHistory?.length || 0}
+                          logs={logs}
+                        />
+                      );
+                    }
+                    if (surface !== 'food') return null;
                     return (
                       <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 p-2.5 space-y-2.5">
                         {previewJourney.length > 0 && (
@@ -1750,42 +1816,26 @@ export default function BugSnapshotFab({
                 </div>
 
                 {/* Requirements 6 & 7: Cleaned up Capture pack and checkboxes for info sent */}
-                <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/25 p-2.5 space-y-2 text-[11px] text-white/70">
-                  <div className="flex items-center gap-1.5 text-emerald-300 font-semibold">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span>Capture pack data to send to agent</span>
-                  </div>
+                {(() => {
+                  const isFoodSurface =
+                    isAnyMealModalOpen(viewingJobId, activeTab) || snapSurface(category, activeTab) === 'food';
+                  return (
+                    <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/25 p-2.5 space-y-2 text-[11px] text-white/70">
+                      <div className="flex items-center gap-1.5 text-emerald-300 font-semibold">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>Capture pack data to send to agent</span>
+                      </div>
 
-                  <div className="grid grid-cols-2 gap-1.5 text-[10px]">
-                    <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={sendChecklist.a11y}
-                        onChange={(e) => setSendChecklist((s) => ({ ...s, a11y: e.target.checked }))}
-                        className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
-                      />
-                      <span>Accessibility tree</span>
-                    </label>
-
-                    <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={sendChecklist.overview}
-                        onChange={(e) => setSendChecklist((s) => ({ ...s, overview: e.target.checked }))}
-                        className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
-                      />
-                      <span>Overview & logs</span>
-                    </label>
-
-                    <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={sendChecklist.sessionData}
-                        onChange={(e) => setSendChecklist((s) => ({ ...s, sessionData: e.target.checked }))}
-                        className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
-                      />
-                      <span>Session data</span>
-                    </label>
+                      <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                        <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={sendChecklist.a11y}
+                            onChange={(e) => setSendChecklist((s) => ({ ...s, a11y: e.target.checked }))}
+                            className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                          />
+                          <span>Accessibility tree</span>
+                        </label>
 
                     <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
                       <input
@@ -1797,28 +1847,54 @@ export default function BugSnapshotFab({
                       <span>Screenshots ({shots.length})</span>
                     </label>
 
-                    <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={sendChecklist.nutrientCalculation}
-                        onChange={(e) => setSendChecklist((s) => ({ ...s, nutrientCalculation: e.target.checked }))}
-                        className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
-                      />
-                      <span>Nutrient calculation</span>
-                    </label>
+                    {isFoodSurface ? (
+                      <>
+                        <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={sendChecklist.overview}
+                            onChange={(e) => setSendChecklist((s) => ({ ...s, overview: e.target.checked }))}
+                            className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                          />
+                          <span>Overview & logs</span>
+                        </label>
 
-                    <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={sendChecklist.debugJson}
-                        onChange={(e) => setSendChecklist((s) => ({ ...s, debugJson: e.target.checked }))}
-                        className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
-                      />
-                      <span>Debug JSON payload</span>
-                    </label>
+                        <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={sendChecklist.nutrientCalculation}
+                            onChange={(e) => setSendChecklist((s) => ({ ...s, nutrientCalculation: e.target.checked }))}
+                            className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                          />
+                          <span>Nutrient calculation</span>
+                        </label>
+
+                        <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={sendChecklist.debugJson}
+                            onChange={(e) => setSendChecklist((s) => ({ ...s, debugJson: e.target.checked }))}
+                            className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                          />
+                          <span>Debug JSON payload</span>
+                        </label>
+                      </>
+                    ) : (
+                      <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={sendChecklist.sessionData}
+                          onChange={(e) => setSendChecklist((s) => ({ ...s, sessionData: e.target.checked }))}
+                          className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                        />
+                        <span>Session data</span>
+                      </label>
+                    )}
                   </div>
                 </div>
-              </div>
+              );
+            })()}
+          </div>
 
               <div className="p-3 border-t border-white/10 flex gap-2 justify-end shrink-0">
                 <button

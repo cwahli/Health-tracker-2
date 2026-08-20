@@ -7,6 +7,8 @@ import {
   buildOverviewMarkdown,
   foodSummaryLine,
   capTombstoneMap,
+  snapSurface,
+  jobFitsSnap,
 } from './bugDomainPacks';
 
 describe('bugDomainPacks', () => {
@@ -214,5 +216,39 @@ describe('bugDomainPacks', () => {
     expect(md).toContain('A11y');
     expect(md).toContain('all agents');
     expect(md).toContain('Domain pack');
+  });
+
+  it('splits snapSurface home vs health and refuses food jobs on Home', () => {
+    expect(snapSurface('foodcart', 'home')).toBe('food');
+    expect(snapSurface('Home', 'home')).toBe('home');
+    expect(snapSurface('biomarker', 'medical')).toBe('health');
+    expect(snapSurface('biomarker', 'dictionary')).toBe('health');
+    expect(snapSurface('Other', 'settings')).toBe('other');
+    expect(jobFitsSnap({ category: 'Home', activeTab: 'home', jobKind: 'food_log' })).toBe(false);
+    expect(jobFitsSnap({ category: 'foodcart', activeTab: 'food', jobKind: 'food_log' })).toBe(true);
+    expect(jobFitsSnap({ category: 'biomarker', activeTab: 'medical', jobKind: 'medical' })).toBe(true);
+  });
+
+  it('Home pack keeps bmi tombstones and drops a cholesterol history dump', () => {
+    const pack = resolveDomainPack({
+      category: 'Home',
+      activeTab: 'home',
+      jobs: [],
+      biomarkers: { bmi: 23, cholesterol: 5.2 },
+      biomarkerHistory: [
+        { id: 'log_bmi_2020', date: '04-11-2020', biomarkers: { bmi: 2 }, sync_state: 'synced' },
+        { id: 'log_lipid', date: '04-11-2020', biomarkers: { cholesterol: 5.2, hdl: 1.1 }, sync_state: 'synced' },
+      ],
+      profile: {
+        deletedBiomarkerLogIds: { log_bmi_2020: 9, log_lipid: 9 },
+        deletedCustomBiomarkerKeys: { bmi: 1, custom_lipid: 1 },
+      },
+    });
+    expect(pack.domain).toBe('biomarker');
+    expect(pack.biomarker?.keys).toContain('bmi');
+    expect(pack.biomarker?.keys || []).not.toContain('cholesterol');
+    expect(pack.biomarker?.historySample?.some((r) => r.id === 'log_lipid')).toBe(false);
+    expect(pack.biomarker?.tombstones?.deletedBiomarkerLogIds?.log_bmi_2020).toBeTruthy();
+    expect(pack.biomarker?.tombstones?.deletedCustomBiomarkerKeys?.custom_lipid).toBeFalsy();
   });
 });

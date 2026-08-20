@@ -26,6 +26,7 @@ import {
   Maximize2,
   Minimize2,
   Clock,
+  Play,
 } from 'lucide-react';
 import { FlagIssueForm, CATEGORY_OPTIONS, saveBugTrackerCache } from './FlagIssueModal';
 import { BugCategory } from '../utils/issueBacklog';
@@ -35,6 +36,7 @@ import GoldenInboxPanel from './GoldenInboxPanel';
 import { bugArtifactUrl, evidencePhotoSrc } from '../utils/bugSnapshot';
 import {
   hydrateWorkItem,
+  linePhotosForText,
   publicId,
   sortReadyQueue,
   getLastActionedDate,
@@ -49,7 +51,7 @@ import {
   BugNow,
 } from '../utils/bugWorkItem';
 import { queueKpis, tagIsFixed } from '../utils/bugQueueKpis';
-import { FoodDetailTabs, RemainingBugRow } from './bugQueue';
+import { FoodDetailTabs } from './bugQueue';
 
 interface BugTrackerModalProps {
   isOpen: boolean;
@@ -102,6 +104,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
   // Q-6.4 G1 food review tabs: history, checks, dishes, scout, balance
   const [trackerDetailTab, setTrackerDetailTab] = useState<'history' | 'checks' | 'dishes' | 'scout' | 'balance'>('history');
+  const [selectedRemainingLine, setSelectedRemainingLine] = useState<string>('');
 
   // UI expand states
   const [openSnapCommitIds, setOpenSnapCommitIds] = useState<Record<string, boolean>>({});
@@ -114,6 +117,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
   const [deletingTagId, setDeletingTagId] = useState<string | null>(null);
   const [zippingTagId, setZippingTagId] = useState<string | null>(null);
   const [makingGoldenId, setMakingGoldenId] = useState<string | null>(null);
+  const [replayingLogId, setReplayingLogId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
@@ -292,6 +296,74 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
     }
   };
 
+  const loadPreviewBoard = async (tagOrDetail: any) => {
+    try {
+      const now = tagOrDetail?.now;
+      const ev =
+        now?.current_evidence ||
+        tagOrDetail?.bug?.current_evidence ||
+        tagOrDetail?.reports?.[0]?.payload ||
+        tagOrDetail?.reports?.[0];
+      const debugUrl =
+        ev?.debug_url ||
+        ev?.scout_url ||
+        ev?.backendLogsUrl ||
+        (ev?.reportId ? `/api/bugs/${tagOrDetail.id || tagOrDetail.bug?.id}/artifacts?reportId=${ev.reportId}&name=console.logs.txt` : '');
+      const jobId = ev?.job_id || ev?.jobId || tagOrDetail?.jobId;
+
+      if (debugUrl || jobId) {
+        const pRes = await fetch('/api/golden/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            backendLogsUrl: debugUrl,
+            jobId,
+          }),
+        });
+        if (pRes.ok) {
+          const board = await pRes.json().catch(() => null);
+          if (board) {
+            setSelectedTagDetail((prev) => (prev ? { ...prev, board } : prev));
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[BugTracker] preview board load skipped:', err);
+    }
+  };
+
+  const handleReplayLog = async (tag: any) => {
+    if (!tag) return;
+    setReplayingLogId(tag.id);
+    try {
+      const ev =
+        selectedTagDetail?.now?.current_evidence ||
+        selectedTagDetail?.bug?.current_evidence ||
+        selectedTagDetail?.reports?.[0]?.payload;
+      const debugUrl = ev?.debug_url || ev?.scout_url || ev?.backendLogsUrl;
+      const jobId = ev?.job_id || ev?.jobId;
+
+      const pRes = await fetch('/api/golden/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          backendLogsUrl: debugUrl,
+          jobId,
+        }),
+      });
+      if (pRes.ok) {
+        const board = await pRes.json().catch(() => null);
+        if (board) {
+          setSelectedTagDetail((prev) => (prev ? { ...prev, board } : prev));
+        }
+      }
+    } catch (e) {
+      console.warn('[BugTracker] Replay log failed:', e);
+    } finally {
+      setReplayingLogId(null);
+    }
+  };
+
   const fetchTagDetail = async (tagId: string) => {
     setDetailLoading(true);
     try {
@@ -301,6 +373,10 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
         setSelectedTagDetail(json);
         setEditBugDraft(json.now?.bug || json.bug?.identified_problems || json.bug?.title || '');
         setEditRemainingDraft((json.now?.remaining || []).join(', '));
+        const cat = (json.bug?.category || json.category || '').toLowerCase();
+        if (cat === 'foodcart' || cat === 'golden') {
+          loadPreviewBoard(json);
+        }
       }
     } catch {
       /* ignore fetch error */
@@ -639,10 +715,12 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
     const item = hydrateWorkItem(tag);
     const pub = json.now?.public_id || publicId(item, tag.id);
     const last = (json.commits || []).slice(-1)[0];
-    const activeLine = json.now?.remaining?.[0] || item.remaining?.[0] || json.now?.bug || tag.title;
-    const photos = json.now?.current_evidence?.photo_urls || [];
-    const comment = json.now?.comment || '';
     const remainingList = json.now?.remaining || item.remaining || [];
+    const evidence = json.now?.current_evidence || item.current_evidence;
+    const activeLine = selectedRemainingLine || remainingList[0] || json.now?.bug || tag.title;
+    const line = linePhotosForText(evidence, activeLine);
+    const photos = line?.photo_urls?.length ? line.photo_urls : evidence?.photo_urls || [];
+    const comment = line?.comment || json.now?.comment || '';
     const text = [
       `Check this bug and fix it. ${pub} — ${tag.title}`,
       '',
@@ -1103,6 +1181,27 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                     <span>Unblock ({burnedCount})</span>
                                   </button>
                                 )}
+                                  {/* Q-6.4 G2: Replay log on food card */}
+                                 {((selectedTag.category || '').toLowerCase() === 'foodcart' ||
+                                   (selectedTag.category || '').toLowerCase() === 'golden') && (
+                                   <button
+                                     type="button"
+                                     disabled={replayingLogId === selectedTag.id}
+                                     onClick={(e) => {
+                                       e.stopPropagation();
+                                       handleReplayLog(selectedTag);
+                                     }}
+                                     className="px-2 py-1 text-[10px] font-bold text-sky-200 bg-sky-950/70 hover:bg-sky-900 border border-sky-500/40 rounded-lg transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+                                     title="Replay saved tape (preview only, no agent)"
+                                   >
+                                     {replayingLogId === selectedTag.id ? (
+                                       <Loader2 className="w-3 h-3 animate-spin text-sky-400" />
+                                     ) : (
+                                       <Play className="w-3 h-3 text-sky-400" />
+                                     )}
+                                     <span className="hidden sm:inline">Replay log</span>
+                                   </button>
+                                 )}
 
                                 {/* Hand Off */}
                                 <button
@@ -1150,7 +1249,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                               </div>
                             </div>
 
-                            {/* Q-6.4 G1: 5-Tab Bar for Food Cards (Checks / Dishes / Scout identity / Balance / History) */}
+                            {/* Q-6.4 G1/G2: 5-Tab Bar for Food Cards (Checks / Dishes / Scout identity / Balance / History) */}
                             {(() => {
                               const isFoodCard =
                                 (selectedTag.category || '').toLowerCase() === 'foodcart' ||
@@ -1161,15 +1260,14 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                   onTabChange={setTrackerDetailTab}
                                   board={(selectedTagDetail as any)?.board || selectedTag.board}
                                   goldenLines={(selectedTagDetail as any)?.expectedMeal || selectedTag.expectedMeal || []}
+                                  onReplayLog={() => handleReplayLog(selectedTag)}
+                                  replayingLog={replayingLogId === selectedTag.id}
                                 />
                               ) : null;
                             })()}
 
-                            {((selectedTag.category || '').toLowerCase() !== 'foodcart' &&
-                              (selectedTag.category || '').toLowerCase() !== 'golden' ||
-                              trackerDetailTab === 'history') && (
-                              <>
-                                {/* NOW Section */}
+                            <>
+                                {/* NOW Section — always on. Food tape tabs sit above; do not hide chrome. */}
                                 <div className="bg-[#0f172a] rounded-xl p-3 space-y-2.5">
                                   <div className="flex items-center justify-between gap-2">
                                     <h3 className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-300">
@@ -1322,15 +1420,40 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                   </div>
                                 ) : selectedBugNow?.remaining && selectedBugNow.remaining.length > 0 ? (
                                   <div className="space-y-1">
-                                    {selectedBugNow.remaining.map((remItem, rIdx) => (
+                                    {selectedBugNow.remaining.map((remItem, rIdx) => {
+                                      const pinned = linePhotosForText(selectedBugNow.current_evidence, remItem);
+                                      return (
                                       <div
                                         key={rIdx}
-                                        className="flex items-start justify-between gap-2 p-1.5 rounded-lg bg-black/40 border border-white/5 text-amber-200/90 text-[11px]"
+                                        className={`flex items-start justify-between gap-2 p-1.5 rounded-lg bg-black/40 border text-amber-200/90 text-[11px] cursor-pointer ${
+                                          selectedRemainingLine === remItem ? 'border-indigo-400' : 'border-white/5'
+                                        }`}
+                                        onClick={() => setSelectedRemainingLine(remItem)}
                                       >
-                                        <span className="leading-relaxed flex-1">{remItem}</span>
+                                        <div className="flex-1 min-w-0">
+                                          <span className="leading-relaxed">{remItem}</span>
+                                          {pinned?.photo_urls?.length ? (
+                                            <div className="flex gap-1 mt-1">
+                                              {pinned.photo_urls.slice(0, 3).map((p, i) => (
+                                                <img
+                                                  key={i}
+                                                  src={evidencePhotoSrc(selectedTag.id, p)}
+                                                  alt=""
+                                                  className="w-10 h-8 rounded object-cover border border-white/20"
+                                                />
+                                              ))}
+                                            </div>
+                                          ) : null}
+                                          {pinned?.comment ? (
+                                            <p className="text-[10px] text-white/50 mt-0.5">{pinned.comment}</p>
+                                          ) : null}
+                                        </div>
                                         <button
                                           type="button"
-                                          onClick={() => toggleRemainingDone(selectedTag.id, remItem)}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleRemainingDone(selectedTag.id, remItem);
+                                          }}
                                           className="px-1.5 py-0.5 rounded bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer shrink-0"
                                           title="Mark item done"
                                         >
@@ -1338,7 +1461,8 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                           <span>Done</span>
                                         </button>
                                       </div>
-                                    ))}
+                                      );
+                                    })}
                                   </div>
                                 ) : (
                                   <span className="leading-relaxed text-white/50">{selectedTag.whats_still_open || '—'}</span>
@@ -1664,7 +1788,6 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                           </ul>
                         </div>
                         </>
-                        )}
 
                         {/* Linked Reports List */}
                         {selectedReports.length > 0 && (

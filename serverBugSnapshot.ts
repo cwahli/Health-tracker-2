@@ -30,6 +30,7 @@ import { stripHeavyImages } from './src/utils/debugPayload';
 import { findIssueTag, normalizeTagKey } from './serverIssueBacklog.js';
 import {
   appendEvidenceCommit,
+  applySnapRemaining,
   applyAttempt,
   assignMissingPublicNs,
   assignPublicN,
@@ -822,7 +823,13 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
           wi = assignPublicN(wi, usedNs);
         }
         wi.bug = prefillBug(wi.bug, symptom || tagTitle || tagRow.title || '');
-        if (!wi.remaining.length && symptom) wi.remaining = [String(symptom).slice(0, 300)];
+        const remainingIn = Array.isArray(req.body?.remaining) ? req.body.remaining : [];
+        const remainingLines = Array.isArray(req.body?.remaining_lines) ? req.body.remaining_lines : [];
+        wi = applySnapRemaining(wi, {
+          remaining: remainingIn,
+          remaining_lines: remainingLines,
+          symptom,
+        });
         const ev = {
           job_id:
             req.body?.job_id ||
@@ -835,12 +842,19 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
           photo_urls: shotMeta.map((s) => s.key),
           r2_prefix: bugReportR2Prefix(cat, tagId, reportId),
           hold: true,
+          scout_url: req.body?.scout_url || (safePayload as any)?.backendLogsUrl || (safePayload as any)?.debugUrl || null,
+          fixture_query: dish_query || (safePayload as any)?.query || null,
+          expected_dishes: Array.isArray(req.body?.expected_dishes)
+            ? req.body.expected_dishes.map(String)
+            : undefined,
+          line_photos: wi.current_evidence?.line_photos,
         };
         wi = appendEvidenceCommit(wi, {
           actor: 'you',
           kind: wi.commits.length ? 'retest' : 'snap',
           summary: (symptom || 'snapshot').slice(0, 200),
           evidence: ev,
+          remaining: wi.remaining,
         });
         wi.hold_refs = [...new Set([...(wi.hold_refs || []), ev.job_id, ev.r2_prefix].filter(Boolean))] as string[];
         await persistWorkItem(tagId, wi);
