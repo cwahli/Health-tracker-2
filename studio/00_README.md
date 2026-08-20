@@ -2,6 +2,7 @@
 
 | File | Status | Topic |
 |------|:------:|-------|
+| **[Q64_GEMINI_COMBINED_QUEUE_UI.md](./Q64_GEMINI_COMBINED_QUEUE_UI.md)** | **Gemini G1 (Q-6.4)** | Bulk UI: one snap, remaining+pin, auto-spot, tracker tape tabs. Not Promote/`snapSurface`. |
 | **[M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md](./M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md)** | **ACTIVE (biomarkers)** | **Plan §13 remaining work, P0→P8 until master gate 0** |
 | **[M23_FULL_FREE_TIER_RELIABILITY.md](./M23_FULL_FREE_TIER_RELIABILITY.md)** | Separate track | **Full free-tier program M23→M28 continuous until master gate 0** |
 | [M23_FIRESTORE_WRITE_KILL_SWITCH.md](./M23_FIRESTORE_WRITE_KILL_SWITCH.md) | Nested | Phase M23 detail only |

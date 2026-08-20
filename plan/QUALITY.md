@@ -436,7 +436,8 @@ Audit (living): line counts, duplicate labels, second math path, eager imports. 
 
 ## 14. Unified bug queue (snap · auto · golden)
 
-Execute: `ROADMAP.md` **Q-6**. Mock: `studio/mockups/bug-queue-dashboard.html`.  
+Execute: `ROADMAP.md` **Q-6**.  
+Mocks: `studio/mockups/bug-queue-dashboard.html` (queue shell) · `studio/mockups/bug-queue-combined.html` (one list) · `studio/mockups/bug-queue-combined-flow.html` (snap → review → iteration, consolidated).  
 Not a fifth pillar. Same QUALITY loop: class → playbook → vitest → honest residual. Inner work is **not** `POST /loop`.
 
 ### 14.1 One work item
@@ -479,6 +480,155 @@ Burns never collapse when `current_evidence` moves. Two burns → `blocked`.
 | Refuse `/loop` as inner COMPLETE | **Grok** |
 
 Do not ask Gemini to design the contract or mark `done` from a chat claim.
+
+### 14.4 Combine Inbox tape into the bug card (review before build)
+
+**Goal.** One queue (`issue_tags`). Fix the **named bug first**. The tape may surface **more reds in the same series** (remaining on this card, or a sibling `#n` if the class is different). When the series is honestly done, **Promote** writes an official fail-safe: food → `tests/Golden_meal/G*` (photos + `expected.json` + manifest); biomarker → lock/extend `tests/Golden_biomarker/` (do not invent a meal scoreboard on `#2`).
+
+Inbox as a second list (`golden_cases` D1 + Golden Inbox tab + Make Golden → disk `inbox/`) is retired. Official G1–G7 (and G-B*) stay git + vitest — not to-dos.
+
+**Loop (must still work when panels are consolidated)**
+
+```text
+Snap (one form; food job → tape on; Home → tape off)
+  → #n first review: bar + NOW remaining = not-fixed checks
+  → Hand off → named vitest for the **primary** class
+  → Replay log (tape) or Re-analyze (new job; label_merge / scout wrong)
+  → extra tape reds become remaining (same series) or sibling #n (other class)
+  → remaining empty + photos + named test → Promote official golden
+```
+
+Primary remaining = the user’s “what’s wrong” lines. Auto checks **append** as a **series** (keep / uncheck at snap). They do not replace the named bug and they do not all have to be fixed in one agent turn (L14: one class per job).
+
+**Auto-spot from the food log (at snap, not a second Inbox)**
+
+We already parse the tape (`/api/golden/preview`, `buildScoreboard`, journey, known-fails, ledger). That is **not** wired into the bug snapshot as remaining, and `classifyJobResult` **skips succeeded meals**, so quality bugs never auto-file.
+
+Lived on current queue jobs (debug JSON):
+
+| Card | User named | Cheap auto-spot from log/items | Existing scoreboard |
+|---|---|---|---|
+| **#3** zeros + baguette | micros 0, false composite | **MICROS_ZERO** 19–20 zeros on all 3 items (`dbSource=label` / `composite`). Baguette `hasComponents` + flour/water/salt/yeast (staple, not a mixed dish). | Flood of “Scouted only” on every composite component — **noise**, not remaining. |
+| **#5** fruit inherited Sainsbury | not from Sainsbury | Walk **subcomponents**: brand/chain on fruit/plum vs oats. Parent already `composite` / brand null. | Journey all-green — **missed** the leak. |
+| **#6** false composite (later) | baguette / brand tooltip | After fix, shape inspector quiet. Ledger caught **dietitian rewrite**. | Same “Scouted only” noise + dietitian rewrite (park unless named). |
+| **#9** multipack servings | 6 croissant vs 1 in photo | **PORTION_PACK**: quantity / `servingsPerPack` vs scout count. | Need debug; not in `classifyJobResult`. |
+| **#7** 503 | crash | Already auto-filed (`INFRA_LATENCY`). | OK. |
+
+**Do auto-suggest at snap (checkbox, user named bug stays first):**
+
+- `MICROS_ZERO` — ≥8 micro keys at 0 on label/brand/composite item.  
+- `BRAND_LEAK` — subcomponent has `chainName`/`brand` but the component name is a generic staple (fruit, milk, egg).  
+- `BRAND_MISSING` — title/query has a chain, item has no brand and `dbSource` is not official.  
+- `STAPLE_COMPOSITE` — `hasComponents` and components ⊆ flour/water/salt/yeast/oil (baguette/loaf).  
+- `PORTION_PACK` — pack/multipack servings ≫ scout item count.  
+- Journey **fallback / mismatch / no_match** (not “scouted only” on a printed-label parent).  
+- Ledger imbalance only if classified (SILENT_REPAIR) — default **park**, not remaining.
+
+**Do not auto-add as remaining:** `j_* Scouted only`, `id_all_components_identified` on `dbSource=label`, accept-class (kept printed kcal), catalog replay misses.
+
+Snap UI: “Also spotted on this tape” under What’s wrong — pre-checked cheap hits, uncheck to drop. Primary line remains the user’s text. Same detectors later may feed auto-file for succeeded jobs (optional, same helper).
+
+**One `#n` per meal, many remaining — not one snap per bug**
+
+Today’s snapshot is one title + one symptom, so you file zeros, then snap again for composite, then again for brand leak. That is the wrong grain.
+
+| Grain | Rule |
+|---|---|
+| **Snap / card** | **One `#n` per meal (or Home incident).** One tape, one title (short meal/problem name). |
+| **Remaining line** | **One bug.** User lines + auto-spot lines. Each line has **text + optional photo(s) + comment** so the agent is not guessing which shot belongs to which red. Optional class chip. |
+| **Agent job (L14)** | **One class per turn.** Primary line first. Other lines stay on the card. |
+| **Sibling `#n`** | Only if you tick **Split** on a line (or Home vs food, or crash vs quality). Default is **same card**. |
+| **Merge** | Same meal + same week → attach to existing `#n` (add remaining), do not mint `#10` for the same picnic. Crash/`INFRA_LATENCY` stays its own card. |
+| **Done / Promote** | Card can **Promote** when the **named series you kept** is done (photos + class tests). Parked lines ≠ blocking Promote if you parked them. Mark done when remaining (unparked) is empty + retest. |
+
+Fingerprint for food tape cards = **meal identity + week** (not `class` alone). Class lives on the **line**. Auto-file of a succeeded meal with quality hits merges onto that meal’s `#n`.
+
+**Snap (no Bug vs Golden tabs)**
+
+| Keep | Consolidate |
+|---|---|
+| Photos, category, Open `#n` / new title | Title = meal/incident. Not one field per bug. |
+| What’s wrong | **Checklist, many lines** (not one textarea). Each line = remaining + **pinned shot(s)** + **comment**. Auto-spot under it, pre-checked. Uncheck to drop. **Split → new `#n`** is a per-line overflow, default off. Hand off sends the **active line’s** photo + comment, not the whole film strip. |
+| Meal tape if food job | Meal **name is a chip** from the job, not a second title. **Scout identity** (full grouped journey, not reds-only) + **top dishes** table (score, kcal, g, P, + Add dish) stay on the snap. |
+| Capture pack | Default 6/6, collapsed. |
+| Home / biomarker | **No leftover food_job.** One incident card; multiple remaining if you list them. |
+
+**Surface packs (page decides the snap, not one food layout)**
+
+The shell is shared. **Packs are components that show or hide.** Do not attach food debug on Home. Do not attach biomarker history on food. Meal modal open on any tab → **food** pack (`isAnyMealModalOpen` already forces `foodcart`).
+
+Today `snapSurface()` lumps Home + Health as `biomarker`. Split:
+
+| Surface | Tabs (default) | Attach | Hide | Checks (auto-spot) |
+|---|---|---|---|---|
+| **food** | Food tab, or meal modal anywhere | Meal job, scout, food debug, photos of meal/UI, top dishes | Biomarker history, BMI tombstone dump | MICROS_ZERO, BRAND_LEAK/MISSING, STAPLE_COMPOSITE, PORTION_PACK, journey fallback/mismatch |
+| **home** | Home dashboard | Screenshot of Home, profile flags (`bmiAutoLogged`, deleted keys), **thin** tiles (bmi/weight/height), tombstones for **those keys/logs only** | Food job, scout, full biomarker history | Resurrection (tile present + tombstone), duplicate tile keys, empty-BMI re-init |
+| **health** | Medical, insights, trends, dictionary | **Full** biomarker history + defs + tombstones (`deletedBiomarkerLogIds`, `deletedCustomBiomarkerKeys`). Medical/ingest job only if that job is open | Food job, meal scout, Replay catalog | Duplicate keys / same-date rows, missing unit, sourceReportId collapse, WRONG_DOOR if food text in medical |
+| **other** | Settings, database, unmatched | Screenshot + a11y + session | Food + bio packs | None unless user lines |
+
+**Review UI:** same chrome (NOW, bar, remaining, History, Hand off). Slot:
+
+- `FoodTape` — scout identity, dishes, Replay log/catalog, Balance, Promote → G*  
+- `HomeState` — tiles + tombstone table, no Replay catalog  
+- `HealthLogs` — history table, key list, ingest job if any, Promote → G-B  
+
+Capture pack also slots: nutrient/debug JSON = food; history JSON = health; Home = a11y + screenshot + thin profile only.
+
+**Suggestion (better than three frozen layouts):** one `SnapSurface` enum from tab + modal. Packs register `{ id, when, SnapBlock, ReviewBlock, checks }`. New page = new pack, not a fork of `BugSnapshotFab`. Overlay wins: food modal on Home is food, not home.
+
+**Review / iteration (food `#n`)**
+
+| Surface | Role |
+|---|---|
+| Green/red bar + “Fixed / remaining” | Tape score. Accept ≠ remaining. |
+| NOW | Bug field + **remaining = not-fixed checks** (one list, not pasted twice). Class dropdown. Burns. |
+| Tape strip | Photos, query, **Replay log**, **Re-analyze**, **Hand off**. |
+| More | Catalog (does not flip done), Pipeline skipScout, downloads, **Promote to G\***, Mark fixed. |
+| Tabs | **Checks** · **Dishes** (top dishes expected vs tape) · **Scout identity** (full journey + USDA/catalog/label/fallback) · **Balance** (6 books) · **History** (commits, tried, pinned shots). |
+| Commits | Snap / attempt / replay / re-analyze. `POST /api/bugs/:id/attempts` only — no golden `/attempt`. |
+
+Biomarker `#n`: no tape, no catalog, no Promote-to-G-meal. Promote (when relevant) = golden **biomarker** fixture for that class.
+
+**Series (more bugs on the same tape)**
+
+1. User lines are remaining[0…] — **primary is line 1**.  
+2. Auto-spot lines **join remaining** (uncheck at snap or park later).  
+3. Agent job 1 = **primary class only**. Hand off says which line is in play. Other reds stay visible.  
+4. Need Analyze (frozen scout / label_merge) → Re-analyze, not Replay log.  
+5. **Split** a line to sibling `#n` only when you ask (or crash vs quality). Do not steal a sibling row (L14).  
+6. Unparked remaining empty + retest after last agent commit → `done`. Parked extras can wait or split.
+
+**Promote (fail-safe, not Inbox all-green)**
+
+- Food: photos + Instruction + `expected.json` locks from the **class tests** + `manifest.json`. Refuse without photos. Refuse if Balance `mayPromote` is false **unless** the human parks ledger as out of series.  
+- Biomarker: add/lock the G-B example that the class test already names.  
+- Replace Make Golden → `inbox/` and Inbox Promote (empty photos).
+
+**Build (do not start until this section is confirmed)**
+
+**Template:** implement against `studio/mockups/bug-queue-combined-flow.html` (snap → review → iteration, use case `#10`) and `studio/mockups/bug-queue-combined.html` (queue shell). The mock is layout, not an inventory. **Live `BugSnapshotFab`, `GoldenInboxPanel`, and `BugTrackerModal` are the feature checklist.**
+
+**Anti-drop audit (mandatory while building, every surface):**
+
+1. Open the live component. List every control, pack field, and panel.  
+2. Map each to keep / consolidate / move. **Consolidate ≠ delete.** If it is not on the mock, it still ships unless this section names it dropped.  
+3. Example: snap already has **Take picture** (floating shutter) **and** **Add image** (file picker) **and** paste. A mock that only draws Take picture must still keep Add image + paste. Same for scout identity, top dishes, capture-pack boxes, zip, triage, remaining Done, tried/burns. Audit **per surface**: Home must not grow a food tape; Health must not drop history attachment; food must not attach biomarker logs.  
+4. Before calling the surface done: side-by-side live vs new UI. Anything a user can do today that disappeared = FAIL (unless listed under Do not build).
+
+**Work items**
+
+1. Snap: drop dual tabs; **surface pack** from tab (food / home / health / other); **+ Add bug**, film select, **Pin shot to selected bug**; remaining line = text + photo(s) + comment; auto-spot **for that surface**; food pack keeps scout identity + top dishes; **Take picture + Add image + paste**; `jobFitsSnap` + **Home ≠ full bio history**. Split `snapSurface` home vs health.  
+2. Pointers on `current_evidence`: `scout_url`, fixture query, expected dishes, **per-line photo keys**. Reuse R2 bug report / golden prefix — **no new D1 store**.  
+3. `#n` detail: bar, tape actions, tabs Checks / Dishes / Scout identity / Balance / **History**; remaining synced to not-fixed; NOW + tried + last loop stay.  
+4. Hand off includes **active line + its photo + comment** + remaining + burns + tape URLs.  
+5. Promote path (photos required). Hide Inbox tab.  
+6. Migrate leftover D1 cards onto `#n` or delete dupes. Stop `writeInboxCase` on replay.  
+7. Tests: snap tape on/off, remaining sync, catalog does not set `done`, promote refuses no photos, per-line photo on remaining.  
+8. Auto-spot helper (pure TS) **per surface**: food (micros-zero, brand leak/missing, staple-composite, portion-pack, filtered journey reds); home (tombstone vs tile); health (dup keys / same-date). Do **not** turn “Scouted only” into remaining. Vitest per pack, not one food-only suite.
+
+**Do not build:** `/loop`, `all_green` as COMPLETE, catalog writing queue status, stacked Inbox as a second list, a sixth `plan/` file.
+
+**Dropped only if named here:** Inbox tab as a queue; Make Golden → disk `inbox/`; Bug vs Golden Meal **tabs** (controls inside them move onto the one snap).
 
 ---
 

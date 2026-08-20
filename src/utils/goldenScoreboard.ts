@@ -20,6 +20,7 @@ import {
 } from './goldenJourney';
 import { compileGoldenMeal, type GoldenMealCompile } from './goldenLedger';
 import { loopRedClass } from './goldenStudio';
+import { autoSpotFood, type AutoSpotHit } from './bugAutoSpot';
 
 export type { GoldenInvariant, GoldenJourneyRow, JourneyPhase };
 export { PHASE_LABEL, groupJourneyByDish, snapshotVisibleInvariants, sanitizeJobErrorText };
@@ -133,6 +134,8 @@ export type GoldenScoreboard = {
   invariants?: GoldenInvariant[];
   replayMode?: 'log' | 'catalog' | 'pipeline' | 'loop' | 'analyze';
   ledger?: GoldenMealCompile;
+  /** Pre-checked remaining suggestions. Not scoreboard outcomes. Not "Scouted only". */
+  autoSpot?: AutoSpotHit[];
 };
 
 const FORBIDDEN: Array<{ id: string; re: RegExp; label: string; signature: string }> = [
@@ -711,6 +714,12 @@ export function buildScoreboard(input: {
       enabled: status !== 'pass',
     });
   });
+  const spotted = autoSpotFood({
+    foodLog: input.foodLog,
+    scout: input.scout,
+    logText: input.logText,
+    journey,
+  });
   return {
     observedMeal,
     expectedMeal: observedMeal.map((l) => ({ ...l, scored: false })),
@@ -720,6 +729,7 @@ export function buildScoreboard(input: {
     journey,
     invariants,
     replayMode: 'log',
+    autoSpot: spotted.remaining,
   };
 }
 

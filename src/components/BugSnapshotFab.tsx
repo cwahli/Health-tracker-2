@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, X, Plus, Trash2, Bug, Loader, Check, ImagePlus, CheckCircle2, Sparkles, Utensils, AlertCircle, MessageSquare, ArrowLeft } from 'lucide-react';
+import { Camera, X, Plus, Trash2, Bug, Loader, Check, ImagePlus, CheckCircle2, Sparkles, Utensils, AlertCircle, MessageSquare, ArrowLeft, Eye } from 'lucide-react';
 import {
   isBugSnapshotEnabled,
   setBugSnapshotEnabled,
@@ -58,6 +58,8 @@ import {
 } from '../utils/goldenScoreboard';
 import { collectOriginalFixture, pickSnapshotJob } from '../utils/goldenFixture';
 import { hydrateWorkItem, publicId } from '../utils/bugWorkItem';
+import { BugSnapRemainingSection, type BugSnapRowItem } from './bugQueue';
+import { autoSpotFood, autoSpotHome, autoSpotHealth, type AutoSpotHit } from '../utils/bugAutoSpot';
 
 export interface BugSnapshotFabProps {
   isAdmin: boolean;
@@ -254,6 +256,22 @@ export default function BugSnapshotFab({
   const [previewJourney, setPreviewJourney] = useState<GoldenJourneyRow[]>([]);
   const [previewInvariants, setPreviewInvariants] = useState<GoldenInvariant[]>([]);
 
+  // Q-6.4 G1 Combined Snap State: remaining checklist rows + film shot selection + auto-spot
+  const [selectedShotIndex, setSelectedShotIndex] = useState<number | null>(0);
+  const [remainingRows, setRemainingRows] = useState<BugSnapRowItem[]>([
+    {
+      id: 'row-1',
+      text: '',
+      comment: '',
+      photos: [],
+      checked: true,
+      source: 'user',
+    },
+  ]);
+  const [selectedRowId, setSelectedRowId] = useState<string>('row-1');
+  const [autoSpotHits, setAutoSpotHits] = useState<AutoSpotHit[]>([]);
+  const [checkedAutoSpotIds, setCheckedAutoSpotIds] = useState<Set<string>>(new Set());
+
   // Requirement 7: User-controlled sharing checkboxes
   const [sendChecklist, setSendChecklist] = useState({
     a11y: true,
@@ -341,6 +359,67 @@ export default function BugSnapshotFab({
     return () => window.removeEventListener('paste', onPaste);
   }, [open, shots.length]);
 
+  const handleAddRow = () => {
+    const newId = `row-${Date.now()}`;
+    setRemainingRows((prev) => [
+      ...prev,
+      {
+        id: newId,
+        text: '',
+        comment: '',
+        photos: [],
+        checked: true,
+        source: 'user',
+      },
+    ]);
+    setSelectedRowId(newId);
+  };
+
+  const handleToggleRow = (id: string, checked: boolean) => {
+    setRemainingRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, checked } : r))
+    );
+  };
+
+  const handleTextChange = (id: string, text: string) => {
+    setRemainingRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, text } : r))
+    );
+  };
+
+  const handleCommentChange = (id: string, comment: string) => {
+    setRemainingRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, comment } : r))
+    );
+  };
+
+  const handlePinShot = (id: string) => {
+    if (selectedShotIndex == null || !shots[selectedShotIndex]) return;
+    const shotUrl = shots[selectedShotIndex];
+    setRemainingRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        if (r.photos.includes(shotUrl)) return r;
+        return { ...r, photos: [...r.photos, shotUrl] };
+      })
+    );
+  };
+
+  const handleClearPhoto = (id: string) => {
+    setRemainingRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, photos: [] } : r))
+    );
+  };
+
+  const handleToggleAutoSpot = (hit: AutoSpotHit, checked: boolean) => {
+    setCheckedAutoSpotIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(hit.id);
+      else next.delete(hit.id);
+      return next;
+    });
+  };
+
   const loadTags = useCallback(() => {
     fetch('/api/bug-tracker/overview')
       .then((r) => r.json())
@@ -358,7 +437,8 @@ export default function BugSnapshotFab({
   }, [loadTags]);
 
   useEffect(() => {
-    if (!open || snapshotType !== 'meal') return;
+    if (!open) return;
+    const isFood = category === 'foodcart' || activeTab === 'food' || isAnyMealModalOpen(viewingJobId, activeTab);
     const jobs = typeof JobStore?.getAllJobs === 'function' ? JobStore.getAllJobs() : [];
     const modalJobId = viewingJobId || readOpenModalJobId();
     const job = pickSnapshotJob(jobs, modalJobId);
@@ -374,35 +454,64 @@ export default function BugSnapshotFab({
     } else if (lines.length) {
       setGoldenLines(lines.map((l) => ({ ...l, scored: l.calories != null })));
     }
-    if (!logs && !food && !scout && !errorText) return;
-    fetch('/api/golden/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        logText: logs,
-        foodLog: food,
-        scout,
-        errorText,
-        jobStatus: job?.status,
-        backendLogsUrl: job?.result?.backendLogsUrl || job?.result?.debugUrl || job?.debugUrl,
-      }),
-    })
-      .then((r) => r.json())
-      .then((board) => {
-        const journey = Array.isArray(board.journey) ? board.journey : [];
-        const inv = snapshotVisibleInvariants(
-          Array.isArray(board.invariants) ? board.invariants : [],
-          journey
-        );
-        setPreviewIssues((board.outcomes || []).map((o: any) => o.label));
-        setPreviewJourney(journey);
-        setPreviewInvariants(inv);
-        if (Array.isArray(board.observedMeal) && board.observedMeal.length) {
-          setGoldenLines(board.expectedMeal || board.observedMeal);
-        }
+
+    if (isFood) {
+      fetch('/api/golden/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          logText: logs,
+          foodLog: food,
+          scout,
+          errorText,
+          jobStatus: job?.status,
+          backendLogsUrl: job?.result?.backendLogsUrl || job?.result?.debugUrl || job?.debugUrl,
+        }),
       })
-      .catch(() => {});
-  }, [open, snapshotType, viewingJobId]);
+        .then((r) => r.json())
+        .then((board) => {
+          const journey = Array.isArray(board.journey) ? board.journey : [];
+          const inv = snapshotVisibleInvariants(
+            Array.isArray(board.invariants) ? board.invariants : [],
+            journey
+          );
+          setPreviewIssues((board.outcomes || []).map((o: any) => o.label));
+          setPreviewJourney(journey);
+          setPreviewInvariants(inv);
+          if (Array.isArray(board.observedMeal) && board.observedMeal.length) {
+            setGoldenLines(board.expectedMeal || board.observedMeal);
+          }
+          const spotted = autoSpotFood({ foodLog: food, scout, logText: logs, journey });
+          const hits = spotted.remaining.concat(spotted.parked || []);
+          setAutoSpotHits(hits);
+          setCheckedAutoSpotIds(new Set(spotted.remaining.map((h) => h.id)));
+        })
+        .catch(() => {
+          const spotted = autoSpotFood({ foodLog: food, scout, logText: logs });
+          const hits = spotted.remaining.concat(spotted.parked || []);
+          setAutoSpotHits(hits);
+          setCheckedAutoSpotIds(new Set(spotted.remaining.map((h) => h.id)));
+        });
+    } else if (category === 'Home' || activeTab === 'home') {
+      const spotted = autoSpotHome({});
+      const hits = spotted.remaining.concat(spotted.parked || []);
+      setAutoSpotHits(hits);
+      setCheckedAutoSpotIds(new Set(spotted.remaining.map((h) => h.id)));
+      setPreviewJourney([]);
+      setGoldenLines([]);
+    } else if (category === 'biomarker' || activeTab === 'medical') {
+      const spotted = autoSpotHealth({ history: biomarkerHistory });
+      const hits = spotted.remaining.concat(spotted.parked || []);
+      setAutoSpotHits(hits);
+      setCheckedAutoSpotIds(new Set(spotted.remaining.map((h) => h.id)));
+      setPreviewJourney([]);
+      setGoldenLines([]);
+    } else {
+      setAutoSpotHits([]);
+      setPreviewJourney([]);
+      setGoldenLines([]);
+    }
+  }, [open, category, activeTab, viewingJobId, biomarkerHistory]);
 
   if (!isAdmin || !enabled) return null;
 
@@ -884,16 +993,27 @@ export default function BugSnapshotFab({
       });
       setChecklist(check);
 
+      const allRemainingLines = [
+        ...remainingRows
+          .filter((r) => r.checked && r.text.trim())
+          .map((r) => (r.comment.trim() ? `${r.text.trim()} — ${r.comment.trim()}` : r.text.trim())),
+        ...autoSpotHits
+          .filter((h) => checkedAutoSpotIds.has(h.id) && !/scouted only/i.test(h.text))
+          .map((h) => h.text.trim()),
+      ];
+
       const autoTriage = isBugAutoTriageEnabled();
-      const effectiveCategory = snapshotType === 'meal' ? 'foodcart' : category;
-      const effectiveTagId = snapshotType === 'meal' ? undefined : (tagId === 'new_bug' ? undefined : tagId);
-      const effectiveNewTitle = snapshotType === 'meal' ? goldenTitle.trim() : (tagId === 'new_bug' ? newTitle.trim() : undefined);
+      const effectiveCategory = category || 'foodcart';
+      const effectiveTagId = tagId === 'new_bug' ? undefined : tagId || undefined;
+      const effectiveNewTitle = tagId === 'new_bug' || !tagId ? (newTitle.trim() || goldenTitle.trim() || undefined) : undefined;
+      const effectiveSymptom = symptom.trim() || allRemainingLines.join('\n');
 
       const body = {
         category: effectiveCategory,
         tag_id: effectiveTagId,
         new_bug_title: effectiveNewTitle,
-        user_symptom: symptom.trim() || undefined,
+        user_symptom: effectiveSymptom || undefined,
+        remaining: allRemainingLines.length > 0 ? allRemainingLines : undefined,
         shots,
         payload: {
           ...payload,
@@ -904,6 +1024,7 @@ export default function BugSnapshotFab({
           domain_pack,
           structure_default: AGENT_STRUCTURE_DEFAULT,
           interactions: getInteractionRing().slice(-50),
+          remaining: allRemainingLines,
         },
         debug_payload,
         nutrition_table_md,
@@ -919,7 +1040,7 @@ export default function BugSnapshotFab({
           (payload as any)?.dish_query ||
           (payload as any)?.query ||
           domain_pack.food?.mealName ||
-          (snapshotType === 'meal' ? goldenTitle.trim() : undefined),
+          (effectiveCategory === 'foodcart' ? (goldenTitle.trim() || newTitle.trim()) : undefined),
         chain_key: (payload as any)?.chain_key || undefined,
         auto_triage: autoTriage,
         modelId: localStorage.getItem('selectedModelId') || 'gemini-3.5-flash-lite',
@@ -933,9 +1054,8 @@ export default function BugSnapshotFab({
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
 
-      if (snapshotType === 'meal') {
+      if (effectiveCategory === 'foodcart' && goldenLines.length > 0) {
         try {
-          const extraIssues = extraIssuesText.split('\n').map((s) => s.trim()).filter(Boolean);
           const fx = await collectOriginalFixture(activeJob);
           const gRes = await fetch('/api/golden/cases', {
             method: 'POST',
@@ -944,6 +1064,7 @@ export default function BugSnapshotFab({
               jobId: activeJob?.id || env.activeJobId,
               title:
                 goldenTitle.trim() ||
+                newTitle.trim() ||
                 deriveGoldenTitle({
                   foodLog: resolvedFoodLog,
                   scout: resolvedScoutItems,
@@ -956,9 +1077,9 @@ export default function BugSnapshotFab({
               scout: resolvedScoutItems,
               foodLog: resolvedFoodLog,
               expectedMeal: goldenLines,
-              extraIssues,
+              extraIssues: allRemainingLines,
               originalQuery: fx.query,
-              photos: fx.photos,
+              photos: fx.photos && fx.photos.length > 0 ? fx.photos : shots,
               errorText: sanitizeJobErrorText(
                 String(activeJob?.error?.message || activeJob?.error || ''),
                 String(resolvedBackendLogs || combinedLogs || ''),
@@ -970,8 +1091,6 @@ export default function BugSnapshotFab({
           const gJson = await gRes.json().catch(() => ({}));
           if (gRes.ok) {
             setSuccess((s) => `${s || 'Saved.'} Golden case ${gJson.id?.slice?.(0, 8) || ''} — ${gJson.fail_count ?? '?'} checks failing.`);
-          } else {
-            console.warn('[BugSnapshot] golden create:', gJson.error);
           }
         } catch (gErr) {
           console.warn('[BugSnapshot] golden create failed', gErr);
@@ -1229,97 +1348,74 @@ export default function BugSnapshotFab({
                 </div>
 
                 {shots.length > 0 && (
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {shots.map((s, i) => (
-                      <div
-                        key={i}
-                        className="relative shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-white/20 bg-slate-950 cursor-pointer group shadow-sm"
-                        onClick={() => setPreviewUrl(s)}
-                      >
-                        <img
-                          src={normalizeMealImageUrl(s) || s}
-                          alt={`shot ${i + 1}`}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const target = e.currentTarget;
-                            if (!target.dataset.tried) {
-                              target.dataset.tried = '1';
-                              const norm = normalizeMealImageUrl(s);
-                              if (norm && norm !== s) target.src = norm;
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          title="Delete shot"
-                          className="absolute top-1 right-1 p-1 rounded-lg bg-black/75 text-rose-300 hover:bg-rose-600 hover:text-white transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShots((prev) => prev.filter((_, j) => j !== i));
-                          }}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-white/80">
-                          #{i + 1}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-white/50">Click a shot to select for pinning (blue ring):</p>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {shots.map((s, i) => {
+                        const isSelectedShot = selectedShotIndex === i;
+                        return (
+                          <div
+                            key={i}
+                            className={`relative shrink-0 w-20 h-20 rounded-xl overflow-hidden cursor-pointer group shadow-sm transition-all ${
+                              isSelectedShot
+                                ? 'border-2 border-indigo-400 ring-2 ring-indigo-400/70'
+                                : 'border border-white/20 hover:border-white/40'
+                            }`}
+                            onClick={() => setSelectedShotIndex(i)}
+                          >
+                            <img
+                              src={normalizeMealImageUrl(s) || s}
+                              alt={`shot ${i + 1}`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                if (!target.dataset.tried) {
+                                  target.dataset.tried = '1';
+                                  const norm = normalizeMealImageUrl(s);
+                                  if (norm && norm !== s) target.src = norm;
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              title="Delete shot"
+                              className="absolute top-1 right-1 p-1 rounded-lg bg-black/75 text-rose-300 hover:bg-rose-600 hover:text-white transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShots((prev) => prev.filter((_, j) => j !== i));
+                                if (selectedShotIndex === i) {
+                                  setSelectedShotIndex(shots.length > 1 ? 0 : null);
+                                }
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Enlarge preview"
+                              className="absolute top-1 left-1 p-1 rounded-lg bg-black/75 text-white/80 hover:bg-indigo-600 hover:text-white transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewUrl(s);
+                              }}
+                            >
+                              <Eye className="w-3 h-3" />
+                            </button>
+                            <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-white/80">
+                              #{i + 1}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
-                {/* Mode Selector Tabs: Bug vs Golden Meal */}
-                <div className="flex rounded-xl bg-slate-950 p-1 border border-white/15">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSnapshotType('bug');
-                      setSaveAsGolden(false);
-                    }}
-                    className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                      snapshotType === 'bug'
-                        ? 'bg-rose-600 text-white shadow-md'
-                        : 'text-white/60 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <Bug className="w-3.5 h-3.5" />
-                    <span>Bug Report</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSnapshotType('meal');
-                      setSaveAsGolden(true);
-                      if (!goldenTitle) {
-                        const jobs = typeof JobStore?.getAllJobs === 'function' ? JobStore.getAllJobs() : [];
-                        const modalJobId = viewingJobId || readOpenModalJobId();
-                        const activeJob = pickSnapshotJob(jobs, modalJobId);
-                        setGoldenTitle(
-                          deriveGoldenTitle({
-                            foodLog: activeJob?.result?.pendingFoodLog || activeJob?.result?.data?.pendingFoodLog,
-                            scout: activeJob?.result?.scoutItems || activeJob?.result?.data?.scoutItems || activeJob?.result?.scout,
-                            jobId: activeJob?.id,
-                            fallback: activeJob?.title || activeJob?.inputSnapshot?.text || '',
-                          })
-                        );
-                      }
-                    }}
-                    className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                      snapshotType === 'meal'
-                        ? 'bg-amber-600 text-white shadow-md'
-                        : 'text-white/60 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <Utensils className="w-3.5 h-3.5" />
-                    <span>Golden Meal</span>
-                  </button>
-                </div>
-
-                {/* TAB 1: BUG REPORT FIELDS */}
-                {snapshotType === 'bug' && (
-                  <div className="space-y-3">
+                {/* Unified Form Body */}
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <label className="font-bold text-white/90">Page / Category</label>
+                      <label className="font-bold text-white/90 text-xs">Page / Category</label>
                       <select
                         value={category}
                         onChange={(e) => {
@@ -1337,7 +1433,7 @@ export default function BugSnapshotFab({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="font-bold text-white/90">Bug tag</label>
+                      <label className="font-bold text-white/90 text-xs">Bug tag</label>
                       <select
                         value={tagId}
                         onChange={(e) => {
@@ -1387,197 +1483,103 @@ export default function BugSnapshotFab({
                         )}
                       </select>
                     </div>
-
-                    {tagId && tagId !== 'new_bug' && (() => {
-                      const selectedTag = bugTags.find((t) => t.id === tagId);
-                      if (!selectedTag) return null;
-                      const item = hydrateWorkItem(selectedTag);
-                      const pub = publicId(item, selectedTag.id);
-
-                      const pinnedBug = (item.bug || selectedTag.pinned_instruction || '').trim();
-                      const identifiedProblem = (
-                        selectedTag.identified_problems ||
-                        selectedTag.description ||
-                        selectedTag.symptom ||
-                        selectedTag.notes ||
-                        selectedTag.user_note ||
-                        ''
-                      ).trim();
-
-                      const remainingItems = (item.remaining || []).filter(
-                        (r: string) => r && r.trim() && r.trim() !== selectedTag.title && r.trim() !== pinnedBug
-                      );
-
-                      const commitNotes = (item.commits || [])
-                        .map((c: any) => {
-                          const text = c?.summary || c?.note || c?.attempt?.note;
-                          const clean = String(text || '').replace(/^\[snapshot\]\s*/i, '').trim();
-                          if (!clean || clean === 'snapshot' || clean === selectedTag.title || clean === pinnedBug || clean === identifiedProblem) {
-                            return null;
-                          }
-                          return {
-                            text: clean,
-                            at: c?.at
-                              ? new Date(c.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                              : '',
-                          };
-                        })
-                        .filter(Boolean) as { text: string; at: string }[];
-
-                      const commentsList = (Array.isArray(selectedTag.comments) ? selectedTag.comments : [])
-                        .map((c: any) => {
-                          const text = String(c?.body || '').replace(/^\[snapshot\]\s*/i, '').trim();
-                          if (!text || text === selectedTag.title || text === pinnedBug || text === identifiedProblem) {
-                            return null;
-                          }
-                          return {
-                            text,
-                            at: c?.created_at
-                              ? new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                              : '',
-                          };
-                        })
-                        .filter(Boolean) as { text: string; at: string }[];
-
-                      const allHistoryNotes: { text: string; at: string }[] = [];
-                      const seenTexts = new Set<string>();
-                      for (const n of [...commitNotes, ...commentsList]) {
-                        if (!seenTexts.has(n.text)) {
-                          seenTexts.add(n.text);
-                          allHistoryNotes.push(n);
-                        }
-                      }
-
-                      return (
-                        <div className="p-3.5 rounded-xl border border-violet-500/40 bg-violet-950/40 space-y-2.5 text-xs text-violet-100 shadow-md">
-                          <div className="flex items-center justify-between gap-2 border-b border-violet-500/20 pb-2">
-                            <span className="font-bold text-violet-300 flex items-center gap-1.5 text-xs">
-                              <Bug className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                              Attaching to Open {pub}: {selectedTag.title}
-                            </span>
-                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-900 text-violet-200 border border-violet-500/30">
-                              Queue: {item.queue || selectedTag.status || 'ready'}
-                            </span>
-                          </div>
-
-                          {pinnedBug ? (
-                            <div className="text-[11px] text-white/95 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto bg-black/40 p-2.5 rounded-lg border border-white/10 space-y-1">
-                              <div className="flex items-center gap-1 font-bold text-amber-300 text-[11px]">
-                                <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
-                                <span>Pinned Bug:</span>
-                              </div>
-                              <p className="text-white/95">{pinnedBug}</p>
-                            </div>
-                          ) : null}
-
-                          {identifiedProblem && identifiedProblem !== pinnedBug ? (
-                            <div className="text-[11px] text-white/95 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto bg-black/40 p-2.5 rounded-lg border border-amber-500/30 space-y-1">
-                              <div className="flex items-center gap-1 font-bold text-amber-400 text-[11px]">
-                                <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
-                                <span>Identified Problem / User Context:</span>
-                              </div>
-                              <p className="text-white/90">{identifiedProblem}</p>
-                            </div>
-                          ) : null}
-
-                          {remainingItems.length > 0 && (
-                            <div className="text-[11px] bg-black/30 p-2 rounded-lg border border-white/10 space-y-1">
-                              <span className="font-semibold text-purple-300 block text-[10px] uppercase tracking-wider">Remaining Unfixed Items:</span>
-                              <ul className="list-disc list-inside space-y-0.5 text-white/80">
-                                {remainingItems.map((r: string, idx: number) => (
-                                  <li key={idx} className="leading-snug">{r}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {allHistoryNotes.length > 0 && (
-                            <div className="text-[10px] bg-black/30 p-2 rounded-lg border border-white/10 space-y-1 max-h-32 overflow-y-auto">
-                              <span className="font-semibold text-purple-300 flex items-center gap-1">
-                                <MessageSquare className="w-3 h-3 text-purple-400 shrink-0" />
-                                <span>Previous Loop & Snapshot Notes ({allHistoryNotes.length}):</span>
-                              </span>
-                              <div className="space-y-1 pt-0.5">
-                                {allHistoryNotes.slice(-4).map((c, idx) => (
-                                  <div key={idx} className="pl-2 border-l-2 border-purple-500/40 text-slate-300 leading-snug">
-                                    <span className="text-white/90">{c.text}</span>
-                                    {c.at && <span className="text-white/40 ml-1.5 font-mono text-[9px]">({c.at})</span>}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          <p className="text-[10px] text-white/60">
-                            Snapshot will be appended as a new commit. Pinned bug instruction and previous loop commits will be preserved.
-                          </p>
-                        </div>
-                      );
-                    })()}
-
-                    {tagId === 'new_bug' && (
-                      <div className="space-y-1">
-                        <label className="font-bold text-amber-300">New bug title *</label>
-                        <input
-                          value={newTitle}
-                          onChange={(e) => setNewTitle(e.target.value)}
-                          className={inputCls}
-                          placeholder="Short descriptive title"
-                        />
-                      </div>
-                    )}
-
-                    <div className="space-y-1">
-                      <label className="font-bold text-white/90">Identified problem / symptom (optional)</label>
-                      <textarea
-                        rows={2}
-                        value={symptom}
-                        onChange={(e) => setSymptom(e.target.value)}
-                        className={inputCls}
-                        placeholder="What looks wrong? (full diagnosis can be filled by Analyze later)"
-                      />
-                    </div>
                   </div>
-                )}
 
-                {/* TAB 2: GOLDEN MEAL FIELDS */}
-                {snapshotType === 'meal' && (
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="font-bold text-amber-300">Golden meal name *</label>
-                      <input
-                        value={goldenTitle}
-                        onChange={(e) => setGoldenTitle(e.target.value)}
-                        className={inputCls}
-                        placeholder="e.g. Avocado Toast with Poached Eggs"
-                      />
+                  {/* Attached Bug Tag Context Card */}
+                  {tagId && tagId !== 'new_bug' && (() => {
+                    const selectedTag = bugTags.find((t) => t.id === tagId);
+                    if (!selectedTag) return null;
+                    const item = hydrateWorkItem(selectedTag);
+                    const pub = publicId(item, selectedTag.id);
+                    const pinnedBug = (item.bug || selectedTag.pinned_instruction || '').trim();
+                    const identifiedProblem = (
+                      selectedTag.identified_problems ||
+                      selectedTag.description ||
+                      selectedTag.symptom ||
+                      selectedTag.notes ||
+                      selectedTag.user_note ||
+                      ''
+                    ).trim();
+
+                    return (
+                      <div className="p-3 rounded-xl border border-violet-500/40 bg-violet-950/40 space-y-2 text-xs text-violet-100 shadow-md">
+                        <div className="flex items-center justify-between gap-2 border-b border-violet-500/20 pb-1.5">
+                          <span className="font-bold text-violet-300 flex items-center gap-1.5 text-xs">
+                            <Bug className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            Attaching to Open {pub}: {selectedTag.title}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-violet-900 text-violet-200 border border-violet-500/30">
+                            Queue: {item.queue || selectedTag.status || 'ready'}
+                          </span>
+                        </div>
+                        {pinnedBug ? (
+                          <div className="text-[11px] text-white/95 leading-relaxed bg-black/40 p-2 rounded-lg border border-white/10 space-y-0.5">
+                            <div className="flex items-center gap-1 font-bold text-amber-300 text-[10px]">
+                              <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+                              <span>Pinned Bug:</span>
+                            </div>
+                            <p>{pinnedBug}</p>
+                          </div>
+                        ) : null}
+                        {identifiedProblem && identifiedProblem !== pinnedBug ? (
+                          <div className="text-[11px] text-white/90 leading-relaxed bg-black/40 p-2 rounded-lg border border-amber-500/30 space-y-0.5">
+                            <span className="font-bold text-amber-400 text-[10px] block">User Context / Identified:</span>
+                            <p>{identifiedProblem}</p>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Title Input */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="font-bold text-amber-300 text-xs">Title *</label>
+                      {(() => {
+                        const jobs = typeof JobStore?.getAllJobs === 'function' ? JobStore.getAllJobs() : [];
+                        const modalJobId = viewingJobId || readOpenModalJobId();
+                        const activeJob = pickSnapshotJob(jobs, modalJobId);
+                        const food = activeJob?.result?.pendingFoodLog || activeJob?.result?.data?.pendingFoodLog;
+                        const mTitle = food?.name || activeJob?.title || activeJob?.inputSnapshot?.text || '';
+                        if (mTitle) {
+                          return (
+                            <span className="text-[10px] font-bold text-indigo-300 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700 truncate max-w-[220px]">
+                              Meal · {mTitle}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
+                    <input
+                      value={newTitle || goldenTitle}
+                      onChange={(e) => {
+                        setNewTitle(e.target.value);
+                        setGoldenTitle(e.target.value);
+                      }}
+                      className={inputCls}
+                      placeholder="Short descriptive title for this bug snapshot"
+                    />
+                  </div>
 
-                    <div className="space-y-1">
-                      <label className="font-bold text-white/90">Identified problem / symptom (optional)</label>
-                      <textarea
-                        rows={2}
-                        value={symptom}
-                        onChange={(e) => setSymptom(e.target.value)}
-                        className={inputCls}
-                        placeholder="What looks wrong with this meal parse? (e.g., incorrect grams or missing sauce)"
-                      />
-                    </div>
-
-                    <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 p-2.5 space-y-2">
-                      <div className="space-y-2 text-[11px] text-white/80">
+                  {/* Food Pack: Scout identity & Top dishes (show on food surface only) */}
+                  {(() => {
+                    const isFood = category === 'foodcart' || activeTab === 'food' || isAnyMealModalOpen(viewingJobId, activeTab);
+                    if (!isFood) return null;
+                    return (
+                      <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 p-2.5 space-y-2.5">
                         {previewJourney.length > 0 && (
-                          <div className="rounded-lg border border-white/10 bg-black/30 p-1.5 space-y-1">
-                            <p className="text-[10px] font-bold text-amber-200">
+                          <div className="rounded-lg border border-white/10 bg-black/30 p-2 space-y-1 text-xs">
+                            <p className="text-[11px] font-bold text-amber-200">
                               Scout identity — {previewJourney.filter((j) => j.identityPass).length}/{previewJourney.length} identified
                             </p>
                             {groupJourneyByDish(previewJourney).map((g) => (
-                              <div key={g.dish} className="space-y-0.5">
+                              <div key={g.dish} className="space-y-0.5 pl-1">
                                 <p className="text-[10px] font-semibold text-white/90 truncate">{g.dish}</p>
                                 {g.rows.map((j) => (
-                                  <div key={j.id} className="flex items-baseline justify-between gap-2 text-[10px] pl-3">
+                                  <div key={j.id} className="flex items-baseline justify-between gap-2 text-[10px] pl-2">
                                     <span className="text-white/70 truncate">{j.query}</span>
-                                    <span className={j.identityPass ? 'text-emerald-300 shrink-0' : 'text-rose-300 shrink-0'}>
+                                    <span className={j.identityPass ? 'text-emerald-300 shrink-0 font-semibold' : 'text-rose-300 shrink-0 font-semibold'}>
                                       {PHASE_LABEL[j.phase] || j.phase}
                                     </span>
                                   </div>
@@ -1586,29 +1588,11 @@ export default function BugSnapshotFab({
                             ))}
                           </div>
                         )}
-                        {previewInvariants.length > 0 && (
-                          <ul className="list-disc pl-4 space-y-0.5 text-rose-200">
-                            {previewInvariants.slice(0, 12).map((inv) => (
-                              <li key={inv.id}>{inv.label}</li>
-                            ))}
-                          </ul>
-                        )}
-                        {previewJourney.length === 0 && previewInvariants.length === 0 && previewIssues.length > 0 && (
-                          <ul className="list-disc pl-4 space-y-0.5 text-rose-200">
-                            {previewIssues.slice(0, 10).map((p) => (
-                              <li key={p}>{p}</li>
-                            ))}
-                          </ul>
-                        )}
-                        {previewJourney.length === 0 && previewInvariants.some((i) => i.group === 'transport') && (
-                          <p className="text-[10px] text-amber-200/90">
-                            Scout never listed foods. Replay catalog cannot run on this case until a job finishes. Switch to Gemini 3.1 Flash Lite and Analyze again — photos are already on the job.
-                          </p>
-                        )}
+
+                        {/* Top dishes table */}
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between">
                             <p className="font-bold text-amber-200 text-xs">Top dishes — target values</p>
-                            <p className="text-[10px] text-white/45">Leave kcal empty to mean “this dish must appear” — don’t invent numbers.</p>
                             <button
                               type="button"
                               onClick={() => {
@@ -1626,15 +1610,13 @@ export default function BugSnapshotFab({
                                   },
                                 ]);
                               }}
-                              className="px-2 py-0.5 rounded bg-amber-500/30 hover:bg-amber-500/50 border border-amber-400/40 text-[10px] text-amber-200 font-bold flex items-center gap-1"
+                              className="px-2 py-0.5 rounded bg-amber-500/30 hover:bg-amber-500/50 border border-amber-400/40 text-[10px] text-amber-200 font-bold flex items-center gap-1 cursor-pointer"
                             >
                               <Plus className="w-3 h-3" />
                               Add Dish
                             </button>
                           </div>
-                          {goldenLines.length === 0 ? (
-                            <p className="text-[10px] text-white/50 italic">No top dishes extracted yet. Click "Add Dish" above.</p>
-                          ) : (
+                          {goldenLines.length > 0 && (
                             <div className="overflow-x-auto rounded-lg border border-white/10 bg-black/40">
                               <table className="w-full text-[10px] border-collapse">
                                 <thead>
@@ -1720,7 +1702,7 @@ export default function BugSnapshotFab({
                                           onClick={() => {
                                             setGoldenLines((prev) => prev.filter((_, idx) => idx !== i));
                                           }}
-                                          className="p-1 text-rose-400 hover:text-rose-200"
+                                          className="p-1 text-rose-400 hover:text-rose-200 cursor-pointer"
                                           title="Remove dish"
                                         >
                                           <Trash2 className="w-3 h-3" />
@@ -1733,17 +1715,39 @@ export default function BugSnapshotFab({
                             </div>
                           )}
                         </div>
-                        <textarea
-                          rows={2}
-                          value={extraIssuesText}
-                          onChange={(e) => setExtraIssuesText(e.target.value)}
-                          className={inputCls}
-                          placeholder="Un-reported bugs (one per line) — e.g. wrap was scaled to scout guess"
-                        />
                       </div>
-                    </div>
+                    );
+                  })()}
+
+                  {/* Q-6.4 G1: Bugs on this meal / page (Checklist rows + film pin toolbar + AutoSpot) */}
+                  <BugSnapRemainingSection
+                    rows={remainingRows}
+                    selectedRowId={selectedRowId}
+                    selectedShotUrl={selectedShotIndex != null ? shots[selectedShotIndex] : null}
+                    autoSpotHits={autoSpotHits}
+                    checkedAutoSpotIds={checkedAutoSpotIds}
+                    onSelectRow={setSelectedRowId}
+                    onAddRow={handleAddRow}
+                    onToggleRow={handleToggleRow}
+                    onTextChange={handleTextChange}
+                    onCommentChange={handleCommentChange}
+                    onPinShot={handlePinShot}
+                    onClearPhoto={handleClearPhoto}
+                    onToggleAutoSpot={handleToggleAutoSpot}
+                  />
+
+                  {/* Optional user notes / symptom */}
+                  <div className="space-y-1">
+                    <label className="font-bold text-white/90 text-xs">Identified problem / symptom (optional)</label>
+                    <textarea
+                      rows={2}
+                      value={symptom}
+                      onChange={(e) => setSymptom(e.target.value)}
+                      className={inputCls}
+                      placeholder="What looks wrong? (full diagnosis can be filled by Analyze later)"
+                    />
                   </div>
-                )}
+                </div>
 
                 {/* Requirements 6 & 7: Cleaned up Capture pack and checkboxes for info sent */}
                 <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/25 p-2.5 space-y-2 text-[11px] text-white/70">
@@ -1828,12 +1832,10 @@ export default function BugSnapshotFab({
                   type="button"
                   disabled={busy}
                   onClick={handleSubmit}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-40 flex items-center gap-1.5 text-white ${
-                    snapshotType === 'meal' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-rose-600 hover:bg-rose-500'
-                  }`}
+                  className="px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-40 flex items-center gap-1.5 text-white bg-rose-600 hover:bg-rose-500 cursor-pointer shadow-md"
                 >
                   {busy ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                  {snapshotType === 'meal' ? 'Save as golden meal' : 'Save to bug tracker'}
+                  {tagId && tagId !== 'new_bug' ? 'Save snapshot → open bug' : 'Save & upload snapshot'}
                 </button>
               </div>
             </div>

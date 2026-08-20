@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bug queue — combined (inbox tape on the card)</title>
+  <style>
+    :root {
+      --bg: #0b1220; --panel: #111827; --line: rgba(255,255,255,.12);
+      --text: #f8fafc; --muted: rgba(248,250,252,.62);
+      --emerald: #34d399; --rose: #fb7185; --amber: #fbbf24; --indigo: #a5b4fc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 13px/1.45 ui-sans-serif, system-ui, sans-serif;
+      background: radial-gradient(1200px 560px at 8% -8%, #1e3a5f, var(--bg) 52%);
+      color: var(--text);
+    }
+    .app { max-width: 1320px; margin: 0 auto; padding: 16px 16px 48px; }
+    h1 { font-size: 20px; margin: 0; letter-spacing: -.02em; display: flex; align-items: center; gap: 8px; }
+    .q6 { font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.1); color: rgba(255,255,255,.7); }
+    .sub { color: var(--muted); margin: 4px 0 0; max-width: 52rem; }
+    header.top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+    .hdr-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .next {
+      background: linear-gradient(135deg, #d97706, #4f46e5); border: 0; color: #fff;
+      font-weight: 800; padding: 8px 14px; border-radius: 12px; cursor: pointer;
+    }
+    .ghost {
+      background: rgba(255,255,255,.06); border: 1px solid var(--line); color: #e2e8f0;
+      border-radius: 12px; padding: 8px 10px; font-weight: 700; cursor: pointer;
+    }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+    .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+    .kpi b { display: block; font-size: 20px; }
+    .kpi span { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    select {
+      background: var(--panel); color: #fff; border: 1px solid var(--line);
+      border-radius: 12px; padding: 7px 10px; font-weight: 700; font-size: 12px;
+    }
+    .layout { display: grid; grid-template-columns: 0.92fr 1.18fr; gap: 12px; }
+    @media (max-width: 980px) { .layout, .kpis { grid-template-columns: 1fr; } }
+    .col { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+    .col h2 {
+      margin: 0; padding: 11px 14px; font-size: 11px; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line);
+    }
+    .row {
+      padding: 10px 12px; border-top: 1px solid var(--line); cursor: pointer;
+      display: grid; grid-template-columns: 52px 1fr auto; gap: 8px; align-items: start;
+    }
+    .row:first-of-type { border-top: 0; }
+    .row.sel { background: rgba(99,102,241,.16); }
+    .id { font-weight: 800; color: #c7d2fe; }
+    .title { font-weight: 700; }
+    .meta { color: var(--muted); font-size: 11px; }
+    .badge { display: inline-block; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
+    .ready { background: rgba(52,211,153,.15); color: var(--emerald); }
+    .human { background: rgba(251,191,36,.16); color: var(--amber); }
+    .blocked { background: rgba(251,113,133,.16); color: var(--rose); }
+    .done { background: rgba(148,163,184,.18); color: #cbd5e1; }
+    .pad { padding: 12px 14px 16px; }
+    .pin {
+      background: #1c1917; border: 1px solid #a16207; border-radius: 12px; padding: 11px 12px; margin-bottom: 10px;
+    }
+    .pin .lock { font-size: 10px; font-weight: 800; color: #fbbf24; letter-spacing: .04em; text-transform: uppercase; }
+    .pin p { margin: 6px 0 0; font-weight: 650; }
+    .now { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 11px 12px; margin-bottom: 12px; }
+    h3 { font-size: 13px; margin: 0 0 6px; }
+    ul { margin: 4px 0 0; padding-left: 18px; }
+    .burn { color: var(--rose); }
+    .ok { color: var(--emerald); }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+    button.link {
+      background: #1e293b; border: 1px solid var(--line); color: #c7d2fe;
+      border-radius: 8px; padding: 6px 9px; font-weight: 700; cursor: pointer; font-size: 11px;
+    }
+    button.link.safe { color: #6ee7b7; border-color: rgba(52,211,153,.35); background: rgba(6,78,59,.35); }
+    button.link.warn { color: #fcd34d; border-color: rgba(251,191,36,.35); background: rgba(69,26,3,.4); }
+    button.link.ok { color: #86efac; border-color: rgba(52,211,153,.45); background: rgba(6,95,70,.45); }
+    button.link.mute { opacity: .45; cursor: not-allowed; }
+    .cap { font-size: 9px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+    .tape {
+      background: rgba(16,185,129,.08); border: 1px solid rgba(52,211,153,.28);
+      border-radius: 12px; padding: 10px 12px; margin-bottom: 12px;
+    }
+    .photos { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+    .ph {
+      width: 64px; height: 64px; border-radius: 10px; cursor: pointer; border: 2px solid transparent;
+      display: flex; align-items: flex-end; padding: 5px; font-size: 10px; font-weight: 800;
+    }
+    .a { background: linear-gradient(160deg,#9a3412,#1e293b); }
+    .b { background: linear-gradient(160deg,#854d0e,#1e293b); }
+    .c { background: linear-gradient(160deg,#1e3a8a,#1e293b); }
+    .journey, .ledger {
+      background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px;
+    }
+    .jrow { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; padding: 2px 0 2px 10px; }
+    .hit { color: var(--emerald); font-weight: 800; }
+    .miss { color: var(--rose); font-weight: 800; }
+    .books { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .book { background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 6px 8px; min-width: 88px; }
+    .book span { display: block; color: var(--muted); font-size: 10px; }
+    .book b { font-size: 13px; }
+    .toast {
+      display: none; margin: 0 0 10px; padding: 8px 10px; border-radius: 10px;
+      background: rgba(6,78,59,.5); border: 1px solid rgba(52,211,153,.35); color: #d1fae5; font-size: 12px;
+    }
+    .toast.on { display: block; }
+    .failsafe {
+      margin-top: 12px; background: var(--panel); border: 1px dashed rgba(148,163,184,.35);
+      border-radius: 16px; padding: 12px 14px;
+    }
+    .failsafe h2 { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+    .gchips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .gchip {
+      font-size: 11px; font-weight: 700; padding: 5px 9px; border-radius: 999px;
+      background: #0f172a; border: 1px solid #334155; color: #cbd5e1;
+    }
+    .gchip em { color: var(--emerald); font-style: normal; font-size: 10px; margin-left: 4px; }
+    .note { font-size: 11px; color: var(--muted); margin: 8px 0 0; }
+    .lb {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7);
+      align-items: center; justify-content: center; z-index: 20;
+    }
+    .lb.on { display: flex; }
+    .lb .box {
+      width: min(380px,90vw); height: min(280px,50vh); border-radius: 16px;
+      background: linear-gradient(160deg,#7c2d12,#0f172a);
+      display: flex; align-items: flex-end; padding: 14px; font-weight: 800;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div>
+        <h1>Bug queue <span class="q6">Q-6 · combined</span></h1>
+        <p class="sub">One work list. Food cards carry the frozen meal tape (replay / journey / ledger). Official G1–G7 stay a fail-safe under the queue — not a second Inbox. Biomarker cards never show Replay catalog.</p>
+      </div>
+      <div class="hdr-actions">
+        <button class="next" type="button">Next bug → #3</button>
+        <button class="ghost" type="button">Flag</button>
+      </div>
+    </header>
+
+    <section class="kpis">
+      <div class="kpi"><span>Ready now</span><b>3</b></div>
+      <div class="kpi"><span>Stuck / 2 burns</span><b>0</b></div>
+      <div class="kpi"><span>Bugs open</span><b>3</b></div>
+      <div class="kpi"><span>Done this week</span><b>5</b></div>
+    </section>
+
+    <div class="filters">
+      <select>
+        <option selected>Active (3)</option>
+        <option>Agent to do</option>
+        <option>Human to do</option>
+        <option>Done / Fixed (5)</option>
+      </select>
+      <select>
+        <option selected>All categories (3)</option>
+        <option>foodcart (2)</option>
+        <option>Home (1)</option>
+      </select>
+      <select>
+        <option selected>Sort: Last actioned</option>
+        <option>Priority (Next bug)</option>
+      </select>
+      <!-- No Golden Inbox option -->
+    </div>
+
+    <div class="layout">
+      <section class="col">
+        <h2>Queue — one list (snap · auto · meal tape)</h2>
+
+        <div class="row sel" data-panel="food">
+          <div class="id">#3</div>
+          <div>
+            <div class="title">nutrition missing</div>
+            <div class="meta">foodcart · FALSE_FRIEND / zeros · tape job_gicamzspm · 1 meal</div>
+          </div>
+          <span class="badge human">human to do</span>
+        </div>
+        <div class="row" data-panel="food9">
+          <div class="id">#9</div>
+          <div>
+            <div class="title">Serving option completely wrong</div>
+            <div class="meta">foodcart · OPENING_WRONG · tape · 1 meal</div>
+          </div>
+          <span class="badge ready">un-actioned</span>
+        </div>
+        <div class="row" data-panel="bio">
+          <div class="id">#2</div>
+          <div>
+            <div class="title">BMI reappearing after delete</div>
+            <div class="meta">Home · no food tape · 6 items · burns kept</div>
+          </div>
+          <span class="badge human">human to do</span>
+        </div>
+        <div class="row" style="opacity:.55">
+          <div class="id">#8</div>
+          <div>
+            <div class="title">Duplicate composite card</div>
+            <div class="meta">foodcart · done · not in Active</div>
+          </div>
+          <span class="badge done">fixed</span>
+        </div>
+      </section>
+
+      <section class="col">
+        <h2 id="detail-h">Open · #3 — food card (tape on the bug)</h2>
+        <div class="pad">
+          <div class="toast" id="toast"></div>
+
+          <div class="actions" id="food-actions">
+            <span class="cap" style="width:100%;margin:0">No Gemini</span>
+            <button class="link safe" type="button" data-toast="Replayed saved tape · remaining refreshed from blocking reds. Queue status unchanged until you mark remaining.">Replay log</button>
+            <button class="link safe" type="button" data-toast="Catalog lookup only · dictionary hits shown on journey. Does not change ready / done / Promote.">Replay catalog</button>
+            <span class="cap" style="width:100%;margin:8px 0 0">New job (photos + query already on the card)</span>
+            <button class="link warn" type="button" data-toast="NEW Analyze queued with saved photos + original query. New commit when the job finishes — not a /loop.">Re-analyze</button>
+            <button class="link" type="button" data-toast="Hand off copied: NOW + remaining classes + burns + scout reds + POST /attempts. No /loop.">Hand off</button>
+            <button class="link ok" type="button" data-toast="Promote blocked: needs photos on the tape + a named class test green. Then writes G8 folder + manifest.">Promote to G8</button>
+            <button class="link" type="button" data-toast="Mark done requires remaining empty (or moved to done[]) after a user retest.">✓ Mark fixed</button>
+          </div>
+          <div class="actions hidden" id="bio-actions">
+            <button class="link" type="button" data-toast="Hand off copied: NOW + remaining + burns. No Replay catalog / Promote on biomarker cards.">Hand off</button>
+            <button class="link" type="button" data-toast="Triage digest on this snap (a11y + domain pack).">Triage</button>
+            <button class="link" type="button" data-toast="Mark done requires a retest after the last agent commit.">✓ Mark fixed</button>
+          </div>
+
+          <!-- FOOD DETAIL -->
+          <div id="panel-food">
+            <div class="now">
+              <h3>NOW — next agent</h3>
+              <div class="pin">
+                <div class="lock">Bug — pinned · never wiped</div>
+                <p>nutrition missing · branded micros at 0. Baguette false-composite is #6 (done) — do not re-work that class here.</p>
+              </div>
+              <ul>
+                <li><strong>Class:</strong> FALSE_FRIEND <span class="meta">(dropdown)</span></li>
+                <li><strong>Remaining:</strong> branded micros at 0 on Marie Rose / baguette sources</li>
+                <li class="ok"><strong>Done:</strong> baguette not composite → moved to #6</li>
+                <li><strong>Tape:</strong> job_1787182235314_gicamzspm · debug held</li>
+                <li class="burn"><strong>Tried:</strong> nutritionAggregator omit zeros · pass on unit file, remaining still open · not done</li>
+              </ul>
+            </div>
+
+            <div class="tape">
+              <div class="cap">Frozen meal tape — fixture query + photos + downloads</div>
+              <div class="meta">Query: “Analyze this meal photo.” · scout.json + backend.log held</div>
+              <div class="photos">
+                <div class="ph a" data-c="Meal photo 1">01</div>
+                <div class="ph b" data-c="Meal photo 2">02</div>
+                <div class="ph c" data-c="Nutrition label UI">04</div>
+              </div>
+              <div style="margin-top:8px">
+                <button class="link" type="button" data-toast="backend.log">Download logs</button>
+                <button class="link" type="button" data-toast="scout.json">Download scout</button>
+              </div>
+            </div>
+
+            <div class="journey">
+              <div class="cap">Scout journey — 11/14 identified</div>
+              <p class="meta" style="margin:0 0 4px">Baguette / flour</p>
+              <div class="jrow"><span>baguette</span><span class="hit">HIT_UNIQUE</span></div>
+              <p class="meta" style="margin:8px 0 4px">Mixed vegetables + Marie Rose</p>
+              <div class="jrow"><span>marie rose sauce</span><span class="miss">fallback · micros 0</span></div>
+              <div class="jrow"><span>cooked pasta</span><span class="hit">label truth</span></div>
+            </div>
+
+            <div class="ledger">
+              <div class="cap">Meal journey / trial balance · unbalanced · mayPromote NO</div>
+              <p class="meta">Scout → foundation → reconcile → dietitian payload → saved table → narrative.</p>
+              <div class="books">
+                <div class="book"><span>Scout est</span><b>1082</b></div>
+                <div class="book"><span>Foundation</span><b>1104</b></div>
+                <div class="book"><span>Reconcile</span><b>1082</b></div>
+                <div class="book"><span>Dietitian payload</span><b>1082</b></div>
+                <div class="book"><span>Saved / UI table</span><b>1082</b></div>
+                <div class="book"><span>Narrative kcal</span><b>1082</b></div>
+              </div>
+              <p class="meta" style="color:var(--rose);margin:8px 0 0">backend · SILENT_REPAIR: foundation 1104 → 1082. Stays on tape. Classify only if you take that job.</p>
+            </div>
+
+            <div class="ledger">
+              <div class="cap">Food resolution diagnostics</div>
+              <p class="meta">Sampled 14 · USDA 4 · Catalog 4 · Label/brand 3 · Fallback 2</p>
+            </div>
+
+            <div class="ledger">
+              <div class="cap">Meal dishes — expected vs tape</div>
+              <p class="meta">Pasta present · Marie Rose micros 0 · baguette not composite (after iter)</p>
+            </div>
+
+            <div class="ledger">
+              <div class="cap">Bug list · 8 pending · 20 fixed · accept ≠ remaining</div>
+              <p class="meta">Not fixed: marie rose fallback. Need analyze: pasta label_merge. Accept: kept printed kcal.</p>
+            </div>
+
+            <div class="ledger">
+              <div class="cap">Tensions / warnings</div>
+              <p class="meta">foundation ↔ scout — wrap scaled to scout guess (user extra issue from snap)</p>
+            </div>
+          </div>
+
+          <!-- #9 short twin -->
+          <div id="panel-food9" class="hidden">
+            <div class="now">
+              <h3>NOW — next agent</h3>
+              <div class="pin">
+                <div class="lock">Bug — pinned</div>
+                <p>Serving option completely wrong. Multipack 6 croissant / 4 wrap vs one of each in the photo.</p>
+              </div>
+              <ul>
+                <li><strong>Class:</strong> OPENING_WRONG</li>
+                <li><strong>Remaining:</strong> pack serving ≠ scout count</li>
+                <li><strong>Tape:</strong> job_1787254395622_06hvkbt2v · debug on snapshot</li>
+                <li><strong>Tried:</strong> none yet</li>
+              </ul>
+            </div>
+            <div class="tape">
+              <div class="cap">Frozen meal tape</div>
+              <div class="photos">
+                <div class="ph a" data-c="Croissant + wrap photo">01</div>
+                <div class="ph b" data-c="Portion options UI">02</div>
+                <div class="ph c" data-c="Title vs servings">03</div>
+              </div>
+            </div>
+            <p class="meta">Same Replay log / catalog / Re-analyze / Promote pattern as #3. One class. No /loop.</p>
+          </div>
+
+          <!-- BIOMARKER: no tape -->
+          <div id="panel-bio" class="hidden">
+            <div class="now">
+              <h3>NOW — next agent</h3>
+              <div class="pin">
+                <div class="lock">Bug — pinned</div>
+                <p>BMI reappearing after delete. Auto-delete clears it; Sync brings it back. Do not glue a leftover food_log onto this snap.</p>
+              </div>
+              <ul>
+                <li><strong>Class:</strong> IDENTITY_FALSE_FRIEND</li>
+                <li><strong>Remaining:</strong> corrupted BMI row still resurrects on Sync</li>
+                <li><strong>Evidence:</strong> Home pack · tombstones · no job_id</li>
+                <li class="burn"><strong>Tried / DO NOT RETRY:</strong> forceAll tombstones · Math.max deleteEmpty · daily-benefit tombstones</li>
+              </ul>
+            </div>
+            <p class="meta">No Replay catalog, no Promote to G*, no meal journey. This is a sync / tombstone card. Food tape on old commits is history — current evidence has no food job.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="failsafe">
+      <h2>Official goldens — fail-safe (not a queue)</h2>
+      <div class="gchips">
+        <span class="gchip">G1 Picnic + croissant edit <em>Layer B</em></span>
+        <span class="gchip">G2 Sainsbury oats 60g <em>Layer B</em></span>
+        <span class="gchip">G3 Yolk + potatoes</span>
+        <span class="gchip">G4 Portion stitch</span>
+        <span class="gchip">G5 Printed labels</span>
+        <span class="gchip">G6 Menu compare</span>
+        <span class="gchip">G7 Chip aisle</span>
+      </div>
+      <p class="note">CI: <code>npx vitest run tests/golden_meals.test.ts</code>. Promote on a food card adds G8 here (photos + expected locks required). There is no Inbox tab. Biomarker gates stay in <code>Golden_biomarker</code> tests, not this strip.</p>
+    </section>
+  </div>
+
+  <div class="lb" id="lb"><div class="box" id="cap"></div></div>
+  <script>
+    const titles = {
+      food: 'Open · #3 — food card (tape on the bug)',
+      food9: 'Open · #9 — food card (tape on the bug)',
+      bio: 'Open · #2 — biomarker (no meal tape)',
+    };
+    document.querySelectorAll('.row[data-panel]').forEach((row) => {
+      row.onclick = () => {
+        document.querySelectorAll('.row[data-panel]').forEach((r) => r.classList.remove('sel'));
+        row.classList.add('sel');
+        const p = row.dataset.panel;
+        document.getElementById('detail-h').textContent = titles[p];
+        ['food', 'food9', 'bio'].forEach((id) => {
+          document.getElementById('panel-' + id).classList.toggle('hidden', id !== p);
+        });
+        const isBio = p === 'bio';
+        document.getElementById('food-actions').classList.toggle('hidden', isBio);
+        document.getElementById('bio-actions').classList.toggle('hidden', !isBio);
+      };
+    });
+    document.querySelectorAll('[data-toast]').forEach((btn) => {
+      btn.onclick = () => {
+        const t = document.getElementById('toast');
+        t.textContent = btn.dataset.toast;
+        t.classList.add('on');
+      };
+    });
+    document.querySelectorAll('.ph').forEach((el) => {
+      el.onclick = () => {
+        document.getElementById('cap').textContent = el.dataset.c;
+        document.getElementById('lb').classList.add('on');
+      };
+    });
+    document.getElementById('lb').onclick = () => document.getElementById('lb').classList.remove('on');
+  </script>
+</body>
+</html>

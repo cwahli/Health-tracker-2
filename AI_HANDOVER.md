@@ -3,6 +3,12 @@
 **Updated:** 2026-08-20
 **Status:** ALL GATES & REGRESSION SUITES GREEN (609 tests across 62 test suites)
 
+- **Q-6.4 combined queue (2026-08-21):** Spec `plan/QUALITY.md` §14.4 & `studio/Q64_GEMINI_COMBINED_QUEUE_UI.md`. **Gemini G1 bulk UI complete & verified**:
+  - **One snap form (`BugSnapshotFab.tsx`):** Unified Bug Report and Golden Meal into a single scrollable form with multi-bug checklist rows (`BugSnapRemainingSection.tsx`), film shot selection with visual ring highlights, and `AutoSpotList` under user rows (auto-dropping `/scouted only/i`).
+  - **Surface-aware food pack:** Scout identity and Top dishes table show when category is foodcart/meal, and hide cleanly on Home/Health surfaces.
+  - **Tracker 5-Tab strip (`BugTrackerModal.tsx` & `FoodDetailTabs.tsx`):** `Checks`, `Dishes`, `Scout identity`, `Balance`, and `History` tabs ported for food cards while keeping Golden Inbox in the board filter.
+  - **Hand off formatting:** Copies active line, photo URLs, comment, and all remaining items.
+
 - **Golden meal cleanup (2026-08-20):** Official set is **G1–G7** only (photos + Instruction + expected). Inbox promotions G8–G18 moved to `tests/Golden_meal/archive/` (`bug`, `Try golden`, quota, duplicate wraps, no-photo stubs). D1 inbox kept one card per unique meal (picnic, sweet-chilli wrap, promoted prawn doughnut, user label). Catalog replay no longer writes `all_green` / status. Disk `inbox/INDEX.md` is empty-by-design; UI is D1.
 
 - **Bug queue green-tick vs agent view (2026-08-20):** Overview now loads `fixed` as well as `to_fix` so KPIs can count Done this week. Green tick already wrote `status=fixed` + `queue=done` for #4–#8; the dashboard had been refetching only `to_fix`, so Done this week stayed 0 and agents querying the full table still listed those cards. Open work is #2, #3, #9. `GET /api/bugs/open` and `/next` stay on open cards only.

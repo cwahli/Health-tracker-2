@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>#10 flow — nothing dropped</title>
+  <style>
+    :root {
+      --bg: #0b1220; --panel: #111827; --line: rgba(255,255,255,.12);
+      --text: #f8fafc; --muted: rgba(248,250,252,.62);
+      --emerald: #34d399; --rose: #fb7185; --amber: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 13px/1.45 ui-sans-serif, system-ui, sans-serif;
+      background: radial-gradient(1200px 560px at 8% -8%, #1e3a5f, var(--bg) 52%);
+      color: var(--text);
+    }
+    .app { max-width: 1100px; margin: 0 auto; padding: 16px 16px 72px; }
+    h1 { font-size: 20px; margin: 0 0 6px; }
+    .sub { color: var(--muted); margin: 0 0 12px; max-width: 50rem; }
+    .note { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; }
+    .steps { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .steps button {
+      flex: 1; min-width: 140px; text-align: left; cursor: pointer;
+      background: var(--panel); border: 1px solid var(--line); color: var(--text);
+      border-radius: 14px; padding: 10px 12px; font-weight: 700;
+    }
+    .steps button.on { border-color: #818cf8; background: rgba(99,102,241,.18); }
+    .steps .n { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; }
+    .screen { display: none; } .screen.on { display: block; }
+    .phone { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+    .ph-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-weight: 800; gap: 8px; }
+    .ph-body { padding: 12px 14px 18px; }
+    label { display: block; font-size: 11px; font-weight: 800; margin: 8px 0 4px; }
+    input, select, textarea {
+      width: 100%; background: #0f172a; border: 1px solid var(--line); color: #fff;
+      border-radius: 10px; padding: 7px 10px; font: inherit;
+    }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .film { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-end; }
+    .shot { position: relative; }
+    .shot img { width: 76px; height: 58px; object-fit: cover; border-radius: 8px; border: 2px solid transparent; cursor: pointer; display: block; }
+    .shot img.on { border-color: #818cf8; }
+    .shot span { position: absolute; left: 4px; bottom: 4px; font-size: 9px; font-weight: 800; background: #000a; padding: 1px 5px; border-radius: 6px; }
+    .cap { font-size: 9px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+    .chip { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #0f172a; border: 1px solid #334155; margin: 2px 4px 0 0; }
+    .bugrow {
+      background: #0f172a; border: 1px solid #334155; border-radius: 12px;
+      padding: 8px; margin-top: 8px; display: grid; grid-template-columns: 80px 1fr; gap: 8px;
+    }
+    .bugrow.sel { border-color: #818cf8; }
+    .bugrow.auto { border-color: rgba(52,211,153,.35); }
+    .bugrow img { width: 80px; height: 60px; object-fit: cover; border-radius: 8px; }
+    .ph { width: 80px; height: 60px; border-radius: 8px; background: #1e293b; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--muted); text-align: center; padding: 4px; }
+    .meta { color: var(--muted); font-size: 11px; }
+    .badge { display: inline-block; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
+    .human { background: rgba(251,191,36,.16); color: var(--amber); }
+    .fix { background: rgba(52,211,153,.15); color: var(--emerald); }
+    .nofix { background: rgba(251,113,133,.16); color: var(--rose); }
+    .need { background: rgba(251,191,36,.16); color: var(--amber); }
+    .bar { height: 8px; border-radius: 99px; background: #020617; overflow: hidden; display: flex; margin: 6px 0; }
+    .bar .g { background: #10b981; } .bar .r { background: #f43f5e; }
+    .card { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 10px 12px; margin-top: 10px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    button.link, button.btn {
+      background: #1e293b; border: 1px solid var(--line); color: #c7d2fe;
+      border-radius: 8px; padding: 6px 9px; font-weight: 700; cursor: pointer; font-size: 11px;
+    }
+    button.link.safe { color: #6ee7b7; }
+    button.link.warn { color: #fcd34d; }
+    button.pri { background: #e11d48; border: 0; color: #fff; font-weight: 800; padding: 10px; border-radius: 12px; width: 100%; margin-top: 12px; cursor: pointer; }
+    .tabs { display: flex; gap: 4px; margin-top: 10px; flex-wrap: wrap; }
+    .tabs button {
+      flex: 1; min-width: 72px; background: #0f172a; border: 1px solid #334155; color: var(--muted);
+      border-radius: 10px; padding: 7px 6px; font-weight: 800; font-size: 11px; cursor: pointer;
+    }
+    .tabs button.on { color: #fff; border-color: #818cf8; background: rgba(99,102,241,.2); }
+    .pane { display: none; margin-top: 8px; }
+    .pane.on { display: block; }
+    .jrow { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0 2px 10px; }
+    .hit { color: var(--emerald); font-weight: 800; }
+    .miss { color: var(--rose); font-weight: 800; }
+    .books { display: flex; flex-wrap: wrap; gap: 6px; }
+    .book { background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 6px 8px; min-width: 88px; }
+    .book span { display: block; color: var(--muted); font-size: 10px; }
+    table.grid { width: 100%; border-collapse: collapse; font-size: 11px; }
+    table.grid th, table.grid td { text-align: left; padding: 5px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
+    table.grid th { color: var(--muted); font-size: 9px; text-transform: uppercase; }
+    .commit { border-left: 2px solid #334155; padding: 0 0 12px 12px; margin: 8px 0 0; position: relative; }
+    .commit::before { content: ""; position: absolute; left: -5px; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
+    .commit.cur::before { background: #818cf8; }
+    .toast { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: rgba(6,78,59,.45); border: 1px solid rgba(52,211,153,.3); color: #d1fae5; font-size: 12px; }
+    .pack { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; font-size: 11px; }
+    .tiny { font-size: 10px; padding: 4px 7px; }
+    .pinempty { width: 80px; height: 60px; border-radius: 8px; border: 1px dashed rgba(255,255,255,.25); display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--muted); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>#10 — restored scout, dishes, add-bug + pin, full review loop</h1>
+    <p class="sub">Same meal as live <code>#10 Incorrect meal</code>. Nothing from Golden Meal snap / Inbox / tracker NOW is deleted — scout identity and top dishes are back on the snap; Checks/Dishes/Identity/Balance are still on review. Add bug + pin selected shot are real controls on screen 1.</p>
+    <div class="note">Select a shot in the film (blue ring), select a bug row (blue border), press <strong>Pin shot to selected bug</strong>. <strong>+ Add bug</strong> appends a row. That is the assignment model: one film, many remaining lines.</div>
+
+    <div class="steps">
+      <button type="button" class="on" data-s="1"><span class="n">Screen 1</span>Snap</button>
+      <button type="button" data-s="2"><span class="n">Screen 2</span>First review</button>
+      <button type="button" data-s="3"><span class="n">Screen 3</span>Iteration 1</button>
+    </div>
+
+    <!-- ========== SNAP ========== -->
+    <div class="screen on" id="s1">
+      <div class="phone">
+        <div class="ph-head">
+          <span>Snapshot</span>
+          <span class="meta">foodcart · job on screen</span>
+        </div>
+        <div class="ph-body">
+          <div class="cap">Film — click a shot to select, then pin it to a bug</div>
+          <div class="film" id="film" style="margin-top:6px">
+            <div class="shot"><img src="bug10/shot-01.jpg" data-i="1" class="on" alt="01"><span>01 fruit</span></div>
+            <div class="shot"><img src="bug10/shot-02.jpg" data-i="2" alt="02"><span>02 croissant</span></div>
+            <div class="shot"><img src="bug10/shot-03.jpg" data-i="3" alt="03"><span>03 wrap</span></div>
+            <div class="shot"><img src="bug10/shot-04.jpg" data-i="4" alt="04"><span>04 lids</span></div>
+            <div class="shot"><img src="bug10/shot-05.jpg" data-i="5" alt="05"><span>05 table</span></div>
+            <button class="btn tiny" type="button">+ Take picture</button>
+          </div>
+
+          <div class="row2">
+            <div>
+              <label>Page / category</label>
+              <select><option selected>foodcart</option><option>Home</option></select>
+            </div>
+            <div>
+              <label>Bug tag</label>
+              <select>
+                <option selected>+ Create new → #10</option>
+                <option>Open #3 nutrition missing</option>
+                <option>Open #9 serving</option>
+                <option>Open #2 BMI (no tape)</option>
+              </select>
+            </div>
+          </div>
+          <label>Title *</label>
+          <input value="Incorrect meal" />
+          <p class="meta"><span class="chip">Meal · Cobb Salad with Mac &amp; Cheese, Fruit Cup, Croissant, Crispy chicken wrap</span> 2584 kcal · 1 serving</p>
+
+          <div class="card">
+            <div class="cap">Scout identity — 13/26 identified (from /preview · was Golden Meal tab)</div>
+            <p class="meta" style="margin:6px 0 2px">Cobb Salad</p>
+            <div class="jrow"><span>mixed greens salad</span><span class="miss">fallback</span></div>
+            <div class="jrow"><span>grilled chicken breast</span><span class="miss">fallback</span></div>
+            <div class="jrow"><span>feta cheese</span><span class="hit">catalog</span></div>
+            <div class="jrow"><span>hard boiled egg</span><span class="hit">catalog</span></div>
+            <p class="meta" style="margin:8px 0 2px">Fruit Cup</p>
+            <div class="jrow"><span>raw strawberry</span><span class="miss">brand Actimel</span></div>
+            <div class="jrow"><span>raw blueberry</span><span class="miss">brand Co-op granola</span></div>
+            <p class="meta" style="margin:8px 0 2px">Butter croissant</p>
+            <div class="jrow"><span>enriched wheat flour</span><span class="hit">USDA</span></div>
+            <div class="jrow"><span>butter / milk / sugar</span><span class="miss">composite staple</span></div>
+            <p class="meta" style="margin:8px 0 2px">Crispy chicken wrap</p>
+            <div class="jrow"><span>flour tortilla</span><span class="hit">catalog</span></div>
+            <div class="jrow"><span>crispy onion</span><span class="miss">yolk Cheddar &amp; Onion Crisps</span></div>
+            <div class="jrow"><span>spicy mayonnaise</span><span class="miss">mismatch</span></div>
+          </div>
+
+          <div class="card">
+            <div class="cap">Top dishes — target values (was Golden Meal table)</div>
+            <p class="meta">Leave kcal empty = must appear. Score checkbox = include in dish checks.</p>
+            <table class="grid">
+              <thead><tr><th></th><th>Dish</th><th>kcal</th><th>g</th><th>P</th></tr></thead>
+              <tbody>
+                <tr><td>✓</td><td>Cobb Salad</td><td>505</td><td>400</td><td></td></tr>
+                <tr><td>✓</td><td>Mac &amp; Cheese</td><td>594</td><td>350</td><td></td></tr>
+                <tr><td>✓</td><td>Fruit Cup</td><td>341</td><td>200</td><td></td></tr>
+                <tr><td>✓</td><td>Croissant</td><td>319</td><td>130</td><td></td></tr>
+                <tr><td>✓</td><td>Crispy chicken wrap</td><td>828</td><td>220</td><td></td></tr>
+              </tbody>
+            </table>
+            <button class="btn tiny" type="button" style="margin-top:8px">+ Add dish</button>
+          </div>
+
+          <label>Bugs on this meal</label>
+          <p class="meta">Select a film shot (blue), select a row (blue), then <strong>Pin shot</strong>. + Add bug for another line. Same photo can pin to two bugs (02 = contrast and croissant).</p>
+          <div class="actions">
+            <button class="btn" type="button" id="addBug">+ Add bug</button>
+            <button class="btn" type="button" id="pinShot">Pin selected shot to selected bug</button>
+            <button class="btn" type="button" id="unpin">Clear photo on selected</button>
+          </div>
+          <div id="bugs"></div>
+
+          <div class="cap" style="margin-top:12px">Also spotted on tape — uncheck to drop</div>
+          <div class="bugrow auto">
+            <img src="bug10/shot-01.jpg" alt="">
+            <div>
+              <label style="margin:0"><input type="checkbox" checked> Co-op granola on fruit cup</label>
+              <div class="meta">Auto BRAND_LEAK · never_coop_granola · same shot as Actimel</div>
+            </div>
+          </div>
+          <div class="bugrow auto">
+            <img src="bug10/shot-01.jpg" alt="">
+            <div>
+              <label style="margin:0"><input type="checkbox" checked> Fruit cup 20 micros at 0</label>
+              <div class="meta">Auto MICROS_ZERO</div>
+            </div>
+          </div>
+          <div class="bugrow auto">
+            <img src="bug10/shot-03.jpg" alt="">
+            <div>
+              <label style="margin:0"><input type="checkbox"> Wrap scaled 827 → 450 kcal</label>
+              <div class="meta">Auto SILENT_REPAIR · parked (off) · not your named series</div>
+            </div>
+          </div>
+
+          <details class="card" open>
+            <summary class="cap" style="cursor:pointer">Capture pack — 6/6 (was snapshot checkboxes)</summary>
+            <div class="pack" style="margin-top:8px">
+              <label style="margin:0"><input type="checkbox" checked> Accessibility tree</label>
+              <label style="margin:0"><input type="checkbox" checked> Overview &amp; logs</label>
+              <label style="margin:0"><input type="checkbox" checked> Session data</label>
+              <label style="margin:0"><input type="checkbox" checked> Screenshots (5)</label>
+              <label style="margin:0"><input type="checkbox" checked> Nutrient calculation</label>
+              <label style="margin:0"><input type="checkbox" checked> Debug JSON</label>
+            </div>
+          </details>
+          <button class="pri" type="button" data-go="2">Save snapshot → open #10</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== REVIEW ========== -->
+    <div class="screen" id="s2">
+      <div class="phone">
+        <div class="ph-head">
+          <span>#10 Incorrect meal</span>
+          <span class="badge human">human to do</span>
+        </div>
+        <div class="ph-body">
+          <p class="meta">foodcart · job_7rnxfccw5 · you snapped just now · <strong>Last loop: you · snap</strong></p>
+          <div class="bar"><div class="g" style="width:28%"></div><div class="r" style="width:72%"></div></div>
+          <p class="meta"><span style="color:var(--emerald);font-weight:800">6 Fixed so far</span> · <span style="color:var(--rose);font-weight:800">6 remaining</span> · 1 need analyze · 1 accept</p>
+
+          <div class="card">
+            <div class="cap">NOW — next agent (tracker)</div>
+            <p style="margin:6px 0;font-weight:700">Primary: chicken wrap ≠ Yolk official. Do not touch Actimel / croissant / contrast in this job.</p>
+            <p class="meta">Class: FALSE_FRIEND (dropdown) · Tape held · burns 0/2</p>
+            <p class="meta"><strong>Tried:</strong> none yet</p>
+            <p class="meta"><strong>Context:</strong> query “Analyze this meal photo.” · debug JSON + scout.json held · domain pack food</p>
+          </div>
+
+          <div class="actions">
+            <button class="link safe" type="button">Replay log</button>
+            <button class="link" type="button">Re-analyze</button>
+            <button class="link" type="button">Hand off · line 2 + shot 03</button>
+            <button class="link" type="button">Triage</button>
+            <button class="link" type="button">Zip</button>
+          </div>
+          <details style="margin-top:8px">
+            <summary class="meta" style="cursor:pointer;font-weight:700">More — catalog · pipeline · downloads · Promote · Mark fixed</summary>
+            <div class="actions">
+              <button class="link safe" type="button">Replay catalog</button>
+              <button class="link warn" type="button">Pipeline skipScout</button>
+              <button class="link" type="button">Download logs</button>
+              <button class="link" type="button">Download scout</button>
+              <button class="link" type="button" style="opacity:.4">Promote to G8</button>
+              <button class="link" type="button">✓ Mark fixed</button>
+            </div>
+            <p class="meta">Run until green is gone (410). Catalog does not flip remaining.</p>
+          </details>
+
+          <div class="tabs" data-tabs="t2">
+            <button type="button" class="on" data-p="c2">Checks</button>
+            <button type="button" data-p="d2">Dishes</button>
+            <button type="button" data-p="i2">Scout identity</button>
+            <button type="button" data-p="b2">Balance</button>
+            <button type="button" data-p="h2">History</button>
+          </div>
+
+          <div id="c2" class="pane on">
+            <p class="meta">Remaining = these rows. Done on a line parks it. Primary is the one Hand off sends.</p>
+            <div class="bugrow sel">
+              <img src="bug10/shot-03.jpg" alt="">
+              <div><strong>Chicken wrap ≠ Yolk official</strong> <span class="badge nofix">Primary</span>
+                <div class="meta">“The chicken is absolutely not yolk official” · FALSE_FRIEND · crispy onion → Cheddar &amp; Onion Crisps</div>
+                <button class="btn tiny" type="button">Mark line done</button>
+              </div>
+            </div>
+            <div class="bugrow">
+              <img src="bug10/shot-01.jpg" alt="">
+              <div><strong>Mixed fruit ≠ Actimel</strong> <span class="badge nofix">Remaining</span>
+                <div class="meta">Shot 01 · strawberry → Actimel 80g Official</div></div>
+            </div>
+            <div class="bugrow">
+              <img src="bug10/shot-01.jpg" alt="">
+              <div><strong>Co-op granola on fruit</strong> <span class="badge nofix">Auto</span></div>
+            </div>
+            <div class="bugrow">
+              <img src="bug10/shot-02.jpg" alt="">
+              <div><strong>Butter croissant ≠ composite</strong> <span class="badge nofix">Remaining</span>
+                <div class="meta">Composite badge · flour+butter+milk+sugar</div></div>
+            </div>
+            <div class="bugrow">
+              <img src="bug10/shot-02.jpg" alt="">
+              <div><strong>Contrast / copy unreadable</strong> <span class="badge nofix">Remaining</span>
+                <div class="meta">CLONE_UI · duplicate carbs, warnings on numbers</div></div>
+            </div>
+            <div class="bugrow">
+              <img src="bug10/shot-01.jpg" alt="">
+              <div><strong>Fruit cup 20 micros at 0</strong> <span class="badge nofix">Auto</span></div>
+            </div>
+            <p class="meta">Need analyze (not remaining until Re-analyze): spicy mayonnaise mismatch. Parked: wrap scale 827→450.</p>
+          </div>
+          <div id="d2" class="pane">
+            <div class="cap">Top dishes — expected vs tape (same table as snap)</div>
+            <table class="grid">
+              <thead><tr><th></th><th>Dish</th><th>Expected</th><th>Tape</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><img src="bug10/shot-05.jpg" width="48" height="36" style="object-fit:cover;border-radius:6px" alt=""></td><td>Cobb Salad</td><td>505 · 400g</td><td>505 / 400</td><td><span class="badge fix">ok</span></td></tr>
+                <tr><td><img src="bug10/shot-05.jpg" width="48" height="36" style="object-fit:cover;border-radius:6px" alt=""></td><td>Mac &amp; Cheese</td><td>594 · 350g</td><td>594 / 350</td><td><span class="badge fix">ok</span></td></tr>
+                <tr><td><img src="bug10/shot-01.jpg" width="48" height="36" style="object-fit:cover;border-radius:6px" alt=""></td><td>Fruit Cup</td><td>341 · 200g</td><td>Actimel + Co-op + zeros</td><td><span class="badge nofix">red</span></td></tr>
+                <tr><td><img src="bug10/shot-02.jpg" width="48" height="36" style="object-fit:cover;border-radius:6px" alt=""></td><td>Croissant</td><td>319 · 130g</td><td>Composite badge</td><td><span class="badge nofix">red</span></td></tr>
+                <tr><td><img src="bug10/shot-03.jpg" width="48" height="36" style="object-fit:cover;border-radius:6px" alt=""></td><td>Crispy chicken wrap</td><td>828 · 220g</td><td>Yolk crisps · scaled 450</td><td><span class="badge nofix">red</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="i2" class="pane">
+            <div class="cap">Scout identity — full journey + resolution (not reds-only)</div>
+            <p class="meta">Sampled 24 · USDA 1 · Catalog 7 · Label/brand 4 · Fallback 12</p>
+            <p class="meta">Cobb Salad</p>
+            <div class="jrow"><span>mixed greens / chicken / avocado / ranch</span><span class="miss">fallback</span></div>
+            <div class="jrow"><span>feta / egg / tomato</span><span class="hit">catalog</span></div>
+            <p class="meta">Fruit Cup</p>
+            <div class="jrow"><span>raw strawberry → Actimel drink</span><span class="miss">FALSE_FRIEND</span></div>
+            <div class="jrow"><span>raw blueberry → Co-op granola pot</span><span class="miss">FALSE_FRIEND</span></div>
+            <p class="meta">Wrap</p>
+            <div class="jrow"><span>crispy onion → yolk crisps</span><span class="miss">FALSE_FRIEND</span></div>
+            <div class="jrow"><span>spicy mayonnaise</span><span class="miss">mismatch · need analyze</span></div>
+            <p class="meta">Not remaining: “Scouted only” on printed-label salad bits.</p>
+          </div>
+          <div id="b2" class="pane">
+            <div class="cap">Meal journey / trial balance</div>
+            <div class="books">
+              <div class="book"><span>Scout est</span><b>2150</b></div>
+              <div class="book"><span>Foundation</span><b>2584</b></div>
+              <div class="book"><span>Reconcile</span><b>2348</b></div>
+              <div class="book"><span>Dietitian payload</span><b>2584</b></div>
+              <div class="book"><span>Saved table</span><b>2587</b></div>
+              <div class="book"><span>Narrative</span><b>—</b></div>
+            </div>
+            <p class="meta" style="color:var(--rose);margin-top:8px">Unbalanced · mayPromote NO · wrap ×0.544 and croissant ×1.442 parked as SILENT_REPAIR</p>
+          </div>
+          <div id="h2" class="pane">
+            <div class="cap">History — one commit per loop (tracker)</div>
+            <div class="commit cur">
+              <strong>c1 · you snapped</strong>
+              <div class="meta">5 photos · 4 named bugs with pinned shots · 2 auto kept · wrap-scale parked · capture pack 6/6</div>
+              <div class="film" style="margin-top:6px">
+                <img src="bug10/shot-01.jpg" width="56" height="42" style="object-fit:cover;border-radius:6px" alt="">
+                <img src="bug10/shot-02.jpg" width="56" height="42" style="object-fit:cover;border-radius:6px" alt="">
+                <img src="bug10/shot-03.jpg" width="56" height="42" style="object-fit:cover;border-radius:6px" alt="">
+              </div>
+              <p class="meta">Debug job_7rnxfccw5 held. Original wording on each remaining line.</p>
+            </div>
+            <p class="meta">Tried / DO NOT RETRY: none yet. After an agent commit this tab grows (c2 attempt, c3 replay…).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== ITERATION ========== -->
+    <div class="screen" id="s3">
+      <div class="phone">
+        <div class="ph-head">
+          <span>#10 Incorrect meal</span>
+          <span class="badge human">human to do</span>
+        </div>
+        <div class="ph-body">
+          <p class="meta"><strong>Last loop:</strong> agent · Yolk wrap only · shot 03 · waiting Re-analyze / your retest</p>
+          <div class="bar"><div class="g" style="width:40%"></div><div class="r" style="width:60%"></div></div>
+          <p class="meta"><span style="color:var(--emerald);font-weight:800">6 Fixed</span> · <span style="color:var(--rose);font-weight:800">5 remaining</span> · Yolk line = retest</p>
+          <div class="toast">Hand off sent only remaining #2 + shot 03. Frozen scout still shows yolk crisps — Replay log cannot unbind; use Re-analyze.</div>
+
+          <div class="card">
+            <div class="cap">NOW</div>
+            <p style="font-weight:700;margin:6px 0">Yolk wrap in play. Actimel / croissant / contrast still remaining with their own photos.</p>
+            <p class="meta"><strong>Tried:</strong> brand-bind crispy onion → yolk crisps · NutritionLabelTable/scout match · not burned yet · needs retest</p>
+            <p class="meta">Burns 0/2 · Class FALSE_FRIEND</p>
+          </div>
+          <div class="actions">
+            <button class="link safe" type="button">Replay log</button>
+            <button class="link warn" type="button">Re-analyze (needed)</button>
+            <button class="link" type="button">Hand off · next Actimel (shot 01)</button>
+            <button class="link" type="button">Triage</button>
+          </div>
+
+          <div class="tabs" data-tabs="t3">
+            <button type="button" class="on" data-p="c3">Checks</button>
+            <button type="button" data-p="d3">Dishes</button>
+            <button type="button" data-p="i3">Scout identity</button>
+            <button type="button" data-p="b3">Balance</button>
+            <button type="button" data-p="h3">History</button>
+          </div>
+          <div id="c3" class="pane on">
+            <div class="bugrow">
+              <img src="bug10/shot-03.jpg" alt="">
+              <div><strong>Chicken ≠ Yolk</strong> <span class="badge need">Retest</span>
+                <div class="meta">c2 attempt logged. Tape still frozen until Re-analyze.</div></div>
+            </div>
+            <div class="bugrow">
+              <img src="bug10/shot-01.jpg" alt="">
+              <div><strong>Fruit ≠ Actimel</strong> <span class="badge nofix">Next series</span></div>
+            </div>
+            <div class="bugrow">
+              <img src="bug10/shot-02.jpg" alt="">
+              <div><strong>Croissant ≠ composite</strong> <span class="badge nofix">Remaining</span></div>
+            </div>
+            <div class="bugrow">
+              <img src="bug10/shot-02.jpg" alt="">
+              <div><strong>Contrast / copy</strong> <span class="badge nofix">Remaining</span></div>
+            </div>
+          </div>
+          <div id="d3" class="pane">
+            <p class="meta">Same 5 top dishes. Only wrap identity is this job. Fruit/croissant stay red on the dish table on purpose.</p>
+          </div>
+          <div id="i3" class="pane">
+            <div class="jrow"><span>crispy onion → yolk crisps</span><span class="miss">still on frozen scout</span></div>
+            <div class="jrow"><span>raw strawberry → Actimel</span><span class="miss">not this job</span></div>
+          </div>
+          <div id="b3" class="pane">
+            <p class="meta">2584 / 2348 still unbalanced. Scale parked. mayPromote NO.</p>
+          </div>
+          <div id="h3" class="pane">
+            <div class="commit cur">
+              <strong>c2 · agent · attempt</strong>
+              <div class="meta">hyp: stop yolk bind on crispy onion · file: brand match · test: generic garnish ≠ chain crisp · shot 03 only · remaining not empty → not done</div>
+            </div>
+            <div class="commit">
+              <strong>c1 · you snapped</strong>
+              <div class="meta">5 photos · per-bug pins · scout identity + top dishes captured</div>
+              <div class="film" style="margin-top:6px">
+                <img src="bug10/shot-01.jpg" width="56" height="42" style="object-fit:cover;border-radius:6px" alt="">
+                <img src="bug10/shot-03.jpg" width="56" height="42" style="object-fit:cover;border-radius:6px" alt="">
+              </div>
+            </div>
+            <p class="meta">Tried / DO NOT RETRY will list c2 if you burn it after retest fails.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const SHOTS = {
+      1: 'bug10/shot-01.jpg',
+      2: 'bug10/shot-02.jpg',
+      3: 'bug10/shot-03.jpg',
+      4: 'bug10/shot-04.jpg',
+      5: 'bug10/shot-05.jpg',
+    };
+    const startBugs = [
+      { t: 'Contrast for copy makes it invisible to read', shot: 2, cls: 'CLONE_UI' },
+      { t: 'The chicken is absolutely not yolk official', shot: 3, cls: 'FALSE_FRIEND' },
+      { t: 'The butter croissant is not composite', shot: 2, cls: 'STAPLE_COMPOSITE' },
+      { t: 'The mixed fruit is not actimel official', shot: 1, cls: 'FALSE_FRIEND' },
+    ];
+    let selectedShot = 1;
+    let selectedBug = 1;
+    let bugs = startBugs.map((b) => ({ ...b }));
+
+    function renderBugs() {
+      const root = document.getElementById('bugs');
+      if (!root) return;
+      root.innerHTML = bugs.map((b, i) => `
+        <div class="bugrow ${i === selectedBug ? 'sel' : ''}" data-b="${i}">
+          ${b.shot ? `<img src="${SHOTS[b.shot]}" alt="">` : `<div class="pinempty">No photo — select shot, Pin</div>`}
+          <div>
+            <input value="${b.t.replace(/"/g, '&quot;')}" />
+            <div class="meta">Class ${b.cls} · ${b.shot ? 'shot 0' + b.shot : 'unassigned'}</div>
+            <textarea rows="2" placeholder="Comment for the agent">${b.t}</textarea>
+          </div>
+        </div>`).join('');
+      root.querySelectorAll('.bugrow').forEach((el) => {
+        el.onclick = () => { selectedBug = Number(el.dataset.b); renderBugs(); };
+      });
+    }
+    document.getElementById('film')?.querySelectorAll('img[data-i]').forEach((img) => {
+      img.onclick = () => {
+        document.querySelectorAll('#film img').forEach((x) => x.classList.remove('on'));
+        img.classList.add('on');
+        selectedShot = Number(img.dataset.i);
+      };
+    });
+    document.getElementById('addBug')?.addEventListener('click', () => {
+      bugs.push({ t: '', shot: null, cls: '(unset)' });
+      selectedBug = bugs.length - 1;
+      renderBugs();
+    });
+    document.getElementById('pinShot')?.addEventListener('click', () => {
+      if (bugs[selectedBug]) bugs[selectedBug].shot = selectedShot;
+      renderBugs();
+    });
+    document.getElementById('unpin')?.addEventListener('click', () => {
+      if (bugs[selectedBug]) bugs[selectedBug].shot = null;
+      renderBugs();
+    });
+    renderBugs();
+
+    document.querySelectorAll('.steps button').forEach((b) => {
+      b.onclick = () => {
+        document.querySelectorAll('.steps button').forEach((x) => x.classList.remove('on'));
+        b.classList.add('on');
+        document.querySelectorAll('.screen').forEach((s) => s.classList.remove('on'));
+        document.getElementById('s' + b.dataset.s).classList.add('on');
+      };
+    });
+    document.querySelector('[data-go]')?.addEventListener('click', () => {
+      document.querySelector('.steps button[data-s="2"]').click();
+    });
+    document.querySelectorAll('[data-tabs]').forEach((bar) => {
+      bar.querySelectorAll('button').forEach((btn) => {
+        btn.onclick = () => {
+          bar.querySelectorAll('button').forEach((x) => x.classList.remove('on'));
+          btn.classList.add('on');
+          const id = btn.getAttribute('data-p');
+          bar.parentElement.querySelectorAll(':scope > .pane').forEach((p) => p.classList.toggle('on', p.id === id));
+        };
+      });
+    });
+  </script>
+</body>
+</html>

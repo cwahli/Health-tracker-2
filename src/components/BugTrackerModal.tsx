@@ -49,6 +49,7 @@ import {
   BugNow,
 } from '../utils/bugWorkItem';
 import { queueKpis, tagIsFixed } from '../utils/bugQueueKpis';
+import { FoodDetailTabs, RemainingBugRow } from './bugQueue';
 
 interface BugTrackerModalProps {
   isOpen: boolean;
@@ -98,6 +99,9 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
   const [attemptBurned, setAttemptBurned] = useState(true);
   const [attemptNote, setAttemptNote] = useState('');
   const [submittingAttempt, setSubmittingAttempt] = useState(false);
+
+  // Q-6.4 G1 food review tabs: history, checks, dishes, scout, balance
+  const [trackerDetailTab, setTrackerDetailTab] = useState<'history' | 'checks' | 'dishes' | 'scout' | 'balance'>('history');
 
   // UI expand states
   const [openSnapCommitIds, setOpenSnapCommitIds] = useState<Record<string, boolean>>({});
@@ -632,14 +636,20 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
     e?.stopPropagation();
     const res = await fetch(`/api/bugs/${tag.id}`);
     const json = await res.json().catch(() => ({}));
-    const pub = json.now?.public_id || publicId(hydrateWorkItem(tag), tag.id);
+    const item = hydrateWorkItem(tag);
+    const pub = json.now?.public_id || publicId(item, tag.id);
     const last = (json.commits || []).slice(-1)[0];
+    const activeLine = json.now?.remaining?.[0] || item.remaining?.[0] || json.now?.bug || tag.title;
+    const photos = json.now?.current_evidence?.photo_urls || [];
+    const comment = json.now?.comment || '';
+    const remainingList = json.now?.remaining || item.remaining || [];
     const text = [
       `Check this bug and fix it. ${pub} — ${tag.title}`,
       '',
-      json.now?.bug || hydrateWorkItem(tag).bug || tag.title,
-      '',
-      `Remaining: ${(json.now?.remaining || []).join(' · ') || '—'}`,
+      `Active line: ${activeLine}`,
+      `Photo: ${photos.length ? photos.join(', ') : 'none'}`,
+      `Comment: ${comment || 'none'}`,
+      `Remaining: ${remainingList.join(' · ') || '—'}`,
       `Tried / do not retry: ${(json.now?.tried || []).join('\n') || 'none yet'}`,
       last
         ? `Last loop: ${last.actor} · ${last.summary}${last.attempt ? ` · ${last.attempt.result} · ${last.attempt.file}` : ''}`
@@ -1140,12 +1150,31 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                               </div>
                             </div>
 
-                            {/* NOW Section */}
-                            <div className="bg-[#0f172a] rounded-xl p-3 space-y-2.5">
-                              <div className="flex items-center justify-between gap-2">
-                                <h3 className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-300">
-                                  NOW — what the next agent sees first
-                                </h3>
+                            {/* Q-6.4 G1: 5-Tab Bar for Food Cards (Checks / Dishes / Scout identity / Balance / History) */}
+                            {(() => {
+                              const isFoodCard =
+                                (selectedTag.category || '').toLowerCase() === 'foodcart' ||
+                                (selectedTag.category || '').toLowerCase() === 'golden';
+                              return isFoodCard ? (
+                                <FoodDetailTabs
+                                  activeTab={trackerDetailTab}
+                                  onTabChange={setTrackerDetailTab}
+                                  board={(selectedTagDetail as any)?.board || selectedTag.board}
+                                  goldenLines={(selectedTagDetail as any)?.expectedMeal || selectedTag.expectedMeal || []}
+                                />
+                              ) : null;
+                            })()}
+
+                            {((selectedTag.category || '').toLowerCase() !== 'foodcart' &&
+                              (selectedTag.category || '').toLowerCase() !== 'golden' ||
+                              trackerDetailTab === 'history') && (
+                              <>
+                                {/* NOW Section */}
+                                <div className="bg-[#0f172a] rounded-xl p-3 space-y-2.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <h3 className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-300">
+                                      NOW — what the next agent sees first
+                                    </h3>
                                 {/* Class assignment dropdown */}
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-[9px] font-extrabold text-slate-400 uppercase">Class:</span>
@@ -1634,6 +1663,8 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                             )}
                           </ul>
                         </div>
+                        </>
+                        )}
 
                         {/* Linked Reports List */}
                         {selectedReports.length > 0 && (

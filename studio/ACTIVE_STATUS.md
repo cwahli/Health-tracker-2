@@ -9,6 +9,7 @@
 
 | Pack | Role |
 |------|------|
+| [Q64_GEMINI_COMBINED_QUEUE_UI.md](./Q64_GEMINI_COMBINED_QUEUE_UI.md) | **Gemini G1** Q-6.4 bulk UI. Paste section A (replaces G0). Not Promote/D1/`snapSurface`. |
 | [M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md](./M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md) | Food catalog curator — separate track |
 | [M22_MEAL_BUILD_TRUE_COMPLETE.md](./M22_MEAL_BUILD_TRUE_COMPLETE.md) | Prior product pack |
 | **Archived** | M23 Free Tier Reliability, M31 Biomarker Lifecycle |
