@@ -416,7 +416,7 @@ export default function GoldenInboxPanel() {
                 />
                 <InboxAction
                   label="Replay catalog"
-                  hint="Look up frozen scout names in the local dictionary. No Gemini."
+                  hint="Dictionary lookup only. Does not change green/pending on the card. Cannot promote."
                   tone="safe"
                   busy={isBusy(c.id, 'catalog')}
                   disabled={!!busy}

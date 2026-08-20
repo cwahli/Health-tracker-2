@@ -1,6 +1,6 @@
 # Inbox — class examples, not a catalog todo list
 
-~14 folders are **4 unique meals** snapshotted many times. Treat the meal as an *example of a class*, not 14 tickets.
+Live cards live in D1 (`golden_cases`). This folder is empty unless a new ingest writes a disk case. Treat each unique **meal** as one class example, not one ticket per snapshot.
 
 | Unique meal | Class | Durable solver |
 |---|---|---|

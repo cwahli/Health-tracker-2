@@ -133,7 +133,8 @@ export function extractFoodUnitNoun(name: string, blob: string, servingSizeStr?:
   if (/\b(wraps?|tortillas?|fajitas?)\b/i.test(text)) return 'wrap';
   if (/\b(rolls?|bread\s*rolls?|buns?|baps?|barm\s*cakes?)\b/i.test(text)) return 'roll';
   if (/\b(pancakes?|crepes?|waffles?)\b/i.test(text)) return 'pancake';
-  if (/\b(crumpets?|muffins?|scones?|croissants?|pastries?)\b/i.test(text)) return 'piece';
+  if (/\b(croissants?|pastries?|danishes?|viennoiseries?)\b/i.test(text)) return 'croissant';
+  if (/\b(crumpets?|muffins?|scones?)\b/i.test(text)) return 'piece';
   if (/\b(meatballs?|falafels?|nuggets?|bites?|strips?|wings?|tenders?|dumplings?|gyozas?|samosas?)\b/i.test(text)) return 'piece';
   if (/\b(pouches?|sachets?|packets?)\b/i.test(text)) return 'pouch';
   if (/\b(pots?|tubs?|cups?|tins?|cans?|jars?|bottles?)\b/i.test(text)) return 'serving';
@@ -167,19 +168,32 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   const unitCountMatch = blob.match(/\b(\d+)\s*(?:pack|pk|slices?|bagels?|rolls?|thins?|buns?|wraps?|tortillas?|pancakes?|muffins?|crumpets?|waffles?|pieces?|pcs?|bars?|bakes?|sachets?|pouches?|biscuits?|cookies?|patties?|fillets?|sausages?|cutlets?|meatballs?|servings?|units?)\b/i);
   let detectedUnits = unitCountMatch ? parseInt(unitCountMatch[1], 10) : 0;
 
+  // Extract leading digit from item name (e.g. "2 butter croissants" → 2, "4 chicken strips" → 4).
+  // This fires BEFORE unit-noun defaults so we never override an explicit quantity with a category guess.
+  if (!detectedUnits) {
+    const nameLeadingDigit = nameL.match(/^(\d+)\s+\w/);
+    if (nameLeadingDigit) {
+      const n = parseInt(nameLeadingDigit[1], 10);
+      if (n >= 2 && n <= 24) detectedUnits = n;
+    }
+  }
+
   const unitNoun = extractFoodUnitNoun(name, blob, rawServing);
   const isDiscreteUnitFood = unitNoun !== 'portion' && unitNoun !== 'serving';
 
   // Check if item is a multi-unit or discrete food product
   if (detectedUnits >= 2 || isDiscreteUnitFood) {
     if (!detectedUnits || detectedUnits < 2 || detectedUnits > 24) {
+      // Visual-source items (freshly made, restaurant, canteen) without an explicit unit count are
+      // single-serve by nature. The multi-serve pack UX is for packaged grocery products only.
+      if (item.source === 'visual') return null;
       if (/\b(bagel|thin|wrap|patty|fillet|muffin|crumpet|roll|bun)\b/i.test(unitNoun)) detectedUnits = 4;
       else if (/\b(biscuit|cookie|piece|sausage)\b/i.test(unitNoun)) detectedUnits = 6;
       else detectedUnits = 4;
     }
 
     // Determine single unit weight and total pack weight
-    const isIndividualUnit = /\b(bar|biscuit|cookie|bagel|thin|wrap|slice|patty|fillet|sausage|pancake|muffin|crumpet|roll|bun)\b/i.test(unitNoun);
+    const isIndividualUnit = /\b(bar|biscuit|cookie|bagel|thin|wrap|slice|patty|fillet|sausage|pancake|muffin|crumpet|roll|bun|croissant)\b/i.test(unitNoun);
     const explicitPackWeight = detectPackNetWeightGrams(item);
 
     let singleUnitGrams: number;

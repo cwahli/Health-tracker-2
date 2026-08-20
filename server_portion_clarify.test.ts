@@ -90,6 +90,46 @@ describe('detectPortionAmbiguity & buildPortionClarifyPayload', () => {
   });
 });
 
+// Bug #9 regressions — visual-source single-serve items
+describe('Bug #9 — visual-source portion-clarify guard', () => {
+  it('does NOT trigger portionClarify for a visual-source single wrap (no explicit unit count)', () => {
+    // "Crispy chicken wrap" — user sees 1 wrap; source=visual; no leading number in name.
+    // Expect: return null so scout's 200g estimate is used directly.
+    const item = {
+      scoutIndex: 2,
+      originalName: 'Crispy chicken wrap',
+      keyword: 'crispy chicken wrap',
+      estimatedWeightGrams: 200,
+      estimatedCalories: 450,
+      source: 'visual',
+      ingredientsList: 'chicken, lettuce, crispy onion, gherkins, spicy mayonnaise',
+    };
+    expect(detectPortionAmbiguity(item, 2)).toBeNull();
+  });
+
+  it('uses leading digit from name for "2 butter croissants" (never the biscuit-default of 6)', () => {
+    // Before fix: unitNoun='piece' → default 6 units. After fix: detectedUnits=2 from name.
+    const item = {
+      scoutIndex: 1,
+      originalName: '2 butter croissants',
+      keyword: 'croissants',
+      estimatedWeightGrams: 130,
+      estimatedCalories: 500,
+      source: 'visual',
+    };
+    const res = detectPortionAmbiguity(item, 1);
+    expect(res).not.toBeNull();
+    // reason must mention 2 units, never 6
+    expect(res?.reason).toContain('2');
+    expect(res?.reason).not.toContain('6');
+    // Must offer a 1-unit option
+    expect(res?.options.some((o) => o.label.startsWith('1 '))).toBe(true);
+    // Must offer a 2-unit option
+    expect(res?.options.some((o) => o.label.startsWith('2 '))).toBe(true);
+  });
+});
+
+
 describe('applyPortionChoices', () => {
   it('scales estimatedCalories with weight and preserves rawNutritionLabel', () => {
     const items = [

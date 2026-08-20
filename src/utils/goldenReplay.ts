@@ -81,3 +81,8 @@ export function replayScoutAgainstCatalog(
 export function catalogReplayGreen(rows: GoldenJourneyRow[]): boolean {
   return rows.length > 0 && rows.every((r) => r.identityPass);
 }
+
+/** Catalog lookup is diagnostic. It must not write all_green / status onto the case. */
+export function shouldPersistReplayGreen(mode: string): boolean {
+  return mode !== 'catalog';
+}

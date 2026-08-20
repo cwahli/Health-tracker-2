@@ -1,0 +1,175 @@
+{
+  "items": [
+    {
+      "keyword": "Chocolate Croissants",
+      "itemConfidence": "High",
+      "estimatedWeightGrams": 180,
+      "estimatedCalories": 680,
+      "cookingMethod": "baked",
+      "components": [
+        {
+          "searchQuery": "butter croissant",
+          "volumePercentage": 75
+        },
+        {
+          "searchQuery": "dark chocolate filling",
+          "volumePercentage": 25
+        }
+      ],
+      "chainName": null,
+      "originalName": "Chocolate Croissants",
+      "boundingBox2D": [
+        65,
+        396,
+        439,
+        730
+      ],
+      "sourceImageIndex": 0,
+      "anomalyFlags": [],
+      "ingredientsList": null,
+      "nutritionFacts": null,
+      "rawNutritionLabel": null,
+      "source": "visual",
+      "visualIngredients": [
+        "butter croissant",
+        "chocolate filling"
+      ],
+      "scoutIndex": 0,
+      "cookingAdded": {
+        "addedCalories": 0,
+        "addedFat": 0,
+        "addedSaturatedFat": 0,
+        "addedSodium": 0
+      },
+      "name": "3 chocolate croissants"
+    },
+    {
+      "keyword": "Vegetarian wrap",
+      "itemConfidence": "High",
+      "estimatedWeightGrams": 220,
+      "estimatedCalories": 420,
+      "cookingMethod": "raw",
+      "components": [
+        {
+          "searchQuery": "flour tortilla",
+          "volumePercentage": 35
+        },
+        {
+          "searchQuery": "falafel",
+          "volumePercentage": 25
+        },
+        {
+          "searchQuery": "hummus",
+          "volumePercentage": 15
+        },
+        {
+          "searchQuery": "feta cheese",
+          "volumePercentage": 10
+        },
+        {
+          "searchQuery": "mixed salad leaves",
+          "volumePercentage": 5
+        },
+        {
+          "searchQuery": "red onion",
+          "volumePercentage": 5
+        },
+        {
+          "searchQuery": "bell pepper",
+          "volumePercentage": 5
+        }
+      ],
+      "chainName": null,
+      "originalName": "Vegetarian wrap",
+      "boundingBox2D": [
+        447,
+        98,
+        977,
+        335
+      ],
+      "sourceImageIndex": 0,
+      "anomalyFlags": [],
+      "ingredientsList": "falafel, hummus, feta cheese, mix leaves, onion, peppers, garlic mayo",
+      "nutritionFacts": null,
+      "rawNutritionLabel": null,
+      "source": "label",
+      "visualIngredients": [],
+      "scoutIndex": 1,
+      "cookingAdded": {
+        "addedCalories": 0,
+        "addedFat": 0,
+        "addedSaturatedFat": 0,
+        "addedSodium": 0
+      },
+      "name": "vegetarian wrap"
+    },
+    {
+      "keyword": "Hummus & White Quinoa Salad",
+      "itemConfidence": "High",
+      "estimatedWeightGrams": 350,
+      "estimatedCalories": 450,
+      "cookingMethod": "raw",
+      "components": [
+        {
+          "searchQuery": "hummus",
+          "volumePercentage": 25
+        },
+        {
+          "searchQuery": "cooked white quinoa",
+          "volumePercentage": 25
+        },
+        {
+          "searchQuery": "cucumber",
+          "volumePercentage": 15
+        },
+        {
+          "searchQuery": "cherry tomato",
+          "volumePercentage": 10
+        },
+        {
+          "searchQuery": "chickpeas",
+          "volumePercentage": 10
+        },
+        {
+          "searchQuery": "kalamata olives",
+          "volumePercentage": 5
+        },
+        {
+          "searchQuery": "feta cheese",
+          "volumePercentage": 5
+        },
+        {
+          "searchQuery": "pomegranate seeds",
+          "volumePercentage": 3
+        },
+        {
+          "searchQuery": "balsamic dressing",
+          "volumePercentage": 2
+        }
+      ],
+      "chainName": null,
+      "originalName": "Hummus & White Quinoa Salad",
+      "boundingBox2D": [
+        415,
+        345,
+        893,
+        1000
+      ],
+      "sourceImageIndex": 0,
+      "anomalyFlags": [],
+      "ingredientsList": "Hummus, quinoa, cucumber, cherry tomato, kalamata olives, chickpeas, feta cheese, red onion, pomegranate, mix leaves, balsamic dressing",
+      "nutritionFacts": null,
+      "rawNutritionLabel": null,
+      "source": "label",
+      "visualIngredients": [],
+      "scoutIndex": 2,
+      "cookingAdded": {
+        "addedCalories": 0,
+        "addedFat": 0,
+        "addedSaturatedFat": 0,
+        "addedSodium": 0
+      },
+      "name": "hummus and white quinoa salad"
+    }
+  ]
+}

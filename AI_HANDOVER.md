@@ -3,6 +3,8 @@
 **Updated:** 2026-08-20
 **Status:** ALL GATES & REGRESSION SUITES GREEN (609 tests across 62 test suites)
 
+- **Golden meal cleanup (2026-08-20):** Official set is **G1–G7** only (photos + Instruction + expected). Inbox promotions G8–G18 moved to `tests/Golden_meal/archive/` (`bug`, `Try golden`, quota, duplicate wraps, no-photo stubs). D1 inbox kept one card per unique meal (picnic, sweet-chilli wrap, promoted prawn doughnut, user label). Catalog replay no longer writes `all_green` / status. Disk `inbox/INDEX.md` is empty-by-design; UI is D1.
+
 - **Bug queue green-tick vs agent view (2026-08-20):** Overview now loads `fixed` as well as `to_fix` so KPIs can count Done this week. Green tick already wrote `status=fixed` + `queue=done` for #4–#8; the dashboard had been refetching only `to_fix`, so Done this week stayed 0 and agents querying the full table still listed those cards. Open work is #2, #3, #9. `GET /api/bugs/open` and `/next` stay on open cards only.
 **Governance & Laws:** Follow `docs/agent/` domain rules. Local agents may `git commit` / `git push` after COMPLETE (tsc + named gates). AI Studio remains a valid ship path.
 
@@ -10,6 +12,13 @@
   - **Brand Scope Isolation**: In `server_vision_scout.ts`, updated system instructions so brand modifiers strictly bind to named brand items (e.g. Sainsbury oats), emitting fresh companion foods (fruits, drinks, sides) as separate unbranded items.
   - **Canonical Dictionary Preference**: In `server.ts`, prioritized `lookupCanonicalBaseFood` before falling back to untrusted `web_search`, ensuring fresh fruits (such as fresh raw plums, 46 kcal) never get clobbered by 465 kcal confectionery web matches.
   - **Strict Composite Classification**: In `NutritionLabelTable.tsx` and `FoodCard.tsx`, strictly enforced `subComps.length > 1` for composite dish tagging (resolving Bug #6 false composite baguette) and guarded the brand official badge and brand prefix so only verified brand database items display brand official indicators.
+- **Bug #9 Serving Option Wrong — Visual-Source Portion Clarify Fix (2026-08-20)**:
+  - **Root Cause:** `detectPortionAmbiguity` in `server_portion_clarify.ts` treated visually-identified restaurant/canteen items (source=`visual`) as packaged grocery multipacks. For "2 butter croissants", `unitNoun` fell to `'piece'` → the biscuit/cookie/piece default assigned 6 units despite the explicit "2" in the name. For "Crispy chicken wrap" (1 visible wrap), the `wrap` noun triggered 4-unit multipack UX.
+  - **Fix 1 — Leading digit extraction:** Before the category-default assignment, now extracts any leading digit from the item name (e.g. "2 butter croissants" → `detectedUnits=2`), so the explicit quantity always overrides category fallbacks.
+  - **Fix 2 — Visual-source guard:** If `source==='visual'` and no explicit unit count was found (neither from the name regex nor the leading-digit extraction), returns `null` immediately — single-serve restaurant/canteen items trust the scout's estimated weight directly.
+  - **Fix 3 — Correct unit noun for croissants:** `extractFoodUnitNoun` now returns `'croissant'` for croissants/pastries/danishes instead of the generic `'piece'`, so option labels read "1 croissant / 2 croissants" rather than "1 piece / 2 pieces".
+  - **Regression tests:** Added two new tests in `server_portion_clarify.test.ts` verifying the wrap returns null and the "2 butter croissants" name produces exactly 2 units (not 6) in the reason string and options list.
+
 - **AI Agent Chat Error Recovery & Model Switcher Retry (2026-08-20)**:
   - **Direct Retry Action Bar**: In `src/components/LogChat.tsx`, added a unified action bar on all error and service-unavailable messages with a dedicated **"Retry ([Selected Model])"** button and **"Switch Agent"** model selector toggle.
   - **Model Re-selection & Multi-Agent Fallback**: Users can now change the active LLM engine from the dropdown or the error bar and immediately trigger a retry on failed analysis turns without re-uploading photos or re-typing queries.

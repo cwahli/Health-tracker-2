@@ -21,7 +21,7 @@ import {
   type GoldenScoreboard,
 } from './src/utils/goldenScoreboard.js';
 import { lookupCanonicalBaseFood } from './server_food_db.js';
-import { catalogReplayGreen, replayScoutAgainstCatalog } from './src/utils/goldenReplay.js';
+import { catalogReplayGreen, replayScoutAgainstCatalog, shouldPersistReplayGreen } from './src/utils/goldenReplay.js';
 import { compileGoldenMeal, formatLedgerBrief } from './src/utils/goldenLedger.js';
 import { normalizeScoutItems } from './src/utils/goldenJourney.js';
 import { d1Query } from './server_d1.js';
@@ -191,15 +191,20 @@ function writeInboxIndex(root: string) {
   const inbox = path.join(root, 'inbox');
   if (!fs.existsSync(inbox)) return;
   const rows: string[] = ['# Golden inbox', '', '| Slug / folder | Title | Job | D1 |', '|---|---|---|---|'];
+  let n = 0;
   for (const name of fs.readdirSync(inbox).sort()) {
     const casePath = path.join(inbox, name, 'case.json');
     if (!fs.existsSync(casePath)) continue;
     try {
       const c = JSON.parse(fs.readFileSync(casePath, 'utf-8'));
       rows.push(`| \`${name}\` | ${c.mealName || name} | \`${c.id || ''}\` | \`${c.d1Id || ''}\` |`);
+      n += 1;
     } catch {
       /* skip */
     }
+  }
+  if (!n) {
+    rows.push('', 'No open disk cases. The Golden Inbox UI reads D1 `golden_cases`, not this folder.');
   }
   fs.writeFileSync(path.join(inbox, 'INDEX.md'), `${rows.join('\n')}\n`);
 }
@@ -1025,39 +1030,35 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
         });
       }
       // Compiler: catalog replay cannot promote. Imbalance stays red.
-      const allGreen = mode !== 'catalog' && identGreen && meal.pass && plan.promoteGreen && board.ledger.mayPromote;
+      const allGreen = mode !== 'catalog' && identGreen && meal.pass && plan.promoteGreen && !!board.ledger?.mayPromote;
       const passCount = journey.filter((j) => j.identityPass).length + (meal.pass ? 1 : 0);
       const failCount =
         journey.filter((j) => !j.identityPass).length +
         (meal.pass ? 0 : 1) +
         blockingReds.filter((o) => o.kind !== 'identity' || /weight_anchor|label_merge/.test(o.id)).length;
 
-      await putR2(deps, `${casePrefix(id)}/scoreboard.json`, JSON.stringify(board, null, 2), 'application/json');
-
-      try {
-        writeInboxCase({
-          jobId: data.job_id || id,
-          title: data.title,
-          scout: storedScout,
-          journey,
-          d1Id: id,
+      const persistGreen = shouldPersistReplayGreen(mode);
+      const status = persistGreen
+        ? allGreen
+          ? 'green'
+          : data.status === 'promoted'
+            ? 'promoted'
+            : 'open'
+        : data.status;
+      if (persistGreen) {
+        await putR2(deps, `${casePrefix(id)}/scoreboard.json`, JSON.stringify(board, null, 2), 'application/json');
+        const attempts = await loadAttempts(deps, id);
+        const iteration = Math.max(data.iteration || 1, attempts.length || 1);
+        await gcUpdate(id, {
+          pass_count: passCount,
+          fail_count: failCount,
+          all_green: allGreen,
+          iteration,
+          status,
+          last_replay_at: nowIso(),
+          updated_at: nowIso(),
         });
-      } catch (diskErr: any) {
-        console.warn('[golden] inbox refresh skipped:', diskErr?.message || diskErr);
       }
-
-      const attempts = await loadAttempts(deps, id);
-      const iteration = Math.max(data.iteration || 1, attempts.length || 1);
-      const status = allGreen ? 'green' : data.status === 'promoted' ? 'promoted' : 'open';
-      await gcUpdate(id, {
-        pass_count: passCount,
-        fail_count: failCount,
-        all_green: allGreen,
-        iteration,
-        status,
-        last_replay_at: nowIso(),
-        updated_at: nowIso(),
-      });
 
       res.json({
         id,
@@ -1065,7 +1066,7 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
         agentCalls,
         passCount,
         failCount,
-        allGreen,
+        allGreen: persistGreen ? allGreen : !!data.all_green,
         mealMisses: meal.misses,
         outcomes,
         journey,

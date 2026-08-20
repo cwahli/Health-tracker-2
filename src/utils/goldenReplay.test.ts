@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyCatalogHit, replayScoutAgainstCatalog, catalogReplayGreen } from './goldenReplay';
+import { classifyCatalogHit, replayScoutAgainstCatalog, catalogReplayGreen, shouldPersistReplayGreen } from './goldenReplay';
 import { buildTransportInvariants } from './goldenJourney';
 import { lookupCanonicalBaseFood } from '../../server_food_db.js';
 
@@ -62,6 +62,12 @@ describe('catalog replay (no Gemini)', () => {
     const rows = replayScoutAgainstCatalog(picnicScout, () => null);
     expect(catalogReplayGreen(rows)).toBe(false);
     expect(rows.every((r) => r.phase === 'no_match')).toBe(true);
+  });
+
+  it('does not persist catalog lookup as the case green/pending score', () => {
+    expect(shouldPersistReplayGreen('catalog')).toBe(false);
+    expect(shouldPersistReplayGreen('log')).toBe(true);
+    expect(shouldPersistReplayGreen('pipeline')).toBe(true);
   });
 });
 
