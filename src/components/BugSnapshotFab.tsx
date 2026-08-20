@@ -443,10 +443,10 @@ export default function BugSnapshotFab({
   const handleOpenFab = async () => {
     const modalJobId = viewingJobId || readOpenModalJobId();
     const modalOpen = isAnyMealModalOpen(modalJobId, activeTab);
-    const initialMode: 'bug' | 'meal' = modalOpen ? 'meal' : 'bug';
 
-    setSnapshotType(initialMode);
-    setSaveAsGolden(initialMode === 'meal');
+    // Default to 'bug' (Bug Report) mode whenever opened
+    setSnapshotType('bug');
+    setSaveAsGolden(false);
     const cat = modalOpen ? 'foodcart' : getCategoryForTab(activeTab, modalJobId);
     setCategory(cat);
     setError(null);
