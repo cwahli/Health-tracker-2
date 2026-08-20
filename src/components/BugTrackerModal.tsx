@@ -595,34 +595,33 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
       {createPortal(
         <div className="fixed inset-0 z-[10050] bg-[#0b1220] flex flex-col w-full h-full p-0 text-[#f8fafc] font-sans antialiased overflow-hidden select-text">
           {/* Top Header */}
-          <header className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between gap-4 bg-[#111827]/80 backdrop-blur shrink-0">
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500/20 to-indigo-500/20 border border-amber-500/30 text-amber-300 shrink-0">
-                <Bug className="w-5 h-5" />
-              </div>
+          <header className="px-3 sm:px-5 py-2.5 flex items-center justify-between gap-3 bg-[#111827]/80 backdrop-blur shrink-0 border-b border-white/5">
+            <div className="flex items-center gap-2 min-w-0">
               <div className="min-w-0">
-                <h1 className="text-lg font-bold tracking-tight flex items-center gap-2">
+                <h1 className="text-base font-bold tracking-tight flex items-center gap-1.5">
                   <span>Bug queue</span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/10 text-white/70 font-normal">
-                    Q-6 Work-Item Engine
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-white/10 text-white/70 font-normal">
+                    Q-6
                   </span>
                 </h1>
-                <p className="text-xs text-[#f8fafc]/60 truncate">
-                  Original instruction is pinned forever. Each loop is a commit you can open. <strong>Next bug</strong> takes the top ready row.
+                <p className="text-[11px] text-[#f8fafc]/60 truncate">
+                  Pinned instructions & loop history. <strong>Next bug</strong> takes top ready card.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5 shrink-0">
-              {/* Next bug Button */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Next bug Button (Icon-only with pub id badge) */}
               <button
                 type="button"
                 onClick={handleNextBug}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 via-indigo-600 to-indigo-700 hover:from-amber-500 hover:to-indigo-600 text-white font-extrabold text-xs shadow-lg shadow-indigo-900/30 flex items-center gap-2 transition-all cursor-pointer border border-white/20 active:scale-95"
+                className="p-2 rounded-xl bg-gradient-to-r from-amber-600 via-indigo-600 to-indigo-700 hover:from-amber-500 hover:to-indigo-600 text-white shadow-md flex items-center gap-1 transition-all cursor-pointer border border-white/20 active:scale-95"
+                title={`Next bug (${topReadyPubId || 'Top Ready'})`}
               >
-                <span>Next bug</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-                <span>{topReadyPubId || 'Top Ready'}</span>
+                <ArrowRight className="w-4 h-4" />
+                <span className="text-[10px] font-mono px-1 rounded bg-black/40 text-amber-200 font-bold">
+                  {topReadyPubId || 'Ready'}
+                </span>
               </button>
 
               {/* Refresh button */}
@@ -630,127 +629,96 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                 type="button"
                 disabled={loading || busy}
                 onClick={load}
-                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 transition-colors"
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 transition-colors cursor-pointer"
                 title="Refresh bug queue"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </button>
 
-              {/* Flag issue button */}
+              {/* Flag issue button (Icon-only) */}
               <button
                 type="button"
                 onClick={() => setIsFlagFormOpen(!isFlagFormOpen)}
-                className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white border border-rose-400/40 shadow-sm transition-all shrink-0 cursor-pointer"
+                className="p-2 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white border border-rose-400/40 shadow-sm transition-all shrink-0 cursor-pointer"
+                title="Flag issue"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Flag issue</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isFlagFormOpen ? 'rotate-180' : ''}`} />
+                <Plus className="w-4 h-4" />
               </button>
 
               {/* Close Button */}
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-white/80 border border-white/10 transition-colors"
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-white/80 transition-colors cursor-pointer"
                 title="Close"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           </header>
 
           {/* Main Content Area */}
-          <div className="flex-1 overflow-hidden flex flex-col p-4 sm:p-5 space-y-3.5 min-h-0 bg-gradient-to-b from-[#1e3a5f]/20 via-[#0b1220] to-[#0b1220]">
+          <div className="flex-1 overflow-hidden flex flex-col p-2 sm:p-3 space-y-2.5 min-h-0 bg-[#0b1220]">
             {error && (
-              <div className="p-3 rounded-xl bg-rose-600/90 text-white text-xs font-semibold flex items-center gap-2 shrink-0 shadow-md">
+              <div className="p-2.5 rounded-xl bg-rose-600/90 text-white text-xs font-semibold flex items-center gap-2 shrink-0 shadow-md">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{error}</span>
               </div>
             )}
 
-            {/* KPIs grid */}
-            <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 shrink-0">
-              <div className="bg-[#111827] border border-white/10 rounded-2xl p-3 shadow-xs">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-white/60 block">Ready now</span>
-                <b className="text-xl font-extrabold text-emerald-400 mt-0.5 block">{readyCount}</b>
+            {/* KPIs Carousel (Horizontal Slider) */}
+            <section className="flex overflow-x-auto gap-2 snap-x pb-1 scrollbar-none shrink-0">
+              <div className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] rounded-xl p-2.5">
+                <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Ready now</span>
+                <b className="text-lg font-extrabold text-emerald-400 mt-0.5 block">{readyCount}</b>
               </div>
-              <div className="bg-[#111827] border border-white/10 rounded-2xl p-3 shadow-xs">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-white/60 block">Stuck / 2 Burns</span>
-                <b className="text-xl font-extrabold text-rose-400 mt-0.5 block">{blockedCount}</b>
+              <div className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] rounded-xl p-2.5">
+                <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Stuck / 2 Burns</span>
+                <b className="text-lg font-extrabold text-rose-400 mt-0.5 block">{blockedCount}</b>
               </div>
-              <div className="bg-[#111827] border border-white/10 rounded-2xl p-3 shadow-xs">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-white/60 block">Meals on open cards</span>
-                <b className="text-xl font-extrabold text-amber-300 mt-0.5 block">{totalMealsCount}</b>
+              <div className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] rounded-xl p-2.5">
+                <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Meals open</span>
+                <b className="text-lg font-extrabold text-amber-300 mt-0.5 block">{totalMealsCount}</b>
               </div>
-              <div className="bg-[#111827] border border-white/10 rounded-2xl p-3 shadow-xs">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-white/60 block">Done this week</span>
-                <b className="text-xl font-extrabold text-slate-300 mt-0.5 block">{doneCount}</b>
+              <div className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] rounded-xl p-2.5">
+                <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Done this week</span>
+                <b className="text-lg font-extrabold text-slate-300 mt-0.5 block">{doneCount}</b>
               </div>
             </section>
 
-            {/* Board mode & Category filter tabs */}
-            <div className="flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-white/10 pb-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setBoardMode('bugs')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    boardMode === 'bugs'
-                      ? 'bg-indigo-600 border-indigo-400 text-white shadow-md'
-                      : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
-                  }`}
-                >
-                  Bugs Queue
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBoardMode('golden')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    boardMode === 'golden'
-                      ? 'bg-amber-600 border-amber-400 text-white shadow-md'
-                      : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
-                  }`}
-                >
-                  Golden Inbox
-                </button>
-              </div>
+            {/* Dropdown Filters (Board mode & Category) */}
+            <div className="flex items-center gap-2 shrink-0 py-1">
+              <select
+                value={boardMode}
+                onChange={(e) => setBoardMode(e.target.value as any)}
+                className="bg-[#111827] text-white border border-white/15 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none cursor-pointer"
+              >
+                <option value="bugs">Bugs Queue ({bugTags.length})</option>
+                <option value="golden">Golden Inbox</option>
+              </select>
 
               {boardMode === 'bugs' && (
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
-                  {[{ key: 'all', label: 'All' }, ...CATEGORY_OPTIONS].map((c) => {
-                    const count =
-                      c.key === 'all'
-                        ? bugTags.length
-                        : bugTags.filter((t: any) => (t.category || 'foodcart') === c.key).length;
-                    const isActive = activeTab === c.key;
+                <select
+                  value={activeTab}
+                  onChange={(e) => setActiveTab(e.target.value as any)}
+                  className="bg-[#111827] text-white border border-white/15 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none cursor-pointer"
+                >
+                  <option value="all">All Categories ({bugTags.length})</option>
+                  {CATEGORY_OPTIONS.map((c) => {
+                    const count = bugTags.filter((t: any) => (t.category || 'foodcart') === c.key).length;
                     return (
-                      <button
-                        key={c.key}
-                        onClick={() => setActiveTab(c.key as any)}
-                        className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
-                          isActive
-                            ? 'bg-indigo-600/80 border-indigo-400 text-white shadow-sm'
-                            : 'bg-slate-800/80 border-white/10 text-white/60 hover:bg-slate-700 hover:text-white'
-                        }`}
-                      >
-                        <span>{c.label}</span>
-                        <span
-                          className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono ${
-                            isActive ? 'bg-indigo-950 text-indigo-200' : 'bg-black/40 text-white/50'
-                          }`}
-                        >
-                          {count}
-                        </span>
-                      </button>
+                      <option key={c.key} value={c.key}>
+                        {c.label} ({count})
+                      </option>
                     );
                   })}
-                </div>
+                </select>
               )}
             </div>
 
             {/* Flag issue dropdown panel */}
             {boardMode === 'bugs' && isFlagFormOpen && (
-              <div className="p-4 rounded-2xl bg-[#111827] border border-rose-500/40 shrink-0 shadow-xl max-h-[40vh] overflow-y-auto">
+              <div className="p-3 rounded-xl bg-[#111827] border border-rose-500/40 shrink-0 shadow-xl max-h-[40vh] overflow-y-auto">
                 <FlagIssueForm
                   initialCategory={activeTab === 'all' ? 'foodcart' : activeTab}
                   existingBugTags={bugTags}
@@ -770,384 +738,285 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
               </div>
             )}
 
-            {/* 2-Column Dashboard Layout for Bugs Queue */}
+            {/* Bugs Queue Accordion View */}
             {boardMode === 'bugs' && (
-              <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-3.5 flex-1 min-h-0 overflow-hidden">
-                {/* LEFT COLUMN: Queue */}
-                <section className="bg-[#111827] border border-white/10 rounded-2xl overflow-hidden flex flex-col min-h-0 shadow-lg">
-                  <div className="px-4 py-2.5 border-b border-white/10 bg-white/5 flex items-center justify-between shrink-0">
-                    <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-white/60">
-                      Queue — sorted for "Next bug"
-                    </h2>
-                    <span className="text-[10px] text-white/50 font-mono">
-                      {sortedQueueTags.length} card{sortedQueueTags.length === 1 ? '' : 's'}
-                    </span>
+              <div className="flex-1 overflow-y-auto min-h-0 space-y-2">
+                {sortedQueueTags.length === 0 ? (
+                  <div className="p-8 text-center text-white/50 text-xs">
+                    No active bug cards in {activeTab}.
                   </div>
+                ) : (
+                  sortedQueueTags.map((tag) => {
+                    const item = hydrateWorkItem(tag);
+                    const pub = publicId(item, tag.id);
+                    const isSelected = selectedTagId === tag.id;
+                    const burnedCount = item.burns.filter((b) => b.burned).length;
 
-                  <div className="overflow-y-auto flex-1 divide-y divide-white/5 min-h-0">
-                    {sortedQueueTags.length === 0 ? (
-                      <div className="p-8 text-center text-white/50 text-xs">
-                        No active bug cards in {activeTab}.
-                      </div>
-                    ) : (
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead className="text-[10px] uppercase tracking-wider text-white/50 bg-slate-900/90 sticky top-0 border-b border-white/10 z-10">
-                          <tr>
-                            <th className="py-2 px-3">#</th>
-                            <th className="py-2 px-3">What</th>
-                            <th className="py-2 px-2">From</th>
-                            <th className="py-2 px-3 text-right">State</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                          {sortedQueueTags.map((tag) => {
-                            const item = hydrateWorkItem(tag);
-                            const pub = publicId(item, tag.id);
-                            const isSelected = selectedTagId === tag.id;
-                            const burnedCount = item.burns.filter((b) => b.burned).length;
-                            return (
-                              <tr
-                                key={tag.id}
-                                onClick={() => handleSelectTag(tag.id)}
-                                className={`cursor-pointer transition-all ${
-                                  isSelected
-                                    ? 'bg-indigo-600/25 border-l-4 border-indigo-400 text-white'
-                                    : 'hover:bg-white/5 text-white/90'
-                                }`}
-                              >
-                                <td className="py-3 px-3 font-extrabold text-indigo-300 font-mono shrink-0 whitespace-nowrap">
-                                  {pub}
-                                </td>
-                                <td className="py-3 px-3 min-w-0">
-                                  <div className="font-bold text-xs truncate max-w-[210px] text-white">
-                                    {tag.title}
-                                  </div>
-                                  <div className="text-[10px] text-white/50 mt-0.5 truncate max-w-[210px]">
-                                    {item.commits.length > 0 ? 'pinned' : 'snap'} ·{' '}
-                                    {tag.linked_count || tag.linked_issues?.length || 1} meal
-                                    {(tag.linked_count || tag.linked_issues?.length || 1) === 1 ? '' : 's'}{' '}
-                                    {burnedCount > 0 ? `· burn ${burnedCount}/${BURN_BUDGET}` : ''}
-                                  </div>
-                                  {(tag.last_commit || item.commits[item.commits.length - 1]) && (
-                                    <div className="text-[10px] text-indigo-200/80 mt-0.5 truncate max-w-[210px]">
-                                      last:{' '}
-                                      {(tag.last_commit || item.commits[item.commits.length - 1]).actor} ·{' '}
-                                      {String(
-                                        (tag.last_commit || item.commits[item.commits.length - 1]).summary || ''
-                                      ).slice(0, 72)}
-                                    </div>
-                                  )}
-                                </td>
-                                <td className="py-3 px-2 text-[10px] text-white/60 whitespace-nowrap">
-                                  {tag.category || 'auto'}
-                                </td>
-                                <td className="py-3 px-3 text-right whitespace-nowrap">
-                                  <span
-                                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border inline-block ${
-                                      item.queue === 'ready'
-                                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                        : item.queue === 'blocked'
-                                        ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                                        : item.queue === 'done'
-                                        ? 'bg-slate-500/20 text-slate-300 border-slate-500/30'
-                                        : 'bg-sky-500/15 text-sky-400 border-sky-500/30'
-                                    }`}
-                                  >
-                                    {item.queue}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </section>
-
-                {/* RIGHT COLUMN: Open Bug Details (NOW + Commits) */}
-                <section className="bg-[#111827] border border-white/10 rounded-2xl overflow-hidden flex flex-col min-h-0 shadow-lg">
-                  {!selectedTag ? (
-                    <div className="p-12 text-center text-white/50 text-xs flex flex-col items-center justify-center h-full">
-                      <Bug className="w-8 h-8 text-white/20 mb-2" />
-                      <p>Select a bug card from the queue or click <strong>Next bug</strong>.</p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Header bar for selected bug */}
-                      <div className="px-4 py-2.5 border-b border-white/10 bg-white/5 flex items-center justify-between gap-3 shrink-0">
-                        <div className="min-w-0">
-                          <h2 className="text-xs font-bold text-white flex items-center gap-2 truncate">
-                            <span className="text-indigo-400 font-mono">{selectedPubId}</span>
-                            <span className="truncate">{selectedTag.title}</span>
-                          </h2>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {/* Run AI Triage */}
-                          <button
-                            type="button"
-                            disabled={busy || triagingTagId === selectedTag.id}
-                            onClick={() => runBugTriageAgent(selectedTag)}
-                            className="px-2.5 py-1 text-[11px] font-bold text-violet-200 bg-violet-950/60 hover:bg-violet-900/80 border border-violet-500/40 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
-                            title="Run AI Triage Agent to synthesize problems"
-                          >
-                            {triagingTagId === selectedTag.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin text-violet-400" />
-                            ) : (
-                              <Sparkles className="w-3 h-3 text-violet-400" />
-                            )}
-                            <span>Triage</span>
-                          </button>
-
-                          {/* Download Zip */}
-                          <button
-                            type="button"
-                            disabled={zippingTagId === selectedTag.id}
-                            onClick={() => downloadTagZip(selectedTag)}
-                            className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 transition-colors"
-                            title="Download Bug Zip with all evidence"
-                          >
-                            {zippingTagId === selectedTag.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Download className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-
-                          {/* Copy handoff for the next agent */}
-                          <button
-                            type="button"
-                            onClick={(e) => copyHandoff(selectedTag, e)}
-                            className="px-2.5 py-1 text-[11px] font-bold text-amber-100 bg-amber-950/70 hover:bg-amber-900/80 border border-amber-500/40 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
-                            title="Copy Start JSON so another agent can take over"
-                          >
-                            {copiedHandoffId === selectedTag.id ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                            <span>{copiedHandoffId === selectedTag.id ? 'Copied' : 'Hand off'}</span>
-                          </button>
-
-                          {/* Copy summary */}
-                          <button
-                            type="button"
-                            onClick={(e) => copyTagSummary(selectedTag, e)}
-                            className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 transition-colors"
-                            title="Copy Summary"
-                          >
-                            {copiedTagId === selectedTag.id ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-
-                          {/* Mark fixed / delete */}
-                          <button
-                            type="button"
-                            disabled={deletingTagId === selectedTag.id}
-                            onClick={(e) => deleteTag(selectedTag.id, selectedTag.title, e)}
-                            className="p-1.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 transition-colors cursor-pointer"
-                            title="Mark Fixed"
-                          >
-                            {deletingTagId === selectedTag.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Check className="w-3.5 h-3.5" strokeWidth={3} />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Detail Scrollable Body */}
-                      <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 min-h-0">
-                        {triageStatus && (
-                          <div className="p-2.5 rounded-xl bg-violet-950/80 border border-violet-500/40 text-violet-200 text-xs font-semibold flex items-center gap-2">
-                            <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-                            <span>{triageStatus}</span>
-                          </div>
-                        )}
-
-                        {/* NOW Section */}
-                        <div className="bg-[#0f172a] border border-[#334155] rounded-2xl p-4 space-y-3.5 shadow-md">
-                          <h3 className="text-xs font-extrabold uppercase tracking-wider text-indigo-300">
-                            NOW — what the next agent sees first
-                          </h3>
-                          {(selectedCommits[selectedCommits.length - 1] || selectedTag.last_commit) && (
-                            <div className="text-[11px] rounded-xl border border-indigo-500/30 bg-indigo-950/40 p-2.5 text-indigo-100">
-                              <div className="font-extrabold uppercase tracking-wider text-[10px] text-indigo-300 mb-1">
-                                Last loop
+                    return (
+                      <div
+                        key={tag.id}
+                        className={`rounded-xl overflow-hidden transition-all bg-[#111827] ${
+                          isSelected ? 'ring-1 ring-indigo-500' : 'hover:bg-white/5'
+                        }`}
+                      >
+                        {/* Accordion Row Header */}
+                        <div
+                          onClick={() => handleSelectTag(tag.id)}
+                          className="p-3 cursor-pointer flex items-center justify-between gap-2"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="font-mono text-xs font-extrabold text-indigo-300 shrink-0">
+                              {pub}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-white truncate">
+                                {tag.title}
                               </div>
-                              {(() => {
-                                const last = selectedCommits[selectedCommits.length - 1] || selectedTag.last_commit;
-                                return (
-                                  <div>
-                                    <span className="font-bold">{last.actor}</span>
-                                    {' · '}
-                                    {last.summary}
-                                    {last.attempt ? (
-                                      <div className="font-mono text-[10px] mt-1 text-indigo-200/90">
-                                        {last.attempt.result} · {last.attempt.file} · {last.attempt.test}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                );
-                              })()}
+                              <div className="text-[10px] text-white/50 mt-0.5 truncate">
+                                {tag.category || 'auto'} · {tag.linked_count || tag.linked_issues?.length || 1} meal(s)
+                                {burnedCount > 0 ? ` · burn ${burnedCount}/${BURN_BUDGET}` : ''}
+                              </div>
                             </div>
-                          )}
+                          </div>
 
-                          {/* Pinned Bug Field */}
-                          <div className="bg-[#1c1917] border border-[#a16207] rounded-2xl p-3.5 space-y-2">
-                            <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-amber-400">
-                              <span className="flex items-center gap-1.5">
-                                <Bug className="w-3.5 h-3.5" />
-                                Bug — open field · snap pre-fills · you edit each loop · not deleted
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${
+                                item.queue === 'ready'
+                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                  : item.queue === 'blocked'
+                                  ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                                  : item.queue === 'done'
+                                  ? 'bg-slate-500/20 text-slate-300 border-slate-500/30'
+                                  : 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+                              }`}
+                            >
+                              {item.queue}
+                            </span>
+                            <ChevronDown
+                              className={`w-4 h-4 text-white/50 transition-transform ${
+                                isSelected ? 'rotate-180 text-indigo-400' : ''
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Accordion Expanded Detail Body */}
+                        {isSelected && (
+                          <div className="p-3 border-t border-white/10 bg-[#0c121e] space-y-3.5 text-xs">
+                            {/* Action Bar */}
+                            <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-white/5">
+                              <span className="font-mono font-bold text-indigo-300 text-xs">
+                                {selectedPubId}
                               </span>
-                              {!editingBugField && (
+
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {/* AI Triage */}
                                 <button
                                   type="button"
-                                  onClick={() => setEditingBugField(true)}
-                                  className="text-amber-300 hover:text-amber-200 p-1 rounded hover:bg-white/5 transition-colors cursor-pointer"
-                                  title="Edit Bug Instruction"
+                                  disabled={busy || triagingTagId === selectedTag.id}
+                                  onClick={() => runBugTriageAgent(selectedTag)}
+                                  className="px-2 py-1 text-[10px] font-bold text-violet-200 bg-violet-950/60 hover:bg-violet-900 border border-violet-500/40 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                                  title="Run AI Triage Agent"
                                 >
-                                  <Edit2 className="w-3 h-3" />
+                                  {triagingTagId === selectedTag.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin text-violet-400" />
+                                  ) : (
+                                    <Sparkles className="w-3 h-3 text-violet-400" />
+                                  )}
+                                  <span>Triage</span>
                                 </button>
-                              )}
-                            </div>
 
-                            {editingBugField ? (
-                              <div className="space-y-2">
-                                <textarea
-                                  rows={4}
-                                  value={editBugDraft}
-                                  onChange={(e) => setEditBugDraft(e.target.value)}
-                                  className="w-full text-xs rounded-xl p-2.5 bg-black/60 border border-amber-500/40 text-white font-sans focus:outline-none"
-                                  placeholder="Describe the bug instruction..."
-                                />
-                                <div className="flex gap-2 justify-end">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingBugField(false);
-                                      setEditBugDraft(selectedBugNow?.bug || selectedTag.identified_problems || '');
-                                    }}
-                                    className="px-2.5 py-1 text-xs rounded-lg bg-slate-700 text-white cursor-pointer"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={savingField}
-                                    onClick={saveBugField}
-                                    className="px-3 py-1 text-xs rounded-lg bg-amber-600 hover:bg-amber-500 font-bold text-white flex items-center gap-1 cursor-pointer"
-                                  >
-                                    {savingField ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                                    Save Bug
-                                  </button>
-                                </div>
+                                {/* Zip Download */}
+                                <button
+                                  type="button"
+                                  disabled={zippingTagId === selectedTag.id}
+                                  onClick={() => downloadTagZip(selectedTag)}
+                                  className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 transition-colors"
+                                  title="Download Bug Zip"
+                                >
+                                  {zippingTagId === selectedTag.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Download className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+
+                                {/* Hand Off */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => copyHandoff(selectedTag, e)}
+                                  className="px-2 py-1 text-[10px] font-bold text-amber-100 bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                                  title="Copy Start JSON for next agent"
+                                >
+                                  {copiedHandoffId === selectedTag.id ? (
+                                    <Check className="w-3 h-3 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                  <span>{copiedHandoffId === selectedTag.id ? 'Copied' : 'Hand off'}</span>
+                                </button>
+
+                                {/* Copy Summary */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => copyTagSummary(selectedTag, e)}
+                                  className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 transition-colors"
+                                  title="Copy Summary"
+                                >
+                                  {copiedTagId === selectedTag.id ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+
+                                {/* Mark fixed */}
+                                <button
+                                  type="button"
+                                  disabled={deletingTagId === selectedTag.id}
+                                  onClick={(e) => deleteTag(selectedTag.id, selectedTag.title, e)}
+                                  className="p-1 rounded-lg bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 transition-colors cursor-pointer"
+                                  title="Mark Fixed"
+                                >
+                                  {deletingTagId === selectedTag.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                                  )}
+                                </button>
                               </div>
-                            ) : (
-                              <p className="text-xs font-semibold text-white/95 leading-relaxed whitespace-pre-wrap">
-                                {selectedBugNow?.bug ||
-                                  selectedTag.identified_problems ||
-                                  selectedTag.title ||
-                                  '(No bug instruction recorded)'}
-                              </p>
-                            )}
-
-                            <div className="text-[10px] text-white/50 border-t border-amber-500/20 pt-1.5">
-                              Started as your snap: "{selectedTag.title}" · you (or the summary) update this; full original + agent replies live in commits below
                             </div>
-                          </div>
 
-                          {/* NOW Bullets */}
-                          <ul className="text-xs space-y-2 text-white/80 list-disc pl-4">
-                            <li>
-                              <div className="flex items-center justify-between gap-2">
-                                <div>
-                                  <strong className="text-white">Remaining:</strong>{' '}
-                                  {selectedBugNow?.remaining?.length
-                                    ? selectedBugNow.remaining.join(' · ')
-                                    : selectedTag.whats_still_open || '—'}
+                            {/* NOW Section */}
+                            <div className="bg-[#0f172a] rounded-xl p-3 space-y-2.5">
+                              <h3 className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-300">
+                                NOW — what the next agent sees first
+                              </h3>
+                              {(selectedCommits[selectedCommits.length - 1] || selectedTag.last_commit) && (
+                                <div className="text-[10px] rounded-lg border border-indigo-500/30 bg-indigo-950/40 p-2 text-indigo-100">
+                                  <div className="font-extrabold uppercase text-[9px] text-indigo-300 mb-0.5">
+                                    Last loop
+                                  </div>
+                                  {(() => {
+                                    const last = selectedCommits[selectedCommits.length - 1] || selectedTag.last_commit;
+                                    return (
+                                      <div>
+                                        <span className="font-bold">{last.actor}</span> · {last.summary}
+                                        {last.attempt ? (
+                                          <div className="font-mono text-[9px] mt-0.5 text-indigo-200/90">
+                                            {last.attempt.result} · {last.attempt.file} · {last.attempt.test}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
-                                {!editingRemaining && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingRemaining(true)}
-                                    className="text-amber-400 hover:text-amber-300 text-[10px] font-bold shrink-0"
-                                  >
-                                    Edit
-                                  </button>
+                              )}
+
+                              {/* Pinned Bug Field */}
+                              <div className="bg-[#1c1917] rounded-xl p-2.5 space-y-1.5 border border-amber-600/40">
+                                <div className="flex items-center justify-between text-[9px] font-extrabold uppercase tracking-wider text-amber-400">
+                                  <span>Pinned Bug Context</span>
+                                  {!editingBugField && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingBugField(true)}
+                                      className="text-amber-300 hover:text-amber-200 p-0.5 cursor-pointer"
+                                      title="Edit Bug Instruction"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+
+                                {editingBugField ? (
+                                  <div className="space-y-1.5">
+                                    <textarea
+                                      rows={3}
+                                      value={editBugDraft}
+                                      onChange={(e) => setEditBugDraft(e.target.value)}
+                                      className="w-full text-xs rounded-lg p-2 bg-black/60 border border-amber-500/40 text-white font-sans focus:outline-none"
+                                      placeholder="Describe the bug instruction..."
+                                    />
+                                    <div className="flex gap-1.5 justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingBugField(false);
+                                          setEditBugDraft(selectedBugNow?.bug || selectedTag.identified_problems || '');
+                                        }}
+                                        className="px-2 py-0.5 text-[10px] rounded bg-slate-700 text-white cursor-pointer"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={savingField}
+                                        onClick={saveBugField}
+                                        className="px-2.5 py-0.5 text-[10px] rounded bg-amber-600 font-bold text-white flex items-center gap-1 cursor-pointer"
+                                      >
+                                        {savingField ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                        Save Bug
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs font-semibold text-white/95 leading-relaxed whitespace-pre-wrap">
+                                    {selectedBugNow?.bug ||
+                                      selectedTag.identified_problems ||
+                                      selectedTag.title ||
+                                      '(No bug instruction recorded)'}
+                                  </p>
                                 )}
                               </div>
 
-                              {editingRemaining && (
-                                <div className="space-y-1.5 mt-1.5 p-2 bg-black/40 rounded-xl border border-white/10">
-                                  <input
-                                    type="text"
-                                    value={editRemainingDraft}
-                                    onChange={(e) => setEditRemainingDraft(e.target.value)}
-                                    placeholder="Comma-separated remaining items (e.g. no label table, photo crop missing)"
-                                    className="w-full text-xs rounded-lg px-2 py-1 bg-black/60 border border-white/20 text-white"
-                                  />
-                                  <div className="flex gap-2 justify-end">
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingRemaining(false)}
-                                      className="px-2 py-0.5 text-[10px] rounded bg-slate-700 text-white"
-                                    >
-                                      Cancel
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={saveRemainingItems}
-                                      className="px-2.5 py-0.5 text-[10px] rounded bg-amber-600 font-bold text-white"
-                                    >
-                                      Save Remaining
-                                    </button>
+                              {/* Remaining Bullets */}
+                              <div className="text-xs text-white/80">
+                                <strong className="text-white">Remaining:</strong>{' '}
+                                {selectedBugNow?.remaining?.length
+                                  ? selectedBugNow.remaining.join(' · ')
+                                  : selectedTag.whats_still_open || '—'}
+                              </div>
+
+                              {/* Done Bullets */}
+                              <div className="text-xs text-emerald-300">
+                                <strong className="text-white">Done:</strong>{' '}
+                                {selectedBugNow?.done?.length
+                                  ? selectedBugNow.done.join(' · ')
+                                  : selectedTag.status === 'fixed'
+                                  ? selectedTag.resolution_note || 'Resolved'
+                                  : '—'}
+                              </div>
+
+                              {/* Current Meal / Evidence */}
+                              <div className="text-xs text-white/80">
+                                <strong className="text-white">Current meal:</strong>{' '}
+                                {selectedBugNow?.current_evidence?.job_id ||
+                                  (selectedReports[0]?.dish_query
+                                    ? `${selectedReports[0].dish_query} (${selectedReports[0].id.slice(0, 8)})`
+                                    : 'None')}
+                              </div>
+
+                              {/* Tried */}
+                              {selectedBugNow?.tried && selectedBugNow.tried.length > 0 && (
+                                <div className="text-xs text-rose-400">
+                                  <strong className="text-white">
+                                    Tried:
+                                  </strong>
+                                  <div className="space-y-1 mt-1 font-mono text-[11px]">
+                                    {selectedBugNow.tried.map((t, idx) => (
+                                      <div
+                                        key={idx}
+                                        className="bg-rose-950/40 border border-rose-500/30 p-1.5 rounded-lg text-rose-200"
+                                      >
+                                        {t}
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                               )}
-                            </li>
-
-                            <li className="text-emerald-300">
-                              <strong className="text-white">Done:</strong>{' '}
-                              {selectedBugNow?.done?.length
-                                ? selectedBugNow.done.join(' · ')
-                                : selectedTag.status === 'fixed'
-                                ? selectedTag.resolution_note || 'Resolved'
-                                : '—'}
-                            </li>
-
-                            <li>
-                              <strong className="text-white">Current meal:</strong>{' '}
-                              {selectedBugNow?.current_evidence?.job_id ||
-                                (selectedReports[0]?.dish_query
-                                  ? `${selectedReports[0].dish_query} (${selectedReports[0].id.slice(0, 8)})`
-                                  : 'None')}
-                            </li>
-
-                            {selectedBugNow?.tried && selectedBugNow.tried.length > 0 && (
-                              <li className="text-rose-400">
-                                <strong className="text-white">
-                                  Tried (burns {selectedBugNow.burns_used || `${selectedTagItem.burns.length}/${BURN_BUDGET}`}):
-                                </strong>
-                                <div className="space-y-1 mt-1 font-mono text-[11px]">
-                                  {selectedBugNow.tried.map((t, idx) => (
-                                    <div
-                                      key={idx}
-                                      className="bg-rose-950/40 border border-rose-500/30 p-1.5 rounded-lg text-rose-200"
-                                    >
-                                      {t}
-                                    </div>
-                                  ))}
-                                </div>
-                              </li>
-                            )}
-                          </ul>
-                        </div>
+                            </div>
 
                         {/* Commits / History Timeline */}
                         <div className="space-y-3">
@@ -1455,12 +1324,14 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                           </div>
                         )}
                       </div>
-                    </>
-                  )}
-                </section>
-              </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
+        )}
+      </div>
 
           {/* Lightbox Modal */}
           {lightboxImage && (

@@ -2426,7 +2426,13 @@ export default function App() {
               };
               v2Foods = (isIncrementalPull ? mergeFoodLogsDeduped(localFoods, serverFoods) : serverFoods)
                 .filter(f => f && f.sync_state !== 'delete' && (!activeDeletedFoodIds[f.id] || (f.updated_at || 0) > activeDeletedFoodIds[f.id]));
-              v2Logs = isIncrementalPull ? mergeBiomarkerHistory(serverBiomarkers, localBioHistory, deletedBioLogs || cloudProfile?.deletedBiomarkerLogIds || localProfile?.deletedBiomarkerLogIds || {}) : serverBiomarkers;
+              const activeDeletedBioIds = {
+                ...(localProfile?.deletedBiomarkerLogIds || {}),
+                ...(cloudProfile?.deletedBiomarkerLogIds || {}),
+                ...(serverProfile?.deletedBiomarkerLogIds || {})
+              };
+              v2Logs = (isIncrementalPull ? mergeBiomarkerHistory(serverBiomarkers, localBioHistory, deletedBioLogs || cloudProfile?.deletedBiomarkerLogIds || localProfile?.deletedBiomarkerLogIds || {}) : serverBiomarkers)
+                .filter(b => b && b.sync_state !== 'delete' && (!activeDeletedBioIds[b.id] || (b.updated_at || 0) > activeDeletedBioIds[b.id]));
               if (serverProfile) spProfile = serverProfile;
               if (Array.isArray(serverActions)) spActions = serverActions;
               if (Array.isArray(serverBenefits)) spBenefits = serverBenefits;
