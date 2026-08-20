@@ -560,13 +560,13 @@ export function getFallbackCategoryProfile(query: string): Record<string, number
   else if (/\b(croissants?|pastr(?:y|ies)|danish(?:es)?|muffins?|donuts?|doughnuts?|brioche|scones?|puffs?|bakery|bakeries|roll|swirl)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.pastry };
   else if (/\b(eggs?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.egg };
   else if (/\b(chicken|turkey|poultry)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.poultry };
-  else if (/\b(fish|salmon|tuna|cod|shrimp|seafood)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.fish };
+  else if (/\b(fish|salmon|tuna|cod|shrimp|prawns?|seafood)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.fish };
   else if (/\b(beef|pork|steak|lamb|mutton|meat|bacon)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.meat };
   else if (/\b(feta|cheddar|mozzarella|parmesan|cheese)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cheese };
   else if (/\b(milk|yogurt|yoghurt|greek|cream|butter|dairy)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dairy };
   else if (/\b(granola|muesli|oats?|cereals?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cereal };
   else if (/\b(chickpeas?|hummus|lentils?|beans?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.legume };
-  else if (/\b(rice|bread|pasta|potatoe?s?|noodles?|starch)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.starch };
+  else if (/\b(rice|bread|baguettes?|pasta|potatoe?s?|noodles?|starch)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.starch };
   else if (/\b(sesame|almonds?|walnuts?|cashews?|pistachios?|peanuts?|pecans?|hazelnuts?|seeds?|nuts?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.nuts_seeds };
   else if (/\b(cucumbers?|tomatoe?s?|apples?|bananas?|carrots?|olives?|broccoli|vegetables?|fruits?|produce|clementines?|oranges?|citrus|mandarins?|tangerines?|lemons?|limes?|grapefruits?|grapes?|peaches?|plums?|pears?|mangoes?|mangos?|kiwis?|pineapples?|melons?|watermelons?|cantaloupes?|honeydews?|nectarines?|apricots?|cherries|cherry|figs?|dates?|raisins?|avocados?|onions?|peppers?|garlics?|mushrooms?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.produce };
 

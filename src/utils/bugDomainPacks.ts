@@ -137,19 +137,23 @@ export function capTombstoneMap(m: any, n = 50): Record<string, number> | undefi
   const add = (id: any, ts: any) => {
     const k = String(id ?? '').trim();
     if (!k || k === 'undefined' || k === 'null') return;
-    if (/^\d+$/.test(k) && k.length <= 3) return;
+    if (/^\d+$/.test(k)) return;
     const num = typeof ts === 'number' ? ts : Number(ts);
-    out[k] = Number.isFinite(num) && num > 1 ? num : Date.now();
+    out[k] = Number.isFinite(num) && num > 0 ? num : Date.now();
   };
   if (Array.isArray(m)) {
     for (const item of m.slice(0, n * 2)) {
-      if (typeof item === 'string' || typeof item === 'number') add(item, Date.now());
-      else if (item && typeof item === 'object') add((item as any).id || (item as any).key, (item as any).ts ?? (item as any).updated_at);
+      if (typeof item === 'string') add(item, Date.now());
+      else if (item && typeof item === 'object') add((item as any).id || (item as any).key, (item as any).ts ?? (item as any).updated_at ?? (item as any).deleted_at);
     }
   } else {
     for (const [k, v] of Object.entries(m)) {
-      if (/^\d+$/.test(k) && k.length <= 3 && (typeof v === 'string' || typeof v === 'number')) add(v, Date.now());
-      else add(k, v);
+      const cleanK = String(k ?? '').trim();
+      if (/^\d+$/.test(cleanK)) {
+        if (typeof v === 'string') add(v, Date.now());
+      } else {
+        add(cleanK, v);
+      }
     }
   }
   const keys = Object.keys(out).slice(0, n);

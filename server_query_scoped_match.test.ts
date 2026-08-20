@@ -37,4 +37,15 @@ describe('query-scoped component bind (scout + resolver + backend)', () => {
   it('returns null when resolver has not produced a row for this query (honest MISS)', () => {
     expect(pickQueryScopedMatch('romaine lettuce raw', pool)).toBeNull();
   });
+
+  it('prefers brand_official over generic openfoodfacts or usda when both exist for query', () => {
+    const brandedPool = [
+      { id: 'off_12345', name: 'Rolled Oats Generic', source: 'off', searchQuery: 'sainsbury rolled oats' },
+      { id: 'brand_menu_0c6ab', name: "Sainsbury's Scottish Rolled Oats", source: 'brand_official', searchQuery: 'sainsbury rolled oats' },
+      { id: 'usda_789', name: 'Oats raw', source: 'usda', searchQuery: 'sainsbury rolled oats' }
+    ];
+    const hit = pickQueryScopedMatch('sainsbury rolled oats', brandedPool);
+    expect(hit?.id).toBe('brand_menu_0c6ab');
+    expect(hit?.source).toBe('brand_official');
+  });
 });

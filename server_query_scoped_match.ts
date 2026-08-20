@@ -34,7 +34,7 @@ export function pickQueryScopedMatch<T extends { searchQuery?: string | null; so
   });
   if (scoped.length === 0) return null;
   const prefer = (src: string) => scoped.find((m) => m.source === src);
-  return prefer('usda') || prefer('internal_catalog') || prefer('off') || prefer('brand_official') || scoped[0];
+  return prefer('brand_official') || prefer('internal_catalog') || prefer('usda') || prefer('off') || scoped[0];
 }
 
 /** Restrict a shared pool to this component's own search rows. */

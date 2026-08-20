@@ -52,4 +52,14 @@ describe('server_honi_poke_prep golden regression', () => {
     expect(breakdown.calories).toBeLessThan(700);
     expect(breakdown.calories).toBeGreaterThan(500);
   });
+
+  it('classifies French Baguette as SOLID_GRAIN_BAKERY even if raw ingredient components exist', () => {
+    const classification = classifyUniversalPhysicalFormV3({
+      name: 'French Baguette',
+      canonicalDbName: 'French Baguette',
+      components: ['Wheat Flour', 'Water', 'Salt', 'Yeast'],
+    });
+
+    expect(classification.physicalForm).toBe('SOLID_GRAIN_BAKERY');
+  });
 });

@@ -17,6 +17,7 @@ import { lazyWithRetry } from '../utils/lazyWithRetry';
 const GoogleHealthIntegration = lazyWithRetry(() => import('./GoogleHealthIntegration'));
 const FullScreenLogViewer = lazyWithRetry(() => import('./FullScreenLogViewer'));
 const ApiCallTrackerModal = lazyWithRetry(() => import('./ApiCallTrackerModal'));
+const SyncDiagnosticsModal = lazyWithRetry(() => import('./SyncDiagnosticsModal'));
 const NutritionDataBrowserModal = lazyWithRetry(() => import('./NutritionDataBrowserModal'));
 const BugTrackerModal = lazyWithRetry(() => import('./BugTrackerModal'));
 import BugSnapshotFab, { BugSnapshotSettingsToggle } from './BugSnapshotFab';
@@ -392,6 +393,7 @@ export default function Header({
   const [showApiTracker, setShowApiTracker] = useState(false);
   const [showNutritionDataBrowser, setShowNutritionDataBrowser] = useState(false);
   const [showBugTracker, setShowBugTracker] = useState(false);
+  const [showSyncDiagnostics, setShowSyncDiagnostics] = useState(false);
   const [isTrackerOpen, setIsTrackerOpen] = useState(false);
   const [agentLogs, setAgentLogs] = useState<{ timestamp: string, message: string }[]>([]);
   const [isFetchingLogs, setIsFetchingLogs] = useState(false);
@@ -1485,6 +1487,10 @@ export default function Header({
       <BugTrackerModal
         isOpen={showBugTracker}
         onClose={() => setShowBugTracker(false)}
+      />
+      <SyncDiagnosticsModal
+        isOpen={showSyncDiagnostics}
+        onClose={() => setShowSyncDiagnostics(false)}
       />
       </React.Suspense>
       {isAdmin && (
@@ -3544,6 +3550,15 @@ export default function Header({
                     Sync Transaction Activity Feed
                   </span>
                   <div className="flex items-center gap-2">
+                    {profile?.email?.toLowerCase().trim() === 'cwah.liu@gmail.com' && (
+                      <button
+                        onClick={() => setShowSyncDiagnostics(true)}
+                        className="flex items-center gap-1 text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 px-2 py-0.5 rounded-full hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors"
+                        title="View / Download full Sync Diagnostics JSON"
+                      >
+                        <Terminal className="w-3 h-3" /> Diagnostics
+                      </button>
+                    )}
                     <button
                       onClick={handleCopySyncFeed}
                       className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-2 py-0.5 rounded-full"
@@ -3678,6 +3693,18 @@ export default function Header({
               </div>
 
 
+
+              {/* Sync Diagnostics (cwah-only): view/copy/download the Supabase debug snapshot in-app */}
+              {profile?.email?.toLowerCase().trim() === 'cwah.liu@gmail.com' && (
+                <button
+                  type="button"
+                  onClick={() => setShowSyncDiagnostics(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-slate-100 dark:bg-slate-850 text-xs font-bold text-slate-600 dark:text-slate-300"
+                >
+                  <Terminal className="w-4 h-4" />
+                  Sync Diagnostics
+                </button>
+              )}
 
               {/* Admin / User View Toggle */}
               {profile?.email?.toLowerCase().trim() === 'cwah.liu@gmail.com' && (
@@ -4527,6 +4554,10 @@ export default function Header({
       <BugTrackerModal
         isOpen={showBugTracker}
         onClose={() => setShowBugTracker(false)}
+      />
+      <SyncDiagnosticsModal
+        isOpen={showSyncDiagnostics}
+        onClose={() => setShowSyncDiagnostics(false)}
       />
       </React.Suspense>
     </>

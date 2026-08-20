@@ -396,6 +396,10 @@ export async function executeFoodResolverCurator(
 
   const quarantines = jsonResult.actions.filter((a: any) => a.type === 'quarantine');
   for (const q of quarantines) {
+     if (q.fdcId && (String(q.fdcId).startsWith('brand_menu_') || String(q.fdcId).startsWith('internal_'))) {
+       addDebugLog(`[CatalogQuarantine Skip] Protected brand/internal entry ${q.fdcId} from database purge.`);
+       continue;
+     }
      addDebugLog(`[CatalogQuarantine] Quarantined ${q.fdcId}. Reason: ${q.reason}`);
      try {
        await supabaseAdmin.from('food_items')

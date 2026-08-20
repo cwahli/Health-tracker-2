@@ -1070,7 +1070,7 @@ export default function FoodHistoryTab({
             // Merge lazy-fetched detail overrides with the (possibly lightweight) log object
             const overrides = detailOverrides[log.id];
             const effectiveComposition = overrides?.composition || log.composition;
-            const effectiveScoutItems = (overrides?.scoutItems && overrides.scoutItems.length > 0) ? overrides.scoutItems : log.scoutItems;
+            const effectiveScoutItems = (overrides?.scoutItems && overrides.scoutItems.length > 0) ? overrides.scoutItems : (log.scoutItems || (log as any).scoutSnapshot || (Array.isArray(log.itemsBreakdown) && log.itemsBreakdown.length > 0 ? log.itemsBreakdown : (Array.isArray((log as any).items) ? (log as any).items : [])));
             const effectiveItemsBreakdown = (overrides?.itemsBreakdown && overrides.itemsBreakdown.length > 0) ? overrides.itemsBreakdown : log.itemsBreakdown;
             const resolvedImgs = resolveFoodImages(log.imageUrls, activeFoodLogs, log);
             const resolvedImg =

@@ -61,6 +61,27 @@ describe('mergeDeleteMaps + isLogTombstoned + filterLogsByTombstone', () => {
     expect(mergeDeleteMaps(undefined as any, { a: 1 })).toEqual({ a: 1 });
   });
 
+  it('purges corrupted numeric array-index keys like {"0": 0, "1": 0}', () => {
+    const corrupt = { '0': 0, '1': 0, '2': 0, log_123: 50 };
+    const merged = mergeDeleteMaps(corrupt, { log_456: 60 });
+    expect(merged).toEqual({ log_123: 50, log_456: 60 });
+    expect(merged['0']).toBeUndefined();
+    expect(merged['1']).toBeUndefined();
+  });
+
+  it('recovers string IDs if serialized as array or indexed array map', () => {
+    const arrayInput = ['log_abc', 'log_xyz'];
+    const merged = mergeDeleteMaps(arrayInput);
+    expect(merged.log_abc).toBeGreaterThan(0);
+    expect(merged.log_xyz).toBeGreaterThan(0);
+
+    const indexedMap = { '0': 'log_recovered', '1': 'log_another' };
+    const merged2 = mergeDeleteMaps(indexedMap);
+    expect(merged2.log_recovered).toBeGreaterThan(0);
+    expect(merged2.log_another).toBeGreaterThan(0);
+    expect(merged2['0']).toBeUndefined();
+  });
+
   it('tombstone 0 is not active', () => {
     expect(isLogTombstoned('x', 5, { x: 0 }, 'presence')).toBe(false);
     expect(isLogTombstoned('x', 5, { x: 0 }, 'recency')).toBe(false);

@@ -61,17 +61,40 @@ export function classifyUniversalPhysicalFormV3(item: {
     };
   }
 
+  // BAKERY CONTAINER / DESSERT TERMS & PHRASES (Evaluated early to distinguish standalone bakery from compound meals)
+  const PLAIN_BREAD_TERMS = [
+    'baguette', 'baguettes', 'bread', 'breads', 'loaf', 'loaves', 'roll', 'rolls', 'bagel', 'bagels',
+    'sourdough', 'ciabatta', 'focaccia', 'pretzel', 'pretzels', 'bun', 'buns', 'crumpet', 'crumpets',
+    'flatbread', 'pita', 'pitta', 'naan', 'tortilla', 'tortillas', 'roti', 'chapati'
+  ];
+  const SWEET_BAKERY_TERMS = [
+    'pie', 'pies', 'cobbler', 'cobblers', 'tart', 'tarts', 'cake', 'cakes', 'muffin', 'muffins',
+    'cookie', 'cookies', 'croissant', 'croissants', 'cheesecake', 'cheesecakes', 'cupcake', 'cupcakes',
+    'brownie', 'brownies', 'shortcake', 'crumble', 'strudel', 'turnover', 'turnovers', 'danish', 'pudding',
+    'custard', 'praline', 'pralines', 'truffle', 'truffles', 'fudge', 'toffee', 'bonbon', 'bonbons', 'pattie', 'patties', 'patty',
+    'pastry', 'pastries', 'swirl', 'swirls', 'brioche', 'scone', 'scones', 'waffle', 'waffles', 'pancake', 'pancakes',
+    'eclair', 'eclairs', 'macaron', 'macarons', 'macaroon', 'macaroons', 'churros', 'biscuit', 'biscuits',
+    'chocolatine', 'pain suisse'
+  ];
+  const BAKERY_CONTAINER_TERMS = [...PLAIN_BREAD_TERMS, ...SWEET_BAKERY_TERMS];
+  const hasBakeryPhrase = /\b(pain au\b|pain aux\b|pain suisse\b|chausson\b|cinnamon roll\b|cinnamon bun\b|cinnamon swirl\b|danish pastry\b|fruit danish\b|apple turnover\b|raisin swirl\b|raisin pastry\b)/i.test(primaryName) ||
+    /\b(pain au\b|pain aux\b|pain suisse\b|chausson\b|cinnamon roll\b|cinnamon bun\b|cinnamon swirl\b|danish pastry\b|fruit danish\b|apple turnover\b|raisin swirl\b|raisin pastry\b)/i.test(textCorpus);
+  const hasBakeryContainer = BAKERY_CONTAINER_TERMS.some(w => primaryHasWord(w)) || hasBakeryPhrase;
+
   // 2. COMPOUND MEAL DETECTOR
   const COMPOUND_BOWL_PATTERN = /\b(bowl|bowls|poke|salad|salads|bento|combo|platter|box|curry|stew|casserole|wrap|burrito|taco|sandwich|sushi|tartare|compound_meal|meal bowl)\b/i;
   const hasMultipleComponents = Array.isArray(item.components) ? item.components.length >= 2 : false;
   const isCompoundName = COMPOUND_BOWL_PATTERN.test(textCorpus);
+  const isStandaloneBakery = hasBakeryContainer && !isCompoundName && !hasWord('sandwich') && !hasWord('burger') && !hasWord('wrap');
   const isCompoundMeal = (
-    hasMultipleComponents ||
-    isCompoundName ||
-    ((item.foodType || '').toLowerCase().includes('meal bowl') || (item.foodType || '').toLowerCase().includes('poke') || (item.foodType || '').toLowerCase().includes('compound_meal')) ||
-    (((hasWord('topped') || hasWord('with') || hasWord('served') || hasWord('and')) &&
-      ((hasWord('chicken') || hasWord('beef') || hasWord('bagel') || hasWord('pasta') || hasWord('parmigiana')) && 
-       (hasWord('cheese') || hasWord('sauce') || hasWord('dressing')))))
+    !isStandaloneBakery && (
+      hasMultipleComponents ||
+      isCompoundName ||
+      ((item.foodType || '').toLowerCase().includes('meal bowl') || (item.foodType || '').toLowerCase().includes('poke') || (item.foodType || '').toLowerCase().includes('compound_meal')) ||
+      (((hasWord('topped') || hasWord('with') || hasWord('served') || hasWord('and')) &&
+        ((hasWord('chicken') || hasWord('beef') || hasWord('bagel') || hasWord('pasta') || hasWord('parmigiana')) && 
+         (hasWord('cheese') || hasWord('sauce') || hasWord('dressing')))))
+    )
   );
 
   if (isCompoundMeal && !hasWord('latte') && !hasWord('soup') && !hasWord('macchiato')) {
@@ -117,19 +140,6 @@ export function classifyUniversalPhysicalFormV3(item: {
   const matchedProduceInPrimary = Array.from(new Set(PRODUCE_WORDS.filter(w => primaryHasWord(w))));
   const hasProduceWord = matchedProduceInCorpus.length > 0;
 
-  // BAKERY CONTAINER / DESSERT TERMS
-  const BAKERY_CONTAINER_TERMS = [
-    'pie', 'pies', 'cobbler', 'cobblers', 'tart', 'tarts', 'cake', 'cakes', 'muffin', 'muffins',
-    'cookie', 'cookies', 'croissant', 'croissants', 'cheesecake', 'cheesecakes', 'cupcake', 'cupcakes',
-    'brownie', 'brownies', 'shortcake', 'crumble', 'strudel', 'turnover', 'turnovers', 'danish', 'pudding',
-    'custard', 'praline', 'pralines', 'truffle', 'truffles', 'fudge', 'toffee', 'bonbon', 'bonbons', 'pattie', 'patties', 'patty',
-    'pastry', 'pastries', 'swirl', 'swirls', 'brioche', 'scone', 'scones', 'waffle', 'waffles', 'pancake', 'pancakes',
-    'eclair', 'eclairs', 'macaron', 'macarons', 'macaroon', 'macaroons', 'churros', 'biscuit', 'biscuits',
-    'chocolatine', 'pain suisse'
-  ];
-  const hasBakeryPhrase = /\b(pain au\b|pain aux\b|pain suisse\b|chausson\b|cinnamon roll\b|cinnamon bun\b|cinnamon swirl\b|danish pastry\b|fruit danish\b|apple turnover\b|raisin swirl\b|raisin pastry\b)/i.test(primaryName) ||
-    /\b(pain au\b|pain aux\b|pain suisse\b|chausson\b|cinnamon roll\b|cinnamon bun\b|cinnamon swirl\b|danish pastry\b|fruit danish\b|apple turnover\b|raisin swirl\b|raisin pastry\b)/i.test(textCorpus);
-  const hasBakeryContainer = BAKERY_CONTAINER_TERMS.some(w => primaryHasWord(w)) || hasBakeryPhrase;
   const isExplicitCandy = primaryHasWord('candy') || primaryHasWord('candies') || primaryHasWord('chocolate');
   const isDoughnutWord = primaryHasWord('donut') || primaryHasWord('doughnut');
   // Donut/Doughnut word indicates a pastry UNLESS a produce item (e.g. donut peach, doughnut nectarine) is present
@@ -161,11 +171,12 @@ export function classifyUniversalPhysicalFormV3(item: {
 
   // 4. BAKERY / DESSERT DETECTOR
   if (isBakeryDessert) {
+    const isPlainBread = PLAIN_BREAD_TERMS.some(w => primaryHasWord(w)) && !SWEET_BAKERY_TERMS.some(w => primaryHasWord(w)) && !hasBakeryPhrase && !isExplicitCandy && !isDoughnutPastry;
     return {
       physicalForm: 'SOLID_GRAIN_BAKERY',
-      primaryCategory: 'bakery_dessert',
-      matchedTokens: ['baked good / dessert'],
-      explanation: 'Item identified as a baked good, dessert, or chocolate bar.'
+      primaryCategory: isPlainBread ? 'grain_bakery_snack' : 'bakery_dessert',
+      matchedTokens: [isPlainBread ? 'bread / roll / grain' : 'baked good / dessert'],
+      explanation: isPlainBread ? 'Item identified as standalone bread or roll.' : 'Item identified as a baked good, dessert, or chocolate bar.'
     };
   }
 

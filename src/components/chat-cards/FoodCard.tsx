@@ -1576,7 +1576,8 @@ export const FoodCard: React.FC<AgentCardProps & {
         scoutIndex: matchingScout ? matchingScout.scoutIndex : (item.scoutIndex !== undefined ? item.scoutIndex : i),
         keyword: updatedName || matchingScout?.keyword || "item",
         originalName: updatedName || matchingScout?.originalName || "item",
-        chainName: matchingScout?.chainName || item.chainName || null,
+        chainName: matchingScout?.chainName || item.chainName || item.brand || matchingScout?.brand || null,
+        brand: matchingScout?.brand || item.brand || item.chainName || matchingScout?.chainName || null,
         scoutOriginalName: matchingScout?.originalName || null,
         labelProductName: matchingScout?.labelProductName || item.labelProductName || null,
         estimatedWeightGrams: item.weightGrams || item.estimatedWeightGrams || matchingScout?.estimatedWeightGrams,
@@ -1592,13 +1593,15 @@ export const FoodCard: React.FC<AgentCardProps & {
         nutritionFacts: item.nutritionFacts || item.nutrients || matchingScout?.nutritionFacts,
         nutrients: item.nutrients || item.nutritionFacts || matchingScout?.nutrients,
         source: matchingScout?.source || item.source,
-        dbSource: item.dbSource || (item.componentsDetailList?.length ? 'composite' : matchingScout?.dbSource) || null,
+        dbSource: item.dbSource || ((item.componentsDetailList?.length || item.components?.length) ? 'composite' : matchingScout?.dbSource) || null,
         dbId: item.dbId || matchingScout?.dbId || null,
         isRealTruth: item.dbSource !== 'composite' && (item.isRealTruth || item.dbSource === 'brand_official' || item.dbSource === 'label' || item.dbSource === 'label_partial'),
         labelNutrientsPerServing: item.labelNutrientsPerServing || item.primaryBase100g || item.nutrients || matchingScout?.labelNutrientsPerServing || null,
         primaryBase100g: item.primaryBase100g || item.labelNutrientsPerServing || null,
         primaryBaseMatchName: item.primaryBaseMatchName || item.canonicalDbName || null,
-        componentsDetailList: item.componentsDetailList || item.componentsDetail || matchingScout?.componentsDetailList || [],
+        componentsDetailList: (Array.isArray(item.componentsDetailList) && item.componentsDetailList.length > 0) ? item.componentsDetailList : ((Array.isArray(item.components) && item.components.length > 0) ? item.components : (item.componentsDetail || matchingScout?.componentsDetailList || matchingScout?.components || [])),
+        components: (Array.isArray(item.components) && item.components.length > 0) ? item.components : ((Array.isArray(item.componentsDetailList) && item.componentsDetailList.length > 0) ? item.componentsDetailList : (item.componentsDetail || matchingScout?.components || matchingScout?.componentsDetailList || null)),
+        compositeSiblings: item.compositeSiblings || matchingScout?.compositeSiblings || item.componentsDetailList || matchingScout?.componentsDetailList || null,
         nutrientSourceMap: item.nutrientSourceMap || matchingScout?.nutrientSourceMap || null
       };
     });
@@ -3383,9 +3386,9 @@ export const FoodCard: React.FC<AgentCardProps & {
                                                 <div>{displayName}</div>
                                                 <div className="mt-1 flex flex-wrap items-center gap-1">
                                                   <PhysicalFormBadge item={item} />
-                                                  {item.chainName && (
+                                                  {(item.chainName || item.brand) && (
                                                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50">
-                                                      {item.chainName}
+                                                      {item.chainName || item.brand}
                                                     </span>
                                                   )}
                                                   {item.dbSource && (

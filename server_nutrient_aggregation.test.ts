@@ -288,4 +288,34 @@ describe("server_nutrient_aggregation", () => {
     expect(result.nutrients.calories).toBe(37);
     expect(result.nutrients.protein).toBe(7.3);
   });
+
+  it("populates micronutrients for items via category fallback and trace profile", () => {
+    const rawItems = [
+      {
+        name: "Prawn Skewer",
+        originalName: "Prawn Skewer",
+        keyword: "prawn",
+        weightGrams: 100,
+        dbSource: "estimated",
+        foodType: "shellfish",
+        labelNutrientsPerServing: {
+          servingSizeGrams: 100,
+          calories: 120,
+          protein: 24,
+          totalFat: 1.5,
+          saturatedFat: 0.3,
+          carbohydrates: 0,
+          sodium: 150
+        }
+      }
+    ];
+    const result = aggregateItemsNutrients(rawItems, 100, new Map(), [], () => {});
+    expect(result.nutrients.calories).toBe(120);
+    expect(result.nutrients.protein).toBe(24);
+    // Micronutrients should be non-zero from trace/category profile
+    expect(result.nutrients.calcium).toBeGreaterThan(0);
+    expect(result.nutrients.iron).toBeGreaterThan(0);
+    expect(result.nutrients.zinc).toBeGreaterThan(0);
+    expect(result.nutrients.magnesium).toBeGreaterThan(0);
+  });
 });

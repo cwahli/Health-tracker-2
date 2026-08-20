@@ -21,6 +21,39 @@ function getAdmin() {
   }
 }
 
+function sanitizeDeleteMap(m: any): Record<string, number> {
+  if (!m || typeof m !== 'object') return {};
+  const out: Record<string, number> = {};
+  if (Array.isArray(m)) {
+    for (const item of m) {
+      if (typeof item === 'string') {
+        const k = item.trim();
+        if (k && k !== 'null' && k !== 'undefined') out[k] = Date.now();
+      } else if (item && typeof item === 'object') {
+        const k = String((item as any).id || (item as any).key || '').trim();
+        const ts = Number((item as any).ts ?? (item as any).updated_at ?? (item as any).deleted_at) || Date.now();
+        if (k && k !== 'null' && k !== 'undefined') out[k] = Math.max(out[k] || 0, ts);
+      }
+    }
+  } else {
+    for (const [k, v] of Object.entries(m)) {
+      const cleanK = String(k ?? '').trim();
+      if (!cleanK || cleanK === 'null' || cleanK === 'undefined') continue;
+      if (/^\d+$/.test(cleanK) && typeof v === 'string') {
+        const valK = v.trim();
+        if (valK && valK !== 'null' && valK !== 'undefined') {
+          out[valK] = Math.max(out[valK] || 0, Date.now());
+        }
+        continue;
+      }
+      const num = typeof v === 'number' ? v : Number(v);
+      if (!Number.isFinite(num) || num <= 0) continue;
+      out[cleanK] = Math.max(out[cleanK] || 0, num);
+    }
+  }
+  return out;
+}
+
 // Sync endpoints
 syncRouter.post("/api/sync/save", async (req, res) => {
   try {
@@ -115,8 +148,8 @@ syncRouter.get("/api/debug/supabase-pull-check", async (req, res) => {
 
     const [foodRes, bioRes, profileRes] = await Promise.all([
       supabaseAdmin.from('food_logs').select('id, firebase_uid, date, name, updated_at').in('firebase_uid', possibleUids).limit(5),
-      supabaseAdmin.from('biomarker_logs').select('id, firebase_uid, date, updated_at').in('firebase_uid', possibleUids).limit(5),
-      supabaseAdmin.from('profiles').select('firebase_uid, updated_at').in('firebase_uid', possibleUids).limit(5)
+      supabaseAdmin.from('biomarker_logs').select('id, firebase_uid, date, biomarkers, updated_at').in('firebase_uid', possibleUids).order('updated_at', { ascending: false }).limit(50),
+      supabaseAdmin.from('profiles').select('firebase_uid, data, updated_at').in('firebase_uid', possibleUids).limit(5)
     ]);
 
     const [foodCountRes, bioCountRes] = await Promise.all([
@@ -142,7 +175,11 @@ syncRouter.get("/api/debug/supabase-pull-check", async (req, res) => {
       },
       profile: {
         error: profileRes.error ? profileRes.error.message : null,
-        sampleRows: profileRes.data || []
+        sampleRows: (profileRes.data || []).map((row: any) => ({
+          firebase_uid: row.firebase_uid,
+          updated_at: row.updated_at,
+          deletedBiomarkerLogIds: row.data?.profile?.deletedBiomarkerLogIds || row.data?.deletedBiomarkerLogIds || {}
+        }))
       }
     });
   } catch (error: any) {
@@ -227,16 +264,41 @@ syncRouter.post("/api/sync/supabase-pull", async (req, res) => {
       profileData = profiles[0]?.data || null;
     }
 
-    console.log(`[Supabase Pull] uid=${uid}, possibleUids=${possibleUids.join(',')}, foods=${foods.length}, biomarkers=${biomarkers.length}, hasProfileData=${!!profileData}`);
+    const pullDelBioIds = sanitizeDeleteMap(profileData?.profile?.deletedBiomarkerLogIds || profileData?.deletedBiomarkerLogIds);
+    const pullDelFoodIds = sanitizeDeleteMap(profileData?.profile?.deletedFoodLogIds || profileData?.deletedFoodLogIds);
+
+    if (profileData?.profile) {
+      profileData.profile.deletedBiomarkerLogIds = pullDelBioIds;
+      profileData.profile.deletedFoodLogIds = pullDelFoodIds;
+    } else if (profileData) {
+      profileData.deletedBiomarkerLogIds = pullDelBioIds;
+      profileData.deletedFoodLogIds = pullDelFoodIds;
+    }
+
+    const activeBiomarkers = biomarkers.filter((b: any) => {
+      const tombstoneTs = pullDelBioIds[b.id];
+      if (!tombstoneTs) return true;
+      const bTs = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      return bTs > tombstoneTs;
+    });
+
+    const activeFoods = foods.filter((f: any) => {
+      const tombstoneTs = pullDelFoodIds[f.id];
+      if (!tombstoneTs) return true;
+      const fTs = f.updated_at ? new Date(f.updated_at).getTime() : 0;
+      return fTs > tombstoneTs;
+    });
+
+    console.log(`[Supabase Pull] uid=${uid}, possibleUids=${possibleUids.join(',')}, foods=${activeFoods.length}/${foods.length}, biomarkers=${activeBiomarkers.length}/${biomarkers.length}, hasProfileData=${!!profileData}`);
 
     res.json({
       success: true,
-      foods,
-      biomarkers,
+      foods: activeFoods,
+      biomarkers: activeBiomarkers,
       profileData,
       meta: {
-        foodCount: foods.length,
-        biomarkerCount: biomarkers.length,
+        foodCount: activeFoods.length,
+        biomarkerCount: activeBiomarkers.length,
         hasProfileData: !!profileData,
         queriedUids: possibleUids
       }
@@ -413,6 +475,7 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
 
     let foodCount = 0;
     let bioCount = 0;
+    const pushErrors: { table: string; op: string; message: string }[] = [];
 
     const normalizeToISOYMD = (dateStr: any): string => {
       if (!dateStr) return new Date().toISOString().split('T')[0];
@@ -485,11 +548,31 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
       updated_at: bio.updated_at ? new Date(bio.updated_at).toISOString() : new Date().toISOString()
     });
 
-    const profileDelFoodIds = Object.keys(profile?.deletedFoodLogIds || {});
+    const extractTombstoneIds = (mapOrArr: any): string[] => {
+      if (!mapOrArr) return [];
+      if (Array.isArray(mapOrArr)) {
+        return mapOrArr.map((x: any) => String(x ?? '').trim()).filter((s: string) => s && s !== 'null' && s !== 'undefined' && !/^\d+$/.test(s));
+      }
+      if (typeof mapOrArr === 'object') {
+        const ids: string[] = [];
+        for (const [k, v] of Object.entries(mapOrArr)) {
+          const cleanK = String(k ?? '').trim();
+          if (/^\d+$/.test(cleanK)) {
+            if (typeof v === 'string') ids.push(v.trim());
+          } else {
+            ids.push(cleanK);
+          }
+        }
+        return ids.filter((s: string) => s && s !== 'null' && s !== 'undefined' && !/^\d+$/.test(s));
+      }
+      return [];
+    };
+
     const foodsToDeleteIds = Array.from(new Set([
       ...(Array.isArray(foods) ? foods.filter((f: any) => f.sync_state === 'delete').map((f: any) => f.id) : []),
-      ...profileDelFoodIds
-    ]));
+      ...extractTombstoneIds(profile?.deletedFoodLogIds),
+      ...extractTombstoneIds(req.body?.deletedFoodLogIds)
+    ].filter(id => id && typeof id === 'string' && !/^\d+$/.test(id) && id !== 'null' && id !== 'undefined')));
 
     if (Array.isArray(foods) && foods.length > 0) {
       const foodsToUpsert = foods
@@ -524,21 +607,26 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
         }
 
         const { error } = await supabaseAdmin.from('food_logs').upsert(foodsToUpsert);
-        if (error) console.error('[Supabase Push] Food upsert error:', error.message);
-        else foodCount += foodsToUpsert.length;
+        if (error) {
+          console.error('[Supabase Push] Food upsert error:', error.message);
+          pushErrors.push({ table: 'food_logs', op: 'upsert', message: error.message });
+        } else foodCount += foodsToUpsert.length;
       }
     }
 
     if (foodsToDeleteIds.length > 0) {
       const { error } = await supabaseAdmin.from('food_logs').delete().in('id', foodsToDeleteIds);
-      if (error) console.error('[Supabase Push] Food delete error:', error.message);
+      if (error) {
+        console.error('[Supabase Push] Food delete error:', error.message);
+        pushErrors.push({ table: 'food_logs', op: 'delete', message: error.message });
+      }
     }
 
-    const profileDelBioIds = Object.keys(profile?.deletedBiomarkerLogIds || {});
     const biosToDeleteIds = Array.from(new Set([
       ...(Array.isArray(biomarkers) ? biomarkers.filter((b: any) => b.sync_state === 'delete').map((b: any) => b.id) : []),
-      ...profileDelBioIds
-    ]));
+      ...extractTombstoneIds(profile?.deletedBiomarkerLogIds),
+      ...extractTombstoneIds(req.body?.deletedBiomarkerLogIds)
+    ].filter(id => id && typeof id === 'string' && !/^\d+$/.test(id) && id !== 'null' && id !== 'undefined')));
 
     if (Array.isArray(biomarkers) && biomarkers.length > 0) {
       const biosToUpsert = biomarkers
@@ -547,14 +635,19 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
 
       if (biosToUpsert.length > 0) {
         const { error } = await supabaseAdmin.from('biomarker_logs').upsert(biosToUpsert);
-        if (error) console.error('[Supabase Push] Biomarker upsert error:', error.message);
-        else bioCount += biosToUpsert.length;
+        if (error) {
+          console.error('[Supabase Push] Biomarker upsert error:', error.message);
+          pushErrors.push({ table: 'biomarker_logs', op: 'upsert', message: error.message });
+        } else bioCount += biosToUpsert.length;
       }
     }
 
     if (biosToDeleteIds.length > 0) {
       const { error } = await supabaseAdmin.from('biomarker_logs').delete().in('id', biosToDeleteIds);
-      if (error) console.error('[Supabase Push] Biomarker delete error:', error.message);
+      if (error) {
+        console.error('[Supabase Push] Biomarker delete error:', error.message);
+        pushErrors.push({ table: 'biomarker_logs', op: 'delete', message: error.message });
+      }
     }
 
     if (profile || (Array.isArray(actions) && actions.length > 0) || (Array.isArray(dailyBenefits) && dailyBenefits.length > 0) || report) {
@@ -619,12 +712,12 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
         });
 
         const mergedDeletedBiomarkerLogIds = {
-          ...(existingData.profile?.deletedBiomarkerLogIds || {}),
-          ...(profile?.deletedBiomarkerLogIds || {})
+          ...sanitizeDeleteMap(existingData.profile?.deletedBiomarkerLogIds),
+          ...sanitizeDeleteMap(profile?.deletedBiomarkerLogIds)
         };
         const mergedDeletedFoodLogIds = {
-          ...(existingData.profile?.deletedFoodLogIds || {}),
-          ...(profile?.deletedFoodLogIds || {})
+          ...sanitizeDeleteMap(existingData.profile?.deletedFoodLogIds),
+          ...sanitizeDeleteMap(profile?.deletedFoodLogIds)
         };
 
         const mergedProfile = profile
@@ -747,6 +840,7 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
         });
         if (profErr) {
           console.error('[Supabase Push] Profile upsert error:', profErr.message);
+          pushErrors.push({ table: 'profiles', op: 'upsert', message: profErr.message });
         } else {
           console.log(`[Supabase Push] Successfully upserted profile data for ${canonicalUid}`);
         }
@@ -757,7 +851,7 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
 
     console.log(`[Supabase Push] Uploaded ${foodCount} foods, ${bioCount} biomarkers for canonicalUid=${canonicalUid}`);
 
-    res.json({ success: true, foodCount, bioCount, canonicalUid });
+    res.json({ success: pushErrors.length === 0, foodCount, bioCount, canonicalUid, errors: pushErrors });
   } catch (error: any) {
     console.error("[Supabase Push] Error:", error);
     res.status(500).json({ error: error.message || "Failed to push to Supabase" });

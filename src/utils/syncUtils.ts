@@ -51,13 +51,46 @@ export function mergeByRecency<T extends { id: string; updated_at?: number }>(
  * Shared by profile merge and tests — never drop the other device's deletes.
  */
 export function mergeDeleteMaps(
-  a: Record<string, number> = {},
-  b: Record<string, number> = {}
+  a: Record<string, number> | string[] | any = {},
+  b: Record<string, number> | string[] | any = {}
 ): Record<string, number> {
-  const merged: Record<string, number> = { ...a };
-  for (const [k, v] of Object.entries(b)) {
-    merged[k] = Math.max(merged[k] || 0, v as number);
-  }
+  const merged: Record<string, number> = {};
+  const add = (source: any) => {
+    if (!source) return;
+    if (Array.isArray(source)) {
+      for (const item of source) {
+        if (typeof item === 'string') {
+          const k = item.trim();
+          if (k && k !== 'undefined' && k !== 'null') {
+            merged[k] = Math.max(merged[k] || 0, Date.now());
+          }
+        } else if (item && typeof item === 'object') {
+          const k = String((item as any).id || (item as any).key || '').trim();
+          const ts = Number((item as any).ts ?? (item as any).updated_at ?? (item as any).deleted_at) || Date.now();
+          if (k && k !== 'undefined' && k !== 'null') {
+            merged[k] = Math.max(merged[k] || 0, ts);
+          }
+        }
+      }
+    } else if (typeof source === 'object') {
+      for (const [k, v] of Object.entries(source)) {
+        const cleanK = String(k ?? '').trim();
+        if (!cleanK || cleanK === 'undefined' || cleanK === 'null') continue;
+        if (/^\d+$/.test(cleanK) && typeof v === 'string') {
+          const valK = v.trim();
+          if (valK && valK !== 'undefined' && valK !== 'null') {
+            merged[valK] = Math.max(merged[valK] || 0, Date.now());
+          }
+          continue;
+        }
+        const num = typeof v === 'number' ? v : Number(v);
+        if (!Number.isFinite(num) || num <= 0) continue;
+        merged[cleanK] = Math.max(merged[cleanK] || 0, num);
+      }
+    }
+  };
+  add(a);
+  add(b);
   return merged;
 }
 
@@ -449,13 +482,32 @@ export const syncLogsWithTimeBuckets = async (
   const trackId = dispatchDbInteraction('upload', `users/${uid} (Food & Biomarker Logs)`, { foods: unsyncedFoods, bios: unsyncedBiomarkers }, 'Supabase', unsyncedFoods.length + unsyncedBiomarkers.length);
   try {
     const sanitizedFoods = sanitizeFoodsForSync(unsyncedFoods, { stripAllDataImages: forceAllFoods });
+    const cleanDeletedFoods = mergeDeleteMaps(deletedFoodLogIds);
+    const cleanDeletedBios = mergeDeleteMaps(deletedBiomarkerLogIds);
     const pushRes = await fetchWithRetry('/api/sync/supabase-push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(auth.currentUser ? { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` } : {}) },
-      body: JSON.stringify({ uid, foods: sanitizedFoods, biomarkers: unsyncedBiomarkers })
+      body: JSON.stringify({
+        uid,
+        foods: sanitizedFoods,
+        biomarkers: unsyncedBiomarkers,
+        deletedFoodLogIds: cleanDeletedFoods,
+        deletedBiomarkerLogIds: cleanDeletedBios
+      })
     });
 
     if (pushRes.ok) {
+      const pushResult = await pushRes.clone().json().catch(() => null);
+      if (pushResult && Array.isArray(pushResult.errors) && pushResult.errors.length > 0) {
+        console.warn('[Supabase Sync Push] Server reported partial failure:', pushResult.errors);
+        window.dispatchEvent(new CustomEvent('sync_push_failed', {
+          detail: {
+            reason: pushResult.errors.map((e: any) => `${e.table} ${e.op}: ${e.message}`).join('; '),
+            foodCount: unsyncedFoods.length,
+            biomarkerCount: unsyncedBiomarkers.length
+          }
+        }));
+      }
       // Update local state flags ONLY on successful response
       const syncedFoodIds = new Set(unsyncedFoods.map(f => f.id));
       for (let i = updatedLocalFoods.length - 1; i >= 0; i--) {
@@ -481,10 +533,24 @@ export const syncLogsWithTimeBuckets = async (
       const errText = await pushRes.text().catch(() => '');
       completeDbInteraction(trackId, false, 0, `Server returned ${pushRes.status}: ${errText}`, 1);
       console.warn('[Supabase Sync Push] Server error status:', pushRes.status, errText);
+      window.dispatchEvent(new CustomEvent('sync_push_failed', {
+        detail: {
+          reason: `Server returned ${pushRes.status}`,
+          foodCount: unsyncedFoods.length,
+          biomarkerCount: unsyncedBiomarkers.length
+        }
+      }));
     }
   } catch (supabaseErr: any) {
     completeDbInteraction(trackId, false, 0, supabaseErr.message || String(supabaseErr), 1);
     console.warn('[Supabase Sync] Could not reach server, keeping local unsynced state for retry:', supabaseErr.message || String(supabaseErr));
+    window.dispatchEvent(new CustomEvent('sync_push_failed', {
+      detail: {
+        reason: supabaseErr.message || String(supabaseErr),
+        foodCount: unsyncedFoods.length,
+        biomarkerCount: unsyncedBiomarkers.length
+      }
+    }));
   }
 
   // Firebase backup writes for food/biomarker logs removed — Supabase is now
@@ -539,16 +605,21 @@ export const fetchAllConsolidatedLogs = async (
     
     if (proxyRes.ok) {
       const result = await proxyRes.json();
+      const cleanDelFoods = mergeDeleteMaps(deletedFoodLogIds, result.profileData?.profile?.deletedFoodLogIds || result.profileData?.deletedFoodLogIds || {});
+      const cleanDelBios = mergeDeleteMaps(deletedBiomarkerLogIds, result.profileData?.profile?.deletedBiomarkerLogIds || result.profileData?.deletedBiomarkerLogIds || {});
+
       if (result.success && result.foods) {
         result.foods.forEach((row: any) => {
-          if (!deletedFoodLogIds[row.id]) {
+          const t = cleanDelFoods[row.id];
+          const rowUpdatedAt = row.updated_at ? new Date(row.updated_at).getTime() : 0;
+          if (!t || rowUpdatedAt > t) {
             serverFoods.push(supabaseRowToFoodLog(row));
           }
         });
       }
       if (result.success && result.biomarkers) {
         result.biomarkers.forEach((row: any) => {
-          const t = deletedBiomarkerLogIds[row.id];
+          const t = cleanDelBios[row.id];
           const rowUpdatedAt = row.updated_at ? new Date(row.updated_at).getTime() : 0;
           if (!t || rowUpdatedAt > t) {
             const bioLog = supabaseRowToBiomarkerLog(row);
@@ -564,7 +635,13 @@ export const fetchAllConsolidatedLogs = async (
       if (result.success && result.profileData) {
         const rawP = result.profileData.profile || result.profileData;
         if (rawP && (rawP.email || rawP.nickname !== undefined || rawP.lastUpdatedAt || rawP.customBiomarkers)) {
-          serverProfile = rawP;
+          serverProfile = {
+            ...rawP,
+            deletedBiomarkerLogIds: mergeDeleteMaps(rawP.deletedBiomarkerLogIds),
+            deletedFoodLogIds: mergeDeleteMaps(rawP.deletedFoodLogIds),
+            deletedCustomBiomarkerKeys: mergeDeleteMaps(rawP.deletedCustomBiomarkerKeys),
+            deletedNotUsedBiomarkerKeys: mergeDeleteMaps(rawP.deletedNotUsedBiomarkerKeys)
+          };
         }
         if (Array.isArray(result.profileData.actions)) serverActions = result.profileData.actions;
         if (Array.isArray(result.profileData.dailyBenefits)) serverBenefits = result.profileData.dailyBenefits;
@@ -1059,11 +1136,12 @@ export function mergeBiomarkerHistory(
   localHistory: BiomarkerLog[] = [],
   deletedBioLogs: Record<string, number> = {}
 ): BiomarkerLog[] {
+  const cleanDeletedMap = mergeDeleteMaps(deletedBioLogs);
   const bioMap = new Map<string, BiomarkerLog>();
 
   (localHistory || []).forEach(localItem => {
     if (!localItem || !localItem.id) return;
-    const isDeleted = deletedBioLogs[localItem.id] && deletedBioLogs[localItem.id] >= (localItem.updated_at || 0);
+    const isDeleted = cleanDeletedMap[localItem.id] && cleanDeletedMap[localItem.id] >= (localItem.updated_at || 0);
     if (!isDeleted && localItem.sync_state !== 'delete') {
       bioMap.set(localItem.id, { ...localItem });
     }
@@ -1071,7 +1149,7 @@ export function mergeBiomarkerHistory(
 
   (cloudHistory || []).forEach(cloudItem => {
     if (!cloudItem || !cloudItem.id) return;
-    const isDeleted = deletedBioLogs[cloudItem.id] && deletedBioLogs[cloudItem.id] >= (cloudItem.updated_at || 0);
+    const isDeleted = cleanDeletedMap[cloudItem.id] && cleanDeletedMap[cloudItem.id] >= (cloudItem.updated_at || 0);
     if (isDeleted || cloudItem.sync_state === 'delete') {
       bioMap.delete(cloudItem.id);
       return;

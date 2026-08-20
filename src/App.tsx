@@ -76,7 +76,7 @@ function extractPendingFoodLogFromCleanResult(cleanResult: any, photoUrl?: strin
 }
 import { getDemoProfile, getDemoBiomarkerHistory, getDemoFoodLogs, getDemoReport, DemoProfileType } from './utils/demoData';
 import { getAvailableCredits, deductAgentCredits } from './utils/creditManager';
-import { Plus, HeartHandshake, RefreshCw, Sparkles, Stethoscope, Utensils, Loader, CloudLightning, AlertTriangle, Activity } from 'lucide-react';
+import { Plus, HeartHandshake, RefreshCw, Sparkles, Stethoscope, Utensils, Loader, CloudLightning, AlertTriangle, Activity, X } from 'lucide-react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
 import { trackApiCall, setActiveQueryId, generateQueryId, initializeFetchInterceptor } from './utils/apiTracker';
@@ -104,7 +104,7 @@ function firestoreReadGuard(label: string, docCount: number = 1): boolean {
 
 
 import { runCleanupMigration } from './utils/migrationTask';
-import { syncLogsWithTimeBuckets, fetchAllConsolidatedLogs, subscribeToSupabaseLogs, upsertProfileToSupabase, mergeByRecency, mergeActions, mergeBenefits, mergeFoodIdeas, mergeReports, mergeProfiles, mergeBiomarkerHistory, supabaseRowToFoodLog, supabaseRowToBiomarkerLog } from "./utils/syncUtils";
+import { syncLogsWithTimeBuckets, fetchAllConsolidatedLogs, subscribeToSupabaseLogs, upsertProfileToSupabase, mergeByRecency, mergeActions, mergeBenefits, mergeFoodIdeas, mergeReports, mergeProfiles, mergeBiomarkerHistory, mergeDeleteMaps, supabaseRowToFoodLog, supabaseRowToBiomarkerLog } from "./utils/syncUtils";
 import { mergeFoodLogsDeduped, rehydrateFoodImagesFromDonors, foodLogFingerprint } from "./utils/foodLogDedupe";
 import { isUsableImageUrl } from "./utils/foodImageSources";
 import { sanitizeBiomarkerHistoryOnLoad } from "./utils/biomarkers";
@@ -639,6 +639,7 @@ export default function App() {
     }
     return exceeded;
   });
+  const [syncFailedWarning, setSyncFailedWarning] = useState<string | null>(null);
   const handleFirestoreError = (err: any) => {
     if (!err) return;
     const msg = String(err.message || err.code || err || '').toLowerCase();
@@ -889,11 +890,20 @@ export default function App() {
       completeInteraction(id, success, sizeBytes, errorMsg, finalDocCount);
     };
 
+    const handleSyncPushFailed = (e: any) => {
+      const { reason, foodCount, biomarkerCount } = e.detail || {};
+      console.warn('[Sync] Push to server failed, changes may not be saved:', reason, { foodCount, biomarkerCount });
+      setSyncFailedWarning(`⚠️ Your last change couldn't reach the server (${reason || 'network error'}). It will retry next time you sync.`);
+      setTimeout(() => setSyncFailedWarning(null), 6000);
+    };
+
     window.addEventListener('db_op_start', handleDbOpStart);
     window.addEventListener('db_op_complete', handleDbOpComplete);
+    window.addEventListener('sync_push_failed', handleSyncPushFailed);
     return () => {
       window.removeEventListener('db_op_start', handleDbOpStart);
       window.removeEventListener('db_op_complete', handleDbOpComplete);
+      window.removeEventListener('sync_push_failed', handleSyncPushFailed);
     };
   }, []);
   const withTimeout = <T,>(promise: Promise<T> | T, timeoutMs: number, label: string): Promise<T | void> => {
@@ -3848,9 +3858,9 @@ export default function App() {
 
     const profileForCloud = updatedProfile ? {
       ...updatedProfile,
-      deletedFoodLogIds: updatedProfile.deletedFoodLogIds || profile?.deletedFoodLogIds || {},
-      deletedBiomarkerLogIds: updatedProfile.deletedBiomarkerLogIds || profile?.deletedBiomarkerLogIds || {},
-      deletedCustomBiomarkerKeys: updatedProfile.deletedCustomBiomarkerKeys || profile?.deletedCustomBiomarkerKeys || {}
+      deletedFoodLogIds: mergeDeleteMaps(updatedProfile.deletedFoodLogIds, profile?.deletedFoodLogIds),
+      deletedBiomarkerLogIds: mergeDeleteMaps(updatedProfile.deletedBiomarkerLogIds, profile?.deletedBiomarkerLogIds),
+      deletedCustomBiomarkerKeys: mergeDeleteMaps(updatedProfile.deletedCustomBiomarkerKeys, profile?.deletedCustomBiomarkerKeys)
     } : null;
     if (profileForCloud && profileForCloud.agentAnalyses) {
       delete profileForCloud.agentAnalyses;
@@ -5121,7 +5131,7 @@ export default function App() {
     
     let updatedProfile = profile ? {
       ...profile,
-      deletedBiomarkerLogIds: { ...(profile.deletedBiomarkerLogIds || {}), [id]: now }
+      deletedBiomarkerLogIds: mergeDeleteMaps(profile.deletedBiomarkerLogIds, { [id]: now })
     } : null;
     if (updatedProfile) {
       setProfile(updatedProfile);
@@ -5263,13 +5273,13 @@ export default function App() {
 
     let updatedProfile = profile;
     if (deletedLogIds.length > 0 && profile) {
-      const updatedDeletedIds = { ...(profile.deletedBiomarkerLogIds || {}) };
+      const newDeletes: Record<string, number> = {};
       deletedLogIds.forEach(id => {
-        updatedDeletedIds[id] = now;
+        newDeletes[id] = now;
       });
       updatedProfile = {
         ...profile,
-        deletedBiomarkerLogIds: updatedDeletedIds
+        deletedBiomarkerLogIds: mergeDeleteMaps(profile.deletedBiomarkerLogIds, newDeletes)
       };
       setProfile(updatedProfile);
     }
@@ -6189,6 +6199,21 @@ export default function App() {
         autoSyncDisabled={autoSyncDisabled}
         onChangeAutoSyncDisabled={handleToggleAutoSyncDisabled}
       />
+      {syncFailedWarning && (
+        <div className="px-5 py-2.5 bg-rose-600 text-white text-xs font-bold flex items-center justify-between shadow-sm animate-in slide-in-from-top duration-200 shrink-0 z-30">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-100 shrink-0" />
+            <span>{syncFailedWarning}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSyncFailedWarning(null)}
+            className="text-white/85 hover:text-white cursor-pointer ml-3 shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {profile?.userType === 'Demo' && (
         <div className="bg-gradient-to-r from-slate-100 to-indigo-50/50 dark:from-slate-900/90 dark:to-indigo-950/20 border-b border-theme-border py-2 px-4 flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left z-20 shadow-sm shrink-0">
           <div className="flex flex-wrap items-center gap-2 justify-center md:justify-start">
