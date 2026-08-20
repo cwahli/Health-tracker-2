@@ -48,6 +48,7 @@ import {
   BugEvidence,
   BugNow,
 } from '../utils/bugWorkItem';
+import { queueKpis, tagIsFixed } from '../utils/bugQueueKpis';
 
 interface BugTrackerModalProps {
   isOpen: boolean;
@@ -672,7 +673,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
         return false;
       }
       const item = hydrateWorkItem(t);
-      const isFixed = item.queue === 'done' || t.status === 'fixed';
+      const isFixed = tagIsFixed(t);
       const isBlocked = item.queue === 'blocked' || item.burns.filter((b) => b.burned).length >= 2;
       
       const hasAgent = item.commits && item.commits.some((c) => c.kind === 'agent' || c.actor !== 'you');
@@ -727,11 +728,11 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
   if (!isOpen) return null;
 
-  // Compute KPIs
-  const readyCount = bugTags.filter((t) => hydrateWorkItem(t).queue === 'ready').length;
-  const blockedCount = bugTags.filter((t) => hydrateWorkItem(t).queue === 'blocked' || hydrateWorkItem(t).burns.filter((b) => b.burned).length >= 2).length;
-  const doneCount = bugTags.filter((t) => hydrateWorkItem(t).queue === 'done' || t.status === 'fixed').length;
-  const totalMealsCount = bugTags.reduce((acc, t) => acc + (t.linked_count || t.linked_issues?.length || 1), 0);
+  const kpis = queueKpis(bugTags);
+  const readyCount = kpis.ready;
+  const blockedCount = kpis.blocked;
+  const doneCount = kpis.doneThisWeek;
+  const openBugCount = kpis.open;
 
   // Selected tag object and work item
   const selectedTag = bugTags.find((t: any) => t.id === selectedTagId) || (sortedQueueTags[0] ?? null);
@@ -838,8 +839,8 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                 onClick={() => setStatusFilter('active')}
                 className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border border-transparent hover:border-amber-500/30"
               >
-                <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Items open</span>
-                <b className="text-lg font-extrabold text-amber-300 mt-0.5 block">{totalMealsCount}</b>
+                <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Bugs open</span>
+                <b className="text-lg font-extrabold text-amber-300 mt-0.5 block">{openBugCount}</b>
               </div>
               <div
                 onClick={() => setStatusFilter('done')}
@@ -868,7 +869,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                     onChange={(e) => setStatusFilter(e.target.value as any)}
                     className="bg-[#111827] text-white border border-white/15 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none cursor-pointer"
                   >
-                    <option value="active">Active ({bugTags.filter((t) => hydrateWorkItem(t).queue !== 'done' && t.status !== 'fixed').length})</option>
+                    <option value="active">Active ({openBugCount})</option>
                     <option value="ready">Agent to do ({bugTags.filter((t) => {
                       const item = hydrateWorkItem(t);
                       if (item.queue === 'done' || t.status === 'fixed') return false;
@@ -887,11 +888,8 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                       if (item.queue === 'done' || t.status === 'fixed') return false;
                       return !item.commits?.some(c => c.kind === 'agent' || c.actor !== 'you');
                     }).length})</option>
-                    <option value="stuck">Stuck / 2 Burns ({bugTags.filter((t) => {
-                      const item = hydrateWorkItem(t);
-                      return item.queue === 'blocked' || item.burns.filter((b) => b.burned).length >= 2;
-                    }).length})</option>
-                    <option value="done">Done / Fixed ({bugTags.filter((t) => hydrateWorkItem(t).queue === 'done' || t.status === 'fixed').length})</option>
+                    <option value="stuck">Stuck / 2 Burns ({blockedCount})</option>
+                    <option value="done">Done / Fixed ({kpis.doneAll})</option>
                     <option value="all">All Statuses ({bugTags.length})</option>
                   </select>
 

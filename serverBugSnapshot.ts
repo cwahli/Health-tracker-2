@@ -1051,14 +1051,16 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
         links = linkRows || [];
       }
 
-      const bugs = (tags || []).map((t: any) => {
-        const linked = links.filter((l) => l.tag_id === t.id).length;
-        return briefFromTag({
-          ...t,
-          identified_problems: readIdentifiedProblems(t),
-          linked_count: linked,
+      const bugs = (tags || [])
+        .filter((t: any) => hydrateWorkItem(t).queue !== 'done')
+        .map((t: any) => {
+          const linked = links.filter((l) => l.tag_id === t.id).length;
+          return briefFromTag({
+            ...t,
+            identified_problems: readIdentifiedProblems(t),
+            linked_count: linked,
+          });
         });
-      });
 
       res.json({
         bugs,
@@ -1230,7 +1232,7 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
         await supabaseAdmin.from('issue_tags').update({ status: 'to_fix' }).eq('id', tag.id);
       }
       if (next.queue === 'done') {
-        await supabaseAdmin.from('issue_tags').update({ status: 'fixed' }).eq('id', tag.id);
+        await supabaseAdmin.from('issue_tags').update({ status: 'fixed', resolved_at: new Date().toISOString() }).eq('id', tag.id);
       }
       const start = buildStartPayload({ ...tag, work_item: next, id: tag.id });
       res.json({ ok: true, rejected: rejected || null, ...start });
@@ -1261,7 +1263,7 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       if (Array.isArray(req.body?.parked)) item.parked = req.body.parked.map(String);
       await persistWorkItem(tag.id, item);
       if (item.queue === 'done') {
-        await supabaseAdmin.from('issue_tags').update({ status: 'fixed' }).eq('id', tag.id);
+        await supabaseAdmin.from('issue_tags').update({ status: 'fixed', resolved_at: new Date().toISOString() }).eq('id', tag.id);
       } else {
         await supabaseAdmin.from('issue_tags').update({ status: 'to_fix' }).eq('id', tag.id);
       }

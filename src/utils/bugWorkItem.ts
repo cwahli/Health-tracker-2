@@ -156,8 +156,9 @@ export function hydrateWorkItem(tag: any): BugWorkItem {
 }
 
 function mapLegacyStatus(legacy?: string, queue?: BugQueueStatus): BugQueueStatus {
-  if (queue === 'blocked' || queue === 'done' || queue === 'in_progress' || queue === 'ready') return queue;
+  // Green tick writes status=fixed. That wins over a stale work_item.queue of ready.
   if (legacy === 'fixed' || legacy === 'ignored') return 'done';
+  if (queue === 'blocked' || queue === 'done' || queue === 'in_progress' || queue === 'ready') return queue;
   if (legacy === 'in_progress') return 'in_progress';
   return 'ready';
 }

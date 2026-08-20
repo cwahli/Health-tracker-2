@@ -187,6 +187,141 @@ syncRouter.get("/api/debug/supabase-pull-check", async (req, res) => {
   }
 });
 
+// ONE-TIME CLEANUP TOOL — safe, conflict-aware duplicate merge for biomarker_logs.
+// Dry run by default. Add ?apply=true to actually write changes.
+// Never merges/deletes rows that disagree on any shared field.
+syncRouter.get("/api/admin/dedupe-biomarkers", async (req, res) => {
+  try {
+    const uid = String(req.query.uid || '');
+    const apply = String(req.query.apply || '') === 'true';
+    if (!uid) {
+      return res.status(400).json({ error: "uid query param is required" });
+    }
+
+    const { getMappedBiomarkerKey } = await import('./src/utils/biomarkers.js');
+
+    const { data: rows, error: fetchErr } = await supabaseAdmin
+      .from('biomarker_logs')
+      .select('id, date, biomarkers, updated_at')
+      .eq('firebase_uid', uid);
+
+    if (fetchErr) {
+      return res.status(500).json({ error: fetchErr.message });
+    }
+
+    const byDate = new Map<string, any[]>();
+    for (const row of rows || []) {
+      const d = String(row.date || '');
+      if (!byDate.has(d)) byDate.set(d, []);
+      byDate.get(d)!.push(row);
+    }
+
+    type Cluster = { rows: any[]; merged: Record<string, any> };
+    const report: any[] = [];
+    const rowsToUpsert: { id: string; biomarkers: Record<string, any> }[] = [];
+    const idsToDelete: string[] = [];
+
+    for (const [date, group] of byDate.entries()) {
+      if (group.length < 2) continue;
+
+      const clusters: Cluster[] = [];
+
+      for (const row of group) {
+        const canon: Record<string, any> = {};
+        Object.entries(row.biomarkers || {}).forEach(([k, v]) => {
+          canon[getMappedBiomarkerKey(k)] = v;
+        });
+
+        let placed = false;
+        for (const cluster of clusters) {
+          let conflict = false;
+          for (const [k, v] of Object.entries(canon)) {
+            if (Object.prototype.hasOwnProperty.call(cluster.merged, k) && cluster.merged[k] !== v) {
+              conflict = true;
+              break;
+            }
+          }
+          if (!conflict) {
+            cluster.rows.push(row);
+            cluster.merged = { ...cluster.merged, ...canon };
+            placed = true;
+            break;
+          }
+        }
+        if (!placed) {
+          clusters.push({ rows: [row], merged: canon });
+        }
+      }
+
+      for (const cluster of clusters) {
+        if (cluster.rows.length < 2) continue; // nothing to merge, leave as-is
+
+        // Keep the row with the most original fields as the survivor id;
+        // tie-break by earliest updated_at (oldest = likely original, not the duplicate).
+        const survivor = [...cluster.rows].sort((a, b) => {
+          const aLen = Object.keys(a.biomarkers || {}).length;
+          const bLen = Object.keys(b.biomarkers || {}).length;
+          if (bLen !== aLen) return bLen - aLen;
+          return String(a.updated_at || '').localeCompare(String(b.updated_at || ''));
+        })[0];
+
+        const toDelete = cluster.rows.filter(r => r.id !== survivor.id).map(r => r.id);
+
+        report.push({
+          date,
+          survivorId: survivor.id,
+          deletedIds: toDelete,
+          mergedFieldCount: Object.keys(cluster.merged).length
+        });
+
+        rowsToUpsert.push({ id: survivor.id, biomarkers: cluster.merged });
+        idsToDelete.push(...toDelete);
+      }
+    }
+
+    if (!apply) {
+      return res.json({
+        dryRun: true,
+        totalRowsScanned: (rows || []).length,
+        duplicateClustersFound: report.length,
+        wouldDeleteCount: idsToDelete.length,
+        details: report
+      });
+    }
+
+    // Apply: merge first, delete second — never the other way around.
+    for (const u of rowsToUpsert) {
+      const { error: upErr } = await supabaseAdmin
+        .from('biomarker_logs')
+        .update({ biomarkers: u.biomarkers, updated_at: new Date().toISOString() })
+        .eq('id', u.id);
+      if (upErr) {
+        return res.status(500).json({ error: `Failed merging into ${u.id}: ${upErr.message}`, partialReport: report });
+      }
+    }
+
+    if (idsToDelete.length > 0) {
+      const { error: delErr } = await supabaseAdmin
+        .from('biomarker_logs')
+        .delete()
+        .in('id', idsToDelete);
+      if (delErr) {
+        return res.status(500).json({ error: `Merged rows written, but delete failed: ${delErr.message}`, partialReport: report });
+      }
+    }
+
+    res.json({
+      dryRun: false,
+      totalRowsScanned: (rows || []).length,
+      duplicateClustersFound: report.length,
+      deletedCount: idsToDelete.length,
+      details: report
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || String(error), stack: error.stack });
+  }
+});
+
 syncRouter.post("/api/sync/supabase-pull", async (req, res) => {
   try {
     await verifyFirebaseIdToken(req).catch(() => null);

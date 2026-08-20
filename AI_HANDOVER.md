@@ -1,7 +1,9 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-19
+**Updated:** 2026-08-20
 **Status:** ALL GATES & REGRESSION SUITES GREEN (609 tests across 62 test suites)
+
+- **Bug queue green-tick vs agent view (2026-08-20):** Overview now loads `fixed` as well as `to_fix` so KPIs can count Done this week. Green tick already wrote `status=fixed` + `queue=done` for #4–#8; the dashboard had been refetching only `to_fix`, so Done this week stayed 0 and agents querying the full table still listed those cards. Open work is #2, #3, #9. `GET /api/bugs/open` and `/next` stay on open cards only.
 **Governance & Laws:** Follow `docs/agent/` domain rules. Local agents may `git commit` / `git push` after COMPLETE (tsc + named gates). AI Studio remains a valid ship path.
 
 - **Bug #5 & Bug #6 Permanent Fixes (Brand Scope Isolation & Composite Precision) (2026-08-20)**:
@@ -17,6 +19,8 @@
 - **Bug #2 Permanent Fix & Key-Level Suppression (2026-08-20)**:
   - **Auto-Log Guard & Suppression Persistence**: In `src/App.tsx`, guarded the BMI initialization effect so that deleting BMI via Auto-Delete or Outlier Deletion explicitly marks `bmiAutoLogged: true` and writes `deletedCustomBiomarkerKeys: { bmi: now }`, preventing client-side re-generation loops.
   - **Sync-Safe Profile Merging**: In `src/utils/syncUtils.ts`, explicitly preserved `bmiAutoLogged` and `deletedCustomBiomarkerKeys` during `mergeProfiles` so cloud pulls never clobber local suppression flags. Unblocked Bug #2 in Supabase.
+- **Bug #2 Safe Conflict-Aware Dedupe Route (`server_routes_sync.ts`) (2026-08-20)**:
+  - **Conflict-Safe One-Time Deduplication**: Added `GET /api/admin/dedupe-biomarkers?uid=...(&apply=true)` in `server_routes_sync.ts`. Canonicalizes all biomarker keys via `getMappedBiomarkerKey`, safely clusters exact/non-conflicting duplicate rows sharing dates, preserves conflicting rows untouched for manual review, upserts the unioned survivor record first, and atomically removes redundant duplicate records.
 - **Bug #2 Stop Silent Same-Date Biomarker Merging (`dateUtils.ts`) (2026-08-20)**:
   - **Explicit `sourceReportId` Requirement**: In `src/utils/dateUtils.ts` (`normalizeBiomarkerHistory`), restricted in-memory record merging to only occur when rows share an explicit, matching `sourceReportId` (`${normalizedDate}::${reportId}`). Eliminated silent collapsing of distinct same-date Supabase rows that lacked `sourceReportId`, making all actual Supabase records visible and independently reviewable/deletable through the UI so outlier deletions stick permanently.
 - **Bug Snapshot Default Tab Initialization (2026-08-20)**:

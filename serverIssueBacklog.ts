@@ -376,7 +376,7 @@ async function loadBugTagsWithLinks(supabaseAdmin: any) {
     let { data: tagRows, error: tErr } = await supabaseAdmin
       .from('issue_tags')
       .select('id, created_at, title, title_key, category, status, resolution_note, whats_still_open, comments, resolved_at, work_item')
-      .eq('status', 'to_fix')
+      .in('status', ['to_fix', 'in_progress', 'fixed'])
       .order('created_at', { ascending: false })
       .limit(200);
     if (tErr) {
@@ -384,7 +384,7 @@ async function loadBugTagsWithLinks(supabaseAdmin: any) {
       const { data: tagRowsFallback } = await supabaseAdmin
         .from('issue_tags')
         .select('id, created_at, title, title_key, status, resolution_note, comments, resolved_at')
-        .eq('status', 'to_fix')
+        .in('status', ['to_fix', 'in_progress', 'fixed'])
         .order('created_at', { ascending: false })
         .limit(200);
       tagRows = tagRowsFallback || [];
@@ -1264,6 +1264,7 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
         wi.queue = 'done';
         patch.work_item = wi;
         if (!patch.status) patch.status = 'fixed';
+        if (!existing.resolved_at) patch.resolved_at = new Date().toISOString();
       }
       if (Object.keys(patch).length === 0) {
         return res.status(400).json({ error: 'Provide resolution_note, whats_still_open, status, title, or identified_problems' });

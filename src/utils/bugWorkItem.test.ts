@@ -175,6 +175,14 @@ describe('bugWorkItem Q-6', () => {
     expect(start.how_to_end).toContain('/attempts');
   });
 
+  it('green-tick status=fixed wins over a leftover ready queue', () => {
+    const item = hydrateWorkItem({
+      status: 'fixed',
+      work_item: { public_n: 8, queue: 'ready', remaining: ['still listed'] },
+    });
+    expect(item.queue).toBe('done');
+  });
+
   it('does not mark done from a pass while remaining is open', () => {
     const open = hydrateWorkItem({
       work_item: { bug: 'labels missing', remaining: ['no label table'], queue: 'ready' },
