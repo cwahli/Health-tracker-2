@@ -175,6 +175,7 @@ export interface UserProfile {
   deletedFoodLogIds?: Record<string, number>;
   deletedBiomarkerLogIds?: Record<string, number>;
   deletedCustomBiomarkerKeys?: Record<string, number>;
+  deletedDailyBenefitIds?: Record<string, number>;
   notUsedBiomarkers?: Record<string, { flaggedAt: number }>;
   deletedNotUsedBiomarkerKeys?: Record<string, number>;
   notUsedInMedicalHistory?: Record<string, { flaggedAt: number }>;

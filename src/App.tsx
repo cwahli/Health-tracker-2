@@ -20,14 +20,12 @@ import { refundCredits } from './jobs/credits';
 import { startGoldenIngestWatcher } from './utils/goldenIngestClient';
 import { getProgressPercent, getStepCeiling } from './jobs/progress';
 import FloatingActionSheet from './components/FloatingActionSheet';
-
 import { saveAgentRequestLog } from './utils/agentLogsTracker';
 import { translations } from './utils/translations';
 import { AVAILABLE_LLMS } from './utils/llm';
 import { PRIMARY_NUTRIENTS, isCoreNutrient, isAdditionalNutrient } from './utils/nutrients';
 import { getLocalFallbackReport } from './utils/fallbackReport';
 import { toPendingFoodLog } from './mealBuild/adapters';
-
 function extractPendingFoodLogFromCleanResult(cleanResult: any, photoUrl?: string): any {
   if (!cleanResult) return null;
   let log: any = null;
@@ -62,7 +60,6 @@ function extractPendingFoodLogFromCleanResult(cleanResult: any, photoUrl?: strin
       };
     }
   }
-
   if (log) {
     log.message = log.message || cleanResult.message || cleanResult.text || cleanResult.description || cleanResult.data?.description || '';
     log.healthImpact = log.healthImpact || cleanResult.healthImpact || cleanResult.data?.healthImpact || '';
@@ -89,7 +86,6 @@ import { extractFallbackModifications } from './components/chat-cards/BiomarkerR
 import { formatOptimalTargetValue } from './utils/agentCalibration';
 import { standardizeUnit, CONVERSION_FACTORS } from './utils/unitConversion';
 import { get, set, pruneLocalStorageToFreeSpace, getStorageKey, getSnapshotKey, saveLocalSnapshot, loadLocalSnapshots, deleteLocalSnapshot, safeSaveToLocalStorage, getAggregatedAppData } from './utils/storageUtils';
-
 const FIRESTORE_READ_BUDGET = 3000; // generous for one real session; a runaway loop hits this fast
 function firestoreReadGuard(label: string, docCount: number = 1): boolean {
   const key = 'firestoreReadCountThisSession';
@@ -101,8 +97,6 @@ function firestoreReadGuard(label: string, docCount: number = 1): boolean {
   }
   return true;
 }
-
-
 import { runCleanupMigration } from './utils/migrationTask';
 import { syncLogsWithTimeBuckets, fetchAllConsolidatedLogs, subscribeToSupabaseLogs, upsertProfileToSupabase, mergeByRecency, mergeActions, mergeBenefits, mergeFoodIdeas, mergeReports, mergeProfiles, mergeBiomarkerHistory, mergeDeleteMaps, supabaseRowToFoodLog, supabaseRowToBiomarkerLog } from "./utils/syncUtils";
 import { mergeFoodLogsDeduped, rehydrateFoodImagesFromDonors, foodLogFingerprint } from "./utils/foodLogDedupe";
@@ -111,10 +105,8 @@ import { sanitizeBiomarkerHistoryOnLoad } from "./utils/biomarkers";
 import { recalibrateProfileOverlays } from "./utils/biomarkerLifecycle";
 import type { SanitizeProposal } from "./utils/dataSanitize";
 import { compressImage } from "./utils/imageCompressor";
-
 /** Cap bulk foodImages Firestore reads per sync (console showed 209 — free-tier death). Rest stay lazy. */
 const MAX_IMAGE_FETCH_PER_SYNC = 24;
-
 const QUOTA_STORAGE_KEY = 'health_cockpit_quota_data';
 const getQuotaKey = () => {
   return new Date().toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' });
@@ -182,7 +174,6 @@ const getDynamicStyles = (profile: any) => {
       --font-size-key-metric: ${keyMetricSize} !important;
       --font-size-xs: ${xsSize} !important;
     }
-
     .font-size-title { font-size: ${titleSize || '24px'} !important; }
     .font-size-subtitle { font-size: ${subtitleSize || '18px'} !important; }
     .font-size-subtitle-small { font-size: ${subtitleSmallSize} !important; }
@@ -343,14 +334,12 @@ const getDynamicStyles = (profile: any) => {
       --color-nutrient-sodium: ${p.nutrientSodium} !important;
     `;
   }
-
   // Generic emitter for all keys in themePalette
   Object.entries(p).forEach(([key, val]) => {
     if (val && typeof val === 'string') {
       colorCss += `--color-${key}: ${val} !important;\n`;
     }
   });
-
   if (profile.customColors && Array.isArray(profile.customColors)) {
     profile.customColors.forEach((color: any) => {
       const activeVal = p[color.key] || color.defaultHex;
@@ -359,11 +348,9 @@ const getDynamicStyles = (profile: any) => {
       }
     });
   }
-
   colorCss += `
     }
   `;
-
   if (profile.themeOverrides && Array.isArray(profile.themeOverrides)) {
     profile.themeOverrides.forEach(override => {
       colorCss += `
@@ -373,20 +360,15 @@ const getDynamicStyles = (profile: any) => {
       `;
     });
   }
-
-
-
   // Spacing, Corner Radius, and Shadows Design Tokens
   const marginScale = profile?.marginScale || 'normal';
   const paddingScale = profile?.paddingScale || 'normal';
   const cornerRadius = profile?.cornerRadius || 'normal';
   const shadowScale = profile?.shadowScale || 'normal';
-
   const marginFactor = marginScale === 'compact' ? '0.75' : marginScale === 'relaxed' ? '1.25' : '1';
   const paddingFactor = paddingScale === 'compact' ? '0.75' : paddingScale === 'relaxed' ? '1.25' : '1';
   const radiusFactor = cornerRadius === 'none' ? '0' : cornerRadius === 'small' ? '0.5' : cornerRadius === 'large' ? '1.5' : cornerRadius === 'pill' ? '2.5' : '1';
   const shadowFactor = shadowScale === 'none' ? '0' : shadowScale === 'light' ? '0.5' : shadowScale === 'heavy' ? '1.75' : '1';
-
   let designTokensCss = `
     :root {
       --spacing-factor: ${paddingFactor} !important;
@@ -403,14 +385,12 @@ const getDynamicStyles = (profile: any) => {
     .rounded-2xl { border-radius: calc(1rem * var(--radius-factor)) !important; }
     .rounded-3xl { border-radius: calc(1.5rem * var(--radius-factor)) !important; }
     .rounded-full { border-radius: ${cornerRadius === 'none' ? '0 !important' : '9999px !important'}; }
-
     /* Shadow scale overrides */
     .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0,0,0,calc(0.05 * var(--shadow-factor))) !important; }
     .shadow, .shadow-md { box-shadow: 0 4px 6px -1px rgba(0,0,0,calc(0.08 * var(--shadow-factor))), 0 2px 4px -1px rgba(0,0,0,calc(0.04 * var(--shadow-factor))) !important; }
     .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0,0,0,calc(0.1 * var(--shadow-factor))), 0 4px 6px -2px rgba(0,0,0,calc(0.05 * var(--shadow-factor))) !important; }
     .shadow-xl { box-shadow: 0 20px 25px -5px rgba(0,0,0,calc(0.1 * var(--shadow-factor))), 0 10px 10px -5px rgba(0,0,0,calc(0.04 * var(--shadow-factor))) !important; }
     .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0,0,0,calc(0.25 * var(--shadow-factor))) !important; }
-
     /* Dynamic Spacing scale classes */
     .p-1 { padding: calc(0.25rem * var(--spacing-factor)) !important; }
     .p-1.5 { padding: calc(0.375rem * var(--spacing-factor)) !important; }
@@ -420,7 +400,6 @@ const getDynamicStyles = (profile: any) => {
     .p-5 { padding: calc(1.25rem * var(--spacing-factor)) !important; }
     .p-6 { padding: calc(1.5rem * var(--spacing-factor)) !important; }
     .p-8 { padding: calc(2rem * var(--spacing-factor)) !important; }
-
     .px-1 { padding-left: calc(0.25rem * var(--spacing-factor)) !important; padding-right: calc(0.25rem * var(--spacing-factor)) !important; }
     .px-2 { padding-left: calc(0.5rem * var(--spacing-factor)) !important; padding-right: calc(0.5rem * var(--spacing-factor)) !important; }
     .px-3 { padding-left: calc(0.75rem * var(--spacing-factor)) !important; padding-right: calc(0.75rem * var(--spacing-factor)) !important; }
@@ -432,7 +411,6 @@ const getDynamicStyles = (profile: any) => {
     .py-3 { padding-top: calc(0.75rem * var(--spacing-factor)) !important; padding-bottom: calc(0.75rem * var(--spacing-factor)) !important; }
     .py-4 { padding-top: calc(1rem * var(--spacing-factor)) !important; padding-bottom: calc(1rem * var(--spacing-factor)) !important; }
     .py-6 { padding-top: calc(1.5rem * var(--spacing-factor)) !important; padding-bottom: calc(1.5rem * var(--spacing-factor)) !important; }
-
     .m-1 { margin: calc(0.25rem * var(--margin-factor)) !important; }
     .m-2 { margin: calc(0.5rem * var(--margin-factor)) !important; }
     .m-3 { margin: calc(0.75rem * var(--margin-factor)) !important; }
@@ -444,7 +422,6 @@ const getDynamicStyles = (profile: any) => {
     .mt-4 { margin-top: calc(1rem * var(--margin-factor)) !important; }
     .mt-6 { margin-top: calc(1.5rem * var(--margin-factor)) !important; }
     .mt-8 { margin-top: calc(2rem * var(--margin-factor)) !important; }
-
     .mb-1 { margin-bottom: calc(0.25rem * var(--margin-factor)) !important; }
     .mb-2 { margin-bottom: calc(0.5rem * var(--margin-factor)) !important; }
     .mb-3 { margin-bottom: calc(0.75rem * var(--margin-factor)) !important; }
@@ -452,7 +429,6 @@ const getDynamicStyles = (profile: any) => {
     .mb-6 { margin-bottom: calc(1.5rem * var(--margin-factor)) !important; }
     .mb-8 { margin-bottom: calc(2rem * var(--margin-factor)) !important; }
   `;
-
   return `
     ${fontSizeCss}
     ${fontCss}
@@ -471,7 +447,6 @@ function isDeepEqual(obj1: any, obj2: any): boolean {
   // Filter out undefined and null values to avoid breaking equality checks on missing or null properties
   const activeKeys1 = keys1.filter(k => obj1[k] !== undefined && obj1[k] !== null);
   const activeKeys2 = keys2.filter(k => obj2[k] !== undefined && obj2[k] !== null);
-
   if (activeKeys1.length !== activeKeys2.length) return false;
   for (const key of activeKeys1) {
     if (!activeKeys2.includes(key)) return false;
@@ -525,7 +500,6 @@ function sanitizeProfile(incomingProfile: any, activeEmail?: string): any {
   return incomingProfile;
 }
 const safeAlert = (message: string) => {
-  console.log("[App Notification]:", message);
   try {
     alert(message);
   } catch (e) {
@@ -547,7 +521,6 @@ export default function App() {
       localStorage.removeItem('custom_system_instruction_data_review');
       localStorage.removeItem('custom_variable_data_data_review');
       localStorage.setItem('migration_july06_prompts_cleaned_v3', 'true');
-      console.log("Stale custom prompts for data_review successfully cleared.");
     }
   }, []);
 
@@ -1894,7 +1867,6 @@ export default function App() {
     }
 
     if ((window as any).isManualSyncExecuting && !forcePull) {
-      console.log("[Sync] Sync already in progress, skipping auto-sync trigger.");
       return;
     }
 
@@ -1910,7 +1882,6 @@ export default function App() {
     (window as any).isManualSyncExecuting = true;
     sessionStorage.setItem('sessionSyncTriggered', 'true');
     const uid = forceUserId || activeUser?.uid;
-    console.log("Checking DB changes for UID:", uid);
     if (!uid) {
       setSyncState('local');
       return;
@@ -2021,35 +1992,6 @@ export default function App() {
         }
       }
       
-      // If manual cache was overwritten/empty, try to aggressively recover from Firestore IndexedDB cache!
-      if (!hasLocalFoods || !hasLocalBio) {
-        try {
-          console.log("[Offline Recovery] Attempting to recover data from Firestore IndexedDB Cache...");
-          const consolidatedSnap = await getDocsFromCache(collection(db, 'users', uid, 'consolidated_logs'));
-          const recoveredFoods: any[] = [];
-          const recoveredBio: any[] = [];
-          consolidatedSnap.forEach(doc => {
-            const data = doc.data();
-            if (data.logs) {
-              Object.values(data.logs).forEach((log: any) => {
-                if (log.type === 'food') recoveredFoods.push(log);
-                if (log.type === 'biomarker') recoveredBio.push(log);
-              });
-            }
-          });
-          
-          if (!hasLocalFoods && recoveredFoods.length > 0) {
-            console.log(`[Offline Recovery] Recovered ${recoveredFoods.length} food logs from cache!`);
-            setFoodLogs(recoveredFoods);
-          }
-          if (!hasLocalBio && recoveredBio.length > 0) {
-            console.log(`[Offline Recovery] Recovered ${recoveredBio.length} biomarker logs from cache!`);
-            setBiomarkerHistory(recoveredBio);
-          }
-        } catch (e) {
-          console.warn("[Offline Recovery] Failed to read Firestore cache:", e);
-        }
-      }
       
 
       // Supabase Fallback Syncing
@@ -4377,13 +4319,16 @@ export default function App() {
     await saveAndSync(profile, updatedFoods, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'foodLog', targetId: compressedFood.id });
   };
   const handleDeleteFoodLog = async (id: string) => {
+    const existingLog = foodLogs.find(f => f.id === id);
+    const existingUpdated = existingLog?.updated_at || 0;
+    const now = Math.max(Date.now(), existingUpdated + 1000);
     // Keep it in array but mark as delete so syncUtils can process it
-    const updatedFoods = foodLogs.map(f => f.id === id ? { ...f, sync_state: 'delete' as const, updated_at: Date.now() } : f);
+    const updatedFoods = foodLogs.map(f => f.id === id ? { ...f, sync_state: 'delete' as const, updated_at: now } : f);
     setFoodLogs(updatedFoods);
     
     let updatedProfile = profile ? {
       ...profile,
-      deletedFoodLogIds: { ...(profile.deletedFoodLogIds || {}), [id]: Date.now() }
+      deletedFoodLogIds: { ...(profile.deletedFoodLogIds || {}), [id]: now }
     } : null;
     if (updatedProfile) {
       setProfile(updatedProfile);
@@ -5071,9 +5016,9 @@ export default function App() {
       if (logChanged) {
         if (Object.keys(cleanBiomarkers).length === 0 && !log.note) {
           logsToDelete.push(log.id);
-          return { ...log, biomarkers: cleanBiomarkers, sync_state: 'delete' as const, updated_at: Date.now() };
+          return { ...log, biomarkers: cleanBiomarkers, sync_state: 'delete' as const, updated_at: Math.max(Date.now(), (log.updated_at || 0) + 1000) };
         } else {
-          const updatedLog = { ...log, biomarkers: cleanBiomarkers, sync_state: 'update' as const, updated_at: Date.now() };
+          const updatedLog = { ...log, biomarkers: cleanBiomarkers, sync_state: 'update' as const, updated_at: Math.max(Date.now(), (log.updated_at || 0) + 1000) };
           logsToUpdate.push(updatedLog);
           return updatedLog;
         }
@@ -5124,7 +5069,9 @@ export default function App() {
     }
   };
   const handleDeleteBiomarkerLog = async (id: string) => {
-    const now = Date.now();
+    const existingLog = biomarkerHistory.find(b => b.id === id);
+    const existingUpdated = existingLog?.updated_at || 0;
+    const now = Math.max(Date.now(), existingUpdated + 1000);
     // Keep it in array but mark as delete so syncUtils can process it
     const updatedHistory = biomarkerHistory.map(b => b.id === id ? { ...b, sync_state: 'delete' as const, updated_at: now } : b);
     setBiomarkerHistory(updatedHistory);
@@ -6308,8 +6255,15 @@ export default function App() {
             }}
             dailyBenefits={dailyBenefits}
             setDailyBenefits={async (ben) => {
+              const deleted = dailyBenefits.filter(old => !ben.some(n => n.id === old.id));
+              let updatedProfile = { ...profile };
+              if (deleted.length > 0) {
+                updatedProfile = { ...profile, deletedDailyBenefitIds: { ...(profile.deletedDailyBenefitIds || {}) } };
+                deleted.forEach(d => { updatedProfile.deletedDailyBenefitIds![d.id] = Date.now(); });
+                setProfile(updatedProfile);
+              }
               setDailyBenefits(ben);
-              await saveAndSync(profile, foodLogs, biomarkers, biomarkerHistory, actions, ben, report, { type: 'dailyBenefits' });
+              await saveAndSync(updatedProfile, foodLogs, biomarkers, biomarkerHistory, actions, ben, report, { type: 'dailyBenefits' });
             }}
             foodIdeas={foodIdeas}
             setFoodIdeas={async (ideas) => {

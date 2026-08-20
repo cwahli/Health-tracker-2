@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   Maximize2,
   Minimize2,
+  Clock,
 } from 'lucide-react';
 import { FlagIssueForm, CATEGORY_OPTIONS, saveBugTrackerCache } from './FlagIssueModal';
 import { BugCategory } from '../utils/issueBacklog';
@@ -36,6 +37,9 @@ import {
   hydrateWorkItem,
   publicId,
   sortReadyQueue,
+  getLastActionedDate,
+  sortByLastActioned,
+  formatLastActioned,
   BURN_BUDGET,
   BugWorkItem,
   BugCommit,
@@ -60,6 +64,8 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
   const [activeTab, setActiveTab] = useState<BugCategory | 'all'>('all');
   const [boardMode, setBoardMode] = useState<'bugs' | 'golden'>('bugs');
+  const [statusFilter, setStatusFilter] = useState<'active' | 'all' | 'pending_review' | 'ready' | 'unactioned' | 'done'>('active');
+  const [sortOrder, setSortOrder] = useState<'last_actioned' | 'priority' | 'oldest'>('last_actioned');
   const [isFlagFormOpen, setIsFlagFormOpen] = useState(false);
 
   // Selected tag in right pane
@@ -315,6 +321,13 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
   }, [isOpen]);
 
   const handleSelectTag = (tagId: string) => {
+    if (selectedTagId === tagId) {
+      setSelectedTagId(null);
+      setEditingBugField(false);
+      setEditingRemaining(false);
+      setShowAddAttempt(false);
+      return;
+    }
     setSelectedTagId(tagId);
     setEditingBugField(false);
     setEditingRemaining(false);
@@ -471,7 +484,6 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
   const deleteTag = async (tagId: string, title: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!confirm(`Mark "${title}" done? The card stays in history (not hard-deleted).`)) return;
     setDeletingTagId(tagId);
     try {
       const res = await fetch(`/api/issue-tags/${encodeURIComponent(tagId)}`, {
@@ -564,13 +576,60 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
     setTimeout(() => setCopiedHandoffId(null), 2500);
   };
 
-  if (!isOpen) return null;
-
   const bugTags: any[] = data?.bugTags || [];
-  const filteredTags = bugTags.filter(
-    (t: any) => activeTab === 'all' || (t.category || 'foodcart') === activeTab
-  );
-  const sortedQueueTags = sortReadyQueue(filteredTags);
+  const filteredTags = useMemo(() => {
+    return bugTags.filter((t: any) => {
+      // Category filter
+      if (activeTab !== 'all' && (t.category || 'foodcart') !== activeTab) {
+        return false;
+      }
+      const item = hydrateWorkItem(t);
+      const isFixed = item.queue === 'done' || t.status === 'fixed';
+      const isBlocked = item.queue === 'blocked' || item.burns.filter((b) => b.burned).length >= 2;
+      
+      const hasAgent = item.commits && item.commits.some((c) => c.kind === 'agent' || c.actor !== 'you');
+      const lastCommit = item.commits && item.commits.length > 0 ? item.commits[item.commits.length - 1] : null;
+      const isPendingReview = lastCommit && (lastCommit.kind === 'agent' || lastCommit.actor !== 'you');
+      const isReady = hasAgent && lastCommit && (lastCommit.kind !== 'agent' && lastCommit.actor === 'you');
+
+      // Status filter
+      if (statusFilter === 'active') {
+        return !isFixed;
+      }
+      if (statusFilter === 'stuck' || statusFilter === 'blocked') {
+        return !isFixed && isBlocked;
+      }
+      if (statusFilter === 'ready') {
+        return !isFixed && isReady;
+      }
+      if (statusFilter === 'pending_review') {
+        return !isFixed && isPendingReview;
+      }
+      if (statusFilter === 'unactioned') {
+        return !isFixed && !hasAgent;
+      }
+      if (statusFilter === 'done') {
+        return isFixed;
+      }
+      return true; // 'all'
+    });
+  }, [bugTags, activeTab, statusFilter]);
+
+  const sortedQueueTags = useMemo(() => {
+    if (sortOrder === 'priority') {
+      return sortReadyQueue(filteredTags);
+    }
+    if (sortOrder === 'oldest') {
+      return [...filteredTags].sort((a, b) => {
+        const da = getLastActionedDate(a)?.getTime() || 0;
+        const db = getLastActionedDate(b)?.getTime() || 0;
+        return da - db;
+      });
+    }
+    return sortByLastActioned(filteredTags);
+  }, [filteredTags, sortOrder]);
+
+  if (!isOpen) return null;
 
   // Compute KPIs
   const readyCount = bugTags.filter((t) => hydrateWorkItem(t).queue === 'ready').length;
@@ -587,7 +646,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
   const selectedReports = selectedTagDetail?.reports || selectedTag?.linked_issues || [];
 
   // Top ready tag for "Next bug" label
-  const topReadyTag = sortReadyQueue(bugTags)[0];
+  const topReadyTag = sortReadyQueue(bugTags.filter((t) => hydrateWorkItem(t).queue === 'ready'))[0];
   const topReadyPubId = topReadyTag ? publicId(hydrateWorkItem(topReadyTag), topReadyTag.id) : null;
 
   return (
@@ -604,9 +663,6 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                     Q-6
                   </span>
                 </h1>
-                <p className="text-[11px] text-[#f8fafc]/60 truncate">
-                  Pinned instructions & loop history. <strong>Next bug</strong> takes top ready card.
-                </p>
               </div>
             </div>
 
@@ -668,26 +724,38 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
             {/* KPIs Carousel (Horizontal Slider) */}
             <section className="flex overflow-x-auto gap-2 snap-x pb-1 scrollbar-none shrink-0">
-              <div className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] rounded-xl p-2.5">
+              <div
+                onClick={() => setStatusFilter('ready')}
+                className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border border-transparent hover:border-emerald-500/30"
+              >
                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Ready now</span>
                 <b className="text-lg font-extrabold text-emerald-400 mt-0.5 block">{readyCount}</b>
               </div>
-              <div className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] rounded-xl p-2.5">
+              <div
+                onClick={() => setStatusFilter('stuck')}
+                className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border border-transparent hover:border-rose-500/30"
+              >
                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Stuck / 2 Burns</span>
                 <b className="text-lg font-extrabold text-rose-400 mt-0.5 block">{blockedCount}</b>
               </div>
-              <div className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] rounded-xl p-2.5">
-                <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Meals open</span>
+              <div
+                onClick={() => setStatusFilter('active')}
+                className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border border-transparent hover:border-amber-500/30"
+              >
+                <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Items open</span>
                 <b className="text-lg font-extrabold text-amber-300 mt-0.5 block">{totalMealsCount}</b>
               </div>
-              <div className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] rounded-xl p-2.5">
+              <div
+                onClick={() => setStatusFilter('done')}
+                className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border border-transparent hover:border-slate-500/30"
+              >
                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Done this week</span>
                 <b className="text-lg font-extrabold text-slate-300 mt-0.5 block">{doneCount}</b>
               </div>
             </section>
 
-            {/* Dropdown Filters (Board mode & Category) */}
-            <div className="flex items-center gap-2 shrink-0 py-1">
+            {/* Dropdown Filters (Board mode, Status filter & Category) */}
+            <div className="flex items-center gap-2 shrink-0 py-1 flex-wrap">
               <select
                 value={boardMode}
                 onChange={(e) => setBoardMode(e.target.value as any)}
@@ -698,21 +766,65 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
               </select>
 
               {boardMode === 'bugs' && (
-                <select
-                  value={activeTab}
-                  onChange={(e) => setActiveTab(e.target.value as any)}
-                  className="bg-[#111827] text-white border border-white/15 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none cursor-pointer"
-                >
-                  <option value="all">All Categories ({bugTags.length})</option>
-                  {CATEGORY_OPTIONS.map((c) => {
-                    const count = bugTags.filter((t: any) => (t.category || 'foodcart') === c.key).length;
-                    return (
-                      <option key={c.key} value={c.key}>
-                        {c.label} ({count})
-                      </option>
-                    );
-                  })}
-                </select>
+                <>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    className="bg-[#111827] text-white border border-white/15 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="active">Active ({bugTags.filter((t) => hydrateWorkItem(t).queue !== 'done' && t.status !== 'fixed').length})</option>
+                    <option value="ready">Agent to do ({bugTags.filter((t) => {
+                      const item = hydrateWorkItem(t);
+                      if (item.queue === 'done' || t.status === 'fixed') return false;
+                      const hasAgent = item.commits?.some(c => c.kind === 'agent' || c.actor !== 'you');
+                      const last = item.commits?.[item.commits.length - 1];
+                      return hasAgent && last && (last.kind !== 'agent' && last.actor === 'you');
+                    }).length})</option>
+                    <option value="pending_review">Human to do ({bugTags.filter((t) => {
+                      const item = hydrateWorkItem(t);
+                      if (item.queue === 'done' || t.status === 'fixed') return false;
+                      const last = item.commits?.[item.commits.length - 1];
+                      return last && (last.kind === 'agent' || last.actor !== 'you');
+                    }).length})</option>
+                    <option value="unactioned">Un-actioned ({bugTags.filter((t) => {
+                      const item = hydrateWorkItem(t);
+                      if (item.queue === 'done' || t.status === 'fixed') return false;
+                      return !item.commits?.some(c => c.kind === 'agent' || c.actor !== 'you');
+                    }).length})</option>
+                    <option value="stuck">Stuck / 2 Burns ({bugTags.filter((t) => {
+                      const item = hydrateWorkItem(t);
+                      return item.queue === 'blocked' || item.burns.filter((b) => b.burned).length >= 2;
+                    }).length})</option>
+                    <option value="done">Done / Fixed ({bugTags.filter((t) => hydrateWorkItem(t).queue === 'done' || t.status === 'fixed').length})</option>
+                    <option value="all">All Statuses ({bugTags.length})</option>
+                  </select>
+
+                  <select
+                    value={activeTab}
+                    onChange={(e) => setActiveTab(e.target.value as any)}
+                    className="bg-[#111827] text-white border border-white/15 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="all">All Categories ({bugTags.length})</option>
+                    {CATEGORY_OPTIONS.map((c) => {
+                      const count = bugTags.filter((t: any) => (t.category || 'foodcart') === c.key).length;
+                      return (
+                        <option key={c.key} value={c.key}>
+                          {c.label} ({count})
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value as any)}
+                    className="bg-[#111827] text-white border border-white/15 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="last_actioned">Sort: Last Actioned</option>
+                    <option value="priority">Sort: Ready Priority</option>
+                    <option value="oldest">Sort: Oldest First</option>
+                  </select>
+                </>
               )}
             </div>
 
@@ -751,6 +863,11 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                     const pub = publicId(item, tag.id);
                     const isSelected = selectedTagId === tag.id;
                     const burnedCount = item.burns.filter((b) => b.burned).length;
+                    const lastActionedDate = getLastActionedDate(tag);
+
+                    const hasAgentCommits = item.commits && item.commits.some((c) => c.kind === 'agent' || c.actor !== 'you');
+                    const lastCommit = item.commits && item.commits.length > 0 ? item.commits[item.commits.length - 1] : null;
+                    const isLastAgent = lastCommit && (lastCommit.kind === 'agent' || lastCommit.actor !== 'you');
 
                     return (
                       <div
@@ -759,42 +876,58 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                           isSelected ? 'ring-1 ring-indigo-500' : 'hover:bg-white/5'
                         }`}
                       >
-                        {/* Accordion Row Header */}
+                        {/* Accordion Row Header (Compact) */}
                         <div
                           onClick={() => handleSelectTag(tag.id)}
-                          className="p-3 cursor-pointer flex items-center justify-between gap-2"
+                          className="px-2.5 py-1.5 cursor-pointer flex items-center justify-between gap-2"
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="font-mono text-xs font-extrabold text-indigo-300 shrink-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-mono text-[11px] font-extrabold text-indigo-300 shrink-0">
                               {pub}
                             </span>
-                            <div className="min-w-0">
-                              <div className="font-bold text-xs text-white truncate">
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-xs text-white truncate leading-tight">
                                 {tag.title}
                               </div>
-                              <div className="text-[10px] text-white/50 mt-0.5 truncate">
-                                {tag.category || 'auto'} · {tag.linked_count || tag.linked_issues?.length || 1} meal(s)
-                                {burnedCount > 0 ? ` · burn ${burnedCount}/${BURN_BUDGET}` : ''}
+                              <div className="text-[10px] text-white/50 truncate flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span>{tag.category || 'auto'} · {tag.linked_count || tag.linked_issues?.length || 1} {tag.category === 'biomarker' ? 'biomarker(s)' : tag.category === 'foodcart' ? 'meal(s)' : 'item(s)'}</span>
+                                <span className="text-slate-300 font-medium flex items-center gap-0.5">
+                                  · <Clock className="w-2.5 h-2.5 inline text-indigo-400" /> {formatLastActioned(lastActionedDate)}
+                                </span>
+                                {burnedCount > 0 && (
+                                  <span className="text-amber-400 font-semibold">· burn {burnedCount}/{BURN_BUDGET}</span>
+                                )}
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${
-                                item.queue === 'ready'
-                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                  : item.queue === 'blocked'
-                                  ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                                  : item.queue === 'done'
-                                  ? 'bg-slate-500/20 text-slate-300 border-slate-500/30'
-                                  : 'bg-sky-500/15 text-sky-400 border-sky-500/30'
-                              }`}
-                            >
-                              {item.queue}
-                            </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Action state indicator */}
+                            {item.queue === 'done' || tag.status === 'fixed' ? (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold border bg-slate-500/20 text-slate-300 border-slate-500/30">
+                                fixed
+                              </span>
+                            ) : item.queue === 'blocked' ? (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold border bg-red-500/15 text-red-400 border-red-500/30">
+                                stuck
+                              </span>
+                            ) : hasAgentCommits ? (
+                              isLastAgent ? (
+                                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold border bg-amber-500/15 text-amber-300 border-amber-500/30">
+                                  human to do
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold border bg-indigo-500/15 text-indigo-300 border-indigo-500/30">
+                                  agent to do
+                                </span>
+                              )
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                                un-actioned
+                              </span>
+                            )}
                             <ChevronDown
-                              className={`w-4 h-4 text-white/50 transition-transform ${
+                              className={`w-3.5 h-3.5 text-white/50 transition-transform ${
                                 isSelected ? 'rotate-180 text-indigo-400' : ''
                               }`}
                             />
@@ -803,20 +936,16 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
                         {/* Accordion Expanded Detail Body */}
                         {isSelected && (
-                          <div className="p-3 border-t border-white/10 bg-[#0c121e] space-y-3.5 text-xs">
+                          <div className="p-3 border-t border-white/10 bg-[#0c121e] space-y-4 text-xs">
                             {/* Action Bar */}
-                            <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-white/5">
-                              <span className="font-mono font-bold text-indigo-300 text-xs">
-                                {selectedPubId}
-                              </span>
-
-                              <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="flex items-center justify-end gap-2 flex-wrap pb-2 border-b border-white/5">
+                              <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto overflow-x-auto no-scrollbar justify-end">
                                 {/* AI Triage */}
                                 <button
                                   type="button"
                                   disabled={busy || triagingTagId === selectedTag.id}
                                   onClick={() => runBugTriageAgent(selectedTag)}
-                                  className="px-2 py-1 text-[10px] font-bold text-violet-200 bg-violet-950/60 hover:bg-violet-900 border border-violet-500/40 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                                  className="px-2 py-1 text-[10px] font-bold text-violet-200 bg-violet-950/60 hover:bg-violet-900 border border-violet-500/40 rounded-lg transition-all flex items-center gap-1 cursor-pointer shrink-0"
                                   title="Run AI Triage Agent"
                                 >
                                   {triagingTagId === selectedTag.id ? (
@@ -824,15 +953,14 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                   ) : (
                                     <Sparkles className="w-3 h-3 text-violet-400" />
                                   )}
-                                  <span>Triage</span>
+                                  <span className="hidden sm:inline">Triage</span>
                                 </button>
-
                                 {/* Zip Download */}
                                 <button
                                   type="button"
                                   disabled={zippingTagId === selectedTag.id}
                                   onClick={() => downloadTagZip(selectedTag)}
-                                  className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 transition-colors"
+                                  className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 transition-colors shrink-0"
                                   title="Download Bug Zip"
                                 >
                                   {zippingTagId === selectedTag.id ? (
@@ -841,12 +969,11 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                     <Download className="w-3.5 h-3.5" />
                                   )}
                                 </button>
-
                                 {/* Hand Off */}
                                 <button
                                   type="button"
                                   onClick={(e) => copyHandoff(selectedTag, e)}
-                                  className="px-2 py-1 text-[10px] font-bold text-amber-100 bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                                  className="px-2 py-1 text-[10px] font-bold text-amber-100 bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 rounded-lg transition-all flex items-center gap-1 cursor-pointer shrink-0"
                                   title="Copy Start JSON for next agent"
                                 >
                                   {copiedHandoffId === selectedTag.id ? (
@@ -854,7 +981,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                   ) : (
                                     <Copy className="w-3 h-3" />
                                   )}
-                                  <span>{copiedHandoffId === selectedTag.id ? 'Copied' : 'Hand off'}</span>
+                                  <span className="hidden sm:inline">{copiedHandoffId === selectedTag.id ? 'Copied' : 'Hand off'}</span>
                                 </button>
 
                                 {/* Copy Summary */}
@@ -972,43 +1099,49 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                               </div>
 
                               {/* Remaining Bullets */}
-                              <div className="text-xs text-white/80">
-                                <strong className="text-white">Remaining:</strong>{' '}
-                                {selectedBugNow?.remaining?.length
-                                  ? selectedBugNow.remaining.join(' · ')
-                                  : selectedTag.whats_still_open || '—'}
+                              <div className="text-xs text-white/80 py-0.5">
+                                <strong className="text-white block mb-1">Remaining:</strong>
+                                <span className="leading-relaxed">
+                                  {selectedBugNow?.remaining?.length
+                                    ? selectedBugNow.remaining.join(' · ')
+                                    : selectedTag.whats_still_open || '—'}
+                                </span>
                               </div>
 
                               {/* Done Bullets */}
-                              <div className="text-xs text-emerald-300">
-                                <strong className="text-white">Done:</strong>{' '}
-                                {selectedBugNow?.done?.length
-                                  ? selectedBugNow.done.join(' · ')
-                                  : selectedTag.status === 'fixed'
-                                  ? selectedTag.resolution_note || 'Resolved'
-                                  : '—'}
+                              <div className="text-xs text-emerald-300 py-0.5">
+                                <strong className="text-white block mb-1">Done:</strong>
+                                <span className="leading-relaxed">
+                                  {selectedBugNow?.done?.length
+                                    ? selectedBugNow.done.join(' · ')
+                                    : selectedTag.status === 'fixed'
+                                    ? selectedTag.resolution_note || 'Resolved'
+                                    : '—'}
+                                </span>
                               </div>
 
-                              {/* Current Meal / Evidence */}
-                              <div className="text-xs text-white/80">
-                                <strong className="text-white">Current meal:</strong>{' '}
-                                {selectedBugNow?.current_evidence?.job_id ||
-                                  (selectedReports[0]?.dish_query
-                                    ? `${selectedReports[0].dish_query} (${selectedReports[0].id.slice(0, 8)})`
-                                    : 'None')}
+                              {/* Current Context / Evidence */}
+                              <div className="text-xs text-white/80 py-0.5">
+                                <strong className="text-white block mb-1">Context:</strong>
+                                <span className="font-mono text-[10px] bg-black/40 text-indigo-200 px-2 py-1.5 rounded block break-all whitespace-pre-wrap">
+                                  {selectedBugNow?.current_evidence?.job_id ||
+                                    (selectedReports[0]?.dish_query
+                                      ? `${selectedReports[0].dish_query} (${selectedReports[0].id.slice(0, 8)})`
+                                      : 'None')}
+                                </span>
                               </div>
 
                               {/* Tried */}
                               {selectedBugNow?.tried && selectedBugNow.tried.length > 0 && (
-                                <div className="text-xs text-rose-400">
-                                  <strong className="text-white">
+                                <div className="text-xs text-rose-400 py-0.5">
+                                  <strong className="text-white block mb-1">
                                     Tried:
                                   </strong>
-                                  <div className="space-y-1 mt-1 font-mono text-[11px]">
+                                  <div className="space-y-1.5 font-mono text-[11px]">
                                     {selectedBugNow.tried.map((t, idx) => (
                                       <div
                                         key={idx}
-                                        className="bg-rose-950/40 border border-rose-500/30 p-1.5 rounded-lg text-rose-200"
+                                        className="bg-rose-950/40 border border-rose-500/30 p-2 rounded-lg text-rose-200 leading-relaxed whitespace-pre-wrap"
                                       >
                                         {t}
                                       </div>

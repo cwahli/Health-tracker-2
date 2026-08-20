@@ -339,7 +339,7 @@ export function FlagIssueForm({
               {entry.selectedTagId === 'new_bug' && (
                 <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 space-y-1.5">
                   <label className="block text-[11px] font-bold text-amber-300">
-                    New Bug Title *
+                    New Bug Title (will be #{bugTags.reduce((max, t) => Math.max(max, hydrateWorkItem(t).public_n || 0), 0) + 1}) *
                   </label>
                   <input
                     type="text"

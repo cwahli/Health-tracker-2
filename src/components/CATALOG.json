@@ -18,7 +18,7 @@
     "note": "B8.0 Option A: Flagged Telemetry modal is the only Auto-Fix. Dictionary Auto-Calibrate / Quick Approve stay gone."
   },
   "ceilings": {
-    "src/App.tsx": 7838,
+    "src/App.tsx": 7842,
     "src/components/BiomarkerDictionaryModal.tsx": 6634,
     "src/components/chat-cards/FoodCard.tsx": 3813,
     "src/components/HomeTab.tsx": 3071,

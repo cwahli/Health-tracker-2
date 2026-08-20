@@ -170,12 +170,87 @@ function safeJson(s: string): Partial<BugWorkItem> {
   }
 }
 
+export function getLastActionedDate(tag: any, hydrate: (t: any) => BugWorkItem = hydrateWorkItem as any): Date | null {
+  if (!tag) return null;
+  const item = hydrate(tag);
+  let maxTime = 0;
+
+  const datesToCheck: (string | number | undefined | null)[] = [
+    tag?.updated_at,
+    tag?.created_at,
+    tag?.last_commit?.at,
+    tag?.updatedAt,
+    tag?.createdAt,
+  ];
+
+  if (Array.isArray(item.commits)) {
+    for (const c of item.commits) {
+      if (c?.at) datesToCheck.push(c.at);
+      if (c?.attempt?.at) datesToCheck.push(c.attempt.at);
+    }
+  }
+
+  if (Array.isArray(item.burns)) {
+    for (const b of item.burns) {
+      if (b?.at) datesToCheck.push(b.at);
+    }
+  }
+
+  if (Array.isArray(tag?.commits)) {
+    for (const c of tag.commits) {
+      if (c?.at) datesToCheck.push(c.at);
+      if (c?.attempt?.at) datesToCheck.push(c.attempt.at);
+    }
+  }
+
+  for (const d of datesToCheck) {
+    if (!d) continue;
+    const t = new Date(d).getTime();
+    if (!isNaN(t) && t > maxTime) {
+      maxTime = t;
+    }
+  }
+
+  return maxTime > 0 ? new Date(maxTime) : null;
+}
+
+export function sortByLastActioned<T>(
+  tags: T[],
+  hydrate: (t: T) => BugWorkItem = hydrateWorkItem as any
+): T[] {
+  return [...tags].sort((a, b) => {
+    const da = getLastActionedDate(a, hydrate)?.getTime() || 0;
+    const db = getLastActionedDate(b, hydrate)?.getTime() || 0;
+    return db - da; // Descending: newest / most recently actioned first
+  });
+}
+
+export function formatLastActioned(date: Date | null): string {
+  if (!date) return 'No actions';
+
+  const now = new Date();
+  const diffMs = Math.max(0, now.getTime() - date.getTime());
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  let relative = '';
+  if (diffMins < 1) relative = 'just now';
+  else if (diffMins < 60) relative = `${diffMins}m ago`;
+  else if (diffHours < 24) relative = `${diffHours}h ago`;
+  else relative = `${diffDays}d ago`;
+
+  const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  return `${relative} (${dateStr} ${timeStr})`;
+}
+
 export function sortReadyQueue<T extends { created_at?: string }>(
   tags: T[],
   hydrate: (t: T) => BugWorkItem = hydrateWorkItem as any
 ): T[] {
-  const ready = tags.filter((t) => hydrate(t).queue === 'ready');
-  return ready.sort((a, b) => {
+  return [...tags].sort((a, b) => {
     const wa = hydrate(a);
     const wb = hydrate(b);
     if (wb.occurrences !== wa.occurrences) return wb.occurrences - wa.occurrences;

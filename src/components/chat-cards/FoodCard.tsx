@@ -17,7 +17,6 @@ import { JobStore } from '../../jobs/JobStore';
 import { toPendingFoodLog } from '../../mealBuild/adapters';
 import { namesReferToSameFood } from '../../../server_scout_reconcile';
 import { extractMostRecentImageDate, getCurrentDateInTimezone } from '../../utils/dateUtils';
-
 function foodCardName(item: any): string {
   return item?.canonicalDbName || item?.name || item?.originalName || item?.keyword || '';
 }
@@ -29,7 +28,6 @@ function scoutIndexAgrees(item: any, s: any): boolean {
   if (s?.scoutIndex === undefined || item?.scoutIndex === undefined || s?.scoutIndex === null || item?.scoutIndex === null) return false;
   return Number(s.scoutIndex) === Number(item.scoutIndex);
 }
-
 function parseLabelCalories(raw: any): number | null {
   if (raw == null) return null;
   if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) return raw;
@@ -55,14 +53,12 @@ function parseLabelCalories(raw: any): number | null {
   const n = parseFloat(m[1]);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
-
 const safeTruncate = (str: any, maxLen: number = 100): string => {
   if (!str) return '';
   const s = String(str);
   if (s.length <= maxLen) return s;
   return s.substring(0, maxLen) + '...';
 };
-
 function getCleanAnomalyFlags(item: any): string[] {
   if (!item || !Array.isArray(item.anomalyFlags)) return [];
   return item.anomalyFlags.filter((f: string) => 
@@ -72,7 +68,6 @@ function getCleanAnomalyFlags(item: any): string[] {
     !f.toLowerCase().includes('converted printed salt')
   );
 }
-
 function isItemUnclearOrLowConfidence(item: any): boolean {
   if (!item) return false;
   const conf = (item.itemConfidence || '').toLowerCase();

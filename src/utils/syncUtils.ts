@@ -607,6 +607,7 @@ export const fetchAllConsolidatedLogs = async (
       const result = await proxyRes.json();
       const cleanDelFoods = mergeDeleteMaps(deletedFoodLogIds, result.profileData?.profile?.deletedFoodLogIds || result.profileData?.deletedFoodLogIds || {});
       const cleanDelBios = mergeDeleteMaps(deletedBiomarkerLogIds, result.profileData?.profile?.deletedBiomarkerLogIds || result.profileData?.deletedBiomarkerLogIds || {});
+      const cleanDelBenefits = mergeDeleteMaps(result.profileData?.profile?.deletedDailyBenefitIds || result.profileData?.deletedDailyBenefitIds || {});
 
       if (result.success && result.foods) {
         result.foods.forEach((row: any) => {
@@ -640,7 +641,8 @@ export const fetchAllConsolidatedLogs = async (
             deletedBiomarkerLogIds: mergeDeleteMaps(rawP.deletedBiomarkerLogIds),
             deletedFoodLogIds: mergeDeleteMaps(rawP.deletedFoodLogIds),
             deletedCustomBiomarkerKeys: mergeDeleteMaps(rawP.deletedCustomBiomarkerKeys),
-            deletedNotUsedBiomarkerKeys: mergeDeleteMaps(rawP.deletedNotUsedBiomarkerKeys)
+            deletedNotUsedBiomarkerKeys: mergeDeleteMaps(rawP.deletedNotUsedBiomarkerKeys),
+            deletedDailyBenefitIds: mergeDeleteMaps(rawP.deletedDailyBenefitIds)
           };
         }
         if (Array.isArray(result.profileData.actions)) serverActions = result.profileData.actions;
@@ -764,12 +766,13 @@ export function mergeActions(cloudActions: HealthAction[] = [], localActions: He
   return Array.from(map.values());
 }
 
-export function mergeBenefits(cloudBenefits: DailyBenefit[] = [], localBenefits: DailyBenefit[] = []): DailyBenefit[] {
+export function mergeBenefits(cloudBenefits: DailyBenefit[] = [], localBenefits: DailyBenefit[] = [], tombstoneIds: Record<string, number> = {}): DailyBenefit[] {
   const map = new Map<string, DailyBenefit>();
   (localBenefits || []).forEach(ben => {
     if (!ben) return;
     const key = ben.id || (ben as any).title || (ben as any).benefit;
     if (key) {
+      if (tombstoneIds[key] && tombstoneIds[key] >= (ben.updated_at || 0)) return;
       map.set(key, { ...ben, id: ben.id || key });
     }
   });
@@ -777,6 +780,7 @@ export function mergeBenefits(cloudBenefits: DailyBenefit[] = [], localBenefits:
     if (!cloudBen) return;
     const key = cloudBen.id || (cloudBen as any).title || (cloudBen as any).benefit;
     if (key) {
+      if (tombstoneIds[key] && tombstoneIds[key] >= (cloudBen.updated_at || 0)) return;
       const existing = map.get(key);
       if (!existing) {
         map.set(key, { ...cloudBen, id: cloudBen.id || key });
@@ -1043,6 +1047,7 @@ export function mergeProfiles(cloudProfile: UserProfile | null, localProfile: Us
   const deletedFoodLogIds = mergeDeleteMaps(secondary.deletedFoodLogIds, primary.deletedFoodLogIds);
   const deletedBiomarkerLogIds = mergeDeleteMaps(secondary.deletedBiomarkerLogIds, primary.deletedBiomarkerLogIds);
   const deletedNotUsedBiomarkerKeys = mergeDeleteMaps(secondary.deletedNotUsedBiomarkerKeys, primary.deletedNotUsedBiomarkerKeys);
+  const deletedDailyBenefitIds = mergeDeleteMaps(secondary.deletedDailyBenefitIds, primary.deletedDailyBenefitIds);
 
   // Union notUsedBiomarkers by key instead of letting the outer object spread clobber one
   // side wholesale. A tombstone (deletedNotUsedBiomarkerKeys) wins over a stale flaggedAt
@@ -1098,12 +1103,12 @@ export function mergeProfiles(cloudProfile: UserProfile | null, localProfile: Us
   };
 
   const actions = mergeActions((secondary as any).actions || [], (primary as any).actions || []);
-  const dailyBenefits = mergeBenefits((secondary as any).dailyBenefits || [], (primary as any).dailyBenefits || []);
+  const dailyBenefits = mergeBenefits((secondary as any).dailyBenefits || [], (primary as any).dailyBenefits || [], deletedDailyBenefitIds);
 
   return {
     ...deepMergeObjectShallow(secondary, primary, [
       'customBiomarkers', 'deletedFoodLogIds', 'deletedBiomarkerLogIds', 'deletedCustomBiomarkerKeys',
-      'notUsedBiomarkers', 'deletedNotUsedBiomarkerKeys', 'actions', 'dailyBenefits',
+      'notUsedBiomarkers', 'deletedNotUsedBiomarkerKeys', 'deletedDailyBenefitIds', 'actions', 'dailyBenefits',
       'targets', 'generalNutrientTargets', 'weeklyTargets', 'weeklyNutrientTargets', 'topWeeklyNutrientTargets',
       'customGroupings', 'groupingDescriptions', 'categoryDescriptions'
     ]),
@@ -1114,6 +1119,7 @@ export function mergeProfiles(cloudProfile: UserProfile | null, localProfile: Us
     deletedCustomBiomarkerKeys,
     notUsedBiomarkers,
     deletedNotUsedBiomarkerKeys,
+    deletedDailyBenefitIds,
     actions,
     dailyBenefits,
     ...(Object.keys(targets).length > 0 ? { targets } : {}),

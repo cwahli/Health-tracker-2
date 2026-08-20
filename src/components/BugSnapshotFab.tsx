@@ -166,29 +166,48 @@ async function capturePageScreenshot(): Promise<string | null> {
     const { toJpeg } = await import('html-to-image');
     const modal = document.querySelector<HTMLElement>('#food-chat-container, [data-unified-modal="true"]');
     const target = modal && modal.offsetParent !== null ? modal : document.body;
-    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-    const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
 
-    const dataUrl = await toJpeg(target, {
-      quality: 0.75,
-      pixelRatio: 1,
-      cacheBust: false,
-      skipFonts: true,
-      backgroundColor: '#0f172a',
-      ...(target === document.body
-        ? {
-            width: window.innerWidth,
-            height: window.innerHeight,
-            style: {
-              transform: `translate(-${scrollX}px, -${scrollY}px)`,
-              transformOrigin: 'top left',
-            },
-          }
-        : {}),
-      filter: (node) => !isBugSnapshotNode(node),
+    const scrollElements = [target, ...Array.from(target.querySelectorAll('*'))]
+      .filter((el) => el.scrollTop > 0);
+      
+    scrollElements.forEach((el) => {
+      el.setAttribute('data-bug-scroll', `${el.scrollTop}`);
     });
-    if (dataUrl && dataUrl.startsWith('data:image/')) {
-      return await compressImage(dataUrl, 1280, 1280, 0.75);
+
+    const scrollCSS = scrollElements
+      .map(
+        (el) =>
+          `[data-bug-scroll="${el.scrollTop}"] > * { transform: translateY(-${el.scrollTop}px) !important; }`
+      )
+      .join('\n');
+
+    const styleTag = document.createElement('style');
+    styleTag.textContent = scrollCSS;
+    target.appendChild(styleTag);
+
+    try {
+      const dataUrl = await toJpeg(target, {
+        quality: 0.75,
+        pixelRatio: 1,
+        cacheBust: false,
+        skipFonts: true,
+        backgroundColor: '#0f172a',
+        ...(target === document.body
+          ? {
+              width: window.innerWidth,
+              height: window.innerHeight,
+            }
+          : {}),
+        filter: (node) => !isBugSnapshotNode(node),
+      });
+      if (dataUrl && dataUrl.startsWith('data:image/')) {
+        return await compressImage(dataUrl, 1280, 1280, 0.75);
+      }
+    } finally {
+      target.removeChild(styleTag);
+      scrollElements.forEach((el) => {
+        el.removeAttribute('data-bug-scroll');
+      });
     }
   } catch (err) {
     console.warn(`${BUG_SNAPSHOT_LOG} html-to-image capture failed`, err);
@@ -474,7 +493,7 @@ export default function BugSnapshotFab({
 
     // Asynchronously resolve real photos from the active job (IDB blobs, imageStore refs, R2 URLs)
     const jobPhotos: string[] = [];
-    if (activeJob) {
+    if (activeJob && cat === 'foodcart') {
       try {
         if (activeJob.id) {
           const idbImages = await ImageStore.getImages(activeJob.id);
@@ -1081,13 +1100,13 @@ export default function BugSnapshotFab({
                 <div className="flex flex-wrap gap-2 items-center">
                   <button
                     type="button"
-                    title="Capture screen"
+                    title="Take picture"
                     disabled={capturing || shots.length >= BUG_SNAPSHOT_MAX_SHOTS}
                     onClick={handleCaptureScreen}
                     className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold disabled:opacity-40 flex items-center gap-1.5 text-white"
                   >
                     {capturing ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
-                    {capturing ? 'Capturing meal…' : 'Capture meal'}
+                    {capturing ? 'Taking picture…' : 'Take picture'}
                   </button>
                   <label className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-bold cursor-pointer flex items-center gap-1.5 text-white">
                     <ImagePlus className="w-3.5 h-3.5" />

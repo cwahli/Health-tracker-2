@@ -491,14 +491,31 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
               ])
             ).filter((k) => {
               if (NON_NUTRIENT_LABEL_KEYS.has(k) || NON_NUTRIENT_LABEL_KEYS.has(k.toLowerCase())) return false;
-              const val = item.rawNutritionLabel?.[k] !== undefined 
-                ? item.rawNutritionLabel?.[k] 
-                : item.nutritionFacts?.[k];
+              const rawVal = item.rawNutritionLabel?.[k];
+              const nutVal = item.nutritionFacts?.[k];
+              const val = rawVal !== undefined ? rawVal : nutVal;
+              
               if (val === undefined || val === null || val === '' || val === '-' || val === '--') return false;
+              const numVal = parseRowNumber(val);
+              
               if (hasImplausibleAllZeroMacros && !k.toLowerCase().includes('calorie') && !k.toLowerCase().includes('energy')) {
-                const numVal = parseRowNumber(val);
                 if (numVal === 0) return false;
               }
+              
+              // Hide 0-value trace nutrients for branded/official foods if they weren't explicitly printed on the label.
+              // Brand databases often default trace nutrients to 0, which clutters the UI with implausible zeros.
+              if (numVal === 0) {
+                const isMacro = ['calories', 'protein', 'totalfat', 'fat', 'carbohydrates', 'totalcarbohydrate', 'sodium', 'sugar', 'addedsugar', 'saturatedfat', 'transfat', 'totalfibre', 'fiber'].includes(k.toLowerCase());
+                const isOfficial = Boolean(item.chainName || item.brand || item.brandName || item.dbSource === 'brand_official' || item.dbSource === 'label' || item.source === 'brand_official' || item.source === 'label');
+                
+                if (isOfficial && !isMacro) {
+                  // If it's a 0 trace nutrient on a branded food, only show it if the printed label explicitly stated it was 0.
+                  if (rawVal === undefined || rawVal === null || rawVal === '') {
+                    return false;
+                  }
+                }
+              }
+              
               return true;
             });
 
