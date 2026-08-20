@@ -7052,22 +7052,42 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         primaryBase100g = receiptRepairedBase100g;
       }
 
+      const isMultiComp = hasComponents && Array.isArray(componentsDetailList) && componentsDetailList.length > 1;
+      const allShareBrand = isMultiComp && componentsDetailList.every((c: any) => c.brand && c.brand.toLowerCase() === componentsDetailList[0].brand?.toLowerCase());
+      const effectiveParentBrand = allShareBrand ? (componentsDetailList[0].brand || null) : (isMultiComp ? null : (item.brand || item.chainName || null));
+      const effectiveParentChain = allShareBrand ? (componentsDetailList[0].chainName || null) : (isMultiComp ? null : (item.chainName || null));
+      const effectiveParentDbSource = isMultiComp ? "composite" : (primaryDbSource || "estimated");
+      const effectiveParentDbId = isMultiComp ? `composite_${item.scoutIndex}` : (primaryDbId || null);
+
+      let cleanDishOriginalName = item.originalName || item.keyword;
+      if (isMultiComp && !allShareBrand && cleanDishOriginalName) {
+        const brandNames = ['sainsbury', 'sainsbury\'s', 'tesco', 'mcdonald\'s', 'starbucks', 'pret', 'waitrose', 'm&s', 'asda', 'morrisons'];
+        for (const bn of brandNames) {
+          const regex = new RegExp(`^${bn}['s]*\\s+`, 'i');
+          if (regex.test(cleanDishOriginalName)) {
+            cleanDishOriginalName = cleanDishOriginalName.replace(regex, '').trim();
+            cleanDishOriginalName = cleanDishOriginalName.charAt(0).toUpperCase() + cleanDishOriginalName.slice(1);
+            break;
+          }
+        }
+      }
+
       return {
         scoutIndex: item.scoutIndex,
         keyword: item.keyword,
-        originalName: item.originalName || item.keyword,
-        chainName: item.chainName || null,
-        brand: item.brand || item.chainName || null,
+        originalName: cleanDishOriginalName || item.originalName || item.keyword,
+        chainName: effectiveParentChain,
+        brand: effectiveParentBrand,
         diningEnvironment: item.diningEnvironment || diningEnvironment || "unknown",
         rawNutritionLabel: item.rawNutritionLabel || null,
         cookingMethod: itemCookingMethod,
         estimatedWeightGrams: itemWeight,
         hasComponents,
-        bestMatchDbId: primaryDbId || null,
-        bestMatchDbSource: primaryDbSource || "estimated",
-        dbId: primaryDbId || null,
-        dbSource: primaryDbSource || "estimated",
-        primaryBaseMatchName: primaryBaseMatchName || item.keyword,
+        bestMatchDbId: effectiveParentDbId,
+        bestMatchDbSource: effectiveParentDbSource,
+        dbId: effectiveParentDbId,
+        dbSource: effectiveParentDbSource,
+        primaryBaseMatchName: cleanDishOriginalName || primaryBaseMatchName || item.keyword,
         primaryBase100g: primaryBase100g,
         primaryBaseWeightG: primaryBaseWeightG,
         componentsDetailList: componentsDetailList,
@@ -8394,12 +8414,43 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             }
           });
 
+          const isMultiCompFinal = Boolean(
+            (preMatch && preMatch.hasComponents) ||
+            item.hasComponents ||
+            (Array.isArray(preMatch?.componentsDetailList) && preMatch.componentsDetailList.length >= 2) ||
+            (Array.isArray(item.componentsDetailList) && item.componentsDetailList.length >= 2)
+          );
+          const subCompsList = preMatch?.componentsDetailList || item.componentsDetailList || [];
+          const allSubCompsShareBrand = isMultiCompFinal && subCompsList.length > 0 && subCompsList.every((c: any) => c.brand && c.brand.toLowerCase() === subCompsList[0].brand?.toLowerCase());
+          const finalParentBrand = allSubCompsShareBrand ? (subCompsList[0].brand || null) : (isMultiCompFinal ? null : (item.brand || preMatch?.brand || null));
+          const finalParentChain = allSubCompsShareBrand ? (subCompsList[0].chainName || null) : (isMultiCompFinal ? null : (item.chainName || preMatch?.chainName || null));
+          const finalParentDbSource = isMultiCompFinal ? "composite" : ((preMatch && preMatch.dbSource) || item.dbSource || "estimated");
+          const finalParentDbId = isMultiCompFinal ? (preMatch?.dbId || `composite_${idx}`) : ((preMatch && preMatch.dbId) || item.dbId || null);
+
+          let finalOriginalName = preMatch?.originalName || item.originalName || rawItem.originalName || null;
+          let finalCanonicalDbName = preMatch?.primaryBaseMatchName || item.canonicalDbName || preMatch?.canonicalDbName || item.name;
+
+          if (isMultiCompFinal && !allSubCompsShareBrand) {
+            const brandNames = ['sainsbury', 'sainsbury\'s', 'tesco', 'mcdonald\'s', 'starbucks', 'pret', 'waitrose', 'm&s', 'asda', 'morrisons'];
+            for (const bn of brandNames) {
+              const regex = new RegExp(`^${bn}['s]*\\s+`, 'i');
+              if (finalOriginalName && regex.test(finalOriginalName)) {
+                finalOriginalName = finalOriginalName.replace(regex, '').trim();
+                finalOriginalName = finalOriginalName.charAt(0).toUpperCase() + finalOriginalName.slice(1);
+              }
+              if (finalCanonicalDbName && regex.test(finalCanonicalDbName)) {
+                finalCanonicalDbName = finalCanonicalDbName.replace(regex, '').trim();
+                finalCanonicalDbName = finalCanonicalDbName.charAt(0).toUpperCase() + finalCanonicalDbName.slice(1);
+              }
+            }
+          }
+
           return {
             ...rawItem,
             ...item,
             nutrients: finalItemNutrients,
-            chainName: item.chainName || preMatch?.chainName || rawItem.chainName || null,
-            brand: item.brand || preMatch?.brand || item.chainName || preMatch?.chainName || rawItem.brand || null,
+            chainName: finalParentChain,
+            brand: finalParentBrand,
             rawNutritionLabel: item.rawNutritionLabel || preMatch?.rawNutritionLabel || rawItem.rawNutritionLabel || (item.primaryBase100g ? {
               servingSize: "100g",
               basisType: "per_100g",
@@ -8419,20 +8470,16 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               totalCarbohydrate: `${parseFloat(((finalItemNutrients.carbohydrates || 0) / ((item.weightGrams || 100) / 100)).toFixed(1))}g`,
               sodium: `${Math.round((finalItemNutrients.sodium || 0) / ((item.weightGrams || 100) / 100))}mg`
             } : null)),
-            originalName: item.originalName || preMatch?.originalName || rawItem.originalName || null,
+            originalName: finalOriginalName,
+            canonicalDbName: finalCanonicalDbName,
             keyword: item.keyword || preMatch?.keyword || rawItem.keyword || null,
             visualIngredients: item.visualIngredients || rawItem.visualIngredients || preMatch?.visualIngredients || null,
             components: item.components || rawItem.components || preMatch?.components || null,
-            dbSource: (preMatch && preMatch.dbSource) || item.dbSource || "estimated",
-            dbId: (preMatch && preMatch.dbId) || item.dbId || null,
-            hasComponents: Boolean(
-              (preMatch && preMatch.hasComponents) ||
-              item.hasComponents ||
-              (Array.isArray(preMatch?.componentsDetailList) && preMatch.componentsDetailList.length >= 2) ||
-              (Array.isArray(item.componentsDetailList) && item.componentsDetailList.length >= 2)
-            ),
+            dbSource: finalParentDbSource,
+            dbId: finalParentDbId,
+            hasComponents: isMultiCompFinal,
             primaryBase100g: preMatch?.primaryBase100g || item.primaryBase100g || null,
-            primaryBaseMatchName: preMatch?.primaryBaseMatchName || item.primaryBaseMatchName || null,
+            primaryBaseMatchName: finalCanonicalDbName || preMatch?.primaryBaseMatchName || item.primaryBaseMatchName || null,
             primaryBaseWeightG: preMatch?.primaryBaseWeightG || item.weightGrams,
             componentsDetailList: preMatch?.componentsDetailList || item.componentsDetailList || [],
             compositeSiblings: preMatch?.compositeSiblings || preMatch?.componentsDetailList || item.compositeSiblings || item.componentsDetailList || [],

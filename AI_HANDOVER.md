@@ -28,6 +28,9 @@
 - **1-Click "Bug → Golden Inbox" Ingest Pipeline (2026-08-20)**:
   - **Automated Case Synthesis**: Added `POST /api/bugs/:tagId/make-golden` in `serverBugSnapshot.ts` to automatically extract linked job scout results and generate complete `expected.json`, `scout.json`, and `Instruction.md` fixtures inside `tests/Golden_meal/inbox/`.
   - **UI Action Trigger**: Added a **"Make Golden"** button in `BugTrackerModal.tsx` for instant 1-click test fixture creation from bug tags.
+- **Bug #5 Composite Parent Dish & Brand Isolation Fix (2026-08-20)**:
+  - **Parent Composite Identification**: In `server.ts` (`preCalculatedItems` and `itemsBreakdown`), when a composite dish contains mixed components (e.g. Sainsbury oats + fresh unbranded fruit), parent `dbSource` is set to `"composite"` (with synthetic composite `dbId`) and parent `brand`/`chainName` is set to `null` so individual ingredient brands never contaminate the parent dish or companion items.
+  - **Dish Title Sanitization**: Stripped leading brand prefix from composite meal titles when other components are generic staples (e.g. `"Sainsbury oat with fruit"` → `"Oatmeal with fruit"` / `"Rolled oats with fruit"`), ensuring the brand badge and title belong strictly to the specific branded component (`Sainsbury's Scottish Whole Rolled Oats`).
 - **Food Classification & Brand Isolation Guardrails (2026-08-20)**:
   - **Brand Contamination Guard**: In `NutritionLabelTable.tsx`, guarded `isCompOfficial` so generic companion staples (berries, milk, bananas, fresh fruit) never inherit brand metadata from parent composite meals (resolves Bug #5 false friends).
   - **Single-Item Composite Inhibition**: Updated `isComposite` badge evaluation in `NutritionLabelTable.tsx` to strictly require `subComps.length > 1` (resolves Bug #6 baguette false composite tagging).
