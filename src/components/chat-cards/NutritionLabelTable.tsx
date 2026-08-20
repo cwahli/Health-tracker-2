@@ -134,9 +134,10 @@ function getSourceBadge(item: any) {
           ? item.componentsDetail
           : [])));
   const isGenuineOcr = (item.dbSource === 'label' || (item.source === 'label' && !item.isComponentOfComposite)) && Boolean(item.rawNutritionLabel && !item.dbSource?.includes('fallback') && !item.dbSource?.includes('composite'));
-  const isComposite = item.dbSource === 'composite' || item.isComposite || (subComps.length >= 2);
+  const isComposite = (item.dbSource === 'composite' || item.isComposite) && Array.isArray(subComps) && subComps.length > 1;
   const brandTitle = item.chainName || item.brand || item.brandName;
-  const isBrand = (item.dbSource === 'brand_official' || item.source === 'brand_official' || Boolean(brandTitle)) && !isComposite;
+  const hasDirectBrandRecord = item.dbSource === 'brand_official' || item.source === 'brand_official' || String(item.dbId || '').includes('brand_menu_') || String(item.fdcId || '').includes('brand_menu_');
+  const isBrand = hasDirectBrandRecord && !isComposite;
   const isOFF = item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts';
   const isFallback = item.dbSource === 'category_fallback' || item.dbSource === 'estimated' || String(item.dbId || '').startsWith('fallback_') || String(item.originalName || item.name || '').toLowerCase().includes('category fallback');
   const isUsda = (item.dbSource === 'usda' || item.dbSource === 'canonical_dict' || item.dbSource === 'web_search') && !isGenuineOcr && !isBrand && !isOFF && !isFallback && !isComposite;
@@ -148,9 +149,9 @@ function getSourceBadge(item: any) {
       className: 'bg-emerald-100/90 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
     };
   }
-  if (isComposite) {
-    const hasBranded = Array.isArray(subComps) && subComps.some((c: any) => c.chainName || c.brand || c.brandName || c.dbSource === 'brand_official');
-    const hasFresh = Array.isArray(subComps) && subComps.some((c: any) => !c.chainName && !c.brand && !c.brandName && c.dbSource !== 'brand_official');
+  if (isComposite && Array.isArray(subComps) && subComps.length > 1) {
+    const hasBranded = subComps.some((c: any) => (c.chainName || c.brand || c.brandName || c.dbSource === 'brand_official') && !/^(milk|berry|berries|banana|apple|water|grape|grapes|strawberry|strawberries|blueberries|raspberry|almond|almonds|walnut|fresh fruit|mixed fruits|fruit)$/i.test(String(c.primaryBaseMatchName || c.name || c.keyword || '')));
+    const hasFresh = subComps.some((c: any) => !c.chainName && !c.brand && !c.brandName && c.dbSource !== 'brand_official');
     return {
       text: hasBranded && hasFresh ? 'Composite (Brand + Fresh)' : 'Composite',
       className: 'bg-purple-100/90 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
@@ -233,11 +234,13 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
         allDishComps.push(comp);
         const compSrc = String(comp.dbSource || comp.source || '').toLowerCase();
         const isStandardRef = ['canonical_dict', 'canonical', 'internal_catalog', 'usda'].includes(compSrc);
-        const isCompOfficial = !isStandardRef && (comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.dbSource === 'open_food_facts' || comp.dbSource === 'openfoodfacts' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || (comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_')) || Boolean(comp.chainName) || Boolean(comp.brand) || Boolean(comp.brandName));
+        const rawName = comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || comp.dish_name || '';
+        const cleanName = String(rawName).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/^[📖\s]+/, '').trim();
+        const isGenericStaple = /^(milk|berry|berries|banana|apple|water|grape|grapes|strawberry|strawberries|blueberries|raspberry|raspberries|almond|almonds|walnut|fresh fruit|mixed fruits|fruit)$/i.test(cleanName);
+        const hasDirectBrand = Boolean((comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_')) || (comp.chainName && !isGenericStaple) || (comp.brand && !isGenericStaple));
+        const isCompOfficial = !isStandardRef && (comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.dbSource === 'open_food_facts' || comp.dbSource === 'openfoodfacts' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || hasDirectBrand);
         const compLabelSource = comp.baseNutrients100g || comp.primaryBase100g || comp.labelNutrientsPerServing || comp.nutrients;
         if (isCompOfficial && (comp.rawNutritionLabel || compLabelSource)) {
-          const rawName = comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || comp.dish_name;
-          const cleanName = String(rawName).replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/^[📖\s]+/, '').trim();
           const compWeight = comp.weightGrams || comp.estimatedWeightGrams || comp.primaryBaseWeightG;
           
           // Build pure component raw label from its own 100g source if comp.rawNutritionLabel was cloned from parent or absent
@@ -268,18 +271,18 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
             keyword: cleanName,
             originalName: cleanName,
             name: cleanName,
-            chainName: comp.chainName || comp.brand || comp.brandName || null,
-            brand: comp.brand || comp.chainName || comp.brandName || null,
+            chainName: hasDirectBrand ? (comp.chainName || comp.brand || comp.brandName || null) : null,
+            brand: hasDirectBrand ? (comp.brand || comp.chainName || comp.brandName || null) : null,
             primaryBaseMatchName: cleanName,
-            dbSource: comp.dbSource || comp.source || (comp.chainName || comp.brand ? 'brand_official' : 'usda'),
-            source: comp.source || comp.dbSource || (comp.chainName || comp.brand ? 'brand_official' : 'usda'),
+            dbSource: comp.dbSource || comp.source || (hasDirectBrand ? 'brand_official' : 'usda'),
+            source: comp.source || comp.dbSource || (hasDirectBrand ? 'brand_official' : 'usda'),
             rawNutritionLabel: compRawLabel,
             nutritionFacts: comp.nutritionFacts || compLabelSource || null,
             labelNutrientsPerServing: compLabelSource,
             primaryBase100g: compLabelSource,
             estimatedWeightGrams: compWeight,
             primaryBaseWeightG: compWeight,
-            isRealTruth: Boolean(comp.chainName || comp.brand || comp.brandName || comp.dbSource === 'brand_official' || comp.rawNutritionLabel),
+            isRealTruth: Boolean(hasDirectBrand || comp.dbSource === 'brand_official' || comp.rawNutritionLabel),
             isComponentOfComposite: true
           });
         }
@@ -533,7 +536,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <strong className="block text-slate-800 dark:text-slate-200 font-display text-xs">
-                      {(item.chainName || item.brand || item.brandName) ? (
+                      {(item.chainName || item.brand || item.brandName) && (item.dbSource === 'brand_official' || String(item.dbId || '').includes('brand_menu_') || String(item.fdcId || '').includes('brand_menu_')) ? (
                         <>
                           <span className="text-indigo-500 dark:text-indigo-400">{item.chainName || item.brand || item.brandName}</span>
                           {' · '}

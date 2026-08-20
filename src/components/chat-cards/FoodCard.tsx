@@ -3381,7 +3381,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                                 <div>{displayName}</div>
                                                 <div className="mt-1 flex flex-wrap items-center gap-1">
                                                   <PhysicalFormBadge item={item} />
-                                                  {(item.chainName || item.brand) && (
+                                                  {(item.chainName || item.brand) && (item.dbSource === 'brand_official' || String(item.dbId || '').includes('brand_menu_') || String(item.fdcId || '').includes('brand_menu_')) && (
                                                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50">
                                                       {item.chainName || item.brand}
                                                     </span>

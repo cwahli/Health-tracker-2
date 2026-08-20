@@ -250,7 +250,8 @@ export function sortReadyQueue<T extends { created_at?: string }>(
   tags: T[],
   hydrate: (t: T) => BugWorkItem = hydrateWorkItem as any
 ): T[] {
-  return [...tags].sort((a, b) => {
+  const ready = tags.filter((t) => hydrate(t).queue === 'ready');
+  return ready.sort((a, b) => {
     const wa = hydrate(a);
     const wb = hydrate(b);
     if (wb.occurrences !== wa.occurrences) return wb.occurrences - wa.occurrences;
@@ -359,8 +360,10 @@ export function appendEvidenceCommit(
     evidence: opts.evidence,
   };
   const hold = [...new Set([...(item.hold_refs || []), opts.evidence.job_id, opts.evidence.debug_url].filter(Boolean))] as string[];
+  const queue: BugQueueStatus = item.queue === 'done' ? 'ready' : item.queue;
   return {
     ...item,
+    queue,
     occurrences: item.occurrences + (item.commits.length ? 1 : 0),
     current_evidence: opts.evidence,
     commits: [...item.commits, commit],
@@ -386,6 +389,30 @@ export type BugNow = {
 export function buildNow(tag: any): BugNow {
   const item = hydrateWorkItem(tag);
   const burned = item.burns.filter((b) => b.burned);
+
+  const allAttempts: BugAttempt[] = [...item.burns];
+  if (Array.isArray(item.commits)) {
+    for (const c of item.commits) {
+      if (
+        c?.attempt &&
+        !allAttempts.some(
+          (a) => a.hyp === c.attempt?.hyp && a.file === c.attempt?.file && a.test === c.attempt?.test
+        )
+      ) {
+        allAttempts.push(c.attempt);
+      }
+    }
+  }
+
+  const triedStrings = allAttempts.map((b) => {
+    if (b.burned) {
+      return `${b.hyp} | ${b.file} | ${b.test} | ${b.result || 'burned'} | DO NOT RETRY`;
+    }
+    const statusText = b.result ? ` | [${b.result}]` : '';
+    const noteText = b.note ? ` (${b.note})` : '';
+    return `${b.hyp} | ${b.file} | ${b.test}${statusText}${noteText}`;
+  });
+
   return {
     public_id: publicId(item, tag?.id),
     bug: item.bug,
@@ -394,9 +421,7 @@ export function buildNow(tag: any): BugNow {
     done: item.done,
     parked: item.parked,
     current_evidence: item.current_evidence,
-    tried: burned.map(
-      (b) => `${b.hyp} | ${b.file} | ${b.test} | ${b.result} | DO NOT RETRY`
-    ),
+    tried: triedStrings,
     burns_used: `${burned.length}/${BURN_BUDGET}`,
     queue: item.queue,
     do_not: [

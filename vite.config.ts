@@ -46,7 +46,16 @@ export default defineConfig(() => {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       hmr: process.env.DISABLE_HMR === 'true' ? false : true,
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      watch: process.env.DISABLE_HMR === 'true' ? null : {
+        ignored: [
+          '**/brand_menu_items_local.json',
+          '**/tests/**',
+          '**/studio/**',
+          '**/archive/**',
+          '**/*.log',
+          '**/tmp/**'
+        ]
+      },
     },
     test: {
       exclude: ['**/node_modules/**', '**/dist/**', '**/studio/**', '**/archive/**'],

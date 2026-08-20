@@ -104,7 +104,9 @@ export async function collectOriginalFixture(job: any): Promise<GoldenFixture> {
     }
   }
 
-  const photos = [...fromStore, ...fromRefs].filter((v, i, a) => a.indexOf(v) === i);
+  // Prefer direct local store images if present to avoid duplicating the same photo with its remote R2 URL
+  const rawPhotos = fromStore.length > 0 ? fromStore : fromRefs;
+  const photos = rawPhotos.filter((v, i, a) => a.indexOf(v) === i);
 
   return {
     query,

@@ -4,7 +4,38 @@
 **Status:** ALL GATES & REGRESSION SUITES GREEN (609 tests across 62 test suites)
 **Governance & Laws:** Follow `docs/agent/` domain rules. Local agents may `git commit` / `git push` after COMPLETE (tsc + named gates). AI Studio remains a valid ship path.
 
----
+- **Bug #5 & Bug #6 Permanent Fixes (Brand Scope Isolation & Composite Precision) (2026-08-20)**:
+  - **Brand Scope Isolation**: In `server_vision_scout.ts`, updated system instructions so brand modifiers strictly bind to named brand items (e.g. Sainsbury oats), emitting fresh companion foods (fruits, drinks, sides) as separate unbranded items.
+  - **Canonical Dictionary Preference**: In `server.ts`, prioritized `lookupCanonicalBaseFood` before falling back to untrusted `web_search`, ensuring fresh fruits (such as fresh raw plums, 46 kcal) never get clobbered by 465 kcal confectionery web matches.
+  - **Strict Composite Classification**: In `NutritionLabelTable.tsx` and `FoodCard.tsx`, strictly enforced `subComps.length > 1` for composite dish tagging (resolving Bug #6 false composite baguette) and guarded the brand official badge and brand prefix so only verified brand database items display brand official indicators.
+- **AI Agent Chat Error Recovery & Model Switcher Retry (2026-08-20)**:
+  - **Direct Retry Action Bar**: In `src/components/LogChat.tsx`, added a unified action bar on all error and service-unavailable messages with a dedicated **"Retry ([Selected Model])"** button and **"Switch Agent"** model selector toggle.
+  - **Model Re-selection & Multi-Agent Fallback**: Users can now change the active LLM engine from the dropdown or the error bar and immediately trigger a retry on failed analysis turns without re-uploading photos or re-typing queries.
+- **Branded Food Source Deletion & Item Cascade (2026-08-20)**:
+  - **Cascade Delete Endpoint**: In `serverBrandMenu.ts`, added `POST /api/chain-menu-sources/delete` supporting single/batch deletion of chain menu sources from Supabase (`chain_menu_sources`), cascading deletion of all associated dishes in `brand_menu_items`, and pruning local fallback items.
+  - **Inline Confirm UI**: In `src/components/NutritionDataBrowserModal.tsx`, added a red trash action button on each branded food row with inline 2-step confirmation (`Confirm?`) and live deletion spinner state.
+- **Bug #2 Permanent Fix & Key-Level Suppression (2026-08-20)**:
+  - **Auto-Log Guard & Suppression Persistence**: In `src/App.tsx`, guarded the BMI initialization effect so that deleting BMI via Auto-Delete or Outlier Deletion explicitly marks `bmiAutoLogged: true` and writes `deletedCustomBiomarkerKeys: { bmi: now }`, preventing client-side re-generation loops.
+  - **Sync-Safe Profile Merging**: In `src/utils/syncUtils.ts`, explicitly preserved `bmiAutoLogged` and `deletedCustomBiomarkerKeys` during `mergeProfiles` so cloud pulls never clobber local suppression flags. Unblocked Bug #2 in Supabase.
+- **Bug Snapshot Photo Deduplication & Session Isolation (2026-08-20)**:
+  - **Fresh Capture Initialization**: In `src/components/BugSnapshotFab.tsx`, explicitly reset `shots` to `[]` and cleared lingering draft cache on modal open/close so previous meal photos and old screenshots never leak into new bug snapshots.
+  - **Single Source Image Extraction**: In `src/utils/goldenFixture.ts` (`collectOriginalFixture`), prioritized local IndexedDB store images over remote R2 URL references when present, preventing the same meal image from being added twice (once as base64 blob and once as R2 URL).
+  - **Redundant Pre-fetch Elimination**: In `src/components/BugSnapshotFab.tsx`, removed duplicate pre-fetch iterations and guarded file drop/paste additions so each distinct photo is attached exactly once.
+- **Bug Snapshot Tag Context & Identified Problems Display (2026-08-20)**:
+  - **Comprehensive Context Surface**: In `src/components/BugSnapshotFab.tsx`, when selecting an existing bug tag, the attachment banner now renders the complete context: pinned bug instructions, user-identified problem/symptoms description, remaining open checklist items, and previous snapshot loop comments with timestamps.
+- **Bug Tracker "Tried / Previous Tentatives" Panel Display (2026-08-20)**:
+  - **Tentative & Burned Attempt Visibility**: In `src/utils/bugWorkItem.ts` (`buildNow`), aggregated all attempts across `item.burns` and `item.commits` so tentative/verified attempts (`PASS` results) are preserved alongside burned attempts. In `BugTrackerModal.tsx`, formatted burned attempts with rose/red `DO NOT RETRY` badges and tentative attempts with indigo badges and notes so previous attempts are always visible in the NOW box.
+- **1-Click "Bug → Golden Inbox" Ingest Pipeline (2026-08-20)**:
+  - **Automated Case Synthesis**: Added `POST /api/bugs/:tagId/make-golden` in `serverBugSnapshot.ts` to automatically extract linked job scout results and generate complete `expected.json`, `scout.json`, and `Instruction.md` fixtures inside `tests/Golden_meal/inbox/`.
+  - **UI Action Trigger**: Added a **"Make Golden"** button in `BugTrackerModal.tsx` for instant 1-click test fixture creation from bug tags.
+- **Food Classification & Brand Isolation Guardrails (2026-08-20)**:
+  - **Brand Contamination Guard**: In `NutritionLabelTable.tsx`, guarded `isCompOfficial` so generic companion staples (berries, milk, bananas, fresh fruit) never inherit brand metadata from parent composite meals (resolves Bug #5 false friends).
+  - **Single-Item Composite Inhibition**: Updated `isComposite` badge evaluation in `NutritionLabelTable.tsx` to strictly require `subComps.length > 1` (resolves Bug #6 baguette false composite tagging).
+- **Bug Tracker Improvements & Auto-Reopen Logic (2026-08-20)**:
+  - **Auto-Reopen Done Bugs on New Evidence / Retest**: In `src/utils/bugWorkItem.ts` (`appendEvidenceCommit`), when new evidence/retest is submitted on a card with `queue: 'done'`, the queue automatically resets to `'ready'`. In `serverBugSnapshot.ts` (`/api/bugs/snapshot`, `/api/bugs/:tagId/attach`, and `PATCH /api/bugs/:tagId`), reopened cards synchronize `issue_tags.status = 'to_fix'`, automatically reopening retested cards (e.g. Bug #5).
+  - **Context-Aware Category Detection**: Updated `getCategoryForTab(activeTab, viewingJobId)` in `BugSnapshotFab.tsx` to detect if an active meal modal is open (`isAnyMealModalOpen`), defaulting the snapshot category to `'foodcart'` instead of blindly assigning `'Home'`.
+  - **Human 1-Click Unblock & Burns Reset**: In `BugTrackerModal.tsx` and `serverBugSnapshot.ts`, added an **"Unblock"** button on cards with burns (`PATCH /api/bugs/:id` with `{ reset_burns: true, queue: 'ready' }`), added a **Class** assignment dropdown in the NOW box (`APPLY_MISS`, `FALSE_FRIEND`, `DISH_DROP`, `SILENT_REPAIR`, etc.), and converted the **Remaining** list into an interactive checklist with per-item `Done` buttons and inline editing.
+  - **Clean Workspace**: Purged root test script residue (`test.js`, `test2.js`, `test-tombstone.js`, `test-pull.mjs`, `test-scroll.html`, `test-merge.mjs`).
 - **Bug #4 Brand Info Recognition in Nutrition Data & Food Card (2026-08-20)**:
   - **Component Resolution & Masking Fix**: In `NutritionLabelTable.tsx` and `FoodCard.tsx`, fixed `subComps` and `componentsDetailList` fallback cascades where empty array initializations `[]` masked valid `item.components` and `matchingScout.components` on composite dishes.
   - **Official Brand Data Extraction**: Updated `getSourceBadge` and `expandedItems` in `NutritionLabelTable.tsx` to properly check `comp.chainName`, `comp.brand`, and `comp.brandName` across decomposed sub-components, surfacing official branded items (e.g. Sainsbury's Scottish Whole Rolled Oats) and enabling the `Composite (Brand + Fresh)` badge.

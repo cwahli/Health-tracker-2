@@ -844,6 +844,9 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
         });
         wi.hold_refs = [...new Set([...(wi.hold_refs || []), ev.job_id, ev.r2_prefix].filter(Boolean))] as string[];
         await persistWorkItem(tagId, wi);
+        if (tagRow.status === 'fixed' || wi.queue === 'ready') {
+          await supabaseAdmin.from('issue_tags').update({ status: 'to_fix' }).eq('id', tagId);
+        }
         snapNow = buildNow({ ...tagRow, work_item: wi, id: tagId });
       }
       if (symptom && tagRow) {
@@ -1236,7 +1239,7 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
     }
   });
 
-  /** PATCH /api/bugs/:tagId — update Bug field (never wipe if empty) */
+  /** PATCH /api/bugs/:tagId — update Bug field, class, remaining, or unblock */
   app.patch('/api/bugs/:tagId', async (req: Request, res: Response) => {
     try {
       const { supabaseAdmin } = await import('./supabaseAdmin.js');
@@ -1245,9 +1248,23 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       const item = hydrateWorkItem(tag);
       const nextBug = String(req.body?.bug ?? '').trim();
       if (nextBug) item.bug = nextBug;
+      if (req.body?.class !== undefined) item.class = req.body.class ? String(req.body.class) : undefined;
+      if (req.body?.queue && ['ready', 'in_progress', 'blocked', 'done'].includes(req.body.queue)) {
+        item.queue = req.body.queue;
+      }
+      if (req.body?.reset_burns || req.body?.resetBurns) {
+        item.burns = item.burns.map((b) => ({ ...b, burned: false }));
+        if (item.queue === 'blocked') item.queue = 'ready';
+      }
       if (Array.isArray(req.body?.remaining)) item.remaining = req.body.remaining.map(String);
+      if (Array.isArray(req.body?.done)) item.done = req.body.done.map(String);
       if (Array.isArray(req.body?.parked)) item.parked = req.body.parked.map(String);
       await persistWorkItem(tag.id, item);
+      if (item.queue === 'done') {
+        await supabaseAdmin.from('issue_tags').update({ status: 'fixed' }).eq('id', tag.id);
+      } else {
+        await supabaseAdmin.from('issue_tags').update({ status: 'to_fix' }).eq('id', tag.id);
+      }
       res.json(buildStartPayload({ ...tag, work_item: item, id: tag.id }));
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'patch failed' });
@@ -1291,6 +1308,9 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       item.unmatched = false;
       if (jobId) item.hold_refs = [...new Set([...(item.hold_refs || []), jobId, debugUrl].filter(Boolean))] as string[];
       await persistWorkItem(tag.id, item);
+      if (tag.status === 'fixed' || item.queue === 'ready') {
+        await supabaseAdmin.from('issue_tags').update({ status: 'to_fix' }).eq('id', tag.id);
+      }
       res.json(buildStartPayload({ ...tag, work_item: item, id: tag.id }));
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'attach failed' });
@@ -1483,6 +1503,81 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       res.json({ success: true, deleted, issueId });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'prune failed' });
+    }
+  });
+
+  /** POST /api/bugs/:tagId/make-golden — 1-click Bug to Golden Case Ingest */
+  app.post('/api/bugs/:tagId/make-golden', async (req: Request, res: Response) => {
+    try {
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const tag = await findTagByParam(supabaseAdmin, req.params.tagId);
+      if (!tag) return res.status(404).json({ error: 'tag not found' });
+
+      const item = hydrateWorkItem(tag);
+      const fs = await import('fs');
+      const path = await import('path');
+      const { fileURLToPath } = await import('url');
+      const curDir = path.dirname(fileURLToPath(import.meta.url));
+      const goldenInboxDir = path.join(curDir, 'tests', 'Golden_meal', 'inbox');
+
+      const pub = item.public_n ? `bug_${item.public_n}` : `bug_${tag.id.slice(0, 8)}`;
+      const safeTitle = (tag.title || 'unnamed').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
+      const slug = `${pub}_${safeTitle}`;
+      const targetDir = path.join(goldenInboxDir, slug);
+
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      // Try to find scout or job context
+      const jobId = item.current_evidence?.job_id || item.commits.find(c => c.evidence?.job_id)?.evidence?.job_id || null;
+      let scoutData: any = null;
+      if (jobId) {
+        const { data: jobRow } = await supabaseAdmin
+          .from('agent_jobs')
+          .select('clean_result')
+          .eq('id', jobId)
+          .maybeSingle();
+        if (jobRow?.clean_result) {
+          scoutData = jobRow.clean_result;
+        }
+      }
+
+      const expectedSpec = {
+        id: slug,
+        title: tag.title,
+        mode: tag.category === 'foodcart' ? 'A' : 'D',
+        bug_id: tag.id,
+        public_id: pub,
+        class: item.class || 'FALSE_FRIEND',
+        passes: [
+          {
+            id: 'pass_1',
+            prompt: tag.title,
+            photos: item.current_evidence?.photo_urls || [],
+          }
+        ],
+        symptom: tag.identified_problems || tag.title,
+        remaining: item.remaining,
+      };
+
+      fs.writeFileSync(path.join(targetDir, 'expected.json'), JSON.stringify(expectedSpec, null, 2));
+      if (scoutData) {
+        fs.writeFileSync(path.join(targetDir, 'scout.json'), JSON.stringify(scoutData, null, 2));
+      }
+      fs.writeFileSync(
+        path.join(targetDir, 'Instruction.md'),
+        `# Golden Case from ${pub}: ${tag.title}\n\n## Symptom\n${tag.identified_problems || tag.title}\n\n## What to verify\n- ${item.remaining?.join('\n- ') || 'Verify accurate food identification'}\n`
+      );
+
+      res.json({
+        success: true,
+        slug,
+        dir: targetDir,
+        expectedSpec,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'make-golden failed' });
     }
   });
 }

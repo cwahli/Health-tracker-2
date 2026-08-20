@@ -40,6 +40,7 @@ import {
   getLastActionedDate,
   sortByLastActioned,
   formatLastActioned,
+  CLASS_SEVERITY,
   BURN_BUDGET,
   BugWorkItem,
   BugCommit,
@@ -64,7 +65,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
   const [activeTab, setActiveTab] = useState<BugCategory | 'all'>('all');
   const [boardMode, setBoardMode] = useState<'bugs' | 'golden'>('bugs');
-  const [statusFilter, setStatusFilter] = useState<'active' | 'all' | 'pending_review' | 'ready' | 'unactioned' | 'done'>('active');
+  const [statusFilter, setStatusFilter] = useState<'active' | 'all' | 'pending_review' | 'ready' | 'unactioned' | 'stuck' | 'done'>('active');
   const [sortOrder, setSortOrder] = useState<'last_actioned' | 'priority' | 'oldest'>('last_actioned');
   const [isFlagFormOpen, setIsFlagFormOpen] = useState(false);
 
@@ -107,6 +108,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
   const [copiedHandoffId, setCopiedHandoffId] = useState<string | null>(null);
   const [deletingTagId, setDeletingTagId] = useState<string | null>(null);
   const [zippingTagId, setZippingTagId] = useState<string | null>(null);
+  const [makingGoldenId, setMakingGoldenId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
@@ -389,6 +391,92 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
     }
   };
 
+  const handleUnblockBug = async (tagId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/bugs/${encodeURIComponent(tagId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reset_burns: true, queue: 'ready' }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || `HTTP ${res.status}`);
+      }
+      await fetchTagDetail(tagId);
+      await load();
+    } catch (err: any) {
+      alert(err?.message || 'Failed to unblock bug');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpdateClass = async (tagId: string, nextClass: string) => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/bugs/${encodeURIComponent(tagId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ class: nextClass || null }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || `HTTP ${res.status}`);
+      }
+      await fetchTagDetail(tagId);
+      await load();
+    } catch (err: any) {
+      alert(err?.message || 'Failed to update class');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleRemainingDone = async (tagId: string, itemText: string) => {
+    if (!selectedBugNow) return;
+    const curRemaining = selectedBugNow.remaining || [];
+    const curDone = selectedBugNow.done || [];
+    const nextRemaining = curRemaining.filter((r) => r !== itemText);
+    const nextDone = [...curDone, itemText];
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/bugs/${encodeURIComponent(tagId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ remaining: nextRemaining, done: nextDone }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || `HTTP ${res.status}`);
+      }
+      await fetchTagDetail(tagId);
+      await load();
+    } catch (err: any) {
+      alert(err?.message || 'Failed to update remaining items');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleMakeGolden = async (tag: any, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setMakingGoldenId(tag.id);
+    try {
+      const res = await fetch(`/api/bugs/${encodeURIComponent(tag.id)}/make-golden`, {
+        method: 'POST',
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      alert(`Golden Case created at tests/Golden_meal/inbox/${json.slug}`);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to make golden case');
+    } finally {
+      setMakingGoldenId(null);
+    }
+  };
+
   const saveRemainingItems = async () => {
     if (!selectedTagId) return;
     setSavingField(true);
@@ -596,7 +684,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
       if (statusFilter === 'active') {
         return !isFixed;
       }
-      if (statusFilter === 'stuck' || statusFilter === 'blocked') {
+      if (statusFilter === 'stuck') {
         return !isFixed && isBlocked;
       }
       if (statusFilter === 'ready') {
@@ -617,7 +705,15 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
   const sortedQueueTags = useMemo(() => {
     if (sortOrder === 'priority') {
-      return sortReadyQueue(filteredTags);
+      return [...filteredTags].sort((a, b) => {
+        const wa = hydrateWorkItem(a);
+        const wb = hydrateWorkItem(b);
+        if (wb.occurrences !== wa.occurrences) return wb.occurrences - wa.occurrences;
+        const sa = CLASS_SEVERITY[wa.class || ''] ?? 500;
+        const sb = CLASS_SEVERITY[wb.class || ''] ?? 500;
+        if (sa !== sb) return sa - sb;
+        return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+      });
     }
     if (sortOrder === 'oldest') {
       return [...filteredTags].sort((a, b) => {
@@ -955,6 +1051,24 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                   )}
                                   <span className="hidden sm:inline">Triage</span>
                                 </button>
+                                 {/* Make Golden Case */}
+                                {(selectedTag.category === 'foodcart' || selectedTag.category === 'Home') && (
+                                  <button
+                                    type="button"
+                                    disabled={makingGoldenId === selectedTag.id}
+                                    onClick={(e) => handleMakeGolden(selectedTag, e)}
+                                    className="px-2 py-1 text-[10px] font-bold text-amber-200 bg-amber-950/60 hover:bg-amber-900 border border-amber-500/40 rounded-lg transition-all flex items-center gap-1 cursor-pointer shrink-0"
+                                    title="Create Golden Case in tests/Golden_meal/inbox/"
+                                  >
+                                    {makingGoldenId === selectedTag.id ? (
+                                      <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                                    ) : (
+                                      <Sparkles className="w-3 h-3 text-amber-400" />
+                                    )}
+                                    <span className="hidden sm:inline">Make Golden</span>
+                                  </button>
+                                )}
+
                                 {/* Zip Download */}
                                 <button
                                   type="button"
@@ -969,6 +1083,19 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                     <Download className="w-3.5 h-3.5" />
                                   )}
                                 </button>
+                                 {/* Unblock Bug / Reset Burns */}
+                                {burnedCount > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleUnblockBug(selectedTag.id, e)}
+                                    className="px-2 py-1 text-[10px] font-bold text-amber-300 bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 rounded-lg transition-all flex items-center gap-1 cursor-pointer shrink-0"
+                                    title="Reset Burns & Unblock Bug"
+                                  >
+                                    <Flame className="w-3 h-3 text-amber-400" />
+                                    <span>Unblock ({burnedCount})</span>
+                                  </button>
+                                )}
+
                                 {/* Hand Off */}
                                 <button
                                   type="button"
@@ -1017,9 +1144,33 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
                             {/* NOW Section */}
                             <div className="bg-[#0f172a] rounded-xl p-3 space-y-2.5">
-                              <h3 className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-300">
-                                NOW — what the next agent sees first
-                              </h3>
+                              <div className="flex items-center justify-between gap-2">
+                                <h3 className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-300">
+                                  NOW — what the next agent sees first
+                                </h3>
+                                {/* Class assignment dropdown */}
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[9px] font-extrabold text-slate-400 uppercase">Class:</span>
+                                  <select
+                                    value={selectedBugNow?.class || selectedTag?.class || ''}
+                                    onChange={(e) => handleUpdateClass(selectedTag.id, e.target.value)}
+                                    className="bg-black/60 text-indigo-200 text-[10px] font-bold border border-indigo-500/30 rounded px-1.5 py-0.5 focus:outline-none cursor-pointer"
+                                  >
+                                    <option value="">(No Class)</option>
+                                    <option value="APPLY_MISS">APPLY_MISS</option>
+                                    <option value="FALSE_FRIEND">FALSE_FRIEND</option>
+                                    <option value="DISH_DROP">DISH_DROP</option>
+                                    <option value="OPENING_WRONG">OPENING_WRONG</option>
+                                    <option value="SILENT_REPAIR">SILENT_REPAIR</option>
+                                    <option value="CALL_BUDGET">CALL_BUDGET</option>
+                                    <option value="INFRA_LATENCY">INFRA_LATENCY</option>
+                                    <option value="F_1">F_1</option>
+                                    <option value="IDENTITY_FALSE_FRIEND">IDENTITY_FALSE_FRIEND</option>
+                                    <option value="CLONE_UI">CLONE_UI</option>
+                                  </select>
+                                </div>
+                              </div>
+
                               {(selectedCommits[selectedCommits.length - 1] || selectedTag.last_commit) && (
                                 <div className="text-[10px] rounded-lg border border-indigo-500/30 bg-indigo-950/40 p-2 text-indigo-100">
                                   <div className="font-extrabold uppercase text-[9px] text-indigo-300 mb-0.5">
@@ -1099,13 +1250,72 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                               </div>
 
                               {/* Remaining Bullets */}
-                              <div className="text-xs text-white/80 py-0.5">
-                                <strong className="text-white block mb-1">Remaining:</strong>
-                                <span className="leading-relaxed">
-                                  {selectedBugNow?.remaining?.length
-                                    ? selectedBugNow.remaining.join(' · ')
-                                    : selectedTag.whats_still_open || '—'}
-                                </span>
+                              <div className="text-xs text-white/80 py-0.5 space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <strong className="text-white block">Remaining:</strong>
+                                  {!editingRemaining && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingRemaining(true)}
+                                      className="text-amber-300 hover:text-amber-200 p-0.5 cursor-pointer text-[10px] flex items-center gap-1"
+                                      title="Edit Remaining list"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                      <span>Edit</span>
+                                    </button>
+                                  )}
+                                </div>
+                                {editingRemaining ? (
+                                  <div className="space-y-1.5">
+                                    <textarea
+                                      rows={2}
+                                      value={editRemainingDraft}
+                                      onChange={(e) => setEditRemainingDraft(e.target.value)}
+                                      className="w-full text-xs rounded-lg p-2 bg-black/60 border border-amber-500/40 text-white font-sans focus:outline-none"
+                                      placeholder="Remaining items (comma-separated)..."
+                                    />
+                                    <div className="flex gap-1.5 justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingRemaining(false)}
+                                        className="px-2 py-0.5 text-[10px] rounded bg-slate-700 text-white cursor-pointer"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={savingField}
+                                        onClick={saveRemainingItems}
+                                        className="px-2.5 py-0.5 text-[10px] rounded bg-amber-600 font-bold text-white flex items-center gap-1 cursor-pointer"
+                                      >
+                                        {savingField ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                        Save
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : selectedBugNow?.remaining && selectedBugNow.remaining.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {selectedBugNow.remaining.map((remItem, rIdx) => (
+                                      <div
+                                        key={rIdx}
+                                        className="flex items-start justify-between gap-2 p-1.5 rounded-lg bg-black/40 border border-white/5 text-amber-200/90 text-[11px]"
+                                      >
+                                        <span className="leading-relaxed flex-1">{remItem}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleRemainingDone(selectedTag.id, remItem)}
+                                          className="px-1.5 py-0.5 rounded bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer shrink-0"
+                                          title="Mark item done"
+                                        >
+                                          <Check className="w-2.5 h-2.5" />
+                                          <span>Done</span>
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="leading-relaxed text-white/50">{selectedTag.whats_still_open || '—'}</span>
+                                )}
                               </div>
 
                               {/* Done Bullets */}
@@ -1131,21 +1341,39 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                 </span>
                               </div>
 
-                              {/* Tried */}
-                              {selectedBugNow?.tried && selectedBugNow.tried.length > 0 && (
-                                <div className="text-xs text-rose-400 py-0.5">
-                                  <strong className="text-white block mb-1">
-                                    Tried:
+                              {/* Tried / Previous Tentatives */}
+                              {((selectedBugNow?.tried && selectedBugNow.tried.length > 0) ||
+                                (selectedCommits && selectedCommits.some((c) => c.attempt))) && (
+                                <div className="text-xs py-0.5 space-y-1">
+                                  <strong className="text-white block">
+                                    Tried / Previous Tentatives:
                                   </strong>
                                   <div className="space-y-1.5 font-mono text-[11px]">
-                                    {selectedBugNow.tried.map((t, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="bg-rose-950/40 border border-rose-500/30 p-2 rounded-lg text-rose-200 leading-relaxed whitespace-pre-wrap"
-                                      >
-                                        {t}
-                                      </div>
-                                    ))}
+                                    {(selectedBugNow?.tried && selectedBugNow.tried.length > 0
+                                      ? selectedBugNow.tried
+                                      : selectedCommits
+                                          .filter((c) => c.attempt)
+                                          .map((c) => {
+                                            const a = c.attempt!;
+                                            const burnedTag = a.burned ? ' | DO NOT RETRY' : (a.result ? ` | [${a.result}]` : '');
+                                            const noteTag = a.note ? ` (${a.note})` : '';
+                                            return `${a.hyp} | ${a.file} | ${a.test}${burnedTag}${noteTag}`;
+                                          })
+                                    ).map((t, idx) => {
+                                      const isDoNotRetry = t.includes('DO NOT RETRY') || t.includes('burned');
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className={`border p-2 rounded-lg leading-relaxed whitespace-pre-wrap ${
+                                            isDoNotRetry
+                                              ? 'bg-rose-950/40 border-rose-500/30 text-rose-200'
+                                              : 'bg-indigo-950/40 border-indigo-500/30 text-indigo-200'
+                                          }`}
+                                        >
+                                          {t}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               )}

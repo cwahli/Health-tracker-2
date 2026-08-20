@@ -162,6 +162,8 @@ export default function NutritionDataBrowserModal({ isOpen, onClose }: Nutrition
   const [bulkPreview, setBulkPreview] = useState<Record<string, any>>({});
   const [bulkResults, setBulkResults] = useState<Record<string, any>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteChainId, setConfirmDeleteChainId] = useState<string | null>(null);
+  const [deletingChainId, setDeletingChainId] = useState<string | null>(null);
   const [expandedChains, setExpandedChains] = useState<Record<string, boolean>>({});
   const [chainItems, setChainItems] = useState<Record<string, any[]>>({});
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -329,7 +331,9 @@ export default function NutritionDataBrowserModal({ isOpen, onClose }: Nutrition
     }
   };
 
-  const deleteItem = async (item: any) => {
+  const deleteItem = async (item: any, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
     const itemKey = `${item.chain_key}:${item.dish_name_key}`;
     if (confirmDeleteId !== itemKey && confirmDeleteId !== item.dish_name_key) {
       setConfirmDeleteId(itemKey);
@@ -338,7 +342,17 @@ export default function NutritionDataBrowserModal({ isOpen, onClose }: Nutrition
     }
     setConfirmDeleteId(null);
     setDeletingItemId(itemKey);
-    setBusy(true);
+
+    // Optimistically remove the item from local chainItems list
+    if (item.chain_key) {
+      setChainItems((prev) => ({
+        ...prev,
+        [item.chain_key]: (prev[item.chain_key] || []).filter(
+          (it: any) => it.dish_name_key !== item.dish_name_key
+        )
+      }));
+    }
+
     try {
       const res = await fetch('/api/brand-menu-items/delete', {
         method: 'POST',
@@ -361,9 +375,59 @@ export default function NutritionDataBrowserModal({ isOpen, onClose }: Nutrition
       }
     } catch (e: any) {
       alert(e?.message || 'Delete failed');
+      if (item.chain_key) {
+        await loadChainItems(item.chain_key);
+      }
     } finally {
-      setBusy(false);
       setDeletingItemId(null);
+    }
+  };
+
+  const deleteChainSource = async (chain: any, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    const chainIdentifier = chain.id || chain.chain_key;
+    if (confirmDeleteChainId !== chainIdentifier) {
+      setConfirmDeleteChainId(chainIdentifier);
+      setTimeout(() => setConfirmDeleteChainId(null), 3500);
+      return;
+    }
+    setConfirmDeleteChainId(null);
+    setDeletingChainId(chainIdentifier);
+
+    // Optimistically remove from state so the modal stays at the current scroll position
+    setData((prev: any) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        chainSources: (prev.chainSources || []).filter(
+          (s: any) => s.id !== chain.id && s.chain_key !== chain.chain_key
+        )
+      };
+    });
+
+    try {
+      const res = await fetch('/api/chain-menu-sources/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: chain.id,
+          chain_key: chain.chain_key,
+          country_code: chain.country_code || 'GB'
+        })
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || `Delete failed (HTTP ${res.status})`);
+      }
+      if (globalSearch.trim()) {
+        await runGlobalSearch(globalSearch);
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Failed to delete brand');
+      await load();
+    } finally {
+      setDeletingChainId(null);
     }
   };
 
@@ -933,7 +997,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose }: Nutrition
                             <button
                               type="button"
                               disabled={busy || deletingItemId === itemKey || deletingItemId === item.dish_name_key}
-                              onClick={() => deleteItem(item)}
+                              onClick={(e) => deleteItem(item, e)}
                               className={`px-2 py-1 flex items-center gap-1 rounded transition-colors ${
                                 deletingItemId === itemKey || deletingItemId === item.dish_name_key
                                   ? 'bg-rose-600 text-white cursor-wait font-bold'
@@ -1034,7 +1098,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose }: Nutrition
                   const key = s.chain_key;
                   const isExpanded = !!expandedChains[key];
                   return (
-                    <div key={s.id || s.chain_key} className="p-3 space-y-1.5 text-white transition-all">
+                    <div key={key || s.id} className="p-3 space-y-1.5 text-white transition-all">
                       {editingChainId === s.id ? (
                       <div className="space-y-3 text-left animate-fadeIn" onClick={(e) => e.stopPropagation()}>
                         <div className="grid grid-cols-2 gap-2">
@@ -1126,6 +1190,33 @@ export default function NutritionDataBrowserModal({ isOpen, onClose }: Nutrition
                               title="Edit Branded Food / Restaurant"
                             >
                               <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy || deletingChainId === (s.id || key)}
+                              onClick={(e) => deleteChainSource(s, e)}
+                              className={`px-1.5 py-1 flex items-center gap-1 rounded transition-colors ${
+                                deletingChainId === (s.id || key)
+                                  ? 'bg-rose-600 text-white cursor-wait font-bold'
+                                  : confirmDeleteChainId === (s.id || key)
+                                  ? 'bg-rose-500 text-white font-bold'
+                                  : 'hover:bg-rose-500/25 text-rose-300 hover:text-rose-200'
+                              } disabled:opacity-50`}
+                              title="Delete brand and all associated menu items"
+                            >
+                              {deletingChainId === (s.id || key) ? (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+                                  <span className="text-[10px] font-bold">Deleting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                                  {confirmDeleteChainId === (s.id || key) && (
+                                    <span className="text-[10px] font-bold">Confirm?</span>
+                                  )}
+                                </>
+                              )}
                             </button>
                             <button type="button" className="p-1 rounded hover:bg-white/10 text-white/75" onClick={() => toggleChainExpand(key)}>
                               {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -1348,7 +1439,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose }: Nutrition
                                     <button
                                       type="button"
                                       disabled={busy || deletingItemId === item.dish_name_key || deletingItemId === `${key}:${item.dish_name_key}`}
-                                      onClick={() => deleteItem(item)}
+                                      onClick={(e) => deleteItem(item, e)}
                                       className={`px-2 py-1 flex items-center gap-1 rounded transition-colors ${
                                         deletingItemId === item.dish_name_key || deletingItemId === `${key}:${item.dish_name_key}`
                                           ? 'bg-rose-600 text-white cursor-wait font-bold'

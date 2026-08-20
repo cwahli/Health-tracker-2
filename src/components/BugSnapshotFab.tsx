@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, X, Plus, Trash2, Bug, Loader, Check, ImagePlus, CheckCircle2, Sparkles, Utensils } from 'lucide-react';
+import { Camera, X, Plus, Trash2, Bug, Loader, Check, ImagePlus, CheckCircle2, Sparkles, Utensils, AlertCircle, MessageSquare } from 'lucide-react';
 import {
   isBugSnapshotEnabled,
   setBugSnapshotEnabled,
@@ -131,7 +131,8 @@ export async function resolveDisplayableImage(ref: unknown): Promise<string | nu
   return null;
 }
 
-export function getCategoryForTab(tab?: string): BugCategory {
+export function getCategoryForTab(tab?: string, viewingJobId?: string | null): BugCategory {
+  if (isAnyMealModalOpen(viewingJobId, tab)) return 'foodcart';
   if (!tab) return 'Home';
   const lower = tab.toLowerCase();
   if (lower === 'home') return 'Home';
@@ -232,7 +233,7 @@ export default function BugSnapshotFab({
   const [snapshotType, setSnapshotType] = useState<'bug' | 'meal'>('bug');
   const [goldenTitle, setGoldenTitle] = useState('');
   const [shots, setShots] = useState<string[]>([]);
-  const [category, setCategory] = useState<BugCategory>(getCategoryForTab(activeTab));
+  const [category, setCategory] = useState<BugCategory>(getCategoryForTab(activeTab, viewingJobId));
   const [tagId, setTagId] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [symptom, setSymptom] = useState('');
@@ -277,10 +278,10 @@ export default function BugSnapshotFab({
   // Update pre-selected category whenever activeTab changes if modal is not currently open
   useEffect(() => {
     if (!open) {
-      setCategory(getCategoryForTab(activeTab));
+      setCategory(getCategoryForTab(activeTab, viewingJobId));
     }
     if (activeTab) recordTabInteraction(activeTab);
-  }, [activeTab, open]);
+  }, [activeTab, open, viewingJobId]);
 
   // Restore draft when opening
   useEffect(() => {
@@ -299,9 +300,6 @@ export default function BugSnapshotFab({
     if (draft.symptom) {
       const cleaned = stripStaleStallLines(draft.symptom);
       if (cleaned) setSymptom(cleaned);
-    }
-    if (Array.isArray(draft.shots) && draft.shots.length && draft.shots[0]?.startsWith('data:image')) {
-      setShots((prev) => (prev.length ? prev : draft.shots!.filter((s) => s.startsWith('data:image'))));
     }
   }, [open]);
 
@@ -427,9 +425,13 @@ export default function BugSnapshotFab({
       for (const f of toProcess) {
         const dataUrl = await compressImage(f, 1280, 1280, 0.8);
         const webp = await compressToWebpOrJpeg(dataUrl, 1280, 0.8);
-        newShots.push(webp);
+        if (webp && !shots.includes(webp) && !newShots.includes(webp)) {
+          newShots.push(webp);
+        }
       }
-      setShots((s) => [...s, ...newShots].slice(0, BUG_SNAPSHOT_MAX_SHOTS));
+      if (newShots.length > 0) {
+        setShots((s) => [...s, ...newShots.filter((x) => !s.includes(x))].slice(0, BUG_SNAPSHOT_MAX_SHOTS));
+      }
     } catch (e: any) {
       setError(e?.message || 'Failed to read image(s)');
     }
@@ -443,11 +445,13 @@ export default function BugSnapshotFab({
 
     setSnapshotType(initialMode);
     setSaveAsGolden(initialMode === 'meal');
-    const cat = getCategoryForTab(activeTab);
+    const cat = modalOpen ? 'foodcart' : getCategoryForTab(activeTab, modalJobId);
     setCategory(cat);
     setError(null);
     setSuccess(null);
     setCapturing(true);
+    setShots([]);
+    clearBugSnapshotDraft();
 
     // Extract active job context (captured meal processing problems + meal photo)
     const jobs = typeof JobStore?.getAllJobs === 'function' ? JobStore.getAllJobs() : [];
@@ -495,20 +499,6 @@ export default function BugSnapshotFab({
     const jobPhotos: string[] = [];
     if (activeJob && cat === 'foodcart') {
       try {
-        if (activeJob.id) {
-          const idbImages = await ImageStore.getImages(activeJob.id);
-          for (const img of idbImages) {
-            const resolved = await resolveDisplayableImage(img);
-            if (resolved && !jobPhotos.includes(resolved)) {
-              jobPhotos.push(resolved);
-            }
-          }
-        }
-      } catch {
-        /* fallback to fixture photos */
-      }
-
-      try {
         const fx = await collectOriginalFixture(activeJob);
         for (const p of fx.photos) {
           const resolved = await resolveDisplayableImage(p);
@@ -532,10 +522,7 @@ export default function BugSnapshotFab({
     }
 
     if (jobPhotos.length > 0) {
-      setShots((s) => {
-        const combined = [...jobPhotos, ...s.filter((x) => !jobPhotos.includes(x))];
-        return combined.slice(0, BUG_SNAPSHOT_MAX_SHOTS);
-      });
+      setShots(jobPhotos.slice(0, BUG_SNAPSHOT_MAX_SHOTS));
     }
 
     const modal = typeof document !== 'undefined'
@@ -561,7 +548,7 @@ export default function BugSnapshotFab({
           }
           lastCaptureLenRef.current = webp.length;
           lastCaptureKeyRef.current = captureKey;
-          setShots((s) => [webp, ...s.filter((x) => x !== webp)].slice(0, BUG_SNAPSHOT_MAX_SHOTS));
+          setShots([webp, ...jobPhotos].slice(0, BUG_SNAPSHOT_MAX_SHOTS));
         }
       } catch {
         /* meal photo already attached if we had one */
@@ -570,6 +557,12 @@ export default function BugSnapshotFab({
       }
     };
     window.setTimeout(run, 0);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setShots([]);
+    clearBugSnapshotDraft();
   };
 
   const handleCaptureScreen = () => {
@@ -1079,7 +1072,7 @@ export default function BugSnapshotFab({
                 <button
                   type="button"
                   title="Close"
-                  onClick={() => setOpen(false)}
+                  onClick={handleClose}
                   className="p-2 rounded-xl hover:bg-white/10 border border-white/10"
                 >
                   <X className="w-5 h-5" />
@@ -1292,10 +1285,65 @@ export default function BugSnapshotFab({
                       if (!selectedTag) return null;
                       const item = hydrateWorkItem(selectedTag);
                       const pub = publicId(item, selectedTag.id);
+
+                      const pinnedBug = (item.bug || selectedTag.pinned_instruction || '').trim();
+                      const identifiedProblem = (
+                        selectedTag.identified_problems ||
+                        selectedTag.description ||
+                        selectedTag.symptom ||
+                        selectedTag.notes ||
+                        selectedTag.user_note ||
+                        ''
+                      ).trim();
+
+                      const remainingItems = (item.remaining || []).filter(
+                        (r: string) => r && r.trim() && r.trim() !== selectedTag.title && r.trim() !== pinnedBug
+                      );
+
+                      const commitNotes = (item.commits || [])
+                        .map((c: any) => {
+                          const text = c?.summary || c?.note || c?.attempt?.note;
+                          const clean = String(text || '').replace(/^\[snapshot\]\s*/i, '').trim();
+                          if (!clean || clean === 'snapshot' || clean === selectedTag.title || clean === pinnedBug || clean === identifiedProblem) {
+                            return null;
+                          }
+                          return {
+                            text: clean,
+                            at: c?.at
+                              ? new Date(c.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                              : '',
+                          };
+                        })
+                        .filter(Boolean) as { text: string; at: string }[];
+
+                      const commentsList = (Array.isArray(selectedTag.comments) ? selectedTag.comments : [])
+                        .map((c: any) => {
+                          const text = String(c?.body || '').replace(/^\[snapshot\]\s*/i, '').trim();
+                          if (!text || text === selectedTag.title || text === pinnedBug || text === identifiedProblem) {
+                            return null;
+                          }
+                          return {
+                            text,
+                            at: c?.created_at
+                              ? new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                              : '',
+                          };
+                        })
+                        .filter(Boolean) as { text: string; at: string }[];
+
+                      const allHistoryNotes: { text: string; at: string }[] = [];
+                      const seenTexts = new Set<string>();
+                      for (const n of [...commitNotes, ...commentsList]) {
+                        if (!seenTexts.has(n.text)) {
+                          seenTexts.add(n.text);
+                          allHistoryNotes.push(n);
+                        }
+                      }
+
                       return (
-                        <div className="p-3 rounded-xl border border-violet-500/40 bg-violet-950/40 space-y-2 text-xs text-violet-100">
-                          <div className="flex items-center justify-between gap-2 border-b border-violet-500/20 pb-1.5">
-                            <span className="font-bold text-violet-300 flex items-center gap-1.5">
+                        <div className="p-3.5 rounded-xl border border-violet-500/40 bg-violet-950/40 space-y-2.5 text-xs text-violet-100 shadow-md">
+                          <div className="flex items-center justify-between gap-2 border-b border-violet-500/20 pb-2">
+                            <span className="font-bold text-violet-300 flex items-center gap-1.5 text-xs">
                               <Bug className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                               Attaching to Open {pub}: {selectedTag.title}
                             </span>
@@ -1303,12 +1351,55 @@ export default function BugSnapshotFab({
                               Queue: {item.queue || selectedTag.status || 'ready'}
                             </span>
                           </div>
-                          {item.bug ? (
-                            <div className="text-[11px] text-white/95 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto bg-black/40 p-2 rounded-lg border border-white/10">
-                              <span className="font-bold text-amber-300">Pinned Bug: </span>
-                              {item.bug}
+
+                          {pinnedBug ? (
+                            <div className="text-[11px] text-white/95 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto bg-black/40 p-2.5 rounded-lg border border-white/10 space-y-1">
+                              <div className="flex items-center gap-1 font-bold text-amber-300 text-[11px]">
+                                <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+                                <span>Pinned Bug:</span>
+                              </div>
+                              <p className="text-white/95">{pinnedBug}</p>
                             </div>
                           ) : null}
+
+                          {identifiedProblem && identifiedProblem !== pinnedBug ? (
+                            <div className="text-[11px] text-white/95 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto bg-black/40 p-2.5 rounded-lg border border-amber-500/30 space-y-1">
+                              <div className="flex items-center gap-1 font-bold text-amber-400 text-[11px]">
+                                <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
+                                <span>Identified Problem / User Context:</span>
+                              </div>
+                              <p className="text-white/90">{identifiedProblem}</p>
+                            </div>
+                          ) : null}
+
+                          {remainingItems.length > 0 && (
+                            <div className="text-[11px] bg-black/30 p-2 rounded-lg border border-white/10 space-y-1">
+                              <span className="font-semibold text-purple-300 block text-[10px] uppercase tracking-wider">Remaining Unfixed Items:</span>
+                              <ul className="list-disc list-inside space-y-0.5 text-white/80">
+                                {remainingItems.map((r: string, idx: number) => (
+                                  <li key={idx} className="leading-snug">{r}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {allHistoryNotes.length > 0 && (
+                            <div className="text-[10px] bg-black/30 p-2 rounded-lg border border-white/10 space-y-1 max-h-32 overflow-y-auto">
+                              <span className="font-semibold text-purple-300 flex items-center gap-1">
+                                <MessageSquare className="w-3 h-3 text-purple-400 shrink-0" />
+                                <span>Previous Loop & Snapshot Notes ({allHistoryNotes.length}):</span>
+                              </span>
+                              <div className="space-y-1 pt-0.5">
+                                {allHistoryNotes.slice(-4).map((c, idx) => (
+                                  <div key={idx} className="pl-2 border-l-2 border-purple-500/40 text-slate-300 leading-snug">
+                                    <span className="text-white/90">{c.text}</span>
+                                    {c.at && <span className="text-white/40 ml-1.5 font-mono text-[9px]">({c.at})</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           <p className="text-[10px] text-white/60">
                             Snapshot will be appended as a new commit. Pinned bug instruction and previous loop commits will be preserved.
                           </p>
@@ -1620,7 +1711,7 @@ export default function BugSnapshotFab({
               <div className="p-3 border-t border-white/10 flex gap-2 justify-end shrink-0">
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={handleClose}
                   className="px-3 py-2 rounded-xl bg-slate-700 text-xs font-bold"
                 >
                   Cancel

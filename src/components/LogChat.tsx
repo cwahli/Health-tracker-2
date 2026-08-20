@@ -4534,7 +4534,7 @@ ${logsText}`);
           }
         };
         setMessages(prev => [
-          ...prev.filter(m => !m.isLive),
+          ...prev.filter(m => !m.isLive && !m.isError && !m.agentUnavailable && !/Failed to process your request|Analysis failed|Vision Scout Failed|Gemini unavailable|rate limit|quota exceeded|quota \(\d+\)|503|429|Service Unavailable/i.test(m.content || '')),
           errMsg
         ]);
         if (onGoToManualEdit && !isTimeout && !isQuota) {
@@ -4544,7 +4544,7 @@ ${logsText}`);
         }
       } else {
         setMessages(prev => [
-          ...prev.filter(m => !m.isLive),
+          ...prev.filter(m => !m.isLive && !m.isError && !m.agentUnavailable && !/Failed to process your request|Analysis failed|Vision Scout Failed|Gemini unavailable|rate limit|quota exceeded|quota \(\d+\)|503|429|Service Unavailable/i.test(m.content || '')),
           {
             id: `msg_err_${Date.now()}`,
             role: 'assistant',
@@ -5787,24 +5787,78 @@ ${logsText}`);
                       })()}
 
                       {(() => {
+                        const isLatestAssistant = !messages.slice(idx + 1).some(m => m.role === 'assistant');
                         const targetJobId = (msg.id?.startsWith('msg_assistant_job_') ? msg.id.replace('msg_assistant_', '') : '') || (msg.id?.startsWith('msg_assistant_') ? msg.id.replace('msg_assistant_', '') : '') || msg.data?.jobId || jobId;
                         const debugUrl = msg.data?.debugUrl || (targetJobId ? JobStore.getJob(targetJobId)?.result?.debugUrl : undefined) || (jobId ? JobStore.getJob(jobId)?.result?.debugUrl : undefined);
-                        if (!debugUrl && !targetJobId) return null;
+                        const isErrorMsg = msg.isError || msg.agentUnavailable || /Failed to process your request|Analysis failed|Vision Scout Failed|Gemini unavailable|rate limit|quota exceeded|quota \(\d+\)|503|429|Service Unavailable|Error:/i.test(msg.content || '');
+
+                        if ((!debugUrl && !targetJobId && !isErrorMsg) || (!isLatestAssistant && isErrorMsg)) return null;
                         return (
-                          <div className="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (targetJobId) {
-                                  handleDownloadDebug(targetJobId, msg);
-                                }
-                              }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
-                              title="Download complete raw debug logs from Cloudflare R2"
-                            >
-                              <Download className="w-3.5 h-3.5 text-indigo-500" />
-                              <span>Download Debug Logs</span>
-                            </button>
+                          <div className="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-800 flex flex-wrap items-center gap-2">
+                            {isErrorMsg && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const lastUserMsg = [...messages].reverse().find(m => m.role === 'user' && m.id < msg.id) || [...messages].reverse().find(m => m.role === 'user');
+                                  setMessages(prev => prev.filter(m => !m.isError && !m.agentUnavailable && !/Failed to process your request|Analysis failed|Vision Scout Failed|Gemini unavailable|rate limit|quota exceeded|quota \(\d+\)|503|429|Service Unavailable/i.test(m.content || '')));
+                                  if (targetJobId) {
+                                    const existingJob = JobStore.getJob(targetJobId);
+                                    JobStore.updateJob(targetJobId, {
+                                      status: 'queued',
+                                      error: undefined,
+                                      retryNotBefore: undefined,
+                                      clientSubmitPending: false,
+                                      statusMessage: `Retrying with ${AVAILABLE_LLMS.find(m => m.id === selectedModelId)?.name || selectedModelId}...`,
+                                      inputSnapshot: {
+                                        ...(existingJob?.inputSnapshot || { text: '', imageRefs: [] }),
+                                        modelId: selectedModelId,
+                                        engine: selectedModelId
+                                      }
+                                    });
+                                    JobQueueRunner.wake();
+                                  }
+                                  if (lastUserMsg) {
+                                    handleSend({
+                                      text: lastUserMsg.content,
+                                      imageUrls: lastUserMsg.imageUrls || (lastUserMsg.imageUrl ? [lastUserMsg.imageUrl] : []),
+                                      overrideMode: msg.data?.userSelectedMode || lastUserMsg?.data?.userSelectedMode || userSelectedMode
+                                    });
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all cursor-pointer"
+                                title={`Retry analysis with ${AVAILABLE_LLMS.find(m => m.id === selectedModelId)?.name || selectedModelId}`}
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>Retry ({AVAILABLE_LLMS.find(m => m.id === selectedModelId)?.name || selectedModelId})</span>
+                              </button>
+                            )}
+                            {isErrorMsg && (
+                              <button
+                                type="button"
+                                onClick={() => setIsEngineSelectorOpen(prev => !prev)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/40 transition-all cursor-pointer"
+                                title="Change model / agent to retry"
+                              >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>Switch Agent</span>
+                                <ChevronDown className="w-3 h-3" />
+                              </button>
+                            )}
+                            {(debugUrl || targetJobId) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (targetJobId) {
+                                    handleDownloadDebug(targetJobId, msg);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                                title="Download complete raw debug logs from Cloudflare R2"
+                              >
+                                <Download className="w-3.5 h-3.5 text-indigo-500" />
+                                <span>Download Debug Logs</span>
+                              </button>
+                            )}
                           </div>
                         );
                       })()}
@@ -5812,117 +5866,9 @@ ${logsText}`);
                     </div>
                   </div>
 
-                    {msg.agentUnavailable && (
-                      <div className="mt-3 flex flex-col gap-3">
-                        {msg.data?.scoutItems && msg.data.scoutItems.length > 0 && (
-                          <div className="mb-2">
-                            <NutritionLabelTable activeScoutItems={msg.data.scoutItems} />
-                          </div>
-                        )}
-                        <div className="flex flex-wrap gap-2">
-                          {msg.data?.scoutItems && msg.data.scoutItems.length > 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const lastUserMsg = [...messages].reverse().find(m => m.role === 'user' && m.id < msg.id);
-                                const retryMode = msg.data?.userSelectedMode || lastUserMsg?.data?.userSelectedMode || userSelectedMode;
-                                if (lastUserMsg) {
-                                  handleSend({
-                                    text: lastUserMsg.content,
-                                    imageUrls: lastUserMsg.imageUrls || (lastUserMsg.imageUrl ? [lastUserMsg.imageUrl] : []),
-                                    skipScout: true,
-                                    activeScoutItems: msg.data.scoutItems,
-                                    scoutContentType: msg.data.scoutContentType,
-                                    overrideMode: retryMode
-                                  });
-                                }
-                              }}
-                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md flex items-center gap-1.5"
-                            >
-                              <RefreshCw className="w-4 h-4" />
-                              Retry (Scout complete)
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const lastUserMsg = [...messages].reverse().find(m => m.role === 'user' && m.id < msg.id);
-                                const retryMode = msg.data?.userSelectedMode || lastUserMsg?.data?.userSelectedMode || userSelectedMode;
-                                if (lastUserMsg) {
-                                  handleSend({
-                                    text: lastUserMsg.content,
-                                    imageUrls: lastUserMsg.imageUrls || (lastUserMsg.imageUrl ? [lastUserMsg.imageUrl] : []),
-                                    overrideMode: retryMode
-                                  });
-                                }
-                              }}
-                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md flex items-center gap-1.5"
-                            >
-                              <RefreshCw className="w-4 h-4" />
-                              Retry
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (onGoToManualEdit) {
-                                onGoToManualEdit("The AI agent is not available. Please enter the food details manually.");
-                              }
-                            }}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md flex items-center gap-1.5"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                            Go to Manual Edit
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {msg.isError && (
-                      <div className="mt-3 p-4 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-3">
-                        <div className="flex items-start gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                          <div className="space-y-1">
-                            <h5 className="text-xs font-bold text-amber-700 dark:text-amber-400">
-                              Service Unavailable
-                            </h5>
-                            <p className="text-[11px] text-theme-text-secondary font-medium leading-relaxed font-sans">
-                              The AI Service is currently experiencing transient spikes in demand. You can seamlessly bypass this error and proceed to the next agent.
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex flex-col sm:flex-row gap-2 font-sans">
-                          {jobId && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                JobStore.updateJob(jobId, {
-                                  status: 'queued',
-                                  retryNotBefore: undefined,
-                                  error: undefined,
-                                  clientSubmitPending: false,
-                                  statusMessage: 'Retrying analysis...'
-                                });
-                                JobQueueRunner.wake();
-                              }}
-                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                            >
-                              <RotateCcw className="w-3.5 h-3.5" />
-                              Retry Analysis
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onClose();
-                            }}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                          >
-                            <ShieldAlert className="w-3.5 h-3.5" />
-                            Close Chat
-                          </button>
-                        </div>
+                    {msg.agentUnavailable && msg.data?.scoutItems && msg.data.scoutItems.length > 0 && (
+                      <div className="mt-3 mb-2">
+                        <NutritionLabelTable activeScoutItems={msg.data.scoutItems} />
                       </div>
                     )}
 

@@ -902,6 +902,55 @@ export function registerBrandMenuRoutes(app: Express) {
     }
   });
 
+  /** Delete a chain menu source and cascade-delete its items */
+  app.post('/api/chain-menu-sources/delete', async (req: Request, res: Response) => {
+    try {
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const id = req.body?.id;
+      const chain_key = String(req.body?.chain_key || '').trim().toLowerCase();
+      const country_code = String(req.body?.country_code || 'GB');
+
+      if (!id && !chain_key) {
+        return res.status(400).json({ error: 'id or chain_key is required' });
+      }
+
+      // 1. Delete from chain_menu_sources
+      if (id) {
+        await supabaseAdmin.from('chain_menu_sources').delete().eq('id', id);
+      }
+      if (chain_key) {
+        await supabaseAdmin.from('chain_menu_sources').delete().eq('chain_key', chain_key);
+        // 2. Cascade delete all brand_menu_items for this chain_key
+        await supabaseAdmin
+          .from('brand_menu_items')
+          .delete()
+          .eq('chain_key', chain_key);
+      }
+
+      // 3. Clean up local fallback storage if present
+      if (chain_key) {
+        const all = loadLocalItems();
+        const filtered = all.filter((it: any) => it.chain_key !== chain_key);
+        if (filtered.length !== all.length) {
+          saveLocalItems(filtered);
+        }
+      }
+
+      res.json({ success: true, chain_key, id });
+    } catch (err: any) {
+      console.error('[chain_menu_sources/delete] error:', err);
+      const chain_key = String(req.body?.chain_key || '').trim().toLowerCase();
+      if (chain_key) {
+        const all = loadLocalItems();
+        const filtered = all.filter((it: any) => it.chain_key !== chain_key);
+        if (filtered.length !== all.length) {
+          saveLocalItems(filtered);
+        }
+      }
+      res.json({ success: true, fallback: true });
+    }
+  });
+
   app.get('/api/brand-menu-items', async (req: Request, res: Response) => {
     const chain_key = String(req.query.chain_key || '').trim().toLowerCase();
     const country_code = String(req.query.country_code || 'GB');

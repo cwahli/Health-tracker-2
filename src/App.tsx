@@ -3537,7 +3537,10 @@ export default function App() {
   useEffect(() => {
     if (isAuthChecking || syncState === 'syncing' || syncState === 'conflict') return;
     if (profile && profile.weight && profile.height && !profile.bmiAutoLogged) {
-      const hasBmiInHistory = biomarkerHistory.some(h => h.biomarkers && h.biomarkers.bmi !== undefined);
+      if (profile.deletedCustomBiomarkerKeys?.bmi || (profile.deletedBiomarkerLogIds && Object.keys(profile.deletedBiomarkerLogIds).some(id => id.includes('bmi')))) {
+        return;
+      }
+      const hasBmiInHistory = biomarkerHistory.some(h => h.biomarkers && h.biomarkers.bmi !== undefined && h.sync_state !== 'delete');
       const hasBmiInBiomarkers = biomarkers.bmi !== undefined;
       if (!hasBmiInHistory || !hasBmiInBiomarkers) {
         const heightInMeters = Number(profile.height) / 100;
@@ -5033,6 +5036,11 @@ export default function App() {
       modifiedProfile = true;
     }
 
+    // Explicitly record BMI suppression so auto-log does not re-inject it on sync
+    updatedProfile.bmiAutoLogged = true;
+    updatedProfile.deletedCustomBiomarkerKeys = mergeDeleteMaps(updatedProfile.deletedCustomBiomarkerKeys, { bmi: Date.now() });
+    modifiedProfile = true;
+
     // Recompute the biomarkers state
     // NOTE: Do NOT delete profile.customBiomarkers or write deletedCustomBiomarkerKeys here.
     // Unused dictionary definitions are not "empty biomarkers" — wiping them strips custom categorisations
@@ -5078,7 +5086,11 @@ export default function App() {
     
     let updatedProfile = profile ? {
       ...profile,
-      deletedBiomarkerLogIds: mergeDeleteMaps(profile.deletedBiomarkerLogIds, { [id]: now })
+      deletedBiomarkerLogIds: mergeDeleteMaps(profile.deletedBiomarkerLogIds, { [id]: now }),
+      ...(id.includes('bmi') || existingLog?.biomarkers?.bmi !== undefined ? {
+        bmiAutoLogged: true,
+        deletedCustomBiomarkerKeys: mergeDeleteMaps(profile.deletedCustomBiomarkerKeys, { bmi: now })
+      } : {})
     } : null;
     if (updatedProfile) {
       setProfile(updatedProfile);
@@ -5124,15 +5136,25 @@ export default function App() {
       });
       setBiomarkerHistory(updatedHistory);
       
+      let updatedProfile = profile;
+      if (canonicalKeyToDelete === 'bmi' || key.toLowerCase() === 'bmi') {
+        updatedProfile = profile ? {
+          ...profile,
+          bmiAutoLogged: true,
+          deletedCustomBiomarkerKeys: mergeDeleteMaps(profile.deletedCustomBiomarkerKeys, { bmi: now })
+        } : null;
+        if (updatedProfile) setProfile(updatedProfile);
+      }
+
       const recomputedBiomarkers: { [key: string]: number | string } = {};
-      [...updatedHistory].filter(b => b.sync_state !== 'delete' && !(profile?.deletedBiomarkerLogIds?.[b.id] && (profile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0))).sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
+      [...updatedHistory].filter(b => b.sync_state !== 'delete' && !(updatedProfile?.deletedBiomarkerLogIds?.[b.id] && (updatedProfile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0))).sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
         Object.entries(log.biomarkers).forEach(([k, v]) => {
           recomputedBiomarkers[k] = v as string | number;
         });
       });
       setBiomarkers(recomputedBiomarkers);
       
-      await saveAndSync(profile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog', targetId: id });
+      await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog', targetId: id });
     } else {
       await handleDeleteBiomarkerLog(id);
     }

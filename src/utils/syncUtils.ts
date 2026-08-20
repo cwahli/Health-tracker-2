@@ -1120,6 +1120,7 @@ export function mergeProfiles(cloudProfile: UserProfile | null, localProfile: Us
     notUsedBiomarkers,
     deletedNotUsedBiomarkerKeys,
     deletedDailyBenefitIds,
+    bmiAutoLogged: (primary.bmiAutoLogged !== undefined ? primary.bmiAutoLogged : secondary.bmiAutoLogged) ?? false,
     actions,
     dailyBenefits,
     ...(Object.keys(targets).length > 0 ? { targets } : {}),

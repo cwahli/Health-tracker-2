@@ -5408,6 +5408,26 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         );
       }
 
+      // 2b. Try local canonical base food dictionary before untrusted web search
+      if (!webMatchRaw) {
+        const canonicalBase = lookupCanonicalBaseFood(item.originalName || item.keyword || '');
+        if (canonicalBase) {
+          webMatchRaw = {
+            dish_name: item.originalName || item.keyword,
+            source: 'canonical_dict',
+            calories: canonicalBase.calories,
+            protein: canonicalBase.protein,
+            carbohydrates: canonicalBase.carbohydrates,
+            totalFat: canonicalBase.totalFat,
+            saturatedFat: canonicalBase.saturatedFat,
+            sodium: canonicalBase.sodium,
+            sugar: canonicalBase.sugar,
+            totalFibre: canonicalBase.totalFibre,
+            fdcId: canonicalBase.fdcId
+          };
+        }
+      }
+
       // 3. Fallback to web search sources if no canonical DB match was found
       if (!webMatchRaw) {
         webMatchRaw = databaseMatchesArray.find((m: any) => 
@@ -14382,7 +14402,19 @@ app.post('/admin/migrate', async (req, res) => {
   } else {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        watch: {
+          ignored: [
+            '**/brand_menu_items_local.json',
+            '**/tests/**',
+            '**/studio/**',
+            '**/archive/**',
+            '**/*.log',
+            '**/tmp/**'
+          ]
+        }
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
