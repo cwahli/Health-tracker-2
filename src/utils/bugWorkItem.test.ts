@@ -4,13 +4,18 @@ import {
   appendEvidenceCommit,
   assignMissingPublicNs,
   assignPublicN,
+  buildContinueJob,
   buildStartPayload,
   applySnapRemaining,
   emptyWorkItem,
   fingerprint,
+  formatContinuePrompt,
+  inferLineClass,
   linePhotosForText,
   hydrateWorkItem,
   isBurned,
+  matchRemainingLine,
+  pickContinueTag,
   prefillBug,
   sortReadyQueue,
   BURN_BUDGET,
@@ -94,7 +99,7 @@ describe('bugWorkItem Q-6', () => {
       actor: 'studio',
     });
     expect(a1.item.burns).toHaveLength(1);
-    expect(a1.item.queue).toBe('ready');
+    expect(a1.item.queue).toBe('in_progress');
     expect(isBurned(a1.item.burns, 'tesco includes()', 'FoodCard.tsx', 'NutritionLabelTable brand')).toBe(true);
 
     const again = applyAttempt(a1.item, {
@@ -175,6 +180,8 @@ describe('bugWorkItem Q-6', () => {
     expect(start.now.tried[0]).toMatch(/DO NOT RETRY/);
     expect(start.now.burns_used).toBe('1/2');
     expect(start.how_to_end).toContain('/attempts');
+    expect(start.continue.active_line).toBe('no label table');
+    expect(start.how_to_end).toMatch(/line/);
   });
 
   it('green-tick status=fixed wins over a leftover ready queue', () => {
@@ -216,5 +223,107 @@ describe('bugWorkItem Q-6', () => {
     });
     expect(next.remaining).toEqual(['yolk bind', 'croissant pack 6 vs 1']);
     expect(linePhotosForText(next.current_evidence, 'croissant pack 6 vs 1')?.photo_urls?.[0]).toMatch(/shot-02/);
+  });
+
+  it('continue job is the first remaining line, not the whole meal', () => {
+    const tag = {
+      id: 'tag-11',
+      title: 'Fruit Salad + Croissant + 3 more',
+      work_item: {
+        public_n: 11,
+        remaining: ['berries share 171711', 'gherkin fallback 150', 'dropped red onion'],
+        done: [],
+        burns: [],
+        commits: [],
+        queue: 'ready',
+      },
+    };
+    const job = buildContinueJob(tag);
+    expect(job.stop).toBe(false);
+    expect(job.active_line).toBe('berries share 171711');
+    expect(job.class_hint).toBe('FALSE_FRIEND');
+    expect(job.next_if_pass).toBe('gherkin fallback 150');
+    expect(job.do_not.some((d) => /CANONICAL_BASE_FOODS/.test(d))).toBe(true);
+    const prompt = formatContinuePrompt(job);
+    expect(prompt).toMatch(/full instruction/i);
+    expect(prompt).toMatch(/GET \/api\/bugs\/next/);
+    expect(prompt).toMatch(/ONLY continue.active_line/i);
+    expect(prompt).toMatch(/do not wait for another file/i);
+    expect(prompt).not.toMatch(/Check this bug and fix it/);
+    expect(prompt).not.toMatch(/BUG_CONTINUE_GEMINI/);
+  });
+
+  it('pass with line moves that remaining row to done and keeps the card open', () => {
+    const open = hydrateWorkItem({
+      work_item: {
+        public_n: 11,
+        remaining: ['berries share 171711', 'gherkin fallback 150'],
+        done: [],
+        queue: 'ready',
+      },
+    });
+    const next = applyAttempt(open, {
+      hyp: 'berry catch-all steals strawberry',
+      file: 'server_food_db.ts',
+      test: 'sibling berries do not share canonical id',
+      result: 'pass',
+      burned: false,
+      line: 'berries share 171711',
+    });
+    expect(next.advanced_line).toBe('berries share 171711');
+    expect(next.item.remaining).toEqual(['gherkin fallback 150']);
+    expect(next.item.done).toEqual(['berries share 171711']);
+    expect(next.item.queue).toBe('in_progress');
+    const cont = buildContinueJob({ id: 'tag-11', work_item: next.item, title: 'picnic' });
+    expect(cont.active_line).toBe('gherkin fallback 150');
+    expect(cont.stop).toBe(false);
+  });
+
+  it('last remaining pass does not mark the card done', () => {
+    const open = hydrateWorkItem({
+      work_item: { remaining: ['dropped red onion'], done: [], queue: 'in_progress' },
+    });
+    const next = applyAttempt(open, {
+      hyp: 'restore onion from visualIngredients',
+      file: 'server_vision_scout.ts',
+      test: 'new salad garnish is not dropped',
+      result: 'pass',
+      burned: false,
+      line: 'dropped red onion',
+    });
+    expect(next.item.remaining).toEqual([]);
+    expect(next.item.done).toEqual(['dropped red onion']);
+    expect(next.item.queue).toBe('in_progress');
+    const cont = buildContinueJob({ id: 't', work_item: next.item });
+    expect(cont.stop).toBe(true);
+    expect(cont.say).toMatch(/remaining is empty/i);
+  });
+
+  it('pickContinueTag prefers in_progress remaining over another ready card', () => {
+    const tags = [
+      {
+        id: 'bmi',
+        created_at: '2026-08-01',
+        work_item: { queue: 'ready', remaining: ['bmi reinit'], occurrences: 99, burns: [], commits: [] },
+      },
+      {
+        id: 'picnic',
+        created_at: '2026-08-10',
+        work_item: {
+          queue: 'in_progress',
+          remaining: ['gherkin fallback 150'],
+          occurrences: 1,
+          burns: [],
+          commits: [{ id: 'c1', at: '2026-08-21T12:00:00.000Z', actor: 'gemini', kind: 'agent', summary: 'done: berries' }],
+        },
+      },
+    ];
+    expect(pickContinueTag(tags)?.id).toBe('picnic');
+  });
+
+  it('infers class from remaining text', () => {
+    expect(inferLineClass('CURATOR_SKIP pick_existing')).toBe('OPENING_WRONG');
+    expect(inferLineClass('SIBLING_ID_COLLISION 171711')).toBe('FALSE_FRIEND');
+    expect(matchRemainingLine(['berries share 171711', 'gherkin'], '171711')).toBe('berries share 171711');
   });
 });

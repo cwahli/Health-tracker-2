@@ -38,6 +38,8 @@ import {
   hydrateWorkItem,
   linePhotosForText,
   publicId,
+  buildContinueJob,
+  formatContinuePrompt,
   sortReadyQueue,
   getLastActionedDate,
   sortByLastActioned,
@@ -52,13 +54,15 @@ import {
 } from '../utils/bugWorkItem';
 import { queueKpis, tagIsFixed } from '../utils/bugQueueKpis';
 import { FoodDetailTabs } from './bugQueue';
+import { buildTapeReplayBody, reanalyzeJobId } from '../utils/bugTapeReplay';
 
 interface BugTrackerModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onViewJob?: (jobId: string) => void;
 }
 
-export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProps) {
+export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrackerModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<{
@@ -120,6 +124,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
   const [zippingTagId, setZippingTagId] = useState<string | null>(null);
   const [makingGoldenId, setMakingGoldenId] = useState<string | null>(null);
   const [replayingLogId, setReplayingLogId] = useState<string | null>(null);
+  const [replayingCatalogId, setReplayingCatalogId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
@@ -391,6 +396,65 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
     }
   };
 
+  const handleReplayCatalog = async (tag: any) => {
+    if (!tag) return;
+    setReplayingCatalogId(tag.id);
+    try {
+      const detail = selectedTagDetail;
+      const ev =
+        detail?.now?.current_evidence ||
+        detail?.bug?.current_evidence ||
+        tag?.now?.current_evidence ||
+        tag?.current_evidence ||
+        {};
+      const board = (detail as any)?.board;
+      const scout =
+        ev?.scoutItems ||
+        ev?.scout ||
+        board?.scout ||
+        (detail as any)?.bug?.scout ||
+        null;
+      const foodLog = ev?.pendingFoodLog || ev?.foodLog || (detail as any)?.bug?.foodLog || null;
+      const jobId = ev?.job_id || ev?.jobId || null;
+      const extraIssues = detail?.now?.remaining || tag?.remaining || [];
+      const body = buildTapeReplayBody({
+        mode: 'catalog',
+        jobId,
+        scout,
+        foodLog,
+        extraIssues,
+      });
+      const pRes = await fetch('/api/golden/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (pRes.ok) {
+        const next = await pRes.json().catch(() => null);
+        if (next) {
+          setSelectedTagDetail((prev) => (prev ? { ...prev, board: next } : prev));
+        }
+      }
+    } catch (e) {
+      console.warn('[BugTracker] Replay catalog failed:', e);
+    } finally {
+      setReplayingCatalogId(null);
+    }
+  };
+
+  const handleReanalyze = (tag: any) => {
+    const ev =
+      selectedTagDetail?.now?.current_evidence ||
+      selectedTagDetail?.bug?.current_evidence ||
+      tag?.now?.current_evidence ||
+      tag?.current_evidence ||
+      null;
+    const jobId = reanalyzeJobId(ev);
+    if (!jobId || !onViewJob) return;
+    onClose();
+    onViewJob(jobId);
+  };
+
   const fetchTagDetail = async (tagId: string) => {
     setDetailLoading(true);
     try {
@@ -427,6 +491,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
         console.warn('Failed to load local bug cache:', e);
       }
       load();
+      fetch('/api/bugs/migrate-inbox', { method: 'POST' }).catch(() => {});
     }
   }, [isOpen]);
 
@@ -784,44 +849,35 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
     const res = await fetch(`/api/bugs/${tag.id}`);
     const json = await res.json().catch(() => ({}));
     const item = hydrateWorkItem(tag);
-    const pub = json.now?.public_id || publicId(item, tag.id);
-    const last = (json.commits || []).slice(-1)[0];
     const remainingList = json.now?.remaining || item.remaining || [];
-    const evidence = json.now?.current_evidence || item.current_evidence;
     const activeLine = selectedRemainingLine || remainingList[0] || json.now?.bug || tag.title;
-    const line = linePhotosForText(evidence, activeLine);
-    const photos = line?.photo_urls?.length ? line.photo_urls : evidence?.photo_urls || [];
-    const comment = line?.comment || json.now?.comment || '';
-    const text = [
-      `Check this bug and fix it. ${pub} — ${tag.title}`,
-      '',
-      `Active line: ${activeLine}`,
-      `Photo: ${photos.length ? photos.join(', ') : 'none'}`,
-      `Comment: ${comment || 'none'}`,
-      `Remaining: ${remainingList.join(' · ') || '—'}`,
-      `Tried / do not retry: ${(json.now?.tried || []).join('\n') || 'none yet'}`,
-      last
-        ? `Last loop: ${last.actor} · ${last.summary}${last.attempt ? ` · ${last.attempt.result} · ${last.attempt.file}` : ''}`
-        : 'Last loop: none',
-      '',
-      json.how_to_end || `POST /api/bugs/${tag.id}/attempts { hyp, file, test, result, burned, note }`,
-      'Do NOT POST /loop. Do not mark done from chat.',
-      '',
-      JSON.stringify(
+    const text = formatContinuePrompt(
+      buildContinueJob(
         {
-          say: 'Next bug',
-          tag_id: tag.id,
-          now: json.now,
-          commits: json.commits || [],
-          how_to_end: json.how_to_end,
+          ...tag,
+          id: tag.id,
+          title: tag.title,
+          work_item: {
+            ...item,
+            remaining: remainingList,
+            done: json.now?.done || item.done,
+            current_evidence: json.now?.current_evidence || item.current_evidence,
+            commits: json.commits || item.commits,
+          },
         },
-        null,
-        2
-      ),
-    ].join('\n');
+        activeLine
+      )
+    );
     await navigator.clipboard.writeText(text);
     setCopiedHandoffId(tag.id);
     setTimeout(() => setCopiedHandoffId(null), 2500);
+    if (item.queue === 'ready') {
+      fetch(`/api/bugs/${encodeURIComponent(tag.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ queue: 'in_progress' }),
+      }).catch(() => {});
+    }
   };
 
   const bugTags: any[] = data?.bugTags || [];
@@ -1335,7 +1391,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                   type="button"
                                   onClick={(e) => copyHandoff(selectedTag, e)}
                                   className="px-2 py-1 text-[10px] font-bold text-amber-100 bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 rounded-lg transition-all flex items-center gap-1 cursor-pointer shrink-0"
-                                  title="Copy Start JSON for next agent"
+                                  title="Copy continue job (one remaining line) for Gemini"
                                 >
                                   {copiedHandoffId === selectedTag.id ? (
                                     <Check className="w-3 h-3 text-emerald-400" />
@@ -1405,6 +1461,17 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                   jobId={foodJobId}
                                   onReplayLog={() => handleReplayLog(selectedTag)}
                                   replayingLog={replayingLogId === selectedTag.id}
+                                  onReplayCatalog={() => handleReplayCatalog(selectedTag)}
+                                  replayingCatalog={replayingCatalogId === selectedTag.id}
+                                  onReanalyze={() => handleReanalyze(selectedTag)}
+                                  canReanalyze={Boolean(
+                                    onViewJob &&
+                                      reanalyzeJobId(
+                                        selectedTagDetail?.now?.current_evidence ||
+                                          selectedTagDetail?.bug?.current_evidence ||
+                                          hydrateWorkItem(selectedTag).current_evidence
+                                      )
+                                  )}
                                 />
                               ) : null;
                             })()}

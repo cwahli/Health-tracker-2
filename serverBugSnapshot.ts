@@ -37,11 +37,12 @@ import {
   buildNow,
   buildStartPayload,
   hydrateWorkItem,
+  pickContinueTag,
   prefillBug,
-  sortReadyQueue,
 } from './src/utils/bugWorkItem';
-import { shouldHoldR2 } from './src/utils/bugAutoFile';
-import { tryAutoFileGolden, tryAutoFileJob } from './serverBugAutoFile.js';
+import { classifyGoldenReds, shouldHoldR2 } from './src/utils/bugAutoFile';
+import { persistAutoFile, tryAutoFileGolden, tryAutoFileJob } from './serverBugAutoFile.js';
+import { planInboxMigration } from './src/utils/bugInboxMigrate';
 
 async function persistMissingPublicNs(tags: any[]): Promise<any[]> {
   const assigned = assignMissingPublicNs(tags);
@@ -1100,11 +1101,10 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
         .limit(100);
       if (r1.error) return res.status(500).json({ error: r1.error.message });
       const tags = await persistMissingPublicNs(r1.data || []);
-      const ready = sortReadyQueue(tags);
-      if (!ready.length) {
-        return res.json({ say: 'Next bug', empty: true, now: null, note: 'No ready bugs.' });
+      const tag = pickContinueTag(tags);
+      if (!tag) {
+        return res.json({ say: 'Next bug', empty: true, now: null, continue: null, note: 'No ready bugs.' });
       }
-      const tag = ready[0];
       const item = hydrateWorkItem(tag);
       const start = buildStartPayload({ ...tag, work_item: item, id: tag.id });
       res.json({ empty: false, ...start });
@@ -1161,6 +1161,83 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       res.json(filed);
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'auto-file failed' });
+    }
+  });
+
+  /** POST /api/bugs/migrate-inbox — leftover D1 golden_cases → issue_tags #n. Not Promote. */
+  app.post('/api/bugs/migrate-inbox', async (_req: Request, res: Response) => {
+    try {
+      const { d1Query } = await import('./server_d1.js');
+      const listed = await d1Query<{
+        id: string;
+        tag_id?: string | null;
+        job_id?: string | null;
+        title?: string | null;
+        status?: string | null;
+      }>(`SELECT id, tag_id, job_id, title, status FROM golden_cases ORDER BY updated_at DESC LIMIT 80`);
+      const cases = listed.success ? listed.results || [] : [];
+      if (!listed.success) {
+        return res.json({ ok: true, skipped: true, reason: listed.error || 'd1 unavailable', linked: 0, created: 0 });
+      }
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const { data: tags } = await supabaseAdmin
+        .from('issue_tags')
+        .select('id, title, work_item, created_at, status')
+        .limit(200);
+      const plan = planInboxMigration(cases, tags || []);
+      const summary = { linked: 0, created: 0, skipped: 0, already: 0 };
+      for (const row of plan) {
+        if (row.action === 'already_linked') {
+          summary.already += 1;
+          continue;
+        }
+        if (row.action === 'skip_promoted') {
+          summary.skipped += 1;
+          continue;
+        }
+        if (row.action === 'link_existing' && row.tagId) {
+          await d1Query(`UPDATE golden_cases SET tag_id = ?, updated_at = ? WHERE id = ?`, [
+            row.tagId,
+            new Date().toISOString(),
+            row.caseId,
+          ]);
+          summary.linked += 1;
+          continue;
+        }
+        if (row.action === 'create_tag') {
+          const candidate = classifyGoldenReds({
+            caseId: row.caseId,
+            title: row.title,
+            jobId: row.jobId || undefined,
+            outcomes: [
+              {
+                id: 'inbox_leftover',
+                label: row.remaining?.[0] || row.title || 'Inbox leftover',
+                pass: false,
+                enabled: true,
+              },
+            ],
+          });
+          if (!candidate) {
+            summary.skipped += 1;
+            continue;
+          }
+          const persisted = await persistAutoFile(candidate);
+          if (persisted.ok && persisted.tag_id) {
+            await d1Query(`UPDATE golden_cases SET tag_id = ?, updated_at = ? WHERE id = ?`, [
+              persisted.tag_id,
+              new Date().toISOString(),
+              row.caseId,
+            ]);
+            summary.created += 1;
+          } else {
+            summary.skipped += 1;
+          }
+        }
+      }
+      res.json({ ok: true, ...summary, planned: plan.length });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err?.message || 'migrate failed' });
     }
   });
 
@@ -1234,6 +1311,7 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
         result: String(body.result || ''),
         burned: body.burned !== false && !/green|pass/i.test(String(body.result || '')),
         note: body.note ? String(body.note) : undefined,
+        line: body.line ? String(body.line) : undefined,
       });
       if (rejected === 'already_burned') {
         return res.status(409).json({ error: 'already_burned', now: buildStartPayload({ ...tag, work_item: next }).now });
