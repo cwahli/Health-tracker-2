@@ -6400,6 +6400,26 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           }
 
           const baseNutrients = dbMatchMap.get(bestMatch.id);
+
+          // Fill missing component macros using the same category macro prior already used
+          // at the whole-dish level (see "Atwater Anchor Engine" in server_pure_helpers.ts).
+          // Some brand-menu records only ever publish calories (no protein/fat/carbs). Without
+          // this, that component silently displays calories-only in the nutrition breakdown UI.
+          // This ONLY fires when calories exist but ALL of protein/totalFat/carbohydrates are
+          // missing — it never overwrites a component that already has any real macro data.
+          if (baseNutrients && baseNutrients.calories != null && Number(baseNutrients.calories) > 0) {
+            const hasAnyMacro = ['protein', 'totalFat', 'carbohydrates'].some(
+              k => baseNutrients[k] !== undefined && baseNutrients[k] !== null
+            );
+            if (!hasAnyMacro) {
+              const compCal = Number(baseNutrients.calories);
+              baseNutrients.protein = Math.round(((compCal * 0.20) / 4) * 10) / 10;
+              baseNutrients.totalFat = Math.round(((compCal * 0.35) / 9) * 10) / 10;
+              baseNutrients.carbohydrates = Math.round(((compCal * 0.45) / 4) * 10) / 10;
+              addDebugLog(`[Component Macro Baseline] "${query}" had ${compCal} kcal but no macros. Applied category macro prior: P=${baseNutrients.protein}g F=${baseNutrients.totalFat}g C=${baseNutrients.carbohydrates}g.`);
+            }
+          }
+
           // NUTRITION BASIS FIX (Aug 2026): don't re-scale whole-dish brand totals by weight/100.
           const factor = (baseNutrients?.basisType === 'total' || baseNutrients?.basisType === 'per_dish') ? 1 : (compWeight / 100);
 

@@ -39,6 +39,7 @@ import { resolveFoodImage } from '../utils/imageResolver';
 
 import { JobStore } from '../jobs/JobStore';
 import { toPendingFoodLog } from '../mealBuild/adapters';
+import { executeFoodAgent } from '../jobs/FoodAgentExecutor';
 
 function isValidFoodLog(log: any): boolean {
   if (!log || typeof log !== 'object' || Array.isArray(log)) return false;
@@ -135,7 +136,6 @@ export function safeJSONStringify(obj: any): string {
 
 type FoodAgentExecutorInput = any;
 
-async function* executeFoodAgent(input: any): AsyncGenerator<any, void, unknown> {}
 async function* executeMedicalAgent(input: any): AsyncGenerator<any, void, unknown> {}
 
 function parseJsonOffline(jsonText: string): BiomarkerEntry[] {
