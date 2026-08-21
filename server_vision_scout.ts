@@ -733,7 +733,7 @@ export function clusterSpatialCompositeDishes(
   return resultDishes;
 }
 
-export const CONDIMENT_DRESSING_REGEX = /\b(ranch(?:\s+dressing)?|caesar(?:\s+dressing)?|vinaigrette|mayonnaise|mayo|salad\s+dressing|dressing|tahini|aioli|pesto|honey\s+mustard|blue\s+cheese\s+dressing|thousand\s+island|french\s+dressing|italian\s+dressing|gravy|sour\s+cream|guacamole|hummus|olive\s+oil|vinaigre|sauce)\b/i;
+export const CONDIMENT_DRESSING_REGEX = /\b(ranch(?:\s+dressing)?|caesar(?:\s+dressing)?|vinaigrette|mayonnaise|mayo|salad\s+dressing|dressing|tahini|aioli|pesto|honey\s+mustard|blue\s+cheese\s+dressing|thousand\s+island|french\s+dressing|italian\s+dressing|gravy|sour\s+cream|guacamole|hummus|olive\s+oil|vinaigre|sauce|gherkins?|pickles?|cornichons?)\b/i;
 
 export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: string) => void): void {
   if (!item || !item.components || !Array.isArray(item.components) || item.components.length === 0) {

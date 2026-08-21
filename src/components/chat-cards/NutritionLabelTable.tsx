@@ -185,6 +185,10 @@ function getSourceBadge(item: any) {
 
 export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOpen = true, hideOwnToggle = false, language = "en" }: { activeScoutItems: any[], onConfirmItem?: (idx: any) => void, defaultOpen?: boolean, hideOwnToggle?: boolean, language?: string }) {
   const t = translations[language || "en"] || translations.en;
+  const [showEstimatedMap, setShowEstimatedMap] = React.useState<Record<number, boolean>>({});
+  const toggleShowEstimated = (idx: number) => {
+    setShowEstimatedMap(prev => ({ ...prev, [idx]: !prev[idx] }));
+  };
   let items = activeScoutItems;
   if (typeof items === 'string') {
     try { items = JSON.parse(items); } catch(e) { items = []; }
@@ -529,6 +533,12 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                 .replace(/^Estimated:\s*/i, '')
                 .replace(/\s*\(category fallback\)/gi, '')
                 .trim();
+              const visualText = Array.isArray(item.visualIngredients) && item.visualIngredients.length > 0
+                ? item.visualIngredients.join(', ')
+                : (item.components || []).map((c: any) => typeof c === 'string' ? c : (c.searchQuery || c.name || c.keyword)).join(', ');
+              const mainName = item.originalName || item.keyword || item.primaryBaseMatchName;
+              const hasDescription = visualText && visualText.toLowerCase().trim() !== (mainName || '').toLowerCase().trim();
+              const cookingMethod = item.cookingMethod || item.cooking_method;
               const sourceBadge = getSourceBadge(item);
 
               return (
@@ -537,20 +547,34 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                   className="text-[10px] text-theme-text-secondary bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-theme-border/80"
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <strong className="block text-slate-800 dark:text-slate-200 font-display text-xs">
-                      {(item.chainName || item.brand || item.brandName) && (item.dbSource === 'brand_official' || String(item.dbId || '').includes('brand_menu_') || String(item.fdcId || '').includes('brand_menu_')) ? (
-                        <>
-                          <span className="text-indigo-500 dark:text-indigo-400">{item.chainName || item.brand || item.brandName}</span>
-                          {' · '}
-                        </>
-                      ) : null}
-                      {cleanTitle}
-                    </strong>
-                    {sourceBadge && (
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium shrink-0 ${sourceBadge.className}`}>
-                        {sourceBadge.text}
-                      </span>
-                    )}
+                    <div className="flex flex-col text-left min-w-0">
+                      <strong className="block text-slate-800 dark:text-slate-200 font-display text-xs">
+                        {(item.chainName || item.brand || item.brandName) && (item.dbSource === 'brand_official' || String(item.dbId || '').includes('brand_menu_') || String(item.fdcId || '').includes('brand_menu_')) ? (
+                          <>
+                            <span className="text-indigo-500 dark:text-indigo-400">{item.chainName || item.brand || item.brandName}</span>
+                            {' · '}
+                          </>
+                        ) : null}
+                        {cleanTitle}
+                      </strong>
+                      {hasDescription && (
+                        <span className="text-[10px] font-medium leading-relaxed text-indigo-600 dark:text-indigo-400 break-words mt-0.5 font-sans">
+                          {visualText}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {sourceBadge && (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium shrink-0 ${sourceBadge.className}`}>
+                          {sourceBadge.text}
+                        </span>
+                      )}
+                      {cookingMethod && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 shrink-0 capitalize">
+                          {cookingMethod}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 text-[10px]">
@@ -586,225 +610,287 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                   </div>
                 )}
 
-                {allKeys.length > 0 && (
-                  <div className="overflow-x-auto rounded-lg border border-theme-border/50">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-100/50 dark:bg-slate-800/50">
-                          <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50">
-                            Nutrient
-                          </th>
-                          <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50">
-                            {(() => {
-                               const ssRaw = String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').trim();
-                               const totalG = (item.primaryBaseWeightG || item.estimatedWeightGrams) ? Number(item.primaryBaseWeightG || item.estimatedWeightGrams) : null;
-                               const ssGramsMatch = ssRaw.match(/^(\d+(?:\.\d+)?)\s*g$/i);
-                               // If the serving size grams exactly equal the Total column's grams, showing
-                               // both is redundant (e.g. "Serving Size (300g)" next to "Total (300g)").
-                               // In that case the serving IS the whole dish, so say so in words instead.
-                               const isExplicit100g = /\b100\s*g\b/i.test(ssRaw);
-                               const bType = item.rawNutritionLabel?.basisType || item.basisType || (isExplicit100g ? 'per_100g' : ((item.source === 'brand_official' || item.brandPriority) ? 'per_dish' : 'per_100g'));
-                               if (bType === 'per_100g' || isExplicit100g) {
-                                 return 'Per 100g';
-                               }
-                               if (ssRaw && ssGramsMatch && totalG && Math.abs(parseFloat(ssGramsMatch[1]) - totalG) < 0.5) {
-                                 return 'Serving Size (1 dish)';
-                               }
-                               if (ssRaw) return `Serving Size (${ssRaw})`;
-                               if (bType === 'per_dish' || bType === 'total' || bType === 'per_portion') {
-                                 return 'Per Dish';
-                               }
-                               return 'Per 100g';
-                            })()}
-                          </th>
-                          <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50 whitespace-nowrap">
-                            Total{(item.primaryBaseWeightG || item.estimatedWeightGrams) ? ` (${item.primaryBaseWeightG || item.estimatedWeightGrams}g)` : ''}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                        {allKeys.map((k) => {
-                          const originalVal = item.rawNutritionLabel?.[k] !== undefined 
-                            ? item.rawNutritionLabel?.[k] 
-                            : item.nutritionFacts?.[k];
-                            
-                          const isCalorieKey = k.toLowerCase().includes('calories') || k.toLowerCase().includes('energy');
-                          let numVal = null;
-                          if (originalVal !== undefined && originalVal !== null) {
-                            if (isCalorieKey) {
-                              numVal = parseLabelCalories(originalVal);
-                            } else {
-                              const match = String(originalVal).match(/[\d.]+/);
-                              if (match) numVal = parseFloat(match[0]);
-                            }
-                          }
-                          
-                          const isServingField = k.toLowerCase().includes('serving');
-                          
-                          let totalStr = '-';
-                          let originalDisplay = '-';
-                          
-                          if (originalVal !== undefined && originalVal !== null) {
-                            const hasUnit = /[a-zA-Z%]/.test(String(originalVal));
-                            const nutDef = nutrientDefinitions.find((n: any) => n.key.toLowerCase() === k.toLowerCase());
-                            const defaultUnit = isCalorieKey ? 'kcal' : (isServingField ? '' : (nutDef ? nutDef.unit : 'g'));
-                            const unit = isCalorieKey ? 'kcal' : (String(originalVal).replace(/[\d.\s]/g, '') || defaultUnit);
-                            
-                            if (isCalorieKey && numVal !== null) {
-                              originalDisplay = `${numVal} kcal`;
-                            } else {
-                              originalDisplay = (hasUnit && !isServingField) ? String(originalVal) : `${originalVal}${defaultUnit}`;
-                            }
-                            
-                            if (numVal !== null && !missingWeight && !isServingField) {
-                              const ssServingSize = String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').trim();
-                              const isExplicit100gServing = /\b100\s*g\b/i.test(ssServingSize);
-                              const bType = item.rawNutritionLabel?.basisType || item.basisType || (isExplicit100gServing ? 'per_100g' : ((item.source === 'brand_official' || item.brandPriority) ? 'per_dish' : 'per_100g'));
-                              const isDishBasis = !isExplicit100gServing && (bType === 'per_dish' || bType === 'total' || bType === 'per_portion' || bType === 'per_serving' || bType === 'per_pack');
+                {allKeys.length > 0 && (() => {
+                  const isKeyLocked = (k: string) => {
+                    const standardMapping: Record<string, string> = {
+                      calories: 'calories',
+                      protein: 'protein',
+                      totalfat: 'totalFat',
+                      saturatedfat: 'saturatedFat',
+                      sodium: 'sodium',
+                      totalcarbohydrate: 'carbohydrates',
+                      carbohydrates: 'carbohydrates',
+                      totalcarbs: 'carbohydrates',
+                      totalfibre: 'totalFibre',
+                      fiber: 'totalFibre',
+                      fibre: 'totalFibre',
+                      sugar: 'sugar',
+                      addedsugar: 'addedSugar',
+                      transfat: 'transFat'
+                    };
+                    const normKey = standardMapping[k.toLowerCase()] || k;
+                    const isFromRawLabel = item.rawNutritionLabel?.[k] !== undefined && 
+                                           item.rawNutritionLabel?.[k] !== null && 
+                                           item.rawNutritionLabel?.[k] !== '' &&
+                                           item.rawNutritionLabel?.[k] !== '-';
+                    const normLower = String(normKey).toLowerCase();
+                    const kLower = String(k).toLowerCase();
+                    const isExplicitlyEstimated = (Array.isArray(item.estimatedFields) && item.estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower)) ||
+                                                 (Array.isArray(item._estimatedFields) && item._estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower));
+                    const hasLockedKeys = Array.isArray(item.lockedNutrientKeys) && item.lockedNutrientKeys.length > 0;
+                    const inLockedKeys = hasLockedKeys && item.lockedNutrientKeys.some((lk: string) => {
+                      const lkLower = String(lk).toLowerCase();
+                      return lkLower === normLower ||
+                        lkLower === kLower ||
+                        (normLower === 'carbohydrates' && (lkLower === 'carbohydrate' || lkLower === 'carbs' || lkLower === 'totalcarbohydrate')) ||
+                        (normLower === 'totalfat' && (lkLower === 'fat' || lkLower === 'totalfat')) ||
+                        (normLower === 'totalfibre' && (lkLower === 'fiber' || lkLower === 'fibre' || lkLower === 'totalfibre')) ||
+                        (normLower === 'calories' && (lkLower === 'energy' || lkLower === 'cals'));
+                    });
+                    return !isExplicitlyEstimated && (hasLockedKeys ? inLockedKeys : isFromRawLabel);
+                  };
 
-                              const weightToDisplay = item.primaryBaseWeightG || item.estimatedWeightGrams || 100;
-                              let labelServingGrams = isDishBasis ? weightToDisplay : 100;
-                              const wasFromRaw = item.rawNutritionLabel?.[k] !== undefined;
-                              
-                              if (wasFromRaw && item.rawNutritionLabel?.servingSize) {
-                                 const ssRaw = String(item.rawNutritionLabel.servingSize);
-                                 labelServingGrams = parseServingSizeGrams(ssRaw, weightToDisplay);
+                  const hasEstimatedNutrients = allKeys.some(k => !isKeyLocked(k));
+                  const isEstimatedExpanded = Boolean(showEstimatedMap[i]);
+                  const visibleKeys = allKeys.filter(k => isEstimatedExpanded || isKeyLocked(k) || (allKeys.every(ak => !isKeyLocked(ak)) && ['calories', 'protein', 'totalfat', 'fat', 'carbohydrates', 'totalcarbohydrate', 'sodium'].includes(k.toLowerCase())));
+
+                  return (
+                    <div>
+                      <div className="overflow-x-auto rounded-lg border border-theme-border/50">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-100/50 dark:bg-slate-800/50">
+                              <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50">
+                                Nutrient
+                              </th>
+                              <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50">
+                                {(() => {
+                                   const ssRaw = String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').trim();
+                                   const totalG = (item.primaryBaseWeightG || item.estimatedWeightGrams) ? Number(item.primaryBaseWeightG || item.estimatedWeightGrams) : null;
+                                   const ssGramsMatch = ssRaw.match(/^(\d+(?:\.\d+)?)\s*g$/i);
+                                   const isExplicit100g = /\b100\s*g\b/i.test(ssRaw);
+                                   const bType = item.rawNutritionLabel?.basisType || item.basisType || (isExplicit100g ? 'per_100g' : ((item.source === 'brand_official' || item.brandPriority) ? 'per_dish' : 'per_100g'));
+                                   if (bType === 'per_100g' || isExplicit100g) {
+                                     return 'Per 100g';
+                                   }
+                                   if (ssRaw && ssGramsMatch && totalG && Math.abs(parseFloat(ssGramsMatch[1]) - totalG) < 0.5) {
+                                     return 'Serving Size (1 dish)';
+                                   }
+                                   if (ssRaw) return `Serving Size (${ssRaw})`;
+                                   if (bType === 'per_dish' || bType === 'total' || bType === 'per_portion') {
+                                     return 'Per Dish';
+                                   }
+                                   return 'Per 100g';
+                                })()}
+                              </th>
+                              <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50 whitespace-nowrap">
+                                Total{(item.primaryBaseWeightG || item.estimatedWeightGrams) ? ` (${item.primaryBaseWeightG || item.estimatedWeightGrams}g)` : ''}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                            {visibleKeys.map((k) => {
+                              const originalVal = item.rawNutritionLabel?.[k] !== undefined 
+                                ? item.rawNutritionLabel?.[k] 
+                                : item.nutritionFacts?.[k];
+                                
+                              const isCalorieKey = k.toLowerCase().includes('calories') || k.toLowerCase().includes('energy');
+                              let numVal = null;
+                              if (originalVal !== undefined && originalVal !== null) {
+                                if (isCalorieKey) {
+                                  numVal = parseLabelCalories(originalVal);
+                                } else {
+                                  const match = String(originalVal).match(/[\d.]+/);
+                                  if (match) numVal = parseFloat(match[0]);
+                                }
                               }
                               
-                              const multiplier = (isDishBasis && (!item.rawNutritionLabel?.servingSize || item.rawNutritionLabel?.servingSize === '1 dish' || item.rawNutritionLabel?.servingSize === '1 serving'))
-                                ? 1.0 
-                                : (labelServingGrams > 0 ? (weightToDisplay / labelServingGrams) : 1.0);
-                              const total = (numVal * multiplier).toFixed(1).replace(/\.0$/, '');
-                              totalStr = `${total}${unit}`;
-                            }
-                          }
+                              const isServingField = k.toLowerCase().includes('serving');
+                              
+                              let totalStr = '-';
+                              let originalDisplay = '-';
+                              
+                              if (originalVal !== undefined && originalVal !== null) {
+                                const hasUnit = /[a-zA-Z%]/.test(String(originalVal));
+                                const nutDef = nutrientDefinitions.find((n: any) => n.key.toLowerCase() === k.toLowerCase());
+                                const defaultUnit = isCalorieKey ? 'kcal' : (isServingField ? '' : (nutDef ? nutDef.unit : 'g'));
+                                const unit = isCalorieKey ? 'kcal' : (String(originalVal).replace(/[\d.\s]/g, '') || defaultUnit);
+                                
+                                if (isCalorieKey && numVal !== null) {
+                                  originalDisplay = `${numVal} kcal`;
+                                } else {
+                                  originalDisplay = (hasUnit && !isServingField) ? String(originalVal) : `${originalVal}${defaultUnit}`;
+                                }
+                                
+                                if (numVal !== null && !missingWeight && !isServingField) {
+                                  const ssServingSize = String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').trim();
+                                  const isExplicit100gServing = /\b100\s*g\b/i.test(ssServingSize);
+                                  const bType = item.rawNutritionLabel?.basisType || item.basisType || (isExplicit100gServing ? 'per_100g' : ((item.source === 'brand_official' || item.brandPriority) ? 'per_dish' : 'per_100g'));
+                                  const isDishBasis = !isExplicit100gServing && (bType === 'per_dish' || bType === 'total' || bType === 'per_portion' || bType === 'per_serving' || bType === 'per_pack');
 
-                          const standardMapping: Record<string, string> = {
-                            calories: 'calories',
-                            protein: 'protein',
-                            totalfat: 'totalFat',
-                            saturatedfat: 'saturatedFat',
-                            sodium: 'sodium',
-                            totalcarbohydrate: 'carbohydrates',
-                            carbohydrates: 'carbohydrates',
-                            totalcarbs: 'carbohydrates',
-                            totalfibre: 'totalFibre',
-                            fiber: 'totalFibre',
-                            fibre: 'totalFibre',
-                            sugar: 'sugar',
-                            addedsugar: 'addedSugar',
-                            transfat: 'transFat'
-                          };
-                          const normKey = standardMapping[k.toLowerCase()] || k;
+                                  const weightToDisplay = item.primaryBaseWeightG || item.estimatedWeightGrams || 100;
+                                  let labelServingGrams = isDishBasis ? weightToDisplay : 100;
+                                  const wasFromRaw = item.rawNutritionLabel?.[k] !== undefined;
+                                  
+                                  if (wasFromRaw && item.rawNutritionLabel?.servingSize) {
+                                     const ssRaw = String(item.rawNutritionLabel.servingSize);
+                                     labelServingGrams = parseServingSizeGrams(ssRaw, weightToDisplay);
+                                  }
+                                  
+                                  const multiplier = (isDishBasis && (!item.rawNutritionLabel?.servingSize || item.rawNutritionLabel?.servingSize === '1 dish' || item.rawNutritionLabel?.servingSize === '1 serving'))
+                                    ? 1.0 
+                                    : (labelServingGrams > 0 ? (weightToDisplay / labelServingGrams) : 1.0);
+                                  const total = (numVal * multiplier).toFixed(1).replace(/\.0$/, '');
+                                  totalStr = `${total}${unit}`;
+                                }
+                              }
 
-                          // Check if value actually came directly from raw printed label / OCR
-                          const isFromRawLabel = item.rawNutritionLabel?.[k] !== undefined && 
-                                                 item.rawNutritionLabel?.[k] !== null && 
-                                                 item.rawNutritionLabel?.[k] !== '' &&
-                                                 item.rawNutritionLabel?.[k] !== '-';
+                              const standardMapping: Record<string, string> = {
+                                calories: 'calories',
+                                protein: 'protein',
+                                totalfat: 'totalFat',
+                                saturatedfat: 'saturatedFat',
+                                sodium: 'sodium',
+                                totalcarbohydrate: 'carbohydrates',
+                                carbohydrates: 'carbohydrates',
+                                totalcarbs: 'carbohydrates',
+                                totalfibre: 'totalFibre',
+                                fiber: 'totalFibre',
+                                fibre: 'totalFibre',
+                                sugar: 'sugar',
+                                addedsugar: 'addedSugar',
+                                transfat: 'transFat'
+                              };
+                              const normKey = standardMapping[k.toLowerCase()] || k;
 
-                          const normLower = String(normKey).toLowerCase();
-                          const kLower = String(k).toLowerCase();
+                              const isFromRawLabel = item.rawNutritionLabel?.[k] !== undefined && 
+                                                     item.rawNutritionLabel?.[k] !== null && 
+                                                     item.rawNutritionLabel?.[k] !== '' &&
+                                                     item.rawNutritionLabel?.[k] !== '-';
 
-                          const isExplicitlyEstimated = (Array.isArray(item.estimatedFields) && item.estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower)) ||
-                                                       (Array.isArray(item._estimatedFields) && item._estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower));
+                              const normLower = String(normKey).toLowerCase();
+                              const kLower = String(k).toLowerCase();
 
-                          const hasLockedKeys = Array.isArray(item.lockedNutrientKeys) && item.lockedNutrientKeys.length > 0;
-                          const inLockedKeys = hasLockedKeys && item.lockedNutrientKeys.some((lk: string) => {
-                            const lkLower = String(lk).toLowerCase();
-                            return lkLower === normLower ||
-                              lkLower === kLower ||
-                              (normLower === 'carbohydrates' && (lkLower === 'carbohydrate' || lkLower === 'carbs' || lkLower === 'totalcarbohydrate')) ||
-                              (normLower === 'totalfat' && (lkLower === 'fat' || lkLower === 'totalfat')) ||
-                              (normLower === 'totalfibre' && (lkLower === 'fiber' || lkLower === 'fibre' || lkLower === 'totalfibre')) ||
-                              (normLower === 'calories' && (lkLower === 'energy' || lkLower === 'cals'));
-                          });
+                              const isExplicitlyEstimated = (Array.isArray(item.estimatedFields) && item.estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower)) ||
+                                                           (Array.isArray(item._estimatedFields) && item._estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower));
 
-                          const isLocked = !isExplicitlyEstimated && (hasLockedKeys ? inLockedKeys : isFromRawLabel);
+                              const hasLockedKeys = Array.isArray(item.lockedNutrientKeys) && item.lockedNutrientKeys.length > 0;
+                              const inLockedKeys = hasLockedKeys && item.lockedNutrientKeys.some((lk: string) => {
+                                const lkLower = String(lk).toLowerCase();
+                                return lkLower === normLower ||
+                                  lkLower === kLower ||
+                                  (normLower === 'carbohydrates' && (lkLower === 'carbohydrate' || lkLower === 'carbs' || lkLower === 'totalcarbohydrate')) ||
+                                  (normLower === 'totalfat' && (lkLower === 'fat' || lkLower === 'totalfat')) ||
+                                  (normLower === 'totalfibre' && (lkLower === 'fiber' || lkLower === 'fibre' || lkLower === 'totalfibre')) ||
+                                  (normLower === 'calories' && (lkLower === 'energy' || lkLower === 'cals'));
+                              });
 
-                          const isSodium = k.toLowerCase().includes('sodium') || k.toLowerCase().includes('salt');
+                              const isLocked = !isExplicitlyEstimated && (hasLockedKeys ? inLockedKeys : isFromRawLabel);
 
-                          const sourceKey = item.nutrientSourceMap?.[k] || item.nutrientSourceMap?.[normKey];
-                          const estimateTooltipText = sourceKey === 'usda_database' ? 'From a matched USDA database entry, not the printed label'
-                            : sourceKey === 'openfoodfacts_database' ? 'From a matched Open Food Facts database entry, not the printed label'
-                            : sourceKey === 'brand_label_data' ? 'From the brand\'s published nutrition data, not this specific printed label'
-                            : sourceKey === 'matched_database_entry' ? 'From a matched food database entry, not the printed label'
-                            : sourceKey === 'foodtype_estimate' ? 'Estimated from typical values for this type of food — not from a database or label'
-                            : 'Estimated — not from a verified label or database';
+                              const isSodium = k.toLowerCase().includes('sodium') || k.toLowerCase().includes('salt');
 
-                          return (
-                            <tr key={k} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                              <td className="py-1.5 px-2 font-medium text-theme-neutral capitalize">
-                                <div className="flex items-center gap-1">
-                                  <span>{k.replace(/([A-Z])/g, ' $1').trim()}</span>
-                                  {isLocked ? null : (!isServingField && (
-                                    <div className="inline-flex items-center ml-1 z-20">
-                                      <PositionedTooltip
-                                        trigger={
-                                          <div
-                                            className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 cursor-pointer transition-colors"
-                                            aria-label="Estimated value notice"
-                                          >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-500">
-                                              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
-                                              <path d="M12 9v4"></path>
-                                              <path d="M12 17h.01"></path>
-                                            </svg>
-                                            !
-                                          </div>
-                                        }
-                                        content={estimateTooltipText}
-                                        contentClassName="bg-slate-900/95 dark:bg-slate-950/95 text-amber-200 border-amber-500/30 text-center text-[10px]"
-                                      />
+                              const sourceKey = item.nutrientSourceMap?.[k] || item.nutrientSourceMap?.[normKey];
+                              const estimateTooltipText = sourceKey === 'usda_database' ? 'From a matched USDA database entry, not the printed label'
+                                : sourceKey === 'openfoodfacts_database' ? 'From a matched Open Food Facts database entry, not the printed label'
+                                : sourceKey === 'brand_label_data' ? 'From the brand\'s published nutrition data, not this specific printed label'
+                                : sourceKey === 'matched_database_entry' ? 'From a matched food database entry, not the printed label'
+                                : sourceKey === 'foodtype_estimate' ? 'Estimated from typical values for this type of food — not from a database or label'
+                                : 'Estimated — not from a verified label or database';
+
+                              return (
+                                <tr key={k} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                  <td className="py-1.5 px-2 font-medium text-theme-neutral capitalize">
+                                    <div className="flex items-center gap-1">
+                                      <span>{k.replace(/([A-Z])/g, ' $1').trim()}</span>
+                                      {isLocked ? null : (!isServingField && (
+                                        <div className="inline-flex items-center ml-1 z-20">
+                                          <PositionedTooltip
+                                            trigger={
+                                              <div
+                                                className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 cursor-pointer transition-colors"
+                                                aria-label="Estimated value notice"
+                                              >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-500">
+                                                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                                                  <path d="M12 9v4"></path>
+                                                  <path d="M12 17h.01"></path>
+                                                </svg>
+                                                !
+                                              </div>
+                                            }
+                                            content={estimateTooltipText}
+                                            contentClassName="bg-slate-900/95 dark:bg-slate-950/95 text-amber-200 border-amber-500/30 text-center text-[10px]"
+                                          />
+                                        </div>
+                                      ))}
+                                      {isSodium && saltConversionNoteText && (
+                                        <div className="inline-flex items-center z-20 ml-1">
+                                          <PositionedTooltip
+                                            trigger={
+                                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 hover:text-blue-600 cursor-help shrink-0">
+                                                <circle cx="12" cy="12" r="10"></circle>
+                                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                              </svg>
+                                            }
+                                            content={saltConversionNoteText}
+                                            contentClassName="bg-slate-800 text-white text-[10px]"
+                                          />
+                                        </div>
+                                      )}
                                     </div>
-                                  ))}
-                                  {isSodium && saltConversionNoteText && (
-                                    <div className="inline-flex items-center z-20 ml-1">
-                                      <PositionedTooltip
-                                        trigger={
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 hover:text-blue-600 cursor-help shrink-0">
-                                            <circle cx="12" cy="12" r="10"></circle>
-                                            <line x1="12" y1="16" x2="12" y2="12"></line>
-                                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                          </svg>
-                                        }
-                                        content={saltConversionNoteText}
-                                        contentClassName="bg-slate-800 text-white text-[10px]"
-                                      />
+                                  </td>
+                                  <td className="py-1.5 px-2 text-theme-text-secondary relative group/tooltip">
+                                    <div className="flex items-center gap-1">
+                                      {originalDisplay}
+                                      {k.toLowerCase().includes('calories') && item.autoCorrectedCalories && (
+                                        <div className="inline-flex items-center z-50 ml-1">
+                                          <PositionedTooltip
+                                            trigger={
+                                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 cursor-help">
+                                                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                                                <path d="M12 9v4"></path>
+                                                <path d="M12 17h.01"></path>
+                                              </svg>
+                                            }
+                                            content={t.abnormalValueMsg.replace("{item.originalCalories}", item.originalCalories).replace("{originalDisplay}", originalDisplay)}
+                                            contentClassName="bg-slate-800 text-white text-[10px] text-center"
+                                          />
+                                        </div>
+                                      )}
                                     </div>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-1.5 px-2 text-theme-text-secondary relative group/tooltip">
-                                <div className="flex items-center gap-1">
-                                  {originalDisplay}
-                                  {k.toLowerCase().includes('calories') && item.autoCorrectedCalories && (
-                                    <div className="inline-flex items-center z-50 ml-1">
-                                      <PositionedTooltip
-                                        trigger={
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 cursor-help">
-                                            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
-                                            <path d="M12 9v4"></path>
-                                            <path d="M12 17h.01"></path>
-                                          </svg>
-                                        }
-                                        content={t.abnormalValueMsg.replace("{item.originalCalories}", item.originalCalories).replace("{originalDisplay}", originalDisplay)}
-                                        contentClassName="bg-slate-800 text-white text-[10px] text-center"
-                                      />
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-1.5 px-2 text-indigo-600 dark:text-indigo-400 font-bold">
-                                {totalStr}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                                  </td>
+                                  <td className="py-1.5 px-2 text-indigo-600 dark:text-indigo-400 font-bold">
+                                    {totalStr}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {hasEstimatedNutrients && (
+                        <div className="mt-2 text-center font-sans">
+                          <button
+                            type="button"
+                            onClick={() => toggleShowEstimated(i)}
+                            className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer inline-flex items-center gap-1 py-1 px-2.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+                          >
+                            <span>{isEstimatedExpanded ? "Hide estimated nutrients" : "Show estimated nutrients"}</span>
+                            <svg
+                              className={`w-3.5 h-3.5 transition-transform ${isEstimatedExpanded ? 'rotate-180' : ''}`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {item.compositeSiblings && item.compositeSiblings.length > 0 && (
                   <div className="mt-3 pt-2.5 border-t border-theme-border/60">

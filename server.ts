@@ -4428,12 +4428,13 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           if (dbMatchMap.has(fdcId)) {
             return dbMatchMap.get(fdcId) || null;
           }
-          if (/^\d{6,}$/.test(fdcId)) {
-            const prod = await fetchOFFProductByBarcode(fdcId);
-            if (prod) return extractOFFNutrientsPer100g(prod);
-          } else if (/^\d+$/.test(fdcId)) {
+          if (/^\d+$/.test(fdcId)) {
             const food = await fetchUSDAFoodById(fdcId);
             if (food) return extractUSDANutrientsPer100g(food);
+            if (/^\d{6,}$/.test(fdcId)) {
+              const prod = await fetchOFFProductByBarcode(fdcId);
+              if (prod) return extractOFFNutrientsPer100g(prod);
+            }
           }
           return null;
         };
@@ -4902,7 +4903,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         if (fsLow.includes('chickpeas') || fsLow.includes('garbanzo')) {
           finalSearch = `${finalSearch} cooked boiled canned`;
         }
-        if (fsLow.includes('fresh berries') || fsLow.includes('berries')) {
+        if (/\bberries\b/i.test(finalSearch)) {
           finalSearch = `${finalSearch} blueberries raspberries strawberries`;
         }
         if (/\byoghurt\b/i.test(finalSearch)) {

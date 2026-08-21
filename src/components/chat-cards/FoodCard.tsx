@@ -2149,8 +2149,27 @@ export const FoodCard: React.FC<AgentCardProps & {
                                        </div>
                                      )}
                                    </div>
-                                   <span className="text-[10px] text-center font-medium leading-tight text-slate-500 break-words line-clamp-2 w-full font-sans">
-                                     {showTranslations.scout ? (item.keyword || item.originalName) : (item.originalName || item.keyword)}
+                                   <span 
+                                     onClick={() => {
+                                       if (checkHasNutritionLabels([item])) {
+                                         setOpenLabelIdx(prev => prev === i ? null : i);
+                                       }
+                                     }}
+                                     className={`text-[10px] text-center font-medium leading-tight break-words line-clamp-2 w-full font-sans inline-flex items-center justify-center gap-0.5 ${
+                                       checkHasNutritionLabels([item]) ? 'cursor-pointer text-indigo-600 dark:text-indigo-400 hover:underline' : 'text-slate-500'
+                                     }`}
+                                   >
+                                     <span>{showTranslations.scout ? (item.keyword || item.originalName) : (item.originalName || item.keyword)}</span>
+                                     {checkHasNutritionLabels([item]) && (
+                                       <svg
+                                         className={`inline-block w-3 h-3 transition-transform shrink-0 ${openLabelIdx === i ? 'rotate-180' : ''}`}
+                                         fill="none"
+                                         viewBox="0 0 24 24"
+                                         stroke="currentColor"
+                                       >
+                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                       </svg>
+                                     )}
                                    </span>
                                    {item.anomalyFlags && item.anomalyFlags.length > 0 && (
                                      <span className="text-[8px] text-center leading-tight text-amber-600 dark:text-amber-500 w-full font-sans line-clamp-2">
@@ -3102,23 +3121,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                          Confidence: {(item.itemConfidence || '').split('(')[0].trim()}
                                        </span>
                                      )}
-                                     {checkHasNutritionLabels([item]) && (
-                                       <button
-                                         type="button"
-                                         onClick={() => setOpenLabelIdx(prev => prev === i ? null : i)}
-                                         className="mt-1 flex items-center gap-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 select-none"
-                                       >
-                                         <span>{t.viewNutritionLabels}</span>
-                                       <svg
-                                         className={`w-3 h-3 transition-transform ${openLabelIdx === i ? 'rotate-180' : ''}`}
-                                         fill="none"
-                                         viewBox="0 0 24 24"
-                                         stroke="currentColor"
-                                       >
-                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                       </svg>
-                                     </button>
-                                     )}
+
                                    </div>
                                  );
                                })}
