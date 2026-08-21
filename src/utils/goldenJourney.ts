@@ -13,7 +13,7 @@
  * a detector: imbalance stays red. See goldenLedger.ts.
  */
 
-import { detectLedgerImbalances, ledgerImbalancesToInvariants } from './goldenLedger';
+import { detectLedgerImbalances, ledgerImbalancesToInvariants, compileGoldenMeal } from './goldenLedger';
 
 export type JourneyPhase =
   | 'scouted'
@@ -327,6 +327,75 @@ function phaseFrom(diag: Diagnostic | undefined, matchName: string | null): Jour
   return 'usda_live';
 }
 
+function dbSourceToPhase(src: string, hasId: boolean): JourneyPhase | null {
+  const s = String(src || '').toLowerCase();
+  if (!s && !hasId) return null;
+  if (s === 'label' || s === 'brand_official' || s === 'brand') return 'label_truth';
+  if (
+    s === 'internal_catalog' ||
+    s === 'canonical_dict' ||
+    s === 'usual_catalog' ||
+    s === 'canonical' ||
+    s === 'catalog'
+  ) {
+    return 'catalog';
+  }
+  if (s === 'category_fallback' || s === 'estimated' || s === 'fallback') return 'fallback';
+  if (s === 'usda' || s === 'off' || s === 'usda_live') return 'usda_live';
+  if (hasId) return 'catalog';
+  return null;
+}
+
+function foodLogNodes(foodLog: any): any[] {
+  const items = extractFoodItems(foodLog);
+  const out: any[] = [];
+  for (const it of items) {
+    out.push(it);
+    const comps = Array.isArray(it?.components) ? it.components : [];
+    for (const c of comps) out.push(c);
+  }
+  return out;
+}
+
+/** When logs are a 403 pointer, the saved meal still knows catalog / USDA / fallback. */
+function applyFoodLogPhases(rows: GoldenJourneyRow[], foodLog: any): void {
+  const nodes = foodLogNodes(foodLog);
+  if (!nodes.length) return;
+  for (const row of rows) {
+    if (row.phase !== 'scouted' && row.phase !== 'no_match') continue;
+    const named = (n: any) => String(n?.name || n?.originalName || n?.searchQuery || n?.keyword || '');
+    const hit = nodes.find((n) => namesClose(named(n), row.query));
+    if (!hit) continue;
+    const src = String(hit.dbSource || hit.source || hit.bestMatchDbSource || '');
+    const id = hit.dbId || hit.fdcId || hit.canonicalMatch || null;
+    const phase = dbSourceToPhase(src, Boolean(id && String(id) !== 'none'));
+    if (!phase) continue;
+    row.phase = phase;
+    row.source = src || row.source;
+    row.matchId = id ? String(id) : row.matchId;
+    row.matchName = String(hit.name || hit.originalName || row.matchName || '');
+  }
+}
+
+export function journeyResolvedCount(rows: GoldenJourneyRow[]): number {
+  return journeyPhaseCounts(rows).bound;
+}
+
+/** Fallback is a bind, not a success. Bound = catalog/label or USDA. */
+export function journeyPhaseCounts(rows: GoldenJourneyRow[]): {
+  bound: number;
+  catalog: number;
+  usda: number;
+  fallback: number;
+  total: number;
+} {
+  const list = rows || [];
+  const catalog = list.filter((j) => identityOk(j.phase)).length;
+  const usda = list.filter((j) => j.phase === 'usda_live').length;
+  const fallback = list.filter((j) => j.phase === 'fallback').length;
+  return { bound: catalog + usda, catalog, usda, fallback, total: list.length };
+}
+
 export function identityOk(phase: JourneyPhase): boolean {
   return phase === 'catalog' || phase === 'label_truth';
 }
@@ -424,6 +493,8 @@ export function buildJourney(input: { logText?: string; foodLog?: any; scout?: a
       matchName,
     });
   });
+
+  applyFoodLogPhases(rows, input.foodLog);
 
   // Attach per-row math / dietitian blockers from the log
   const scaleItems = [...log.matchAll(/\[Reconcile\] item="([^"]+)" action=scale/g)].map((m) => m[1]);
@@ -525,22 +596,17 @@ export function buildAutoInvariants(input: {
       });
     }
 
-    const noDiag = journey.filter((j) => j.phase === 'scouted');
-    const labelCovered = noDiag.filter((j) =>
-      [...labelDishes].some((d) => namesClose(d, j.dish))
+    const unexplained = journey.filter(
+      (j) => j.phase === 'scouted' || j.phase === 'no_match' || j.phase === 'fallback'
     );
-    // Label-locked dishes never emit Component Resolution Diagnostic — that is OK.
-    const unexplained = noDiag.filter((j) => !labelCovered.includes(j));
     add({
       id: 'id_every_component_resolved',
       group: 'resolve',
       label: 'Every scout component was resolved (diagnostic, catalog, or printed label)',
-      expected: 'identity per component',
+      expected: 'identity per component — fallback does not count',
       actual: unexplained.length
-        ? `unresolved: ${unexplained.map((j) => j.query).join(', ')}`
-        : labelCovered.length
-          ? `${labelCovered.length} covered by printed label (no diagnostic expected)`
-          : 'all components diagnosed',
+        ? `unresolved: ${unexplained.map((j) => `${j.query} (${j.phase})`).join(', ')}`
+        : 'all components diagnosed',
       pass: unexplained.length === 0 && journey.length > 0,
     });
   }
@@ -1033,6 +1099,30 @@ export function buildAutoInvariants(input: {
       pass: false,
     });
   }
+
+  const compile = compileGoldenMeal({
+    logText: log,
+    foodLog: input.foodLog,
+    scout: input.scout,
+  });
+  const missingLogBooks = (compile.books || []).filter(
+    (b) => b.kcal == null && (b.id === 'foundation' || b.id === 'reconcile' || b.id === 'dietitian_payload')
+  );
+  const drift = (compile.imbalances || [])[0];
+  add({
+    id: 'math_trial_balance',
+    group: 'math',
+    label:
+      compile.compiler === 'green'
+        ? 'Trial balance books agree'
+        : missingLogBooks.length
+          ? `Trial balance incomplete (${missingLogBooks.map((b) => b.id).join(', ')} not in log)`
+          : `Trial balance drifted: ${drift?.label || 'books disagree'}`,
+    expected: 'foundation, reconcile, dietitian payload, and saved table present and agree',
+    actual: (compile.books || []).map((b) => `${b.id}=${b.kcal ?? '—'}`).join(', '),
+    pass: compile.compiler === 'green',
+    signature: 'trial_balance',
+  });
 
   return inv;
 }

@@ -64,8 +64,22 @@ export function extractLedgerBooks(input: { logText?: string; foodLog?: any; sco
     (scoutItems || []).map((s: any) => num(s.estimatedCalories ?? s.calories))
   );
 
-  const foundations = [...log.matchAll(/\[Foundation\] item="[^"]+" kcal=([\d.]+)/g)].map((m) => num(m[1]));
-  const reconciles = [...log.matchAll(/\[Reconcile\] item="[^"]+"[^\n]*final=([\d.]+)/g)].map((m) => num(m[1]));
+  const foundationBy = new Map<string, number>();
+  for (const m of log.matchAll(/\[Foundation\] item="([^"]+)" kcal=([\d.]+)/g)) {
+    const v = num(m[2]);
+    if (v != null) foundationBy.set(m[1], v);
+  }
+  const reconBy = new Map<string, number>();
+  for (const m of log.matchAll(/\[Reconcile\] item="([^"]+)"[^\n]*final=([\d.]+)/g)) {
+    const v = num(m[2]);
+    if (v != null) reconBy.set(m[1], v);
+  }
+  for (const m of log.matchAll(/refused silent scale for "([^"]+)"[^\n]*keep foundation=([\d.]+)/g)) {
+    const v = num(m[2]);
+    if (v != null) reconBy.set(m[1], v);
+  }
+  const foundations = [...foundationBy.values()];
+  const reconciles = [...reconBy.values()];
 
   const payload = log.match(/macroTotals=\{[^}]*"calories":\s*([\d.]+)/);
   const narrative = log.match(/pushes this meal to ([\d,]+)\s*calories/i)
@@ -118,6 +132,7 @@ export function detectLedgerImbalances(input: {
     });
   };
 
+  pair('scout_est', 'saved_table', 'identity', 'OPENING_WRONG', 'Scout opening kcal vs saved table');
   pair('foundation', 'reconcile', 'backend', 'SILENT_REPAIR', 'Backend scaled foundation toward a budget');
   pair('reconcile', 'dietitian_payload', 'backend', 'SILENT_REPAIR', 'Pre-dietitian books already drifted');
   pair('dietitian_payload', 'saved_table', 'identity', 'DISH_DROP', 'Saved table ≠ dietitian payload (phantom inject / post-dietitian rewrite)');
@@ -176,6 +191,10 @@ export function compileGoldenMeal(input: {
 }): GoldenMealCompile {
   const books = extractLedgerBooks(input);
   const imbalances = detectLedgerImbalances(input);
+  const logBooks = books.filter(
+    (b) => (b.id === 'foundation' || b.id === 'reconcile') && b.kcal != null
+  ).length;
+  const complete = logBooks >= 1 && books.some((b) => b.id === 'saved_table' && b.kcal != null);
   if (input.replayMode === 'catalog') {
     return {
       books,
@@ -188,9 +207,9 @@ export function compileGoldenMeal(input: {
   return {
     books,
     imbalances,
-    mayPromote: imbalances.length === 0,
+    mayPromote: complete && imbalances.length === 0,
     primaryClass: imbalances[0]?.classHint || null,
-    compiler: imbalances.length === 0 ? 'green' : 'unbalanced',
+    compiler: complete && imbalances.length === 0 ? 'green' : 'unbalanced',
   };
 }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Bug,
@@ -38,6 +38,10 @@ import {
   hydrateWorkItem,
   linePhotosForText,
   publicId,
+  restoreRemainingFromAutoSpot,
+  collectAttempts,
+  triesMatchingLine,
+  formatTriedAttempt,
   buildContinueJob,
   formatContinuePrompt,
   sortReadyQueue,
@@ -54,7 +58,8 @@ import {
 } from '../utils/bugWorkItem';
 import { queueKpis, tagIsFixed } from '../utils/bugQueueKpis';
 import { FoodDetailTabs } from './bugQueue';
-import { buildTapeReplayBody, reanalyzeJobId } from '../utils/bugTapeReplay';
+import { buildTapeReplayBody, reanalyzeJobId, tapeFromJobRecord, scoreLocalTape, pickTapeBoard } from '../utils/bugTapeReplay';
+import { overlayAutoRemaining, isHumanCheckLine } from '../utils/bugTapeReview';
 
 interface BugTrackerModalProps {
   isOpen: boolean;
@@ -79,6 +84,9 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
 
   // Selected tag in right pane
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
+  const selectedTagIdRef = useRef<string | null>(null);
+  selectedTagIdRef.current = selectedTagId;
+  const detailFetchGen = useRef(0);
   const [selectedTagDetail, setSelectedTagDetail] = useState<{
     bug?: any;
     now?: BugNow;
@@ -125,6 +133,7 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
   const [makingGoldenId, setMakingGoldenId] = useState<string | null>(null);
   const [replayingLogId, setReplayingLogId] = useState<string | null>(null);
   const [replayingCatalogId, setReplayingCatalogId] = useState<string | null>(null);
+  const [reanalyzingTagId, setReanalyzingTagId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
@@ -285,15 +294,17 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
       const nowStr = new Date().toLocaleTimeString();
       setLastUpdated(nowStr);
 
-      // Auto-select head of ready queue if none selected
+      // Keep the open card even if remaining is empty. Do not jump to the next leftover.
       if (json.bugTags && json.bugTags.length > 0) {
         const sorted = sortReadyQueue(json.bugTags);
         const top = sorted[0] || json.bugTags[0];
-        if (!selectedTagId || !json.bugTags.some((t: any) => t.id === selectedTagId)) {
+        const current = selectedTagIdRef.current;
+        if (!current || !json.bugTags.some((t: any) => t.id === current)) {
           setSelectedTagId(top.id);
+          selectedTagIdRef.current = top.id;
           fetchTagDetail(top.id);
         } else {
-          fetchTagDetail(selectedTagId);
+          fetchTagDetail(current);
         }
       }
     } catch (err: any) {
@@ -305,83 +316,96 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
 
   const loadPreviewBoard = async (tagOrDetail: any) => {
     try {
-      const tagId = tagOrDetail?.id || tagOrDetail?.bug?.id;
-      const reports = tagOrDetail?.reports || [];
-      const primaryReportId = reports[0]?.reportId || reports[0]?.id;
       const now = tagOrDetail?.now;
       const ev =
         now?.current_evidence ||
         tagOrDetail?.bug?.current_evidence ||
-        reports[0]?.payload ||
-        reports[0];
-
-      let foodLog = ev?.pendingFoodLog || ev?.foodLog || tagOrDetail?.bug?.foodLog || null;
-      let scout = ev?.scoutItems || ev?.scout || tagOrDetail?.bug?.scout || null;
+        tagOrDetail?.reports?.[0]?.payload ||
+        tagOrDetail?.reports?.[0];
+      const jobId = reanalyzeJobId(ev) || tagOrDetail?.jobId || tagOrDetail?.bug?.job_id || null;
+      let foodLog = ev?.pendingFoodLog || ev?.foodLog || null;
+      let scout = ev?.scoutItems || ev?.scout || null;
       let logText = ev?.logText || ev?.backendLogs || '';
-      const extraIssues = tagOrDetail?.now?.remaining || tagOrDetail?.bug?.remaining || [];
-      let jobId = ev?.job_id || ev?.jobId || tagOrDetail?.jobId || tagOrDetail?.bug?.job_id || null;
-      const debugUrl = ev?.debug_url || ev?.scout_url || ev?.backendLogsUrl || '';
-      if (debugUrl && debugUrl.startsWith('/') && !logText) {
+      const extraIssues = now?.remaining || tagOrDetail?.bug?.remaining || [];
+      if (jobId) {
         try {
-          const localLogs = await fetch(debugUrl);
-          if (localLogs.ok) {
-            const t = await localLogs.text();
-            if (t) logText = t;
-          }
+          const jr = await fetch(`/api/jobs/status?jobId=${encodeURIComponent(jobId)}&full=true`);
+          const jjson = await jr.json().catch(() => ({}));
+          const tape = tapeFromJobRecord((jjson.jobs || [])[0]);
+          if (!foodLog) foodLog = tape.foodLog;
+          if (!scout) scout = tape.scout;
+          if (tape.logText && tape.logText.length > String(logText || '').length) logText = tape.logText;
         } catch {
-          /* relative artifact fetch is best-effort */
+          /* job status is best-effort */
         }
-      }
-
-      // If foodLog or scout or logText missing and we have an artifact reportId, fetch payload.json and console.logs.txt
-      if (tagId && primaryReportId && (!foodLog || !scout || !logText)) {
         try {
-          const [payloadRes, logsRes] = await Promise.all([
-            fetch(bugArtifactUrl(tagId, primaryReportId, 'payload.json')).catch(() => null),
-            fetch(bugArtifactUrl(tagId, primaryReportId, 'console.logs.txt')).catch(() => null),
-          ]);
-          if (payloadRes && payloadRes.ok) {
-            const pJson = await payloadRes.json().catch(() => null);
-            const pData = pJson?.data || pJson;
-            if (pData) {
-              if (!foodLog) foodLog = pData.pendingFoodLog || pData.foodLog || pData.result?.pendingFoodLog || pData.debug_payload?.pendingFoodLog || null;
-              if (!scout) scout = pData.scoutItems || pData.scout || pData.result?.scoutItems || pData.debug_payload?.scoutItems || null;
-              if (!jobId) jobId = pData.jobId || pData.debug_payload?.jobId || jobId;
-              if (!logText && pData.backendLogs) logText = pData.backendLogs;
+          const dr = await fetch(`/api/jobs/debug?jobId=${encodeURIComponent(jobId)}`);
+          if (dr.ok && (dr.headers.get('content-type') || '').includes('json')) {
+            const payload = await dr.json().catch(() => null);
+            const logs = payload?.backendLogs || payload?.result?.backendLogs;
+            if (logs && !String(logs).startsWith('[Logs stored in R2') && String(logs).length > 800) {
+              logText = String(logs);
+            }
+            if (!foodLog) {
+              foodLog = payload?.result?.pendingFoodLog || payload?.pendingFoodLog || null;
+            }
+            if (!scout) {
+              scout = payload?.result?.scoutItems || payload?.scoutItems || null;
             }
           }
-          if (logsRes && logsRes.ok && !logText) {
-            const lText = await logsRes.text().catch(() => '');
-            if (lText) logText = lText;
-          }
         } catch {
-          /* ignore artifact probe error */
+          /* debug hydrate is best-effort */
         }
       }
-
-      if (debugUrl || jobId || logText || foodLog || scout) {
+      let remote: any = null;
+      if (!remote && (jobId || foodLog || scout || logText)) {
+        const body = buildTapeReplayBody({
+          mode: 'log',
+          jobId,
+          foodLog,
+          scout,
+          logText,
+          extraIssues,
+        });
         const pRes = await fetch('/api/golden/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            backendLogsUrl: /^https?:\/\//i.test(debugUrl) ? debugUrl : undefined,
-            logText: logText || undefined,
-            foodLog: foodLog || undefined,
-            scout: scout || undefined,
-            extraIssues,
-            jobId,
-          }),
+          body: JSON.stringify(body),
         });
-        if (pRes.ok) {
-          const board = await pRes.json().catch(() => null);
-          if (board) {
-            setSelectedTagDetail((prev) => (prev ? { ...prev, board } : prev));
+        if (pRes.ok) remote = await pRes.json().catch(() => null);
+      }
+      const local =
+        foodLog || scout
+          ? scoreLocalTape({ foodLog, scout, logText, extraIssues })
+          : null;
+      const board = pickTapeBoard(remote, local);
+      if (board) {
+        setSelectedTagDetail((prev) => (prev ? { ...prev, board } : prev));
+        const tagId = tagOrDetail?.id || tagOrDetail?.bug?.id || selectedTagId;
+        if (tagId) {
+          const item = hydrateWorkItem({
+            ...(typeof tagOrDetail === 'object' ? tagOrDetail : {}),
+            work_item: {
+              ...hydrateWorkItem(tagOrDetail),
+              remaining: now?.remaining || hydrateWorkItem(tagOrDetail).remaining,
+              done: now?.done || hydrateWorkItem(tagOrDetail).done,
+            },
+          });
+          const over = overlayAutoRemaining(item, board);
+          if (JSON.stringify(over.remaining) !== JSON.stringify(item.remaining)) {
+            await fetch(`/api/bugs/${encodeURIComponent(tagId)}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ remaining: over.remaining, done: over.done, queue: over.queue }),
+            });
           }
         }
       }
+      return board;
     } catch (err) {
       console.warn('[BugTracker] preview board load skipped:', err);
     }
+    return null;
   };
 
   const handleReplayLog = async (tag: any) => {
@@ -442,37 +466,76 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
     }
   };
 
-  const handleReanalyze = (tag: any) => {
+  const handleReanalyze = async (tag: any) => {
+    if (!tag) return;
     const ev =
       selectedTagDetail?.now?.current_evidence ||
       selectedTagDetail?.bug?.current_evidence ||
       tag?.now?.current_evidence ||
-      tag?.current_evidence ||
+      hydrateWorkItem(tag).current_evidence ||
       null;
     const jobId = reanalyzeJobId(ev);
-    if (!jobId || !onViewJob) return;
-    onClose();
-    onViewJob(jobId);
+    if (!jobId) return;
+    setReanalyzingTagId(tag.id);
+    try {
+      const board = await loadPreviewBoard({
+        ...selectedTagDetail,
+        now: selectedTagDetail?.now,
+        bug: selectedTagDetail?.bug || tag,
+        jobId,
+      });
+      if (board) {
+        setSelectedTagDetail((prev) => (prev ? { ...prev, board } : prev));
+        const item = hydrateWorkItem({
+          ...tag,
+          work_item: {
+            ...hydrateWorkItem(tag),
+            remaining: selectedTagDetail?.now?.remaining || hydrateWorkItem(tag).remaining,
+            done: selectedTagDetail?.now?.done || hydrateWorkItem(tag).done,
+          },
+        });
+        const next = restoreRemainingFromAutoSpot(item, board.autoSpot || []);
+        const remainingChanged =
+          JSON.stringify(next.remaining) !== JSON.stringify(item.remaining) ||
+          JSON.stringify(next.done) !== JSON.stringify(item.done);
+        if (remainingChanged) {
+          await fetch(`/api/bugs/${encodeURIComponent(tag.id)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ remaining: next.remaining, done: next.done, queue: 'in_progress' }),
+          });
+          await fetchTagDetail(tag.id);
+          setSelectedTagDetail((prev) => (prev ? { ...prev, board } : prev));
+        }
+      }
+    } catch (e) {
+      console.warn('[BugTracker] Re-analyze failed:', e);
+    } finally {
+      setReanalyzingTagId(null);
+    }
   };
 
   const fetchTagDetail = async (tagId: string) => {
+    const gen = ++detailFetchGen.current;
     setDetailLoading(true);
     try {
       const res = await fetch(`/api/bugs/${tagId}`);
       const json = await res.json().catch(() => ({}));
+      if (gen !== detailFetchGen.current) return;
       if (res.ok) {
         setSelectedTagDetail(json);
         setEditBugDraft(json.now?.bug || json.bug?.identified_problems || json.bug?.title || '');
         setEditRemainingDraft((json.now?.remaining || []).join(', '));
         const cat = (json.bug?.category || json.category || '').toLowerCase();
         if (cat === 'foodcart' || cat === 'golden') {
-          loadPreviewBoard(json);
+          await loadPreviewBoard(json);
+          if (gen !== detailFetchGen.current) return;
         }
       }
     } catch {
       /* ignore fetch error */
     } finally {
-      setDetailLoading(false);
+      if (gen === detailFetchGen.current) setDetailLoading(false);
     }
   };
 
@@ -504,6 +567,7 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
       return;
     }
     setSelectedTagId(tagId);
+    selectedTagIdRef.current = tagId;
     setEditingBugField(false);
     setEditingRemaining(false);
     setShowAddAttempt(false);
@@ -516,7 +580,9 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
       const res = await fetch('/api/bugs/next');
       const json = await res.json().catch(() => ({}));
       if (res.ok && !json.empty && json.tag_id) {
+        detailFetchGen.current += 1;
         setSelectedTagId(json.tag_id);
+        selectedTagIdRef.current = json.tag_id;
         setSelectedTagDetail(json);
         setEditBugDraft(json.now?.bug || '');
         setEditRemainingDraft((json.now?.remaining || []).join(', '));
@@ -1235,8 +1301,6 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
                     const lastActionedDate = getLastActionedDate(tag);
 
                     const hasAgentCommits = item.commits && item.commits.some((c) => c.kind === 'agent' || c.actor !== 'you');
-                    const lastCommit = item.commits && item.commits.length > 0 ? item.commits[item.commits.length - 1] : null;
-                    const isLastAgent = lastCommit && (lastCommit.kind === 'agent' || lastCommit.actor !== 'you');
 
                     return (
                       <div
@@ -1280,16 +1344,14 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
                               <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold border bg-red-500/15 text-red-400 border-red-500/30">
                                 stuck
                               </span>
-                            ) : hasAgentCommits ? (
-                              isLastAgent ? (
-                                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold border bg-amber-500/15 text-amber-300 border-amber-500/30">
-                                  human to do
-                                </span>
-                              ) : (
-                                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold border bg-indigo-500/15 text-indigo-300 border-indigo-500/30">
-                                  agent to do
-                                </span>
-                              )
+                            ) : (item.remaining || []).filter((r) => !isHumanCheckLine(r)).length > 0 ? (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold border bg-indigo-500/15 text-indigo-300 border-indigo-500/30">
+                                agent to do
+                              </span>
+                            ) : hasAgentCommits || (item.remaining || []).length > 0 ? (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold border bg-amber-500/15 text-amber-300 border-amber-500/30">
+                                human to do
+                              </span>
                             ) : (
                               <span className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
                                 un-actioned
@@ -1464,13 +1526,13 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
                                   onReplayCatalog={() => handleReplayCatalog(selectedTag)}
                                   replayingCatalog={replayingCatalogId === selectedTag.id}
                                   onReanalyze={() => handleReanalyze(selectedTag)}
+                                  reanalyzing={reanalyzingTagId === selectedTag.id}
                                   canReanalyze={Boolean(
-                                    onViewJob &&
-                                      reanalyzeJobId(
-                                        selectedTagDetail?.now?.current_evidence ||
-                                          selectedTagDetail?.bug?.current_evidence ||
-                                          hydrateWorkItem(selectedTag).current_evidence
-                                      )
+                                    reanalyzeJobId(
+                                      selectedTagDetail?.now?.current_evidence ||
+                                        selectedTagDetail?.bug?.current_evidence ||
+                                        hydrateWorkItem(selectedTag).current_evidence
+                                    )
                                   )}
                                 />
                               ) : null;
@@ -1657,6 +1719,27 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
                                           {pinned?.comment ? (
                                             <p className="text-[10px] text-white/50 mt-0.5">{pinned.comment}</p>
                                           ) : null}
+                                          {triesMatchingLine(
+                                            collectAttempts({
+                                              ...selectedTagItem,
+                                              commits: selectedCommits.length
+                                                ? selectedCommits
+                                                : selectedTagItem.commits,
+                                            }),
+                                            remItem
+                                          ).map((a, ti) => (
+                                            <p
+                                              key={ti}
+                                              className="text-[10px] text-amber-200/80 mt-1 leading-snug"
+                                              title={formatTriedAttempt(a)}
+                                            >
+                                              tried: {a.hyp.slice(0, 72)}
+                                              {a.hyp.length > 72 ? '…' : ''}
+                                              {' · '}
+                                              {/pass|green/i.test(a.result || '') ? 'claimed pass' : a.result || 'attempt'}
+                                              {a.file ? ` · ${a.file}` : ''}
+                                            </p>
+                                          ))}
                                         </div>
                                         <button
                                           type="button"
@@ -1675,7 +1758,11 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
                                     })}
                                   </div>
                                 ) : (
-                                  <span className="leading-relaxed text-white/50">{selectedTag.whats_still_open || '—'}</span>
+                                  <span className="leading-relaxed text-white/50">
+                                    {selectedBugNow?.done?.length
+                                      ? 'None — Re-analyze this meal, then Mark fixed. Do not Promote from chat.'
+                                      : '—'}
+                                  </span>
                                 )}
                               </div>
 
@@ -1709,24 +1796,47 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
                                   <strong className="text-white block">
                                     Tried / Previous Tentatives:
                                   </strong>
+                                  <p className="text-[10px] text-white/40 font-sans">
+                                    Grouped by remaining line. Agents only work the first remaining row.
+                                  </p>
                                   <div className="space-y-1.5 font-mono text-[11px]">
-                                    {(selectedBugNow?.tried && selectedBugNow.tried.length > 0
-                                      ? selectedBugNow.tried
-                                      : selectedCommits
-                                          .filter((c) => c.attempt)
-                                          .map((c) => {
-                                            const a = c.attempt!;
-                                            const burnedTag = a.burned ? ' | DO NOT RETRY' : (a.result ? ` | [${a.result}]` : '');
-                                            const noteTag = a.note ? ` (${a.note})` : '';
-                                            return `${a.hyp} | ${a.file} | ${a.test}${burnedTag}${noteTag}`;
-                                          })
-                                    ).map((t, idx) => {
+                                    {(() => {
+                                      const attempts = collectAttempts({
+                                        ...selectedTagItem,
+                                        commits: selectedCommits.length
+                                          ? selectedCommits
+                                          : selectedTagItem.commits,
+                                      });
+                                      const lines = [
+                                        ...(selectedBugNow?.remaining || []),
+                                        ...(selectedBugNow?.done || []),
+                                      ];
+                                      const grouped = lines
+                                        .map((ln) => ({ ln, tries: triesMatchingLine(attempts, ln) }))
+                                        .filter((g) => g.tries.length);
+                                      const orphans = attempts.filter(
+                                        (a) => !lines.some((ln) => triesMatchingLine([a], ln).length)
+                                      );
+                                      const blocks: string[] = [];
+                                      for (const g of grouped) {
+                                        blocks.push(`▸ ${g.ln}`);
+                                        for (const a of g.tries) blocks.push(formatTriedAttempt(a));
+                                      }
+                                      if (orphans.length) {
+                                        blocks.push('▸ unscoped');
+                                        for (const a of orphans) blocks.push(formatTriedAttempt(a));
+                                      }
+                                      return blocks;
+                                    })().map((t, idx) => {
                                       const isDoNotRetry = t.includes('DO NOT RETRY') || t.includes('burned');
+                                      const isHead = t.startsWith('▸ ');
                                       return (
                                         <div
                                           key={idx}
                                           className={`border p-2 rounded-lg leading-relaxed whitespace-pre-wrap ${
-                                            isDoNotRetry
+                                            isHead
+                                              ? 'border-indigo-500/30 text-indigo-200 font-sans font-bold'
+                                              : isDoNotRetry
                                               ? 'bg-rose-950/40 border-rose-500/30 text-rose-200'
                                               : 'bg-indigo-950/40 border-indigo-500/30 text-indigo-200'
                                           }`}

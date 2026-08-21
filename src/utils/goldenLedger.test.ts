@@ -55,6 +55,31 @@ describe('meal trial balance', () => {
     expect(table?.kcal).toBe(4106);
   });
 
+  it('refused silent scale keeps foundation, not the scaled final=', () => {
+    const books = extractLedgerBooks({
+      logText: `
+[backend] [Foundation] item="Croissant" kcal=617.31
+[backend] [Reconcile] item="Croissant" action=scale foundation=617.31 budget=460 final=460 factor=0.745
+[backend] [Reconcile] refused silent scale for "Croissant" — keep foundation=617.31
+[backend] [Foundation] item="Fruit Salad" kcal=365
+[backend] [Reconcile] item="Fruit Salad" action=keep foundation=365 budget=120 final=365 factor=1.000
+macroTotals={"calories":982}
+`,
+      foodLog: { nutrients: { calories: 982 } },
+    });
+    expect(books.find((b) => b.id === 'foundation')?.kcal).toBe(982.3);
+    expect(books.find((b) => b.id === 'reconcile')?.kcal).toBe(982.3);
+    expect(books.find((b) => b.id === 'dietitian_payload')?.kcal).toBe(982);
+  });
+
+  it('flags scout opening vs saved table as a trial-balance miss', () => {
+    const imbalances = detectLedgerImbalances({
+      scout: [{ estimatedCalories: 2280 }],
+      foodLog: { nutrients: { calories: 2836 } },
+    });
+    expect(imbalances.some((i) => i.id === 'ledger_scout_est_vs_saved_table')).toBe(true);
+  });
+
   it('compiler refuses promote when books disagree or replay is catalog', () => {
     const unbalanced = compileGoldenMeal({
       logText: TAPE,

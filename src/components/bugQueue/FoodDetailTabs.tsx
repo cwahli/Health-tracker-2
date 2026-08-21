@@ -1,7 +1,7 @@
 import React from 'react';
 import { PHASE_LABEL, groupJourneyByDish } from '../../utils/goldenScoreboard';
+import { journeyPhaseCounts } from '../../utils/goldenJourney';
 import { Play, Loader2 } from 'lucide-react';
-import { AutoSpotList } from './AutoSpotList';
 import type { AutoSpotHit } from '../../utils/bugAutoSpot';
 
 export type FoodDetailTabsProps = {
@@ -90,7 +90,42 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
   const journey = Array.isArray(board?.journey) ? board.journey : [];
   const invariants = Array.isArray(board?.invariants) ? board.invariants : [];
   const autoSpotHits: AutoSpotHit[] = Array.isArray(board?.autoSpot) ? board.autoSpot : [];
-  const ledger = board?.ledger;
+  const phaseCounts = journeyPhaseCounts(journey);
+  const invLabelKeys = new Set(
+    invariants.map((i: any) => String(i.label || i.id || '').toLowerCase().replace(/\s+/g, ' ').trim())
+  );
+  const extraSpotHits = autoSpotHits.filter((h) => {
+    const k = String(h.text || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    return k && !invLabelKeys.has(k);
+  });
+  const checkRows = [
+    ...invariants,
+    ...extraSpotHits.map((h) => ({
+      id: h.id,
+      label: h.text,
+      pass: false,
+      status: 'fail',
+    })),
+  ];
+  const ledger =
+    board?.ledger ||
+    (Array.isArray(board?.observedMeal) && board.observedMeal.length
+      ? {
+          books: [
+            {
+              id: 'saved_table',
+              label: 'Saved / UI table',
+              kcal: board.observedMeal.reduce(
+                (s: number, d: any) => s + (Number(d.calories) || 0),
+                0
+              ),
+            },
+          ],
+          imbalances: [],
+          compiler: 'unbalanced',
+          mayPromote: false,
+        }
+      : null);
   const progress = computeBoardProgress(board);
   const effectiveJobId = jobId || board?.jobId || board?.job_id;
   const hasJob = Boolean(effectiveJobId);
@@ -201,7 +236,7 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
               disabled={replayingLog}
               onClick={onReplayLog}
               className="py-1.5 px-2.5 rounded-xl bg-sky-950/70 hover:bg-sky-900 border border-sky-500/40 text-sky-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
-              title={`Replay saved tape (job ${String(effectiveJobId).slice(0, 8)})`}
+              title="Fill Checks, Dishes, Scout identity, and Balance from the saved meal tape"
             >
               {replayingLog ? <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" /> : <Play className="w-3.5 h-3.5 text-sky-400" />}
               <span>Replay log</span>
@@ -218,14 +253,26 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
           )
         )}
 
+        {onReplayCatalog && (
+          <button
+            type="button"
+            disabled={replayingCatalog}
+            onClick={onReplayCatalog}
+            className="py-1.5 px-2.5 rounded-xl bg-teal-950/70 hover:bg-teal-900 border border-teal-500/40 text-teal-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+            title="Frozen scout × dictionary. Preview only — does not mark the card done."
+          >
+            {replayingCatalog ? <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-400" /> : <Play className="w-3.5 h-3.5 text-teal-400" />}
+            <span>Replay catalog</span>
+          </button>
+        )}
         {onReanalyze && (
-          hasJob ? (
+          hasJob || canReanalyze ? (
             <button
               type="button"
               disabled={reanalyzing}
               onClick={onReanalyze}
               className="py-1.5 px-2.5 rounded-xl bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
-              title={`Re-analyze meal with Vision Scout (job ${String(effectiveJobId).slice(0, 8)})`}
+              title="Reload remaining from this tape (auto-spot). Tracker stays open. Use Replay log to fill the four tabs."
             >
               {reanalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" /> : <Play className="w-3.5 h-3.5 text-indigo-400" />}
               <span>Re-analyze</span>
@@ -241,50 +288,23 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
             </button>
           )
         )}
-        {onReplayCatalog && (
-          <button
-            type="button"
-            disabled={replayingCatalog}
-            onClick={onReplayCatalog}
-            className="py-1.5 px-2.5 rounded-xl bg-teal-950/70 hover:bg-teal-900 border border-teal-500/40 text-teal-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
-            title="Frozen scout × dictionary. Preview only — does not mark the card done."
-          >
-            {replayingCatalog ? <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-400" /> : <Play className="w-3.5 h-3.5 text-teal-400" />}
-            <span>Replay catalog</span>
-          </button>
-        )}
-        {onReanalyze && (
-          <button
-            type="button"
-            disabled={!canReanalyze}
-            onClick={onReanalyze}
-            className="py-1.5 px-2.5 rounded-xl bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
-            title={canReanalyze ? 'Open the saved food job' : 'No saved job_id on this card'}
-          >
-            <Play className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Re-analyze</span>
-          </button>
-        )}
         </div>
       </div>
 
       {/* Pane: Checks */}
       {activeTab === 'checks' && (
         <div className="bg-[#0f172a] border border-slate-700/80 rounded-xl p-3 space-y-2.5 text-xs text-white">
-          {autoSpotHits.length > 0 && (
-            <AutoSpotList hits={autoSpotHits} className="mb-2" />
-          )}
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-300">
-              Journey Checks & Invariants ({invariants.length})
+              Journey Checks & Invariants ({checkRows.length})
             </span>
           </div>
 
-          {invariants.length === 0 ? (
+          {checkRows.length === 0 ? (
             <p className="text-[11px] text-white/50 italic">No invariant checks recorded on this meal tape.</p>
           ) : (
             <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-              {invariants.map((inv: any, idx: number) => {
+              {checkRows.map((inv: any, idx: number) => {
                 const isPass = inv.pass === true || inv.status === 'pass';
                 return (
                   <div
@@ -366,7 +386,10 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
       {activeTab === 'scout' && (
         <div className="bg-[#0f172a] border border-slate-700/80 rounded-xl p-3 space-y-2.5 text-xs text-white">
           <div className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-300">
-            Scout Journey — {journey.filter((j: any) => j.identityPass).length}/{journey.length} identified
+            Scout Journey — {phaseCounts.bound}/{phaseCounts.total} bound
+            {phaseCounts.total > 0
+              ? ` (${phaseCounts.catalog} catalog/label · ${phaseCounts.usda} USDA · ${phaseCounts.fallback} fallback)`
+              : ''}
           </div>
 
           {journey.length === 0 ? (
@@ -415,12 +438,16 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
                     : 'bg-rose-500/20 text-rose-300'
                 }`}
               >
-                {ledger.compiler === 'green' ? 'balanced' : 'unbalanced'}
+                {ledger.compiler === 'green'
+                  ? 'balanced'
+                  : (ledger.books || []).some((b: any) => b.id === 'foundation' && b.kcal != null)
+                    ? 'unbalanced'
+                    : 'logs not loaded'}
               </span>
             )}
           </div>
 
-          {!ledger ? (
+          {!(ledger && (ledger.books || []).length) ? (
             <p className="text-[11px] text-white/50 italic">No ledger compile data available for this meal.</p>
           ) : (
             <div className="space-y-2">

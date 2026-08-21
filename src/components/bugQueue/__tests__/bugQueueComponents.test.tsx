@@ -388,9 +388,9 @@ describe('FoodDetailTabs component (G1-4)', () => {
         }}
       />
     );
-    expect(html).toContain('Also spotted on tape');
+    expect(html).toContain('Journey Checks');
     expect(html).toContain('pick_existing');
-    expect(html).toContain('OPENING_WRONG');
+    expect(html).toContain('fail');
   });
 
   it('renders "no saved job" disabled button when no jobId is present (G2-2)', () => {

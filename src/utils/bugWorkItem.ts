@@ -4,6 +4,8 @@
  * Commits = loop history. Agent iteration ≠ a new food/medical job.
  */
 
+import { isHumanCheckLine } from './bugTapeReview';
+
 export const BURN_BUDGET = 2;
 
 export type BugQueueStatus = 'ready' | 'in_progress' | 'blocked' | 'done';
@@ -471,7 +473,7 @@ export function lineStrikeCount(
 }
 
 export const DRAIN_CARD_INSTRUCTION =
-  'Drain this card. Work continue.active_line only (one class, one file, named vitest on a NEW food). POST /api/bugs/<tag_id>/attempts. If continue.stop=false, immediately work the new active_line — do not wait for the human, do not summarize yet. One summary only when continue.stop=true (remaining empty). Two misses on a line parks it and returns the next remaining.';
+  'Drain automatic tape checks on this card. Work continue.active_line only (one class, one file, named vitest on a NEW food). POST /attempts then GET /api/bugs/next — remaining is re-scored from the tape, not from claimed pass. If continue.stop=false, immediately work the new active_line. stop=true means auto checks are green or blocked: human review only. Two misses park that line. Do not work visual/UI remaining (human).';
 
 export function applyAttempt(
   item: BugWorkItem,
@@ -589,6 +591,75 @@ export function applySnapRemaining(
   return { ...item, remaining, current_evidence: evidence };
 }
 
+function remainingOverlap(a: string, b: string): boolean {
+  const na = norm(a);
+  const nb = norm(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.length >= 12 && nb.includes(na)) return true;
+  if (nb.length >= 12 && na.includes(nb)) return true;
+  return false;
+}
+
+/** Honor-system Done is not meal-green. Tape auto-spot remaining comes back; matching Done rows move with it. */
+export function restoreRemainingFromAutoSpot(
+  item: BugWorkItem,
+  hits: Array<{ text?: string; parked?: boolean }>
+): BugWorkItem {
+  const texts = (hits || [])
+    .filter((h) => h && !h.parked && String(h.text || '').trim() && !/scouted only/i.test(String(h.text)))
+    .map((h) => String(h.text).trim());
+  if (!texts.length) return item;
+  let remaining = item.remaining.slice();
+  let done = item.done.slice();
+  for (const t of texts) {
+    const doneHit = done.find((d) => remainingOverlap(d, t));
+    if (doneHit) {
+      done = done.filter((d) => d !== doneHit);
+      if (!remaining.some((r) => remainingOverlap(r, doneHit))) remaining.push(doneHit);
+      continue;
+    }
+    if (!remaining.some((r) => remainingOverlap(r, t))) remaining.push(t);
+  }
+  return {
+    ...item,
+    remaining,
+    done,
+    queue: remaining.length ? 'in_progress' : item.queue,
+  };
+}
+
+export function collectAttempts(item: BugWorkItem): BugAttempt[] {
+  const all: BugAttempt[] = [...(item.burns || [])];
+  for (const c of item.commits || []) {
+    const a = c?.attempt;
+    if (!a) continue;
+    if (!all.some((x) => x.hyp === a.hyp && x.file === a.file && x.test === a.test && x.at === a.at)) {
+      all.push(a);
+    }
+  }
+  return all;
+}
+
+export function triesMatchingLine(attempts: BugAttempt[], line: string): BugAttempt[] {
+  const needle = String(line || '').trim();
+  if (!needle) return [];
+  return (attempts || []).filter((a) => {
+    if (a.line) return remainingOverlap(a.line, needle);
+    return false;
+  });
+}
+
+export function formatTriedAttempt(a: BugAttempt): string {
+  if (a.burned) {
+    return `${a.hyp} | ${a.file} | ${a.test} | ${a.result || 'burned'} | DO NOT RETRY`;
+  }
+  const statusText = a.result ? ` | [${a.result}]` : '';
+  const noteText = a.note ? ` (${a.note})` : '';
+  const lineText = a.line ? ` · line: ${a.line}` : '';
+  return `${a.hyp} | ${a.file} | ${a.test}${statusText}${noteText}${lineText}`;
+}
+
 export function linePhotosForText(evidence: BugEvidence | null | undefined, text: string): RemainingLinePhoto | undefined {
   const needle = String(text || '').trim().toLowerCase();
   if (!needle || !evidence?.line_photos?.length) return undefined;
@@ -641,28 +712,8 @@ export function buildNow(tag: any): BugNow {
   const item = hydrateWorkItem(tag);
   const burned = item.burns.filter((b) => b.burned);
 
-  const allAttempts: BugAttempt[] = [...item.burns];
-  if (Array.isArray(item.commits)) {
-    for (const c of item.commits) {
-      if (
-        c?.attempt &&
-        !allAttempts.some(
-          (a) => a.hyp === c.attempt?.hyp && a.file === c.attempt?.file && a.test === c.attempt?.test
-        )
-      ) {
-        allAttempts.push(c.attempt);
-      }
-    }
-  }
-
-  const triedStrings = allAttempts.map((b) => {
-    if (b.burned) {
-      return `${b.hyp} | ${b.file} | ${b.test} | ${b.result || 'burned'} | DO NOT RETRY`;
-    }
-    const statusText = b.result ? ` | [${b.result}]` : '';
-    const noteText = b.note ? ` (${b.note})` : '';
-    return `${b.hyp} | ${b.file} | ${b.test}${statusText}${noteText}`;
-  });
+  const allAttempts = collectAttempts(item);
+  const triedStrings = allAttempts.map(formatTriedAttempt);
 
   return {
     public_id: publicId(item, tag?.id),
@@ -721,21 +772,24 @@ export function buildContinueJob(tag: any, activeLine?: string | null): BugConti
   const id = String(tag?.id || '');
   const now = buildNow(tag);
   const remaining = item.remaining || [];
-  const selected = matchRemainingLine(remaining, activeLine) || remaining[0] || null;
+  const autoRemaining = remaining.filter((r) => !isHumanCheckLine(r));
+  const autoEmpty = autoRemaining.length === 0;
+  const selected = autoEmpty
+    ? null
+    : matchRemainingLine(autoRemaining, activeLine) || autoRemaining[0] || null;
   const blocked = item.queue === 'blocked';
-  const empty = !selected;
-  const stop = blocked || empty || item.queue === 'done';
+  const stop = blocked || item.queue === 'done' || autoEmpty;
   const cls = selected ? inferLineClass(selected, item.class) : item.class || '';
   const total = (item.done || []).length + (item.parked || []).length + remaining.length;
   const idx = (item.done || []).length + 1;
   let say = `DRAIN ${now.public_id} ${idx}/${total || 1}: ${selected}. After POST, if stop=false immediately work continue.active_line. Do not wait for the human. Summary only when remaining is empty.`;
   if (item.queue === 'done') say = `STOP. ${now.public_id} is done. Do not edit.`;
   else if (blocked) say = `STOP. ${now.public_id} is blocked. Human Unblock before continue.`;
-  else if (empty) {
-    const parkedN = (item.parked || []).length;
-    say = parkedN
-      ? `STOP. ${now.public_id} remaining is empty (${parkedN} parked). Do not Promote. Human Re-analyze / Unblock parked.`
-      : `STOP. ${now.public_id} remaining is empty. Do not Promote. Human Re-analyze then Mark fixed.`;
+  else if (autoEmpty) {
+    const humanN = remaining.filter((r) => isHumanCheckLine(r)).length;
+    say = humanN
+      ? `STOP. ${now.public_id} automatic checks are green. Human review ${humanN} visual/UI line(s). Do not Promote.`
+      : `STOP. ${now.public_id} automatic checks are green. Human Re-analyze then Mark fixed. Do not Promote.`;
   }
   const evidence = item.current_evidence;
   const linePhoto = selected ? linePhotosForText(evidence, selected) : null;
@@ -759,7 +813,7 @@ export function buildContinueJob(tag: any, activeLine?: string | null): BugConti
     debug_url: evidence?.debug_url || evidence?.scout_url || null,
     photo,
     comment: linePhoto?.comment || '',
-    tried: now.tried,
+    tried: triesMatchingLine(collectAttempts(item), selected || '').map(formatTriedAttempt),
     burns_used: now.burns_used,
     queue: item.queue,
     last_loop: (() => {
@@ -779,7 +833,9 @@ export function buildContinueJob(tag: any, activeLine?: string | null): BugConti
       'summarize before continue.stop=true',
       'POST result=pass when test is a filename, names this meal’s FDC, or file ≠ File hint',
     ],
-    next_if_pass: selected ? remaining.filter((r) => r !== selected)[0] || null : remaining[0] || null,
+    next_if_pass: selected
+      ? autoRemaining.filter((r) => r !== selected)[0] || null
+      : autoRemaining[0] || null,
     keep_going: !stop,
     drain: true,
     parked: item.parked || [],
@@ -812,7 +868,7 @@ export function formatContinuePrompt(job: BugContinueJob): string {
         `Photo: ${job.photo || 'none'}`,
         `Comment: ${job.comment || 'none'}`,
         `Tape: job_id=${job.job_id || 'none'} debug=${job.debug_url || 'none'}`,
-        `Tried / do not retry: ${job.tried.join(' · ') || 'none yet'}`,
+        `Tried on this line only: ${job.tried.join(' · ') || 'none yet'}`,
         `Last loop: ${job.last_loop || 'none'}`,
         `Next remaining after POST: ${job.remaining_after.join(' · ') || 'none'}`,
         `Parked: ${job.parked.join(' · ') || 'none'}`,

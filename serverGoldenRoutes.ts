@@ -188,7 +188,9 @@ function unwrapFetchedLogs(body: string): string {
     try {
       const j = JSON.parse(trimmed);
       const inner = j.backendLogs || j.result?.backendLogs || j.debug_payload?.backendLogs;
-      if (inner && String(inner).length > 80) return String(inner);
+      const s = inner ? String(inner) : '';
+      if (s && !previewLogNeedsHydrate(s)) return s;
+      if (!previewLogNeedsHydrate(t)) return t;
     } catch {
       /* keep raw */
     }
@@ -200,6 +202,89 @@ function previewLogNeedsHydrate(logText: string): boolean {
   const t = String(logText || '');
   if (t.length < 800) return true;
   return !/\[Reconcile\]|\[Budget\]|\[CuratorAction\]/.test(t);
+}
+
+function tapeFieldsFromJob(job: any): { foodLog: any; scout: any; logText: string; logsUrl: string; debugUrl: string } {
+  const cr = job?.clean_result && typeof job.clean_result === 'object' ? job.clean_result : {};
+  const data = job?.data && typeof job.data === 'object' ? job.data : {};
+  return {
+    foodLog: cr.pendingFoodLog || cr.foodLog || data.pendingFoodLog || data.foodLog || null,
+    scout: cr.scoutItems || cr.scout || data.scoutItems || data.scout || null,
+    logText: String(cr.backendLogs || data.backendLogs || job?.backendLogs || ''),
+    logsUrl: String(cr.backendLogsUrl || data.backendLogsUrl || ''),
+    debugUrl: String(cr.debugUrl || cr.debug_url || job?.debug_url || ''),
+  };
+}
+
+/** Public pub-*.r2.dev URLs are often 403. Prefer agent_jobs + S3. */
+async function hydratePreviewFromJob(
+  deps: GoldenRouteDeps,
+  jobId: string,
+  current: { logText: string; foodLog: any; scout: any }
+): Promise<{ logText: string; foodLog: any; scout: any }> {
+  let { logText, foodLog, scout } = current;
+  try {
+    const { fetchLogsFromR2, fetchDebugPayloadFromR2 } = await import('./src/utils/r2Storage.js');
+    if (previewLogNeedsHydrate(logText)) {
+      const logs = await fetchLogsFromR2(jobId);
+      if (logs && !previewLogNeedsHydrate(logs)) logText = logs;
+    }
+    if (!foodLog || !scout || previewLogNeedsHydrate(logText)) {
+      const payload = await fetchDebugPayloadFromR2(jobId);
+      if (payload) {
+        if (!foodLog) foodLog = payload.pendingFoodLog || payload.result?.pendingFoodLog || payload.foodLog || null;
+        if (!scout) scout = payload.scoutItems || payload.result?.scoutItems || payload.scout || null;
+        const inner = payload.backendLogs || payload.result?.backendLogs;
+        if (inner && !previewLogNeedsHydrate(String(inner))) logText = String(inner);
+      }
+    }
+    const { getInMemoryServerJob } = await import('./serverJobs.js');
+    let job: any = getInMemoryServerJob(jobId);
+    if (!job) {
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const { data } = await supabaseAdmin.from('agent_jobs').select('*').eq('id', jobId).maybeSingle();
+      job = data;
+      if (job?.clean_result && typeof job.clean_result === 'object' && (job.clean_result as any).is_r2) {
+        try {
+          const { fetchJobResultFromR2 } = await import('./src/utils/r2Storage.js');
+          const full = await fetchJobResultFromR2(jobId);
+          if (full) job.clean_result = full;
+        } catch {
+          /* keep stub */
+        }
+      }
+    }
+    const tape = tapeFieldsFromJob(job);
+    if (!foodLog) foodLog = tape.foodLog;
+    if (!scout) scout = tape.scout;
+    if (tape.logText && tape.logText.length > logText.length) logText = tape.logText;
+    if (previewLogNeedsHydrate(logText)) {
+      const logKey = r2KeyFromPhotoRef(tape.logsUrl) || `logs/${jobId}.log`;
+      const logs = await getR2Text(deps, logKey);
+      if (logs) {
+        const body = unwrapFetchedLogs(logs);
+        if (body.length > logText.length) logText = body;
+      }
+    }
+    if (previewLogNeedsHydrate(logText) || !foodLog || !scout) {
+      const dbgKey = r2KeyFromPhotoRef(tape.debugUrl) || `debug/${jobId}.json`;
+      const dbg = await getR2Text(deps, dbgKey);
+      if (dbg) {
+        const body = unwrapFetchedLogs(dbg);
+        if (body.length > logText.length) logText = body;
+        try {
+          const j = JSON.parse(dbg.trim().startsWith('{') ? dbg : '{}');
+          if (!foodLog) foodLog = j.pendingFoodLog || j.result?.pendingFoodLog || j.foodLog || null;
+          if (!scout) scout = j.scoutItems || j.result?.scoutItems || j.scout || null;
+        } catch {
+          /* logs only */
+        }
+      }
+    }
+  } catch {
+    /* keep what we have */
+  }
+  return { logText, foodLog, scout };
 }
 
 function casePrefix(id: string) {
@@ -595,6 +680,31 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
     });
   });
 
+  app.get('/api/golden/tape/:jobId', async (req: Request, res: Response) => {
+    const jobId = String(req.params.jobId || '').trim();
+    if (!jobId) return res.status(400).json({ error: 'jobId required' });
+    try {
+      const hydrated = await hydratePreviewFromJob(deps, jobId, {
+        logText: '',
+        foodLog: null,
+        scout: null,
+      });
+      const board = buildScoreboard({
+        logText: hydrated.logText,
+        foodLog: hydrated.foodLog,
+        scout: hydrated.scout,
+      });
+      res.json({
+        ...board,
+        jobId,
+        logChars: hydrated.logText.length,
+        tapeHydrated: !previewLogNeedsHydrate(hydrated.logText),
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'tape hydrate failed' });
+    }
+  });
+
   app.post('/api/golden/preview', async (req: Request, res: Response) => {
     let logText = String(req.body?.logText || req.body?.backendLogs || '');
     let foodLog = req.body?.foodLog || req.body?.pendingFoodLog || null;
@@ -632,7 +742,9 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
         const { fetchLogsFromR2, fetchDebugPayloadFromR2 } = await import('./src/utils/r2Storage.js');
         if (needsHydrate) {
           const logs = await fetchLogsFromR2(jobId);
-          if (logs && logs.length > logText.length) logText = logs;
+          if (logs && (logs.length > logText.length || !previewLogNeedsHydrate(logs))) {
+            if (!previewLogNeedsHydrate(logs) || logs.length > logText.length) logText = logs;
+          }
         }
         if (!foodLog || !scout || previewLogNeedsHydrate(logText)) {
           const payload = await fetchDebugPayloadFromR2(jobId);
@@ -654,12 +766,18 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
                 null;
             }
             const inner = payload.backendLogs || payload.result?.backendLogs;
-            if (inner && String(inner).length > logText.length) logText = String(inner);
+            if (inner && !previewLogNeedsHydrate(String(inner)) && String(inner).length > logText.length) {
+              logText = String(inner);
+            }
           }
         }
       } catch {
         /* keep what we have */
       }
+      const fromJob = await hydratePreviewFromJob(deps, jobId, { logText, foodLog, scout });
+      logText = fromJob.logText;
+      foodLog = fromJob.foodLog;
+      scout = fromJob.scout;
     }
     const replayModeRaw = String(req.body?.replayMode || req.body?.mode || '');
     if (replayModeRaw === 'catalog' && !normalizeScoutItems(scout).length) {

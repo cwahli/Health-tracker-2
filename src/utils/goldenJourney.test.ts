@@ -7,6 +7,8 @@ import {
   groupJourneyByDish,
   snapshotVisibleInvariants,
   sanitizeJobErrorText,
+  journeyResolvedCount,
+  journeyPhaseCounts,
 } from './goldenJourney';
 import { buildScoreboard } from './goldenScoreboard';
 
@@ -66,6 +68,43 @@ describe('goldenJourney — scout identity phases', () => {
     expect(byQ['hummus'].identityPass).toBe(false);
   });
 
+  it('fills scouted rows from saved foodLog dbSource when logs are missing', () => {
+    const rows = buildJourney({
+      scout: {
+        items: [
+          {
+            originalName: 'butter croissant',
+            components: [
+              { searchQuery: 'wheat flour' },
+              { searchQuery: 'strawberry' },
+              { searchQuery: 'milk' },
+            ],
+          },
+        ],
+      },
+      foodLog: {
+        itemsBreakdown: [
+          {
+            name: 'Croissant',
+            components: [
+              { name: 'wheat flour', dbSource: 'internal_catalog', dbId: '172242' },
+              { name: 'strawberry', dbSource: 'category_fallback' },
+              { name: 'milk', dbSource: 'usda', fdcId: '746782' },
+            ],
+          },
+        ],
+      },
+    });
+    const byQ = Object.fromEntries(rows.map((r) => [r.query, r]));
+    expect(byQ['wheat flour'].phase).toBe('catalog');
+    expect(byQ['wheat flour'].identityPass).toBe(true);
+    expect(byQ['strawberry'].phase).toBe('fallback');
+    expect(byQ['milk'].phase).toBe('usda_live');
+    expect(byQ['milk'].identityPass).toBe(false);
+    expect(journeyPhaseCounts(rows).fallback).toBe(1);
+    expect(journeyResolvedCount(rows)).toBe(2);
+  });
+
   it('treats dietitian rescale as a blocker on that dish', () => {
     const rows = buildJourney({ logText: picnicLog, scout });
     const wrap = rows.filter((r) => r.dish === 'Vegetarian wrap');
@@ -109,6 +148,7 @@ describe('goldenJourney — auto invariants (no user text)', () => {
     expect(ids).toContain('diet_no_reality_rewrite');
     expect(ids).toContain('id_scout_items_present');
     expect(ids).toContain('id_all_components_identified');
+    expect(ids).toContain('math_trial_balance');
   });
 
   it('flags zero-macro items, blank fields, and rewritten truth', () => {

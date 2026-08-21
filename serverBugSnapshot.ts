@@ -40,9 +40,44 @@ import {
   pickQueueTag,
   prefillBug,
 } from './src/utils/bugWorkItem';
+import { overlayAutoRemaining } from './src/utils/bugTapeReview';
 import { classifyGoldenReds, shouldHoldR2 } from './src/utils/bugAutoFile';
 import { persistAutoFile, tryAutoFileGolden, tryAutoFileJob } from './serverBugAutoFile.js';
 import { planInboxMigration } from './src/utils/bugInboxMigrate';
+
+async function refreshTapeRemaining(item: ReturnType<typeof hydrateWorkItem>) {
+  const jobId = item.current_evidence?.job_id;
+  if (!jobId) return item;
+  try {
+    const { fetchLogsFromR2, fetchDebugPayloadFromR2 } = await import('./src/utils/r2Storage.js');
+    let logText = '';
+    let foodLog: any = null;
+    let scout: any = null;
+    const logs = await fetchLogsFromR2(jobId);
+    if (logs) logText = logs;
+    const payload = await fetchDebugPayloadFromR2(jobId);
+    if (payload) {
+      foodLog = payload.pendingFoodLog || payload.result?.pendingFoodLog || null;
+      scout = payload.scoutItems || payload.result?.scoutItems || null;
+    }
+    if (!foodLog || !scout) {
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const { data: job } = await supabaseAdmin
+        .from('agent_jobs')
+        .select('clean_result')
+        .eq('id', jobId)
+        .maybeSingle();
+      const cr = job?.clean_result || {};
+      if (!foodLog) foodLog = cr.pendingFoodLog || null;
+      if (!scout) scout = cr.scoutItems || null;
+    }
+    const { buildScoreboard } = await import('./src/utils/goldenScoreboard.js');
+    const board = buildScoreboard({ logText, foodLog, scout });
+    return overlayAutoRemaining(item, board);
+  } catch {
+    return item;
+  }
+}
 
 async function persistMissingPublicNs(tags: any[]): Promise<any[]> {
   const assigned = assignMissingPublicNs(tags);
@@ -1108,7 +1143,12 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       if (!tag) {
         return res.json({ say: 'Next bug', empty: true, now: null, continue: null, note: 'No matching bug.' });
       }
-      const item = hydrateWorkItem(tag);
+      let item = hydrateWorkItem(tag);
+      const taped = await refreshTapeRemaining(item);
+      if (taped.remaining.join('\n') !== item.remaining.join('\n')) {
+        await persistWorkItem(tag.id, taped);
+        item = taped;
+      }
       const start = buildStartPayload({ ...tag, work_item: item, id: tag.id });
       res.json({ empty: false, ...start });
     } catch (err: any) {
@@ -1322,14 +1362,15 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       if (body.bug && String(body.bug).trim()) {
         next.bug = String(body.bug).trim();
       }
-      await persistWorkItem(tag.id, next);
-      if (next.queue === 'blocked') {
+      const taped = await refreshTapeRemaining(next);
+      await persistWorkItem(tag.id, taped);
+      if (taped.queue === 'blocked') {
         await supabaseAdmin.from('issue_tags').update({ status: 'to_fix' }).eq('id', tag.id);
       }
-      if (next.queue === 'done') {
+      if (taped.queue === 'done') {
         await supabaseAdmin.from('issue_tags').update({ status: 'fixed', resolved_at: new Date().toISOString() }).eq('id', tag.id);
       }
-      const start = buildStartPayload({ ...tag, work_item: next, id: tag.id });
+      const start = buildStartPayload({ ...tag, work_item: taped, id: tag.id });
       if (rejected) {
         return res.status(409).json({
           ok: false,

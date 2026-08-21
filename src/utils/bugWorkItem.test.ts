@@ -18,6 +18,8 @@ import {
   pickContinueTag,
   pickNextOtherTag,
   pickQueueTag,
+  restoreRemainingFromAutoSpot,
+  triesMatchingLine,
   prefillBug,
   sortReadyQueue,
   BURN_BUDGET,
@@ -254,7 +256,7 @@ describe('bugWorkItem Q-6', () => {
     expect(job.keep_going).toBe(true);
     expect(job.drain).toBe(true);
     expect(job.say).toMatch(/^DRAIN #11 /);
-    expect(prompt).toMatch(/Drain this card/);
+    expect(prompt).toMatch(/Drain automatic tape checks/);
     expect(prompt).toMatch(/do not wait for the human/i);
     expect(prompt).toMatch(/work bug/);
     expect(prompt).toMatch(/next bug/);
@@ -264,6 +266,60 @@ describe('bugWorkItem Q-6', () => {
     expect(prompt).not.toMatch(/BUG_CONTINUE_GEMINI/);
     expect(prompt).not.toMatch(/One trigger = one line/);
     expect(prompt).toMatch(/409 paint\/weak_test\/paint_fdc\/wrong_file/);
+    expect(prompt).toMatch(/Tried on this line only/);
+  });
+
+  it('triesMatchingLine keeps croissant attempts off a cobb remaining row', () => {
+    const croissant = {
+      at: 't',
+      actor: 'agent',
+      hyp: 'Enrich croissant micros',
+      file: 'server_food_db.ts',
+      test: 'bakery class',
+      result: 'pass',
+      burned: false,
+      line: 'Croissant: 9 micro keys at 0',
+    };
+    const cobb = {
+      at: 't2',
+      actor: 'agent',
+      hyp: 'Cobb fallback to catalog',
+      file: 'server_food_catalog.ts',
+      test: 'resolveInternalFood',
+      result: 'pass',
+      burned: false,
+      line: 'Cobb Salad: fallback',
+    };
+    expect(triesMatchingLine([croissant, cobb], 'Croissant: 9 micro keys at 0')).toHaveLength(1);
+    expect(triesMatchingLine([croissant, cobb], 'Cobb Salad: fallback')[0].file).toBe(
+      'server_food_catalog.ts'
+    );
+    const unscoped = { ...croissant, line: undefined, hyp: 'Populate canonical bakery micronutrients' };
+    expect(
+      triesMatchingLine([unscoped], 'Fruit Salad: strawberry, blueberry, raspberry share canonical id 171711')
+    ).toEqual([]);
+  });
+
+  it('restoreRemainingFromAutoSpot moves honor-system Done back when the tape still flags it', () => {
+    const item = hydrateWorkItem({
+      work_item: {
+        remaining: [],
+        done: ['Croissant: 9 micro keys at 0', 'cobb salad: mismatch'],
+        queue: 'in_progress',
+      },
+    });
+    const next = restoreRemainingFromAutoSpot(item, [
+      { text: 'Croissant: 9 micro keys at 0' },
+      { text: 'Curator skipped pick_existing for 17 queries' },
+      { text: 'Scouted only strawberry', parked: false },
+      { text: 'gherkin fallback 150', parked: true },
+    ]);
+    expect(next.remaining).toEqual([
+      'Croissant: 9 micro keys at 0',
+      'Curator skipped pick_existing for 17 queries',
+    ]);
+    expect(next.done).toEqual(['cobb salad: mismatch']);
+    expect(next.queue).toBe('in_progress');
   });
 
   it('two misses on one line parks it and keeps sibling remaining on the same card', () => {
@@ -397,7 +453,7 @@ describe('bugWorkItem Q-6', () => {
     expect(next.item.queue).toBe('in_progress');
     const cont = buildContinueJob({ id: 't', work_item: next.item });
     expect(cont.stop).toBe(true);
-    expect(cont.say).toMatch(/remaining is empty/i);
+    expect(cont.say).toMatch(/automatic checks are green/i);
   });
 
   it('pickContinueTag prefers in_progress remaining over another ready card', () => {
