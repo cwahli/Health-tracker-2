@@ -195,6 +195,7 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   croissant: { fdcId: "172242", calories: 406, protein: 8.2, totalFat: 21.0, saturatedFat: 11.66, transFat: 0.16, carbohydrates: 45.8, sugar: 11.26, sodium: 467, potassium: 118, totalFibre: 2.6, vitaminC: 0.2, vitaminA: 206, calcium: 37, magnesium: 16, iron: 2.03, zinc: 0.77, folate: 83, vitaminB6: 0.04, foodType: 'processed' },
   raspberry: { fdcId: "167755", calories: 52, protein: 1.2, totalFat: 0.65, saturatedFat: 0.02, transFat: 0, carbohydrates: 11.9, sugar: 4.42, sodium: 1, potassium: 151, totalFibre: 6.5, vitaminC: 26.2, vitaminA: 2, calcium: 25, magnesium: 22, iron: 0.69, zinc: 0.42, folate: 21, vitaminB6: 0.06, foodType: 'fruit' },
   cobb_salad: { fdcId: "cobb_salad_canonical", calories: 145, protein: 11.2, totalFat: 10.5, saturatedFat: 3.2, transFat: 0, carbohydrates: 2.8, sugar: 1.6, sodium: 380, potassium: 310, totalFibre: 1.4, vitaminC: 9.5, vitaminA: 210, calcium: 75, magnesium: 24, iron: 1.4, zinc: 0.85, folate: 65, vitaminB6: 0.12, foodType: 'processed' },
+  cooked_bacon: { fdcId: "172550", calories: 541, protein: 37.0, totalFat: 42.0, saturatedFat: 14.0, transFat: 0, carbohydrates: 1.4, sugar: 0, sodium: 1717, potassium: 565, totalFibre: 0, foodType: 'processed' },
   mixed_fruit_cup: { fdcId: "mixed_fruit_cup_canonical", calories: 50, protein: 0.6, totalFat: 0.2, saturatedFat: 0.02, transFat: 0, carbohydrates: 12.5, sugar: 9.8, sodium: 3, potassium: 160, totalFibre: 1.8, vitaminC: 25.0, vitaminA: 15, calcium: 12, magnesium: 10, iron: 0.3, zinc: 0.1, folate: 12, vitaminB6: 0.05, foodType: 'fruit' },
   falafel: { fdcId: "falafel_canonical", calories: 333, protein: 13.3, totalFat: 17.8, saturatedFat: 2.39, transFat: 0, carbohydrates: 31.8, sugar: 4.88, sodium: 294, potassium: 585, totalFibre: 4.9, foodType: 'legume' },
   hummus: { fdcId: "174289", calories: 277, protein: 7.9, totalFat: 21.4, saturatedFat: 2.94, transFat: 0, carbohydrates: 15.6, sugar: 0, sodium: 395, potassium: 251, totalFibre: 6, foodType: 'processed' },
@@ -321,6 +322,7 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   if (normalized.includes('prawn') || normalized.includes('prawns') || normalized.includes('shrimp')) return CANONICAL_BASE_FOODS.cooked_prawns;
 
   if (normalized.includes('cobb salad') || (normalized.includes('cobb') && normalized.includes('salad'))) return CANONICAL_BASE_FOODS.cobb_salad;
+  if (normalized.includes('bacon')) return CANONICAL_BASE_FOODS.cooked_bacon;
   if (normalized.includes('fruit cup') || normalized.includes('fruit salad') || (normalized.includes('mixed') && normalized.includes('fruit'))) return CANONICAL_BASE_FOODS.mixed_fruit_cup;
   if (normalized.includes('raspberry') || normalized.includes('raspberries')) return CANONICAL_BASE_FOODS.raspberry;
   if (normalized.includes('plain yogurt') || normalized.includes('plain yoghurt')) return CANONICAL_BASE_FOODS.plain_yogurt;

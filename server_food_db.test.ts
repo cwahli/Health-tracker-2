@@ -142,4 +142,9 @@ describe('FALSE_FRIEND class examples', () => {
     const res = lookupCanonicalBaseFood('cobb salad');
     expect(res?.fdcId).toBe('cobb_salad_canonical');
   });
+
+  it('resolves cooked bacon query to canonical bacon entry', () => {
+    const res = lookupCanonicalBaseFood('cooked bacon');
+    expect(res?.fdcId).toBe('172550');
+  });
 });
