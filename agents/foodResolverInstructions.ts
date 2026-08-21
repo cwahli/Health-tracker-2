@@ -60,6 +60,16 @@ export const FoodCuratorActionSchema = z.preprocess((raw: any) => {
         typeVal = 'pick_existing';
       }
 
+      // Guard: the curator LLM sometimes mislabels a normal single-item resolution as
+      // "quarantine" — likely because the case ALSO includes a "quarantine": [...] list of
+      // bad candidate IDs to blacklist, and the model conflates "I'm quarantining some
+      // candidates" with "this whole case's action is quarantine". A genuine quarantine-only
+      // action has none of these resolution fields; it just flags bad candidates. If any of
+      // them are present, this is really a pick_existing action that was mislabeled.
+      if (typeVal === 'quarantine' && (a.parametricFdcId || a.parametricFoodName || a.chosenFdcId)) {
+        typeVal = 'pick_existing';
+      }
+
       const reasonVal = a.reason || a.Reason || a.reasonText || a.ReasonText || 'Curated action';
       const queryVal = a.query || a.Query || '';
       const fdcIdVal = a.fdcId || a.FdcId || a.fdc_id || a.chosenFdcId || a.chosen_fdc_id || '0';

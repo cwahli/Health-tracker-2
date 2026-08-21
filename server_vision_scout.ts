@@ -735,6 +735,13 @@ export function clusterSpatialCompositeDishes(
 
 export const CONDIMENT_DRESSING_REGEX = /\b(ranch(?:\s+dressing)?|caesar(?:\s+dressing)?|vinaigrette|mayonnaise|mayo|salad\s+dressing|dressing|tahini|aioli|pesto|honey\s+mustard|blue\s+cheese\s+dressing|thousand\s+island|french\s+dressing|italian\s+dressing|gravy|sour\s+cream|guacamole|hummus|olive\s+oil|vinaigre|sauce|gherkins?|pickles?|cornichons?)\b/i;
 
+// Common raw salad/garnish vegetables that Vision Scout's own component decomposition
+// tends to drop even when they're explicitly present in ingredientsList/visualIngredients
+// (e.g. "red onion" listed on a Cobb salad label but missing from the modeled components).
+// Kept separate from CONDIMENT_DRESSING_REGEX since these aren't condiments — grouping them
+// under a differently-named constant keeps the two lists semantically honest.
+export const GARNISH_VEGETABLE_REGEX = /\b(red\s+onion|white\s+onion|spring\s+onion|scallions?|shallots?|olives?|jalape[nñ]os?|banana\s+peppers?|croutons?|capers?)\b/i;
+
 export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: string) => void): void {
   if (!item || !item.components || !Array.isArray(item.components) || item.components.length === 0) {
     return;
@@ -761,7 +768,7 @@ export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: 
 
   const missingCondiments: string[] = [];
   for (const ing of candidateIngredients) {
-    const match = ing.match(CONDIMENT_DRESSING_REGEX);
+    const match = ing.match(CONDIMENT_DRESSING_REGEX) || ing.match(GARNISH_VEGETABLE_REGEX);
     if (match) {
       const matchedName = match[0].toLowerCase();
       const alreadyPresent = currentCompNames.some((cName) => cName.includes(matchedName) || matchedName.includes(cName));
