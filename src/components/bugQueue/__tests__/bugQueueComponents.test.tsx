@@ -351,6 +351,30 @@ describe('FoodDetailTabs component (G1-4)', () => {
     expect(html).toContain('Replay log');
     expect(html).toContain('job job-1234');
   });
+
+  it('renders live auto-spot hits on Checks (curator skip / collision / drop)', () => {
+    const html = renderToStaticMarkup(
+      <FoodDetailTabs
+        activeTab="checks"
+        onTabChange={() => {}}
+        board={{
+          invariants: [{ id: 'inv-1', label: 'Calories within bounds', pass: true }],
+          autoSpot: [
+            {
+              id: 'CURATOR_SKIP:kiwifruit',
+              code: 'CURATOR_SKIP',
+              surface: 'food',
+              text: 'Curator skipped pick_existing for 2 queries (fresh kiwifruit, pickled onion)',
+              class: 'OPENING_WRONG',
+            },
+          ],
+        }}
+      />
+    );
+    expect(html).toContain('Also spotted on tape');
+    expect(html).toContain('pick_existing');
+    expect(html).toContain('OPENING_WRONG');
+  });
 });
 
 describe('computeBoardProgress helper (G2-3)', () => {

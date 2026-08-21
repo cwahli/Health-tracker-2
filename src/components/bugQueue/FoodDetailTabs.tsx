@@ -1,6 +1,8 @@
 import React from 'react';
 import { PHASE_LABEL, groupJourneyByDish } from '../../utils/goldenScoreboard';
 import { Play, Loader2 } from 'lucide-react';
+import { AutoSpotList } from './AutoSpotList';
+import type { AutoSpotHit } from '../../utils/bugAutoSpot';
 
 export type FoodDetailTabsProps = {
   activeTab: 'checks' | 'dishes' | 'scout' | 'balance' | 'history';
@@ -75,6 +77,7 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
 }) => {
   const journey = Array.isArray(board?.journey) ? board.journey : [];
   const invariants = Array.isArray(board?.invariants) ? board.invariants : [];
+  const autoSpotHits: AutoSpotHit[] = Array.isArray(board?.autoSpot) ? board.autoSpot : [];
   const ledger = board?.ledger;
   const progress = computeBoardProgress(board);
 
@@ -193,6 +196,9 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
       {/* Pane: Checks */}
       {activeTab === 'checks' && (
         <div className="bg-[#0f172a] border border-slate-700/80 rounded-xl p-3 space-y-2.5 text-xs text-white">
+          {autoSpotHits.length > 0 && (
+            <AutoSpotList hits={autoSpotHits} className="mb-2" />
+          )}
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-300">
               Journey Checks & Invariants ({invariants.length})

@@ -1,7 +1,14 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-21
-**Status:** Q-6.4 Grok takeover of Gemini G1 — not Promote/D1
+**Status:** Q-6.4 auto-spot classes extended from picnic tape; Promote/D1 still open
+
+- **Q-6.4 auto-spot from picnic tape (2026-08-21):** Snap / `#n` Checks now surface tape-detectable remaining that `classifyJobResult` skips on succeeded meals. New codes in `bugAutoSpot.ts` (query-scoped, not this meal’s FDC list):
+  - **CURATOR_SKIP** — grouped `[CuratorAction] No pick_existing action found` (picnic: 17 queries skipped because curator emitted `action: quarantine` + `parametricFdcId` instead of `pick_existing`).
+  - **SIBLING_ID_COLLISION** — distinct sibling components share one 5–8 digit canonical id (picnic: strawberries/blueberries/raspberries → 171711).
+  - **FALLBACK_SKEW** — category-fallback kcal/100g outside a class band (picnic: gherkin 150 vs pickle ≤45; also avocado 40 vs ≥100). Reasonable chicken 165 is quiet.
+  - **COMPONENT_DROP** — `visualIngredients` missing from scout and receipt components (picnic: Cobb **red onion**; also fruit-cup mixed melon).
+  - Snap prefers `POST /api/golden/preview` `autoSpot` (server hydrates `jobId` / R2 / `logs/` keys so short `[Logs stored in R2]` pointers still score). `#n` Checks render `board.autoSpot`. Did **not** bind curator quarantine→pick (would paint this meal’s reused 171711). Promote / D1 / `writeInboxCase` still open. Do not mark Q-6.4 done.
 
 - **Debug Log Download Scoping & Current Meal Extraction (2026-08-21)**:
   - **Scoped Job ID Priority**: In `LogChat.tsx` (`handleDownloadDebug` and message render loop) and `FoodCard.tsx` (`handleDownloadTableAndLogs`), resolved `targetJobId` / `resolvedJobId` using prioritized lookup `msg.data?.jobId || msg.id.replace('msg_assistant_job_', 'job_') || msg.pendingFoodLog?.jobId || msg.data?.pendingFoodLog?.jobId || jobId`.

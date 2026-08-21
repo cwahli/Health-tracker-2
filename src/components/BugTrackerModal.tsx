@@ -312,8 +312,19 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
       let scout = ev?.scoutItems || ev?.scout || tagOrDetail?.bug?.scout || null;
       let logText = ev?.logText || ev?.backendLogs || '';
       const extraIssues = tagOrDetail?.now?.remaining || tagOrDetail?.bug?.remaining || [];
-      let jobId = ev?.job_id || ev?.jobId || tagOrDetail?.jobId || null;
+      let jobId = ev?.job_id || ev?.jobId || tagOrDetail?.jobId || tagOrDetail?.bug?.job_id || null;
       const debugUrl = ev?.debug_url || ev?.scout_url || ev?.backendLogsUrl || '';
+      if (debugUrl && debugUrl.startsWith('/') && !logText) {
+        try {
+          const localLogs = await fetch(debugUrl);
+          if (localLogs.ok) {
+            const t = await localLogs.text();
+            if (t) logText = t;
+          }
+        } catch {
+          /* relative artifact fetch is best-effort */
+        }
+      }
 
       // If foodLog or scout or logText missing and we have an artifact reportId, fetch payload.json and console.logs.txt
       if (tagId && primaryReportId && (!foodLog || !scout || !logText)) {

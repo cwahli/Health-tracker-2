@@ -59,7 +59,7 @@ import {
 import { collectOriginalFixture, pickSnapshotJob } from '../utils/goldenFixture';
 import { hydrateWorkItem, publicId } from '../utils/bugWorkItem';
 import { BugSnapRemainingSection, HomeStatePanel, HealthLogsPanel, type BugSnapRowItem } from './bugQueue';
-import { autoSpotFood, autoSpotHome, autoSpotHealth, type AutoSpotHit } from '../utils/bugAutoSpot';
+import { autoSpotFood, autoSpotHome, autoSpotHealth, mergeAutoSpotHits, type AutoSpotHit } from '../utils/bugAutoSpot';
 
 export interface BugSnapshotFabProps {
   isAdmin: boolean;
@@ -468,6 +468,7 @@ export default function BugSnapshotFab({
           scout,
           errorText,
           jobStatus: job?.status,
+          jobId: job?.id || job?.jobId || modalJobId,
           backendLogsUrl: job?.result?.backendLogsUrl || job?.result?.debugUrl || job?.debugUrl,
         }),
       })
@@ -484,10 +485,12 @@ export default function BugSnapshotFab({
           if (Array.isArray(board.observedMeal) && board.observedMeal.length) {
             setGoldenLines(board.expectedMeal || board.observedMeal);
           }
-          const spotted = autoSpotFood({ foodLog: food, scout, logText: logs, journey });
-          const hits = spotted.remaining.concat(spotted.parked || []);
+          const local = autoSpotFood({ foodLog: food, scout, logText: logs, journey });
+          const serverHits = Array.isArray(board.autoSpot) ? board.autoSpot : [];
+          const remaining = mergeAutoSpotHits(serverHits, local.remaining);
+          const hits = remaining.concat(local.parked || []);
           setAutoSpotHits(hits);
-          setCheckedAutoSpotIds(new Set(spotted.remaining.map((h) => h.id)));
+          setCheckedAutoSpotIds(new Set(remaining.map((h) => h.id)));
         })
         .catch(() => {
           const spotted = autoSpotFood({ foodLog: food, scout, logText: logs });

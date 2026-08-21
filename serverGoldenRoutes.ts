@@ -168,15 +168,38 @@ async function getR2Bytes(deps: GoldenRouteDeps, key: string): Promise<{ body: B
 export function r2KeyFromPhotoRef(ref: string): string | null {
   const raw = String(ref || '').trim();
   if (!raw || raw.startsWith('data:')) return null;
-  if (/^(golden|photos)\//i.test(raw) && !raw.includes('..')) return raw.replace(/^\/+/, '');
+  const prefixes = /^(golden|photos|logs|debug|bugs|jobs)\//i;
+  if (prefixes.test(raw) && !raw.includes('..')) return raw.replace(/^\/+/, '');
   try {
     const path = raw.startsWith('http') ? new URL(raw).pathname : raw;
     const cleaned = path.replace(/^\/+/, '').replace(/\.\./g, '');
-    if (/^(golden|photos)\//i.test(cleaned)) return cleaned;
+    if (prefixes.test(cleaned)) return cleaned;
   } catch {
     /* ignore */
   }
   return null;
+}
+
+function unwrapFetchedLogs(body: string): string {
+  const t = String(body || '');
+  if (!t) return t;
+  const trimmed = t.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      const j = JSON.parse(trimmed);
+      const inner = j.backendLogs || j.result?.backendLogs || j.debug_payload?.backendLogs;
+      if (inner && String(inner).length > 80) return String(inner);
+    } catch {
+      /* keep raw */
+    }
+  }
+  return t;
+}
+
+function previewLogNeedsHydrate(logText: string): boolean {
+  const t = String(logText || '');
+  if (t.length < 800) return true;
+  return !/\[Reconcile\]|\[Budget\]|\[CuratorAction\]/.test(t);
 }
 
 function casePrefix(id: string) {
@@ -574,24 +597,74 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
 
   app.post('/api/golden/preview', async (req: Request, res: Response) => {
     let logText = String(req.body?.logText || req.body?.backendLogs || '');
+    let foodLog = req.body?.foodLog || req.body?.pendingFoodLog || null;
+    let scout = req.body?.scout || req.body?.scoutItems || null;
     const pointer = logText.match(/\[Logs stored in R2:\s*(https?:\/\/\S+)\]/i);
     const extraUrl = String(req.body?.backendLogsUrl || req.body?.debugUrl || '');
+    const jobId = String(req.body?.jobId || req.body?.job_id || '').trim();
     const url = pointer?.[1] || (/^https?:\/\//i.test(extraUrl) ? extraUrl : '');
-    if (url && (pointer || logText.length < 800 || !/\[Reconcile\]|\[Budget\]/.test(logText))) {
+    let needsHydrate = previewLogNeedsHydrate(logText);
+    if (url && (pointer || needsHydrate)) {
       try {
         const fetched = await fetch(url);
         if (fetched.ok) {
-          const body = await fetched.text();
+          const body = unwrapFetchedLogs(await fetched.text());
           if (body && body.length > logText.length) logText = body;
         }
       } catch {
         /* keep short log */
       }
     }
+    needsHydrate = previewLogNeedsHydrate(logText);
+    if (needsHydrate) {
+      const key = r2KeyFromPhotoRef(extraUrl) || r2KeyFromPhotoRef(url);
+      if (key) {
+        const text = await getR2Text(deps, key);
+        if (text) {
+          const body = unwrapFetchedLogs(text);
+          if (body.length > logText.length) logText = body;
+        }
+      }
+    }
+    needsHydrate = previewLogNeedsHydrate(logText);
+    if (jobId && (needsHydrate || !foodLog || !scout)) {
+      try {
+        const { fetchLogsFromR2, fetchDebugPayloadFromR2 } = await import('./src/utils/r2Storage.js');
+        if (needsHydrate) {
+          const logs = await fetchLogsFromR2(jobId);
+          if (logs && logs.length > logText.length) logText = logs;
+        }
+        if (!foodLog || !scout || previewLogNeedsHydrate(logText)) {
+          const payload = await fetchDebugPayloadFromR2(jobId);
+          if (payload) {
+            if (!foodLog) {
+              foodLog =
+                payload.pendingFoodLog ||
+                payload.result?.pendingFoodLog ||
+                payload.foodLog ||
+                payload.foodData ||
+                null;
+            }
+            if (!scout) {
+              scout =
+                payload.scoutItems ||
+                payload.result?.scoutItems ||
+                payload.scout ||
+                payload.scoutSnapshot ||
+                null;
+            }
+            const inner = payload.backendLogs || payload.result?.backendLogs;
+            if (inner && String(inner).length > logText.length) logText = String(inner);
+          }
+        }
+      } catch {
+        /* keep what we have */
+      }
+    }
     const board = buildScoreboard({
       logText,
-      foodLog: req.body?.foodLog || req.body?.pendingFoodLog,
-      scout: req.body?.scout || req.body?.scoutItems || null,
+      foodLog,
+      scout,
       extraIssues: req.body?.extraIssues || [],
       errorText: req.body?.errorText || req.body?.error || '',
       jobStatus: req.body?.jobStatus || req.body?.status,
