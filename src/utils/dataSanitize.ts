@@ -139,6 +139,7 @@ export function buildDataSanitizePlan(opts: {
   // Duplicate history rows: same day + identical biomarker key set after normalize
   const dayKeyMap = new Map<string, any[]>();
   updatedHistory.forEach((log: any) => {
+    if (!log || log.sync_state === 'delete') return;
     const day = toYYYYMMDD(log.date);
     const keys = Object.keys(log.biomarkers || {}).sort().join(',');
     const fp = `${day}|${keys}`;
@@ -159,6 +160,38 @@ export function buildDataSanitizePlan(opts: {
         date: dup.date,
         selected: true,
       });
+    });
+  });
+
+  // Duplicate key-value pairs on same date across log entries
+  const dayKeyValueMap = new Map<string, any[]>();
+  updatedHistory.forEach((log: any) => {
+    if (!log || log.sync_state === 'delete') return;
+    const day = toYYYYMMDD(log.date);
+    Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
+      if (v == null || v === '') return;
+      const fp = `${day}|${k}|${v}`;
+      if (!dayKeyValueMap.has(fp)) dayKeyValueMap.set(fp, []);
+      dayKeyValueMap.get(fp)!.push({ log, key: k, val: v });
+    });
+  });
+  dayKeyValueMap.forEach((entries) => {
+    if (entries.length < 2) return;
+    entries.sort((a, b) => (b.log.updated_at || 0) - (a.log.updated_at || 0));
+    entries.slice(1).forEach((dup) => {
+      const alreadyInProposals = proposals.some((p) => p.logId === dup.log.id);
+      if (!alreadyInProposals) {
+        proposals.push({
+          id: nextId(),
+          kind: 'drop_history_log',
+          title: `Remove duplicate ${defName(dup.key, profile)} log`,
+          detail: `Duplicate value (${dup.val}) recorded on ${dup.log.date}`,
+          logId: dup.log.id,
+          key: dup.key,
+          date: dup.log.date,
+          selected: true,
+        });
+      }
     });
   });
 
@@ -262,6 +295,9 @@ export function applyDataSanitizePlan(
   const deletedCustom: Record<string, number> = {
     ...(opts.profile?.deletedCustomBiomarkerKeys || {}),
   };
+  const deletedLogIds: Record<string, number> = {
+    ...(opts.profile?.deletedBiomarkerLogIds || {}),
+  };
   let applied = 0;
 
   // First apply full normalize when any fix/drop_value selected
@@ -273,7 +309,9 @@ export function applyDataSanitizePlan(
 
   selected.forEach((p) => {
     if (p.kind === 'drop_history_log' && p.logId) {
-      history = history.filter((h) => h.id !== p.logId);
+      const now = Date.now();
+      deletedLogIds[p.logId] = now;
+      history = history.map((h) => h.id === p.logId ? { ...h, sync_state: 'delete' as const, updated_at: now } : h);
       applied++;
     }
     if (p.kind === 'drop_custom_key' && p.key) {
@@ -334,6 +372,7 @@ export function applyDataSanitizePlan(
     profileUpdates: {
       customBiomarkers: cleanedCatalog.profile.customBiomarkers,
       deletedCustomBiomarkerKeys: cleanedCatalog.profile.deletedCustomBiomarkerKeys,
+      deletedBiomarkerLogIds: deletedLogIds,
       ...(cleanedCatalog.profile.customRanges ? { customRanges: cleanedCatalog.profile.customRanges } : {}),
     },
     applied,

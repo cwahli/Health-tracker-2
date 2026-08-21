@@ -2132,6 +2132,13 @@ export function brandHitFitsQuery(query: string, hit: { name?: string; dish_name
     }
     if (/crisp|chip|chicken and ham/.test(n)) return false;
   }
+  // Reject packaged crisps/chips snack products when the query itself is not
+  // naming a crisps/chips snack (e.g. a "crispy onion" garnish/topping query
+  // should not match a branded "Cheddar & Onion Crisps" snack just because
+  // "crispy" and "crisps" share a word stem).
+  if (/\bcrisps?\b|\bchips?\b/.test(n) && !/\bcrisps?\b|\bchips?\b/.test(q)) {
+    return false;
+  }
   return true;
 }
 

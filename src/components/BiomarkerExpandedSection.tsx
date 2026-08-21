@@ -63,28 +63,62 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
   const [editDefUnit, setEditDefUnit] = useState('');
   const [editDate, setEditDate] = useState<string>('');
 
-  const historyData = biomarkerHistory
-    .filter(h => h.biomarkers[def.key] !== undefined)
-    .map(h => {
+  const rawActiveLogsForBio = React.useMemo(() => {
+    return biomarkerHistory.filter(h => {
+      if (!h || h.sync_state === 'delete') return false;
+      if (profile?.deletedBiomarkerLogIds?.[h.id] && (profile?.deletedBiomarkerLogIds?.[h.id] || 0) >= (h.updated_at || 0)) return false;
+      return h.biomarkers && h.biomarkers[def.key] !== undefined;
+    });
+  }, [biomarkerHistory, def.key, profile?.deletedBiomarkerLogIds]);
+
+  const historyData = React.useMemo(() => {
+    const rawFiltered = rawActiveLogsForBio;
+
+    const seenLogIds = new Set<string>();
+    const seenDateValues = new Set<string>();
+    const result: Array<{
+      date: string;
+      value: number;
+      originalVal: number | string;
+      unit: string;
+      logId: string;
+    }> = [];
+
+    const sortedRaw = [...rawFiltered].sort((a, b) => {
+      const dateCmp = toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date));
+      if (dateCmp !== 0) return dateCmp;
+      return (b.updated_at || 0) - (a.updated_at || 0);
+    });
+
+    for (const h of sortedRaw) {
+      if (seenLogIds.has(h.id)) continue;
+      seenLogIds.add(h.id);
+
       let rawVal = h.biomarkers[def.key];
       let val = typeof rawVal === 'string' ? parseFloat(rawVal) : Number(rawVal);
       let dispUnit = def.unit || '';
-      let displayRange = def.normalRange;
-      
-      if (profile.unitPreference === 'US' && !isNaN(val)) {
-         const reversed = reverseStandardizeUnit(def.key, val, dispUnit);
-         dispUnit = reversed.newUnit || dispUnit;
-         val = Number(reversed.newValue);
+
+      if (profile?.unitPreference === 'US' && !isNaN(val)) {
+        const reversed = reverseStandardizeUnit(def.key, val, dispUnit);
+        dispUnit = reversed.newUnit || dispUnit;
+        val = Number(reversed.newValue);
       }
-      return {
+
+      const dedupeKey = `${h.date}_${val}_${dispUnit}`;
+      if (seenDateValues.has(dedupeKey)) continue;
+      seenDateValues.add(dedupeKey);
+
+      result.push({
         date: h.date,
         value: val,
         originalVal: rawVal,
         unit: dispUnit,
         logId: h.id
-      };
-    })
-    .sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))); // oldest to newest for chart
+      });
+    }
+
+    return result.sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date)));
+  }, [biomarkerHistory, def.key, def.unit, profile?.deletedBiomarkerLogIds, profile?.unitPreference]);
 
   const [isMoreDetailsExpanded, setIsMoreDetailsExpanded] = useState(false);
 
@@ -385,9 +419,26 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
 
       {historyData.length > 0 && (
         <div className="flex flex-col max-h-[300px]">
+          {rawActiveLogsForBio.length > historyData.length && (
+            <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-2.5 text-xs text-amber-900 dark:text-amber-200 font-medium">
+                <span className="p-1.5 bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200 rounded-lg text-sm shrink-0">⚠️</span>
+                <div>
+                  <div className="font-bold">{rawActiveLogsForBio.length - historyData.length} Duplicate Log{rawActiveLogsForBio.length - historyData.length > 1 ? 's' : ''} in Database</div>
+                  <div className="text-[11px] text-amber-800/90 dark:text-amber-300/80">{rawActiveLogsForBio.length} total entries exist on same dates.</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onOpenAiReview(def.key)}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shrink-0 transition-colors cursor-pointer shadow-xs"
+              >
+                Review & Delete
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between mb-2 shrink-0">
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t.historicalLogsLabel}</h4>
-
+            <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t.historicalLogsLabel}</h4>
           </div>
           <div className="space-y-2 overflow-y-auto flex-1 pr-1 pb-1">
             {historyData.slice().reverse().map(h => {
@@ -405,7 +456,7 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
                         className="form-input-styled text-xs font-mono w-28 text-slate-800 dark:text-slate-100"
                       />
                     ) : (
-                      <span className="text-xs font-mono text-slate-500">{h.date}</span>
+                      <span className="text-xs font-mono font-semibold text-slate-700 dark:text-slate-300">{h.date}</span>
                     )}
                     <div className="flex items-center gap-3">
                       {editingLogId === h.logId ? (
