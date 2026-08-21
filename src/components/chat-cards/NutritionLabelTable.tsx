@@ -95,11 +95,11 @@ function normalizeNutritionKeys(obj: any) {
   // Mapping of variation to standard camelCase keys
   const keyMapping: { [key: string]: string } = {
     'calories': 'calories', 'energy': 'calories', 'energi': 'calories', 'energitotal': 'calories', 'energi total': 'calories',
-    'totalfat': 'totalFat', 'lemaktotal': 'totalFat', 'lemak total': 'totalFat',
+    'totalfat': 'totalFat', 'fat': 'totalFat', 'lemaktotal': 'totalFat', 'lemak total': 'totalFat',
     'saturatedfat': 'saturatedFat', 'lemakjenuh': 'saturatedFat', 'lemak jenuh': 'saturatedFat',
     'saturatedfatenergy': 'saturatedFatEnergy', 'energidarilemakjenuh': 'saturatedFatEnergy',
     'energyfromfat': 'energyFromFat', 'energidarilemak': 'energyFromFat',
-    'totalcarbohydrate': 'totalCarbohydrate', 'totalcarbs': 'totalCarbohydrate', 'karbohidrat': 'totalCarbohydrate', 'karbohidrattotal': 'totalCarbohydrate', 'karbohidrat total': 'totalCarbohydrate',
+    'totalcarbohydrate': 'totalCarbohydrate', 'carbohydrates': 'totalCarbohydrate', 'carbs': 'totalCarbohydrate', 'totalcarbs': 'totalCarbohydrate', 'karbohidrat': 'totalCarbohydrate', 'karbohidrattotal': 'totalCarbohydrate', 'karbohidrat total': 'totalCarbohydrate',
     'sugar': 'sugar', 'gula': 'sugar', 'gulatotal': 'sugar', 'gula total': 'sugar',
     'salt': 'salt', 'garam': 'salt', 'sodium': 'sodium', 'natrium': 'sodium',
     'protein': 'protein',
@@ -245,7 +245,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
         const isGenericStaple = /^(milk|berry|berries|banana|apple|water|grape|grapes|strawberry|strawberries|blueberries|raspberry|raspberries|almond|almonds|walnut|fresh fruit|mixed fruits|fruit)$/i.test(cleanName);
         const hasDirectBrand = Boolean((comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_')) || (comp.chainName && !isGenericStaple) || (comp.brand && !isGenericStaple));
         const isCompOfficial = !isStandardRef && (comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.dbSource === 'open_food_facts' || comp.dbSource === 'openfoodfacts' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || hasDirectBrand);
-        const compLabelSource = comp.baseNutrients100g || comp.primaryBase100g || comp.labelNutrientsPerServing || comp.nutrients;
+        const compLabelSource = comp.baseNutrients100g || comp.primaryBase100g || comp.labelNutrientsPerServing || comp.nutrients || comp.nutrients_per_100g || comp.core_nutrients;
         if (isCompOfficial && (comp.rawNutritionLabel || compLabelSource)) {
           const compWeight = comp.weightGrams || comp.estimatedWeightGrams || comp.primaryBaseWeightG;
           
@@ -312,7 +312,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
     } else {
       // Include the top-level dish/item when there are no decomposed official subcomponents
       const isMultiCompComposite = (Array.isArray(subComps) && subComps.length >= 2) || item.dbSource === 'composite';
-      const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients || item;
+      const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients || item.nutrients_per_100g || item.core_nutrients || item;
       let itemRawLabel = item.rawNutritionLabel;
       
       if ((!itemRawLabel || Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length === 0) && itemLabelSource && typeof itemLabelSource === 'object') {
@@ -375,7 +375,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
     let correctedFacts = normalizeNutritionKeys(parsedFacts);
 
     const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
-    const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients;
+    const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients || item.nutrients_per_100g || item.core_nutrients;
     if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && labelSource) {
       const source = labelSource;
       if (source && typeof source === 'object') {

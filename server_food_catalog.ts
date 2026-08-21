@@ -55,6 +55,63 @@ export interface InternalDishMatch {
   source: 'supabase_active' | 'dish_alias';
 }
 
+export const STANDARD_BASE_FOODS: Record<string, { fdcId?: string; nutrients: Record<string, number> }> = {
+  ranch_dressing: {
+    fdcId: "170755",
+    nutrients: {
+      calories: 430, protein: 1.5, carbohydrates: 6.5, totalFat: 45.0, saturatedFat: 7.0, unsaturatedFat: 36.0,
+      sugar: 3.5, addedSugar: 2.5, totalFibre: 0.2, solubleFibre: 0, sodium: 850,
+      potassium: 75, calcium: 35, magnesium: 5, phosphorus: 40, iron: 0.3, zinc: 0.2, selenium: 1.5, iodine: 5,
+      vitaminE: 3.5, vitaminK: 45, vitaminA: 20, vitaminB12: 0.1, vitaminB6: 0.02, folate: 6, riboflavin: 0.03, niacin: 0.1, thiamine: 0.02, vitaminC: 0.5, vitaminD: 0.1
+    }
+  },
+  caesar_dressing: {
+    fdcId: "173574",
+    nutrients: {
+      calories: 470, protein: 2.1, carbohydrates: 4.2, totalFat: 50.0, saturatedFat: 8.5, unsaturatedFat: 39.0,
+      sugar: 2.8, addedSugar: 1.5, totalFibre: 0.1, solubleFibre: 0, sodium: 980,
+      potassium: 55, calcium: 65, magnesium: 6, phosphorus: 45, iron: 0.4, zinc: 0.3, selenium: 2.0, iodine: 5,
+      vitaminE: 4.0, vitaminK: 50, vitaminA: 25, vitaminB12: 0.15, vitaminB6: 0.03, folate: 8, riboflavin: 0.04, niacin: 0.2, thiamine: 0.02, vitaminC: 0.5, vitaminD: 0.1
+    }
+  },
+  vinaigrette: {
+    fdcId: "170756",
+    nutrients: {
+      calories: 380, protein: 0.5, carbohydrates: 8.0, totalFat: 39.0, saturatedFat: 5.5, unsaturatedFat: 32.0,
+      sugar: 6.5, addedSugar: 5.0, totalFibre: 0.1, solubleFibre: 0, sodium: 720,
+      potassium: 40, calcium: 15, magnesium: 3, phosphorus: 15, iron: 0.2, zinc: 0.1, selenium: 0.8, iodine: 2,
+      vitaminE: 4.5, vitaminK: 40, vitaminA: 10, vitaminB12: 0, vitaminB6: 0.01, folate: 3, riboflavin: 0.01, niacin: 0.1, thiamine: 0.01, vitaminC: 0.5, vitaminD: 0
+    }
+  },
+  balsamic_vinaigrette: {
+    fdcId: "170756",
+    nutrients: {
+      calories: 350, protein: 0.4, carbohydrates: 12.0, totalFat: 33.0, saturatedFat: 4.8, unsaturatedFat: 27.0,
+      sugar: 10.5, addedSugar: 8.0, totalFibre: 0.1, solubleFibre: 0, sodium: 680,
+      potassium: 50, calcium: 18, magnesium: 4, phosphorus: 18, iron: 0.3, zinc: 0.1, selenium: 0.5, iodine: 2,
+      vitaminE: 3.8, vitaminK: 35, vitaminA: 8, vitaminB12: 0, vitaminB6: 0.01, folate: 3, riboflavin: 0.01, niacin: 0.1, thiamine: 0.01, vitaminC: 0.5, vitaminD: 0
+    }
+  },
+  crispy_onion: {
+    fdcId: "169998",
+    nutrients: {
+      calories: 560, protein: 6.0, carbohydrates: 45.0, totalFat: 40.0, saturatedFat: 9.0, unsaturatedFat: 31.0,
+      sugar: 4.0, addedSugar: 1.0, totalFibre: 3.5, solubleFibre: 0.8, sodium: 800,
+      potassium: 200, calcium: 30, magnesium: 20, phosphorus: 70, iron: 1.8, zinc: 0.6, selenium: 5.0, iodine: 5,
+      folate: 20, vitaminC: 2.0, vitaminA: 10, vitaminB6: 0.1, vitaminB12: 0.1, thiamine: 0.15, riboflavin: 0.1, niacin: 1.5, vitaminE: 3.5, vitaminK: 5.0, vitaminD: 0
+    }
+  },
+  crispy_onions: {
+    fdcId: "169998",
+    nutrients: {
+      calories: 560, protein: 6.0, carbohydrates: 45.0, totalFat: 40.0, saturatedFat: 9.0, unsaturatedFat: 31.0,
+      sugar: 4.0, addedSugar: 1.0, totalFibre: 3.5, solubleFibre: 0.8, sodium: 800,
+      potassium: 200, calcium: 30, magnesium: 20, phosphorus: 70, iron: 1.8, zinc: 0.6, selenium: 5.0, iodine: 5,
+      folate: 20, vitaminC: 2.0, vitaminA: 10, vitaminB6: 0.1, vitaminB12: 0.1, thiamine: 0.15, riboflavin: 0.1, niacin: 1.5, vitaminE: 3.5, vitaminK: 5.0, vitaminD: 0
+    }
+  }
+};
+
 export async function resolveInternalFood(query: string): Promise<InternalFoodMatch | null> {
   if (!query) return null;
   const key = normalizeFoodKey(query);
@@ -72,6 +129,20 @@ export async function resolveInternalFood(query: string): Promise<InternalFoodMa
       source: 'canonical_local',
       confidence: 0.95,
       fdc_id: fdcId,
+    };
+  }
+
+  // 1b. Check standard kitchen staples/dressings
+  const standard = STANDARD_BASE_FOODS[key];
+  if (standard) {
+    return {
+      food_id: standard.fdcId || key,
+      food_key: key,
+      display_name: query,
+      nutrients_per_100g: standard.nutrients,
+      source: 'canonical_local',
+      confidence: 0.95,
+      fdc_id: standard.fdcId,
     };
   }
 
@@ -541,6 +612,18 @@ export const DEFAULT_CATEGORY_PROFILES: Record<string, Record<string, number>> =
     potassium: 160, calcium: 60, iron: 1.8, magnesium: 25, phosphorus: 90, zinc: 0.7, selenium: 8.0, iodine: 10,
     thiamine: 0.15, riboflavin: 0.18, niacin: 1.2, folate: 35, vitaminA: 90, vitaminB6: 0.04, vitaminB12: 0.2, vitaminE: 0.8, vitaminK: 2.5, vitaminD: 0.1, vitaminC: 0.2
   },
+  pickle: {
+    calories: 15, protein: 0.5, carbohydrates: 2.5, totalFat: 0.2, saturatedFat: 0.05, unsaturatedFat: 0.1,
+    sugar: 1.2, addedSugar: 0, totalFibre: 1.0, solubleFibre: 0.3, sodium: 800,
+    potassium: 130, calcium: 40, iron: 0.4, magnesium: 10, phosphorus: 14, zinc: 0.2, selenium: 0.5, iodine: 1.0,
+    vitaminC: 1.0, vitaminA: 15, folate: 10, vitaminK: 30.0, thiamine: 0.02, riboflavin: 0.02, niacin: 0.1, vitaminB6: 0.03, vitaminB12: 0.01, vitaminD: 0.01, vitaminE: 0.1
+  },
+  crispy_topping: {
+    calories: 560, protein: 6.0, carbohydrates: 45.0, totalFat: 40.0, saturatedFat: 9.0, unsaturatedFat: 31.0,
+    sugar: 4.0, addedSugar: 1.0, totalFibre: 3.5, solubleFibre: 0.8, sodium: 800,
+    potassium: 200, calcium: 30, magnesium: 20, phosphorus: 70, iron: 1.8, zinc: 0.6, selenium: 5.0, iodine: 5,
+    folate: 20, vitaminC: 2.0, vitaminA: 10, vitaminB6: 0.1, vitaminB12: 0.1, thiamine: 0.15, riboflavin: 0.1, niacin: 1.5, vitaminE: 3.5, vitaminK: 5.0, vitaminD: 0
+  },
   general_dish: {
     calories: 150, protein: 7.0, carbohydrates: 18.0, totalFat: 5.5, saturatedFat: 1.8, unsaturatedFat: 3.2,
     sugar: 3.5, addedSugar: 1.0, totalFibre: 2.0, solubleFibre: 0.5, sodium: 320,
@@ -553,6 +636,8 @@ export function getFallbackCategoryProfile(query: string): Record<string, number
   const q = (query || '').toLowerCase();
   let base: Record<string, number> = { ...DEFAULT_CATEGORY_PROFILES.general_dish };
   if (/\b(beverage|drink|water|tea|coffee|soda)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.beverage };
+  else if (/\b(crispy\s*onion|fried\s*onion|french\s*fried\s*onion|croutons?|crispy\s*shallots?|fried\s*shallots?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.crispy_topping };
+  else if (/\b(gherkins?|pickles?|pickled|cornichons?|relish)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.pickle };
   else if (/\b(ranch|dressing|vinaigrette|mayo|mayonnaise|sauce|caesar|condiment|gravy|aioli|dip|pesto)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dressing };
   else if (/\b(berr(?:y|ies)|strawberr(?:y|ies)|blueberr(?:y|ies)|raspberr(?:y|ies)|blackberr(?:y|ies)|cranberr(?:y|ies)|acai)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.berries };
   else if (/\b(salads?|mix\s*leaves|mixed\s*leaves|salad\s*leaves|lettuce|spinach|kale|arugula|greens|romaine|cabbage|slaw|watercress)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.leafy_greens };

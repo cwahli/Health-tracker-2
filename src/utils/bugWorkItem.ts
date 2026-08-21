@@ -787,23 +787,28 @@ export function buildContinueJob(tag: any, activeLine?: string | null): BugConti
   const now = buildNow(tag);
   const remaining = item.remaining || [];
   const autoRemaining = remaining.filter((r) => !isHumanCheckLine(r));
-  const autoEmpty = autoRemaining.length === 0;
-  const selected = autoEmpty
+  const unparked = autoRemaining.filter(
+    (r) => !(item.parked || []).some((p) => matchRemainingLine([p], r))
+  );
+  const candidateList = unparked.length ? unparked : autoRemaining;
+  const selected = unparked.length === 0
     ? null
-    : matchRemainingLine(autoRemaining, activeLine) || autoRemaining[0] || null;
+    : matchRemainingLine(candidateList, activeLine) || candidateList[0] || null;
   const blocked = item.queue === 'blocked';
-  const stop = blocked || item.queue === 'done' || autoEmpty;
+  const autoDoneOrParked = unparked.length === 0;
+  const stop = blocked || item.queue === 'done' || autoDoneOrParked;
   const cls = selected ? inferLineClass(selected, item.class) : item.class || '';
   const total = (item.done || []).length + (item.parked || []).length + remaining.length;
-  const idx = (item.done || []).length + 1;
+  const idx = (item.done || []).length + (item.parked || []).length + 1;
   let say = `DRAIN ${now.public_id} ${idx}/${total || 1}: ${selected}. After POST, if stop=false immediately work continue.active_line. Do not wait for the human. Summary only when remaining is empty.`;
   if (item.queue === 'done') say = `STOP. ${now.public_id} is done. Do not edit.`;
   else if (blocked) say = `STOP. ${now.public_id} is blocked. Human Unblock before continue.`;
-  else if (autoEmpty) {
+  else if (autoDoneOrParked) {
     const humanN = remaining.filter((r) => isHumanCheckLine(r)).length;
+    const parkedN = (item.parked || []).length;
     say = humanN
-      ? `STOP. ${now.public_id} automatic checks are green. Human review ${humanN} visual/UI line(s). Do not Promote.`
-      : `STOP. ${now.public_id} automatic checks are green. Human Re-analyze then Mark fixed. Do not Promote.`;
+      ? `STOP. ${now.public_id} automatic checks are ${parkedN ? 'parked/blocked' : 'green'}. Human review ${humanN} visual/UI line(s). Do not Promote.`
+      : `STOP. ${now.public_id} automatic checks are ${parkedN ? 'parked/blocked' : 'green'}. Human Re-analyze then Mark fixed. Do not Promote.`;
   }
   const evidence = item.current_evidence;
   const linePhoto = selected ? linePhotosForText(evidence, selected) : null;

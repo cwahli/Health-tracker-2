@@ -402,6 +402,77 @@ export default function BugSnapshotFab({
     setSelectedRowId(newId);
   };
 
+  const handleBatchAdd = (bugTexts: string[], replace?: boolean) => {
+    if (!bugTexts.length) return;
+    const now = Date.now();
+    const newItems: BugSnapRowItem[] = bugTexts.map((text, i) => ({
+      id: `row-${now}-${i}`,
+      text,
+      comment: '',
+      photos: [],
+      checked: true,
+      source: 'user',
+    }));
+
+    setRemainingRows((prev) => {
+      if (replace) {
+        const filtered = prev.filter((r) => r.source === 'auto' || r.text.trim() || r.photos.length > 0);
+        return [...filtered, ...newItems];
+      }
+      if (prev.length === 1 && prev[0].source === 'user' && !prev[0].text.trim() && !prev[0].photos.length) {
+        return newItems;
+      }
+      return [...prev, ...newItems];
+    });
+
+    if (newItems[0]) {
+      setSelectedRowId(newItems[0].id);
+    }
+  };
+
+  const handleBatchInsert = (targetRowId: string, bugTexts: string[]) => {
+    if (!bugTexts.length) return;
+    const now = Date.now();
+    setRemainingRows((prev) => {
+      const idx = prev.findIndex((r) => r.id === targetRowId);
+      if (idx === -1) return prev;
+      const targetRow = prev[idx];
+      const updatedTarget: BugSnapRowItem = { ...targetRow, text: bugTexts[0] };
+      const additionalRows: BugSnapRowItem[] = bugTexts.slice(1).map((text, i) => ({
+        id: `row-${now}-${i}`,
+        text,
+        comment: '',
+        photos: [],
+        checked: true,
+        source: 'user',
+      }));
+      const next = [...prev];
+      next.splice(idx, 1, updatedTarget, ...additionalRows);
+      return next;
+    });
+  };
+
+  const handleRemoveRow = (id: string) => {
+    setRemainingRows((prev) => {
+      const filtered = prev.filter((r) => r.id !== id);
+      if (filtered.length === 0) {
+        const newId = `row-${Date.now()}`;
+        setSelectedRowId(newId);
+        return [
+          {
+            id: newId,
+            text: '',
+            comment: '',
+            photos: [],
+            checked: true,
+            source: 'user',
+          },
+        ];
+      }
+      return filtered;
+    });
+  };
+
   const handleToggleRow = (id: string, checked: boolean) => {
     setRemainingRows((prev) =>
       prev.map((r) => (r.id === id ? { ...r, checked } : r))
@@ -1797,6 +1868,9 @@ export default function BugSnapshotFab({
                     checkedAutoSpotIds={checkedAutoSpotIds}
                     onSelectRow={setSelectedRowId}
                     onAddRow={handleAddRow}
+                    onBatchAdd={handleBatchAdd}
+                    onBatchInsert={handleBatchInsert}
+                    onRemoveRow={handleRemoveRow}
                     onToggleRow={handleToggleRow}
                     onTextChange={handleTextChange}
                     onCommentChange={handleCommentChange}

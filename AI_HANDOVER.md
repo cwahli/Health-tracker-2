@@ -3,6 +3,11 @@
 **Updated:** 2026-08-21
 **Status:** Q-6.4 Promote deferred. `#11` still picnic-tape red until Re-analyze restages. Not meal-green.
 
+- **Batch Bug Paste Support in Bug Tracker & Snapshot (2026-08-21)**:
+  - **Parser Engine (`src/utils/bugBatchParser.ts`)**: Built robust parser supporting multi-line strings, markdown/bullet lists (`-`, `•`, `*`, `1.`, `[ ]`), and concatenated single-paragraph `Title: description.` formats (such as pasting multi-bug paragraphs).
+  - **Bug Snapshot Batch UI (`BugSnapRemainingSection.tsx` & `BugSnapshotFab.tsx`)**: Added dedicated "Paste bugs" toolbar button opening a batch paste popover with live count badge and preview, smart paste on individual row inputs (auto-expanding multi-bug strings into separate rows), and individual bug row removal.
+  - **Flag Issue Modal (`FlagIssueModal.tsx`)**: Added "Paste set of bugs" action with live bug detection, preview list, and smart paste interception on new bug title inputs.
+
 - **Staged Re-analyze (2026-08-21):** Replay log = frozen job only. **Re-analyze** = catalog restage then one skipScout. Checks roster is **pinned on the card** (`work_item.checks`): Replay only flips pass/fail, hollow `golden_*` cannot replace the list. New unique fails may append. skipScout `golden_*` ids persist to R2; Replay log skips `/api/jobs/debug` for those ids and falls back to picnic `job_`.
 
 - **Auto vs human review (2026-08-21):** Agent remaining = failing **automatic** tape checks (re-scored on GET /next and Replay log). Claimed pass does not paint remaining. **human to do** only when auto checks are green or the agent is stuck. Add remaining only for visual/UI (a11y, contrast, screenshot). Custom picnic remaining is redundant with Checks. Gemini “all completed” was honor-system — `#11` still has auto reds.

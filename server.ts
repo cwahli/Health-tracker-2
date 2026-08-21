@@ -7001,12 +7001,35 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         });
         if (dietitianSyncResult.appliedDensityCorrection || dietitianSyncResult.appliedSodiumRealityCheck) {
           addDebugLog(`[Dietitian Sync] Pre-dietitian reconciliation applied for "${item.originalName || item.keyword}" (density=${dietitianSyncResult.appliedDensityCorrection}, sodium=${dietitianSyncResult.appliedSodiumRealityCheck}).`);
+          
+          const oldCalories = aggregatedNutrients.calories > 0 ? aggregatedNutrients.calories : 1;
+          const syncFix = dietitianSyncResult.nutrients.calories / oldCalories;
+
           aggregatedNutrients.calories = dietitianSyncResult.nutrients.calories;
           aggregatedNutrients.protein = dietitianSyncResult.nutrients.protein;
           aggregatedNutrients.totalFat = dietitianSyncResult.nutrients.totalFat;
           aggregatedNutrients.saturatedFat = dietitianSyncResult.nutrients.saturatedFat;
           aggregatedNutrients.sodium = dietitianSyncResult.nutrients.sodium;
           aggregatedNutrients.carbohydrates = dietitianSyncResult.nutrients.carbohydrates;
+
+          if (hasComponents && componentsDetailList.length > 0) {
+            componentsDetailList.forEach((s: any) => {
+              if (!s || typeof s !== 'object') return;
+              if (s.calories != null) s.calories = Math.round(s.calories * syncFix * 10) / 10;
+              if (s.protein != null) s.protein = Math.round(s.protein * syncFix * 10) / 10;
+              if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * syncFix * 10) / 10;
+              if (s.saturatedFat != null) s.saturatedFat = Math.round(s.saturatedFat * syncFix * 10) / 10;
+              if (s.sodium != null) s.sodium = Math.round(s.sodium * syncFix * 10) / 10;
+            });
+          }
+
+          if (primaryBase100g && itemWeight > 0) {
+            const scaledBase100g: Record<string, number> = { ...(primaryBase100g as any) };
+            NUTRIENT_KEYS.forEach(key => {
+              scaledBase100g[key] = parseFloat(((aggregatedNutrients[key] || 0) / (itemWeight / 100)).toFixed(3));
+            });
+            primaryBase100g = scaledBase100g;
+          }
         }
       }
 

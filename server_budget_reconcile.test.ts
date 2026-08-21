@@ -56,7 +56,7 @@ describe('Server Budget & Reconcile Logic', () => {
     expect(rec.finalKcal).toBe(520);
   });
 
-  it('scales foundation when ratio is in [0.5, 2.0] outside keep band', () => {
+  it('keeps foundation when budget is soft scout estimate even if outside keep band', () => {
     const budget = computeItemBudget({
       itemName: 'Granola Yogurt Cup',
       weightGrams: 250,
@@ -66,9 +66,9 @@ describe('Server Budget & Reconcile Logic', () => {
       nutrients: { calories: 600, protein: 20, totalFat: 20, carbohydrates: 80 },
       budget,
     });
-    expect(rec.action).toBe('scale');
-    expect(rec.finalKcal).toBe(400);
-    expect(rec.nutrients.protein).toBe(13.3);
+    expect(rec.action).toBe('keep');
+    expect(rec.finalKcal).toBe(600);
+    expect(rec.nutrients.protein).toBe(20);
   });
 
   it('rejects scale when ratio is extreme (<0.5)', () => {

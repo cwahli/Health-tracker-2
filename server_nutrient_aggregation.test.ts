@@ -336,4 +336,54 @@ describe("server_nutrient_aggregation", () => {
     expect(result.nutrients.iron).toBeGreaterThan(0);
     expect(result.nutrients.folate).toBeGreaterThan(0);
   });
+
+  it("populates canonical base food micronutrients for macaroni and cheese dish in fallback aggregation", () => {
+    const rawItems = [
+      {
+        name: "Macaroni and Cheese",
+        originalName: "macaroni and cheese",
+        canonicalDbName: "macaroni and cheese",
+        weightGrams: 200,
+        dbSource: "estimated",
+        foodType: "processed"
+      }
+    ];
+    const result = aggregateItemsNutrients(rawItems, 200, new Map(), [], () => {});
+    expect(result.nutrients.calories).toBeGreaterThan(0);
+    expect(result.nutrients.calcium).toBeGreaterThan(0);
+    expect(result.nutrients.iron).toBeGreaterThan(0);
+    expect(result.nutrients.magnesium).toBeGreaterThan(0);
+    expect(result.nutrients.zinc).toBeGreaterThan(0);
+  });
+
+  it("populates trace micronutrients for brand/label grain item without leaving 16 zeros", () => {
+    const rawItems = [
+      {
+        name: "Sainsbury's Rolled Oats with Whole Milk",
+        originalName: "Sainsbury's Rolled Oats with Whole Milk",
+        canonicalDbName: "sainsbury_rolled_oats",
+        weightGrams: 250,
+        dbSource: "brand_official",
+        chainName: "Sainsbury's",
+        labelNutrientsPerServing: {
+          servingSizeGrams: 100,
+          calories: 180,
+          protein: 7,
+          totalFat: 5,
+          saturatedFat: 2,
+          carbohydrates: 26,
+          sugar: 6,
+          sodium: 50,
+          potassium: 200
+        }
+      }
+    ];
+    const result = aggregateItemsNutrients(rawItems, 250, new Map(), [], () => {});
+    expect(result.nutrients.calories).toBeGreaterThan(0);
+    expect(result.nutrients.magnesium).toBeGreaterThan(0);
+    expect(result.nutrients.calcium).toBeGreaterThan(0);
+    expect(result.nutrients.iron).toBeGreaterThan(0);
+    expect(result.nutrients.zinc).toBeGreaterThan(0);
+    expect(result.nutrients.phosphorus).toBeGreaterThan(0);
+  });
 });

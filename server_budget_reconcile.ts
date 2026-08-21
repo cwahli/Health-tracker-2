@@ -262,6 +262,28 @@ export function reconcileNutrients(input: {
     };
   }
 
+  // Soft budgets (scout estimate, category default) must not silently scale foundation
+  if (!input.budget.hardLock) {
+    if (ratio < 0.5 || ratio > 2.0) {
+      return {
+        action: 'reject_scale',
+        finalKcal: foundationKcal,
+        scaleFactor: 1,
+        foundationKcal,
+        budgetKcal,
+        nutrients,
+      };
+    }
+    return {
+      action: 'keep',
+      finalKcal: foundationKcal,
+      scaleFactor: 1,
+      foundationKcal,
+      budgetKcal,
+      nutrients,
+    };
+  }
+
   if (ratio >= 0.5 && ratio <= 2.0) {
     const factor = budgetKcal / foundationKcal;
     const scaled = scaleNutrientMap(nutrients, factor);

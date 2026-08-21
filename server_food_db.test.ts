@@ -138,6 +138,43 @@ describe('FALSE_FRIEND class examples', () => {
     expect(res?.fdcId).toBe('mixed_fruit_cup_canonical');
   });
 
+  it('american cheese has comprehensive micronutrient profile populated', () => {
+    const cheese = lookupCanonicalBaseFood('american cheese');
+    expect(cheese).toBeDefined();
+    expect(cheese!.vitaminC).toBeDefined();
+    expect(cheese!.vitaminE).toBeDefined();
+    expect(cheese!.vitaminK).toBeDefined();
+    expect(cheese!.vitaminA).toBeDefined();
+    expect(cheese!.iron).toBeDefined();
+    expect(cheese!.calcium).toBeDefined();
+    expect(cheese!.phosphorus).toBeDefined();
+  });
+
+  it('macaroni and cheese has comprehensive micronutrient profile populated', () => {
+    const mac = lookupCanonicalBaseFood('macaroni and cheese');
+    expect(mac).toBeDefined();
+    expect(mac?.calcium).toBeGreaterThan(0);
+    expect(mac?.iron).toBeGreaterThan(0);
+    expect(mac?.magnesium).toBeGreaterThan(0);
+    expect(mac?.zinc).toBeGreaterThan(0);
+    expect(mac?.phosphorus).toBeGreaterThan(0);
+  });
+
+  it('crispy onion query returns canonical crispy onion instead of category fallback', () => {
+    const res = lookupCanonicalBaseFood('crispy onion');
+    expect(res?.fdcId).toBe('crispy_onion_canonical');
+  });
+
+  it('ranch dressing query returns canonical ranch dressing instead of category fallback', () => {
+    const res = lookupCanonicalBaseFood('ranch dressing');
+    expect(res?.fdcId).toBe('ranch_dressing_canonical');
+  });
+
+  it('gherkin query returns canonical gherkin instead of category fallback', () => {
+    const res = lookupCanonicalBaseFood('gherkin');
+    expect(res?.fdcId).toBe('gherkin_canonical');
+  });
+
   it('cobb salad query returns canonical cobb salad instead of salad dressing', () => {
     const res = lookupCanonicalBaseFood('cobb salad');
     expect(res?.fdcId).toBe('cobb_salad_canonical');

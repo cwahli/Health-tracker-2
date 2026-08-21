@@ -10,11 +10,15 @@ export type RemainingBugRowProps = {
   classLabel?: string;
   parked?: boolean;
   selected?: boolean;
+  strikethroughWhenChecked?: boolean;
   onToggle?: (id: string, checked: boolean) => void;
+  onTextChange?: (id: string, text: string) => void;
+  onInputPaste?: (e: React.ClipboardEvent<HTMLInputElement>, id: string) => void;
   onComment?: (id: string, comment: string) => void;
   onSelect?: (id: string) => void;
   onPinShot?: (id: string) => void; // parent already knows selected film shot
   onClearPhoto?: (id: string) => void;
+  onDelete?: (id: string) => void;
 };
 
 /**
@@ -31,17 +35,22 @@ export const RemainingBugRow: React.FC<RemainingBugRowProps> = ({
   classLabel,
   parked = false,
   selected = false,
+  strikethroughWhenChecked = false,
   onToggle,
+  onTextChange,
+  onInputPaste,
   onComment,
   onSelect,
   onPinShot,
   onClearPhoto,
+  onDelete,
 }) => {
   const [isEditingComment, setIsEditingComment] = useState(false);
   const [commentDraft, setCommentDraft] = useState(comment);
 
   const hasPhoto = photos && photos.length > 0;
   const isAuto = source === 'auto';
+  const isEditable = !isAuto && Boolean(onTextChange);
 
   return (
     <div
@@ -111,26 +120,58 @@ export const RemainingBugRow: React.FC<RemainingBugRowProps> = ({
         {/* Content Column */}
         <div className="min-w-0 space-y-1">
           <div className="flex items-start justify-between gap-2">
-            <label
-              className="flex items-start gap-2 cursor-pointer select-none min-w-0 flex-1"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div className="flex items-start gap-2 min-w-0 flex-1">
               <input
                 type="checkbox"
                 checked={checked}
                 onChange={(e) => onToggle?.(id, e.target.checked)}
-                className="mt-0.5 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer h-3.5 w-3.5"
+                onClick={(e) => e.stopPropagation()}
+                className="mt-1 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer h-3.5 w-3.5 shrink-0"
               />
-              <span className={`font-semibold text-white leading-tight ${checked ? 'line-through text-slate-400' : ''}`}>
-                {text}
-              </span>
-            </label>
+              {isEditable ? (
+                <input
+                  type="text"
+                  value={text}
+                  onChange={(e) => onTextChange?.(id, e.target.value)}
+                  onFocus={() => onSelect?.(id)}
+                  onClick={(e) => e.stopPropagation()}
+                  onPaste={(e) => onInputPaste?.(e, id)}
+                  placeholder="Describe bug or paste multiple bugs (auto-splits)..."
+                  className="w-full text-xs font-semibold rounded-lg px-2.5 py-1 bg-black/60 border border-indigo-500/40 text-white placeholder:text-white/40 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/50"
+                  autoFocus={selected && !text}
+                />
+              ) : (
+                <span
+                  onClick={() => onSelect?.(id)}
+                  className={`font-semibold leading-tight cursor-pointer ${
+                    strikethroughWhenChecked && checked ? 'line-through text-slate-400' : 'text-white'
+                  }`}
+                >
+                  {text || '(New bug description...)'}
+                </span>
+              )}
+            </div>
 
-            {classLabel && (
-              <span className="shrink-0 px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-full bg-slate-900 border border-slate-700 text-indigo-300">
-                {classLabel}
-              </span>
-            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {classLabel && (
+                <span className="px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-full bg-slate-900 border border-slate-700 text-indigo-300">
+                  {classLabel}
+                </span>
+              )}
+              {onDelete && !isAuto && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(id);
+                  }}
+                  className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer"
+                  title="Remove this bug"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Metadata / Source / Parked tag */}

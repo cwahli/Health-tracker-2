@@ -22,6 +22,16 @@ describe('Food Catalog Normalization & Resolution (PASS 2 - R7)', () => {
     expect(cobbMatch).not.toBeNull();
     expect(cobbMatch?.source).toBe('canonical_local');
     expect(cobbMatch?.fdc_id).toBe('cobb_salad_canonical');
+
+    const caesarMatch = await resolveInternalFood('Caesar Dressing');
+    expect(caesarMatch).not.toBeNull();
+    expect(caesarMatch?.source).toBe('canonical_local');
+    expect(caesarMatch?.nutrients_per_100g.totalFat).toBeGreaterThan(40);
+
+    const balsamicMatch = await resolveInternalFood('Balsamic Vinaigrette');
+    expect(balsamicMatch).not.toBeNull();
+    expect(balsamicMatch?.source).toBe('canonical_local');
+    expect(balsamicMatch?.nutrients_per_100g.calories).toBeGreaterThan(200);
   });
 
   it('normalizes arbitrary food names consistently', () => {
@@ -54,6 +64,14 @@ describe('Food Catalog Normalization & Resolution (PASS 2 - R7)', () => {
 
     const produceProfile = getFallbackCategoryProfile('fresh apple slice');
     expect(produceProfile.carbohydrates).toBe(9);
+
+    const pickleProfile = getFallbackCategoryProfile('dill pickle spear');
+    expect(pickleProfile.calories).toBeLessThanOrEqual(45);
+    expect(pickleProfile.sodium).toBeGreaterThan(500);
+
+    const crispyShallotProfile = getFallbackCategoryProfile('crispy shallots garnish');
+    expect(crispyShallotProfile.calories).toBeGreaterThan(450);
+    expect(crispyShallotProfile.totalFat).toBeGreaterThan(30);
   });
 
   it('supports alias creation via upsertFoodAlias', async () => {

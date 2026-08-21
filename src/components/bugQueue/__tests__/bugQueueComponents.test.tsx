@@ -225,6 +225,7 @@ describe('BugSnapRemainingSection component (G1-1, G1-2)', () => {
 
     expect(html).toContain('data-testid="bug-snap-remaining-section"');
     expect(html).toContain('Add bug');
+    expect(html).toContain('Paste bugs');
     expect(html).toContain('Pin selected shot to bug');
     expect(html).toContain('Clear photo');
     expect(html).toContain('Croissant quantity 2 vs 6');

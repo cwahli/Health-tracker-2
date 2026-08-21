@@ -537,7 +537,34 @@ export function aggregateItemsNutrients(
     if (isNaN(itemNutrients.carbohydrates) || itemNutrients.carbohydrates < 0) itemNutrients.carbohydrates = 0;
 
     // STEP 3: Derive the 20 trace nutrients from authentic DB data or food-type classification
-    const foodType = item.foodType || 'unknown';
+    let foodType = item.foodType;
+    if (!foodType || foodType === 'unknown') {
+      if (item.primaryBase100g && (item.primaryBase100g as any).foodType) {
+        foodType = (item.primaryBase100g as any).foodType;
+      } else {
+        const canonicalBase = lookupCanonicalBaseFood(canonicalName) || lookupCanonicalBaseFood(item.name || "") || lookupCanonicalBaseFood(item.originalName || "") || lookupCanonicalBaseFood(item.keyword || "");
+        if (canonicalBase?.foodType) {
+          foodType = canonicalBase.foodType;
+        }
+      }
+    }
+    if (!foodType || foodType === 'unknown') {
+      const lower = (canonicalName + " " + (item.keyword || "") + " " + (item.originalName || "")).toLowerCase();
+      if (/\b(oat|oats|oatmeal|wheat|bread|rice|pasta|noodle|grain|cereal|flour|quinoa|barley|rye|porridge)\b/.test(lower)) foodType = 'grain';
+      else if (/\b(milk|dairy|cheese|yogurt|butter|cream|latte|cappuccino)\b/.test(lower)) foodType = 'dairy';
+      else if (/\b(chicken|turkey|duck|poultry)\b/.test(lower)) foodType = 'poultry';
+      else if (/\b(beef|pork|lamb|steak|bacon|sausage|meat)\b/.test(lower)) foodType = 'red_meat';
+      else if (/\b(salmon|tuna|mackerel|sardine|trout)\b/.test(lower)) foodType = 'fish_fatty';
+      else if (/\b(cod|haddock|tilapia|halibut|bass|whitefish|fish)\b/.test(lower)) foodType = 'fish_lean';
+      else if (/\b(shrimp|prawn|crab|lobster|mussel|clam|oyster|squid|calamari)\b/.test(lower)) foodType = 'shellfish';
+      else if (/\b(egg|eggs|omelet|omelette)\b/.test(lower)) foodType = 'egg';
+      else if (/\b(bean|beans|lentil|lentils|chickpea|chickpeas|tofu|edamame|soy|hummus|falafel)\b/.test(lower)) foodType = 'legume';
+      else if (/\b(apple|banana|berry|berries|orange|fruit|grape|melon|peach|mango)\b/.test(lower)) foodType = 'fruit';
+      else if (/\b(salad|lettuce|spinach|kale|cabbage|greens|cucumber|broccoli)\b/.test(lower)) foodType = 'leafy_veg';
+      else if (/\b(potato|potatoes|carrot|carrots|beet|beetroot|sweet potato|yam|radish)\b/.test(lower)) foodType = 'root_veg';
+      else foodType = 'unknown';
+    }
+
     const traceNutrients = { ...getTraceNutrientsForFoodType(foodType, itemWeight) };
     
     // Geofencing and Regional Fortification Logic
@@ -560,6 +587,11 @@ export function aggregateItemsNutrients(
       if (matchObj) {
         baseRef100g = dbSource === "usda" ? extractUSDANutrientsPer100g(matchObj) : extractOFFNutrientsPer100g(matchObj);
       }
+    } else if (!baseRef100g) {
+      const canonicalBase = lookupCanonicalBaseFood(canonicalName) || lookupCanonicalBaseFood(item.name || "") || lookupCanonicalBaseFood(item.originalName || "");
+      if (canonicalBase) {
+        baseRef100g = canonicalBase as any;
+      }
     }
 
     const itemFactor = itemWeight / 100;
@@ -569,13 +601,13 @@ export function aggregateItemsNutrients(
     // involved in producing any of these trace-20 values).
     const nutrientSourceMap: Record<string, string> = { ...(item.nutrientSourceMap || {}) };
     for (const key of Object.keys(traceNutrients)) {
-      if (baseRef100g && baseRef100g[key] !== undefined && baseRef100g[key] !== null) {
+      if (baseRef100g && baseRef100g[key] !== undefined && baseRef100g[key] !== null && Number(baseRef100g[key]) > 0) {
         itemNutrients[key] = parseFloat((baseRef100g[key] * itemFactor).toFixed(2));
         nutrientSourceMap[key] = dbSource === "usda" ? "usda_database"
           : dbSource === "off" ? "openfoodfacts_database"
           : dbSource === "brand_official" || dbSource === "label" ? "brand_label_data"
           : "matched_database_entry";
-      } else if (itemNutrients[key] === undefined || itemNutrients[key] === 0) {
+      } else if (itemNutrients[key] === undefined || itemNutrients[key] === 0 || isNaN(itemNutrients[key])) {
         itemNutrients[key] = (traceNutrients as any)[key];
         nutrientSourceMap[key] = "foodtype_estimate";
       }
