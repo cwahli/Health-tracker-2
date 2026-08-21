@@ -275,28 +275,72 @@ export const ScratchpadMarkdownViewer: React.FC<{ content: any; className?: stri
     try {
       const tableMarkdown = buildFullMarkdownText();
 
+      // Helper to safely stringify logs (whether string, array of objects, or array of strings)
+      const extractLogString = (val: any): string => {
+        if (!val) return '';
+        if (typeof val === 'string') return val.trim();
+        if (Array.isArray(val)) {
+          return val.map((l: any) => typeof l === 'string' ? l : (l.message ? (l.timestamp ? `[${l.timestamp}] ${l.message}` : l.message) : JSON.stringify(l))).join('\n').trim();
+        }
+        return '';
+      };
+
       // Gather full log history without cropping
       let fullLogsText = '';
       const foodLog = pendingFoodLog || msg?.data?.pendingFoodLog || msg?.pendingFoodLog;
-      const specificId = msg?.data?.requestId || msg?.data?.sessionId || msg?.sessionId || msg?.id || foodLog?.id || '';
+      const candidateJobId = msg?.data?.jobId || foodLog?.jobId || (msg?.id?.startsWith('msg_assistant_job_') ? msg.id.replace('msg_assistant_job_', 'job_') : '') || (msg?.id?.startsWith('msg_assistant_') && !msg.id.includes('fail') && !msg.id.includes('clarify') && !/^\d+$/.test(msg.id.replace('msg_assistant_', '')) ? msg.id.replace('msg_assistant_', '') : '');
+      const job = candidateJobId ? JobStore.getJob(candidateJobId) : null;
+      const targetReqId = msg?.data?.requestId || job?.requestId || candidateJobId || foodLog?.id || '';
 
-      // 1. Check inline logs on msg object or foodLog object first
-      if (msg?.data?.agentResult?.backendLogs && Array.isArray(msg.data.agentResult.backendLogs) && msg.data.agentResult.backendLogs.length > 0) {
-        fullLogsText = msg.data.agentResult.backendLogs.map((l: any) => typeof l === 'string' ? l : (l.message || JSON.stringify(l))).join('\n');
-      } else if (foodLog?.backendLogs && Array.isArray(foodLog.backendLogs) && foodLog.backendLogs.length > 0) {
-        fullLogsText = foodLog.backendLogs.map((l: any) => typeof l === 'string' ? l : (l.message || JSON.stringify(l))).join('\n');
-      } else if (msg?.data?.debugLogs) {
-        const dLogs = msg.data.debugLogs;
-        fullLogsText = Array.isArray(dLogs) ? dLogs.map((l: any) => l.message || String(l)).join('\n') : String(dLogs);
+      // 1. Check inline logs on msg object, foodLog object, or JobStore first
+      fullLogsText =
+        extractLogString(msg?.data?.agentResult?.backendLogs) ||
+        extractLogString(msg?.data?.agentResult?.globalLiveLogs) ||
+        extractLogString(msg?.data?.backendLogs) ||
+        extractLogString(msg?.agentResult?.backendLogs) ||
+        extractLogString(foodLog?.backendLogs) ||
+        extractLogString(foodLog?.rawLogs) ||
+        extractLogString(foodLog?.globalLiveLogs) ||
+        extractLogString(msg?.data?.debugLogs) ||
+        extractLogString(job?.result?.backendLogs) ||
+        extractLogString((job as any)?.clean_result?.backendLogs) ||
+        extractLogString(job?.liveThoughts?.backendLogs) ||
+        extractLogString(job?.liveThoughts?.globalLiveLogs) ||
+        extractLogString((job as any)?.accumulatedLogs);
+
+      // 2. If logs are an R2 reference, fetch the full content
+      if (fullLogsText && (fullLogsText.startsWith('[Logs stored in R2') || fullLogsText.includes('.r2.dev/logs/'))) {
+        const urlMatch = fullLogsText.match(/(https?:\/\/[^\s\]"]+\.r2\.dev\/logs\/[^\s\]"]+)/i) ||
+                         fullLogsText.match(/\[Logs stored in R2:\s*(https?:\/\/[^\s\]]+)\]/i);
+        if (urlMatch) {
+          const r2Url = urlMatch[1] || urlMatch[0];
+          try {
+            let r2Res = await fetch(`/api/r2/log-proxy?url=${encodeURIComponent(r2Url)}`);
+            if (!r2Res.ok) {
+              r2Res = await fetch(r2Url);
+            }
+            if (r2Res.ok) {
+              const fetchedText = await r2Res.text();
+              if (fetchedText && fetchedText.trim() && !fetchedText.startsWith('[Logs stored in R2')) {
+                fullLogsText = fetchedText.trim();
+              }
+            }
+          } catch (e) {
+            console.warn('[FoodCard] Failed fetching R2 logs for download:', e);
+          }
+        }
       }
 
-      // 2. Try server endpoint using the specific meal ID
-      if (!fullLogsText.trim() && specificId) {
+      // 3. Try server endpoints using the specific job/request ID (NOT generic sessionId)
+      if (!fullLogsText.trim() && targetReqId) {
         try {
-          const url = `/api/gemini/debug-logs?sessionId=${encodeURIComponent(specificId)}`;
-          const res = await fetch(url, {
-            headers: { 'X-Session-ID': specificId },
-          });
+          // Check server-job endpoint first
+          const url1 = `/api/gemini/debug-logs?sessionId=${encodeURIComponent(`server-job-${targetReqId}`)}`;
+          let res = await fetch(url1, { headers: { 'X-Session-ID': targetReqId } });
+          if (!res.ok) {
+            const url2 = `/api/gemini/debug-logs?sessionId=${encodeURIComponent(targetReqId)}`;
+            res = await fetch(url2, { headers: { 'X-Session-ID': targetReqId } });
+          }
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data.logs) && data.logs.length > 0) {
@@ -304,7 +348,7 @@ export const ScratchpadMarkdownViewer: React.FC<{ content: any; className?: stri
                 if (typeof l === 'string') return l;
                 if (l.message) return l.timestamp ? `[${l.timestamp}] ${l.message}` : l.message;
                 return JSON.stringify(l);
-              }).join('\n');
+              }).join('\n').trim();
             }
           }
         } catch {
@@ -312,14 +356,20 @@ export const ScratchpadMarkdownViewer: React.FC<{ content: any; className?: stri
         }
       }
 
-      // 3. Fallback to localStorage request logs tracker ONLY if matching specific ID
-      if (!fullLogsText.trim() && specificId) {
+      // 4. Fallback to localStorage request logs tracker ONLY if matching specific job/request/msg ID
+      if (!fullLogsText.trim() && (targetReqId || msg?.id || foodLog?.id)) {
         try {
           const savedLogs = getAgentRequestLogs();
           if (savedLogs && savedLogs.length > 0) {
-            const matched = savedLogs.find(r => r.id === specificId || r.id === msg?.id || r.id === foodLog?.id);
-            if (matched && Array.isArray(matched.logs)) {
-              fullLogsText = matched.logs.map(l => l.message).join('\n');
+            const matched = savedLogs.find(r =>
+              (targetReqId && r.id === targetReqId) ||
+              (targetReqId && r.id === `server-job-${targetReqId}`) ||
+              (candidateJobId && r.id === candidateJobId) ||
+              (msg?.id && r.id === msg.id) ||
+              (foodLog?.id && r.id === foodLog.id)
+            );
+            if (matched && Array.isArray(matched.logs) && matched.logs.length > 0) {
+              fullLogsText = matched.logs.map(l => typeof l === 'string' ? l : (l.timestamp ? `[${l.timestamp}] ${l.message}` : (l.message || JSON.stringify(l)))).join('\n').trim();
             }
           }
         } catch (e) {
@@ -2482,7 +2532,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                 {/* Recommendation */}
                                 <div className="space-y-1.5 pt-1">
                                   {(group.message || group.recommendation) && (
-                                    <p className="text-[13px] text-theme-neutral leading-snug bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-md border border-theme-border">
+                                    <p className="text-[13px] text-theme-neutral leading-snug">
                                       {group.message || group.recommendation}
                                     </p>
                                   )}
@@ -3216,7 +3266,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                           const desc = msg.data?.pendingFoodLog?.message || msg.data?.agentResult?.message || msg.data?.pendingFoodLog?.description || msg.data?.agentResult?.description || (msg.data?.pendingFoodLog?.healthImpact && !msg.data.pendingFoodLog.healthImpact.includes("Contributes to daily macro") ? msg.data.pendingFoodLog.healthImpact : null);
                           if (!desc) return null;
                           return (
-                            <div className="text-[12px] text-slate-900 dark:text-slate-100 font-sans leading-relaxed bg-slate-50 dark:bg-slate-900/80 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 my-1 text-left w-full font-medium">
+                            <div className="text-[12px] text-slate-900 dark:text-slate-100 font-sans leading-relaxed my-1 text-left w-full font-medium">
                               {desc}
                             </div>
                           );

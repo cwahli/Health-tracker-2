@@ -1510,7 +1510,7 @@ export default function FoodHistoryTab({
                         const summaryText = log.message || log.description || (log.healthImpact && !log.healthImpact.includes("Contributes to daily macro") ? log.healthImpact : null) || effectiveComposition || log.composition;
                         if (!summaryText) return null;
                         return (
-                          <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium text-left bg-indigo-50/40 dark:bg-indigo-950/20 p-3 rounded-xl border border-indigo-100/30 dark:border-indigo-900/20 my-1">
+                          <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium text-left my-1 w-full">
                             <p>{summaryText}</p>
                           </div>
                         );

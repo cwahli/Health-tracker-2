@@ -1825,13 +1825,49 @@ ${logsText}`);
   }, [isOpen]);
 
   const handleDownloadDebug = async (jobIdToDownload: string, msg: any, format: 'json' | 'markdown' = 'markdown') => {
-    const job = JobStore.getJob(jobIdToDownload);
+    const resolvedJobId =
+      msg?.data?.jobId ||
+      (msg?.id?.startsWith('msg_assistant_job_') ? msg.id.replace('msg_assistant_job_', 'job_') : '') ||
+      (msg?.id?.startsWith('msg_assistant_') && !msg.id.includes('fail') && !msg.id.includes('clarify') && !/^\d+$/.test(msg.id.replace('msg_assistant_', '')) ? msg.id.replace('msg_assistant_', '') : '') ||
+      (msg?.pendingFoodLog?.jobId || msg?.data?.pendingFoodLog?.jobId) ||
+      jobIdToDownload ||
+      jobId;
+
+    const job = JobStore.getJob(resolvedJobId);
     const clientConsoleLogs = window.__clientConsoleLogs || [];
     const networkErrors = window.__clientNetworkErrors || [];
     const lastUserAction = window.__lastUserAction || (inputText ? { action: 'chat_submit', prompt: inputText, timestamp: new Date().toISOString() } : undefined);
 
+    const pendingFoodLog = msg?.data?.pendingFoodLog || msg?.pendingFoodLog || job?.result?.pendingFoodLog || job?.result;
+    const scoutItems = msg?.data?.scoutItems || msg?.data?.agentResult?.scoutItems || job?.result?.scoutItems;
+    const receiptTable = msg?.data?.pendingFoodLog?.receiptTable || msg?.data?.receiptTable || job?.result?.receiptTable || job?.result?.pendingFoodLog?.receiptTable;
+
+    const extractLogString = (val: any): string => {
+      if (!val) return '';
+      if (typeof val === 'string') return val.trim();
+      if (Array.isArray(val)) {
+        return val.map((l: any) => typeof l === 'string' ? l : (l.message ? (l.timestamp ? `[${l.timestamp}] ${l.message}` : l.message) : JSON.stringify(l))).join('\n').trim();
+      }
+      return '';
+    };
+
+    let initialBackendLogs =
+      extractLogString(msg?.data?.agentResult?.backendLogs) ||
+      extractLogString(msg?.data?.agentResult?.globalLiveLogs) ||
+      extractLogString(msg?.data?.backendLogs) ||
+      extractLogString(msg?.agentResult?.backendLogs) ||
+      extractLogString(pendingFoodLog?.backendLogs) ||
+      extractLogString(pendingFoodLog?.rawLogs) ||
+      extractLogString(job?.result?.backendLogs) ||
+      extractLogString((job as any)?.clean_result?.backendLogs) ||
+      extractLogString(job?.liveThoughts?.backendLogs) ||
+      extractLogString(job?.liveThoughts?.globalLiveLogs) ||
+      extractLogString((job as any)?.accumulatedLogs) ||
+      globalLiveLogsRef.current ||
+      '';
+
     const localPayload = {
-      jobId: jobIdToDownload,
+      jobId: resolvedJobId,
       status: job?.status,
       result: {
         ...(job?.result || {}),
@@ -1841,12 +1877,7 @@ ${logsText}`);
       },
       messages: job?.messages,
       liveThoughts: job?.liveThoughts,
-      backendLogs:
-        job?.result?.backendLogs ||
-        msg.data?.agentResult?.backendLogs ||
-        msg.data?.agentResult?.globalLiveLogs ||
-        globalLiveLogsRef.current ||
-        '',
+      backendLogs: initialBackendLogs,
       exportedAt: new Date().toISOString(),
       source: 'client-fallback',
     };
@@ -1855,13 +1886,13 @@ ${logsText}`);
     try {
       const uid = auth.currentUser?.uid || 'anonymous';
       const fmtParam = format === 'markdown' ? '&format=markdown' : '';
-      const res = await fetch(`/api/jobs/debug?jobId=${encodeURIComponent(jobIdToDownload)}&userId=${encodeURIComponent(uid)}${fmtParam}`);
+      const res = await fetch(`/api/jobs/debug?jobId=${encodeURIComponent(resolvedJobId)}&userId=${encodeURIComponent(uid)}${fmtParam}`);
       if (res.ok) {
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `debug-${jobIdToDownload}.${format === 'markdown' ? 'md' : 'json'}`;
+        a.download = `debug-${resolvedJobId}.${format === 'markdown' ? 'md' : 'json'}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -1899,9 +1930,15 @@ ${logsText}`);
     if (!finalBackendLogs || finalBackendLogs.startsWith('[Logs stored in R2') || finalBackendLogs.length < 50) {
       try {
         const storedLogs = getAgentRequestLogs();
-        const matchedReq = storedLogs.find(r => r.id === jobIdToDownload || (msg?.data?.agentResult?.requestId && r.id === msg.data.agentResult.requestId));
+        const matchedReq = storedLogs.find(r =>
+          r.id === resolvedJobId ||
+          r.id === `server-job-${resolvedJobId}` ||
+          (msg?.data?.requestId && r.id === msg.data.requestId) ||
+          (msg?.id && r.id === msg.id) ||
+          (pendingFoodLog?.id && r.id === pendingFoodLog.id)
+        );
         if (matchedReq && matchedReq.logs && matchedReq.logs.length > 0) {
-          finalBackendLogs = matchedReq.logs.map(l => l.message).join('\n');
+          finalBackendLogs = matchedReq.logs.map(l => typeof l === 'string' ? l : (l.timestamp ? `[${l.timestamp}] ${l.message}` : (l.message || JSON.stringify(l)))).join('\n');
         }
       } catch (e) {
         console.warn('[LogChat] Failed loading stored logs from tracker:', e);
@@ -1911,14 +1948,14 @@ ${logsText}`);
     if (format === 'markdown') {
       const { buildDebugMarkdownReport } = await import('../utils/debugPayload');
       const mdContent = buildDebugMarkdownReport({
-        jobId: jobIdToDownload,
+        jobId: resolvedJobId,
         status: job?.status,
         mode: job?.result?.mode,
         message: job?.result?.message || msg?.content,
         backendLogs: finalBackendLogs,
-        pendingFoodLog: job?.result?.pendingFoodLog || job?.result,
-        scoutItems: job?.result?.scoutItems,
-        receiptTable: job?.result?.receiptTable || job?.result?.pendingFoodLog?.receiptTable,
+        pendingFoodLog,
+        scoutItems,
+        receiptTable,
         error: job?.error?.message,
         lastUserAction: lastUserAction || job?.result?.lastUserAction || (typeof window !== 'undefined' ? window.__lastUserAction : undefined),
         userActionBreadcrumbs: (typeof window !== 'undefined' ? window.__userActionBreadcrumbs : undefined) || job?.result?.userActionBreadcrumbs || [],
@@ -1926,13 +1963,13 @@ ${logsText}`);
         networkErrors: networkErrors || job?.result?.networkErrors || (typeof window !== 'undefined' ? window.__clientNetworkErrors : undefined) || [],
         usdaSearchResults: job?.result?.usdaSearchResults,
         brandSearchResults: job?.result?.brandSearchResults,
-        comprehensiveNutrients: job?.result?.comprehensiveNutrients || job?.result?.pendingFoodLog?.nutrients
+        comprehensiveNutrients: job?.result?.comprehensiveNutrients || pendingFoodLog?.nutrients
       });
       const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `debug-${jobIdToDownload}.md`;
+      a.download = `debug-${resolvedJobId}.md`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1942,7 +1979,7 @@ ${logsText}`);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `debug-${jobIdToDownload}.json`;
+      a.download = `debug-${resolvedJobId}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -5788,7 +5825,12 @@ ${logsText}`);
 
                       {(() => {
                         const isLatestAssistant = !messages.slice(idx + 1).some(m => m.role === 'assistant');
-                        const targetJobId = (msg.id?.startsWith('msg_assistant_job_') ? msg.id.replace('msg_assistant_', '') : '') || (msg.id?.startsWith('msg_assistant_') ? msg.id.replace('msg_assistant_', '') : '') || msg.data?.jobId || jobId;
+                        const targetJobId =
+                          msg.data?.jobId ||
+                          (msg.id?.startsWith('msg_assistant_job_') ? msg.id.replace('msg_assistant_job_', 'job_') : '') ||
+                          (msg.id?.startsWith('msg_assistant_') && !msg.id.includes('fail') && !msg.id.includes('clarify') && !/^\d+$/.test(msg.id.replace('msg_assistant_', '')) ? msg.id.replace('msg_assistant_', '') : '') ||
+                          (msg.pendingFoodLog?.jobId || msg.data?.pendingFoodLog?.jobId) ||
+                          jobId;
                         const debugUrl = msg.data?.debugUrl || (targetJobId ? JobStore.getJob(targetJobId)?.result?.debugUrl : undefined) || (jobId ? JobStore.getJob(jobId)?.result?.debugUrl : undefined);
                         const isErrorMsg = msg.isError || msg.agentUnavailable || /Failed to process your request|Analysis failed|Vision Scout Failed|Gemini unavailable|rate limit|quota exceeded|quota \(\d+\)|503|429|Service Unavailable|Error:/i.test(msg.content || '');
 

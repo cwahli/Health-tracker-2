@@ -3,6 +3,11 @@
 **Updated:** 2026-08-21
 **Status:** Q-6.4 Grok takeover of Gemini G1 — not Promote/D1
 
+- **Debug Log Download Scoping & Current Meal Extraction (2026-08-21)**:
+  - **Scoped Job ID Priority**: In `LogChat.tsx` (`handleDownloadDebug` and message render loop) and `FoodCard.tsx` (`handleDownloadTableAndLogs`), resolved `targetJobId` / `resolvedJobId` using prioritized lookup `msg.data?.jobId || msg.id.replace('msg_assistant_job_', 'job_') || msg.pendingFoodLog?.jobId || msg.data?.pendingFoodLog?.jobId || jobId`.
+  - **Scoped Meal Data Isolation**: Ensured downloaded debug Markdown/JSON uses `msg.data?.pendingFoodLog || msg.pendingFoodLog` and the message's specific logs instead of inheriting previous/stale meal logs from initial session jobs.
+  - **R2 & Tracker Resolution**: Added transparent R2 URL log resolution and exact ID matching in `getAgentRequestLogs()` to guarantee complete log history downloads for each unique meal.
+
 - **Q-6.4 combined queue (2026-08-21):** Gemini G1 bulk UI landed (`7427ea0`), Grok contract/schema updates verified. **Gemini G2 tape actions landed & verified**:
   - **G2-1 Live Preview Board:** Selecting food `#n` invokes `loadPreviewBoard` (`POST /api/golden/preview`) using `current_evidence` (`debug_url` / `scout_url` / `job_id`), loading the live board onto `selectedTagDetail.board` and populating Checks, Dishes, Scout identity, and Balance tabs.
   - **G2-2 Replay Log Action:** Added "Replay log" action button on food cards in `BugTrackerModal` and `FoodDetailTabs` (preview-only, no agent, does not mutate remaining or queue status).
