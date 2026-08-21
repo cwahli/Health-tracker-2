@@ -37,7 +37,7 @@ import {
   buildNow,
   buildStartPayload,
   hydrateWorkItem,
-  pickContinueTag,
+  pickQueueTag,
   prefillBug,
 } from './src/utils/bugWorkItem';
 import { classifyGoldenReds, shouldHoldR2 } from './src/utils/bugAutoFile';
@@ -1089,8 +1089,8 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
     }
   });
 
-  /** GET /api/bugs/next — head of ready queue (user says "Next bug") */
-  app.get('/api/bugs/next', async (_req: Request, res: Response) => {
+  /** GET /api/bugs/next — work bug (current). ?mode=next = next card. ?n=11 = that #. */
+  app.get('/api/bugs/next', async (req: Request, res: Response) => {
     try {
       const { supabaseAdmin } = await import('./supabaseAdmin.js');
       const r1 = await supabaseAdmin
@@ -1101,9 +1101,12 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
         .limit(100);
       if (r1.error) return res.status(500).json({ error: r1.error.message });
       const tags = await persistMissingPublicNs(r1.data || []);
-      const tag = pickContinueTag(tags);
+      const tag = pickQueueTag(tags, {
+        mode: String(req.query?.mode || ''),
+        n: req.query?.n as string | undefined,
+      });
       if (!tag) {
-        return res.json({ say: 'Next bug', empty: true, now: null, continue: null, note: 'No ready bugs.' });
+        return res.json({ say: 'Next bug', empty: true, now: null, continue: null, note: 'No matching bug.' });
       }
       const item = hydrateWorkItem(tag);
       const start = buildStartPayload({ ...tag, work_item: item, id: tag.id });
@@ -1327,7 +1330,15 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
         await supabaseAdmin.from('issue_tags').update({ status: 'fixed', resolved_at: new Date().toISOString() }).eq('id', tag.id);
       }
       const start = buildStartPayload({ ...tag, work_item: next, id: tag.id });
-      res.json({ ok: true, rejected: rejected || null, ...start });
+      if (rejected) {
+        return res.status(409).json({
+          ok: false,
+          error: rejected,
+          rejected,
+          ...start,
+        });
+      }
+      res.json({ ok: true, rejected: null, ...start });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'attempt failed' });
     }
@@ -1348,6 +1359,10 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       }
       if (req.body?.reset_burns || req.body?.resetBurns) {
         item.burns = item.burns.map((b) => ({ ...b, burned: false }));
+        if (item.parked.length) {
+          item.remaining = [...item.remaining, ...item.parked];
+          item.parked = [];
+        }
         if (item.queue === 'blocked') item.queue = 'ready';
       }
       if (Array.isArray(req.body?.remaining)) item.remaining = req.body.remaining.map(String);

@@ -9,7 +9,7 @@
 
 | Pack | Role |
 |------|------|
-| [BUG_CONTINUE_GEMINI.md](./BUG_CONTINUE_GEMINI.md) | **Gemini continue (human notes).** Do not paste this file. Click **Hand off** — clipboard is the full prompt. |
+| [BUG_CONTINUE_GEMINI.md](./BUG_CONTINUE_GEMINI.md) | Notes only. Law is **`AGENTS.md` L15**. |
 | [Q64_GEMINI_COMBINED_QUEUE_UI.md](./Q64_GEMINI_COMBINED_QUEUE_UI.md) | **Gemini G2** Q-6.4 tape actions. Paste §A. Preview board + Replay log on food `#n`. Not Promote/D1/`snapSurface`. |
 | [M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md](./M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md) | Food catalog curator — separate track |
 | [M22_MEAL_BUILD_TRUE_COMPLETE.md](./M22_MEAL_BUILD_TRUE_COMPLETE.md) | Prior product pack |
@@ -22,13 +22,9 @@
 - Agents early-stop analysis: [`plan/AISTUDIO_M30_AGENTS_COMPAT.md`](../plan/AISTUDIO_M30_AGENTS_COMPAT.md)
 - Free tier: [`plan/RELIABILITY_FREE_TIER_PLAN.md`](../plan/RELIABILITY_FREE_TIER_PLAN.md)
 
-## Continue bug fixing (AI Studio)
+## Continue bug fixing (any agent)
 
-1. Open the card, click **Hand off**, paste that clipboard into Gemini. That is the full instruction — do not also paste `BUG_CONTINUE_GEMINI.md`.
-2. After the first turn, only say **continue**.
-3. Gemini `GET /api/bugs/next` (stays on the in-progress card) → one class → `POST /api/bugs/:id/attempts` with `line` = that remaining text.
-4. Pass moves that line to Done and returns the next `continue.active_line`. Burn keeps the same line. Remaining empty → STOP (human Re-analyze). Do not Promote from chat.
-5. Do **not** ask Gemini to “review #n then fix it” — that re-enables meal-wide catalog paint.
+Law: **`AGENTS.md` L15**. **work bug** / **work 11** drains that card’s remaining in one turn. **next bug** = following card. Claude: Hand off. Do not type continue between lines.
 
 ## M31 — how to run AI Studio (biomarker remaining)
 

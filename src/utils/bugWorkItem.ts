@@ -280,19 +280,14 @@ export function sortReadyQueue<T extends { created_at?: string }>(
   });
 }
 
-/** Same-card continue beats a different ready card (so "continue" does not jump to BMI). */
+/** Current card: in-progress with remaining, else first ready. `work bug`. */
 export function pickContinueTag<T extends { created_at?: string }>(
   tags: T[],
   hydrate: (t: T) => BugWorkItem = hydrateWorkItem as any
 ): T | null {
   const working = (tags || [])
     .map((t) => ({ t, w: hydrate(t) }))
-    .filter(
-      (row) =>
-        row.w.queue === 'in_progress' &&
-        row.w.remaining.length > 0 &&
-        row.w.burns.filter((b) => b.burned).length < BURN_BUDGET
-    );
+    .filter((row) => row.w.queue === 'in_progress' && row.w.remaining.length > 0);
   if (working.length) {
     working.sort((a, b) => {
       const at = lastCommit(a.w)?.at || '';
@@ -302,6 +297,44 @@ export function pickContinueTag<T extends { created_at?: string }>(
     return working[0].t;
   }
   return sortReadyQueue(tags, hydrate)[0] || null;
+}
+
+/** Named card: `work 11` / `work #11`. */
+export function pickTagByPublicN<T>(
+  tags: T[],
+  n: number,
+  hydrate: (t: T) => BugWorkItem = hydrateWorkItem as any
+): T | null {
+  const want = Number(n);
+  if (!want) return null;
+  const hit = (tags || []).find((t) => hydrate(t).public_n === want);
+  return hit || null;
+}
+
+/** Following card, not the current in-progress one. `next bug`. */
+export function pickNextOtherTag<T extends { created_at?: string }>(
+  tags: T[],
+  hydrate: (t: T) => BugWorkItem = hydrateWorkItem as any
+): T | null {
+  const current = pickContinueTag(tags, hydrate);
+  const ready = sortReadyQueue(tags, hydrate);
+  if (current) {
+    const curId = (current as { id?: string }).id;
+    const other = ready.find((t) => (t as { id?: string }).id !== curId);
+    return other || null;
+  }
+  return ready[0] || null;
+}
+
+export function pickQueueTag<T extends { created_at?: string }>(
+  tags: T[],
+  opts: { mode?: string | null; n?: string | number | null } = {},
+  hydrate: (t: T) => BugWorkItem = hydrateWorkItem as any
+): T | null {
+  const n = Number(opts.n);
+  if (n > 0) return pickTagByPublicN(tags, n, hydrate);
+  if (String(opts.mode || '').toLowerCase() === 'next') return pickNextOtherTag(tags, hydrate);
+  return pickContinueTag(tags, hydrate);
 }
 
 export function publicId(item: BugWorkItem, tagId?: string): string {
@@ -370,6 +403,76 @@ export function fileHintForLine(text: string, cls: string): string {
   return 'one file at the broken layer — not CANONICAL_BASE_FOODS includes()';
 }
 
+const PAINT_PASS_RE =
+  /food_aliases|expected\.json|\/loop|canonical_mixed_berries|mixed_fruit_cup_canonical|cobb_salad_canonical|populated micronutrient|enrich(?:ed)? canonical|lookupcanonicalbasefood includes|canonical_base_foods includes/i;
+
+/** Honor-system `result=pass` is how picnic lines got painted. Refuse before remaining moves. */
+export function rejectAttemptPass(
+  attempt: {
+    hyp: string;
+    file: string;
+    test: string;
+    result: string;
+    burned?: boolean;
+    note?: string;
+    line?: string;
+  },
+  item: BugWorkItem
+): string | null {
+  if (attempt.burned) return null;
+  if (!/green|pass/i.test(String(attempt.result || ''))) return null;
+  const test = String(attempt.test || '').trim();
+  if (!test) return 'weak_test';
+  if (/^[\w./-]+\.test\.(ts|tsx|js)$/i.test(test)) return 'weak_test';
+  if (PAINT_PASS_RE.test(`${attempt.hyp || ''} ${attempt.note || ''} ${attempt.file || ''} ${test}`)) {
+    return 'paint';
+  }
+  const corpus = [...(item.remaining || []), ...(item.done || []), attempt.line || ''].join(' ');
+  const fdcs = test.match(/\b\d{5,8}\b/g) || [];
+  if (fdcs.some((n) => corpus.includes(n))) return 'paint_fdc';
+  const matched = matchRemainingLine(item.remaining, attempt.line);
+  if (matched) {
+    const hinted = fileHintForLine(matched, inferLineClass(matched, item.class)).match(
+      /([\w.-]+\.(?:ts|tsx|js|mjs))/
+    );
+    const file = String(attempt.file || '');
+    if (hinted && file && !file.includes(hinted[1])) return 'wrong_file';
+  }
+  return null;
+}
+
+function attemptTouchesLine(attempt: BugAttempt, line: string): boolean {
+  if (!attempt?.line) return false;
+  return !!matchRemainingLine([line], attempt.line);
+}
+
+function isLineStrike(attempt: BugAttempt): boolean {
+  return !!attempt.burned || /^refused:/.test(String(attempt.result || ''));
+}
+
+export function lineStrikeCount(
+  item: BugWorkItem,
+  line: string,
+  extra?: BugAttempt
+): number {
+  const rows: BugAttempt[] = [];
+  for (const b of item.burns || []) {
+    if (attemptTouchesLine(b, line)) rows.push(b);
+  }
+  for (const c of item.commits || []) {
+    const a = c?.attempt;
+    if (!a || !attemptTouchesLine(a, line)) continue;
+    if (!rows.some((r) => r.hyp === a.hyp && r.file === a.file && r.test === a.test && r.at === a.at)) {
+      rows.push(a);
+    }
+  }
+  if (extra && attemptTouchesLine(extra, line)) rows.push(extra);
+  return rows.filter(isLineStrike).length;
+}
+
+export const DRAIN_CARD_INSTRUCTION =
+  'Drain this card. Work continue.active_line only (one class, one file, named vitest on a NEW food). POST /api/bugs/<tag_id>/attempts. If continue.stop=false, immediately work the new active_line — do not wait for the human, do not summarize yet. One summary only when continue.stop=true (remaining empty). Two misses on a line parks it and returns the next remaining.';
+
 export function applyAttempt(
   item: BugWorkItem,
   attempt: {
@@ -383,59 +486,74 @@ export function applyAttempt(
     note?: string;
     line?: string;
   }
-): { item: BugWorkItem; rejected?: string; advanced_line?: string | null } {
+): { item: BugWorkItem; rejected?: string; advanced_line?: string | null; parked_line?: string | null } {
   if (item.queue === 'done') return { item, rejected: 'card_done' };
   if (isBurned(item.burns, attempt.hyp, attempt.file, attempt.test)) {
     return { item, rejected: 'already_burned' };
   }
+  const paint = rejectAttemptPass(attempt, item);
+  const remainingBefore = item.remaining.slice();
+  const matched = matchRemainingLine(remainingBefore, attempt.line);
+  const passed = !paint && !attempt.burned && /green|pass/.test(String(attempt.result));
+  let strikeLine = matched;
+  if (!strikeLine && !passed && remainingBefore.length === 1) strikeLine = remainingBefore[0];
   const row: BugAttempt = {
     at: attempt.at || new Date().toISOString(),
     actor: attempt.actor || 'agent',
     hyp: attempt.hyp,
     file: attempt.file,
     test: attempt.test,
-    result: attempt.result,
+    result: paint ? `refused:${paint}` : attempt.result,
     burned: !!attempt.burned,
     note: attempt.note,
-    line: attempt.line ? String(attempt.line) : undefined,
+    line: attempt.line ? String(attempt.line) : strikeLine || undefined,
   };
   const burns = row.burned ? [...item.burns, row] : item.burns;
-  const remainingBefore = item.remaining.slice();
   let remaining = remainingBefore;
   let done = item.done.slice();
-  const matched = matchRemainingLine(remainingBefore, attempt.line);
-  const passed = !row.burned && /green|pass/.test(String(row.result));
+  let parked = item.parked.slice();
+  let parked_line: string | null = null;
   if (matched && passed) {
     remaining = remainingBefore.filter((r) => r !== matched);
     if (!done.some((d) => norm(d) === norm(matched))) done.push(matched);
+  } else if (strikeLine && !passed && lineStrikeCount(item, strikeLine, row) >= BURN_BUDGET) {
+    remaining = remainingBefore.filter((r) => r !== strikeLine);
+    if (!parked.some((p) => norm(p) === norm(strikeLine))) parked.push(strikeLine);
+    parked_line = strikeLine;
   }
   const commit: BugCommit = {
     id: `c${item.commits.length + 1}`,
     at: row.at,
     actor: row.actor,
     kind: 'agent',
-    summary: row.burned
-      ? `burn: ${row.hyp}`
-      : matched && passed
-        ? `done: ${matched}`
-        : `attempt: ${row.hyp}`,
+    summary: parked_line
+      ? `parked: ${parked_line}`
+      : paint
+        ? `refused ${paint}: ${matched || row.hyp}`
+        : row.burned
+          ? `burn: ${row.hyp}`
+          : matched && passed
+            ? `done: ${matched}`
+            : `attempt: ${row.hyp}`,
     evidence: item.current_evidence,
     attempt: row,
   };
   let queue: BugQueueStatus = item.queue;
-  if (row.burned && burns.filter((b) => b.burned).length >= BURN_BUDGET) queue = 'blocked';
-  else if (passed && remainingBefore.length === 0) queue = 'done';
+  if (passed && remainingBefore.length === 0) queue = 'done';
   else if (queue !== 'blocked') queue = 'in_progress';
   return {
     item: {
       ...item,
       remaining,
       done,
+      parked,
       burns,
       commits: [...item.commits, commit],
       queue,
     },
+    rejected: paint || undefined,
     advanced_line: matched && passed ? matched : null,
+    parked_line,
   };
 }
 
@@ -562,6 +680,7 @@ export function buildNow(tag: any): BugNow {
       'edit expected.json to paint green',
       'retry any line in tried',
       'mark done from chat without the predicted test flipping',
+      'POST result=pass when test is a filename, names this meal’s FDC, or file ≠ File hint',
     ],
   };
 }
@@ -590,6 +709,11 @@ export type BugContinueJob = {
   how_to_end: string;
   do_not: string[];
   next_if_pass: string | null;
+  keep_going: boolean;
+  drain: boolean;
+  parked: string[];
+  line_strikes: string;
+  instruction: string;
 };
 
 export function buildContinueJob(tag: any, activeLine?: string | null): BugContinueJob {
@@ -598,15 +722,21 @@ export function buildContinueJob(tag: any, activeLine?: string | null): BugConti
   const now = buildNow(tag);
   const remaining = item.remaining || [];
   const selected = matchRemainingLine(remaining, activeLine) || remaining[0] || null;
-  const burnedCount = item.burns.filter((b) => b.burned).length;
-  const blocked = item.queue === 'blocked' || burnedCount >= BURN_BUDGET;
+  const blocked = item.queue === 'blocked';
   const empty = !selected;
   const stop = blocked || empty || item.queue === 'done';
   const cls = selected ? inferLineClass(selected, item.class) : item.class || '';
-  let say = `Continue ${now.public_id}: ${selected}`;
+  const total = (item.done || []).length + (item.parked || []).length + remaining.length;
+  const idx = (item.done || []).length + 1;
+  let say = `DRAIN ${now.public_id} ${idx}/${total || 1}: ${selected}. After POST, if stop=false immediately work continue.active_line. Do not wait for the human. Summary only when remaining is empty.`;
   if (item.queue === 'done') say = `STOP. ${now.public_id} is done. Do not edit.`;
   else if (blocked) say = `STOP. ${now.public_id} is blocked. Human Unblock before continue.`;
-  else if (empty) say = `STOP. ${now.public_id} remaining is empty. Do not Promote. Human Re-analyze then Mark fixed.`;
+  else if (empty) {
+    const parkedN = (item.parked || []).length;
+    say = parkedN
+      ? `STOP. ${now.public_id} remaining is empty (${parkedN} parked). Do not Promote. Human Re-analyze / Unblock parked.`
+      : `STOP. ${now.public_id} remaining is empty. Do not Promote. Human Re-analyze then Mark fixed.`;
+  }
   const evidence = item.current_evidence;
   const linePhoto = selected ? linePhotosForText(evidence, selected) : null;
   const photo =
@@ -637,7 +767,7 @@ export function buildContinueJob(tag: any, activeLine?: string | null): BugConti
       if (!last) return 'none';
       return `${last.actor} · ${last.summary}${last.attempt ? ` · ${last.attempt.result} · ${last.attempt.file}` : ''}`;
     })(),
-    how_to_end: `POST /api/bugs/${id}/attempts { line, hyp, file, test, result, burned, note }`,
+    how_to_end: `POST /api/bugs/${id}/attempts { line, hyp, file, test, result, burned, note } then immediately work continue.active_line if stop=false`,
     do_not: [
       'POST /api/golden/cases/:id/loop',
       'PATCH remaining to [] or queue=done from chat',
@@ -645,63 +775,47 @@ export function buildContinueJob(tag: any, activeLine?: string | null): BugConti
       'edit food_aliases or expected.json to paint green',
       'invent files (foodScoutResolver, foodBudgetReconcile, populateMicroNutrients)',
       'retry any line in tried marked DO NOT RETRY',
-      'work remaining lines other than active_line',
+      'wait for the human between remaining lines',
+      'summarize before continue.stop=true',
+      'POST result=pass when test is a filename, names this meal’s FDC, or file ≠ File hint',
     ],
     next_if_pass: selected ? remaining.filter((r) => r !== selected)[0] || null : remaining[0] || null,
+    keep_going: !stop,
+    drain: true,
+    parked: item.parked || [],
+    line_strikes: selected ? `${lineStrikeCount(item, selected)}/${BURN_BUDGET}` : now.burns_used,
+    instruction: DRAIN_CARD_INSTRUCTION,
   };
 }
 
 export function formatContinuePrompt(job: BugContinueJob): string {
   const standing = [
-    'You are continuing Health-tracker bug fixing. This paste is the full instruction — do not wait for another file or pack.',
-    'After this message the user may only say "continue".',
-    '',
-    'How to start each turn:',
-    '1. If this CONTINUE block is in the message, this is the job.',
-    `2. If they later say "continue" with no paste: GET /api/bugs/next (stays on tag ${job.tag_id || 'this card'} while remaining exists).`,
-    `3. If they named a public id: GET /api/bugs/${job.tag_id || '<tag_id>'} from the last payload.`,
-    '',
-    'Read continue on the JSON at the bottom.',
-    '- If continue.stop is true: do not write code. Quote continue.say. Stop.',
-    '- Else do ONLY continue.active_line. Other remaining are out of session.',
-    '',
-    'DO:',
-    '- One class (continue.class_hint). One file (continue.file_hint).',
-    '- Named vitest that fails on a NEW food of that class (not this meal’s FDC list).',
-    `- End every turn: POST /api/bugs/${job.tag_id}/attempts`,
-    '  { "line": "<continue.active_line exactly>", "hyp": "...", "file": "...", "test": "...", "result": "pass" | "still_red", "burned": true|false, "note": "..." }',
-    '  burned=false only when that named test flipped. burned=true otherwise.',
-    '- After POST, reply with response.continue.say and wait. If they say continue, GET /api/bugs/next and do that active_line.',
-    '- If they said "keep going" in the same message: at most 3 remaining lines this chat, different classes, stop on burn or stop=true.',
-    '',
-    'DO NOT:',
-    '- POST /api/golden/cases/:id/loop',
-    '- PATCH remaining to [] or queue=done',
-    '- Add CANONICAL_BASE_FOODS / lookupCanonicalBaseFood includes() for this meal’s dishes (fruit cup, cobb salad, mixed fruit)',
-    '- Edit food_aliases or expected.json to paint green',
-    '- Invent files (foodScoutResolver.ts, foodBudgetReconcile.ts, populateMicroNutrients)',
-    '- Work every remaining line as one catalog dump',
-    '- Mark the card done, Promote, or hide Inbox',
-    '- Retry a tried line marked DO NOT RETRY',
-    '',
-    'A pass with line moves that remaining row to Done and points continue at the next line. Remaining empty → STOP for the human to Re-analyze. Do not Promote.',
+    'AGENTS.md L15 (bug queue). Triggers: work bug (current) / next bug (following card) / work 11 or work #11 (that card). Not a bare "continue" or "work".',
+    'If you can GET http://127.0.0.1:3000/api/bugs/next (or localhost:3000), that JSON is the job.',
+    'If you cannot (GitHub-only): this paste IS the job. Do not invent remaining from git.',
+    DRAIN_CARD_INSTRUCTION,
+    'Named vitest on a NEW food (it() sentence, not a filename, not this meal’s FDC). 409 paint/weak_test/paint_fdc/wrong_file = remaining stays; new hyp. Two misses park the line.',
+    'Do not /loop, PATCH remaining [], queue=done, CANONICAL includes() for this meal, food_aliases, expected.json, invent files, Promote.',
   ].join('\n');
 
   const jobBlock = job.stop
-    ? `stop=true. Do not write code. Tell the human:\n${job.say}`
+    ? `stop=true. Do not write code. One summary to the human:\n${job.say}`
     : [
         job.say,
         '',
+        `keep_going: ${job.keep_going}`,
         `Active line: ${job.active_line}`,
         `Class: ${job.class_hint}`,
         `File: ${job.file_hint}`,
         `Test: ${job.predicted_test}`,
+        `Line strikes: ${job.line_strikes}`,
         `Photo: ${job.photo || 'none'}`,
         `Comment: ${job.comment || 'none'}`,
         `Tape: job_id=${job.job_id || 'none'} debug=${job.debug_url || 'none'}`,
         `Tried / do not retry: ${job.tried.join(' · ') || 'none yet'}`,
         `Last loop: ${job.last_loop || 'none'}`,
-        `Other remaining (do not touch): ${job.remaining_after.join(' · ') || 'none'}`,
+        `Next remaining after POST: ${job.remaining_after.join(' · ') || 'none'}`,
+        `Parked: ${job.parked.join(' · ') || 'none'}`,
       ].join('\n');
 
   return [
@@ -714,6 +828,8 @@ export function formatContinuePrompt(job: BugContinueJob): string {
       {
         say: job.say,
         stop: job.stop,
+        keep_going: job.keep_going,
+        drain: job.drain,
         tag_id: job.tag_id,
         public_id: job.public_id,
         active_line: job.active_line,
@@ -721,6 +837,7 @@ export function formatContinuePrompt(job: BugContinueJob): string {
         file_hint: job.file_hint,
         how_to_end: job.how_to_end,
         next_if_pass: job.next_if_pass,
+        instruction: job.instruction,
         do_not: job.do_not,
       },
       null,
@@ -735,6 +852,7 @@ export function buildStartPayload(tag: any, activeLine?: string | null): {
   commits: BugCommit[];
   how_to_end: string;
   tag_id: string;
+  instruction: string;
   continue: BugContinueJob;
 } {
   const item = hydrateWorkItem(tag);
@@ -746,6 +864,7 @@ export function buildStartPayload(tag: any, activeLine?: string | null): {
     now: buildNow(tag),
     commits: item.commits,
     how_to_end: cont.how_to_end,
+    instruction: DRAIN_CARD_INSTRUCTION,
     continue: cont,
   };
 }

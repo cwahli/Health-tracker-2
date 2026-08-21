@@ -1,23 +1,25 @@
-# Gemini — continue bug fixing (human notes)
+# Continue bugs — human notes
 
-**Do not paste this file into AI Studio.** The full instruction lives on **Hand off**.
+Law is **`AGENTS.md` L15**. Do not paste this file.
 
-**For you:** Open `#n` → click **Hand off** → paste the clipboard into Gemini. After that only say **continue**.
+- **Studio / Antigravity / Grok:** **work bug** (current) · **next bug** (next card) · **work 11** (that #). One phrase drains **all remaining on that card**.
+- **GitHub-only (Claude):** paste **Hand off**.
 
-**Spec:** `plan/QUALITY.md` §14.4. One class per job. No `POST /loop`. Do not mark the card done from chat.
+**Spec:** `plan/QUALITY.md` §14.4. One class per remaining line. No `POST /loop`. Do not mark the card done from chat.
 
-`GET /api/bugs/next` stays on the **in-progress card** while it has remaining (so continue does not jump to BMI).
+`GET /api/bugs/next` stays on the **in-progress card** while it has remaining (so it does not jump to BMI). After each `POST /attempts`, `continue.keep_going=true` means immediately work the next line — do not wait for the human.
 
 ---
 
 ## What you do
 
-1. Click **Hand off** on the card. Paste only that. No pack, no §A.
-2. After Studio returns: History should show a new attempt. Remaining shrinks only if `result=pass` and `line` matched.
-3. Food-calc lines: **Re-analyze** before you believe the meal. Replay log/catalog is the frozen tape.
-4. Say **continue**. `/next` stays on this card until remaining is empty or blocked.
+1. Say **work bug**, **next bug**, or **work 11** **once**.
+2. Claude (GitHub only): **Hand off** paste. No extra pack.
+3. Do **not** type continue between lines. Agent summarizes only when remaining is empty (`continue.stop=true`).
+4. History must show an attempt per line. Remaining shrinks only if `result=pass` and `line` matched (or the line is parked after 2 misses).
+5. Food-calc: **Re-analyze** before you believe the meal.
 
-If History is empty, Gemini did not POST `/attempts` — the card will look unchanged. Ask them to POST, do not say “try fixing #11”.
+If History is empty, they skipped `POST /attempts`. Ask them to POST. Do not say “fix #11”.
 
 ---
 

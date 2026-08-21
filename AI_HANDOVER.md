@@ -1,9 +1,13 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-21
-**Status:** Q-6.4 Promote deferred; Gemini **continue** = one remaining line (`POST /attempts` with `line`)
+**Status:** Q-6.4 Promote deferred; `#11` picnic still detect-only. One **work bug** / **work 11** now drains that card’s remaining.
 
-- **Gemini continue loop (2026-08-21):** “Continue” is no longer “fix this bug.” **Hand off is the full prompt** (standing rules + one remaining line) — do not also paste `BUG_CONTINUE_GEMINI.md`. `POST /api/bugs/:id/attempts` with `line` + pass moves that row to `done` and returns the next `continue.active_line`; last line does **not** mark the card done. `GET /api/bugs/next` prefers the in-progress card so continue does not jump to BMI. Replay log still will not show food-calc until Re-analyze. Picnic catalog paint on `#11` is still not a class fix.
+- **Drain-card loop (2026-08-21):** L15: one trigger = all remaining on this `#n`. After `POST /attempts`, if `continue.stop=false` / `keep_going=true` the agent immediately works the next line — human does not type continue. Two misses on a line **parks** it (does not block the card). Summary only when remaining is empty. Restart local server. Update the Studio Gem instruction (drain-card snippet).
+
+- **Gemini #11 review (2026-08-21):** Two Studio `result=pass` posts moved croissant micros + 171711 to `done` without landing in git. Remaining was restored. `/attempts` 409s paint/filename tests.
+
+- **Continue bugs (2026-08-21):** **`AGENTS.md` L15** — **work bug** = current in-progress · **next bug** = following card (`?mode=next`) · **work 11** = that # (`?n=11`). Claude: Hand off. `#11` remaining starts at croissant micros.
 
 - **Q-6.4 rest minus Promote (2026-08-21):** Item **5 Promote / hide Inbox tab** is deferred. Item 6: snap no longer POSTs `/api/golden/cases`; `writeInboxCase` is not called on D1 create; leftover D1 rows plan-link onto existing `#n` via `POST /api/bugs/migrate-inbox` (promoted official goldens skip create). Item 7 tests (tape on/off, remaining+line photos, catalog body does not touch queue) landed; promote-refuses-photos waits on item 5. Food `#n` now has **Replay catalog** (preview only) and **Re-analyze** (opens saved `job_id`). Inbox tab + Make Golden stay until Promote. Picnic food-calc (curator skip / 171711 / gherkin / red onion) still detect-only.
 

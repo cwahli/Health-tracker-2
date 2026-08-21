@@ -16,6 +16,8 @@ import {
   isBurned,
   matchRemainingLine,
   pickContinueTag,
+  pickNextOtherTag,
+  pickQueueTag,
   prefillBug,
   sortReadyQueue,
   BURN_BUDGET,
@@ -121,7 +123,9 @@ describe('bugWorkItem Q-6', () => {
       actor: 'studio',
     });
     expect(a2.item.burns).toHaveLength(2);
-    expect(a2.item.queue).toBe('blocked');
+    expect(a2.item.queue).toBe('in_progress');
+    expect(a2.item.remaining).toEqual([]);
+    expect(a2.item.parked).toEqual(['no label table']);
     expect(a2.item.burns.length).toBeGreaterThanOrEqual(BURN_BUDGET);
   });
 
@@ -245,12 +249,59 @@ describe('bugWorkItem Q-6', () => {
     expect(job.next_if_pass).toBe('gherkin fallback 150');
     expect(job.do_not.some((d) => /CANONICAL_BASE_FOODS/.test(d))).toBe(true);
     const prompt = formatContinuePrompt(job);
-    expect(prompt).toMatch(/full instruction/i);
-    expect(prompt).toMatch(/GET \/api\/bugs\/next/);
-    expect(prompt).toMatch(/ONLY continue.active_line/i);
-    expect(prompt).toMatch(/do not wait for another file/i);
+    expect(prompt).toMatch(/AGENTS\.md L15/);
+    expect(prompt).toMatch(/GET http:\/\/127\.0\.0\.1:3000\/api\/bugs\/next/);
+    expect(job.keep_going).toBe(true);
+    expect(job.drain).toBe(true);
+    expect(job.say).toMatch(/^DRAIN #11 /);
+    expect(prompt).toMatch(/Drain this card/);
+    expect(prompt).toMatch(/do not wait for the human/i);
+    expect(prompt).toMatch(/work bug/);
+    expect(prompt).toMatch(/next bug/);
+    expect(prompt).toMatch(/work 11 or work #11/);
+    expect(prompt).toMatch(/Not a bare "continue"/);
     expect(prompt).not.toMatch(/Check this bug and fix it/);
     expect(prompt).not.toMatch(/BUG_CONTINUE_GEMINI/);
+    expect(prompt).not.toMatch(/One trigger = one line/);
+    expect(prompt).toMatch(/409 paint\/weak_test\/paint_fdc\/wrong_file/);
+  });
+
+  it('two misses on one line parks it and keeps sibling remaining on the same card', () => {
+    let item = hydrateWorkItem({
+      work_item: {
+        public_n: 11,
+        remaining: ['Croissant: 9 micro keys at 0', 'berries share 171711'],
+        done: [],
+        parked: [],
+        queue: 'in_progress',
+      },
+    });
+    item = applyAttempt(item, {
+      hyp: 'catalog micros',
+      file: 'server_food_db.ts',
+      test: 'server_food_db.test.ts',
+      result: 'pass',
+      burned: false,
+      line: 'Croissant: 9 micro keys at 0',
+    }).item;
+    expect(item.remaining[0]).toMatch(/Croissant/);
+    const parked = applyAttempt(item, {
+      hyp: 'still catalog micros',
+      file: 'server_food_db.ts',
+      test: 'server_food_db.test.ts',
+      result: 'pass',
+      burned: false,
+      line: 'Croissant: 9 micro keys at 0',
+    });
+    expect(parked.parked_line).toMatch(/Croissant/);
+    expect(parked.item.remaining).toEqual(['berries share 171711']);
+    expect(parked.item.parked[0]).toMatch(/Croissant/);
+    expect(parked.item.queue).toBe('in_progress');
+    const cont = buildContinueJob({ id: 'tag-11', work_item: parked.item, title: 'picnic' });
+    expect(cont.stop).toBe(false);
+    expect(cont.keep_going).toBe(true);
+    expect(cont.active_line).toBe('berries share 171711');
+    expect(cont.say).toMatch(/DRAIN #11/);
   });
 
   it('pass with line moves that remaining row to done and keeps the card open', () => {
@@ -277,6 +328,56 @@ describe('bugWorkItem Q-6', () => {
     const cont = buildContinueJob({ id: 'tag-11', work_item: next.item, title: 'picnic' });
     expect(cont.active_line).toBe('gherkin fallback 150');
     expect(cont.stop).toBe(false);
+  });
+
+  it('refuses honor-system pass that paints remaining (filename test, this-meal FDC, wrong file)', () => {
+    const picnic = hydrateWorkItem({
+      work_item: {
+        public_n: 11,
+        remaining: [
+          'Croissant: 9 micro keys at 0',
+          'Fruit Salad: strawberry, blueberry, raspberry share canonical id 171711',
+        ],
+        done: [],
+        queue: 'in_progress',
+      },
+    });
+    const weak = applyAttempt(picnic, {
+      hyp: 'Enrich croissant canonical bakery items',
+      file: 'server_food_db.ts',
+      test: 'server_food_db.test.ts',
+      result: 'pass',
+      burned: false,
+      line: 'Croissant: 9 micro keys at 0',
+    });
+    expect(weak.rejected).toBe('weak_test');
+    expect(weak.advanced_line).toBeNull();
+    expect(weak.item.remaining[0]).toMatch(/Croissant/);
+    expect(weak.item.done).toEqual([]);
+
+    const fdc = applyAttempt(picnic, {
+      hyp: 'Reordered berry lookups',
+      file: 'server_food_db.ts',
+      test: 'strawberry, blueberry, and raspberry do not share canonical FDC ID 171711',
+      result: 'pass',
+      burned: false,
+      line: 'Fruit Salad: strawberry, blueberry, raspberry share canonical id 171711',
+    });
+    expect(fdc.rejected).toBe('paint_fdc');
+    expect(fdc.item.remaining).toHaveLength(2);
+
+    const wrong = applyAttempt(picnic, {
+      hyp: 'fill croissant micros in catalog',
+      file: 'server_food_db.ts',
+      test: 'bakery items of this class keep micros through aggregation',
+      result: 'pass',
+      burned: false,
+      line: 'Croissant: 9 micro keys at 0',
+    });
+    expect(wrong.rejected).toBe('wrong_file');
+    expect(wrong.item.remaining[0]).toMatch(/Croissant/);
+    expect(wrong.item.commits.at(-1)?.summary).toMatch(/refused wrong_file/);
+    expect(wrong.item.commits.at(-1)?.attempt?.result).toBe('refused:wrong_file');
   });
 
   it('last remaining pass does not mark the card done', () => {
@@ -319,6 +420,19 @@ describe('bugWorkItem Q-6', () => {
       },
     ];
     expect(pickContinueTag(tags)?.id).toBe('picnic');
+    expect(pickNextOtherTag(tags)?.id).toBe('bmi');
+    expect(pickQueueTag(tags, { mode: 'current' })?.id).toBe('picnic');
+    expect(pickQueueTag(tags, { mode: 'next' })?.id).toBe('bmi');
+    expect(pickQueueTag(tags, { n: 11 })?.id).toBeUndefined();
+  });
+
+  it('work 11 picks that public_n', () => {
+    const tags = [
+      { id: 'bmi', created_at: '2026-08-01', work_item: { public_n: 2, queue: 'ready', remaining: ['bmi'], burns: [], commits: [] } },
+      { id: 'picnic', created_at: '2026-08-10', work_item: { public_n: 11, queue: 'ready', remaining: ['micros'], burns: [], commits: [] } },
+    ];
+    expect(pickQueueTag(tags, { n: 11 })?.id).toBe('picnic');
+    expect(pickQueueTag(tags, { n: '11' })?.id).toBe('picnic');
   });
 
   it('infers class from remaining text', () => {

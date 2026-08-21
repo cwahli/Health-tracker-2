@@ -138,14 +138,14 @@ This law **overrides L11 / L13** when they would mean “keep `/loop`-ing or gre
    - `next bug` → `GET /api/bugs/next?mode=next` (skips the current card)  
    - `work 11` / `work #11` → `GET /api/bugs/next?n=11`  
    **No live API** (GitHub-only Claude): the **Hand off** clipboard is the ticket. Do not invent remaining from git.
-2. `continue.stop` → quote `continue.say`, no code. Remaining empty → STOP for human Re-analyze; do not Promote from chat.
-3. Else **only** `continue.active_line`. One class, one file (`class_hint` / `file_hint`). Other remaining on that `#n` are out of session.
+2. `continue.stop` → quote `continue.say`, **one** summary, no more code. Remaining empty → STOP for human Re-analyze; do not Promote from chat.
+3. Else **drain this `#n`**. Work **only** `continue.active_line` (one class, one file). After `POST /attempts`, if `continue.stop=false` **immediately** work the new `active_line`. Do not wait for the human. Do not summarize until `stop=true`. Other **cards** are out of session.
 4. Named vitest must fail on a **new** food of that class (not this meal’s FDC list).
-5. End every turn: `POST /api/bugs/<tag_id>/attempts` `{ line: <active_line exactly>, hyp, file, test, result, burned, note }`. `burned=false` only if that test flipped. Pass with `line` moves that row to Done and returns the next ticket.
-6. One trigger = one line. `keep going on this bug` = at most 3 lines this turn, different classes, stop on burn or `stop=true`.
-7. **Do not:** `POST /loop` · `PATCH remaining` to `[]` / `queue=done` · `CANONICAL_BASE_FOODS` / `lookupCanonicalBaseFood` `includes()` for this meal’s dishes · `food_aliases` / `expected.json` paint · invent files · retry **DO NOT RETRY** · mark the card done from chat.
+5. End every line: `POST /api/bugs/<tag_id>/attempts` `{ line: <active_line exactly>, hyp, file, test, result, burned, note }`. `burned=false` only if that test flipped. Pass moves that row to Done. 409 paint/weak_test/paint_fdc/wrong_file does not. Two misses on a line **parks** it and returns the next remaining.
+6. One trigger = this card’s remaining. Stop on `stop=true`.
+7. **Do not:** `POST /loop` · `PATCH remaining` to `[]` / `queue=done` · `CANONICAL_BASE_FOODS` / `lookupCanonicalBaseFood` `includes()` for this meal’s dishes · `food_aliases` / `expected.json` paint · invent files · retry **DO NOT RETRY** · mark the card done from chat · ask the human to say continue between lines.
 
-L15 **overrides L11** only for those trigger phrases: the next job is the next **remaining line**, not “green this meal.” Pack **continue** stays L13. L14 class/test/catalog-paint rules still apply.
+L15 **overrides L11** for those trigger phrases: drain this card’s remaining lines in one turn, not “green this meal.” Pack **continue** stays L13. L14 class/test/catalog-paint rules still apply.
 
 ### L10 — COMPLETE
 All of: IMPACT (L/X) · SELF-CHECK · (if code changed: `tsc` · domain regression map commands · pack assert if any; skip if doc/ops only) · paths verified or known-broken noted.

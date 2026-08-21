@@ -2,7 +2,7 @@
 
 | File | Status | Topic |
 |------|:------:|-------|
-| **[BUG_CONTINUE_GEMINI.md](./BUG_CONTINUE_GEMINI.md)** | **Gemini continue (notes)** | Do not paste this file. **Hand off** clipboard is the full prompt. |
+| **[BUG_CONTINUE_GEMINI.md](./BUG_CONTINUE_GEMINI.md)** | **Queue notes** | L15: one phrase drains that card. Do not paste this file. |
 | **[Q64_GEMINI_COMBINED_QUEUE_UI.md](./Q64_GEMINI_COMBINED_QUEUE_UI.md)** | **Gemini G2 (Q-6.4)** | Tape actions: preview board, Replay log, bar, capture-pack slots. Not Promote/D1. |
 | **[M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md](./M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md)** | **ACTIVE (biomarkers)** | **Plan §13 remaining work, P0→P8 until master gate 0** |
 | **[M23_FULL_FREE_TIER_RELIABILITY.md](./M23_FULL_FREE_TIER_RELIABILITY.md)** | Separate track | **Full free-tier program M23→M28 continuous until master gate 0** |
