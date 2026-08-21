@@ -290,7 +290,7 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   egg_sandwich: { fdcId: "canonical_egg_sandwich", calories: 220, protein: 10.5, totalFat: 11.0, saturatedFat: 2.8, transFat: 0, carbohydrates: 20.0, sugar: 2.5, sodium: 430, potassium: 160, totalFibre: 1.5, foodType: 'egg' },
   chicken_wrap: { fdcId: "canonical_chicken_wrap", calories: 215, protein: 12.0, totalFat: 8.5, saturatedFat: 2.0, transFat: 0.1, carbohydrates: 23.0, sugar: 2.0, sodium: 460, potassium: 170, totalFibre: 1.8, foodType: 'poultry' },
   serrano_ham: { fdcId: "172551", calories: 235, protein: 22.0, totalFat: 15.0, saturatedFat: 5.5, transFat: 0, carbohydrates: 1.0, sugar: 0, sodium: 1200, potassium: 300, totalFibre: 0, foodType: 'processed' },
-  mixed_berries: { fdcId: "171711", calories: 45, protein: 0.7, totalFat: 0.3, saturatedFat: 0.02, transFat: 0, carbohydrates: 11.0, sugar: 7.0, sodium: 1, potassium: 120, totalFibre: 2.5, foodType: 'fruit' },
+  mixed_berries: { fdcId: "canonical_mixed_berries", calories: 45, protein: 0.7, totalFat: 0.3, saturatedFat: 0.02, transFat: 0, carbohydrates: 11.0, sugar: 7.0, sodium: 1, potassium: 120, totalFibre: 2.5, foodType: 'fruit' },
   low_fat_yogurt: { fdcId: "170903", calories: 63, protein: 5.25, totalFat: 1.55, saturatedFat: 1.0, transFat: 0, carbohydrates: 7.04, sugar: 7.04, sodium: 70, potassium: 230, totalFibre: 0, foodType: 'dairy' },
   sea_salt: { fdcId: "173468", calories: 0, protein: 0, totalFat: 0, saturatedFat: 0, transFat: 0, carbohydrates: 0, sugar: 0, sodium: 38758, potassium: 8, totalFibre: 0, foodType: 'processed' }
 };
@@ -309,6 +309,9 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   if (normalized.includes('balsamic')) return CANONICAL_BASE_FOODS.balsamic_dressing;
   if (normalized.includes('marie rose') || normalized.includes('rose sauce')) return CANONICAL_BASE_FOODS.marie_rose_sauce;
   if (normalized.includes('serrano') || normalized.includes('cured ham') || normalized.includes('cooked ham') || normalized === 'ham') return CANONICAL_BASE_FOODS.serrano_ham;
+  if (normalized.includes('strawberry') || normalized.includes('strawberries')) return CANONICAL_BASE_FOODS.strawberry;
+  if (normalized.includes('blueberry') || normalized.includes('blueberries')) return CANONICAL_BASE_FOODS.blueberry;
+  if (normalized.includes('raspberry') || normalized.includes('raspberries')) return CANONICAL_BASE_FOODS.raspberry;
   if (normalized.includes('mixed berries fruit compote')) return CANONICAL_BASE_FOODS.strawberry;
   if (normalized.includes('mixed berries') || normalized.includes('berry') || normalized.includes('berries')) return CANONICAL_BASE_FOODS.mixed_berries;
   if (normalized.includes('low fat yogurt') || normalized.includes('low-fat yogurt') || normalized.includes('low fat yoghurt')) return CANONICAL_BASE_FOODS.low_fat_yogurt;

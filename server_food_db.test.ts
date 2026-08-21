@@ -121,4 +121,15 @@ describe('FALSE_FRIEND class examples', () => {
     // We changed it to 169134 (or brand_menu...) so it should not be 170150!
     expect(p?.fdcId).not.toBe('170150');
   });
+
+  it('strawberry, blueberry, and raspberry do not share canonical FDC ID 171711', () => {
+    const s = lookupCanonicalBaseFood('strawberry');
+    const b = lookupCanonicalBaseFood('blueberry');
+    const r = lookupCanonicalBaseFood('raspberry');
+    expect(s?.fdcId).toBe('167762');
+    expect(b?.fdcId).toBe('171711');
+    expect(r?.fdcId).toBe('167755');
+    expect(s?.fdcId).not.toBe(b?.fdcId);
+    expect(r?.fdcId).not.toBe(b?.fdcId);
+  });
 });
