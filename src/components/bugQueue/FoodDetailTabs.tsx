@@ -1,8 +1,8 @@
 import React from 'react';
 import { PHASE_LABEL, groupJourneyByDish } from '../../utils/goldenScoreboard';
 import { journeyPhaseCounts } from '../../utils/goldenJourney';
+import { uniqueTapeCheckRows } from '../../utils/bugTapeReview';
 import { Play, Loader2 } from 'lucide-react';
-import type { AutoSpotHit } from '../../utils/bugAutoSpot';
 
 export type FoodDetailTabsProps = {
   activeTab: 'checks' | 'dishes' | 'scout' | 'balance' | 'history';
@@ -36,20 +36,8 @@ function isFilteredJourneyCheck(i: any) {
 export function computeBoardProgress(board?: any) {
   if (!board) return { passCount: 0, failCount: 0, total: 0, passPct: 0, failPct: 0 };
 
-  const invariants = Array.isArray(board.invariants)
-    ? board.invariants.filter((i: any) => !isFilteredJourneyCheck(i))
-    : [];
-
-  const autoSpotHits = Array.isArray(board.autoSpot) ? board.autoSpot : [];
-  const invLabelKeys = new Set(
-    invariants.map((i: any) => String(i.label || i.id || '').toLowerCase().replace(/\s+/g, ' ').trim())
-  );
-  const extraSpotHits = autoSpotHits.filter((h: any) => {
-    const k = String(h.text || '').toLowerCase().replace(/\s+/g, ' ').trim();
-    if (!k || invLabelKeys.has(k)) return false;
-    return !isFilteredJourneyCheck({ id: h.id, label: h.text });
-  });
-
+  const rows =
+    Array.isArray(board.checks) && board.checks.length ? board.checks : uniqueTapeCheckRows(board);
   const outcomes = Array.isArray(board.outcomes)
     ? board.outcomes.filter((o: any) => !isFilteredJourneyCheck({ id: o.id, label: `${o.label || ''} ${o.name || ''}` }))
     : [];
@@ -57,10 +45,9 @@ export function computeBoardProgress(board?: any) {
   let passCount = 0;
   let failCount = 0;
 
-  if (invariants.length > 0 || extraSpotHits.length > 0) {
-    passCount = invariants.filter((i: any) => i.pass === true || i.status === 'pass').length;
-    // auto-spot hits are always unresolved fails until promoted to a real invariant
-    failCount = invariants.filter((i: any) => i.pass !== true && i.status !== 'pass').length + extraSpotHits.length;
+  if (rows.length > 0) {
+    passCount = rows.filter((r) => r.pass).length;
+    failCount = rows.filter((r) => !r.pass).length;
   } else if (outcomes.length > 0) {
     passCount = outcomes.filter((o: any) => o.pass === true || o.status === 'pass').length;
     failCount = outcomes.filter((o: any) => o.pass !== true && o.status !== 'pass').length;
@@ -98,28 +85,9 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
   className = '',
 }) => {
   const journey = Array.isArray(board?.journey) ? board.journey : [];
-  const invariants = Array.isArray(board?.invariants)
-    ? board.invariants.filter((i: any) => !isFilteredJourneyCheck(i))
-    : [];
-  const autoSpotHits: AutoSpotHit[] = Array.isArray(board?.autoSpot) ? board.autoSpot : [];
   const phaseCounts = journeyPhaseCounts(journey);
-  const invLabelKeys = new Set(
-    invariants.map((i: any) => String(i.label || i.id || '').toLowerCase().replace(/\s+/g, ' ').trim())
-  );
-  const extraSpotHits = autoSpotHits.filter((h) => {
-    const k = String(h.text || '').toLowerCase().replace(/\s+/g, ' ').trim();
-    if (!k || invLabelKeys.has(k)) return false;
-    return !isFilteredJourneyCheck({ id: h.id, label: h.text });
-  });
-  const checkRows = [
-    ...invariants,
-    ...extraSpotHits.map((h) => ({
-      id: h.id,
-      label: h.text,
-      pass: false,
-      status: 'fail',
-    })),
-  ];
+  const checkRows =
+    Array.isArray(board?.checks) && board.checks.length ? board.checks : uniqueTapeCheckRows(board);
   const ledger =
     board?.ledger ||
     (Array.isArray(board?.observedMeal) && board.observedMeal.length
@@ -285,7 +253,7 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
               disabled={reanalyzing}
               onClick={onReanalyze}
               className="py-1.5 px-2.5 rounded-xl bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
-              title="Reload remaining from this tape (auto-spot). Tracker stays open. Use Replay log to fill the four tabs."
+              title="Catalog restage (no LLM), then one skipScout pipeline if auto checks still need a live tape. Same card — history stays. Replay log still reads the frozen job."
             >
               {reanalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" /> : <Play className="w-3.5 h-3.5 text-indigo-400" />}
               <span>Re-analyze</span>

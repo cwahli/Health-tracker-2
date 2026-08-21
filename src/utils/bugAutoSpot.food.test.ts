@@ -119,10 +119,36 @@ describe('autoSpotFood', () => {
     const fallback = autoSpotFood({
       journey: [
         {
+          id: 'j_0_0_onion',
+          dish: 'macaroni and cheese',
+          query: 'crispy onion',
+          scoutIndex: 0,
+          componentIndex: 0,
+          phase: 'fallback',
+          source: 'category',
+          matchId: null,
+          matchName: null,
+          identityPass: false,
+          blockers: [],
+        },
+        {
+          id: 'j_0_1_mayo',
+          dish: 'macaroni and cheese',
+          query: 'spicy mayonnaise',
+          scoutIndex: 0,
+          componentIndex: 1,
+          phase: 'fallback',
+          source: 'category',
+          matchId: null,
+          matchName: null,
+          identityPass: false,
+          blockers: [],
+        },
+        {
           id: 'j_0_0_yogurt',
           dish: 'yogurt',
           query: 'plain yogurt',
-          scoutIndex: 0,
+          scoutIndex: 1,
           componentIndex: 0,
           phase: 'fallback',
           source: 'category',
@@ -134,6 +160,10 @@ describe('autoSpotFood', () => {
       ],
     });
     expect(fallback.remaining.some((h) => h.code === 'JOURNEY_FALLBACK')).toBe(true);
+    const mac = fallback.remaining.filter((h) => /macaroni and cheese: fallback/i.test(h.text));
+    expect(mac).toHaveLength(1);
+    expect(mac[0].text).toMatch(/crispy onion/);
+    expect(mac[0].text).toMatch(/spicy mayonnaise/);
   });
 
   it('parks ledger SILENT_REPAIR instead of remaining', () => {

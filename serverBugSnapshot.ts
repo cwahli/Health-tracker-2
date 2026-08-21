@@ -40,39 +40,44 @@ import {
   pickQueueTag,
   prefillBug,
 } from './src/utils/bugWorkItem';
-import { overlayAutoRemaining } from './src/utils/bugTapeReview';
+import { overlayAutoRemaining, planReanalyzeStages, restageBoardFromCatalog, failingAutoWorkLines } from './src/utils/bugTapeReview';
 import { classifyGoldenReds, shouldHoldR2 } from './src/utils/bugAutoFile';
 import { persistAutoFile, tryAutoFileGolden, tryAutoFileJob } from './serverBugAutoFile.js';
 import { planInboxMigration } from './src/utils/bugInboxMigrate';
+
+async function loadJobTape(jobId: string): Promise<{ logText: string; foodLog: any; scout: any }> {
+  let logText = '';
+  let foodLog: any = null;
+  let scout: any = null;
+  const { fetchLogsFromR2, fetchDebugPayloadFromR2 } = await import('./src/utils/r2Storage.js');
+  const logs = await fetchLogsFromR2(jobId);
+  if (logs) logText = logs;
+  const payload = await fetchDebugPayloadFromR2(jobId);
+  if (payload) {
+    foodLog = payload.pendingFoodLog || payload.result?.pendingFoodLog || null;
+    scout = payload.scoutItems || payload.result?.scoutItems || null;
+  }
+  if (!foodLog || !scout) {
+    const { supabaseAdmin } = await import('./supabaseAdmin.js');
+    const { data: job } = await supabaseAdmin
+      .from('agent_jobs')
+      .select('clean_result')
+      .eq('id', jobId)
+      .maybeSingle();
+    const cr = job?.clean_result || {};
+    if (!foodLog) foodLog = cr.pendingFoodLog || null;
+    if (!scout) scout = cr.scoutItems || null;
+  }
+  return { logText, foodLog, scout };
+}
 
 async function refreshTapeRemaining(item: ReturnType<typeof hydrateWorkItem>) {
   const jobId = item.current_evidence?.job_id;
   if (!jobId) return item;
   try {
-    const { fetchLogsFromR2, fetchDebugPayloadFromR2 } = await import('./src/utils/r2Storage.js');
-    let logText = '';
-    let foodLog: any = null;
-    let scout: any = null;
-    const logs = await fetchLogsFromR2(jobId);
-    if (logs) logText = logs;
-    const payload = await fetchDebugPayloadFromR2(jobId);
-    if (payload) {
-      foodLog = payload.pendingFoodLog || payload.result?.pendingFoodLog || null;
-      scout = payload.scoutItems || payload.result?.scoutItems || null;
-    }
-    if (!foodLog || !scout) {
-      const { supabaseAdmin } = await import('./supabaseAdmin.js');
-      const { data: job } = await supabaseAdmin
-        .from('agent_jobs')
-        .select('clean_result')
-        .eq('id', jobId)
-        .maybeSingle();
-      const cr = job?.clean_result || {};
-      if (!foodLog) foodLog = cr.pendingFoodLog || null;
-      if (!scout) scout = cr.scoutItems || null;
-    }
+    const tape = await loadJobTape(jobId);
     const { buildScoreboard } = await import('./src/utils/goldenScoreboard.js');
-    const board = buildScoreboard({ logText, foodLog, scout });
+    const board = buildScoreboard({ logText: tape.logText, foodLog: tape.foodLog, scout: tape.scout });
     return overlayAutoRemaining(item, board);
   } catch {
     return item;
@@ -1145,7 +1150,10 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       }
       let item = hydrateWorkItem(tag);
       const taped = await refreshTapeRemaining(item);
-      if (taped.remaining.join('\n') !== item.remaining.join('\n')) {
+      if (
+        taped.remaining.join('\n') !== item.remaining.join('\n') ||
+        JSON.stringify(taped.checks || []) !== JSON.stringify(item.checks || [])
+      ) {
         await persistWorkItem(tag.id, taped);
         item = taped;
       }
@@ -1284,6 +1292,132 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
     }
   });
 
+  /** POST /api/bugs/:tagId/reanalyze — catalog restage, then one skipScout if auto remaining. Same card. */
+  app.post('/api/bugs/:tagId/reanalyze', async (req: Request, res: Response) => {
+    try {
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const tag = await findTagByParam(supabaseAdmin, req.params.tagId);
+      if (!tag) return res.status(404).json({ error: 'not found' });
+      let item = hydrateWorkItem(tag);
+      const priorBurns = (item.burns || []).length;
+      const priorAttempts = (item.commits || []).length;
+      const jobId = String(item.current_evidence?.job_id || '').trim();
+      if (!jobId) {
+        return res.status(409).json({ error: 'No saved job_id on this card — cannot restage.' });
+      }
+      const { tapeJobCandidatesFromDetail } = await import('./src/utils/bugTapeReplay.js');
+      let tape = await loadJobTape(jobId);
+      const { normalizeScoutItems } = await import('./src/utils/goldenJourney.js');
+      if (!normalizeScoutItems(tape.scout).length) {
+        const fallbackId = tapeJobCandidatesFromDetail({
+          work_item: item,
+          commits: item.commits,
+          now: { current_evidence: item.current_evidence },
+        }).find((id) => id !== jobId && /^job_/i.test(id));
+        if (fallbackId) tape = await loadJobTape(fallbackId);
+      }
+      if (!normalizeScoutItems(tape.scout).length) {
+        return res.status(409).json({ error: 'No frozen scout on this card — cannot restage.' });
+      }
+      const { buildScoreboard } = await import('./src/utils/goldenScoreboard.js');
+      const { replayScoutAgainstCatalog } = await import('./src/utils/goldenReplay.js');
+      const logBoard = buildScoreboard({
+        logText: tape.logText,
+        foodLog: tape.foodLog,
+        scout: tape.scout,
+      });
+      const catalogJourney = replayScoutAgainstCatalog(tape.scout);
+      let board = restageBoardFromCatalog({ ...logBoard, scout: tape.scout }, catalogJourney);
+      item = overlayAutoRemaining(item, board);
+      item = appendEvidenceCommit(item, {
+        actor: 'system',
+        kind: 'retest',
+        summary: `Catalog restage (no LLM) · ${failingAutoWorkLines(board).length} auto remaining`,
+        evidence: {
+          ...(item.current_evidence || {}),
+          job_id: jobId,
+          scout_url: item.current_evidence?.scout_url || null,
+        },
+      });
+      const stages: string[] = ['catalog'];
+      let pipelineError = '';
+      const wantPipeline = planReanalyzeStages(board).pipeline && req.body?.catalogOnly !== true;
+      if (wantPipeline) {
+        const { runGoldenAnalyze } = await import('./serverGoldenRoutes.js');
+        const pipe = await runGoldenAnalyze({
+          caseId: String(tag.id),
+          scout: tape.scout,
+          query: item.current_evidence?.fixture_query || item.bug || 'Re-analyze frozen scout (skipScout).',
+          skipScout: true,
+        });
+        stages.push('pipeline');
+        if (pipe.ok && (pipe.foodLog || pipe.logText)) {
+          board = buildScoreboard({
+            logText: pipe.logText,
+            foodLog: pipe.foodLog || tape.foodLog,
+            scout: pipe.scout || tape.scout,
+          });
+          item = overlayAutoRemaining(item, board);
+          const nextJob = pipe.jobId || jobId;
+          try {
+            const { uploadLogsToR2, uploadDebugPayloadToR2 } = await import('./src/utils/r2Storage.js');
+            if (pipe.logText) await uploadLogsToR2(nextJob, pipe.logText);
+            await uploadDebugPayloadToR2(nextJob, {
+              jobId: nextJob,
+              source: 'bug-reanalyze-skipScout',
+              pendingFoodLog: pipe.foodLog || tape.foodLog,
+              scoutItems: pipe.scout || tape.scout,
+              backendLogs: pipe.logText || '',
+              result: {
+                pendingFoodLog: pipe.foodLog || tape.foodLog,
+                scoutItems: pipe.scout || tape.scout,
+                backendLogs: pipe.logText || '',
+              },
+            });
+          } catch (persistErr: any) {
+            console.warn(`${BUG_SNAPSHOT_LOG} skipScout tape persist skipped:`, persistErr?.message || persistErr);
+          }
+          item = appendEvidenceCommit(item, {
+            actor: 'system',
+            kind: 'retest',
+            summary: `skipScout pipeline ${pipe.status} · job ${nextJob} · ${failingAutoWorkLines(board).length} auto remaining`,
+            evidence: {
+              ...(item.current_evidence || {}),
+              job_id: nextJob,
+              debug_url: `debug/${nextJob}.json`,
+            },
+          });
+        } else {
+          pipelineError = pipe.errorText || 'skipScout pipeline failed';
+          item = appendEvidenceCommit(item, {
+            actor: 'system',
+            kind: 'note',
+            summary: `skipScout pipeline failed: ${pipelineError}`,
+            evidence: item.current_evidence || { job_id: jobId },
+          });
+        }
+      }
+      if ((item.burns || []).length < priorBurns) {
+        item = { ...item, burns: hydrateWorkItem(tag).burns };
+      }
+      await persistWorkItem(tag.id, item);
+      const start = buildStartPayload({ ...tag, work_item: item, id: tag.id });
+      res.json({
+        board: { ...board, checks: item.checks || [] },
+        work_item: item,
+        stages,
+        pipelineError: pipelineError || null,
+        catalogOnly: !wantPipeline,
+        now: start.now,
+        commits: start.commits,
+        burns_kept: (item.burns || []).length,
+        attempts_before: priorAttempts,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'reanalyze failed' });
+    }
+  });
+
   /** GET /api/bugs/:tagId — NOW + commits + report manifests */
   app.get('/api/bugs/:tagId', async (req: Request, res: Response) => {
     try {
@@ -1409,6 +1543,7 @@ export function registerBugSnapshotRoutes(app: Express, deps: BugSnapshotDeps = 
       if (Array.isArray(req.body?.remaining)) item.remaining = req.body.remaining.map(String);
       if (Array.isArray(req.body?.done)) item.done = req.body.done.map(String);
       if (Array.isArray(req.body?.parked)) item.parked = req.body.parked.map(String);
+      if (Array.isArray(req.body?.checks)) item.checks = req.body.checks;
       await persistWorkItem(tag.id, item);
       if (item.queue === 'done') {
         await supabaseAdmin.from('issue_tags').update({ status: 'fixed', resolved_at: new Date().toISOString() }).eq('id', tag.id);

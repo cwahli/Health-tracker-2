@@ -1,7 +1,9 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-21
-**Status:** Q-6.4 Promote deferred. `#11` Gemini Done is honor-system — Re-analyze now stays in the tracker, hydrates the picnic tape, and puts auto-spot remaining back. Not meal-green.
+**Status:** Q-6.4 Promote deferred. `#11` still picnic-tape red until Re-analyze restages. Not meal-green.
+
+- **Staged Re-analyze (2026-08-21):** Replay log = frozen job only. **Re-analyze** = catalog restage then one skipScout. Checks roster is **pinned on the card** (`work_item.checks`): Replay only flips pass/fail, hollow `golden_*` cannot replace the list. New unique fails may append. skipScout `golden_*` ids persist to R2; Replay log skips `/api/jobs/debug` for those ids and falls back to picnic `job_`.
 
 - **Auto vs human review (2026-08-21):** Agent remaining = failing **automatic** tape checks (re-scored on GET /next and Replay log). Claimed pass does not paint remaining. **human to do** only when auto checks are green or the agent is stuck. Add remaining only for visual/UI (a11y, contrast, screenshot). Custom picnic remaining is redundant with Checks. Gemini “all completed” was honor-system — `#11` still has auto reds.
 

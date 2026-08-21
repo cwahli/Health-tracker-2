@@ -48,6 +48,37 @@ export function reanalyzeJobId(evidence: { job_id?: string | null; jobId?: strin
   return id || null;
 }
 
+/** skipScout ids are not agent_jobs rows until persisted to R2. */
+export function isSyntheticTapeJobId(jobId: string | null | undefined): boolean {
+  return /^golden_/i.test(String(jobId || '').trim());
+}
+
+export function tapeJobCandidatesFromDetail(detail: any): string[] {
+  const out: string[] = [];
+  const push = (id?: string | null) => {
+    const s = String(id || '').trim();
+    if (!s || out.includes(s)) return;
+    if (!/^(job_|golden_)/i.test(s) && s.length < 8) return;
+    out.push(s);
+  };
+  const ev =
+    detail?.now?.current_evidence ||
+    detail?.bug?.current_evidence ||
+    detail?.work_item?.current_evidence ||
+    detail?.current_evidence ||
+    null;
+  push(ev?.job_id || ev?.jobId);
+  push(detail?.jobId || detail?.job_id);
+  const commits = detail?.commits || detail?.now?.commits || detail?.work_item?.commits || [];
+  for (let i = commits.length - 1; i >= 0; i--) {
+    push(commits[i]?.evidence?.job_id);
+  }
+  for (const h of detail?.work_item?.hold_refs || ev?.hold_refs || []) {
+    push(h);
+  }
+  return out;
+}
+
 /** Pull tape fields off /api/jobs/status (clean_result). Public R2 URLs may be 403. */
 export function tapeFromJobRecord(job: any): {
   foodLog: unknown;
@@ -87,6 +118,28 @@ export function scoreLocalTape(opts: {
     logText: opts.logText || '',
     extraIssues: opts.extraIssues || [],
   });
+}
+
+/** True when Replay log actually loaded pipeline logs, not a hollow golden_* preview. */
+export function tapeBoardIsHydrated(board: any): boolean {
+  if (!board) return false;
+  const books = Array.isArray(board.ledger?.books) ? board.ledger.books : [];
+  const hasLogBooks = books.some(
+    (x: any) => (x?.id === 'foundation' || x?.id === 'reconcile') && x?.kcal != null
+  );
+  if (hasLogBooks) return true;
+  if (board.tapeHydrated === true || Number(board.logChars) > 800) return true;
+  const journey = Array.isArray(board.journey) ? board.journey : [];
+  const bound = journey.filter((r: any) =>
+    r?.phase === 'catalog' || r?.phase === 'label_truth' || r?.phase === 'usda_live'
+  ).length;
+  if (bound >= 3) return true;
+  const inv = Array.isArray(board.invariants) ? board.invariants : [];
+  if (inv.length && inv.every((i: any) => /trial balance incomplete/i.test(String(i.label || '')))) {
+    return false;
+  }
+  if (inv.length >= 2) return true;
+  return false;
 }
 
 /** Prefer the board that actually resolved scout rows and has ledger books. */

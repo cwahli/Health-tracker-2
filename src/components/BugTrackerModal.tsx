@@ -38,7 +38,6 @@ import {
   hydrateWorkItem,
   linePhotosForText,
   publicId,
-  restoreRemainingFromAutoSpot,
   collectAttempts,
   triesMatchingLine,
   formatTriedAttempt,
@@ -58,7 +57,16 @@ import {
 } from '../utils/bugWorkItem';
 import { queueKpis, tagIsFixed } from '../utils/bugQueueKpis';
 import { FoodDetailTabs } from './bugQueue';
-import { buildTapeReplayBody, reanalyzeJobId, tapeFromJobRecord, scoreLocalTape, pickTapeBoard } from '../utils/bugTapeReplay';
+import {
+  buildTapeReplayBody,
+  reanalyzeJobId,
+  tapeFromJobRecord,
+  scoreLocalTape,
+  pickTapeBoard,
+  tapeJobCandidatesFromDetail,
+  isSyntheticTapeJobId,
+  tapeBoardIsHydrated,
+} from '../utils/bugTapeReplay';
 import { overlayAutoRemaining, isHumanCheckLine } from '../utils/bugTapeReview';
 
 interface BugTrackerModalProps {
@@ -322,86 +330,111 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
         tagOrDetail?.bug?.current_evidence ||
         tagOrDetail?.reports?.[0]?.payload ||
         tagOrDetail?.reports?.[0];
-      const jobId = reanalyzeJobId(ev) || tagOrDetail?.jobId || tagOrDetail?.bug?.job_id || null;
+      const extraIssues = now?.remaining || tagOrDetail?.bug?.remaining || [];
+      const jobIds = tapeJobCandidatesFromDetail({
+        ...tagOrDetail,
+        now,
+        jobId: reanalyzeJobId(ev) || tagOrDetail?.jobId || tagOrDetail?.bug?.job_id || null,
+        commits: tagOrDetail?.commits,
+      });
       let foodLog = ev?.pendingFoodLog || ev?.foodLog || null;
       let scout = ev?.scoutItems || ev?.scout || null;
       let logText = ev?.logText || ev?.backendLogs || '';
-      const extraIssues = now?.remaining || tagOrDetail?.bug?.remaining || [];
-      if (jobId) {
-        try {
-          const jr = await fetch(`/api/jobs/status?jobId=${encodeURIComponent(jobId)}&full=true`);
-          const jjson = await jr.json().catch(() => ({}));
-          const tape = tapeFromJobRecord((jjson.jobs || [])[0]);
-          if (!foodLog) foodLog = tape.foodLog;
-          if (!scout) scout = tape.scout;
-          if (tape.logText && tape.logText.length > String(logText || '').length) logText = tape.logText;
-        } catch {
-          /* job status is best-effort */
+      let remote: any = null;
+
+      for (const jobId of jobIds.length ? jobIds : [null]) {
+        if (jobId && !isSyntheticTapeJobId(jobId)) {
+          try {
+            const jr = await fetch(`/api/jobs/status?jobId=${encodeURIComponent(jobId)}&full=true`);
+            const jjson = await jr.json().catch(() => ({}));
+            const tape = tapeFromJobRecord((jjson.jobs || [])[0]);
+            if (!foodLog) foodLog = tape.foodLog;
+            if (!scout) scout = tape.scout;
+            if (tape.logText && tape.logText.length > String(logText || '').length) logText = tape.logText;
+          } catch {
+            /* job status is best-effort */
+          }
+          try {
+            const dr = await fetch(`/api/jobs/debug?jobId=${encodeURIComponent(jobId)}`);
+            if (dr.ok && (dr.headers.get('content-type') || '').includes('json')) {
+              const payload = await dr.json().catch(() => null);
+              const logs = payload?.backendLogs || payload?.result?.backendLogs;
+              if (logs && !String(logs).startsWith('[Logs stored in R2') && String(logs).length > 800) {
+                logText = String(logs);
+              }
+              if (!foodLog) {
+                foodLog = payload?.result?.pendingFoodLog || payload?.pendingFoodLog || null;
+              }
+              if (!scout) {
+                scout = payload?.result?.scoutItems || payload?.scoutItems || null;
+              }
+            }
+          } catch {
+            /* debug hydrate is best-effort */
+          }
         }
-        try {
-          const dr = await fetch(`/api/jobs/debug?jobId=${encodeURIComponent(jobId)}`);
-          if (dr.ok && (dr.headers.get('content-type') || '').includes('json')) {
-            const payload = await dr.json().catch(() => null);
-            const logs = payload?.backendLogs || payload?.result?.backendLogs;
-            if (logs && !String(logs).startsWith('[Logs stored in R2') && String(logs).length > 800) {
-              logText = String(logs);
-            }
-            if (!foodLog) {
-              foodLog = payload?.result?.pendingFoodLog || payload?.pendingFoodLog || null;
-            }
-            if (!scout) {
-              scout = payload?.result?.scoutItems || payload?.scoutItems || null;
+        if (jobId || foodLog || scout || logText) {
+          const body = buildTapeReplayBody({
+            mode: 'log',
+            jobId,
+            foodLog,
+            scout,
+            logText,
+            extraIssues,
+          });
+          const pRes = await fetch('/api/golden/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (pRes.ok) {
+            const next = await pRes.json().catch(() => null);
+            if (tapeBoardIsHydrated(next)) {
+              remote = next;
+              break;
             }
           }
-        } catch {
-          /* debug hydrate is best-effort */
         }
-      }
-      let remote: any = null;
-      if (!remote && (jobId || foodLog || scout || logText)) {
-        const body = buildTapeReplayBody({
-          mode: 'log',
-          jobId,
-          foodLog,
-          scout,
-          logText,
-          extraIssues,
-        });
-        const pRes = await fetch('/api/golden/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        if (pRes.ok) remote = await pRes.json().catch(() => null);
+        if (tapeBoardIsHydrated(remote)) break;
       }
       const local =
         foodLog || scout
           ? scoreLocalTape({ foodLog, scout, logText, extraIssues })
           : null;
-      const board = pickTapeBoard(remote, local);
-      if (board) {
-        setSelectedTagDetail((prev) => (prev ? { ...prev, board } : prev));
+      const picked = pickTapeBoard(remote, local);
+      if (picked) {
         const tagId = tagOrDetail?.id || tagOrDetail?.bug?.id || selectedTagId;
-        if (tagId) {
-          const item = hydrateWorkItem({
-            ...(typeof tagOrDetail === 'object' ? tagOrDetail : {}),
-            work_item: {
-              ...hydrateWorkItem(tagOrDetail),
-              remaining: now?.remaining || hydrateWorkItem(tagOrDetail).remaining,
-              done: now?.done || hydrateWorkItem(tagOrDetail).done,
-            },
+        const base = hydrateWorkItem({
+          ...(typeof tagOrDetail === 'object' ? tagOrDetail : {}),
+          work_item: {
+            ...hydrateWorkItem(tagOrDetail),
+            remaining: now?.remaining || hydrateWorkItem(tagOrDetail).remaining,
+            done: now?.done || hydrateWorkItem(tagOrDetail).done,
+            checks: now?.checks || hydrateWorkItem(tagOrDetail).checks,
+          },
+        });
+        const over = overlayAutoRemaining(base, picked);
+        const board = { ...picked, checks: over.checks || [] };
+        setSelectedTagDetail((prev) => (prev ? { ...prev, board } : prev));
+        if (
+          tagId &&
+          tapeBoardIsHydrated(picked) &&
+          (JSON.stringify(over.remaining) !== JSON.stringify(base.remaining) ||
+            JSON.stringify(over.checks || []) !== JSON.stringify(base.checks || []))
+        ) {
+          await fetch(`/api/bugs/${encodeURIComponent(tagId)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              remaining: over.remaining,
+              done: over.done,
+              queue: over.queue,
+              checks: over.checks,
+            }),
           });
-          const over = overlayAutoRemaining(item, board);
-          if (JSON.stringify(over.remaining) !== JSON.stringify(item.remaining)) {
-            await fetch(`/api/bugs/${encodeURIComponent(tagId)}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ remaining: over.remaining, done: over.done, queue: over.queue }),
-            });
-          }
         }
+        return board;
       }
-      return board;
     } catch (err) {
       console.warn('[BugTracker] preview board load skipped:', err);
     }
@@ -478,35 +511,27 @@ export default function BugTrackerModal({ isOpen, onClose, onViewJob }: BugTrack
     if (!jobId) return;
     setReanalyzingTagId(tag.id);
     try {
-      const board = await loadPreviewBoard({
-        ...selectedTagDetail,
-        now: selectedTagDetail?.now,
-        bug: selectedTagDetail?.bug || tag,
-        jobId,
+      const r = await fetch(`/api/bugs/${encodeURIComponent(tag.id)}/reanalyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
       });
-      if (board) {
-        setSelectedTagDetail((prev) => (prev ? { ...prev, board } : prev));
-        const item = hydrateWorkItem({
-          ...tag,
-          work_item: {
-            ...hydrateWorkItem(tag),
-            remaining: selectedTagDetail?.now?.remaining || hydrateWorkItem(tag).remaining,
-            done: selectedTagDetail?.now?.done || hydrateWorkItem(tag).done,
-          },
-        });
-        const next = restoreRemainingFromAutoSpot(item, board.autoSpot || []);
-        const remainingChanged =
-          JSON.stringify(next.remaining) !== JSON.stringify(item.remaining) ||
-          JSON.stringify(next.done) !== JSON.stringify(item.done);
-        if (remainingChanged) {
-          await fetch(`/api/bugs/${encodeURIComponent(tag.id)}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ remaining: next.remaining, done: next.done, queue: 'in_progress' }),
-          });
-          await fetchTagDetail(tag.id);
-          setSelectedTagDetail((prev) => (prev ? { ...prev, board } : prev));
-        }
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const hint =
+          r.status === 404
+            ? 'Re-analyze route missing — restart npm run dev (tsx does not load new /api routes), then click Re-analyze again.'
+            : String(json.error || `Re-analyze failed (${r.status})`);
+        setError(hint);
+        console.warn('[BugTracker] Re-analyze failed:', json.error || r.status);
+        return;
+      }
+      if (json.board) {
+        setSelectedTagDetail((prev) => (prev ? { ...prev, board: json.board } : prev));
+      }
+      await fetchTagDetail(tag.id);
+      if (json.board) {
+        setSelectedTagDetail((prev) => (prev ? { ...prev, board: json.board } : prev));
       }
     } catch (e) {
       console.warn('[BugTracker] Re-analyze failed:', e);

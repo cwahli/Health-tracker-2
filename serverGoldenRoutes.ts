@@ -516,20 +516,28 @@ function extractScoutFromAnalyze(finalData: any, fallback: any): any {
   );
 }
 
-async function runGoldenAnalyze(opts: {
+export async function runGoldenAnalyze(opts: {
   caseId: string;
   scout?: any;
   query?: string;
   images?: string[];
   skipScout: boolean;
   timeoutMs?: number;
-}): Promise<{ ok: boolean; foodLog: any; logText: string; errorText: string; status: string; scout: any }> {
+}): Promise<{
+  ok: boolean;
+  foodLog: any;
+  logText: string;
+  errorText: string;
+  status: string;
+  scout: any;
+  jobId: string | null;
+}> {
   const items = normalizeScoutItems(opts.scout);
   if (opts.skipScout && !items.length) {
-    return { ok: false, foodLog: null, logText: '', errorText: 'No frozen scout', status: 'failed', scout: null };
+    return { ok: false, foodLog: null, logText: '', errorText: 'No frozen scout', status: 'failed', scout: null, jobId: null };
   }
   if (!opts.skipScout && !(opts.images || []).length) {
-    return { ok: false, foodLog: null, logText: '', errorText: 'No saved photos on this case', status: 'failed', scout: null };
+    return { ok: false, foodLog: null, logText: '', errorText: 'No saved photos on this case', status: 'failed', scout: null, jobId: null };
   }
   const jobId = `golden_${opts.caseId.slice(0, 8)}_${Date.now()}`;
   const timeoutMs = opts.timeoutMs || (opts.skipScout ? 180_000 : 240_000);
@@ -620,7 +628,7 @@ async function runGoldenAnalyze(opts: {
         if (/429|RESOURCE_EXHAUSTED|503|stalled|timeout/i.test(lastErr) && attempt < GOLDEN_LOOP_TRANSPORT_RETRIES) {
           continue;
         }
-        return { ok: false, foodLog: null, logText, errorText: lastErr, status: 'failed', scout: null };
+        return { ok: false, foodLog: null, logText, errorText: lastErr, status: 'failed', scout: null, jobId };
       }
       return {
         ok: true,
@@ -629,6 +637,7 @@ async function runGoldenAnalyze(opts: {
         errorText: lastErr,
         status: 'succeeded',
         scout: extractScoutFromAnalyze(finalData, opts.scout),
+        jobId,
       };
     } catch (e: any) {
       lastErr = e?.message || String(e);
@@ -638,7 +647,7 @@ async function runGoldenAnalyze(opts: {
     }
   }
   clearTimeout(timer);
-  return { ok: false, foodLog: null, logText: '', errorText: lastErr || 'pipeline replay failed', status: 'failed', scout: null };
+  return { ok: false, foodLog: null, logText: '', errorText: lastErr || 'pipeline replay failed', status: 'failed', scout: null, jobId };
 }
 
 async function runSkipScoutPipeline(opts: {
@@ -796,10 +805,13 @@ export function registerGoldenRoutes(app: Express, deps: GoldenRouteDeps = {}) {
     });
     if (replayModeRaw === 'catalog') {
       const journey = replayScoutAgainstCatalog(scout, lookupCanonicalBaseFood);
-      board.journey = journey;
+      const { restageBoardFromCatalog } = await import('./src/utils/bugTapeReview.js');
+      const restaged = restageBoardFromCatalog({ ...board, scout }, journey);
+      board.journey = restaged.journey;
+      board.invariants = restaged.invariants;
+      board.outcomes = restaged.outcomes;
+      board.autoSpot = restaged.autoSpot;
       board.replayMode = 'catalog';
-      board.invariants = [];
-      board.outcomes = journeyToOutcomes(journey, []);
       board.ledger = compileGoldenMeal({
         foodLog,
         scout,

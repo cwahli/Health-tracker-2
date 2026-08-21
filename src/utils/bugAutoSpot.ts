@@ -532,14 +532,25 @@ export function autoSpotFood(input: AutoSpotFoodInput): AutoSpotResult {
       foodLog: input.foodLog,
       scout: input.scout,
     }).journey;
+  const byDishPhase = new Map<string, { dish: string; phase: JourneyPhase; queries: string[] }>();
   for (const row of journey || []) {
     if (row.phase === 'scouted') continue;
-    const code = JOURNEY_SPOT[row.phase];
+    if (!JOURNEY_SPOT[row.phase]) continue;
+    const dish = String(row.dish || row.query || '').trim();
+    const key = `${dish.toLowerCase()}|${row.phase}`;
+    const cur = byDishPhase.get(key) || { dish, phase: row.phase, queries: [] };
+    const q = String(row.query || '').trim();
+    if (q && !cur.queries.some((x) => x.toLowerCase() === q.toLowerCase())) cur.queries.push(q);
+    byDishPhase.set(key, cur);
+  }
+  for (const g of byDishPhase.values()) {
+    const code = JOURNEY_SPOT[g.phase];
     if (!code) continue;
+    const extra = g.queries.length ? ` (${g.queries.slice(0, 4).join(', ')})` : '';
     push(
-      hit(code, 'food', `${row.dish || row.query}: ${row.phase.replace('_', ' ')}`, {
-        item: row.query || row.dish,
-        class: row.phase === 'mismatch' ? 'FALSE_FRIEND' : 'OPENING_WRONG',
+      hit(code, 'food', `${g.dish}: ${g.phase.replace('_', ' ')}${extra}`, {
+        item: g.dish,
+        class: g.phase === 'mismatch' ? 'FALSE_FRIEND' : 'OPENING_WRONG',
       })
     );
   }

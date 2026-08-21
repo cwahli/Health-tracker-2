@@ -72,6 +72,16 @@ export type BugWorkItem = {
   current_evidence: BugEvidence | null;
   hold_refs: string[];
   unmatched?: boolean;
+  /** Stable Checks roster for this card. Replay only flips pass/fail. */
+  checks?: PinnedTapeCheck[];
+};
+
+export type PinnedTapeCheck = {
+  id: string;
+  label: string;
+  pass: boolean;
+  group?: string;
+  status?: string;
 };
 
 export const CLASS_SEVERITY: Record<string, number> = {
@@ -102,6 +112,7 @@ export function emptyWorkItem(partial?: Partial<BugWorkItem>): BugWorkItem {
     current_evidence: null,
     hold_refs: [],
     unmatched: false,
+    checks: [],
     ...partial,
   };
 }
@@ -171,6 +182,7 @@ export function hydrateWorkItem(tag: any): BugWorkItem {
     remaining: Array.isArray(parsed.remaining) ? parsed.remaining.map(String) : [],
     done: Array.isArray(parsed.done) ? parsed.done.map(String) : [],
     parked: Array.isArray(parsed.parked) ? parsed.parked.map(String) : [],
+    checks: Array.isArray(parsed.checks) ? parsed.checks : [],
   });
 }
 
@@ -473,7 +485,7 @@ export function lineStrikeCount(
 }
 
 export const DRAIN_CARD_INSTRUCTION =
-  'Drain automatic tape checks on this card. Work continue.active_line only (one class, one file, named vitest on a NEW food). POST /attempts then GET /api/bugs/next — remaining is re-scored from the tape, not from claimed pass. If continue.stop=false, immediately work the new active_line. stop=true means auto checks are green or blocked: human review only. Two misses park that line. Do not work visual/UI remaining (human).';
+  'Drain automatic tape checks on this card. Work continue.active_line only (one class, one file, named vitest on a NEW food). POST /attempts then GET /api/bugs/next — remaining is re-scored from the tape, not from claimed pass. If continue.stop=false, immediately work the new active_line. After class tests, POST /api/bugs/<tag_id>/reanalyze (catalog restage then one skipScout; same card). stop=true means auto checks are green or blocked: human review only. Two misses park that line. Do not work visual/UI remaining (human).';
 
 export function applyAttempt(
   item: BugWorkItem,
@@ -706,6 +718,7 @@ export type BugNow = {
   burns_used: string;
   queue: BugQueueStatus;
   do_not: string[];
+  checks?: PinnedTapeCheck[];
 };
 
 export function buildNow(tag: any): BugNow {
@@ -726,6 +739,7 @@ export function buildNow(tag: any): BugNow {
     tried: triedStrings,
     burns_used: `${burned.length}/${BURN_BUDGET}`,
     queue: item.queue,
+    checks: item.checks || [],
     do_not: [
       'POST /api/golden/cases/:id/loop',
       'edit expected.json to paint green',

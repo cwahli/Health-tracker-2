@@ -6,6 +6,9 @@ import {
   tapeFromJobRecord,
   scoreLocalTape,
   pickTapeBoard,
+  tapeJobCandidatesFromDetail,
+  isSyntheticTapeJobId,
+  tapeBoardIsHydrated,
 } from './bugTapeReplay';
 import { jobFitsSnap } from './bugDomainPacks';
 import { applySnapRemaining, linePhotosForText, emptyWorkItem } from './bugWorkItem';
@@ -40,9 +43,23 @@ describe('Q-6.4 item 7 tape actions (Promote deferred)', () => {
     expect(body).not.toHaveProperty('all_green');
   });
 
-  it('re-analyze uses a saved job_id (no new pipeline)', () => {
+  it('re-analyze needs a saved job_id to restage frozen scout', () => {
     expect(reanalyzeJobId({ job_id: 'job_1787' })).toBe('job_1787');
     expect(reanalyzeJobId({})).toBeNull();
+  });
+
+  it('tapeJobCandidatesFromDetail falls back from golden_ skipScout id to the picnic job', () => {
+    const ids = tapeJobCandidatesFromDetail({
+      now: { current_evidence: { job_id: 'golden_152aa69b_1787318696617' } },
+      commits: [
+        { evidence: { job_id: 'job_1787301189340_b7oux316g' } },
+        { evidence: { job_id: 'golden_152aa69b_1787318696617' } },
+      ],
+    });
+    expect(ids[0]).toBe('golden_152aa69b_1787318696617');
+    expect(ids).toContain('job_1787301189340_b7oux316g');
+    expect(isSyntheticTapeJobId(ids[0])).toBe(true);
+    expect(isSyntheticTapeJobId('job_1787301189340_b7oux316g')).toBe(false);
   });
 
   it('tapeFromJobRecord reads scout and foodLog off clean_result', () => {
@@ -97,5 +114,28 @@ describe('Q-6.4 item 7 tape actions (Promote deferred)', () => {
     const empty = { journey: [{ phase: 'scouted' }, { phase: 'scouted' }], invariants: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] };
     const scored = { journey: [{ phase: 'catalog' }, { phase: 'usda_live' }], invariants: new Array(8).fill({ id: 'x' }) };
     expect(pickTapeBoard(empty, scored).journey[0].phase).toBe('catalog');
+  });
+
+  it('hollow golden preview (incomplete trial balance only) is not a hydrated tape', () => {
+    expect(
+      tapeBoardIsHydrated({
+        invariants: [
+          {
+            id: 'math_trial_balance',
+            label: 'Trial balance incomplete (foundation, reconcile, dietitian_payload not in log)',
+            pass: false,
+          },
+        ],
+        journey: [],
+        ledger: { books: [{ id: 'saved_table', kcal: 2582 }] },
+      })
+    ).toBe(false);
+    expect(
+      tapeBoardIsHydrated({
+        invariants: [{ id: 'x' }, { id: 'y' }],
+        journey: [{ phase: 'catalog' }, { phase: 'catalog' }, { phase: 'label_truth' }],
+        ledger: { books: [{ id: 'foundation', kcal: 2200 }, { id: 'reconcile', kcal: 2200 }] },
+      })
+    ).toBe(true);
   });
 });

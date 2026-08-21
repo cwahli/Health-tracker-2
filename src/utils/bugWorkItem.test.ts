@@ -257,6 +257,7 @@ describe('bugWorkItem Q-6', () => {
     expect(job.drain).toBe(true);
     expect(job.say).toMatch(/^DRAIN #11 /);
     expect(prompt).toMatch(/Drain automatic tape checks/);
+    expect(prompt).toMatch(/reanalyze/);
     expect(prompt).toMatch(/do not wait for the human/i);
     expect(prompt).toMatch(/work bug/);
     expect(prompt).toMatch(/next bug/);
