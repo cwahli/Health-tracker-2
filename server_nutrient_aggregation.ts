@@ -370,6 +370,11 @@ export function aggregateItemsNutrients(
             totalFibre: canonical.totalFibre ? parseFloat((canonical.totalFibre * ratio).toFixed(1)) : 0,
             potassium: canonical.potassium ? Math.round(canonical.potassium * ratio) : 0
           };
+          for (const [k, v] of Object.entries(canonical)) {
+            if (typeof v === 'number' && item.primaryBase100g[k] === undefined) {
+              item.primaryBase100g[k] = parseFloat((v * ratio).toFixed(2));
+            }
+          }
           item.primaryBaseMatchName = canonicalName;
 
           const fPortion = itemWeight / 100;

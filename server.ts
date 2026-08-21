@@ -5011,6 +5011,13 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           // berries ≠ basil / herbs
           if (/\b(berr|blueberry|raspberry|strawberry|fruit)\b/i.test(qLow) &&
               /\b(basil|oregano|thyme|parsley|cilantro|herb)\b/i.test(dbTitle)) return;
+          // fresh fruit / fruit cup / fruit salad ≠ yogurt / drink / milk / actimel / probiotic / smoothie
+          if (/\b(fruit|mixed fruit|fruit cup|fruit salad)\b/i.test(qLow) &&
+              !/\b(yogurt|yoghurt|drink|milk|smoothie|probiotic|drinkable)\b/i.test(qLow) &&
+              /\b(yogurt|yoghurt|drink|milk|smoothie|actimel|danone|probiotic|drinkable)\b/i.test(dbTitle)) return;
+          // salad dish ≠ salad dressing / vinaigrette / sauce
+          if (/\bsalad\b/i.test(qLow) && !/\bdressing|sauce|dip|vinaigrette\b/i.test(qLow) &&
+              /\bdressing|sauce|dip|vinaigrette\b/i.test(dbTitle)) return;
 
           // RULE 3: Token Overlap & Noise Penalty
           let score = 0;

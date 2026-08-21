@@ -17,6 +17,11 @@ describe('Food Catalog Normalization & Resolution (PASS 2 - R7)', () => {
     expect(match?.food_key).toBe('chicken_breast');
     expect(match?.source).toBe('canonical_local');
     expect(match?.nutrients_per_100g.protein).toBeGreaterThan(20);
+
+    const cobbMatch = await resolveInternalFood('Cobb Salad');
+    expect(cobbMatch).not.toBeNull();
+    expect(cobbMatch?.source).toBe('canonical_local');
+    expect(cobbMatch?.fdc_id).toBe('cobb_salad_canonical');
   });
 
   it('normalizes arbitrary food names consistently', () => {

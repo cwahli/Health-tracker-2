@@ -122,7 +122,7 @@ describe('FALSE_FRIEND class examples', () => {
     expect(p?.fdcId).not.toBe('170150');
   });
 
-  it('strawberry, blueberry, and raspberry do not share canonical FDC ID 171711', () => {
+  it('individual berry species resolve to distinct base food references rather than falling back to generic mixed berries', () => {
     const s = lookupCanonicalBaseFood('strawberry');
     const b = lookupCanonicalBaseFood('blueberry');
     const r = lookupCanonicalBaseFood('raspberry');
@@ -131,5 +131,15 @@ describe('FALSE_FRIEND class examples', () => {
     expect(r?.fdcId).toBe('167755');
     expect(s?.fdcId).not.toBe(b?.fdcId);
     expect(r?.fdcId).not.toBe(b?.fdcId);
+  });
+
+  it('mixed fruit cup query returns canonical fruit cup instead of actimel or yogurt drink', () => {
+    const res = lookupCanonicalBaseFood('mixed fruit cup');
+    expect(res?.fdcId).toBe('mixed_fruit_cup_canonical');
+  });
+
+  it('cobb salad query returns canonical cobb salad instead of salad dressing', () => {
+    const res = lookupCanonicalBaseFood('cobb salad');
+    expect(res?.fdcId).toBe('cobb_salad_canonical');
   });
 });

@@ -318,4 +318,22 @@ describe("server_nutrient_aggregation", () => {
     expect(result.nutrients.zinc).toBeGreaterThan(0);
     expect(result.nutrients.magnesium).toBeGreaterThan(0);
   });
+
+  it("preserves canonical base food micronutrient keys for croissant items during fallback aggregation", () => {
+    const rawItems = [
+      {
+        name: "Butter Croissant",
+        originalName: "Butter Croissant",
+        keyword: "croissant",
+        weightGrams: 80,
+        dbSource: "estimated",
+        foodType: "processed"
+      }
+    ];
+    const result = aggregateItemsNutrients(rawItems, 80, new Map(), [], () => {});
+    expect(result.nutrients.calories).toBeGreaterThan(0);
+    expect(result.nutrients.calcium).toBeGreaterThan(0);
+    expect(result.nutrients.iron).toBeGreaterThan(0);
+    expect(result.nutrients.folate).toBeGreaterThan(0);
+  });
 });

@@ -1,7 +1,14 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-21
-**Status:** Q-6.4 Promote deferred; `#11` picnic still detect-only. One **work bug** / **work 11** now drains that card’s remaining.
+**Status:** Card #11 ("Fruit Salad + Croissant + 3 more") fully drained and completed (`stop=true`). All 5 remaining lines passed and verified with unit tests.
+
+- **Card #11 Fully Drained (2026-08-21):**
+  - `Croissant: 9 micro keys at 0`: Preserved canonical micronutrients in `primaryBase100g` construction during fallback aggregation in `server_nutrient_aggregation.ts`.
+  - `Fruit Salad: strawberry, blueberry, raspberry share canonical id 171711`: Prioritized specific berry species lookups before generic mixed berries in `server_food_db.ts`.
+  - `mixed fruit cup: mismatch`: Added candidate rejection guard in `server.ts` to prevent fruit cup queries from matching yogurt drinks or Actimel.
+  - `cobb salad: mismatch`: Added candidate rejection guard in `server.ts` to prevent salad dish queries from matching salad dressings.
+  - `Cobb Salad: fallback`: Integrated `lookupCanonicalBaseFood` into `resolveInternalFood` in `server_food_catalog.ts` to resolve canonical base food entries directly.
 
 - **Drain-card loop (2026-08-21):** L15: one trigger = all remaining on this `#n`. After `POST /attempts`, if `continue.stop=false` / `keep_going=true` the agent immediately works the next line — human does not type continue. Two misses on a line **parks** it (does not block the card). Summary only when remaining is empty. Restart local server. Update the Studio Gem instruction (drain-card snippet).
 

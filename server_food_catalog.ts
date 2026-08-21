@@ -1,5 +1,5 @@
 import { supabaseAdmin, isSupabaseConfigured } from './supabaseAdmin';
-import { CANONICAL_BASE_FOODS } from './server_food_db';
+import { CANONICAL_BASE_FOODS, lookupCanonicalBaseFood } from './server_food_db';
 import { NUTRIENT_KEYS } from './src/utils/nutrients';
 import { ensureFoodCatalogSchema, resetFoodCatalogSchemaEnsure } from "./server_food_catalog_schema.js";
 import { isKnownDatabaseBrandSync, isGroceryBrandSync } from "./serverBrandMenu.js";
@@ -61,7 +61,7 @@ export async function resolveInternalFood(query: string): Promise<InternalFoodMa
   if (!key) return null;
 
   // 1. Check local canonical base foods map
-  const canonical = CANONICAL_BASE_FOODS[key];
+  const canonical = CANONICAL_BASE_FOODS[key] || lookupCanonicalBaseFood(query);
   if (canonical) {
     const { fdcId, foodType, ...nutrients } = canonical as any;
     return {
