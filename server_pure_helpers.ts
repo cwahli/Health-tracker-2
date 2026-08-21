@@ -612,10 +612,20 @@ export function applyCommercialSodiumFloor(
     isKnownDatabaseBrandSync(identityForChecks) ||
     /\b(kebab|tikka|burger|fries|fried\s+chicken|pizza|fast\s+food)\b/i.test(identityForChecks);
 
+  const isCleanProteinSide =
+    /\b(chicken|poultry|turkey|steak|beef|flank|breast|salmon|tuna|cod|fish|seafood|egg|poached)\b/i.test(identityForChecks) &&
+    !/\b(fried|breaded|crispy|nugget|tenders?|sauced?|glazed?|gravy|burger|sandwich|pizza|pie|casserole|curry|fries|wings)\b/i.test(identityForChecks);
+
+  const isCompositeEntree =
+    /\b(fried\s+chicken|breaded|nuggets?|tenders?|burger|sandwich|pizza|burrito|taco|casserole|pie|pasta|curry|wings)\b/i.test(identityForChecks) ||
+    (ctx?.componentCount != null && ctx.componentCount >= 3);
+
   const isWholeFood =
     ctx?.physicalForm === 'SOLID_FRUIT_VEG' ||
     dbSource === 'canonical_dict' ||
     dbSource === 'label_raw' ||
+    isCleanProteinSide ||
+    !isCompositeEntree ||
     /\b(oats?|oatmeal|rolled\s+oats|milk|cow\s+milk|berries|berry|blueberry|blueberries|strawberry|strawberries|raspberry|raspberries|blackberry|blackberries|fruit|apple|banana|orange|grape|plain\s+yogurt|greek\s+yogurt|nuts?|seeds?|almonds?|walnuts?|raw|fresh)\b/i.test(identityForChecks);
 
   if (isFastFoodOrChain && !isWholeFood && (itemNutrients.calories || 0) > 0) {
@@ -630,6 +640,108 @@ export function applyCommercialSodiumFloor(
       itemNutrients.sodium = commercialSodiumFloor;
     }
   }
+}
+
+export function checkThermodynamicDensitySanity(
+  itemName: string,
+  foodType: string | undefined,
+  cookingMethod: string | undefined,
+  calories: number,
+  servingGrams: number
+): { isBreach: boolean; ceiling: number; density: number; category: string } {
+  if (!itemName || calories <= 0 || servingGrams <= 0) {
+    return { isBreach: false, ceiling: 0, density: 0, category: 'unknown' };
+  }
+
+  const density = (calories / servingGrams) * 100;
+  const nameLower = itemName.toLowerCase();
+  const typeLower = (foodType || '').toLowerCase();
+  const combined = `${nameLower} ${typeLower}`;
+
+  const isFried = /\b(fried|breaded|crispy|nugget|tenders?|chips|fries)\b/i.test(combined);
+
+  // 1. Plain poultry / fish / lean meat: <= 250 kcal/100g
+  if (/\b(chicken|poultry|turkey|steak|beef|pork|flank|breast|salmon|tuna|cod|fish|seafood|lean_meat|protein)\b/i.test(combined) && !isFried) {
+    const ceiling = 250;
+    if (density > ceiling) {
+      return { isBreach: true, ceiling, density, category: 'plain_meat_poultry_fish' };
+    }
+    return { isBreach: false, ceiling, density, category: 'plain_meat_poultry_fish' };
+  }
+
+  // 2. Cooked tubers / potatoes: <= 160 kcal/100g
+  if (/\b(potato|potatoes|tuber|yam|sweet_potato)\b/i.test(combined) && !isFried) {
+    const ceiling = 160;
+    if (density > ceiling) {
+      return { isBreach: true, ceiling, density, category: 'cooked_tubers_potatoes' };
+    }
+    return { isBreach: false, ceiling, density, category: 'cooked_tubers_potatoes' };
+  }
+
+  // 3. Cooked pasta / rice: <= 200 kcal/100g
+  if (/\b(pasta|rice|noodles|spaghetti|macaroni|grain)\b/i.test(combined) && !isFried) {
+    const ceiling = 200;
+    if (density > ceiling) {
+      return { isBreach: true, ceiling, density, category: 'cooked_pasta_rice' };
+    }
+    return { isBreach: false, ceiling, density, category: 'cooked_pasta_rice' };
+  }
+
+  // 4. Fresh fruits / vegetables: <= 90 kcal/100g
+  if (/\b(vegetable|fruit|greens|broccoli|cabbage|salad|kale|spinach|lettuce|berry|berries|apple|orange|banana)\b/i.test(combined)) {
+    const ceiling = 90;
+    if (density > ceiling) {
+      return { isBreach: true, ceiling, density, category: 'fresh_fruits_vegetables' };
+    }
+    return { isBreach: false, ceiling, density, category: 'fresh_fruits_vegetables' };
+  }
+
+  return { isBreach: false, ceiling: 0, density, category: 'generic' };
+}
+
+export function checkArchetypeMacroBounds(
+  itemName: string,
+  foodType: string | undefined,
+  cookingMethod: string | undefined,
+  calories: number,
+  protein: number,
+  carbs: number,
+  fat: number
+): { violated: boolean; reason?: string } {
+  if (!itemName || calories <= 0) return { violated: false };
+
+  const nameLower = itemName.toLowerCase();
+  const typeLower = (foodType || '').toLowerCase();
+  const combined = `${nameLower} ${typeLower}`;
+  const methodLower = (cookingMethod || '').toLowerCase();
+
+  const isFried = /\b(fried|breaded|crispy|nugget|tenders?)\b/i.test(combined);
+
+  // Archetype 1: Plain Protein / Meats (foodType: "protein" or plain meat names)
+  if ((typeLower === 'protein' || /\b(chicken|poultry|turkey|steak|beef|pork|flank|breast|salmon|tuna|cod|fish|seafood)\b/i.test(combined)) && !isFried) {
+    if (carbs > 5) {
+      return { violated: true, reason: `Carbs (${carbs}g > 5g) on plain protein archetype` };
+    }
+    const proteinCalRatio = (protein * 4) / calories;
+    if (proteinCalRatio < 0.65) {
+      return { violated: true, reason: `Protein calories ratio (${(proteinCalRatio * 100).toFixed(1)}% < 65%) on plain protein archetype` };
+    }
+  }
+
+  // Archetype 2: Tubers / Potatoes (foodType: "tuber" or potato names)
+  if (typeLower === 'tuber' || /\b(potato|potatoes|tuber|yam|sweet_potato)\b/i.test(combined)) {
+    const carbsCalRatio = (carbs * 4) / calories;
+    if (carbsCalRatio < 0.60) {
+      return { violated: true, reason: `Carbs calories ratio (${(carbsCalRatio * 100).toFixed(1)}% < 60%) on tuber archetype` };
+    }
+    if (/\b(roasted|boiled|baked|steamed)\b/i.test(methodLower) || /\b(roasted|boiled|baked|steamed)\b/i.test(combined)) {
+      if (fat > 12) {
+        return { violated: true, reason: `Fat (${fat}g > 12g) on roasted/boiled/baked tuber archetype` };
+      }
+    }
+  }
+
+  return { violated: false };
 }
 
 export function applyNutrientRealityChecks(

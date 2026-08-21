@@ -1266,7 +1266,10 @@ export const CroppedFoodImage: React.FC<CroppedFoodImageProps> = ({
         // Calculate center of the bounding box and a square crop size with 20% padding
         const centerX = rawX + rawW / 2;
         const centerY = rawY + rawH / 2;
-        const side = Math.max(rawW, rawH) * 1.25;
+        let side = Math.max(rawW, rawH) * 1.25;
+
+        // Cap side so that image boundaries math doesn't result in negative minimum bounds
+        side = Math.min(side, img.naturalWidth, img.naturalHeight);
 
         // Calculate centered square bounds within image boundaries
         let srcX = centerX - side / 2;
@@ -1343,7 +1346,7 @@ export const CroppedFoodImage: React.FC<CroppedFoodImageProps> = ({
   );
 };
 
-const getFoodImageUrl = (foodName: string, suppliedUrl?: string) => {
+export const getFoodImageUrl = (foodName: string, suppliedUrl?: string) => {
   if (suppliedUrl && (suppliedUrl.startsWith('http') || suppliedUrl.startsWith('data:image/') || suppliedUrl.startsWith('blob:'))) {
     return suppliedUrl;
   }

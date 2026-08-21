@@ -91,9 +91,12 @@ export function namesReferToSameFood(a: unknown, b: unknown): boolean {
     }
   }
 
-  // 2. Exact substring match (when non-conflicting)
+  // 2. Exact substring match (only if very similar in length to avoid "butter" matching "peanut butter")
   if (na.length >= 6 && nb.length >= 6 && (na.includes(nb) || nb.includes(na))) {
-    return true;
+    // Only allow substring match if lengths are relatively close (e.g., within 5 characters) or it's a very long string
+    if (Math.abs(na.length - nb.length) <= 5) {
+      return true;
+    }
   }
 
   // 3. Token overlap check
@@ -122,7 +125,15 @@ export function namesReferToSameFood(a: unknown, b: unknown): boolean {
   // For 1 overlapping token: only match if that token is a specific distinguishing food name
   // (e.g. croissant, cinnamon, cereal) and NOT a generic container word
   const singleToken = commonTokens[0];
-  if (!CONTAINER_FORM_TOKENS.has(singleToken)) {
+  const DANGEROUS_SINGLE_TOKENS = new Set([
+    'butter', 'cheese', 'chicken', 'milk', 'oil', 'water', 'sauce', 'cream', 
+    'sugar', 'syrup', 'salt', 'pepper', 'garlic', 'onion', 'egg', 'eggs', 
+    'bread', 'rice', 'noodle', 'noodles', 'pasta', 'meat', 'beef', 'pork',
+    'bean', 'beans', 'potato', 'potatoes', 'apple', 'apples', 'chocolate', 'vanilla',
+    'strawberry', 'peanut', 'almond', 'walnut', 'pecan', 'mac', 'macaroni', 'whip', 'whipped'
+  ]);
+
+  if (!CONTAINER_FORM_TOKENS.has(singleToken) && !DANGEROUS_SINGLE_TOKENS.has(singleToken)) {
     if (
       singleToken === 'croissant' ||
       singleToken === 'cinnamon' ||

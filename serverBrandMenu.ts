@@ -2262,6 +2262,19 @@ export async function searchBrandMenuItems(query: string, explicitChainKey?: str
     const sugar = matchedItem.nutrients?.sugar ?? null;
     const fiber = matchedItem.nutrients?.totalFibre ?? matchedItem.nutrients?.fiber ?? null;
 
+    // OCR Duplicate Broadcast Scrape Detector:
+    // Check if distinct items in the same chain share identical calorie values
+    const chainItemsWithSameCals = allItems.filter(other =>
+      other.id !== matchedItem.id &&
+      (other.chain_key === matchedItem.chain_key || other.chain_name === matchedItem.chain_name) &&
+      other.nutrients?.calories != null &&
+      Number(other.nutrients.calories) === Number(cals) &&
+      cals != null && Number(cals) > 0 &&
+      other.dish_name !== matchedItem.dish_name
+    );
+
+    const isOcrCollision = chainItemsWithSameCals.length >= 1;
+
     return {
       id: `brand_menu_${matchedItem.id || matchedItem.dish_name_key || normalizeDishKey(matchedItem.dish_name)}`,
       source: 'brand_official',
@@ -2279,6 +2292,8 @@ export async function searchBrandMenuItems(query: string, explicitChainKey?: str
       carbohydrates: carbs != null ? Number(carbs) : undefined,
       sugar: sugar != null ? Number(sugar) : undefined,
       totalFibre: fiber != null ? Number(fiber) : undefined,
+      isOcrCollision,
+      anomalyFlags: isOcrCollision ? ['OCR_BROADCAST_COLLISION'] : [],
       nutrients: matchedItem.nutrients || {
         calories: cals,
         protein,
@@ -2291,7 +2306,7 @@ export async function searchBrandMenuItems(query: string, explicitChainKey?: str
         totalFibre: fiber
       },
       ingredients: cleanIngredients,
-      basisType: matchedItem.basis_type || 'per_dish',
+      basisType: 'per_dish',
       sourceUrl: matchedItem.source_url || undefined,
       snippet: `${matchedItem.dish_name} (${matchedItem.chain_name || matchedItem.chain_key}): ${cleanIngredients}. Nutrition: ${cals} kcal, ${protein}g protein, ${carbs}g carbs (sugar ${sugar}g), ${fat}g fat, fiber ${fiber}g, salt ${saltG ?? '—'}g (sodium ${sodiumMg ?? '—'}mg)`
     };

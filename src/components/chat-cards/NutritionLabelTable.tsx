@@ -376,7 +376,9 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
 
     const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
     const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients || item.nutrients_per_100g || item.core_nutrients;
-    if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && labelSource) {
+    const hasCoreMacros = correctedRaw && typeof correctedRaw === 'object' ? ['calories', 'protein', 'totalfat', 'fat', 'carbohydrates', 'totalcarbohydrate', 'energy'].some(k => correctedRaw[k] !== undefined && correctedRaw[k] !== null && correctedRaw[k] !== '' && correctedRaw[k] !== '-') : false;
+    
+    if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0 || !hasCoreMacros) && labelSource) {
       const source = labelSource;
       if (source && typeof source === 'object') {
         const cals = source.calories ?? source.energy;
@@ -1145,7 +1147,7 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
     }
 
     const isMultiCompComposite = (Array.isArray(subComps) && subComps.length >= 2) || item.dbSource === 'composite';
-    const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients;
+    const itemLabelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients || item.nutrients_per_100g || item.core_nutrients;
     let itemRawLabel = item.rawNutritionLabel;
     
     if ((!itemRawLabel || Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length === 0) && itemLabelSource && typeof itemLabelSource === 'object') {
@@ -1189,8 +1191,10 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
     }
     let correctedRaw = normalizeNutritionKeys(parsedRaw);
     const isRealTruth = item.dbSource === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label_partial' || item.dbSource === 'off' || item.dbSource === 'open_food_facts' || item.dbSource === 'openfoodfacts' || item.source === 'label' || item.source === 'brand_official' || Boolean(item.isRealTruth);
-    const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients;
-    if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0) && labelSource) {
+    const labelSource = item.labelNutrientsPerServing || item.baseNutrients100g || item.primaryBase100g || item.nutritionFacts || item.nutrients || item.nutrients_per_100g || item.core_nutrients;
+    const hasCoreMacros = correctedRaw && typeof correctedRaw === 'object' ? ['calories', 'protein', 'totalfat', 'fat', 'carbohydrates', 'totalcarbohydrate', 'energy'].some(k => correctedRaw[k] !== undefined && correctedRaw[k] !== null && correctedRaw[k] !== '' && correctedRaw[k] !== '-') : false;
+
+    if ((!correctedRaw || typeof correctedRaw !== 'object' || Object.keys(correctedRaw).length === 0 || !hasCoreMacros) && labelSource) {
       const source = labelSource;
       if (source && typeof source === 'object') {
         const cals = source.calories ?? source.energy;

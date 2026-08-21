@@ -5,7 +5,7 @@ try {
 } catch (e) {}
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
-import { checkCategoryAndStateCompatibility, applyServerAverageNutrients } from './server_pure_helpers.js';
+import { checkCategoryAndStateCompatibility, applyServerAverageNutrients, checkThermodynamicDensitySanity, checkArchetypeMacroBounds } from './server_pure_helpers.js';
 import { filterMatchesForQuery, pickQueryScopedMatch } from './server_query_scoped_match.js';
 import {
   namesReferToSameFood,
@@ -442,6 +442,31 @@ async function searchUSDA(query: string, maxResults: number = 5, dataTypes: stri
     if (!response.ok) return [];
     const data = await response.json();
     let foods = data.foods || [];
+
+    // Fallback: If query returned 0 foods and contains multiple tokens (e.g., "cheddar cheese"),
+    // USDA records use inverted phrasing (e.g., "Cheese, cheddar"). Try loosened token searches.
+    const tokens = query.trim().split(/\s+/).filter(Boolean);
+    if (foods.length === 0 && tokens.length > 1) {
+      const invertedComma = [...tokens].reverse().join(', ');
+      const invertedSpace = [...tokens].reverse().join(' ');
+      const altQueries = [invertedComma, invertedSpace];
+
+      for (const altQuery of altQueries) {
+        try {
+          const altUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${usdaApiKey}&query=${encodeURIComponent(altQuery)}&pageSize=${fetchSize}&${dataTypeQuery}`;
+          const altResponse = await fetch(altUrl);
+          if (altResponse.ok) {
+            const altData = await altResponse.json();
+            if (altData.foods && altData.foods.length > 0) {
+              foods = altData.foods;
+              break;
+            }
+          }
+        } catch (err) {
+          // Ignore fallback fetch errors and proceed
+        }
+      }
+    }
     
     // Sort to bubble exact or shortest matches to the top
     const qLower = query.toLowerCase().trim();
@@ -4424,6 +4449,22 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
             temperature: 0.1,
           });
         };
+        const fetchFoodDetailsForFdcId = async (fdcId: string): Promise<{ title: string, nutrients: Record<string, number> } | null> => {
+          if (dbMatchMap.has(fdcId)) {
+            const data = dbMatchMap.get(fdcId);
+            return data ? { title: data.name || data.description || data.searchQuery || '', nutrients: data } : null;
+          }
+          if (/^\d+$/.test(fdcId)) {
+            const food = await fetchUSDAFoodById(fdcId);
+            if (food) return { title: food.description || '', nutrients: extractUSDANutrientsPer100g(food) };
+            if (/^\d{6,}$/.test(fdcId)) {
+              const prod = await fetchOFFProductByBarcode(fdcId);
+              if (prod) return { title: prod.product_name || '', nutrients: extractOFFNutrientsPer100g(prod) };
+            }
+          }
+          return null;
+        };
+
         const fetchNutrientsForFdcId = async (fdcId: string): Promise<Record<string, number> | null> => {
           if (dbMatchMap.has(fdcId)) {
             return dbMatchMap.get(fdcId) || null;
@@ -4443,7 +4484,8 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           addDebugLog,
           callLLMFn,
           fetchNutrientsForFdcId,
-          searchUSDA
+          searchUSDA,
+          fetchFoodDetailsForFdcId
         );
 
         // For each resolved item, add it to databaseMatchesArray & dbMatchMap
@@ -5584,6 +5626,19 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           (truthMatch.carbohydrates === 0 || truthMatch.carbohydrates == null || truthMatch.carbs === 0 || truthMatch.carbs == null) &&
           (truthMatch.fat === 0 || truthMatch.fat == null || truthMatch.totalFat === 0 || truthMatch.totalFat == null);
 
+        if (isPlaceholderZeroMacros) {
+          const clearZeros = (obj: any) => {
+            if (!obj || typeof obj !== 'object') return;
+            ['protein', 'totalFat', 'fat', 'carbohydrates', 'carbs', 'totalCarbohydrate'].forEach(k => {
+              if (obj[k] !== undefined && String(obj[k]).match(/^[0.\s]*(g|mg)?$/i)) {
+                delete obj[k];
+              }
+            });
+          };
+          if (truthMatch) clearZeros(truthMatch.rawNutritionLabel);
+          clearZeros(item.rawNutritionLabel);
+        }
+
         const proteinKnown = truthMatch.protein != null && (!isPlaceholderZeroMacros || truthMatch.protein !== 0);
         const fatKnown = (truthMatch.fat != null || truthMatch.totalFat != null) && (!isPlaceholderZeroMacros || (truthMatch.fat !== 0 && truthMatch.totalFat !== 0));
         const satFatKnown = truthMatch.saturatedFat != null && (!isPlaceholderZeroMacros || truthMatch.saturatedFat !== 0);
@@ -5617,8 +5672,17 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         let servingScale = 1.0;
         if (isDishBasis) {
           if (truthServingGrams > 0 && truthServingGrams !== 100 && itemWeight > 0 && Math.abs(itemWeight - truthServingGrams) > 5) {
-            servingScale = itemWeight / truthServingGrams;
-            addDebugLog(`[Truth Serving Rescale] "${item.originalName || item.keyword}": DB dish serving is ${truthServingGrams}g, item consumed weight is ${itemWeight}g. Rescaling dish truth values by factor ${servingScale.toFixed(2)}.`);
+            const rawServingScale = itemWeight / truthServingGrams;
+            const queryText = [item.originalName, item.keyword, (req as any)?.body?.message].filter(Boolean).join(' ').toLowerCase();
+            const hasExplicitFraction = /\b(half|quarter|0\.5|0\.25|0\.75|1\.5|2x|double|3x|portion|bowls?|servings?|pieces?)\b/i.test(queryText);
+
+            if (!hasExplicitFraction && rawServingScale >= 0.5 && rawServingScale <= 2.5) {
+              servingScale = 1.0;
+              addDebugLog(`[Smart Unit Locking] Clamped scale factor ${rawServingScale.toFixed(2)} to 1.0x for branded restaurant item "${item.originalName || item.keyword}" (within standard container margin).`);
+            } else {
+              servingScale = rawServingScale;
+              addDebugLog(`[Truth Serving Rescale] "${item.originalName || item.keyword}": DB dish serving is ${truthServingGrams}g, item consumed weight is ${itemWeight}g. Rescaling dish truth values by factor ${servingScale.toFixed(2)}.`);
+            }
           } else {
             servingScale = 1.0;
             addDebugLog(`[Truth Serving Rescale] "${item.originalName || item.keyword}": Whole dish/portion basis (${truthBasis}). Keeping truth values unscaled (${webCals} kcal).`);
@@ -5641,19 +5705,73 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           webPotassium = Math.round(webPotassium * servingScale);
         }
 
-        // Lock only fields the source actually recorded (post-rescale).
-        if (truthMatch.calories != null) lockTruth('calories', webCals);
-        if (proteinKnown) lockTruth('protein', webProt);
-        if (fatKnown) lockTruth('totalFat', webFat);
-        if (satFatKnown) lockTruth('saturatedFat', webSatFat);
-        if (sodiumKnown) lockTruth('sodium', webNa);
-        if (carbsKnown) lockTruth('carbohydrates', webCarbs);
-        if (fibreKnown) lockTruth('totalFibre', webFibre);
-        // Printed sugar / added sugar / potassium / trans fat (label panels often have these)
-        if (truthMatch.addedSugar != null) lockTruth('addedSugar', webAddedSugar);
-        if (truthMatch.sugar != null) lockTruth('sugar', webSugar);
-        if (truthMatch.potassium != null) lockTruth('potassium', webPotassium);
-        if (truthMatch.transFat != null) lockTruth('transFat', Number(truthMatch.transFat) * servingScale);
+        // Gate 4 Check: OCR Duplicate Broadcast Scrape Detector
+        if (truthMatch && (truthMatch.isOcrCollision || (truthMatch.anomalyFlags && truthMatch.anomalyFlags.includes('OCR_BROADCAST_COLLISION')))) {
+          addDebugLog(`[OCR Broadcast Detector] COLLISION DETECTED: "${truthMatch.name || truthMatch.dish_name}" shares unverified OCR calorie count (${truthMatch.calories} kcal) with distinct items in brand menu. Suppressing locked truth status.`);
+          if (!item.anomalyFlags) item.anomalyFlags = [];
+          if (!item.anomalyFlags.includes('OCR_BROADCAST_COLLISION')) item.anomalyFlags.push('OCR_BROADCAST_COLLISION');
+          if (truthMatch.id) quarantinedIdsSet.add(String(truthMatch.id));
+          truthMatch = null;
+        }
+
+        // Gate 1 Check: Thermodynamic Density Sanity Gate (Pre-Lock Validation)
+        if (truthMatch && webCals > 0) {
+          const densityCheckGrams = truthServingGrams > 0 ? truthServingGrams : itemWeight;
+          const densityResult = checkThermodynamicDensitySanity(
+            item.originalName || item.keyword || truthMatch.name || truthMatch.dish_name || '',
+            item.foodType,
+            item.cookingMethod,
+            webCals,
+            densityCheckGrams
+          );
+
+          if (densityResult.isBreach) {
+            addDebugLog(`[Thermodynamic Density Gate] BREACH detected for "${item.originalName || item.keyword}" (${densityResult.density.toFixed(1)} kcal/100g > ceiling ${densityResult.ceiling} kcal/100g for category ${densityResult.category}). Flagging DENSITY_ANOMALY_BREACH, stripping brand calorie lock, and falling back to USDA component decomposition.`);
+            if (!item.anomalyFlags) item.anomalyFlags = [];
+            if (!item.anomalyFlags.includes('DENSITY_ANOMALY_BREACH')) item.anomalyFlags.push('DENSITY_ANOMALY_BREACH');
+            if (truthMatch.id) quarantinedIdsSet.add(String(truthMatch.id));
+            if (truthMatch.fdcId) quarantinedIdsSet.add(String(truthMatch.fdcId));
+            truthMatch = null;
+          }
+        }
+
+        // Gate 3 Check: Archetype Macro Invariant Constraints
+        if (truthMatch && webCals > 0) {
+          const macroCheck = checkArchetypeMacroBounds(
+            item.originalName || item.keyword || truthMatch.name || truthMatch.dish_name || '',
+            item.foodType,
+            item.cookingMethod,
+            webCals,
+            webProt,
+            webCarbs,
+            webFat
+          );
+
+          if (macroCheck.violated) {
+            addDebugLog(`[Macro Archetype Violation] Aborting brand calorie lock for "${item.originalName || item.keyword}" due to archetype bound breach (${macroCheck.reason}). Re-evaluating via first-principles ingredient modeling.`);
+            if (!item.anomalyFlags) item.anomalyFlags = [];
+            if (!item.anomalyFlags.includes('ARCHETYPE_BOUND_VIOLATION')) item.anomalyFlags.push('ARCHETYPE_BOUND_VIOLATION');
+            if (truthMatch.id) quarantinedIdsSet.add(String(truthMatch.id));
+            if (truthMatch.fdcId) quarantinedIdsSet.add(String(truthMatch.fdcId));
+            truthMatch = null;
+          }
+        }
+
+        // Lock only fields the source actually recorded (post-rescale) if truthMatch passed all sanity gates.
+        if (truthMatch) {
+          if (truthMatch.calories != null) lockTruth('calories', webCals);
+          if (proteinKnown) lockTruth('protein', webProt);
+          if (fatKnown) lockTruth('totalFat', webFat);
+          if (satFatKnown) lockTruth('saturatedFat', webSatFat);
+          if (sodiumKnown) lockTruth('sodium', webNa);
+          if (carbsKnown) lockTruth('carbohydrates', webCarbs);
+          if (fibreKnown) lockTruth('totalFibre', webFibre);
+          // Printed sugar / added sugar / potassium / trans fat (label panels often have these)
+          if (truthMatch.addedSugar != null) lockTruth('addedSugar', webAddedSugar);
+          if (truthMatch.sugar != null) lockTruth('sugar', webSugar);
+          if (truthMatch.potassium != null) lockTruth('potassium', webPotassium);
+          if (truthMatch.transFat != null) lockTruth('transFat', Number(truthMatch.transFat) * servingScale);
+        }
 
         // Extra nutrient keys (brand JSON / soft micro fill). NEVER overwrite a printed lock.
         // For printed labels, also skip re-locking CORE macros from any residual nutrients map

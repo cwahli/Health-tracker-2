@@ -21,6 +21,8 @@ import { NutritionLabelTable } from './chat-cards/NutritionLabelTable';
 import { PhysicalFormBadge } from './PhysicalFormBadge';
 import { JobStore } from '../jobs/JobStore';
 import TaskPlaceholderCard from './TaskPlaceholderCard';
+import { CroppedFoodImage, isValidBoundingBox, getFoodImageUrl } from './chat-cards/FoodCard';
+import { ZoomableImage } from './ZoomableImage';
 
 interface FoodHistoryTabProps {
   profile: UserProfile;
@@ -101,6 +103,8 @@ export default function FoodHistoryTab({
   const t = translations[profile.language] || translations.en;
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [openLabelLogMap, setOpenLabelLogMap] = useState<Record<string, number | null>>({});
+  const [zoomState, setZoomState] = useState<{ src: string; boundingBox?: number[] | null; foodName?: string; items: any[]; currentIdx: number; resolvedImgs: string[] } | null>(null);
   // Lazy-fetched heavy detail fields per log id (composition, scoutItems, itemsBreakdown, chatTranscript)
   const [detailOverrides, setDetailOverrides] = useState<Record<string, { composition?: string; scoutItems?: any[]; itemsBreakdown?: any[]; chatTranscript?: any[] }>>({});
 
@@ -1655,13 +1659,136 @@ export default function FoodHistoryTab({
                             )}
                           </div>
 
-                          {/* Composition Block inside Show-Hide */}
-                          {effectiveComposition && (
-                            <div className="bg-slate-50 dark:bg-slate-900/40 rounded-xl p-3 text-left space-y-1">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Composition & Ingredients</span>
-                              <p className="text-xs text-slate-750 dark:text-slate-300 font-semibold leading-relaxed">{effectiveComposition}</p>
-                            </div>
-                          )}
+                          {/* Interactive Meal Composition Gallery & Breakdown */}
+                          {(() => {
+                            const scoutItemsList = (Array.isArray(effectiveScoutItems) && effectiveScoutItems.length > 0)
+                              ? effectiveScoutItems.map((item: any) => ({
+                                  ...item,
+                                  keyword: item.keyword || item.canonicalDbName || item.name || item.originalName,
+                                  originalName: item.originalName || item.scoutOriginalName || item.name || item.keyword,
+                                  boundingBox2D: item.boundingBox2D,
+                                  sourceImageIndex: item.sourceImageIndex ?? 0,
+                                  itemConfidence: item.itemConfidence || item.confidenceRating || 'High',
+                                  weightGrams: item.weightGrams || item.weight,
+                                  nutrients: item.nutrients || item,
+                                  nutritionFacts: item.nutritionFacts || item.rawNutritionLabel || item.nutrients || item,
+                                  visualIngredients: item.visualIngredients,
+                                  components: item.components
+                                }))
+                              : (Array.isArray(effectiveItemsBreakdown) && effectiveItemsBreakdown.length > 0)
+                                ? effectiveItemsBreakdown.map((item: any) => ({
+                                    ...item,
+                                    keyword: item.keyword || item.canonicalDbName || item.name || item.originalName,
+                                    originalName: item.scoutOriginalName || item.originalName || item.name || item.keyword,
+                                    boundingBox2D: item.boundingBox2D,
+                                    sourceImageIndex: item.sourceImageIndex ?? 0,
+                                    itemConfidence: item.itemConfidence || 'High',
+                                    weightGrams: item.weightGrams || item.weight,
+                                    nutrients: item.nutrients || item,
+                                    nutritionFacts: item.nutritionFacts || item.rawNutritionLabel || item.nutrients || item,
+                                    visualIngredients: item.visualIngredients,
+                                    components: item.components
+                                  }))
+                                : [];
+
+                            if (scoutItemsList.length === 0 && !effectiveComposition) return null;
+
+                            return (
+                              <div className="bg-slate-50 dark:bg-slate-900/40 rounded-xl p-3 text-left space-y-2.5 border border-slate-200/50 dark:border-slate-800/50">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10.5px] font-bold text-indigo-500 dark:text-indigo-400 flex items-center gap-1">
+                                    🔍 Meal composition {scoutItemsList.length > 0 ? `(${scoutItemsList.length})` : ''}
+                                  </span>
+                                </div>
+
+                                {scoutItemsList.length > 0 && (
+                                  <div className="flex overflow-x-auto flex-nowrap sm:flex-wrap items-start justify-start gap-3 pt-1 pb-2 w-full font-sans scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+                                    {scoutItemsList.map((item: any, i: number) => {
+                                      const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
+                                      const resolvedImgSrc = (resolvedImgs.length > 0)
+                                        ? (resolvedImgs[rawIdx] || resolvedImgs[0])
+                                        : (resolvedImg || getFoodImageUrl(item.keyword || item.originalName));
+                                      const hasBbox = isValidBoundingBox(item.boundingBox2D);
+                                      const isSelectedLabel = openLabelLogMap[log.id] === i;
+
+                                      return (
+                                        <div key={i} className="flex flex-col items-center gap-1 shrink-0 relative group w-[95px] sm:w-[110px]">
+                                          <div className="relative w-full">
+                                            <div 
+                                              className="w-full aspect-square rounded-xl overflow-hidden cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-sm bg-slate-100 dark:bg-slate-800 border border-slate-200/50 dark:border-slate-700/50"
+                                              onClick={() => setZoomState({
+                                                src: resolvedImgSrc,
+                                                boundingBox: hasBbox ? item.boundingBox2D : null,
+                                                foodName: item.originalName || item.keyword,
+                                                items: scoutItemsList,
+                                                currentIdx: i,
+                                                resolvedImgs: resolvedImgs
+                                              })}
+                                              title="Click to view image zoom"
+                                            >
+                                              {hasBbox ? (
+                                                <CroppedFoodImage
+                                                  src={resolvedImgSrc}
+                                                  boundingBox={item.boundingBox2D}
+                                                  alt={item.keyword || item.originalName}
+                                                  className="w-full h-full object-cover"
+                                                  imageUrls={resolvedImgs}
+                                                  sourceImageIndex={rawIdx}
+                                                />
+                                              ) : (
+                                                <img
+                                                  src={resolvedImgSrc}
+                                                  alt={item.keyword || item.originalName}
+                                                  className="w-full h-full object-cover"
+                                                  onError={(e) => {
+                                                    const t = e.target as HTMLImageElement;
+                                                    if (!t.src.includes('unsplash.com')) t.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&q=80&auto=format';
+                                                  }}
+                                                />
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => setOpenLabelLogMap(prev => ({
+                                              ...prev,
+                                              [log.id]: prev[log.id] === i ? null : i
+                                            }))}
+                                            className="text-[10px] text-center font-semibold leading-tight text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer break-words line-clamp-2 w-full font-sans inline-flex items-center justify-center gap-0.5 mt-1"
+                                          >
+                                            <span>{item.originalName || item.keyword}</span>
+                                            <ChevronDown className={`w-3 h-3 transition-transform shrink-0 text-slate-400 ${isSelectedLabel ? 'rotate-180' : ''}`} />
+                                          </button>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {/* Per-dish nutrient breakdown dropdown */}
+                                {openLabelLogMap[log.id] !== undefined && openLabelLogMap[log.id] !== null && scoutItemsList[openLabelLogMap[log.id]!] && (
+                                  <div className="mt-2 w-full pt-2 border-t border-slate-200/60 dark:border-slate-800">
+                                    <NutritionLabelTable
+                                      defaultOpen={true}
+                                      hideOwnToggle={true}
+                                      activeScoutItems={[{
+                                        ...scoutItemsList[openLabelLogMap[log.id]!],
+                                        nutritionFacts: scoutItemsList[openLabelLogMap[log.id]!].nutritionFacts || scoutItemsList[openLabelLogMap[log.id]!].nutrients
+                                      }]}
+                                    />
+                                  </div>
+                                )}
+
+                                {effectiveComposition && (
+                                  <div className={scoutItemsList.length > 0 ? "pt-2 border-t border-slate-200/50 dark:border-slate-800/50" : ""}>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Composition & Ingredients</span>
+                                    <p className="text-xs text-slate-750 dark:text-slate-300 font-semibold leading-relaxed">{effectiveComposition}</p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
 
 
 
@@ -1850,6 +1977,46 @@ export default function FoodHistoryTab({
         </div>
       )}
 
+      {zoomState && (
+        <ZoomableImage
+          src={zoomState.src}
+          boundingBox={zoomState.boundingBox}
+          foodName={zoomState.foodName}
+          onClose={() => setZoomState(null)}
+          hasNext={zoomState.currentIdx < zoomState.items.length - 1}
+          hasPrev={zoomState.currentIdx > 0}
+          onNext={() => {
+            const nextIdx = zoomState.currentIdx + 1;
+            const item = zoomState.items[nextIdx];
+            const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
+            const imgSrc = (zoomState.resolvedImgs.length > 0)
+              ? (zoomState.resolvedImgs[rawIdx] || zoomState.resolvedImgs[0])
+              : getFoodImageUrl(item.keyword || item.originalName);
+            setZoomState({
+              ...zoomState,
+              currentIdx: nextIdx,
+              src: imgSrc,
+              boundingBox: isValidBoundingBox(item.boundingBox2D) ? item.boundingBox2D : null,
+              foodName: item.originalName || item.keyword
+            });
+          }}
+          onPrev={() => {
+            const prevIdx = zoomState.currentIdx - 1;
+            const item = zoomState.items[prevIdx];
+            const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
+            const imgSrc = (zoomState.resolvedImgs.length > 0)
+              ? (zoomState.resolvedImgs[rawIdx] || zoomState.resolvedImgs[0])
+              : getFoodImageUrl(item.keyword || item.originalName);
+            setZoomState({
+              ...zoomState,
+              currentIdx: prevIdx,
+              src: imgSrc,
+              boundingBox: isValidBoundingBox(item.boundingBox2D) ? item.boundingBox2D : null,
+              foodName: item.originalName || item.keyword
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

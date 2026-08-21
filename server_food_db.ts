@@ -381,11 +381,11 @@ export function lookupCanonicalBaseFood(name: string): any | null {
     return CANONICAL_BASE_FOODS.almonds;
   }
   
+  if (normalized.includes('croissant')) return CANONICAL_BASE_FOODS.croissant;
+
   if (normalized.includes('unsalted butter') || normalized.includes('unsalted_butter')) return CANONICAL_BASE_FOODS.unsalted_butter;
   if (normalized.includes('whipped butter') || normalized.includes('whipped_butter')) return CANONICAL_BASE_FOODS.whipped_butter;
   if (normalized.includes('butter') && !normalized.includes('peanut') && !normalized.includes('almond') && !normalized.includes('apple') && !normalized.includes('cookie') && !normalized.includes('milk') && !normalized.includes('squash') && !normalized.includes('fly')) return CANONICAL_BASE_FOODS.butter;
-
-  if (normalized.includes('croissant')) return CANONICAL_BASE_FOODS.croissant;
   
   if (normalized.includes('falafel')) return CANONICAL_BASE_FOODS.falafel;
   
