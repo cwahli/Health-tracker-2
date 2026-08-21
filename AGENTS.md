@@ -1,6 +1,6 @@
 # AGENTS.md — Always-on rules (keep short)
 
-**Updated:** 2026-08-19  
+**Updated:** 2026-08-21  
 
 **Token rule:** Read **this file first**. Load domain rulebooks (`docs/agent/**`) **only when the table below says so**. (Investigating application source code, debug logs, and relevant functions is always permitted and encouraged; do not dump unneeded rulebook docs).
 
@@ -41,6 +41,7 @@ AGENTS + docs/agent = how we work without breaking each other (stable process)
 | Which tests to run | `docs/agent/DOMAIN_REGRESSION_MAP.md` |
 | IMPACT / SELF-CHECK / GATE paste | `docs/agent/TEMPLATES.md` |
 | Active Studio pack name | `studio/ACTIVE_STATUS.md` |
+| User says **work bug** / **next bug** / **work 11** | **L15**. Not a bare “continue” or “work”. |
 
 **Default loop:** board (`AI_HANDOVER`) → domain rulebook if needed → implement → domain gates → COMPLETE format → update board.
 
@@ -102,7 +103,7 @@ When addressing tasks, bug fixes, or feature plans, agents execute end-to-end in
 ### L13 — Multipass Epic Continuation (Anti Early-Stop)
 When executing multi-phase plans (e.g. `studio/M*.md` or `plan/*.md`):
 - After each phase's tests pass, the agent **must immediately start the next phase in the same continuous stream**.
-- Ending a turn with only “ready for Phase N when you say continue” (or similar) while checklist IDs remain = **FAIL**.
+- Ending a turn with only “ready for Phase N when you say continue” (or similar) while checklist IDs remain = **FAIL**. Pack/phase **continue** is L13, not L15.
 - On context pressure: write `AI_HANDOVER.md` multipass checkpoint + RESUME line, then continue from checkpoint without re-auditing the whole repo.
 - L10 COMPLETE requires the named master gate to exit code 0.
 
@@ -125,6 +126,26 @@ When asked to fix bugs (one ticket or a whole registry):
 8. **Parallel is required, retry-loop is not.** Different classes / different files = do them now. Same-file collision = serialize those two only. Human only at `blocked_human`.
 
 This law **overrides L11 / L13** when they would mean “keep `/loop`-ing or grepping until the meal is green.” Continuous execution = the next **job**, not the next **replay**.
+
+### L15 — Bug queue (all agents)
+
+**Triggers (only these):** `work bug` (current in-progress card) · `next bug` (the following card) · `work 11` / `work #11` (that number) · a **Hand off** paste that starts with `AGENTS.md L15`.
+
+**Not L15:** a bare **continue** or **work** (pack phase / L13 / current task). The JSON field `continue` on `/api/bugs/next` is the ticket object, not a user phrase.
+
+1. **Live ticket** (`http://127.0.0.1:3000` then `localhost:3000`):  
+   - `work bug` → `GET /api/bugs/next` (in-progress remaining, else first ready)  
+   - `next bug` → `GET /api/bugs/next?mode=next` (skips the current card)  
+   - `work 11` / `work #11` → `GET /api/bugs/next?n=11`  
+   **No live API** (GitHub-only Claude): the **Hand off** clipboard is the ticket. Do not invent remaining from git.
+2. `continue.stop` → quote `continue.say`, no code. Remaining empty → STOP for human Re-analyze; do not Promote from chat.
+3. Else **only** `continue.active_line`. One class, one file (`class_hint` / `file_hint`). Other remaining on that `#n` are out of session.
+4. Named vitest must fail on a **new** food of that class (not this meal’s FDC list).
+5. End every turn: `POST /api/bugs/<tag_id>/attempts` `{ line: <active_line exactly>, hyp, file, test, result, burned, note }`. `burned=false` only if that test flipped. Pass with `line` moves that row to Done and returns the next ticket.
+6. One trigger = one line. `keep going on this bug` = at most 3 lines this turn, different classes, stop on burn or `stop=true`.
+7. **Do not:** `POST /loop` · `PATCH remaining` to `[]` / `queue=done` · `CANONICAL_BASE_FOODS` / `lookupCanonicalBaseFood` `includes()` for this meal’s dishes · `food_aliases` / `expected.json` paint · invent files · retry **DO NOT RETRY** · mark the card done from chat.
+
+L15 **overrides L11** only for those trigger phrases: the next job is the next **remaining line**, not “green this meal.” Pack **continue** stays L13. L14 class/test/catalog-paint rules still apply.
 
 ### L10 — COMPLETE
 All of: IMPACT (L/X) · SELF-CHECK · (if code changed: `tsc` · domain regression map commands · pack assert if any; skip if doc/ops only) · paths verified or known-broken noted.
@@ -179,7 +200,8 @@ These files define how **all** agents work. Random edits dilute process and brea
 
 ## 7. Bug & Diagnostic Investigations
 When investigating user bug logs, errors, or diagnostic reports, deep multi-file inspection and reading the provided diagnostic markdown file is expected and encouraged.
-Spec: `plan/BUG_TRACKING_COMPREHENSIVE_PLAN.md`.
+Spec: `plan/BUG_TRACKING_COMPREHENSIVE_PLAN.md`.  
+**Queue work** (`work bug` / `next bug` / `work 11` / Hand off) follows **L15**.
 
 ---
 
