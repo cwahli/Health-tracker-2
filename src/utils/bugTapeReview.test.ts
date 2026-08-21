@@ -62,6 +62,19 @@ describe('automatic vs human tape review', () => {
     expect(cleared.find((c) => c.id === 'math_trial_balance')?.pass).toBe(true);
   });
 
+  it('retainTapeChecks preserves user-added journey checks as failing when tape has no match', () => {
+    const pinned = [
+      { id: 'id_ok', label: 'Every scout dish is still in the final meal', pass: true },
+      { id: 'user_custom_bug', label: 'Nutrients missing on expanded view', pass: false, group: 'user' },
+    ];
+    const tapeChecks = [{ id: 'id_ok', label: 'Every scout dish is still in the final meal', pass: true }];
+    const result = retainTapeChecks(pinned, tapeChecks, { hydrated: true });
+    expect(result).toHaveLength(2);
+    const userCheck = result.find((c) => c.id === 'user_custom_bug');
+    expect(userCheck?.pass).toBe(false);
+    expect(userCheck?.status).toBe('fail');
+  });
+
   it('continue job stops for human when only visual remaining is open', () => {
     const job = buildContinueJob({
       id: 't',

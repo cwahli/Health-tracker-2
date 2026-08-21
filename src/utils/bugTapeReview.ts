@@ -127,6 +127,8 @@ export function retainTapeChecks(
         status: hit.status,
         group: hit.group || p.group,
       });
+    } else if (p.group === 'user' || p.id?.startsWith('user_')) {
+      out.push({ ...p, pass: p.pass ?? false, status: p.status || 'fail' });
     } else {
       out.push({ ...p, pass: true, status: 'pass' });
     }

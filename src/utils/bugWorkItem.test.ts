@@ -229,6 +229,14 @@ describe('bugWorkItem Q-6', () => {
     });
     expect(next.remaining).toEqual(['yolk bind', 'croissant pack 6 vs 1']);
     expect(linePhotosForText(next.current_evidence, 'croissant pack 6 vs 1')?.photo_urls?.[0]).toMatch(/shot-02/);
+    expect(next.checks?.some((c) => c.label === 'croissant pack 6 vs 1' && c.group === 'user' && !c.pass)).toBe(true);
+  });
+
+  it('user journey checks survive tape review and are not auto-cleared as pass', () => {
+    const base = emptyWorkItem({ remaining: ['user added bug here'] });
+    const snapped = applySnapRemaining(base, { remaining: ['user added bug here'] });
+    expect(snapped.checks?.length).toBe(1);
+    expect(snapped.checks?.[0].label).toBe('user added bug here');
   });
 
   it('continue job is the first remaining line, not the whole meal', () => {

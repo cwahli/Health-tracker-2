@@ -600,7 +600,21 @@ export function applySnapRemaining(
       line_photos: [...(evidence?.line_photos || []), ...lines],
     };
   }
-  return { ...item, remaining, current_evidence: evidence };
+
+  const checks = (item.checks || []).slice();
+  for (const r of remaining) {
+    if (!checks.some((c) => remainingOverlap(c.label, r))) {
+      checks.push({
+        id: `user_${norm(r).slice(0, 32).replace(/\s+/g, '_')}`,
+        label: r,
+        pass: false,
+        status: 'fail',
+        group: 'user',
+      });
+    }
+  }
+
+  return { ...item, remaining, checks, current_evidence: evidence };
 }
 
 function remainingOverlap(a: string, b: string): boolean {
