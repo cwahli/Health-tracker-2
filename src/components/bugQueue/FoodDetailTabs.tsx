@@ -26,31 +26,41 @@ export type FoodDetailTabsProps = {
  * Maps outcomes/invariants into passCount, failCount, and percentage distributions.
  * (Scouted only / label filters do not count as remaining issues).
  */
+function isFilteredJourneyCheck(i: any) {
+  const text = `${i.id || ''} ${i.label || ''}`;
+  if (/scouted only/i.test(text)) return true;
+  if (/^j_/i.test(String(i.id || ''))) return true;
+  return false;
+}
+
 export function computeBoardProgress(board?: any) {
   if (!board) return { passCount: 0, failCount: 0, total: 0, passPct: 0, failPct: 0 };
+
   const invariants = Array.isArray(board.invariants)
-    ? board.invariants.filter((i: any) => {
-        const text = `${i.id || ''} ${i.label || ''}`;
-        if (/scouted only/i.test(text)) return false;
-        if (/^j_/i.test(String(i.id || ''))) return false;
-        return true;
-      })
+    ? board.invariants.filter((i: any) => !isFilteredJourneyCheck(i))
     : [];
+
+  const autoSpotHits = Array.isArray(board.autoSpot) ? board.autoSpot : [];
+  const invLabelKeys = new Set(
+    invariants.map((i: any) => String(i.label || i.id || '').toLowerCase().replace(/\s+/g, ' ').trim())
+  );
+  const extraSpotHits = autoSpotHits.filter((h: any) => {
+    const k = String(h.text || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!k || invLabelKeys.has(k)) return false;
+    return !isFilteredJourneyCheck({ id: h.id, label: h.text });
+  });
+
   const outcomes = Array.isArray(board.outcomes)
-    ? board.outcomes.filter((o: any) => {
-        const text = `${o.id || ''} ${o.label || ''} ${o.name || ''}`;
-        if (/scouted only/i.test(text)) return false;
-        if (/^j_/i.test(String(o.id || ''))) return false;
-        return true;
-      })
+    ? board.outcomes.filter((o: any) => !isFilteredJourneyCheck({ id: o.id, label: `${o.label || ''} ${o.name || ''}` }))
     : [];
 
   let passCount = 0;
   let failCount = 0;
 
-  if (invariants.length > 0) {
+  if (invariants.length > 0 || extraSpotHits.length > 0) {
     passCount = invariants.filter((i: any) => i.pass === true || i.status === 'pass').length;
-    failCount = invariants.filter((i: any) => i.pass !== true && i.status !== 'pass').length;
+    // auto-spot hits are always unresolved fails until promoted to a real invariant
+    failCount = invariants.filter((i: any) => i.pass !== true && i.status !== 'pass').length + extraSpotHits.length;
   } else if (outcomes.length > 0) {
     passCount = outcomes.filter((o: any) => o.pass === true || o.status === 'pass').length;
     failCount = outcomes.filter((o: any) => o.pass !== true && o.status !== 'pass').length;
@@ -88,7 +98,9 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
   className = '',
 }) => {
   const journey = Array.isArray(board?.journey) ? board.journey : [];
-  const invariants = Array.isArray(board?.invariants) ? board.invariants : [];
+  const invariants = Array.isArray(board?.invariants)
+    ? board.invariants.filter((i: any) => !isFilteredJourneyCheck(i))
+    : [];
   const autoSpotHits: AutoSpotHit[] = Array.isArray(board?.autoSpot) ? board.autoSpot : [];
   const phaseCounts = journeyPhaseCounts(journey);
   const invLabelKeys = new Set(
@@ -96,7 +108,8 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
   );
   const extraSpotHits = autoSpotHits.filter((h) => {
     const k = String(h.text || '').toLowerCase().replace(/\s+/g, ' ').trim();
-    return k && !invLabelKeys.has(k);
+    if (!k || invLabelKeys.has(k)) return false;
+    return !isFilteredJourneyCheck({ id: h.id, label: h.text });
   });
   const checkRows = [
     ...invariants,
