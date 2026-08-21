@@ -62,9 +62,15 @@ function repairUnquotedJsonKeys(jsonStr: string): string {
   // Strip markdown code block wrappers if present
   s = s.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
   // Wrap unquoted property keys in double quotes (e.g. Reason: "..." -> "Reason": "...")
-  s = s.replace(/(?:^|[{,\s])([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, (match, key) => {
+  // IMPORTANT: only match keys immediately after a real object boundary ('{' or ',',
+  // optionally followed by whitespace/newlines) — NOT after any arbitrary whitespace.
+  // The old pattern matched "word:" anywhere preceded by a space, which corrupted
+  // string VALUES containing a colon (e.g. "ranch dressing. contains: dairy" — the
+  // curator echoing an allergen note from the label — got misread as an unquoted key
+  // "contains", breaking the JSON and crashing the whole curator response).
+  s = s.replace(/(^|[{,])(\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, (match, prefix, ws, key) => {
     if (match.includes('"')) return match;
-    return match.replace(key, `"${key}"`);
+    return `${prefix}${ws}"${key}":`;
   });
   // Clean trailing commas before closing braces/brackets
   s = s.replace(/,\s*([}\]])/g, '$1');

@@ -3093,28 +3093,23 @@ export const FoodCard: React.FC<AgentCardProps & {
                                          </div>
                                        )}
                                      </div>
-                                     <span className="text-[10px] text-center font-medium leading-tight text-slate-500 break-words line-clamp-2 w-full font-sans">
-                                       {showTranslations.scout ? (item.keyword || item.originalName) : (item.originalName || item.keyword)}
+                                     <span 
+                                       onClick={() => {
+                                         setOpenLabelIdx(prev => prev === i ? null : i);
+                                       }}
+                                       className="text-[10px] text-center font-semibold leading-tight text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer break-words line-clamp-2 w-full font-sans inline-flex items-center justify-center gap-0.5 mt-1"
+                                     >
+                                       <span>{showTranslations.scout ? (item.keyword || item.originalName) : (item.originalName || item.keyword)}</span>
+                                       <svg
+                                         className={`inline-block w-3 h-3 transition-transform shrink-0 text-slate-400 ${openLabelIdx === i ? 'rotate-180' : ''}`}
+                                         fill="none"
+                                         viewBox="0 0 24 24"
+                                         stroke="currentColor"
+                                       >
+                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                       </svg>
                                      </span>
-                                     {(() => {
-                                       const visualText = Array.isArray(item.visualIngredients) && item.visualIngredients.length > 0
-                                         ? item.visualIngredients.join(', ')
-                                         : (item.components || []).map((c: any) => typeof c === 'string' ? c : (c.searchQuery || c.name || c.keyword)).join(', ');
-                                       const mainName = showTranslations.scout ? (item.keyword || item.originalName) : (item.originalName || item.keyword);
-                                       if (visualText && visualText.toLowerCase().trim() !== (mainName || '').toLowerCase().trim()) {
-                                         return (
-                                           <span className="text-[9px] text-center font-medium leading-tight text-indigo-600 dark:text-indigo-400 break-words line-clamp-3 w-full font-sans bg-indigo-50/60 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded-md border border-indigo-200/50 dark:border-indigo-800/50">
-                                             {safeTruncate(visualText, 100)}
-                                           </span>
-                                         );
-                                       }
-                                       return null;
-                                     })()}
-                                     {item.cookingMethod && (
-                                       <div className="flex flex-wrap items-center justify-center gap-1 w-full mt-0.5 scale-90 origin-top">
-                                         {getCookingMethodChip(item.cookingMethod, true)}
-                                       </div>
-                                     )}
+
                                      {/* Confidence badge below the name — full detail now lives in Items in Review */}
                                      {(item.itemConfidence?.toLowerCase().includes('low') || item.itemConfidence?.toLowerCase().includes('medium')) && (
                                        <span className="text-[8px] text-center leading-tight text-amber-600 dark:text-amber-500 w-full font-sans">
@@ -3531,23 +3526,72 @@ export const FoodCard: React.FC<AgentCardProps & {
           <div className="bg-white dark:bg-slate-800 border border-theme-border rounded-2xl p-4 shadow-md space-y-3 animation-fade-in w-full max-w-full min-w-0 overflow-hidden font-sans text-left mt-3">
             {/* Show Scout identified items if photos were uploaded */}
             {displayedScoutItems.length > 0 && (
-              <div className="mb-3 border-b border-theme-border/50 pb-3 font-sans">
+              <div className="mb-3 border-b border-theme-border/50 pb-3 font-sans text-left">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10.5px] font-bold text-indigo-500 dark:text-indigo-400">
                     🔍 Meal composition ({displayedScoutItems.length} items identified)
                   </span>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                  {displayedScoutItems.map((item: any, i: number) => (
-                    <div key={i} className="bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center justify-between min-w-0">
-                      <span className="truncate">{item.originalName || item.keyword}</span>
-                      {item.estimatedWeightGrams && (
-                        <span className="text-[10px] text-slate-400 font-mono ml-1 shrink-0">{item.estimatedWeightGrams}g</span>
-                      )}
-                    </div>
-                  ))}
+                <div className="flex overflow-x-auto flex-nowrap sm:flex-wrap items-start justify-start gap-3 pt-2 pb-3 w-full font-sans scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+                  {displayedScoutItems.map((item: any, i: number) => {
+                    const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
+                    const imgIdx = (messageImages.length > 0 && rawIdx >= 0 && rawIdx < messageImages.length) ? rawIdx : 0;
+                    const resolvedImgSrc = (messageImages.length > 0) ? messageImages[imgIdx] : getFoodImageUrl(item.keyword);
+                    return (
+                      <div key={i} className="flex flex-col items-center gap-1 shrink-0 relative group w-[110px] sm:w-[130px]">
+                        <div 
+                          className="w-full aspect-square rounded-xl overflow-hidden cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-sm bg-slate-100 dark:bg-slate-800 border border-slate-200/50 dark:border-slate-700/50"
+                          onClick={() => setScoutPreviewIdx(i)}
+                        >
+                          {isValidBoundingBox(item.boundingBox2D) ? (
+                            <CroppedFoodImage 
+                              src={resolvedImgSrc} 
+                              boundingBox={item.boundingBox2D} 
+                              alt={item.keyword} 
+                              className="w-full h-full object-cover"
+                              imageUrls={messageImages}
+                              sourceImageIndex={imgIdx}
+                            />
+                          ) : (
+                            <img 
+                              src={resolvedImgSrc} 
+                              alt={item.keyword} 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const t = e.target as HTMLImageElement;
+                                if (!t.src.includes('unsplash.com')) t.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&q=80&auto=format';
+                              }}
+                            />
+                          )}
+                        </div>
+                        <span 
+                          onClick={() => setOpenLabelIdx(prev => prev === i ? null : i)}
+                          className="text-[10px] text-center font-semibold leading-tight text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer break-words line-clamp-2 w-full font-sans inline-flex items-center justify-center gap-0.5 mt-1"
+                        >
+                          <span>{showTranslations.scout ? (item.keyword || item.originalName) : (item.originalName || item.keyword)}</span>
+                          <svg
+                            className={`inline-block w-3 h-3 transition-transform shrink-0 text-slate-400 ${openLabelIdx === i ? 'rotate-180' : ''}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-                <NutritionLabelTable defaultOpen={true} activeScoutItems={displayedScoutItems} onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))} />
+                {openLabelIdx !== null && displayedScoutItems[openLabelIdx] && (
+                  <div className="mt-2 w-full">
+                    <NutritionLabelTable
+                      defaultOpen={true}
+                      hideOwnToggle={true}
+                      activeScoutItems={[displayedScoutItems[openLabelIdx]]}
+                      onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))}
+                    />
+                  </div>
+                )}
               </div>
             )}
 

@@ -652,12 +652,13 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
 
                   const hasEstimatedNutrients = allKeys.some(k => !isKeyLocked(k));
                   const isEstimatedExpanded = Boolean(showEstimatedMap[i]);
-                  const visibleKeys = allKeys.filter(k => isEstimatedExpanded || isKeyLocked(k) || (allKeys.every(ak => !isKeyLocked(ak)) && ['calories', 'protein', 'totalfat', 'fat', 'carbohydrates', 'totalcarbohydrate', 'sodium'].includes(k.toLowerCase())));
+                  const visibleKeys = allKeys.filter(k => isEstimatedExpanded || isKeyLocked(k));
 
                   return (
                     <div>
-                      <div className="overflow-x-auto rounded-lg border border-theme-border/50">
-                        <table className="w-full text-left border-collapse">
+                      {visibleKeys.length > 0 && (
+                        <div className="overflow-x-auto rounded-lg border border-theme-border/50">
+                          <table className="w-full text-left border-collapse">
                           <thead>
                             <tr className="bg-slate-100/50 dark:bg-slate-800/50">
                               <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50">
@@ -869,6 +870,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                           </tbody>
                         </table>
                       </div>
+                      )}
                       {hasEstimatedNutrients && (
                         <div className="mt-2 text-center font-sans">
                           <button
