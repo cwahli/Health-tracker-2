@@ -375,6 +375,21 @@ describe('FoodDetailTabs component (G1-4)', () => {
     expect(html).toContain('pick_existing');
     expect(html).toContain('OPENING_WRONG');
   });
+
+  it('renders "no saved job" disabled button when no jobId is present (G2-2)', () => {
+    const html = renderToStaticMarkup(
+      <FoodDetailTabs
+        activeTab="checks"
+        onTabChange={() => {}}
+        board={{
+          invariants: [{ id: 'inv-1', label: 'Calories within bounds', pass: true }],
+        }}
+        onReplayLog={() => {}}
+      />
+    );
+    expect(html).toContain('no saved job');
+    expect(html).not.toContain('Replay log');
+  });
 });
 
 describe('computeBoardProgress helper (G2-3)', () => {

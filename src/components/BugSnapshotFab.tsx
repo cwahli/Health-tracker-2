@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, X, Plus, Trash2, Bug, Loader, Check, ImagePlus, CheckCircle2, Sparkles, Utensils, AlertCircle, MessageSquare, ArrowLeft, Eye } from 'lucide-react';
+import { Camera, X, Plus, Trash2, Bug, Loader, Check, ImagePlus, CheckCircle2, Sparkles, Utensils, AlertCircle, MessageSquare, ArrowLeft, Eye, ClipboardPaste } from 'lucide-react';
 import {
   isBugSnapshotEnabled,
   setBugSnapshotEnabled,
@@ -339,7 +339,32 @@ export default function BugSnapshotFab({
     });
   }, [open, category, tagId, newTitle, symptom, shots, snapshotType, goldenTitle]);
 
-  // Paste images (Cmd/Ctrl+V)
+  // Paste images (Cmd/Ctrl+V or Paste button)
+  const handlePasteClipboard = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.read) {
+        const items = await navigator.clipboard.read();
+        const files: File[] = [];
+        for (const item of items) {
+          for (const type of item.types) {
+            if (type.startsWith('image/')) {
+              const blob = await item.getType(type);
+              files.push(new File([blob], `clipboard-${Date.now()}.${type.split('/')[1] || 'png'}`, { type }));
+            }
+          }
+        }
+        if (files.length > 0) {
+          addShotsFromFiles(files);
+          return;
+        }
+      }
+    } catch {
+      /* clipboard read permission or unsupported */
+    }
+    setError('Press ⌘V / Ctrl+V to paste screenshot directly from your clipboard.');
+    setTimeout(() => setError(null), 4000);
+  };
+
   useEffect(() => {
     if (!open) return;
     const onPaste = (e: ClipboardEvent) => {
@@ -603,7 +628,7 @@ export default function BugSnapshotFab({
     }
     setTagId(autoMatchedTagId);
 
-    // Pre-populate golden meal name from job context
+    // Pre-populate bug and golden meal title from job context
     const derivedTitle = deriveGoldenTitle({
       foodLog: activeJob?.result?.pendingFoodLog || activeJob?.result?.data?.pendingFoodLog,
       scout: activeJob?.result?.scoutItems || activeJob?.result?.data?.scoutItems || activeJob?.result?.scout,
@@ -611,6 +636,7 @@ export default function BugSnapshotFab({
       fallback: activeJob?.title || activeJob?.inputSnapshot?.text || '',
     });
     setGoldenTitle(derivedTitle);
+    setNewTitle(derivedTitle);
 
     const capturedProblems = extractCapturedMealProblems(activeJob).filter(
       (p) => !isStaleCapturedStallSymptom(p)
@@ -780,13 +806,13 @@ export default function BugSnapshotFab({
     setError(null);
     setSuccess(null);
     try {
+      const effectiveTitle = (newTitle || goldenTitle).trim();
       if (snapshotType === 'bug') {
-        if (tagId === 'new_bug' && !newTitle.trim()) {
+        if ((tagId === 'new_bug' || !tagId) && !effectiveTitle) {
           throw new Error('Enter a title for the new bug');
         }
-        if (!tagId) throw new Error('Select a bug tag or create new');
       } else {
-        if (!goldenTitle.trim()) {
+        if (!effectiveTitle) {
           throw new Error('Enter a title for the golden meal');
         }
       }
@@ -865,24 +891,28 @@ export default function BugSnapshotFab({
         try {
           const { buildDebugMarkdownReport, debugReportFromJobMsg, stripHeavyImages } = await import('../utils/debugPayload');
 
-          // Only fetch cold R2 debug data for real food/biomarker jobs that exist in Supabase.
+          // Only fetch cold R2 debug data for real food/biomarker jobs that exist on server.
           // bug_triage and other local-only jobs are not stored in agent_jobs table.
           const isSupabaseJob =
+            Boolean(activeJob?.id) &&
             activeJob.kind !== 'bug_triage' &&
             !String(activeJob.id).startsWith('triage_') &&
-            !String(activeJob.id).startsWith('bug_triage_');
+            !String(activeJob.id).startsWith('bug_triage_') &&
+            !String(activeJob.id).startsWith('local_') &&
+            (Boolean(activeJob.serverSubmittedAt) || Boolean(activeJob.debugUrl) || Boolean(activeJob.photoUrl) || activeJob.status === 'succeeded' || activeJob.status === 'running');
 
           let fullJobData: any = null;
-          if (isSupabaseJob) {
+          if (isSupabaseJob && activeJob?.id) {
             try {
               const uid = (payload as any)?.firebaseUid || firebaseUid || 'anonymous';
               const dbgRes = await fetch(
                 `/api/jobs/debug?jobId=${encodeURIComponent(activeJob.id)}&userId=${encodeURIComponent(uid)}`
               );
-              if (dbgRes.ok) fullJobData = await dbgRes.json().catch(() => null);
-              else console.warn(`[BugSnapshot] /api/jobs/debug returned ${dbgRes.status} for job=${activeJob.id}`);
+              if (dbgRes.ok) {
+                fullJobData = await dbgRes.json().catch(() => null);
+              }
             } catch (fetchErr) {
-              console.warn('[BugSnapshot] /api/jobs/debug fetch failed, using local job:', fetchErr);
+              // Gracefully fall back to activeJob in memory
             }
           }
 
@@ -1349,12 +1379,12 @@ export default function BugSnapshotFab({
                     title="Take picture of target screen area (minimizes modal)"
                     disabled={shots.length >= BUG_SNAPSHOT_MAX_SHOTS}
                     onClick={handleStartPrecisionCapture}
-                    className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold disabled:opacity-40 flex items-center gap-1.5 text-white shadow-sm transition-all hover:scale-[1.02] active:scale-95"
+                    className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold disabled:opacity-40 flex items-center gap-1.5 text-white shadow-sm transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
                   >
                     <Camera className="w-3.5 h-3.5" />
                     Take picture
                   </button>
-                  <label className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-bold cursor-pointer flex items-center gap-1.5 text-white">
+                  <label className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-bold cursor-pointer flex items-center gap-1.5 text-white transition-all">
                     <ImagePlus className="w-3.5 h-3.5" />
                     Add image
                     <input
@@ -1368,6 +1398,16 @@ export default function BugSnapshotFab({
                       }}
                     />
                   </label>
+                  <button
+                    type="button"
+                    title="Paste screenshot from clipboard (⌘V / Ctrl+V)"
+                    disabled={shots.length >= BUG_SNAPSHOT_MAX_SHOTS}
+                    onClick={handlePasteClipboard}
+                    className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-bold disabled:opacity-40 flex items-center gap-1.5 text-white transition-all cursor-pointer"
+                  >
+                    <ClipboardPaste className="w-3.5 h-3.5" />
+                    Paste
+                  </button>
                   <span className="text-white/50 self-center text-xs">
                     {shots.length}/{BUG_SNAPSHOT_MAX_SHOTS}
                   </span>
@@ -1820,13 +1860,23 @@ export default function BugSnapshotFab({
 
                 {/* Requirements 6 & 7: Cleaned up Capture pack and checkboxes for info sent */}
                 {(() => {
-                  const isFoodSurface =
-                    isAnyMealModalOpen(viewingJobId, activeTab) || snapSurface(category, activeTab) === 'food';
+                  const surface = isAnyMealModalOpen(viewingJobId, activeTab)
+                    ? 'food'
+                    : snapSurface(category, activeTab);
+                  const isFoodSurface = surface === 'food';
+                  const isHomeSurface = surface === 'home';
+                  const isHealthSurface = surface === 'health';
+
                   return (
                     <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/25 p-2.5 space-y-2 text-[11px] text-white/70">
-                      <div className="flex items-center gap-1.5 text-emerald-300 font-semibold">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span>Capture pack data to send to agent</span>
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 text-emerald-300 font-semibold">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>Capture pack data to send to agent</span>
+                        </div>
+                        <span className="text-[10px] font-mono uppercase bg-emerald-900/60 border border-emerald-500/30 text-emerald-300 px-1.5 py-0.5 rounded">
+                          {surface}
+                        </span>
                       </div>
 
                       <div className="grid grid-cols-2 gap-1.5 text-[10px]">
@@ -1860,16 +1910,27 @@ export default function BugSnapshotFab({
                           <span>Overview & logs</span>
                         </label>
 
-                        {!isFoodSurface && (
-                          <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={sendChecklist.sessionData}
-                              onChange={(e) => setSendChecklist((s) => ({ ...s, sessionData: e.target.checked }))}
-                              className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
-                            />
-                            <span>Session data</span>
-                          </label>
+                        {isHomeSurface && (
+                          <>
+                            <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={sendChecklist.sessionData}
+                                onChange={(e) => setSendChecklist((s) => ({ ...s, sessionData: e.target.checked }))}
+                                className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                              />
+                              <span>Home tiles & profile</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={sendChecklist.debugJson}
+                                onChange={(e) => setSendChecklist((s) => ({ ...s, debugJson: e.target.checked }))}
+                                className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                              />
+                              <span>Tombstones (thin)</span>
+                            </label>
+                          </>
                         )}
 
                         {isFoodSurface && (
@@ -1895,10 +1956,45 @@ export default function BugSnapshotFab({
                             </label>
                           </>
                         )}
+
+                        {isHealthSurface && (
+                          <>
+                            <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={sendChecklist.sessionData}
+                                onChange={(e) => setSendChecklist((s) => ({ ...s, sessionData: e.target.checked }))}
+                                className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                              />
+                              <span>Biomarker history</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={sendChecklist.debugJson}
+                                onChange={(e) => setSendChecklist((s) => ({ ...s, debugJson: e.target.checked }))}
+                                className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                              />
+                              <span>Medical tombstones</span>
+                            </label>
+                          </>
+                        )}
+
+                        {!isFoodSurface && !isHomeSurface && !isHealthSurface && (
+                          <label className="flex items-center gap-1.5 text-white/80 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={sendChecklist.sessionData}
+                              onChange={(e) => setSendChecklist((s) => ({ ...s, sessionData: e.target.checked }))}
+                              className="rounded border-emerald-500/50 text-emerald-500 focus:ring-0 bg-slate-900"
+                            />
+                            <span>Session data</span>
+                          </label>
+                        )}
                       </div>
                     </div>
                   );
-            })()}
+                })()}
           </div>
 
               <div className="p-3 border-t border-white/10 flex gap-2 justify-end shrink-0">

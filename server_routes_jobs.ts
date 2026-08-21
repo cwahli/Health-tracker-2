@@ -279,7 +279,12 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
 
     if (!debugPayload) {
       if (!job) {
-        return res.status(404).json({ error: 'Job or debug payload not found' });
+        if (req.query.format === 'markdown' || req.query.format === 'md') {
+          res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+          res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.md"`);
+          return res.send(`# Diagnostic Log: ${cleanJobId}\n\n- **Status**: Local/Offline entry\n- **Details**: No server execution trace found in remote storage for ID \`${cleanJobId}\`.\n- **Generated At**: ${new Date().toISOString()}\n`);
+        }
+        return res.status(404).json({ error: 'Job or debug payload not found', jobId: cleanJobId });
       }
       const accumulated = Array.isArray(job.accumulatedLogs) ? job.accumulatedLogs.join('\n') : (Array.isArray(job.turn1Logs) ? job.turn1Logs.join('\n') : '');
       debugPayload = {

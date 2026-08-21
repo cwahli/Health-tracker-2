@@ -112,6 +112,8 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
   const [lightboxImage, setLightboxImage] = useState<{ url: string; caption?: string } | null>(null);
 
   // Action states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [purgingDone, setPurgingDone] = useState(false);
   const [copiedTagId, setCopiedTagId] = useState<string | null>(null);
   const [copiedHandoffId, setCopiedHandoffId] = useState<string | null>(null);
   const [deletingTagId, setDeletingTagId] = useState<string | null>(null);
@@ -689,10 +691,6 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error || `Failed (HTTP ${res.status})`);
       }
-      if (selectedTagId === tagId) {
-        setSelectedTagId(null);
-        setSelectedTagDetail(null);
-      }
       await load();
     } catch (err: any) {
       alert(err?.message || 'Failed to mark bug done');
@@ -701,9 +699,57 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
     }
   };
 
+  const hardDeleteTag = async (tagId: string, title?: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setDeletingTagId(tagId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/issue-tags/${encodeURIComponent(tagId)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || `Failed (HTTP ${res.status})`);
+      }
+      if (selectedTagId === tagId) {
+        setSelectedTagId(null);
+        setSelectedTagDetail(null);
+      }
+      await load();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete bug');
+    } finally {
+      setDeletingTagId(null);
+    }
+  };
+
+  const handlePurgeDoneBugs = async () => {
+    const doneTotal = kpis.doneAll;
+    if (doneTotal === 0) {
+      setError('There are no done bugs to delete.');
+      return;
+    }
+    setPurgingDone(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/issue-tags/purge-done', { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      if (selectedTagId && bugTags.find((t) => t.id === selectedTagId && tagIsFixed(t))) {
+        setSelectedTagId(null);
+        setSelectedTagDetail(null);
+      }
+      await load();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to purge done bugs');
+    } finally {
+      setPurgingDone(false);
+    }
+  };
+
   const pruneReport = async (tagId: string, issueId: string) => {
-    if (!confirm('Remove R2 artifacts for this report (mark obsolete)?')) return;
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch(`/api/bugs/${tagId}/reports/${issueId}/prune`, { method: 'POST' });
       const json = await res.json().catch(() => ({}));
@@ -711,7 +757,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
       await fetchTagDetail(tagId);
       await load();
     } catch (err: any) {
-      alert(err?.message || 'Prune failed');
+      setError(err?.message || 'Prune failed');
     } finally {
       setBusy(false);
     }
@@ -788,34 +834,45 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
       const item = hydrateWorkItem(t);
       const isFixed = tagIsFixed(t);
       const isBlocked = item.queue === 'blocked' || item.burns.filter((b) => b.burned).length >= 2;
+      const isReady = !isFixed && !isBlocked && item.queue === 'ready';
       
       const hasAgent = item.commits && item.commits.some((c) => c.kind === 'agent' || c.actor !== 'you');
       const lastCommit = item.commits && item.commits.length > 0 ? item.commits[item.commits.length - 1] : null;
-      const isPendingReview = lastCommit && (lastCommit.kind === 'agent' || lastCommit.actor !== 'you');
-      const isReady = hasAgent && lastCommit && (lastCommit.kind !== 'agent' && lastCommit.actor === 'you');
+      const isPendingReview = !isFixed && lastCommit && (lastCommit.kind === 'agent' || lastCommit.actor !== 'you');
+      const isAgentToDo = !isFixed && hasAgent && lastCommit && (lastCommit.kind !== 'agent' && lastCommit.actor === 'you');
+      const isUnactioned = !isFixed && !hasAgent;
 
       // Status filter
       if (statusFilter === 'active') {
-        return !isFixed;
+        if (isFixed) return false;
+      } else if (statusFilter === 'stuck') {
+        if (isFixed || !isBlocked) return false;
+      } else if (statusFilter === 'ready') {
+        if (!isReady) return false;
+      } else if (statusFilter === 'pending_review') {
+        if (!isPendingReview) return false;
+      } else if (statusFilter === 'unactioned') {
+        if (!isUnactioned) return false;
+      } else if (statusFilter === 'done') {
+        if (!isFixed) return false;
       }
-      if (statusFilter === 'stuck') {
-        return !isFixed && isBlocked;
+
+      // Text search filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase();
+        const pub = publicId(item, t.id).toLowerCase();
+        const title = String(t.title || '').toLowerCase();
+        const rawId = String(t.id || '').toLowerCase();
+        const problem = String(t.identified_problems || item.bug || '').toLowerCase();
+        const category = String(t.category || '').toLowerCase();
+        if (!title.includes(q) && !pub.includes(q) && !rawId.includes(q) && !problem.includes(q) && !category.includes(q)) {
+          return false;
+        }
       }
-      if (statusFilter === 'ready') {
-        return !isFixed && isReady;
-      }
-      if (statusFilter === 'pending_review') {
-        return !isFixed && isPendingReview;
-      }
-      if (statusFilter === 'unactioned') {
-        return !isFixed && !hasAgent;
-      }
-      if (statusFilter === 'done') {
-        return isFixed;
-      }
-      return true; // 'all'
+
+      return true;
     });
-  }, [bugTags, activeTab, statusFilter]);
+  }, [bugTags, activeTab, statusFilter, searchQuery]);
 
   const sortedQueueTags = useMemo(() => {
     if (sortOrder === 'priority') {
@@ -923,8 +980,8 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
             </div>
           </header>
 
-          {/* Main Content Area */}
-          <div className="flex-1 overflow-hidden flex flex-col p-2 sm:p-3 space-y-2.5 min-h-0 bg-[#0b1220]">
+          {/* Main Content Area — naturally scrollable without sticky trapping */}
+          <div className="flex-1 overflow-y-auto flex flex-col p-2 sm:p-3 space-y-3 min-h-0 bg-[#0b1220]">
             {error && (
               <div className="p-2.5 rounded-xl bg-rose-600/90 text-white text-xs font-semibold flex items-center gap-2 shrink-0 shadow-md">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -936,35 +993,43 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
             <section className="flex overflow-x-auto gap-2 snap-x pb-1 scrollbar-none shrink-0">
               <div
                 onClick={() => setStatusFilter('ready')}
-                className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border border-transparent hover:border-emerald-500/30"
+                className={`snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border ${
+                  statusFilter === 'ready' ? 'border-emerald-500 bg-emerald-950/20' : 'border-transparent hover:border-emerald-500/30'
+                }`}
               >
                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Ready now</span>
                 <b className="text-lg font-extrabold text-emerald-400 mt-0.5 block">{readyCount}</b>
               </div>
               <div
                 onClick={() => setStatusFilter('stuck')}
-                className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border border-transparent hover:border-rose-500/30"
+                className={`snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border ${
+                  statusFilter === 'stuck' ? 'border-rose-500 bg-rose-950/20' : 'border-transparent hover:border-rose-500/30'
+                }`}
               >
                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Stuck / 2 Burns</span>
                 <b className="text-lg font-extrabold text-rose-400 mt-0.5 block">{blockedCount}</b>
               </div>
               <div
                 onClick={() => setStatusFilter('active')}
-                className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border border-transparent hover:border-amber-500/30"
+                className={`snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border ${
+                  statusFilter === 'active' ? 'border-amber-500 bg-amber-950/20' : 'border-transparent hover:border-amber-500/30'
+                }`}
               >
                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Bugs open</span>
                 <b className="text-lg font-extrabold text-amber-300 mt-0.5 block">{openBugCount}</b>
               </div>
               <div
                 onClick={() => setStatusFilter('done')}
-                className="snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border border-transparent hover:border-slate-500/30"
+                className={`snap-start shrink-0 min-w-[125px] sm:min-w-[150px] bg-[#111827] hover:bg-[#1a2336] cursor-pointer transition-colors rounded-xl p-2.5 border ${
+                  statusFilter === 'done' ? 'border-slate-400 bg-slate-800/40' : 'border-transparent hover:border-slate-500/30'
+                }`}
               >
                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-white/50 block truncate">Done this week</span>
                 <b className="text-lg font-extrabold text-slate-300 mt-0.5 block">{doneCount}</b>
               </div>
             </section>
 
-            {/* Dropdown Filters (Board mode, Status filter & Category) */}
+            {/* Dropdown Filters, Search & Actions */}
             <div className="flex items-center gap-2 shrink-0 py-1 flex-wrap">
               <select
                 value={boardMode}
@@ -983,23 +1048,13 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                     className="bg-[#111827] text-white border border-white/15 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none cursor-pointer"
                   >
                     <option value="active">Active ({openBugCount})</option>
-                    <option value="ready">Agent to do ({bugTags.filter((t) => {
-                      const item = hydrateWorkItem(t);
-                      if (item.queue === 'done' || t.status === 'fixed') return false;
-                      const hasAgent = item.commits?.some(c => c.kind === 'agent' || c.actor !== 'you');
-                      const last = item.commits?.[item.commits.length - 1];
-                      return hasAgent && last && (last.kind !== 'agent' && last.actor === 'you');
-                    }).length})</option>
+                    <option value="ready">Ready now ({readyCount})</option>
+                    <option value="unactioned">Un-actioned ({bugTags.filter((t) => !tagIsFixed(t) && !hydrateWorkItem(t).commits?.some(c => c.kind === 'agent' || c.actor !== 'you')).length})</option>
                     <option value="pending_review">Human to do ({bugTags.filter((t) => {
                       const item = hydrateWorkItem(t);
-                      if (item.queue === 'done' || t.status === 'fixed') return false;
+                      if (tagIsFixed(t)) return false;
                       const last = item.commits?.[item.commits.length - 1];
                       return last && (last.kind === 'agent' || last.actor !== 'you');
-                    }).length})</option>
-                    <option value="unactioned">Un-actioned ({bugTags.filter((t) => {
-                      const item = hydrateWorkItem(t);
-                      if (item.queue === 'done' || t.status === 'fixed') return false;
-                      return !item.commits?.some(c => c.kind === 'agent' || c.actor !== 'you');
                     }).length})</option>
                     <option value="stuck">Stuck / 2 Burns ({blockedCount})</option>
                     <option value="done">Done / Fixed ({kpis.doneAll})</option>
@@ -1031,6 +1086,44 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                     <option value="priority">Sort: Ready Priority</option>
                     <option value="oldest">Sort: Oldest First</option>
                   </select>
+
+                  {/* Search box */}
+                  <div className="relative flex-1 min-w-[130px] max-w-[220px]">
+                    <input
+                      type="text"
+                      placeholder="Search bugs..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-[#111827] text-white border border-white/15 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:border-indigo-500 placeholder-white/30"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white text-xs cursor-pointer"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Purge Done bugs button to reclaim DB space */}
+                  {kpis.doneAll > 0 && (
+                    <button
+                      type="button"
+                      disabled={purgingDone}
+                      onClick={handlePurgeDoneBugs}
+                      className="bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 text-rose-300 rounded-xl px-2.5 py-1.5 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                      title="Permanently delete all done/fixed bugs to free up database storage"
+                    >
+                      {purgingDone ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      )}
+                      <span>Delete Done ({kpis.doneAll})</span>
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -1052,17 +1145,30 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
 
             {/* Golden Inbox Mode */}
             {boardMode === 'golden' && (
-              <div className="flex-1 overflow-y-auto min-h-0">
+              <div className="min-h-0">
                 <GoldenInboxPanel />
               </div>
             )}
 
             {/* Bugs Queue Accordion View */}
             {boardMode === 'bugs' && (
-              <div className="flex-1 overflow-y-auto min-h-0 space-y-2">
+              <div className="space-y-2 pb-6">
                 {sortedQueueTags.length === 0 ? (
-                  <div className="p-8 text-center text-white/50 text-xs">
-                    No active bug cards in {activeTab}.
+                  <div className="p-8 text-center text-white/50 text-xs bg-[#111827]/40 rounded-xl border border-white/5 space-y-2">
+                    <p>No bug cards found matching current filters ({statusFilter} / {activeTab}).</p>
+                    {(statusFilter !== 'active' || activeTab !== 'all' || searchQuery) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStatusFilter('active');
+                          setActiveTab('all');
+                          setSearchQuery('');
+                        }}
+                        className="px-3 py-1 rounded-lg bg-indigo-600/40 hover:bg-indigo-600 text-white text-xs font-semibold transition-colors cursor-pointer"
+                      >
+                        Reset filters
+                      </button>
+                    )}
                   </div>
                 ) : (
                   sortedQueueTags.map((tag) => {
@@ -1133,6 +1239,22 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                 un-actioned
                               </span>
                             )}
+
+                            {/* Delete bin button - shown ONCE per card in the header row */}
+                            <button
+                              type="button"
+                              disabled={deletingTagId === tag.id}
+                              onClick={(e) => hardDeleteTag(tag.id, tag.title, e)}
+                              className="p-1 rounded bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 text-rose-300 transition-colors cursor-pointer shrink-0"
+                              title="Permanently delete bug from database"
+                            >
+                              {deletingTagId === tag.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
+                              ) : (
+                                <Trash2 className="w-3 h-3 text-rose-400" />
+                              )}
+                            </button>
+
                             <ChevronDown
                               className={`w-3.5 h-3.5 text-white/50 transition-transform ${
                                 isSelected ? 'rotate-180 text-indigo-400' : ''
@@ -1169,7 +1291,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                     disabled={makingGoldenId === selectedTag.id}
                                     onClick={(e) => handleMakeGolden(selectedTag, e)}
                                     className="px-2 py-1 text-[10px] font-bold text-amber-200 bg-amber-950/60 hover:bg-amber-900 border border-amber-500/40 rounded-lg transition-all flex items-center gap-1 cursor-pointer shrink-0"
-                                    title="Create Golden Case in tests/Golden_meal/inbox/"
+                                    title="Promote later — Create Golden Case in tests/golden_meal/inbox/"
                                   >
                                     {makingGoldenId === selectedTag.id ? (
                                       <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
@@ -1177,6 +1299,7 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                                       <Sparkles className="w-3 h-3 text-amber-400" />
                                     )}
                                     <span className="hidden sm:inline">Make Golden</span>
+                                    <span className="text-[9px] text-amber-400/70 font-normal hidden md:inline">(Promote later)</span>
                                   </button>
                                 )}
 
@@ -1258,12 +1381,28 @@ export default function BugTrackerModal({ isOpen, onClose }: BugTrackerModalProp
                               const isFoodCard =
                                 (selectedTag.category || '').toLowerCase() === 'foodcart' ||
                                 (selectedTag.category || '').toLowerCase() === 'golden';
+                              const foodEvidence =
+                                (selectedTagDetail as any)?.now?.current_evidence ||
+                                (selectedTag as any)?.now?.current_evidence ||
+                                (selectedTagDetail as any)?.reports?.[0]?.payload ||
+                                selectedTag.reports?.[0]?.payload ||
+                                selectedTag.reports?.[0];
+                              const foodJobId =
+                                foodEvidence?.job_id ||
+                                foodEvidence?.jobId ||
+                                selectedTag.jobId ||
+                                (selectedTagDetail as any)?.jobId ||
+                                (selectedTagDetail as any)?.board?.jobId ||
+                                selectedTag.board?.jobId ||
+                                null;
+
                               return isFoodCard ? (
                                 <FoodDetailTabs
                                   activeTab={trackerDetailTab}
                                   onTabChange={setTrackerDetailTab}
                                   board={(selectedTagDetail as any)?.board || selectedTag.board}
                                   goldenLines={(selectedTagDetail as any)?.expectedMeal || selectedTag.expectedMeal || []}
+                                  jobId={foodJobId}
                                   onReplayLog={() => handleReplayLog(selectedTag)}
                                   replayingLog={replayingLogId === selectedTag.id}
                                 />

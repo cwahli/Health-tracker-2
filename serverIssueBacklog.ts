@@ -1214,14 +1214,41 @@ export function registerIssueBacklogRoutes(app: Express, deps: IssueBacklogDeps 
     }
   });
 
+  /** Hard-delete all done/fixed issue tags from the database to reclaim space */
+  app.post('/api/issue-tags/purge-done', async (_req: Request, res: Response) => {
+    try {
+      const { supabaseAdmin } = await import('./supabaseAdmin.js');
+      const { data: doneTags, error: findErr } = await supabaseAdmin
+        .from('issue_tags')
+        .select('id, title, status, work_item')
+        .or('status.eq.fixed,status.eq.ignored');
+
+      if (findErr) return res.status(500).json({ error: findErr.message });
+      const tagIds = (doneTags || []).map((t: any) => t.id);
+
+      if (tagIds.length > 0) {
+        // Remove links first to ensure clean cascade
+        await supabaseAdmin.from('issue_tag_links').delete().in('tag_id', tagIds);
+        const { error: delErr } = await supabaseAdmin.from('issue_tags').delete().in('id', tagIds);
+        if (delErr) return res.status(500).json({ error: delErr.message });
+      }
+
+      overviewCache = null;
+      res.json({ success: true, count: tagIds.length, deleted_ids: tagIds });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'purge done failed' });
+    }
+  });
+
   /** Hard-delete a shared fix tag from the database (tick / mark fixed). Links cascade. */
-  app.delete('/api/issue-tags/:id', async (req: Request, res: Response) => {
+  app.delete(['/api/issue-tags/:id', '/api/bugs/:id'], async (req: Request, res: Response) => {
     try {
       const { supabaseAdmin } = await import('./supabaseAdmin.js');
       const existing = await findIssueTag(supabaseAdmin, req.params.id);
       if (!existing) return res.status(404).json({ error: 'tag not found' });
       const id = existing.id;
 
+      await supabaseAdmin.from('issue_tag_links').delete().eq('tag_id', id);
       const { error } = await supabaseAdmin.from('issue_tags').delete().eq('id', id);
       if (error) return res.status(500).json({ error: error.message });
       overviewCache = null;

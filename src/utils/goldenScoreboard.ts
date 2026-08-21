@@ -720,6 +720,11 @@ export function buildScoreboard(input: {
     logText: input.logText,
     journey,
   });
+  const ledger = compileGoldenMeal({
+    logText: input.logText,
+    foodLog: input.foodLog,
+    scout: input.scout,
+  });
   return {
     observedMeal,
     expectedMeal: observedMeal.map((l) => ({ ...l, scored: false })),
@@ -730,6 +735,7 @@ export function buildScoreboard(input: {
     invariants,
     replayMode: 'log',
     autoSpot: spotted.remaining,
+    ledger,
   };
 }
 

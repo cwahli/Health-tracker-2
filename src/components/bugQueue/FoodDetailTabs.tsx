@@ -11,7 +11,10 @@ export type FoodDetailTabsProps = {
   goldenLines?: any[];
   onAddDish?: () => void;
   onReplayLog?: () => void;
+  onReanalyze?: () => void;
   replayingLog?: boolean;
+  reanalyzing?: boolean;
+  jobId?: string | null;
   className?: string;
 };
 
@@ -72,7 +75,10 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
   goldenLines = [],
   onAddDish,
   onReplayLog,
+  onReanalyze,
   replayingLog = false,
+  reanalyzing = false,
+  jobId,
   className = '',
 }) => {
   const journey = Array.isArray(board?.journey) ? board.journey : [];
@@ -80,6 +86,8 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
   const autoSpotHits: AutoSpotHit[] = Array.isArray(board?.autoSpot) ? board.autoSpot : [];
   const ledger = board?.ledger;
   const progress = computeBoardProgress(board);
+  const effectiveJobId = jobId || board?.jobId || board?.job_id;
+  const hasJob = Boolean(effectiveJobId);
 
   const effectiveDishes = goldenLines.length > 0 ? goldenLines : (Array.isArray(board?.expectedMeal) ? board.expectedMeal : []);
 
@@ -97,7 +105,7 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
               <span className="text-emerald-400 font-semibold">{progress.passCount} pass</span>
               <span className="text-white/40">·</span>
               <span className="text-rose-400 font-semibold">{progress.failCount} fail</span>
-              {board?.jobId && <span className="text-white/40">· job {String(board.jobId).slice(0, 8)}</span>}
+              {effectiveJobId && <span className="text-white/40">· job {String(effectiveJobId).slice(0, 8)}</span>}
             </div>
           </div>
           <div className="h-1.5 rounded-full bg-black/60 overflow-hidden flex">
@@ -180,16 +188,51 @@ export const FoodDetailTabs: React.FC<FoodDetailTabsProps> = ({
         </div>
 
         {onReplayLog && (
-          <button
-            type="button"
-            disabled={replayingLog}
-            onClick={onReplayLog}
-            className="py-1.5 px-2.5 rounded-xl bg-sky-950/70 hover:bg-sky-900 border border-sky-500/40 text-sky-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
-            title="Replay saved tape (preview only, no agent)"
-          >
-            {replayingLog ? <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" /> : <Play className="w-3.5 h-3.5 text-sky-400" />}
-            <span>Replay log</span>
-          </button>
+          hasJob ? (
+            <button
+              type="button"
+              disabled={replayingLog}
+              onClick={onReplayLog}
+              className="py-1.5 px-2.5 rounded-xl bg-sky-950/70 hover:bg-sky-900 border border-sky-500/40 text-sky-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+              title={`Replay saved tape (job ${String(effectiveJobId).slice(0, 8)})`}
+            >
+              {replayingLog ? <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" /> : <Play className="w-3.5 h-3.5 text-sky-400" />}
+              <span>Replay log</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="py-1.5 px-2.5 rounded-xl bg-slate-900/60 border border-white/10 text-white/40 text-xs font-medium flex items-center gap-1 cursor-not-allowed shrink-0"
+              title="No saved job_id on this tape to re-analyze or replay"
+            >
+              <span>no saved job</span>
+            </button>
+          )
+        )}
+
+        {onReanalyze && (
+          hasJob ? (
+            <button
+              type="button"
+              disabled={reanalyzing}
+              onClick={onReanalyze}
+              className="py-1.5 px-2.5 rounded-xl bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+              title={`Re-analyze meal with Vision Scout (job ${String(effectiveJobId).slice(0, 8)})`}
+            >
+              {reanalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" /> : <Play className="w-3.5 h-3.5 text-indigo-400" />}
+              <span>Re-analyze</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="py-1.5 px-2.5 rounded-xl bg-slate-900/60 border border-white/10 text-white/40 text-xs font-medium flex items-center gap-1 cursor-not-allowed shrink-0"
+              title="No saved job_id on this tape to re-analyze"
+            >
+              <span>no saved job</span>
+            </button>
+          )
         )}
       </div>
 

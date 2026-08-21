@@ -5824,6 +5824,7 @@ ${logsText}`);
                       })()}
 
                       {(() => {
+                        if (msg.id?.startsWith('welcome_')) return null;
                         const isLatestAssistant = !messages.slice(idx + 1).some(m => m.role === 'assistant');
                         const targetJobId =
                           msg.data?.jobId ||

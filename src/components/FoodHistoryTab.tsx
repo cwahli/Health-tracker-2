@@ -1799,16 +1799,16 @@ export default function FoodHistoryTab({
                           )}
 
                           {/* Debug Log Download (Inside Expanded Log) */}
-                          {(log.debugUrl || log.id) && (
+                          {(log.debugUrl || (log as any).backendLogs || (log as any).jobId) && (
                             <div className="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Diagnostic Log</span>
                               <a
                                 href={`/api/jobs/debug?jobId=${encodeURIComponent(
                                   log.debugUrl
-                                    ? (log.debugUrl.match(/debug\/(?:[^\/]+\/)?([a-zA-Z0-9_\-]+)\.json/i)?.[1] || log.id)
-                                    : log.id
+                                    ? (log.debugUrl.match(/debug\/(?:[^\/]+\/)?([a-zA-Z0-9_\-]+)\.json/i)?.[1] || (log as any).jobId || log.id)
+                                    : ((log as any).jobId || log.id)
                                 )}&format=markdown`}
-                                download={`debug-${log.id}.md`}
+                                download={`debug-${(log as any).jobId || log.id}.md`}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200/60 dark:border-indigo-800/60 transition-colors cursor-pointer"
                                 title="Download complete diagnostic report (.md)"
                               >

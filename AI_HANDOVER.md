@@ -3,6 +3,12 @@
 **Updated:** 2026-08-21
 **Status:** Q-6.4 auto-spot classes extended from picnic tape; Promote/D1 still open
 
+- **UI & Bug Queue Polish (2026-08-21):**
+  - **Anti-Drop Snap Toolbar:** Added dedicated "Paste" button alongside "Take picture" and "Add image" with clipboard reader and ⌘V/Ctrl+V fallback hints in `BugSnapshotFab`.
+  - **Surface-Aware Capture Pack:** Differentiated Capture Pack items and badges dynamically across `food`, `home`, and `health` surfaces in `BugSnapshotFab`.
+  - **Tracker Chrome Resilience:** Replay log / Re-analyze button in `FoodDetailTabs` and `BugTrackerModal` now cleanly renders a disabled `no saved job` state when no `job_id` exists on the tape instead of a dead button.
+  - **Make Golden Note:** Added `(Promote later)` hint and updated tooltip to clarify Golden Case queuing in `tests/golden_meal/inbox/` without altering the underlying action.
+
 - **Q-6.4 auto-spot from picnic tape (2026-08-21):** Snap / `#n` Checks now surface tape-detectable remaining that `classifyJobResult` skips on succeeded meals. New codes in `bugAutoSpot.ts` (query-scoped, not this meal’s FDC list):
   - **CURATOR_SKIP** — grouped `[CuratorAction] No pick_existing action found` (picnic: 17 queries skipped because curator emitted `action: quarantine` + `parametricFdcId` instead of `pick_existing`).
   - **SIBLING_ID_COLLISION** — distinct sibling components share one 5–8 digit canonical id (picnic: strawberries/blueberries/raspberries → 171711).
