@@ -5776,7 +5776,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         // Extra nutrient keys (brand JSON / soft micro fill). NEVER overwrite a printed lock.
         // For printed labels, also skip re-locking CORE macros from any residual nutrients map
         // so USDA component fill cannot poison label-scaled values (debug job beef topside).
-        if (truthMatch.nutrients && typeof truthMatch.nutrients === 'object') {
+        if (truthMatch && truthMatch.nutrients && typeof truthMatch.nutrients === 'object') {
           const isLabelTruth = truthMatch.source === 'label' || truthMatch.source === 'label_partial';
           const CORE_FROM_NUTRIENTS_BLOCK = new Set([
             'calories', 'protein', 'totalFat', 'fat', 'saturatedFat', 'satFat',
@@ -5821,7 +5821,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         const atwaterFromMacros = webProtNum * 4 + webCarbs * 4 + webFatNum * 9;
         const atwaterDev = webCalsNum > 0 ? Math.abs(atwaterFromMacros - webCalsNum) / webCalsNum : 1;
 
-        const isTrustedSource = truthMatch.source === 'brand_official' || truthMatch.source === 'label';
+        const isTrustedSource = truthMatch ? (truthMatch.source === 'brand_official' || truthMatch.source === 'label') : false;
         const isMultiComponent = item.components && item.components.length >= 2;
 
         const webRejected =

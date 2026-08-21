@@ -1,26 +1,0 @@
-Note: Unnecessary use of -X or --request, POST is already inferred.
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 127.0.0.1:3000...
-* Connected to localhost (127.0.0.1) port 3000 (#0)
-> POST /api/gemini/food-analyze HTTP/1.1
-> Host: localhost:3000
-> User-Agent: curl/7.88.1
-> Accept: */*
-> Content-Type: application/json
-> Content-Length: 107
-> 
-} [107 bytes data]
-< HTTP/1.1 403 Forbidden
-< X-Powered-By: Express
-< Content-Type: application/json; charset=utf-8
-< Content-Length: 94
-< ETag: W/"5e-A23jCMRao+pUu8YVnrS9v+S/7i0"
-< Date: Fri, 21 Aug 2026 19:02:06 GMT
-< Connection: keep-alive
-< Keep-Alive: timeout=5
-< 
-{ [94 bytes data]
-100   201  100    94  100   107   3488   3970 --:--:-- --:--:-- --:--:--  7730
-* Connection #0 to host localhost left intact
-{"error":"This SSE path is deprecated and strictly reserved for internal loopback execution."}
