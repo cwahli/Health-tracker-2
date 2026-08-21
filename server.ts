@@ -68,6 +68,8 @@ import {
 import { extractMostRecentImageDate } from './src/utils/dateUtils.js';
 import * as cheerio from "cheerio";
 import fs from "fs";
+
+const SINGLE_STAPLE_RE = /\b(croissant|croissants|baguette|bread|toast|muffin|scone|cookie|cupcake|biscuit|pancake|waffle|pastry|doughnut|donut|bun|roll|brioche)\b/i;
 import path from "path";
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { submitServerJob, recoverInterruptedServerJobs } from './serverJobs';
@@ -4576,16 +4578,22 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
             });
             if (match) {
               const isBrandMatch = Boolean(match.chainName) || match.source === 'brand_official' || match.dbSource === 'brand_official';
-              const queryHasBrand = isBrandMatch && (
-                (match.chainName && cQuery.includes(match.chainName.toLowerCase())) ||
-                (c.brand && cQuery.includes(String(c.brand).toLowerCase())) ||
-                (match.name && match.chainName && match.name.toLowerCase().includes(match.chainName.toLowerCase()))
+              const matchChain = String(match.chainName || match.brand || '').toLowerCase().trim();
+              const queryHasBrand = isBrandMatch && Boolean(matchChain) && (
+                cQuery.includes(matchChain) ||
+                (c.brand && String(c.brand).toLowerCase().includes(matchChain))
               );
-              c.dbSource = queryHasBrand ? (match.source || 'brand_official') : (match.source || 'usda');
-              c.primaryBaseMatchName = match.name || c.primaryBaseMatchName;
-              if (queryHasBrand) {
-                c.chainName = match.chainName || c.chainName;
-                c.brand = match.chainName || match.brand || c.brand;
+              if (isBrandMatch && !queryHasBrand) {
+                c.dbSource = (match.source && match.source !== 'brand_official') ? match.source : 'category_fallback';
+                c.chainName = null;
+                c.brand = null;
+              } else {
+                c.dbSource = queryHasBrand ? (match.source || 'brand_official') : (match.source || 'usda');
+                c.primaryBaseMatchName = match.name || c.primaryBaseMatchName;
+                if (queryHasBrand) {
+                  c.chainName = match.chainName || c.chainName;
+                  c.brand = match.chainName || match.brand || c.brand;
+                }
               }
               if (match.rawNutritionLabel) {
                 // Only ever propagate a GENUINE label/OCR object here (Vision-Scout-sourced,
@@ -6311,21 +6319,26 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           } else {
             compLabel = `${bestMatch.name || query}`;
           }
+          const compQueryNorm = String(query || '').toLowerCase().trim();
+          const matchChainNorm = String(bestMatch.chainName || bestMatch.brand || bestMatch.brandName || '').toLowerCase().trim();
+          const compHasBrand = Boolean(matchChainNorm) && compQueryNorm.includes(matchChainNorm);
+          const isGenuineCompBrand = (bestMatch.source === 'brand_official' || bestMatch.source === 'label') && compHasBrand;
+
           const newComp: any = {
             name: compLabel,
             searchQuery: query,
             weightGrams: compWeight,
             dbId: String(bestMatch.id),
-            dbSource: bestMatch.source,
-            chainName: (bestMatch.source === 'brand_official' || bestMatch.source === 'label') ? (bestMatch.chainName || bestMatch.brand || null) : (bestMatch.chainName || null),
-            brand: (bestMatch.source === 'brand_official' || bestMatch.source === 'label') ? (bestMatch.brand || bestMatch.chainName || null) : (bestMatch.brand || null),
-            brandName: (bestMatch.source === 'brand_official' || bestMatch.source === 'label') ? (bestMatch.brandName || bestMatch.chainName || null) : (bestMatch.brandName || null),
-            rawNutritionLabel: bestMatch.rawNutritionLabel,
+            dbSource: isGenuineCompBrand ? bestMatch.source : (bestMatch.source === 'brand_official' ? 'category_fallback' : bestMatch.source),
+            chainName: isGenuineCompBrand ? (bestMatch.chainName || bestMatch.brand || null) : null,
+            brand: isGenuineCompBrand ? (bestMatch.brand || bestMatch.chainName || null) : null,
+            brandName: isGenuineCompBrand ? (bestMatch.brandName || bestMatch.chainName || null) : null,
+            rawNutritionLabel: isGenuineCompBrand ? bestMatch.rawNutritionLabel : null,
             primaryBaseMatchName: bestMatch.name || query,
             primaryBase100g: baseNutrients,
             baseNutrients100g: baseNutrients,
-            labelNutrientsPerServing: (bestMatch.source === 'brand_official' || bestMatch.source === 'label') ? baseNutrients : null,
-            isRealTruth: bestMatch.source === 'brand_official' || bestMatch.source === 'label'
+            labelNutrientsPerServing: isGenuineCompBrand ? baseNutrients : null,
+            isRealTruth: isGenuineCompBrand
           };
           NUTRIENT_KEYS.forEach(key => {
             if (baseNutrients[key] !== undefined && baseNutrients[key] !== null) {
@@ -7052,7 +7065,8 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         primaryBase100g = receiptRepairedBase100g;
       }
 
-      const isMultiComp = hasComponents && Array.isArray(componentsDetailList) && componentsDetailList.length > 1;
+      const isSingleStapleItem = SINGLE_STAPLE_RE.test(item.originalName || item.keyword || '');
+      const isMultiComp = !isSingleStapleItem && hasComponents && Array.isArray(componentsDetailList) && componentsDetailList.length > 1;
       const allShareBrand = isMultiComp && componentsDetailList.every((c: any) => c.brand && c.brand.toLowerCase() === componentsDetailList[0].brand?.toLowerCase());
       const effectiveParentBrand = allShareBrand ? (componentsDetailList[0].brand || null) : (isMultiComp ? null : (item.brand || item.chainName || null));
       const effectiveParentChain = allShareBrand ? (componentsDetailList[0].chainName || null) : (isMultiComp ? null : (item.chainName || null));
@@ -8401,7 +8415,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             }
           });
 
-          const isMultiCompFinal = Boolean(
+          const isSingleStapleFinal = SINGLE_STAPLE_RE.test(item.originalName || item.keyword || rawItem?.originalName || '');
+          const isMultiCompFinal = !isSingleStapleFinal && Boolean(
             (preMatch && preMatch.hasComponents) ||
             item.hasComponents ||
             (Array.isArray(preMatch?.componentsDetailList) && preMatch.componentsDetailList.length >= 2) ||

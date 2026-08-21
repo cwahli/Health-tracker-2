@@ -3218,7 +3218,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                           const desc = msg.data?.pendingFoodLog?.message || msg.data?.agentResult?.message || msg.data?.pendingFoodLog?.description || msg.data?.agentResult?.description || (msg.data?.pendingFoodLog?.healthImpact && !msg.data.pendingFoodLog.healthImpact.includes("Contributes to daily macro") ? msg.data.pendingFoodLog.healthImpact : null);
                           if (!desc) return null;
                           return (
-                            <div className="text-[11.5px] text-slate-700 dark:text-slate-300 font-sans leading-relaxed bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/80 my-1 text-left w-full">
+                            <div className="text-[12px] text-slate-900 dark:text-slate-100 font-sans leading-relaxed bg-slate-50 dark:bg-slate-900/80 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 my-1 text-left w-full font-medium">
                               {desc}
                             </div>
                           );
@@ -3282,10 +3282,10 @@ export const FoodCard: React.FC<AgentCardProps & {
 
                       <div className="text-[11.5px] space-y-2 text-slate-800 dark:text-slate-100 font-medium text-left font-sans leading-relaxed">
                         {msg.data?.pendingFoodLog.cookingMethod && (
-                          <p className="text-slate-700 dark:text-slate-400 italic">🔥 Preparation: {msg.data?.pendingFoodLog.cookingMethod}</p>
+                          <p className="text-slate-800 dark:text-slate-200 italic font-semibold">🔥 Preparation: {msg.data?.pendingFoodLog.cookingMethod}</p>
                         )}
                         {msg.data?.pendingFoodLog.scoutConfidenceComment && (
-                          <div className="text-[11px] text-slate-500 italic bg-slate-100 dark:bg-slate-800/50 p-2 rounded">
+                          <div className="text-[11.5px] text-slate-800 dark:text-slate-200 italic bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700">
                             ℹ️ {msg.data.pendingFoodLog.scoutConfidenceComment}
                           </div>
                         )}

@@ -134,7 +134,9 @@ function getSourceBadge(item: any) {
           ? item.componentsDetail
           : [])));
   const isGenuineOcr = (item.dbSource === 'label' || (item.source === 'label' && !item.isComponentOfComposite)) && Boolean(item.rawNutritionLabel && !item.dbSource?.includes('fallback') && !item.dbSource?.includes('composite'));
-  const isComposite = (item.dbSource === 'composite' || item.isComposite) && Array.isArray(subComps) && subComps.length > 1;
+  const SINGLE_STAPLE_RE = /\b(croissant|croissants|baguette|bread|toast|muffin|scone|cookie|cupcake|biscuit|pancake|waffle|pastry|doughnut|donut|bun|roll|brioche)\b/i;
+  const isSingleStaple = SINGLE_STAPLE_RE.test(String(item.originalName || item.name || item.canonicalDbName || ''));
+  const isComposite = !isSingleStaple && (item.dbSource === 'composite' || item.isComposite) && Array.isArray(subComps) && subComps.length > 1;
   const brandTitle = item.chainName || item.brand || item.brandName;
   const hasDirectBrandRecord = item.dbSource === 'brand_official' || item.source === 'brand_official' || String(item.dbId || '').includes('brand_menu_') || String(item.fdcId || '').includes('brand_menu_');
   const isBrand = hasDirectBrandRecord && !isComposite;
