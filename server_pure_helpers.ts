@@ -575,6 +575,35 @@ export function checkAtwaterConsistency(
       (itemNutrients as any).truthNutrients.carbohydrates = newCarbs;
       (itemNutrients as any).truthNutrients.totalFat = newFat;
     }
+    if (itemNutrients.saturatedFat !== undefined && itemNutrients.saturatedFat !== null) {
+      const satRatio = fat > 0 ? (itemNutrients.saturatedFat / fat) : getSaturatedFatRatio(itemName);
+      itemNutrients.saturatedFat = Math.min(
+        newFat,
+        Math.round(itemNutrients.saturatedFat * scaleRatio * 10) / 10,
+        Math.round(newFat * satRatio * 10) / 10
+      );
+      if ((itemNutrients as any).truthNutrients?.saturatedFat !== undefined) {
+        (itemNutrients as any).truthNutrients.saturatedFat = itemNutrients.saturatedFat;
+      }
+    }
+    if (itemNutrients.transFat !== undefined && itemNutrients.transFat !== null) {
+      itemNutrients.transFat = Math.min(newFat, Math.round(itemNutrients.transFat * scaleRatio * 10) / 10);
+      if ((itemNutrients as any).truthNutrients?.transFat !== undefined) {
+        (itemNutrients as any).truthNutrients.transFat = itemNutrients.transFat;
+      }
+    }
+    if (itemNutrients.sugar !== undefined && itemNutrients.sugar !== null) {
+      itemNutrients.sugar = Math.min(newCarbs, Math.round(itemNutrients.sugar * scaleRatio * 10) / 10);
+      if ((itemNutrients as any).truthNutrients?.sugar !== undefined) {
+        (itemNutrients as any).truthNutrients.sugar = itemNutrients.sugar;
+      }
+    }
+    if (itemNutrients.addedSugar !== undefined && itemNutrients.addedSugar !== null) {
+      itemNutrients.addedSugar = Math.min(itemNutrients.sugar ?? newCarbs, Math.round(itemNutrients.addedSugar * scaleRatio * 10) / 10);
+      if ((itemNutrients as any).truthNutrients?.addedSugar !== undefined) {
+        (itemNutrients as any).truthNutrients.addedSugar = itemNutrients.addedSugar;
+      }
+    }
     const satFat = itemNutrients.saturatedFat || 0;
     const transFat = itemNutrients.transFat || 0;
     itemNutrients.unsaturatedFat = parseFloat(Math.max(0, newFat - satFat - transFat).toFixed(2));
@@ -952,8 +981,50 @@ export function applyNutrientRealityChecks(
         if (itemNutrients.carbohydrates) {
           itemNutrients.carbohydrates = Math.round(itemNutrients.carbohydrates * scaleRatio * 10) / 10;
         }
+        if (itemNutrients.transFat !== undefined && itemNutrients.transFat !== null) {
+          itemNutrients.transFat = Math.min(itemNutrients.totalFat || 0, Math.round(itemNutrients.transFat * scaleRatio * 10) / 10);
+        }
+        if (itemNutrients.sugar !== undefined && itemNutrients.sugar !== null) {
+          itemNutrients.sugar = Math.min(itemNutrients.carbohydrates || 0, Math.round(itemNutrients.sugar * scaleRatio * 10) / 10);
+        }
+        if (itemNutrients.addedSugar !== undefined && itemNutrients.addedSugar !== null) {
+          itemNutrients.addedSugar = Math.min(itemNutrients.sugar ?? (itemNutrients.carbohydrates || 0), Math.round(itemNutrients.addedSugar * scaleRatio * 10) / 10);
+        }
         checkAtwaterConsistency(itemName, itemNutrients, addDebugLog);
       }
+    }
+  }
+
+  // 6. Mass Conservation & Physical Macro Ceiling Guard
+  if (itemWeight > 0) {
+    const p = itemNutrients.protein || 0;
+    const c = itemNutrients.carbohydrates || 0;
+    const f = itemNutrients.totalFat || 0;
+    const macroSum = p + c + f;
+    if (macroSum > itemWeight && macroSum > 0) {
+      const massScale = itemWeight / macroSum;
+      if (addDebugLog) {
+        addDebugLog(`[Mass Conservation Guard] "${itemName}": Total macros (${macroSum.toFixed(1)}g = P:${p}g + C:${c}g + F:${f}g) exceeded item weight (${itemWeight}g). Rescaling macros to fit within physical mass limit.`);
+      }
+      itemNutrients.protein = Math.round(p * massScale * 10) / 10;
+      itemNutrients.carbohydrates = Math.round(c * massScale * 10) / 10;
+      itemNutrients.totalFat = Math.round(f * massScale * 10) / 10;
+      if (itemNutrients.saturatedFat !== undefined && itemNutrients.saturatedFat !== null) {
+        itemNutrients.saturatedFat = Math.min(itemNutrients.totalFat, Math.round(itemNutrients.saturatedFat * massScale * 10) / 10);
+      }
+      if (itemNutrients.transFat !== undefined && itemNutrients.transFat !== null) {
+        itemNutrients.transFat = Math.min(itemNutrients.totalFat, Math.round(itemNutrients.transFat * massScale * 10) / 10);
+      }
+      if (itemNutrients.sugar !== undefined && itemNutrients.sugar !== null) {
+        itemNutrients.sugar = Math.min(itemNutrients.carbohydrates, Math.round(itemNutrients.sugar * massScale * 10) / 10);
+      }
+      if (itemNutrients.addedSugar !== undefined && itemNutrients.addedSugar !== null) {
+        itemNutrients.addedSugar = Math.min(itemNutrients.sugar ?? itemNutrients.carbohydrates, Math.round(itemNutrients.addedSugar * massScale * 10) / 10);
+      }
+      const sat = itemNutrients.saturatedFat || 0;
+      const trans = itemNutrients.transFat || 0;
+      itemNutrients.unsaturatedFat = parseFloat(Math.max(0, (itemNutrients.totalFat || 0) - sat - trans).toFixed(2));
+      itemNutrients.calories = Math.round((itemNutrients.protein || 0) * 4 + (itemNutrients.carbohydrates || 0) * 4 + (itemNutrients.totalFat || 0) * 9);
     }
   }
 }

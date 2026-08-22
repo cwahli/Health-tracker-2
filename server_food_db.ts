@@ -300,6 +300,8 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   serrano_ham: { fdcId: "172551", calories: 235, protein: 22.0, totalFat: 15.0, saturatedFat: 5.5, transFat: 0, carbohydrates: 1.0, sugar: 0, sodium: 1200, potassium: 300, totalFibre: 0, foodType: 'processed' },
   mixed_berries: { fdcId: "canonical_mixed_berries", calories: 45, protein: 0.7, totalFat: 0.3, saturatedFat: 0.02, transFat: 0, carbohydrates: 11.0, sugar: 7.0, sodium: 1, potassium: 120, totalFibre: 2.5, foodType: 'fruit' },
   low_fat_yogurt: { fdcId: "170903", calories: 63, protein: 5.25, totalFat: 1.55, saturatedFat: 1.0, transFat: 0, carbohydrates: 7.04, sugar: 7.04, sodium: 70, potassium: 230, totalFibre: 0, foodType: 'dairy' },
+  cooked_mushrooms: { fdcId: "169252", calories: 28, protein: 2.2, totalFat: 0.5, saturatedFat: 0.1, transFat: 0, carbohydrates: 4.4, sugar: 2.0, sodium: 4, potassium: 356, totalFibre: 2.2, foodType: 'leafy_veg' },
+  mushrooms: { fdcId: "169252", calories: 28, protein: 2.2, totalFat: 0.5, saturatedFat: 0.1, transFat: 0, carbohydrates: 4.4, sugar: 2.0, sodium: 4, potassium: 356, totalFibre: 2.2, foodType: 'leafy_veg' },
   sea_salt: { fdcId: "173468", calories: 0, protein: 0, totalFat: 0, saturatedFat: 0, transFat: 0, carbohydrates: 0, sugar: 0, sodium: 38758, potassium: 8, totalFibre: 0, foodType: 'processed' }
 };
 
@@ -474,6 +476,7 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   if (tokens.includes('kiwi') || tokens.includes('kiwis')) return CANONICAL_BASE_FOODS.kiwi;
   if (tokens.includes('pineapple') || tokens.includes('pineapples')) return CANONICAL_BASE_FOODS.pineapple;
   if (tokens.includes('mango') || tokens.includes('mangoes') || tokens.includes('mangos')) return CANONICAL_BASE_FOODS.mango;
+  if (clean.includes('mushroom') || tokens.includes('mushrooms') || tokens.includes('mushroom')) return CANONICAL_BASE_FOODS.cooked_mushrooms;
   return null;
 }
 

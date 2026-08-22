@@ -5667,7 +5667,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         // for itemWeight grams".
         const truthBasis = truthMatch.basisType || (truthMatch.source === 'brand_official' || truthMatch.brandPriority ? 'per_dish' : 'per_100g');
         const isDishBasis = truthBasis === 'per_dish' || truthBasis === 'total' || truthBasis === 'per_portion' || truthBasis === 'per_serving' || truthBasis === 'per_pack';
-        const truthServingGrams = Number(truthMatch.servingGrams) || 0;
+        const truthServingGrams = Number(truthMatch.servingGrams) || (truthBasis === 'per_100g' ? 100 : 0);
 
         let servingScale = 1.0;
         if (isDishBasis) {
@@ -6515,12 +6515,12 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           };
           const rowKey = (c: any): string => {
             const id = c.dbId != null && String(c.dbId).trim() !== '' ? String(c.dbId) : '';
-            if (id && !id.startsWith('fallback_') && !id.startsWith('resolver_')) {
-              return `id:${id}`;
-            }
             const wBucket = Math.round((Number(c.weightGrams) || 0) / 2) * 2; // ±1g collapse
             const q = stripDisplayNoise(c.searchQuery || '');
             const n = stripDisplayNoise(c.name || '');
+            if (id && !id.startsWith('fallback_') && !id.startsWith('resolver_')) {
+              return `id:${id}_q:${q || n}_w:${wBucket}`;
+            }
             return `n:${q || n}_w:${wBucket}`;
           };
           const dedupedMap = new Map<string, any>();

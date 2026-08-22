@@ -23,6 +23,7 @@ import { JobStore } from '../jobs/JobStore';
 import TaskPlaceholderCard from './TaskPlaceholderCard';
 import { CroppedFoodImage, isValidBoundingBox, getFoodImageUrl } from './chat-cards/FoodCard';
 import { ZoomableImage } from './ZoomableImage';
+import { buildDebugMarkdownReport } from '../utils/debugPayload';
 
 interface FoodHistoryTabProps {
   profile: UserProfile;
@@ -556,6 +557,99 @@ export default function FoodHistoryTab({
     }, 250);
     return () => clearTimeout(timer);
   }, [expandedLogId, currentPage]);
+
+  const handleDownloadDebugLog = async (log: FoodLog) => {
+    const targetJobId =
+      (log as any).jobId ||
+      (log.debugUrl ? log.debugUrl.match(/debug\/(?:[^\/]+\/)?([a-zA-Z0-9_\-]+)\.json/i)?.[1] : null) ||
+      log.id;
+    const uid = auth.currentUser?.uid || 'anonymous';
+
+    // 1) Try server proxy endpoint with strict non-HTML validation
+    try {
+      const res = await fetch(`/api/jobs/debug?jobId=${encodeURIComponent(targetJobId)}&userId=${encodeURIComponent(uid)}&format=markdown`);
+      if (res.ok) {
+        const contentType = res.headers.get('content-type') || '';
+        const text = await res.text();
+        // Ensure this is not an iframe cookie check HTML challenge or empty stub
+        if (
+          !contentType.includes('text/html') &&
+          !text.trim().startsWith('<!doctype') &&
+          !text.trim().startsWith('<html') &&
+          !text.includes('Cookie check') &&
+          !text.includes('No server execution trace found')
+        ) {
+          const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `debug-${targetJobId}.md`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[FoodHistoryTab] Server debug fetch failed, using client fallback:', err);
+    }
+
+    // 2) If debugUrl is an R2 link, try fetching raw JSON via proxy or direct
+    let remotePayload: any = null;
+    if (log.debugUrl && (log.debugUrl.startsWith('http://') || log.debugUrl.startsWith('https://') || log.debugUrl.startsWith('debug/'))) {
+      try {
+        const r2Url = log.debugUrl.startsWith('http') ? log.debugUrl : `https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev/${log.debugUrl}`;
+        let r2Res = await fetch(`/api/r2/log-proxy?url=${encodeURIComponent(r2Url)}`);
+        if (!r2Res.ok) {
+          r2Res = await fetch(r2Url);
+        }
+        if (r2Res.ok) {
+          const contentType = r2Res.headers.get('content-type') || '';
+          if (contentType.includes('json') || !contentType.includes('html')) {
+            remotePayload = await r2Res.json().catch(() => null);
+          }
+        }
+      } catch (r2Err) {
+        console.warn('[FoodHistoryTab] R2 debug fetch failed:', r2Err);
+      }
+    }
+
+    // 3) Client fallback: synthesize complete Markdown report from log & remote payload
+    const job = JobStore.getJob(targetJobId);
+    const backendLogs =
+      remotePayload?.backendLogs ||
+      (typeof (log as any).backendLogs === 'string' ? (log as any).backendLogs : '') ||
+      (Array.isArray((log as any).backendLogs) ? (log as any).backendLogs.join('\n') : '') ||
+      (log as any).rawLogs ||
+      job?.result?.backendLogs ||
+      '';
+
+    const mdContent = buildDebugMarkdownReport({
+      jobId: targetJobId,
+      status: remotePayload?.status || job?.status || 'saved',
+      mode: remotePayload?.mode || job?.result?.mode || 'food_log',
+      message: remotePayload?.message || remotePayload?.result?.message || log.healthImpact || log.benefits,
+      backendLogs,
+      pendingFoodLog: remotePayload?.result?.pendingFoodLog || remotePayload?.pendingFoodLog || log,
+      scoutItems: remotePayload?.result?.scoutItems || (log as any).scoutItems || (log as any).items,
+      receiptTable: remotePayload?.result?.receiptTable || (log as any).receiptTable,
+      debugUrl: log.debugUrl,
+      photoUrl: (log as any).photoUrl || (Array.isArray(log.imageUrls) ? log.imageUrls[0] : log.imageUrl),
+      comprehensiveNutrients: log.nutrients as unknown as Record<string, number>,
+      exportedAt: new Date().toISOString()
+    });
+
+    const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `debug-${targetJobId}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
 
   const handleStartEdit = (log: FoodLog) => {
     setEditingLogId(log.id);
@@ -1929,19 +2023,15 @@ export default function FoodHistoryTab({
                           {(log.debugUrl || (log as any).backendLogs || (log as any).jobId) && (
                             <div className="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Diagnostic Log</span>
-                              <a
-                                href={`/api/jobs/debug?jobId=${encodeURIComponent(
-                                  log.debugUrl
-                                    ? (log.debugUrl.match(/debug\/(?:[^\/]+\/)?([a-zA-Z0-9_\-]+)\.json/i)?.[1] || (log as any).jobId || log.id)
-                                    : ((log as any).jobId || log.id)
-                                )}&format=markdown`}
-                                download={`debug-${(log as any).jobId || log.id}.md`}
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadDebugLog(log)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200/60 dark:border-indigo-800/60 transition-colors cursor-pointer"
                                 title="Download complete diagnostic report (.md)"
                               >
                                 <Download className="w-3.5 h-3.5 text-indigo-500" />
                                 <span>Download Debug Log</span>
-                              </a>
+                              </button>
                             </div>
                           )}
                         </div>

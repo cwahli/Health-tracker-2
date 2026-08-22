@@ -1888,16 +1888,26 @@ ${logsText}`);
       const fmtParam = format === 'markdown' ? '&format=markdown' : '';
       const res = await fetch(`/api/jobs/debug?jobId=${encodeURIComponent(resolvedJobId)}&userId=${encodeURIComponent(uid)}${fmtParam}`);
       if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `debug-${resolvedJobId}.${format === 'markdown' ? 'md' : 'json'}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        return;
+        const contentType = res.headers.get('content-type') || '';
+        const text = await res.text();
+        if (
+          !contentType.includes('text/html') &&
+          !text.trim().startsWith('<!doctype') &&
+          !text.trim().startsWith('<html') &&
+          !text.includes('Cookie check') &&
+          !text.includes('No server execution trace found')
+        ) {
+          const blob = new Blob([text], { type: format === 'markdown' ? 'text/markdown;charset=utf-8' : 'application/json' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `debug-${resolvedJobId}.${format === 'markdown' ? 'md' : 'json'}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          return;
+        }
       }
     } catch (e) {
       console.warn('Proxy download failed, trying local fallback:', e);

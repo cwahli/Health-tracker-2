@@ -45,4 +45,43 @@ describe("P0 precision pack", () => {
     });
     expect(r.addedCalories).toBe(0);
   });
+
+  it("enforces mass conservation guard when macro sum exceeds item weight", () => {
+    const n: any = { calories: 717, protein: 0.9, totalFat: 81.1, saturatedFat: 51.4, sodium: 643, carbohydrates: 0 };
+    applyNutrientRealityChecks(
+      "Anchor Butter Packet",
+      10,
+      n,
+      0,
+      () => {},
+      "usda",
+      {
+        originalName: "Anchor Butter Packet",
+        componentCount: 0,
+      }
+    );
+    expect(n.totalFat).toBeLessThanOrEqual(10);
+    expect(n.saturatedFat).toBeLessThanOrEqual(n.totalFat);
+    expect(n.protein + n.carbohydrates + n.totalFat).toBeLessThanOrEqual(10);
+    expect(n.calories).toBeLessThanOrEqual(100);
+  });
+
+  it("synchronizes saturated fat and sugar when macros are rescaled under Atwater check", () => {
+    const n: any = { calories: 130, protein: 9, totalFat: 3.2, saturatedFat: 2.0, sodium: 220, carbohydrates: 49 };
+    applyNutrientRealityChecks(
+      "Airline Bread Roll",
+      45,
+      n,
+      0,
+      () => {},
+      "usda",
+      {
+        originalName: "Airline Bread Roll",
+        componentCount: 0,
+      }
+    );
+    expect(n.carbohydrates).toBeLessThanOrEqual(45);
+    expect(n.totalFat).toBeLessThanOrEqual(45);
+    expect(n.saturatedFat).toBeLessThanOrEqual(n.totalFat);
+  });
 });
