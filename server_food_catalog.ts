@@ -534,6 +534,18 @@ export const DEFAULT_CATEGORY_PROFILES: Record<string, Record<string, number>> =
     potassium: 10, calcium: 15, magnesium: 2, phosphorus: 2, iron: 0.1, zinc: 0.05, selenium: 0.1, iodine: 5,
     vitaminC: 0, vitaminA: 0, folate: 0, vitaminK: 0, vitaminE: 0, vitaminB6: 0, thiamine: 0, riboflavin: 0, niacin: 0, vitaminB12: 0, vitaminD: 0
   },
+  seaweed_salad: {
+    calories: 85, protein: 1.5, carbohydrates: 8.5, totalFat: 6.0, saturatedFat: 1.0, unsaturatedFat: 5.0,
+    sugar: 3.0, addedSugar: 2.0, totalFibre: 1.5, solubleFibre: 0.3, sodium: 650,
+    potassium: 150, calcium: 50, magnesium: 30, phosphorus: 40, iron: 1.0, zinc: 0.3, selenium: 1.0, iodine: 50,
+    vitaminC: 5.0, vitaminA: 100, folate: 40, vitaminK: 80, vitaminE: 1.5, vitaminB6: 0.05, thiamine: 0.03, riboflavin: 0.05, niacin: 0.5, vitaminB12: 0.1, vitaminD: 0
+  },
+  sweet_spread: {
+    calories: 250, protein: 0.4, carbohydrates: 65.0, totalFat: 0.1, saturatedFat: 0.02, unsaturatedFat: 0.08,
+    sugar: 49.0, addedSugar: 40.0, totalFibre: 1.0, solubleFibre: 0.2, sodium: 15,
+    potassium: 75, calcium: 15, magnesium: 5, phosphorus: 10, iron: 0.2, zinc: 0.1, selenium: 0.5, iodine: 1,
+    folate: 5, vitaminC: 8.0, vitaminA: 5, vitaminB6: 0.02, vitaminB12: 0, thiamine: 0.01, riboflavin: 0.01, niacin: 0.2, vitaminE: 0.1, vitaminK: 1.0, vitaminD: 0
+  },
   fat_spread: {
     calories: 620, protein: 0.5, carbohydrates: 0.5, totalFat: 68.0, saturatedFat: 42.0, unsaturatedFat: 24.0,
     sugar: 0.3, addedSugar: 0, totalFibre: 0, solubleFibre: 0, sodium: 550,
@@ -545,6 +557,12 @@ export const DEFAULT_CATEGORY_PROFILES: Record<string, Record<string, number>> =
     sugar: 16.0, addedSugar: 14.0, totalFibre: 0.3, solubleFibre: 0.1, sodium: 55,
     potassium: 30, calcium: 8, magnesium: 2, phosphorus: 10, iron: 0.2, zinc: 0.1, selenium: 0.5, iodine: 1,
     vitaminC: 1.0, vitaminA: 3, folate: 1, vitaminK: 0.1, vitaminE: 0.05, vitaminB6: 0.01, thiamine: 0.01, riboflavin: 0.02, niacin: 0.05, vitaminB12: 0, vitaminD: 0
+  },
+  mousse_dessert: {
+    calories: 220, protein: 4.5, carbohydrates: 24.0, totalFat: 12.5, saturatedFat: 7.5, unsaturatedFat: 4.5,
+    sugar: 20.0, addedSugar: 16.0, totalFibre: 1.2, solubleFibre: 0.3, sodium: 80,
+    potassium: 190, calcium: 90, iron: 1.2, magnesium: 28, phosphorus: 110, zinc: 0.6, selenium: 4.0, iodine: 15,
+    vitaminA: 85, vitaminD: 0.4, vitaminE: 0.6, vitaminK: 1.5, vitaminC: 0.5, folate: 18, vitaminB12: 0.35, vitaminB6: 0.05, thiamine: 0.04, riboflavin: 0.18, niacin: 0.4
   },
   produce: {
     calories: 40, protein: 1.0, carbohydrates: 9.0, totalFat: 0.2, saturatedFat: 0.05, unsaturatedFat: 0.15,
@@ -654,12 +672,15 @@ export function getFallbackCategoryProfile(query: string): Record<string, number
   const q = (query || '').toLowerCase();
   let base: Record<string, number> = { ...DEFAULT_CATEGORY_PROFILES.general_dish };
   if (/\b(beverage|drink|water|tea|coffee|soda)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.beverage };
+  else if (/\b(seaweed\s*salad|wakame|goma\s*wakame)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.seaweed_salad };
   else if (/\b(crispy\s*onion|fried\s*onion|french\s*fried\s*onion|croutons?|crispy\s*shallots?|fried\s*shallots?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.crispy_topping };
   else if (/\b(gherkins?|pickles?|pickled|cornichons?|relish)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.pickle };
   else if (/\b(ranch|dressing|vinaigrette|mayo|mayonnaise|sauce|caesar|condiment|gravy|aioli|dip|pesto)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dressing };
+  else if (/\b(jams?|preserves?|marmalades?|fruit\s*spreads?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.sweet_spread };
   else if (/\b(berr(?:y|ies)|strawberr(?:y|ies)|blueberr(?:y|ies)|raspberr(?:y|ies)|blackberr(?:y|ies)|cranberr(?:y|ies)|acai)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.berries };
-  else if (/\b(salads?|mix\s*leaves|mixed\s*leaves|salad\s*leaves|lettuce|spinach|kale|arugula|greens|romaine|cabbage|slaw|watercress)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.leafy_greens };
+  else if (/\b(salads?|mix\s*leaves|mixed\s*leaves|salad\s*leaves|lettuce|spinach|kale|arugula|greens|romaine|cabbage|slaw|watercress|bok\s*choy|pak\s*choi|caisim|choy\s*sum|gai\s*lan|chinese\s*greens)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.leafy_greens };
   else if (/\b(gelatin|jell-?o|jelly|jellies)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.jelly_dessert };
+  else if (/\b(mousse|mousses)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.mousse_dessert };
   else if (/\b(salt|seasoning|spice|spices|pepper\s*flakes?|iodized)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.seasoning };
   else if (/\b(scallions?|spring\s*onions?|green\s*onions?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.produce };
   else if (/\b(spreadable|margarine|ghee)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.fat_spread };
@@ -668,7 +689,7 @@ export function getFallbackCategoryProfile(query: string): Record<string, number
   else if (/\b(eggs?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.egg };
   else if (/\b(chicken|turkey|poultry)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.poultry };
   else if (/\b(fish|salmon|tuna|cod|shrimp|prawns?|seafood)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.fish };
-  else if (/\b(beef|pork|steak|lamb|mutton|meat|bacon)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.meat };
+  else if (/\b(beef|pork|steak|lamb|mutton|meat|bacon|empal|daging|blade|chuck|brisket|ribeye|sirloin|tenderloin|short\s*plate)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.meat };
   else if (/\b(feta|cheddar|mozzarella|parmesan|cheese)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cheese };
   else if (/\b(butter)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.fat_spread };
   else if (/\b(milk|yogurt|yoghurt|greek|cream|dairy)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dairy };

@@ -658,19 +658,18 @@ export function applyCommercialSodiumFloor(
     !/\b(fried|breaded|crispy|nugget|tenders?|sauced?|glazed?|gravy|burger|sandwich|pizza|pie|casserole|curry|fries|wings)\b/i.test(identityForChecks);
 
   const isCompositeEntree =
-    /\b(fried\s+chicken|breaded|nuggets?|tenders?|burger|sandwich|pizza|burrito|taco|casserole|pie|pasta|curry|wings)\b/i.test(identityForChecks) ||
-    (ctx?.componentCount != null && ctx.componentCount >= 3);
+    /\b(fried\s+chicken|breaded|nuggets?|tenders?|burger|sandwich|pizza|burrito|taco|casserole|pie|pasta|curry|wings|bowl|meal|platter|bento|entree)\b/i.test(identityForChecks) ||
+    (ctx?.componentCount != null && ctx.componentCount >= 2);
 
   const isWholeFood =
     ctx?.physicalForm === 'SOLID_FRUIT_VEG' ||
     dbSource === 'canonical_dict' ||
     dbSource === 'label_raw' ||
     isCleanProteinSide ||
-    !isCompositeEntree ||
     /\b(oats?|oatmeal|rolled\s+oats|milk|cow\s+milk|berries|berry|blueberry|blueberries|strawberry|strawberries|raspberry|raspberries|blackberry|blackberries|fruit|apple|banana|orange|grape|plain\s+yogurt|greek\s+yogurt|nuts?|seeds?|almonds?|walnuts?|raw|fresh)\b/i.test(identityForChecks);
 
   const isSaucedOrGlazedEntree =
-    /\b(glazed?|braised?|teriyaki|sweet\s*and\s*sour|kung\s*pao|curry|masala|tikka\s*masala|butter\s*chicken|black\s*pepper\s*sauce|soy\s*glazed?|stir-?fry)\b/i.test(identityForChecks) &&
+    /\b(glazed?|braised?|teriyaki|sweet\s*and\s*sour|kung\s*pao|curry|masala|tikka\s*masala|butter\s*chicken|black\s*pepper\s*sauce|soy\s*glazed?|stir-?fry|stewed?)\b/i.test(identityForChecks) &&
     !/\b(plain|steamed\s+plain|raw|fresh|salad|fruit|apple|orange)\b/i.test(identityForChecks);
 
   if ((isFastFoodOrChain || isSaucedOrGlazedEntree) && !isWholeFood && (itemNutrients.calories || 0) > 0) {
@@ -833,7 +832,8 @@ export function checkThermodynamicDensitySanity(
   }
 
   // 4. Fresh fruits / vegetables: <= 90 kcal/100g
-  if (/\b(vegetable|fruit|greens|broccoli|cabbage|salad|kale|spinach|lettuce|berry|berries|apple|orange|banana)\b/i.test(combined)) {
+  const isDessertOrProcessedSweet = /\b(cake|tart|pie|mousse|dessert|jelly|gelatin|pudding|jam|preserves|pastry|danish|muffin|bread|candy|bar|cookie|custard|smoothie|juice|dried|confection)\b/i.test(combined);
+  if (!isDessertOrProcessedSweet && /\b(vegetable|fruit|greens|broccoli|cabbage|salad|kale|spinach|lettuce|berry|berries|apple|orange|banana)\b/i.test(combined)) {
     const ceiling = 90;
     if (density > ceiling) {
       return { isBreach: true, ceiling, density, category: 'fresh_fruits_vegetables' };
@@ -1101,7 +1101,8 @@ export function applyNutrientRealityChecks(
       sauce_condiment: [20, 750],
     };
     const pfClass = classifyUniversalPhysicalFormV3({ name: itemName, canonicalDbName: itemName, keyword: itemName });
-    const bounds = CALORIC_DENSITY_BOUNDS[pfClass.primaryCategory];
+    const isJellyOrMousse = /\b(jelly|gelatin|mousse|pudding|custard|flan)\b/i.test(itemName);
+    const bounds = isJellyOrMousse ? [50, 300] : CALORIC_DENSITY_BOUNDS[pfClass.primaryCategory];
     if (bounds) {
       const [floor, ceiling] = bounds;
       const caloriesPer100g = (itemNutrients.calories / itemWeight) * 100;
@@ -1146,16 +1147,27 @@ export function applyNutrientRealityChecks(
     }
   }
 
-  // 6. Mass Conservation & Physical Macro Ceiling Guard
+  // 6. Mass Conservation & Physical Macro/Moisture Ceiling Guard
   if (itemWeight > 0) {
     const p = itemNutrients.protein || 0;
     const c = itemNutrients.carbohydrates || 0;
     const f = itemNutrients.totalFat || 0;
     const macroSum = p + c + f;
-    if (macroSum > itemWeight && macroSum > 0) {
-      const massScale = itemWeight / macroSum;
+
+    // Determine max physical dry matter fraction based on physical moisture category
+    let maxMacroCeiling = itemWeight;
+    const isWateryDrink = /\b(water|tea|black\s*coffee|diet\s*soda|clear\s*broth)\b/i.test(identityForChecks);
+    const isHighMoisture = /\b(gelatin|jell-?o|jelly|mousse|pudding|custard|soup|broth|consomme)\b/i.test(identityForChecks);
+    if (isWateryDrink) {
+      maxMacroCeiling = itemWeight * 0.15;
+    } else if (isHighMoisture) {
+      maxMacroCeiling = itemWeight * 0.45;
+    }
+
+    if (macroSum > maxMacroCeiling && macroSum > 0) {
+      const massScale = maxMacroCeiling / macroSum;
       if (addDebugLog) {
-        addDebugLog(`[Mass Conservation Guard] "${itemName}": Total macros (${macroSum.toFixed(1)}g = P:${p}g + C:${c}g + F:${f}g) exceeded item weight (${itemWeight}g). Rescaling macros to fit within physical mass limit.`);
+        addDebugLog(`[Mass Conservation Guard] "${itemName}": Total macros (${macroSum.toFixed(1)}g = P:${p}g + C:${c}g + F:${f}g) exceeded physical ceiling (${maxMacroCeiling.toFixed(1)}g for ${itemWeight}g). Rescaling macros.`);
       }
       itemNutrients.protein = Math.round(p * massScale * 10) / 10;
       itemNutrients.carbohydrates = Math.round(c * massScale * 10) / 10;
@@ -1461,10 +1473,10 @@ export function checkCategoryAndStateCompatibility(
   // 1. Beverage vs Solid
   const isQBeverage = /\b(beverage|beverages|drink|drinks|water|juice|juices|beer|wine|soda|cola|tea|coffee|latte|mocha|macchiato|smoothie|shake|milk|oat\s*milk|almond\s*milk|soy\s*milk|coconut\s*milk|seltzer|powerade|gatorade|cider|lemonade)\b/i.test(q);
   const isCBeverage = /\b(beverage|beverages|drink|drinks|water|juice|juices|beer|wine|soda|cola|tea|coffee|latte|mocha|macchiato|smoothie|shake|milk|oat\s*milk|almond\s*milk|soy\s*milk|coconut\s*milk|seltzer|powerade|gatorade|cider|lemonade)\b/i.test(c);
-  const isQSolid = /\b(egg|eggs|yogurt|cheese|meat|chicken|steak|fish|salad|greens|bread|pastry|cake|cookie|tortilla|rice|pasta|grain|granola|raw|whole|fresh\s+fruit|fresh\s+orange|raw\s+orange)\b/i.test(q);
-  const isCSolid = /\b(egg|eggs|yogurt|cheese|meat|chicken|steak|fish|salad|greens|bread|pastry|cake|cookie|tortilla|rice|pasta|grain|granola|raw|whole|fresh\s+fruit|raw\s+fruit)\b/i.test(c);
+  const isQSolid = /\b(egg|eggs|yogurt|cheese|meat|chicken|steak|fish|salad|greens|bread|pastry|cake|cookie|tortilla|rice|pasta|grain|granola|raw\s+fruit|fresh\s+fruit|fresh\s+orange|raw\s+orange)\b/i.test(q);
+  const isCSolid = /\b(egg|eggs|yogurt|cheese|meat|chicken|steak|fish|salad|greens|bread|pastry|cake|cookie|tortilla|rice|pasta|grain|granola|raw\s+fruit|fresh\s+fruit)\b/i.test(c);
 
-  if (isQBeverage && (isCSolid || !isCBeverage) && /\b(raw|fresh|whole|peel|sections|slices)\b/i.test(c)) {
+  if (isQBeverage && (isCSolid || !isCBeverage) && /\b(raw|fresh|peel|sections|slices|whole\s+(?:orange|apple|banana|fruit|vegetable))\b/i.test(c)) {
     return { compatible: false, reason: `Blocked solid whole food candidate ("${candidateName}") for beverage query ("${query}")` };
   }
   if (isQBeverage && isCSolid && !isCBeverage) {
@@ -1525,6 +1537,13 @@ export function checkCategoryAndStateCompatibility(
   const isProduceQuery = /\b(lettuce|spinach|apple|apples|strawberry|strawberries|kale|cabbage|broccoli|cauliflower|cucumber|cucumbers|tomato|tomatoes|zucchini|onion|onions|garlic)\b/i.test(q);
   if (isCondimentCandidate && isProduceQuery && !/\b(sauce|dressing|condiment|ketchup|mayo|mayonnaise|mustard|syrup)\b/i.test(q)) {
     return { compatible: false, reason: `Blocked condiment candidate ("${candidateName}") for fresh/whole produce query ("${query}")` };
+  }
+
+  // 7. Prepared/Spread/Dessert/Salad vs Raw Agricultural Commodity
+  const isPreparedOrSpreadQuery = /\b(jam|jelly|preserves?|marmalade|fruit\s*spread|mousse|cake|dessert|seaweed\s*salad|wakame\s*salad|potato\s*salad|coleslaw)\b/i.test(q);
+  const isRawCommodityCandidate = /\b(raw|fresh)\b/i.test(c) && !/\b(jam|preserves?|marmalade|spread|mousse|cake|salad|cooked|prepared|sweetened)\b/i.test(c);
+  if (isPreparedOrSpreadQuery && isRawCommodityCandidate) {
+    return { compatible: false, reason: `Blocked raw commodity candidate ("${candidateName}") for prepared/spread/dessert query ("${query}")` };
   }
 
   return { compatible: true };

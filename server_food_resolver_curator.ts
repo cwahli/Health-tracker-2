@@ -193,6 +193,16 @@ export async function executeFoodResolverCurator(
               addDebugLog(`[CategoryStateFilter] REJECTED: FDC ${id} "${detailName}" for query "${gap.query}": ${detailStateCheck.reason}`);
               return false;
             }
+            // Strict Two-Way USDA Description Verification
+            // If query is an archetype vegetable/condiment/produce (e.g. scallion, lettuce, tomato)
+            // but the official USDA record description is a prepared composite (e.g. pizza, sandwich, casserole),
+            // or has zero core token overlap with the gap query, reject the FDC ID.
+            const hasCoreMatch = hasCoreTokenOverlap(gap.query, detailName);
+            const tokenOverlap = calculateTokenOverlap(gap.query, detailName);
+            if (tokenOverlap < 0.25 && !hasCoreMatch) {
+              addDebugLog(`[USDA Title Mismatch] REJECTED: FDC ${id} official USDA description "${detailName}" does not match query "${gap.query}" (overlap: ${(tokenOverlap * 100).toFixed(0)}%).`);
+              return false;
+            }
             const macroCheck = checkMacroBoundary(gap.query, details.nutrients);
             if (!macroCheck.passed) {
               addDebugLog(`[MacroBoundaryFilter] REJECTED: FDC ${id} ${macroCheck.reason}`);

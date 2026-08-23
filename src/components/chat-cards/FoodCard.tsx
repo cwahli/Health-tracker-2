@@ -17,6 +17,7 @@ import { JobStore } from '../../jobs/JobStore';
 import { toPendingFoodLog } from '../../mealBuild/adapters';
 import { namesReferToSameFood } from '../../../server_scout_reconcile';
 import { extractMostRecentImageDate, getCurrentDateInTimezone } from '../../utils/dateUtils';
+import { normalizeMealImageUrl } from '../../utils/foodImageSources';
 function foodCardName(item: any): string {
   return item?.canonicalDbName || item?.name || item?.originalName || item?.keyword || '';
 }
@@ -1227,10 +1228,11 @@ export const CroppedFoodImage: React.FC<CroppedFoodImageProps> = ({
   const [error, setError] = React.useState<boolean>(false);
 
   const baseImageSrc = React.useMemo(() => {
+    let raw = src;
     if (imageUrls && imageUrls.length > 0 && typeof sourceImageIndex === 'number' && sourceImageIndex >= 0 && sourceImageIndex < imageUrls.length) {
-      return imageUrls[sourceImageIndex];
+      raw = imageUrls[sourceImageIndex];
     }
-    return src;
+    return normalizeMealImageUrl(raw) || raw;
   }, [src, imageUrls, sourceImageIndex]);
 
   React.useEffect(() => {
@@ -1347,7 +1349,9 @@ export const CroppedFoodImage: React.FC<CroppedFoodImageProps> = ({
 };
 
 export const getFoodImageUrl = (foodName: string, suppliedUrl?: string) => {
-  if (suppliedUrl && (suppliedUrl.startsWith('http') || suppliedUrl.startsWith('data:image/') || suppliedUrl.startsWith('blob:'))) {
+  const normalized = normalizeMealImageUrl(suppliedUrl);
+  if (normalized) return normalized;
+  if (suppliedUrl && (suppliedUrl.startsWith('http') || suppliedUrl.startsWith('data:image/') || suppliedUrl.startsWith('blob:') || suppliedUrl.startsWith('/'))) {
     return suppliedUrl;
   }
   

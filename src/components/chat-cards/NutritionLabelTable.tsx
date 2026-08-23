@@ -183,6 +183,73 @@ function getSourceBadge(item: any) {
   };
 }
 
+const NON_NUTRIENT_LABEL_KEYS = new Set([
+  'name',
+  'keyword',
+  'originalname',
+  'canonicaldbname',
+  'components',
+  'componentsdetail',
+  'componentsdetaillist',
+  'ingredients',
+  'ingredientslist',
+  'cookingmethod',
+  'cooking_method',
+  'brand',
+  'brandname',
+  'chainname',
+  'id',
+  'dbid',
+  'fdcid',
+  'source',
+  'dbsource',
+  'itemconfidence',
+  'boundingbox2d',
+  'sourceimageindex',
+  'anomalyflags',
+  'searchquery',
+  'visualingredients',
+  'visualform',
+  'physicalform',
+  'portionsize',
+  'portionunit',
+  'weightgrams',
+  'estimatedweightgrams',
+  'primarybasematchname',
+  'primarybaseweightg',
+  'iscomponentofcomposite',
+  'iscompositedish',
+  'iscomposite',
+  'servingsize',
+  'servingSize',
+  'weight',
+  'servingspercontainer',
+  'servingsPerContainer',
+  'basistype',
+  'basisType',
+  'isdishbasis',
+  'isDishBasis',
+  'density',
+  'servingsizegrams',
+  'servingSizeGrams',
+  'servings',
+  'isrealtruth',
+  'isRealTruth',
+  'compositesiblings',
+  'compositeSiblings',
+  'lockednutrientkeys',
+  'estimatedfields',
+  '_estimatedfields',
+  'nutrientsourcemap',
+  'saltconversionnote',
+  'confidence',
+  'visualtexture',
+  'visualripeness',
+  'visualcookstate',
+  'matchconfidence',
+  'verdict'
+]);
+
 export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOpen = true, hideOwnToggle = false, language = "en" }: { activeScoutItems: any[], onConfirmItem?: (idx: any) => void, defaultOpen?: boolean, hideOwnToggle?: boolean, language?: string }) {
   const t = translations[language || "en"] || translations.en;
   const [showEstimatedMap, setShowEstimatedMap] = React.useState<Record<number, boolean>>({});
@@ -193,28 +260,6 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
   if (typeof items === 'string') {
     try { items = JSON.parse(items); } catch(e) { items = []; }
   }
-  const NON_NUTRIENT_LABEL_KEYS = new Set([
-    'servingsize',
-    'servingSize',
-    'weight',
-    'servingspercontainer',
-    'servingsPerContainer',
-    'basistype',
-    'basisType',
-    'isdishbasis',
-    'isDishBasis',
-    'density',
-    'servingsizegrams',
-    'servingSizeGrams',
-    'servings',
-    'source',
-    'dbsource',
-    'dbSource',
-    'isrealtruth',
-    'isRealTruth',
-    'compositesiblings',
-    'compositeSiblings'
-  ]);
 
   if (!Array.isArray(items) || !items.length) return null;
   // Only `rawNutritionLabel` is gated on "a real physical panel is visible" — `nutritionFacts`
@@ -316,16 +361,48 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
       let itemRawLabel = item.rawNutritionLabel;
       
       if ((!itemRawLabel || Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length === 0) && itemLabelSource && typeof itemLabelSource === 'object') {
-        const cals = itemLabelSource.calories ?? itemLabelSource.energy ?? itemLabelSource.cals ?? item.calories ?? item.energy;
-        const protein = itemLabelSource.protein ?? item.protein;
-        const totalFat = itemLabelSource.totalFat ?? itemLabelSource.fat ?? item.totalFat ?? item.fat;
-        const saturatedFat = itemLabelSource.saturatedFat ?? item.saturatedFat;
-        const totalCarbohydrate = itemLabelSource.totalCarbohydrate ?? itemLabelSource.carbohydrates ?? itemLabelSource.carbs ?? item.totalCarbohydrate ?? item.carbohydrates ?? item.carbs;
-        const sugar = itemLabelSource.sugar ?? item.sugar;
-        const addedSugar = itemLabelSource.addedSugar ?? item.addedSugar;
-        const totalFibre = itemLabelSource.totalFibre ?? itemLabelSource.fiber ?? item.totalFibre ?? item.fiber;
-        const sodium = itemLabelSource.sodium ?? item.sodium;
-        const salt = itemLabelSource.salt ?? item.salt;
+        let cals = itemLabelSource.calories ?? itemLabelSource.energy ?? itemLabelSource.cals ?? item.calories ?? item.energy;
+        let protein = itemLabelSource.protein ?? item.protein;
+        let totalFat = itemLabelSource.totalFat ?? itemLabelSource.fat ?? item.totalFat ?? item.fat;
+        let saturatedFat = itemLabelSource.saturatedFat ?? item.saturatedFat;
+        let totalCarbohydrate = itemLabelSource.totalCarbohydrate ?? itemLabelSource.carbohydrates ?? itemLabelSource.carbs ?? item.totalCarbohydrate ?? item.carbohydrates ?? item.carbs;
+        let sugar = itemLabelSource.sugar ?? item.sugar;
+        let addedSugar = itemLabelSource.addedSugar ?? item.addedSugar;
+        let totalFibre = itemLabelSource.totalFibre ?? itemLabelSource.fiber ?? item.totalFibre ?? item.fiber;
+        let sodium = itemLabelSource.sodium ?? item.sodium;
+        let salt = itemLabelSource.salt ?? item.salt;
+
+        if ((cals == null || cals === '') && Array.isArray(subComps) && subComps.length > 0) {
+          let compCals = 0;
+          let compProtein = 0;
+          let compFat = 0;
+          let compCarbs = 0;
+          let compSodium = 0;
+          let hasCompVal = false;
+          subComps.forEach((sc: any) => {
+            if (!sc) return;
+            const scWeight = Number(sc.weightGrams || sc.estimatedWeightGrams || sc.primaryBaseWeightG || 100);
+            const scRatio = scWeight / 100;
+            const scSrc = sc.baseNutrients100g || sc.primaryBase100g || sc.nutrients || sc.nutritionFacts || sc.rawNutritionLabel || sc;
+            const scC = sc.calories ?? scSrc?.calories ?? scSrc?.energy;
+            if (scC != null && scC !== '') {
+              hasCompVal = true;
+              const numC = parseLabelCalories(scC) ?? Number(scC) ?? 0;
+              compCals += (sc.baseNutrients100g ? numC * scRatio : numC);
+              compProtein += (sc.baseNutrients100g ? (Number(scSrc.protein) || 0) * scRatio : (Number(scSrc.protein) || 0));
+              compFat += (sc.baseNutrients100g ? (Number(scSrc.totalFat ?? scSrc.fat) || 0) * scRatio : (Number(scSrc.totalFat ?? scSrc.fat) || 0));
+              compCarbs += (sc.baseNutrients100g ? (Number(scSrc.totalCarbohydrate ?? scSrc.carbohydrates ?? scSrc.carbs) || 0) * scRatio : (Number(scSrc.totalCarbohydrate ?? scSrc.carbohydrates ?? scSrc.carbs) || 0));
+              compSodium += (sc.baseNutrients100g ? (Number(scSrc.sodium) || 0) * scRatio : (Number(scSrc.sodium) || 0));
+            }
+          });
+          if (hasCompVal) {
+            cals = Math.round(compCals);
+            protein = Math.round(compProtein * 10) / 10;
+            totalFat = Math.round(compFat * 10) / 10;
+            totalCarbohydrate = Math.round(compCarbs * 10) / 10;
+            sodium = Math.round(compSodium);
+          }
+        }
 
         const isDishBasis = itemLabelSource.basisType === 'per_dish' || itemLabelSource.basisType === 'total' || itemLabelSource.basisType === 'per_portion' || itemLabelSource.basisType === 'per_serving' || itemLabelSource.basisType === 'per_pack' || item.basisType === 'per_dish';
         const servingSizeStr = itemLabelSource.servingSizeGrams 
@@ -499,13 +576,16 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                 ...(hasNut ? Object.keys(item.nutritionFacts) : []),
               ])
             ).filter((k) => {
-              if (NON_NUTRIENT_LABEL_KEYS.has(k) || NON_NUTRIENT_LABEL_KEYS.has(k.toLowerCase())) return false;
+              const kLower = k.toLowerCase().replace(/[\s_-]/g, '');
+              if (NON_NUTRIENT_LABEL_KEYS.has(k) || NON_NUTRIENT_LABEL_KEYS.has(k.toLowerCase()) || NON_NUTRIENT_LABEL_KEYS.has(kLower)) return false;
               const rawVal = item.rawNutritionLabel?.[k];
               const nutVal = item.nutritionFacts?.[k];
               const val = rawVal !== undefined ? rawVal : nutVal;
               
               if (val === undefined || val === null || val === '' || val === '-' || val === '--') return false;
+              if (typeof val === 'object' || Array.isArray(val) || typeof val === 'function' || typeof val === 'boolean') return false;
               const numVal = parseRowNumber(val);
+              if (numVal === null) return false;
               
               if (hasImplausibleAllZeroMacros && !k.toLowerCase().includes('calorie') && !k.toLowerCase().includes('energy')) {
                 if (numVal === 0) return false;

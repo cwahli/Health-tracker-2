@@ -85,8 +85,8 @@ STEP 1: SCENE CLASSIFICATION & ENVIRONMENT
 - 'diningEnvironment': 'casual_restaurant' | 'fast_food_chain' | 'home_cooked' | 'fine_dining' | 'airline' | 'unknown'.
 
 STEP 2: UNIVERSAL DISH EXTRACTION & DEDUPLICATION
-- USER MESSAGE SCOPE ANCHOR & MULTI-DISH EXTRACTION: Extract EVERY distinct food, drink, side, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items' (e.g. if 2 dishes or a main + drink are visible, output 2 separate item objects). Do NOT combine distinct dishes into 1 item. If user's text message specifies a portion/weight (e.g. "50g of oats + fruits"), assign logically. The user's explicit text sentence is absolute ground truth. CRITICAL: If the user's text explicitly limits consumption (e.g., "I only had 1 croissant", "I just ate the salad"), you MUST strictly obey this constraint and ONLY extract the specified items. Skip all other visible food items entirely. Otherwise, only skip items if they are unopened bulk grocery packaging used merely for context.
-- CROSS-IMAGE DEDUPLICATION: If photos show BOTH a menu/kiosk screen AND physical food, extract each distinct dish ONCE across all photos. Do NOT duplicate items or extract physical screens/receipts as food items.
+- USER MESSAGE SCOPE ANCHOR & MULTI-DISH EXTRACTION: Extract EVERY distinct food, drink, side, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items' (e.g. if 2 dishes or a main + drink are visible, output 2 separate item objects). Do NOT combine distinct dishes into 1 item. For beverages and open cups, estimate weight based on visible fill level (e.g. half-full cup ~100-120g vs full ~200-250g). If user's text message specifies a portion/weight (e.g. "50g of oats + fruits"), assign logically. The user's explicit text sentence is absolute ground truth. CRITICAL: If the user's text explicitly limits consumption (e.g., "I only had 1 croissant", "I just ate the salad"), you MUST strictly obey this constraint and ONLY extract the specified items. Skip all other visible food items entirely. Otherwise, only skip items if they are unopened bulk grocery packaging used merely for context.
+- CROSS-IMAGE DEDUPLICATION: If photos show BOTH a menu screen AND physical food, or raw grocery packages AND the cooked dish prepared from them, extract each distinct dish ONCE. Do NOT duplicate raw ingredients and their cooked dish as separate meals.
 - KNOWN CHAIN & BRAND IDENTIFICATION: For any restaurant chain, brand, or menu item (e.g. McDonald's, Yolk, Starbucks, Pret):
   1. Capture exact brand + dish title in 'originalName' (e.g. "YOLK Steak Chimi 2.0 Sandwich").
   1b. ALSO output the brand/chain name alone (e.g. 'McDonald\'s', not 'McDonald\'s Big Mac') in the new 'chainName' field. Leave 'chainName' null for home-cooked or non-branded items.
@@ -97,8 +97,8 @@ STEP 2: UNIVERSAL DISH EXTRACTION & DEDUPLICATION
 - PARTIAL TRUTH TRANSCRIPTION & VISUAL TRACKING: Transcribe whatever partial truth is literally visible on the screen/label/menu (even if only calories, e.g. "450 kcal", or 8-10 key nutrients) into 'rawNutritionLabel'. Set 'lockedNutrientKeys' to an array of lowercase nutrient names that were literally visible (e.g. ["calories"]). NEVER invent unprinted fields in 'rawNutritionLabel'. Simultaneously, for mixed dishes (like salads, sandwiches) ALWAYS visually inspect and decompose dish ingredients in 'components' & 'visualIngredients' so the engine can extrapolate the full 31-nutrient profile using first principles anchored by the printed truth. For single, uniform foods (like bread, baguettes, cheese, plain rice, whole fruits, plain meats, liquids), DO NOT decompose them into recipe ingredients (like flour, water, yeast, milk).
 
 STEP 3: COMPONENT DECOMPOSITION, CLINICAL QUERIES & LABELS
-- NATURAL CANONICAL ENGLISH QUERIES: For all components and generic items, format the 'keyword' and 'searchQuery' in natural 2-3 word canonical noun phrases (e.g., "creamy salad dressing" or "mayonnaise dressing" instead of ambiguous "salad cream", "dried raisins" or "seedless raisins" instead of bare "raisins", "hard boiled egg", "grilled chicken breast", "feta cheese", "flour tortilla", "falafel", "hummus", "raw red bell pepper", "romaine lettuce raw"). Do NOT use inverted comma syntax (avoid "Egg, whole, cooked, hard-boiled" or "Cheese, feta"). Do NOT append noisy bureaucratic suffixes like "commercial", "cow's milk", "all commercial varieties", or "plain enriched wheat".
-- CANONICAL COMPONENT DECOMPOSITION: Extract clean, direct canonical English search queries for each component. Do NOT guess numeric database IDs; focus on precise ingredient extraction.
+- NATURAL CANONICAL ENGLISH QUERIES (USDA RETRIEVAL): Format all 'keyword', 'searchQuery', and 'queriesToSearch' strictly in clean standard English for USDA database matching (e.g. translate foreign/local culinary terms like "caisim" -> "baby bok choy", "daging empal" -> "braised beef brisket", "gai lan" -> "chinese broccoli"). Use natural 2-3 word canonical noun phrases (e.g., "grilled chicken breast", "feta cheese", "steamed white rice"). Do NOT use non-English terms in search queries. Do NOT use inverted comma syntax (avoid "Egg, whole, cooked").
+- CANONICAL COMPONENT DECOMPOSITION: Extract clean, direct canonical English search queries for each component so they are immediately retrievable in USDA. Do NOT guess numeric database IDs.
 - PREPARATION FAT & OILS: For any deep-fried, pan-fried, or heavily glazed items, explicitly extract the cooking oil or butter as a separate component (e.g., "Oil, vegetable, canola", "Butter, salted"). Assign it a realistic mass percentage.
 - MASS PERCENTAGE OVER VOLUME: When estimating component ratios, strongly prefer estimating 'massPercentage' (weight) over pure 'volumePercentage'.
 - REALISTIC SEASONING RATIOS: Salt, baking soda, baking powder, yeast, and dry spices are potent by weight and are never a large share of a recipe's mass. For baked/dough items specifically, salt is typically only 1.5-2% of the flour weight — do NOT assign it a mass percentage anywhere near the flour or liquid components. As a general rule, a single seasoning component should rarely exceed ~2-3% of the total dish mass unless the item is literally a seasoning blend or condiment itself.
@@ -112,7 +112,7 @@ STEP 3: COMPONENT DECOMPOSITION, CLINICAL QUERIES & LABELS
   2. DEFINE & DEDUCE SERVING WEIGHTS: If you are extracting a portion-based serving size instead of 100g, or if a textual portion size is given, you MUST deduce or calculate the numerical gram weight of that serving size. For example: "If serving size is '1/4 pot' and total weight is 160g, deduce/calculate and output '40g' for the 'servingSize'". Ensure textual portion size descriptions (like "1/4 pack", "1/2 carton", "1 slice") are mapped to their calculated actual gram weight inside 'rawNutritionLabel' so that the backend parser can correctly parse it as a number and prevent macro-overflow anomalies.
   3. If label lists 'Salt', transcribe into 'salt' with "sodium": null for backend conversion.
 - SOFT ITEM CALORIE ESTIMATE (REQUIRED for visual food items): For EACH distinct food item (dish), set "estimatedCalories" to a single rough total kcal for the portion you see (the whole item, not each component). Examples: restaurant mac & cheese plate ~550-750; composed salad bowl ~400-600; yogurt granola fruit cup ~300-500. This is a SOFT prior for the server — NOT printed truth. Do NOT put estimatedCalories into rawNutritionLabel. rawNutritionLabel calories remain ONLY for literally printed values. Do NOT invent protein/fat/sodium — only this one calorie number per item plus existing structure fields.
-- NAMES: 'keyword' = clean English database query. 'originalName' = exact local/printed dish name (Do NOT translate).
+- NAMES: 'keyword', 'searchQuery', and 'queriesToSearch' = clean English USDA queries. 'originalName' = exact local/printed dish name (preserve untranslated brand/local name here only).
 
 === SYSTEM CONSTRAINTS ===
 Output exactly ONE JSON object matching this schema. NEVER omit keys; use null or 'unknown' if inapplicable.
@@ -740,7 +740,7 @@ export const CONDIMENT_DRESSING_REGEX = /\b(ranch(?:\s+dressing)?|caesar(?:\s+dr
 // (e.g. "red onion" listed on a Cobb salad label but missing from the modeled components).
 // Kept separate from CONDIMENT_DRESSING_REGEX since these aren't condiments — grouping them
 // under a differently-named constant keeps the two lists semantically honest.
-export const GARNISH_VEGETABLE_REGEX = /\b(red\s+onion|white\s+onion|spring\s+onion|scallions?|shallots?|olives?|jalape[nñ]os?|banana\s+peppers?|croutons?|capers?)\b/i;
+export const GARNISH_VEGETABLE_REGEX = /\b(red\s+onion|white\s+onion|spring\s+onion|scallions?|shallots?|olives?|jalape[nñ]os?|banana\s+peppers?|croutons?|capers?|zucchini|courgettes?|carrots?|cucumbers?|bell\s*peppers?|peppers?|broccoli|peas?|corn|mushrooms?|edamame|cabbage|radish(?:es)?|tomatoes?|celery|green\s*beans?|bok\s*choy|pak\s*choi)\b/i;
 
 export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: string) => void): void {
   if (!item || !item.components || !Array.isArray(item.components) || item.components.length === 0) {
@@ -766,21 +766,22 @@ export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: 
     return String(typeof c === 'string' ? c : (c.searchQuery || c.name || c.keyword || '')).toLowerCase();
   });
 
-  const missingCondiments: string[] = [];
+  const missingIngredients: string[] = [];
   for (const ing of candidateIngredients) {
     const match = ing.match(CONDIMENT_DRESSING_REGEX) || ing.match(GARNISH_VEGETABLE_REGEX);
     if (match) {
       const matchedName = match[0].toLowerCase();
       const alreadyPresent = currentCompNames.some((cName) => cName.includes(matchedName) || matchedName.includes(cName));
-      if (!alreadyPresent && !missingCondiments.some(m => m.toLowerCase().includes(matchedName))) {
-        missingCondiments.push(ing);
+      if (!alreadyPresent && !missingIngredients.some(m => m.toLowerCase().includes(matchedName) || matchedName.includes(m.toLowerCase()))) {
+        missingIngredients.push(ing);
       }
     }
   }
 
-  if (missingCondiments.length > 0) {
-    for (const missing of missingCondiments) {
-      const allocatedPct = 8;
+  if (missingIngredients.length > 0) {
+    const allocatedPerItem = Math.min(8, Math.max(5, Math.floor(20 / missingIngredients.length)));
+    for (const missing of missingIngredients) {
+      const allocatedPct = allocatedPerItem;
       const currentPctSum = item.components.reduce((acc: number, c: any) => acc + (Number(c.volumePercentage) || 0), 0) || 100;
       const scaleFactor = (100 - allocatedPct) / currentPctSum;
       
@@ -797,7 +798,7 @@ export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: 
       };
       item.components.push(newComp);
       if (addDebugLog) {
-        addDebugLog(`[Label-to-Component Reconciliation] Injected detected dressing/condiment "${missing}" at ${allocatedPct}% volume into components for "${item.originalName || item.keyword}".`);
+        addDebugLog(`[Label-to-Component Reconciliation] Injected detected ingredient "${missing}" at ${allocatedPct}% volume into components for "${item.originalName || item.keyword}".`);
       }
     }
   }

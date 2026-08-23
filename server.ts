@@ -4894,6 +4894,16 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           overrides = { calories: 250, protein: 8, totalFat: 3, saturatedFat: 0.5, sodium: 400, carbohydrates: 50, transFat: 0, addedSugar: 2, potassium: 100, totalFibre: 3, solubleFibre: 0.5 };
         } else if (n.includes("egg") || n.includes("omelet")) {
           overrides = { calories: 150, protein: 12, totalFat: 10, saturatedFat: 3, sodium: 130, carbohydrates: 1, transFat: 0, addedSugar: 0, potassium: 130, totalFibre: 0, solubleFibre: 0 };
+        } else if (n.includes("braised") || n.includes("glazed") || n.includes("teriyaki") || n.includes("kung pao") || n.includes("sweet and sour") || n.includes("soy sauce")) {
+          if (n.includes("tofu") || n.includes("tahu")) {
+            overrides = { calories: 95, protein: 8.5, totalFat: 4.5, saturatedFat: 0.8, sodium: 480, carbohydrates: 5, transFat: 0, addedSugar: 2, potassium: 160, totalFibre: 1, solubleFibre: 0.2 };
+          } else if (n.includes("chicken") || n.includes("beef") || n.includes("pork") || n.includes("meat")) {
+            overrides = { calories: 200, protein: 24, totalFat: 8, saturatedFat: 2.5, sodium: 600, carbohydrates: 6, transFat: 0, addedSugar: 3, potassium: 280, totalFibre: 0.5, solubleFibre: 0 };
+          } else if (n.includes("mushroom") || n.includes("vegetable") || n.includes("veg")) {
+            overrides = { calories: 55, protein: 2.5, totalFat: 2, saturatedFat: 0.3, sodium: 420, carbohydrates: 7, transFat: 0, addedSugar: 2, potassium: 250, totalFibre: 1.5, solubleFibre: 0.3 };
+          } else {
+            overrides = { calories: 120, protein: 6, totalFat: 4, saturatedFat: 0.8, sodium: 500, carbohydrates: 12, transFat: 0, addedSugar: 3, potassium: 200, totalFibre: 1, solubleFibre: 0.2 };
+          }
         } else if (n.includes("tofu") || n.includes("tahu")) {
           overrides = { calories: 75, protein: 8, totalFat: 4.5, saturatedFat: 0.5, sodium: 10, carbohydrates: 2, transFat: 0, addedSugar: 0, potassium: 120, totalFibre: 1, solubleFibre: 0 };
         } else if (n.includes("wine") || n.includes("champagne") || n.includes("prosecco") || n.includes("cava") || n.includes("sparkling")) {
@@ -6682,8 +6692,11 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
 
       // CRITICAL GUARD: When rawLabelHasData is true, the printed nutrition label already
       // accounts for ALL ingredients including sauces/dressings in its per-100g values.
-      // Injecting an estimated sauce on top of label data double-counts those calories.
-      if (componentsDetailList.length === 0 && !rawLabelHasData && (hasMayo || hasPepperSauce || hasSauceInVis)) {
+      // Also guard against standalone condiments/butter/spreads/fats injecting a redundant sauce onto themselves.
+      const isStandaloneCondimentOrFat = /\b(butter|margarine|spread|oil|dressing|vinaigrette|mayo|mayonnaise|jam|preserves|marmalade|ketchup|mustard|syrup|honey|sauce|dip|ghee|fat)\b/i.test(
+        String(item.originalName || item.keyword || item.name || '')
+      );
+      if (componentsDetailList.length === 0 && !rawLabelHasData && !isStandaloneCondimentOrFat && (hasMayo || hasPepperSauce || hasSauceInVis)) {
         let detectedSauceName = "Sauce / Dressing";
         if (hasMayo) detectedSauceName = "Mayonnaise";
         else if (hasPepperSauce) detectedSauceName = "Black Pepper Sauce";
@@ -7063,6 +7076,27 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           if (!item.anomalyFlags) item.anomalyFlags = [];
           if (!item.anomalyFlags.includes('FOUNDATION_BUDGET_DIVERGENCE')) item.anomalyFlags.push('FOUNDATION_BUDGET_DIVERGENCE');
           addDebugLog(`[Reconcile] flagged "${itemNameForBudget}" FOUNDATION_BUDGET_DIVERGENCE (ratio=${foundationBudgetRatio.toFixed(2)})`);
+
+          // Proactive self-healing: If a single-component soft item diverges severely (<0.35x or >2.8x),
+          // check if the category fallback profile provides a more plausible, physically sound estimate.
+          if ((foundationBudgetRatio < 0.35 || foundationBudgetRatio > 2.8) && componentsDetailList.length <= 1 && itemWeight > 0) {
+            const catProfile = getFallbackCategoryProfile(itemNameForBudget);
+            if (catProfile && catProfile.calories > 0) {
+              const catKcal = Math.round(catProfile.calories * (itemWeight / 100));
+              const catRatio = catKcal / recRes.budgetKcal;
+              if (catRatio >= 0.5 && catRatio <= 2.0) {
+                addDebugLog(`[Reconcile Self-Healing] Auto-corrected severe divergence for "${itemNameForBudget}" using category profile: ${recRes.foundationKcal} kcal -> ${catKcal} kcal.`);
+                NUTRIENT_KEYS.forEach(k => {
+                  if (catProfile[k] != null) {
+                    recRes.nutrients[k] = Math.round((catProfile[k] * (itemWeight / 100)) * 10) / 10;
+                  }
+                });
+                recRes.nutrients.calories = catKcal;
+                recRes.foundationKcal = catKcal;
+                recRes.finalKcal = catKcal;
+              }
+            }
+          }
         }
       }
 

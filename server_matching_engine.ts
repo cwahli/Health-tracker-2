@@ -435,6 +435,20 @@ export function evaluateUniversalCategoryDisparity(query: string, candidateName:
     return 3000;
   }
 
+  // 1b. Sweet Spread / Jam vs Raw Fruit Disparity
+  if (/\b(jam|jelly|preserves?|marmalade|fruit\s*spread|syrup|honey|nutella)\b/i.test(query) &&
+      /\b(raw|fresh|unprepared)\b/i.test(candidateName) &&
+      !/\b(jam|jelly|preserves?|marmalade|spread|sweetened)\b/i.test(candidateName)) {
+    return 3000;
+  }
+
+  // 1c. Dressed / Prepared Salad vs Raw Produce Commodity Disparity
+  if (/\b(seaweed\s*salad|wakame\s*salad|potato\s*salad|pasta\s*salad|coleslaw|egg\s*salad|chicken\s*salad|tuna\s*salad)\b/i.test(query) &&
+      /\b(raw|kelp|seaweed|sea\s*vegetable|potato|pasta|cabbage)\b/i.test(candidateName) &&
+      !/\b(salad|prepared|dressed|mayonnaise|sesame\s*oil|vinaigrette)\b/i.test(candidateName)) {
+    return 3000;
+  }
+
   // 2. Liquid Beverage vs Solid Cheese/Meat Disparity
   if (qForm.primaryCategory === 'beverage' && (cForm.primaryCategory === 'meat_seafood' || cForm.primaryCategory === 'dairy_solid')) {
     return 3000;

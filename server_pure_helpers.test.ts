@@ -475,4 +475,33 @@ describe('server_pure_helpers', () => {
       expect(nutrients.potassium).toBe(350);
     });
   });
+
+  describe('pipeline safeguards & mass/state compatibility', () => {
+    it('blocks raw commodity matches for prepared sweet spreads', async () => {
+      const { checkCategoryAndStateCompatibility } = await import('./server_pure_helpers');
+      const res = checkCategoryAndStateCompatibility('Strawberry Jam', 'Strawberries, raw');
+      expect(res.compatible).toBe(false);
+    });
+
+    it('blocks raw kelp matches for dressed seaweed salad', async () => {
+      const { checkCategoryAndStateCompatibility } = await import('./server_pure_helpers');
+      const res = checkCategoryAndStateCompatibility('Seaweed Salad', 'Seaweed, kelp, raw');
+      expect(res.compatible).toBe(false);
+    });
+
+    it('enforces moisture and mass conservation ceiling for gelatin/mousse desserts', () => {
+      const nutrients: Record<string, number> = {
+        calories: 500,
+        protein: 10,
+        carbohydrates: 100,
+        totalFat: 20,
+        sugar: 90
+      };
+      // For 120g fruit jelly, 130g total macros is physically impossible
+      applyNutrientRealityChecks('Fruit Jelly Dessert', 120, nutrients, 50, undefined, 'estimated');
+      const totalMacros = (nutrients.protein || 0) + (nutrients.carbohydrates || 0) + (nutrients.totalFat || 0);
+      expect(totalMacros).toBeLessThanOrEqual(120 * 0.45 + 0.1); // Max 45% dry matter
+      expect(nutrients.sugar).toBeLessThanOrEqual(nutrients.carbohydrates || 0);
+    });
+  });
 });

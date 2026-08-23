@@ -254,6 +254,8 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   cherry_tomato: { fdcId: "170010", calories: 18, protein: 0.9, totalFat: 0.2, saturatedFat: 0, transFat: 0, carbohydrates: 3.9, sugar: 2.6, sodium: 5, potassium: 237, totalFibre: 1.2, vitaminC: 13.7, vitaminA: 42, calcium: 10, magnesium: 11, iron: 0.27, foodType: 'leafy_veg' },
   white_rice: { fdcId: "169756", calories: 130, protein: 2.7, totalFat: 0.3, saturatedFat: 0.1, transFat: 0, carbohydrates: 28.2, sugar: 0.1, sodium: 1, potassium: 35, totalFibre: 0.4, calcium: 10, magnesium: 12, iron: 0.2, zinc: 0.49, foodType: 'grain' },
   rice_congee: { fdcId: null, calories: 45, protein: 1.3, totalFat: 0.3, saturatedFat: 0.05, transFat: 0, carbohydrates: 9.5, sugar: 0.1, sodium: 5, potassium: 20, totalFibre: 0.2, calcium: 4, magnesium: 5, iron: 0.1, zinc: 0.2, foodType: 'grain' },
+  seaweed_salad: { fdcId: "seaweed_salad_canonical", calories: 85, protein: 1.5, totalFat: 6.0, saturatedFat: 1.0, transFat: 0, carbohydrates: 8.5, sugar: 3.0, sodium: 650, potassium: 150, totalFibre: 1.5, calcium: 50, magnesium: 30, iron: 1.0, zinc: 0.3, foodType: 'prepared dish/entree' },
+  fruit_jam: { fdcId: "172081", calories: 250, protein: 0.4, totalFat: 0.1, saturatedFat: 0, transFat: 0, carbohydrates: 65.0, sugar: 49.0, sodium: 15, potassium: 75, totalFibre: 1.0, calcium: 15, magnesium: 5, iron: 0.2, zinc: 0.1, foodType: 'ultra_processed' },
   chicken_breast: { fdcId: "171077", calories: 165, protein: 31.0, totalFat: 3.6, saturatedFat: 1.0, transFat: 0, carbohydrates: 0, sugar: 0, sodium: 74, potassium: 256, totalFibre: 0, calcium: 15, magnesium: 29, iron: 1.0, zinc: 1.0, foodType: 'poultry' },
   breaded_chicken_tender: { fdcId: "171057", calories: 268, protein: 15.6, totalFat: 14.5, saturatedFat: 2.6, transFat: 0, carbohydrates: 18.7, sugar: 0.5, sodium: 604, potassium: 220, totalFibre: 1.2, foodType: 'poultry' },
   white_fish: { fdcId: "171986", calories: 90, protein: 19.0, totalFat: 1.2, saturatedFat: 0.3, transFat: 0, carbohydrates: 0, sugar: 0, sodium: 80, potassium: 338, totalFibre: 0, calcium: 16, magnesium: 32, iron: 0.4, foodType: 'fish_lean' },
@@ -326,6 +328,8 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   low_fat_yogurt: { fdcId: "170903", calories: 63, protein: 5.25, totalFat: 1.55, saturatedFat: 1.0, transFat: 0, carbohydrates: 7.04, sugar: 7.04, sodium: 70, potassium: 230, totalFibre: 0, foodType: 'dairy' },
   cooked_mushrooms: { fdcId: "169252", calories: 28, protein: 2.2, totalFat: 0.5, saturatedFat: 0.1, transFat: 0, carbohydrates: 4.4, sugar: 2.0, sodium: 4, potassium: 356, totalFibre: 2.2, foodType: 'leafy_veg' },
   mushrooms: { fdcId: "169252", calories: 28, protein: 2.2, totalFat: 0.5, saturatedFat: 0.1, transFat: 0, carbohydrates: 4.4, sugar: 2.0, sodium: 4, potassium: 356, totalFibre: 2.2, foodType: 'leafy_veg' },
+  bok_choy: { fdcId: "170390", calories: 13, protein: 1.5, totalFat: 0.2, saturatedFat: 0.03, transFat: 0, carbohydrates: 2.18, sugar: 1.18, sodium: 65, potassium: 252, totalFibre: 1.0, vitaminC: 45, vitaminA: 223, calcium: 105, magnesium: 19, iron: 0.8, foodType: 'leafy_veg' },
+  raw_beef_cut: { fdcId: "170197", calories: 217, protein: 26.1, totalFat: 11.8, saturatedFat: 4.6, transFat: 0.5, carbohydrates: 0, sugar: 0, sodium: 55, potassium: 318, totalFibre: 0, iron: 2.6, zinc: 5.8, magnesium: 21, phosphorus: 200, foodType: 'red_meat' },
   sea_salt: { fdcId: "173468", calories: 0, protein: 0, totalFat: 0, saturatedFat: 0, transFat: 0, carbohydrates: 0, sugar: 0, sodium: 38758, potassium: 8, totalFibre: 0, foodType: 'processed' }
 };
 
@@ -461,6 +465,8 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   if (clean.includes('macaroni_and_cheese') || clean.includes('mac_and_cheese') || clean.includes('mac_n_cheese') || clean.includes('macaroni_cheese')) return CANONICAL_BASE_FOODS.macaroni_and_cheese;
   if (clean.includes('macaroni') || clean.includes('elbow_pasta')) return CANONICAL_BASE_FOODS.macaroni_pasta;
   if (clean.includes('lettuce') || clean.includes('romaine')) return CANONICAL_BASE_FOODS.romaine_lettuce;
+  if (clean.includes('bok_choy') || clean.includes('pak_choi') || clean.includes('caisim') || clean.includes('choy_sum') || clean.includes('baby_bok_choy')) return CANONICAL_BASE_FOODS.bok_choy;
+  if (clean.includes('empal') || clean.includes('daging') || clean.includes('beef_blade') || clean.includes('beef_chuck') || clean.includes('beef_cut') || clean.includes('beef_brisket')) return CANONICAL_BASE_FOODS.raw_beef_cut;
   if (clean.includes('tartar') || clean.includes('tartar_sauce') || clean.includes('tartar sauce')) return CANONICAL_BASE_FOODS.tartar_sauce;
   if (clean.includes('american_cheese') || clean.includes('american cheese') || (clean.includes('cheese') && clean.includes('processed'))) return CANONICAL_BASE_FOODS.american_cheese;
   if (clean.includes('mayo') || clean.includes('mayonnaise')) return CANONICAL_BASE_FOODS.mayonnaise;
@@ -476,16 +482,19 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   if (tokens.includes('rice') && (clean.includes('porridge') || clean.includes('congee'))) return CANONICAL_BASE_FOODS.rice_congee;
   if (tokens.includes('rice')) return CANONICAL_BASE_FOODS.white_rice;
   if (clean.includes('white_fish') || (tokens.includes('fish') && !tokens.includes('salmon'))) return CANONICAL_BASE_FOODS.white_fish;
+  if (clean.includes('seaweed_salad') || clean.includes('wakame_salad') || clean.includes('wakame') || (clean.includes('seaweed') && (clean.includes('salad') || clean.includes('side')))) return CANONICAL_BASE_FOODS.seaweed_salad;
   if (clean.includes('watermelon')) return CANONICAL_BASE_FOODS.watermelon;
   if (clean.includes('honeydew') || clean.includes('melon')) return CANONICAL_BASE_FOODS.honeydew;
   if (clean.includes('margarine')) return CANONICAL_BASE_FOODS.margarine;
   if (clean.includes('bread_roll') || clean.includes('dinner_roll')) return CANONICAL_BASE_FOODS.bread_roll;
+  if ((clean.includes('butter') && !clean.includes('peanut_butter') && !clean.includes('almond_butter') && !clean.includes('butter_croissant') && !clean.includes('butter_chicken')) || clean.includes('lurpak')) return CANONICAL_BASE_FOODS.butter;
   if (clean.includes('pomegranate')) return CANONICAL_BASE_FOODS.pomegranate_seed;
   if (clean.includes('sesame_seed') || (clean.includes('sesame') && clean.includes('seed'))) return CANONICAL_BASE_FOODS.sesame_seed;
   if (clean.includes('sugar_syrup') || clean.includes('simple_syrup') || (clean.includes('sugar') && clean.includes('syrup')) || clean.includes('corn_syrup')) return CANONICAL_BASE_FOODS.sugar_syrup;
   if (clean.includes('citrus_juice') || clean.includes('orange_juice') || (clean.includes('orange') && (clean.includes('juice') || clean.includes('drink'))) || (clean.includes('citrus') && (clean.includes('juice') || clean.includes('drink')))) return CANONICAL_BASE_FOODS.citrus_juice;
   if (clean.includes('espresso') || clean.includes('brewed_espresso') || clean.includes('cold_brew_espresso')) return CANONICAL_BASE_FOODS.espresso;
   if (!clean.includes('cheese') && !clean.includes('mozzarella') && !clean.includes('ricotta') && (clean.includes('milk') || clean.includes('whole_cow_milk') || clean.includes('steamed_milk') || clean.includes('cow_milk') || clean.includes('whole_milk'))) return CANONICAL_BASE_FOODS.whole_cow_milk;
+  if (clean.includes('jam') || clean.includes('preserves') || clean.includes('marmalade') || clean.includes('jelly_spread') || (clean.includes('fruit') && clean.includes('spread'))) return CANONICAL_BASE_FOODS.fruit_jam;
   if (tokens.includes('grapes') || tokens.includes('grape') || clean.includes('red_grapes') || clean.includes('green_grapes')) return CANONICAL_BASE_FOODS.grapes;
   if (tokens.includes('banana') || tokens.includes('bananas')) return CANONICAL_BASE_FOODS.banana;
   if (tokens.includes('nectarine') || tokens.includes('nectarines')) return CANONICAL_BASE_FOODS.nectarine;

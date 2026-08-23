@@ -1,7 +1,23 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-22
-**Status:** Q-6.4 Promote deferred. Parametric Verification bug fixed and passing regression.
+**Updated:** 2026-08-23
+**Status:** Multi-pass density drift, systemic anti-commodity collapse safeguards, mass & moisture conservation, self-healing divergence recovery, and jam canonical mapping active and verified (74/74 files, 702/702 tests).
+
+- **Systemic Anti-Commodity Collapse & Physical Form Disparity Safeguards (2026-08-23):**
+  - **Self-Healing Foundation Divergence Recovery (`server.ts`):** Added automatic category profile fallback when single-component soft items trigger severe foundation-budget divergence (<0.35x or >2.8x), repairing raw-commodity collapse before meal finalization.
+  - **Mass and Moisture Conservation Guard (`server_pure_helpers.ts`):** Bound total physical dry matter based on moisture category (max 45% dry matter for jellies, mousses, puddings, soups, and 15% for watery drinks), preventing multi-pass macro distortion and impossible water displacement.
+  - **Head-Noun & Disparity Matching Gate:** Added `evaluateUniversalCategoryDisparity` rules in `server_matching_engine.ts` applying a `+3000` penalty when prepared sweet spreads (jam, marmalade, preserves) or dressed salads (seaweed salad, potato salad) match raw agricultural commodities (raw fruit, raw kelp).
+  - **Cross-Engine Category & State Compatibility Gate:** Updated `checkCategoryAndStateCompatibility` in `server_pure_helpers.ts` to reject raw/fresh commodity candidates for prepared dishes, confections, dressed salads, and spreads across deterministic and curator pipelines.
+  - **Master Curator Anti-Commodity Contract:** Added Rule 7 (`ANTI-COMMODITY COLLAPSE RULE`) to `agents/foodResolverInstructions.ts` prohibiting the LLM curator from collapsing prepared/sweetened/dressed foods into single-ingredient agricultural commodities.
+  - **Fruit Jam / Preserves Canonical Base Food & Fallback Profile:** Added `fruit_jam` canonical entry (`fdcId: "172081"`, 250 kcal, 65g carbs, 49g sugar) to `server_food_db.ts` and `sweet_spread` profile to `server_food_catalog.ts`. Mapped `jam|preserves|marmalade` queries prior to raw fruit checks, preventing strawberry jam from resolving to raw strawberries (32 kcal).
+  - **Thermodynamic Density Gate & Mousse/Jelly Calibration:** Excluded processed sweets, pastries, cakes, and mousses from the strict ≤90 kcal/100g fresh produce ceiling in `checkThermodynamicDensitySanity`. Calibrated Dietitian Reality Check bounds (`[50, 300]` kcal/100g) for high-moisture desserts (`jelly`, `gelatin`, `mousse`, `pudding`, `custard`) in `server_pure_helpers.ts`, eliminating over-rescaling and macro distortion.
+  - **Standalone Butter/Spread Sauce Guard:** Added `isStandaloneCondimentOrFat` check in `server.ts` to prevent standalone condiments, butter (e.g. Lurpak), spreads, and fats from injecting redundant sauce rows onto themselves.
+
+- **Nutritional Logging Regression Fixes (2026-08-23):**
+  - **Seaweed Salad (Wakame) Macro Density:** Added canonical base food and category fallback profile for `seaweed_salad` (85 kcal / 6g fat / 650mg sodium per 100g) in `server_food_db.ts` and `server_food_catalog.ts`, resolving 20 kcal/0.8g fat raw kelp misattribution.
+  - **Main Dish Sodium Suppression in Glazed/Braised Dishes:** Updated `server_pure_helpers.ts` (`applyCommercialCookingFloors`) and `server.ts` (`getClinicalDefaultNutrients100g`) to properly calculate sodium floors and profiles for braised/glazed/teriyaki dishes, preventing sodium from dropping to implausible raw ingredient levels.
+  - **Main Dish Vegetable Component Reconciliation:** Expanded `GARNISH_VEGETABLE_REGEX` and `reconcileIngredientsToComponents` in `server_vision_scout.ts` to ensure all detected vegetables (e.g. zucchini, carrots, peppers, edamame) in `visualIngredients` or labels receive non-zero component volume allocations.
+  - **Orange Juice Portion Fill Estimation:** Updated scout prompt instructions in `server_vision_scout.ts` to calibrate beverage portion estimates from visible liquid fill heights rather than assuming a full cup.
 
 - **Parametric Verification Semantic Token & Macro Relaxation (2026-08-22):**
   - **Verification Filter Bypass:** Removed raw substring token overlap (`< 0.65`) from `verifyId` in `server_food_resolver_curator.ts`. Semantic token validation is now correctly handled by the LLM parametric food name mapping without strictly penalizing natural queries that differ from inverted clinical USDA titles.
