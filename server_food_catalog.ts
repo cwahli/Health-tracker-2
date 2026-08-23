@@ -552,6 +552,18 @@ export const DEFAULT_CATEGORY_PROFILES: Record<string, Record<string, number>> =
     potassium: 25, calcium: 20, magnesium: 2, phosphorus: 15, iron: 0.05, zinc: 0.1, selenium: 0.3, iodine: 2,
     vitaminA: 600, vitaminD: 1.0, vitaminE: 2.0, vitaminK: 5.0, vitaminB12: 0, folate: 0, vitaminB6: 0, thiamine: 0, riboflavin: 0, niacin: 0, vitaminC: 0
   },
+  oil_unsaturated: {
+    calories: 884, protein: 0, carbohydrates: 0, totalFat: 100.0, saturatedFat: 9.0, unsaturatedFat: 91.0,
+    sugar: 0, addedSugar: 0, totalFibre: 0, solubleFibre: 0, sodium: 0,
+    potassium: 0, calcium: 0, magnesium: 0, phosphorus: 0, iron: 0, zinc: 0, selenium: 0, iodine: 0,
+    vitaminA: 0, vitaminD: 0, vitaminE: 17.0, vitaminK: 25.0, vitaminB12: 0, folate: 0, vitaminB6: 0, thiamine: 0, riboflavin: 0, niacin: 0, vitaminC: 0
+  },
+  oil_saturated: {
+    calories: 862, protein: 0, carbohydrates: 0, totalFat: 100.0, saturatedFat: 82.0, unsaturatedFat: 18.0,
+    sugar: 0, addedSugar: 0, totalFibre: 0, solubleFibre: 0, sodium: 0,
+    potassium: 0, calcium: 0, magnesium: 0, phosphorus: 0, iron: 0.04, zinc: 0, selenium: 0, iodine: 0,
+    vitaminA: 0, vitaminD: 0, vitaminE: 0.5, vitaminK: 0.5, vitaminB12: 0, folate: 0, vitaminB6: 0, thiamine: 0, riboflavin: 0, niacin: 0, vitaminC: 0
+  },
   jelly_dessert: {
     calories: 85, protein: 1.5, carbohydrates: 19.0, totalFat: 0.1, saturatedFat: 0, unsaturatedFat: 0.05,
     sugar: 16.0, addedSugar: 14.0, totalFibre: 0.3, solubleFibre: 0.1, sodium: 55,
@@ -684,6 +696,8 @@ export function getFallbackCategoryProfile(query: string): Record<string, number
   else if (/\b(salt|seasoning|spice|spices|pepper\s*flakes?|iodized)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.seasoning };
   else if (/\b(scallions?|spring\s*onions?|green\s*onions?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.produce };
   else if (/\b(spreadable|margarine|ghee)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.fat_spread };
+  else if (/\b(coconut\s*oil|palm\s*oil|palm\s*kernel\s*oil|lard|shortening)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.oil_saturated };
+  else if (/\b(oil|oils|canola|olive\s*oil|vegetable\s*oil|sunflower\s*oil|soybean\s*oil|corn\s*oil|rapeseed\s*oil|peanut\s*oil|sesame\s*oil|frying\s*oil|cooking\s*oil|grapeseed\s*oil|avocado\s*oil)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.oil_unsaturated };
   else if (/\b(brownies?|cakes?|cookies?|chocolates?|cand(?:y|ies)|pies?|tarts?|fudge|desserts?|sweets?|biscuits?|puddings?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dessert };
   else if (/\b(croissants?|pastr(?:y|ies)|danish(?:es)?|muffins?|donuts?|doughnuts?|brioche|scones?|puffs?|bakery|bakeries|roll|swirl)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.pastry };
   else if (/\b(eggs?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.egg };
