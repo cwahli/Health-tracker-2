@@ -384,3 +384,16 @@ describe("server_vision_scout", () => {
     });
   });
 });
+
+    it("does not merge sweet chilli mini fillets label", () => {
+      const label = { originalName: "Quorn Sweet Chilli Mini Fillets Nutrition Facts Label" };
+      const food = { originalName: "Quorn Sweet Chilli Mini Fillets" };
+      const d = canMergeScoutLabelIntoFood(label, food);
+      expect(d.ok).toBe(true);
+    });
+    it("uses Scout Dedupe for True Friends", () => {
+      const label = { originalName: "Tesco Vegan Chicken Nuggets Nutrition Facts Label" };
+      const food = { originalName: "Tesco Vegan Chicken Nuggets" };
+      const d = canMergeScoutLabelIntoFood(label, food);
+      expect(d.ok).toBe(true);
+    });

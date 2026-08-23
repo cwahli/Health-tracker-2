@@ -1287,7 +1287,13 @@ export function parseAndHealVisionScout(
             break;
           }
 
-          addDebugLog(`[Label Merge] Matched label "${labelItem.originalName || labelItem.keyword}" (sourceImageIndex=${labelItem.sourceImageIndex}) -> "${primaryItem.originalName || primaryItem.keyword}" (sourceImageIndex=${primaryItem.sourceImageIndex}).`);
+          const cleanLabel = (labelItem.originalName || labelItem.keyword || "").toLowerCase().replace(/nutrition\s*facts?\s*label|nutrition\s*label/g, '').replace(/[^a-z0-9]/g, '');
+          const cleanTarget = (primaryItem.originalName || primaryItem.keyword || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (cleanLabel.length > 2 && (cleanLabel === cleanTarget || cleanTarget.includes(cleanLabel) || cleanLabel.includes(cleanTarget))) {
+            addDebugLog(`[Scout Dedupe] deduplicated true-friend label "${labelItem.originalName || labelItem.keyword}" into "${primaryItem.originalName || primaryItem.keyword}" (Image ${primaryItem.sourceImageIndex}).`);
+          } else {
+            addDebugLog(`[Label Merge] Matched label "${labelItem.originalName || labelItem.keyword}" (sourceImageIndex=${labelItem.sourceImageIndex}) -> "${primaryItem.originalName || primaryItem.keyword}" (sourceImageIndex=${primaryItem.sourceImageIndex}).`);
+          }
 
           const labelHasRealData = labelItem.rawNutritionLabel && typeof labelItem.rawNutritionLabel === 'object'
             ? Object.keys(labelItem.rawNutritionLabel).some((k: string) => {

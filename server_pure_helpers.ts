@@ -1585,3 +1585,16 @@ export function applyServerAverageNutrients(
     return g;
   });
 }
+
+export function isLabelPanelItem(item: any): boolean {
+  const orig = (item.canonicalDbName || item.name || item.originalLocalName || "").toLowerCase();
+  const foodKeywords = ["milk", "burger", "fries", "fry", "chicken", "fish", "beef", "fillet", "pork", "salad", "wrap", "bread", "juice", "water", "tea", "coffee", "rice", "noodle", "pasta", "pizza", "cookie", "cake", "fruit", "vegetable", "cheese", "yogurt", "egg", "soup", "stew", "pancake", "waffle", "sausage", "bacon", "steak", "tart", "pie", "donut", "doughnut", "oat", "cereal", "muffin", "soda", "coke"];
+  if (foodKeywords.some(kw => orig.includes(kw))) return false;
+  return orig.includes("nutrition fact") || 
+         orig.includes("informasi nilai gizi") || 
+         orig.includes("komposisi") || 
+         orig.includes("nutrition label") || 
+         orig.includes("back of package") || 
+         orig.includes("printed_packaging_label") ||
+         orig === "label";
+}

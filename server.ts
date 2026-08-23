@@ -147,7 +147,7 @@ export function extractOFFNutrientsPer100g(product: any): Record<string, number>
   return profile;
 }
 
-export async function fetchUSDAFoodById(fdcId: string): Promise<any | null> {
+export async function fetchUSDAFoodById(fdcId: string, retryCount = 1): Promise<any | null> {
   try {
     const usdaApiKey = process.env.USDA_API_KEY || "DEMO_KEY";
     const url = `https://api.nal.usda.gov/fdc/v1/food/${fdcId}?api_key=${usdaApiKey}`;
@@ -155,9 +155,19 @@ export async function fetchUSDAFoodById(fdcId: string): Promise<any | null> {
     const timeout = setTimeout(() => controller.abort(), 15000);
     const response = await fetch(url, { signal: controller.signal as any });
     clearTimeout(timeout);
-    if (!response.ok) return null;
+    if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) {
+      if (retryCount > 0) {
+        await new Promise(r => setTimeout(r, 1000));
+        return await fetchUSDAFoodById(fdcId, retryCount - 1);
+      }
+      return null;
+    }
     return await response.json();
   } catch (err) {
+    if (retryCount > 0) {
+      await new Promise(r => setTimeout(r, 1000));
+      return await fetchUSDAFoodById(fdcId, retryCount - 1);
+    }
     console.error(`[fetchUSDAFoodById] Error fetching FDC ID ${fdcId}:`, err);
     return null;
   }
@@ -176,6 +186,8 @@ export async function fetchOFFProductByBarcode(barcode: string): Promise<any | n
     });
     clearTimeout(timeout);
     if (!response.ok) return null;
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) return null;
     const data = await response.json();
     return data.product || null;
   } catch (err) {
@@ -8297,7 +8309,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         if (rawFoodData.itemsBreakdown.length > 1) {
           const isLabelPanelItem = (item: any) => {
             const orig = (item.canonicalDbName || item.name || item.originalLocalName || "").toLowerCase();
-            const foodKeywords = ["milk", "burger", "fries", "fry", "chicken", "fish", "beef", "pork", "salad", "wrap", "bread", "juice", "water", "tea", "coffee", "rice", "noodle", "pasta", "pizza", "cookie", "cake", "fruit", "vegetable", "cheese", "yogurt", "egg", "soup", "stew", "pancake", "waffle", "sausage", "bacon", "steak", "tart", "pie", "donut", "doughnut", "oat", "cereal", "muffin", "soda", "coke"];
+            const foodKeywords = ["milk", "burger", "fries", "fry", "chicken", "fish", "beef", "fillet", "pork", "salad", "wrap", "bread", "juice", "water", "tea", "coffee", "rice", "noodle", "pasta", "pizza", "cookie", "cake", "fruit", "vegetable", "cheese", "yogurt", "egg", "soup", "stew", "pancake", "waffle", "sausage", "bacon", "steak", "tart", "pie", "donut", "doughnut", "oat", "cereal", "muffin", "soda", "coke"];
             if (foodKeywords.some(kw => orig.includes(kw))) return false;
             return orig.includes("nutrition fact") || 
                    orig.includes("informasi nilai gizi") || 
@@ -8413,7 +8425,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           // Reconcile missing visionScoutItems that the Dietitian LLM omitted
           const isLabelName = (s: string) => {
             const orig = String(s || '').toLowerCase();
-            const foodKeywords = ["milk", "burger", "fries", "fry", "chicken", "fish", "beef", "pork", "salad", "wrap", "bread", "juice", "water", "tea", "coffee", "rice", "noodle", "pasta", "pizza", "cookie", "cake", "fruit", "vegetable", "cheese", "yogurt", "egg", "soup", "stew", "pancake", "waffle", "sausage", "bacon", "steak", "tart", "pie", "donut", "doughnut", "oat", "cereal", "muffin", "soda", "coke", "drink", "beverage", "salami", "kefir"];
+            const foodKeywords = ["milk", "burger", "fries", "fry", "chicken", "fish", "beef", "fillet", "pork", "salad", "wrap", "bread", "juice", "water", "tea", "coffee", "rice", "noodle", "pasta", "pizza", "cookie", "cake", "fruit", "vegetable", "cheese", "yogurt", "egg", "soup", "stew", "pancake", "waffle", "sausage", "bacon", "steak", "tart", "pie", "donut", "doughnut", "oat", "cereal", "muffin", "soda", "coke", "drink", "beverage", "salami", "kefir"];
             if (foodKeywords.some(kw => orig.includes(kw))) return false;
             return orig.includes("nutrition fact") || 
                    orig.includes("informasi nilai gizi") || 

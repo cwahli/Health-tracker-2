@@ -505,3 +505,11 @@ describe('server_pure_helpers', () => {
     });
   });
 });
+
+import { isLabelPanelItem } from "./server_pure_helpers.js";
+
+describe("isLabelPanelItem", () => {
+  it("rejects items containing fillet as a label", () => {
+    expect(isLabelPanelItem({ name: "Quorn Sweet Chilli Mini Fillets Nutrition Facts Label" })).toBe(false);
+  });
+});

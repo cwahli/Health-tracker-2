@@ -61,7 +61,14 @@ export function extractLedgerBooks(input: { logText?: string; foodLog?: any; sco
     ? input.scout
     : input.scout?.items || input.scout?.scoutItems || [];
   const scoutEst = sum(
-    (scoutItems || []).map((s: any) => num(s.estimatedCalories ?? s.calories))
+    (scoutItems || []).map((s: any) => {
+      const printed = s.rawNutritionLabel?.calories;
+      if (printed != null) {
+        const val = num(printed);
+        if (val != null) return val;
+      }
+      return num(s.estimatedCalories ?? s.calories);
+    })
   );
 
   const foundationBy = new Map<string, number>();
