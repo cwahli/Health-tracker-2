@@ -917,7 +917,7 @@ export function applyNutrientRealityChecks(
     dbSource === "kiosk" || 
     dbSource === "screen" || 
     dbSource === "menu" || 
-    (typeof dbSource === "string" && dbSource.startsWith("label") && dbSource !== "label_partial");
+    (typeof dbSource === "string" && dbSource.startsWith("label"));
 
   if (isLabelOrScreenSource) {
     if (addDebugLog) {
@@ -1008,7 +1008,11 @@ export function applyNutrientRealityChecks(
   // 4. Sodium Reality Check
   const isCuredOrSalted = nameLower.includes('cured') || nameLower.includes('bacon') || nameLower.includes('ham') || 
                           nameLower.includes('sausage') || nameLower.includes('soy sauce') || nameLower.includes('salted') || 
-                          nameLower.includes('anchovy') || nameLower.includes('pickle') || nameLower.includes('fish sauce');
+                          nameLower.includes('anchovy') || nameLower.includes('pickle') || nameLower.includes('fish sauce') ||
+                          nameLower.includes('chilli') || nameLower.includes('chili') || nameLower.includes('sauce') ||
+                          nameLower.includes('seasoned') || nameLower.includes('glazed') || nameLower.includes('marinated') ||
+                          nameLower.includes('bbq') || nameLower.includes('teriyaki') || nameLower.includes('curry') ||
+                          nameLower.includes('tikka') || nameLower.includes('quorn');
   const sodiumPer100g = (itemNutrients.sodium / itemWeight) * 100;
   if (!isCuredOrSalted && sodiumPer100g > 500) {
     const realisticSodium = Math.round((250 + (addedSodium / (itemWeight / 100) || 150)) * (itemWeight / 100));
@@ -1099,10 +1103,13 @@ export function applyNutrientRealityChecks(
       fruit_vegetable: [10, 180],
       beverage: [0, 220],
       sauce_condiment: [20, 750],
+      compound_meal: [80, 520],
+      prepared_dish: [80, 520],
     };
     const pfClass = classifyUniversalPhysicalFormV3({ name: itemName, canonicalDbName: itemName, keyword: itemName });
     const isJellyOrMousse = /\b(jelly|gelatin|mousse|pudding|custard|flan)\b/i.test(itemName);
-    const bounds = isJellyOrMousse ? [50, 300] : CALORIC_DENSITY_BOUNDS[pfClass.primaryCategory];
+    const isWrapOrSandwich = /\b(wrap|sandwich|burrito|panini|burger|sub|taco)\b/i.test(itemName);
+    const bounds = isJellyOrMousse ? [50, 300] : isWrapOrSandwich ? [80, 550] : (CALORIC_DENSITY_BOUNDS[pfClass.primaryCategory] || [50, 600]);
     if (bounds) {
       const [floor, ceiling] = bounds;
       const caloriesPer100g = (itemNutrients.calories / itemWeight) * 100;

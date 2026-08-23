@@ -7059,6 +7059,28 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         addDebugLog(`[Budget] stripped non-genuine calorie lock for "${itemNameForBudget}" (source=${primaryDbSource})`);
       }
 
+      if (hardLabelKcal != null && hardLabelKcal > 0) {
+        if (aggregatedNutrients.calories > 0 && Math.abs(aggregatedNutrients.calories - hardLabelKcal) > 1) {
+          const scale = hardLabelKcal / aggregatedNutrients.calories;
+          for (const k of ['protein', 'carbohydrates', 'totalFat', 'saturatedFat', 'sodium', 'sugar', 'totalFibre']) {
+            if (typeof aggregatedNutrients[k] === 'number') {
+              aggregatedNutrients[k] = Math.round(aggregatedNutrients[k] * scale * 10) / 10;
+            }
+          }
+          if (Array.isArray(componentsDetailList) && componentsDetailList.length > 0) {
+            componentsDetailList.forEach((s: any) => {
+              if (!s || typeof s !== 'object') return;
+              if (s.calories != null) s.calories = Math.round(s.calories * scale * 10) / 10;
+              if (s.protein != null) s.protein = Math.round(s.protein * scale * 10) / 10;
+              if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * scale * 10) / 10;
+              if (s.saturatedFat != null) s.saturatedFat = Math.round(s.saturatedFat * scale * 10) / 10;
+              if (s.sodium != null) s.sodium = Math.round(s.sodium * scale * 10) / 10;
+            });
+          }
+        }
+        aggregatedNutrients.calories = hardLabelKcal;
+      }
+
       const budgetRes = computeItemBudget({
         itemName: itemNameForBudget,
         weightGrams: itemWeight,
@@ -9219,6 +9241,40 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
           // Plus components / sauces:
           if (it.componentsDetailList && Array.isArray(it.componentsDetailList) && it.componentsDetailList.length > 0) {
+            const targetKcal = Number(it.truthNutrients?.calories ?? it.calories);
+            if (targetKcal > 0) {
+              const rawCompSum = it.componentsDetailList.reduce((acc: number, c: any) => acc + (Number(c.calories) || 0), 0);
+              if (rawCompSum > 0 && Math.abs(rawCompSum * scaleRatio - targetKcal) > 1) {
+                const cScale = targetKcal / (rawCompSum * scaleRatio);
+                it.componentsDetailList.forEach((s: any) => {
+                  if (!s || typeof s !== 'object') return;
+                  if (s.calories != null) s.calories = Math.round(s.calories * cScale * 10) / 10;
+                  if (s.protein != null) s.protein = Math.round(s.protein * cScale * 10) / 10;
+                  if (s.totalFat != null) s.totalFat = Math.round(s.totalFat * cScale * 10) / 10;
+                  if (s.saturatedFat != null) s.saturatedFat = Math.round(s.saturatedFat * cScale * 10) / 10;
+                  if (s.sodium != null) s.sodium = Math.round(s.sodium * cScale * 10) / 10;
+                });
+              }
+            }
+            const targetSodium = Number(it.truthNutrients?.sodium ?? it.sodium ?? 0);
+            if (targetSodium > 0) {
+              const rawSodiumSum = it.componentsDetailList.reduce((acc: number, c: any) => acc + (Number(c.sodium) || 0), 0);
+              if (rawSodiumSum === 0) {
+                const compCount = it.componentsDetailList.length;
+                it.componentsDetailList.forEach((s: any) => {
+                  if (s && typeof s === 'object') {
+                    s.sodium = Math.round(targetSodium / compCount);
+                  }
+                });
+              } else if (Math.abs(rawSodiumSum * scaleRatio - targetSodium) > 5) {
+                const sScale = targetSodium / (rawSodiumSum * scaleRatio);
+                it.componentsDetailList.forEach((s: any) => {
+                  if (s && typeof s === 'object' && s.sodium != null) {
+                    s.sodium = Math.round(s.sodium * sScale * 10) / 10;
+                  }
+                });
+              }
+            }
             it.componentsDetailList.forEach((s: any) => {
               const sCal = Math.round((s.calories || 0) * scaleRatio);
               const sP = Math.round((s.protein || 0) * scaleRatio * 10) / 10;

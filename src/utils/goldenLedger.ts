@@ -62,12 +62,28 @@ export function extractLedgerBooks(input: { logText?: string; foodLog?: any; sco
     : input.scout?.items || input.scout?.scoutItems || [];
   const scoutEst = sum(
     (scoutItems || []).map((s: any) => {
-      const printed = s.rawNutritionLabel?.calories;
-      if (printed != null) {
-        const val = num(printed);
-        if (val != null) return val;
+      if (s?.rawNutritionLabelPerPack?.calories != null) {
+        const v = num(s.rawNutritionLabelPerPack.calories);
+        if (v != null) return v;
       }
-      return num(s.estimatedCalories ?? s.calories);
+      if (s?.rawNutritionLabel?.calories != null) {
+        const rawVal = num(s.rawNutritionLabel.calories);
+        if (rawVal != null) {
+          const ss = String(s.rawNutritionLabel.servingSize || '').toLowerCase();
+          if ((ss.includes('100g') || ss.includes('100ml')) && s.estimatedWeightGrams) {
+            const wt = num(s.estimatedWeightGrams);
+            if (wt != null && wt > 0) {
+              return Math.round((rawVal * wt) / 100);
+            }
+          }
+          return rawVal;
+        }
+      }
+      if (Array.isArray(s?.components) && s.components.length > 0) {
+        const compSum = sum(s.components.map((c: any) => num(c.calories)));
+        if (compSum != null && compSum > 0) return compSum;
+      }
+      return num(s?.estimatedCalories ?? s?.calories);
     })
   );
 

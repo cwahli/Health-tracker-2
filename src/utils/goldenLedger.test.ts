@@ -80,6 +80,50 @@ macroTotals={"calories":982}
     expect(imbalances.some((i) => i.id === 'ledger_scout_est_vs_saved_table')).toBe(true);
   });
 
+  it('uses printed label calories for scout opening when rawNutritionLabel is present', () => {
+    const books = extractLedgerBooks({
+      scout: [
+        { estimatedCalories: 453, rawNutritionLabel: { calories: '997 kcal' } },
+        { estimatedCalories: 68, rawNutritionLabel: { calories: '39 kcal' } },
+      ],
+      foodLog: { nutrients: { calories: 1036 } },
+    });
+    const scout = books.find((b) => b.id === 'scout_est');
+    expect(scout?.kcal).toBe(1036);
+  });
+
+  it('detects no foundation vs reconcile drift when hard label calories match reconcile', () => {
+    const imbalances = detectLedgerImbalances({
+      logText: '[Foundation] item="Sweet Chilli Chicken Wrap" kcal=997.0\n[Reconcile] item="Sweet Chilli Chicken Wrap" action=keep foundation=997.0 budget=997.0 final=997.0 factor=1.000',
+      foodLog: { nutrients: { calories: 997 } },
+    });
+    expect(imbalances.some((i) => i.id === 'ledger_foundation_vs_reconcile')).toBe(false);
+  });
+
+  it('detects no receipt repaired imbalance when component rows match item total', () => {
+    const imbalances = detectLedgerImbalances({
+      logText: '[ReceiptInvariant] OK item="Sweet Chilli Chicken Wrap" rowSum=997 itemCal=997',
+      foodLog: { nutrients: { calories: 997 } },
+    });
+    expect(imbalances.some((i) => i.id === 'ledger_receipt_repaired')).toBe(false);
+  });
+
+  it('detects no ledger density override imbalance when component row sum matches composite target', () => {
+    const imbalances = detectLedgerImbalances({
+      logText: '[LedgerInvariant] composite "Sweet Chilli Chicken Wrap": using row-sum totals, reality-check mutations ignored',
+      foodLog: { nutrients: { calories: 997 } },
+    });
+    expect(imbalances.some((i) => i.id === 'ledger_density_override')).toBe(false);
+  });
+
+  it('detects no dietitian rewrite imbalance when label items skip reality check', () => {
+    const imbalances = detectLedgerImbalances({
+      logText: '[Dietitian Reality Check] Heuristic checks skipped for "Sweet Chilli Chicken Wrap" — dbSource is "label_partial" (printed label/screen/menu is ground truth).',
+      foodLog: { nutrients: { calories: 997 } },
+    });
+    expect(imbalances.some((i) => i.id === 'ledger_dietitian_rewrite')).toBe(false);
+  });
+
   it('compiler refuses promote when books disagree or replay is catalog', () => {
     const unbalanced = compileGoldenMeal({
       logText: TAPE,
