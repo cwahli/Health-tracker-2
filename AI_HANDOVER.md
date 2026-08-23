@@ -1,7 +1,11 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-21
-**Status:** Q-6.4 Promote deferred. `#11` still picnic-tape red until Re-analyze restages. Not meal-green.
+**Updated:** 2026-08-22
+**Status:** Q-6.4 Promote deferred. Parametric Verification bug fixed and passing regression.
+
+- **Parametric Verification Semantic Token & Macro Relaxation (2026-08-22):**
+  - **Verification Filter Bypass:** Removed raw substring token overlap (`< 0.65`) from `verifyId` in `server_food_resolver_curator.ts`. Semantic token validation is now correctly handled by the LLM parametric food name mapping without strictly penalizing natural queries that differ from inverted clinical USDA titles.
+  - **Macro Relaxation:** Broadened `checkMacroBoundary` for generic commodities (e.g., cheese protein minimum to 7g, fresh fruit carbohydrate ceiling to 35g) to gracefully accommodate valid items like soft cheeses, marinades, and sugar-dense fruits (e.g., bananas).
 
 - **Batch Bug Paste Support in Bug Tracker & Snapshot (2026-08-21)**:
   - **Parser Engine (`src/utils/bugBatchParser.ts`)**: Built robust parser supporting multi-line strings, markdown/bullet lists (`-`, `•`, `*`, `1.`, `[ ]`), and concatenated single-paragraph `Title: description.` formats (such as pasting multi-bug paragraphs).

@@ -2250,7 +2250,7 @@ export async function searchBrandMenuItems(query: string, explicitChainKey?: str
 
   matches.sort((a, b) => b.score - a.score);
 
-  return matches.slice(0, 5).map(({ item: matchedItem }) => {
+  return matches.slice(0, 5).map(({ item: matchedItem, score: matchScore }) => {
     const cleanIngredients = cleanDescriptionText(matchedItem.ingredients || matchedItem.description || '');
     const saltG = matchedItem.nutrients?.salt ?? (matchedItem.nutrients?.sodium ? matchedItem.nutrients.sodium / 400 : undefined);
     const sodiumMg = matchedItem.nutrients?.sodium ?? (saltG ? Math.round(saltG * 400) : undefined);
@@ -2273,7 +2273,8 @@ export async function searchBrandMenuItems(query: string, explicitChainKey?: str
       other.dish_name !== matchedItem.dish_name
     );
 
-    const isOcrCollision = chainItemsWithSameCals.length >= 1;
+    const isExactOrStrongMatch = matchScore >= 0.92 || normalizeDishKey(matchedItem.dish_name) === normQ;
+    const isOcrCollision = !isExactOrStrongMatch && chainItemsWithSameCals.length >= 1;
 
     return {
       id: `brand_menu_${matchedItem.id || matchedItem.dish_name_key || normalizeDishKey(matchedItem.dish_name)}`,
