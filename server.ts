@@ -5831,6 +5831,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         const isTrustedSource = truthMatch ? (truthMatch.source === 'brand_official' || truthMatch.source === 'label') : false;
         const isMultiComponent = item.components && item.components.length >= 2;
 
+        const impliesSugarDenseCondiment = /\b(jams?|jellies|preserves?|marmalades?|honey|syrups?|treacle|molasses|nutella)\b/.test(nameLower);
+        const webDensityPer100g = itemWeight > 0 ? (webCalsNum / itemWeight) * 100 : webCalsNum;
+
         const webRejected =
           !truthMatch ||
           !(webCalsNum > 0) ||
@@ -5838,6 +5841,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           (!isTrustedSource && (impliesCarbs && webCarbs <= 0 && webFatNum * 9 > webCalsNum * 0.85)) ||
           (!isTrustedSource && atwaterDev > 0.45) ||
           (!isTrustedSource && webFatNum > webCalsNum / 5) ||
+          (!isTrustedSource && impliesSugarDenseCondiment && webDensityPer100g < 150) ||
           (!isTrustedSource && Boolean(detectedChainKey) && registeredChainSources.length === 0);
 
         if (webRejected) {
@@ -7052,6 +7056,15 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
       });
 
       addDebugLog(`[Reconcile] item="${itemNameForBudget}" action=${recRes.action} foundation=${recRes.foundationKcal} budget=${recRes.budgetKcal} final=${recRes.finalKcal} factor=${recRes.scaleFactor.toFixed(3)}`);
+
+      if (!budgetRes.hardLock && recRes.budgetKcal && recRes.foundationKcal > 0) {
+        const foundationBudgetRatio = recRes.foundationKcal / recRes.budgetKcal;
+        if (foundationBudgetRatio < 0.6 || foundationBudgetRatio > 1.7) {
+          if (!item.anomalyFlags) item.anomalyFlags = [];
+          if (!item.anomalyFlags.includes('FOUNDATION_BUDGET_DIVERGENCE')) item.anomalyFlags.push('FOUNDATION_BUDGET_DIVERGENCE');
+          addDebugLog(`[Reconcile] flagged "${itemNameForBudget}" FOUNDATION_BUDGET_DIVERGENCE (ratio=${foundationBudgetRatio.toFixed(2)})`);
+        }
+      }
 
       // Apply reconciled nutrients map
       Object.assign(aggregatedNutrients, recRes.nutrients);

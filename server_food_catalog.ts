@@ -528,6 +528,24 @@ export const DEFAULT_CATEGORY_PROFILES: Record<string, Record<string, number>> =
     potassium: 75, calcium: 35, magnesium: 5, phosphorus: 40, iron: 0.3, zinc: 0.2, selenium: 1.5, iodine: 5,
     vitaminE: 3.5, vitaminK: 45, vitaminA: 20, vitaminB12: 0.1, vitaminB6: 0.02, folate: 6, riboflavin: 0.03, niacin: 0.1, thiamine: 0.02, vitaminC: 0.5, vitaminD: 0.1
   },
+  seasoning: {
+    calories: 2, protein: 0.1, carbohydrates: 0.5, totalFat: 0, saturatedFat: 0, unsaturatedFat: 0,
+    sugar: 0, addedSugar: 0, totalFibre: 0.2, solubleFibre: 0, sodium: 3800,
+    potassium: 10, calcium: 15, magnesium: 2, phosphorus: 2, iron: 0.1, zinc: 0.05, selenium: 0.1, iodine: 5,
+    vitaminC: 0, vitaminA: 0, folate: 0, vitaminK: 0, vitaminE: 0, vitaminB6: 0, thiamine: 0, riboflavin: 0, niacin: 0, vitaminB12: 0, vitaminD: 0
+  },
+  fat_spread: {
+    calories: 620, protein: 0.5, carbohydrates: 0.5, totalFat: 68.0, saturatedFat: 42.0, unsaturatedFat: 24.0,
+    sugar: 0.3, addedSugar: 0, totalFibre: 0, solubleFibre: 0, sodium: 550,
+    potassium: 25, calcium: 20, magnesium: 2, phosphorus: 15, iron: 0.05, zinc: 0.1, selenium: 0.3, iodine: 2,
+    vitaminA: 600, vitaminD: 1.0, vitaminE: 2.0, vitaminK: 5.0, vitaminB12: 0, folate: 0, vitaminB6: 0, thiamine: 0, riboflavin: 0, niacin: 0, vitaminC: 0
+  },
+  jelly_dessert: {
+    calories: 85, protein: 1.5, carbohydrates: 19.0, totalFat: 0.1, saturatedFat: 0, unsaturatedFat: 0.05,
+    sugar: 16.0, addedSugar: 14.0, totalFibre: 0.3, solubleFibre: 0.1, sodium: 55,
+    potassium: 30, calcium: 8, magnesium: 2, phosphorus: 10, iron: 0.2, zinc: 0.1, selenium: 0.5, iodine: 1,
+    vitaminC: 1.0, vitaminA: 3, folate: 1, vitaminK: 0.1, vitaminE: 0.05, vitaminB6: 0.01, thiamine: 0.01, riboflavin: 0.02, niacin: 0.05, vitaminB12: 0, vitaminD: 0
+  },
   produce: {
     calories: 40, protein: 1.0, carbohydrates: 9.0, totalFat: 0.2, saturatedFat: 0.05, unsaturatedFat: 0.15,
     sugar: 6.0, addedSugar: 0, totalFibre: 2.2, solubleFibre: 0.5, sodium: 10,
@@ -641,6 +659,10 @@ export function getFallbackCategoryProfile(query: string): Record<string, number
   else if (/\b(ranch|dressing|vinaigrette|mayo|mayonnaise|sauce|caesar|condiment|gravy|aioli|dip|pesto)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dressing };
   else if (/\b(berr(?:y|ies)|strawberr(?:y|ies)|blueberr(?:y|ies)|raspberr(?:y|ies)|blackberr(?:y|ies)|cranberr(?:y|ies)|acai)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.berries };
   else if (/\b(salads?|mix\s*leaves|mixed\s*leaves|salad\s*leaves|lettuce|spinach|kale|arugula|greens|romaine|cabbage|slaw|watercress)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.leafy_greens };
+  else if (/\b(gelatin|jell-?o|jelly|jellies)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.jelly_dessert };
+  else if (/\b(salt|seasoning|spice|spices|pepper\s*flakes?|iodized)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.seasoning };
+  else if (/\b(scallions?|spring\s*onions?|green\s*onions?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.produce };
+  else if (/\b(spreadable|margarine|ghee)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.fat_spread };
   else if (/\b(brownies?|cakes?|cookies?|chocolates?|cand(?:y|ies)|pies?|tarts?|fudge|desserts?|sweets?|biscuits?|puddings?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dessert };
   else if (/\b(croissants?|pastr(?:y|ies)|danish(?:es)?|muffins?|donuts?|doughnuts?|brioche|scones?|puffs?|bakery|bakeries|roll|swirl)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.pastry };
   else if (/\b(eggs?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.egg };
@@ -648,7 +670,8 @@ export function getFallbackCategoryProfile(query: string): Record<string, number
   else if (/\b(fish|salmon|tuna|cod|shrimp|prawns?|seafood)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.fish };
   else if (/\b(beef|pork|steak|lamb|mutton|meat|bacon)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.meat };
   else if (/\b(feta|cheddar|mozzarella|parmesan|cheese)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cheese };
-  else if (/\b(milk|yogurt|yoghurt|greek|cream|butter|dairy)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dairy };
+  else if (/\b(butter)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.fat_spread };
+  else if (/\b(milk|yogurt|yoghurt|greek|cream|dairy)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dairy };
   else if (/\b(granola|muesli|oats?|cereals?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cereal };
   else if (/\b(chickpeas?|hummus|lentils?|beans?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.legume };
   else if (/\b(rice|bread|baguettes?|pasta|potatoe?s?|noodles?|starch)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.starch };

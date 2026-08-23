@@ -253,6 +253,7 @@ export const CANONICAL_BASE_FOODS: Record<string, { fdcId: string; calories: num
   soda_cola: { fdcId: "173256", calories: 42, protein: 0, totalFat: 0, saturatedFat: 0, transFat: 0, carbohydrates: 10.6, sugar: 10.6, sodium: 10, potassium: 2, totalFibre: 0, foodType: 'processed' },
   cherry_tomato: { fdcId: "170010", calories: 18, protein: 0.9, totalFat: 0.2, saturatedFat: 0, transFat: 0, carbohydrates: 3.9, sugar: 2.6, sodium: 5, potassium: 237, totalFibre: 1.2, vitaminC: 13.7, vitaminA: 42, calcium: 10, magnesium: 11, iron: 0.27, foodType: 'leafy_veg' },
   white_rice: { fdcId: "169756", calories: 130, protein: 2.7, totalFat: 0.3, saturatedFat: 0.1, transFat: 0, carbohydrates: 28.2, sugar: 0.1, sodium: 1, potassium: 35, totalFibre: 0.4, calcium: 10, magnesium: 12, iron: 0.2, zinc: 0.49, foodType: 'grain' },
+  rice_congee: { fdcId: null, calories: 45, protein: 1.3, totalFat: 0.3, saturatedFat: 0.05, transFat: 0, carbohydrates: 9.5, sugar: 0.1, sodium: 5, potassium: 20, totalFibre: 0.2, calcium: 4, magnesium: 5, iron: 0.1, zinc: 0.2, foodType: 'grain' },
   chicken_breast: { fdcId: "171077", calories: 165, protein: 31.0, totalFat: 3.6, saturatedFat: 1.0, transFat: 0, carbohydrates: 0, sugar: 0, sodium: 74, potassium: 256, totalFibre: 0, calcium: 15, magnesium: 29, iron: 1.0, zinc: 1.0, foodType: 'poultry' },
   breaded_chicken_tender: { fdcId: "171057", calories: 268, protein: 15.6, totalFat: 14.5, saturatedFat: 2.6, transFat: 0, carbohydrates: 18.7, sugar: 0.5, sodium: 604, potassium: 220, totalFibre: 1.2, foodType: 'poultry' },
   white_fish: { fdcId: "171986", calories: 90, protein: 19.0, totalFat: 1.2, saturatedFat: 0.3, transFat: 0, carbohydrates: 0, sugar: 0, sodium: 80, potassium: 338, totalFibre: 0, calcium: 16, magnesium: 32, iron: 0.4, foodType: 'fish_lean' },
@@ -472,6 +473,7 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   if (clean.includes('cherry_tomato') || (clean.includes('cherry') && clean.includes('tomato'))) return CANONICAL_BASE_FOODS.cherry_tomato;
   if (clean.includes('breaded_chicken_tender') || clean.includes('chicken_tender') || (clean.includes('breaded') && clean.includes('chicken')) || (clean.includes('chicken') && (clean.includes('crispy') || clean.includes('crumbed') || clean.includes('panko') || clean.includes('battered') || clean.includes('katsu') || clean.includes('schnitzel')) && clean.includes('fried'))) return CANONICAL_BASE_FOODS.breaded_chicken_tender;
   if (clean.includes('chicken_breast') || (clean.includes('chicken') && clean.includes('breast'))) return CANONICAL_BASE_FOODS.chicken_breast;
+  if (tokens.includes('rice') && (clean.includes('porridge') || clean.includes('congee'))) return CANONICAL_BASE_FOODS.rice_congee;
   if (tokens.includes('rice')) return CANONICAL_BASE_FOODS.white_rice;
   if (clean.includes('white_fish') || (tokens.includes('fish') && !tokens.includes('salmon'))) return CANONICAL_BASE_FOODS.white_fish;
   if (clean.includes('watermelon')) return CANONICAL_BASE_FOODS.watermelon;
