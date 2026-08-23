@@ -659,13 +659,14 @@ export function aggregateItemsNutrients(
 
     // Ensure lipid sub-components sum cleanly to totalFat
     if (itemNutrients.totalFat > 0) {
-      const sat = itemNutrients.saturatedFat || 0;
-      const trans = itemNutrients.transFat || 0;
-      if (sat > itemNutrients.totalFat) {
-        itemNutrients.saturatedFat = itemNutrients.totalFat;
+      if (itemNutrients.saturatedFat > itemNutrients.totalFat) {
+        itemNutrients.totalFat = itemNutrients.saturatedFat;
       }
-      if (trans > itemNutrients.totalFat - itemNutrients.saturatedFat) {
-        itemNutrients.transFat = Math.max(0, itemNutrients.totalFat - itemNutrients.saturatedFat);
+      if (itemNutrients.transFat > itemNutrients.totalFat) {
+        itemNutrients.totalFat = itemNutrients.transFat;
+      }
+      if (itemNutrients.saturatedFat + itemNutrients.transFat > itemNutrients.totalFat) {
+        itemNutrients.totalFat = parseFloat((itemNutrients.saturatedFat + itemNutrients.transFat).toFixed(2));
       }
       itemNutrients.unsaturatedFat = parseFloat(Math.max(0, itemNutrients.totalFat - itemNutrients.saturatedFat - (itemNutrients.transFat || 0)).toFixed(2));
     } else {
@@ -674,17 +675,31 @@ export function aggregateItemsNutrients(
       itemNutrients.unsaturatedFat = 0;
     }
 
+    const displayName = sanitizeString(
+      item.originalName || item.originalLocalName || item.keyword || item.name || canonicalName,
+      canonicalName
+    );
+
+    // Atwater Energy Consistency Floor Sanity:
+    // Calories must never be lower than the physical thermal energy of fat alone (fat * 9)
+    // for fat-dominant foods (e.g. butter, oils, ghee).
+    if (itemNutrients.totalFat > 0) {
+      const minFatKcal = itemNutrients.totalFat * 9;
+      if ((itemNutrients.calories || 0) < minFatKcal) {
+        const derivedKcal = Math.round((itemNutrients.protein || 0) * 4 + (itemNutrients.carbohydrates || 0) * 4 + itemNutrients.totalFat * 9);
+        if (derivedKcal > (itemNutrients.calories || 0)) {
+          addDebugLog(`[Atwater Energy Consistency Gate] "${displayName}": Calories (${itemNutrients.calories} kcal) below fat thermal energy (${itemNutrients.totalFat}g fat * 9 = ${minFatKcal.toFixed(1)} kcal). Reconciled calories to ${derivedKcal} kcal.`);
+          itemNutrients.calories = derivedKcal;
+        }
+      }
+    }
+
     // Add to aggregated nutrients
     for (const key of NUTRIENT_KEYS) {
       nutrients[key] = cleanNutrientNumber(nutrients[key] + (itemNutrients[key] || 0));
     }
 
     const matchType = dbSource === "usda" ? "USDA FDC Entry" : dbSource === "off" ? "Open Food Facts Entry" : dbSource === "backend_calculated" || dbSource === "canonical" ? "Canonical Base Food Reference" : "Universal Nutrient Estimator";
-
-    const displayName = sanitizeString(
-      item.originalName || item.originalLocalName || item.keyword || item.name || canonicalName,
-      canonicalName
-    );
 
     return {
       name: displayName,

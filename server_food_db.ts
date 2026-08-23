@@ -52,6 +52,8 @@ export const COOKING_METHOD_OIL_MODIFIERS: Record<string, OilModifier> = {
   deep_fried: { addedFatPer100g: 10.0, addedSaturatedFatPer100g: 1.5, addedCaloriesPer100g: 90.0, addedSodiumPer100g: 250.0, description: "Deep-fried" },
   pan_fried:  { addedFatPer100g: 5.0,  addedSaturatedFatPer100g: 0.75, addedCaloriesPer100g: 45.0, addedSodiumPer100g: 200.0, description: "Pan-fried" },
   stir_fried: { addedFatPer100g: 3.0,  addedSaturatedFatPer100g: 0.45, addedCaloriesPer100g: 27.0, addedSodiumPer100g: 180.0, description: "Stir-fried" },
+  glazed:     { addedFatPer100g: 2.0,  addedSaturatedFatPer100g: 0.30, addedCaloriesPer100g: 18.0, addedSodiumPer100g: 350.0, description: "Glazed" },
+  braised:    { addedFatPer100g: 2.0,  addedSaturatedFatPer100g: 0.30, addedCaloriesPer100g: 18.0, addedSodiumPer100g: 300.0, description: "Braised" },
   roasted:    { addedFatPer100g: 1.5,  addedSaturatedFatPer100g: 0.22, addedCaloriesPer100g: 13.5, addedSodiumPer100g: 150.0, description: "Roasted" },
   boiled:     { addedFatPer100g: 0.0,  addedSaturatedFatPer100g: 0.0,  addedCaloriesPer100g: 0.0,  addedSodiumPer100g: 50.0,  description: "Boiled" },
   steamed:    { addedFatPer100g: 0.0,  addedSaturatedFatPer100g: 0.0,  addedCaloriesPer100g: 0.0,  addedSodiumPer100g: 30.0,  description: "Steamed" },
@@ -106,7 +108,19 @@ export function calculateUniversalAddedNutrients(
     else if (cookingMethod === 'pan_fried') kInternal = 0.03;
   }
 
-  const addedFat = (weightGrams * kInternal + surfaceAreaFactor * visualSheen * 8.0) * env.lipid;
+  const baseFatPerMethod: Record<string, number> = {
+    deep_fried: 10.0,
+    pan_fried: 8.0,
+    stir_fried: 5.0,
+    glazed: 4.0,
+    braised: 3.5,
+    roasted: 3.0,
+    grilled: 2.0,
+    baked: 2.0,
+  };
+  const methodBaseFat = baseFatPerMethod[cookingMethod] || 8.0;
+
+  const addedFat = (weightGrams * kInternal + surfaceAreaFactor * visualSheen * methodBaseFat) * env.lipid;
   const addedSaturatedFat = addedFat * 0.20;
   const addedCalories = addedFat * 9.0;
 
@@ -114,7 +128,10 @@ export function calculateUniversalAddedNutrients(
   // the sauce provides the bulk of the sodium. We still add a smaller base amount to account for baseline cooking salt.
   let addedSodium = 0;
   if (cookingMethod !== 'raw' && cookingMethod !== 'unknown') {
-    const baseNa = hasSauceOrDressing ? 40.0 : 120.0;
+    let baseNa = hasSauceOrDressing ? 40.0 : 120.0;
+    if (cookingMethod === 'glazed' || cookingMethod === 'braised') {
+      baseNa = hasSauceOrDressing ? 120.0 : 250.0;
+    }
     addedSodium = Math.round((surfaceAreaFactor * visualCoating * baseNa) * env.sodium);
   }
 
@@ -140,6 +157,12 @@ export function getCookingMethodModifier(methodStr: string | null | undefined): 
   }
   if (lower.includes("stir") && lower.includes("fried")) {
     return COOKING_METHOD_OIL_MODIFIERS.stir_fried;
+  }
+  if (lower.includes("glazed") || lower.includes("glaze")) {
+    return COOKING_METHOD_OIL_MODIFIERS.glazed;
+  }
+  if (lower.includes("braised") || lower.includes("braise")) {
+    return COOKING_METHOD_OIL_MODIFIERS.braised;
   }
   if (lower.includes("fry") || lower.includes("fried")) {
     // default fried to pan_fried
@@ -458,7 +481,7 @@ export function lookupCanonicalBaseFood(name: string): any | null {
   if (clean.includes('pomegranate')) return CANONICAL_BASE_FOODS.pomegranate_seed;
   if (clean.includes('sesame_seed') || (clean.includes('sesame') && clean.includes('seed'))) return CANONICAL_BASE_FOODS.sesame_seed;
   if (clean.includes('sugar_syrup') || clean.includes('simple_syrup') || (clean.includes('sugar') && clean.includes('syrup')) || clean.includes('corn_syrup')) return CANONICAL_BASE_FOODS.sugar_syrup;
-  if (clean.includes('citrus_juice') || (clean.includes('citrus') && (clean.includes('juice') || clean.includes('drink')))) return CANONICAL_BASE_FOODS.citrus_juice;
+  if (clean.includes('citrus_juice') || clean.includes('orange_juice') || (clean.includes('orange') && (clean.includes('juice') || clean.includes('drink'))) || (clean.includes('citrus') && (clean.includes('juice') || clean.includes('drink')))) return CANONICAL_BASE_FOODS.citrus_juice;
   if (clean.includes('espresso') || clean.includes('brewed_espresso') || clean.includes('cold_brew_espresso')) return CANONICAL_BASE_FOODS.espresso;
   if (!clean.includes('cheese') && !clean.includes('mozzarella') && !clean.includes('ricotta') && (clean.includes('milk') || clean.includes('whole_cow_milk') || clean.includes('steamed_milk') || clean.includes('cow_milk') || clean.includes('whole_milk'))) return CANONICAL_BASE_FOODS.whole_cow_milk;
   if (tokens.includes('grapes') || tokens.includes('grape') || clean.includes('red_grapes') || clean.includes('green_grapes')) return CANONICAL_BASE_FOODS.grapes;

@@ -555,6 +555,17 @@ export function checkAtwaterConsistency(
   const derivedCalories = protein * 4 + carbs * 4 + fat * 9;
   if (derivedCalories <= 0) return; // no macros to check against stated calories
 
+  // Specific high-fat pure fat / dairy fat floor: if fat * 9 is substantially larger than statedCalories
+  // (e.g. butter/ghee/oil where fat dominates), calories cannot physically be lower than fat * 9.
+  const minFatCalories = Math.round(fat * 9);
+  if (minFatCalories > statedCalories && fat >= 5 && (fat * 9) / Math.max(1, derivedCalories) > 0.80) {
+    if (addDebugLog) {
+      addDebugLog(`[Atwater Fat Floor] "${itemName}": stated ${statedCalories} kcal is physically below energy from fat alone (${fat}g * 9 = ${minFatCalories} kcal). Adjusting calories to ${minFatCalories} kcal.`);
+    }
+    itemNutrients.calories = Math.round(derivedCalories);
+    return;
+  }
+
   const deviation = Math.abs(derivedCalories - statedCalories) / statedCalories;
   if (deviation > ATWATER_TOLERANCE) {
     // Macros and stated calories disagree by more than physically plausible rounding/fibre
@@ -658,13 +669,18 @@ export function applyCommercialSodiumFloor(
     !isCompositeEntree ||
     /\b(oats?|oatmeal|rolled\s+oats|milk|cow\s+milk|berries|berry|blueberry|blueberries|strawberry|strawberries|raspberry|raspberries|blackberry|blackberries|fruit|apple|banana|orange|grape|plain\s+yogurt|greek\s+yogurt|nuts?|seeds?|almonds?|walnuts?|raw|fresh)\b/i.test(identityForChecks);
 
-  if (isFastFoodOrChain && !isWholeFood && (itemNutrients.calories || 0) > 0) {
+  const isSaucedOrGlazedEntree =
+    /\b(glazed?|braised?|teriyaki|sweet\s*and\s*sour|kung\s*pao|curry|masala|tikka\s*masala|butter\s*chicken|black\s*pepper\s*sauce|soy\s*glazed?|stir-?fry)\b/i.test(identityForChecks) &&
+    !/\b(plain|steamed\s+plain|raw|fresh|salad|fruit|apple|orange)\b/i.test(identityForChecks);
+
+  if ((isFastFoodOrChain || isSaucedOrGlazedEntree) && !isWholeFood && (itemNutrients.calories || 0) > 0) {
     const currentSodium = itemNutrients.sodium || 0;
-    const commercialSodiumFloor = Math.round((itemNutrients.calories || 0) * 1.8);
+    const multiplier = isFastFoodOrChain ? 1.8 : 1.2;
+    const commercialSodiumFloor = Math.round((itemNutrients.calories || 0) * multiplier);
     if (currentSodium < commercialSodiumFloor) {
       if (addDebugLog) {
         addDebugLog(
-          `[Commercial Sodium Floor] Sodium for fast-food item "${canonicalName}" (${currentSodium}mg) was below commercial floor (1.8mg/kcal). Adjusted sodium to ${commercialSodiumFloor}mg floor for ${itemNutrients.calories} kcal.`
+          `[Commercial Sodium Floor] Sodium for seasoned/sauced item "${canonicalName}" (${currentSodium}mg) was below baseline floor (${multiplier}mg/kcal). Adjusted sodium to ${commercialSodiumFloor}mg floor for ${itemNutrients.calories} kcal.`
         );
       }
       itemNutrients.sodium = commercialSodiumFloor;
@@ -1019,6 +1035,35 @@ export function applyNutrientRealityChecks(
     }
     itemNutrients.totalFibre = Math.max(itemNutrients.totalFibre || 0, expectedFibre);
     itemNutrients.solubleFibre = Math.max(itemNutrients.solubleFibre || 0, expectedSoluble);
+  }
+
+  // Ensure lipid sub-components sum cleanly to totalFat
+  if (itemNutrients.totalFat > 0 || (itemNutrients.saturatedFat || 0) > 0 || (itemNutrients.transFat || 0) > 0) {
+    // 4d. Dairy / Natural Ruminant Trans Fat Clamping
+    // Natural ruminant trans fat in pure dairy products (butter, cream, ghee, cheese) is at most 3-4.5% of total fat.
+    // Artificial/hydrogenated trans fat levels (e.g. 20-30% of fat) should not be applied to pure dairy butter.
+    const isDairyFat = /\b(butter|ghee|dairy|cream|cow milk|cheese|curd)\b/i.test(identityForChecks) &&
+      !/\b(margarine|shortening|hydrogenated|partially\s+hydrogenated|spread|frosting|pastry\s+shortening)\b/i.test(identityForChecks);
+    if (isDairyFat && itemNutrients.transFat !== undefined && itemNutrients.transFat !== null && itemNutrients.totalFat > 0) {
+      const maxDairyTransFat = Math.round(itemNutrients.totalFat * 0.045 * 10) / 10;
+      if (itemNutrients.transFat > maxDairyTransFat) {
+        if (addDebugLog) {
+          addDebugLog(`[Dietitian Reality Check] Trans fat for dairy item "${itemName}" (${itemNutrients.transFat}g) exceeded natural ruminant ceiling (4.5% of ${itemNutrients.totalFat}g fat). Clamped trans fat to ${maxDairyTransFat}g.`);
+        }
+        itemNutrients.transFat = maxDairyTransFat;
+      }
+    }
+
+    if (itemNutrients.saturatedFat > (itemNutrients.totalFat || 0)) {
+      itemNutrients.totalFat = itemNutrients.saturatedFat;
+    }
+    if (itemNutrients.transFat > (itemNutrients.totalFat || 0)) {
+      itemNutrients.totalFat = itemNutrients.transFat;
+    }
+    if ((itemNutrients.saturatedFat || 0) + (itemNutrients.transFat || 0) > (itemNutrients.totalFat || 0)) {
+      itemNutrients.totalFat = parseFloat(((itemNutrients.saturatedFat || 0) + (itemNutrients.transFat || 0)).toFixed(2));
+    }
+    itemNutrients.unsaturatedFat = parseFloat(Math.max(0, (itemNutrients.totalFat || 0) - (itemNutrients.saturatedFat || 0) - (itemNutrients.transFat || 0)).toFixed(2));
   }
 
   // Backfill missing/zero soluble fibre based on food category when totalFibre > 0
@@ -1414,11 +1459,14 @@ export function checkCategoryAndStateCompatibility(
   const c = candidateName.toLowerCase().trim();
 
   // 1. Beverage vs Solid
-  const isQBeverage = /\b(beverage|beverages|drink|water|juice|beer|wine|soda|cola|tea|coffee|latte|mocha|macchiato|smoothie|shake|milk|oat\s*milk|almond\s*milk|soy\s*milk|coconut\s*milk|seltzer|powerade|gatorade)\b/i.test(q);
-  const isCBeverage = /\b(beverage|beverages|drink|water|juice|beer|wine|soda|cola|tea|coffee|latte|mocha|macchiato|smoothie|shake|milk|oat\s*milk|almond\s*milk|soy\s*milk|coconut\s*milk|seltzer|powerade|gatorade)\b/i.test(c);
-  const isQSolid = /\b(egg|eggs|yogurt|cheese|meat|chicken|steak|fish|salad|greens|bread|pastry|cake|cookie|tortilla|rice|pasta|grain|granola)\b/i.test(q);
-  const isCSolid = /\b(egg|eggs|yogurt|cheese|meat|chicken|steak|fish|salad|greens|bread|pastry|cake|cookie|tortilla|rice|pasta|grain|granola)\b/i.test(c);
+  const isQBeverage = /\b(beverage|beverages|drink|drinks|water|juice|juices|beer|wine|soda|cola|tea|coffee|latte|mocha|macchiato|smoothie|shake|milk|oat\s*milk|almond\s*milk|soy\s*milk|coconut\s*milk|seltzer|powerade|gatorade|cider|lemonade)\b/i.test(q);
+  const isCBeverage = /\b(beverage|beverages|drink|drinks|water|juice|juices|beer|wine|soda|cola|tea|coffee|latte|mocha|macchiato|smoothie|shake|milk|oat\s*milk|almond\s*milk|soy\s*milk|coconut\s*milk|seltzer|powerade|gatorade|cider|lemonade)\b/i.test(c);
+  const isQSolid = /\b(egg|eggs|yogurt|cheese|meat|chicken|steak|fish|salad|greens|bread|pastry|cake|cookie|tortilla|rice|pasta|grain|granola|raw|whole|fresh\s+fruit|fresh\s+orange|raw\s+orange)\b/i.test(q);
+  const isCSolid = /\b(egg|eggs|yogurt|cheese|meat|chicken|steak|fish|salad|greens|bread|pastry|cake|cookie|tortilla|rice|pasta|grain|granola|raw|whole|fresh\s+fruit|raw\s+fruit)\b/i.test(c);
 
+  if (isQBeverage && (isCSolid || !isCBeverage) && /\b(raw|fresh|whole|peel|sections|slices)\b/i.test(c)) {
+    return { compatible: false, reason: `Blocked solid whole food candidate ("${candidateName}") for beverage query ("${query}")` };
+  }
   if (isQBeverage && isCSolid && !isCBeverage) {
     return { compatible: false, reason: `Blocked solid candidate ("${candidateName}") for beverage query ("${query}")` };
   }

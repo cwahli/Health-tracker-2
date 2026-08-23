@@ -132,7 +132,8 @@ export function decidePrepAddition(input: PrepPolicyInput): PrepAddition {
   }
 
   const nameForPreparedCheck = input.dishName || input.keyword || input.canonicalDbName || "";
-  const itemAlreadyPrep = input.isAlreadyPrepared ?? checkIfItemIsAlreadyPrepared(nameForPreparedCheck, input.keyword || "", undefined, undefined);
+  const isGlazedOrBraisedSauced = /\b(glazed?|braised?|teriyaki|sweet\s*and\s*sour|kung\s*pao|stir-?fry)\b/i.test(nameForPreparedCheck);
+  const itemAlreadyPrep = (input.isAlreadyPrepared ?? checkIfItemIsAlreadyPrepared(nameForPreparedCheck, input.keyword || "", undefined, undefined)) && !isGlazedOrBraisedSauced;
 
   if (itemAlreadyPrep && !isUserExplicit) {
     return { ...zeroPrep, reason: 'already_prepared' };

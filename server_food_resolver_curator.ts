@@ -178,10 +178,21 @@ export async function executeFoodResolverCurator(
     if (action && (action.type === 'pick_existing' || action.type === 'normalize_basis')) {
       let finalChosenId: string | null = null;
       const verifyId = async (id: string, nameToMatch: string) => {
+        const stateCheck = checkCategoryAndStateCompatibility(gap.query, nameToMatch);
+        if (!stateCheck.compatible) {
+          addDebugLog(`[CategoryStateFilter] REJECTED: FDC ${id} "${nameToMatch}" for query "${gap.query}": ${stateCheck.reason}`);
+          return false;
+        }
         if (!fetchFoodDetailsFn) return true;
         try {
           const details = await fetchFoodDetailsFn(id);
           if (details) {
+            const detailName = (details as any).name || (details as any).title || nameToMatch;
+            const detailStateCheck = checkCategoryAndStateCompatibility(gap.query, detailName);
+            if (!detailStateCheck.compatible) {
+              addDebugLog(`[CategoryStateFilter] REJECTED: FDC ${id} "${detailName}" for query "${gap.query}": ${detailStateCheck.reason}`);
+              return false;
+            }
             const macroCheck = checkMacroBoundary(gap.query, details.nutrients);
             if (!macroCheck.passed) {
               addDebugLog(`[MacroBoundaryFilter] REJECTED: FDC ${id} ${macroCheck.reason}`);
