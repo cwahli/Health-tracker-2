@@ -2241,7 +2241,7 @@ export async function searchBrandMenuItems(query: string, explicitChainKey?: str
     }
 
     const score = scoreDishMatch(normQ, normItemKey, itemChainKey);
-    const threshold = (explicitChainKey || (itemChainKey && qLower.includes(itemChainKey.replace(/_/g, ' ')))) ? 0.45 : 0.75;
+    const threshold = (explicitChainKey || (itemChainKey && qLower.includes(itemChainKey.replace(/_/g, ' ')))) ? 0.45 : 0.85;
 
     if (score >= threshold) {
       matches.push({ item: it, score });

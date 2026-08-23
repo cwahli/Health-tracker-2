@@ -447,6 +447,8 @@ async function searchUSDA(query: string, maxResults: number = 5, dataTypes: stri
     clearTimeout(timeout);
     
     if (!response.ok) return [];
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) return [];
     const data = await response.json();
     let foods = data.foods || [];
 
@@ -463,6 +465,8 @@ async function searchUSDA(query: string, maxResults: number = 5, dataTypes: stri
           const altUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${usdaApiKey}&query=${encodeURIComponent(altQuery)}&pageSize=${fetchSize}&${dataTypeQuery}`;
           const altResponse = await fetch(altUrl);
           if (altResponse.ok) {
+            const altContentType = altResponse.headers.get("content-type");
+            if (!altContentType || !altContentType.includes("application/json")) continue;
             const altData = await altResponse.json();
             if (altData.foods && altData.foods.length > 0) {
               foods = altData.foods;
@@ -482,9 +486,9 @@ async function searchUSDA(query: string, maxResults: number = 5, dataTypes: stri
 
     // Reject 0-kcal items that are supposed to have substance
     foods = foods.filter((f: any) => {
-      const kcalNutrient = f.foodNutrients?.find((n: any) => n.nutrientName === "Energy" && n.unitName === "kcal");
+      const kcalNutrient = f.foodNutrients?.find((n: any) => n.nutrientName === "Energy" && String(n.unitName || "").toLowerCase() === "kcal");
       const kcal = kcalNutrient ? parseFloat(kcalNutrient.value) : 0;
-      const proteinNutrient = f.foodNutrients?.find((n: any) => n.nutrientName === "Protein" && n.unitName === "g");
+      const proteinNutrient = f.foodNutrients?.find((n: any) => n.nutrientName === "Protein" && String(n.unitName || "").toLowerCase() === "g");
       const protein = proteinNutrient ? parseFloat(proteinNutrient.value) : 0;
       
       const name = (f.description || "").toLowerCase();
@@ -644,6 +648,8 @@ async function searchOpenFoodFacts(query: string, maxResults: number = 5): Promi
     clearTimeout(timeout);
     
     if (!response.ok) return [];
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) return [];
     const data = await response.json();
     let products = data.products || [];
     
