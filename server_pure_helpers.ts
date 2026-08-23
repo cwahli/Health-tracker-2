@@ -6,6 +6,7 @@
 
 import { classifyUniversalPhysicalFormV3 } from "./server_matching_engine";
 import { isGroceryBrandSync, isKnownDatabaseBrandSync } from "./serverBrandMenu.js";
+import { getFallbackCategoryProfile } from "./server_food_catalog.js";
 
 // Simple and robust custom JS object-to-YAML stringifier
 export function jsToYaml(val: any, indent: number = 0): string {
@@ -671,6 +672,105 @@ export function applyCommercialSodiumFloor(
   }
 }
 
+export function applySatFatAndAddedSugarFloor(
+  itemName: string,
+  itemNutrients: Record<string, number>,
+  dbSource?: string,
+  addDebugLog?: (msg: string) => void,
+  ctx?: {
+    originalName?: string | null;
+    keyword?: string | null;
+    componentCount?: number;
+    physicalForm?: string | null;
+    chainName?: string | null;
+  }
+): void {
+  if (!itemNutrients || typeof itemNutrients !== 'object') return;
+  const isLabelOrScreenSource = dbSource === "label" || 
+    dbSource === "kiosk" || 
+    dbSource === "screen" || 
+    dbSource === "menu" || 
+    dbSource === "brand_official" ||
+    (typeof dbSource === "string" && dbSource.startsWith("label") && dbSource !== "label_partial");
+  if (isLabelOrScreenSource) return;
+  if (!(itemNutrients.calories > 10)) return;
+
+  const canonicalName = itemName;
+  const identityForChecks = [
+    ctx?.originalName,
+    ctx?.keyword,
+    itemName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const isGroceryBrand =
+    ctx?.chainName != null && isGroceryBrandSync(ctx.chainName);
+  const isFastFoodOrChain =
+    (ctx?.chainName != null && !isGroceryBrand) ||
+    isKnownDatabaseBrandSync(identityForChecks) ||
+    /\b(kebab|tikka|burger|cheeseburger|hamburger|fries|french\s+fries|fried\s+chicken|pizza|fast\s+food|mcdonald|kfc|wendy|burger\s+king|taco\s+bell|subway|domino|starbucks|greggs)\b/i.test(identityForChecks);
+
+  const isCleanProteinSide =
+    /\b(chicken|poultry|turkey|steak|beef|flank|breast|salmon|tuna|cod|fish|seafood|egg|poached)\b/i.test(identityForChecks) &&
+    !/\b(fried|breaded|crispy|nugget|tenders?|sauced?|glazed?|gravy|burger|cheeseburger|sandwich|pizza|pie|casserole|curry|fries|wings)\b/i.test(identityForChecks);
+
+  const isWholeProduceOrGrain =
+    ctx?.physicalForm === 'SOLID_FRUIT_VEG' ||
+    dbSource === 'canonical_dict' ||
+    dbSource === 'label_raw' ||
+    (/\b(oats?|oatmeal|rolled\s+oats|cow\s+milk|berries|berry|blueberry|blueberries|strawberry|strawberries|raspberry|raspberries|blackberry|blackberries|fruit|apple|banana|orange|grape|peach|plum|plain\s+yogurt|greek\s+yogurt|nuts?|seeds?|almonds?|walnuts?|raw|fresh|boiled\s+egg|poached\s+egg|lettuce|salad\s+greens|spinach|kale|broccoli|cucumber|tomato)\b/i.test(identityForChecks) &&
+     !/\b(croissant|pastry|danish|donut|doughnut|muffin|cake|cookie|brownie|pie|tart|scone|biscuit|brioche|ice\s*cream|sundae|parfait|cheesecake|pudding|custard|dessert|waffle|pancake|syrup|frosting|chocolate|chocolates|candy|sugar|sweet|fried|breaded|burger|pizza)\b/i.test(identityForChecks));
+
+  const isWholeFood = isCleanProteinSide || isWholeProduceOrGrain;
+
+  const isBakeryOrDessert = /\b(croissant|pastry|danish|donut|doughnut|muffin|cake|cookie|brownie|pie|tart|scone|biscuit|brioche|ice\s*cream|sundae|parfait|cheesecake|pudding|custard|sweet|dessert|waffle|pancake|syrup|frosting|chocolate|chocolates)\b/i.test(identityForChecks);
+  const isFriedOrProcessed = /\b(fried|breaded|crispy|batter|nugget|tenders?|chips?|fries|french\s+fries|wedge|wedges|onion\s+rings?|hash\s+brown)\b/i.test(identityForChecks);
+  const isSweetBeverageOrSauce = /\b(frappe|frappuccino|shake|milkshake|smoothie|soda|cola|syrup|bbq\s*sauce|teriyaki|sweet\s*chili|sweet\s*and\s*sour|caramel|glaze|sweet\s*tea)\b/i.test(identityForChecks);
+
+  // 1. Saturated Fat Floor
+  if ((isFastFoodOrChain || isBakeryOrDessert || isFriedOrProcessed) && !isWholeFood) {
+    const totalFat = itemNutrients.totalFat || 0;
+    if (totalFat > 0) {
+      const satFatRatioFloor = isBakeryOrDessert ? 0.35 : 0.25;
+      const minSatFat = Math.min(totalFat, Math.round(totalFat * satFatRatioFloor * 10) / 10);
+      if ((itemNutrients.saturatedFat || 0) < minSatFat) {
+        if (addDebugLog) {
+          addDebugLog(`[SatFat Floor] Saturated fat for "${canonicalName}" (${itemNutrients.saturatedFat || 0}g) was below commercial/bakery floor (${Math.round(satFatRatioFloor * 100)}% of fat). Adjusted sat fat to ${minSatFat}g for ${totalFat}g total fat.`);
+        }
+        itemNutrients.saturatedFat = minSatFat;
+        const trans = itemNutrients.transFat || 0;
+        itemNutrients.unsaturatedFat = parseFloat(Math.max(0, totalFat - minSatFat - trans).toFixed(2));
+      }
+    }
+  }
+
+  // 2. Added Sugar Floor
+  if ((isBakeryOrDessert || isSweetBeverageOrSauce) && !isWholeFood) {
+    const sugar = itemNutrients.sugar || 0;
+    const carbs = itemNutrients.carbohydrates || 0;
+    const currentAdded = itemNutrients.addedSugar || 0;
+
+    let targetAdded = 0;
+    if (sugar > 0) {
+      targetAdded = Math.round(sugar * 0.80 * 10) / 10;
+    } else if (carbs > 0 && (isBakeryOrDessert || isSweetBeverageOrSauce)) {
+      targetAdded = Math.round(carbs * 0.40 * 10) / 10;
+    }
+
+    if (targetAdded > 0 && currentAdded < targetAdded) {
+      if (addDebugLog) {
+        addDebugLog(`[Added Sugar Floor] Added sugar for sweet item "${canonicalName}" (${currentAdded}g) was below minimum floor. Adjusted added sugar to ${targetAdded}g.`);
+      }
+      itemNutrients.addedSugar = targetAdded;
+      if ((itemNutrients.sugar || 0) < targetAdded) {
+        itemNutrients.sugar = targetAdded;
+      }
+    }
+  }
+}
+
 export function checkThermodynamicDensitySanity(
   itemName: string,
   foodType: string | undefined,
@@ -906,6 +1006,9 @@ export function applyNutrientRealityChecks(
   // 4b. Fast-Food Commercial Sodium Floor (Tier 3 Guardrail)
   applyCommercialSodiumFloor(itemName, itemNutrients, dbSource, addDebugLog, ctx);
 
+  // 4c. Saturated Fat & Added Sugar Floor Guardrails
+  applySatFatAndAddedSugarFloor(itemName, itemNutrients, dbSource, addDebugLog, ctx);
+
   // 2. Fibre Reality Check (Specific for Kimchi / Radish)
   const isKimchiOrRadish = nameLower.includes('kimchi') || nameLower.includes('radish') || nameLower.includes('daikon') || nameLower.includes('kkakdugi');
   if (isKimchiOrRadish && (!itemNutrients.totalFibre || itemNutrients.totalFibre < 0.5)) {
@@ -920,6 +1023,9 @@ export function applyNutrientRealityChecks(
 
   // Backfill missing/zero soluble fibre based on food category when totalFibre > 0
   backfillSolubleFibre(itemNutrients, identityForChecks || itemName, addDebugLog);
+
+  // Backfill sparse/missing micronutrients from category fallback profile
+  backfillSparseMicronutrients(itemName, itemWeight, itemNutrients, dbSource, identityForChecks || itemName, addDebugLog);
 
 
   // 2. Protein Reality Check
@@ -1257,6 +1363,45 @@ export function backfillSolubleFibre(
         addDebugLog(`[Soluble Fibre Backfill] "${itemName}": backfilled soluble fibre (${itemNutrients.solubleFibre}g) from total fibre (${totalF}g) using ratio ${(ratio * 100).toFixed(0)}% for food category.`);
       }
     }
+  }
+}
+
+export function backfillSparseMicronutrients(
+  itemName: string,
+  itemWeight: number,
+  itemNutrients: Record<string, number>,
+  dbSource?: string,
+  categoryQuery?: string,
+  addDebugLog?: (msg: string) => void
+): void {
+  if (!itemNutrients || typeof itemNutrients !== 'object') return;
+  // Never touch label/brand_official/menu sourced items — a printed zero is truth.
+  const isVerifiedSource = dbSource === 'label' || dbSource === 'label_partial' ||
+    dbSource === 'brand_official' || dbSource === 'kiosk' || dbSource === 'menu';
+  if (isVerifiedSource) return;
+  if (!(itemNutrients.calories > 10) || !(itemWeight > 0)) return; // skip trivial/garnish items
+
+  const MICRO_KEYS = [
+    'magnesium', 'zinc', 'selenium', 'iodine', 'phosphorus', 'potassium', 'calcium', 'iron',
+    'vitaminA', 'vitaminC', 'vitaminD', 'vitaminE', 'vitaminK', 'vitaminB12', 'vitaminB6',
+    'folate', 'thiamine', 'riboflavin', 'niacin'
+  ];
+  const zeroKeys = MICRO_KEYS.filter(k => !itemNutrients[k] || itemNutrients[k] === 0);
+  // Only intervene when MOST of the micronutrient list is zero — a single genuine zero
+  // (e.g. vitamin C in plain chicken) should not trigger a full backfill.
+  if (zeroKeys.length < MICRO_KEYS.length * 0.6) return;
+
+  const q = categoryQuery || itemName || '';
+  const categoryProfile = getFallbackCategoryProfile(q);
+  const scaleFactor = itemWeight / 100;
+  zeroKeys.forEach(k => {
+    const categoryValue = (categoryProfile[k] || 0) * scaleFactor;
+    if (categoryValue > 0) {
+      itemNutrients[k] = Math.round(categoryValue * 100) / 100;
+    }
+  });
+  if (addDebugLog) {
+    addDebugLog(`[Sparse Micronutrient Backfill] "${itemName}": backfilled ${zeroKeys.length} micronutrient(s) from category profile for "${q}".`);
   }
 }
 

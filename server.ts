@@ -5,7 +5,14 @@ try {
 } catch (e) {}
 
 import { executeFoodResolverCurator } from './server_food_resolver_curator.js';
-import { checkCategoryAndStateCompatibility, applyServerAverageNutrients, checkThermodynamicDensitySanity, checkArchetypeMacroBounds } from './server_pure_helpers.js';
+import {
+  checkCategoryAndStateCompatibility,
+  applyServerAverageNutrients,
+  checkThermodynamicDensitySanity,
+  checkArchetypeMacroBounds,
+  applySatFatAndAddedSugarFloor,
+  backfillSparseMicronutrients,
+} from './server_pure_helpers.js';
 import { filterMatchesForQuery, pickQueryScopedMatch } from './server_query_scoped_match.js';
 import {
   namesReferToSameFood,
@@ -7095,6 +7102,20 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
       // unlike the earlier pre-budget applyNutrientRealityChecks call, which is intentionally
       // skipped for soft-budget items because the calorie numbers aren't finalized yet at that point.
       applyCommercialSodiumFloor(
+        item.originalName || item.keyword,
+        aggregatedNutrients,
+        effectiveDbSourceForChecks,
+        addDebugLog,
+        {
+          originalName: item.originalName || item.keyword,
+          keyword: item.keyword,
+          componentCount: Array.isArray(item.components) ? item.components.length : 0,
+          physicalForm: preForm?.physicalForm,
+          chainName: item.chainName || null,
+        }
+      );
+
+      applySatFatAndAddedSugarFloor(
         item.originalName || item.keyword,
         aggregatedNutrients,
         effectiveDbSourceForChecks,

@@ -11,7 +11,9 @@ import {
   checkIfItemIsAlreadyPrepared,
   checkAtwaterConsistency,
   applyNutrientRealityChecks,
-  backfillSolubleFibre
+  backfillSolubleFibre,
+  applySatFatAndAddedSugarFloor,
+  backfillSparseMicronutrients
 } from './server_pure_helpers';
 
 describe('server_pure_helpers', () => {
@@ -364,6 +366,113 @@ describe('server_pure_helpers', () => {
       expect(normalizeChainKey("jack_daniel_s")).toBe('jack_daniels');
       expect(normalizeChainKey("YOLK")).toBe('yolk');
       expect(normalizeChainKey("Pret A Manger")).toBe('pret_a_manger');
+    });
+  });
+
+  describe('applySatFatAndAddedSugarFloor', () => {
+    it('applies sat fat floor to fast food / processed fried items when sat fat is missing or too low', () => {
+      const nutrients: Record<string, number> = { calories: 450, totalFat: 20, saturatedFat: 0, unsaturatedFat: 20 };
+      applySatFatAndAddedSugarFloor("Cheeseburger", nutrients, "estimated", undefined, { chainName: "McDonald's" });
+      expect(nutrients.saturatedFat).toBeGreaterThanOrEqual(5); // 25% of 20g
+      expect(nutrients.unsaturatedFat).toBe(20 - nutrients.saturatedFat);
+    });
+
+    it('applies higher sat fat floor (35%) to bakery pastries/desserts', () => {
+      const nutrients: Record<string, number> = { calories: 350, totalFat: 18, saturatedFat: 0, unsaturatedFat: 18 };
+      applySatFatAndAddedSugarFloor("Butter Croissant", nutrients, "estimated");
+      expect(nutrients.saturatedFat).toBeGreaterThanOrEqual(6.3); // 35% of 18g
+    });
+
+    it('applies added sugar floor to sweet desserts and baked goods', () => {
+      const nutrients: Record<string, number> = { calories: 400, carbohydrates: 50, sugar: 30, addedSugar: 0 };
+      applySatFatAndAddedSugarFloor("Chocolate Cake", nutrients, "estimated");
+      expect(nutrients.addedSugar).toBe(24); // 80% of 30g sugar
+      expect(nutrients.sugar).toBe(30);
+    });
+
+    it('does NOT alter verified printed label or brand official source items', () => {
+      const nutrients: Record<string, number> = { calories: 400, totalFat: 20, saturatedFat: 1, addedSugar: 0, sugar: 20 };
+      applySatFatAndAddedSugarFloor("Commercial Donut", nutrients, "label");
+      expect(nutrients.saturatedFat).toBe(1);
+      expect(nutrients.addedSugar).toBe(0);
+    });
+
+    it('does NOT force added sugar on clean whole foods like fruit or plain oats', () => {
+      const nutrients: Record<string, number> = { calories: 150, carbohydrates: 27, sugar: 14, addedSugar: 0, totalFat: 0.5, saturatedFat: 0.1 };
+      applySatFatAndAddedSugarFloor("Fresh Blueberries", nutrients, "estimated");
+      expect(nutrients.addedSugar).toBe(0);
+    });
+  });
+
+  describe('backfillSparseMicronutrients', () => {
+    it('backfills missing micronutrients when majority (>60%) are 0', () => {
+      const nutrients: Record<string, number> = {
+        calories: 120,
+        protein: 2.0,
+        totalFat: 0.2,
+        carbohydrates: 25.0,
+        potassium: 0,
+        calcium: 0,
+        iron: 0,
+        magnesium: 0,
+        zinc: 0,
+        selenium: 0,
+        iodine: 0,
+        phosphorus: 0,
+        vitaminA: 0,
+        vitaminC: 0,
+        vitaminD: 0,
+        vitaminE: 0,
+        vitaminK: 0,
+        vitaminB12: 0,
+        vitaminB6: 0,
+        folate: 0,
+        thiamine: 0,
+        riboflavin: 0,
+        niacin: 0
+      };
+      backfillSparseMicronutrients("Mixed Green Salad", 150, nutrients, "estimated", "leafy_greens");
+      expect(nutrients.potassium).toBeGreaterThan(0);
+      expect(nutrients.vitaminK).toBeGreaterThan(0);
+      expect(nutrients.calcium).toBeGreaterThan(0);
+    });
+
+    it('does not touch verified printed label source', () => {
+      const nutrients: Record<string, number> = {
+        calories: 120,
+        potassium: 0,
+        calcium: 0
+      };
+      backfillSparseMicronutrients("Greek Salad", 150, nutrients, "label", "leafy_greens");
+      expect(nutrients.potassium).toBe(0);
+    });
+
+    it('does not touch items that already have populated micronutrients', () => {
+      const nutrients: Record<string, number> = {
+        calories: 200,
+        potassium: 350,
+        calcium: 40,
+        iron: 1.5,
+        magnesium: 30,
+        zinc: 1.2,
+        selenium: 15,
+        iodine: 10,
+        phosphorus: 120,
+        vitaminA: 50,
+        vitaminC: 20,
+        vitaminD: 0,
+        vitaminE: 1.0,
+        vitaminK: 15,
+        vitaminB12: 0.5,
+        vitaminB6: 0.2,
+        folate: 40,
+        thiamine: 0.1,
+        riboflavin: 0.1,
+        niacin: 2.0
+      };
+      backfillSparseMicronutrients("Chicken Breast", 100, nutrients, "estimated", "poultry");
+      // Potassium should remain unchanged (350, not overwritten)
+      expect(nutrients.potassium).toBe(350);
     });
   });
 });
