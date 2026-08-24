@@ -3,6 +3,12 @@
 **Updated:** 2026-08-23
 **Status:** Multi-pass density drift, systemic anti-commodity collapse safeguards, mass & moisture conservation, self-healing divergence recovery, and jam canonical mapping active and verified (74/74 files, 702/702 tests).
 
+- **Prototype End-to-End Benchmark & Case 7 Sainsbury Oats (2026-08-24):**
+  - **7-Case Benchmark Suite (`prototype/`):** Evaluated all 7 test meals end-to-end using `gemini-3.5-flash-lite` across Stage 1 Vision Scout, Stage 2 Derivation Engine & Brand Matcher, and Stage 3 Dietitian Coach. Generated detailed markdown reports (`REPORT_01` to `REPORT_07`) and consolidated `END_TO_END_REPORT.md`.
+  - **Case 7 Sainsbury Oats + Fruit Plate:** Fixed photo mismatch, added `BRAND SEPARATION` instruction to Scout prompt to extract companion fruits as separate items, and integrated Sainsbury Scottish Whole Rolled Oats brand lookup (60g base grain = 217.5 kcal). Prototype accurately evaluated the composite meal at 543 kcal (vs production's 689 kcal over-estimate).
+  - **Production Debug Archive (`existing-log/`):** Archived 7 production diagnostic logs for direct side-by-side comparison with the prototype visual architecture.
+  - **Committed & Pushed to GitHub:** Synced all prototype benchmark code, image assets, diagnostic logs, and report artifacts to `origin/main` (`ef13e54`).
+
 - **Systemic Anti-Commodity Collapse & Physical Form Disparity Safeguards (2026-08-23):**
   - **Self-Healing Foundation Divergence Recovery (`server.ts`):** Added automatic category profile fallback when single-component soft items trigger severe foundation-budget divergence (<0.35x or >2.8x), repairing raw-commodity collapse before meal finalization.
   - **Mass and Moisture Conservation Guard (`server_pure_helpers.ts`):** Bound total physical dry matter based on moisture category (max 45% dry matter for jellies, mousses, puddings, soups, and 15% for watery drinks), preventing multi-pass macro distortion and impossible water displacement.
