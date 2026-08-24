@@ -614,9 +614,14 @@ export function aggregateItemsNutrients(
     for (const key of Object.keys(traceNutrients)) {
       if (baseRef100g && baseRef100g[key] !== undefined && baseRef100g[key] !== null && Number(baseRef100g[key]) > 0) {
         itemNutrients[key] = parseFloat((baseRef100g[key] * itemFactor).toFixed(2));
+        // "label" dbSource means the item's core MACROS were OCR'd from a photographed
+        // label — it does NOT mean this specific trace micronutrient (pulled here from the
+        // generic USDA reference density, not from the photo) was printed anywhere. Only a
+        // genuinely curated "brand_official" record (a specific branded product's official
+        // nutrition data) should ever be attributed as label/brand-verified truth.
         nutrientSourceMap[key] = dbSource === "usda" ? "usda_database"
           : dbSource === "off" ? "openfoodfacts_database"
-          : dbSource === "brand_official" || dbSource === "label" ? "brand_label_data"
+          : dbSource === "brand_official" ? "brand_label_data"
           : "matched_database_entry";
       } else if (itemNutrients[key] === undefined || itemNutrients[key] === 0 || isNaN(itemNutrients[key])) {
         itemNutrients[key] = (traceNutrients as any)[key];
