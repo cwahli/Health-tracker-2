@@ -2,14 +2,14 @@ import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
-import { scoutSystemInstruction } from "./server_vision_scout";
+import { scoutSystemInstruction } from "./server_vision_scout.ts";
 import {
   computeDishCoreKeyNutrients,
   aggregateDishNutrients,
   CoreKeyNutrients,
   BaseNutrients,
-} from "./derivation_engine";
-import { runDietitianAgent, dietitianSystemInstruction } from "./server_dietitian";
+} from "./derivation_engine.ts";
+import { runDietitianAgent, dietitianSystemInstruction } from "./server_dietitian.ts";
 
 dotenv.config();
 

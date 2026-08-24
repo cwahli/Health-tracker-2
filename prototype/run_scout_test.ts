@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
-import { scoutSystemInstruction } from "./server_vision_scout";
+import { scoutSystemInstruction } from "./server_vision_scout.ts";
 
 dotenv.config();
 
