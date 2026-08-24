@@ -768,7 +768,19 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                               }
                               
                               const isServingField = k.toLowerCase().includes('serving');
-                              
+
+                              // A number only represents a genuine "per serving / per 100g" printed
+                              // reference when it was actually transcribed into rawNutritionLabel.
+                              // When it falls back to item.nutritionFacts, the backend has already
+                              // computed that number as the FINAL TOTAL for the item's actual consumed
+                              // weight — showing that same number again in the per-serving column
+                              // falsely implies a doubling/calculation error. Gate the per-serving
+                              // column on the value's true origin instead of always populating it.
+                              const originalValIsFromRawLabel = item.rawNutritionLabel?.[k] !== undefined &&
+                                                                 item.rawNutritionLabel?.[k] !== null &&
+                                                                 !item.rawNutritionLabel?._synthetic &&
+                                                                 LABEL_PRINTABLE_NUTRIENT_KEYS.has(k.toLowerCase());
+
                               let totalStr = '-';
                               let originalDisplay = '-';
                               
@@ -778,10 +790,14 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                 const defaultUnit = isCalorieKey ? 'kcal' : (isServingField ? '' : (nutDef ? nutDef.unit : 'g'));
                                 const unit = isCalorieKey ? 'kcal' : (String(originalVal).replace(/[\d.\s]/g, '') || defaultUnit);
                                 
-                                if (isCalorieKey && numVal !== null) {
+                                if (isServingField) {
+                                  originalDisplay = hasUnit ? String(originalVal) : `${originalVal}${defaultUnit}`;
+                                } else if (!originalValIsFromRawLabel) {
+                                  originalDisplay = '-';
+                                } else if (isCalorieKey && numVal !== null) {
                                   originalDisplay = `${numVal} kcal`;
                                 } else {
-                                  originalDisplay = (hasUnit && !isServingField) ? String(originalVal) : `${originalVal}${defaultUnit}`;
+                                  originalDisplay = hasUnit ? String(originalVal) : `${originalVal}${defaultUnit}`;
                                 }
                                 
                                 if (numVal !== null && !missingWeight && !isServingField) {
