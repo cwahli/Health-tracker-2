@@ -1,11 +1,11 @@
-# End-to-End Pipeline Report: 03_sushi_shrimp_salad.jpg
+# End-to-End Pipeline Report: 07_sainsbury_oat_fruits.jpg (Sainsbury Rolled Oats + Fresh Fruits)
 
-**Generated At:** 2026-08-23T22:43:02.268Z
+**Generated At:** 2026-08-23T22:43:46.942Z
 **Evaluated Model:** `gemini-3.5-flash-lite` (Strictly used for both Stage 1 Scout & Stage 3 Dietitian)
-**File(s):** `03_sushi_shrimp_salad.jpg` | **Content Type:** `visual` | **Environment:** `casual_restaurant`
+**File(s):** `07_sainsbury_oat_fruits.jpg` | **Content Type:** `visual` | **Environment:** `home_cooked`
 
 ### 1. User Input Context & Active Clinical Biomarker Profile
-- **User Prompt:** "I ate this for lunch and went for a short 15 minute walk afterwards."
+- **User Prompt:** "I had 60g of sainsbury rolled oat + fruits"
 - **Active Clinical Biomarkers:**
   - Prediabetes / Elevated Fasting Glucose
   - Elevated LDL Cholesterol (145 mg/dL)
@@ -207,198 +207,236 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
 
 ### 3. Stage 1 Output: Vision Scout Analysis & Dish Detection
 **Scout Internal Reasoning:**
-> The image shows a meal consisting of three distinct items: sushi rolls in a plastic container on the left, a shrimp and pasta salad with dressing in a larger container on the right, and a baguette at the bottom. I will extract each of these three items separately with precise bounding boxes and estimates.
+> The user provided an image showing a bowl/cup of oatmeal with berries and grapes, plus a separate plate with whole fruits (banana, apple, plum). The user's text states 'I had 60g of sainsbury rolled oat + fruits'. According to instructions, brand 'Sainsbury's' applies strictly to the branded oat item. The companion foods (fruits in the mug and the entire fruit plate) are extracted as separate unbranded items. We extract the Sainsbury's oats with its toppings in the cup as one item, and the whole fruits on the plate as separate items or companion fruits as instructed.
 
 #### Discovered Dishes & Per-Dish Core + Key Nutrients
 
-##### Dish 1: Salmon and Avocado Sushi Rolls (180g) [Image 0]
+##### Dish 1: Sainsbury's rolled oats with raspberries and grapes (180g) [Image 0]
+- **Brand / Chain:** Sainsbury's (Official Brand DB)
+- **Cooking Method:** boiled
+- **Bounding Box:** `[454, 0, 995, 574]`
+- **Ingredients:** Sainsbury's rolled oats, water or milk, raspberries, red grapes
+- **Core Nutrients:** 312.5 kcal | 9.9g Protein | **52g Carbs [Derived]** | 7.2g Fat | 2.7g Sat Fat | 0g Trans Fat | 0g Added Sugar | 7g Fibre | 44mg Sodium
+- **Key Nutrients:** 11.9g Total Sugar | **4.5g Unsat Fat [Derived]** | **0.11g Salt [Derived]** | 320mg Potassium | 0.1g Omega-3 | 40mg Calcium | 2.5mg Iron | 100mg Magnesium | 0mcg Vit D
+
+##### Dish 2: Banana (118g) [Image 0]
 - **Brand / Chain:** Unbranded
 - **Cooking Method:** raw
-- **Bounding Box:** `[119, 0, 666, 268]`
-- **Ingredients:** sushi rice, salmon, avocado, nori
-- **Core Nutrients:** 280 kcal | 11g Protein | **42.1g Carbs [Derived]** | 7.5g Fat | 1.2g Sat Fat | 0g Trans Fat | 3g Added Sugar | 2.5g Fibre | 420mg Sodium
-- **Key Nutrients:** 4g Total Sugar | **6.3g Unsat Fat [Derived]** | **1.07g Salt [Derived]** | 290mg Potassium | 0.5g Omega-3 | 20mg Calcium | 1.1mg Iron | 35mg Magnesium | 3.5mcg Vit D
+- **Bounding Box:** `[78, 336, 447, 959]`
+- **Ingredients:** banana
+- **Core Nutrients:** 105 kcal | 1.3g Protein | **24.3g Carbs [Derived]** | 0.3g Fat | 0.1g Sat Fat | 0g Trans Fat | 0g Added Sugar | 3g Fibre | 1mg Sodium
+- **Key Nutrients:** 14.4g Total Sugar | **0.2g Unsat Fat [Derived]** | **0g Salt [Derived]** | 422mg Potassium | 0g Omega-3 | 6mg Calcium | 0.3mg Iron | 32mg Magnesium | 0mcg Vit D
 
-##### Dish 2: Shrimp and Pasta Salad with Dressing (320g) [Image 0]
+##### Dish 3: Apple (182g) [Image 0]
 - **Brand / Chain:** Unbranded
-- **Cooking Method:** boiled
-- **Bounding Box:** `[169, 359, 762, 994]`
-- **Ingredients:** shrimp, penne pasta, lettuce, carrots, creamy dressing
-- **Core Nutrients:** 420 kcal | 28g Protein | **36.5g Carbs [Derived]** | 18g Fat | 4g Sat Fat | 0g Trans Fat | 2g Added Sugar | 3g Fibre | 750mg Sodium
-- **Key Nutrients:** 5g Total Sugar | **14g Unsat Fat [Derived]** | **1.91g Salt [Derived]** | 380mg Potassium | 0.3g Omega-3 | 60mg Calcium | 2mg Iron | 40mg Magnesium | 0.8mcg Vit D
+- **Cooking Method:** raw
+- **Bounding Box:** `[270, 442, 513, 831]`
+- **Ingredients:** apple
+- **Core Nutrients:** 95 kcal | 0.5g Protein | **22.6g Carbs [Derived]** | 0.3g Fat | 0g Sat Fat | 0g Trans Fat | 0g Added Sugar | 4.4g Fibre | 2mg Sodium
+- **Key Nutrients:** 19g Total Sugar | **0.3g Unsat Fat [Derived]** | **0.01g Salt [Derived]** | 195mg Potassium | 0g Omega-3 | 11mg Calcium | 0.2mg Iron | 9mg Magnesium | 0mcg Vit D
 
-##### Dish 3: French Baguette (150g) [Image 0]
+##### Dish 4: Plum (66g) [Image 0]
 - **Brand / Chain:** Unbranded
-- **Cooking Method:** baked
-- **Bounding Box:** `[741, 100, 1000, 996]`
-- **Ingredients:** wheat flour, water, yeast, salt
-- **Core Nutrients:** 390 kcal | 13.5g Protein | **80.6g Carbs [Derived]** | 1.5g Fat | 0.3g Sat Fat | 0g Trans Fat | 0g Added Sugar | 3.5g Fibre | 680mg Sodium
-- **Key Nutrients:** 1g Total Sugar | **1.2g Unsat Fat [Derived]** | **1.73g Salt [Derived]** | 190mg Potassium | 0g Omega-3 | 30mg Calcium | 3.2mg Iron | 45mg Magnesium | 0mcg Vit D
+- **Cooking Method:** raw
+- **Bounding Box:** `[121, 372, 297, 592]`
+- **Ingredients:** plum
+- **Core Nutrients:** 30 kcal | 0.5g Protein | **6.6g Carbs [Derived]** | 0.2g Fat | 0g Sat Fat | 0g Trans Fat | 0g Added Sugar | 0.9g Fibre | 0mg Sodium
+- **Key Nutrients:** 6.6g Total Sugar | **0.2g Unsat Fat [Derived]** | **0g Salt [Derived]** | 104mg Potassium | 0g Omega-3 | 4mg Calcium | 0.1mg Iron | 5mg Magnesium | 0mcg Vit D
 
 ### 4. Stage 2 Output: Derivation Engine & Brand Database Matcher
+> ⚠️ **Brand Database Replacement Notice:**
+> - [BRAND DATABASE MATCH APPLIED]: Dish "Sainsbury's rolled oats with raspberries and grapes" matched to official Sainsbury's Scottish Whole Rolled Oats Brand Database entry. 60g verified oats (217.5 kcal, 6.6g P, 3.9g F) + mug preparations locked to 312.5 kcal, 9.9g Protein, 7.2g Total Fat, 7g Fibre, 44mg Sodium.
+
 | Nutrient Category | Nutrient | Value |
 | :--- | :--- | :--- |
-| **Core (High Precision)** | Calories | 1090 kcal |
-| **Core (High Precision)** | Protein | 52.5 g |
-| **Core (High Precision)** | Saturated Fat | 5.5 g |
+| **Core (High Precision)** | Calories | 543 kcal |
+| **Core (High Precision)** | Protein | 12.2 g |
+| **Core (High Precision)** | Saturated Fat | 2.8 g |
 | **Core (High Precision)** | Trans Fat | 0 g |
-| **Core (High Precision)** | Added Sugar | 5 g |
-| **Core (High Precision)** | Total Fibre | 9 g |
-| **Core (High Precision)** | Sodium | 1850 mg |
-| **Core (Derived)** | **Carbohydrates** | **159.2 g** |
-| **Key (Moderate Precision)** | Total Fat | 27 g |
-| **Key (Moderate Precision)** | Total Sugar | 10 g |
-| **Key (Moderate Precision)** | Potassium | 860 mg |
-| **Key (Moderate Precision)** | Omega-3 | 0.8 g |
-| **Key (Moderate Precision)** | Calcium | 110 mg |
-| **Key (Moderate Precision)** | Iron | 6.3 mg |
-| **Key (Moderate Precision)** | Magnesium | 120 mg |
-| **Key (Moderate Precision)** | Vitamin D | 4.3 mcg |
-| **Key (Derived)** | **Unsaturated Fat** | **21.5 g** |
-| **Key (Derived)** | **Salt** | **4.71 g** |
+| **Core (High Precision)** | Added Sugar | 0 g |
+| **Core (High Precision)** | Total Fibre | 15.3 g |
+| **Core (High Precision)** | Sodium | 47 mg |
+| **Core (Derived)** | **Carbohydrates** | **105.5 g** |
+| **Key (Moderate Precision)** | Total Fat | 8 g |
+| **Key (Moderate Precision)** | Total Sugar | 51.9 g |
+| **Key (Moderate Precision)** | Potassium | 1041 mg |
+| **Key (Moderate Precision)** | Omega-3 | 0.1 g |
+| **Key (Moderate Precision)** | Calcium | 61 mg |
+| **Key (Moderate Precision)** | Iron | 3.1 mg |
+| **Key (Moderate Precision)** | Magnesium | 146 mg |
+| **Key (Moderate Precision)** | Vitamin D | 0 mcg |
+| **Key (Derived)** | **Unsaturated Fat** | **5.2 g** |
+| **Key (Derived)** | **Salt** | **0.12 g** |
 
 ### 5. Stage 3 Output: Dietitian Clinical Coach Review & Extended Micronutrients
-- **Verdict:** **High sodium and carbohydrate load** (Level: `warning`)
+- **Verdict:** **Exceptional fibre for heart health** (Level: `good`)
 - **Dietitian Message (4-Beat Narrative):**
-  > You secured 52.5g of quality lean protein from the shrimp and salmon. However, the combined sodium hit 1,850mg, consuming nearly your entire daily limit in one meal. This high sodium load temporarily elevates blood pressure and causes fluid retention. Your 15-minute post-meal walk was a great choice to blunt the blood glucose spike from the 159g of carbohydrates.
+  > You secured 15.3g of quality dietary fibre and 1,041mg of heart-healthy potassium from the oats and fresh fruits. Even though the carbohydrate load is 105.5g, the robust fibre matrix prevents a sharp glucose spike for your prediabetes. This nutrient density promotes steady, sustained energy without cardiovascular strain. Enjoy a light 15-minute walk to optimize insulin sensitivity and glucose clearance.
 - **Accuracy Review Status:** ✅ **Scout Estimates Approved (No Correction Needed)**
 
 ##### Aggregate Extended Nutrients (Filled by Dietitian):
 | Extended Nutrient (Directional Precision <50%) | Value |
 | :--- | :--- |
-| **Soluble Fibre** | 3.2 g |
-| **Vitamin A** | 550 mcg |
-| **Thiamine (B1)** | 0.45 mg |
-| **Riboflavin (B2)** | 0.38 mg |
-| **Niacin (B3)** | 6.2 mg |
-| **Vitamin B6** | 0.4 mg |
-| **Folate (B9)** | 110 mcg |
-| **Vitamin B12** | 1.8 mcg |
-| **Vitamin C** | 25 mg |
-| **Vitamin E** | 2.1 mg |
-| **Vitamin K** | 45 mcg |
-| **Zinc** | 2.5 mg |
-| **Selenium** | 45 mcg |
-| **Iodine** | 60 mcg |
-| **Phosphorus** | 350 mg |
+| **Soluble Fibre** | 5.2 g |
+| **Vitamin A** | 95 mcg |
+| **Thiamine (B1)** | 0.32 mg |
+| **Riboflavin (B2)** | 0.18 mg |
+| **Niacin (B3)** | 1.4 mg |
+| **Vitamin B6** | 0.55 mg |
+| **Folate (B9)** | 58 mcg |
+| **Vitamin B12** | 0 mcg |
+| **Vitamin C** | 32.5 mg |
+| **Vitamin E** | 0.8 mg |
+| **Vitamin K** | 12.4 mcg |
+| **Zinc** | 1.8 mg |
+| **Selenium** | 14.2 mcg |
+| **Iodine** | 5 mcg |
+| **Phosphorus** | 240 mg |
 
 #### Raw Payloads & JSON Output
 <details><summary>Click to expand Raw Scout JSON</summary>
 
 ```json
 {
-  "_internalReasoning": "The image shows a meal consisting of three distinct items: sushi rolls in a plastic container on the left, a shrimp and pasta salad with dressing in a larger container on the right, and a baguette at the bottom. I will extract each of these three items separately with precise bounding boxes and estimates.",
+  "_internalReasoning": "The user provided an image showing a bowl/cup of oatmeal with berries and grapes, plus a separate plate with whole fruits (banana, apple, plum). The user's text states 'I had 60g of sainsbury rolled oat + fruits'. According to instructions, brand 'Sainsbury's' applies strictly to the branded oat item. The companion foods (fruits in the mug and the entire fruit plate) are extracted as separate unbranded items. We extract the Sainsbury's oats with its toppings in the cup as one item, and the whole fruits on the plate as separate items or companion fruits as instructed.",
   "contentType": "visual",
-  "diningEnvironment": "casual_restaurant",
+  "diningEnvironment": "home_cooked",
   "items": [
     {
-      "originalName": "Salmon and Avocado Sushi Rolls",
-      "chainName": null,
+      "originalName": "Sainsbury's rolled oats with raspberries and grapes",
+      "chainName": "Sainsbury's",
       "estimatedWeightGrams": 180,
-      "cookingMethod": "raw",
-      "ingredients": [
-        "sushi rice",
-        "salmon",
-        "avocado",
-        "nori"
-      ],
-      "boundingBox2D": [
-        119,
-        0,
-        666,
-        268
-      ],
-      "sourceImageIndex": 0,
-      "nutrients": {
-        "calories": 280,
-        "protein": 11,
-        "saturatedFat": 1.2,
-        "transFat": 0,
-        "addedSugar": 3,
-        "totalFibre": 2.5,
-        "sodium": 420,
-        "totalFat": 7.5,
-        "totalSugar": 4,
-        "potassium": 290,
-        "omega3": 0.5,
-        "calcium": 20,
-        "iron": 1.1,
-        "magnesium": 35,
-        "vitaminD": 3.5
-      },
-      "itemConfidence": "High"
-    },
-    {
-      "originalName": "Shrimp and Pasta Salad with Dressing",
-      "chainName": null,
-      "estimatedWeightGrams": 320,
       "cookingMethod": "boiled",
       "ingredients": [
-        "shrimp",
-        "penne pasta",
-        "lettuce",
-        "carrots",
-        "creamy dressing"
+        "Sainsbury's rolled oats",
+        "water or milk",
+        "raspberries",
+        "red grapes"
       ],
       "boundingBox2D": [
-        169,
-        359,
-        762,
-        994
+        454,
+        0,
+        995,
+        574
       ],
       "sourceImageIndex": 0,
       "nutrients": {
-        "calories": 420,
-        "protein": 28,
-        "saturatedFat": 4,
+        "calories": 260,
+        "protein": 8,
+        "saturatedFat": 0.4,
         "transFat": 0,
-        "addedSugar": 2,
-        "totalFibre": 3,
-        "sodium": 750,
-        "totalFat": 18,
-        "totalSugar": 5,
-        "potassium": 380,
-        "omega3": 0.3,
-        "calcium": 60,
-        "iron": 2,
-        "magnesium": 40,
-        "vitaminD": 0.8
+        "addedSugar": 0,
+        "totalFibre": 7.5,
+        "sodium": 5,
+        "totalFat": 3.5,
+        "totalSugar": 6,
+        "potassium": 320,
+        "omega3": 0.1,
+        "calcium": 40,
+        "iron": 2.5,
+        "magnesium": 100,
+        "vitaminD": 0
       },
       "itemConfidence": "High"
     },
     {
-      "originalName": "French Baguette",
+      "originalName": "Banana",
       "chainName": null,
-      "estimatedWeightGrams": 150,
-      "cookingMethod": "baked",
+      "estimatedWeightGrams": 118,
+      "cookingMethod": "raw",
       "ingredients": [
-        "wheat flour",
-        "water",
-        "yeast",
-        "salt"
+        "banana"
       ],
       "boundingBox2D": [
-        741,
-        100,
-        1000,
-        996
+        78,
+        336,
+        447,
+        959
       ],
       "sourceImageIndex": 0,
       "nutrients": {
-        "calories": 390,
-        "protein": 13.5,
-        "saturatedFat": 0.3,
+        "calories": 105,
+        "protein": 1.3,
+        "saturatedFat": 0.1,
         "transFat": 0,
         "addedSugar": 0,
-        "totalFibre": 3.5,
-        "sodium": 680,
-        "totalFat": 1.5,
-        "totalSugar": 1,
-        "potassium": 190,
+        "totalFibre": 3,
+        "sodium": 1,
+        "totalFat": 0.3,
+        "totalSugar": 14.4,
+        "potassium": 422,
         "omega3": 0,
-        "calcium": 30,
-        "iron": 3.2,
-        "magnesium": 45,
+        "calcium": 6,
+        "iron": 0.3,
+        "magnesium": 32,
+        "vitaminD": 0
+      },
+      "itemConfidence": "High"
+    },
+    {
+      "originalName": "Apple",
+      "chainName": null,
+      "estimatedWeightGrams": 182,
+      "cookingMethod": "raw",
+      "ingredients": [
+        "apple"
+      ],
+      "boundingBox2D": [
+        270,
+        442,
+        513,
+        831
+      ],
+      "sourceImageIndex": 0,
+      "nutrients": {
+        "calories": 95,
+        "protein": 0.5,
+        "saturatedFat": 0,
+        "transFat": 0,
+        "addedSugar": 0,
+        "totalFibre": 4.4,
+        "sodium": 2,
+        "totalFat": 0.3,
+        "totalSugar": 19,
+        "potassium": 195,
+        "omega3": 0,
+        "calcium": 11,
+        "iron": 0.2,
+        "magnesium": 9,
+        "vitaminD": 0
+      },
+      "itemConfidence": "High"
+    },
+    {
+      "originalName": "Plum",
+      "chainName": null,
+      "estimatedWeightGrams": 66,
+      "cookingMethod": "raw",
+      "ingredients": [
+        "plum"
+      ],
+      "boundingBox2D": [
+        121,
+        372,
+        297,
+        592
+      ],
+      "sourceImageIndex": 0,
+      "nutrients": {
+        "calories": 30,
+        "protein": 0.5,
+        "saturatedFat": 0,
+        "transFat": 0,
+        "addedSugar": 0,
+        "totalFibre": 0.9,
+        "sodium": 0,
+        "totalFat": 0.2,
+        "totalSugar": 6.6,
+        "potassium": 104,
+        "omega3": 0,
+        "calcium": 4,
+        "iron": 0.1,
+        "magnesium": 5,
         "vitaminD": 0
       },
       "itemConfidence": "High"
@@ -412,57 +450,64 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
 
 ```json
 {
-  "_internalReasoning": "Evaluated the meal consisting of sushi rolls, shrimp and pasta salad, and french baguette. Total calories: 1090 kcal, Protein: 52.5g, Sodium: 1850mg (very high, approaching the 2000mg daily limit in a single meal, which impacts mild hypertension). Saturated fat is 5.5g (within safe limits). Carbs are high (159g) requiring attention given prediabetes warnings. Extended micronutrients estimated based on seafood, vegetables, grains, and avocado content.",
+  "_internalReasoning": "Evaluated the meal consisting of official Sainsbury's rolled oats with raspberries, grapes, a banana, apple, and plum. Total calories are 543 with a remarkable 15.3g of total fibre and zero added sugars (all sugar is natural whole-fruit and oat-derived). Despite high total carbohydrate content (105.5g), the massive soluble and insoluble fibre load slows glucose absorption significantly, making it safe for prediabetes. Potassium is very high (1041 mg) supporting hypertension management. Brand match data was incorporated directly.",
   "verdict": {
-    "label": "High sodium and carbohydrate load",
-    "level": "warning"
+    "label": "Exceptional fibre for heart health",
+    "level": "good"
   },
-  "message": "You secured 52.5g of quality lean protein from the shrimp and salmon. However, the combined sodium hit 1,850mg, consuming nearly your entire daily limit in one meal. This high sodium load temporarily elevates blood pressure and causes fluid retention. Your 15-minute post-meal walk was a great choice to blunt the blood glucose spike from the 159g of carbohydrates.",
+  "message": "You secured 15.3g of quality dietary fibre and 1,041mg of heart-healthy potassium from the oats and fresh fruits. Even though the carbohydrate load is 105.5g, the robust fibre matrix prevents a sharp glucose spike for your prediabetes. This nutrient density promotes steady, sustained energy without cardiovascular strain. Enjoy a light 15-minute walk to optimize insulin sensitivity and glucose clearance.",
   "accuracyReview": {
     "isCorrected": false,
     "correctionNotes": null,
     "correctedMealNutrients": null
   },
   "extendedMealNutrients": {
-    "solubleFibre": 3.2,
-    "vitaminA": 550,
-    "thiamine": 0.45,
-    "riboflavin": 0.38,
-    "niacin": 6.2,
-    "vitaminB6": 0.4,
-    "folate": 110,
-    "vitaminB12": 1.8,
-    "vitaminC": 25,
-    "vitaminE": 2.1,
-    "vitaminK": 45,
-    "zinc": 2.5,
-    "selenium": 45,
-    "iodine": 60,
-    "phosphorus": 350
+    "solubleFibre": 5.2,
+    "vitaminA": 95,
+    "thiamine": 0.32,
+    "riboflavin": 0.18,
+    "niacin": 1.4,
+    "vitaminB6": 0.55,
+    "folate": 58,
+    "vitaminB12": 0,
+    "vitaminC": 32.5,
+    "vitaminE": 0.8,
+    "vitaminK": 12.4,
+    "zinc": 1.8,
+    "selenium": 14.2,
+    "iodine": 5,
+    "phosphorus": 240
   },
   "mealSummary": {
-    "title": "Salmon Sushi, Shrimp Pasta Salad & Baguette",
+    "title": "Sainsbury's Rolled Oats with Mixed Fresh Fruits",
     "itemsSummary": [
       {
         "scoutIndex": 0,
-        "name": "Salmon and Avocado Sushi Rolls",
+        "name": "Sainsbury's rolled oats with raspberries and grapes",
         "weightGrams": 180,
-        "foodType": "sushi",
-        "cookingMethod": "raw"
-      },
-      {
-        "scoutIndex": 1,
-        "name": "Shrimp and Pasta Salad with Dressing",
-        "weightGrams": 320,
-        "foodType": "salad",
+        "foodType": "cereal and fruit",
         "cookingMethod": "boiled"
       },
       {
+        "scoutIndex": 1,
+        "name": "Banana",
+        "weightGrams": 118,
+        "foodType": "fresh fruit",
+        "cookingMethod": "raw"
+      },
+      {
         "scoutIndex": 2,
-        "name": "French Baguette",
-        "weightGrams": 150,
-        "foodType": "bread",
-        "cookingMethod": "baked"
+        "name": "Apple",
+        "weightGrams": 182,
+        "foodType": "fresh fruit",
+        "cookingMethod": "raw"
+      },
+      {
+        "scoutIndex": 3,
+        "name": "Plum",
+        "weightGrams": 66,
+        "foodType": "fresh fruit",
+        "cookingMethod": "raw"
       }
     ]
   }

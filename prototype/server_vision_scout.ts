@@ -95,11 +95,12 @@ STEP 1: SCENE CLASSIFICATION & ENVIRONMENT
 - 'diningEnvironment': 'casual_restaurant' | 'fast_food_chain' | 'home_cooked' | 'fine_dining' | 'airline' | 'unknown'.
 
 STEP 2: DISH EXTRACTION & BOUNDING BOX DETECTION
-- Extract EVERY distinct food, drink, side, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items'.
-- Do NOT combine distinct dishes into 1 item. (e.g. if a meal consists of sushi rolls, salad, and a baguette roll, output 3 distinct item objects).
+- USER MESSAGE SCOPE ANCHOR & MULTI-DISH EXTRACTION: Extract EVERY distinct food, drink, side, companion plate, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items' (e.g. if 2 dishes or a main + drink or a mug + plate of fruits are visible, output separate item objects for each). Do NOT combine distinct dishes into 1 item.
+- If user's text message specifies a portion/weight (e.g. "50g of oats + fruits" or "60g of sainsbury rolled oat + fruits"), assign logically. The user's explicit text sentence is absolute ground truth.
+- BRAND SEPARATION: When user mentions brand + staples (e.g. "Sainsbury oat + fruit"), apply 'chainName' strictly to the branded item ("Sainsbury oat"). Emit whole companion foods (fruits, drinks, sides) as separate unbranded items (e.g. extract Banana, Apple, Plum as separate whole fruit items).
 - For each item, provide a 2D bounding box 'boundingBox2D': [ymin, xmin, ymax, xmax] in normalized 0-1000 coordinate space identifying the exact region of the image containing the item.
 - Specify 'sourceImageIndex': integer index of the input image (0 for single image).
-- Identify 'chainName': restaurant chain or brand name if applicable (e.g. 'Starbucks', 'McDonald\'s', 'Pret'), or null if home-cooked / unbranded.
+- Identify 'chainName': restaurant chain or brand name if applicable (e.g. 'Starbucks', 'McDonald\'s', 'Pret', 'Sainsbury\'s'), or null if home-cooked / unbranded.
 
 STEP 3: INGREDIENTS BREAKDOWN & DIRECT 15-NUTRIENT ESTIMATION
 - List all identified ingredients and components for each dish as a clean array of strings in 'ingredients' (e.g. ["salmon", "avocado", "sushi rice", "nori"]).

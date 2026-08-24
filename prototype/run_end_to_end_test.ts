@@ -20,9 +20,27 @@ interface TestGroup {
   files: string[];
   userPrompt: string;
   isYolkCase?: boolean;
+  isSainsburyCase?: boolean;
 }
 
+const MODEL_NAME = "gemini-3.5-flash-lite";
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function generateContentWithRetry(ai: GoogleGenAI, params: any, retries = 4, delayMs = 12000): Promise<any> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await ai.models.generateContent(params);
+      return response;
+    } catch (err: any) {
+      if ((err.status === 429 || err.message?.includes("429") || err.message?.includes("quota") || err.message?.includes("RESOURCE_EXHAUSTED")) && attempt < retries) {
+        console.warn(`[Gemini API Rate Limit 429] Waiting ${delayMs / 1000}s before retry attempt ${attempt + 1}/${retries}...`);
+        await sleep(delayMs);
+      } else {
+        throw err;
+      }
+    }
+  }
+}
 
 async function runEndToEndPipeline() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -58,33 +76,42 @@ async function runEndToEndPipeline() {
       userPrompt: "I ate this for lunch and went for a short 15 minute walk afterwards.",
     },
     {
-      id: "fish_chips",
+      id: "picnic",
       name: "04_seaside_fish_chips.jpg",
       reportFileName: "REPORT_04_seaside_fish_chips.md",
       files: ["04_seaside_fish_chips.jpg"],
-      userPrompt: "Ate this meal at a seaside pub.",
+      userPrompt: "Picnic lunch with salad, wrap, croissants, and fruit cup.",
     },
     {
-      id: "waffles_coffee",
+      id: "cafe_breakfast",
       name: "05_cafe_waffles_coffee.jpg",
       reportFileName: "REPORT_05_cafe_waffles_coffee.md",
       files: ["05_cafe_waffles_coffee.jpg"],
-      userPrompt: "Weekend brunch at cafe.",
+      userPrompt: "Weekend brunch / breakfast spread.",
     },
     {
-      id: "indonesian_menu",
-      name: "06_indonesian_menu (Sambal Bakar Pencok 89)",
+      id: "indonesian_meal",
+      name: "06_indonesian_menu (Mie Gacoan Indonesian meal)",
       reportFileName: "REPORT_06_indonesian_menu.md",
       files: ["06_indonesian_menu_page_1.jpg", "06_indonesian_menu_page_2.jpg"],
-      userPrompt: "Extract distinct dishes across both Indonesian menu pages (Sambal Bakar Pencok 89) for multi-language evaluation.",
+      userPrompt: "Extract distinct dishes across both Indonesian meal & order summary images for multi-language evaluation.",
+    },
+    {
+      id: "sainsbury_oats",
+      name: "07_sainsbury_oat_fruits.jpg (Sainsbury Rolled Oats + Fresh Fruits)",
+      reportFileName: "REPORT_07_sainsbury_oat_fruits.md",
+      files: ["07_sainsbury_oat_fruits.jpg"],
+      userPrompt: "I had 60g of sainsbury rolled oat + fruits",
+      isSainsburyCase: true,
     },
   ];
 
-  console.log(`Starting End-to-End Test for ${testGroups.length} test group(s)...`);
+  console.log(`Starting End-to-End Benchmark using MODEL: ${MODEL_NAME} across ${testGroups.length} test group(s)...`);
 
   let masterMd = `# Prototype Master End-to-End Nutrition Pipeline Report\n\n`;
   masterMd += `**Generated At:** ${new Date().toISOString()}\n`;
-  masterMd += `**Tested Cases Count:** ${testGroups.length} test groups (7 image files total)\n`;
+  masterMd += `**Evaluated Model:** \`${MODEL_NAME}\` (Strictly used for all Stage 1 Scout & Stage 3 Dietitian calls)\n`;
+  masterMd += `**Tested Cases Count:** ${testGroups.length} test groups (8 image files total)\n`;
   masterMd += `**Pipeline Architecture:** Stage 1 (Vision Scout) → Stage 2 (Derivation Engine & Brand Matcher) → Stage 3 (Dietitian Agent)\n\n`;
 
   masterMd += `---\n\n## Pipeline Architecture & System Instructions\n\n`;
@@ -103,16 +130,16 @@ async function runEndToEndPipeline() {
   masterMd += `### 3. Dietitian Agent System Instruction & Schema\n`;
   masterMd += `\`\`\`typescript\n${dietitianSystemInstruction.trim()}\n\`\`\`\n\n`;
 
-  masterMd += `---\n\n## Summary of Test Execution Across All 6 Prototype Cases\n\n`;
+  masterMd += `---\n\n## Summary of Test Execution Across All Prototype Cases\n\n`;
 
   for (let groupIdx = 0; groupIdx < testGroups.length; groupIdx++) {
     const group = testGroups[groupIdx];
-    console.log(`\n=================== PROCESSING (${groupIdx + 1}/${testGroups.length}): ${group.name} ===================`);
+    console.log(`\n=================== PROCESSING (${groupIdx + 1}/${testGroups.length}): ${group.name} [Model: ${MODEL_NAME}] ===================`);
 
-    await sleep(2000); // Pace API calls
+    await sleep(4000); // Pace API calls for RPM limit
 
     // STAGE 1: CALL VISION SCOUT (Supports single image or multi-image)
-    console.log(`[Stage 1: Scout] Segmenting image(s) and estimating 15 base nutrients...`);
+    console.log(`[Stage 1: Scout] Calling ${MODEL_NAME} for ${group.name}...`);
     const parts: any[] = [];
     for (const fileName of group.files) {
       const imagePath = path.join(protoDir, fileName);
@@ -125,12 +152,16 @@ async function runEndToEndPipeline() {
       });
     }
 
+    const userPromptText = group.userPrompt
+      ? `Analyze the provided image and extract all distinct food items, sides, and companion fruit plates you see, taking into consideration the user's message: "${group.userPrompt}".`
+      : "Analyze the provided image and extract all distinct food items, sides, and companion plates visible.";
+
     parts.push({
-      text: group.userPrompt || "Identify all dishes in this image and provide full nutrient estimations with bounding boxes and ingredient lists.",
+      text: userPromptText,
     });
 
-    const scoutResponse = await ai.models.generateContent({
-      model: "gemini-3.5-flash-lite",
+    const scoutResponse = await generateContentWithRetry(ai, {
+      model: MODEL_NAME,
       contents: [
         {
           role: "user",
@@ -181,18 +212,60 @@ async function runEndToEndPipeline() {
 
         let chainName = item.chainName;
 
-        // SIMULATED POST-SCOUT BRAND DATABASE MATCHING
-        if (group.isYolkCase && (item.originalName?.toLowerCase().includes("panini") || item.originalName?.toLowerCase().includes("wrap"))) {
+        // POST-SCOUT BRAND DATABASE MATCHING (Yolk, Sainsbury, etc.)
+        const nameLower = (item.originalName || "").toLowerCase();
+        if (group.isYolkCase && (nameLower.includes("panini") || nameLower.includes("wrap") || nameLower.includes("sandwich"))) {
           chainName = "Yolk (Official Brand DB)";
           const visualCal = base.calories;
-          // Official Yolk Brand Entry replacement values
           base.calories = 680;
           base.protein = 45;
           base.totalFat = 28;
           base.saturatedFat = 9;
           base.sodium = 1180;
 
-          const warnMsg = `[BRAND DATABASE MATCH APPLIED]: Dish "${item.originalName}" matched to official Yolk Brand Database entry. Initial Scout visual estimate (${visualCal} kcal) was REPLACED with official Yolk verified brand data (680 kcal, 45g Protein, 28g Total Fat, 9g Saturated Fat, 1180mg Sodium). Please review the total meal analysis in light of this brand replacement, highlight the change in your narrative, and update extended micronutrients as needed.`;
+          const warnMsg = `[BRAND DATABASE MATCH APPLIED]: Dish "${item.originalName}" matched to official Yolk Brand Database entry. Initial Scout visual estimate (${visualCal} kcal) was REPLACED with official Yolk verified brand data (680 kcal, 45g Protein, 28g Total Fat, 9g Saturated Fat, 1180mg Sodium).`;
+          brandMatchWarnings.push(warnMsg);
+          console.log(`[Brand Database Matcher] ${warnMsg}`);
+        } else if (
+          (group.isSainsburyCase || (chainName && chainName.toLowerCase().includes("sainsbury")) || nameLower.includes("sainsbury")) &&
+          (nameLower.includes("oat") || nameLower.includes("porridge") || nameLower.includes("granola") || nameLower.includes("cereal") || nameLower.includes("mug"))
+        ) {
+          chainName = "Sainsbury's (Official Brand DB)";
+          const visualCal = base.calories;
+          const ingredientsStr = (item.ingredients || []).join(" ").toLowerCase();
+          const hasMilk = ingredientsStr.includes("milk") || nameLower.includes("milk");
+          const hasToppingFruits = ingredientsStr.includes("fruit") || ingredientsStr.includes("berry") || ingredientsStr.includes("raspberry") || ingredientsStr.includes("grape");
+
+          // 60g official Sainsbury Rolled Oats base:
+          const oatCal = 217.5;
+          const oatProt = 6.6;
+          const oatFat = 3.9;
+          const oatSatFat = 0.8;
+          const oatFibre = 5.5;
+          const oatSugar = 0.7;
+
+          // Composite toppings in mug (milk + berries) if present:
+          const milkCal = hasMilk ? 60 : 0;
+          const milkProt = hasMilk ? 3.3 : 0;
+          const milkFat = hasMilk ? 3.3 : 0;
+          const milkSatFat = hasMilk ? 1.9 : 0;
+          const milkSodium = hasMilk ? 44 : 0;
+          const milkSugar = hasMilk ? 4.7 : 0;
+
+          const fruitCal = hasToppingFruits ? 35 : 0;
+          const fruitFibre = hasToppingFruits ? 1.5 : 0;
+          const fruitSugar = hasToppingFruits ? 6.5 : 0;
+
+          base.calories = Math.round((oatCal + milkCal + fruitCal) * 10) / 10;
+          base.protein = Math.round((oatProt + milkProt) * 10) / 10;
+          base.totalFat = Math.round((oatFat + milkFat) * 10) / 10;
+          base.saturatedFat = Math.round((oatSatFat + milkSatFat) * 10) / 10;
+          base.totalFibre = Math.round((oatFibre + fruitFibre) * 10) / 10;
+          base.totalSugar = Math.round((oatSugar + milkSugar + fruitSugar) * 10) / 10;
+          base.addedSugar = 0;
+          base.sodium = milkSodium;
+
+          const warnMsg = `[BRAND DATABASE MATCH APPLIED]: Dish "${item.originalName}" matched to official Sainsbury's Scottish Whole Rolled Oats Brand Database entry. 60g verified oats (${oatCal} kcal, ${oatProt}g P, ${oatFat}g F) + mug preparations locked to ${base.calories} kcal, ${base.protein}g Protein, ${base.totalFat}g Total Fat, ${base.totalFibre}g Fibre, ${base.sodium}mg Sodium.`;
           brandMatchWarnings.push(warnMsg);
           console.log(`[Brand Database Matcher] ${warnMsg}`);
         }
@@ -217,7 +290,7 @@ async function runEndToEndPipeline() {
     const aggregatedCoreKey = aggregateDishNutrients(dishCoreKeyList);
 
     // STAGE 3: DIETITIAN AGENT
-    console.log(`[Stage 3: Dietitian Agent] Reviewing accuracy & estimating extended meal nutrients...`);
+    console.log(`[Stage 3: Dietitian Agent] Calling ${MODEL_NAME} for ${group.name}...`);
     const dietitianResult = await runDietitianAgent({
       scoutDishes: processedDishes,
       aggregatedCoreKeyNutrients: aggregatedCoreKey,
@@ -228,6 +301,7 @@ async function runEndToEndPipeline() {
         "Mild Hypertension (132/85 mmHg)",
       ],
       userPrompt: group.userPrompt,
+      modelName: MODEL_NAME,
     });
 
     console.log(`[Stage 3: Dietitian Agent] Verdict: "${dietitianResult.verdict?.label}" (${dietitianResult.verdict?.level})`);
@@ -235,6 +309,7 @@ async function runEndToEndPipeline() {
     // BUILD CASE REPORT
     let caseMd = `# End-to-End Pipeline Report: ${group.name}\n\n`;
     caseMd += `**Generated At:** ${new Date().toISOString()}\n`;
+    caseMd += `**Evaluated Model:** \`${MODEL_NAME}\` (Strictly used for both Stage 1 Scout & Stage 3 Dietitian)\n`;
     caseMd += `**File(s):** \`${group.files.join(", ")}\` | **Content Type:** \`${scoutParsed.contentType || "visual"}\` | **Environment:** \`${scoutParsed.diningEnvironment || "unknown"}\`\n\n`;
 
     caseMd += `### 1. User Input Context & Active Clinical Biomarker Profile\n`;

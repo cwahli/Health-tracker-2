@@ -1,10 +1,11 @@
 # End-to-End Pipeline Report: 04_seaside_fish_chips.jpg
 
-**Generated At:** 2026-08-23T20:54:40.510Z
+**Generated At:** 2026-08-23T22:43:12.415Z
+**Evaluated Model:** `gemini-3.5-flash-lite` (Strictly used for both Stage 1 Scout & Stage 3 Dietitian)
 **File(s):** `04_seaside_fish_chips.jpg` | **Content Type:** `visual` | **Environment:** `casual_restaurant`
 
 ### 1. User Input Context & Active Clinical Biomarker Profile
-- **User Prompt:** "Ate this meal at a seaside pub."
+- **User Prompt:** "Picnic lunch with salad, wrap, croissants, and fruit cup."
 - **Active Clinical Biomarkers:**
   - Prediabetes / Elevated Fasting Glucose
   - Elevated LDL Cholesterol (145 mg/dL)
@@ -22,11 +23,12 @@ STEP 1: SCENE CLASSIFICATION & ENVIRONMENT
 - 'diningEnvironment': 'casual_restaurant' | 'fast_food_chain' | 'home_cooked' | 'fine_dining' | 'airline' | 'unknown'.
 
 STEP 2: DISH EXTRACTION & BOUNDING BOX DETECTION
-- Extract EVERY distinct food, drink, side, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items'.
-- Do NOT combine distinct dishes into 1 item. (e.g. if a meal consists of sushi rolls, salad, and a baguette roll, output 3 distinct item objects).
+- USER MESSAGE SCOPE ANCHOR & MULTI-DISH EXTRACTION: Extract EVERY distinct food, drink, side, companion plate, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items' (e.g. if 2 dishes or a main + drink or a mug + plate of fruits are visible, output separate item objects for each). Do NOT combine distinct dishes into 1 item.
+- If user's text message specifies a portion/weight (e.g. "50g of oats + fruits" or "60g of sainsbury rolled oat + fruits"), assign logically. The user's explicit text sentence is absolute ground truth.
+- BRAND SEPARATION: When user mentions brand + staples (e.g. "Sainsbury oat + fruit"), apply 'chainName' strictly to the branded item ("Sainsbury oat"). Emit whole companion foods (fruits, drinks, sides) as separate unbranded items (e.g. extract Banana, Apple, Plum as separate whole fruit items).
 - For each item, provide a 2D bounding box 'boundingBox2D': [ymin, xmin, ymax, xmax] in normalized 0-1000 coordinate space identifying the exact region of the image containing the item.
 - Specify 'sourceImageIndex': integer index of the input image (0 for single image).
-- Identify 'chainName': restaurant chain or brand name if applicable (e.g. 'Starbucks', 'McDonald's', 'Pret'), or null if home-cooked / unbranded.
+- Identify 'chainName': restaurant chain or brand name if applicable (e.g. 'Starbucks', 'McDonald's', 'Pret', 'Sainsbury's'), or null if home-cooked / unbranded.
 
 STEP 3: INGREDIENTS BREAKDOWN & DIRECT 15-NUTRIENT ESTIMATION
 - List all identified ingredients and components for each dish as a clean array of strings in 'ingredients' (e.g. ["salmon", "avocado", "sushi rice", "nori"]).
@@ -205,296 +207,204 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
 
 ### 3. Stage 1 Output: Vision Scout Analysis & Dish Detection
 **Scout Internal Reasoning:**
-> The meal consists of five distinct items: a fruit cup (upper left), two croissants (upper center), a crispy chicken wrap (lower left), a chicken bacon avocado salad with eggs (lower center), and a macaroni and cheese dish (lower right). I will extract all 5 items with bounding boxes, ingredients, and realistic nutritional estimates.
+> The image shows a picnic lunch spread on a wooden table, consisting of three main items: a yogurt and fruit granola cup on the left, a salad bowl with chicken, avocado, feta, and hard-boiled eggs on the bottom right, and pastries (croissant and pastry swirl) in a white paper bag at the top. I will extract these three distinct items.
 
 #### Discovered Dishes & Per-Dish Core + Key Nutrients
 
-##### Dish 1: Fruit Cup (250g) [Image 0]
+##### Dish 1: Granola and Fruit Yogurt Cup (280g) [Image 0]
 - **Brand / Chain:** Unbranded
 - **Cooking Method:** raw
-- **Bounding Box:** `[53, 85, 417, 323]`
-- **Ingredients:** strawberries, blueberries, raspberries, melon, pineapple
-- **Core Nutrients:** 110 kcal | 1.5g Protein | **24.9g Carbs [Derived]** | 0.5g Fat | 0.1g Sat Fat | 0g Trans Fat | 0g Added Sugar | 4.5g Fibre | 3mg Sodium
-- **Key Nutrients:** 22g Total Sugar | **0.4g Unsat Fat [Derived]** | **0.01g Salt [Derived]** | 310mg Potassium | 0.1g Omega-3 | 35mg Calcium | 0.6mg Iron | 30mg Magnesium | 0mcg Vit D
+- **Bounding Box:** `[294, 15, 597, 377]`
+- **Ingredients:** yogurt, granola, strawberries, raspberries, blueberries, blackberries
+- **Core Nutrients:** 310 kcal | 12g Protein | **49.8g Carbs [Derived]** | 7g Fat | 2.5g Sat Fat | 0g Trans Fat | 10g Added Sugar | 5g Fibre | 95mg Sodium
+- **Key Nutrients:** 22g Total Sugar | **4.5g Unsat Fat [Derived]** | **0.24g Salt [Derived]** | 380mg Potassium | 0.1g Omega-3 | 250mg Calcium | 1.5mg Iron | 45mg Magnesium | 1mcg Vit D
 
-##### Dish 2: Croissants (120g) [Image 0]
+##### Dish 2: Chicken and Avocado Salad (350g) [Image 0]
+- **Brand / Chain:** Unbranded
+- **Cooking Method:** grilled
+- **Bounding Box:** `[510, 360, 980, 963]`
+- **Ingredients:** chicken breast, avocado, feta cheese, hard-boiled eggs, cherry tomatoes, red onion, mixed salad greens
+- **Core Nutrients:** 420 kcal | 36g Protein | **15g Carbs [Derived]** | 24g Fat | 6.5g Sat Fat | 0g Trans Fat | 0g Added Sugar | 7.5g Fibre | 550mg Sodium
+- **Key Nutrients:** 4.5g Total Sugar | **17.5g Unsat Fat [Derived]** | **1.4g Salt [Derived]** | 780mg Potassium | 0.3g Omega-3 | 220mg Calcium | 2.8mg Iron | 65mg Magnesium | 1.6mcg Vit D
+
+##### Dish 3: Croissant and Pastry (140g) [Image 0]
 - **Brand / Chain:** Unbranded
 - **Cooking Method:** baked
-- **Bounding Box:** `[83, 381, 362, 683]`
-- **Ingredients:** flour, butter, milk, yeast, sugar, salt
-- **Core Nutrients:** 460 kcal | 8g Protein | **48.5g Carbs [Derived]** | 26g Fat | 14g Sat Fat | 0.5g Trans Fat | 6g Added Sugar | 2g Fibre | 380mg Sodium
-- **Key Nutrients:** 7g Total Sugar | **11.5g Unsat Fat [Derived]** | **0.97g Salt [Derived]** | 110mg Potassium | 0.1g Omega-3 | 30mg Calcium | 1.8mg Iron | 18mg Magnesium | 0.4mcg Vit D
-
-##### Dish 3: Crispy chicken wrap (220g) [Image 0]
-- **Brand / Chain:** Unbranded
-- **Cooking Method:** wrapped
-- **Bounding Box:** `[363, 0, 996, 208]`
-- **Ingredients:** tortilla wrap, crispy chicken, lettuce, crispy onion, gherkin, spicy mayonnaise
-- **Core Nutrients:** 520 kcal | 22g Protein | **54g Carbs [Derived]** | 24g Fat | 4.5g Sat Fat | 0.1g Trans Fat | 3g Added Sugar | 3.5g Fibre | 820mg Sodium
-- **Key Nutrients:** 4g Total Sugar | **19.4g Unsat Fat [Derived]** | **2.08g Salt [Derived]** | 280mg Potassium | 0.2g Omega-3 | 60mg Calcium | 2.5mg Iron | 35mg Magnesium | 0.3mcg Vit D
-
-##### Dish 4: Chicken Bacon Avocado Salad (380g) [Image 0]
-- **Brand / Chain:** Unbranded
-- **Cooking Method:** assembled
-- **Bounding Box:** `[409, 169, 1000, 665]`
-- **Ingredients:** mixed salad greens, grilled chicken breast, bacon, avocado, feta cheese, cherry tomatoes, boiled eggs, red onion
-- **Core Nutrients:** 580 kcal | 42g Protein | **17.5g Carbs [Derived]** | 38g Fat | 9g Sat Fat | 0.1g Trans Fat | 0g Added Sugar | 8g Fibre | 950mg Sodium
-- **Key Nutrients:** 5g Total Sugar | **28.9g Unsat Fat [Derived]** | **2.41g Salt [Derived]** | 920mg Potassium | 0.4g Omega-3 | 220mg Calcium | 3.8mg Iron | 75mg Magnesium | 1.5mcg Vit D
-
-##### Dish 5: Macaroni and Cheese (300g) [Image 0]
-- **Brand / Chain:** Unbranded
-- **Cooking Method:** boiled and baked
-- **Bounding Box:** `[428, 638, 985, 990]`
-- **Ingredients:** macaroni pasta, cheese sauce, cheddar cheese cubes
-- **Core Nutrients:** 550 kcal | 20g Protein | **54.5g Carbs [Derived]** | 28g Fat | 12g Sat Fat | 0.5g Trans Fat | 1g Added Sugar | 2g Fibre | 720mg Sodium
-- **Key Nutrients:** 3g Total Sugar | **15.5g Unsat Fat [Derived]** | **1.83g Salt [Derived]** | 180mg Potassium | 0.1g Omega-3 | 450mg Calcium | 2mg Iron | 40mg Magnesium | 0.5mcg Vit D
+- **Bounding Box:** `[136, 464, 328, 768]`
+- **Ingredients:** flour, butter, yeast, sugar, pastry dough
+- **Core Nutrients:** 480 kcal | 8g Protein | **53.5g Carbs [Derived]** | 26g Fat | 14g Sat Fat | 0.5g Trans Fat | 9g Added Sugar | 2g Fibre | 340mg Sodium
+- **Key Nutrients:** 8g Total Sugar | **11.5g Unsat Fat [Derived]** | **0.86g Salt [Derived]** | 110mg Potassium | 0g Omega-3 | 25mg Calcium | 1.8mg Iron | 15mg Magnesium | 0.4mcg Vit D
 
 ### 4. Stage 2 Output: Derivation Engine & Brand Database Matcher
 | Nutrient Category | Nutrient | Value |
 | :--- | :--- | :--- |
-| **Core (High Precision)** | Calories | 2220 kcal |
-| **Core (High Precision)** | Protein | 93.5 g |
-| **Core (High Precision)** | Saturated Fat | 39.6 g |
-| **Core (High Precision)** | Trans Fat | 1.2 g |
-| **Core (High Precision)** | Added Sugar | 10 g |
-| **Core (High Precision)** | Total Fibre | 20 g |
-| **Core (High Precision)** | Sodium | 2873 mg |
-| **Core (Derived)** | **Carbohydrates** | **199.4 g** |
-| **Key (Moderate Precision)** | Total Fat | 116.5 g |
-| **Key (Moderate Precision)** | Total Sugar | 41 g |
-| **Key (Moderate Precision)** | Potassium | 1800 mg |
-| **Key (Moderate Precision)** | Omega-3 | 0.9 g |
-| **Key (Moderate Precision)** | Calcium | 795 mg |
-| **Key (Moderate Precision)** | Iron | 10.7 mg |
-| **Key (Moderate Precision)** | Magnesium | 198 mg |
-| **Key (Moderate Precision)** | Vitamin D | 2.7 mcg |
-| **Key (Derived)** | **Unsaturated Fat** | **75.7 g** |
-| **Key (Derived)** | **Salt** | **7.3 g** |
+| **Core (High Precision)** | Calories | 1210 kcal |
+| **Core (High Precision)** | Protein | 56 g |
+| **Core (High Precision)** | Saturated Fat | 23 g |
+| **Core (High Precision)** | Trans Fat | 0.5 g |
+| **Core (High Precision)** | Added Sugar | 19 g |
+| **Core (High Precision)** | Total Fibre | 14.5 g |
+| **Core (High Precision)** | Sodium | 985 mg |
+| **Core (Derived)** | **Carbohydrates** | **118.3 g** |
+| **Key (Moderate Precision)** | Total Fat | 57 g |
+| **Key (Moderate Precision)** | Total Sugar | 34.5 g |
+| **Key (Moderate Precision)** | Potassium | 1270 mg |
+| **Key (Moderate Precision)** | Omega-3 | 0.4 g |
+| **Key (Moderate Precision)** | Calcium | 495 mg |
+| **Key (Moderate Precision)** | Iron | 6.1 mg |
+| **Key (Moderate Precision)** | Magnesium | 125 mg |
+| **Key (Moderate Precision)** | Vitamin D | 3 mcg |
+| **Key (Derived)** | **Unsaturated Fat** | **33.5 g** |
+| **Key (Derived)** | **Salt** | **2.5 g** |
 
 ### 5. Stage 3 Output: Dietitian Clinical Coach Review & Extended Micronutrients
-- **Verdict:** **260% over saturated fat limit** (Level: `alert`)
+- **Verdict:** **153% over saturated fat limit** (Level: `warning`)
 - **Dietitian Message (4-Beat Narrative):**
-  > You secured 93.5g of quality protein and 20g of fiber from the lean chicken and fresh fruit. However, the buttery croissants and mac and cheese pack 39.6g of saturated fat, pushing your limit 260% over. This heavy lipid load causes acute vascular stiffness and profound sluggishness. Take a 20-minute brisk walk to aid glucose uptake, and hydrate with water.
+  > You secured 56g of lean protein and 14.5g of fiber from the chicken salad and berries. However, the butter-rich croissant and salad cheeses add 23g of saturated fat, pushing this meal 153% over your daily limit. This heavy fat load triggers post-meal vascular stiffness and sluggishness. Take a 20-minute brisk walk now to support circulation and clear circulating lipids.
 - **Accuracy Review Status:** ✅ **Scout Estimates Approved (No Correction Needed)**
 
 ##### Aggregate Extended Nutrients (Filled by Dietitian):
 | Extended Nutrient (Directional Precision <50%) | Value |
 | :--- | :--- |
-| **Soluble Fibre** | 6.5 g |
-| **Vitamin A** | 650 mcg |
-| **Thiamine (B1)** | 0.55 mg |
-| **Riboflavin (B2)** | 0.82 mg |
-| **Niacin (B3)** | 12.5 mg |
-| **Vitamin B6** | 0.95 mg |
+| **Soluble Fibre** | 4.5 g |
+| **Vitamin A** | 550 mcg |
+| **Thiamine (B1)** | 0.45 mg |
+| **Riboflavin (B2)** | 0.65 mg |
+| **Niacin (B3)** | 8.5 mg |
+| **Vitamin B6** | 0.72 mg |
 | **Folate (B9)** | 140 mcg |
-| **Vitamin B12** | 2.1 mcg |
-| **Vitamin C** | 55 mg |
-| **Vitamin E** | 4.5 mg |
+| **Vitamin B12** | 1.8 mcg |
+| **Vitamin C** | 62 mg |
+| **Vitamin E** | 4.1 mg |
 | **Vitamin K** | 95 mcg |
-| **Zinc** | 5.2 mg |
-| **Selenium** | 45 mcg |
-| **Iodine** | 55 mcg |
-| **Phosphorus** | 920 mg |
+| **Zinc** | 3.2 mg |
+| **Selenium** | 38 mcg |
+| **Iodine** | 42 mcg |
+| **Phosphorus** | 620 mg |
 
 #### Raw Payloads & JSON Output
 <details><summary>Click to expand Raw Scout JSON</summary>
 
 ```json
 {
-  "_internalReasoning": "The meal consists of five distinct items: a fruit cup (upper left), two croissants (upper center), a crispy chicken wrap (lower left), a chicken bacon avocado salad with eggs (lower center), and a macaroni and cheese dish (lower right). I will extract all 5 items with bounding boxes, ingredients, and realistic nutritional estimates.",
+  "_internalReasoning": "The image shows a picnic lunch spread on a wooden table, consisting of three main items: a yogurt and fruit granola cup on the left, a salad bowl with chicken, avocado, feta, and hard-boiled eggs on the bottom right, and pastries (croissant and pastry swirl) in a white paper bag at the top. I will extract these three distinct items.",
   "contentType": "visual",
   "diningEnvironment": "casual_restaurant",
   "items": [
     {
-      "originalName": "Fruit Cup",
+      "originalName": "Granola and Fruit Yogurt Cup",
       "chainName": null,
-      "estimatedWeightGrams": 250,
+      "estimatedWeightGrams": 280,
       "cookingMethod": "raw",
       "ingredients": [
+        "yogurt",
+        "granola",
         "strawberries",
-        "blueberries",
         "raspberries",
-        "melon",
-        "pineapple"
+        "blueberries",
+        "blackberries"
       ],
       "boundingBox2D": [
-        53,
-        85,
-        417,
-        323
+        294,
+        15,
+        597,
+        377
       ],
       "sourceImageIndex": 0,
       "nutrients": {
-        "calories": 110,
-        "protein": 1.5,
-        "saturatedFat": 0.1,
+        "calories": 310,
+        "protein": 12,
+        "saturatedFat": 2.5,
         "transFat": 0,
-        "addedSugar": 0,
-        "totalFibre": 4.5,
-        "sodium": 3,
-        "totalFat": 0.5,
+        "addedSugar": 10,
+        "totalFibre": 5,
+        "sodium": 95,
+        "totalFat": 7,
         "totalSugar": 22,
-        "potassium": 310,
+        "potassium": 380,
         "omega3": 0.1,
-        "calcium": 35,
-        "iron": 0.6,
-        "magnesium": 30,
-        "vitaminD": 0
+        "calcium": 250,
+        "iron": 1.5,
+        "magnesium": 45,
+        "vitaminD": 1
       },
       "itemConfidence": "High"
     },
     {
-      "originalName": "Croissants",
+      "originalName": "Chicken and Avocado Salad",
       "chainName": null,
-      "estimatedWeightGrams": 120,
+      "estimatedWeightGrams": 350,
+      "cookingMethod": "grilled",
+      "ingredients": [
+        "chicken breast",
+        "avocado",
+        "feta cheese",
+        "hard-boiled eggs",
+        "cherry tomatoes",
+        "red onion",
+        "mixed salad greens"
+      ],
+      "boundingBox2D": [
+        510,
+        360,
+        980,
+        963
+      ],
+      "sourceImageIndex": 0,
+      "nutrients": {
+        "calories": 420,
+        "protein": 36,
+        "saturatedFat": 6.5,
+        "transFat": 0,
+        "addedSugar": 0,
+        "totalFibre": 7.5,
+        "sodium": 550,
+        "totalFat": 24,
+        "totalSugar": 4.5,
+        "potassium": 780,
+        "omega3": 0.3,
+        "calcium": 220,
+        "iron": 2.8,
+        "magnesium": 65,
+        "vitaminD": 1.6
+      },
+      "itemConfidence": "High"
+    },
+    {
+      "originalName": "Croissant and Pastry",
+      "chainName": null,
+      "estimatedWeightGrams": 140,
       "cookingMethod": "baked",
       "ingredients": [
         "flour",
         "butter",
-        "milk",
         "yeast",
         "sugar",
-        "salt"
+        "pastry dough"
       ],
       "boundingBox2D": [
-        83,
-        381,
-        362,
-        683
+        136,
+        464,
+        328,
+        768
       ],
       "sourceImageIndex": 0,
       "nutrients": {
-        "calories": 460,
+        "calories": 480,
         "protein": 8,
         "saturatedFat": 14,
         "transFat": 0.5,
-        "addedSugar": 6,
+        "addedSugar": 9,
         "totalFibre": 2,
-        "sodium": 380,
+        "sodium": 340,
         "totalFat": 26,
-        "totalSugar": 7,
+        "totalSugar": 8,
         "potassium": 110,
-        "omega3": 0.1,
-        "calcium": 30,
+        "omega3": 0,
+        "calcium": 25,
         "iron": 1.8,
-        "magnesium": 18,
+        "magnesium": 15,
         "vitaminD": 0.4
-      },
-      "itemConfidence": "High"
-    },
-    {
-      "originalName": "Crispy chicken wrap",
-      "chainName": null,
-      "estimatedWeightGrams": 220,
-      "cookingMethod": "wrapped",
-      "ingredients": [
-        "tortilla wrap",
-        "crispy chicken",
-        "lettuce",
-        "crispy onion",
-        "gherkin",
-        "spicy mayonnaise"
-      ],
-      "boundingBox2D": [
-        363,
-        0,
-        996,
-        208
-      ],
-      "sourceImageIndex": 0,
-      "nutrients": {
-        "calories": 520,
-        "protein": 22,
-        "saturatedFat": 4.5,
-        "transFat": 0.1,
-        "addedSugar": 3,
-        "totalFibre": 3.5,
-        "sodium": 820,
-        "totalFat": 24,
-        "totalSugar": 4,
-        "potassium": 280,
-        "omega3": 0.2,
-        "calcium": 60,
-        "iron": 2.5,
-        "magnesium": 35,
-        "vitaminD": 0.3
-      },
-      "itemConfidence": "High"
-    },
-    {
-      "originalName": "Chicken Bacon Avocado Salad",
-      "chainName": null,
-      "estimatedWeightGrams": 380,
-      "cookingMethod": "assembled",
-      "ingredients": [
-        "mixed salad greens",
-        "grilled chicken breast",
-        "bacon",
-        "avocado",
-        "feta cheese",
-        "cherry tomatoes",
-        "boiled eggs",
-        "red onion"
-      ],
-      "boundingBox2D": [
-        409,
-        169,
-        1000,
-        665
-      ],
-      "sourceImageIndex": 0,
-      "nutrients": {
-        "calories": 580,
-        "protein": 42,
-        "saturatedFat": 9,
-        "transFat": 0.1,
-        "addedSugar": 0,
-        "totalFibre": 8,
-        "sodium": 950,
-        "totalFat": 38,
-        "totalSugar": 5,
-        "potassium": 920,
-        "omega3": 0.4,
-        "calcium": 220,
-        "iron": 3.8,
-        "magnesium": 75,
-        "vitaminD": 1.5
-      },
-      "itemConfidence": "High"
-    },
-    {
-      "originalName": "Macaroni and Cheese",
-      "chainName": null,
-      "estimatedWeightGrams": 300,
-      "cookingMethod": "boiled and baked",
-      "ingredients": [
-        "macaroni pasta",
-        "cheese sauce",
-        "cheddar cheese cubes"
-      ],
-      "boundingBox2D": [
-        428,
-        638,
-        985,
-        990
-      ],
-      "sourceImageIndex": 0,
-      "nutrients": {
-        "calories": 550,
-        "protein": 20,
-        "saturatedFat": 12,
-        "transFat": 0.5,
-        "addedSugar": 1,
-        "totalFibre": 2,
-        "sodium": 720,
-        "totalFat": 28,
-        "totalSugar": 3,
-        "potassium": 180,
-        "omega3": 0.1,
-        "calcium": 450,
-        "iron": 2,
-        "magnesium": 40,
-        "vitaminD": 0.5
       },
       "itemConfidence": "High"
     }
@@ -507,71 +417,57 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
 
 ```json
 {
-  "_internalReasoning": "The user consumed a large, highly dense pub meal totaling 2220 calories, 39.6g of saturated fat, and 2873mg of sodium. Given their prediabetes, elevated LDL, and mild hypertension, this meal significantly exceeds safe targets (e.g. 140%+ of daily saturated fat and sodium limits). The narrative is constructed in four precise beats addressing protein/fiber assets, sodium/sat fat overages, physical impacts (sluggishness, blood pressure spikes), and a corrective walk/fiber habit. Extended micronutrients are realistically estimated for an aggregate pub meal of ~1270g.",
+  "_internalReasoning": "Evaluated the meal consisting of a yogurt and fruit granola cup, chicken avocado salad, and croissant. The aggregate saturated fat (23g) exceeds the daily target of 15g in a single meal, driven primarily by the croissant and salad cheese/feta. Total calories and protein are solid (56g protein), but high saturated fat paired with prediabetes and elevated LDL requires a warning on cardiovascular impact. Estimated extended micronutrients based on ingredients like berries, chicken, avocado, greens, and dairy.",
   "verdict": {
-    "label": "260% over saturated fat limit",
-    "level": "alert"
+    "label": "153% over saturated fat limit",
+    "level": "warning"
   },
-  "message": "You secured 93.5g of quality protein and 20g of fiber from the lean chicken and fresh fruit. However, the buttery croissants and mac and cheese pack 39.6g of saturated fat, pushing your limit 260% over. This heavy lipid load causes acute vascular stiffness and profound sluggishness. Take a 20-minute brisk walk to aid glucose uptake, and hydrate with water.",
+  "message": "You secured 56g of lean protein and 14.5g of fiber from the chicken salad and berries. However, the butter-rich croissant and salad cheeses add 23g of saturated fat, pushing this meal 153% over your daily limit. This heavy fat load triggers post-meal vascular stiffness and sluggishness. Take a 20-minute brisk walk now to support circulation and clear circulating lipids.",
   "accuracyReview": {
     "isCorrected": false,
     "correctionNotes": null,
     "correctedMealNutrients": null
   },
   "extendedMealNutrients": {
-    "solubleFibre": 6.5,
-    "vitaminA": 650,
-    "thiamine": 0.55,
-    "riboflavin": 0.82,
-    "niacin": 12.5,
-    "vitaminB6": 0.95,
+    "solubleFibre": 4.5,
+    "vitaminA": 550,
+    "thiamine": 0.45,
+    "riboflavin": 0.65,
+    "niacin": 8.5,
+    "vitaminB6": 0.72,
     "folate": 140,
-    "vitaminB12": 2.1,
-    "vitaminC": 55,
-    "vitaminE": 4.5,
+    "vitaminB12": 1.8,
+    "vitaminC": 62,
+    "vitaminE": 4.1,
     "vitaminK": 95,
-    "zinc": 5.2,
-    "selenium": 45,
-    "iodine": 55,
-    "phosphorus": 920
+    "zinc": 3.2,
+    "selenium": 38,
+    "iodine": 42,
+    "phosphorus": 620
   },
   "mealSummary": {
-    "title": "Pub Feast Spread",
+    "title": "Chicken Salad, Yogurt Fruit Cup & Croissant",
     "itemsSummary": [
       {
         "scoutIndex": 0,
-        "name": "Fruit Cup",
-        "weightGrams": 250,
-        "foodType": "Fruit",
+        "name": "Granola and Fruit Yogurt Cup",
+        "weightGrams": 280,
+        "foodType": "Dairy and Fruit",
         "cookingMethod": "raw"
       },
       {
         "scoutIndex": 1,
-        "name": "Croissants",
-        "weightGrams": 120,
-        "foodType": "Bakery",
-        "cookingMethod": "baked"
+        "name": "Chicken and Avocado Salad",
+        "weightGrams": 350,
+        "foodType": "Poultry and Vegetables",
+        "cookingMethod": "grilled"
       },
       {
         "scoutIndex": 2,
-        "name": "Crispy chicken wrap",
-        "weightGrams": 220,
-        "foodType": "Fast Food",
-        "cookingMethod": "wrapped"
-      },
-      {
-        "scoutIndex": 3,
-        "name": "Chicken Bacon Avocado Salad",
-        "weightGrams": 380,
-        "foodType": "Salad",
-        "cookingMethod": "assembled"
-      },
-      {
-        "scoutIndex": 4,
-        "name": "Macaroni and Cheese",
-        "weightGrams": 300,
-        "foodType": "Pasta",
-        "cookingMethod": "boiled and baked"
+        "name": "Croissant and Pastry",
+        "weightGrams": 140,
+        "foodType": "Bakery",
+        "cookingMethod": "baked"
       }
     ]
   }

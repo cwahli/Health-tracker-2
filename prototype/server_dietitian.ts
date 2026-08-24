@@ -209,19 +209,32 @@ export async function runDietitianAgent(params: {
 
   const userContentText = `PAYLOAD CONTEXT FOR DIETITIAN ANALYSIS:\n${JSON.stringify(payloadContext, null, 2)}`;
 
-  const response = await ai.models.generateContent({
-    model: modelName,
-    contents: [
-      {
-        role: "user",
-        parts: [{ text: userContentText }],
-      },
-    ],
-    config: {
-      systemInstruction: dietitianSystemInstruction,
-      responseMimeType: "application/json",
-    },
-  });
+  let response: any;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      response = await ai.models.generateContent({
+        model: modelName,
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: userContentText }],
+          },
+        ],
+        config: {
+          systemInstruction: dietitianSystemInstruction,
+          responseMimeType: "application/json",
+        },
+      });
+      break;
+    } catch (err: any) {
+      if ((err.status === 429 || err.message?.includes("429") || err.message?.includes("quota") || err.message?.includes("RESOURCE_EXHAUSTED")) && attempt < 4) {
+        console.warn(`[Dietitian Rate Limit 429] Waiting 12s before retry attempt ${attempt + 1}/4...`);
+        await new Promise((r) => setTimeout(r, 12000));
+      } else {
+        throw err;
+      }
+    }
+  }
 
   const responseText = response.text || "{}";
   const parsed = JSON.parse(responseText);

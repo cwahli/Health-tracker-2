@@ -1,10 +1,11 @@
-# End-to-End Pipeline Report: 06_indonesian_menu (Sambal Bakar Pencok 89)
+# End-to-End Pipeline Report: 06_indonesian_menu (Mie Gacoan Indonesian meal)
 
-**Generated At:** 2026-08-23T20:54:57.986Z
-**File(s):** `06_indonesian_menu_page_1.jpg, 06_indonesian_menu_page_2.jpg` | **Content Type:** `menu_or_poster` | **Environment:** `casual_restaurant`
+**Generated At:** 2026-08-23T22:43:34.420Z
+**Evaluated Model:** `gemini-3.5-flash-lite` (Strictly used for both Stage 1 Scout & Stage 3 Dietitian)
+**File(s):** `06_indonesian_menu_page_1.jpg, 06_indonesian_menu_page_2.jpg` | **Content Type:** `visual` | **Environment:** `fast_food_chain`
 
 ### 1. User Input Context & Active Clinical Biomarker Profile
-- **User Prompt:** "Extract distinct dishes across both Indonesian menu pages (Sambal Bakar Pencok 89) for multi-language evaluation."
+- **User Prompt:** "Extract distinct dishes across both Indonesian meal & order summary images for multi-language evaluation."
 - **Active Clinical Biomarkers:**
   - Prediabetes / Elevated Fasting Glucose
   - Elevated LDL Cholesterol (145 mg/dL)
@@ -22,11 +23,12 @@ STEP 1: SCENE CLASSIFICATION & ENVIRONMENT
 - 'diningEnvironment': 'casual_restaurant' | 'fast_food_chain' | 'home_cooked' | 'fine_dining' | 'airline' | 'unknown'.
 
 STEP 2: DISH EXTRACTION & BOUNDING BOX DETECTION
-- Extract EVERY distinct food, drink, side, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items'.
-- Do NOT combine distinct dishes into 1 item. (e.g. if a meal consists of sushi rolls, salad, and a baguette roll, output 3 distinct item objects).
+- USER MESSAGE SCOPE ANCHOR & MULTI-DISH EXTRACTION: Extract EVERY distinct food, drink, side, companion plate, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items' (e.g. if 2 dishes or a main + drink or a mug + plate of fruits are visible, output separate item objects for each). Do NOT combine distinct dishes into 1 item.
+- If user's text message specifies a portion/weight (e.g. "50g of oats + fruits" or "60g of sainsbury rolled oat + fruits"), assign logically. The user's explicit text sentence is absolute ground truth.
+- BRAND SEPARATION: When user mentions brand + staples (e.g. "Sainsbury oat + fruit"), apply 'chainName' strictly to the branded item ("Sainsbury oat"). Emit whole companion foods (fruits, drinks, sides) as separate unbranded items (e.g. extract Banana, Apple, Plum as separate whole fruit items).
 - For each item, provide a 2D bounding box 'boundingBox2D': [ymin, xmin, ymax, xmax] in normalized 0-1000 coordinate space identifying the exact region of the image containing the item.
 - Specify 'sourceImageIndex': integer index of the input image (0 for single image).
-- Identify 'chainName': restaurant chain or brand name if applicable (e.g. 'Starbucks', 'McDonald's', 'Pret'), or null if home-cooked / unbranded.
+- Identify 'chainName': restaurant chain or brand name if applicable (e.g. 'Starbucks', 'McDonald's', 'Pret', 'Sainsbury's'), or null if home-cooked / unbranded.
 
 STEP 3: INGREDIENTS BREAKDOWN & DIRECT 15-NUTRIENT ESTIMATION
 - List all identified ingredients and components for each dish as a clean array of strings in 'ingredients' (e.g. ["salmon", "avocado", "sushi rice", "nori"]).
@@ -205,249 +207,200 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
 
 ### 3. Stage 1 Output: Vision Scout Analysis & Dish Detection
 **Scout Internal Reasoning:**
-> The user provided two images of a yellow menu from 'Sambal Bakar Pencok 89' featuring various Indonesian dishes like Paket Ayam, Paket Lele, Tumis Kangkung, Nasi Uduk, etc. Since multiple images are provided, we will extract notable items visible across both pages.
+> Extracted three distinct items from the Mie Gacoan meal photo and order summary: Mie Suit (noodles with fried wontons), Siomay (steamed dumplings in a bamboo steamer), and Es Petak Umpet (fruity iced drink). Nutrient estimations are tailored to typical Indonesian fast-food chain portions.
 
 #### Discovered Dishes & Per-Dish Core + Key Nutrients
 
-##### Dish 1: PAKET AYAM (400g) [Image 0]
-- **Brand / Chain:** Sambal Bakar Pencok 89
-- **Cooking Method:** fried
-- **Bounding Box:** `[322, 123, 348, 744]`
-- **Ingredients:** nasi, ayam goreng, sayur asem, tahu, tempe
-- **Core Nutrients:** 650 kcal | 38g Protein | **68.3g Carbs [Derived]** | 25g Fat | 5g Sat Fat | 0g Trans Fat | 0g Added Sugar | 4.5g Fibre | 750mg Sodium
-- **Key Nutrients:** 2g Total Sugar | **20g Unsat Fat [Derived]** | **1.91g Salt [Derived]** | 450mg Potassium | 0.2g Omega-3 | 120mg Calcium | 3.5mg Iron | 65mg Magnesium | 0.5mcg Vit D
+##### Dish 1: Mie Suit (220g) [Image 0]
+- **Brand / Chain:** Mie Gacoan
+- **Cooking Method:** boiled and fried
+- **Bounding Box:** `[337, 0, 832, 500]`
+- **Ingredients:** wheat noodles, fried wonton skins, chicken seasoning, garlic oil, fried shallots
+- **Core Nutrients:** 420 kcal | 12g Protein | **57g Carbs [Derived]** | 16g Fat | 5g Sat Fat | 0g Trans Fat | 1g Added Sugar | 2.5g Fibre | 850mg Sodium
+- **Key Nutrients:** 2g Total Sugar | **11g Unsat Fat [Derived]** | **2.16g Salt [Derived]** | 180mg Potassium | 0.1g Omega-3 | 30mg Calcium | 1.5mg Iron | 25mg Magnesium | 0mcg Vit D
 
-##### Dish 2: PAKET LELE (380g) [Image 0]
-- **Brand / Chain:** Sambal Bakar Pencok 89
-- **Cooking Method:** fried
-- **Bounding Box:** `[452, 122, 467, 727]`
-- **Ingredients:** nasi, lele goreng, sayur asem, tahu, tempe
-- **Core Nutrients:** 600 kcal | 32g Protein | **68.5g Carbs [Derived]** | 22g Fat | 4.5g Sat Fat | 0g Trans Fat | 0g Added Sugar | 4g Fibre | 700mg Sodium
-- **Key Nutrients:** 2g Total Sugar | **17.5g Unsat Fat [Derived]** | **1.78g Salt [Derived]** | 400mg Potassium | 0.4g Omega-3 | 110mg Calcium | 3mg Iron | 60mg Magnesium | 0.8mcg Vit D
+##### Dish 2: Siomay (150g) [Image 0]
+- **Brand / Chain:** Mie Gacoan
+- **Cooking Method:** steamed
+- **Bounding Box:** `[452, 561, 990, 981]`
+- **Ingredients:** minced chicken, prawn, tapioca flour, wonton wrapper, spring onion
+- **Core Nutrients:** 240 kcal | 14g Protein | **25.8g Carbs [Derived]** | 9g Fat | 3g Sat Fat | 0g Trans Fat | 1g Added Sugar | 1g Fibre | 520mg Sodium
+- **Key Nutrients:** 1.5g Total Sugar | **6g Unsat Fat [Derived]** | **1.32g Salt [Derived]** | 150mg Potassium | 0.2g Omega-3 | 25mg Calcium | 1mg Iron | 20mg Magnesium | 0.2mcg Vit D
 
-##### Dish 3: TUMIS KANGKUNG/CAH TERASI (150g) [Image 1]
-- **Brand / Chain:** Sambal Bakar Pencok 89
-- **Cooking Method:** stir-fried
-- **Bounding Box:** `[250, 129, 266, 308]`
-- **Ingredients:** kangkung, bawang putih, bawang merah, cabai, terasi, minyak goreng
-- **Core Nutrients:** 120 kcal | 3g Protein | **9g Carbs [Derived]** | 8g Fat | 1g Sat Fat | 0g Trans Fat | 1g Added Sugar | 3.5g Fibre | 450mg Sodium
-- **Key Nutrients:** 2g Total Sugar | **7g Unsat Fat [Derived]** | **1.14g Salt [Derived]** | 300mg Potassium | 0.1g Omega-3 | 80mg Calcium | 2mg Iron | 40mg Magnesium | 0mcg Vit D
-
-##### Dish 4: SOTO BETAWI DAGING SAPI / AYAM KAMPUNG (450g) [Image 1]
-- **Brand / Chain:** Sambal Bakar Pencok 89
-- **Cooking Method:** boiled
-- **Bounding Box:** `[408, 120, 421, 388]`
-- **Ingredients:** daging sapi, santan, bumbu soto, kentang, tomat, emping
-- **Core Nutrients:** 480 kcal | 24g Protein | **24g Carbs [Derived]** | 32g Fat | 12g Sat Fat | 0.5g Trans Fat | 0g Added Sugar | 2g Fibre | 850mg Sodium
-- **Key Nutrients:** 3g Total Sugar | **19.5g Unsat Fat [Derived]** | **2.16g Salt [Derived]** | 380mg Potassium | 0.1g Omega-3 | 50mg Calcium | 2.5mg Iron | 45mg Magnesium | 0.2mcg Vit D
+##### Dish 3: Es Petak Umpet (300g) [Image 0]
+- **Brand / Chain:** Mie Gacoan
+- **Cooking Method:** blended and iced
+- **Bounding Box:** `[82, 529, 502, 765]`
+- **Ingredients:** iced sweetened syrup, fruit chunks, colorful jelly balls, water
+- **Core Nutrients:** 180 kcal | 0.5g Protein | **44.1g Carbs [Derived]** | 0.2g Fat | 0g Sat Fat | 0g Trans Fat | 32g Added Sugar | 0.5g Fibre | 25mg Sodium
+- **Key Nutrients:** 34g Total Sugar | **0.2g Unsat Fat [Derived]** | **0.06g Salt [Derived]** | 90mg Potassium | 0g Omega-3 | 15mg Calcium | 0.2mg Iron | 10mg Magnesium | 0mcg Vit D
 
 ### 4. Stage 2 Output: Derivation Engine & Brand Database Matcher
 | Nutrient Category | Nutrient | Value |
 | :--- | :--- | :--- |
-| **Core (High Precision)** | Calories | 1850 kcal |
-| **Core (High Precision)** | Protein | 97 g |
-| **Core (High Precision)** | Saturated Fat | 22.5 g |
-| **Core (High Precision)** | Trans Fat | 0.5 g |
-| **Core (High Precision)** | Added Sugar | 1 g |
-| **Core (High Precision)** | Total Fibre | 14 g |
-| **Core (High Precision)** | Sodium | 2750 mg |
-| **Core (Derived)** | **Carbohydrates** | **169.8 g** |
-| **Key (Moderate Precision)** | Total Fat | 87 g |
-| **Key (Moderate Precision)** | Total Sugar | 9 g |
-| **Key (Moderate Precision)** | Potassium | 1530 mg |
-| **Key (Moderate Precision)** | Omega-3 | 0.8 g |
-| **Key (Moderate Precision)** | Calcium | 360 mg |
-| **Key (Moderate Precision)** | Iron | 11 mg |
-| **Key (Moderate Precision)** | Magnesium | 210 mg |
-| **Key (Moderate Precision)** | Vitamin D | 1.5 mcg |
-| **Key (Derived)** | **Unsaturated Fat** | **64 g** |
-| **Key (Derived)** | **Salt** | **6.99 g** |
+| **Core (High Precision)** | Calories | 840 kcal |
+| **Core (High Precision)** | Protein | 26.5 g |
+| **Core (High Precision)** | Saturated Fat | 8 g |
+| **Core (High Precision)** | Trans Fat | 0 g |
+| **Core (High Precision)** | Added Sugar | 34 g |
+| **Core (High Precision)** | Total Fibre | 4 g |
+| **Core (High Precision)** | Sodium | 1395 mg |
+| **Core (Derived)** | **Carbohydrates** | **126.9 g** |
+| **Key (Moderate Precision)** | Total Fat | 25.2 g |
+| **Key (Moderate Precision)** | Total Sugar | 37.5 g |
+| **Key (Moderate Precision)** | Potassium | 420 mg |
+| **Key (Moderate Precision)** | Omega-3 | 0.3 g |
+| **Key (Moderate Precision)** | Calcium | 70 mg |
+| **Key (Moderate Precision)** | Iron | 2.7 mg |
+| **Key (Moderate Precision)** | Magnesium | 55 mg |
+| **Key (Moderate Precision)** | Vitamin D | 0.2 mcg |
+| **Key (Derived)** | **Unsaturated Fat** | **17.2 g** |
+| **Key (Derived)** | **Salt** | **3.54 g** |
 
 ### 5. Stage 3 Output: Dietitian Clinical Coach Review & Extended Micronutrients
-- **Verdict:** **38% over sodium limit** (Level: `alert`)
+- **Verdict:** **141% over added sugar limit** (Level: `warning`)
 - **Dietitian Message (4-Beat Narrative):**
-  > You secured 97g of quality protein and 14g of fiber from the mixed dishes. However, the heavy frying and coconut milk soup add 2750mg of sodium, pushing today's total 38% over your daily limit. This high sodium and fat load triggers physical sluggishness, digestive heaviness, and vascular constriction. Take a 25-minute brisk walk to aid circulation, and hydrate with water.
+  > You received 26.5g of satisfying protein from the chicken noodles and steamed siomay. However, the sweetened beverage pushes your added sugar intake to 34g, exceeding your daily limit. This high sugar and sodium load triggers an immediate blood glucose spike and fluid retention. Drink 500ml of water now and take a 20-minute walk to stabilize blood sugar.
 - **Accuracy Review Status:** ✅ **Scout Estimates Approved (No Correction Needed)**
 
 ##### Aggregate Extended Nutrients (Filled by Dietitian):
 | Extended Nutrient (Directional Precision <50%) | Value |
 | :--- | :--- |
-| **Soluble Fibre** | 3.8 g |
-| **Vitamin A** | 850 mcg |
-| **Thiamine (B1)** | 0.45 mg |
-| **Riboflavin (B2)** | 0.52 mg |
-| **Niacin (B3)** | 8.5 mg |
-| **Vitamin B6** | 0.75 mg |
-| **Folate (B9)** | 140 mcg |
-| **Vitamin B12** | 3.2 mcg |
-| **Vitamin C** | 65 mg |
-| **Vitamin E** | 4.1 mg |
-| **Vitamin K** | 180 mcg |
-| **Zinc** | 5.2 mg |
-| **Selenium** | 45 mcg |
-| **Iodine** | 40 mcg |
-| **Phosphorus** | 620 mg |
+| **Soluble Fibre** | 1.2 g |
+| **Vitamin A** | 120 mcg |
+| **Thiamine (B1)** | 0.22 mg |
+| **Riboflavin (B2)** | 0.18 mg |
+| **Niacin (B3)** | 3.4 mg |
+| **Vitamin B6** | 0.25 mg |
+| **Folate (B9)** | 45 mcg |
+| **Vitamin B12** | 0.8 mcg |
+| **Vitamin C** | 12 mg |
+| **Vitamin E** | 1.1 mg |
+| **Vitamin K** | 18 mcg |
+| **Zinc** | 1.9 mg |
+| **Selenium** | 18.5 mcg |
+| **Iodine** | 15 mcg |
+| **Phosphorus** | 240 mg |
 
 #### Raw Payloads & JSON Output
 <details><summary>Click to expand Raw Scout JSON</summary>
 
 ```json
 {
-  "_internalReasoning": "The user provided two images of a yellow menu from 'Sambal Bakar Pencok 89' featuring various Indonesian dishes like Paket Ayam, Paket Lele, Tumis Kangkung, Nasi Uduk, etc. Since multiple images are provided, we will extract notable items visible across both pages.",
-  "contentType": "menu_or_poster",
-  "diningEnvironment": "casual_restaurant",
+  "_internalReasoning": "Extracted three distinct items from the Mie Gacoan meal photo and order summary: Mie Suit (noodles with fried wontons), Siomay (steamed dumplings in a bamboo steamer), and Es Petak Umpet (fruity iced drink). Nutrient estimations are tailored to typical Indonesian fast-food chain portions.",
+  "contentType": "visual",
+  "diningEnvironment": "fast_food_chain",
   "items": [
     {
-      "originalName": "PAKET AYAM",
-      "chainName": "Sambal Bakar Pencok 89",
-      "estimatedWeightGrams": 400,
-      "cookingMethod": "fried",
+      "originalName": "Mie Suit",
+      "chainName": "Mie Gacoan",
+      "estimatedWeightGrams": 220,
+      "cookingMethod": "boiled and fried",
       "ingredients": [
-        "nasi",
-        "ayam goreng",
-        "sayur asem",
-        "tahu",
-        "tempe"
+        "wheat noodles",
+        "fried wonton skins",
+        "chicken seasoning",
+        "garlic oil",
+        "fried shallots"
       ],
       "boundingBox2D": [
-        322,
-        123,
-        348,
-        744
+        337,
+        0,
+        832,
+        500
       ],
       "sourceImageIndex": 0,
       "nutrients": {
-        "calories": 650,
-        "protein": 38,
+        "calories": 420,
+        "protein": 12,
         "saturatedFat": 5,
         "transFat": 0,
-        "addedSugar": 0,
-        "totalFibre": 4.5,
-        "sodium": 750,
-        "totalFat": 25,
-        "totalSugar": 2,
-        "potassium": 450,
-        "omega3": 0.2,
-        "calcium": 120,
-        "iron": 3.5,
-        "magnesium": 65,
-        "vitaminD": 0.5
-      },
-      "itemConfidence": "High"
-    },
-    {
-      "originalName": "PAKET LELE",
-      "chainName": "Sambal Bakar Pencok 89",
-      "estimatedWeightGrams": 380,
-      "cookingMethod": "fried",
-      "ingredients": [
-        "nasi",
-        "lele goreng",
-        "sayur asem",
-        "tahu",
-        "tempe"
-      ],
-      "boundingBox2D": [
-        452,
-        122,
-        467,
-        727
-      ],
-      "sourceImageIndex": 0,
-      "nutrients": {
-        "calories": 600,
-        "protein": 32,
-        "saturatedFat": 4.5,
-        "transFat": 0,
-        "addedSugar": 0,
-        "totalFibre": 4,
-        "sodium": 700,
-        "totalFat": 22,
-        "totalSugar": 2,
-        "potassium": 400,
-        "omega3": 0.4,
-        "calcium": 110,
-        "iron": 3,
-        "magnesium": 60,
-        "vitaminD": 0.8
-      },
-      "itemConfidence": "High"
-    },
-    {
-      "originalName": "TUMIS KANGKUNG/CAH TERASI",
-      "chainName": "Sambal Bakar Pencok 89",
-      "estimatedWeightGrams": 150,
-      "cookingMethod": "stir-fried",
-      "ingredients": [
-        "kangkung",
-        "bawang putih",
-        "bawang merah",
-        "cabai",
-        "terasi",
-        "minyak goreng"
-      ],
-      "boundingBox2D": [
-        250,
-        129,
-        266,
-        308
-      ],
-      "sourceImageIndex": 1,
-      "nutrients": {
-        "calories": 120,
-        "protein": 3,
-        "saturatedFat": 1,
-        "transFat": 0,
         "addedSugar": 1,
-        "totalFibre": 3.5,
-        "sodium": 450,
-        "totalFat": 8,
+        "totalFibre": 2.5,
+        "sodium": 850,
+        "totalFat": 16,
         "totalSugar": 2,
-        "potassium": 300,
+        "potassium": 180,
         "omega3": 0.1,
-        "calcium": 80,
-        "iron": 2,
-        "magnesium": 40,
+        "calcium": 30,
+        "iron": 1.5,
+        "magnesium": 25,
         "vitaminD": 0
       },
       "itemConfidence": "High"
     },
     {
-      "originalName": "SOTO BETAWI DAGING SAPI / AYAM KAMPUNG",
-      "chainName": "Sambal Bakar Pencok 89",
-      "estimatedWeightGrams": 450,
-      "cookingMethod": "boiled",
+      "originalName": "Siomay",
+      "chainName": "Mie Gacoan",
+      "estimatedWeightGrams": 150,
+      "cookingMethod": "steamed",
       "ingredients": [
-        "daging sapi",
-        "santan",
-        "bumbu soto",
-        "kentang",
-        "tomat",
-        "emping"
+        "minced chicken",
+        "prawn",
+        "tapioca flour",
+        "wonton wrapper",
+        "spring onion"
       ],
       "boundingBox2D": [
-        408,
-        120,
-        421,
-        388
+        452,
+        561,
+        990,
+        981
       ],
-      "sourceImageIndex": 1,
+      "sourceImageIndex": 0,
       "nutrients": {
-        "calories": 480,
-        "protein": 24,
-        "saturatedFat": 12,
-        "transFat": 0.5,
-        "addedSugar": 0,
-        "totalFibre": 2,
-        "sodium": 850,
-        "totalFat": 32,
-        "totalSugar": 3,
-        "potassium": 380,
-        "omega3": 0.1,
-        "calcium": 50,
-        "iron": 2.5,
-        "magnesium": 45,
+        "calories": 240,
+        "protein": 14,
+        "saturatedFat": 3,
+        "transFat": 0,
+        "addedSugar": 1,
+        "totalFibre": 1,
+        "sodium": 520,
+        "totalFat": 9,
+        "totalSugar": 1.5,
+        "potassium": 150,
+        "omega3": 0.2,
+        "calcium": 25,
+        "iron": 1,
+        "magnesium": 20,
         "vitaminD": 0.2
+      },
+      "itemConfidence": "High"
+    },
+    {
+      "originalName": "Es Petak Umpet",
+      "chainName": "Mie Gacoan",
+      "estimatedWeightGrams": 300,
+      "cookingMethod": "blended and iced",
+      "ingredients": [
+        "iced sweetened syrup",
+        "fruit chunks",
+        "colorful jelly balls",
+        "water"
+      ],
+      "boundingBox2D": [
+        82,
+        529,
+        502,
+        765
+      ],
+      "sourceImageIndex": 0,
+      "nutrients": {
+        "calories": 180,
+        "protein": 0.5,
+        "saturatedFat": 0,
+        "transFat": 0,
+        "addedSugar": 32,
+        "totalFibre": 0.5,
+        "sodium": 25,
+        "totalFat": 0.2,
+        "totalSugar": 34,
+        "potassium": 90,
+        "omega3": 0,
+        "calcium": 15,
+        "iron": 0.2,
+        "magnesium": 10,
+        "vitaminD": 0
       },
       "itemConfidence": "High"
     }
@@ -460,64 +413,57 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
 
 ```json
 {
-  "_internalReasoning": "Evaluated the combined Indonesian meal from Sambal Bakar Pencok 89 consisting of Paket Ayam, Paket Lele, Tumis Kangkung, and Soto Betawi. The aggregate calories are 1850 kcal with high sodium (2750mg, exceeding the 2000mg limit) and saturated fat (22.5g vs 15g limit), compounded by fried items and coconut milk broth given the user's mild hypertension, elevated LDL, and prediabetes.",
+  "_internalReasoning": "Evaluated the meal consisting of Mie Suit, Siomay, and Es Petak Umpet from Mie Gacoan. Total calories are 840 kcal with 26.5g protein. However, added sugar (34g) exceeds the 24g daily limit, and sodium (1395mg) is very high, presenting risks for the user's prediabetes and hypertension.",
   "verdict": {
-    "label": "38% over sodium limit",
-    "level": "alert"
+    "label": "141% over added sugar limit",
+    "level": "warning"
   },
-  "message": "You secured 97g of quality protein and 14g of fiber from the mixed dishes. However, the heavy frying and coconut milk soup add 2750mg of sodium, pushing today's total 38% over your daily limit. This high sodium and fat load triggers physical sluggishness, digestive heaviness, and vascular constriction. Take a 25-minute brisk walk to aid circulation, and hydrate with water.",
+  "message": "You received 26.5g of satisfying protein from the chicken noodles and steamed siomay. However, the sweetened beverage pushes your added sugar intake to 34g, exceeding your daily limit. This high sugar and sodium load triggers an immediate blood glucose spike and fluid retention. Drink 500ml of water now and take a 20-minute walk to stabilize blood sugar.",
   "accuracyReview": {
     "isCorrected": false,
     "correctionNotes": null,
     "correctedMealNutrients": null
   },
   "extendedMealNutrients": {
-    "solubleFibre": 3.8,
-    "vitaminA": 850,
-    "thiamine": 0.45,
-    "riboflavin": 0.52,
-    "niacin": 8.5,
-    "vitaminB6": 0.75,
-    "folate": 140,
-    "vitaminB12": 3.2,
-    "vitaminC": 65,
-    "vitaminE": 4.1,
-    "vitaminK": 180,
-    "zinc": 5.2,
-    "selenium": 45,
-    "iodine": 40,
-    "phosphorus": 620
+    "solubleFibre": 1.2,
+    "vitaminA": 120,
+    "thiamine": 0.22,
+    "riboflavin": 0.18,
+    "niacin": 3.4,
+    "vitaminB6": 0.25,
+    "folate": 45,
+    "vitaminB12": 0.8,
+    "vitaminC": 12,
+    "vitaminE": 1.1,
+    "vitaminK": 18,
+    "zinc": 1.9,
+    "selenium": 18.5,
+    "iodine": 15,
+    "phosphorus": 240
   },
   "mealSummary": {
-    "title": "Indonesian Fried & Broth Combo Meal",
+    "title": "Mie Gacoan Meal Set",
     "itemsSummary": [
       {
         "scoutIndex": 0,
-        "name": "Paket Ayam",
-        "weightGrams": 400,
-        "foodType": "Set Menu",
-        "cookingMethod": "fried"
+        "name": "Mie Suit",
+        "weightGrams": 220,
+        "foodType": "Noodles",
+        "cookingMethod": "boiled and fried"
       },
       {
         "scoutIndex": 1,
-        "name": "Paket Lele",
-        "weightGrams": 380,
-        "foodType": "Set Menu",
-        "cookingMethod": "fried"
+        "name": "Siomay",
+        "weightGrams": 150,
+        "foodType": "Dumpling",
+        "cookingMethod": "steamed"
       },
       {
         "scoutIndex": 2,
-        "name": "Tumis Kangkung",
-        "weightGrams": 150,
-        "foodType": "Vegetable",
-        "cookingMethod": "stir-fried"
-      },
-      {
-        "scoutIndex": 3,
-        "name": "Soto Betawi",
-        "weightGrams": 450,
-        "foodType": "Soup",
-        "cookingMethod": "boiled"
+        "name": "Es Petak Umpet",
+        "weightGrams": 300,
+        "foodType": "Beverage",
+        "cookingMethod": "blended and iced"
       }
     ]
   }

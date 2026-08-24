@@ -1,7 +1,8 @@
 # End-to-End Pipeline Report: 02_lidl_chicken_muffin.jpg
 
-**Generated At:** 2026-08-23T20:54:24.322Z
-**File(s):** `02_lidl_chicken_muffin.jpg` | **Content Type:** `visual` | **Environment:** `unknown`
+**Generated At:** 2026-08-23T22:42:52.565Z
+**Evaluated Model:** `gemini-3.5-flash-lite` (Strictly used for both Stage 1 Scout & Stage 3 Dietitian)
+**File(s):** `02_lidl_chicken_muffin.jpg` | **Content Type:** `visual` | **Environment:** `casual_restaurant`
 
 ### 1. User Input Context & Active Clinical Biomarker Profile
 - **User Prompt:** "Scanning product package & muffin for afternoon snack."
@@ -22,11 +23,12 @@ STEP 1: SCENE CLASSIFICATION & ENVIRONMENT
 - 'diningEnvironment': 'casual_restaurant' | 'fast_food_chain' | 'home_cooked' | 'fine_dining' | 'airline' | 'unknown'.
 
 STEP 2: DISH EXTRACTION & BOUNDING BOX DETECTION
-- Extract EVERY distinct food, drink, side, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items'.
-- Do NOT combine distinct dishes into 1 item. (e.g. if a meal consists of sushi rolls, salad, and a baguette roll, output 3 distinct item objects).
+- USER MESSAGE SCOPE ANCHOR & MULTI-DISH EXTRACTION: Extract EVERY distinct food, drink, side, companion plate, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items' (e.g. if 2 dishes or a main + drink or a mug + plate of fruits are visible, output separate item objects for each). Do NOT combine distinct dishes into 1 item.
+- If user's text message specifies a portion/weight (e.g. "50g of oats + fruits" or "60g of sainsbury rolled oat + fruits"), assign logically. The user's explicit text sentence is absolute ground truth.
+- BRAND SEPARATION: When user mentions brand + staples (e.g. "Sainsbury oat + fruit"), apply 'chainName' strictly to the branded item ("Sainsbury oat"). Emit whole companion foods (fruits, drinks, sides) as separate unbranded items (e.g. extract Banana, Apple, Plum as separate whole fruit items).
 - For each item, provide a 2D bounding box 'boundingBox2D': [ymin, xmin, ymax, xmax] in normalized 0-1000 coordinate space identifying the exact region of the image containing the item.
 - Specify 'sourceImageIndex': integer index of the input image (0 for single image).
-- Identify 'chainName': restaurant chain or brand name if applicable (e.g. 'Starbucks', 'McDonald's', 'Pret'), or null if home-cooked / unbranded.
+- Identify 'chainName': restaurant chain or brand name if applicable (e.g. 'Starbucks', 'McDonald's', 'Pret', 'Sainsbury's'), or null if home-cooked / unbranded.
 
 STEP 3: INGREDIENTS BREAKDOWN & DIRECT 15-NUTRIENT ESTIMATION
 - List all identified ingredients and components for each dish as a clean array of strings in 'ingredients' (e.g. ["salmon", "avocado", "sushi rice", "nori"]).
@@ -205,52 +207,52 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
 
 ### 3. Stage 1 Output: Vision Scout Analysis & Dish Detection
 **Scout Internal Reasoning:**
-> The image shows two distinct items: a chocolate muffin on the left inside a paper/plastic bag, and a packaged food item (chicken bites) with visible nutrition information on the right. I will extract both items separately.
+> The image shows two distinct items: a chocolate muffin on the left (likely from a bakery/cafe like Pret, given the bag logo) and a packaged Lidl southern fried chicken bites product showing its nutrition label on the right. I have extracted both items separately as requested.
 
 #### Discovered Dishes & Per-Dish Core + Key Nutrients
 
 ##### Dish 1: Chocolate Muffin (110g) [Image 0]
 - **Brand / Chain:** Unbranded
 - **Cooking Method:** baked
-- **Bounding Box:** `[311, 51, 719, 549]`
-- **Ingredients:** flour, sugar, cocoa powder, butter, eggs, milk, chocolate chips, baking powder
-- **Core Nutrients:** 420 kcal | 5.5g Protein | **54.5g Carbs [Derived]** | 20g Fat | 8g Sat Fat | 0.2g Trans Fat | 28g Added Sugar | 2.5g Fibre | 280mg Sodium
-- **Key Nutrients:** 32g Total Sugar | **11.8g Unsat Fat [Derived]** | **0.71g Salt [Derived]** | 210mg Potassium | 0.05g Omega-3 | 60mg Calcium | 2.1mg Iron | 45mg Magnesium | 0.4mcg Vit D
+- **Bounding Box:** `[310, 47, 720, 553]`
+- **Ingredients:** flour, sugar, cocoa powder, butter, milk, eggs, chocolate chips
+- **Core Nutrients:** 420 kcal | 5g Protein | **55g Carbs [Derived]** | 20g Fat | 8g Sat Fat | 0.2g Trans Fat | 28g Added Sugar | 3g Fibre | 220mg Sodium
+- **Key Nutrients:** 32g Total Sugar | **11.8g Unsat Fat [Derived]** | **0.56g Salt [Derived]** | 180mg Potassium | 0.1g Omega-3 | 50mg Calcium | 2.1mg Iron | 45mg Magnesium | 0.5mcg Vit D
 
-##### Dish 2: Minced Chicken Bites (85g) [Image 0]
+##### Dish 2: Southern Fried Minced Chicken Bites (85g) [Image 0]
 - **Brand / Chain:** Lidl
-- **Cooking Method:** fried
-- **Bounding Box:** `[117, 535, 878, 1000]`
+- **Cooking Method:** cooked
+- **Bounding Box:** `[116, 532, 882, 992]`
 - **Ingredients:** Minced Chicken Breast, Rapeseed Oil, Water, Salt, Dextrose, Yeast Extract, Spices, Maltodextrin, Sugar, Wheat Flour, Calcium Carbonate, Iron, Niacin, Thiamin, Maize Starch, Rice Flour, Barley Malt Extract, Tapioca Starch, Garlic, Onion, Spice Extracts, Lemon Extract
-- **Core Nutrients:** 154 kcal | 16.2g Protein | **3.2g Carbs [Derived]** | 8.5g Fat | 1g Sat Fat | 0g Trans Fat | 0.5g Added Sugar | 0.4g Fibre | 408mg Sodium
-- **Key Nutrients:** 2.9g Total Sugar | **7.5g Unsat Fat [Derived]** | **1.04g Salt [Derived]** | 220mg Potassium | 0.1g Omega-3 | 25mg Calcium | 1.2mg Iron | 20mg Magnesium | 0.1mcg Vit D
+- **Core Nutrients:** 154 kcal | 16.2g Protein | **3.2g Carbs [Derived]** | 8.5g Fat | 1g Sat Fat | 0g Trans Fat | 1.2g Added Sugar | 0.5g Fibre | 408mg Sodium
+- **Key Nutrients:** 1.3g Total Sugar | **7.5g Unsat Fat [Derived]** | **1.04g Salt [Derived]** | 210mg Potassium | 0.2g Omega-3 | 20mg Calcium | 1.5mg Iron | 25mg Magnesium | 0.2mcg Vit D
 
 ### 4. Stage 2 Output: Derivation Engine & Brand Database Matcher
 | Nutrient Category | Nutrient | Value |
 | :--- | :--- | :--- |
 | **Core (High Precision)** | Calories | 574 kcal |
-| **Core (High Precision)** | Protein | 21.7 g |
+| **Core (High Precision)** | Protein | 21.2 g |
 | **Core (High Precision)** | Saturated Fat | 9 g |
 | **Core (High Precision)** | Trans Fat | 0.2 g |
-| **Core (High Precision)** | Added Sugar | 28.5 g |
-| **Core (High Precision)** | Total Fibre | 2.9 g |
-| **Core (High Precision)** | Sodium | 688 mg |
-| **Core (Derived)** | **Carbohydrates** | **57.7 g** |
+| **Core (High Precision)** | Added Sugar | 29.2 g |
+| **Core (High Precision)** | Total Fibre | 3.5 g |
+| **Core (High Precision)** | Sodium | 628 mg |
+| **Core (Derived)** | **Carbohydrates** | **58.2 g** |
 | **Key (Moderate Precision)** | Total Fat | 28.5 g |
-| **Key (Moderate Precision)** | Total Sugar | 34.9 g |
-| **Key (Moderate Precision)** | Potassium | 430 mg |
-| **Key (Moderate Precision)** | Omega-3 | 0.15 g |
-| **Key (Moderate Precision)** | Calcium | 85 mg |
-| **Key (Moderate Precision)** | Iron | 3.3 mg |
-| **Key (Moderate Precision)** | Magnesium | 65 mg |
-| **Key (Moderate Precision)** | Vitamin D | 0.5 mcg |
+| **Key (Moderate Precision)** | Total Sugar | 33.3 g |
+| **Key (Moderate Precision)** | Potassium | 390 mg |
+| **Key (Moderate Precision)** | Omega-3 | 0.3 g |
+| **Key (Moderate Precision)** | Calcium | 70 mg |
+| **Key (Moderate Precision)** | Iron | 3.6 mg |
+| **Key (Moderate Precision)** | Magnesium | 70 mg |
+| **Key (Moderate Precision)** | Vitamin D | 0.7 mcg |
 | **Key (Derived)** | **Unsaturated Fat** | **19.3 g** |
-| **Key (Derived)** | **Salt** | **1.75 g** |
+| **Key (Derived)** | **Salt** | **1.6 g** |
 
 ### 5. Stage 3 Output: Dietitian Clinical Coach Review & Extended Micronutrients
-- **Verdict:** **118% over added sugar limit** (Level: `warning`)
+- **Verdict:** **122% over added sugar limit** (Level: `alert`)
 - **Dietitian Message (4-Beat Narrative):**
-  > You secured 21.7g of quality protein from the chicken bites. However, the chocolate muffin delivers 28.5g of added sugar, pushing today's total 118% over your daily limit. This high sugar load causes a sharp blood sugar spike, vascular stiffness, and sudden afternoon fatigue. Take a 20-minute post-meal walk to enhance glucose disposal, and load your next meal with leafy greens.
+  > You secured 21.2g of quality protein from the chicken bites, but the chocolate muffin brings 29.2g of added sugar, pushing this single snack 122% over your daily added sugar limit. This heavy sugar spike triggers an immediate insulin surge, leaving you feeling fatigued and driving up your blood pressure. Take a 15-minute brisk walk to stabilize your glucose, and choose high-fiber, unsweetened snacks next time.
 - **Accuracy Review Status:** ✅ **Scout Estimates Approved (No Correction Needed)**
 
 ##### Aggregate Extended Nutrients (Filled by Dietitian):
@@ -259,27 +261,27 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
 | **Soluble Fibre** | 1.2 g |
 | **Vitamin A** | 120 mcg |
 | **Thiamine (B1)** | 0.22 mg |
-| **Riboflavin (B2)** | 0.31 mg |
-| **Niacin (B3)** | 3.4 mg |
-| **Vitamin B6** | 0.28 mg |
+| **Riboflavin (B2)** | 0.25 mg |
+| **Niacin (B3)** | 2.8 mg |
+| **Vitamin B6** | 0.18 mg |
 | **Folate (B9)** | 45 mcg |
-| **Vitamin B12** | 0.8 mcg |
-| **Vitamin C** | 2.1 mg |
-| **Vitamin E** | 1.5 mg |
-| **Vitamin K** | 18 mcg |
-| **Zinc** | 1.6 mg |
-| **Selenium** | 16.5 mcg |
-| **Iodine** | 20 mcg |
-| **Phosphorus** | 210 mg |
+| **Vitamin B12** | 0.6 mcg |
+| **Vitamin C** | 1.5 mg |
+| **Vitamin E** | 1.8 mg |
+| **Vitamin K** | 12 mcg |
+| **Zinc** | 1.1 mg |
+| **Selenium** | 14.5 mcg |
+| **Iodine** | 18 mcg |
+| **Phosphorus** | 180 mg |
 
 #### Raw Payloads & JSON Output
 <details><summary>Click to expand Raw Scout JSON</summary>
 
 ```json
 {
-  "_internalReasoning": "The image shows two distinct items: a chocolate muffin on the left inside a paper/plastic bag, and a packaged food item (chicken bites) with visible nutrition information on the right. I will extract both items separately.",
+  "_internalReasoning": "The image shows two distinct items: a chocolate muffin on the left (likely from a bakery/cafe like Pret, given the bag logo) and a packaged Lidl southern fried chicken bites product showing its nutrition label on the right. I have extracted both items separately as requested.",
   "contentType": "visual",
-  "diningEnvironment": "unknown",
+  "diningEnvironment": "casual_restaurant",
   "items": [
     {
       "originalName": "Chocolate Muffin",
@@ -291,44 +293,41 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
         "sugar",
         "cocoa powder",
         "butter",
-        "eggs",
         "milk",
-        "chocolate chips",
-        "baking powder"
+        "eggs",
+        "chocolate chips"
       ],
       "boundingBox2D": [
-        [
-          311,
-          51,
-          719,
-          549
-        ]
+        310,
+        47,
+        720,
+        553
       ],
       "sourceImageIndex": 0,
       "nutrients": {
         "calories": 420,
-        "protein": 5.5,
+        "protein": 5,
         "saturatedFat": 8,
         "transFat": 0.2,
         "addedSugar": 28,
-        "totalFibre": 2.5,
-        "sodium": 280,
+        "totalFibre": 3,
+        "sodium": 220,
         "totalFat": 20,
         "totalSugar": 32,
-        "potassium": 210,
-        "omega3": 0.05,
-        "calcium": 60,
+        "potassium": 180,
+        "omega3": 0.1,
+        "calcium": 50,
         "iron": 2.1,
         "magnesium": 45,
-        "vitaminD": 0.4
+        "vitaminD": 0.5
       },
       "itemConfidence": "High"
     },
     {
-      "originalName": "Minced Chicken Bites",
+      "originalName": "Southern Fried Minced Chicken Bites",
       "chainName": "Lidl",
       "estimatedWeightGrams": 85,
-      "cookingMethod": "fried",
+      "cookingMethod": "cooked",
       "ingredients": [
         "Minced Chicken Breast",
         "Rapeseed Oil",
@@ -354,12 +353,10 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
         "Lemon Extract"
       ],
       "boundingBox2D": [
-        [
-          117,
-          535,
-          878,
-          1000
-        ]
+        116,
+        532,
+        882,
+        992
       ],
       "sourceImageIndex": 0,
       "nutrients": {
@@ -367,17 +364,17 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
         "protein": 16.2,
         "saturatedFat": 1,
         "transFat": 0,
-        "addedSugar": 0.5,
-        "totalFibre": 0.4,
+        "addedSugar": 1.2,
+        "totalFibre": 0.5,
         "sodium": 408,
         "totalFat": 8.5,
-        "totalSugar": 2.9,
-        "potassium": 220,
-        "omega3": 0.1,
-        "calcium": 25,
-        "iron": 1.2,
-        "magnesium": 20,
-        "vitaminD": 0.1
+        "totalSugar": 1.3,
+        "potassium": 210,
+        "omega3": 0.2,
+        "calcium": 20,
+        "iron": 1.5,
+        "magnesium": 25,
+        "vitaminD": 0.2
       },
       "itemConfidence": "High"
     }
@@ -390,12 +387,12 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
 
 ```json
 {
-  "_internalReasoning": "Evaluated scanned meal containing a chocolate muffin and Lidl minced chicken bites for an afternoon snack. The meal contains 574 calories, 28.5g added sugar (exceeding the 24g daily limit), and 688mg sodium. Patient has prediabetes, elevated LDL, and mild hypertension. Focused beat structure on added sugar overage, blood sugar/vascular impact, and corrective movement/fiber steps.",
+  "_internalReasoning": "Evaluated the meal consisting of a Chocolate Muffin and Lidl Southern Fried Minced Chicken Bites. Total added sugar is 29.2g, which exceeds the daily limit of 24g in a single snack, and sodium is elevated at 628mg, impacting the user's prediabetes and hypertension biomarkers. Extended micronutrients calculated logically. Message follows the 4-beat structure and verdict guidelines.",
   "verdict": {
-    "label": "118% over added sugar limit",
-    "level": "warning"
+    "label": "122% over added sugar limit",
+    "level": "alert"
   },
-  "message": "You secured 21.7g of quality protein from the chicken bites. However, the chocolate muffin delivers 28.5g of added sugar, pushing today's total 118% over your daily limit. This high sugar load causes a sharp blood sugar spike, vascular stiffness, and sudden afternoon fatigue. Take a 20-minute post-meal walk to enhance glucose disposal, and load your next meal with leafy greens.",
+  "message": "You secured 21.2g of quality protein from the chicken bites, but the chocolate muffin brings 29.2g of added sugar, pushing this single snack 122% over your daily added sugar limit. This heavy sugar spike triggers an immediate insulin surge, leaving you feeling fatigued and driving up your blood pressure. Take a 15-minute brisk walk to stabilize your glucose, and choose high-fiber, unsweetened snacks next time.",
   "accuracyReview": {
     "isCorrected": false,
     "correctionNotes": null,
@@ -405,35 +402,35 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
     "solubleFibre": 1.2,
     "vitaminA": 120,
     "thiamine": 0.22,
-    "riboflavin": 0.31,
-    "niacin": 3.4,
-    "vitaminB6": 0.28,
+    "riboflavin": 0.25,
+    "niacin": 2.8,
+    "vitaminB6": 0.18,
     "folate": 45,
-    "vitaminB12": 0.8,
-    "vitaminC": 2.1,
-    "vitaminE": 1.5,
-    "vitaminK": 18,
-    "zinc": 1.6,
-    "selenium": 16.5,
-    "iodine": 20,
-    "phosphorus": 210
+    "vitaminB12": 0.6,
+    "vitaminC": 1.5,
+    "vitaminE": 1.8,
+    "vitaminK": 12,
+    "zinc": 1.1,
+    "selenium": 14.5,
+    "iodine": 18,
+    "phosphorus": 180
   },
   "mealSummary": {
-    "title": "Chocolate Muffin and Minced Chicken Bites",
+    "title": "Chocolate Muffin and Fried Chicken Bites",
     "itemsSummary": [
       {
         "scoutIndex": 0,
         "name": "Chocolate Muffin",
         "weightGrams": 110,
-        "foodType": "Bakery",
+        "foodType": "baked good",
         "cookingMethod": "baked"
       },
       {
         "scoutIndex": 1,
-        "name": "Minced Chicken Bites",
+        "name": "Southern Fried Minced Chicken Bites",
         "weightGrams": 85,
-        "foodType": "Poultry",
-        "cookingMethod": "fried"
+        "foodType": "poultry snack",
+        "cookingMethod": "cooked"
       }
     ]
   }

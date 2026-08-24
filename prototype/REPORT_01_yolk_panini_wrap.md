@@ -1,6 +1,7 @@
 # End-to-End Pipeline Report: 01_yolk_panini_wrap.jpg
 
-**Generated At:** 2026-08-23T20:54:17.486Z
+**Generated At:** 2026-08-23T22:42:42.886Z
+**Evaluated Model:** `gemini-3.5-flash-lite` (Strictly used for both Stage 1 Scout & Stage 3 Dietitian)
 **File(s):** `01_yolk_panini_wrap.jpg` | **Content Type:** `visual` | **Environment:** `fast_food_chain`
 
 ### 1. User Input Context & Active Clinical Biomarker Profile
@@ -22,11 +23,12 @@ STEP 1: SCENE CLASSIFICATION & ENVIRONMENT
 - 'diningEnvironment': 'casual_restaurant' | 'fast_food_chain' | 'home_cooked' | 'fine_dining' | 'airline' | 'unknown'.
 
 STEP 2: DISH EXTRACTION & BOUNDING BOX DETECTION
-- Extract EVERY distinct food, drink, side, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items'.
-- Do NOT combine distinct dishes into 1 item. (e.g. if a meal consists of sushi rolls, salad, and a baguette roll, output 3 distinct item objects).
+- USER MESSAGE SCOPE ANCHOR & MULTI-DISH EXTRACTION: Extract EVERY distinct food, drink, side, companion plate, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items' (e.g. if 2 dishes or a main + drink or a mug + plate of fruits are visible, output separate item objects for each). Do NOT combine distinct dishes into 1 item.
+- If user's text message specifies a portion/weight (e.g. "50g of oats + fruits" or "60g of sainsbury rolled oat + fruits"), assign logically. The user's explicit text sentence is absolute ground truth.
+- BRAND SEPARATION: When user mentions brand + staples (e.g. "Sainsbury oat + fruit"), apply 'chainName' strictly to the branded item ("Sainsbury oat"). Emit whole companion foods (fruits, drinks, sides) as separate unbranded items (e.g. extract Banana, Apple, Plum as separate whole fruit items).
 - For each item, provide a 2D bounding box 'boundingBox2D': [ymin, xmin, ymax, xmax] in normalized 0-1000 coordinate space identifying the exact region of the image containing the item.
 - Specify 'sourceImageIndex': integer index of the input image (0 for single image).
-- Identify 'chainName': restaurant chain or brand name if applicable (e.g. 'Starbucks', 'McDonald's', 'Pret'), or null if home-cooked / unbranded.
+- Identify 'chainName': restaurant chain or brand name if applicable (e.g. 'Starbucks', 'McDonald's', 'Pret', 'Sainsbury's'), or null if home-cooked / unbranded.
 
 STEP 3: INGREDIENTS BREAKDOWN & DIRECT 15-NUTRIENT ESTIMATION
 - List all identified ingredients and components for each dish as a clean array of strings in 'ingredients' (e.g. ["salmon", "avocado", "sushi rice", "nori"]).
@@ -205,76 +207,76 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
 
 ### 3. Stage 1 Output: Vision Scout Analysis & Dish Detection
 **Scout Internal Reasoning:**
-> The image shows a meal from Yolk, consisting of a chicken sandwich or wrap cut in half wrapped in foil, a side of roasted broccoli and cabbage, and a side of roasted baby potatoes. There are also small sauce containers on the left.
+> The user provided an image showing a meal from 'Yolk' containing a sandwich cut in half wrapped partly in foil, a side of roasted/steamed broccoli, and a side of small roasted potatoes, along with small plastic condiment cups. I will extract three distinct items: the sandwich, the broccoli side, and the potato side.
 
 #### Discovered Dishes & Per-Dish Core + Key Nutrients
 
-##### Dish 1: Chicken Wrap / Sandwich (320g) [Image 0]
+##### Dish 1: Chicken Sandwich Halves (320g) [Image 0]
 - **Brand / Chain:** Yolk (Official Brand DB)
 - **Cooking Method:** grilled
-- **Bounding Box:** `[79, 290, 482, 888]`
-- **Ingredients:** bread, chicken breast, cheese, sauce, vegetables
-- **Core Nutrients:** 680 kcal | 45g Protein | **62g Carbs [Derived]** | 28g Fat | 9g Sat Fat | 0g Trans Fat | 2g Added Sugar | 4g Fibre | 1180mg Sodium
-- **Key Nutrients:** 4g Total Sugar | **19g Unsat Fat [Derived]** | **3g Salt [Derived]** | 450mg Potassium | 0.2g Omega-3 | 120mg Calcium | 3.2mg Iron | 45mg Magnesium | 0.5mcg Vit D
+- **Bounding Box:** `[72, 291, 479, 891]`
+- **Ingredients:** bread, chicken, cheese, sauce, vegetables
+- **Core Nutrients:** 680 kcal | 45g Protein | **62g Carbs [Derived]** | 28g Fat | 9g Sat Fat | 0g Trans Fat | 4g Added Sugar | 4g Fibre | 1180mg Sodium
+- **Key Nutrients:** 6g Total Sugar | **19g Unsat Fat [Derived]** | **3g Salt [Derived]** | 450mg Potassium | 0.2g Omega-3 | 220mg Calcium | 3.5mg Iron | 45mg Magnesium | 0.5mcg Vit D
 
-##### Dish 2: Roasted Broccoli and Cabbage (180g) [Image 0]
+##### Dish 2: Roasted Broccoli Side (150g) [Image 0]
 - **Brand / Chain:** Yolk
 - **Cooking Method:** roasted
-- **Bounding Box:** `[393, 0, 955, 420]`
-- **Ingredients:** broccoli, cabbage, olive oil, seasonings
-- **Core Nutrients:** 110 kcal | 5g Protein | **6.8g Carbs [Derived]** | 7g Fat | 1g Sat Fat | 0g Trans Fat | 0g Added Sugar | 6g Fibre | 220mg Sodium
-- **Key Nutrients:** 4g Total Sugar | **6g Unsat Fat [Derived]** | **0.56g Salt [Derived]** | 510mg Potassium | 0.1g Omega-3 | 90mg Calcium | 1.5mg Iron | 35mg Magnesium | 0mcg Vit D
+- **Bounding Box:** `[425, 0, 919, 418]`
+- **Ingredients:** broccoli, oil, seasoning
+- **Core Nutrients:** 90 kcal | 4g Protein | **7.3g Carbs [Derived]** | 5g Fat | 0.5g Sat Fat | 0g Trans Fat | 0g Added Sugar | 5g Fibre | 200mg Sodium
+- **Key Nutrients:** 2g Total Sugar | **4.5g Unsat Fat [Derived]** | **0.51g Salt [Derived]** | 380mg Potassium | 0.1g Omega-3 | 60mg Calcium | 1.2mg Iron | 30mg Magnesium | 0mcg Vit D
 
-##### Dish 3: Roasted Baby Potatoes (200g) [Image 0]
+##### Dish 3: Roasted Baby Potatoes Side (180g) [Image 0]
 - **Brand / Chain:** Yolk
 - **Cooking Method:** roasted
-- **Bounding Box:** `[375, 563, 912, 981]`
-- **Ingredients:** baby potatoes, olive oil, salt, herbs
-- **Core Nutrients:** 240 kcal | 4g Protein | **35.8g Carbs [Derived]** | 9g Fat | 0.8g Sat Fat | 0g Trans Fat | 0g Added Sugar | 3.5g Fibre | 300mg Sodium
-- **Key Nutrients:** 1.5g Total Sugar | **8.2g Unsat Fat [Derived]** | **0.76g Salt [Derived]** | 750mg Potassium | 0g Omega-3 | 25mg Calcium | 2mg Iron | 50mg Magnesium | 0mcg Vit D
+- **Bounding Box:** `[377, 561, 910, 982]`
+- **Ingredients:** baby potatoes, oil, salt, herbs
+- **Core Nutrients:** 220 kcal | 4g Protein | **33g Carbs [Derived]** | 8g Fat | 1g Sat Fat | 0g Trans Fat | 0g Added Sugar | 3.5g Fibre | 320mg Sodium
+- **Key Nutrients:** 1g Total Sugar | **7g Unsat Fat [Derived]** | **0.81g Salt [Derived]** | 650mg Potassium | 0g Omega-3 | 25mg Calcium | 2mg Iron | 45mg Magnesium | 0mcg Vit D
 
 ### 4. Stage 2 Output: Derivation Engine & Brand Database Matcher
 > ⚠️ **Brand Database Replacement Notice:**
-> - [BRAND DATABASE MATCH APPLIED]: Dish "Chicken Wrap / Sandwich" matched to official Yolk Brand Database entry. Initial Scout visual estimate (520 kcal) was REPLACED with official Yolk verified brand data (680 kcal, 45g Protein, 28g Total Fat, 9g Saturated Fat, 1180mg Sodium). Please review the total meal analysis in light of this brand replacement, highlight the change in your narrative, and update extended micronutrients as needed.
+> - [BRAND DATABASE MATCH APPLIED]: Dish "Chicken Sandwich Halves" matched to official Yolk Brand Database entry. Initial Scout visual estimate (650 kcal) was REPLACED with official Yolk verified brand data (680 kcal, 45g Protein, 28g Total Fat, 9g Saturated Fat, 1180mg Sodium).
 
 | Nutrient Category | Nutrient | Value |
 | :--- | :--- | :--- |
-| **Core (High Precision)** | Calories | 1030 kcal |
-| **Core (High Precision)** | Protein | 54 g |
-| **Core (High Precision)** | Saturated Fat | 10.8 g |
+| **Core (High Precision)** | Calories | 990 kcal |
+| **Core (High Precision)** | Protein | 53 g |
+| **Core (High Precision)** | Saturated Fat | 10.5 g |
 | **Core (High Precision)** | Trans Fat | 0 g |
-| **Core (High Precision)** | Added Sugar | 2 g |
-| **Core (High Precision)** | Total Fibre | 13.5 g |
+| **Core (High Precision)** | Added Sugar | 4 g |
+| **Core (High Precision)** | Total Fibre | 12.5 g |
 | **Core (High Precision)** | Sodium | 1700 mg |
-| **Core (Derived)** | **Carbohydrates** | **104.6 g** |
-| **Key (Moderate Precision)** | Total Fat | 44 g |
-| **Key (Moderate Precision)** | Total Sugar | 9.5 g |
-| **Key (Moderate Precision)** | Potassium | 1710 mg |
+| **Core (Derived)** | **Carbohydrates** | **102.3 g** |
+| **Key (Moderate Precision)** | Total Fat | 41 g |
+| **Key (Moderate Precision)** | Total Sugar | 9 g |
+| **Key (Moderate Precision)** | Potassium | 1480 mg |
 | **Key (Moderate Precision)** | Omega-3 | 0.3 g |
-| **Key (Moderate Precision)** | Calcium | 235 mg |
+| **Key (Moderate Precision)** | Calcium | 305 mg |
 | **Key (Moderate Precision)** | Iron | 6.7 mg |
-| **Key (Moderate Precision)** | Magnesium | 130 mg |
+| **Key (Moderate Precision)** | Magnesium | 120 mg |
 | **Key (Moderate Precision)** | Vitamin D | 0.5 mcg |
-| **Key (Derived)** | **Unsaturated Fat** | **33.2 g** |
+| **Key (Derived)** | **Unsaturated Fat** | **30.5 g** |
 | **Key (Derived)** | **Salt** | **4.32 g** |
 
 ### 5. Stage 3 Output: Dietitian Clinical Coach Review & Extended Micronutrients
-- **Verdict:** **1700mg sodium nears daily limit** (Level: `warning`)
+- **Verdict:** **High protein with elevated sodium** (Level: `warning`)
 - **Dietitian Message (4-Beat Narrative):**
-  > You delivered 54g of muscle-building protein and 13.5g of fiber from the grilled chicken and roasted greens. However, the Yolk chicken wrap brings 1180mg of sodium, pushing your meal total to 1700mg—85% of your daily limit. This high sodium load causes transient vascular constriction and fluid retention. Drink extra water and take a 20-minute walk to support healthy circulation.
+  > You got 53g of quality lean protein and 12.5g of gut-healthy fibre from the chicken and roasted broccoli. However, the meal contains 1700mg of sodium, pushing close to your daily limit within a single sitting. This high salt load causes temporary fluid retention, blood vessel constriction, and a spike in blood pressure. Take a 20-minute post-meal walk to assist circulation, and prioritize low-sodium hydration for the rest of the day.
 - **Accuracy Review Status:** ✅ **Scout Estimates Approved (No Correction Needed)**
 
 ##### Aggregate Extended Nutrients (Filled by Dietitian):
 | Extended Nutrient (Directional Precision <50%) | Value |
 | :--- | :--- |
 | **Soluble Fibre** | 3.8 g |
-| **Vitamin A** | 850 mcg |
+| **Vitamin A** | 320 mcg |
 | **Thiamine (B1)** | 0.45 mg |
 | **Riboflavin (B2)** | 0.38 mg |
-| **Niacin (B3)** | 9.2 mg |
-| **Vitamin B6** | 0.85 mg |
+| **Niacin (B3)** | 8.5 mg |
+| **Vitamin B6** | 0.72 mg |
 | **Folate (B9)** | 145 mcg |
-| **Vitamin B12** | 0.4 mcg |
+| **Vitamin B12** | 0.8 mcg |
 | **Vitamin C** | 95 mg |
 | **Vitamin E** | 4.1 mg |
 | **Vitamin K** | 180 mcg |
@@ -288,124 +290,117 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
 
 ```json
 {
-  "_internalReasoning": "The image shows a meal from Yolk, consisting of a chicken sandwich or wrap cut in half wrapped in foil, a side of roasted broccoli and cabbage, and a side of roasted baby potatoes. There are also small sauce containers on the left.",
+  "_internalReasoning": "The user provided an image showing a meal from 'Yolk' containing a sandwich cut in half wrapped partly in foil, a side of roasted/steamed broccoli, and a side of small roasted potatoes, along with small plastic condiment cups. I will extract three distinct items: the sandwich, the broccoli side, and the potato side.",
   "contentType": "visual",
   "diningEnvironment": "fast_food_chain",
   "items": [
     {
-      "originalName": "Chicken Wrap / Sandwich",
+      "originalName": "Chicken Sandwich Halves",
       "chainName": "Yolk",
       "estimatedWeightGrams": 320,
       "cookingMethod": "grilled",
       "ingredients": [
         "bread",
-        "chicken breast",
+        "chicken",
         "cheese",
         "sauce",
         "vegetables"
       ],
       "boundingBox2D": [
-        [
-          79,
-          290,
-          482,
-          888
-        ]
+        72,
+        291,
+        479,
+        891
       ],
       "sourceImageIndex": 0,
       "nutrients": {
-        "calories": 520,
-        "protein": 38,
-        "saturatedFat": 5,
+        "calories": 650,
+        "protein": 42,
+        "saturatedFat": 6.5,
         "transFat": 0,
-        "addedSugar": 2,
+        "addedSugar": 4,
         "totalFibre": 4,
-        "sodium": 850,
-        "totalFat": 18,
-        "totalSugar": 4,
+        "sodium": 980,
+        "totalFat": 24,
+        "totalSugar": 6,
         "potassium": 450,
         "omega3": 0.2,
-        "calcium": 120,
-        "iron": 3.2,
+        "calcium": 220,
+        "iron": 3.5,
         "magnesium": 45,
         "vitaminD": 0.5
       },
       "itemConfidence": "High"
     },
     {
-      "originalName": "Roasted Broccoli and Cabbage",
+      "originalName": "Roasted Broccoli Side",
       "chainName": "Yolk",
-      "estimatedWeightGrams": 180,
+      "estimatedWeightGrams": 150,
       "cookingMethod": "roasted",
       "ingredients": [
         "broccoli",
-        "cabbage",
-        "olive oil",
-        "seasonings"
+        "oil",
+        "seasoning"
       ],
       "boundingBox2D": [
-        [
-          393,
-          0,
-          955,
-          420
-        ]
+        425,
+        0,
+        919,
+        418
       ],
       "sourceImageIndex": 0,
       "nutrients": {
-        "calories": 110,
-        "protein": 5,
-        "saturatedFat": 1,
+        "calories": 90,
+        "protein": 4,
+        "saturatedFat": 0.5,
         "transFat": 0,
         "addedSugar": 0,
-        "totalFibre": 6,
-        "sodium": 220,
-        "totalFat": 7,
-        "totalSugar": 4,
-        "potassium": 510,
+        "totalFibre": 5,
+        "sodium": 200,
+        "totalFat": 5,
+        "totalSugar": 2,
+        "potassium": 380,
         "omega3": 0.1,
-        "calcium": 90,
-        "iron": 1.5,
-        "magnesium": 35,
+        "calcium": 60,
+        "iron": 1.2,
+        "magnesium": 30,
         "vitaminD": 0
       },
       "itemConfidence": "High"
     },
     {
-      "originalName": "Roasted Baby Potatoes",
+      "originalName": "Roasted Baby Potatoes Side",
       "chainName": "Yolk",
-      "estimatedWeightGrams": 200,
+      "estimatedWeightGrams": 180,
       "cookingMethod": "roasted",
       "ingredients": [
         "baby potatoes",
-        "olive oil",
+        "oil",
         "salt",
         "herbs"
       ],
       "boundingBox2D": [
-        [
-          375,
-          563,
-          912,
-          981
-        ]
+        377,
+        561,
+        910,
+        982
       ],
       "sourceImageIndex": 0,
       "nutrients": {
-        "calories": 240,
+        "calories": 220,
         "protein": 4,
-        "saturatedFat": 0.8,
+        "saturatedFat": 1,
         "transFat": 0,
         "addedSugar": 0,
         "totalFibre": 3.5,
-        "sodium": 300,
-        "totalFat": 9,
-        "totalSugar": 1.5,
-        "potassium": 750,
+        "sodium": 320,
+        "totalFat": 8,
+        "totalSugar": 1,
+        "potassium": 650,
         "omega3": 0,
         "calcium": 25,
         "iron": 2,
-        "magnesium": 50,
+        "magnesium": 45,
         "vitaminD": 0
       },
       "itemConfidence": "High"
@@ -419,26 +414,26 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
 
 ```json
 {
-  "_internalReasoning": "Evaluated the scanned meal featuring a Yolk brand chicken wrap, roasted broccoli and cabbage, and roasted baby potatoes. Brand database match applied for the wrap. The meal provides 54g of protein and 13.5g of fiber, but sodium reaches 1700mg (85% of limit) largely due to the wrap (1180mg). With mild hypertension and elevated LDL, the high sodium is the primary risk factor. Extended micronutrients estimated based on chicken, vegetables, and potatoes.",
+  "_internalReasoning": "Evaluated the meal consisting of Yolk Chicken Sandwich Halves, Roasted Broccoli Side, and Roasted Baby Potatoes. Integrated official brand database match for the sandwich. Noted high protein (53g) and fibre (12.5g) alongside elevated sodium (1700mg) which impacts hypertension and prediabetes. Generated extended micronutrients for the aggregate meal and formulated the response following all clinical guidelines.",
   "verdict": {
-    "label": "1700mg sodium nears daily limit",
+    "label": "High protein with elevated sodium",
     "level": "warning"
   },
-  "message": "You delivered 54g of muscle-building protein and 13.5g of fiber from the grilled chicken and roasted greens. However, the Yolk chicken wrap brings 1180mg of sodium, pushing your meal total to 1700mg—85% of your daily limit. This high sodium load causes transient vascular constriction and fluid retention. Drink extra water and take a 20-minute walk to support healthy circulation.",
+  "message": "You got 53g of quality lean protein and 12.5g of gut-healthy fibre from the chicken and roasted broccoli. However, the meal contains 1700mg of sodium, pushing close to your daily limit within a single sitting. This high salt load causes temporary fluid retention, blood vessel constriction, and a spike in blood pressure. Take a 20-minute post-meal walk to assist circulation, and prioritize low-sodium hydration for the rest of the day.",
   "accuracyReview": {
     "isCorrected": false,
-    "correctionNotes": "Brand data successfully applied for the Yolk chicken wrap; derived totals are physiologically sound and no further corrections needed.",
+    "correctionNotes": null,
     "correctedMealNutrients": null
   },
   "extendedMealNutrients": {
     "solubleFibre": 3.8,
-    "vitaminA": 850,
+    "vitaminA": 320,
     "thiamine": 0.45,
     "riboflavin": 0.38,
-    "niacin": 9.2,
-    "vitaminB6": 0.85,
+    "niacin": 8.5,
+    "vitaminB6": 0.72,
     "folate": 145,
-    "vitaminB12": 0.4,
+    "vitaminB12": 0.8,
     "vitaminC": 95,
     "vitaminE": 4.1,
     "vitaminK": 180,
@@ -448,27 +443,27 @@ Output exactly ONE JSON object matching this schema. Never wrap in markdown bloc
     "phosphorus": 520
   },
   "mealSummary": {
-    "title": "Yolk Grilled Chicken Wrap with Roasted Vegetables & Potatoes",
+    "title": "Yolk Chicken Sandwich with Roasted Veggies",
     "itemsSummary": [
       {
         "scoutIndex": 0,
-        "name": "Chicken Wrap / Sandwich",
+        "name": "Chicken Sandwich Halves",
         "weightGrams": 320,
-        "foodType": "Entree",
+        "foodType": "sandwich",
         "cookingMethod": "grilled"
       },
       {
         "scoutIndex": 1,
-        "name": "Roasted Broccoli and Cabbage",
-        "weightGrams": 180,
-        "foodType": "Vegetable Side",
+        "name": "Roasted Broccoli Side",
+        "weightGrams": 150,
+        "foodType": "vegetable",
         "cookingMethod": "roasted"
       },
       {
         "scoutIndex": 2,
-        "name": "Roasted Baby Potatoes",
-        "weightGrams": 200,
-        "foodType": "Carbohydrate Side",
+        "name": "Roasted Baby Potatoes Side",
+        "weightGrams": 180,
+        "foodType": "starch",
         "cookingMethod": "roasted"
       }
     ]
