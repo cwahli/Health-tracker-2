@@ -23,6 +23,7 @@ const DedupeBiomarkerLogsModal = lazyWithRetry(() => import('./DedupeBiomarkerLo
 const NutritionDataBrowserModal = lazyWithRetry(() => import('./NutritionDataBrowserModal'));
 const BugTrackerModal = lazyWithRetry(() => import('./BugTrackerModal'));
 import BugSnapshotFab, { BugSnapshotSettingsToggle } from './BugSnapshotFab';
+import { AllAnalysesModal } from './AllAnalysesModal';
 const UserManagementTab = lazyWithRetry(() => import('./UserManagementTab'));
 const BackupRestoreTab = lazyWithRetry(() => import('./BackupRestoreTab'));
 const FoodCatalogAdminTab = lazyWithRetry(() => import('./FoodCatalogAdminTab').then(m => ({ default: m.FoodCatalogAdminTab })));
@@ -317,6 +318,7 @@ export default function Header({
   }, []);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [showAllAnalysesModal, setShowAllAnalysesModal] = useState(false);
   const [showThemeScreen, setShowThemeScreen] = useState(false);
   const [themePreviewMode, setThemePreviewMode] = useState(false);
   const [themeCompactMode, setThemeCompactMode] = useState(false);
@@ -1331,38 +1333,7 @@ export default function Header({
                   const activeProgress = activeRunning?.progressPercent || 0;
 
                   const handleBadgeClick = () => {
-                    const targetJob = succeededUnsavedJobs[0] || runningJobs[0] || queuedJobs[0];
-                    if (!targetJob) return;
-                    
-                    const isMedical = targetJob.kind === 'medical';
-                    const targetTab = isMedical ? 'medical' : 'food';
-
-                    if (onNavigateTab) {
-                      onNavigateTab(targetTab);
-                    } else if (typeof window !== 'undefined') {
-                      window.dispatchEvent(new CustomEvent('navigate-tab', { detail: targetTab }));
-                    }
-
-                    // If this is a ready job, mark it as viewed to decrement count by 1
-                    if (targetJob.status === 'succeeded') {
-                      JobStore.updateJob(targetJob.id, {
-                        viewed: true,
-                        result: {
-                          ...(targetJob.result || {}),
-                          viewed: true
-                        }
-                      });
-                    }
-
-                    setTimeout(() => {
-                      const jobEl = document.getElementById(`job-${targetJob.id}`) || document.getElementById(`task-card-${targetJob.id}`);
-                      if (jobEl) {
-                        jobEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      } else {
-                        const fallbackEl = document.getElementById(isMedical ? 'active-medical-jobs' : 'food-history-tab');
-                        if (fallbackEl) fallbackEl.scrollIntoView({ behavior: 'smooth' });
-                      }
-                    }, 150);
+                    setShowAllAnalysesModal(true);
                   };
 
                   return (
@@ -4587,6 +4558,23 @@ export default function Header({
         onClose={() => setShowDedupeBiomarkerLogs(false)}
       />
       </React.Suspense>
+
+      <AllAnalysesModal
+        isOpen={showAllAnalysesModal}
+        onClose={() => setShowAllAnalysesModal(false)}
+        profile={profile}
+        foodLogs={foodLogs}
+        setFoodLogs={setFoodLogs}
+        biomarkerHistory={biomarkerHistory}
+        setBiomarkerHistory={setBiomarkerHistory}
+        biomarkers={biomarkers}
+        actions={actions}
+        dailyBenefits={dailyBenefits}
+        report={report}
+        onSaveAndSync={onSaveAndSync}
+        onNavigateTab={onNavigateTab}
+        onViewJob={onViewJob}
+      />
     </>
   );
 }

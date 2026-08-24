@@ -1,8 +1,10 @@
 import { trackApiCall } from '../utils/apiTracker';
 import React, { useRef, useEffect, useState } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-interface ZoomableImageProps {
+import { nextPhotoFallbackUrl, normalizeMealImageUrl } from '../utils/foodImageSources';
+import { Loader, AlertCircle } from 'lucide-react';
 
+interface ZoomableImageProps {
   src: string;
   boundingBox?: number[] | null;
   onClose: () => void;
@@ -13,6 +15,7 @@ interface ZoomableImageProps {
   hasPrev?: boolean;
   sourceUrl?: string;
 }
+
 export const ZoomableImage: React.FC<ZoomableImageProps> = ({ 
   src, 
   boundingBox, 
@@ -26,8 +29,18 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
 }) => {
   const targetRef = useRef<HTMLDivElement>(null);
   const isFirstRef = useRef(true);
-  const { zoomToElement } = React.useContext(React.createContext({ zoomToElement: (el: any, scale: any, time: any) => {} })); // Just a placeholder, we'll get it from render props
   const [highlight, setHighlight] = useState(true);
+  const [currentSrc, setCurrentSrc] = useState<string>(() => normalizeMealImageUrl(src) || src);
+  const [imgStatus, setImgStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const triedUrlsRef = useRef<Set<string>>(new Set([src, normalizeMealImageUrl(src) || src]));
+
+  useEffect(() => {
+    const norm = normalizeMealImageUrl(src) || src;
+    setCurrentSrc(norm);
+    setImgStatus('loading');
+    triedUrlsRef.current = new Set([src, norm]);
+  }, [src]);
+
   // Reset highlight state and trigger smooth transitions when the bounding box coordinates change
   useEffect(() => {
     setHighlight(true);
@@ -37,9 +50,21 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
       isFirstRef.current = false; // Mark first mount completed
     };
   }, [boundingBox]);
+
+  const handleImageError = () => {
+    const nextUrl = nextPhotoFallbackUrl(currentSrc, triedUrlsRef.current);
+    if (nextUrl) {
+      triedUrlsRef.current.add(nextUrl);
+      setCurrentSrc(nextUrl);
+      setImgStatus('loading');
+    } else {
+      setImgStatus('error');
+    }
+  };
+
   return (
     <div 
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-md transition-all duration-300"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-md transition-all duration-300"
       onClick={onClose}
     >
       <div 
@@ -60,87 +85,120 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
             <span className="opacity-50 text-[10px]">↗</span>
           </div>
         )}
-        <TransformWrapper
-          initialScale={1}
-          minScale={0.5}
-          maxScale={40}
-          centerOnInit={true}
-        >
-          {({ zoomToElement }) => {
-            return (
-              <>
-                <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
-                  <div className="relative inline-block max-w-[95vw] max-h-[85vh]">
+
+        {imgStatus === 'loading' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-[9998] text-slate-300">
+            <Loader className="w-8 h-8 animate-spin text-indigo-400" />
+            <span className="text-xs font-mono tracking-wider opacity-80">Loading photo preview...</span>
+          </div>
+        )}
+
+        {imgStatus === 'error' ? (
+          <div className="flex flex-col items-center justify-center gap-3 p-6 max-w-sm rounded-2xl bg-slate-900/90 border border-slate-800 text-center text-slate-200 z-[9998] shadow-2xl">
+            <AlertCircle className="w-10 h-10 text-amber-400" />
+            <div className="space-y-1">
+              <h4 className="font-bold text-sm">Image Preview Unavailable</h4>
+              <p className="text-xs text-slate-400">
+                {foodName ? `Photo for "${foodName}" could not be retrieved.` : 'The requested photo preview could not be loaded.'}
+              </p>
+            </div>
+            {foodName && (
+              <button
+                type="button"
+                onClick={() => window.open('https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(foodName), '_blank', 'noopener,noreferrer')}
+                className="mt-2 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors cursor-pointer"
+              >
+                Search "{foodName}" Images
+              </button>
+            )}
+          </div>
+        ) : (
+          <TransformWrapper
+            initialScale={1}
+            minScale={0.5}
+            maxScale={20}
+            centerOnInit={true}
+          >
+            {({ zoomToElement }) => {
+              return (
+                <>
+                  <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
+                    <div className="relative inline-block max-w-[95vw] max-h-[85vh]">
                       <img 
-                        src={src} 
+                        src={currentSrc} 
                         alt={foodName || "Full screen preview"} 
-                        className={`max-w-[95vw] max-h-[85vh] rounded-xl object-contain shadow-2xl animate-fade-in ${sourceUrl ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
+                        className={`max-w-[95vw] max-h-[85vh] rounded-xl object-contain shadow-2xl transition-opacity duration-300 ${imgStatus === 'loading' ? 'opacity-0' : 'opacity-100'} ${sourceUrl ? 'cursor-pointer hover:opacity-90' : ''}`}
                         referrerPolicy="no-referrer"
+                        onLoad={() => setImgStatus('success')}
+                        onError={handleImageError}
                         onClick={sourceUrl ? (e) => { e.stopPropagation(); window.open(sourceUrl, '_blank', 'noopener,noreferrer'); } : undefined}
                       />
-                    {boundingBox && boundingBox.length === 4 && (
-                      <ZoomTrigger boundingBox={boundingBox} zoomToElement={zoomToElement} isFirst={isFirstRef.current} />
-                    )}
-                    {boundingBox && boundingBox.length === 4 && (
-                      <div 
-                        id="zoom-target-bbox"
-                        className={`absolute pointer-events-none transition-opacity duration-500 bg-emerald-400/25 border border-emerald-400/40 shadow-[0_0_20px_rgba(52,211,153,0.35)] rounded-md ${
-                          highlight ? 'opacity-100' : 'opacity-0'
-                        }`}
-                        style={{
-                          top: `${boundingBox[0] / 10}%`,
-                          left: `${boundingBox[1] / 10}%`,
-                          height: `${(boundingBox[2] - boundingBox[0]) / 10}%`,
-                          width: `${(boundingBox[3] - boundingBox[1]) / 10}%`,
-                        }}
-                      />
-                    )}
-                  </div>
-                </TransformComponent>
-                {/* Left Navigation Chevron */}
-                {hasPrev && onPrev && (
+                      {boundingBox && boundingBox.length === 4 && imgStatus === 'success' && (
+                        <ZoomTrigger boundingBox={boundingBox} zoomToElement={zoomToElement} isFirst={isFirstRef.current} />
+                      )}
+                      {boundingBox && boundingBox.length === 4 && imgStatus === 'success' && (
+                        <div 
+                          id="zoom-target-bbox"
+                          className={`absolute pointer-events-none transition-opacity duration-500 bg-emerald-400/25 border border-emerald-400/40 shadow-[0_0_20px_rgba(52,211,153,0.35)] rounded-md ${
+                            highlight ? 'opacity-100' : 'opacity-0'
+                          }`}
+                          style={{
+                            top: `${(boundingBox[0] > 1 ? boundingBox[0] / 10 : boundingBox[0] * 100)}%`,
+                            left: `${(boundingBox[1] > 1 ? boundingBox[1] / 10 : boundingBox[1] * 100)}%`,
+                            height: `${((boundingBox[2] - boundingBox[0]) > 1 ? (boundingBox[2] - boundingBox[0]) / 10 : (boundingBox[2] - boundingBox[0]) * 100)}%`,
+                            width: `${((boundingBox[3] - boundingBox[1]) > 1 ? (boundingBox[3] - boundingBox[1]) / 10 : (boundingBox[3] - boundingBox[1]) * 100)}%`,
+                          }}
+                        />
+                      )}
+                    </div>
+                  </TransformComponent>
+                  {/* Left Navigation Chevron */}
+                  {hasPrev && onPrev && (
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); onPrev(); }}
+                      className="absolute left-6 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center bg-slate-900/80 hover:bg-slate-800 text-white rounded-full font-bold shadow-2xl border border-slate-700/60 cursor-pointer transition-all active:scale-95 z-[10000] text-xl"
+                      aria-label="Previous item"
+                    >
+                      ‹
+                    </button>
+                  )}
+                  {/* Right Navigation Chevron */}
+                  {hasNext && onNext && (
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); onNext(); }}
+                      className="absolute right-6 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center bg-slate-900/80 hover:bg-slate-800 text-white rounded-full font-bold shadow-2xl border border-slate-700/60 cursor-pointer transition-all active:scale-95 z-[10000] text-xl"
+                      aria-label="Next item"
+                    >
+                      ›
+                    </button>
+                  )}
                   <button 
-                    onClick={(e) => { e.stopPropagation(); onPrev(); }}
-                    className="absolute left-6 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center bg-slate-900/80 hover:bg-slate-800 text-white rounded-full font-bold shadow-2xl border border-slate-700/60 cursor-pointer transition-all active:scale-95 z-[10000] text-xl"
-                    aria-label="Previous item"
+                    onClick={onClose}
+                    className="absolute bottom-8 left-1/2 -translate-x-1/2 px-8 py-3 bg-slate-900/90 hover:bg-slate-800 text-white rounded-full font-bold text-sm border border-slate-700 shadow-xl transition-all cursor-pointer z-[10000]"
                   >
-                    ‹
+                    Close Preview
                   </button>
-                )}
-                {/* Right Navigation Chevron */}
-                {hasNext && onNext && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); onNext(); }}
-                    className="absolute right-6 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center bg-slate-900/80 hover:bg-slate-800 text-white rounded-full font-bold shadow-2xl border border-slate-700/60 cursor-pointer transition-all active:scale-95 z-[10000] text-xl"
-                    aria-label="Next item"
-                  >
-                    ›
-                  </button>
-                )}
-                <button 
-                  onClick={onClose}
-                  className="absolute bottom-8 left-1/2 -translate-x-1/2 px-8 py-3 bg-slate-900/90 hover:bg-slate-800 text-white rounded-full font-bold text-sm border border-slate-700 shadow-xl transition-all cursor-pointer z-[10000]"
-                >
-                  Close Preview
-                </button>
-              </>
-            );
-          }}
-        </TransformWrapper>
+                </>
+              );
+            }}
+          </TransformWrapper>
+        )}
       </div>
     </div>
   );
 };
+
 const ZoomTrigger = ({ boundingBox, zoomToElement, isFirst }: { boundingBox: number[], zoomToElement: any, isFirst: boolean }) => {
   React.useEffect(() => {
     if (boundingBox && boundingBox.length === 4) {
-      const bboxWidth = (boundingBox[3] - boundingBox[1]) / 1000;
-      const bboxHeight = (boundingBox[2] - boundingBox[0]) / 1000;
+      const scaleDivider = boundingBox[0] > 1 || boundingBox[2] > 1 ? 1000 : 1;
+      const bboxWidth = (boundingBox[3] - boundingBox[1]) / scaleDivider;
+      const bboxHeight = (boundingBox[2] - boundingBox[0]) / scaleDivider;
       const maxBboxSize = Math.max(bboxWidth, bboxHeight);
-      const targetScale = Math.min(0.95 / (maxBboxSize || 1), 40);
+      const targetScale = Math.min(0.95 / (maxBboxSize || 1), 6);
       
       const duration = isFirst ? 0 : 500;
-      const delay = isFirst ? 0 : 150;
+      const delay = isFirst ? 0 : 200;
       
       const timer = setTimeout(() => {
         const el = document.getElementById('zoom-target-bbox');
@@ -151,3 +209,4 @@ const ZoomTrigger = ({ boundingBox, zoomToElement, isFirst }: { boundingBox: num
   }, [boundingBox, zoomToElement, isFirst]);
   return null;
 };
+
