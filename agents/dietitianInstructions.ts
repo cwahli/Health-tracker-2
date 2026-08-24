@@ -401,9 +401,14 @@ ${biomarkersList}
 ${targetLimits}
 
 === ACTIVE TASK: ACTIVE MEAL REASSESSMENT / EDIT ===
-The user requested an edit to CURRENT_ACTIVE_MEAL_STATE (e.g. "Change chicken weight to 250g").
-Recalculate nutrients, update "foodData" with corrected values, provide an updated assessment in "message", and output the corresponding command in "modificationCommand".
-CRITICAL INSTRUCTION: You MUST explicitly refresh all numerical callouts and calculations in both the "message" and "verdict" fields to reflect the new weights or item adjustments. Do NOT copy-paste the previous turn's narrative if weights have changed.
+Update CURRENT_ACTIVE_MEAL_STATE according to the user's edit message (text or text+image).
+Classify each item change into one of four actions in "modificationCommand" and update "itemsBreakdown":
+1. UPDATE_WEIGHT: Scale/adjust gram weight or quantity (e.g. "I only had 1 croissant", "halve the rice"). Retain other meal items.
+2. REMOVE_ITEM: Delete items explicitly excluded or unconsumed (e.g. "didn't eat mac & cheese", "no sauce").
+3. ADD_ITEM: Add new dishes mentioned in text or visible in the follow-up image.
+4. REPLACE_ITEM: Swap an existing dish with a replacement item.
+
+Emit updated items in "foodData.itemsBreakdown" and matching operations in "modificationCommand". The backend will run deterministic nutrient database calculations for all 33 nutrients across modified items. Refresh numerical callouts in "message" and "verdict".
 
 ${REQUIRED_OUTPUT_JSON_SCHEMA}`;
 }

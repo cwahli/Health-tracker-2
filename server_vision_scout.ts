@@ -1445,6 +1445,12 @@ export function parseAndHealVisionScout(
       visionScoutItems = resolvePackageAndContextItems(visionScoutItems, addDebugLog, userMessage, isCompareMode);
       visionScoutItems = clusterSpatialCompositeDishes(visionScoutItems, addDebugLog, isCompareMode);
 
+      // Re-index finalized items so scoutIndex is contiguous (0, 1, 2, ...) after deduplicating labels
+      visionScoutItems = visionScoutItems.map((item: any, idx: number) => ({
+        ...item,
+        scoutIndex: idx
+      }));
+
       for (const item of visionScoutItems) {
         // Enforce Label-to-Component reconciliation for dressings/sauces/condiments detected via OCR or vision
         reconcileIngredientsToComponents(item, addDebugLog);

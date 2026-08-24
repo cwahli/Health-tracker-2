@@ -3673,14 +3673,19 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       ? refineDecision.intent
       : detectWeightRefineIntent(message);
 
-    // Legacy narrow pure-weight patterns + B5 broader detect
+    // Pure weight modification: only true if there is an explicit numerical gram weight for the whole meal
     const isPureWeightModification = !!(
-      refineDecision.skip ||
+      (refineDecision.skip && weightRefineIntent.isRefine && weightRefineIntent.kind === 'absolute_grams' && typeof weightRefineIntent.weightGrams === 'number' && weightRefineIntent.weightGrams > 0 && !weightRefineIntent.targetHint) ||
       (
         activeMeal &&
         (!imagePayloads || imagePayloads.length === 0) &&
         message &&
-        weightRefineIntent.isRefine
+        weightRefineIntent.isRefine &&
+        weightRefineIntent.kind === 'absolute_grams' &&
+        typeof weightRefineIntent.weightGrams === 'number' &&
+        weightRefineIntent.weightGrams > 0 &&
+        !weightRefineIntent.targetHint &&
+        !/\b(only|remove|delete|without|except|no|instead|replace|add|plus|with|not|didn't|did\s+not)\b/i.test(message)
       )
     );
 
@@ -3697,7 +3702,8 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         (
           message &&
           /\b(change|modify|update|remove|delete|correct|instead|replace|adjust|had|ate|only|portion|fraction|half|quarter|third|\d+\/\d+)\b/i.test(message)
-        )
+        ) ||
+        weightRefineIntent.isRefine
       )
     );
 
@@ -7750,7 +7756,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
     const activeMealState = activeMeal || req.body.activeMealState || null;
     const activeComparisonState = activeComparison || req.body.activeComparisonState || null;
 
-    if (userSelectedMode === 'review') {
+    if (userSelectedMode === 'review' || userSelectedMode === 'edit') {
       if (isExplicitModify || effectiveActiveMeal !== null) {
         systemInstruction = buildModeAEditInstruction({ biomarkersNeedingImprovement, remainingAllowance, activeMeal: effectiveActiveMeal, foodLogs, userProfile });
       } else {
@@ -8143,11 +8149,18 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
     const canSkipDietitianForPureScale = Boolean(
       isPureWeightModification &&
       activeMeal &&
-      userSelectedMode !== 'compare'
+      userSelectedMode !== 'compare' &&
+      weightRefineIntent.isRefine &&
+      typeof weightRefineIntent.weightGrams === 'number' &&
+      weightRefineIntent.weightGrams > 0 &&
+      !weightRefineIntent.targetHint &&
+      (weightRefineIntent.kind === 'absolute_grams' || weightRefineIntent.kind === 'whole_pack') &&
+      (!Array.isArray(activeMeal.itemsBreakdown) || activeMeal.itemsBreakdown.length <= 1) &&
+      !/\b(only|remove|delete|without|except|no|instead|replace|add|plus|with|not|didn't|did\s+not)\b/i.test(message || '')
     );
 
-    if (canSkipDietitianForPureScale) {
-      const targetWeight = (weightRefineIntent.isRefine && weightRefineIntent.weightGrams) ? weightRefineIntent.weightGrams : (activeMeal.weightGrams || 100);
+    if (canSkipDietitianForPureScale && weightRefineIntent.isRefine && weightRefineIntent.weightGrams) {
+      const targetWeight = weightRefineIntent.weightGrams;
       addDebugLog(`[Refine] skip-dietitian: Scaled label-locked meal directly to ${targetWeight}g without LLM call.`);
       sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: `Scaled portion to ${targetWeight}g.` });
       textOutput = JSON.stringify({
@@ -8857,7 +8870,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         parsedData.nutrients = nutrients;
         
         // Critical Guard: Only synchronize narrative text for single-item meals to prevent grand total overwriting multi-item stats
-        if (parsedData.nutrients && rawFoodData.itemsBreakdown && rawFoodData.itemsBreakdown.length === 1 && userSelectedMode === 'review') {
+        if (parsedData.nutrients && rawFoodData.itemsBreakdown && rawFoodData.itemsBreakdown.length === 1 && (userSelectedMode === 'review' || userSelectedMode === 'edit' || !userSelectedMode)) {
           if (rawParsed && rawParsed.message) {
             rawParsed.message = synchronizeNarrativeText(
               rawParsed.message,
@@ -9677,7 +9690,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
         // GUARANTEED ZERO-DISCREPANCY SYNCHRONIZATION ACROSS ALL NARRATIVE FIELDS:
         // Critical Guard: Only synchronize narrative text for single-item meals to prevent grand total overwriting multi-item stats
-        if (parsedData.nutrients && parsedData.itemsBreakdown && parsedData.itemsBreakdown.length === 1 && userSelectedMode === 'review') {
+        if (parsedData.nutrients && parsedData.itemsBreakdown && parsedData.itemsBreakdown.length === 1 && (userSelectedMode === 'review' || userSelectedMode === 'edit' || !userSelectedMode)) {
           if (rawParsed.message) {
             rawParsed.message = synchronizeNarrativeText(rawParsed.message, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
           }
@@ -9896,7 +9909,59 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         });
       }
 
-      const commands = rawParsed.modificationCommand;
+      let commands = rawParsed.modificationCommand;
+      if (!commands || !Array.isArray(commands) || commands.length === 0) {
+        // Fallback: If Dietitian returned foodData.itemsBreakdown, synthesize commands comparing against activeMeal
+        if (rawParsed.foodData && Array.isArray(rawParsed.foodData.itemsBreakdown) && rawParsed.foodData.itemsBreakdown.length > 0) {
+          const dietitianItems = rawParsed.foodData.itemsBreakdown;
+          const synthesizedCommands: any[] = [];
+          
+          // Identify removed items
+          (activeMeal.itemsBreakdown || []).forEach((oldIt: any) => {
+            const oldName = String(oldIt.canonicalDbName || oldIt.originalName || oldIt.name || '').toLowerCase().trim();
+            const stillExists = dietitianItems.some((newIt: any) => {
+              const newName = String(newIt.canonicalDbName || newIt.originalName || newIt.name || '').toLowerCase().trim();
+              return newName === oldName || oldName.includes(newName) || newName.includes(oldName);
+            });
+            if (!stillExists) {
+              synthesizedCommands.push({
+                action: 'remove_item',
+                itemName: oldIt.name || oldIt.canonicalDbName,
+                targetDbId: oldIt.dbId || null
+              });
+            }
+          });
+
+          // Identify weight updates or added items
+          dietitianItems.forEach((newIt: any) => {
+            const newName = String(newIt.canonicalDbName || newIt.originalName || newIt.name || '').toLowerCase().trim();
+            const matchedOld = (activeMeal.itemsBreakdown || []).find((oldIt: any) => {
+              const oldName = String(oldIt.canonicalDbName || oldIt.originalName || oldIt.name || '').toLowerCase().trim();
+              return newName === oldName || oldName.includes(newName) || newName.includes(oldName);
+            });
+            if (matchedOld && newIt.weightGrams && Number(newIt.weightGrams) !== Number(matchedOld.weightGrams)) {
+              synthesizedCommands.push({
+                action: 'update_weight',
+                itemName: matchedOld.name || matchedOld.canonicalDbName,
+                targetDbId: matchedOld.dbId || null,
+                newWeightGrams: Number(newIt.weightGrams)
+              });
+            } else if (!matchedOld && newIt.weightGrams) {
+              synthesizedCommands.push({
+                action: 'add_item',
+                itemName: newIt.canonicalDbName || newIt.name || 'Food Item',
+                newWeightGrams: Number(newIt.weightGrams)
+              });
+            }
+          });
+
+          if (synthesizedCommands.length > 0) {
+            addDebugLog(`[Modify Math] Synthesized ${synthesizedCommands.length} modification commands from foodData.itemsBreakdown.`);
+            commands = synthesizedCommands;
+          }
+        }
+      }
+
       if (!commands || !Array.isArray(commands) || commands.length === 0) {
         addDebugLog(`[Modify Math Error] Modification command array was empty or null.`);
         return res.json({
@@ -9949,6 +10014,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       for (const cmd of commands) {
         const action = cmd.action;
         const itemName = cmd.itemName || "";
+        const targetDbId = cmd.targetDbId ? String(cmd.targetDbId).replace(/[^\x20-\x7E]/g, '').trim() : null;
         let newWeight = sanitizeMealWeight(cmd.newWeightGrams, 0);
 
         if (action === "update_weight") {
@@ -10145,6 +10211,43 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             addDebugLog(`[Modify Math Warning] Could not find item "${itemName}" (targetDbId: ${targetDbId}) to update_cooking_method.`);
           }
         }
+        else if (action === "replace_item") {
+          const idx = findItemIndex(itemName, targetDbId);
+          const replacementName = cmd.replacementItemName || cmd.newItemName || itemName;
+          let cFactor = 1.0;
+          let fFactor = 0.01;
+          let sFactor = 0.5;
+ 
+          const lowerName = replacementName.toLowerCase();
+          for (const [key, factors] of Object.entries(standardItems)) {
+            if (lowerName.includes(key)) {
+              cFactor = factors.calories;
+              fFactor = factors.saturatedFat;
+              sFactor = factors.sodium;
+              break;
+            }
+          }
+ 
+          const newItem = {
+            name: replacementName,
+            canonicalDbName: replacementName,
+            weightGrams: newWeight,
+            calories: Number((newWeight * cFactor).toFixed(1)),
+            saturatedFat: Number((newWeight * fFactor).toFixed(2)),
+            sodium: Number((newWeight * sFactor).toFixed(1)),
+            dbSource: "estimated",
+            dbId: null
+          };
+
+          if (idx !== -1) {
+            activeMeal.itemsBreakdown[idx] = newItem;
+            addDebugLog(`[Modify Math] replace_item: Replaced "${itemName}" with "${replacementName}" (${newWeight}g).`);
+          } else {
+            if (!activeMeal.itemsBreakdown) activeMeal.itemsBreakdown = [];
+            activeMeal.itemsBreakdown.push(newItem);
+            addDebugLog(`[Modify Math] replace_item: Item "${itemName}" not found; appended "${replacementName}" (${newWeight}g).`);
+          }
+        }
         else if (action === "add_item") {
           let cFactor = 1.0;
           let fFactor = 0.01;
@@ -10162,6 +10265,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
  
           const newItem = {
             name: itemName,
+            canonicalDbName: itemName,
             weightGrams: newWeight,
             calories: Number((newWeight * cFactor).toFixed(1)),
             saturatedFat: Number((newWeight * fFactor).toFixed(2)),
@@ -10184,7 +10288,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       activeMeal.basis_type = 'total';
       activeMeal.serving_grams = newTotalWeight;
       if (newItems.length === 1) {
-        activeMeal.name = newItems[0].name;
+        activeMeal.name = newItems[0].name || newItems[0].canonicalDbName || 'Meal';
+      } else if (newItems.length > 1 && rawParsed.foodData?.name && rawParsed.foodData.name !== 'Food Item' && !rawParsed.foodData.name.toLowerCase().includes('i only had')) {
+        activeMeal.name = rawParsed.foodData.name;
+      } else if (newItems.length > 1) {
+        activeMeal.name = newItems.map((it: any) => it.name).join(", ");
       }
       if (activeMeal.scoutItems && Array.isArray(activeMeal.scoutItems)) {
         const currentNames = new Set(newItems.map((it: any) => (it.name || '').toLowerCase().trim()));
