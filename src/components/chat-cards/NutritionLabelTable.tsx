@@ -182,7 +182,23 @@ function getSourceBadge(item: any) {
   };
 }
 
+// Fields that realistically appear printed on a packaged-food Nutrition Facts panel.
+// Micronutrients (calcium, iron, magnesium, zinc, vitamins, omega3, unsaturated fat, etc.)
+// are essentially never printed and must NEVER be treated as "verified from label" truth,
+// even when a backend/AI estimate happens to be merged into the same object shape.
+const LABEL_PRINTABLE_NUTRIENT_KEYS = new Set([
+  'calories', 'energy',
+  'protein',
+  'totalfat', 'fat', 'saturatedfat', 'transfat',
+  'totalcarbohydrate', 'carbohydrates', 'carbs', 'totalcarbs',
+  'sugar', 'totalsugar', 'addedsugar',
+  'totalfibre', 'fiber', 'fibre',
+  'sodium', 'salt', 'potassium'
+]);
+
 const NON_NUTRIENT_LABEL_KEYS = new Set([
+  '_synthetic',
+  'issynthetic',
   'name',
   'keyword',
   'originalname',
@@ -285,6 +301,10 @@ function buildSynthesizedRawLabel(item: any, source: any) {
     if (v === undefined || v === null || v === '' || typeof v === 'object') return;
     const kLower = k.toLowerCase().replace(/[\s_-]/g, '');
     if (NON_NUTRIENT_LABEL_KEYS.has(k) || NON_NUTRIENT_LABEL_KEYS.has(kLower)) return;
+    // Never synthesize micronutrients (calcium, iron, magnesium, omega3, etc.) into a
+    // "raw label" shaped object — those are not printed on real labels and must not be
+    // eligible for the "Verified from printed label" badge or label-serving-size rescaling.
+    if (!LABEL_PRINTABLE_NUTRIENT_KEYS.has(kLower)) return;
     
     const unit = NUTRIENT_DEFAULT_UNITS[kLower] || '';
     const num = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^\d.]/g, ''));
@@ -295,6 +315,10 @@ function buildSynthesizedRawLabel(item: any, source: any) {
       rawLabel[k] = unit ? `${scaledVal}${unit}` : String(scaledVal);
     }
   });
+
+  // Mark this object as backend/AI-synthesized (not genuinely OCR'd from a photographed
+  // label) so downstream badge/tick logic never mistakes it for printed label truth.
+  rawLabel._synthetic = true;
 
   return rawLabel;
 }
@@ -660,12 +684,14 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                       transfat: 'transFat'
                     };
                     const normKey = standardMapping[k.toLowerCase()] || k;
+                    const normLower = String(normKey).toLowerCase();
+                    const kLower = String(k).toLowerCase();
                     const isFromRawLabel = item.rawNutritionLabel?.[k] !== undefined && 
                                            item.rawNutritionLabel?.[k] !== null && 
                                            item.rawNutritionLabel?.[k] !== '' &&
-                                           item.rawNutritionLabel?.[k] !== '-';
-                    const normLower = String(normKey).toLowerCase();
-                    const kLower = String(k).toLowerCase();
+                                           item.rawNutritionLabel?.[k] !== '-' &&
+                                           !item.rawNutritionLabel?._synthetic &&
+                                           (LABEL_PRINTABLE_NUTRIENT_KEYS.has(kLower) || LABEL_PRINTABLE_NUTRIENT_KEYS.has(normLower));
                     const isExplicitlyEstimated = (Array.isArray(item.estimatedFields) && item.estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower)) ||
                                                  (Array.isArray(item._estimatedFields) && item._estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower));
                     const hasLockedKeys = Array.isArray(item.lockedNutrientKeys) && item.lockedNutrientKeys.length > 0;
@@ -765,17 +791,31 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                   const isDishBasis = !isExplicit100gServing && (bType === 'per_dish' || bType === 'total' || bType === 'per_portion' || bType === 'per_serving' || bType === 'per_pack');
 
                                   const weightToDisplay = item.primaryBaseWeightG || item.estimatedWeightGrams || 100;
-                                  let labelServingGrams = isDishBasis ? weightToDisplay : 100;
-                                  const wasFromRaw = item.rawNutritionLabel?.[k] !== undefined;
-                                  
-                                  if (wasFromRaw && item.rawNutritionLabel?.servingSize) {
-                                     const ssRaw = String(item.rawNutritionLabel.servingSize);
-                                     labelServingGrams = parseServingSizeGrams(ssRaw, weightToDisplay);
+                                  const wasFromRaw = item.rawNutritionLabel?.[k] !== undefined &&
+                                                     !item.rawNutritionLabel?._synthetic &&
+                                                     LABEL_PRINTABLE_NUTRIENT_KEYS.has(k.toLowerCase());
+
+                                  let multiplier = 1.0;
+                                  if (wasFromRaw) {
+                                    // Only genuinely printed label values are per-serving/per-100g figures
+                                    // that need rescaling to the actual consumed weight.
+                                    const ssServingSize = String(item.rawNutritionLabel?.servingSize || '').trim();
+                                    const isExplicit100gServing = /\b100\s*g\b/i.test(ssServingSize);
+                                    const bType = item.rawNutritionLabel?.basisType || item.basisType || (isExplicit100gServing ? 'per_100g' : ((item.source === 'brand_official' || item.brandPriority) ? 'per_dish' : 'per_100g'));
+                                    const isDishBasis = !isExplicit100gServing && (bType === 'per_dish' || bType === 'total' || bType === 'per_portion' || bType === 'per_serving' || bType === 'per_pack');
+
+                                    let labelServingGrams = isDishBasis ? weightToDisplay : 100;
+                                    if (item.rawNutritionLabel?.servingSize) {
+                                       const ssRaw = String(item.rawNutritionLabel.servingSize);
+                                       labelServingGrams = parseServingSizeGrams(ssRaw, weightToDisplay);
+                                    }
+
+                                    multiplier = (isDishBasis && (!item.rawNutritionLabel?.servingSize || item.rawNutritionLabel?.servingSize === '1 dish' || item.rawNutritionLabel?.servingSize === '1 serving'))
+                                      ? 1.0
+                                      : (labelServingGrams > 0 ? (weightToDisplay / labelServingGrams) : 1.0);
                                   }
-                                  
-                                  const multiplier = (isDishBasis && (!item.rawNutritionLabel?.servingSize || item.rawNutritionLabel?.servingSize === '1 dish' || item.rawNutritionLabel?.servingSize === '1 serving'))
-                                    ? 1.0 
-                                    : (labelServingGrams > 0 ? (weightToDisplay / labelServingGrams) : 1.0);
+                                  // else: value came from item.nutritionFacts / backend estimate, which is
+                                  // already the final total for the item's actual weight — never rescale it again.
                                   const total = (numVal * multiplier).toFixed(1).replace(/\.0$/, '');
                                   totalStr = `${total}${unit}`;
                                 }
@@ -799,13 +839,15 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                               };
                               const normKey = standardMapping[k.toLowerCase()] || k;
 
+                              const normLower = String(normKey).toLowerCase();
+                              const kLower = String(k).toLowerCase();
+
                               const isFromRawLabel = item.rawNutritionLabel?.[k] !== undefined && 
                                                      item.rawNutritionLabel?.[k] !== null && 
                                                      item.rawNutritionLabel?.[k] !== '' &&
-                                                     item.rawNutritionLabel?.[k] !== '-';
-
-                              const normLower = String(normKey).toLowerCase();
-                              const kLower = String(k).toLowerCase();
+                                                     item.rawNutritionLabel?.[k] !== '-' &&
+                                                     !item.rawNutritionLabel?._synthetic &&
+                                                     (LABEL_PRINTABLE_NUTRIENT_KEYS.has(kLower) || LABEL_PRINTABLE_NUTRIENT_KEYS.has(normLower));
 
                               const isExplicitlyEstimated = (Array.isArray(item.estimatedFields) && item.estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower)) ||
                                                            (Array.isArray(item._estimatedFields) && item._estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower));

@@ -9024,7 +9024,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               totalFat: `${item.primaryBase100g.totalFat || 0}g`,
               saturatedFat: `${item.primaryBase100g.saturatedFat || 0}g`,
               totalCarbohydrate: `${item.primaryBase100g.carbohydrates || 0}g`,
-              sodium: `${item.primaryBase100g.sodium || 0}mg`
+              sodium: `${item.primaryBase100g.sodium || 0}mg`,
+              // Not a genuine photographed/OCR'd label — computed from an internal DB match.
+              // Flag it so the frontend never shows the "Verified from printed label" badge for it.
+              _synthetic: true
             } : (finalItemNutrients.calories > 0 ? {
               servingSize: "100g",
               basisType: "per_100g",
@@ -9033,7 +9036,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               totalFat: `${parseFloat(((finalItemNutrients.totalFat || 0) / ((item.weightGrams || 100) / 100)).toFixed(1))}g`,
               saturatedFat: `${parseFloat(((finalItemNutrients.saturatedFat || 0) / ((item.weightGrams || 100) / 100)).toFixed(1))}g`,
               totalCarbohydrate: `${parseFloat(((finalItemNutrients.carbohydrates || 0) / ((item.weightGrams || 100) / 100)).toFixed(1))}g`,
-              sodium: `${Math.round((finalItemNutrients.sodium || 0) / ((item.weightGrams || 100) / 100))}mg`
+              sodium: `${Math.round((finalItemNutrients.sodium || 0) / ((item.weightGrams || 100) / 100))}mg`,
+              // Backed out from our own computed totals, not a genuine printed label — flag as synthetic.
+              _synthetic: true
             } : null)),
             originalName: finalOriginalName,
             canonicalDbName: finalCanonicalDbName,
