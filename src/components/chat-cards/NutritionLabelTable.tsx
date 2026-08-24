@@ -824,7 +824,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                               const sourceKey = item.nutrientSourceMap?.[k] || item.nutrientSourceMap?.[normKey];
                               const isVerifiedFromBrand = Boolean(
                                 !isExplicitlyEstimated &&
-                                (isFromRawLabel || inLockedKeys || sourceKey === 'brand_label_data')
+                                (isFromRawLabel || sourceKey === 'brand_label_data' || (item.dbSource === 'brand_official' && inLockedKeys))
                               );
                               const verifiedTooltipText = (sourceKey === 'brand_label_data' || item.dbSource === 'brand_official')
                                 ? 'Verified from brand label data'

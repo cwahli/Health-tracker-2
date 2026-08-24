@@ -1883,7 +1883,7 @@ app.get('/api/r2/log-proxy', async (req, res) => {
   try {
     const rawUrl = String(req.query.url || '');
     const jobId = String(req.query.jobId || '');
-    const { fetchLogsFromR2 } = await import('./src/utils/r2Storage.js');
+    const { fetchLogsFromR2 } = await import('./src/utils/r2Storage');
 
     let targetJobId = jobId;
     if (!targetJobId && rawUrl) {
@@ -1894,10 +1894,14 @@ app.get('/api/r2/log-proxy', async (req, res) => {
     }
 
     if (targetJobId) {
-      const logs = await fetchLogsFromR2(targetJobId);
-      if (logs) {
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        return res.send(logs);
+      try {
+        const logs = await fetchLogsFromR2(targetJobId);
+        if (logs) {
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          return res.send(logs);
+        }
+      } catch (r2Err) {
+        console.warn('[API] R2 fetch error in proxy, trying memory fallback:', r2Err);
       }
       const { getInMemoryServerJob } = await import('./serverJobs');
       const memJob = getInMemoryServerJob(targetJobId);
@@ -1905,7 +1909,7 @@ app.get('/api/r2/log-proxy', async (req, res) => {
         const memLogs = (Array.isArray(memJob.accumulatedLogs) && memJob.accumulatedLogs.length > 0)
           ? memJob.accumulatedLogs.join('\n')
           : (Array.isArray(memJob.turn1Logs) && memJob.turn1Logs.length > 0 ? memJob.turn1Logs.join('\n') : (memJob.clean_result?.backendLogs || ''));
-        if (memLogs && !memLogs.startsWith('[Logs stored in R2')) {
+        if (memLogs) {
           res.setHeader('Content-Type', 'text/plain; charset=utf-8');
           return res.send(memLogs);
         }
