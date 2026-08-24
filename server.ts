@@ -3911,7 +3911,16 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
 
         // Vision Scout _internalReasoning is removed per user request
 
-          visionScoutItems = scoutResult.items;
+          visionScoutItems = (scoutResult.items || []).map((item: any) => ({
+            ...item,
+            // Vision Scout's schema/prompt never asks the model to populate `source`, so
+            // photographed dishes arrive with it undefined. Tag anything without a
+            // transcribed printed nutrition label as 'visual' so the single-serve-photo
+            // guard in detectPortionAmbiguity() (server_portion_clarify.ts) can actually
+            // fire. Items with a genuine rawNutritionLabel (OCR'd package) are left as-is
+            // so they still flow through multi-serve-pack portion clarification.
+            source: item.source || (item.rawNutritionLabel ? 'label' : 'visual'),
+          }));
           scoutConfidenceRating = scoutResult.scoutConfidenceRating;
           scoutConfidenceComment = scoutResult.scoutConfidenceComment;
           scoutCookingMethod = scoutResult.scoutCookingMethod;

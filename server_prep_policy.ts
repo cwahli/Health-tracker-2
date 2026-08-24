@@ -17,7 +17,7 @@ export function isCompositeDishForm(input: {
     .filter(Boolean)
     .join(" ");
 
-  if (nameCorpus && COMPOUND_BOWL_PATTERN.test(nameCorpus)) {
+  if (nameCorpus && (COMPOUND_BOWL_PATTERN.test(nameCorpus) || /\b(with\s+rice|and\s+rice|over\s+rice|fried\s+rice|pad\s+thai|stir-?fry|curry|stew|casserole|bento|platter)\b/i.test(nameCorpus))) {
     return true;
   }
 
@@ -25,14 +25,16 @@ export function isCompositeDishForm(input: {
   if (
     foodTypeLower.includes("meal bowl") ||
     foodTypeLower.includes("poke") ||
-    foodTypeLower.includes("compound_meal")
+    foodTypeLower.includes("compound_meal") ||
+    foodTypeLower.includes("prepared dish") ||
+    foodTypeLower.includes("entree")
   ) {
     return true;
   }
 
   if (
     input.physicalForm === "COMPOUND_MEAL" &&
-    /\b(bowl|poke|salad|bento|platter|combo|wrap|burrito|taco|sandwich)\b/i.test(nameCorpus)
+    /\b(bowl|poke|salad|bento|platter|combo|wrap|burrito|taco|sandwich|entree|prepared dish|rice)\b/i.test(nameCorpus)
   ) {
     return true;
   }
@@ -102,11 +104,6 @@ export function decidePrepAddition(input: PrepPolicyInput): PrepAddition {
     return { ...zeroPrep, reason: 'zero_weight' };
   }
 
-  const isWholeFood = input.physicalForm === 'SOLID_FRUIT_VEG' || input.dbSource === 'canonical_dict';
-  if (isWholeFood) {
-    return { ...zeroPrep, reason: 'raw_whole_food' };
-  }
-
   if (input.hasLockedTruth) {
     return { ...zeroPrep, reason: 'locked_truth' };
   }
@@ -122,13 +119,21 @@ export function decidePrepAddition(input: PrepPolicyInput): PrepAddition {
     foodType: input.foodType,
   });
 
-  
+  if (composite && !isUserExplicit) {
+    return { ...zeroPrep, reason: 'composite_dish_suppress_top_level_prep' };
+  }
+
+  const nameCorpus = [input.dishName, input.keyword, input.canonicalDbName].filter(Boolean).join(" ");
+  const isCookedEntree = /\b(braised?|glazed?|stir-?fry|stir-?fried|fried|baked|curry|stew|roast|roasted|with\s+rice|and\s+rice)\b/i.test(nameCorpus);
+
+  const isWholeFood = (input.physicalForm === 'SOLID_FRUIT_VEG' || input.dbSource === 'canonical_dict') && !composite && !isCookedEntree;
+  if (isWholeFood) {
+    return { ...zeroPrep, reason: 'raw_whole_food' };
+  }
+
   if (input.hasFatBearingComponent && !isUserExplicit) {
     if (input.addDebugLog) input.addDebugLog('[PrepXOR] Suppressing prep addition because dish has fat-bearing components');
     return { ...zeroPrep, reason: 'prep_xor_fat_bearing' };
-  }
-  if (composite && !isUserExplicit) {
-    return { ...zeroPrep, reason: 'composite_dish_suppress_top_level_prep' };
   }
 
   const nameForPreparedCheck = input.dishName || input.keyword || input.canonicalDbName || "";

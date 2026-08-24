@@ -102,12 +102,11 @@ export function detectPackNetWeightGrams(item: any): number | null {
     }
   }
 
-  // 4. Scout estimatedWeightGrams
-  const estW = Math.round(Number(item.estimatedWeightGrams) || 0);
-  if (estW > 0 && estW <= 500) {
-    return estW;
-  }
-
+  // NOTE: Do NOT fall back to item.estimatedWeightGrams here. That is the Vision Scout's
+  // photo-estimated weight of the single visible item, not a printed pack net weight.
+  // Falling back to it previously caused detectPortionAmbiguity()'s "Whole pack of N"
+  // option to collide with the "1 unit" option's weight (both showing the same grams),
+  // which also made the frontend highlight both buttons as selected simultaneously.
   return null;
 }
 

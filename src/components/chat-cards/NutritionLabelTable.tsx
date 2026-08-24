@@ -299,9 +299,10 @@ function buildSynthesizedRawLabel(item: any, source: any) {
   return rawLabel;
 }
 
-export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOpen = true, hideOwnToggle = false, language = "en" }: { activeScoutItems: any[], onConfirmItem?: (idx: any) => void, defaultOpen?: boolean, hideOwnToggle?: boolean, language?: string }) {
+export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOpen = true, hideOwnToggle = false, language = "en", isSaved = false }: { activeScoutItems: any[], onConfirmItem?: (idx: any) => void, defaultOpen?: boolean, hideOwnToggle?: boolean, language?: string, isSaved?: boolean }) {
   const t = translations[language || "en"] || translations.en;
   const [showEstimatedMap, setShowEstimatedMap] = React.useState<Record<number, boolean>>({});
+  const [confirmedIndices, setConfirmedIndices] = React.useState<Set<number>>(new Set());
   const toggleShowEstimated = (idx: number) => {
     setShowEstimatedMap(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
@@ -480,7 +481,18 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
             const isUnclear = (item.itemConfidence?.toLowerCase().includes('low') || 
                                item.itemConfidence?.toLowerCase().includes('medium')) || 
                               (cleanAnomalyFlags.length > 0);
-            const showWarning = missingWeight || isUnclear;
+            const itemIsSaved = isSaved || Boolean(
+              item.isSaved || 
+              item.saved || 
+              item.savedToHistory || 
+              item.savedToLog || 
+              item.isAlreadyLogged || 
+              item.confirmed || 
+              item.scoutConfirmed || 
+              item.isConfirmed
+            );
+            const isConfirmedByUser = confirmedIndices.has(item.scoutIndex ?? i) || confirmedIndices.has(i);
+            const showWarning = !itemIsSaved && !isConfirmedByUser && (missingWeight || isUnclear);
 
             const saltConversionNoteText = item.saltConversionNote ||
               (Array.isArray(item.anomalyFlags) && item.anomalyFlags.find((f: string) => typeof f === 'string' && f.includes("Converted printed salt"))) ||
@@ -1021,8 +1033,10 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                       </button>
                       <button 
                         onClick={() => { 
+                          const targetIdx = item.scoutIndex ?? i;
+                          setConfirmedIndices(prev => new Set(prev).add(targetIdx).add(i));
                           if (onConfirmItem) {
-                            onConfirmItem(item.scoutIndex ?? i);
+                            onConfirmItem(targetIdx);
                           }
                         }} 
                         className="flex-1 text-[10px] font-bold bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 py-1.5 px-3 rounded-md shadow-sm hover:bg-amber-50 dark:hover:bg-amber-900/40 active:scale-95 transition-all text-center"

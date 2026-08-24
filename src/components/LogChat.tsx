@@ -5921,7 +5921,7 @@ ${logsText}`);
 
                     {msg.agentUnavailable && msg.data?.scoutItems && msg.data.scoutItems.length > 0 && (
                       <div className="mt-3 mb-2">
-                        <NutritionLabelTable activeScoutItems={msg.data.scoutItems} />
+                        <NutritionLabelTable activeScoutItems={msg.data.scoutItems} isSaved={loggedMessageIds.includes(msg.id)} />
                       </div>
                     )}
 

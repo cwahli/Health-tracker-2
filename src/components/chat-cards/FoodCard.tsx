@@ -2408,7 +2408,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                   }
                                     
                                   if (groupScoutItems.length > 0) {
-                                    return <NutritionLabelTable defaultOpen={true} activeScoutItems={groupScoutItems} onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))} />;
+                                    return <NutritionLabelTable defaultOpen={true} activeScoutItems={groupScoutItems} isSaved={isAlreadyLogged} onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))} />;
                                   }
 
                                   // No real scout items for this group (e.g. a text-only comparison with no
@@ -3188,13 +3188,14 @@ export const FoodCard: React.FC<AgentCardProps & {
                                    defaultOpen={true}
                                    hideOwnToggle={true}
                                    activeScoutItems={[displayedScoutItems[openLabelIdx]]}
+                                   isSaved={isAlreadyLogged}
                                    onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))}
                                  />
                                </div>
                              )}
                              
                              {/* Uncertain Items Helper Button */}
-                             {reviewsOpen && displayedScoutItems.some(isItemUnclearOrLowConfidence) && (
+                             {reviewsOpen && !isAlreadyLogged && displayedScoutItems.some(isItemUnclearOrLowConfidence) && (
                                <div className="mt-2 flex flex-col gap-1.5 bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-800/50 rounded-lg p-2 font-sans relative">
                                  <button 
                                    onClick={() => setReviewsOpen(false)}
@@ -3648,6 +3649,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                       defaultOpen={true}
                       hideOwnToggle={true}
                       activeScoutItems={[displayedScoutItems[openLabelIdx]]}
+                      isSaved={isAlreadyLogged}
                       onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))}
                     />
                   </div>

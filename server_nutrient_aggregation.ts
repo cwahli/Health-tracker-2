@@ -568,6 +568,16 @@ export function aggregateItemsNutrients(
 
     const traceNutrients = { ...getTraceNutrientsForFoodType(foodType, itemWeight) };
     
+    // Natural citrus fruit & juice baseline: standard orange/citrus juice and whole citrus provide ~35-50mg Vitamin C per 100g
+    const lowerItemName = (canonicalName + " " + (item.keyword || "") + " " + (item.originalName || "")).toLowerCase();
+    const isCitrusBeverageOrFruit = /\b(orange\s*juice|grapefruit\s*juice|lemonade|lime\s*juice|citrus\s*juice|orange|grapefruit|lemon|lime|clementine|tangerine|mandarin)\b/i.test(lowerItemName) && !/\b(cake|cookie|chicken|duck|pie|candy|soda|pepsi|coca|flavour|flavor)\b/i.test(lowerItemName);
+    if (isCitrusBeverageOrFruit) {
+      const minCitrusVitC = parseFloat((38 * (itemWeight / 100)).toFixed(1));
+      if (traceNutrients.vitaminC === undefined || traceNutrients.vitaminC < minCitrusVitC) {
+        traceNutrients.vitaminC = minCitrusVitC;
+      }
+    }
+
     // Geofencing and Regional Fortification Logic
     const fullText = ((item.ingredientsList || "") + " " + (item.originalName || "") + " " + JSON.stringify(item.rawNutritionLabel || {}) + " " + JSON.stringify(item.visualIngredients || []) + " " + (item.canonicalDbName || "")).toLowerCase();
     const isUKRegion = fullText.includes(".info") || fullText.match(/\bgb\b/) || fullText.includes("saturates") || fullText.match(/\buk\b/);

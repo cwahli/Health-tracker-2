@@ -35,6 +35,20 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled }: Prop
     });
     return init;
   });
+  // Tracks which specific OPTION (by id) is selected per item, not just its weight.
+  // Two distinct options can legitimately share the same weightGrams value (e.g. a
+  // "Whole pack of N" total colliding with a "1 unit" weight), so comparing by weight
+  // alone highlighted both buttons at once. Comparing by id keeps exactly one active.
+  const [selectedOptionId, setSelectedOptionId] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    items.forEach((it) => {
+      const key = String(it.scoutIndex);
+      const match =
+        it.options.find((o) => o.weightGrams === it.estimatedWeightGrams) || it.options[0];
+      if (match) init[key] = match.id;
+    });
+    return init;
+  });
   const [customOpen, setCustomOpen] = useState<Record<string, boolean>>({});
   const [customVal, setCustomVal] = useState<Record<string, string>>({});
 
@@ -47,7 +61,6 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled }: Prop
       </p>
       {items.map((it) => {
         const key = String(it.scoutIndex);
-        const sel = selected[key];
         return (
           <div key={key} className="space-y-2">
             <div className="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wide">
@@ -58,7 +71,7 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled }: Prop
             )}
             <div className="flex flex-wrap gap-2">
               {it.options.map((opt) => {
-                const active = sel === opt.weightGrams && !customOpen[key];
+                const active = selectedOptionId[key] === opt.id && !customOpen[key];
                 return (
                   <button
                     key={opt.id}
@@ -67,6 +80,7 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled }: Prop
                     onClick={() => {
                       setCustomOpen((p) => ({ ...p, [key]: false }));
                       setSelected((p) => ({ ...p, [key]: opt.weightGrams }));
+                      setSelectedOptionId((p) => ({ ...p, [key]: opt.id }));
                     }}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                       active
