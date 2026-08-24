@@ -1,10 +1,30 @@
 import { z } from "zod";
 import { extractBalancedJson } from "./server_pure_helpers";
 import { parseLabelCalories } from "./server_budget_reconcile";
+import { isStandaloneCondimentPacket } from "./server_dish_classify";
+
+export const ScoutNutrientsSchema = z.object({
+  calories: z.number().nullable().optional(),
+  protein: z.number().nullable().optional(),
+  totalFat: z.number().nullable().optional(),
+  saturatedFat: z.number().nullable().optional(),
+  transFat: z.number().nullable().optional(),
+  addedSugar: z.number().nullable().optional(),
+  totalSugar: z.number().nullable().optional(),
+  totalFibre: z.number().nullable().optional(),
+  sodium: z.number().nullable().optional(),
+  carbohydrates: z.number().nullable().optional(),
+  potassium: z.number().nullable().optional(),
+  omega3: z.number().nullable().optional(),
+  calcium: z.number().nullable().optional(),
+  iron: z.number().nullable().optional(),
+  magnesium: z.number().nullable().optional(),
+  vitaminD: z.number().nullable().optional(),
+}).passthrough();
 
 export const ScoutItemComponentSchema = z.object({
-  searchQuery: z.string(),
-  volumePercentage: z.number().finite().positive(),
+  searchQuery: z.string().optional(),
+  volumePercentage: z.number().finite().positive().optional(),
   visualSheen: z.number().min(0.0).max(1.0).optional(),
   visualCoating: z.number().min(0.0).max(1.0).optional(),
   pieceCount: z.number().optional(),
@@ -12,14 +32,22 @@ export const ScoutItemComponentSchema = z.object({
 });
 
 export const ScoutItemSchema = z.object({
+  originalName: z.string().optional(),
   keyword: z.string().optional(),
   itemConfidence: z.string().optional(),
   estimatedWeightGrams: z.number().finite().nonnegative().optional(),
-  /** Soft visual calorie estimate for the WHOLE item portion (not per component, not full macros). */
+  nutrientBasisWeight: z.number().finite().nonnegative().optional(),
+  /** Soft visual calorie estimate for the WHOLE item portion (legacy mirror of nutrients.calories). */
   estimatedCalories: z.number().finite().nonnegative().nullable().optional(),
   cookingMethod: z.string().optional(),
+  ingredients: z.array(z.string()).optional(),
+  nutrients: ScoutNutrientsSchema.optional(),
   components: z.array(ScoutItemComponentSchema).optional(),
   chainName: z.string().nullable().optional(),
+  rawNutritionLabel: z.record(z.string(), z.any()).nullable().optional(),
+  lockedNutrientKeys: z.array(z.string()).nullable().optional(),
+  boundingBox2D: z.array(z.number()).optional(),
+  sourceImageIndex: z.number().optional(),
 }).passthrough();
 
 const LABEL_STOPWORDS = new Set([
@@ -89,33 +117,22 @@ STEP 2: UNIVERSAL DISH EXTRACTION & DEDUPLICATION
 - CROSS-IMAGE DEDUPLICATION: If photos show BOTH a menu screen AND physical food, or raw grocery packages AND the cooked dish prepared from them, extract each distinct dish ONCE. Do NOT duplicate raw ingredients and their cooked dish as separate meals.
 - KNOWN CHAIN & BRAND IDENTIFICATION: For any restaurant chain, brand, or menu item (e.g. McDonald's, Yolk, Starbucks, Pret):
   1. Capture exact brand + dish title in 'originalName' (e.g. "YOLK Steak Chimi 2.0 Sandwich").
-  1b. ALSO output the brand/chain name alone (e.g. 'McDonald\'s', not 'McDonald\'s Big Mac') in the new 'chainName' field. Leave 'chainName' null for home-cooked or non-branded items.
-  2. Include brand + dish title in 'queriesToSearch' so the server executes live web search and database matching for official nutrients and ingredients.
-  3. If calories/macros or ingredients are printed on a visible menu/kiosk screen or package, transcribe them into 'rawNutritionLabel' & 'ingredientsList' with 'source': 'label' (Screen OCR Dominance).
-  4. STRICT PRINTED TRUTH IN rawNutritionLabel: Transcribe ONLY values that are literally visible/printed on the image, photo, or kiosk screen into 'rawNutritionLabel'. NEVER invent, guess, or populate unprinted macro fields into 'rawNutritionLabel' using internal parametric memory. If a kiosk photo or menu board only displays calories (e.g. "455 kcal"), set ONLY calories: "455 kcal" in 'rawNutritionLabel' and set missing unprinted fields to null. When a photo is flagged as a nutrition label — even a secondary/background photo merged with a primary dish photo — look closely at that image specifically before transcribing: read each printed value directly off the label rather than defaulting fields to null, and only use null for a field if it is genuinely illegible or absent from the label itself.
-  4b. SUGAR FIELDS — TOTAL vs ADDED: 'sugar' = Total Sugars, printed as "Sugars" or "of which sugars" on UK/EU labels, or "Total Sugars" on US labels. Populate 'sugar' whenever any sugar figure is printed. 'addedSugar' must be populated ONLY when the label explicitly and separately prints an "Added Sugars" or "Includes Xg Added Sugars" line (US FDA format). UK/EU labels almost never print this — leave 'addedSugar' null in that case. Do NOT copy the 'sugar' value into 'addedSugar' — the backend derives Added Sugar itself from food type and ingredients.
-- PARTIAL TRUTH TRANSCRIPTION & VISUAL TRACKING: Transcribe whatever partial truth is literally visible on the screen/label/menu (even if only calories, e.g. "450 kcal", or 8-10 key nutrients) into 'rawNutritionLabel'. Set 'lockedNutrientKeys' to an array of lowercase nutrient names that were literally visible (e.g. ["calories"]). NEVER invent unprinted fields in 'rawNutritionLabel'. Simultaneously, for mixed dishes (like salads, sandwiches) ALWAYS visually inspect and decompose dish ingredients in 'components' & 'visualIngredients' so the engine can extrapolate the full 31-nutrient profile using first principles anchored by the printed truth. For single, uniform foods (like bread, baguettes, cheese, plain rice, whole fruits, plain meats, liquids), DO NOT decompose them into recipe ingredients (like flour, water, yeast, milk).
+  1b. ALSO output the brand/chain name alone (e.g. 'McDonald\'s', not 'McDonald\'s Big Mac') in the 'chainName' field. Leave 'chainName' null for home-cooked or non-branded items.
+  2. If calories/macros or ingredients are printed on a visible menu/kiosk screen or package, transcribe them into 'rawNutritionLabel' & 'ingredientsList' with 'source': 'label' (Screen OCR Dominance).
+  3. STRICT PRINTED TRUTH IN rawNutritionLabel: Transcribe ONLY values that are literally visible/printed on the image into 'rawNutritionLabel'. NEVER invent unprinted fields.
+  4. SUGAR FIELDS — TOTAL vs ADDED: 'sugar' = Total Sugars. 'addedSugar' must be populated ONLY when the label explicitly prints an "Added Sugars" line. UK/EU labels almost never print this — leave 'addedSugar' null.
+- BRAND SEPARATION: Apply 'chainName' strictly to branded staples ("Sainsbury oat"). Emit companion foods (fruits, drinks) as unbranded items.
+- PRECISE COUNTING & OCCLUSION: Inspect open pastry bags/boxes for stacked items. Split into individual items with realistic weights.
+- PACKAGE LABELS (UK/EU 100G BASELINE): Extract "Per 100g" column data and set "servingSize" to "100g" in 'rawNutritionLabel'.
 
-STEP 3: COMPONENT DECOMPOSITION, CLINICAL QUERIES & LABELS
-- NATURAL CANONICAL ENGLISH QUERIES (USDA RETRIEVAL): Format all 'keyword', 'searchQuery', and 'queriesToSearch' strictly in clean standard English for USDA database matching (e.g. translate foreign/local culinary terms like "caisim" -> "baby bok choy", "daging empal" -> "braised beef brisket", "gai lan" -> "chinese broccoli"). Use natural 2-3 word canonical noun phrases (e.g., "grilled chicken breast", "feta cheese", "steamed white rice"). Do NOT use non-English terms in search queries. Do NOT use inverted comma syntax (avoid "Egg, whole, cooked").
-- CANONICAL COMPONENT DECOMPOSITION: Extract clean, direct canonical English search queries for each component so they are immediately retrievable in USDA. Do NOT guess numeric database IDs.
-- PREPARATION FAT & OILS: For any deep-fried, pan-fried, or heavily glazed items, explicitly extract the cooking oil or butter as a separate component (e.g., "Oil, vegetable, canola", "Butter, salted"). Assign it a realistic mass percentage.
-- MASS PERCENTAGE OVER VOLUME: When estimating component ratios, strongly prefer estimating 'massPercentage' (weight) over pure 'volumePercentage'.
-- REALISTIC SEASONING RATIOS: Salt, baking soda, baking powder, yeast, and dry spices are potent by weight and are never a large share of a recipe's mass. For baked/dough items specifically, salt is typically only 1.5-2% of the flour weight — do NOT assign it a mass percentage anywhere near the flour or liquid components. As a general rule, a single seasoning component should rarely exceed ~2-3% of the total dish mass unless the item is literally a seasoning blend or condiment itself.
-- BRAND SEPARATION: When user mentions brand + staples (e.g. "Sainsbury oat + fruit"), apply 'chainName' strictly to the branded item ("Sainsbury oat"). Emit whole companion foods (fruits, drinks, sides) as separate unbranded items.
-- COMPONENT DECOMPOSITION (< 15 items): Decompose cooked dishes into raw 'components' (volume % totaling 100%, including oils, dressings, and sauces). Set precise boundingBox2D [ymin, xmin, ymax, xmax].
-- PRECISE COUNTING, BAG INSPECTION & OCCLUSION: Inspect inside open pastry bags, boxes, trays, or packaging for stacked, nested, or distinct items (e.g. a croissant resting on a cinnamon swirl/pain aux raisins) before treating a container as a single item. If multiple distinct baked goods or pastries are present, split them into individual items with realistic weights (e.g. Croissant ~65g, Danish/Swirl ~100g) rather than aggregating into an ambiguous category fallback. If grouping identical items, prepend count (e.g., "2 butter croissants").
-- COMPACT MODE (>= 15 items): Group high-density menus by category blocks or shelf rows.
-- PACKAGE LABELS (HARDENED FOR UK/EU & MULTI-COLUMN FORMATS):
-  - PRESERVE BRAND IN COMPONENTS: If the user explicitly mentions a brand name for an ingredient (e.g., "Sainsbury oat"), you MUST preserve that brand name in the component's 'searchQuery' (e.g., "Sainsbury rolled oats" or "Sainsbury oat"). Do not strip the brand name from the component query.
-  1. FORCE THE 100G BASELINE: Standard UK/EU nutrition labels always include a "Per 100g" (or "Typical values per 100g") column by law. If multiple columns are present (e.g., "Per 100g" and "Per 1/4 pot" or "Per Serving"), you MUST always extract the "Per 100g" column data for nutrients and set "servingSize" to "100g" in 'rawNutritionLabel'. This completely eliminates the risk of column-hopping and ensures consistent backend scaling calculations.
-  2. DEFINE & DEDUCE SERVING WEIGHTS: If you are extracting a portion-based serving size instead of 100g, or if a textual portion size is given, you MUST deduce or calculate the numerical gram weight of that serving size. For example: "If serving size is '1/4 pot' and total weight is 160g, deduce/calculate and output '40g' for the 'servingSize'". Ensure textual portion size descriptions (like "1/4 pack", "1/2 carton", "1 slice") are mapped to their calculated actual gram weight inside 'rawNutritionLabel' so that the backend parser can correctly parse it as a number and prevent macro-overflow anomalies.
-  3. If label lists 'Salt', transcribe into 'salt' with "sodium": null for backend conversion.
-- SOFT ITEM CALORIE ESTIMATE (REQUIRED for visual food items): For EACH distinct food item (dish), set "estimatedCalories" to a single rough total kcal for the portion you see (the whole item, not each component). Examples: restaurant mac & cheese plate ~550-750; composed salad bowl ~400-600; yogurt granola fruit cup ~300-500. This is a SOFT prior for the server — NOT printed truth. Do NOT put estimatedCalories into rawNutritionLabel. rawNutritionLabel calories remain ONLY for literally printed values. Do NOT invent protein/fat/sodium — only this one calorie number per item plus existing structure fields.
-- NAMES: 'keyword', 'searchQuery', and 'queriesToSearch' = clean English USDA queries. 'originalName' = exact local/printed dish name (preserve untranslated brand/local name here only).
+STEP 3: DISH ESTIMATES & CULINARY CALIBRATION
+- DISH NUTRIENTS: For EACH item, emit realistic portion 'nutrients' across all 16 keys (calories, protein, totalFat, saturatedFat, transFat, carbohydrates, sugar, addedSugar, totalFibre, sodium, potassium, omega3, calcium, iron, magnesium, vitaminD).
+- CULINARY & REGIONAL CALIBRATION: Calibrate portion unit sizes, default proteins/ingredients, and cooking fat to the specific cuisine's regional norms (e.g. fried coatings/crisps absorb 25–35% fat by weight; stir-fry adds +5–10g oil; steamed/boiled is fat-neutral; Halal environments use poultry/beef/seafood).
+- INGREDIENTS: Plain string list in 'ingredients' (e.g. ["noodles", "chicken", "vegetables"]).
+- NAMES: 'originalName' = exact local/printed dish name. 'keyword' = concise canonical English name.
 
 === SYSTEM CONSTRAINTS ===
-Output exactly ONE JSON object matching this schema. NEVER omit keys; use null or 'unknown' if inapplicable.
+Output exactly ONE JSON object matching this schema. You MUST include 'nutrients' with realistic estimated numeric values for every item:
 
 {
   "_internalReasoning": "string",
@@ -123,27 +140,36 @@ Output exactly ONE JSON object matching this schema. NEVER omit keys; use null o
   "diningEnvironment": "home_cooked | casual_restaurant | fast_food_chain | fine_dining | airline | unknown",
   "items": [
     {
-      "keyword": "string",
       "originalName": "string",
+      "keyword": "string",
       "chainName": "string | null",
-      "rawNutritionLabel": { "servingSize": "Perpack", "calories": "90 kcal", "protein": "2g", "totalFat": "0g", "saturatedFat": "0g", "totalCarbohydrate": "22g", "sugar": "17g", "addedSugar": null, "sodium": null, "salt": "0.53g" },
-      "ingredientsList": "string | null",
-      "estimatedWeightGrams": "number",
-      "estimatedCalories": "number",
-      "components": [{ "searchQuery": "string", "volumePercentage": "number", "suggestedFdcId": "string | null" }],
-      "visualIngredients": ["string"],
-      "source": "label | visual",
+      "estimatedWeightGrams": 250,
+      "ingredients": ["noodles", "chicken", "wonton wrapper", "spices"],
+      "nutrients": {
+        "calories": 480,
+        "protein": 22,
+        "totalFat": 16,
+        "saturatedFat": 4.5,
+        "transFat": 0,
+        "addedSugar": 1,
+        "totalSugar": 3,
+        "totalFibre": 4,
+        "sodium": 750,
+        "carbohydrates": 62,
+        "potassium": 380,
+        "omega3": 0.2,
+        "calcium": 45,
+        "iron": 3.2,
+        "magnesium": 55,
+        "vitaminD": 0
+      },
+      "rawNutritionLabel": null,
+      "ingredientsList": "Noodles, chicken, spices",
       "boundingBox2D": [150, 200, 800, 750],
       "sourceImageIndex": 0,
-      "nutritionFacts": "{}",
-      "anomalyFlags": ["string"],
-      "itemConfidence": "High | Medium | Low",
-      "cookingMethod": "deep_fried | pan_fried | stir_fried | roasted | boiled | steamed | grilled | baked | raw | unknown"
+      "cookingMethod": "boiled"
     }
-  ],
-  "cookingMethod": "string",
-  "scanCompleteness": "full | partial",
-  "queriesToSearch": ["string"]
+  ]
 }
 `;
 
@@ -176,13 +202,20 @@ export function mergeScoutItems(visionItems: any[], llmItems: any[] | null | und
       return {
         ...vItem,
         ...lItem,
+        originalName: lItem.originalName ?? vItem.originalName,
+        keyword: lItem.keyword ?? vItem.keyword,
+        chainName: lItem.chainName ?? vItem.chainName,
         rawNutritionLabel: vItem.rawNutritionLabel,
         nutritionFacts: vItem.nutritionFacts,
         ingredientsList: vItem.ingredientsList,
-        visualIngredients: vItem.visualIngredients || [],
+        ingredients: vItem.ingredients ?? lItem.ingredients ?? [],
+        visualIngredients: vItem.visualIngredients || vItem.ingredients || lItem.ingredients || [],
         boundingBox2D: vItem.boundingBox2D,
         sourceImageIndex: vItem.sourceImageIndex,
         source: vItem.source,
+        nutrients: vItem.nutrients ?? lItem.nutrients,
+        nutrientBasisWeight: vItem.nutrientBasisWeight ?? lItem.nutrientBasisWeight ?? vItem.estimatedWeightGrams,
+        lockedNutrientKeys: vItem.lockedNutrientKeys ?? lItem.lockedNutrientKeys,
         // Soft scout kcal must survive dietitian merge (same priority as vision OCR fields)
         estimatedCalories: vItem.estimatedCalories ?? lItem.estimatedCalories,
         estimatedWeightGrams: vItem.estimatedWeightGrams ?? lItem.estimatedWeightGrams,
@@ -1006,20 +1039,20 @@ export function parseAndHealVisionScout(
       });
 
       visionScoutItems = explodedItems.map((item: any, idx: number) => {
-        let newItem = { ...item, scoutIndex: idx };
-
-        // Volumetric Tuning for high-density condiments
-        const isCondiment = (name: string) => {
-          const lower = (name || '').toLowerCase();
-          return lower.includes('mayonnaise') || lower.includes('ranch') || lower.includes('dressing') || lower.includes('sauce') || lower.includes('ketchup') || lower.includes('mustard') || lower.includes('dip');
+        let newItem = {
+          ...item,
+          scoutIndex: idx,
+          nutrientBasisWeight: item.nutrientBasisWeight || item.estimatedWeightGrams,
         };
-        if (isCondiment(newItem.originalName) || isCondiment(newItem.keyword)) {
+
+        // Volumetric Tuning for standalone high-density condiments (never parent dishes)
+        if (isStandaloneCondimentPacket(newItem)) {
           if (newItem.estimatedWeightGrams > 50) {
             newItem.estimatedWeightGrams = 30;
             if (newItem.estimatedCalories) {
                 newItem.estimatedCalories = Math.round(newItem.estimatedCalories * (30 / item.estimatedWeightGrams));
             }
-            addDebugLog(`[Volumetric Tuning] Capped high-density condiment "${newItem.keyword}" to 30g.`);
+            addDebugLog(`[Volumetric Tuning] Capped high-density condiment "${newItem.keyword || newItem.originalName}" to 30g.`);
           }
         }
 

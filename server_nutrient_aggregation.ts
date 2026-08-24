@@ -72,7 +72,7 @@ export function aggregateItemsNutrients(
       components: item.components
     });
 
-    const labelData = item.labelNutrientsPerServing;
+    const labelData = item.labelNutrientsPerServing || item.syntheticBase100g;
     let servingSizeGrams = labelData && labelData.servingSizeGrams !== undefined && labelData.servingSizeGrams !== null
       ? Number(labelData.servingSizeGrams)
       : 0;
@@ -527,6 +527,7 @@ export function aggregateItemsNutrients(
         componentCount: Array.isArray(item.components) ? item.components.length : 0,
         physicalForm: physicalFormClassification.physicalForm,
         chainName: item.chainName || null,
+        syntheticBase100g: item.syntheticBase100g,
       }
     );
 
@@ -626,9 +627,12 @@ export function aggregateItemsNutrients(
     }
     itemNutrients.unsaturatedFat = parseFloat(Math.max(0, itemNutrients.totalFat - itemNutrients.saturatedFat - itemNutrients.transFat).toFixed(2));
     if (itemNutrients.sugar || itemNutrients.addedSugar) {
+      const existingAddedSugar = (itemNutrients.addedSugar !== undefined && itemNutrients.addedSugar !== null && Number(itemNutrients.addedSugar) > 0)
+        ? Number(itemNutrients.addedSugar)
+        : null;
       const sugarResult = deduceSugarBreakdown({
         totalSugar: itemNutrients.sugar || itemNutrients.addedSugar || 0,
-        addedSugarPrinted: labelData?.addedSugar != null ? Number(labelData.addedSugar) : null,
+        addedSugarPrinted: labelData?.addedSugar != null ? (Number(labelData.addedSugar) * (servingSizeGrams > 0 ? itemWeight / servingSizeGrams : 1)) : existingAddedSugar,
         carbohydrates: itemNutrients.carbohydrates,
         totalFibre: itemNutrients.totalFibre,
         physicalForm: physicalFormClassification.physicalForm,
@@ -636,7 +640,7 @@ export function aggregateItemsNutrients(
         foodName: canonicalName || item.keyword || item.originalName,
       });
       itemNutrients.sugar = sugarResult.sugar;
-      itemNutrients.addedSugar = sugarResult.addedSugar;
+      itemNutrients.addedSugar = existingAddedSugar ?? sugarResult.addedSugar;
     }
     itemNutrients.addedSugar = itemNutrients.addedSugar || 0;
     itemNutrients.sugar = itemNutrients.sugar || 0;

@@ -1,7 +1,21 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-23
-**Status:** Multi-pass density drift, systemic anti-commodity collapse safeguards, mass & moisture conservation, self-healing divergence recovery, and jam canonical mapping active and verified (74/74 files, 702/702 tests).
+**Updated:** 2026-08-24
+**Status:** Inverted Dish Estimate Pipeline deployed, verified, and active as default. 3-rung truth hierarchy, single scaler ($R = W_1/W_0$), pure TS derivation, standalone condiment capping fix, and dietitian single-ledger parity fully operational (53/53 tests passing).
+
+- **Food Calculation Pipeline Inversion & Dish Estimate Architecture (2026-08-24):**
+  - **PR 1: Pure TS Derivation Module (`server_derivation.ts`):** Implemented pure mathematical calculations for unsaturated fat (`totalFat - saturatedFat - transFat`), salt from sodium (`sodium * 2.54 / 1000`), and carbohydrate fallback (`(kcal - 4P - 9F)/4`) post-Atwater. (9/9 unit tests passing).
+  - **PR 2: Standalone Condiment Capping & Classification (`server_dish_classify.ts`, `server_vision_scout.ts`):** Exported shared `PARENT_DISH_RE` covering sandwiches, wraps, salads, bowls, pastas, and burritos. Built `isStandaloneCondimentPacket` ensuring composite dishes with sauces/dressings are never falsely capped to 30g. (5/5 unit tests passing).
+  - **PR 3: Scout Dish Schema & Weight-Only Portioning (`server_vision_scout.ts`, `server_portion_clarify.ts`):** Added `ScoutNutrientsSchema` (15 core keys + carbs), updated `mergeScoutItems` to preserve dish nutrients/identity, and updated `applyPortionChoices` to scale weight only on flag-on. (29/29 unit tests passing).
+  - **PR 4: Core Finalize Engine & Standalone Brand Matcher (`server_dish_finalize.ts`, `server_brand_match.ts`, `server.ts`):** Created `finalizeDishLedger` executing the 3-rung truth hierarchy (OCR $\rightarrow$ Brand Menu $\rightarrow$ Scout Direct Estimate + USDA Atomics), single scaler ratio ($R = \text{consumedWeight} / \text{nutrientBasisWeight}$), Atwater checks, and derivation. Wired Mode A early-return assembly, Mode D evaluation, and live/mock Edit weight updates. (8/8 unit tests passing).
+  - **PR 5: Hot-Path Curator Bypass (`server.ts`):** Bypassed database search loop and Food Resolver curator on flag-on (`[CuratorSkipped]`), saving 1 full Gemini call per meal and eliminating component assembly latency.
+  - **PR 6: Dietitian Single-Ledger Injection & Net-Zero Scout Prompt (`server.ts`, `server_vision_scout.ts`, `agents/scoutInstructions.ts`):** Enforced deterministic injection of the finalized ledger into dietitian coaching so narrative and saved meal table match 1:1. Aligned Scout prompt instructions under net-zero line budget to output dish nutrients and plain ingredients.
+  - **PR 7: Rulebook Updates & Default-ON Rollout (`server_food_flags.ts`, `docs/agent/domains/food-calc.md`, `docs/agent/DOMAIN_REGRESSION_MAP.md`):** Updated domain invariants, added test suites to smoke regression map, and enabled `FOOD_DISH_ESTIMATE = true` by default.
+  - **PR 8: Structured Output Schema Hardening & Reality-Check Immunity (`server.ts`, `server_nutrient_aggregation.ts`, `server_pure_helpers.ts`, `docs/agent/domains/food-calc.md`):** 
+    - Enforced multi-level `required` constraints in Gemini `responseSchema` (`nutrients` in `items.required`, core macros in `nutrients.required`), eliminating model drop of nested nutrient estimates.
+    - Updated `server_nutrient_aggregation.ts` to resolve `labelData = item.labelNutrientsPerServing || item.syntheticBase100g`, preventing 0-macro drops on dish estimates.
+    - Made `applyNutrientRealityChecks` skip heuristic category rewrites when `syntheticBase100g` or `isDishEstimate` is present.
+    - Added Section 1b ("LLM Structured Output & Schema Invariants") to `docs/agent/domains/food-calc.md`. (52/52 unit tests passing, `tsc` clean).
 
 - **Prototype End-to-End Benchmark & Case 7 Sainsbury Oats (2026-08-24):**
   - **7-Case Benchmark Suite (`prototype/`):** Evaluated all 7 test meals end-to-end using `gemini-3.5-flash-lite` across Stage 1 Vision Scout, Stage 2 Derivation Engine & Brand Matcher, and Stage 3 Dietitian Coach. Generated detailed markdown reports (`REPORT_01` to `REPORT_07`) and consolidated `END_TO_END_REPORT.md`.

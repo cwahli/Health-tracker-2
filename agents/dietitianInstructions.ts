@@ -179,6 +179,11 @@ You are a Dietician coach operating within a personalized health application. Pr
 - Keep next steps focused on practical real-food habits or movement (not future gram targets).
 - When discussing sugar, always distinguish Total Sugar (naturally occurring, e.g. fructose in fruit, lactose in dairy) from Added Sugar (the only figure with a 24g/day guideline). Do not flag naturally high-sugar whole foods (fruit, vegetables, plain dairy) as a sugar concern — only flag genuinely high Added Sugar intake.
 
+=== CLINICAL NUTRIENT AUDIT & CORRECTION PASS ===
+- Review each item's baseline nutrients and portion weights against culinary reality and regional norms.
+- By default, accept the baseline estimate (leave 'correctedNutrients' null).
+- If you identify an inaccurate estimate or portion weight (e.g. street/fast-food dim sum or dumpling pieces overestimated vs regional norms, deep-fried oil absorption undercounted, or fast-food sodium underestimated), adjust 'weightGrams' and/or output the corrected portion values in 'correctedNutrients' with your clinical reason in 'clinicalCorrectionNote'.
+
 === VERDICT LABEL GUIDELINES (3-6 WORDS MAX) ===
 - Positive/Neutral Choice: Focus on a core physical health outcome. Example: "Good for your heart", "Boosts lean muscle tissue".
 - Overage/Risk Choice: Focus strictly on a punchy, metric-backed impact label. Example: "140% over sat fat limit", "115% over sodium limit".
@@ -207,8 +212,6 @@ You MUST write the "message" narrative strictly using a 4-beat structure:
         "scoutIndex": 0,
         "canonicalDbName": "Macaroni and Cheese, frozen entree",
         "weightGrams": 220,
-        "dbSource": "usda",
-        "dbId": "173342",
         "foodType": "prepared dish/entree",
         "cookingMethod": "baked"
       },
@@ -216,8 +219,6 @@ You MUST write the "message" narrative strictly using a 4-beat structure:
         "scoutIndex": 1,
         "canonicalDbName": "Fish, salmon, Atlantic, farmed, cooked, dry heat",
         "weightGrams": 150,
-        "dbSource": "estimated",
-        "dbId": null,
         "foodType": "protein",
         "cookingMethod": "grilled"
       },
@@ -225,8 +226,6 @@ You MUST write the "message" narrative strictly using a 4-beat structure:
         "scoutIndex": 2,
         "canonicalDbName": "Avocado, Hass, peeled, raw",
         "weightGrams": 90,
-        "dbSource": "usda",
-        "dbId": "2710824",
         "foodType": "fruit/fat source",
         "cookingMethod": "raw"
       },
@@ -234,8 +233,6 @@ You MUST write the "message" narrative strictly using a 4-beat structure:
         "scoutIndex": 3,
         "canonicalDbName": "Lettuce, iceberg, raw",
         "weightGrams": 30,
-        "dbSource": "usda",
-        "dbId": "2346388",
         "foodType": "vegetable",
         "cookingMethod": "raw"
       }
@@ -261,10 +258,18 @@ const REQUIRED_OUTPUT_JSON_SCHEMA = `
         "scoutIndex": 0,
         "canonicalDbName": "string (strictly standard database/product name, 2-5 words maximum. No reasoning/scaling/notes)",
         "weightGrams": 0,
-        "dbSource": "string ('usda' | 'label' | 'estimated')",
-        "dbId": "string | null",
         "foodType": "string (strictly concise 1-2 words category e.g. 'grain', 'protein', 'vegetable', 'fruit', 'dairy'. No sentences, no explanations, no explanations of calculations, no justifications)",
-        "cookingMethod": "string (strictly 1-2 words concise method e.g. 'raw', 'baked', 'grilled', 'boiled'. No justifications)"
+        "cookingMethod": "string (strictly 1-2 words concise method e.g. 'raw', 'baked', 'grilled', 'boiled'. No justifications)",
+        "correctedNutrients": {
+          "calories": 250,
+          "protein": 15,
+          "totalFat": 8,
+          "saturatedFat": 2.5,
+          "sodium": 450,
+          "addedSugar": 0,
+          "totalFibre": 2
+        },
+        "clinicalCorrectionNote": "string | null (Optional. State clinical reason if you adjusted any baseline nutrient)"
       }
     ]
   },

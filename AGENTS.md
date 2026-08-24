@@ -88,7 +88,7 @@ If the task hits food-calc / biomarkers / sync: **read** that domain file.
 When addressing tasks, bug fixes, or feature plans, agents execute end-to-end in a single continuous turn:
 1. **Autonomous Deep Investigation**: Perform thorough multi-file inspection across all relevant files without pausing mid-turn.
 2. **Durable Implementation**: Apply pure TypeScript middleware / code modifications directly (anti-patch guarantee). Never use stubs or placeholders.
-3. **Automated Verification**: Run tests, type checks (`tsc`), and regression gates to verify zero cascade breakages.
+3. **Automated Verification**: Run tests, type checks (`tsc`), and regression gates to verify zero cascade breakages. Any live AI tests, mock evaluations, or script runs MUST use the `gemini-3.5-flash-lite` model by default.
 4. **Mandatory Executive Response Format (Zero Code Dumps)**:
    All completion responses MUST strictly adhere to this format:
    - **Root Cause & Diagnosis:** (1–2 concise sentences)
@@ -97,7 +97,8 @@ When addressing tasks, bug fixes, or feature plans, agents execute end-to-end in
    *(Pasting raw code blocks, file contents, or diffs in chat is strictly prohibited).*
 
 ### L12 — Strict Prompt Line-Budget & Anti-Bloat Rule
-- **Strict Prompt Line Ceiling**: System prompts (in `server_vision_scout.ts`, dietitian instructions, biomarker agents) are strictly capped. Adding new lines to a prompt is FORBIDDEN unless an equivalent number of redundant/outdated prompt lines are removed in the same edit (net-zero line growth).
+- **Strict Copy Length & Line Ceiling**: When updating agent instructions (system prompts in `server_vision_scout.ts`, dietitian instructions, biomarker agents), the total copy length/word count must by default remain equal to or less than before. Content MUST be consolidated instead of adding more (net-zero line/word growth). Adding more content than existing requires explicit human approval first.
+- **Default Test & Runtime Model**: Any test, benchmark, or prototype call should be executed using the `gemini-3.5-flash-lite` model by default.
 - **No Prompt-Based Code**: Business logic, math, unit conversions, brand overrides, and data sanitization MUST live in pure TypeScript middleware, NEVER in English prompt instructions. Prompts are strictly for classification and schema extraction under 200 words.
 
 ### L13 — Multipass Epic Continuation (Anti Early-Stop)

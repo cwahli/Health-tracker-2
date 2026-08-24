@@ -1,7 +1,4 @@
-/**
- * B1 — Portion ambiguity detection for dual-column / multi-serve UK packs.
- * Pure helpers: no I/O. Scout may read per-100g truth but must not guess consumed grams.
- */
+import { isDishEstimateEnabled } from "./server_food_flags";
 
 export type PortionOption = {
   id: string;
@@ -393,10 +390,16 @@ export function applyPortionChoices(
     if (w == null || !(Number(w) > 0)) return it;
     const weightGrams = Math.round(Number(w));
     const prevW = Math.round(Number(it.estimatedWeightGrams) || 0) || weightGrams;
-    const next: any = { ...it, estimatedWeightGrams: weightGrams };
-    const estCal = Number(it.estimatedCalories);
-    if (estCal > 0 && prevW > 0) {
-      next.estimatedCalories = Math.round(estCal * (weightGrams / prevW));
+    const next: any = {
+      ...it,
+      estimatedWeightGrams: weightGrams,
+      nutrientBasisWeight: it.nutrientBasisWeight || prevW,
+    };
+    if (!isDishEstimateEnabled()) {
+      const estCal = Number(it.estimatedCalories);
+      if (estCal > 0 && prevW > 0) {
+        next.estimatedCalories = Math.round(estCal * (weightGrams / prevW));
+      }
     }
     next.portionChoiceApplied = weightGrams;
     return next;

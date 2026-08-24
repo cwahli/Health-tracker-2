@@ -12,31 +12,122 @@ If you intentionally change pipeline/modes/fields: get confirmation for protecte
 
 ---
 
-## 1. Pipeline (current default — change only deliberately)
+## 1. Pipeline (Dish-Level Inverted Pipeline — default)
 
 ```text
-Budget (label → dish/brand → scout → category×W)
-  → foundation sum
-  → reconcile
-  → receipt
+Vision Scout (dish-level portion estimate + printed OCR label + ingredients)
+  → Finalize Engine (3-Rung Truth Hierarchy: OCR → Brand Menu → Scout Estimate + USDA Atomics)
+  → Single Scaler Math (R = W_consumed / W_basis)
+  → Pure TS Derivation (Unsat Fat, Salt, Carbs) & Atwater Check
+  → Dietitian Final Audit & Coaching (reviews all outputs; can edit inaccurate values with transparent clinical notes)
 ```
 
 | Role | Rule |
 |------|------|
-| Scout calories | **One** soft `estimatedCalories` **per dish item** — not per component, not full free macros |
-| `rawNutritionLabel` | **Printed label only** — never free estimates |
-| Dietitian | Coaches on **server preCalc only** — no free macro invent |
-| Food Resolver | Catalog curator (1-iter): multi-match, merge, brand routing, basis normalize, quarantine + aliases — not primary calorie estimator; not invoked on HIT_UNIQUE atomics. Each component binds **only** to rows tagged with that component’s `searchQuery`. Do not steal a sibling’s FDC. Honest `MISS` is valid. |
-| Modes | Same finalize/budget math for **A, Edit, D** |
+| Scout | Identifies whole dishes, assigns realistic gram weight & core nutrients per dish, transcribes printed labels verbatim, emits plain ingredients |
+| `rawNutritionLabel` | **Printed label only** — never invented |
+| Truth Hierarchy | Rung 1 (OCR) → Rung 2 (Brand Menu) → Rung 3 (Scout Estimate + USDA Atomics) |
+| Scaler | **Single scaler across entire system:** $R = \text{consumedWeight} / \text{nutrientBasisWeight}$. Never double-scale or clamp brand lock basis |
+| Derivations | `server_derivation.ts` computes unsaturated fat, salt from sodium, and carb fallback mathematically |
+| Dietitian | Coaches on server finalize ledger; conducts final clinical reality check on all outputs and can adjust values with an explicit note when estimates are physiologically inaccurate |
+| Modes | Same finalize math (`finalizeDishLedger`) for **Mode A, Mode D, and Edit** |
 
 ---
 
-## 2. Mode matrix (default — all modes share finalize math)
+## 1b. LLM Structured Output & Schema Invariants (Grammar Enforcement)
+
+To guarantee that Vision Scout and Dietitian agents reliably emit core fields (e.g., `nutrients`, `ingredients`):
+
+1. **Multi-Level `required` Arrays in `responseSchema`:**
+   - In Gemini Structured Outputs (`responseMimeType: "application/json"`), defining a field in `properties` is only *permissive*.
+   - To make it mandatory, the field MUST be included in the enclosing object's `required` list at **every level**:
+     - Level 1 (`items.required`): `["keyword", "originalName", "estimatedWeightGrams", "nutrients", "ingredients", "boundingBox2D", "sourceImageIndex"]`
+     - Level 2 (`nutrients.required`): `["calories", "protein", "totalFat", "carbohydrates", "sodium", "saturatedFat"]`
+   - *Failure to add to `required` causes lite models (`gemini-3.5-flash-lite`) to drop nested objects.*
+
+2. **Concrete Numeric Values in Prompt Schema Templates:**
+   - System instruction schema examples must use concrete numbers (e.g. `"calories": 480, "protein": 22`) instead of type string placeholders (`"calories": "number"`). Lite models pattern-match directly on the template.
+
+3. **Explicit `propertyOrdering`:**
+   - Place critical estimation fields (`estimatedWeightGrams`, `ingredients`, `nutrients`) early in `propertyOrdering` before bulky fields like bounding boxes or label OCR strings.
+
+4. **Aggregator Baseline Resolution (`server_nutrient_aggregation.ts`):**
+   - Must resolve `labelData = item.labelNutrientsPerServing || item.syntheticBase100g`.
+   - Never allow dish estimates with synthetic baselines to evaluate `labelData` to null.
+
+5. **Reality-Check Immunity for Dish Estimates & Brand Truth:**
+   - `applyNutrientRealityChecks` must skip heuristic category rewrites when `syntheticBase100g`, `isDishEstimate`, or `dbSource === "brand_official"` is present.
+
+---
+
+## 1c. Nutrient Precision Hierarchy (31 Nutrients)
+
+### 1. Core Nutrients (High Precision ~90–100%)
+*Reason: Narrow safety windows, non-negotiable physiological floors, and hard upper limits where estimation errors cause acute metabolic disruption, cardiovascular risk, or rapid dietary drift within 24–48 hours.*
+- **Calories**
+- **Protein**
+- **Saturated Fat**
+- **Trans Fat**
+- **Added Sugar**
+- **Total Fibre**
+- **Sodium**
+- **Carbohydrates** [Derived mathematically: $(\text{Calories} - (4 \times \text{Protein}) - (9 \times \text{Total Fat})) / 4$ if omitted or unprovided]
+
+### 2. Key Nutrients (Moderate Precision ~70%)
+*Reason: Wide biological buffers and flexible metabolic ranges where day-to-day fluctuations are regulated by homeostatic reserves; medium-term weekly averages matter far more than single-meal precision.*
+- **Total Fat**
+- **Total Sugar**
+- **Potassium**
+- **Omega-3**
+- **Calcium**
+- **Iron**
+- **Magnesium**
+- **Vitamin D**
+- **Unsaturated Fat** [Derived: $\text{Total Fat} - (\text{Saturated Fat} + \text{Trans Fat})$]
+- **Salt** [Derived: $(\text{Sodium in mg} \times 2.54) / 1000$]
+
+### 3. Extended Nutrients (Directional Precision <50%)
+*Reason: Deep internal storage pools (liver, bone, adipose tissue) that buffer deficiencies over weeks to years, or ubiquitous dietary abundance where day-to-day tracking errors carry negligible clinical risk.*
+- **Soluble Fibre**
+- **Vitamin A**
+- **Thiamine (B1)**
+- **Riboflavin (B2)**
+- **Niacin (B3)**
+- **Vitamin B6**
+- **Folate (B9)**
+- **Vitamin B12**
+- **Vitamin C**
+- **Vitamin E**
+- **Vitamin K**
+- **Zinc**
+- **Selenium**
+- **Iodine**
+- **Phosphorus**
+
+---
+
+## 1d. Dietitian Final Nutrient Audit & Clinical Corrections
+
+The Dietitian coach serves as the final clinical auditor on all nutrient estimates before meal presentation:
+
+1. **Final Sanity Audit:**
+   - The Dietitian inspects the backend finalize ledger against the meal image context, dining environment, and culinary preparation realism.
+   - If the Dietitian identifies an implausible or underestimated figure (e.g. oil absorption was underestimated on deep-fried elements, sodium was under-calculated for fast food, or uncaptured cooking fats), the Dietitian has the authority to emit corrected values (`correctedNutrients`).
+
+2. **Mandatory Audit & Clinical Note:**
+   - Every adjustment made by the Dietitian MUST be accompanied by an explicit clinical note explaining *why* the value was modified (e.g., `"Adjusted fat +6g (+54 kcal) to account for deep-fried wonton oil absorption"`, `"Adjusted sodium to 850mg based on fast-food seasoning prior"`).
+
+3. **Single-Ledger Parity Guarantee:**
+   - When the Dietitian issues a correction, the modified values immediately become the authoritative numbers for both the Dietitian narrative and the saved meal breakdown table, ensuring 1:1 parity with full audit transparency.
+
+---
+
+## 2. Mode matrix (all modes share finalize math)
 
 | Behavior | Mode A (`new_log`) | Mode D (evaluation) | Edit / modify |
 |----------|--------------------|---------------------|---------------|
-| Budget / finalize | call + log | call + log `mode=D` | call + log `mode=edit` |
-| Reconcile / portion | same | same | same |
+| Finalize ledger | `finalizeDishLedger` | `finalizeDishLedger` (`mode=D`) | `finalizeDishLedger` (`mode=edit`) |
+| Portion scale | $R = W_1 / W_0$ | $R = W_1 / W_0$ | $R = W_1 / W_0$ |
 
 - Mode A PASS ≠ Mode D/Edit PASS.  
 - Prefer **one shared helper** + call sites in each mode over copy-paste math.  

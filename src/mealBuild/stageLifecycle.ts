@@ -180,7 +180,7 @@ export function formatDietitianProjectionBlock(projection: any): string {
   const macros = projection.macroTotals || {};
   const items = projection.itemsSummary || [];
   return [
-    '[SERVER PRECALC — use only these numbers; do not invent macros]',
+    '[SERVER BASELINE ESTIMATE — audit each nutrient against culinary reality; accept or provide clinical corrections in correctedNutrients]',
     `mealId=${projection.mealId || ''}`,
     `mealName=${projection.mealName || ''}`,
     `macroTotals=${JSON.stringify(macros)}`,

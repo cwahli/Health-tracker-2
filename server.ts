@@ -309,6 +309,10 @@ import {
   mergeScoutItems, 
   parseAndHealVisionScout 
 } from "./server_vision_scout";
+import { isDishEstimateEnabled } from "./server_food_flags";
+import { finalizeDishLedger } from "./server_dish_finalize";
+import { matchBrandMenu } from "./server_brand_match";
+import { classifyDishAtomic } from "./server_dish_classify";
 
 
 import { getFirestore, Firestore } from "firebase-admin/firestore";
@@ -1095,11 +1099,8 @@ TRANS FAT AVOIDANCE: Trans fat (partially hydrogenated oils) is universally harm
 === NUTRITIONAL BASELINE & CLINICAL SANITY CHECK DIRECTIVE ===
 The backend provides pre-calculated precise nutrient weights inside "=== BACKEND PRE-CALCULATED ITEM NUTRIENTS ===".
 1. DEFAULT BASELINE: Treat these pre-calculated numbers as your default baseline for your evaluation. Write your prose message, benefits, risks, and recommendations based directly on these numbers.
-2. PRESERVE BACKEND WEIGHTS (CRITICAL SPECIFIED PORTION RULE): If the user's text message explicitly specifies a weight (e.g., '50g Sainsbury oat + fruits'), do NOT override the entire dish's weight down to that number! The pre-calculated item weight provided by the backend already mathematically accounts for the specific ingredient proportions via the visual scout. You MUST preserve the item weights exactly as provided in the BACKEND PRE-CALCULATED ITEM NUTRIENTS section and NEVER change them to match the user's raw text snippet.
-3. CLINICAL SANITY CHECK OVERRIDE: If a pre-calculated database entry is physically impossible or wildly wrong (e.g. >150mg Na in raw meat, or 5000 kcal for a 50g salad), you MUST override those numbers:
-   - Set "dbSource": "estimated_override".
-   - Supply your corrected clinical estimate in "labelNutrientsPerServing".
-   - Add an explicit reason to "anomalyFlags" (e.g. ["Sanity Check Override: Overrode saline-injected 2500mg sodium database value to raw baseline ~50mg"]).
+2. PORTION WEIGHT CALIBRATION: Preserve baseline item weights by default. If an item's portion weight is inaccurate against regional dim sum/side norms or piece counts (e.g. 3 small street siomay dumplings estimated at 150g instead of ~90-105g), adjust 'weightGrams' to the calibrated portion size.
+3. CLINICAL NUTRIENT AUDIT & CORRECTION: Review the baseline numbers for each item against culinary preparation realism. If you identify an inaccurate estimate (e.g. deep-fried oil absorption undercounted, or fast-food sodium underestimated), output the corrected portion values in 'correctedNutrients' and state the clinical reason in 'clinicalCorrectionNote'.
 2. TRACE NUTRIENTS: Do NOT estimate these individually. Instead, output the single most appropriate foodType string for each item (e.g., 'red_meat', 'leafy_veg', 'root_veg', etc.).
 
 Critical: Original Name Override & Anti-Merging Rule
@@ -1112,11 +1113,6 @@ Preserve Visual Scout Cooking Method & Ingredients:
 Protein Verification: If an originalName contains clear local language identifiers for proteins (e.g., "Ikan" = fish, "Ayam" = chicken, "Daging" = beef) but the upstream agent mistakenly passed an English keyword matching a vegetable, you MUST classify and log the item based on the local protein name.
 
 Strict Anti-Merging: NEVER sum the weights of two items simply because their English keywords match. You must evaluate if their originalNames represent the exact same food. If they are different (e.g., "IK BARONANG" and "BABY PAKCHOY"), keep them as separate, distinct entries in the itemsBreakdown array.
-
-Core Nutrients DB ID Validation
-Zero Hallucination: For EVERY item, when databaseMatches contains a relevant entry, use it to set dbSource and dbId.
-
-Strict Fallback: If a food item does NOT have a clear, exact match in the provided databaseMatches list, you MUST set dbId to null and dbSource to estimated. NEVER invent, guess, or hallucinate a dbId string or integer that was not explicitly provided in the payload data.
 
 Trace Nutrients Taxonomy
 Fungi Expansion: Do NOT estimate trace nutrients individually. Instead, output the single most appropriate foodType string for each item.
@@ -1139,7 +1135,7 @@ MODE A: NEW FOOD LOGGING
 - CRITICAL SCHEMA REQUIREMENT: You MUST output the foodData block and you MUST explicitly set "comparison": null. Do NOT generate comparison group structures or assign scout indices to a comparison engine for a single logged meal.
 - CRITICAL: If the user uploads a picture of a meal (e.g. a plate with steak, potatoes, veggies), you MUST treat it as a single meal entry and use MODE A (NEW FOOD LOGGING). Combine the components into the itemsBreakdown array. DO NOT use MODE D (EVALUATION/COMPARISON) to compare the items on the plate unless the user explicitly asks to compare them or choose the best option.
 - CRITICAL: If the user enters a single food item name or phrase like "I ate this steak" without explicitly asking to compare, you MUST use MODE A.
-- CRITICAL: If the user provides a single food image and asks a general health question (e.g., "Is it healthy?"), that MUST be routed to MODE A, not Mode D. You MUST directly answer the question in the "message" field evaluating its clinical impact.
+- FINAL NUTRIENT AUDIT & CLINICAL CORRECTIONS: Review the backend numbers in === BACKEND PRE-CALCULATED ITEM NUTRIENTS === against culinary preparation realism. By default, accept them. If you identify an inaccurate estimate (e.g. deep-fried oil absorption undercounted, or fast-food sodium under-calculated), you may output 'correctedNutrients' and state the clinical reason in 'clinicalCorrectionNote'.
 - CONFIDENCE ACKNOWLEDGEMENT (CRITICAL): Check the "Visual Scout Confidence Rating" and any anomaly flags listed for the items in the === VISUAL FOOD SCOUT IDENTIFIED ITEMS === section. If any item is marked as Medium or Low confidence (or has anomaly flags), you MUST start your response by explicitly acknowledging this uncertainty. You MUST explicitly invite the user to correct the identification manually via text, or upload a clearer picture so you can update the lower rating.
 
 MODE B: DISCUSSION 
@@ -3309,6 +3305,43 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
               const oldWeight = Math.max(1, Number(item.weightGrams) || 1);
               const newWeight = Number(mockCommand.newWeightGrams);
               const R = newWeight / oldWeight;
+              if (isDishEstimateEnabled()) {
+                const ledger = await finalizeDishLedger({
+                  item: {
+                    ...item,
+                    originalName: item.name || item.originalName,
+                    keyword: item.keyword || item.name,
+                    nutrients: item.nutrients || {
+                      calories: item.calories,
+                      protein: item.protein,
+                      totalFat: item.totalFat,
+                      saturatedFat: item.saturatedFat,
+                      carbohydrates: item.carbohydrates,
+                      sodium: item.sodium,
+                    },
+                  },
+                  nutrientBasisWeight: item.nutrientBasisWeight || oldWeight,
+                  consumedWeight: newWeight,
+                  storedBrandLock: item.brandLock || null,
+                  storedOcrLock: item.rawNutritionLabel ? {
+                    basisType: item.rawNutritionLabel.basisType || 'per_dish',
+                    servingGrams: item.rawNutritionLabel.servingGrams || null,
+                    keys: item.lockedNutrientKeys || ['calories'],
+                    valuesAtBasis: item.rawNutritionLabel,
+                  } : null,
+                });
+                addDebugLog(`[Budget] mode=edit item="${item.name}" kcal=${ledger.nutrients.calories} source=${ledger.dbSource} weight=${newWeight}`);
+                item.weightGrams = newWeight;
+                item.calories = ledger.nutrients.calories;
+                item.protein = ledger.nutrients.protein;
+                item.totalFat = ledger.nutrients.totalFat;
+                item.saturatedFat = ledger.nutrients.saturatedFat;
+                item.carbohydrates = ledger.nutrients.carbohydrates;
+                item.sodium = ledger.nutrients.sodium;
+                if (item.nutrients) {
+                  item.nutrients = { ...item.nutrients, ...ledger.nutrients };
+                }
+              } else {
               // Scale foundation macros by weight ratio first
               const foundation: Record<string, number> = {
                 calories: Number(item.calories || 0) * R,
@@ -3339,6 +3372,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
                 item.carbohydrates = Number(((rec?.nutrients?.carbohydrates ?? foundation?.carbohydrates) || 0).toFixed(2));
                 item.sodium = Number(((rec?.nutrients?.sodium ?? foundation?.sodium) || 0).toFixed(1));
                 if (scoutEst != null) item.estimatedCalories = scoutEst;
+              }
               }
             }
           } else if (mockCommand.action === "remove_item") {
@@ -3705,8 +3739,8 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         sendStreamEvent({ type: 'status', stage: 'scout', status: 'started', message: 'Reading your photos...' });
         const imageCount = imagePayloads?.length || 0;
         const scoutPromptText = message 
-          ? `Analyze the provided ${imageCount > 1 ? imageCount + ' images' : 'image'} and list the food items you see, taking into consideration the user's message: "${message}".${imageCount > 1 ? ' CRITICAL MULTI-IMAGE REQUIREMENT: Inspect each image and set "sourceImageIndex" (0 for 1st photo, 1 for 2nd, etc.). If any photo shows a kiosk touchscreen or menu screen, transcribe the exact calories displayed for EACH item (e.g. "Fish Burger 265 kcal") into rawNutritionLabel. If images show different views/sides of the same package (e.g. front of package and back nutrition label), list them as TWO separate entries: 1. The food item. 2. A dedicated label item (originalName containing "Nutrition Facts Label") with full rawNutritionLabel.' : ''} If any identified dish is a known item from a restaurant chain or brand (e.g. McDonald's, Yolk, Starbucks), capture exact brand and dish name in originalName and queriesToSearch for server web search.`
-          : `Analyze the provided ${imageCount > 1 ? imageCount + ' images' : 'image'} and list the food items you see.${imageCount > 1 ? ' CRITICAL MULTI-IMAGE REQUIREMENT: Inspect each image and set "sourceImageIndex" (0 for 1st photo, 1 for 2nd, etc.). If any photo shows a kiosk touchscreen or menu screen, transcribe the exact calories displayed for EACH item (e.g. "Fish Burger 265 kcal") into rawNutritionLabel. If images show different views/sides of the same package (e.g. front of package and back nutrition label), list them as TWO separate entries: 1. The food item. 2. A dedicated label item (originalName containing "Nutrition Facts Label") with full rawNutritionLabel.' : ''} If any identified dish is a known item from a restaurant chain or brand (e.g. McDonald's, Yolk, Starbucks), capture exact brand and dish name in originalName and queriesToSearch for server web search.`;
+          ? `Analyze the provided ${imageCount > 1 ? imageCount + ' images' : 'image'} and list the food items you see, taking into consideration the user's message: "${message}". For each distinct food item, estimate its weight in grams and emit realistic portion nutrients in "nutrients" (calories, protein, totalFat, saturatedFat, transFat, carbohydrates, sugar, addedSugar, totalFibre, sodium, potassium, omega3, calcium, iron, magnesium, vitaminD).${imageCount > 1 ? ' CRITICAL MULTI-IMAGE REQUIREMENT: Inspect each image and set "sourceImageIndex" (0 for 1st photo, 1 for 2nd, etc.). If any photo shows a kiosk touchscreen or menu screen, transcribe the exact calories displayed for EACH item (e.g. "Fish Burger 265 kcal") into rawNutritionLabel. If images show different views/sides of the same package (e.g. front of package and back nutrition label), list them as TWO separate entries: 1. The food item. 2. A dedicated label item (originalName containing "Nutrition Facts Label") with full rawNutritionLabel.' : ''} If any identified dish is a known item from a restaurant chain or brand (e.g. McDonald's, Yolk, Starbucks), capture exact brand and dish name in originalName.`
+          : `Analyze the provided ${imageCount > 1 ? imageCount + ' images' : 'image'} and list the food items you see. For each distinct food item, estimate its weight in grams and emit realistic portion nutrients in "nutrients" (calories, protein, totalFat, saturatedFat, transFat, carbohydrates, sugar, addedSugar, totalFibre, sodium, potassium, omega3, calcium, iron, magnesium, vitaminD).${imageCount > 1 ? ' CRITICAL MULTI-IMAGE REQUIREMENT: Inspect each image and set "sourceImageIndex" (0 for 1st photo, 1 for 2nd, etc.). If any photo shows a kiosk touchscreen or menu screen, transcribe the exact calories displayed for EACH item (e.g. "Fish Burger 265 kcal") into rawNutritionLabel. If images show different views/sides of the same package (e.g. front of package and back nutrition label), list them as TWO separate entries: 1. The food item. 2. A dedicated label item (originalName containing "Nutrition Facts Label") with full rawNutritionLabel.' : ''} If any identified dish is a known item from a restaurant chain or brand (e.g. McDonald's, Yolk, Starbucks), capture exact brand and dish name in originalName.`;
         sendLog('scout_instruction', 'scout', `Vision Scout Instruction dispatched (model: ${engine || "gemini-3.5-flash-lite"}). Prompt: "${scoutPromptText}"`);
         addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout with retry protection...`);
         let scoutResult: any = null;
@@ -3779,6 +3813,35 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
                           nullable: true
                         },
                         ingredientsList: { type: Type.STRING, nullable: true },
+                        ingredients: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
+                        nutrients: {
+                          type: Type.OBJECT,
+                          properties: {
+                            calories: { type: Type.NUMBER, nullable: true },
+                            protein: { type: Type.NUMBER, nullable: true },
+                            totalFat: { type: Type.NUMBER, nullable: true },
+                            saturatedFat: { type: Type.NUMBER, nullable: true },
+                            transFat: { type: Type.NUMBER, nullable: true },
+                            carbohydrates: { type: Type.NUMBER, nullable: true },
+                            sugar: { type: Type.NUMBER, nullable: true },
+                            totalSugar: { type: Type.NUMBER, nullable: true },
+                            addedSugar: { type: Type.NUMBER, nullable: true },
+                            totalFibre: { type: Type.NUMBER, nullable: true },
+                            sodium: { type: Type.NUMBER, nullable: true },
+                            potassium: { type: Type.NUMBER, nullable: true },
+                            omega3: { type: Type.NUMBER, nullable: true },
+                            calcium: { type: Type.NUMBER, nullable: true },
+                            iron: { type: Type.NUMBER, nullable: true },
+                            magnesium: { type: Type.NUMBER, nullable: true },
+                            vitaminD: { type: Type.NUMBER, nullable: true },
+                          },
+                          required: [
+                            "calories", "protein", "totalFat", "saturatedFat", "transFat",
+                            "carbohydrates", "sugar", "addedSugar", "totalFibre", "sodium",
+                            "potassium", "omega3", "calcium", "iron", "magnesium", "vitaminD"
+                          ],
+                          nullable: true,
+                        },
                         estimatedWeightGrams: { type: Type.NUMBER },
                         estimatedCalories: { type: Type.NUMBER, nullable: true },
                         sourceImageIndex: { type: Type.INTEGER, description: "0-based index of which image this item appears in" },
@@ -3805,7 +3868,8 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
                         visualIngredients: { type: Type.ARRAY, items: { type: Type.STRING } },
                         nutritionFacts: { type: Type.OBJECT, nullable: true }
                       },
-                      required: ["keyword", "originalName", "estimatedWeightGrams", "boundingBox2D", "sourceImageIndex"]
+                      required: ["keyword", "originalName", "estimatedWeightGrams", "nutrients", "ingredients", "boundingBox2D", "sourceImageIndex"],
+                      propertyOrdering: ["originalName", "keyword", "chainName", "estimatedWeightGrams", "ingredients", "nutrients", "rawNutritionLabel", "ingredientsList", "source", "boundingBox2D", "sourceImageIndex"]
                     }
                   },
                   queriesToSearch: { type: Type.ARRAY, items: { type: Type.STRING } }
@@ -4043,13 +4107,12 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       }
     }
 
-    // Dish-count based, not flattened query-string count: components/visualIngredients
-    // strings were inflating this and causing false positives on normal 2-3 item meals.
     const isEvaluationScale = visionScoutItems.length >= 15;
-    // Task 1: shouldRunDbSearch now only guards against weight-only edits and scale modes.
-    // The DB search itself is run BEFORE the portionClarify check so resolved candidates
-    // can be embedded in the pause payload and carried to turn 2.
-    const shouldRunDbSearch = !isWeightModification && !isMenuScale && !isEvaluationScale &&
+    if (isDishEstimateEnabled(req)) {
+      addDebugLog('[CuratorSkipped] Dish estimate pipeline active, skipping hot-path database search and resolver curator.');
+    }
+
+    const shouldRunDbSearch = !isDishEstimateEnabled(req) && !isWeightModification && !isMenuScale && !isEvaluationScale &&
       databaseMatchesArray.length === 0 && // skip if already restored from turn-1 resolvedDbCandidates
       (visionScoutRanAndReturnedItems || (!hasImage && uniqueQueries.length > 0));
 
@@ -4828,8 +4891,43 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       }
     }
 
-    // Backend-Side Mathematical Macro Aggregation for Component-Level Decomposition
-    preCalculatedItems = visionScoutItems.map((item: any, itemIdx: number) => {
+    if (isDishEstimateEnabled(req)) {
+      const ledgers = await Promise.all(
+        visionScoutItems.map(async (vItem: any, vIdx: number) => {
+          return finalizeDishLedger({
+            item: { ...vItem, scoutIndex: vItem.scoutIndex ?? vIdx },
+            nutrientBasisWeight: vItem.nutrientBasisWeight || vItem.estimatedWeightGrams,
+            consumedWeight: vItem.estimatedWeightGrams,
+          });
+        })
+      );
+      preCalculatedItems = ledgers.map((l) => {
+        addDebugLog(`[Budget] Finalized ledger for "${l.originalName}": ${l.nutrients.calories} kcal (${l.weightGrams}g, source=${l.dbSource})`);
+        return {
+          scoutIndex: l.scoutIndex,
+          originalName: l.originalName,
+          keyword: l.keyword || l.originalName,
+          foodType: l.dishClass,
+          estimatedWeightGrams: l.weightGrams,
+          portionMultiplier: 1.0,
+          nutrients: l.nutrients,
+          nutrients100g: {},
+          lockedNutrientKeys: l.lockedNutrientKeys,
+          rawNutritionLabel: l.dbSource === 'label' ? l.nutrients : null,
+          brandLock: l.brandLock,
+          dbSource: l.dbSource,
+          dbId: l.dbId,
+          atwaterFlag: l.atwaterFlag,
+          ingredients: l.ingredients,
+          visualIngredients: l.visualIngredients,
+          ingredientsList: l.ingredients.length > 0 ? l.ingredients.join(', ') : null,
+          boundingBox2D: (visionScoutItems[l.scoutIndex] || {}).boundingBox2D || null,
+          sourceImageIndex: (visionScoutItems[l.scoutIndex] || {}).sourceImageIndex ?? 0,
+        };
+      });
+    } else {
+      // Backend-Side Mathematical Macro Aggregation for Component-Level Decomposition
+      preCalculatedItems = visionScoutItems.map((item: any, itemIdx: number) => {
       const itemWeight = item.estimatedWeightGrams || 100;
       const aggregatedNutrients: Record<string, number> = {};
       NUTRIENT_KEYS.forEach(k => aggregatedNutrients[k] = 0);
@@ -7392,6 +7490,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
         sourceImageIndex: typeof item.sourceImageIndex === "number" ? item.sourceImageIndex : (item.sourceImageIndex ? Number(item.sourceImageIndex) : 0),
       };
     });
+    }
 
     let preCalculatedCtx = "";
     if (preCalculatedItems.length > 0) {
@@ -7668,17 +7767,30 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
                   scoutIndex: { type: Type.INTEGER },
                   canonicalDbName: { type: Type.STRING, description: "Standard database or product name, extremely concise (e.g. 'Whole Rolled Oats'). Do NOT include scaling, rationale, calculations, or explanations." },
                   weightGrams: { type: Type.INTEGER },
-                  dbSource: { type: Type.STRING, description: "'usda' | 'label' | 'estimated'" },
-                  dbId: { type: Type.STRING, nullable: true },
                   foodType: { 
                     type: Type.STRING, 
                     enum: ['grain', 'protein', 'vegetable', 'fruit', 'dairy', 'fat/oil', 'beverage', 'snack', 'condiment', 'prepared dish/entree', 'other'],
                     description: "Strictly one of: 'grain', 'protein', 'vegetable', 'fruit', 'dairy', 'fat/oil', 'beverage', 'snack', 'condiment', 'prepared dish/entree', 'other'.", 
                     nullable: true 
                   },
-                  cookingMethod: { type: Type.STRING, description: "Concise cooking method (e.g. 'raw', 'baked', 'grilled', 'boiled', 'fried').", nullable: true }
+                  cookingMethod: { type: Type.STRING, description: "Concise cooking method (e.g. 'raw', 'baked', 'grilled', 'boiled', 'fried').", nullable: true },
+                  correctedNutrients: {
+                    type: Type.OBJECT,
+                    properties: {
+                      calories: { type: Type.NUMBER, nullable: true },
+                      protein: { type: Type.NUMBER, nullable: true },
+                      totalFat: { type: Type.NUMBER, nullable: true },
+                      saturatedFat: { type: Type.NUMBER, nullable: true },
+                      sodium: { type: Type.NUMBER, nullable: true },
+                      addedSugar: { type: Type.NUMBER, nullable: true },
+                      totalFibre: { type: Type.NUMBER, nullable: true },
+                    },
+                    nullable: true,
+                    description: "Optional. If you identify an inaccurate or underestimated estimate (e.g. deep-fried oil absorption undercounted), output corrected values for this portion."
+                  },
+                  clinicalCorrectionNote: { type: Type.STRING, nullable: true, description: "If any nutrient was corrected, state the clinical reason (e.g. 'Adjusted fat +6g to account for deep-fried wonton oil absorption')." }
                 },
-                required: ["scoutIndex", "canonicalDbName", "weightGrams", "dbSource"]
+                required: ["scoutIndex", "canonicalDbName", "weightGrams"]
               }
             }
           },
@@ -8074,6 +8186,20 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       const comparisonData = rawParsed.comparison || { groups: [] };
       const preCalcByScoutIndex: Record<number, Record<string, number>> = {};
       if (visionScoutItems && visionScoutItems.length > 0) {
+        if (isDishEstimateEnabled(req)) {
+          await Promise.all(
+            visionScoutItems.map(async (sItem: any, idx: number) => {
+              const itemGrams = Number(sItem.weightGrams || sItem.estimatedGrams || sItem.estimatedWeightGrams || sItem.servingGrams || 100) || 100;
+              const ledger = await finalizeDishLedger({
+                item: sItem,
+                nutrientBasisWeight: sItem.nutrientBasisWeight || itemGrams,
+                consumedWeight: itemGrams,
+              });
+              addDebugLog(`[Budget] mode=D idx=${idx} item="${sItem.originalName || sItem.keyword}" kcal=${ledger.nutrients.calories} source=${ledger.dbSource} scoutEst=${sItem.estimatedCalories ?? 'n/a'}`);
+              preCalcByScoutIndex[idx] = ledger.nutrients as any;
+            })
+          );
+        } else {
         visionScoutItems.forEach((sItem: any, idx: number) => {
           const q = sItem.keyword || sItem.originalName || sItem.name || '';
           const normQ = normalizeFoodKey(q);
@@ -8112,6 +8238,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           addDebugLog(`[Reconcile] mode=D idx=${idx} action=${result.action} foundation=${result.foundationKcal} final=${result.finalKcal}`);
           preCalcByScoutIndex[idx] = result.nutrients;
         });
+        }
       }
       const resolvedGroups = resolveComparisonGroups(comparisonData.groups, visionScoutItems);
       addDebugLog(`[Comparison Resolve] ${visionScoutItems.length} scout item(s) -> ${resolvedGroups.length} group(s), covering ${resolvedGroups.reduce((sum: number, g: any) => sum + (g.items?.length || 0), 0)} item(s).`);
@@ -8550,13 +8677,36 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               }
             }
 
-            if (preMatch && preMatch.nutrients && item.weightGrams > 0 && (preMatch.hasComponents || preMatch.bestMatchDbId)) {
-              if (!preMatch.hasComponents && item.dbId && String(item.dbId) !== String(preMatch.bestMatchDbId)) {
+            if (preMatch && preMatch.nutrients && item.weightGrams > 0 && (isDishEstimateEnabled(req) || preMatch.hasComponents || preMatch.bestMatchDbId)) {
+              if (!isDishEstimateEnabled(req) && !preMatch.hasComponents && item.dbId && String(item.dbId) !== String(preMatch.bestMatchDbId)) {
                 // Dietitian picked a DIFFERENT database ID for a single-ingredient item. Do NOT inject preMatch nutrients, let the backend calculate from the LLM's chosen ID.
                 return item;
               }
               const weight = item.weightGrams;
-              const n = preMatch.nutrients;
+              const originalBasisWeight = Number(preMatch.estimatedWeightGrams || preMatch.weightGrams || preMatch.nutrientBasisWeight || weight);
+              const weightScaleFactor = (originalBasisWeight > 0 && Math.abs(weight - originalBasisWeight) > 0.01)
+                ? (weight / originalBasisWeight)
+                : 1.0;
+
+              const n = { ...preMatch.nutrients };
+              if (weightScaleFactor !== 1.0) {
+                NUTRIENT_KEYS.forEach(k => {
+                  if (n[k] !== undefined && n[k] !== null && Number.isFinite(Number(n[k]))) {
+                    n[k] = Number(((Number(n[k])) * weightScaleFactor).toFixed(2));
+                  }
+                });
+              }
+
+              if (item.correctedNutrients && typeof item.correctedNutrients === 'object') {
+                Object.entries(item.correctedNutrients).forEach(([k, v]) => {
+                  if (v !== null && v !== undefined && Number.isFinite(Number(v))) {
+                    n[k] = Number(v);
+                  }
+                });
+                if (item.clinicalCorrectionNote) {
+                  addDebugLog(`[Dietitian Clinical Correction] "${item.canonicalDbName || item.name}": ${item.clinicalCorrectionNote}`);
+                }
+              }
               const scale = 100 / weight;
 
               const injectedLabel: Record<string, number> = { servingSizeGrams: 100 };
@@ -8572,18 +8722,19 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                 cookingMethod: (preMatch.cookingMethod && preMatch.cookingMethod !== 'unknown') ? preMatch.cookingMethod : (item.cookingMethod || null),
                 components: item.components || preMatch.components || null,
                 syntheticBase100g: injectedLabel,
-                labelNutrientsPerServing: preMatch.labelNutrientsPerServing || preMatch.primaryBase100g || null,
-                primaryBase100g: preMatch.primaryBase100g || null,
-                primaryBaseMatchName: preMatch.primaryBaseMatchName,
+                labelNutrientsPerServing: preMatch.labelNutrientsPerServing || preMatch.primaryBase100g || injectedLabel,
+                primaryBase100g: preMatch.primaryBase100g || injectedLabel,
+                primaryBaseMatchName: preMatch.primaryBaseMatchName || item.canonicalDbName || item.name,
                 primaryBaseWeightG: preMatch.primaryBaseWeightG || item.weightGrams,
                 hasComponents: Boolean(preMatch.hasComponents),
                 componentsDetailList: preMatch.componentsDetailList || [],
                 cookingAdded: preMatch.cookingAdded || { addedCalories: 0, addedFat: 0, addedSaturatedFat: 0, addedSodium: 0 },
-                truthNutrients: preMatch.truthNutrients || {},
+                truthNutrients: preMatch.truthNutrients || n || {},
                 lockedNutrientKeys: preMatch.lockedNutrientKeys || [],
                 ingredientsList: preMatch.ingredientsList || item.ingredientsList || null,
-                dbSource: preMatch.bestMatchDbSource || item.dbSource || "estimated",
-                dbId: preMatch.bestMatchDbId || item.dbId || null
+                clinicalCorrectionNote: item.clinicalCorrectionNote || null,
+                dbSource: preMatch.dbSource || preMatch.bestMatchDbSource || item.dbSource || "estimated",
+                dbId: preMatch.dbId || preMatch.bestMatchDbId || item.dbId || null
               };
             }
             return item;
@@ -9024,9 +9175,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           let dbRefTag = "";
           const dbSourceUpper = String(it.dbSource || '').toUpperCase();
           const cleanItemName = dbNameStr ? dbNameStr.replace(' (Canonical Base)', '').replace(' (Estimated Component Baseline)', '') : (it.keyword || it.name || 'Ingredient');
+          const isDishEstimate = Boolean(it.isDishEstimate || dbSourceUpper === 'ESTIMATED' || it.syntheticBase100g || (isDishEstimateEnabled(req) && it.dbSource === "estimated"));
           // Prefer printed/brand truth for receipt attribution. Never let a name-token
-          // canonical match (e.g. "blueberry" → raw blueberries FDC) hijack a LABEL row.
-          const canonicalBase = (dbSourceUpper === 'LABEL' || dbSourceUpper === 'BRAND_OFFICIAL')
+          // canonical match (e.g. "blueberry" → raw blueberries FDC) hijack a LABEL row,
+          // and never link an estimated dish to USDA.
+          const canonicalBase = (dbSourceUpper === 'LABEL' || dbSourceUpper === 'BRAND_OFFICIAL' || isDishEstimate)
             ? null
             : lookupCanonicalBaseFood(dbNameStr || it.keyword || it.name);
           const realFdcId = (canonicalBase && canonicalBase.fdcId) ? canonicalBase.fdcId : ((dbSourceUpper === 'USDA' || dbSourceUpper === 'INTERNAL_CATALOG' || dbSourceUpper === 'USUAL_CATALOG') && it.dbId && !String(it.dbId).startsWith('canonical_') && !String(it.dbId).startsWith('printed_') && !String(it.dbId).startsWith('fallback_') && !isNaN(Number(it.dbId)) ? it.dbId : null);
@@ -9107,12 +9260,14 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           const dishIdentityReceipt =
             it.originalName || it.originalLocalName || it.keyword || it.name || it.canonicalDbName || "";
           const baseIngredientNameForPrepCheck = dbNameStr || it.keyword || it.name;
-          const isAlreadyPreparedReceipt = checkIfItemIsAlreadyPrepared(
-            baseIngredientNameForPrepCheck,
-            baseIngredientNameForPrepCheck,
-            it.dbSource,
-            base100Na
-          );
+          const isAlreadyPreparedReceipt = 
+            Boolean(it.hasLockedTruth || it.isDishEstimate || it.syntheticBase100g || (isDishEstimateEnabled(req) && it.dbSource === "estimated")) ||
+            checkIfItemIsAlreadyPrepared(
+              baseIngredientNameForPrepCheck,
+              baseIngredientNameForPrepCheck,
+              it.dbSource,
+              base100Na
+            );
 
           const lockedTruthReceipt = Boolean(
             it.dbSource === "label" ||
@@ -9332,6 +9487,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               componentCount: Array.isArray(it.components) ? it.components.length : 0,
               physicalForm: physicalFormObj?.physicalForm,
               chainName: it.chainName || null,
+              syntheticBase100g: it.syntheticBase100g,
+              isDishEstimate: isDishEstimateEnabled(req),
             }
           );
           
@@ -9750,6 +9907,43 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               const oldWeight = Math.max(1, Number(item.weightGrams) || 1);
               const R = newWeight / oldWeight;
 
+              if (isDishEstimateEnabled()) {
+                const ledger = await finalizeDishLedger({
+                  item: {
+                    ...item,
+                    originalName: item.name || item.originalName,
+                    keyword: item.keyword || item.name,
+                    nutrients: item.nutrients || {
+                      calories: item.calories,
+                      protein: item.protein,
+                      totalFat: item.totalFat,
+                      saturatedFat: item.saturatedFat,
+                      carbohydrates: item.carbohydrates,
+                      sodium: item.sodium,
+                    },
+                  },
+                  nutrientBasisWeight: item.nutrientBasisWeight || oldWeight,
+                  consumedWeight: newWeight,
+                  storedBrandLock: item.brandLock || null,
+                  storedOcrLock: item.rawNutritionLabel ? {
+                    basisType: item.rawNutritionLabel.basisType || 'per_dish',
+                    servingGrams: item.rawNutritionLabel.servingGrams || null,
+                    keys: item.lockedNutrientKeys || ['calories'],
+                    valuesAtBasis: item.rawNutritionLabel,
+                  } : null,
+                });
+                addDebugLog(`[Budget] mode=edit item="${item.name}" kcal=${ledger.nutrients.calories} source=${ledger.dbSource} weight=${newWeight}`);
+                item.weightGrams = newWeight;
+                item.calories = ledger.nutrients.calories;
+                item.protein = ledger.nutrients.protein;
+                item.totalFat = ledger.nutrients.totalFat;
+                item.saturatedFat = ledger.nutrients.saturatedFat;
+                item.carbohydrates = ledger.nutrients.carbohydrates;
+                item.sodium = ledger.nutrients.sodium;
+                if (item.nutrients) {
+                  item.nutrients = { ...item.nutrients, ...ledger.nutrients };
+                }
+              } else {
               const foundation: Record<string, number> = {
                 calories: Number(item.calories || 0) * R,
                 protein: Number(item.protein || 0) * R,
@@ -9779,6 +9973,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                 item.sodium = Number(((rec?.nutrients?.sodium ?? foundation?.sodium) || 0).toFixed(1));
                 item.carbohydrates = Number(((rec?.nutrients?.carbohydrates ?? foundation?.carbohydrates) || 0).toFixed(1));
                 if (scoutEst != null) item.estimatedCalories = scoutEst;
+              }
               }
 
               addDebugLog(`[Modify Math] update_weight of "${item.name}" (dbId: ${item.dbId}) from ${oldWeight}g to ${newWeight}g (ratio: ${R.toFixed(3)})`);

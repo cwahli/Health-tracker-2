@@ -552,7 +552,7 @@ export default function TaskPlaceholderCard({
                   <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
                     {scoutItems.map((item: any, idx: number) => {
                       const name = item.originalName || item.keyword || `Option ${idx + 1}`;
-                      const cals = item.estimatedCalories ?? item.rawNutritionLabel?.calories ?? item.preCalcNutrients?.calories;
+                      const cals = item.nutrients?.calories ?? item.calories ?? item.estimatedCalories ?? item.rawNutritionLabel?.calories ?? item.preCalcNutrients?.calories;
                       const numericCals = cals != null ? parseFloat(String(cals).replace(/[^\d.]/g, '')) : NaN;
                       return (
                         <span key={idx} className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-900/50 text-[11px] font-semibold flex items-center gap-1">

@@ -112,18 +112,19 @@ Per **dish item** (not per component):
 
 | Priority | Source | Effect |
 |----------|--------|--------|
-| 1 | Printed OCR / `rawNutritionLabel` keys | Hard lock those keys |
-| 2 | Official brand menu match (high confidence) | Hard lock official nutrients / kcal |
-| 3 | Foundation sum from resolved atomics | Shape of macros/micros; fills unlocked keys |
-| 4 | Scout `estimatedCalories` | Soft budget **only if** 1–2 missing |
-| 5 | Category density × weight | Last resort |
+| 1 | Printed OCR / `rawNutritionLabel` keys | Hard lock (scaled by serving size if applicable) |
+| 2 | Official brand menu match (`matchBrandMenu`) | Hard lock official basis nutrients; scaled by $R = \text{consumedWeight} / \text{nutrientBasisWeight}$ |
+| 3 | Scout per-dish direct core nutrients (including carbs) | Dish estimate ledger for unlocked keys |
+| Overlay | Atomic dictionary match (alias \| unique food_items \| FDC HIT_UNIQUE) | Populates unlocked macros & micros $\times \text{consumedWeight}/100$ |
+| Derive | Pure TypeScript derivations (`server_derivation.ts`) | Unsaturated fat, salt from sodium, carbohydrate energy fallback |
+| Prohibited | Category $\times$ weight, foundation $\Sigma$, resolver MISS fill, reality-check rescale | Never used to construct or mutate meal nutrients |
 
-**Yolk burger with only kcal printed**
+**Yolk burger with brand menu entry**
 
-- Budget hard-lock calories from brand/OCR.
-- Scout components (bun, beef, sauce…) build foundation.
-- Reconcile: **one** hard_lock scale of foundation → locked kcal.
-- Scout estimatedCalories **not used**.
+- `matchBrandMenu` locks official brand basis nutrients at 350g basis (760 kcal).
+- Scout estimates 350g portion $\rightarrow$ single scaler $R = 350/350 = 1.0 \rightarrow 760$ kcal.
+- In portion edits (e.g. 175g), single scaler $R = 175/350 = 0.5 \rightarrow 380$ kcal directly without re-querying or clamping.
+- Dietitian coaches on the exact finalized ledger.
 
 **Double-count bans**
 

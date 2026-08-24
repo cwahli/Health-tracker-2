@@ -131,7 +131,7 @@ describe('Bug #9 — visual-source portion-clarify guard', () => {
 
 
 describe('applyPortionChoices', () => {
-  it('scales estimatedCalories with weight and preserves rawNutritionLabel', () => {
+  it('updates estimatedWeightGrams and sets nutrientBasisWeight while preserving rawNutritionLabel', () => {
     const items = [
       {
         scoutIndex: 0,
@@ -143,9 +143,30 @@ describe('applyPortionChoices', () => {
     ];
     const out = applyPortionChoices(items, { '0': 100 });
     expect(out[0].estimatedWeightGrams).toBe(100);
-    expect(out[0].estimatedCalories).toBe(200);
+    expect(out[0].nutrientBasisWeight).toBe(200);
     expect(out[0].rawNutritionLabel).toEqual({ calories: '200 kcal / 100g' });
     expect(out[0].portionChoiceApplied).toBe(100);
+  });
+
+  it('scales legacy estimatedCalories when FOOD_DISH_ESTIMATE is 0', () => {
+    const prevEnv = process.env.FOOD_DISH_ESTIMATE;
+    try {
+      process.env.FOOD_DISH_ESTIMATE = '0';
+      const items = [
+        {
+          scoutIndex: 0,
+          estimatedWeightGrams: 200,
+          estimatedCalories: 400,
+          rawNutritionLabel: { calories: '200 kcal / 100g' },
+          keyword: 'granola',
+        },
+      ];
+      const out = applyPortionChoices(items, { '0': 100 });
+      expect(out[0].estimatedWeightGrams).toBe(100);
+      expect(out[0].estimatedCalories).toBe(200);
+    } finally {
+      process.env.FOOD_DISH_ESTIMATE = prevEnv;
+    }
   });
 
   it('no-ops when choices empty', () => {

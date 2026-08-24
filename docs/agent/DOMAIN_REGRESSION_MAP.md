@@ -22,6 +22,7 @@ If you touch a hot path and **no** row fits: add a unit/fixture test in the same
 
 | If you touch… | Run |
 |---------------|-----|
+| `server_dish_finalize.ts` / `server_brand_match.ts` / `server_derivation.ts` / `server_dish_classify.ts` | `npx vitest run server_derivation.test.ts server_dish_classify.test.ts server_brand_match.test.ts server_dish_finalize.test.ts` |
 | `server_budget_reconcile.ts` / budget / reconcile | `npx vitest run server_budget_reconcile.test.ts` · `node scripts/assert-budget-reconcile.mjs` |
 | `server_vision_scout.ts` / mergeScoutItems | `npx vitest run server_vision_scout.test.ts` (must include soft kcal + components preserve cases) |
 | Label truth / locks / hard-lock | `node scripts/assert-label-truth-locks.mjs` · `node scripts/assert-false-hard-lock.mjs` |
@@ -35,14 +36,14 @@ If you touch a hot path and **no** row fits: add a unit/fixture test in the same
 | Food log identity / history | `node scripts/assert-food-log-identity.mjs` · `npx vitest run src/utils/foodLogDedupe.test.ts` |
 | Broad food-calc pack | `node scripts/assert-food-calc-exact.mjs` and/or `assert-food-calc-final.mjs` |
 | Mode A / D / Edit executor / modal jobs | `npx vitest run src/jobs/__tests__/ModeDAndEdit.test.ts FoodAgentExecutor.test.ts` · `node scripts/assert-unified-modal-*.mjs` as relevant |
-| `server.ts` food finalize paths | At minimum: budget + vision merge + aggregation + one mode assert |
+| `server.ts` food finalize paths | At minimum: finalize/derivation + vision merge + portion clarify + one mode assert |
 
 **Invariant reminder:** Mode A PASS ≠ Mode D/Edit PASS. See `domains/food-calc.md`.
 
 **Food-calc smoke (any food math PR):**
 
 ```bash
-npx vitest run server_budget_reconcile.test.ts server_vision_scout.test.ts server_nutrient_aggregation.test.ts server_portion_clarify.test.ts tests/golden_meals.test.ts
+npx vitest run server_derivation.test.ts server_dish_classify.test.ts server_brand_match.test.ts server_dish_finalize.test.ts server_vision_scout.test.ts server_portion_clarify.test.ts src/jobs/__tests__/ModeDAndEdit.test.ts
 ```
 
 

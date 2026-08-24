@@ -303,6 +303,42 @@ export default function FoodHistoryTab({
     });
   };
 
+  const remapItemImageIndex = (item: any, from: number, to: number) => {
+    if (!item || typeof item !== 'object') return item;
+    const currIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
+    let newIdx = currIdx;
+    if (currIdx === from) {
+      newIdx = to;
+    } else if (from < to && currIdx > from && currIdx <= to) {
+      newIdx = currIdx - 1;
+    } else if (from > to && currIdx >= to && currIdx < from) {
+      newIdx = currIdx + 1;
+    }
+    return { ...item, sourceImageIndex: newIdx };
+  };
+
+  const remapItemsList = (items: any[] | undefined, from: number, to: number) => {
+    if (!Array.isArray(items)) return items;
+    return items.map(item => remapItemImageIndex(item, from, to));
+  };
+
+  const deleteItemImageIndex = (item: any, deletedIdx: number, remainingCount: number) => {
+    if (!item || typeof item !== 'object') return item;
+    const currIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
+    let newIdx = currIdx;
+    if (currIdx === deletedIdx) {
+      newIdx = Math.max(0, Math.min(deletedIdx, remainingCount - 1));
+    } else if (currIdx > deletedIdx) {
+      newIdx = Math.max(0, currIdx - 1);
+    }
+    return { ...item, sourceImageIndex: newIdx };
+  };
+
+  const deleteItemsList = (items: any[] | undefined, deletedIdx: number, remainingCount: number) => {
+    if (!Array.isArray(items)) return items;
+    return items.map(item => deleteItemImageIndex(item, deletedIdx, remainingCount));
+  };
+
   // Drag-and-drop Photo sorting
   const handlePhotoDragStart = (e: React.DragEvent, index: number) => {
     setDraggedPhotoIndex(index);
@@ -313,18 +349,23 @@ export default function FoodHistoryTab({
     e.preventDefault();
     if (draggedPhotoIndex === null || draggedPhotoIndex === index || !editLogState) return;
 
+    const from = draggedPhotoIndex;
+    const to = index;
     const currentUrls = editLogState.imageUrls ? [...editLogState.imageUrls] : (editLogState.imageUrl ? [editLogState.imageUrl] : []);
     const updatedUrls = [...currentUrls];
     
     // Perform splice
-    const [draggedItem] = updatedUrls.splice(draggedPhotoIndex, 1);
-    updatedUrls.splice(index, 0, draggedItem);
+    const [draggedItem] = updatedUrls.splice(from, 1);
+    updatedUrls.splice(to, 0, draggedItem);
     
-    setDraggedPhotoIndex(index);
+    setDraggedPhotoIndex(to);
     setEditLogState({
       ...editLogState,
       imageUrls: updatedUrls,
-      imageUrl: updatedUrls[0] || ''
+      imageUrl: updatedUrls[0] || '',
+      scoutItems: remapItemsList(editLogState.scoutItems, from, to),
+      itemsBreakdown: remapItemsList(editLogState.itemsBreakdown, from, to),
+      ...((editLogState as any).items ? { items: remapItemsList((editLogState as any).items, from, to) } : {})
     });
   };
 
@@ -337,17 +378,22 @@ export default function FoodHistoryTab({
     e.preventDefault();
     if (draggedPhotoIndex === null || draggedPhotoIndex === index) return;
 
+    const from = draggedPhotoIndex;
+    const to = index;
     const currentUrls = manualLog.imageUrls ? [...manualLog.imageUrls] : [];
     const updatedUrls = [...currentUrls];
     
-    const [draggedItem] = updatedUrls.splice(draggedPhotoIndex, 1);
-    updatedUrls.splice(index, 0, draggedItem);
+    const [draggedItem] = updatedUrls.splice(from, 1);
+    updatedUrls.splice(to, 0, draggedItem);
     
-    setDraggedPhotoIndex(index);
+    setDraggedPhotoIndex(to);
     setManualLog({
       ...manualLog,
       imageUrls: updatedUrls,
-      imageUrl: updatedUrls[0] || ''
+      imageUrl: updatedUrls[0] || '',
+      scoutItems: remapItemsList(manualLog.scoutItems, from, to),
+      itemsBreakdown: remapItemsList(manualLog.itemsBreakdown, from, to),
+      ...((manualLog as any).items ? { items: remapItemsList((manualLog as any).items, from, to) } : {})
     });
   };
 
@@ -1302,7 +1348,10 @@ export default function FoodHistoryTab({
                                         setEditLogState({
                                           ...editLogState,
                                           imageUrls: updatedUrls,
-                                          imageUrl: updatedUrls[0] || ''
+                                          imageUrl: updatedUrls[0] || '',
+                                          scoutItems: deleteItemsList(editLogState.scoutItems, idx, updatedUrls.length),
+                                          itemsBreakdown: deleteItemsList(editLogState.itemsBreakdown, idx, updatedUrls.length),
+                                          ...((editLogState as any).items ? { items: deleteItemsList((editLogState as any).items, idx, updatedUrls.length) } : {})
                                         });
                                       }}
                                       className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-slate-900/80 hover:bg-rose-600 text-white transition-colors cursor-pointer shadow-md z-10"

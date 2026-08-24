@@ -902,6 +902,8 @@ export function applyNutrientRealityChecks(
     componentCount?: number;
     physicalForm?: string | null;
     chainName?: string | null;
+    syntheticBase100g?: any;
+    isDishEstimate?: boolean;
   }
 ): void {
   if (!itemNutrients || typeof itemNutrients !== 'object') return;
@@ -917,11 +919,14 @@ export function applyNutrientRealityChecks(
     dbSource === "kiosk" || 
     dbSource === "screen" || 
     dbSource === "menu" || 
+    dbSource === "brand_official" ||
+    Boolean(ctx?.syntheticBase100g) ||
+    Boolean(ctx?.isDishEstimate) ||
     (typeof dbSource === "string" && dbSource.startsWith("label"));
 
   if (isLabelOrScreenSource) {
     if (addDebugLog) {
-      addDebugLog(`[Dietitian Reality Check] Heuristic checks skipped for "${itemName}" — dbSource is "${dbSource}" (printed label/screen/menu is ground truth). Atwater consistency check still applied.`);
+      addDebugLog(`[Dietitian Reality Check] Heuristic checks skipped for "${itemName}" — dbSource is "${dbSource}" (ground truth / dish estimate pipeline active). Atwater consistency check still applied.`);
     }
     return;
   }

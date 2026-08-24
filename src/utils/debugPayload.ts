@@ -75,6 +75,7 @@ export type DebugReportInput = {
   error?: string;
   debugUrl?: string;
   photoUrl?: string;
+  photoUrls?: string[];
   exportedAt?: string;
   mode?: string;
   savable?: boolean;
@@ -108,9 +109,23 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   if (input.version !== undefined) lines.push(`- **Version:** ${input.version}`);
   if (input.savable !== undefined) lines.push(`- **Savable:** ${input.savable}`);
   if (input.degradedStages && input.degradedStages.length > 0) lines.push(`- **Degraded Stages:** ${input.degradedStages.join(', ')}`);
-  if (input.debugUrl) lines.push(`- **Cold debug URL:** ${input.debugUrl}`);
-  if (input.photoUrl && /^https?:\/\//i.test(String(input.photoUrl))) {
-    lines.push(`- **Photo:** ${input.photoUrl}`);
+  if (Array.isArray(input.photoUrls) && input.photoUrls.length > 0) {
+    input.photoUrls.forEach((p, idx) => {
+      if (/^https?:\/\//i.test(String(p))) {
+        lines.push(`- **Photo ${idx + 1}:** ${p}`);
+      }
+    });
+  } else if (input.photoUrl && /^https?:\/\//i.test(String(input.photoUrl))) {
+    const photoBase = input.photoUrl.replace(/_\d+\.jpg$/, '');
+    const crumb = (input.userActionBreadcrumbs || []).find((c: any) => (c?.details?.imageCount && c.details.imageCount > 1) || (c?.details?.image_count && c.details.image_count > 1));
+    const imgCount = crumb?.details?.imageCount || crumb?.details?.image_count || 1;
+    if (imgCount > 1 && photoBase !== input.photoUrl) {
+      for (let i = 0; i < imgCount; i++) {
+        lines.push(`- **Photo ${i + 1}:** ${photoBase}_${i}.jpg`);
+      }
+    } else {
+      lines.push(`- **Photo:** ${input.photoUrl}`);
+    }
   }
   if (input.error) lines.push(`- **Error:** ${input.error}`);
   lines.push('');
