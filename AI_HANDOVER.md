@@ -1,7 +1,11 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-24
-**Status:** Chat image upload lock resolved; Precalculated ledger fiber key aligned; Inverted Dish Estimate Pipeline active; Dietitian coaching updated to Mode B; Biomarker Clinical Calibration Agent hardened.
+**Status:** Biomarker Health Audit aligned with Dictionary approval rule; Chat image upload lock resolved; Precalculated ledger fiber key aligned; Inverted Dish Estimate Pipeline active.
+
+- **Biomarker Health Audit Aligned with Dictionary Gate (`src/utils/biomarkerAuditEngine.ts` - 2026-08-24):**
+  - **Interface Update:** Added `missingRiskCategory` and `missingConditions` fields to `BiomarkerAuditItem.missingMetadata` interface type.
+  - **Check Expansion (`isCategoryMissing`):** Expanded the missing category evaluation to check for risk categories and potential conditions, ensuring perfect structural alignment with the Biomarker Dictionary's `isBiomarkerApproved` five-field gate.
 
 - **Pre-Calculated Prompt Context Fiber Alignment (`server.ts` - 2026-08-24):**
   - **Prompt Header Synchronization:** Aligned `preCalculatedCtx` authoritative summary header string to pull `(mealTotals.totalFibre ?? mealTotals.fiber)` ensuring dietary fiber in the dietitian context header accurately displays calculated meal fiber (e.g. 18.9g).

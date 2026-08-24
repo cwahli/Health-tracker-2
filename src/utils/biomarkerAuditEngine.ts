@@ -69,6 +69,8 @@ export interface BiomarkerAuditItem {
     missingCategory: boolean;
     missingBrackets?: boolean;
     missingDescription: boolean;
+    missingRiskCategory?: boolean;
+    missingConditions?: boolean;
     currentRange?: string;
     currentCategory?: string;
     catalogMatch?: {
@@ -1003,7 +1005,13 @@ export function runGeneralizedBiomarkerAudit(
     const hasNormalRange = !!def.normalRange && def.normalRange !== 'Unknown' && def.normalRange.trim() !== '';
     const hasRangeBrackets = Array.isArray(def.rangeBrackets) && def.rangeBrackets.length > 0;
     const isRangeMissing = !hasNormalRange && !hasRangeBrackets;
-    const isCategoryMissing = !def.category || def.category === 'other' || def.category === 'wellness' || def.needsApproval || !def.standardMedicalGrouping || def.standardMedicalGrouping === 'Other';
+    // Mirror isBiomarkerApproved() in src/utils/biomarkers.ts exactly, so the Audit's
+    // "clean" verdict can never disagree with the Dictionary's approval gate.
+    const hasRiskCategoryTag = Array.isArray(def.riskCategories) && def.riskCategories.length > 0 && def.riskCategories.some((r: string) => r.trim() !== '' && r !== 'Uncategorized');
+    const hasPotentialConditionTag = Array.isArray(def.potentialMedicalConditions) && def.potentialMedicalConditions.length > 0 && def.potentialMedicalConditions.some((c: string) => c.trim() !== '');
+    const isRiskCategoryMissing = !hasRiskCategoryTag;
+    const isConditionsMissing = !hasPotentialConditionTag;
+    const isCategoryMissing = !def.category || def.category === 'other' || def.category === 'wellness' || def.needsApproval || !def.standardMedicalGrouping || def.standardMedicalGrouping === 'Other' || isRiskCategoryMissing || isConditionsMissing;
     const isBracketsMissing = hasNormalRange && !hasRangeBrackets;
     const isDescriptionMissing = !def.description && !def.descriptions?.en;
 
@@ -1013,6 +1021,8 @@ export function runGeneralizedBiomarkerAudit(
         missingCategory: !!isCategoryMissing,
         missingBrackets: !!isBracketsMissing,
         missingDescription: !!isDescriptionMissing,
+        missingRiskCategory: !!isRiskCategoryMissing,
+        missingConditions: !!isConditionsMissing,
         currentRange: hasNormalRange ? def.normalRange : undefined,
         currentCategory: def.category && def.category !== 'other' && def.category !== 'wellness' ? def.category : undefined,
         catalogMatch: catalogMatchDef ? {
