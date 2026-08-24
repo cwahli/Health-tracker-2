@@ -2434,9 +2434,38 @@ ${logsText}`);
   };
 
   const handleSend = async (overrideText?: string | { text?: string; imageUrls?: string[]; compareOnly?: boolean; compareItems?: string[]; sourceMsgId?: string; skipScout?: boolean; activeScoutItems?: any; scoutContentType?: any; overrideMode?: string; userSelectedMode?: string; } | any, extraImages?: any[], extraOptions?: any) => {
+    if (isCompressing) {
+      console.log('[handleSend] Blocked — image compression in progress.');
+      return;
+    }
+
+    let textToSend = typeof overrideText === 'string' ? overrideText : (overrideText?.text || inputText);
+    const overrideImagesInner = typeof overrideText === 'object' && overrideText?.imageUrls ? overrideText.imageUrls : (extraImages || []);
+    const finalImages = overrideImagesInner.length > 0 ? overrideImagesInner : selectedImages;
+    const tempDates = overrideImagesInner.length > 0 ? (extraOptions?.imageDates || []) : [...imageDates];
+
+    if (!textToSend && finalImages.length > 0) {
+      textToSend = isAgent('food') ? 'Analyze this meal photo.' : (isAgent('medical') ? 'Please review my health records / lab report.' : 'Analyze attached photo.');
+    }
+
+    if (!textToSend && finalImages.length === 0) {
+      if (autoSendMessage) {
+        textToSend = autoSendMessage;
+      } else if (reviewBiomarkerKey) {
+        textToSend = buildBiomarkerReviewPrefill(reviewBiomarkerKey, undefined, biomarkers, profile);
+      } else if (isAgent('biomarker_review') || agentType === 'biomarker_review') {
+        textToSend = 'Please review my full set of biomarker data and log history.';
+      }
+    }
+
+    if (!textToSend && finalImages.length === 0) {
+      console.log('[handleSend] Blocked — both text and images are empty.');
+      return;
+    }
+
     const now = Date.now();
-    if (now - lastSendClickTimeRef.current < 1500) {
-      console.log('[handleSend] Blocked — debounced duplicate click within 1500ms.');
+    if (now - lastSendClickTimeRef.current < 1000) {
+      console.log('[handleSend] Blocked — debounced duplicate click within 1000ms.');
       return;
     }
     if (isSendingRef.current || isAnalyzing || isSubmitting) {
@@ -2445,8 +2474,8 @@ ${logsText}`);
     }
     lastSendClickTimeRef.current = now;
     recordBreadcrumb('submit_initiated', 'chat_composer', {
-      prompt: typeof overrideText === 'string' ? overrideText : overrideText?.text,
-      imageCount: extraImages?.length || selectedImages.length
+      prompt: textToSend,
+      imageCount: finalImages.length
     });
     isSendingRef.current = true;
     setIsSubmitting(true);
@@ -2454,6 +2483,7 @@ ${logsText}`);
     const failsafe = setTimeout(() => {
       isSendingRef.current = false;
       setIsSubmitting(false);
+      setIsAnalyzing(false);
     }, 60000);
     // Check credit limits before proceeding
     if (profile) {
@@ -2470,6 +2500,7 @@ ${logsText}`);
           isError: true
         };
         setMessages(prev => [...prev, errorMsg]);
+        clearTimeout(failsafe);
         isSendingRef.current = false;
         setIsSubmitting(false);
         setIsAnalyzing(false);
@@ -2482,10 +2513,6 @@ ${logsText}`);
     setActiveQueryId(currentReqId);
     setActiveReqId(currentReqId);
     setLiveThoughts({});
-    let textToSend = typeof overrideText === 'string' ? overrideText : (overrideText?.text || inputText);
-    const overrideImagesInner = typeof overrideText === 'object' && overrideText?.imageUrls ? overrideText.imageUrls : (extraImages || []);
-    const finalImages = overrideImagesInner.length > 0 ? overrideImagesInner : selectedImages;
-    const tempDates = overrideImagesInner.length > 0 ? (extraOptions?.imageDates || []) : [...imageDates];
     
     const compareOnly = typeof overrideText === 'object' && overrideText?.compareOnly;
     const compareItems = typeof overrideText === 'object' && overrideText?.compareItems;
@@ -2508,16 +2535,6 @@ ${logsText}`);
 
     if (isAgent('food')) {
       try {
-        if (!textToSend && finalImages.length > 0) {
-          textToSend = 'Analyze this meal photo.';
-        }
-        if (!textToSend && finalImages.length === 0) {
-          console.log('[handleSend] Blocked — both text and images are empty.');
-          isSendingRef.current = false;
-          setIsAnalyzing(false);
-          return;
-        }
-
         setUserSelectedMode(mappedMode);
         isManualModeRef.current = true;
 
@@ -2988,6 +3005,10 @@ ${logsText}`);
         );
         if (duplicate) {
           console.log(`[LogChat] B2: Skipping duplicate job for ${dedupeKey}, existing job: ${duplicate.id}`);
+          clearTimeout(failsafe);
+          isSendingRef.current = false;
+          setIsSubmitting(false);
+          setIsAnalyzing(false);
           onClose();
           return;
         }
@@ -3213,6 +3234,10 @@ ${logsText}`);
         onClose();
       } catch (err: any) {
         console.error('Failed to enqueue medical job:', err);
+        clearTimeout(failsafe);
+        isSendingRef.current = false;
+        setIsSubmitting(false);
+        setIsAnalyzing(false);
         const errorMsg: ChatMessage = {
           id: `msg_err_${Date.now()}`,
           role: 'assistant',
@@ -6425,9 +6450,11 @@ ${logsText}`);
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !isAnalyzing && !isSubmitting && !isSendingRef.current) {
-                    const triggerText = inputText.trim() || autoSendMessage || (reviewBiomarkerKey ? buildBiomarkerReviewPrefill(reviewBiomarkerKey, undefined, biomarkers, profile) : '');
-                    handleSend(triggerText || undefined);
+                  if (e.key === 'Enter' && !isAnalyzing && !isSubmitting && !isSendingRef.current && !isCompressing) {
+                    const triggerText = inputText.trim() || autoSendMessage || (reviewBiomarkerKey ? buildBiomarkerReviewPrefill(reviewBiomarkerKey, undefined, biomarkers, profile) : (selectedImages.length > 0 ? 'Analyze this meal photo.' : ''));
+                    if (triggerText || selectedImages.length > 0) {
+                      handleSend(triggerText || undefined);
+                    }
                   }
                 }}
                 placeholder={t.chatPlaceholder}
@@ -6438,19 +6465,21 @@ ${logsText}`);
                 id="food-chat-send-btn"
                 type="button"
                 onClick={() => {
-                  if (isAnalyzing || isSubmitting || isSendingRef.current) return;
-                  const triggerText = inputText.trim() || autoSendMessage || (reviewBiomarkerKey ? buildBiomarkerReviewPrefill(reviewBiomarkerKey, undefined, biomarkers, profile) : '');
-                  handleSend(triggerText || undefined);
+                  if (isAnalyzing || isSubmitting || isSendingRef.current || isCompressing) return;
+                  const triggerText = inputText.trim() || autoSendMessage || (reviewBiomarkerKey ? buildBiomarkerReviewPrefill(reviewBiomarkerKey, undefined, biomarkers, profile) : (selectedImages.length > 0 ? 'Analyze this meal photo.' : ''));
+                  if (triggerText || selectedImages.length > 0) {
+                    handleSend(triggerText || undefined);
+                  }
                 }}
-                disabled={isAnalyzing || isSubmitting || isSendingRef.current}
-                className={`px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs flex items-center gap-1.5 shrink-0 ${(isAnalyzing || isSubmitting || isSendingRef.current) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'}`}
+                disabled={isAnalyzing || isSubmitting || isSendingRef.current || isCompressing}
+                className={`px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs flex items-center gap-1.5 shrink-0 ${(isAnalyzing || isSubmitting || isSendingRef.current || isCompressing) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'}`}
               >
-                {(isAnalyzing || isSubmitting) ? (
+                {(isAnalyzing || isSubmitting || isCompressing) ? (
                   <Loader className="w-4 h-4 animate-spin" />
                 ) : (
                   <Send className="w-4 h-4" />
                 )}
-                <span>{(isAnalyzing || isSubmitting) ? 'Analyzing...' : 'Analyze'}</span>
+                <span>{isCompressing ? 'Compressing...' : (isAnalyzing || isSubmitting) ? 'Analyzing...' : 'Analyze'}</span>
               </button>
             </div>
           )}

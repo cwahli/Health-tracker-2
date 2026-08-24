@@ -3159,7 +3159,7 @@ export default function App() {
       } finally {
         setIsAuthChecking(false);
       }
-    }, 8000);
+    }, 12000);
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       clearTimeout(fallbackTimeout);

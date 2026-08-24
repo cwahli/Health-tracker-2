@@ -1,7 +1,15 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-24
-**Status:** Inverted Dish Estimate Pipeline active; Dietitian coaching updated to Mode B; Biomarker Clinical Calibration Agent hardened against scale & unit conflicts.
+**Status:** Chat image upload lock resolved; Precalculated ledger fiber key aligned; Inverted Dish Estimate Pipeline active; Dietitian coaching updated to Mode B; Biomarker Clinical Calibration Agent hardened.
+
+- **Pre-Calculated Prompt Context Fiber Alignment (`server.ts` - 2026-08-24):**
+  - **Prompt Header Synchronization:** Aligned `preCalculatedCtx` authoritative summary header string to pull `(mealTotals.totalFibre ?? mealTotals.fiber)` ensuring dietary fiber in the dietitian context header accurately displays calculated meal fiber (e.g. 18.9g).
+
+- **Chat Image Upload & Submission Guard Fix (`src/components/LogChat.tsx` - 2026-08-24):**
+  - **Early Validation Before State Locking:** Shifted text and image resolution logic (`textToSend`, `finalImages`) prior to setting `isSubmitting(true)` and `isAnalyzing(true)`, preventing deadlocks when clicking send before images finish compressing or with empty input.
+  - **Compression State Synchronization:** Added `isCompressing` checks to the input Enter handler, Send button disabled condition, and button status label.
+  - **Failsafe & Submission State Cleanup:** Added comprehensive failsafe timer clear and state resets (`setIsSubmitting(false)`, `setIsAnalyzing(false)`, `isSendingRef.current = false`) across all early exit, deduplication, quota, and error catch paths.
 
 - **Clinical Calibration Agent Unit Consistency Hardening (2026-08-24):**
   - **Prompt Mandate (`server.ts`):** Injected `=== UNIT CONSISTENCY MANDATE (STRICT) ===` to instruct the Clinical Calibration Agent that all ranges and target values must strictly align with the declared unit of the biomarker, reducing overall system prompt word count.
