@@ -73,6 +73,7 @@ import {
   mergeStagedExtract,
 } from './src/utils/biomarkerLifecycle';
 import { extractMostRecentImageDate } from './src/utils/dateUtils.js';
+import { extractUnitFromString, normalizeUnitEquivalence } from './src/utils/biomarkerAuditEngine';
 import * as cheerio from "cheerio";
 import fs from "fs";
 
@@ -88,6 +89,68 @@ import { adminRouter } from './server_routes_admin.js';
 import { healthConnectRouter } from './server_routes_health_connect.js';
 
 export const BEVERAGE_RAW_PATTERN = /\b(beverage|drink|water|juice|beer|wine|soda|cola|tea|coffee|cappuccino|espresso|latte|mocha|macchiato|boba|smoothie|shake|milk|oat\s*milk|oatmilk|almond\s*milk|almondmilk|soy\s*milk|soymilk|coconut\s*milk|dairy|yogurt|fruit|melon|watermelon|apple|orange|banana|berry|berries|grape|citrus|salad|raw|fresh|broth|soup)\b/i;
+
+export function sanitizeReviewedBiomarkerUnitConsistency(item: any): any {
+  if (!item || typeof item !== 'object') return item;
+  const declaredUnit = item.unit || '';
+  const normalizedDeclared = normalizeUnitEquivalence(declaredUnit);
+
+  let hasMismatch = false;
+
+  // Check brackets range
+  if (Array.isArray(item.rangeBrackets)) {
+    for (const b of item.rangeBrackets) {
+      if (b && typeof b.range === 'string') {
+        const bracketUnit = extractUnitFromString(b.range);
+        if (bracketUnit) {
+          const normalizedBracket = normalizeUnitEquivalence(bracketUnit);
+          if (normalizedDeclared && normalizedBracket && normalizedDeclared !== normalizedBracket) {
+            hasMismatch = true;
+            console.warn(`[data_review] Unit mismatch detected in bracket range "${b.range}" (found unit "${bracketUnit}", normalized "${normalizedBracket}") vs declared unit "${declaredUnit}" (normalized "${normalizedDeclared}") for biomarker key "${item.key}"`);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Check profileAdjustedNormalRange
+  if (!hasMismatch && typeof item.profileAdjustedNormalRange === 'string') {
+    const rangeUnit = extractUnitFromString(item.profileAdjustedNormalRange);
+    if (rangeUnit) {
+      const normalizedRange = normalizeUnitEquivalence(rangeUnit);
+      if (normalizedDeclared && normalizedRange && normalizedDeclared !== normalizedRange) {
+        hasMismatch = true;
+        console.warn(`[data_review] Unit mismatch detected in profileAdjustedNormalRange "${item.profileAdjustedNormalRange}" vs declared unit "${declaredUnit}" for biomarker key "${item.key}"`);
+      }
+    }
+  }
+
+  // Check optimalValue
+  if (!hasMismatch && typeof item.optimalValue === 'string') {
+    const optimalUnit = extractUnitFromString(item.optimalValue);
+    if (optimalUnit) {
+      const normalizedOptimal = normalizeUnitEquivalence(optimalUnit);
+      if (normalizedDeclared && normalizedOptimal && normalizedDeclared !== normalizedOptimal) {
+        hasMismatch = true;
+        console.warn(`[data_review] Unit mismatch detected in optimalValue "${item.optimalValue}" vs declared unit "${declaredUnit}" for biomarker key "${item.key}"`);
+      }
+    }
+  }
+
+  if (hasMismatch) {
+    console.warn(`[data_review] Discarding unit-mismatched AI output ranges for biomarker key "${item.key}" due to scale/unit inconsistency.`);
+    return {
+      ...item,
+      rangeBrackets: [],
+      profileAdjustedNormalRange: "",
+      optimalValue: "",
+      _unitConsistencyDropped: true
+    };
+  }
+
+  return item;
+}
 
 export function extractOFFNutrientsPer100g(product: any): Record<string, number> {
   const profile: Record<string, number> = {};
@@ -7503,7 +7566,18 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
 
     let preCalculatedCtx = "";
     if (preCalculatedItems.length > 0) {
-      preCalculatedCtx = "=== BACKEND PRE-CALCULATED ITEM NUTRIENTS (Absolute Truth) ===\n" +
+      const mealTotals = preCalculatedItems.reduce((acc: any, it: any) => {
+        const n = it.nutrients || {};
+        NUTRIENT_KEYS.forEach(k => {
+          acc[k] = (acc[k] || 0) + (Number(n[k]) || 0);
+        });
+        acc.weightGrams = (acc.weightGrams || 0) + (Number(it.estimatedWeightGrams) || 0);
+        return acc;
+      }, { weightGrams: 0 });
+
+      preCalculatedCtx = "=== BACKEND PRE-CALCULATED AUTHORITATIVE MEAL TOTALS (33-Nutrient Ledger) ===\n" +
+        `Total Weight: ${Math.round(mealTotals.weightGrams || 0)}g | Calories: ${Math.round(mealTotals.calories || 0)} kcal | Protein: ${Math.round((mealTotals.protein || 0) * 10) / 10}g | Total Fat: ${Math.round((mealTotals.totalFat || 0) * 10) / 10}g (Sat Fat: ${Math.round((mealTotals.saturatedFat || 0) * 10) / 10}g, Trans Fat: ${Math.round((mealTotals.transFat || 0) * 10) / 10}g) | Carbs: ${Math.round((mealTotals.carbohydrates || 0) * 10) / 10}g (Fiber: ${Math.round((mealTotals.fiber || 0) * 10) / 10}g, Sugar: ${Math.round((mealTotals.sugar || 0) * 10) / 10}g, Added Sugar: ${Math.round((mealTotals.addedSugar || 0) * 10) / 10}g) | Sodium: ${Math.round(mealTotals.sodium || 0)}mg | Potassium: ${Math.round(mealTotals.potassium || 0)}mg | Calcium: ${Math.round(mealTotals.calcium || 0)}mg | Iron: ${Math.round((mealTotals.iron || 0) * 10) / 10}mg | Cholesterol: ${Math.round(mealTotals.cholesterol || 0)}mg\n\n` +
+        "=== BACKEND PRE-CALCULATED ITEM NUTRIENTS (Authoritative Item Breakdown) ===\n" +
         preCalculatedItems.map(item => {
           const n = item.nutrients || {};
           return `- "${item.originalName}" (${item.estimatedWeightGrams}g):\n` +
@@ -11218,20 +11292,23 @@ Your responses MUST be extremely concise to fit within token limits:
 - Keep 'specificRiskContext' to 1-2 short sentences (20 words maximum).
 - Under 'rangeBrackets', define only necessary brackets (e.g. Optimal, Elevated, Low). For severity scores, use the 4 exact brackets defined in the severity mandate.
 === OPTIMAL VALUE vs NORMAL RANGE MANDATE ===
-- 'profileAdjustedNormalRange': The healthy reference range bounds where the biomarker is not at risk (e.g. '18.5 - 22.9 kg/m2').
-- 'optimalValue': The SPECIFIC SINGLE IDEAL TARGET VALUE for this specific user profile to aim for (e.g., '21.0 kg/m2' for BMI, '30 mmol/mol' for HbA1c, '115 mmHg' for SBP, '1.2 mmol/L' for ApoB). This MUST be a specific single ideal target value/point within the healthy spectrum calculated for this patient's age/gender/profile, NOT a range string and NOT a repeat of normalRange. The patient should aim for an ideal target point, not just stay barely below the at-risk cutoff.
+- 'profileAdjustedNormalRange': Healthy reference range (e.g. '18.5 - 22.9 kg/m2').
+- 'optimalValue': Single specific target point within healthy range (e.g., '21.0 kg/m2' for BMI, '115 mmHg' for SBP), NOT a range or repeat of normalRange.
+
+=== UNIT CONSISTENCY MANDATE (STRICT) ===
+Every clinical range bound, normal range, and target value described in 'profileAdjustedNormalRange', 'optimalValue', and 'rangeBrackets[].range' MUST strictly use the EXACT declared 'unit' of the biomarker. Under no circumstances should you embed a composite or index unit like 'kg/m²' if the biomarker's declared 'unit' is 'kg'. Composite/index units are ONLY valid when the biomarker's own declared 'unit' matches that composite unit exactly.
 
 === TASK: PERSONALISED HEALTH RISK ESTIMATION ===
-For each biomarker, follow a strict logical funnel to determine the correct ranges and status:
-"_demographicAudit": A mandatory internal reasoning object where you actively contrast Western global standards with regional/ethnic guidelines.
-"profileAdjustedNormalRange": The final calibrated range based on your audit for which the biomarker is not at risk.
-"optimalValue": A single specific ideal target value (e.g. '21.0 kg/m2' for BMI) that this user profile should aim for within the healthy spectrum.
-"rangeBrackets": List each range bracket with its naming and value ranges, adjusted to match your demographic audit. CRITICAL: The brackets MUST be continuous (no numerical gaps or missing values between brackets) and must fully map out the bounds of the profileAdjustedNormalRange. Include bounds for each bracket.
-"description": A clear, ultra-short description of the physiological role.
-"_statusReasoning": A strict mathematical comparison of the userValue against the profileAdjustedNormalRange.
-"reference": State the explicit clinical reference body acting as the anchor (e.g. 'KDIGO 2024 Guidelines').
-"status": Assign 'Optimal', 'Sub-Optimal (Action Zone)', or 'At Risk'. MATHEMATICAL BINDING RULE: Do not apply artificial clinical leniency to expand reference ranges. Instead, map the user's value strictly to the three-tiered status system. 'Optimal' means ideal target homeostasis. 'Sub-Optimal (Action Zone)' means early deviation requiring preventative attention but not immediately pathogenic. 'At Risk' means outside the action zone.
-"specificRiskContext": Explain why this value matters for this demographic based on the final status.
+For each biomarker, follow a strict logical funnel to determine ranges and status:
+"_demographicAudit": Reasoning object contrasting Western global standards with regional guidelines.
+"profileAdjustedNormalRange": Final calibrated range where biomarker is not at risk.
+"optimalValue": Single specific ideal target point within healthy spectrum.
+"rangeBrackets": Continuous brackets (no gaps) mapping the bounds of profileAdjustedNormalRange.
+"description": 1 short sentence physiological role.
+"_statusReasoning": Strict mathematical comparison of userValue against profileAdjustedNormalRange.
+"reference": Clinical reference body acting as the anchor.
+"status": 'Optimal', 'Sub-Optimal (Action Zone)', or 'At Risk' based strictly on userValue location.
+"specificRiskContext": 1-2 short sentences on clinical relevance.
 === CRITICAL REQUIREMENTS ===
 You MUST include an analysis for EVERY biomarker in the input list.
 Your output MUST be a valid JSON object matching the schema provided.`;
@@ -11777,7 +11854,8 @@ Your output MUST be a valid JSON object matching the schema provided.`;
           if (parsed) {
             message = parsed.message || "";
             extremeDivergences = Array.isArray(parsed.extremeDivergences) ? parsed.extremeDivergences : [];
-            reviewedBiomarkers = Array.isArray(parsed.reviewedBiomarkers) ? parsed.reviewedBiomarkers : [];
+            const rawReviewed = Array.isArray(parsed.reviewedBiomarkers) ? parsed.reviewedBiomarkers : [];
+            reviewedBiomarkers = rawReviewed.map(sanitizeReviewedBiomarkerUnitConsistency);
           }
         } catch (e) {
           console.error("data_review JSON parse error", e);

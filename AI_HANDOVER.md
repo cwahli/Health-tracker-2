@@ -1,7 +1,15 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-24
-**Status:** Inverted Dish Estimate Pipeline deployed, verified, and active as default. 3-rung truth hierarchy, single scaler ($R = W_1/W_0$), pure TS derivation, standalone condiment capping fix, and dietitian single-ledger parity fully operational (53/53 tests passing).
+**Status:** Inverted Dish Estimate Pipeline active; Dietitian coaching updated to Mode B; Biomarker Clinical Calibration Agent hardened against scale & unit conflicts.
+
+- **Clinical Calibration Agent Unit Consistency Hardening (2026-08-24):**
+  - **Prompt Mandate (`server.ts`):** Injected `=== UNIT CONSISTENCY MANDATE (STRICT) ===` to instruct the Clinical Calibration Agent that all ranges and target values must strictly align with the declared unit of the biomarker, reducing overall system prompt word count.
+  - **Structural Guard (`server.ts`):** Implemented a top-level exported `sanitizeReviewedBiomarkerUnitConsistency` function utilizing `extractUnitFromString` and `normalizeUnitEquivalence` to filter and drop any inconsistent ranges/optimal targets dynamically from raw reviewed output.
+
+- **Mode B Dietitian Framework Update (2026-08-24):**
+  - **4-Beat Narrative Guidelines (`agents/dietitianInstructions.ts`):** Transitioned Dietitian coaching instructions to the Mode B framework: Beat 1 (Asset & Metric praise), Beat 2 (Contextual impact without shame), Beat 3 (Physiological balance & digestive pacing), and Beat 4 (Actionable next step / gentle movement).
+  - **Few-Shot Prompt Example (`agents/dietitianInstructions.ts`):** Aligned few-shot exemplar narrative to construct comforting, supportive feedback with 0 net line/word expansion.
 
 - **Food Calculation Pipeline Inversion & Dish Estimate Architecture (2026-08-24):**
   - **PR 1: Pure TS Derivation Module (`server_derivation.ts`):** Implemented pure mathematical calculations for unsaturated fat (`totalFat - saturatedFat - transFat`), salt from sodium (`sodium * 2.54 / 1000`), and carbohydrate fallback (`(kcal - 4P - 9F)/4`) post-Atwater. (9/9 unit tests passing).
