@@ -23,31 +23,33 @@ export const ScoutNutrientsSchema = z.object({
 }).passthrough();
 
 export const ScoutItemComponentSchema = z.object({
-  searchQuery: z.string().optional(),
-  volumePercentage: z.number().finite().positive().optional(),
-  visualSheen: z.number().min(0.0).max(1.0).optional(),
-  visualCoating: z.number().min(0.0).max(1.0).optional(),
-  pieceCount: z.number().optional(),
+  searchQuery: z.string().nullable().optional(),
+  volumePercentage: z.number().finite().positive().nullable().optional(),
+  visualSheen: z.number().min(0.0).max(1.0).nullable().optional(),
+  visualCoating: z.number().min(0.0).max(1.0).nullable().optional(),
+  pieceCount: z.number().nullable().optional(),
   suggestedFdcId: z.string().nullable().optional(),
 });
 
 export const ScoutItemSchema = z.object({
-  originalName: z.string().optional(),
-  keyword: z.string().optional(),
-  itemConfidence: z.string().optional(),
-  estimatedWeightGrams: z.number().finite().nonnegative().optional(),
-  nutrientBasisWeight: z.number().finite().nonnegative().optional(),
+  originalName: z.string().nullable().optional(),
+  keyword: z.string().nullable().optional(),
+  itemConfidence: z.string().nullable().optional(),
+  estimatedWeightGrams: z.number().finite().nonnegative().nullable().optional(),
+  nutrientBasisWeight: z.number().finite().nonnegative().nullable().optional(),
   /** Soft visual calorie estimate for the WHOLE item portion (legacy mirror of nutrients.calories). */
   estimatedCalories: z.number().finite().nonnegative().nullable().optional(),
-  cookingMethod: z.string().optional(),
-  ingredients: z.array(z.string()).optional(),
-  nutrients: ScoutNutrientsSchema.optional(),
-  components: z.array(ScoutItemComponentSchema).optional(),
+  isStandaloneCondimentPacket: z.boolean().nullable().optional(),
+  cookingMethod: z.string().nullable().optional(),
+  ingredients: z.array(z.string()).nullable().optional(),
   chainName: z.string().nullable().optional(),
   rawNutritionLabel: z.record(z.string(), z.any()).nullable().optional(),
+  nutrients: ScoutNutrientsSchema.nullable().optional(),
+  components: z.array(ScoutItemComponentSchema).nullable().optional(),
+  ingredientsList: z.string().nullable().optional(),
   lockedNutrientKeys: z.array(z.string()).nullable().optional(),
-  boundingBox2D: z.array(z.number()).optional(),
-  sourceImageIndex: z.number().optional(),
+  boundingBox2D: z.array(z.number()).nullable().optional(),
+  sourceImageIndex: z.number().nullable().optional(),
 }).passthrough();
 
 const LABEL_STOPWORDS = new Set([
@@ -103,8 +105,8 @@ export function canMergeScoutLabelIntoFood(
 }
 
 export const VisionScoutSchema = z.object({
-  items: z.array(ScoutItemSchema).optional(),
-  diningEnvironment: z.string().optional(),
+  items: z.array(ScoutItemSchema).nullable().optional(),
+  diningEnvironment: z.string().nullable().optional(),
 }).passthrough();
 
 export const scoutSystemInstruction = `System Instruction:
@@ -122,6 +124,7 @@ STEP 2: UNIVERSAL DISH EXTRACTION & DEDUPLICATION
   3. STRICT PRINTED TRUTH IN rawNutritionLabel: Transcribe ONLY values that are literally visible/printed on the image into 'rawNutritionLabel'. NEVER invent unprinted fields.
   4. SUGAR FIELDS — TOTAL vs ADDED: 'sugar' = Total Sugars. 'addedSugar' must be populated ONLY when the label explicitly prints an "Added Sugars" line. UK/EU labels almost never print this — leave 'addedSugar' null.
 - BRAND SEPARATION: Apply 'chainName' strictly to branded staples ("Sainsbury oat"). Emit companion foods (fruits, drinks) as unbranded items.
+- RAW NUTRITION LABEL FIRST (NO DOUBLE WORK): Transcribe printed package labels or menu screens into 'rawNutritionLabel' FIRST. For any nutrient keys already covered in 'rawNutritionLabel', simply OMIT those keys from 'nutrients' entirely (do NOT output null or duplicate estimates). Only include in 'nutrients' the unmentioned/unprinted nutrients that were NOT listed on the label. The backend automatically scales and uses 'rawNutritionLabel' as authoritative ground truth.
 - PRECISE COUNTING & OCCLUSION: Inspect open pastry bags/boxes for stacked items. Split into individual items with realistic weights.
 - PACKAGE LABELS (UK/EU 100G BASELINE): Extract "Per 100g" column data and set "servingSize" to "100g" in 'rawNutritionLabel'.
 
@@ -130,6 +133,7 @@ STEP 3: DISH ESTIMATES & CULINARY CALIBRATION
 - CULINARY & REGIONAL CALIBRATION: Calibrate portion unit sizes, default proteins/ingredients, and cooking fat to the specific cuisine's regional norms (e.g. fried coatings/crisps absorb 25–35% fat by weight; stir-fry adds +5–10g oil; steamed/boiled is fat-neutral; Halal environments use poultry/beef/seafood).
 - INGREDIENTS: Plain string list in 'ingredients' (e.g. ["noodles", "chicken", "vegetables"]).
 - NAMES: 'originalName' = exact local/printed dish name. 'keyword' = concise canonical English name.
+- CONDIMENTS: Set 'isStandaloneCondimentPacket' to true ONLY if the item is a tiny standalone condiment packet or small sauce cup (e.g. ketchup packet, small mayo dip). Set it to false for all main dishes, plates, bowls, salads, wraps, sandwiches, or mixed meals that happen to contain sauce.
 
 === SYSTEM CONSTRAINTS ===
 Output exactly ONE JSON object matching this schema. You MUST include 'nutrients' with realistic estimated numeric values for every item:
@@ -145,6 +149,12 @@ Output exactly ONE JSON object matching this schema. You MUST include 'nutrients
       "chainName": "string | null",
       "estimatedWeightGrams": 250,
       "ingredients": ["noodles", "chicken", "wonton wrapper", "spices"],
+      "rawNutritionLabel": {
+        "servingSize": "100g",
+        "calories": "190 kcal",
+        "protein": "8.8g",
+        "totalFat": "6.4g"
+      },
       "nutrients": {
         "calories": 480,
         "protein": 22,
@@ -163,10 +173,10 @@ Output exactly ONE JSON object matching this schema. You MUST include 'nutrients
         "magnesium": 55,
         "vitaminD": 0
       },
-      "rawNutritionLabel": null,
       "ingredientsList": "Noodles, chicken, spices",
       "boundingBox2D": [150, 200, 800, 750],
       "sourceImageIndex": 0,
+      "isStandaloneCondimentPacket": false,
       "cookingMethod": "boiled"
     }
   ]
@@ -183,7 +193,23 @@ function validateOrFallback<T>(
 ): T {
   const result = schema.safeParse(parsed);
   if (!result.success) {
-    addDebugLog(`[Zod Validation Failed] ${label}: ${result.error.message}. Raw output: ${rawText}`);
+    addDebugLog(`[Zod Validation Failed] ${label}: ${result.error.message}. Attempting soft recovery...`);
+    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.items)) {
+      parsed.items = parsed.items.map((item: any) => {
+        if (!item || typeof item !== 'object') return item;
+        if (item.ingredients === null) item.ingredients = undefined;
+        if (item.components === null) item.components = undefined;
+        if (item.lockedNutrientKeys === null) item.lockedNutrientKeys = undefined;
+        if (item.boundingBox2D === null) item.boundingBox2D = undefined;
+        return item;
+      });
+      const retryResult = schema.safeParse(parsed);
+      if (retryResult.success) {
+        addDebugLog(`[Zod Recovery Success] ${label}: Recovered parsed items after sanitizing null fields.`);
+        return retryResult.data;
+      }
+    }
+    addDebugLog(`[Zod Hard Fallback] ${label}: Unrecoverable validation error. Raw output: ${rawText}`);
     return fallback;
   }
   return result.data;
@@ -1046,7 +1072,7 @@ export function parseAndHealVisionScout(
         };
 
         // Volumetric Tuning for standalone high-density condiments (never parent dishes)
-        if (isStandaloneCondimentPacket(newItem)) {
+        if (newItem.isStandaloneCondimentPacket === true || (newItem.isStandaloneCondimentPacket !== false && isStandaloneCondimentPacket(newItem))) {
           if (newItem.estimatedWeightGrams > 50) {
             newItem.estimatedWeightGrams = 30;
             if (newItem.estimatedCalories) {
@@ -1307,8 +1333,8 @@ export function parseAndHealVisionScout(
             }
           }
 
-          // Fallback: only when totally unambiguous by construction (exactly 2 items total).
-          if (!primaryItem && visionScoutItems.length === 2) {
+          // Fallback: when unambiguous by construction (exactly 2 items total OR exactly 1 non-label food candidate).
+          if (!primaryItem && (visionScoutItems.length === 2 || candidates.length === 1)) {
             primaryItem = candidates[0]?.it || null;
           }
 

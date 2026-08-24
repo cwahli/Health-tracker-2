@@ -92,7 +92,18 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
       rawLabel?.servingSize === '100g' ||
       rawLabel?.serving === '100g' ||
       (input.storedOcrLock && input.storedOcrLock.basisType === 'per_100g');
-    const ocrBasis = isPer100g ? 'per_100g' : 'per_dish';
+    
+    let ocrServingGrams: number | null = null;
+    if (rawLabel?.servingGrams && Number(rawLabel.servingGrams) > 0) {
+      ocrServingGrams = Number(rawLabel.servingGrams);
+    } else if (rawLabel?.servingSize) {
+      const match = String(rawLabel.servingSize).match(/([\d.]+)\s*g/i);
+      if (match) ocrServingGrams = parseFloat(match[1]);
+    }
+
+    const ocrScale = isPer100g
+      ? (consumedWeight / 100)
+      : ((ocrServingGrams && ocrServingGrams > 0) ? (consumedWeight / ocrServingGrams) : R);
     
     // Process OCR nutrients
     const rawCalStr = rawLabel?.calories ?? rawLabel?.energy ?? rawLabel?.kcal;
@@ -100,9 +111,7 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
       ? rawCalStr
       : (rawCalStr ? parseFloat(String(rawCalStr).replace(/[^0-9.]/g, '')) : NaN);
     if (Number.isFinite(ocrCal) && ocrCal > 0) {
-      nutrients.calories = ocrBasis === 'per_100g'
-        ? Math.round(ocrCal * (consumedWeight / 100))
-        : Math.round(ocrCal * R);
+      nutrients.calories = Math.round(ocrCal * ocrScale);
       lockedNutrientKeys.push('calories');
     }
 
@@ -111,9 +120,7 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
       const v = rawLabel?.[f] ? parseFloat(String(rawLabel[f]).replace(/[^0-9.]/g, '')) : NaN;
       if (Number.isFinite(v)) {
         const normKey = f === 'totalSugar' ? 'sugar' : f;
-        nutrients[normKey] = ocrBasis === 'per_100g'
-          ? Math.round(v * (consumedWeight / 100) * 10) / 10
-          : Math.round(v * R * 10) / 10;
+        nutrients[normKey] = Math.round(v * ocrScale * 10) / 10;
         if (!lockedNutrientKeys.includes(normKey)) lockedNutrientKeys.push(normKey);
       }
     }

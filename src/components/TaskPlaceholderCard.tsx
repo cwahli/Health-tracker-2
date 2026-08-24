@@ -103,9 +103,9 @@ export default function TaskPlaceholderCard({
         }
       }
 
-      // 2. FALLBACK: If ImageStore didn't yield a valid URL but we have an active, visible preview image or job photoUrl
+      // 2. FALLBACK: If ImageStore didn't yield a valid URL but we have an active, visible preview image or (job as any).photoUrl
       const remotePhoto =
-        job.photoUrl ||
+        (job as any).photoUrl ||
         job.result?.photoUrl ||
         job.result?.clean_result?.photoUrl ||
         (job.result as any)?.data?.photoUrl ||
@@ -140,8 +140,11 @@ export default function TaskPlaceholderCard({
         job.result?.imageUrls ||
         (remotePhoto ? [remotePhoto] : []);
 
-      if (finalImageUrls.length === 0 && remotePhotos.length > 0) {
+      if (remotePhotos.length > 0) {
         finalImageUrls = remotePhotos;
+        finalImageUrl = remotePhotos[0];
+      } else if (finalImageUrls.length === 0 && remotePhoto) {
+        finalImageUrl = remotePhoto;
       }
 
       // Apply the resolved image URL(s) if found
@@ -197,7 +200,9 @@ export default function TaskPlaceholderCard({
 
         // 2. Direct photoUrl or pendingFoodLog.imageUrl / imageUrls
         const directPhoto =
-          job.photoUrl ||
+          (job as any).photoUrl ||
+          ((job as any).remotePhotos && (job as any).remotePhotos.length > 0 && (job as any).remotePhotos[0]) ||
+          ((job as any).imageUrls && (job as any).imageUrls.length > 0 && (job as any).imageUrls[0]) ||
           job.result?.photoUrl ||
           job.result?.clean_result?.photoUrl ||
           (job.result as any)?.data?.photoUrl ||
@@ -230,7 +235,7 @@ export default function TaskPlaceholderCard({
         URL.revokeObjectURL(createdObjectUrl);
       }
     };
-  }, [job.id, job.photoUrl, job.result, job.messages]);
+  }, [job.id, (job as any).photoUrl, job.result, job.messages]);
 
   const lastMsgContent = (job.messages && job.messages.length > 0) ? job.messages[job.messages.length - 1]?.content : '';
   const isFailedOrTimedOut =

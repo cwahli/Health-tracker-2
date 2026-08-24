@@ -698,9 +698,19 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
             pendingFoodLog.imageUrl = photoUrl || '';
           }
           if (Array.isArray(pendingFoodLog.imageUrls)) {
+            // First, replace any base64 placeholders with newly uploaded R2 URLs
             pendingFoodLog.imageUrls = pendingFoodLog.imageUrls.map((url: any, idx: number) => 
               String(url).startsWith('data:') ? (photoUrls[idx] || photoUrl || '') : url
             ).filter(Boolean);
+            
+            // Then, if there are additional new photos uploaded in this turn that weren't mapped, append them
+            const existingSet = new Set(pendingFoodLog.imageUrls);
+            for (const newUrl of photoUrls) {
+              if (newUrl && !existingSet.has(newUrl)) {
+                pendingFoodLog.imageUrls.push(newUrl);
+                existingSet.add(newUrl);
+              }
+            }
           } else {
             pendingFoodLog.imageUrls = photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : []);
           }

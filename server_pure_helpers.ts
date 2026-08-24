@@ -705,7 +705,13 @@ export function applySatFatAndAddedSugarFloor(
     dbSource === "kiosk" || 
     dbSource === "screen" || 
     dbSource === "menu" || 
-    dbSource === "brand_official" ||
+    dbSource === "brand_official" || dbSource === "usda" || dbSource === "matched_database_entry" || dbSource === "estimated" ||
+    dbSource === "usda" || 
+    dbSource === "matched_database_entry" || 
+    dbSource === "estimated" ||
+    dbSource === "usda" || 
+    dbSource === "matched_database_entry" || 
+    dbSource === "estimated" ||
     (typeof dbSource === "string" && dbSource.startsWith("label") && dbSource !== "label_partial");
   if (isLabelOrScreenSource) return;
   if (!(itemNutrients.calories > 10)) return;
@@ -919,7 +925,7 @@ export function applyNutrientRealityChecks(
     dbSource === "kiosk" || 
     dbSource === "screen" || 
     dbSource === "menu" || 
-    dbSource === "brand_official" ||
+    dbSource === "brand_official" || dbSource === "usda" || dbSource === "matched_database_entry" || dbSource === "estimated" ||
     Boolean(ctx?.syntheticBase100g) ||
     Boolean(ctx?.isDishEstimate) ||
     (typeof dbSource === "string" && dbSource.startsWith("label"));
@@ -950,7 +956,7 @@ export function applyNutrientRealityChecks(
     componentCount >= 2 ||
     form === "COMPOUND_MEAL" ||
     Boolean(ctx?.chainName && componentCount >= 1) ||
-    /\b(burgers?|sandwich(es)?|buns?|rolls?|wraps?|pies?|nuggets?|pizzas?|dumplings?|patties|patty|tacos?|burritos?|noodles?|rice|soup|fried|batter|breaded|bowls?|poke|salad|salads|combos?|meals?|platters?|boxes?|bentos?|currys?|curries|stews?|casseroles?|pastas?|spaghetti|macaroni|risotto|paella|teriyaki|stir-?fry|mix|mixed|dish|dishes|entrees?|compounds?|sets?|surimi)\b/i.test(
+    /\b(burgers?|sandwich(es)?|buns?|rolls?|wraps?|pies?|nuggets?|pizzas?|dumplings?|patties|patty|tacos?|burritos?|noodles?|rice|soup|fried|batter|breaded|bowls?|poke|salad|salads|combos?|meals?|platters?|boxes?|bentos?|currys?|curries|stews?|casseroles?|pastas?|spaghetti|macaroni|risotto|paella|teriyaki|stir-?fry|mix|mixed|dish|dishes|entrees?|compounds?|sets?|surimi|with|and)\b/i.test(
       identityForChecks
     );
 
@@ -1017,7 +1023,11 @@ export function applyNutrientRealityChecks(
                           nameLower.includes('chilli') || nameLower.includes('chili') || nameLower.includes('sauce') ||
                           nameLower.includes('seasoned') || nameLower.includes('glazed') || nameLower.includes('marinated') ||
                           nameLower.includes('bbq') || nameLower.includes('teriyaki') || nameLower.includes('curry') ||
-                          nameLower.includes('tikka') || nameLower.includes('quorn');
+                          nameLower.includes('tikka') || nameLower.includes('quorn') || nameLower.includes('cracker') ||
+                          nameLower.includes('crisp') || nameLower.includes('chip') || nameLower.includes('pretzel') ||
+                          nameLower.includes('fry') || nameLower.includes('fries') || nameLower.includes('snack') ||
+                          nameLower.includes('broth') || nameLower.includes('soup') || nameLower.includes('miso') ||
+                          nameLower.includes('bouillon') || nameLower.includes('stock');
   const sodiumPer100g = (itemNutrients.sodium / itemWeight) * 100;
   if (!isCuredOrSalted && sodiumPer100g > 500) {
     const realisticSodium = Math.round((250 + (addedSodium / (itemWeight / 100) || 150)) * (itemWeight / 100));
@@ -1224,37 +1234,59 @@ export function synchronizeNarrativeText(
   const naVal = Math.round(grandNa);
   const naFormatted = naVal.toLocaleString('en-US');
 
+  
+  
   // 1. Calories
-  updated = updated.replace(/(roughly\s+|approximately\s+|about\s+)?\b[\d,]+(\.\d+)?\s*(calories|kcal)\b/gi, (match, prefix) => {
-    return `${prefix || ''}${calVal} calories`;
+  updated = updated.replace(/\b([\d,]+(?:\.\d+)?)\s*((?:[a-zA-Z-]+\s+)*(?:calories|kcal))\b/gi, (match, num, rest) => {
+    return `${calVal} ${rest}`;
   });
 
   // 2. Sodium
-  updated = updated.replace(/\b[\d,]+(\.\d+)?\s*mg\s*(of\s*)?sodium\b/gi, `${naFormatted}mg of sodium`);
-  updated = updated.replace(/sodium\s*\([^)]*[\d,]+(\.\d+)?\s*mg[^)]*\)/gi, `sodium (${naFormatted}mg)`);
-  updated = updated.replace(/sodium\s*:\s*[\d,]+(\.\d+)?\s*mg/gi, `sodium: ${naFormatted}mg`);
+  updated = updated.replace(/\b([\d,]+(?:\.\d+)?)\s*(mg\s*(?:of\s+)?(?:[a-zA-Z-]+\s+)*sodium)\b/gi, (match, num, rest) => {
+    return `${naFormatted}${rest}`;
+  });
+  updated = updated.replace(/(sodium\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*mg[^)]*\))/gi, (match, p1, num, p3) => {
+    return `${p1}${naFormatted}${p3}`;
+  });
+  updated = updated.replace(/(sodium\s*(?:to\s+|is\s+|at\s+|:\s*))([\d,]+(?:\.\d+)?)(\s*mg)/gi, (match, p1, num, p3) => {
+    return `${p1}${naFormatted}${p3}`;
+  });
 
   // 3. Saturated Fat
-  updated = updated.replace(/\b[\d,]+(\.\d+)?\s*g\s*(of\s*)?saturated\s*fat\b/gi, `${satFatVal}g of saturated fat`);
-  updated = updated.replace(/saturated\s*fat\s*\([^)]*[\d,]+(\.\d+)?\s*g[^)]*\)/gi, `saturated fat (${satFatVal}g)`);
-  updated = updated.replace(/saturated\s*fat\s*:\s*[\d,]+(\.\d+)?\s*g/gi, `saturated fat: ${satFatVal}g`);
+  updated = updated.replace(/\b([\d,]+(?:\.\d+)?)\s*(g\s*(?:of\s+)?(?:[a-zA-Z-]+\s+)*saturated\s*fat)\b/gi, (match, num, rest) => {
+    return `${satFatVal}${rest}`;
+  });
+  updated = updated.replace(/(saturated\s*fat\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*g[^)]*\))/gi, (match, p1, num, p3) => {
+    return `${p1}${satFatVal}${p3}`;
+  });
+  updated = updated.replace(/(saturated\s*fat\s*:\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => {
+    return `${p1}${satFatVal}${p3}`;
+  });
 
   // 4. Total Fat
-  updated = updated.replace(/\b[\d,]+(\.\d+)?\s*g\s*(of\s*)?total\s*fat\b/gi, `${fatVal}g of total fat`);
+  updated = updated.replace(/\b([\d,]+(?:\.\d+)?)\s*(g\s*(?:of\s+)?(?:[a-zA-Z-]+\s+)*total\s*fat)\b/gi, (match, num, rest) => {
+    return `${fatVal}${rest}`;
+  });
 
   // 5. Protein
-  updated = updated.replace(/\b[\d,]+(\.\d+)?\s*g\s*(of\s*)?protein\b/gi, `${pVal}g of protein`);
-  updated = updated.replace(/protein\s*\([^)]*[\d,]+(\.\d+)?\s*g[^)]*\)/gi, `protein (${pVal}g)`);
-  updated = updated.replace(/protein\s*:\s*[\d,]+(\.\d+)?\s*g/gi, `protein: ${pVal}g`);
-  updated = updated.replace(/(roughly|approximately|about|around|~)\s*[\d,]+(\.\d+)?\s*g\s*(of\s*)?protein\b/gi, `~$pVal}g of protein`.replace('$pVal', String(pVal)));
+  updated = updated.replace(/\b([\d,]+(?:\.\d+)?)\s*(g\s*(?:of\s+)?(?:[a-zA-Z-]+\s+)*protein)\b/gi, (match, num, rest) => {
+    return `${pVal}${rest}`;
+  });
+  updated = updated.replace(/(protein\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*g[^)]*\))/gi, (match, p1, num, p3) => {
+    return `${p1}${pVal}${p3}`;
+  });
+  updated = updated.replace(/(protein\s*:\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => {
+    return `${p1}${pVal}${p3}`;
+  });
 
   // 6. Carbohydrates
   if (grandCarbs !== undefined && grandCarbs > 0) {
     const carbVal = Math.round(grandCarbs * 10) / 10;
-    updated = updated.replace(/\b[\d,]+(\.\d+)?\s*g\s*(of\s*)?(carbohydrates|carbs)\b/gi, `${carbVal}g of carbohydrates`);
+    updated = updated.replace(/\b([\d,]+(?:\.\d+)?)\s*(g\s*(?:of\s+)?(?:[a-zA-Z-]+\s+)*(?:carbohydrates|carbs))\b/gi, (match, num, rest) => {
+      return `${carbVal}${rest}`;
+    });
   }
-
-  return updated;
+return updated;
 }
 
 
@@ -1462,7 +1494,13 @@ export function backfillSparseMicronutrients(
 
   const q = categoryQuery || itemName || '';
   const categoryProfile = getFallbackCategoryProfile(q);
-  const scaleFactor = itemWeight / 100;
+  
+  // Cap the scale factor by calorie density to prevent over-inflating micronutrients 
+  // for heavy but watery/diluted foods (like soups) matched to dense categories (like meat).
+  const weightScale = itemWeight / 100;
+  const calorieScale = (itemNutrients.calories || 0) / Math.max(10, categoryProfile.calories || 100);
+  const scaleFactor = Math.min(weightScale, calorieScale * 1.5); // Allow some leeway, but cap severe over-inflation
+
   zeroKeys.forEach(k => {
     const categoryValue = (categoryProfile[k] || 0) * scaleFactor;
     if (categoryValue > 0) {

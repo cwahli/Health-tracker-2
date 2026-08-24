@@ -1667,13 +1667,26 @@ ${logsText}`);
 
           // Attach images from ImageStore or remotePhoto if foodLog lacks them
           try {
-            const imgs = await ImageStore.getImages(jobId);
-            if (foodLog && imgs?.length) {
-              foodLog.imageUrls = imgs.map(img => typeof img === 'string' ? img : URL.createObjectURL(img as Blob));
-              foodLog.imageUrl = foodLog.imageUrls[0];
-            } else if (foodLog && remotePhoto) {
-              foodLog.imageUrl = foodLog.imageUrl || remotePhoto;
-              foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : [remotePhoto];
+            if (foodLog && (!foodLog.imageUrls || foodLog.imageUrls.length === 0 || foodLog.imageUrls.some((u: string) => u.startsWith('blob:')))) {
+              const imgs = await ImageStore.getImages(jobId);
+              if (imgs?.length) {
+                const base64Imgs = await Promise.all(imgs.map(async (img) => {
+                  if (typeof img === 'string') return img;
+                  return new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = () => resolve('');
+                    reader.readAsDataURL(img as Blob);
+                  });
+                }));
+                foodLog.imageUrls = base64Imgs.filter(Boolean);
+                if (foodLog.imageUrls.length > 0) {
+                  foodLog.imageUrl = foodLog.imageUrls[0];
+                }
+              } else if (remotePhoto) {
+                foodLog.imageUrl = foodLog.imageUrl || remotePhoto;
+                foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : [remotePhoto];
+              }
             }
           } catch (err) {
             console.warn('Failed to load images from ImageStore for LogChat:', err);
@@ -1725,9 +1738,31 @@ ${logsText}`);
           };
           if (assistantMsg.pendingFoodLog) {
             assistantMsg.pendingFoodLog.id = assistantMsg.pendingFoodLog.id || `food_${Date.now()}`;
+            
+            const r2PhotoUrl = assistantMsg.pendingFoodLog.imageUrl;
+            const r2PhotoUrls = assistantMsg.pendingFoodLog.imageUrls;
+
+            if (userMsg) {
+              userMsg.imageUrl = r2PhotoUrl;
+              userMsg.imageUrls = r2PhotoUrls;
+            }
+
             assistantMsg.pendingFoodLog.chatTranscript = [
-              { role: userMsg.role, content: userMsg.content, timestamp: userMsg.timestamp },
-              { role: assistantMsg.role, content: assistantMsg.content, timestamp: assistantMsg.timestamp }
+              { 
+                role: userMsg.role, 
+                content: userMsg.content, 
+                timestamp: userMsg.timestamp,
+                imageUrl: r2PhotoUrl,
+                imageUrls: r2PhotoUrls,
+                data: userMsg.data
+              },
+              { 
+                role: assistantMsg.role, 
+                content: assistantMsg.content, 
+                timestamp: assistantMsg.timestamp,
+                agentResult: assistantMsg.agentResult,
+                data: assistantMsg.data
+              }
             ];
           }
           setMessages([welcome, userMsg, assistantMsg], false);
@@ -2631,17 +2666,20 @@ ${logsText}`);
         // preview image survives JobStore/localStorage persistence + rehydration
         // (blob: URLs become invalid after reload and render as a broken image).
         let userMsgImageUrl: string | undefined = undefined;
+        let userMsgImageUrls: string[] | undefined = undefined;
         if (finalImages.length > 0) {
-          const firstImg = finalImages[0];
-          if (typeof firstImg === 'string') {
-            userMsgImageUrl = firstImg;
-          } else {
-            userMsgImageUrl = await new Promise<string>((resolve, reject) => {
+          const base64Imgs = await Promise.all(finalImages.map(async (img) => {
+            if (typeof img === 'string') return img;
+            return new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = () => resolve(reader.result as string);
               reader.onerror = () => reject(new Error('Failed to read image Blob for preview'));
-              reader.readAsDataURL(firstImg as Blob);
+              reader.readAsDataURL(img as Blob);
             });
+          }));
+          userMsgImageUrls = base64Imgs.filter(Boolean);
+          if (userMsgImageUrls.length > 0) {
+            userMsgImageUrl = userMsgImageUrls[0];
           }
         }
 
@@ -2650,7 +2688,8 @@ ${logsText}`);
           role: 'user',
           content: userContent,
           timestamp: new Date().toISOString(),
-          imageUrl: userMsgImageUrl
+          imageUrl: userMsgImageUrl,
+          imageUrls: userMsgImageUrls
         };
 
         const updatedMessages = [...existingMsgs, userMsg];
@@ -3553,22 +3592,23 @@ ${logsText}`);
         image: tempAnalysisImages[0] || tempImages[0] || undefined,
         images: tempAnalysisImages.length > 0 ? tempAnalysisImages : (tempImages.length > 0 ? tempImages : undefined),
         imageDates: tempDates.length > 0 ? tempDates : undefined,
-        history: messages.slice(activeSessionIdx).filter(m => !m.id?.startsWith('welcome_')).map(m => {
+        history: messages.slice(activeSessionIdx).filter(m => !m.id?.startsWith('welcome_')).reduce((acc: any[], m: any) => {
           let extra = "";
           if (m.role === 'assistant') {
-            if (m.data?.pendingBiomarkers) extra += `
-[Extracted Biomarkers: ${JSON.stringify(m.data?.pendingBiomarkers)}]`;
+            if (m.data?.pendingBiomarkers) extra += `\n[Extracted Biomarkers: ${JSON.stringify(m.data?.pendingBiomarkers)}]`;
             if (m.data?.pendingFoodLog) {
-               extra += `
-[Extracted Food: ${m.data?.pendingFoodLog.name}, ${m.data?.pendingFoodLog.quantity}, ${m.data?.pendingFoodLog.nutrients?.calories || 0} kcal. (Full nutrient data omitted for brevity)]`;
+               extra += `\n[Extracted Food: ${m.data?.pendingFoodLog.name}, ${m.data?.pendingFoodLog.quantity}, ${m.data?.pendingFoodLog.nutrients?.calories || 0} kcal. (Full nutrient data omitted for brevity)]`;
             }
-            if (m.pendingDate) extra += `
-[Extracted Date: ${m.pendingDate}]`;
-            if (m.pendingProfile) extra += `
-[Extracted Profile: ${JSON.stringify(m.pendingProfile)}]`;
+            if (m.pendingDate) extra += `\n[Extracted Date: ${m.pendingDate}]`;
+            if (m.pendingProfile) extra += `\n[Extracted Profile: ${JSON.stringify(m.pendingProfile)}]`;
           }
-          return { role: m.role, content: m.content + extra };
-        }),
+          const content = (m.content + extra).trim();
+          const last = acc[acc.length - 1];
+          if (!last || last.role !== m.role || last.content !== content) {
+            acc.push({ role: m.role, content });
+          }
+          return acc;
+        }, []),
         userProfile: lightProfile,
         engine: selectedModelId,
         biomarkerKey: reviewBiomarkerKey,

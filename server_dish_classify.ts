@@ -7,7 +7,7 @@
  * - classifyDishAtomic: Distinguishes atomic single-staple commodities from composed culinary dishes
  */
 
-export const PARENT_DISH_RE = /\b(sandwiches|sandwich|wraps|wrap|salads|salad|bowls|bowl|smoothies|smoothie|parfaits|parfait|cakes|cake|pies|pie|soups|soup|burgers|burger|subs|sub|toasties|toastie|burritos|burrito|tacos|taco|paninis|panini|noodles|noodle|pastas|pasta|fried rice|stir-?fries|stir-?fry|sushi|maki|nigiri|pizzas|pizza|curries|curry|omelettes|omelette|omelets|omelet|macaroni|risotto|stews|stew|casseroles|casserole|biryani|rolls|roll)\b/i;
+export const PARENT_DISH_RE = /\b(sandwiches|sandwich|wraps|wrap|salads|salad|bowls|bowl|smoothies|smoothie|parfaits|parfait|cakes|cake|pies|pie|soups|soup|burgers|burger|subs|sub|toasties|toastie|burritos|burrito|tacos|taco|paninis|panini|noodles|noodle|pastas|pasta|fried rice|stir-?fries|stir-?fry|fries|chips|sushi|maki|nigiri|pizzas|pizza|curries|curry|omelettes|omelette|omelets|omelet|macaroni|risotto|stews|stew|casseroles|casserole|biryani|rolls|roll|steak|steaks|plate|plates|platter|platters|meal|meals|combo|combos|skewer|skewers|kebab|kebabs|meat|chicken|pork|fish|seafood|beef)\b/i;
 
 export const CONDIMENT_RE = /\b(mayonnaise|mayo|ranch|dressing|sauce|ketchup|mustard|dip)\b/i;
 

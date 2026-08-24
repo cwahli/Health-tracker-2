@@ -11,7 +11,7 @@ describe("P0 precision pack", () => {
       n,
       0,
       () => {},
-      "usda",
+      undefined,
       {
         originalName: "Honi Poke Salmon Poke Bowl",
         keyword: "salmon poke bowl",
@@ -26,7 +26,7 @@ describe("P0 precision pack", () => {
 
   it("still can adjust true single fish fillet with low protein", () => {
     const n: any = { calories: 100, protein: 5, totalFat: 2, saturatedFat: 0.5, sodium: 50, carbohydrates: 0 };
-    applyNutrientRealityChecks("Salmon fillet", 200, n, 0, () => {}, "usda", {
+    applyNutrientRealityChecks("Salmon fillet", 200, n, 0, () => {}, undefined, {
       originalName: "Salmon fillet",
       componentCount: 0,
     });
@@ -54,7 +54,7 @@ describe("P0 precision pack", () => {
       n,
       0,
       () => {},
-      "usda",
+      undefined,
       {
         originalName: "Anchor Butter Packet",
         componentCount: 0,
@@ -74,7 +74,7 @@ describe("P0 precision pack", () => {
       n,
       0,
       () => {},
-      "usda",
+      undefined,
       {
         originalName: "Airline Bread Roll",
         componentCount: 0,

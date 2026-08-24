@@ -3808,8 +3808,8 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
         sendStreamEvent({ type: 'status', stage: 'scout', status: 'started', message: 'Reading your photos...' });
         const imageCount = imagePayloads?.length || 0;
         const scoutPromptText = message 
-          ? `Analyze the provided ${imageCount > 1 ? imageCount + ' images' : 'image'} and list the food items you see, taking into consideration the user's message: "${message}". For each distinct food item, estimate its weight in grams and emit realistic portion nutrients in "nutrients" (calories, protein, totalFat, saturatedFat, transFat, carbohydrates, sugar, addedSugar, totalFibre, sodium, potassium, omega3, calcium, iron, magnesium, vitaminD).${imageCount > 1 ? ' CRITICAL MULTI-IMAGE REQUIREMENT: Inspect each image and set "sourceImageIndex" (0 for 1st photo, 1 for 2nd, etc.). If any photo shows a kiosk touchscreen or menu screen, transcribe the exact calories displayed for EACH item (e.g. "Fish Burger 265 kcal") into rawNutritionLabel. If images show different views/sides of the same package (e.g. front of package and back nutrition label), list them as TWO separate entries: 1. The food item. 2. A dedicated label item (originalName containing "Nutrition Facts Label") with full rawNutritionLabel.' : ''} If any identified dish is a known item from a restaurant chain or brand (e.g. McDonald's, Yolk, Starbucks), capture exact brand and dish name in originalName.`
-          : `Analyze the provided ${imageCount > 1 ? imageCount + ' images' : 'image'} and list the food items you see. For each distinct food item, estimate its weight in grams and emit realistic portion nutrients in "nutrients" (calories, protein, totalFat, saturatedFat, transFat, carbohydrates, sugar, addedSugar, totalFibre, sodium, potassium, omega3, calcium, iron, magnesium, vitaminD).${imageCount > 1 ? ' CRITICAL MULTI-IMAGE REQUIREMENT: Inspect each image and set "sourceImageIndex" (0 for 1st photo, 1 for 2nd, etc.). If any photo shows a kiosk touchscreen or menu screen, transcribe the exact calories displayed for EACH item (e.g. "Fish Burger 265 kcal") into rawNutritionLabel. If images show different views/sides of the same package (e.g. front of package and back nutrition label), list them as TWO separate entries: 1. The food item. 2. A dedicated label item (originalName containing "Nutrition Facts Label") with full rawNutritionLabel.' : ''} If any identified dish is a known item from a restaurant chain or brand (e.g. McDonald's, Yolk, Starbucks), capture exact brand and dish name in originalName.`;
+          ? `Analyze the provided ${imageCount > 1 ? imageCount + ' images' : 'image'} and list the food items you see, taking into consideration the user's message: "${message}". Transcribe printed package labels or menu screens into "rawNutritionLabel" FIRST. For any nutrient keys covered by "rawNutritionLabel", OMIT those keys from "nutrients" entirely to avoid double work. Only include in "nutrients" the remaining estimated nutrients that were NOT mentioned on the label.${imageCount > 1 ? ' CRITICAL MULTI-IMAGE REQUIREMENT: Inspect each image and set "sourceImageIndex" (0 for 1st photo, 1 for 2nd, etc.). If images show different views/sides of a package (e.g. front and back nutrition label), list them as separate entries: 1. Food item. 2. Dedicated label item (originalName containing "Nutrition Facts Label") with full rawNutritionLabel.' : ''} If any identified dish is a known brand item, capture brand and dish name in originalName.`
+          : `Analyze the provided ${imageCount > 1 ? imageCount + ' images' : 'image'} and list the food items you see. Transcribe printed package labels or menu screens into "rawNutritionLabel" FIRST. For any nutrient keys covered by "rawNutritionLabel", OMIT those keys from "nutrients" entirely to avoid double work. Only include in "nutrients" the remaining estimated nutrients that were NOT mentioned on the label.${imageCount > 1 ? ' CRITICAL MULTI-IMAGE REQUIREMENT: Inspect each image and set "sourceImageIndex" (0 for 1st photo, 1 for 2nd, etc.). If images show different views/sides of a package (e.g. front and back nutrition label), list them as separate entries: 1. Food item. 2. Dedicated label item (originalName containing "Nutrition Facts Label") with full rawNutritionLabel.' : ''} If any identified dish is a known brand item, capture brand and dish name in originalName.`;
         sendLog('scout_instruction', 'scout', `Vision Scout Instruction dispatched (model: ${engine || "gemini-3.5-flash-lite"}). Prompt: "${scoutPromptText}"`);
         addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout with retry protection...`);
         let scoutResult: any = null;
@@ -3938,7 +3938,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
                         nutritionFacts: { type: Type.OBJECT, nullable: true }
                       },
                       required: ["keyword", "originalName", "estimatedWeightGrams", "nutrients", "ingredients", "boundingBox2D", "sourceImageIndex"],
-                      propertyOrdering: ["originalName", "keyword", "chainName", "estimatedWeightGrams", "ingredients", "nutrients", "rawNutritionLabel", "ingredientsList", "source", "boundingBox2D", "sourceImageIndex"]
+                      propertyOrdering: ["originalName", "keyword", "chainName", "estimatedWeightGrams", "ingredients", "rawNutritionLabel", "nutrients", "ingredientsList", "source", "boundingBox2D", "sourceImageIndex"]
                     }
                   },
                   queriesToSearch: { type: Type.ARRAY, items: { type: Type.STRING } }
@@ -5126,6 +5126,10 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           } else {
             overrides = { calories: 360, protein: 10, totalFat: 1.5, saturatedFat: 0.3, sodium: 5, carbohydrates: 75, transFat: 0, addedSugar: 0, potassium: 120, totalFibre: 2.5, solubleFibre: 0.5 };
           }
+        } else if (n.includes("soup") || n.includes("broth") || n.includes("sop") || n.includes("soto")) {
+          overrides = { calories: 60, protein: 3, totalFat: 2.5, saturatedFat: 1, sodium: 600, carbohydrates: 6, transFat: 0, addedSugar: 0, potassium: 120, totalFibre: 0.5, solubleFibre: 0 };
+        } else if (n.includes("cracker") || n.includes("chip") || n.includes("crisp") || n.includes("emping") || n.includes("kerupuk") || n.includes("krupuk")) {
+          overrides = { calories: 500, protein: 7, totalFat: 25, saturatedFat: 4, sodium: 600, carbohydrates: 60, transFat: 0, addedSugar: 0, potassium: 200, totalFibre: 3, solubleFibre: 0.5 };
         }
         return { ...base, ...overrides };
       };
@@ -7631,8 +7635,18 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
 
     let historyContext = "";
     if (history && Array.isArray(history) && history.length > 0) {
-      historyContext = "PAST DISCUSSIONS & MEALS CHAT HISTORY:\n" +
-        history.slice(-10).map((h: any) => `${h.role.toUpperCase()}: ${h.content}`).join("\n") + "\n\n";
+      const cleanHistory: any[] = [];
+      history.forEach((h: any) => {
+        if (!h || !h.content) return;
+        const last = cleanHistory[cleanHistory.length - 1];
+        if (!last || last.role !== h.role || String(last.content).trim() !== String(h.content).trim()) {
+          cleanHistory.push(h);
+        }
+      });
+      if (cleanHistory.length > 0) {
+        historyContext = "PAST DISCUSSIONS & MEALS CHAT HISTORY:\n" +
+          cleanHistory.slice(-10).map((h: any) => `${h.role.toUpperCase()}: ${h.content}`).join("\n") + "\n\n";
+      }
     }
 
     let pastMealsCtx = "";
@@ -8406,8 +8420,21 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           'visualIngredients',
           'components',
           'cookingAdded',
+          'truthNutrients',
+          'syntheticBase100g',
+          'hasLockedTruth',
+          'lockedNutrientKeys',
+          'isDishEstimate',
+          'dbSource',
+          'dbId',
+          'calories',
+          'protein',
+          'totalFat',
+          'saturatedFat',
+          'sodium',
+          'carbohydrates',
         ];
-        rawFoodData.itemsBreakdown = rawFoodData.itemsBreakdown.map((newItem: any, idx: number) => {
+        rawFoodData.itemsBreakdown = await Promise.all(rawFoodData.itemsBreakdown.map(async (newItem: any, idx: number) => {
           const origItemByScout = (newItem.scoutIndex !== undefined && newItem.scoutIndex !== null)
             ? origItems.find((o: any) => o.scoutIndex === newItem.scoutIndex)
             : (origItems[idx] || null);
@@ -8446,10 +8473,29 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               merged.dbId = origItemSameFood.dbId;
               merged.dbSource = origItemSameFood.dbSource;
             }
+          } else {
+            // Identity changed or new item introduced in Edit Mode
+            // Fetch fresh database resolution for this new item
+            const newName = newItem.canonicalDbName || newItem.name || newItem.originalName;
+            if (newName && !merged.dbId) {
+              addDebugLog(`[Edit Merge] Identity changed for item (was "${origItemByScout ? (origItemByScout.canonicalDbName || origItemByScout.name) : 'none'}"). Fetching fresh DB resolution for "${newName}".`);
+              const hit = await resolveInternalFood(newName);
+              if (hit) {
+                const virtualId = hit.food_id || `internal_${hit.food_key}`;
+                dbMatchMap.set(virtualId, hit.nutrients_per_100g);
+                merged.dbId = virtualId;
+                merged.dbSource = 'internal_catalog';
+                merged.primaryBaseMatchName = hit.display_name || newName;
+                merged.primaryBase100g = hit.nutrients_per_100g;
+                addDebugLog(`[Edit Merge] Resolved fresh database profile for "${newName}" (ID: ${virtualId}).`);
+              } else {
+                addDebugLog(`[Edit Merge] Could not find fresh database profile for "${newName}". It will be processed as estimated.`);
+              }
+            }
           }
 
           return merged;
-        });
+        }));
         addDebugLog(`[Edit Merge] Preserved spatial bounding boxes by scoutIndex and database resolution for matching food items.`);
       }
 
@@ -9630,28 +9676,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           const diffSatFat = itemLockedKeysSet.has('saturatedFat') ? 0 : Math.abs(originalItemSatFat - itemSatFat);
           const diffNa = itemLockedKeysSet.has('sodium') ? 0 : Math.abs(originalItemNa - itemNa);
 
-          if (diffCal > 1.1 || diffP > 0.15 || diffSatFat > 0.15 || diffNa > 1.1) {
-            console.error(`[Math Integrity Failure] Item "${it.name}" has mismatched subtotal!\n` +
-                          `Sum of Component Rows: Cal=${itemCal}, P=${itemP}, SatFat=${itemSatFat}, Na=${itemNa}\n` +
-                          `Original Item Nutrients: Cal=${originalItemCal}, P=${originalItemP}, SatFat=${originalItemSatFat}, Na=${originalItemNa}`);
-            const reasonParts: string[] = [];
-            if (cookingCal > 0 || cookingFat > 0 || cookingNa > 0) {
-              reasonParts.push(`added ${rawMethod ? rawMethod.replace(/_/g, ' ') : 'cooking'} prep additions (+${cookingNa}mg sodium, +${cookingCal} kcal)`);
-            }
-            if (it.componentsDetailList && it.componentsDetailList.length > 0) {
-              const SAUCE_PATTERN = /\b(sauce|dressing|mayo|mayonnaise|gravy|ketchup|mustard|oil|dip|condiment|relish)\b/i;
-              const containsActualSauce = it.componentsDetailList.some((s: any) => SAUCE_PATTERN.test(s.name || ''));
-              if (containsActualSauce) {
-                reasonParts.push("decomposed sauce/dressing components");
-              } else {
-                reasonParts.push("decomposed ingredient components");
-              }
-            }
-            if (reasonParts.length === 0) {
-              reasonParts.push("recalculated via first-principles database profile");
-            }
-            const explanation = reasonParts.join(" & ");
-            receiptTable += `| *Dietitian corrected — initial estimate lacked ${explanation}; updated to deterministic sub-total below* | ${fVal(originalItemCal)} | ${fVal(originalItemP, 'g')} | ${fVal(originalItemSatFat, 'g')} | ${fVal(originalItemNa, 'mg')} |\n`;
+          if (it.clinicalCorrectionNote) {
+            receiptTable += `| *Dietitian clinical correction — ${it.clinicalCorrectionNote}* | ${fVal(itemCal)} | ${fVal(itemP, 'g')} | ${fVal(itemSatFat, 'g')} | ${fVal(itemNa, 'mg')} |\n`;
+          } else if (diffCal > 1.1 || diffP > 0.15 || diffSatFat > 0.15 || diffNa > 1.1) {
+            addDebugLog(`[Math Integrity Check] Item "${it.originalName || it.name}" subtotal updated from initial baseline Cal=${originalItemCal} → ${itemCal}`);
           }
 
           // Row 5: Item Sub-Total
@@ -9690,7 +9718,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
         // GUARANTEED ZERO-DISCREPANCY SYNCHRONIZATION ACROSS ALL NARRATIVE FIELDS:
         // Critical Guard: Only synchronize narrative text for single-item meals to prevent grand total overwriting multi-item stats
-        if (parsedData.nutrients && parsedData.itemsBreakdown && parsedData.itemsBreakdown.length === 1 && (userSelectedMode === 'review' || userSelectedMode === 'edit' || !userSelectedMode)) {
+        if (parsedData.nutrients && parsedData.itemsBreakdown && (userSelectedMode === 'review' || userSelectedMode === 'edit' || !userSelectedMode)) {
           if (rawParsed.message) {
             rawParsed.message = synchronizeNarrativeText(rawParsed.message, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
           }

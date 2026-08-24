@@ -127,7 +127,13 @@ class JobQueueRunnerImpl {
         if (!photoUrl && !isServerOwned) {
           const images = await ImageStore.getImages(job.id);
           if (images && images.length > 0) {
-            const firstImg = typeof images[0] === 'string' ? images[0] : '';
+            let firstImg = '';
+            if (typeof images[0] === 'string') {
+              firstImg = images[0];
+            } else if ((images[0] as any) instanceof Blob || (images[0] as any) instanceof File) {
+              firstImg = URL.createObjectURL(images[0]);
+            }
+            
             if (firstImg) {
               photoUrl = await uploadPhotoToR2(job.id, firstImg);
             }

@@ -64,10 +64,43 @@ export function namesReferToSameFood(a: unknown, b: unknown): boolean {
   const na = normalizeFoodName(a);
   const nb = normalizeFoodName(b);
   if (!na || !nb) return false;
+
+  const NEGATION_MODIFIERS = new Set(['unsweetened', 'sugarfree', 'sugar', 'free', 'decaf', 'unsalted', 'fatfree', 'skim', 'diet', 'zero', 'plain']);
+  
   if (na === nb) return true;
 
+  // 0. Modifier conflict check (e.g. unsweetened vs sweetened, diet vs regular)
+  // If one name has a negation modifier and the other doesn't, they are different foods.
+  let aHasNegation = false;
+  let bHasNegation = false;
+  
+  // We check against the normalized string directly since hyphenated forms like "sugar-free" might be split or joined.
+  // Actually, better to check tokens so we don't accidentally match substrings of unrelated words.
   const ta = new Set(na.split(' ').filter((t) => t.length >= 3));
   const tb = new Set(nb.split(' ').filter((t) => t.length >= 3));
+  
+  // Wait, "sugar free" might be two tokens. But we normalized the name.
+  // We can just check the set of tokens.
+  const modTokensA = [...ta].filter(t => NEGATION_MODIFIERS.has(t) || t === 'unsweetened' || t === 'sugarfree' || t === 'decaf' || t === 'unsalted' || t === 'fatfree' || t === 'skim' || t === 'diet' || t === 'zero');
+  const modTokensB = [...tb].filter(t => NEGATION_MODIFIERS.has(t) || t === 'unsweetened' || t === 'sugarfree' || t === 'decaf' || t === 'unsalted' || t === 'fatfree' || t === 'skim' || t === 'diet' || t === 'zero');
+
+  // If one has a modifier that the other doesn't have, they are different.
+  // Wait, if A has 'unsweetened' and B has 'sweet' (which is not in NEGATION_MODIFIERS), 
+  // checking if they have the exact same modifiers is safer.
+  for (const m of NEGATION_MODIFIERS) {
+    // If one contains the modifier as a distinct token or as a clear word part and the other doesn't.
+    // Let's just check the raw normalized string to catch "sugar-free" etc.
+    const aHas = na.includes(m);
+    const bHas = nb.includes(m);
+    if (aHas !== bHas) {
+      // exception: "sugar" is in "sugarfree". We should be careful with "sugar".
+      if (m === 'sugar' && (na.includes('sugarfree') || nb.includes('sugarfree'))) {
+         continue; // handled by 'sugarfree'
+      }
+      if (m === 'free') continue; // too generic on its own unless part of sugar/fat/gluten free
+      return false;
+    }
+  }
   if (ta.size === 0 || tb.size === 0) return false;
 
   // 1. Protein / core ingredient discriminator conflict check

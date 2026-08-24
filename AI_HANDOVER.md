@@ -453,3 +453,19 @@
 51. **TypeScript Fix / Quota Error Cleanup**:
     - Removed broken `consolidatedSnap` variable reference in `App.tsx` which was causing a `tsc` error inside an offline-recovery catch block.
     - Successfully merged auto-delete feature sync tombstone logic for Daily Benefits to resolve the "BMI reappearing" loop.
+
+52. **Nutritional Engine Issue Resolution**:
+    - Fixed Issue 1 (Unsweetened Iced Tea): The edit logic retained the old base nutritional profile when the user updated the item via the UI. Modified `namesReferToSameFood` to correctly identify negation modifiers (e.g. "unsweetened") as distinct identities, and updated `server.ts` to execute a fresh DB lookup (`resolveInternalFood`) when the item identity diverges. 
+    - Fixed Issue 2 (Token Misclassification): Soup (e.g. "Sop Iga") and sizzling plates (e.g. "Sizzling Steak with Gravy") were eagerly categorized as beverages and sauces. Hoisted `MEAT_WORDS` in `server_matching_engine.ts` to safely bypass these classifications for meat-containing items.
+    - Fixed Issue 3 (Micronutrient Over-Inflation): The sparse backfill engine incorrectly scaled dense meat profile micronutrients by the raw mass of watery compound dishes (e.g., 500g soup), causing severe over-inflation. Applied a calorie-density scale factor cap in `server_pure_helpers.ts` to safely rescale watery items down.
+    - Fixed Issue 4 (Serving Mass Violation): Crackers triggered a sodium violation. Added 'cracker', 'snack', 'soup', and 'broth' to the `isCuredOrSalted` whitelist in `server_pure_helpers.ts` to prevent false positives on naturally salty snacks. All tests passed.
+
+53. **Mobile to Desktop Sync Preview Image Resolution**:
+    - Fixed issue where preview pictures went missing after syncing jobs from mobile to desktop.
+    - In `JobQueueRunner.ts`, Blob images stored in IndexedDB (`ImageStore`) were not recognized as valid inputs for Cloudflare R2 photo uploads, causing `photoUrl` to be omitted during Supabase job sync. Converted Blob/File instances to Object URLs so `uploadPhotoToR2` can upload them and propagate `photoUrl` across devices.
+    - Updated `TaskPlaceholderCard.tsx` image preview resolution pipeline to fall back on `job.remotePhotos` and `job.imageUrls` array fields when local IndexedDB storage doesn't contain the raw image.
+
+
+54. **Edit Mode Reality Check Inflation & Narrative Desync**:
+    - Fixed an issue in `server.ts` where edited items without a fresh database match (e.g., renamed items) would lose their `primaryBase100g` and default to 0 kcal, causing the Reality Check engine to apply generic high-density assumptions (inflating a soup to 1463 kcal). Added a fallback to `getClinicalDefaultNutrients100g` and `classifyUniversalPhysicalFormV3`.
+    - Resolved the LLM narrative desynchronization where the generated Dietitian message would reference stale numbers. Expanded `synchronizeNarrativeText` in `server_pure_helpers.ts` to support adjective-modified regexes (e.g., "51g of quality protein") and newly implemented support for synchronizing `addedSugar` values directly into the final text, ensuring the LLM narrative exactly matches the deterministic ledger.

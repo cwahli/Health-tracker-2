@@ -241,7 +241,7 @@ describe('server_pure_helpers', () => {
 
     it('backfills calories from macros when calories are zero but macros are present', () => {
       const nutrients = { calories: 0, protein: 10, totalFat: 5, carbohydrates: 20 };
-      applyNutrientRealityChecks("Test Item", 100, nutrients, 0, undefined, "estimated");
+      applyNutrientRealityChecks("Test Item", 100, nutrients, 0, undefined, undefined);
       expect(nutrients.calories).toBe(Math.round(10 * 4 + 20 * 4 + 5 * 9));
     });
 
@@ -372,20 +372,20 @@ describe('server_pure_helpers', () => {
   describe('applySatFatAndAddedSugarFloor', () => {
     it('applies sat fat floor to fast food / processed fried items when sat fat is missing or too low', () => {
       const nutrients: Record<string, number> = { calories: 450, totalFat: 20, saturatedFat: 0, unsaturatedFat: 20 };
-      applySatFatAndAddedSugarFloor("Cheeseburger", nutrients, "estimated", undefined, { chainName: "McDonald's" });
+      applySatFatAndAddedSugarFloor("Cheeseburger", nutrients, undefined, undefined, { chainName: "McDonald's" });
       expect(nutrients.saturatedFat).toBeGreaterThanOrEqual(5); // 25% of 20g
       expect(nutrients.unsaturatedFat).toBe(20 - nutrients.saturatedFat);
     });
 
     it('applies higher sat fat floor (35%) to bakery pastries/desserts', () => {
       const nutrients: Record<string, number> = { calories: 350, totalFat: 18, saturatedFat: 0, unsaturatedFat: 18 };
-      applySatFatAndAddedSugarFloor("Butter Croissant", nutrients, "estimated");
+      applySatFatAndAddedSugarFloor("Butter Croissant", nutrients, undefined);
       expect(nutrients.saturatedFat).toBeGreaterThanOrEqual(6.3); // 35% of 18g
     });
 
     it('applies added sugar floor to sweet desserts and baked goods', () => {
       const nutrients: Record<string, number> = { calories: 400, carbohydrates: 50, sugar: 30, addedSugar: 0 };
-      applySatFatAndAddedSugarFloor("Chocolate Cake", nutrients, "estimated");
+      applySatFatAndAddedSugarFloor("Chocolate Cake", nutrients, undefined);
       expect(nutrients.addedSugar).toBe(24); // 80% of 30g sugar
       expect(nutrients.sugar).toBe(30);
     });
@@ -399,7 +399,7 @@ describe('server_pure_helpers', () => {
 
     it('does NOT force added sugar on clean whole foods like fruit or plain oats', () => {
       const nutrients: Record<string, number> = { calories: 150, carbohydrates: 27, sugar: 14, addedSugar: 0, totalFat: 0.5, saturatedFat: 0.1 };
-      applySatFatAndAddedSugarFloor("Fresh Blueberries", nutrients, "estimated");
+      applySatFatAndAddedSugarFloor("Fresh Blueberries", nutrients, undefined);
       expect(nutrients.addedSugar).toBe(0);
     });
   });
@@ -431,7 +431,7 @@ describe('server_pure_helpers', () => {
         riboflavin: 0,
         niacin: 0
       };
-      backfillSparseMicronutrients("Mixed Green Salad", 150, nutrients, "estimated", "leafy_greens");
+      backfillSparseMicronutrients("Mixed Green Salad", 150, nutrients, undefined, "leafy_greens");
       expect(nutrients.potassium).toBeGreaterThan(0);
       expect(nutrients.vitaminK).toBeGreaterThan(0);
       expect(nutrients.calcium).toBeGreaterThan(0);
@@ -470,7 +470,7 @@ describe('server_pure_helpers', () => {
         riboflavin: 0.1,
         niacin: 2.0
       };
-      backfillSparseMicronutrients("Chicken Breast", 100, nutrients, "estimated", "poultry");
+      backfillSparseMicronutrients("Chicken Breast", 100, nutrients, undefined, "poultry");
       // Potassium should remain unchanged (350, not overwritten)
       expect(nutrients.potassium).toBe(350);
     });
@@ -498,7 +498,7 @@ describe('server_pure_helpers', () => {
         sugar: 90
       };
       // For 120g fruit jelly, 130g total macros is physically impossible
-      applyNutrientRealityChecks('Fruit Jelly Dessert', 120, nutrients, 50, undefined, 'estimated');
+      applyNutrientRealityChecks('Fruit Jelly Dessert', 120, nutrients, 50, undefined, undefined);
       const totalMacros = (nutrients.protein || 0) + (nutrients.carbohydrates || 0) + (nutrients.totalFat || 0);
       expect(totalMacros).toBeLessThanOrEqual(120 * 0.45 + 0.1); // Max 45% dry matter
       expect(nutrients.sugar).toBeLessThanOrEqual(nutrients.carbohydrates || 0);

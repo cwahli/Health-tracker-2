@@ -705,15 +705,15 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                    const totalG = (item.primaryBaseWeightG || item.estimatedWeightGrams) ? Number(item.primaryBaseWeightG || item.estimatedWeightGrams) : null;
                                    const ssGramsMatch = ssRaw.match(/^(\d+(?:\.\d+)?)\s*g$/i);
                                    const isExplicit100g = /\b100\s*g\b/i.test(ssRaw);
-                                   const bType = item.rawNutritionLabel?.basisType || item.basisType || (isExplicit100g ? 'per_100g' : ((item.source === 'brand_official' || item.brandPriority) ? 'per_dish' : 'per_100g'));
-                                   if (bType === 'per_100g' || isExplicit100g) {
+                                   const rawBasis = item.rawNutritionLabel?.basisType || item.basisType;
+                                   if (isExplicit100g || rawBasis === 'per_100g') {
                                      return 'Per 100g';
                                    }
                                    if (ssRaw && ssGramsMatch && totalG && Math.abs(parseFloat(ssGramsMatch[1]) - totalG) < 0.5) {
                                      return 'Serving Size (1 dish)';
                                    }
                                    if (ssRaw) return `Serving Size (${ssRaw})`;
-                                   if (bType === 'per_dish' || bType === 'total' || bType === 'per_portion') {
+                                   if (rawBasis === 'per_dish' || rawBasis === 'total' || rawBasis === 'per_portion') {
                                      return 'Per Dish';
                                    }
                                    return 'Per 100g';
@@ -823,9 +823,8 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
 
                               const sourceKey = item.nutrientSourceMap?.[k] || item.nutrientSourceMap?.[normKey];
                               const isVerifiedFromBrand = Boolean(
-                                (sourceKey === 'brand_label_data' || sourceKey === 'label' || item.dbSource === 'brand_official' || item.dbSource === 'label' || (isFromRawLabel && item.dbSource === 'label')) &&
-                                item.dbSource !== 'estimated' &&
-                                !item.isDishEstimate
+                                !isExplicitlyEstimated &&
+                                (isFromRawLabel || inLockedKeys || sourceKey === 'brand_label_data')
                               );
                               const verifiedTooltipText = (sourceKey === 'brand_label_data' || item.dbSource === 'brand_official')
                                 ? 'Verified from brand label data'

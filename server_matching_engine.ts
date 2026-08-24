@@ -49,10 +49,13 @@ export function classifyUniversalPhysicalFormV3(item: {
   const hasWord = (pattern: string) => new RegExp(`\\b${pattern}\\b`, 'i').test(textCorpus);
   const primaryHasWord = (pattern: string) => new RegExp(`\\b${pattern}\\b`, 'i').test(primaryName);
 
+  const MEAT_WORDS = ['steak', 'steaks', 'salmon', 'salmons', 'chicken', 'chickens', 'beef', 'pork', 'fish', 'fishes', 'shrimp', 'shrimps', 'prawn', 'prawns', 'squid', 'squids', 'calamari', 'turkey', 'lamb', 'duck', 'bacon', 'cod', 'catfish', 'tuna', 'meatball', 'meatballs', 'ham', 'sausage', 'sausages', 'pepperoni', 'salami', 'ayam', 'ikan', 'sapi', 'daging', 'lele'];
+  const matchedMeats = Array.from(new Set(MEAT_WORDS.filter(w => hasWord(w))));
+
   // 1. VISCOUS / SAUCE / CONDIMENT DETECTOR (Check sauce FIRST if item name explicitly ends with sauce / dressing / gravy / paste)
   const SAUCE_WORDS = ['sauce', 'sauces', 'dressing', 'dressings', 'mayo', 'mayonnaise', 'ketchup', 'gravy', 'sriracha', 'dip', 'dips', 'condiment', 'condiments', 'pesto', 'hummus', 'guacamole', 'hollandaise', 'teriyaki', 'bumbu', 'kecap', 'salsa', 'relish', 'paste', 'vinaigrette', 'aioli', 'marinara', 'tahini'];
   const matchedSaucesInPrimary = Array.from(new Set(SAUCE_WORDS.filter(w => primaryHasWord(w))));
-  if (matchedSaucesInPrimary.length > 0 && !primaryHasWord('pasta') && !primaryHasWord('spaghetti') && !primaryHasWord('bowl') && !primaryHasWord('poke') && !primaryHasWord('salad') && !primaryHasWord('bento')) {
+  if (matchedSaucesInPrimary.length > 0 && matchedMeats.length === 0 && !primaryHasWord('pasta') && !primaryHasWord('spaghetti') && !primaryHasWord('bowl') && !primaryHasWord('poke') && !primaryHasWord('salad') && !primaryHasWord('bento')) {
     return {
       physicalForm: 'VISCOUS_SAUCE',
       primaryCategory: 'sauce_condiment',
@@ -160,7 +163,10 @@ export function classifyUniversalPhysicalFormV3(item: {
   const isExplicitCheese = hasWord('cheese') || hasWord('mozzarella') || hasWord('cheddar') || hasWord('parmesan') || hasWord('ricotta') || hasWord('feta') || hasWord('gouda') || hasWord('brie') || hasWord('provolone') || hasWord('paneer') || hasWord('halloumi');
   const isSolidCoconut = hasWord('flesh') || hasWord('copra') || hasWord('flake') || hasWord('shredded');
 
-  if (matchedBeverages.length > 0 && !isExplicitCheese && !isSolidCoconut && !isBakeryDessert) {
+  // Skip beverage classification if the only matches are soup/broth but there is meat present, or if it's a compound name
+  const isSoupWithMeatOrCompound = (matchedBeverages.length > 0 && matchedBeverages.every(w => w === 'soup' || w === 'broth') && (matchedMeats.length > 0 || isCompoundName));
+
+  if (matchedBeverages.length > 0 && !isExplicitCheese && !isSolidCoconut && !isBakeryDessert && !isSoupWithMeatOrCompound) {
     return {
       physicalForm: 'LIQUID_BEVERAGE',
       primaryCategory: 'beverage',
@@ -210,8 +216,6 @@ export function classifyUniversalPhysicalFormV3(item: {
   }
 
   // 6. SOLID MEAT / FISH / SEAFOOD DETECTOR
-  const MEAT_WORDS = ['steak', 'steaks', 'salmon', 'salmons', 'chicken', 'chickens', 'beef', 'pork', 'fish', 'fishes', 'shrimp', 'shrimps', 'prawn', 'prawns', 'squid', 'squids', 'calamari', 'turkey', 'lamb', 'duck', 'bacon', 'cod', 'catfish', 'tuna', 'meatball', 'meatballs', 'ham', 'sausage', 'sausages', 'pepperoni', 'salami', 'ayam', 'ikan', 'sapi', 'daging', 'lele'];
-  const matchedMeats = Array.from(new Set(MEAT_WORDS.filter(w => hasWord(w))));
   if (matchedMeats.length > 0) {
     return {
       physicalForm: 'SOLID_MEAT_FISH',
