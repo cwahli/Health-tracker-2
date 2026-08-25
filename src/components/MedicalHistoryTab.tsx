@@ -301,7 +301,7 @@ export default function MedicalHistoryTab({
             };
             existing.structuredRanges = def.structuredRanges || existing.structuredRanges;
           } else {
-            existing.name = def.name || existing.name; existing.normalRange = def.normalRange || existing.normalRange;
+            existing.name = def.name || existing.name; existing.normalRange = (def.normalRange && def.normalRange !== 'Unknown') ? def.normalRange : existing.normalRange;
             existing.structuredRanges = def.structuredRanges || existing.structuredRanges;
             existing.unit = def.unit || existing.unit; existing.standardMedicalGrouping = def.standardMedicalGrouping || existing.standardMedicalGrouping; existing.potentialMedicalConditions = def.potentialMedicalConditions || existing.potentialMedicalConditions; existing.riskCategories = def.riskCategories || existing.riskCategories;
             if (def.description) {
@@ -406,7 +406,7 @@ export default function MedicalHistoryTab({
       "Not Used"
     ];
 
-    const exportList = allDefinitions.filter(def => biomarkers[def.key] !== undefined || profile.customBiomarkers?.[def.key]);
+    const exportList = allDefinitions;
     const rows = exportList.map(def => {
       const customDef = getCustomBiomarkerDef(profile, def.key);
       const name = def.name || customDef?.name || def.key;
@@ -418,11 +418,12 @@ export default function MedicalHistoryTab({
       const normalRange = def.normalRange || '';
       const customRange = customDef?.normalRange || '';
       
-      const rangeSourceInfo = getBiomarkerRangeSourceInfo(key, def, profile);
-      const clinicalReferenceRange = rangeSourceInfo.sourceRange || normalRange;
-      
       const agentCal = agentCalibrationRecords[def.key] || null;
       const optVal = customDef?.optimalValue || (agentCal ? formatOptimalTargetValue(agentCal) : '');
+      const latestLogForUnit = [...activeHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).find(h => h.biomarkers && h.biomarkers[key] !== undefined);
+      
+      const rangeSourceInfo = getBiomarkerRangeSourceInfo(key, def, profile, latestLogForUnit, agentCal);
+      const clinicalReferenceRange = rangeSourceInfo.sourceRange || normalRange;
       
       const medicalPractice = def.standardMedicalGrouping || customDef?.standardMedicalGrouping || '';
       const riskCats = (def.riskCategories || customDef?.riskCategories || []).join('; ');
@@ -484,7 +485,7 @@ export default function MedicalHistoryTab({
       ].join(',');
     });
 
-    const csvContent = [headers.join(','), ...rows].join('\n');
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

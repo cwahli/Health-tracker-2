@@ -3031,7 +3031,7 @@ export function getMergedBiomarkerDef(key: string, builtIn?: any, custom?: any, 
 
   const normalRange = (custom?.normalRange && custom.normalRange.trim() !== '' && custom.normalRange !== 'Unknown')
     ? custom.normalRange.trim()
-    : (logRange || ((centralDef?.normalRange && centralDef.normalRange.trim() !== '' && centralDef.normalRange !== 'Unknown') ? centralDef.normalRange : ''));
+    : ((logRange && logRange !== 'Unknown') ? logRange : ((centralDef?.normalRange && centralDef.normalRange.trim() !== '' && centralDef.normalRange !== 'Unknown') ? centralDef.normalRange : ''));
 
   const defaults = getDerivedCategoryDefaults(centralDef?.category || '', k);
 
