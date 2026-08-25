@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAndHealVisionScout, mergeScoutItems, canMergeScoutLabelIntoFood, resolvePackageAndContextItems, reconcileIngredientsToComponents } from "./server_vision_scout";
+import { parseAndHealVisionScout, mergeScoutItems, canMergeScoutLabelIntoFood, resolvePackageAndContextItems, reconcileIngredientsToComponents, clusterSpatialCompositeDishes } from "./server_vision_scout";
 
 describe("server_vision_scout", () => {
   describe("mergeScoutItems", () => {
@@ -397,3 +397,92 @@ describe("server_vision_scout", () => {
       const d = canMergeScoutLabelIntoFood(label, food);
       expect(d.ok).toBe(true);
     });
+
+    it("preserves parenthetical comma lists without exploding and keeps direct nutrients intact", () => {
+      const mockOutput = {
+        items: [
+          {
+            keyword: "mixed vegetables",
+            originalName: "Mixed Vegetables (Corn, Peas, Carrots)",
+            estimatedWeightGrams: 120,
+            nutrients: {
+              protein: 4,
+              carbohydrates: 18,
+              totalFat: 4,
+              sodium: 120
+            }
+          }
+        ]
+      };
+
+      const result = parseAndHealVisionScout(mockOutput, () => {});
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].originalName).toBe("Mixed Vegetables (Corn, Peas, Carrots)");
+      expect(result.items[0].estimatedWeightGrams).toBe(120);
+      expect(result.items[0].nutrientBasisWeight).toBe(120);
+      expect(result.items[0].nutrients.protein).toBe(4);
+    });
+
+    it("re-anchors nutrientBasisWeight and merges nutrients in clusterSpatialCompositeDishes", () => {
+      const items = [
+        {
+          originalName: "Grilled Chicken",
+          keyword: "grilled chicken",
+          estimatedWeightGrams: 150,
+          nutrientBasisWeight: 150,
+          boundingBox2D: [100, 100, 400, 400],
+          sourceImageIndex: 0,
+          nutrients: { protein: 30, carbohydrates: 0, totalFat: 5 }
+        },
+        {
+          originalName: "Steamed Rice",
+          keyword: "steamed rice",
+          estimatedWeightGrams: 200,
+          nutrientBasisWeight: 200,
+          boundingBox2D: [120, 110, 410, 410],
+          sourceImageIndex: 0,
+          nutrients: { protein: 5, carbohydrates: 50, totalFat: 1 }
+        }
+      ];
+
+      const clustered = clusterSpatialCompositeDishes(items, () => {});
+      expect(clustered).toHaveLength(1);
+      expect(clustered[0].estimatedWeightGrams).toBe(350);
+      expect(clustered[0].nutrientBasisWeight).toBe(350);
+      expect(clustered[0].nutrients.protein).toBe(35);
+      expect(clustered[0].nutrients.carbohydrates).toBe(50);
+      expect(clustered[0].nutrients.totalFat).toBe(6);
+    });
+
+    it("combines weights and nutrients for duplicate visual items across separate photos", () => {
+      const mockOutput = {
+        items: [
+          {
+            keyword: "potato wedges",
+            originalName: "Potato Wedges",
+            estimatedWeightGrams: 100,
+            sourceImageIndex: 0,
+            boundingBox2D: [500, 100, 900, 400],
+            nutrients: { protein: 2.5, carbohydrates: 26, totalFat: 7, sodium: 200 }
+          },
+          {
+            keyword: "potato wedges",
+            originalName: "Potato Wedges",
+            estimatedWeightGrams: 90,
+            sourceImageIndex: 1,
+            boundingBox2D: [400, 50, 800, 500],
+            nutrients: { protein: 2.2, carbohydrates: 23, totalFat: 6, sodium: 180 }
+          }
+        ]
+      };
+
+      const result = parseAndHealVisionScout(mockOutput, () => {});
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].estimatedWeightGrams).toBe(190);
+      expect(result.items[0].nutrientBasisWeight).toBe(190);
+      expect(result.items[0].nutrients.protein).toBe(4.7);
+      expect(result.items[0].nutrients.carbohydrates).toBe(49);
+      expect(result.items[0].nutrients.totalFat).toBe(13);
+      expect(result.items[0].nutrients.sodium).toBe(380);
+    });
+

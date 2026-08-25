@@ -15,21 +15,21 @@ If you intentionally change pipeline/modes/fields: get confirmation for protecte
 ## 1. Pipeline (Dish-Level Inverted Pipeline — default)
 
 ```text
-Vision Scout (dish-level portion estimate + printed OCR label + ingredients)
+Vision Scout (dish-level portion estimate + direct carbohydrates + printed OCR label + ingredients)
   → Finalize Engine (3-Rung Truth Hierarchy: OCR → Brand Menu → Scout Estimate + USDA Atomics)
   → Single Scaler Math (R = W_consumed / W_basis)
-  → Pure TS Derivation (Unsat Fat, Salt, Carbs) & Atwater Check
-  → Dietitian Final Audit & Coaching (reviews all outputs; can edit inaccurate values with transparent clinical notes)
+  → Pure TS Derivation (Bottom-Up Calories = 4P + 4C + 9F, Unsat Fat, Salt, Carbs) & Atwater Check
+  → Dietitian Clinical Audit & Pure TS Macro Rebalancing (active review; clinical corrections rebalanced deterministically)
 ```
 
 | Role | Rule |
 |------|------|
-| Scout | Identifies whole dishes, assigns realistic gram weight & core nutrients per dish, transcribes printed labels verbatim, emits plain ingredients |
+| Scout | Identifies whole dishes, assigns realistic gram weight & direct physical macros (P, C, F) per dish, transcribes printed labels verbatim, emits plain ingredients |
 | `rawNutritionLabel` | **Printed label only** — never invented |
 | Truth Hierarchy | Rung 1 (OCR) → Rung 2 (Brand Menu) → Rung 3 (Scout Estimate + USDA Atomics) |
 | Scaler | **Single scaler across entire system:** $R = \text{consumedWeight} / \text{nutrientBasisWeight}$. Never double-scale or clamp brand lock basis |
-| Derivations | `server_derivation.ts` computes unsaturated fat, salt from sodium, and carb fallback mathematically |
-| Dietitian | Coaches on server finalize ledger; conducts final clinical reality check on all outputs and can adjust values with an explicit note when estimates are physiologically inaccurate |
+| Derivations | `server_derivation.ts` computes bottom-up Calories ($4\text{P} + 4\text{C} + 9\text{F}$), unsaturated fat, and salt mathematically |
+| Dietitian | Audits server finalize ledger against culinary reality; emits `correctedNutrients` with clinical notes; pure TS rebalances dependent metrics |
 | Modes | Same finalize math (`finalizeDishLedger`) for **Mode A, Mode D, and Edit** |
 
 ---
@@ -119,6 +119,9 @@ The Dietitian coach serves as the final clinical auditor on all nutrient estimat
 
 3. **Single-Ledger Parity Guarantee:**
    - When the Dietitian issues a correction, the modified values immediately become the authoritative numbers for both the Dietitian narrative and the saved meal breakdown table, ensuring 1:1 parity with full audit transparency.
+
+4. **Pure TS Macro Rebalancing:**
+   - Whenever the Dietitian mutates one or more macros or calories, pure TypeScript middleware (`rebalanceNutrientProfile`) deterministically recomputes dependent metrics ($\text{Calories} = 4\text{P} + 4\text{C} + 9\text{F}$, $\text{Unsaturated Fat}$, $\text{Salt}$) and clamps values to physical density bounds, ensuring 100% thermodynamic consistency.
 
 ---
 

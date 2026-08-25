@@ -237,7 +237,7 @@ export function aggregateItemsNutrients(
           foodType: item.foodType,
           componentCount: Array.isArray(item.components) ? item.components.length : 0,
           hasLockedTruth: Boolean(item.hasLockedTruth || (item.truthNutrients && Object.keys(item.truthNutrients).length >= 11)),
-          isAlreadyPrepared: false,
+          isAlreadyPrepared: checkIfItemIsAlreadyPrepared(item.originalName || item.name || item.keyword, item.keyword || '', item.dbSource || dbSource, item.truthNutrients?.sodium || (labelData && labelData.sodium) || 0) || Boolean(item.isDishEstimate || (item.truthNutrients && Object.keys(item.truthNutrients).length > 0)),
           cookingAdded: item.cookingAdded || null,
           visualSheen: 0.5,
           visualCoating: 0.5,

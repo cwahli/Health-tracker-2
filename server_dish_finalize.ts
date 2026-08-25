@@ -11,9 +11,11 @@
 import { classifyDishAtomic } from './server_dish_classify';
 import { matchBrandMenu, BrandMatchResult } from './server_brand_match';
 import {
+  computeCaloriesFromMacros,
   computeUnsaturatedFat,
   computeSaltFromSodium,
   deriveCarbohydratesFromEnergy,
+  decomposeSaucedEntree,
 } from './server_derivation';
 
 export interface FinalizeInput {
@@ -235,68 +237,87 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
   }
 
   // Fallback if scout nutrients were absent and not locked by OCR/Brand
-  if (nutrients.calories == null || !(nutrients.calories > 0)) {
+  const hasValidMacros = (nutrients.protein != null || nutrients.carbohydrates != null || nutrients.totalFat != null);
+  if (!hasValidMacros && (nutrients.calories == null || !(nutrients.calories > 0))) {
     const hay = `${originalName} ${keyword || ''}`.toLowerCase();
     const isDrink = /\b(drink|juice|tea|coffee|soda|water|beverage|iced|smoothie|es\b)/i.test(hay);
     const isNoodleRice = /\b(noodle|noodles|rice|pasta|mie|bihun|kwetiau|spaghetti)\b/i.test(hay);
     const isMeatDumpling = /\b(dumpling|dumplings|siomay|dim sum|wonton|chicken|beef|pork|fish|meat)\b/i.test(hay);
 
     if (isDrink) {
-      nutrients.calories = Math.round(consumedWeight * 0.45);
       nutrients.carbohydrates = Math.round(consumedWeight * 0.11 * 10) / 10;
       nutrients.sugar = Math.round(consumedWeight * 0.10 * 10) / 10;
       nutrients.protein = 0;
       nutrients.totalFat = 0;
       nutrients.saturatedFat = 0;
       nutrients.sodium = Math.round(consumedWeight * 0.05);
+      nutrients.calories = computeCaloriesFromMacros(nutrients.protein, nutrients.carbohydrates, nutrients.totalFat);
     } else if (isNoodleRice) {
-      nutrients.calories = Math.round(consumedWeight * 1.8);
       nutrients.carbohydrates = Math.round(consumedWeight * 0.30 * 10) / 10;
       nutrients.protein = Math.round(consumedWeight * 0.06 * 10) / 10;
       nutrients.totalFat = Math.round(consumedWeight * 0.04 * 10) / 10;
       nutrients.saturatedFat = Math.round(consumedWeight * 0.01 * 10) / 10;
       nutrients.sodium = Math.round(consumedWeight * 2.5);
+      nutrients.calories = computeCaloriesFromMacros(nutrients.protein, nutrients.carbohydrates, nutrients.totalFat);
     } else if (isMeatDumpling) {
-      nutrients.calories = Math.round(consumedWeight * 1.9);
       nutrients.protein = Math.round(consumedWeight * 0.12 * 10) / 10;
       nutrients.totalFat = Math.round(consumedWeight * 0.08 * 10) / 10;
       nutrients.saturatedFat = Math.round(consumedWeight * 0.02 * 10) / 10;
       nutrients.carbohydrates = Math.round(consumedWeight * 0.15 * 10) / 10;
       nutrients.sodium = Math.round(consumedWeight * 3.5);
+      nutrients.calories = computeCaloriesFromMacros(nutrients.protein, nutrients.carbohydrates, nutrients.totalFat);
     } else {
-      nutrients.calories = Math.round(consumedWeight * 1.6);
       nutrients.carbohydrates = Math.round(consumedWeight * 0.20 * 10) / 10;
       nutrients.protein = Math.round(consumedWeight * 0.08 * 10) / 10;
       nutrients.totalFat = Math.round(consumedWeight * 0.05 * 10) / 10;
       nutrients.saturatedFat = Math.round(consumedWeight * 0.01 * 10) / 10;
       nutrients.sodium = Math.round(consumedWeight * 2.0);
+      nutrients.calories = computeCaloriesFromMacros(nutrients.protein, nutrients.carbohydrates, nutrients.totalFat);
     }
   }
 
-  // 4. Atwater Consistency & Carbohydrate Derivation
+  // 4. Bottom-Up Calorie Derivation & Atwater Consistency
+  if (dbSource === 'estimated' && !lockedNutrientKeys.includes('protein')) {
+    const decomp = decomposeSaucedEntree(originalName, consumedWeight, nutrients.protein);
+    if (decomp.boundedProtein !== null) {
+      nutrients.protein = decomp.boundedProtein;
+    }
+  }
+
   const p = nutrients.protein ?? 0;
   const f = nutrients.totalFat ?? 0;
-  const cal = nutrients.calories ?? 0;
   let atwaterFlag: { deviationPct: number; flagged: boolean } | null = null;
 
-  if (nutrients.carbohydrates !== null && nutrients.carbohydrates !== undefined && Number.isFinite(Number(nutrients.carbohydrates))) {
-    const c = Number(nutrients.carbohydrates);
-    const atwaterKcal = 4 * p + 4 * c + 9 * f;
-    const deviation = cal > 0 ? Math.abs(atwaterKcal - cal) / cal : 0;
-    const flagged = deviation > ATWATER_TOLERANCE;
-    atwaterFlag = {
-      deviationPct: Math.round(deviation * 100),
-      flagged,
-    };
+  if (!lockedNutrientKeys.includes('calories')) {
+    // Bottom-Up standard: compute calories directly from macros
+    if (nutrients.carbohydrates == null) {
+      nutrients.carbohydrates = deriveCarbohydratesFromEnergy(nutrients.calories, p, f);
+    }
+    const c = nutrients.carbohydrates ?? 0;
+    nutrients.calories = computeCaloriesFromMacros(p, c, f);
   } else {
-    // Derive carbohydrates from energy when missing
-    nutrients.carbohydrates = deriveCarbohydratesFromEnergy(cal, p, f);
-    atwaterFlag = null;
+    // Calories locked by OCR or Brand Menu
+    const cal = nutrients.calories ?? 0;
+    if (nutrients.carbohydrates !== null && nutrients.carbohydrates !== undefined && Number.isFinite(Number(nutrients.carbohydrates))) {
+      const c = Number(nutrients.carbohydrates);
+      const atwaterKcal = 4 * p + 4 * c + 9 * f;
+      const deviation = cal > 0 ? Math.abs(atwaterKcal - cal) / cal : 0;
+      const flagged = deviation > ATWATER_TOLERANCE;
+      atwaterFlag = {
+        deviationPct: Math.round(deviation * 100),
+        flagged,
+      };
+    } else {
+      // Derive carbohydrates from energy when missing on label
+      nutrients.carbohydrates = deriveCarbohydratesFromEnergy(cal, p, f);
+      atwaterFlag = null;
+    }
   }
 
   // 5. Derive Unsaturated Fat and Salt
   nutrients.unsaturatedFat = computeUnsaturatedFat(nutrients.totalFat, nutrients.saturatedFat, nutrients.transFat);
   nutrients.salt = computeSaltFromSodium(nutrients.sodium);
+
 
   return {
     scoutIndex,

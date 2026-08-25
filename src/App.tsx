@@ -14,7 +14,7 @@ import ConflictResolutionModal from './components/ConflictResolutionModal';
 const LogChat = lazyWithRetry(() => import('./components/LogChat'));
 import { JobStore } from './jobs/JobStore';
 import { JobQueueRunner } from './jobs/JobQueueRunner';
-import { initSupabaseJobSync, hydrateUserJobs } from './jobs/SupabaseJobSync';
+import { initSupabaseJobSync, hydrateUserJobs, upsertJobToSupabase } from './jobs/SupabaseJobSync';
 import { ImageStore } from './jobs/ImageStore';
 import { refundCredits } from './jobs/credits';
 import { startGoldenIngestWatcher } from './utils/goldenIngestClient';
@@ -2339,8 +2339,12 @@ export default function App() {
               }
             }
           }
-          // Trigger job hydration past initial paint to prevent startup network bottleneck
-          setTimeout(() => { hydrateUserJobs(uid).catch(() => {}); }, 1500);
+          // Trigger job hydration: immediate on manual pull, deferred on background check
+          if (forcePull) {
+            hydrateUserJobs(uid, true).catch(() => {});
+          } else {
+            setTimeout(() => { hydrateUserJobs(uid).catch(() => {}); }, 1500);
+          }
           tFoodsId = logInteraction('download', `users/${uid}/foodLogs`, null);
           tBioId = logInteraction('download', `users/${uid}/biomarkerHistory`, null);
           tActsId = logInteraction('download', `users/${uid}/actions`, null);
@@ -4077,6 +4081,12 @@ export default function App() {
 
 
       }
+      // Sync active / ready inbox jobs so other devices get latest drafts
+      const activeJobs = JobStore.getAllJobs().filter(j => j.status === 'succeeded' || j.status === 'awaiting_user');
+      for (const aj of activeJobs) {
+        upsertJobToSupabase(aj, uid).catch(() => {});
+      }
+
       // Artificially enforce a minimum rotation time of 800ms so the user gets clear visual confirmation
       await new Promise(resolve => setTimeout(resolve, 800));
       const finalBundle = {

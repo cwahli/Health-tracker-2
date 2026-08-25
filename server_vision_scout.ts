@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { extractBalancedJson } from "./server_pure_helpers";
 import { parseLabelCalories } from "./server_budget_reconcile";
-import { isStandaloneCondimentPacket } from "./server_dish_classify";
+import { isStandaloneCondimentPacket, reconcileContainerVolumeBudget } from "./server_dish_classify";
 
 export const ScoutNutrientsSchema = z.object({
   calories: z.number().nullable().optional(),
@@ -121,9 +121,10 @@ STEP 2: UNIVERSAL DISH EXTRACTION & OCR ATTACHMENT
 - DIRECT OCR FIRST: If a package label or menu panel is visible, transcribe ALL printed facts directly into 'rawNutritionLabel' FIRST (including servingSize, calories, protein, totalFat, saturatedFat, totalCarbohydrate, sugar, sodium). Omit unprinted label keys completely (NEVER emit "key": null). If no label is visible, set 'rawNutritionLabel' to null.
 - PRECISE COUNTING: Inspect open pastry bags/boxes for stacked items. Split into individual items with realistic weights.
 
-STEP 3: 15 MANDATORY DISH NUTRIENTS (ZERO NULLS)
-- For EVERY dish, provide complete numeric portion estimates across all 15 required keys in 'nutrients' (scaled to estimated consumed weight in grams): calories, protein, totalFat, saturatedFat, transFat, sugar, addedSugar, totalFibre, sodium, potassium, omega3, calcium, iron, magnesium, vitaminD. NEVER emit null in nutrients.
-- ZERO-MATH FOR SCOUT: Do not calculate carbohydrates, unsaturated fat, or salt conversions. The backend pipeline automatically derives carbs via Atwater ((Calories - 4P - 9F) / 4), salt via sodium conversion, and unsaturated fat from total fat.
+STEP 3: 14 MANDATORY PHYSICAL NUTRIENTS (ZERO CALORIE INPUT)
+- For EVERY dish, provide numeric portion estimates across all 14 required keys in 'nutrients': protein, carbohydrates, totalFat, saturatedFat, transFat, sugar, addedSugar, totalFibre, sodium, potassium, omega3, calcium, iron, magnesium, vitaminD.
+- ZERO-CALORIE INPUT: Do not estimate calories. Backend computes Calories = (4 * Protein) + (4 * Carbohydrates) + (9 * TotalFat).
+- DIRECT CARBOHYDRATES: Estimate carbohydrates based on visible starch mass (potatoes ~20–25%, batter ~25–30%, meat/fish 0%, rice/pasta ~25–28%, bread ~50%) and sweet liquids.
 - CULINARY & REGIONAL CALIBRATION: Calibrate portion unit sizes, default ingredients, and cooking fat to specific cuisine norms (fried coatings absorb 25–35% fat; stir-fry adds +5–10g oil; steamed/boiled is fat-neutral).
 - INGREDIENTS: Plain string list in 'ingredients' (e.g. ["noodles", "chicken", "vegetables"]).
 - COOKING METHOD: 'raw' | 'baked' | 'grilled' | 'boiled' | 'steamed' | 'deep_fried' | 'pan_fried' | 'stir_fried'.
@@ -151,8 +152,8 @@ Output exactly ONE JSON object matching this schema. You MUST include 'nutrients
         "totalCarbohydrate": "22g"
       },
       "nutrients": {
-        "calories": 480,
         "protein": 22,
+        "carbohydrates": 62,
         "totalFat": 16,
         "saturatedFat": 4.5,
         "transFat": 0,
@@ -278,86 +279,41 @@ export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) =>
 
   for (let idx = 0; idx < items.length; idx++) {
     const item = items[idx];
-    if (!item || typeof item !== "object") {
-      return { valid: false, reason: `Item at index ${idx} is not an object` };
-    }
+    if (!item || typeof item !== "object") return { valid: false, reason: `Item at index ${idx} is not an object` };
 
-    // 1. Check lengths of string fields on the item itself
     for (const [key, value] of Object.entries(item)) {
       if (typeof value === "string") {
-        const isLongTextField = key === 'ingredientsList' || 
-                                key === 'confidenceComment' || 
-                                key === 'scoutConfidenceComment' || 
-                                key === 'description' || 
-                                key === 'notes' ||
-                                key === 'reason' ||
-                                key === 'summary';
-        const maxLen = isLongTextField ? 3000 : 150;
-        if (value.length > maxLen) {
-          return {
-            valid: false,
-            reason: `Item field '${key}' length (${value.length}) exceeds ${maxLen} characters. Field value: "${value.substring(0, 100)}..."`
-          };
-        }
+        const isLongText = ['ingredientsList', 'confidenceComment', 'scoutConfidenceComment', 'description', 'notes', 'reason', 'summary'].includes(key);
+        const maxLen = isLongText ? 3000 : 150;
+        if (value.length > maxLen) return { valid: false, reason: `Item field '${key}' length (${value.length}) exceeds ${maxLen}` };
         const valLower = value.toLowerCase();
-        if (!isLongTextField && jsonKeyHeuristics.some(h => valLower.includes(h + '"') || valLower.includes(h + ':'))) {
-          return {
-            valid: false,
-            reason: `Item field '${key}' contains raw JSON-like keys: "${value.substring(0, 100)}..."`
-          };
+        if (!isLongText && jsonKeyHeuristics.some(h => valLower.includes(h + '"') || valLower.includes(h + ':'))) {
+          return { valid: false, reason: `Item field '${key}' contains raw JSON-like keys` };
         }
       }
     }
 
-    // 2. Check visualIngredients
-    if (item.visualIngredients !== undefined && item.visualIngredients !== null) {
-      if (!Array.isArray(item.visualIngredients)) {
-        return { valid: false, reason: `Item visualIngredients is not an array at index ${idx}` };
-      }
-      if (item.visualIngredients.length > 20) {
-        return {
-          valid: false,
-          reason: `Item visualIngredients array has ${item.visualIngredients.length} entries (limit 20) at index ${idx}`
-        };
-      }
+    if (Array.isArray(item.visualIngredients)) {
+      if (item.visualIngredients.length > 20) return { valid: false, reason: `Item visualIngredients exceeds limit (20)` };
       for (let j = 0; j < item.visualIngredients.length; j++) {
         const ing = item.visualIngredients[j];
-        if (typeof ing !== "string") {
-          return { valid: false, reason: `visualIngredients entry at index ${j} of item ${idx} is not a string` };
-        }
-        if (ing.length > 250) {
-          return {
-            valid: false,
-            reason: `visualIngredients entry at index ${j} of item ${idx} length (${ing.length}) exceeds 250 characters. Value: "${ing.substring(0, 100)}..."`
-          };
-        }
+        if (typeof ing !== "string") return { valid: false, reason: `visualIngredients entry is not a string` };
+        if (ing.length > 250) return { valid: false, reason: `visualIngredients entry exceeds 250 characters` };
         const ingLower = ing.toLowerCase();
         if (jsonKeyHeuristics.some(h => ingLower.includes(h + '"') || ingLower.includes(h + ':'))) {
-          return {
-            valid: false,
-            reason: `visualIngredients entry at index ${j} of item ${idx} looks like JSON: "${ing.substring(0, 100)}..."`
-          };
+          return { valid: false, reason: `visualIngredients entry looks like JSON` };
         }
       }
     }
 
-    // 3. Check components
-    if (item.components !== undefined && item.components !== null) {
-      if (!Array.isArray(item.components)) {
-        return { valid: false, reason: `Item components is not an array at index ${idx}` };
-      }
+    if (Array.isArray(item.components)) {
       for (let j = 0; j < item.components.length; j++) {
         const comp = item.components[j];
         if (comp && typeof comp === "object") {
           for (const [ckey, cval] of Object.entries(comp)) {
             if (typeof cval === "string") {
-              const compMaxLen = (ckey === 'ingredients' || ckey === 'description' || ckey === 'notes' || ckey === 'ingredientsList') ? 3000 : 250;
-              if (cval.length > compMaxLen) {
-                return {
-                  valid: false,
-                  reason: `Component field '${ckey}' at index ${j} of item ${idx} length (${cval.length}) exceeds ${compMaxLen} characters`
-                };
-              }
+              const compMaxLen = ['ingredients', 'description', 'notes', 'ingredientsList'].includes(ckey) ? 3000 : 250;
+              if (cval.length > compMaxLen) return { valid: false, reason: `Component field '${ckey}' exceeds ${compMaxLen}` };
             }
           }
         }
@@ -760,10 +716,26 @@ export function clusterSpatialCompositeDishes(
       const subNames = distinctNames.slice(1);
       const compositeDishTitle = subNames.length > 0 ? `${baseName} with ${subNames.join(', ')}` : baseName;
 
+      // Merge nutrients if multiple items with nutrients are clustered
+      if (clusterGroup.length > 1 && clusterGroup.some(it => it.nutrients && typeof it.nutrients === 'object')) {
+        const mergedNutrients: Record<string, number> = {};
+        for (const it of clusterGroup) {
+          if (it.nutrients && typeof it.nutrients === 'object') {
+            for (const [k, v] of Object.entries(it.nutrients)) {
+              if (typeof v === 'number' && Number.isFinite(v)) {
+                mergedNutrients[k] = (mergedNutrients[k] || 0) + v;
+              }
+            }
+          }
+        }
+        primary.nutrients = mergedNutrients;
+      }
+
       primary.originalName = compositeDishTitle;
       primary.keyword = compositeDishTitle;
       primary.name = compositeDishTitle;
       primary.estimatedWeightGrams = totalWeight;
+      primary.nutrientBasisWeight = totalWeight;
       primary.boundingBox2D = [min0, min1, max2, max3];
       primary.components = compositeComponents;
       primary.isCompositeDish = true;
@@ -1007,13 +979,21 @@ export function parseAndHealVisionScout(
         const rawOriginal = item.originalName || item.keyword || "";
         const hasPrintedMacros = item.rawNutritionLabel && 
                    (item.rawNutritionLabel.calories || item.rawNutritionLabel.protein || item.rawNutritionLabel.totalFat);
-        const hasMultipleCommas = (rawOriginal.match(/,/g) || []).length >= 2;
         const hasComponents = Array.isArray(item.components) && item.components.length > 0;
+        const hasDirectNutrients = item.nutrients && (
+          (item.nutrients.protein != null && item.nutrients.protein > 0) ||
+          (item.nutrients.carbohydrates != null && item.nutrients.carbohydrates > 0) ||
+          (item.nutrients.totalFat != null && item.nutrients.totalFat > 0)
+        );
 
-        // If the item ALREADY has a structured component breakdown, keep it intact as a single dish!
-        // Exploding by comma is ONLY for legacy multi-item strings without component breakdowns.
-        if (!hasPrintedMacros && hasMultipleCommas && !hasComponents) {
-          const dishNames = rawOriginal.split(",").map((n: string) => n.trim()).filter((n: string) => n.length > 0);
+        // Check for multiple commas OUTSIDE of parentheses
+        const outsideParens = rawOriginal.replace(/\([^)]*\)/g, '').trim();
+        const hasMultipleCommas = (outsideParens.match(/,/g) || []).length >= 2;
+
+        // If the item ALREADY has a structured component breakdown or direct nutrients, keep it intact as a single dish!
+        // Exploding by comma is ONLY for legacy multi-item strings without component breakdowns or direct nutrients.
+        if (!hasPrintedMacros && !hasDirectNutrients && hasMultipleCommas && !hasComponents) {
+          const dishNames = outsideParens.split(",").map((n: string) => n.trim()).filter((n: string) => n.length > 0);
           const splitWeight = Math.round((item.estimatedWeightGrams || 300) / Math.max(1, dishNames.length));
 
           dishNames.forEach((dishName: string) => {
@@ -1027,6 +1007,7 @@ export function parseAndHealVisionScout(
               keyword: cleanDishName,
               name: cleanDishName,
               estimatedWeightGrams: splitWeight,
+              nutrientBasisWeight: splitWeight,
               components: singleComponent
             });
           });
@@ -1388,8 +1369,8 @@ export function parseAndHealVisionScout(
             const tokensB = nameB.replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter((t: string) => t.length > 2);
 
             const overlapCount = tokensA.filter((t: string) => tokensB.includes(t)).length;
-            const minLen = Math.min(tokensA.length, tokensB.length);
-            const overlapRatio = minLen > 0 ? overlapCount / minLen : 0;
+            const maxLen = Math.max(tokensA.length, tokensB.length);
+            const overlapRatio = maxLen > 0 ? overlapCount / maxLen : 0;
 
             const calA = itemA.rawNutritionLabel?.calories || null;
             const calB = itemB.rawNutritionLabel?.calories || null;
@@ -1442,6 +1423,24 @@ export function parseAndHealVisionScout(
                 }
                 itemB.rawNutritionLabel = mergedLabel;
               }
+
+              // If both items are visual dishes without printed nutrition labels, combine their weights and nutrients
+              if (!hasLabelA && !hasLabelB) {
+                const weightA = Number(itemA.estimatedWeightGrams) || 0;
+                const weightB = Number(itemB.estimatedWeightGrams) || 0;
+                if (weightA > 0) {
+                  itemB.estimatedWeightGrams = weightB + weightA;
+                  itemB.nutrientBasisWeight = itemB.estimatedWeightGrams;
+                  if (itemA.nutrients && typeof itemA.nutrients === 'object' && itemB.nutrients && typeof itemB.nutrients === 'object') {
+                    for (const [k, v] of Object.entries(itemA.nutrients)) {
+                      if (typeof v === 'number' && Number.isFinite(v)) {
+                        itemB.nutrients[k] = Math.round(((itemB.nutrients[k] || 0) + v) * 10) / 10;
+                      }
+                    }
+                  }
+                }
+              }
+
               if (itemA.components && Array.isArray(itemA.components) && itemA.components.length > 0 && (!itemB.components || itemB.components.length === 0)) {
                 itemB.components = itemA.components;
               }
@@ -1462,6 +1461,7 @@ export function parseAndHealVisionScout(
 
       visionScoutItems = resolvePackageAndContextItems(visionScoutItems, addDebugLog, userMessage, isCompareMode);
       visionScoutItems = clusterSpatialCompositeDishes(visionScoutItems, addDebugLog, isCompareMode);
+      visionScoutItems = reconcileContainerVolumeBudget(visionScoutItems, addDebugLog);
 
       // Re-index finalized items so scoutIndex is contiguous (0, 1, 2, ...) after deduplicating labels
       visionScoutItems = visionScoutItems.map((item: any, idx: number) => ({

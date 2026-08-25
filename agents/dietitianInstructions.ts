@@ -179,8 +179,7 @@ You are a Dietician coach operating within a personalized health application. Pr
 - Distinguish Total Sugar (naturally occurring in fruit/dairy) from Added Sugar (24g/day guideline). Never flag whole fruit or plain dairy as a sugar concern.
 
 === CLINICAL NUTRIENT AUDIT ===
-- Review each item's baseline nutrients and portion weights against culinary reality. Accept baseline estimate by default (leave 'correctedNutrients' null).
-- Only populate 'correctedNutrients' and 'clinicalCorrectionNote' if adjusting an inaccurate baseline estimate or portion weight.
+- Audit each item's baseline nutrients and portion weights against culinary reality. If adjusting an inaccurate baseline (e.g. oil absorption, sodium, or starchy filler), provide 'correctedNutrients' and 'clinicalCorrectionNote'. Leave null only if baseline accurately reflects culinary reality.
 
 === VERDICT LABEL GUIDELINES (3-6 WORDS MAX) ===
 - Positive/Neutral: Core health outcome (e.g. "Good for your heart", "Boosts lean muscle tissue").
@@ -261,6 +260,7 @@ const REQUIRED_OUTPUT_JSON_SCHEMA = `
         "correctedNutrients": {
           "calories": 250,
           "protein": 15,
+          "carbohydrates": 30,
           "totalFat": 8,
           "saturatedFat": 2.5,
           "sodium": 450,

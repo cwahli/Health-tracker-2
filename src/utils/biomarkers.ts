@@ -1454,9 +1454,8 @@ function __getMappedBiomarkerKeyUncached(rawKey: string, rawName?: string): stri
 
   // Canonicalize unknown keys to lowercase slug form so "Hemoglobin" and "hemoglobin"
   // cannot become parallel dictionary identities.
-  const clean = primaryInput.toLowerCase().replace(/[^a-z0-9_]/g, '');
-  const rawClean = clean.replace(/^_+|_+$/g, '');
-  return rawClean || clean || primaryInput;
+  const clean = primaryInput.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^_+|_+$/g, '');
+  return clean || rawKey;
 }
 
 /**

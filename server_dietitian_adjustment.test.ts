@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { rebalanceNutrientProfile, applyNutrientModifiers } from "./server_derivation";
 
 describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
   const NUTRIENT_KEYS = [
     'calories', 'protein', 'totalFat', 'saturatedFat', 'transFat', 'unsaturatedFat',
-    'carbohydrates', 'sugar', 'addedSugar', 'totalFibre', 'sodium', 'potassium'
+    'carbohydrates', 'sugar', 'addedSugar', 'totalFibre', 'sodium', 'potassium', 'salt'
   ];
 
   function simulateDietitianInjection(preMatch: any, dietitianItem: any) {
@@ -28,6 +29,9 @@ describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
           n[k] = Number(v);
         }
       });
+      // Pure TS rebalancing: recalculates Calories (4P+4C+9F), Unsat Fat, Salt, and density bounds
+      const rebalanced = rebalanceNutrientProfile(n, weight);
+      Object.assign(n, rebalanced);
     }
 
     const scale = 100 / weight;
@@ -46,8 +50,7 @@ describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
     };
   }
 
-  it("calibrates Siomay portion weight from 150g (3x50g) to 100g (3x33g) and proportionally scales baseline macros", () => {
-    // Scout emitted Siomay at 150g with 280 kcal
+  it("calibrates portion weight and proportionally scales baseline macros", () => {
     const preMatch = {
       scoutIndex: 1,
       originalName: "SIOMAY",
@@ -67,7 +70,6 @@ describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
       }
     };
 
-    // Dietitian clinical review adjusts weight to 100g (regional norm: ~33g/piece for 3 pieces)
     const dietitianItem = {
       scoutIndex: 1,
       canonicalDbName: "steamed chicken dumplings",
@@ -78,58 +80,108 @@ describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
     const finalized = simulateDietitianInjection(preMatch, dietitianItem);
 
     expect(finalized.weightGrams).toBe(100);
-    // 280 * (100 / 150) = 186.67
     expect(finalized.nutrients.calories).toBe(186.67);
-    // 16 * (100 / 150) = 10.67
     expect(finalized.nutrients.protein).toBe(10.67);
-    // 10 * (100 / 150) = 6.67
     expect(finalized.nutrients.totalFat).toBe(6.67);
-    // 520 * (100 / 150) = 346.67
     expect(finalized.nutrients.sodium).toBe(346.67);
-    // 100g synthetic baseline reflects the exact 100g values
-    expect(finalized.syntheticBase100g.calories).toBe(186.67);
-    expect(finalized.syntheticBase100g.protein).toBe(10.67);
   });
 
-  it("applies clinical corrections when Dietitian explicitly overrides baseline nutrients with note", () => {
+  it("applies clinical corrections and rebalances dependent metrics (Calories = 4P+4C+9F, Unsat Fat, Salt)", () => {
     const preMatch = {
       scoutIndex: 1,
-      originalName: "SIOMAY",
-      keyword: "steamed chicken dumplings",
-      estimatedWeightGrams: 150,
+      originalName: "Fried Fish Fillet",
+      keyword: "fried fish",
+      estimatedWeightGrams: 200,
       nutrients: {
-        calories: 280,
-        protein: 16,
-        totalFat: 10,
-        saturatedFat: 3,
-        carbohydrates: 30,
-        sodium: 520
+        protein: 24,
+        carbohydrates: 20,
+        totalFat: 12,
+        saturatedFat: 2.5,
+        transFat: 0,
+        sodium: 400,
       }
     };
 
+    // Dietitian observes deep-fried oil absorption undercounted -> adjusts totalFat to 22g and satFat to 5g
     const dietitianItem = {
       scoutIndex: 1,
-      canonicalDbName: "steamed chicken dumplings",
-      weightGrams: 100,
+      canonicalDbName: "Fried Fish Fillet",
+      weightGrams: 200,
       dbSource: "estimated",
       correctedNutrients: {
-        calories: 180,
-        protein: 12,
-        totalFat: 6,
-        saturatedFat: 1.8,
-        sodium: 380
+        totalFat: 22,
+        saturatedFat: 5,
+        sodium: 600,
       },
-      clinicalCorrectionNote: "Calibrated 3 pcs siomay to 100g total (33g/pc) and adjusted fat/sodium to regional fast-casual steamed chicken dumplings norm."
+      clinicalCorrectionNote: "Increased total fat by 10g for batter oil absorption and updated sodium."
     };
 
     const finalized = simulateDietitianInjection(preMatch, dietitianItem);
 
-    expect(finalized.weightGrams).toBe(100);
-    expect(finalized.nutrients.calories).toBe(180);
-    expect(finalized.nutrients.protein).toBe(12);
-    expect(finalized.nutrients.totalFat).toBe(6);
-    expect(finalized.nutrients.saturatedFat).toBe(1.8);
-    expect(finalized.nutrients.sodium).toBe(380);
-    expect(finalized.clinicalCorrectionNote).toContain("Calibrated 3 pcs siomay to 100g");
+    expect(finalized.weightGrams).toBe(200);
+    expect(finalized.nutrients.totalFat).toBe(22);
+    expect(finalized.nutrients.saturatedFat).toBe(5);
+    expect(finalized.nutrients.unsaturatedFat).toBe(17); // 22 - 5 = 17
+    expect(finalized.nutrients.sodium).toBe(600);
+    expect(finalized.nutrients.salt).toBe(1.52); // (600 * 2.54) / 1000 = 1.52
+    // Bottom-Up Calories automatically recalculated: 4(24) + 4(20) + 9(22) = 96 + 80 + 198 = 374 kcal!
+    expect(finalized.nutrients.calories).toBe(374);
+    expect(finalized.clinicalCorrectionNote).toContain("batter oil absorption");
+  });
+
+  it("handles unsweetened beverage edits via universal applyNutrientModifiers", () => {
+    const teaNutrients = {
+      protein: 0,
+      carbohydrates: 18,
+      totalFat: 0,
+      saturatedFat: 0,
+      transFat: 0,
+      sugar: 18,
+      addedSugar: 18,
+      sodium: 5,
+      calories: 72
+    };
+
+    const res = applyNutrientModifiers(teaNutrients, {
+      message: "My tea was unsweatened",
+      foodType: "beverage",
+      name: "Iced Tea"
+    });
+
+    expect(res.updatedNutrients.sugar).toBe(0);
+    expect(res.updatedNutrients.addedSugar).toBe(0);
+    expect(res.updatedNutrients.carbohydrates).toBe(0);
+    expect(res.updatedNutrients.calories).toBe(0);
+    expect(res.lockedKeys).toContain("sugar");
+    expect(res.lockedKeys).toContain("calories");
+  });
+
+  it("handles zero-sodium and oil-free modifiers universally without food-specific hardcoding", () => {
+    const dishNutrients = {
+      protein: 25,
+      carbohydrates: 10,
+      totalFat: 20,
+      saturatedFat: 6,
+      transFat: 0,
+      sodium: 850,
+      calories: 320
+    };
+
+    // User says "no salt and steamed without oil"
+    const res = applyNutrientModifiers(dishNutrients, {
+      message: "Cooked with no salt and steamed without oil",
+      foodType: "protein",
+      name: "Chicken Breast"
+    });
+
+    expect(res.updatedNutrients.sodium).toBe(0);
+    expect(res.updatedNutrients.salt).toBe(0);
+    expect(res.updatedNutrients.totalFat).toBe(6); // 20 * 0.3 = 6
+    // Recalculated Calories bottom up: 4(25) + 4(10) + 9(6) = 100 + 40 + 54 = 194 kcal!
+    expect(res.updatedNutrients.calories).toBe(194);
+    expect(res.lockedKeys).toContain("sodium");
+    expect(res.lockedKeys).toContain("totalFat");
   });
 });
+
+

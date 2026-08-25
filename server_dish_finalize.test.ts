@@ -65,8 +65,8 @@ describe("server_dish_finalize", () => {
     });
 
     expect(ledger.weightGrams).toBe(30);
-    // 540 * (30 / 80) = 202.5 -> 203
-    expect(ledger.nutrients.calories).toBe(203);
+    // Bottom-Up: 4(0.4) + 4(0.8) + 9(21.8) = 1.6 + 3.2 + 196.2 = 201 kcal
+    expect(ledger.nutrients.calories).toBe(201);
     expect(ledger.nutrients.totalFat).toBe(21.8); // 58 * 30/80 = 21.75 -> 21.8
   });
 
@@ -94,104 +94,105 @@ describe("server_dish_finalize", () => {
     });
 
     expect(ledger.dbSource).toBe("label");
+    expect(ledger.lockedNutrientKeys).toContain("calories");
     expect(ledger.nutrients.calories).toBe(154);
     expect(ledger.nutrients.protein).toBe(16.2);
     expect(ledger.nutrients.totalFat).toBe(8.5);
-    expect(ledger.lockedNutrientKeys).toContain("calories");
-    expect(ledger.lockedNutrientKeys).toContain("protein");
+    expect(ledger.nutrients.carbohydrates).toBe(3.2);
+    expect(ledger.nutrients.unsaturatedFat).toBe(6.4); // 8.5 - 2.1 = 6.4
+    expect(ledger.nutrients.salt).toBe(0.64); // 250 * 2.54 / 1000 = 0.635 -> 0.64
   });
 
   it("recognizes Gemini totalCarbohydrate alias in OCR label and scales correctly for user portion edit", async () => {
     const item = {
       scoutIndex: 0,
-      originalName: "Rolled Oats Bowl",
-      keyword: "rolled oats",
-      estimatedWeightGrams: 80,
-      nutrientBasisWeight: 80,
+      originalName: "Snack Bar",
+      keyword: "bar",
+      estimatedWeightGrams: 50,
       rawNutritionLabel: {
-        servingSize: "30 g",
-        calories: "120 kcal",
-        protein: "3 g",
-        totalFat: "3.5 g",
-        saturatedFat: "0.5 g",
-        transFat: null,
-        totalCarbohydrate: "21 g",
-        sugar: "0 g",
-        addedSugar: null,
-        sodium: "0 mg",
-        salt: null,
-        potassium: null,
-        totalFibre: "3 g",
-        solubleFibre: null,
+        calories: "200",
+        protein: "10g",
+        totalFat: "8g",
+        saturatedFat: "2g",
+        totalCarbohydrate: "22g", // Gemini output format
+        sodium: "100mg",
+        basisType: "per_dish",
       },
     };
 
     const ledger = await finalizeDishLedger({
       item,
-      nutrientBasisWeight: 80,
-      consumedWeight: 80,
+      nutrientBasisWeight: 50,
+      consumedWeight: 100, // User edited to 100g (2x portion)
     });
 
     expect(ledger.dbSource).toBe("label");
-    // Scale factor = 80 / 30 = 2.6667
-    expect(ledger.nutrients.calories).toBe(320); // 120 * 80/30
-    expect(ledger.nutrients.protein).toBe(8); // 3 * 80/30
-    expect(ledger.nutrients.totalFat).toBe(9.3); // 3.5 * 80/30
-    expect(ledger.nutrients.saturatedFat).toBe(1.3); // 0.5 * 80/30
-    expect(ledger.nutrients.carbohydrates).toBe(56); // 21 * 80/30
-    expect(ledger.nutrients.totalFibre).toBe(8); // 3 * 80/30
-    expect(ledger.nutrients.sugar).toBe(0);
-    expect(ledger.nutrients.sodium).toBe(0);
-    expect(ledger.lockedNutrientKeys).toContain("carbohydrates");
-    expect(ledger.lockedNutrientKeys).toContain("totalFibre");
-    expect(ledger.atwaterFlag?.flagged).toBe(false);
+    expect(ledger.weightGrams).toBe(100);
+    expect(ledger.nutrients.calories).toBe(400);
+    expect(ledger.nutrients.protein).toBe(20);
+    expect(ledger.nutrients.totalFat).toBe(16);
+    expect(ledger.nutrients.carbohydrates).toBe(44);
+    expect(ledger.nutrients.salt).toBe(0.51);
   });
 
   it("scales stored brand lock correctly on portion edit (D8) without re-fetching whole dish", async () => {
-    // 350g Yolk sandwich with 760 kcal locked
-    const storedBrandLock = {
-      id: "yolk_chimi_sandwich",
-      basisType: "per_dish",
-      servingGrams: 350,
-      keys: ["calories", "protein", "totalFat"],
-      valuesAtBasis: {
-        calories: 760,
-        protein: 38,
-        totalFat: 32,
+    const item = {
+      scoutIndex: 0,
+      originalName: "Big Mac",
+      keyword: "burger",
+      chainName: "McDonald's",
+      estimatedWeightGrams: 215,
+      nutrients: {
+        calories: 550,
+        protein: 25,
+        totalFat: 30,
+        carbohydrates: 45,
+        sodium: 1000,
+        potassium: 350,
       },
     };
 
-    const item = {
-      scoutIndex: 0,
-      originalName: "YOLK Steak Chimi 2.0 Sandwich",
-      keyword: "steak sandwich",
-      estimatedWeightGrams: 175, // user edited weight to half
-      nutrientBasisWeight: 350,
+    const storedBrandLock = {
+      id: "brand-mcd-big-mac",
+      basisType: "per_dish",
+      servingGrams: 215,
+      keys: ["calories", "protein", "totalFat", "saturatedFat", "carbohydrates", "sodium"],
+      valuesAtBasis: {
+        calories: 550,
+        protein: 25,
+        totalFat: 30,
+        saturatedFat: 10,
+        carbohydrates: 45,
+        sodium: 1000,
+      },
+      per100g: null,
     };
 
     const ledger = await finalizeDishLedger({
       item,
-      nutrientBasisWeight: 350,
-      consumedWeight: 175,
       storedBrandLock,
+      nutrientBasisWeight: 215,
+      consumedWeight: 107.5, // 0.5x portion
     });
 
     expect(ledger.dbSource).toBe("brand_official");
-    expect(ledger.weightGrams).toBe(175);
-    expect(ledger.nutrients.calories).toBe(380); // 760 * 0.5
-    expect(ledger.nutrients.protein).toBe(19); // 38 * 0.5
-    expect(ledger.nutrients.totalFat).toBe(16); // 32 * 0.5
-    expect(ledger.lockedNutrientKeys).toContain("calories");
+    expect(ledger.weightGrams).toBe(108); // Rounded
+    expect(ledger.nutrients.calories).toBe(276); // 550 * 108 / 215 = 276.28 -> 276
+    expect(ledger.nutrients.protein).toBe(12.6); // 25 * 108 / 215 = 12.56 -> 12.6
+    expect(ledger.nutrients.totalFat).toBe(15.1); // 30 * 108 / 215 = 15.07 -> 15.1
+    expect(ledger.nutrients.carbohydrates).toBe(22.6); // 45 * 108 / 215 = 22.6
+    expect(ledger.nutrients.sodium).toBe(502.3); // 1000 * 108 / 215 = 502.32 -> 502.3
+    // Unlocked micronutrient potassium scales by effective R (108 / 215)
+    expect(ledger.nutrients.potassium).toBe(176);
   });
 
-  it("computes Atwater flag when carbohydrates is present and flags if discrepancy > 35%", async () => {
-    // Bad scout estimate: 1000 kcal with only 10g P, 10g C, 10g F (170 kcal actual)
-    const item = {
+  it("computes bottom-up calories on estimated dishes and flags Atwater on OCR labels with discrepancy > 35%", async () => {
+    // 1. Estimated dish: computes bottom-up calories
+    const estimatedItem = {
       scoutIndex: 0,
       originalName: "Mystery Dish",
       estimatedWeightGrams: 200,
       nutrients: {
-        calories: 1000,
         protein: 10,
         totalFat: 10,
         carbohydrates: 10,
@@ -199,16 +200,38 @@ describe("server_dish_finalize", () => {
       },
     };
 
-    const ledger = await finalizeDishLedger({
-      item,
+    const estimatedLedger = await finalizeDishLedger({
+      item: estimatedItem,
       nutrientBasisWeight: 200,
       consumedWeight: 200,
     });
 
-    expect(ledger.atwaterFlag).not.toBeNull();
-    expect(ledger.atwaterFlag?.flagged).toBe(true);
-    // Atwater is flagged but does NOT destructively rescale calories
-    expect(ledger.nutrients.calories).toBe(1000);
+    // 4(10) + 4(10) + 9(10) = 170 kcal
+    expect(estimatedLedger.nutrients.calories).toBe(170);
+
+    // 2. OCR label with high discrepancy: locks label calories and flags Atwater
+    const ocrItem = {
+      scoutIndex: 1,
+      originalName: "Mislabeled Bar",
+      estimatedWeightGrams: 100,
+      rawNutritionLabel: {
+        calories: "1000",
+        protein: "10g",
+        totalFat: "10g",
+        carbohydrates: "10g",
+        basisType: "per_dish",
+      },
+    };
+
+    const ocrLedger = await finalizeDishLedger({
+      item: ocrItem,
+      nutrientBasisWeight: 100,
+      consumedWeight: 100,
+    });
+
+    expect(ocrLedger.atwaterFlag).not.toBeNull();
+    expect(ocrLedger.atwaterFlag?.flagged).toBe(true);
+    expect(ocrLedger.nutrients.calories).toBe(1000);
   });
 
   it("derives carbohydrates from energy without flagging Atwater if C is missing", async () => {

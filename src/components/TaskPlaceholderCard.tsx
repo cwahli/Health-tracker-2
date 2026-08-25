@@ -535,18 +535,31 @@ export default function TaskPlaceholderCard({
             {/* Comparison Options Summary Row with Calories */}
             {(() => {
               const compGroups = job.result?.comparisonSet?.optionMeals || job.result?.comparison?.options || job.result?.comparison?.groups || job.result?.clean_result?.comparison?.groups || (job as any).clean_result?.comparison?.groups;
-              const scoutItems = job.result?.scoutItems || job.result?.clean_result?.scoutItems || (job as any).scoutItems;
+              const scoutItems = job.result?.foodData?.itemsBreakdown || job.result?.items || job.result?.meal?.items || job.result?.scoutItems || job.result?.clean_result?.scoutItems || (job as any).scoutItems;
 
               if (compGroups && Array.isArray(compGroups) && compGroups.length > 0) {
                 return (
                   <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
                     {compGroups.map((opt: any, idx: number) => {
                       const name = opt.groupName || opt.content?.name || opt.name || opt.title || `Option ${idx + 1}`;
-                      const cals = opt.averageNutrients?.calories ?? opt.nutrients?.calories ?? opt.calories ?? opt.totalCalories;
+                      let numericCals = NaN;
+                      const directCal = opt.averageNutrients?.calories ?? opt.nutrients?.calories ?? opt.calories ?? opt.totalCalories;
+                      if (directCal != null) {
+                        const parsed = parseFloat(String(directCal).replace(/[^\d.]/g, ''));
+                        if (!isNaN(parsed) && parsed > 0) numericCals = parsed;
+                      }
+                      if (isNaN(numericCals) && (opt.averageNutrients || opt.nutrients)) {
+                        const n = opt.averageNutrients || opt.nutrients;
+                        const p = Number(n.protein) || 0;
+                        const c = Number(n.carbohydrates ?? n.carbs) || 0;
+                        const f = Number(n.totalFat ?? n.fat) || 0;
+                        const macroSum = Math.round(4 * p + 4 * c + 9 * f);
+                        if (macroSum > 0) numericCals = macroSum;
+                      }
                       return (
                         <span key={idx} className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-900/50 text-[11px] font-semibold flex items-center gap-1">
                           <span>{name}:</span>
-                          <span className="font-bold text-indigo-800 dark:text-indigo-200">{cals != null ? `${Math.round(Number(cals))} kcal` : 'Calculating...'}</span>
+                          <span className="font-bold text-indigo-800 dark:text-indigo-200">{!isNaN(numericCals) && numericCals > 0 ? `${Math.round(numericCals)} kcal` : 'Calculating...'}</span>
                         </span>
                       );
                     })}
@@ -556,9 +569,20 @@ export default function TaskPlaceholderCard({
                 return (
                   <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
                     {scoutItems.map((item: any, idx: number) => {
-                      const name = item.originalName || item.keyword || `Option ${idx + 1}`;
-                      const cals = item.nutrients?.calories ?? item.calories ?? item.estimatedCalories ?? item.rawNutritionLabel?.calories ?? item.preCalcNutrients?.calories;
-                      const numericCals = cals != null ? parseFloat(String(cals).replace(/[^\d.]/g, '')) : NaN;
+                      const name = item.canonicalDbName || item.originalName || item.name || item.keyword || `Option ${idx + 1}`;
+                      let numericCals = NaN;
+                      const directCal = item.nutrients?.calories ?? item.calories ?? item.estimatedCalories ?? item.rawNutritionLabel?.calories ?? item.preCalcNutrients?.calories;
+                      if (directCal != null) {
+                        const parsed = parseFloat(String(directCal).replace(/[^\d.]/g, ''));
+                        if (!isNaN(parsed) && parsed > 0) numericCals = parsed;
+                      }
+                      if (isNaN(numericCals) && item.nutrients) {
+                        const p = Number(item.nutrients.protein) || 0;
+                        const c = Number(item.nutrients.carbohydrates ?? item.nutrients.carbs) || 0;
+                        const f = Number(item.nutrients.totalFat ?? item.nutrients.fat) || 0;
+                        const macroSum = Math.round(4 * p + 4 * c + 9 * f);
+                        if (macroSum > 0) numericCals = macroSum;
+                      }
                       return (
                         <span key={idx} className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-900/50 text-[11px] font-semibold flex items-center gap-1">
                           <span>{name}:</span>

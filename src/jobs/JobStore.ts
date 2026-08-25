@@ -2,7 +2,7 @@ import { AgentJob } from './types';
 import { ImageStore } from './ImageStore';
 import { MealBuild } from '../mealBuild/types';
 import { rebaseUserEdit } from '../mealBuild/consolidate';
-import { deleteJobFromBackend } from './SupabaseJobSync';
+import { deleteJobFromBackend, upsertJobToSupabase } from './SupabaseJobSync';
 
 type Listener = () => void;
 
@@ -232,6 +232,11 @@ class JobStoreImpl {
     Object.assign(job, { ...patch, updatedAt: new Date().toISOString() });
     this.saveJobs();
     this.notify();
+
+    // Auto-sync completed / ready jobs to cloud so they appear across all user devices
+    if (patch.status === 'succeeded' || patch.status === 'awaiting_user' || (job.status === 'succeeded' && patch.result)) {
+      upsertJobToSupabase(job).catch(() => {});
+    }
   }
 
   async deleteJob(id: string) {

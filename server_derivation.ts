@@ -2,12 +2,29 @@
  * server_derivation.ts
  *
  * Pure TypeScript derivation utilities for nutrients:
+ * - Bottom-Up Calories (kcal) = Math.round((4 * Protein) + (4 * Carbohydrates) + (9 * TotalFat))
  * - Unsaturated Fat (g) = Math.max(0, TotalFat - (SaturatedFat + TransFat))
  * - Salt (g) = (Sodium in mg * 2.54) / 1000
- * - Carbohydrates from energy (g) = Math.max(0, (Calories - (4 * Protein) - (9 * TotalFat)) / 4) [Fallback only when C is missing]
+ * - Carbohydrates from energy fallback (g) = Math.max(0, (Calories - (4 * Protein) - (9 * TotalFat)) / 4) [Fallback only when C is missing]
+ * - rebalanceNutrientProfile: Ensures 100% thermodynamic consistency and physical density clamping
  */
 
-export function computeUnsaturatedFat(totalFat?: number | null, saturatedFat?: number | null, transFat?: number | null): number {
+export function computeCaloriesFromMacros(
+  protein?: number | null,
+  carbohydrates?: number | null,
+  totalFat?: number | null
+): number {
+  const p = Math.max(0, protein ?? 0);
+  const c = Math.max(0, carbohydrates ?? 0);
+  const tf = Math.max(0, totalFat ?? 0);
+  return Math.round((4 * p) + (4 * c) + (9 * tf));
+}
+
+export function computeUnsaturatedFat(
+  totalFat?: number | null,
+  saturatedFat?: number | null,
+  transFat?: number | null
+): number {
   const tf = totalFat ?? 0;
   const sf = saturatedFat ?? 0;
   const tr = transFat ?? 0;
@@ -21,7 +38,11 @@ export function computeSaltFromSodium(sodiumMg?: number | null): number {
   return Math.round(rawSalt * 100) / 100;
 }
 
-export function deriveCarbohydratesFromEnergy(calories?: number | null, protein?: number | null, totalFat?: number | null): number {
+export function deriveCarbohydratesFromEnergy(
+  calories?: number | null,
+  protein?: number | null,
+  totalFat?: number | null
+): number {
   const cal = calories ?? 0;
   const p = protein ?? 0;
   const tf = totalFat ?? 0;
@@ -40,22 +61,176 @@ export interface BaseNutrientInputs {
 }
 
 export interface DerivedNutrientOutputs {
+  calories: number;
   unsaturatedFat: number;
   salt: number;
   carbohydrates: number;
 }
 
 export function calculateDerivedNutrients(base: BaseNutrientInputs): DerivedNutrientOutputs {
+  const p = base.protein ?? 0;
+  const tf = base.totalFat ?? 0;
   const unsaturatedFat = computeUnsaturatedFat(base.totalFat, base.saturatedFat, base.transFat);
   const salt = computeSaltFromSodium(base.sodium);
+
   // Carbohydrates: use emitted value if present, else derive from energy equation
   const carbohydrates = base.carbohydrates !== undefined && base.carbohydrates !== null
     ? Math.round(base.carbohydrates * 10) / 10
-    : deriveCarbohydratesFromEnergy(base.calories, base.protein, base.totalFat);
+    : deriveCarbohydratesFromEnergy(base.calories, p, tf);
+
+  // Calories: if explicit carbs given, calculate bottom-up; else retain or compute
+  const calories = (base.calories !== undefined && base.calories !== null && !(base.carbohydrates !== undefined && base.carbohydrates !== null))
+    ? Math.round(base.calories)
+    : computeCaloriesFromMacros(p, carbohydrates, tf);
 
   return {
+    calories,
     unsaturatedFat,
     salt,
     carbohydrates,
   };
 }
+
+/**
+ * Rebalances a nutrient profile dictionary post-mutation (e.g. from Dietitian corrections),
+ * ensuring complete thermodynamic consistency between macros and calories, deriving
+ * unsaturated fat and salt, and enforcing physical density bounds.
+ */
+export function rebalanceNutrientProfile(
+  nutrients: Record<string, any>,
+  weightGrams?: number | null
+): Record<string, any> {
+  const result = { ...nutrients };
+  const p = result.protein !== null && result.protein !== undefined ? Number(result.protein) : null;
+  let c = result.carbohydrates !== null && result.carbohydrates !== undefined ? Number(result.carbohydrates) : null;
+  const tf = result.totalFat !== null && result.totalFat !== undefined ? Number(result.totalFat) : null;
+  const sf = result.saturatedFat !== null && result.saturatedFat !== undefined ? Number(result.saturatedFat) : null;
+  const tr = result.transFat !== null && result.transFat !== undefined ? Number(result.transFat) : null;
+  const na = result.sodium !== null && result.sodium !== undefined ? Number(result.sodium) : null;
+  const cal = result.calories !== null && result.calories !== undefined ? Number(result.calories) : null;
+
+  // Physical density clamping if weight is known
+  if (weightGrams && weightGrams > 0) {
+    const maxDensity = weightGrams * 0.95;
+    if (c !== null && c > maxDensity) c = maxDensity;
+  }
+
+  if (c !== null && p !== null && tf !== null) {
+    // Both macros present -> derive calories bottom-up
+    result.calories = computeCaloriesFromMacros(p, c, tf);
+    result.carbohydrates = Math.round(c * 10) / 10;
+  } else if (c === null && cal !== null && p !== null && tf !== null) {
+    // Carbs missing -> back-solve via Atwater
+    result.carbohydrates = deriveCarbohydratesFromEnergy(cal, p, tf);
+  } else if (p !== null || c !== null || tf !== null) {
+    result.calories = computeCaloriesFromMacros(p ?? 0, c ?? 0, tf ?? 0);
+  }
+
+  // Derive dependent metrics
+  result.unsaturatedFat = computeUnsaturatedFat(tf, sf, tr);
+  result.salt = computeSaltFromSodium(na);
+
+  return result;
+}
+
+/**
+ * Decomposes sauced entrees into solid protein mass and liquid sauce glaze,
+ * ensuring cooked meat protein density does not exceed biological limits (<= 26g / 100g solid meat).
+ */
+export function decomposeSaucedEntree(
+  name: string,
+  totalWeightGrams: number,
+  proteinEstimate: number | null | undefined
+): { netSolidWeightGrams: number; netSauceWeightGrams: number; boundedProtein: number | null } {
+  const isSauced = /\b(sauce|gravy|curry|glaze|stew|salsa|teriyaki|black\s*pepper|bbq|sweet\s*and\s*sour|stroganoff)\b/i.test(name);
+  const isProtein = /\b(steak|beef|chicken|pork|lamb|fish|salmon|chop|fillet|ribs|turkey|duck|daging|ayam|ikan)\b/i.test(name);
+
+  if (!isSauced || !isProtein || !totalWeightGrams || totalWeightGrams <= 0) {
+    return {
+      netSolidWeightGrams: totalWeightGrams,
+      netSauceWeightGrams: 0,
+      boundedProtein: proteinEstimate ?? null,
+    };
+  }
+
+  // In standard sauced platters, solid meat represents 55-65% of the total dish mass
+  const netSolidWeight = Math.round(totalWeightGrams * 0.60);
+  const netSauceWeight = Math.max(0, totalWeightGrams - netSolidWeight);
+
+  // Maximum biological protein capacity of solid cooked meat is ~24-26g / 100g
+  const maxSolidProtein = Math.round((netSolidWeight * 0.24) * 10) / 10;
+  const sauceProtein = Math.round((netSauceWeight * 0.015) * 10) / 10;
+  const maxTotalProtein = Math.round((maxSolidProtein + sauceProtein) * 10) / 10;
+
+  let boundedProtein = proteinEstimate ?? null;
+  if (boundedProtein !== null && boundedProtein > maxTotalProtein) {
+    boundedProtein = maxTotalProtein;
+  }
+
+  return {
+    netSolidWeightGrams: netSolidWeight,
+    netSauceWeightGrams: netSauceWeight,
+    boundedProtein,
+  };
+}
+
+export interface NutrientModifierOptions {
+  message?: string | null;
+  foodType?: string | null;
+  physicalForm?: string | null;
+  name?: string | null;
+}
+
+/**
+ * Universal Nutrient Modifier Matrix: Applies semantic culinary modifiers (e.g. zero-sugar,
+ * salt-free, oil-free) directly to nutrient profiles bottom-up without food-specific hardcoding.
+ */
+export function applyNutrientModifiers(
+  nutrients: Record<string, any>,
+  options: NutrientModifierOptions
+): { updatedNutrients: Record<string, any>; lockedKeys: string[] } {
+  const n = { ...nutrients };
+  const lockedKeys: string[] = [];
+  const msg = (options.message || '').toLowerCase();
+  const name = (options.name || '').toLowerCase();
+  const isBeverage = options.foodType === 'beverage' ||
+    options.physicalForm === 'LIQUID_BEVERAGE' ||
+    /\b(tea|coffee|drink|beverage|juice|soda|latte|lemonade|teh|water|chai|matcha|smoothie|kombucha)\b/i.test(name);
+
+  // 1. Zero-Sugar / Unsweetened Modifier
+  const isZeroSugar = /\b(unsweetened|unsweatened|no sugar|sugar free|zero sugar|without sugar|tanpa gula|tawar|diet|zero calorie)\b/i.test(msg);
+  if (isZeroSugar && isBeverage) {
+    n.sugar = 0;
+    n.addedSugar = 0;
+    n.carbohydrates = 0;
+    n.calories = computeCaloriesFromMacros(n.protein, 0, n.totalFat);
+    lockedKeys.push('sugar', 'addedSugar', 'carbohydrates', 'calories');
+  }
+
+  // 2. Zero-Sodium / Unsalted Modifier
+  const isZeroSodium = /\b(no salt|unsalted|salt free|zero sodium|without salt|tanpa garam)\b/i.test(msg);
+  if (isZeroSodium) {
+    n.sodium = 0;
+    n.salt = 0;
+    lockedKeys.push('sodium', 'salt');
+  }
+
+  // 3. Oil-Free / Fat-Free Modifier
+  const isOilFree = /\b(no oil|oil free|without oil|steamed without oil|dry grilled|tanpa minyak)\b/i.test(msg);
+  if (isOilFree) {
+    const rawFat = Number(n.totalFat) || 0;
+    n.totalFat = Math.max(0, Math.round(rawFat * 0.3 * 10) / 10);
+    n.saturatedFat = Math.max(0, Math.round((Number(n.saturatedFat) || 0) * 0.3 * 10) / 10);
+    n.unsaturatedFat = computeUnsaturatedFat(n.totalFat, n.saturatedFat, n.transFat);
+    n.calories = computeCaloriesFromMacros(n.protein, n.carbohydrates, n.totalFat);
+    lockedKeys.push('totalFat', 'saturatedFat', 'unsaturatedFat', 'calories');
+  }
+
+  return {
+    updatedNutrients: n,
+    lockedKeys,
+  };
+}
+
+
+

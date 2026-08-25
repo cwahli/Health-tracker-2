@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   isStandaloneCondimentPacket,
   classifyDishAtomic,
+  reconcileContainerVolumeBudget,
 } from "./server_dish_classify";
 
 describe("server_dish_classify", () => {
@@ -72,4 +73,64 @@ describe("server_dish_classify", () => {
       expect(classifyDishAtomic({ originalName: "Mie Gacoan Spicy Noodles", keyword: "noodles" })).toBe("composed");
     });
   });
+
+  describe("reconcileContainerVolumeBudget", () => {
+    it("scales co-located items sharing a constrained container down to container capacity", () => {
+      const items = [
+        {
+          originalName: "Sizzling Steak with Black Pepper Sauce",
+          keyword: "beef steak with black pepper sauce",
+          estimatedWeightGrams: 250,
+          sourceImageIndex: 1,
+          nutrients: { protein: 42, carbohydrates: 12, totalFat: 18, calories: 378 }
+        },
+        {
+          originalName: "Mixed Vegetables",
+          keyword: "mixed vegetables",
+          estimatedWeightGrams: 130,
+          sourceImageIndex: 1,
+          nutrients: { protein: 4, carbohydrates: 22, totalFat: 4, calories: 140 }
+        },
+        {
+          originalName: "Potato Wedges (Steak Side)",
+          keyword: "potato wedges",
+          estimatedWeightGrams: 100,
+          sourceImageIndex: 1,
+          nutrients: { protein: 2.5, carbohydrates: 25, totalFat: 6, calories: 164 }
+        }
+      ];
+
+      // Total weight = 250 + 130 + 100 = 480g > 320g max capacity for sizzling_skillet
+      const reconciled = reconcileContainerVolumeBudget(items);
+      const totalReconciled = reconciled.reduce((sum, it) => sum + it.estimatedWeightGrams, 0);
+
+      expect(totalReconciled).toBeLessThanOrEqual(320);
+      expect(reconciled[0].estimatedWeightGrams).toBeLessThan(250);
+      expect(reconciled[1].estimatedWeightGrams).toBeLessThan(130);
+      expect(reconciled[2].estimatedWeightGrams).toBeLessThan(100);
+      expect(reconciled[0].nutrients.protein).toBeLessThan(42);
+    });
+
+    it("does not scale unconstrained plates or normal weight containers", () => {
+      const items = [
+        {
+          originalName: "Fried Fish Fillet",
+          keyword: "fried fish",
+          estimatedWeightGrams: 220,
+          sourceImageIndex: 0
+        },
+        {
+          originalName: "Potato Wedges",
+          keyword: "potato wedges",
+          estimatedWeightGrams: 120,
+          sourceImageIndex: 0
+        }
+      ];
+
+      const reconciled = reconcileContainerVolumeBudget(items);
+      expect(reconciled[0].estimatedWeightGrams).toBe(220);
+      expect(reconciled[1].estimatedWeightGrams).toBe(120);
+    });
+  });
 });
+

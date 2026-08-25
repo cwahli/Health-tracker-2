@@ -95,3 +95,76 @@ export function classifyDishAtomic(item: {
 
   return 'composed';
 }
+
+export type ContainerForm = 'sizzling_skillet' | 'side_bowl' | 'entree_plate' | 'unbounded';
+
+export const CONTAINER_MAX_CAPACITIES_GRAMS: Record<ContainerForm, number> = {
+  sizzling_skillet: 320,
+  side_bowl: 220,
+  entree_plate: 650,
+  unbounded: 2500,
+};
+
+export function detectContainerForm(haystack: string): ContainerForm {
+  const s = haystack.toLowerCase();
+  if (/\b(sizzling|skillet|hot\s*plate|cast\s*iron)\b/i.test(s)) return 'sizzling_skillet';
+  if (/\b(side\s*bowl|soup\s*bowl)\b/i.test(s) && !/\b(entree|main|plate|tray|board)\b/i.test(s)) return 'side_bowl';
+  return 'unbounded';
+}
+
+export function reconcileContainerVolumeBudget(items: any[], addDebugLog?: (msg: string) => void): any[] {
+  if (!items || items.length === 0) return items || [];
+
+  const imageGroups = new Map<number, any[]>();
+  items.forEach((it, idx) => {
+    const imgIdx = it.sourceImageIndex ?? 0;
+    if (!imageGroups.has(imgIdx)) imageGroups.set(imgIdx, []);
+    imageGroups.get(imgIdx)!.push({ ...it, _origIdx: idx });
+  });
+
+  const updatedItems = items.map(it => ({ ...it }));
+
+  for (const [imgIdx, imgItems] of imageGroups.entries()) {
+    const combinedText = imgItems.map(it => `${it.originalName || ''} ${it.keyword || ''}`).join(' ');
+    const container = detectContainerForm(combinedText);
+
+    if (container !== 'unbounded' && container !== 'entree_plate') {
+      const maxCapacity = CONTAINER_MAX_CAPACITIES_GRAMS[container];
+      const totalWeight = imgItems.reduce((sum, it) => sum + (Number(it.estimatedWeightGrams) || 0), 0);
+
+      if (totalWeight > maxCapacity && maxCapacity > 0) {
+        const scaleFactor = maxCapacity / totalWeight;
+        if (addDebugLog) {
+          addDebugLog(`[Container Volume Budget] Image ${imgIdx} (${container}) total weight ${totalWeight}g exceeds capacity ${maxCapacity}g. Scaling co-located items by factor ${(scaleFactor).toFixed(2)}.`);
+        }
+        imgItems.forEach(it => {
+          const origW = Number(it.estimatedWeightGrams) || 100;
+          const newW = Math.max(15, Math.round(origW * scaleFactor));
+          const target = updatedItems[it._origIdx];
+          target.estimatedWeightGrams = newW;
+          target.nutrientBasisWeight = newW;
+          if (target.nutrients && typeof target.nutrients === 'object') {
+            for (const [k, v] of Object.entries(target.nutrients)) {
+              if (typeof v === 'number' && Number.isFinite(v)) {
+                target.nutrients[k] = (k === 'calories' || k === 'sodium' || k === 'potassium' || k === 'calcium' || k === 'magnesium')
+                  ? Math.round(v * scaleFactor)
+                  : Math.round(v * scaleFactor * 10) / 10;
+              }
+            }
+          }
+        });
+
+        let curSum = imgItems.reduce((s, it) => s + updatedItems[it._origIdx].estimatedWeightGrams, 0);
+        while (curSum > maxCapacity) {
+          const largest = imgItems.map(it => updatedItems[it._origIdx]).sort((a, b) => b.estimatedWeightGrams - a.estimatedWeightGrams)[0];
+          largest.estimatedWeightGrams -= 1;
+          largest.nutrientBasisWeight = largest.estimatedWeightGrams;
+          curSum -= 1;
+        }
+      }
+    }
+  }
+
+  return updatedItems;
+}
+
