@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractMostRecentImageDate } from './dateUtils';
+import { extractMostRecentImageDate, normalizeBiomarkerHistory } from './dateUtils';
 
 describe('extractMostRecentImageDate', () => {
   it('returns null for empty, undefined, or non-array inputs', () => {
@@ -30,5 +30,54 @@ describe('extractMostRecentImageDate', () => {
   it('handles numeric epoch timestamps', () => {
     const timestamp = new Date('2026-07-04T12:00:00Z').getTime();
     expect(extractMostRecentImageDate([timestamp])).toBe('2026-07-04');
+  });
+});
+
+describe('normalizeBiomarkerHistory deduplication & merging', () => {
+  it('deduplicates identical biomarker readings on the same date', () => {
+    const logs = [
+      { id: '1', date: '05-06-2026', biomarkers: { hematocrit: 48 }, note: 'Run 1' },
+      { id: '2', date: '05-06-2026', biomarkers: { hematocrit: 48 }, note: 'Run 2' },
+      { id: '3', date: '05-06-2026', biomarkers: { hematocrit: 48 }, note: 'Run 3' },
+      { id: '4', date: '05-06-2026', biomarkers: { hematocrit: 48 }, note: 'Run 4' },
+      { id: '5', date: '25-06-2025', biomarkers: { hematocrit: 30 } },
+      { id: '6', date: '25-06-2025', biomarkers: { hematocrit: 30 } },
+      { id: '7', date: '25-06-2025', biomarkers: { hematocrit: 30 } }
+    ];
+
+    const result = normalizeBiomarkerHistory(logs);
+    expect(result).toHaveLength(2);
+    expect(result[0].date).toBe('05-06-2026');
+    expect(result[0].biomarkers.hematocrit).toBe(48);
+    expect(result[0].note).toContain('Run 1');
+    expect(result[0].note).toContain('Run 2');
+    expect(result[1].date).toBe('25-06-2025');
+    expect(result[1].biomarkers.hematocrit).toBe(30);
+  });
+
+  it('merges non-conflicting biomarkers recorded on the same date', () => {
+    const logs = [
+      { id: '1', date: '2026-06-05', biomarkers: { hematocrit: 48 } },
+      { id: '2', date: '05-06-2026', biomarkers: { hemoglobin: 15.2 } }
+    ];
+
+    const result = normalizeBiomarkerHistory(logs);
+    expect(result).toHaveLength(1);
+    expect(result[0].date).toBe('05-06-2026');
+    expect(result[0].biomarkers).toEqual({
+      hematocrit: 48,
+      hemoglobin: 15.2
+    });
+  });
+
+  it('normalizes YYYY-MM-DD and DD-MM-YYYY dates and sorts newest first', () => {
+    const logs = [
+      { id: '1', date: '2024-04-02', biomarkers: { hematocrit: 48.8 } },
+      { id: '2', date: '16-08-2026', biomarkers: { hematocrit: 42.1 } },
+      { id: '3', date: '2025-06-25', biomarkers: { hematocrit: 30 } }
+    ];
+
+    const result = normalizeBiomarkerHistory(logs);
+    expect(result.map(r => r.date)).toEqual(['16-08-2026', '25-06-2025', '02-04-2024']);
   });
 });

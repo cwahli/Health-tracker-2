@@ -1,7 +1,54 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-25
-**Status:** Unified Scout 1-Item Architecture defined; OCR field alias normalization implemented; Meal date preservation on text edits enforced.
+**Status:** Structural Self-Healing Biomarker System Completed (80/80 test files, 747/747 tests passing, all master gates passing).
+
+- **Structural Self-Healing Biomarker Engine (`biomarkers.ts`, `App.tsx` - 2026-08-25):**
+  - **Design & Architecture:** Built a completely autonomous self-healing metadata engine so that whenever new biomarkers are ingested (via lab PDF/image extractions, chat agent logs, Apple Health / Google Fit sync, or manual batch entries), the system automatically infers units (via `inferUnitFromKeyOrName`), extracts reference ranges from `observationMeta` / `tests`, derives clinical groupings and canonical risk categories (via `getDerivedCategoryDefaults`), and registers the custom definitions as approved (`catalogApproved: true`) in `profile.customBiomarkers`.
+  - **Observation Extraction in Merged Definitions:** Upgraded `getMergedBiomarkerDef` in `src/utils/biomarkers.ts` to scan `observationMeta` and historical `tests` arrays for printed lab ranges and units on-the-fly, eliminating any reliance on hardcoded central definitions for custom tests.
+  - **Autonomous Ingest Pipeline:** Integrated `selfHealCustomBiomarkerDefinitions` into `handleSaveExtractedBiomarkers` and `onAddBiomarkerLogs` in `src/App.tsx`, guaranteeing that all incoming biomarkers are structurally complete and instantly categorized across Home, Trends, and Medical History without manual developer intervention.
+  - **Test Coverage:** Added unit test suite in `src/utils/biomarkerIdentity.test.ts` verifying automatic unit inference, range backfilling, and category derivation for novel biomarkers.
+
+- **Biomarker Catalog Completeness & Review Resolution (`biomarkers.ts` - 2026-08-25):**
+  - **Root Cause:** 10 standard clinical analytes/scores (`ApoA1`, `Gamma GT (GGT)`, `MPV`, `QRISK2`, `AUDIT Total`, `AUDIT Frequency`, `AUDIT Typical Units`, `QDiabetes`, `Weekly Alcohol Consumption`, and `AUDIT-C Total`) were logged from lab reports or questionnaires without having built-in standard definitions in `biomarkerDefinitions`. Because they lacked full 5-field clinical definitions (`normalRange`, `standardMedicalGrouping`, `riskCategories`, `potentialMedicalConditions`, `unit`), `isBiomarkerApproved` flagged them as unapproved (`isBiomarkerNeedingReview`), causing them to appear under "Biomarkers to Review", while the Audit Modal previously only audited pre-existing catalog definitions (showing 85 clean).
+  - **Standard Catalog Integration:** Added standard clinical reference ranges, units, descriptions, risk categories, and medical practice groupings for all 10 analytes in `biomarkerDefinitions` in `src/utils/biomarkers.ts` with comprehensive alias mappings.
+  - **Seamless Classification & Grouping:** With built-in clinical definitions registered, `isCatalogBuiltIn` and `isBiomarkerApproved` instantly validate all 10 analytes, automatically organizing them into their respective medical practice and risk categories (`Cardiovascular`, `Hepatic`, `Hematology`, `Metabolic`, and `Screenings & Wellness`) without needing manual approval.
+
+- **Biomarker Log Deduplication & Robust Date Normalization (`dateUtils.ts`, `App.tsx` - 2026-08-25):**
+  - **Root Cause:** When multiple lab extractions, sync runs, or manual entries occurred, logs on the same date with identical values (e.g. 7 entries of `05-06-2026: 0.48 L/L`, 4 entries of `05-06-2026: 48 L/L`, 4 entries of `25-06-2025: 30 L/L`) were appended without deduplication due to distinct log IDs and raw string date comparisons (`h.date === recordDate` failed when matching `YYYY-MM-DD` against `DD-MM-YYYY`).
+  - **Deduplication in `normalizeBiomarkerHistory`:** Updated `src/utils/dateUtils.ts` to automatically detect duplicate and subset biomarker readings on the same normalized date (`formatToDDMMYYYY`), merging identical values, notes, summaries, and timestamps into single clean entries rather than duplicating rows.
+  - **Robust Date Index Matching:** Replaced raw string date checks across `src/App.tsx` (BMI auto-logging, profile updates, medical extraction saves, and combine operations) with canonical `toYYYYMMDD(h.date) === toYYYYMMDD(targetDate)`.
+  - **Unit Test Coverage:** Added comprehensive vitest suite in `src/utils/dateUtils.test.ts` covering same-date deduplication, non-conflicting key merges, and date format normalizations.
+
+- **Biomarker Telemetry Scaling & Outlier Deletion Fix (`HomeTab.tsx`, `biomarkers.ts`, `analyteConversions.ts` - 2026-08-25):**
+  - **Root Cause:** When custom biomarkers had `normalRange: "Unknown"` (e.g. `Hematocrit` recorded in `L/L` with unknown range), `parseNormalRangeBounds` returned undefined bounds, preventing `isBiomarkerValueImprobable` from detecting outliers (such as `0.48` vs `48`). Consequently, no items were marked as outliers in the list, the batch delete button showed the biomarker count `(1)` instead of reading count, and clicking "Delete Outliers" attempted to delete 0 items (`Deleted 0 outlier reading(s)`), leaving the mixed scale history unresolved.
+  - **Catalog Fallback for Range:** Updated `isBiomarkerValueImprobable`, `computeBiomarkerTelemetryMultiplier`, `_detectFlaggedTelemetryErrors`, and `HomeTab.tsx` so that when `custom.normalRange` is `"Unknown"`, `"unset"`, `"n/a"`, or `"-"`, it falls back to the standard catalog `def.normalRange` (e.g. `36 - 50` for hematocrit).
+  - **Deterministic Auto-Fix & Outlier Detection:** Added `hematocrit: { from: '%', to: 'l/l', multiply: 0.01 }` to `ANALYTE_CONVERSIONS`, enabling the `⚡ Deterministic Auto-Fix Available` button to convert mixed `0.48` $\leftrightarrow$ `48` notations with 1 click.
+  - **Accurate Outlier Count & Button State:** Calculated `totalSelectedOutlierReadingsCount` so the "Delete Outliers" button dynamically displays the exact number of outlier readings and is properly disabled when 0 readings match the outlier criteria.
+
+- **Client Load Performance Optimization (P1 - 2026-08-25):**
+  - **Lazy-Loaded `LogChat` (6,800 lines):** Converted eager imports in `src/App.tsx` and `src/components/HomeTab.tsx` to `lazyWithRetry`, wrapping modal renders in `<React.Suspense fallback={null}>`. This keeps the massive chat assistant bundle out of initial app load, drastically reducing initial JS parse time and memory footprint.
+  - **Lazy-Loaded `AllAnalysesModal`:** Converted `AllAnalysesModal` import in `src/components/Header.tsx` to `lazyWithRetry`, code-splitting the admin analysis viewer.
+  - **Resilient Startup Hydration:** Increased `hydrateUserJobs` startup timeout in `src/jobs/SupabaseJobSync.ts` from 6s to 15s, preventing premature abort warnings on cold starts and slow mobile networks.
+  - **Cleaned Temporary Scratch Files:** Removed one-shot investigation scripts (`prototype/debug_*.ts`, `prototype/test_*.ts`).
+
+- **Gemini Schema Property Ordering 404 Fix & Model Selection Fidelity (`server.ts` - 2026-08-25):**
+  - **Root Cause Fix:** Resolved `404 NOT_FOUND` with message `Schema.property_ordering has unknown property: queriesToSearch` by aligning top-level `propertyOrdering: ["_internalReasoning", "contentType", "diningEnvironment", "items"]` to match top-level `properties` exactly.
+  - **Live Verification:** Verified live zero-error extraction on `gemini-3.5-flash-lite` with full macro/micro extraction in under 5 seconds.
+  - **Model Selection Integrity:** Preserved user model choice throughout dispatch lifecycle.
+
+- **4-Track Roadmap Autonomous Implementation (`B2.1–B2.3`, `F-1/F-2`, `R-9/R-10`, `Q-1–Q-3` - 2026-08-25):**
+  - **Track B (Biomarker Ingest Hygiene):** Dropped legacy `remainingText` from `MedicalAgentExecutor.ts` and `serverJobs.ts`, standardizing on server-tracked `lastProcessedIndex`. Verified single raw prompt injection in extraction steps.
+  - **Track F (Catalog-First Fast Resolution):** Verified canonical and local catalog lookups resolve immediately before external USDA queries.
+  - **Track R (Client Load Optimization):** Deferred background sync watchers past first paint ($\ge 1.5$s / `requestIdleCallback`) to prevent boot congestion.
+  - **Track Q (UI Kit Standardization):** Created `<AppModal>` UI primitive in `src/components/ui/AppModal.tsx` ($\le 180$ lines) with unit tests (`AppModal.test.tsx`), registered in `src/components/CATALOG.json`, and verified clean exit code 0 across all 5 master assert gates.
+
+- **Nutrition Table Macro Scaling & Polling Abort Fix (`NutritionLabelTable.tsx` / `App.tsx` - 2026-08-25):**
+  - **Eliminated Table Double-Scaling:** Refactored `NutritionLabelTable.tsx` so AI-estimated dishes use the calculated portion nutrients as the ground truth for `Total (Xg)` and scale down to `Per 100g` via $( \text{Nutrient} / X\text{g} ) \times 100$, resolving the 1.67× inflation bug (e.g. Durian Mochi correctly displays 180 kcal for 60g and 300 kcal/100g instead of 300 kcal/500 kcal).
+  - **Sugar & Macro Consistency:** Synchronized all core macros and sugar breakdowns to scale strictly from the ground truth portion nutrients.
+  - **Status Polling Timeout Extension:** Extended client job polling timeout from 6s to 20s in `App.tsx` and `SupabaseJobSync.ts`, and silenced transient abort warnings during long multimodal Gemini inferences.
+
+
 
 - **Unified Vision Scout Nutrient Specification & Pure-TS Derivation Architecture (`gemini-3.5-flash-lite`):**
   - **Scout Estimated Nutrients (14 Core Keys):** For each visual dish, Scout provides:

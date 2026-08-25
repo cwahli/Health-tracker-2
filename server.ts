@@ -372,6 +372,7 @@ import {
   mergeScoutItems, 
   parseAndHealVisionScout 
 } from "./server_vision_scout";
+import { buildVisualScoutPrompt } from "./agents/scoutInstructions";
 import { isDishEstimateEnabled } from "./server_food_flags";
 import { finalizeDishLedger } from "./server_dish_finalize";
 import { matchBrandMenu } from "./server_brand_match";
@@ -2467,11 +2468,13 @@ async function callUnifiedLLMInternal({
   }
   
   let targetGeminiModel = normalizedModelId;
-  if (targetGeminiModel === "gemini") {
+  if (targetGeminiModel === "gemini" || targetGeminiModel === "gemini-flash" || targetGeminiModel === "default") {
     targetGeminiModel = "gemini-3.5-flash-lite";
+  } else if (targetGeminiModel === "gemini-2.0-flash" || targetGeminiModel === "gemini-1.5-flash") {
+    targetGeminiModel = "gemini-2.5-flash";
+  } else if (targetGeminiModel === "gemini-1.5-pro" || targetGeminiModel === "gemini-2.0-pro") {
+    targetGeminiModel = "gemini-2.5-pro";
   }
-
-
 
   const initialParts: any[] = [];
   if (imagePayloads && imagePayloads.length > 0) {
@@ -2540,11 +2543,6 @@ async function callUnifiedLLMInternal({
     configObj.maxOutputTokens = maxOutputTokens;
   }
   
-  // Grounding search (googleSearch) disabled per user request
-  // if (googleSearch) {
-  //   configObj.tools.push({ googleSearch: {} });
-  // }
-
   if (enablePlaceIdTool) {
     configObj.tools.push({
       functionDeclarations: [
@@ -2584,6 +2582,9 @@ async function callUnifiedLLMInternal({
   _localAddDebugLog(`[UnifiedLLM${stageTag}] Attaching ${imagePayloads?.length || (imagePayload ? 1 : 0)} image part(s) to model "${targetGeminiModel}".`);
   _localAddDebugLog(`[UnifiedLLM-Prompt${stageTag}] System Instruction:\n${resolvedInstruction}`);
   _localAddDebugLog(`[UnifiedLLM-Prompt${stageTag}] User Prompt:\n${promptText}`);
+
+  const isGemini404Error = (err: any) => err?.status === 404 || err?.code === 404 || String(err?.message || "").includes("404") || String(err?.message || "").includes("NOT_FOUND");
+
   try {
     let response: any;
     let thoughtsText = "";
@@ -2621,6 +2622,10 @@ async function callUnifiedLLMInternal({
           addDebugLog(`[UnifiedLLM] Stream 503 on ${targetGeminiModel} — not falling back to a second generateContent (that doubles quota).`);
           throw streamErr;
         }
+        if (isGemini404Error(streamErr) && targetGeminiModel !== "gemini-2.5-flash") {
+          addDebugLog(`[UnifiedLLM] Model "${targetGeminiModel}" returned 404 NOT_FOUND. Automatically falling back to "gemini-2.5-flash"...`);
+          targetGeminiModel = "gemini-2.5-flash";
+        }
         const errMsg = String(streamErr?.message || streamErr || "").toLowerCase();
         const isAbortOrTimeout = streamErr?.name === 'AbortError' || 
                                  errMsg.includes('abort') || 
@@ -2631,7 +2636,7 @@ async function callUnifiedLLMInternal({
           addDebugLog(`[UnifiedLLM] Stream aborted/timed out (${streamErr?.message}) — throwing directly without non-streaming fallback.`);
           throw streamErr;
         }
-        addDebugLog(`[UnifiedLLM] Stream failed (${streamErr?.message}). Falling back to non-streaming generateContent...`);
+        addDebugLog(`[UnifiedLLM] Stream failed (${streamErr?.message}). Falling back to non-streaming generateContent on "${targetGeminiModel}"...`);
         const fullRes = await withGeminiRetry(() => ai.models.generateContent({
           model: targetGeminiModel,
           contents,
@@ -2642,11 +2647,25 @@ async function callUnifiedLLMInternal({
         response = { text: fullText, candidates: fullRes.candidates, functionCalls: fullRes.functionCalls };
       }
     } else {
-      response = await withGeminiRetry(() => ai.models.generateContent({
-        model: targetGeminiModel,
-        contents,
-        config: configObj
-      }), { label: "Unified LLM" });
+      try {
+        response = await withGeminiRetry(() => ai.models.generateContent({
+          model: targetGeminiModel,
+          contents,
+          config: configObj
+        }), { label: "Unified LLM" });
+      } catch (genErr: any) {
+        if (isGemini404Error(genErr) && targetGeminiModel !== "gemini-2.5-flash") {
+          addDebugLog(`[UnifiedLLM] Model "${targetGeminiModel}" returned 404 NOT_FOUND. Automatically falling back to "gemini-2.5-flash"...`);
+          targetGeminiModel = "gemini-2.5-flash";
+          response = await withGeminiRetry(() => ai.models.generateContent({
+            model: targetGeminiModel,
+            contents,
+            config: configObj
+          }), { label: "Unified LLM Fallback 2.5-flash" });
+        } else {
+          throw genErr;
+        }
+      }
       if (response.candidates?.[0]?.content?.parts) {
         for (const part of response.candidates[0].content.parts) {
           if (part.thought && part.text) {
@@ -3811,9 +3830,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
       if (hasImage) {
         sendStreamEvent({ type: 'status', stage: 'scout', status: 'started', message: 'Reading your photos...' });
         const imageCount = imagePayloads?.length || 0;
-        const scoutPromptText = message 
-          ? `Analyze the provided ${imageCount > 1 ? imageCount + ' images' : 'image'} and list the food items you see, taking into consideration the user's message: "${message}". Transcribe printed package labels or menu screens into "rawNutritionLabel" FIRST. Labels vary widely — evaluate each nutrient key independently against what this specific label actually shows: if a key's value is visible/printed, put it in "rawNutritionLabel" and OMIT that exact key from "nutrients" (never duplicate it as an estimate). If a key is NOT visible/printed, you MUST still include a realistic numeric estimate for it in "nutrients" — this applies equally to the main food item AND to any dedicated "Nutrition Facts Label" entry created for a multi-image package; never zero out or skip estimating a whole item's "nutrients" just because most of its fields were covered by the label.${imageCount > 1 ? ' CRITICAL MULTI-IMAGE REQUIREMENT: Inspect each image and set "sourceImageIndex" (0 for 1st photo, 1 for 2nd, etc.). If images show different views/sides of a package (e.g. front and back nutrition label), list them as separate entries: 1. Food item. 2. Dedicated label item (originalName containing "Nutrition Facts Label") with full rawNutritionLabel.' : ''} If any identified dish is a known brand item, capture brand and dish name in originalName.`
-          : `Analyze the provided ${imageCount > 1 ? imageCount + ' images' : 'image'} and list the food items you see. Transcribe printed package labels or menu screens into "rawNutritionLabel" FIRST. Labels vary widely — evaluate each nutrient key independently against what this specific label actually shows: if a key's value is visible/printed, put it in "rawNutritionLabel" and OMIT that exact key from "nutrients" (never duplicate it as an estimate). If a key is NOT visible/printed, you MUST still include a realistic numeric estimate for it in "nutrients" — this applies equally to the main food item AND to any dedicated "Nutrition Facts Label" entry created for a multi-image package; never zero out or skip estimating a whole item's "nutrients" just because most of its fields were covered by the label.${imageCount > 1 ? ' CRITICAL MULTI-IMAGE REQUIREMENT: Inspect each image and set "sourceImageIndex" (0 for 1st photo, 1 for 2nd, etc.). If images show different views/sides of a package (e.g. front and back nutrition label), list them as separate entries: 1. Food item. 2. Dedicated label item (originalName containing "Nutrition Facts Label") with full rawNutritionLabel.' : ''} If any identified dish is a known brand item, capture brand and dish name in originalName.`;
+        const scoutPromptText = buildVisualScoutPrompt(message || '', imageCount);
         sendLog('scout_instruction', 'scout', `Vision Scout Instruction dispatched (model: ${engine || "gemini-3.5-flash-lite"}). Prompt: "${scoutPromptText}"`);
         addDebugLog(`[Vision Scout] Running Stage 3 lightweight vision scout with retry protection...`);
         let scoutResult: any = null;
@@ -3850,11 +3867,9 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
               responseSchema: {
                 type: Type.OBJECT,
                 properties: {
-                  _internalReasoning: { type: Type.STRING, description: "STEP 1: CLASSIFICATION, STEP 2: DECOMPOSITION & RATIONALE, STEP 3: NUTRITION & PACKAGING EXTRACTION" },
+                  _internalReasoning: { type: Type.STRING, description: "STEP 1: CLASSIFICATION, STEP 2: EXTRACTION & OCR ATTACHMENT, STEP 3: 14 PORTION NUTRIENTS" },
                   contentType: { type: Type.STRING },
                   diningEnvironment: { type: Type.STRING, description: "home_cooked | casual_restaurant | fast_food_chain | fine_dining | airline | unknown" },
-                  cookingMethod: { type: Type.STRING },
-                  scanCompleteness: { type: Type.STRING },
                   items: {
                     type: Type.ARRAY,
                     items: {
@@ -3862,93 +3877,77 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
                       properties: {
                         keyword: { type: Type.STRING, description: "Base food name in database-friendly English" },
                         originalName: { type: Type.STRING, description: "Exact localized food name" },
-                        chainName: { type: Type.STRING, nullable: true, description: "The restaurant/brand/chain name ONLY (e.g. 'McDonald\'s', 'YOLK', 'Pret'), separate from the dish title. Null if this is not a restaurant/chain item (e.g. home cooked, generic grocery item)." },
-                        rawNutritionLabel: {
-                          type: Type.OBJECT,
-                          properties: {
-                            servingSize: { type: Type.STRING, nullable: true },
-                            calories: { type: Type.STRING, nullable: true },
-                            protein: { type: Type.STRING, nullable: true },
-                            totalFat: { type: Type.STRING, nullable: true },
-                            saturatedFat: { type: Type.STRING, nullable: true },
-                            transFat: { type: Type.STRING, nullable: true },
-                            totalCarbohydrate: { type: Type.STRING, nullable: true },
-                            sugar: { type: Type.STRING, nullable: true },
-                            addedSugar: { type: Type.STRING, nullable: true },
-                            sodium: { type: Type.STRING, nullable: true },
-                            salt: { type: Type.STRING, nullable: true, description: "Exact verbatim printed salt value if label lists Salt instead of Sodium (e.g. '0.53g'). Do NOT convert to sodium." },
-                            potassium: { type: Type.STRING, nullable: true },
-                            totalFibre: { type: Type.STRING, nullable: true },
-                            solubleFibre: { type: Type.STRING, nullable: true }
-                          },
-                          required: ["servingSize", "calories", "protein", "totalFat", "saturatedFat", "transFat", "totalCarbohydrate", "sugar", "addedSugar", "sodium", "salt", "potassium", "totalFibre", "solubleFibre"],
-                          propertyOrdering: ["servingSize", "calories", "protein", "totalFat", "saturatedFat", "transFat", "totalCarbohydrate", "sugar", "addedSugar", "sodium", "salt", "potassium", "totalFibre", "solubleFibre"],
-                          nullable: true
-                        },
-                        ingredientsList: { type: Type.STRING, nullable: true },
-                        ingredients: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-                        nutrients: {
-                          type: Type.OBJECT,
-                          properties: {
-                            calories: { type: Type.NUMBER, nullable: true },
-                            protein: { type: Type.NUMBER, nullable: true },
-                            totalFat: { type: Type.NUMBER, nullable: true },
-                            saturatedFat: { type: Type.NUMBER, nullable: true },
-                            transFat: { type: Type.NUMBER, nullable: true },
-                            carbohydrates: { type: Type.NUMBER, nullable: true },
-                            sugar: { type: Type.NUMBER, nullable: true },
-                            totalSugar: { type: Type.NUMBER, nullable: true },
-                            addedSugar: { type: Type.NUMBER, nullable: true },
-                            totalFibre: { type: Type.NUMBER, nullable: true },
-                            sodium: { type: Type.NUMBER, nullable: true },
-                            potassium: { type: Type.NUMBER, nullable: true },
-                            omega3: { type: Type.NUMBER, nullable: true },
-                            calcium: { type: Type.NUMBER, nullable: true },
-                            iron: { type: Type.NUMBER, nullable: true },
-                            magnesium: { type: Type.NUMBER, nullable: true },
-                            vitaminD: { type: Type.NUMBER, nullable: true },
-                          },
-                          required: [
-                            "calories", "protein", "totalFat", "saturatedFat", "transFat",
-                            "carbohydrates", "sugar", "addedSugar", "totalFibre", "sodium",
-                            "potassium", "omega3", "calcium", "iron", "magnesium", "vitaminD"
-                          ],
-                          nullable: true,
-                        },
+                        chainName: { type: Type.STRING, nullable: true, description: "The restaurant/brand/chain name ONLY (e.g. 'McDonald\'s', 'YOLK', 'Pret'), separate from the dish title. Null if not branded." },
                         estimatedWeightGrams: { type: Type.NUMBER },
-                        estimatedCalories: { type: Type.NUMBER, nullable: true },
+                        cookingMethod: { type: Type.STRING },
+                        ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
                         sourceImageIndex: { type: Type.INTEGER, description: "0-based index of which image this item appears in" },
                         boundingBox2D: {
                           type: Type.ARRAY,
                           items: { type: Type.INTEGER },
                           description: "4-element bounding box array [ymin, xmin, ymax, xmax] scale 0-1000"
                         },
-                        components: {
-                          type: Type.ARRAY,
-                          items: {
-                            type: Type.OBJECT,
-                            properties: {
-                              searchQuery: { type: Type.STRING },
-                              volumePercentage: { type: Type.NUMBER }
-                            },
-                            required: ["searchQuery", "volumePercentage"]
-                          }
+                        isStandaloneCondimentPacket: { type: Type.BOOLEAN, nullable: true },
+                        // 1. Literal OCR Label (When Visible)
+                        rawNutritionLabel: {
+                          type: Type.OBJECT,
+                          nullable: true,
+                          properties: {
+                            servingSize: { type: Type.STRING },
+                            calories: { type: Type.STRING },
+                            protein: { type: Type.STRING },
+                            totalFat: { type: Type.STRING },
+                            saturatedFat: { type: Type.STRING },
+                            transFat: { type: Type.STRING },
+                            totalCarbohydrate: { type: Type.STRING },
+                            sugar: { type: Type.STRING },
+                            addedSugar: { type: Type.STRING },
+                            sodium: { type: Type.STRING },
+                            salt: { type: Type.STRING, description: "Verbatim printed salt if label lists Salt instead of Sodium." },
+                            potassium: { type: Type.STRING },
+                            totalFibre: { type: Type.STRING },
+                            solubleFibre: { type: Type.STRING }
+                          },
+                          required: ["servingSize", "calories", "protein", "totalFat", "totalCarbohydrate"],
+                        },
+                        // 2. 14 Mandatory Nutrient Numbers (Always 100% Complete)
+                        nutrients: {
+                          type: Type.OBJECT,
+                          properties: {
+                            calories: { type: Type.NUMBER },
+                            protein: { type: Type.NUMBER },
+                            totalFat: { type: Type.NUMBER },
+                            saturatedFat: { type: Type.NUMBER },
+                            transFat: { type: Type.NUMBER },
+                            sugar: { type: Type.NUMBER },
+                            addedSugar: { type: Type.NUMBER },
+                            totalFibre: { type: Type.NUMBER },
+                            sodium: { type: Type.NUMBER },
+                            potassium: { type: Type.NUMBER },
+                            omega3: { type: Type.NUMBER },
+                            calcium: { type: Type.NUMBER },
+                            iron: { type: Type.NUMBER },
+                            magnesium: { type: Type.NUMBER },
+                            vitaminD: { type: Type.NUMBER },
+                          },
+                          required: [
+                            "calories", "protein", "totalFat", "saturatedFat", "transFat",
+                            "sugar", "addedSugar", "totalFibre", "sodium",
+                            "potassium", "omega3", "calcium", "iron", "magnesium", "vitaminD"
+                          ],
                         },
                         source: { type: Type.STRING },
-                        cookingMethod: { type: Type.STRING },
-                        itemConfidence: { type: Type.STRING },
                         anomalyFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
                         visualIngredients: { type: Type.ARRAY, items: { type: Type.STRING } },
                         nutritionFacts: { type: Type.OBJECT, nullable: true }
                       },
-                      required: ["keyword", "originalName", "estimatedWeightGrams", "nutrients", "ingredients", "boundingBox2D", "sourceImageIndex"],
-                      propertyOrdering: ["originalName", "keyword", "chainName", "estimatedWeightGrams", "ingredients", "rawNutritionLabel", "nutrients", "ingredientsList", "source", "boundingBox2D", "sourceImageIndex"]
+                      required: ["keyword", "originalName", "estimatedWeightGrams", "cookingMethod", "nutrients", "ingredients", "boundingBox2D", "sourceImageIndex"],
+                      propertyOrdering: ["originalName", "keyword", "chainName", "estimatedWeightGrams", "cookingMethod", "ingredients", "rawNutritionLabel", "nutrients", "boundingBox2D", "sourceImageIndex", "isStandaloneCondimentPacket"]
                     }
-                  },
-                  queriesToSearch: { type: Type.ARRAY, items: { type: Type.STRING } }
+                  }
                 },
                 required: ["contentType", "diningEnvironment", "items"],
-                propertyOrdering: ["_internalReasoning", "items", "contentType", "cookingMethod", "scanCompleteness", "queriesToSearch"]
+                propertyOrdering: ["_internalReasoning", "contentType", "diningEnvironment", "items"]
               }
             });
 

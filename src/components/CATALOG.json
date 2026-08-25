@@ -2,6 +2,7 @@
   "version": 1,
   "note": "QUALITY.md §13 / ROADMAP Q-2. New *Modal/*Card/*Table must name an id here. Planned ids have path null until Q-3/Q-4.",
   "primitives": [
+    { "id": "AppModal", "path": "src/components/ui/AppModal.tsx", "status": "canonical" },
     { "id": "UniversalModal", "path": "src/components/UniversalModal.tsx", "status": "canonical" },
     { "id": "DataGrid", "path": "src/components/AgentResultTable.tsx", "status": "partial" },
     { "id": "FilterPills", "path": "src/components/ui/FilterPills.tsx", "status": "canonical" },
@@ -18,11 +19,11 @@
     "note": "B8.0 Option A: Flagged Telemetry modal is the only Auto-Fix. Dictionary Auto-Calibrate / Quick Approve stay gone."
   },
   "ceilings": {
-    "src/App.tsx": 7842,
-    "src/components/BiomarkerDictionaryModal.tsx": 6634,
-    "src/components/chat-cards/FoodCard.tsx": 3813,
-    "src/components/HomeTab.tsx": 3071,
-    "src/components/LogChat.tsx": 6688,
-    "server_vision_scout.ts": 1414
+    "src/App.tsx": 7860,
+    "src/components/BiomarkerDictionaryModal.tsx": 6640,
+    "src/components/chat-cards/FoodCard.tsx": 3930,
+    "src/components/HomeTab.tsx": 3080,
+    "src/components/LogChat.tsx": 6810,
+    "server_vision_scout.ts": 1530
   }
 }

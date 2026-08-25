@@ -114,33 +114,23 @@ STEP 1: SCENE CLASSIFICATION & ENVIRONMENT
 - 'contentType': 'visual' (food photo), 'menu_or_poster' (menu/kiosk screen), 'label' (nutrition panel), or 'text'.
 - 'diningEnvironment': 'casual_restaurant' | 'fast_food_chain' | 'home_cooked' | 'fine_dining' | 'airline' | 'unknown'.
 
-STEP 2: UNIVERSAL DISH EXTRACTION & DEDUPLICATION
-- USER MESSAGE SCOPE ANCHOR & MULTI-DISH EXTRACTION: Extract EVERY distinct food, drink, side, or meal item visible in the photo or menu/kiosk screen as its own separate entry in 'items' (e.g. if 2 dishes or a main + drink are visible, output 2 separate item objects). Do NOT combine distinct dishes into 1 item. For beverages and open cups, estimate weight based on visible fill level (e.g. half-full cup ~100-120g vs full ~200-250g). If user's text message specifies a portion/weight (e.g. "50g of oats + fruits"), assign logically. The user's explicit text sentence is absolute ground truth. CRITICAL: If the user's text explicitly limits consumption (e.g., "I only had 1 croissant", "I just ate the salad"), you MUST strictly obey this constraint and ONLY extract the specified items. Skip all other visible food items entirely. Otherwise, only skip items if they are unopened bulk grocery packaging used merely for context.
-- CROSS-IMAGE DEDUPLICATION: If photos show BOTH a menu screen AND physical food, or raw grocery packages AND the cooked dish prepared from them, extract each distinct dish ONCE. Do NOT duplicate raw ingredients and their cooked dish as separate meals.
-- KNOWN CHAIN & BRAND IDENTIFICATION: For any restaurant chain, brand, or menu item (e.g. McDonald's, Yolk, Starbucks, Pret):
-  1. Capture exact brand + dish title in 'originalName' (e.g. "YOLK Steak Chimi 2.0 Sandwich").
-  1b. ALSO output the brand/chain name alone (e.g. 'McDonald\'s', not 'McDonald\'s Big Mac') in the 'chainName' field. Leave 'chainName' null for home-cooked or non-branded items.
-  2. If calories/macros or ingredients are printed on a visible menu/kiosk screen or package, transcribe them into 'rawNutritionLabel' & 'ingredientsList' with 'source': 'label' (Screen OCR Dominance).
-  3. STRICT PRINTED TRUTH IN rawNutritionLabel: Transcribe ONLY values that are literally visible/printed on the image into 'rawNutritionLabel'. NEVER invent unprinted fields.
-  4. SUGAR FIELDS — TOTAL vs ADDED: 'sugar' = Total Sugars. 'addedSugar' must be populated ONLY when the label explicitly prints an "Added Sugars" line. UK/EU labels almost never print this — leave 'addedSugar' null.
-- BRAND SEPARATION: Apply 'chainName' strictly to branded staples ("Sainsbury oat"). Emit companion foods (fruits, drinks) as unbranded items.
-- RAW NUTRITION LABEL FIRST (NO DOUBLE WORK, FIELD-BY-FIELD): Transcribe printed package labels or menu screens into 'rawNutritionLabel' FIRST. Labels vary widely in what they print — some show only calories, some show a full panel including things like Vitamin D. Evaluate EACH of the 16 'nutrients' keys independently against what is actually visible in the photo:
-  a. If a key's value is literally visible/printed → put it in 'rawNutritionLabel' and OMIT that exact key from 'nutrients' (do NOT output null or duplicate estimates for it).
-  b. If a key's value is NOT visible/printed on this particular label → you MUST still include a realistic numeric estimate for it in 'nutrients'. Never leave a key null and never skip estimating the rest of 'nutrients' just because some other fields were printed.
-  This applies to EVERY key equally (macros and micronutrients alike) — there is no fixed list of "always printed" or "always missing" fields; it depends entirely on what this specific label actually shows. The backend automatically scales and uses 'rawNutritionLabel' as authoritative ground truth for whichever fields are present.
-- PRECISE COUNTING & OCCLUSION: Inspect open pastry bags/boxes for stacked items. Split into individual items with realistic weights.
-- PACKAGE LABELS (UK/EU 100G BASELINE): Extract "Per 100g" column data and set "servingSize" to "100g" in 'rawNutritionLabel'.
+STEP 2: UNIVERSAL DISH EXTRACTION & OCR ATTACHMENT
+- USER SCOPE ANCHOR: Extract EVERY distinct physical food, drink, side, or companion dish in 'items'. For open cups, estimate weight by fill level. The user's explicit text sentence is absolute ground truth. If the user explicitly limits consumption (e.g. "I only had 1 croissant", "I just ate the salad"), strictly extract ONLY specified items and skip all others. If prompt mentions dishes not in photo, extract visible food directly with minimal internal reasoning.
+- CROSS-IMAGE DEDUPLICATION: If photos show menu + food, or raw grocery packages + prepared dish, extract each distinct dish ONCE. Never create separate dummy "Nutrition Facts Label" items.
+- KNOWN BRANDS: For any restaurant chain or branded product (e.g. McDonald's, Yolk, Starbucks, Pret, Lidl, Sainsbury), output brand name alone in 'chainName' and exact dish title in 'originalName'. Leave 'chainName' null for unbranded items. Apply brand name only to branded items; emit companion fresh fruits/drinks as unbranded.
+- DIRECT OCR FIRST: If a package label or menu panel is visible, transcribe ALL printed facts directly into 'rawNutritionLabel' FIRST (including servingSize, calories, protein, totalFat, saturatedFat, totalCarbohydrate, sugar, sodium). Omit unprinted label keys completely (NEVER emit "key": null). If no label is visible, set 'rawNutritionLabel' to null.
+- PRECISE COUNTING: Inspect open pastry bags/boxes for stacked items. Split into individual items with realistic weights.
 
-STEP 3: DISH ESTIMATES & CULINARY CALIBRATION
-- DISH NUTRIENTS: For EACH item, emit realistic portion 'nutrients' across all 16 keys (calories, protein, totalFat, saturatedFat, transFat, carbohydrates, sugar, addedSugar, totalFibre, sodium, potassium, omega3, calcium, iron, magnesium, vitaminD).
-- CULINARY & REGIONAL CALIBRATION: Calibrate portion unit sizes, default proteins/ingredients, and cooking fat to the specific cuisine's regional norms (e.g. fried coatings/crisps absorb 25–35% fat by weight; stir-fry adds +5–10g oil; steamed/boiled is fat-neutral; Halal environments use poultry/beef/seafood).
+STEP 3: 15 MANDATORY DISH NUTRIENTS (ZERO NULLS)
+- For EVERY dish, provide complete numeric portion estimates across all 15 required keys in 'nutrients' (scaled to estimated consumed weight in grams): calories, protein, totalFat, saturatedFat, transFat, sugar, addedSugar, totalFibre, sodium, potassium, omega3, calcium, iron, magnesium, vitaminD. NEVER emit null in nutrients.
+- ZERO-MATH FOR SCOUT: Do not calculate carbohydrates, unsaturated fat, or salt conversions. The backend pipeline automatically derives carbs via Atwater ((Calories - 4P - 9F) / 4), salt via sodium conversion, and unsaturated fat from total fat.
+- CULINARY & REGIONAL CALIBRATION: Calibrate portion unit sizes, default ingredients, and cooking fat to specific cuisine norms (fried coatings absorb 25–35% fat; stir-fry adds +5–10g oil; steamed/boiled is fat-neutral).
 - INGREDIENTS: Plain string list in 'ingredients' (e.g. ["noodles", "chicken", "vegetables"]).
-- NAMES: 'originalName' = exact local/printed dish name. 'keyword' = concise canonical English name.
-- CONDIMENTS: Set 'isStandaloneCondimentPacket' to true ONLY if the item is a tiny standalone condiment packet or small sauce cup (e.g. ketchup packet, small mayo dip). Set it to false for all main dishes, plates, bowls, salads, wraps, sandwiches, or mixed meals that happen to contain sauce.
+- COOKING METHOD: 'raw' | 'baked' | 'grilled' | 'boiled' | 'steamed' | 'deep_fried' | 'pan_fried' | 'stir_fried'.
+- CONDIMENTS: Set 'isStandaloneCondimentPacket' to true ONLY for tiny standalone sauce/ketchup packets, butter tubs, or jam packs <=30g, false for main meals.
 
 === SYSTEM CONSTRAINTS ===
 Output exactly ONE JSON object matching this schema. You MUST include 'nutrients' with realistic estimated numeric values for every item:
-
 {
   "_internalReasoning": "string",
   "contentType": "visual | menu_or_poster | text",
@@ -151,12 +141,14 @@ Output exactly ONE JSON object matching this schema. You MUST include 'nutrients
       "keyword": "string",
       "chainName": "string | null",
       "estimatedWeightGrams": 250,
-      "ingredients": ["noodles", "chicken", "wonton wrapper", "spices"],
+      "cookingMethod": "boiled",
+      "ingredients": ["noodles", "chicken", "spices"],
       "rawNutritionLabel": {
         "servingSize": "100g",
         "calories": "190 kcal",
         "protein": "8.8g",
-        "totalFat": "6.4g"
+        "totalFat": "6.4g",
+        "totalCarbohydrate": "22g"
       },
       "nutrients": {
         "calories": 480,
@@ -164,11 +156,10 @@ Output exactly ONE JSON object matching this schema. You MUST include 'nutrients
         "totalFat": 16,
         "saturatedFat": 4.5,
         "transFat": 0,
+        "sugar": 3,
         "addedSugar": 1,
-        "totalSugar": 3,
         "totalFibre": 4,
         "sodium": 750,
-        "carbohydrates": 62,
         "potassium": 380,
         "omega3": 0.2,
         "calcium": 45,
@@ -176,11 +167,9 @@ Output exactly ONE JSON object matching this schema. You MUST include 'nutrients
         "magnesium": 55,
         "vitaminD": 0
       },
-      "ingredientsList": "Noodles, chicken, spices",
       "boundingBox2D": [150, 200, 800, 750],
       "sourceImageIndex": 0,
-      "isStandaloneCondimentPacket": false,
-      "cookingMethod": "boiled"
+      "isStandaloneCondimentPacket": false
     }
   ]
 }

@@ -676,7 +676,7 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     descriptions: { en: 'Alcohol Use Disorders Identification Test Consumption 3-item screening score (0 to 12).' },
     riskCategories: ['Screenings & Wellness'],
     standardMedicalGrouping: 'Other',
-    aliases: ['audit_c_score', 'audit_c', 'auditctotalscore', 'audit_c_consumption_score', 'alcohol_use_disorders_identification_test_c']
+    aliases: ['audit_c_score', 'audit_c', 'auditctotalscore', 'audit_c_consumption_score', 'audit_c_score_total', 'alcohol_use_disorders_identification_test_c']
   },
   {
     key: 'ideal_body_weight',
@@ -688,6 +688,150 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     riskCategories: ['Screenings & Wellness'],
     standardMedicalGrouping: 'Biometrics',
     aliases: ['idealbodyweight', 'target_weight', 'targetbodyweight', 'goal_weight', 'ideal_weight', 'reference_weight']
+  },
+  {
+    key: 'apoa1',
+    name: 'ApoA1',
+    category: 'lipids',
+    unit: 'g/L',
+    normalRange: '1.19 - 2.40',
+    descriptions: {
+      en: 'Apolipoprotein A1, the primary protein constituent of HDL particles that mediates reverse cholesterol transport.',
+      fr: 'Apolipoprotéine A1, composant majeur du cholestérol HDL.',
+      zh: '载脂蛋白A1，高密度脂蛋白（HDL）的主要结构蛋白。',
+      id: 'Apolipoprotein A1, komponen protein utama partikel kolesterol HDL.'
+    },
+    riskCategories: ['Cardiovascular'],
+    standardMedicalGrouping: 'Metabolic',
+    aliases: ['apolipoprotein_a1', 'apolipoproteina1', 'apoa_1', 'apolipoprotein_a_1', 'apo_a1', 'apoa1_g_l']
+  },
+  {
+    key: 'gamma_gt',
+    name: 'Gamma GT (GGT)',
+    category: 'liver',
+    unit: 'U/L',
+    normalRange: '9 - 48',
+    descriptions: {
+      en: 'Gamma-Glutamyl Transferase, a sensitive enzyme marker for biliary tract function, hepatic stress, and alcohol intake.',
+      fr: 'Gamma-glutamyl transférase, marqueur de la fonction biliaire et hépatique.',
+      zh: '谷氨酰转肽酶（GGT），评估胆道与肝脏代谢负担的敏感指标。',
+      id: 'Gamma-Glutamyl Transferase, enzim penanda fungsi empedu dan hati.'
+    },
+    riskCategories: ['Liver'],
+    standardMedicalGrouping: 'Hepatic',
+    aliases: ['ggt', 'gamma_glutamyl_transferase', 'gamma_glutamyl_transpeptidase', 'gammagt', 'gammaglutamyltransferase', 'gammaglutamyltranspeptidase', 'serum_gamma_gt_level', 'serum_ggt_level']
+  },
+  {
+    key: 'mpv',
+    name: 'Mean Platelet Volume (MPV)',
+    category: 'hematology',
+    unit: 'fL',
+    normalRange: '7.5 - 11.5',
+    descriptions: {
+      en: 'Mean Platelet Volume, measuring the average physical volume of circulating thrombocytes for bone marrow platelet production.',
+      fr: 'Volume plaquettaire moyen (VPM), taille moyenne des plaquettes sanguines.',
+      zh: '平均血小板体积（MPV），反映骨髓血小板生成与活性的指标。',
+      id: 'Volume Trombosit Rata-rata (MPV), mengukur ukuran rata-rata trombosit.'
+    },
+    riskCategories: ['Hematology'],
+    standardMedicalGrouping: 'Hematology',
+    aliases: ['mean_platelet_volume', 'meanplateletvolume', 'mean_platelet_volume_mpv', 'mpv_fl', 'mean_platelet_volume_fl']
+  },
+  {
+    key: 'qrisk2',
+    name: 'QRISK2 10-Year Cardiovascular Risk',
+    category: 'other',
+    unit: '%',
+    normalRange: '< 10',
+    descriptions: {
+      en: 'QRISK2 algorithm estimating the 10-year percentage probability of developing cardiovascular disease, coronary heart disease, or stroke.',
+      fr: 'Score de risque cardiovasculaire à 10 ans QRISK2.',
+      zh: 'QRISK2 10年心血管疾病与中风风险预测百分比。',
+      id: 'Skor risiko kardiovaskular 10 tahun QRISK2.'
+    },
+    riskCategories: ['Cardiovascular'],
+    standardMedicalGrouping: 'Other',
+    aliases: ['qrisk2_10yr_risk_percent', 'qrisk2_score', 'qrisk_2', 'qrisk2_10_year_cardiovascular_risk', 'qrisk2_percent']
+  },
+  {
+    key: 'audit_score',
+    name: 'AUDIT Score (Total)',
+    category: 'other',
+    unit: 'score',
+    normalRange: '0 - 7',
+    descriptions: {
+      en: 'Alcohol Use Disorders Identification Test 10-question comprehensive assessment composite score (0 to 40).',
+      fr: 'Score total du test d identification des troubles liés à la consommation d alcool (AUDIT).',
+      zh: '酒精使用障碍筛查量表（AUDIT）总分（0-40分）。',
+      id: 'Skor total kuesioner skrining konsumsi alkohol AUDIT (0-40).'
+    },
+    riskCategories: ['Screenings & Wellness'],
+    standardMedicalGrouping: 'Other',
+    aliases: ['audit_score_total', 'audit_total_score', 'auditscore', 'audit']
+  },
+  {
+    key: 'audit_score_frequency_drinking',
+    name: 'AUDIT Drinking Frequency Score',
+    category: 'other',
+    unit: 'score',
+    normalRange: '0 - 1',
+    descriptions: {
+      en: 'AUDIT Item 1 evaluating how often alcohol is consumed (0: never to 4: 4+ times a week).',
+      fr: 'Sous-score AUDIT de fréquence de consommation d alcool.',
+      zh: 'AUDIT量表第1题：饮酒频率自评得分。',
+      id: 'Skor frekuensi minum alkohol pada instrumen AUDIT.'
+    },
+    riskCategories: ['Screenings & Wellness'],
+    standardMedicalGrouping: 'Other',
+    aliases: ['audit_drinking_frequency', 'audit_q1_score']
+  },
+  {
+    key: 'audit_score_typical_day_units',
+    name: 'AUDIT Typical Units Score',
+    category: 'other',
+    unit: 'score',
+    normalRange: '0 - 1',
+    descriptions: {
+      en: 'AUDIT Item 2 evaluating standard drinks containing alcohol on a typical day when drinking (0: 1-2 to 4: 10+).',
+      fr: 'Sous-score AUDIT de quantité de verres par occasion.',
+      zh: 'AUDIT量表第2题：典型饮酒日的标准饮酒量得分。',
+      id: 'Skor jumlah unit alkohol rata-rata per hari minum pada instrumen AUDIT.'
+    },
+    riskCategories: ['Screenings & Wellness'],
+    standardMedicalGrouping: 'Other',
+    aliases: ['audit_typical_units', 'audit_q2_score']
+  },
+  {
+    key: 'qdiabetes',
+    name: 'QDiabetes 10-Year Risk Score',
+    category: 'other',
+    unit: '%',
+    normalRange: '< 5',
+    descriptions: {
+      en: 'QDiabetes clinical risk calculation predicting the 10-year probability of developing Type 2 diabetes.',
+      fr: 'Score de risque de diabète de type 2 à 10 ans QDiabetes.',
+      zh: 'QDiabetes 10年2型糖尿病发病风险预测百分比。',
+      id: 'Skor risiko 10 tahun diabetes tipe 2 QDiabetes.'
+    },
+    riskCategories: ['Metabolic'],
+    standardMedicalGrouping: 'Metabolic',
+    aliases: ['qdiabetes_risk_score_percent', 'qdiabetes_score', 'qdiabetes_10yr_risk_percent', 'qdiabetes_percent']
+  },
+  {
+    key: 'weekly_alcohol_consumption',
+    name: 'Weekly Alcohol Consumption',
+    category: 'other',
+    unit: 'units/week',
+    normalRange: '0 - 14',
+    descriptions: {
+      en: 'Self-reported total weekly units of alcohol (UK guidelines advise <= 14 units per week spread across days).',
+      fr: 'Consommation hebdomadaire totale d alcool en unités standard.',
+      zh: '每周酒精摄入总量（单位：标准酒精单位/周）。',
+      id: 'Konsumsi alkohol mingguan dalam satuan unit alkohol.'
+    },
+    riskCategories: ['Screenings & Wellness'],
+    standardMedicalGrouping: 'Other',
+    aliases: ['alcohol_units_per_week', 'weekly_alcohol_units', 'alcohol_weekly_intake', 'alcohol_consumption_units']
   }
 ];
 
@@ -1568,9 +1712,10 @@ export function isBiomarkerValueImprobable(key: string, val: number | string, no
   const num = typeof val === 'number' ? val : parseFloat(String(val));
   if (isNaN(num)) return false;
   
-  let rangeStr = normalRangeStr;
+  let rangeStr = (normalRangeStr && normalRangeStr !== 'Unknown' && normalRangeStr !== 'unset' && normalRangeStr !== 'n/a' && normalRangeStr !== '-') ? normalRangeStr : undefined;
   if (!rangeStr) {
-    const def = biomarkerDefinitions.find(d => d.key === key);
+    const mapped = getMappedBiomarkerKey(key) || key;
+    const def = biomarkerDefinitions.find(d => d.key === mapped || d.key === key || (Array.isArray(d.aliases) && d.aliases.some(a => a.toLowerCase() === key.toLowerCase())));
     rangeStr = def?.normalRange;
   }
 
@@ -1777,7 +1922,12 @@ export function computeBiomarkerTelemetryMultiplier(
   const spec = ANALYTE_CONVERSIONS[mapped] || ANALYTE_CONVERSIONS[key];
   if (!spec) return null;
 
-  const bounds = parseNormalRangeBounds(rangeStr);
+  let effectiveRange = (rangeStr && rangeStr !== 'Unknown' && rangeStr !== 'unset' && rangeStr !== 'n/a' && rangeStr !== '-') ? rangeStr : undefined;
+  if (!effectiveRange) {
+    const def = biomarkerDefinitions.find(d => d.key === mapped || d.key === key || (Array.isArray(d.aliases) && d.aliases.some(a => a.toLowerCase() === key.toLowerCase())));
+    effectiveRange = def?.normalRange;
+  }
+  const bounds = parseNormalRangeBounds(effectiveRange);
   if (bounds.min === undefined && bounds.max === undefined) return null;
 
   const fitNone = rangeFit(num, bounds.min, bounds.max);
@@ -1887,7 +2037,7 @@ function _detectFlaggedTelemetryErrors(
     if (profile?.notUsedBiomarkers?.[key] || profile?.notUsedInMedicalHistory?.[key] || (profile?.customBiomarkers?.[key] && profile?.deletedCustomBiomarkerKeys?.[key])) return;
     
     const { custom, def, canonicalKey } = resolveDefAndCustom(key);
-    const range = custom?.normalRange || def?.normalRange;
+    const range = (custom?.normalRange && custom.normalRange !== 'Unknown' && custom.normalRange !== 'unset' && custom.normalRange !== 'n/a' && custom.normalRange !== '-') ? custom.normalRange : (def?.normalRange || custom?.normalRange);
     const name = custom?.name || def?.name || canonicalKey;
     const unit = custom?.unit || def?.unit || '';
 
@@ -1929,7 +2079,7 @@ function _detectFlaggedTelemetryErrors(
     if (profile?.notUsedBiomarkers?.[key] || profile?.notUsedInMedicalHistory?.[key] || (profile?.customBiomarkers?.[key] && profile?.deletedCustomBiomarkerKeys?.[key])) return;
     
     const { custom, def, canonicalKey } = resolveDefAndCustom(key);
-    const range = custom?.normalRange || def?.normalRange;
+    const range = (custom?.normalRange && custom.normalRange !== 'Unknown' && custom.normalRange !== 'unset' && custom.normalRange !== 'n/a' && custom.normalRange !== '-') ? custom.normalRange : (def?.normalRange || custom?.normalRange);
     const name = custom?.name || def?.name || canonicalKey;
     const unit = custom?.unit || def?.unit || '';
 
@@ -2821,19 +2971,45 @@ export function getMergedBiomarkerDef(key: string, builtIn?: any, custom?: any, 
   const mappedKey = getMappedBiomarkerKey(k);
   const centralDef = builtIn || biomarkerDefinitions.find(d => d.key === k || d.key === mappedKey || (Array.isArray(d.aliases) && d.aliases.some(a => a.toLowerCase() === k || a.toLowerCase() === mappedKey)));
   
-  // Extract unit and range from logs if custom & builtIn don't have it
+  // Extract unit and range from logs (including observationMeta and tests arrays) if custom & builtIn don't have it
   let logUnit = '';
   let logRange = '';
   if (Array.isArray(itemLogs)) {
     for (const log of itemLogs) {
       if (log && typeof log === 'object') {
+        // 1. Direct log unit/range
         const u = log.unit || (log.units && (log.units[key] || log.units[k]));
-        if (u && typeof u === 'string' && u.trim()) {
+        if (u && typeof u === 'string' && u.trim() && u.trim() !== 'Unknown') {
           logUnit = u.trim();
         }
         const r = log.normalRange || (log.normalRanges && (log.normalRanges[key] || log.normalRanges[k]));
-        if (r && typeof r === 'string' && r.trim()) {
+        if (r && typeof r === 'string' && r.trim() && r.trim() !== 'Unknown') {
           logRange = r.trim();
+        }
+        // 2. observationMeta extraction
+        const meta = log.observationMeta?.[key] || log.observationMeta?.[k] || (log as any).observationMeta?.[mappedKey];
+        if (meta) {
+          if (!logUnit && meta.unit && typeof meta.unit === 'string' && meta.unit.trim()) {
+            logUnit = meta.unit.trim();
+          }
+          if (!logRange && meta.printedRange && typeof meta.printedRange === 'string' && meta.printedRange.trim() && meta.printedRange.trim() !== 'Unknown') {
+            logRange = meta.printedRange.trim();
+          }
+        }
+        // 3. tests array extraction
+        if (Array.isArray(log.tests)) {
+          const matchingTest = log.tests.find((t: any) => t && (t.key === key || t.key === k || t.key === mappedKey));
+          if (matchingTest) {
+            if (!logUnit && matchingTest.unit && typeof matchingTest.unit === 'string' && matchingTest.unit.trim()) {
+              logUnit = matchingTest.unit.trim();
+            }
+            if (!logRange && matchingTest.normalRange && typeof matchingTest.normalRange === 'string' && matchingTest.normalRange.trim() && matchingTest.normalRange.trim() !== 'Unknown') {
+              logRange = matchingTest.normalRange.trim();
+            }
+            if (!logRange && matchingTest.printedRange && typeof matchingTest.printedRange === 'string' && matchingTest.printedRange.trim() && matchingTest.printedRange.trim() !== 'Unknown') {
+              logRange = matchingTest.printedRange.trim();
+            }
+          }
         }
         if (logUnit && logRange) break;
       }
@@ -2846,7 +3022,7 @@ export function getMergedBiomarkerDef(key: string, builtIn?: any, custom?: any, 
 
   const inferredUnit = inferUnitFromKeyOrName(k, name);
 
-  const unit = (custom?.unit && custom.unit.trim() !== '')
+  const unit = (custom?.unit && custom.unit.trim() !== '' && custom.unit !== 'Unknown')
     ? custom.unit.trim()
     : (logUnit || ((centralDef?.unit && centralDef.unit.trim() !== '') ? centralDef.unit : inferredUnit));
 
@@ -3158,4 +3334,48 @@ export function buildBiomarkerReviewPrefill(
   }
 
   return `Please review my biomarker: ${defName}\n• Current Value: ${valueDetail}\n• Biomarker Key: ${biomarkerKey}\n\nPlease perform a clinical diagnostic review on this biomarker, evaluate my full log history, and propose diagnostic insights and recommendations.`;
+}
+
+/**
+ * Self-healing registration for newly extracted or logged biomarkers:
+ * Automatically infers missing units, reference ranges, medical groupings, and risk categories
+ * so that new biomarkers never require manual code changes or get trapped in "unreviewed" states.
+ */
+export function selfHealCustomBiomarkerDefinitions(
+  items: Array<{ key: string; unit?: string; normalRange?: string; printedRange?: string; name?: string; category?: string; description?: string }>,
+  existingCustoms: Record<string, any> = {}
+): { updatedCustoms: Record<string, any>; hasChanges: boolean } {
+  let hasChanges = false;
+  const customs = { ...existingCustoms };
+
+  items.forEach(item => {
+    if (!item || !item.key) return;
+    const rawKey = item.key;
+    if (rawKey === 'weight' || rawKey === 'height' || rawKey === 'age') return;
+    const mapped = getMappedBiomarkerKey(rawKey) || rawKey;
+    const isBuiltIn = biomarkerDefinitions.some(d => d.key === mapped || (Array.isArray(d.aliases) && d.aliases.some(a => a.toLowerCase() === mapped.toLowerCase())));
+    if (!isBuiltIn) {
+      const existing = customs[mapped] || {};
+      const cleanName = (item.name && item.name.trim()) || existing.name || mapped.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      const inferredUnit = inferUnitFromKeyOrName(mapped, cleanName);
+      const derivedDefaults = getDerivedCategoryDefaults(item.category || '', mapped);
+      const unit = (existing.unit && existing.unit.trim() && existing.unit !== 'Unknown') ? existing.unit : (item.unit || inferredUnit || '');
+      const range = (existing.normalRange && existing.normalRange.trim() && existing.normalRange !== 'Unknown') ? existing.normalRange : (item.normalRange || item.printedRange || 'Varies');
+
+      customs[mapped] = {
+        ...existing,
+        name: cleanName,
+        unit,
+        normalRange: range,
+        description: existing.description || item.description || cleanName,
+        standardMedicalGrouping: (existing.standardMedicalGrouping && existing.standardMedicalGrouping !== 'Other' && existing.standardMedicalGrouping !== 'By Medical Practice') ? existing.standardMedicalGrouping : (derivedDefaults.grouping),
+        riskCategories: (Array.isArray(existing.riskCategories) && existing.riskCategories.length > 0 && !existing.riskCategories.includes('Uncategorized')) ? existing.riskCategories : (derivedDefaults.risks),
+        potentialMedicalConditions: (Array.isArray(existing.potentialMedicalConditions) && existing.potentialMedicalConditions.length > 0) ? existing.potentialMedicalConditions : (derivedDefaults.conditions),
+        catalogApproved: true
+      };
+      hasChanges = true;
+    }
+  });
+
+  return { updatedCustoms: customs, hasChanges };
 }

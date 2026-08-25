@@ -11,7 +11,7 @@ const FoodHistoryTab = lazyWithRetry(() => import('./components/FoodHistoryTab')
 const MedicalHistoryTab = lazyWithRetry(() => import('./components/MedicalHistoryTab'));
 const TrendsTab = lazyWithRetry(() => import('./components/TrendsTab'));
 import ConflictResolutionModal from './components/ConflictResolutionModal';
-import LogChat from './components/LogChat';
+const LogChat = lazyWithRetry(() => import('./components/LogChat'));
 import { JobStore } from './jobs/JobStore';
 import { JobQueueRunner } from './jobs/JobQueueRunner';
 import { initSupabaseJobSync, hydrateUserJobs } from './jobs/SupabaseJobSync';
@@ -80,7 +80,7 @@ import { trackApiCall, setActiveQueryId, generateQueryId, initializeFetchInterce
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, getDocFromServer, getDocsFromServer, getDocsFromCache, writeBatch } from 'firebase/firestore';
 import { sanitizeForFirestore, checkQuotaFlag, handleRetryQuota } from './utils/firestoreUtils';
 import { getCurrentDateInTimezone, toYYYYMMDD, normalizeBiomarkerHistory } from './utils/dateUtils';
-import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint, isValEmpty, getMappedBiomarkerKey } from './utils/biomarkers';
+import { biomarkerDefinitions, isAsianEthnicity, hasBmiPendingAlert, getProfileFingerprint, isValEmpty, getMappedBiomarkerKey, selfHealCustomBiomarkerDefinitions } from './utils/biomarkers';
 import { applyModificationCommands, overlayFingerprint, resolveAgentDestination, shouldRunCalibrator, attachObservationMeta, enrichReviewModificationCommands, collectCatalogUnitMap, cleanupInventedBiomarkerCatalog, type ModificationCommand } from './utils/biomarkerLifecycle';
 import { extractFallbackModifications } from './components/chat-cards/BiomarkerReviewCard';
 import { formatOptimalTargetValue } from './utils/agentCalibration';
@@ -1102,7 +1102,7 @@ export default function App() {
                   continue;
                 }
                 const statusController = new AbortController();
-                const timeoutId = setTimeout(() => statusController.abort(), 6000);
+                const timeoutId = setTimeout(() => statusController.abort(), 20000);
                 let statusRes: Response;
                 try {
                   statusRes = await fetch(`/api/jobs/status?jobId=${job.id}&userId=${auth.currentUser?.uid || 'anonymous'}`, { signal: statusController.signal });
@@ -1117,7 +1117,7 @@ export default function App() {
                   }
                 }
               } catch (pollErr: any) {
-                const isFetchErr = pollErr && (pollErr.name === 'TypeError' || (pollErr.message && pollErr.message.includes('Failed to fetch')));
+                const isFetchErr = pollErr && (pollErr.name === 'TypeError' || pollErr.name === 'AbortError' || (pollErr.message && (pollErr.message.includes('Failed to fetch') || pollErr.message.includes('aborted'))));
                 if (isFetchErr) {
                   console.debug('[JobQueueRunner] Network poll pending:', pollErr.message || pollErr);
                 } else {
@@ -3562,7 +3562,7 @@ export default function App() {
         });
         setBiomarkerHistory(prev => {
           const updatedHistory = [...prev];
-          const existingLogIndex = updatedHistory.findIndex(h => h.date === recordDate);
+          const existingLogIndex = updatedHistory.findIndex(h => toYYYYMMDD(h.date) === toYYYYMMDD(recordDate));
           
           let targetIdToSave = logId;
           if (existingLogIndex >= 0) {
@@ -4280,6 +4280,21 @@ export default function App() {
       }
     }
     setFoodLogs(updatedFoods);
+    
+    // Mark matching job as savedToLog and purge from backend/Supabase so preview disappears on all devices
+    const matchingJobs = JobStore.getAllJobs().filter(j => 
+      j.id === compressedFood.id || 
+      (compressedFood as any).jobId === j.id ||
+      j.result?.pendingFoodLog?.id === compressedFood.id ||
+      (j.result?.pendingFoodLog?.name && compressedFood.name && 
+       j.result.pendingFoodLog.name.toLowerCase().trim() === compressedFood.name.toLowerCase().trim() &&
+       toYYYYMMDD(j.result.pendingFoodLog.date) === toYYYYMMDD(compressedFood.date))
+    );
+    matchingJobs.forEach(j => {
+      JobStore.updateJob(j.id, { savedToLog: true });
+      JobStore.deleteJob(j.id).catch(() => {});
+    });
+
     await saveAndSync(profile, updatedFoods, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'foodLog', targetId: compressedFood.id });
   };
   const handleUpdateFoodLog = async (updatedLog: FoodLog) => {
@@ -4358,7 +4373,7 @@ export default function App() {
       const bmiScore = Number(next.weight) / (heightInMeters * heightInMeters);
       const roundedBmi = parseFloat(bmiScore.toFixed(1));
       const recordDate = getCurrentDateInTimezone(next.timezone || (prev && prev.timezone));
-      const existingLogIndex = updatedHistory.findIndex(h => h.date === recordDate);
+      const existingLogIndex = updatedHistory.findIndex(h => toYYYYMMDD(h.date) === toYYYYMMDD(recordDate));
       if (existingLogIndex >= 0) {
         updatedHistory[existingLogIndex] = {
           ...updatedHistory[existingLogIndex],
@@ -4642,36 +4657,21 @@ export default function App() {
       // Standardize extracted keys
       const mappedExtracted: { [key: string]: number | string } = {};
       const rawKeyToMappedKey: { [key: string]: string } = {};
-      Object.entries(entry.biomarkers || {}).forEach(([rawKey, val]) => {
-        // Ignore age, height, weight from extracted biomarkers
-        if (rawKey === 'weight' || rawKey === 'height' || rawKey === 'age') return;
-        if (biomarkerDefinitions.some(d => d.key === rawKey)) {
-          mappedExtracted[rawKey] = val;
-          rawKeyToMappedKey[rawKey] = rawKey;
-          return;
-        }
-        if (keyMapping[rawKey]) {
-          mappedExtracted[keyMapping[rawKey]] = val;
-          rawKeyToMappedKey[rawKey] = keyMapping[rawKey];
-          return;
-        }
-        // Check name match directly
-        const cleaned = cleanName(rawKey.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '));
+      const resolveKey = (rk: string) => {
+        if (!rk || rk === 'weight' || rk === 'height' || rk === 'age') return rk;
+        if (biomarkerDefinitions.some(d => d.key === rk)) return rk;
+        if (keyMapping[rk]) return keyMapping[rk];
+        const cleaned = cleanName(rk.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '));
         const stdMatch = biomarkerDefinitions.find(d => d.name.toLowerCase() === cleaned.toLowerCase() || cleanName(d.name).toLowerCase() === cleaned.toLowerCase());
-        if (stdMatch) {
-          mappedExtracted[stdMatch.key] = val;
-          rawKeyToMappedKey[rawKey] = stdMatch.key;
-          return;
-        }
-        const existingCustoms = { ...(profile?.customBiomarkers || {}) };
-        const custMatchKey = Object.keys(existingCustoms).find(k => cleanName(existingCustoms[k]?.name || '').toLowerCase() === cleaned.toLowerCase());
-        if (custMatchKey) {
-          mappedExtracted[custMatchKey] = val;
-          rawKeyToMappedKey[rawKey] = custMatchKey;
-          return;
-        }
-        const safeKey = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-        const finalKey = safeKey || rawKey;
+        if (stdMatch) return stdMatch.key;
+        const customs = profile?.customBiomarkers || {};
+        const custMatch = Object.keys(customs).find(k => cleanName(customs[k]?.name || '').toLowerCase() === cleaned.toLowerCase());
+        return custMatch || (cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || rk);
+      };
+
+      Object.entries(entry.biomarkers || {}).forEach(([rawKey, val]) => {
+        if (rawKey === 'weight' || rawKey === 'height' || rawKey === 'age') return;
+        const finalKey = resolveKey(rawKey);
         mappedExtracted[finalKey] = val;
         rawKeyToMappedKey[rawKey] = finalKey;
       });
@@ -4679,43 +4679,11 @@ export default function App() {
       if (Object.keys(mappedExtracted).length > 0) {
         hasNewBiomarkers = true;
         const recordDate = entry.date || getCurrentDateInTimezone(profile?.timezone);
-        const existingLogIndex = updatedHistory.findIndex(h => h.date === recordDate);
+        const existingLogIndex = updatedHistory.findIndex(h => toYYYYMMDD(h.date) === toYYYYMMDD(recordDate));
 
-        // Map tests array
-        let entryTests: any[] = [];
-        if (entry.tests && Array.isArray(entry.tests)) {
-          entryTests = entry.tests.map((t: any) => {
-            let mappedKey = t.key;
-            if (rawKeyToMappedKey[t.key]) {
-              mappedKey = rawKeyToMappedKey[t.key];
-            } else {
-              if (biomarkerDefinitions.some(d => d.key === t.key)) {
-                mappedKey = t.key;
-              } else if (keyMapping[t.key]) {
-                mappedKey = keyMapping[t.key];
-              } else {
-                const cleaned = cleanName((t.key || "").split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '));
-                const stdMatch = biomarkerDefinitions.find(d => d.name.toLowerCase() === cleaned.toLowerCase() || cleanName(d.name).toLowerCase() === cleaned.toLowerCase());
-                if (stdMatch) {
-                  mappedKey = stdMatch.key;
-                } else {
-                  const existingCustoms = { ...(profile?.customBiomarkers || {}) };
-                  const custMatchKey = Object.keys(existingCustoms).find(k => cleanName(existingCustoms[k]?.name || '').toLowerCase() === cleaned.toLowerCase());
-                  if (custMatchKey) {
-                    mappedKey = custMatchKey;
-                  } else {
-                    const safeKey = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-                    mappedKey = safeKey || t.key;
-                  }
-                }
-              }
-            }
-            return {
-              ...t,
-              key: mappedKey
-            };
-          });
-        }
+        const entryTests = (entry.tests && Array.isArray(entry.tests))
+          ? entry.tests.map((t: any) => ({ ...t, key: rawKeyToMappedKey[t.key] || resolveKey(t.key) }))
+          : [];
 
         if (existingLogIndex >= 0) {
           // Merge with existing log for this date
@@ -4785,12 +4753,35 @@ export default function App() {
         }
       }
     });
+    // Self-healing: Ensure every newly extracted or updated custom biomarker has complete structural metadata
+    const itemsToSelfHeal: any[] = [];
+    entriesToProcess.forEach(entry => {
+      const tests = entry.tests || [];
+      Object.keys(entry.biomarkers || {}).forEach(rawKey => {
+        const testInfo = Array.isArray(tests) ? tests.find((t: any) => t && (t.key === rawKey || t.key === getMappedBiomarkerKey(rawKey))) : null;
+        itemsToSelfHeal.push({
+          key: rawKey,
+          name: testInfo?.name,
+          unit: testInfo?.unit,
+          normalRange: testInfo?.normalRange,
+          printedRange: testInfo?.printedRange,
+          category: testInfo?.category,
+          description: testInfo?.description
+        });
+      });
+    });
+    const { updatedCustoms, hasChanges } = selfHealCustomBiomarkerDefinitions(itemsToSelfHeal, currentProfile?.customBiomarkers);
+    if (hasChanges) {
+      currentProfile = { ...currentProfile, customBiomarkers: updatedCustoms } as UserProfile;
+      setProfile(currentProfile);
+    }
+
     if (finalProfileUpdates && Object.keys(finalProfileUpdates).length > 0) {
       if (typeof finalProfileUpdates.age === 'string') finalProfileUpdates.age = parseFloat(finalProfileUpdates.age) || finalProfileUpdates.age;
       if (typeof finalProfileUpdates.weight === 'string') finalProfileUpdates.weight = parseFloat(finalProfileUpdates.weight) || finalProfileUpdates.weight;
       if (typeof finalProfileUpdates.height === 'string') finalProfileUpdates.height = parseFloat(finalProfileUpdates.height) || finalProfileUpdates.height;
-      const nextProfile = { ...profile, ...finalProfileUpdates };
-      const bmiRes = logBmiIfProfileWeightHeightChanged(profile, nextProfile, updatedHistory, updatedBiomarkers);
+      const nextProfile = { ...currentProfile, ...finalProfileUpdates };
+      const bmiRes = logBmiIfProfileWeightHeightChanged(currentProfile, nextProfile, updatedHistory, updatedBiomarkers);
       currentProfile = nextProfile;
       updatedHistory = bmiRes.updatedHistory;
       updatedBiomarkers = bmiRes.updatedBiomarkers;
@@ -5550,7 +5541,7 @@ export default function App() {
           existingIndex = updatedHistory.findIndex(h => h.id === ml.originalLogId);
         }
         if (existingIndex < 0) {
-          existingIndex = updatedHistory.findIndex(h => h.date === ml.date);
+          existingIndex = updatedHistory.findIndex(h => toYYYYMMDD(h.date) === toYYYYMMDD(ml.date));
         }
         if (existingIndex >= 0) {
           updatedHistory[existingIndex] = {
@@ -5713,7 +5704,7 @@ export default function App() {
         existingIndex = updatedHistory.findIndex(h => h.id === ml.originalLogId);
       }
       if (existingIndex < 0) {
-        existingIndex = updatedHistory.findIndex(h => h.date === ml.date);
+        existingIndex = updatedHistory.findIndex(h => toYYYYMMDD(h.date) === toYYYYMMDD(ml.date));
       }
       if (existingIndex >= 0) {
         updatedHistory[existingIndex] = {
@@ -6616,7 +6607,8 @@ export default function App() {
           setIsMedicalChatOpen(true);
         };
         return (
-          <ErrorBoundary>{isFrontDeskOpen && <LogChat type="front_desk"
+          <React.Suspense fallback={null}>
+            <ErrorBoundary>{isFrontDeskOpen && <LogChat type="front_desk"
             profile={profile}
             isOpen={isFrontDeskOpen}
             onOpenAgentFromFrontDesk={handleOpenAgentFromFrontDesk}
@@ -6634,6 +6626,9 @@ export default function App() {
         onAddBiomarkerLogs={async (logs) => {
           let updatedBiomarkers = { ...biomarkers };
           let updatedHistory = [...biomarkerHistory];
+          let hasCustomUpdates = false;
+          const customBiomarkers = { ...(profile?.customBiomarkers || {}) };
+
           logs.forEach(log => {
             const key = getMappedBiomarkerKey(log.biomarker) || log.biomarker;
             updatedBiomarkers[key] = log.value;
@@ -6661,16 +6656,30 @@ export default function App() {
               attachObservationMeta(row, key, { unit: log.unit, rawValue: log.value });
               updatedHistory.push(row);
             }
+
           });
+
+          const { updatedCustoms, hasChanges } = selfHealCustomBiomarkerDefinitions(
+            logs.map(l => ({ key: l.biomarker, unit: l.unit, normalRange: l.normalRange })),
+            profile?.customBiomarkers
+          );
+          let targetProfile = profile;
+          if (hasChanges && profile) {
+            targetProfile = { ...profile, customBiomarkers: updatedCustoms };
+            setProfile(targetProfile);
+          }
+
           setBiomarkers(updatedBiomarkers);
           setBiomarkerHistory(updatedHistory);
-          await saveAndSync(profile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: updatedHistory.slice(-logs.length).map(l => l.id) });
+          await saveAndSync(targetProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLogsBatch', targetIds: updatedHistory.slice(-logs.length).map(l => l.id) });
         }}
 
       />}</ErrorBoundary>
+          </React.Suspense>
         );
       })()}
-      <ErrorBoundary>{isFoodChatOpen && <LogChat type="food"
+      <React.Suspense fallback={null}>
+        <ErrorBoundary>{isFoodChatOpen && <LogChat type="food"
         profile={profile}
         isOpen={isFoodChatOpen}
         jobId={activeJobId}
@@ -6714,7 +6723,9 @@ export default function App() {
           setIsManualFoodLogOpen(true);
         }}
       />}</ErrorBoundary>
-      <ErrorBoundary>{isMedicalChatOpen && <LogChat key={`medical_${activeAgentType || 'general'}`}
+      </React.Suspense>
+      <React.Suspense fallback={null}>
+        <ErrorBoundary>{isMedicalChatOpen && <LogChat key={`medical_${activeAgentType || 'general'}`}
         type="medical"
         profile={profile}
         isOpen={isMedicalChatOpen}
@@ -7776,7 +7787,8 @@ export default function App() {
             }
           }
         }}
-      />}
+      />}</ErrorBoundary>
+      </React.Suspense>
 
  
 
@@ -7833,7 +7845,6 @@ export default function App() {
         </div>
       )}
 
-      </ErrorBoundary>
     </div>
   );
 }

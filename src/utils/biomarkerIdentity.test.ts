@@ -12,6 +12,7 @@ import {
   isPendingCatalogApproval,
   shouldStampExtractedDefPending,
   isBiomarkerDuplicateCandidate,
+  selfHealCustomBiomarkerDefinitions,
   biomarkerDefinitions,
 } from './biomarkers';
 
@@ -265,5 +266,45 @@ describe('isBiomarkerDuplicateCandidate — false-friend guards (dedup engine re
   it('REGRESSION: does NOT merge Creatinine with Fecal Creatinine — specimen guard must cover fecal/faecal, not just urine/csf/saliva/stool', () => {
     const m = isBiomarkerDuplicateCandidate({ key: 'creatinine', name: 'Creatinine' }, { key: 'fecal_creatinine', name: 'Fecal Creatinine' });
     expect(m.isMatch).toBe(false);
+  });
+});
+
+describe('selfHealCustomBiomarkerDefinitions — structural self-healing', () => {
+  it('automatically infers units, reference ranges, and physiological categories for new biomarkers', () => {
+    const { updatedCustoms, hasChanges } = selfHealCustomBiomarkerDefinitions([
+      { key: 'novel_lab_marker_mg_dl', normalRange: '10 - 25' },
+      { key: 'hepatic_stress_index', unit: 'U/L', category: 'liver' }
+    ]);
+
+    expect(hasChanges).toBe(true);
+    expect(updatedCustoms.novel_lab_marker_mg_dl.unit).toBe('mg/dL');
+    expect(updatedCustoms.novel_lab_marker_mg_dl.normalRange).toBe('10 - 25');
+    expect(updatedCustoms.novel_lab_marker_mg_dl.catalogApproved).toBe(true);
+
+    expect(updatedCustoms.hepatic_stress_index.unit).toBe('U/L');
+    expect(updatedCustoms.hepatic_stress_index.standardMedicalGrouping).toBe('Hepatic');
+    expect(updatedCustoms.hepatic_stress_index.riskCategories).toContain('Liver');
+    expect(updatedCustoms.hepatic_stress_index.catalogApproved).toBe(true);
+  });
+
+  it('preserves existing custom ranges while filling in missing structural metadata', () => {
+    const existing = {
+      my_custom_biomarker: {
+        name: 'My Custom Marker',
+        normalRange: '5.0 - 15.0',
+        unit: 'mmol/L'
+      }
+    };
+
+    const { updatedCustoms } = selfHealCustomBiomarkerDefinitions(
+      [{ key: 'my_custom_biomarker' }],
+      existing
+    );
+
+    expect(updatedCustoms.my_custom_biomarker.normalRange).toBe('5.0 - 15.0');
+    expect(updatedCustoms.my_custom_biomarker.unit).toBe('mmol/L');
+    expect(updatedCustoms.my_custom_biomarker.catalogApproved).toBe(true);
+    expect(updatedCustoms.my_custom_biomarker.standardMedicalGrouping).toBeDefined();
+    expect(updatedCustoms.my_custom_biomarker.riskCategories.length).toBeGreaterThan(0);
   });
 });

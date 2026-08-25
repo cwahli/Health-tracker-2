@@ -23,7 +23,7 @@ const DedupeBiomarkerLogsModal = lazyWithRetry(() => import('./DedupeBiomarkerLo
 const NutritionDataBrowserModal = lazyWithRetry(() => import('./NutritionDataBrowserModal'));
 const BugTrackerModal = lazyWithRetry(() => import('./BugTrackerModal'));
 import BugSnapshotFab, { BugSnapshotSettingsToggle } from './BugSnapshotFab';
-import { AllAnalysesModal } from './AllAnalysesModal';
+const AllAnalysesModal = lazyWithRetry(() => import('./AllAnalysesModal').then(m => ({ default: m.AllAnalysesModal })));
 const UserManagementTab = lazyWithRetry(() => import('./UserManagementTab'));
 const BackupRestoreTab = lazyWithRetry(() => import('./BackupRestoreTab'));
 const FoodCatalogAdminTab = lazyWithRetry(() => import('./FoodCatalogAdminTab').then(m => ({ default: m.FoodCatalogAdminTab })));
@@ -4557,8 +4557,6 @@ export default function Header({
         isOpen={showDedupeBiomarkerLogs}
         onClose={() => setShowDedupeBiomarkerLogs(false)}
       />
-      </React.Suspense>
-
       <AllAnalysesModal
         isOpen={showAllAnalysesModal}
         onClose={() => setShowAllAnalysesModal(false)}
@@ -4575,6 +4573,7 @@ export default function Header({
         onNavigateTab={onNavigateTab}
         onViewJob={onViewJob}
       />
+      </React.Suspense>
     </>
   );
 }

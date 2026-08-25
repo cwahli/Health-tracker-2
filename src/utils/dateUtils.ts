@@ -117,47 +117,74 @@ export function normalizeBiomarkerHistory<T extends MinimalBiomarkerLog>(history
     const rawDate = log.date || new Date().toISOString().split('T')[0];
     const normalizedDate = formatToDDMMYYYY(rawDate);
     const reportId = (log as any).sourceReportId;
-    // Only merge rows that share an explicit, matching sourceReportId.
-    // Do NOT fall back to date-only merging: rows without a sourceReportId
-    // (the vast majority of historical data) may be genuinely distinct
-    // Supabase rows for the same date, and silently collapsing them here
-    // hides real duplicate data from the UI, which makes it impossible to
-    // review or delete — this was causing "deleted" outlier biomarkers to
-    // silently reappear from a hidden duplicate row on the next sync.
+
+    const mappedBiomarkers: Record<string, any> = {};
+    Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
+      mappedBiomarkers[getMappedBiomarkerKey(k)] = v;
+    });
+
     const sourceKey = reportId ? `${normalizedDate}::${reportId}` : null;
 
     if (sourceKey && seenDates.has(sourceKey)) {
       // Same calendar day AND same source extract: merge keys (last write wins, never average).
       const existing = seenDates.get(sourceKey)!;
-      
-      const newBiomarkers = { ...existing.biomarkers };
-      Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
-        newBiomarkers[getMappedBiomarkerKey(k)] = v;
-      });
-      existing.biomarkers = newBiomarkers;
-
-      if (log.note) {
-        existing.note = dedupeDelimitedText(existing.note, log.note, '; ');
+      existing.biomarkers = { ...existing.biomarkers, ...mappedBiomarkers };
+      if (log.note) existing.note = dedupeDelimitedText(existing.note, log.note, '; ');
+      if (log.summary) existing.summary = dedupeDelimitedText(existing.summary, log.summary, '; ');
+      if ((log as any).updated_at && (log as any).updated_at > ((existing as any).updated_at || 0)) {
+        (existing as any).updated_at = (log as any).updated_at;
       }
-      if (log.summary) {
-        existing.summary = dedupeDelimitedText(existing.summary, log.summary, '; ');
-      }
-    } else {
-      const mappedBiomarkers: Record<string, any> = {};
-      Object.entries(log.biomarkers || {}).forEach(([k, v]) => {
-        mappedBiomarkers[getMappedBiomarkerKey(k)] = v;
-      });
-      const copy = {
-        ...log,
-        date: normalizedDate,
-        biomarkers: mappedBiomarkers,
-        note: log.note ? dedupeDelimitedText('', log.note, '; ') : log.note,
-        summary: log.summary ? dedupeDelimitedText('', log.summary, '; ') : log.summary
-      };
-      
-      if (sourceKey) seenDates.set(sourceKey, copy);
-      results.push(copy);
+      continue;
     }
+
+    // Check if an existing log on the same calendar day matches or is an exact duplicate
+    const existingOnDateIndex = results.findIndex(r => r.date === normalizedDate);
+    if (existingOnDateIndex >= 0) {
+      const existing = results[existingOnDateIndex];
+      const existingKeys = Object.keys(existing.biomarkers || {});
+      const newKeys = Object.keys(mappedBiomarkers);
+
+      // 1. Exact duplicate or subset: all new keys exist with identical values
+      const isDuplicateOrSubset = newKeys.length > 0 && newKeys.every(k => {
+        return existing.biomarkers[k] !== undefined && String(existing.biomarkers[k]) === String(mappedBiomarkers[k]);
+      });
+
+      // 2. Superset: existing is a pure subset of new
+      const isSuperset = existingKeys.length > 0 && existingKeys.every(k => {
+        return mappedBiomarkers[k] !== undefined && String(mappedBiomarkers[k]) === String(existing.biomarkers[k]);
+      });
+
+      // 3. Check for conflicting values on overlapping keys
+      const hasKeyConflict = newKeys.some(k => existing.biomarkers[k] !== undefined && String(existing.biomarkers[k]) !== String(mappedBiomarkers[k]));
+
+      if (isDuplicateOrSubset) {
+        if (log.note) existing.note = dedupeDelimitedText(existing.note, log.note, '; ');
+        if (log.summary) existing.summary = dedupeDelimitedText(existing.summary, log.summary, '; ');
+        if ((log as any).updated_at && (log as any).updated_at > ((existing as any).updated_at || 0)) {
+          (existing as any).updated_at = (log as any).updated_at;
+        }
+        continue;
+      } else if (isSuperset || !hasKeyConflict) {
+        existing.biomarkers = { ...existing.biomarkers, ...mappedBiomarkers };
+        if (log.note) existing.note = dedupeDelimitedText(existing.note, log.note, '; ');
+        if (log.summary) existing.summary = dedupeDelimitedText(existing.summary, log.summary, '; ');
+        if ((log as any).updated_at && (log as any).updated_at > ((existing as any).updated_at || 0)) {
+          (existing as any).updated_at = (log as any).updated_at;
+        }
+        continue;
+      }
+    }
+
+    const copy = {
+      ...log,
+      date: normalizedDate,
+      biomarkers: mappedBiomarkers,
+      note: log.note ? dedupeDelimitedText('', log.note, '; ') : log.note,
+      summary: log.summary ? dedupeDelimitedText('', log.summary, '; ') : log.summary
+    };
+    
+    if (sourceKey) seenDates.set(sourceKey, copy);
+    results.push(copy);
   }
 
   // Sort reverse-chronologically so newest logs are first

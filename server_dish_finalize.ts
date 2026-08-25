@@ -202,8 +202,14 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
     }
   }
 
-  // 3. Fill remaining unlocked nutrients from Scout base estimates scaled by R
+  // 3. Fill remaining unlocked nutrients from Scout base estimates scaled by R (or calorie-adjusted R for brand locks)
   const scoutNutrients = item.nutrients || {};
+  const scoutCal = Number(scoutNutrients.calories ?? item.estimatedCalories ?? 0);
+  const brandCal = nutrients.calories != null ? Number(nutrients.calories) : null;
+  const effectiveR = (dbSource === 'brand_official' && brandCal && scoutCal > 0)
+    ? (brandCal / scoutCal)
+    : R;
+
   const SCOUT_KEYS = [
     'calories', 'protein', 'totalFat', 'saturatedFat', 'transFat',
     'addedSugar', 'totalSugar', 'sugar', 'totalFibre', 'sodium',
@@ -219,8 +225,8 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
     if (rawVal !== undefined && rawVal !== null && Number.isFinite(Number(rawVal))) {
       const numVal = Number(rawVal);
       nutrients[targetKey] = targetKey === 'calories' || targetKey === 'sodium' || targetKey === 'potassium' || targetKey === 'calcium' || targetKey === 'magnesium'
-        ? Math.round(numVal * R)
-        : Math.round(numVal * R * 10) / 10;
+        ? Math.round(numVal * effectiveR)
+        : Math.round(numVal * effectiveR * 10) / 10;
     } else {
       if (nutrients[targetKey] === undefined) {
         nutrients[targetKey] = null;

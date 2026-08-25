@@ -15,7 +15,7 @@ async function fetchAndPopulateR2Job(jobId: string) {
   try {
     const baseUrl = typeof window !== 'undefined' ? '' : 'http://localhost:3000';
     const r2Controller = new AbortController();
-    const r2TimeoutId = setTimeout(() => r2Controller.abort(), 6000);
+    const r2TimeoutId = setTimeout(() => r2Controller.abort(), 20000);
     let r: Response;
     try {
       r = await fetch(`${baseUrl}/api/jobs/status?jobId=${jobId}&full=true`, { signal: r2Controller.signal });
@@ -51,7 +51,7 @@ async function fetchAndPopulateR2Job(jobId: string) {
 export async function hydrateUserJobs(userId: string = 'anonymous', isFull: boolean = true): Promise<void> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     let res: Response;
     try {
       res = await fetch(`/api/jobs/status?userId=${encodeURIComponent(userId)}&full=${isFull}`, { signal: controller.signal });

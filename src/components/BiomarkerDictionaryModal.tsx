@@ -2274,8 +2274,10 @@ I can analyze these, compare them with our database keys, and find standard mapp
       parsed = parsed.map((item: any) => {
         const itemKey = item.originalKey || item.key;
         const customDef = profile.customBiomarkers?.[itemKey] || biomarkerDefinitions.find((b: any) => b.key === itemKey);
-        const itemName = item.name || customDef?.name || itemKey;
-        const range = item.normalRange !== undefined ? item.normalRange : (customDef as any)?.normalRange;
+        const builtInDef = biomarkerDefinitions.find((b: any) => b.key === itemKey || (Array.isArray(b.aliases) && b.aliases.some((a: string) => a.toLowerCase() === itemKey.toLowerCase())));
+        const itemName = item.name || customDef?.name || builtInDef?.name || itemKey;
+        const rawRange = item.normalRange !== undefined ? item.normalRange : (customDef as any)?.normalRange;
+        const range = (rawRange && rawRange !== 'Unknown' && rawRange !== 'unset' && rawRange !== 'n/a' && rawRange !== '-') ? rawRange : builtInDef?.normalRange;
         
         let grouping = item.standardMedicalGrouping;
         if (!grouping || grouping === 'N/A' || grouping.trim() === '') {

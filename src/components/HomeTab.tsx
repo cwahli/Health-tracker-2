@@ -13,8 +13,9 @@ import { PRIMARY_NUTRIENTS, isCoreNutrient, isAdditionalNutrient } from '../util
 import { nutrientDefinitions } from '../utils/nutrition';
 import { BiomarkerExpandedSection } from './BiomarkerExpandedSection';
 import { FilterPills } from './ui/FilterPills';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
 
-import LogChat from './LogChat';
+const LogChat = lazyWithRetry(() => import('./LogChat'));
 import { JobStore } from '../jobs/JobStore';
 
 const defaultNutrientTargets: { [key: string]: string } = {
@@ -2335,41 +2336,43 @@ export default function HomeTab({
       
 
       {/* Food Idea Agent Modal */}
-      {isFoodIdeaChatOpen && (
-        <LogChat 
-          type="food_idea"
-          isOpen={isFoodIdeaChatOpen}
-          onClose={() => setIsFoodIdeaChatOpen(false)}
-          profile={profile}
-          foodLogs={activeFoodLogs}
-          biomarkers={biomarkers}
-          biomarkerHistory={activeHistory}
-          selectedModelId={selectedModelId}
-          onChangeModelId={onChangeModelId}
-          onLogFoodIdeas={(ideas) => {
-            setFoodIdeas([...foodIdeas, ...ideas]);
-            setIsFoodIdeaChatOpen(false);
-          }}
-        />
-      )}
+      <React.Suspense fallback={null}>
+        {isFoodIdeaChatOpen && (
+          <LogChat 
+            type="food_idea"
+            isOpen={isFoodIdeaChatOpen}
+            onClose={() => setIsFoodIdeaChatOpen(false)}
+            profile={profile}
+            foodLogs={activeFoodLogs}
+            biomarkers={biomarkers}
+            biomarkerHistory={activeHistory}
+            selectedModelId={selectedModelId}
+            onChangeModelId={onChangeModelId}
+            onLogFoodIdeas={(ideas) => {
+              setFoodIdeas([...foodIdeas, ...ideas]);
+              setIsFoodIdeaChatOpen(false);
+            }}
+          />
+        )}
 
-      {isDailyRecommendationChatOpen && (
-        <LogChat 
-          type="daily_recommendation"
-          isOpen={isDailyRecommendationChatOpen}
-          onClose={() => setIsDailyRecommendationChatOpen(false)}
-          profile={profile}
-          foodLogs={activeFoodLogs}
-          biomarkers={biomarkers}
-          biomarkerHistory={activeHistory}
-          report={report}
-          actions={actions}
-          googleSteps={googleSteps}
-          selectedModelId={selectedModelId}
-          onChangeModelId={onChangeModelId}
-          autoSendMessage="What's up today?"
-        />
-      )}
+        {isDailyRecommendationChatOpen && (
+          <LogChat 
+            type="daily_recommendation"
+            isOpen={isDailyRecommendationChatOpen}
+            onClose={() => setIsDailyRecommendationChatOpen(false)}
+            profile={profile}
+            foodLogs={activeFoodLogs}
+            biomarkers={biomarkers}
+            biomarkerHistory={activeHistory}
+            report={report}
+            actions={actions}
+            googleSteps={googleSteps}
+            selectedModelId={selectedModelId}
+            onChangeModelId={onChangeModelId}
+            autoSendMessage="What's up today?"
+          />
+        )}
+      </React.Suspense>
 
       {/* Flagged Biomarkers & Telemetry Error Management Modal */}
       {showTelemetryModal && (() => {
@@ -2384,12 +2387,34 @@ export default function HomeTab({
 
         const selectedAutoFixableCount = flaggedTelemetryErrors.filter(e => selectedErrorKeys.has(e.key) && e.proposedAutoFix?.canAutoFix).length;
 
+        let totalSelectedOutlierReadingsCount = 0;
+        const selectedKeysList = Array.from(selectedErrorKeys);
+        (activeHistory || []).forEach(log => {
+          if (!log.biomarkers) return;
+          selectedKeysList.forEach(k => {
+            const matchingKey = Object.keys(log.biomarkers).find(bk => {
+              const canBk = getMappedBiomarkerKey(bk) || bk;
+              return canBk === k || canBk.toLowerCase().replace(/[\s_]/g, '') === k.toLowerCase().replace(/[\s_]/g, '') || bk.toLowerCase().replace(/[\s_]/g, '') === k.toLowerCase().replace(/[\s_]/g, '');
+            });
+            if (matchingKey && log.biomarkers[matchingKey] !== undefined) {
+              const val = log.biomarkers[matchingKey];
+              const num = typeof val === 'number' ? val : parseFloat(String(val));
+              const custom = profile.customBiomarkers?.[k];
+              const def = allDefinitions.find(d => d.key === k) || biomarkerDefinitions.find(d => d.key === k);
+              const range = (custom?.normalRange && custom.normalRange !== 'Unknown' && custom.normalRange !== 'unset' && custom.normalRange !== 'n/a' && custom.normalRange !== '-') ? custom.normalRange : def?.normalRange;
+              if (!isNaN(num) && isBiomarkerValueImprobable(k, num, range)) {
+                totalSelectedOutlierReadingsCount++;
+              }
+            }
+          });
+        });
+
         const handleAutoFixBiomarker = (err: any) => {
           if (!err.proposedAutoFix?.canAutoFix) return;
           const mult = err.proposedAutoFix.proposedMultiplier;
           const custom = profile.customBiomarkers?.[err.key];
           const def = allDefinitions.find(d => d.key === err.key) || biomarkerDefinitions.find(d => d.key === err.key);
-          const range = custom?.normalRange || def?.normalRange;
+          const range = (custom?.normalRange && custom.normalRange !== 'Unknown' && custom.normalRange !== 'unset' && custom.normalRange !== 'n/a' && custom.normalRange !== '-') ? custom.normalRange : (def?.normalRange || custom?.normalRange);
 
           const updatesToApply: { id: string; key: string; value: number }[] = [];
           (activeHistory || []).forEach(log => {
@@ -2431,7 +2456,7 @@ export default function HomeTab({
             const mult = err.proposedAutoFix!.proposedMultiplier;
             const custom = profile.customBiomarkers?.[err.key];
             const def = allDefinitions.find(d => d.key === err.key) || biomarkerDefinitions.find(d => d.key === err.key);
-            const range = custom?.normalRange || def?.normalRange;
+            const range = (custom?.normalRange && custom.normalRange !== 'Unknown' && custom.normalRange !== 'unset' && custom.normalRange !== 'n/a' && custom.normalRange !== '-') ? custom.normalRange : (def?.normalRange || custom?.normalRange);
 
             (activeHistory || []).forEach(log => {
               if (!log.biomarkers || !log.id) return;
@@ -2569,7 +2594,7 @@ export default function HomeTab({
                     const isSelected = selectedErrorKeys.has(err.key);
                     const custom = profile.customBiomarkers?.[err.key];
                     const def = allDefinitions.find(d => d.key === err.key) || biomarkerDefinitions.find(d => d.key === err.key);
-                    const range = custom?.normalRange || def?.normalRange;
+                    const range = (custom?.normalRange && custom.normalRange !== 'Unknown' && custom.normalRange !== 'unset' && custom.normalRange !== 'n/a' && custom.normalRange !== '-') ? custom.normalRange : (def?.normalRange || custom?.normalRange);
                     const unit = err.unit || custom?.unit || def?.unit || '';
 
                     // Find all matching historical logs for this biomarker
@@ -2919,7 +2944,7 @@ export default function HomeTab({
                     confirmBatchDelete ? (
                       <div className="flex items-center gap-2 p-1 bg-rose-100/90 dark:bg-rose-950/90 border border-rose-300 dark:border-rose-800 rounded-xl animate-in fade-in duration-150">
                         <span className="text-xs font-bold text-rose-800 dark:text-rose-200 pl-2">
-                          Delete {selectedErrorKeys.size} outlier biomarker(s)?
+                          Delete {totalSelectedOutlierReadingsCount} outlier reading(s)?
                         </span>
                         <button
                           type="button"
@@ -2940,7 +2965,7 @@ export default function HomeTab({
                                   const num = typeof val === 'number' ? val : parseFloat(String(val));
                                   const custom = profile.customBiomarkers?.[k];
                                   const def = allDefinitions.find(d => d.key === k) || biomarkerDefinitions.find(d => d.key === k);
-                                  const range = custom?.normalRange || def?.normalRange;
+                                  const range = (custom?.normalRange && custom.normalRange !== 'Unknown' && custom.normalRange !== 'unset' && custom.normalRange !== 'n/a' && custom.normalRange !== '-') ? custom.normalRange : def?.normalRange;
                                   if (isBiomarkerValueImprobable(k, num, range)) {
                                     deletionsToDelete.push({ id: log.id, key: matchingKey });
                                   }
@@ -2977,7 +3002,7 @@ export default function HomeTab({
                     ) : (
                       <button
                         type="button"
-                        disabled={selectedErrorKeys.size === 0 || savingActionKeys['batch_delete'] !== undefined}
+                        disabled={totalSelectedOutlierReadingsCount === 0 || savingActionKeys['batch_delete'] !== undefined}
                         onClick={() => setConfirmBatchDelete(true)}
                         className="px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-800/60 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                       >
@@ -2994,7 +3019,7 @@ export default function HomeTab({
                         ) : (
                           <>
                             <Trash2 className="w-3.5 h-3.5" />
-                            <span>Delete Outliers ({selectedErrorKeys.size})</span>
+                            <span>Delete Outliers ({totalSelectedOutlierReadingsCount})</span>
                           </>
                         )}
                       </button>

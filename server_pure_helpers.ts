@@ -1234,59 +1234,41 @@ export function synchronizeNarrativeText(
   const naVal = Math.round(grandNa);
   const naFormatted = naVal.toLocaleString('en-US');
 
-  
-  
+  const safeAdj = `(?:(?!\\b(?:and|with|plus|or|including|protein|fat|calories|sugar|sodium|carbs|carbohydrates|carbohydrate|fiber|fibre)\\b)[a-zA-Z-]+\\s+){0,2}`;
+
   // 1. Calories
-  updated = updated.replace(/\b([\d,]+(?:\.\d+)?)\s*((?:[a-zA-Z-]+\s+)*(?:calories|kcal))\b/gi, (match, num, rest) => {
-    return `${calVal} ${rest}`;
-  });
+  const calRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(${safeAdj}(?:calories|kcal))\\b`, 'gi');
+  updated = updated.replace(calRe, (match, num, rest) => `${calVal} ${rest}`);
 
   // 2. Sodium
-  updated = updated.replace(/\b([\d,]+(?:\.\d+)?)\s*(mg\s*(?:of\s+)?(?:[a-zA-Z-]+\s+)*sodium)\b/gi, (match, num, rest) => {
-    return `${naFormatted}${rest}`;
-  });
-  updated = updated.replace(/(sodium\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*mg[^)]*\))/gi, (match, p1, num, p3) => {
-    return `${p1}${naFormatted}${p3}`;
-  });
-  updated = updated.replace(/(sodium\s*(?:to\s+|is\s+|at\s+|:\s*))([\d,]+(?:\.\d+)?)(\s*mg)/gi, (match, p1, num, p3) => {
-    return `${p1}${naFormatted}${p3}`;
-  });
+  const naRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(mg\\s*(?:of\\s+)?${safeAdj}sodium)\\b`, 'gi');
+  updated = updated.replace(naRe, (match, num, rest) => `${naFormatted}${rest}`);
+  updated = updated.replace(/(sodium\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*mg[^)]*\))/gi, (match, p1, num, p3) => `${p1}${naFormatted}${p3}`);
+  updated = updated.replace(/(sodium\s*(?:to\s+|is\s+|at\s+|:\s*))([\d,]+(?:\.\d+)?)(\s*mg)/gi, (match, p1, num, p3) => `${p1}${naFormatted}${p3}`);
 
   // 3. Saturated Fat
-  updated = updated.replace(/\b([\d,]+(?:\.\d+)?)\s*(g\s*(?:of\s+)?(?:[a-zA-Z-]+\s+)*saturated\s*fat)\b/gi, (match, num, rest) => {
-    return `${satFatVal}${rest}`;
-  });
-  updated = updated.replace(/(saturated\s*fat\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*g[^)]*\))/gi, (match, p1, num, p3) => {
-    return `${p1}${satFatVal}${p3}`;
-  });
-  updated = updated.replace(/(saturated\s*fat\s*:\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => {
-    return `${p1}${satFatVal}${p3}`;
-  });
+  const satFatRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}saturated\\s*fat)\\b`, 'gi');
+  updated = updated.replace(satFatRe, (match, num, rest) => `${satFatVal}${rest}`);
+  updated = updated.replace(/(saturated\s*fat\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*g[^)]*\))/gi, (match, p1, num, p3) => `${p1}${satFatVal}${p3}`);
+  updated = updated.replace(/(saturated\s*fat\s*:\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => `${p1}${satFatVal}${p3}`);
 
   // 4. Total Fat
-  updated = updated.replace(/\b([\d,]+(?:\.\d+)?)\s*(g\s*(?:of\s+)?(?:[a-zA-Z-]+\s+)*total\s*fat)\b/gi, (match, num, rest) => {
-    return `${fatVal}${rest}`;
-  });
+  const fatRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}total\\s*fat)\\b`, 'gi');
+  updated = updated.replace(fatRe, (match, num, rest) => `${fatVal}${rest}`);
 
   // 5. Protein
-  updated = updated.replace(/\b([\d,]+(?:\.\d+)?)\s*(g\s*(?:of\s+)?(?:[a-zA-Z-]+\s+)*protein)\b/gi, (match, num, rest) => {
-    return `${pVal}${rest}`;
-  });
-  updated = updated.replace(/(protein\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*g[^)]*\))/gi, (match, p1, num, p3) => {
-    return `${p1}${pVal}${p3}`;
-  });
-  updated = updated.replace(/(protein\s*:\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => {
-    return `${p1}${pVal}${p3}`;
-  });
+  const pRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}protein)\\b`, 'gi');
+  updated = updated.replace(pRe, (match, num, rest) => `${pVal}${rest}`);
+  updated = updated.replace(/(protein\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*g[^)]*\))/gi, (match, p1, num, p3) => `${p1}${pVal}${p3}`);
+  updated = updated.replace(/(protein\s*:\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => `${p1}${pVal}${p3}`);
 
   // 6. Carbohydrates
   if (grandCarbs !== undefined && grandCarbs > 0) {
     const carbVal = Math.round(grandCarbs * 10) / 10;
-    updated = updated.replace(/\b([\d,]+(?:\.\d+)?)\s*(g\s*(?:of\s+)?(?:[a-zA-Z-]+\s+)*(?:carbohydrates|carbs))\b/gi, (match, num, rest) => {
-      return `${carbVal}${rest}`;
-    });
+    const carbRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}(?:carbohydrates|carbs))\\b`, 'gi');
+    updated = updated.replace(carbRe, (match, num, rest) => `${carbVal}${rest}`);
   }
-return updated;
+  return updated;
 }
 
 

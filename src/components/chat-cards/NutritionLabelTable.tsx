@@ -752,114 +752,6 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
                             {visibleKeys.map((k) => {
-                              const originalVal = item.rawNutritionLabel?.[k] !== undefined 
-                                ? item.rawNutritionLabel?.[k] 
-                                : item.nutritionFacts?.[k];
-                                
-                              const isCalorieKey = k.toLowerCase().includes('calories') || k.toLowerCase().includes('energy');
-                              let numVal = null;
-                              if (originalVal !== undefined && originalVal !== null) {
-                                if (isCalorieKey) {
-                                  numVal = parseLabelCalories(originalVal);
-                                } else {
-                                  const match = String(originalVal).match(/[\d.]+/);
-                                  if (match) numVal = parseFloat(match[0]);
-                                }
-                              }
-                              
-                              const isServingField = k.toLowerCase().includes('serving');
-
-                              // A number only represents a genuine "per serving / per 100g" printed
-                              // reference when it was actually transcribed into rawNutritionLabel.
-                              // The checkmark badge (rendered elsewhere in this row) is what signals
-                              // OCR-verified vs AI-estimated — this column must always show a real,
-                              // correctly-scaled number so the table never looks incomplete.
-                              const originalValIsFromRawLabel = item.rawNutritionLabel?.[k] !== undefined &&
-                                                                 item.rawNutritionLabel?.[k] !== null &&
-                                                                 !item.rawNutritionLabel?._synthetic &&
-                                                                 LABEL_PRINTABLE_NUTRIENT_KEYS.has(k.toLowerCase());
-
-                              // Reference "per serving" weight, computed the same way as the rest of
-                              // this table, so AI-estimated rows can be scaled down from their total
-                              // to a genuine per-serving figure instead of being left blank.
-                              const weightToDisplayForServing = item.primaryBaseWeightG || item.estimatedWeightGrams || 100;
-                              let labelServingGramsForDisplay = weightToDisplayForServing;
-                              {
-                                const ssServingSizeForDisplay = String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').trim();
-                                const isExplicit100gForDisplay = /\b100\s*g\b/i.test(ssServingSizeForDisplay);
-                                const bTypeForDisplay = item.rawNutritionLabel?.basisType || item.basisType || (isExplicit100gForDisplay ? 'per_100g' : ((item.source === 'brand_official' || item.brandPriority) ? 'per_dish' : 'per_100g'));
-                                const isDishBasisForDisplay = !isExplicit100gForDisplay && (bTypeForDisplay === 'per_dish' || bTypeForDisplay === 'total' || bTypeForDisplay === 'per_portion' || bTypeForDisplay === 'per_serving' || bTypeForDisplay === 'per_pack');
-                                labelServingGramsForDisplay = isDishBasisForDisplay ? weightToDisplayForServing : 100;
-                                if (item.rawNutritionLabel?.servingSize) {
-                                  labelServingGramsForDisplay = parseServingSizeGrams(String(item.rawNutritionLabel.servingSize), weightToDisplayForServing);
-                                }
-                              }
-
-                              let totalStr = '-';
-                              let originalDisplay = '-';
-                              
-                              if (originalVal !== undefined && originalVal !== null) {
-                                const hasUnit = /[a-zA-Z%]/.test(String(originalVal));
-                                const nutDef = nutrientDefinitions.find((n: any) => n.key.toLowerCase() === k.toLowerCase());
-                                const defaultUnit = isCalorieKey ? 'kcal' : (isServingField ? '' : (nutDef ? nutDef.unit : 'g'));
-                                const unit = isCalorieKey ? 'kcal' : (String(originalVal).replace(/[\d.\s]/g, '') || defaultUnit);
-                                
-                                if (isServingField) {
-                                  originalDisplay = hasUnit ? String(originalVal) : `${originalVal}${defaultUnit}`;
-                                } else if (!originalValIsFromRawLabel) {
-                                  // AI-estimated value: originalVal is already the TOTAL for the item's
-                                  // actual weight. Scale it down to the per-serving reference so the
-                                  // column is populated with a real, correctly-derived number.
-                                  if (numVal !== null && weightToDisplayForServing > 0 && labelServingGramsForDisplay > 0) {
-                                    const perServingVal = (numVal / weightToDisplayForServing) * labelServingGramsForDisplay;
-                                    const perServingStr = perServingVal.toFixed(2).replace(/0$/, '').replace(/\.$/, '').replace(/^(-?\d+)\.$/, '$1');
-                                    originalDisplay = isCalorieKey ? `${Math.round(perServingVal)} kcal` : `${perServingStr}${unit}`;
-                                  } else {
-                                    originalDisplay = '-';
-                                  }
-                                } else if (isCalorieKey && numVal !== null) {
-                                  originalDisplay = `${numVal} kcal`;
-                                } else {
-                                  originalDisplay = hasUnit ? String(originalVal) : `${originalVal}${defaultUnit}`;
-                                }
-                                
-                                if (numVal !== null && !missingWeight && !isServingField) {
-                                  const ssServingSize = String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').trim();
-                                  const isExplicit100gServing = /\b100\s*g\b/i.test(ssServingSize);
-                                  const bType = item.rawNutritionLabel?.basisType || item.basisType || (isExplicit100gServing ? 'per_100g' : ((item.source === 'brand_official' || item.brandPriority) ? 'per_dish' : 'per_100g'));
-                                  const isDishBasis = !isExplicit100gServing && (bType === 'per_dish' || bType === 'total' || bType === 'per_portion' || bType === 'per_serving' || bType === 'per_pack');
-
-                                  const weightToDisplay = item.primaryBaseWeightG || item.estimatedWeightGrams || 100;
-                                  const wasFromRaw = item.rawNutritionLabel?.[k] !== undefined &&
-                                                     !item.rawNutritionLabel?._synthetic &&
-                                                     LABEL_PRINTABLE_NUTRIENT_KEYS.has(k.toLowerCase());
-
-                                  let multiplier = 1.0;
-                                  if (wasFromRaw) {
-                                    // Only genuinely printed label values are per-serving/per-100g figures
-                                    // that need rescaling to the actual consumed weight.
-                                    const ssServingSize = String(item.rawNutritionLabel?.servingSize || '').trim();
-                                    const isExplicit100gServing = /\b100\s*g\b/i.test(ssServingSize);
-                                    const bType = item.rawNutritionLabel?.basisType || item.basisType || (isExplicit100gServing ? 'per_100g' : ((item.source === 'brand_official' || item.brandPriority) ? 'per_dish' : 'per_100g'));
-                                    const isDishBasis = !isExplicit100gServing && (bType === 'per_dish' || bType === 'total' || bType === 'per_portion' || bType === 'per_serving' || bType === 'per_pack');
-
-                                    let labelServingGrams = isDishBasis ? weightToDisplay : 100;
-                                    if (item.rawNutritionLabel?.servingSize) {
-                                       const ssRaw = String(item.rawNutritionLabel.servingSize);
-                                       labelServingGrams = parseServingSizeGrams(ssRaw, weightToDisplay);
-                                    }
-
-                                    multiplier = (isDishBasis && (!item.rawNutritionLabel?.servingSize || item.rawNutritionLabel?.servingSize === '1 dish' || item.rawNutritionLabel?.servingSize === '1 serving'))
-                                      ? 1.0
-                                      : (labelServingGrams > 0 ? (weightToDisplay / labelServingGrams) : 1.0);
-                                  }
-                                  // else: value came from item.nutritionFacts / backend estimate, which is
-                                  // already the final total for the item's actual weight — never rescale it again.
-                                  const total = (numVal * multiplier).toFixed(1).replace(/\.0$/, '');
-                                  totalStr = `${total}${unit}`;
-                                }
-                              }
-
                               const standardMapping: Record<string, string> = {
                                 calories: 'calories',
                                 protein: 'protein',
@@ -874,10 +766,16 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                 fibre: 'totalFibre',
                                 sugar: 'sugar',
                                 addedsugar: 'addedSugar',
-                                transfat: 'transFat'
+                                transfat: 'transFat',
+                                potassium: 'potassium',
+                                calcium: 'calcium',
+                                iron: 'iron',
+                                magnesium: 'magnesium',
+                                vitamind: 'vitaminD',
+                                omega3: 'omega3',
+                                solublefibre: 'solubleFibre'
                               };
                               const normKey = standardMapping[k.toLowerCase()] || k;
-
                               const normLower = String(normKey).toLowerCase();
                               const kLower = String(k).toLowerCase();
 
@@ -887,6 +785,107 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                                      item.rawNutritionLabel?.[k] !== '-' &&
                                                      !item.rawNutritionLabel?._synthetic &&
                                                      (LABEL_PRINTABLE_NUTRIENT_KEYS.has(kLower) || LABEL_PRINTABLE_NUTRIENT_KEYS.has(normLower));
+
+                              const isServingField = k.toLowerCase().includes('serving');
+                              const isCalorieKey = k.toLowerCase().includes('calories') || k.toLowerCase().includes('energy');
+
+                              const nutDef = nutrientDefinitions.find((n: any) => n.key.toLowerCase() === normLower || n.key.toLowerCase() === kLower);
+                              const defaultUnit = isCalorieKey ? 'kcal' : (isServingField ? '' : (nutDef ? nutDef.unit : 'g'));
+
+                              const weightToDisplay = item.primaryBaseWeightG || item.estimatedWeightGrams || item.weightGrams || 100;
+
+                              let originalDisplay = '-';
+                              let totalStr = '-';
+
+                              if (isServingField) {
+                                const sVal = item.rawNutritionLabel?.[k] || item.nutritionFacts?.[k] || `${weightToDisplay}g`;
+                                originalDisplay = String(sVal);
+                              } else if (isFromRawLabel) {
+                                const rawVal = item.rawNutritionLabel[k];
+                                const unit = isCalorieKey ? 'kcal' : (String(rawVal).replace(/[\d.\s]/g, '') || defaultUnit);
+                                let numVal: number | null = null;
+                                if (isCalorieKey) {
+                                  numVal = parseLabelCalories(rawVal);
+                                } else {
+                                  const match = String(rawVal).match(/[\d.]+/);
+                                  if (match) numVal = parseFloat(match[0]);
+                                }
+
+                                const hasUnit = /[a-zA-Z%]/.test(String(rawVal));
+                                originalDisplay = isCalorieKey && numVal !== null ? `${numVal} kcal` : (hasUnit ? String(rawVal) : `${rawVal}${defaultUnit}`);
+
+                                if (numVal !== null && weightToDisplay > 0) {
+                                  const ssServingSize = String(item.rawNutritionLabel?.servingSize || '').trim();
+                                  const isExplicit100g = /\b100\s*g\b/i.test(ssServingSize);
+                                  const bType = item.rawNutritionLabel?.basisType || (isExplicit100g ? 'per_100g' : 'per_dish');
+                                  const isDishBasis = !isExplicit100g && (bType === 'per_dish' || bType === 'total' || bType === 'per_portion' || bType === 'per_serving' || bType === 'per_pack');
+
+                                  let labelServingGrams = isDishBasis ? weightToDisplay : 100;
+                                  if (item.rawNutritionLabel?.servingSize) {
+                                    labelServingGrams = parseServingSizeGrams(String(item.rawNutritionLabel.servingSize), weightToDisplay);
+                                  }
+
+                                  const multiplier = (isDishBasis && (!item.rawNutritionLabel?.servingSize || item.rawNutritionLabel?.servingSize === '1 dish' || item.rawNutritionLabel?.servingSize === '1 serving'))
+                                    ? 1.0
+                                    : (labelServingGrams > 0 ? (weightToDisplay / labelServingGrams) : 1.0);
+
+                                  const total = (numVal * multiplier).toFixed(1).replace(/\.0$/, '');
+                                  totalStr = `${total}${unit}`;
+                                }
+                              } else {
+                                // AI Estimated or DB match: portion total is the ground truth
+                                const portionVal = item.nutrients?.[normKey] ?? item.nutrients?.[k] ?? item.truthNutrients?.[normKey] ?? item.truthNutrients?.[k];
+                                const base100gVal = item.primaryBase100g?.[normKey] ?? item.primaryBase100g?.[k] ?? item.baseNutrients100g?.[normKey] ?? item.baseNutrients100g?.[k];
+                                const fallbackVal = item.nutritionFacts?.[k] ?? item.nutritionFacts?.[normKey];
+
+                                let finalPortionNum: number | null = null;
+                                let final100gNum: number | null = null;
+
+                                if (portionVal !== undefined && portionVal !== null && !isNaN(Number(portionVal))) {
+                                  finalPortionNum = Number(portionVal);
+                                  if (base100gVal !== undefined && base100gVal !== null && !isNaN(Number(base100gVal))) {
+                                    final100gNum = Number(base100gVal);
+                                  } else if (weightToDisplay > 0) {
+                                    final100gNum = (finalPortionNum / weightToDisplay) * 100;
+                                  }
+                                } else if (base100gVal !== undefined && base100gVal !== null && !isNaN(Number(base100gVal))) {
+                                  final100gNum = Number(base100gVal);
+                                  finalPortionNum = (final100gNum * weightToDisplay) / 100;
+                                } else if (fallbackVal !== undefined && fallbackVal !== null) {
+                                  const parsedF = isCalorieKey ? parseLabelCalories(fallbackVal) : parseFloat(String(fallbackVal).match(/[\d.]+/)?.[0] || '');
+                                  if (parsedF !== null && !isNaN(parsedF)) {
+                                    finalPortionNum = parsedF;
+                                    final100gNum = weightToDisplay > 0 ? (parsedF / weightToDisplay) * 100 : parsedF;
+                                  }
+                                }
+
+                                const unit = defaultUnit;
+
+                                const ssServingSize = String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').trim();
+                                const isExplicit100g = /\b100\s*g\b/i.test(ssServingSize);
+                                const rawBasis = item.rawNutritionLabel?.basisType || item.basisType;
+                                let targetServingGrams = 100;
+                                if (!isExplicit100g && rawBasis !== 'per_100g' && ssServingSize) {
+                                  targetServingGrams = parseServingSizeGrams(ssServingSize, weightToDisplay);
+                                }
+
+                                let servingValNum = final100gNum;
+                                if (targetServingGrams !== 100 && targetServingGrams > 0) {
+                                  if (finalPortionNum !== null && weightToDisplay > 0) {
+                                    servingValNum = (finalPortionNum * targetServingGrams) / weightToDisplay;
+                                  } else if (final100gNum !== null) {
+                                    servingValNum = (final100gNum * targetServingGrams) / 100;
+                                  }
+                                }
+
+                                if (servingValNum !== null) {
+                                  originalDisplay = isCalorieKey ? `${Math.round(servingValNum)} kcal` : `${servingValNum.toFixed(2).replace(/0$/, '').replace(/\.$/, '')}${unit}`;
+                                }
+
+                                if (finalPortionNum !== null) {
+                                  totalStr = isCalorieKey ? `${Math.round(finalPortionNum)} kcal` : `${finalPortionNum.toFixed(1).replace(/\.0$/, '')}${unit}`;
+                                }
+                              }
 
                               const isExplicitlyEstimated = (Array.isArray(item.estimatedFields) && item.estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower)) ||
                                                            (Array.isArray(item._estimatedFields) && item._estimatedFields.map((f: string) => String(f).toLowerCase()).includes(normLower));

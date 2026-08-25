@@ -17,23 +17,28 @@ interface TestCase {
 
 const testCases: TestCase[] = [
   {
-    name: "Case 1: Yolk Restaurant Sandwich (Brand Lock / Single Dish)",
+    name: "Case 1: Rolled Oats Prepared Bowl + Nutrition Label (2-Photo Multi-Image Set)",
+    imageFiles: ["08_rolled_oats_1.jpg", "08_rolled_oats_2.jpg"],
+    userPrompt: "Analyze this meal photo.",
+  },
+  {
+    name: "Case 2: Yolk Restaurant Sandwich (Brand Lock / Single Dish)",
     imageFiles: ["01_yolk_panini_wrap.jpg"],
     userPrompt: "I had it from Yolk",
   },
   {
-    name: "Case 2: Lidl Chicken Bites with UK Nutrition Label",
+    name: "Case 3: Lidl Chicken Bites with UK Nutrition Label",
     imageFiles: ["02_lidl_chicken_muffin.jpg"],
     userPrompt: "Analyze this meal",
   },
   {
-    name: "Case 3: Salmon Sushi Roll & Shrimp Salad (Visual Plated Dishes)",
+    name: "Case 4: Salmon Sushi Roll & Shrimp Salad (Visual Plated Dishes)",
     imageFiles: ["03_sushi_shrimp_salad.jpg"],
     userPrompt: "Analyze this meal photo",
   },
   {
-    name: "Case 4: Multi-Image Menu Set (Page 1 + Page 2 Analyzed Together)",
-    imageFiles: ["set_page_1.jpg", "set_page_2.jpg"],
+    name: "Case 5: Multi-Image Menu Set (Page 1 + Page 2 Analyzed Together)",
+    imageFiles: ["06_indonesian_menu_page_1.jpg", "06_indonesian_menu_page_2.jpg"],
     userPrompt: "Analyze these 2 menu pages together and extract all options",
   },
 ];
@@ -106,6 +111,9 @@ async function runUnifiedScoutPrototype() {
       const parsed = JSON.parse(rawText);
 
       console.log(`\nResponse received in ${elapsed}ms:`);
+      console.log("\n--- RAW JSON OUTPUT ---");
+      console.log(rawText);
+      console.log("-----------------------\n");
       console.log(`Content Type: ${parsed.contentType} | Dining: ${parsed.diningEnvironment}`);
       console.log(`Internal Reasoning: ${parsed._internalReasoning}`);
       console.log(`\nExtracted Items Count: ${parsed.items?.length || 0}`);

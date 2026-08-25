@@ -33,7 +33,7 @@ export interface ServerJobPayload {
   dataReviewBatchIdx?: number | string | null;
   extractedData?: any;
   bucketMapping?: string;
-  remainingText?: string;
+  lastProcessedIndex?: number | null;
   estimatedTotalMarkers?: number | null;
   currentBatch?: number;
   numberOfBatches?: number;
@@ -404,7 +404,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         dataReviewBatchIdx: payload.dataReviewBatchIdx,
         extractedData: payload.extractedData,
         bucketMapping: payload.bucketMapping,
-        remainingText: payload.remainingText,
+        lastProcessedIndex: payload.lastProcessedIndex,
         estimatedTotalMarkers: payload.estimatedTotalMarkers,
         currentBatch: payload.currentBatch,
         numberOfBatches: payload.numberOfBatches,

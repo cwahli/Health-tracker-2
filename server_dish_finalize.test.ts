@@ -234,4 +234,58 @@ describe("server_dish_finalize", () => {
     expect(ledger.nutrients.carbohydrates).toBe(55); // (500 - 100 - 180) / 4 = 55
     expect(ledger.atwaterFlag).toBeNull();
   });
+
+  it("proportionally scales unprovided micronutrients by brand calorie adjustment ratio", async () => {
+    // Stored brand lock provides Calories (780 kcal) and Protein (45g), but no micronutrients
+    const storedBrandLock = {
+      id: "brand_menu_yolk_sandwich",
+      basisType: "per_dish" as const,
+      servingGrams: 300,
+      keys: ["calories", "protein", "totalFat"],
+      valuesAtBasis: {
+        calories: 780,
+        protein: 45,
+        totalFat: 30,
+      },
+    };
+
+    // Scout estimated 650 kcal with micronutrients for a 300g portion
+    const item = {
+      scoutIndex: 0,
+      originalName: "Yolk Chicken Sandwich",
+      keyword: "chicken sandwich",
+      chainName: "Yolk",
+      estimatedWeightGrams: 300,
+      nutrientBasisWeight: 300,
+      nutrients: {
+        calories: 650,
+        protein: 35,
+        totalFat: 25,
+        sodium: 1000,
+        potassium: 300,
+        calcium: 150,
+      },
+    };
+
+    const ledger = await finalizeDishLedger({
+      item,
+      nutrientBasisWeight: 300,
+      consumedWeight: 300,
+      storedBrandLock,
+    });
+
+    expect(ledger.dbSource).toBe("brand_official");
+    expect(ledger.nutrients.calories).toBe(780);
+    expect(ledger.nutrients.protein).toBe(45);
+    expect(ledger.nutrients.totalFat).toBe(30);
+    // Ratio = 780 / 650 = 1.2
+    // Sodium: 1000 * 1.2 = 1200
+    expect(ledger.nutrients.sodium).toBe(1200);
+    // Potassium: 300 * 1.2 = 360
+    expect(ledger.nutrients.potassium).toBe(360);
+    // Calcium: 150 * 1.2 = 180
+    expect(ledger.nutrients.calcium).toBe(180);
+    // Derived Atwater Carbs: (780 - 4(45) - 9(30)) / 4 = (780 - 180 - 270) / 4 = 330 / 4 = 82.5
+    expect(ledger.nutrients.carbohydrates).toBe(82.5);
+  });
 });

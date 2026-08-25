@@ -1308,8 +1308,25 @@ ${logsText}`);
 
   // Lock mode based on job's lockedModeFamily
   useEffect(() => {
-    if (type !== 'food' || !jobId) return;
-    const job = JobStore.getJob(jobId);
+    let targetJobId = jobId;
+    if (!targetJobId && type === 'food') {
+      const isLocalSessionEmpty = messages.length <= 1 || (messages.length === 1 && messages[0].id?.startsWith('welcome_'));
+      if (isLocalSessionEmpty) {
+        const pendingFoodJobs = JobStore.getAllJobs().filter(j => 
+          (j.kind === 'food_log' || j.kind === 'food' || (j as any).kind === 'food_compare') &&
+          j.status === 'succeeded' &&
+          !j.savedToLog &&
+          !j.viewed &&
+          (j.result?.pendingFoodLog || j.result?.data?.pendingFoodLog || j.result?.clean_result?.pendingFoodLog || j.result?.items || j.result?.clean_result?.items)
+        ).sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+
+        if (pendingFoodJobs.length > 0) {
+          targetJobId = pendingFoodJobs[0].id;
+        }
+      }
+    }
+    if (type !== 'food' || !targetJobId) return;
+    const job = JobStore.getJob(targetJobId);
     if (job && job.lockedModeFamily) {
       if (job.lockedModeFamily === 'A') {
         setUserSelectedMode('review');
@@ -1317,13 +1334,35 @@ ${logsText}`);
         setUserSelectedMode('compare');
       }
     }
-  }, [jobId, isOpen, type]);
+  }, [jobId, isOpen, type, messages.length]);
 
-  // Load messages from background job if jobId is set
+  // Load messages from background job if jobId is set, or auto-bind to latest unlogged food job if opened on another device
   useEffect(() => {
-    if ((type !== 'food' && type !== 'medical') || !jobId || !isOpen) return;
+    if ((type !== 'food' && type !== 'medical') || !isOpen) return;
+
+    let targetJobId = jobId;
+    if (!targetJobId && type === 'food') {
+      const isLocalSessionEmpty = messages.length <= 1 || (messages.length === 1 && messages[0].id?.startsWith('welcome_'));
+      if (isLocalSessionEmpty) {
+        const pendingFoodJobs = JobStore.getAllJobs().filter(j => 
+          (j.kind === 'food_log' || j.kind === 'food' || (j as any).kind === 'food_compare') &&
+          j.status === 'succeeded' &&
+          !j.savedToLog &&
+          !j.viewed &&
+          (j.result?.pendingFoodLog || j.result?.data?.pendingFoodLog || j.result?.clean_result?.pendingFoodLog || j.result?.items || j.result?.clean_result?.items)
+        ).sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+
+        if (pendingFoodJobs.length > 0) {
+          targetJobId = pendingFoodJobs[0].id;
+        }
+      }
+    }
+
+    if (!targetJobId) return;
+    const activeJobId = targetJobId;
+
     const loadJobMessages = async () => {
-      let job = JobStore.getJob(jobId);
+      let job = JobStore.getJob(activeJobId);
       if (!job) {
         setIsAnalyzing(false);
         isSendingRef.current = false;
@@ -1350,7 +1389,7 @@ ${logsText}`);
         if (currentResult.is_r2 || (job as any).clean_result?.is_r2 || !resolvePendingFoodLog(job)) {
           try {
             const baseUrl = typeof window !== 'undefined' ? '' : 'http://localhost:3000';
-            const r = await fetch(`${baseUrl}/api/jobs/status?jobId=${jobId}&full=true`);
+            const r = await fetch(`${baseUrl}/api/jobs/status?jobId=${activeJobId}&full=true`);
             if (r.ok) {
               const fullData = await r.json();
               const backendJob = fullData.jobs?.[0];
@@ -1363,7 +1402,7 @@ ${logsText}`);
                   photoUrl: currentResult.photoUrl || job.photoUrl,
                   debugUrl: currentResult.debugUrl || job.debugUrl
                 };
-                JobStore.updateJob(jobId, {
+                JobStore.updateJob(activeJobId, {
                   result: currentResult,
                   mealBuild: currentResult.mealBuild || job.mealBuild,
                   photoUrl: currentResult.photoUrl || job.photoUrl,
@@ -1378,11 +1417,10 @@ ${logsText}`);
 
         const welcome = getWelcomeMessage();
         
-        // Find existing user message or construct one
         let userMsg: ChatMessage | undefined = job.messages?.find((m: any) => m.role === 'user');
         if (!userMsg) {
           userMsg = {
-            id: `msg_user_${jobId}`,
+            id: `msg_user_${activeJobId}`,
             role: 'user',
             content: job.inputSnapshot?.text || '',
             timestamp: job.createdAt,
@@ -1400,7 +1438,7 @@ ${logsText}`);
 
         if ((job.inputSnapshot as any)?.hasImage || userMsg.imageUrl === 'loading' || userMsg.imageUrl === 'Image reference preserved' || remotePhoto) {
           try {
-            const images = await ImageStore.getImages(jobId);
+            const images = await ImageStore.getImages(activeJobId);
             if (images && images.length > 0) {
               userMsg.imageUrl = typeof images[0] === 'string' ? images[0] : URL.createObjectURL(images[0] as Blob);
               userMsg.imageUrls = images.map(img => typeof img === 'string' ? img : URL.createObjectURL(img as Blob));
@@ -1419,9 +1457,8 @@ ${logsText}`);
 
         const foodLog = resolvePendingFoodLog(job);
 
-        // Attach images from ImageStore or remotePhoto if foodLog lacks them
         try {
-          const imgs = await ImageStore.getImages(jobId);
+          const imgs = await ImageStore.getImages(activeJobId);
           if (foodLog && imgs?.length) {
             foodLog.imageUrls = imgs.map(img => typeof img === 'string' ? img : URL.createObjectURL(img as Blob));
             foodLog.imageUrl = foodLog.imageUrls[0];
@@ -1450,7 +1487,7 @@ ${logsText}`);
           : reviewCmds;
         const rawContent = raw.message || raw.text || raw.reply || raw.globalSummary || foodLog?.message || 'Analysis complete.';
         const assistantMsg: ChatMessage = {
-          id: `msg_assistant_${jobId}`,
+          id: `msg_assistant_${activeJobId}`,
           role: 'assistant',
           content: isReview ? sanitizeReviewReply(rawContent, cmds, biomarkerHistory || [], unitMap) : rawContent,
           timestamp: job.updatedAt || new Date().toISOString(),
@@ -1460,7 +1497,7 @@ ${logsText}`);
           modificationCommand: cmds,
           pendingFoodLog: foodLog,
           data: {
-            pendingFoodLog: foodLog, // REQUIRED for FoodCard
+            pendingFoodLog: foodLog,
             hasImage: !!(foodLog?.imageUrl || foodLog?.imageUrls?.length || (job.inputSnapshot as any)?.hasImage),
             photoUrl: job.result?.photoUrl || raw.photoUrl,
             debugUrl: job.result?.debugUrl || raw.debugUrl,
@@ -1489,7 +1526,13 @@ ${logsText}`);
             { role: assistantMsg.role, content: assistantMsg.content, timestamp: assistantMsg.timestamp }
           ];
         }
-        setMessages([welcome, userMsg, assistantMsg], false);
+
+        const isDefaultWelcome = !userMsg.content && !userMsg.imageUrl && !userMsg.imageUrls?.length;
+        if (isDefaultWelcome) {
+          setMessages([assistantMsg], false);
+        } else {
+          setMessages([welcome, userMsg, assistantMsg], false);
+        }
         return;
       }
 
@@ -1530,10 +1573,9 @@ ${logsText}`);
           return m;
         });
 
-        // Restore image references from ImageStore or remotePhoto
         const remotePhoto = job.photoUrl || job.result?.photoUrl || (job.result as any)?.clean_result?.photoUrl;
         try {
-          const realImages = await ImageStore.getImages(jobId);
+          const realImages = await ImageStore.getImages(activeJobId);
           const realUrls = (realImages && realImages.length > 0)
             ? realImages.map((img: any) => typeof img === 'string' ? img : URL.createObjectURL(img as Blob))
             : (remotePhoto ? [remotePhoto] : []);
@@ -1565,7 +1607,7 @@ ${logsText}`);
             });
           }
         } catch (err) {
-          console.warn('[loadJobMessages] Failed to restore images from ImageStore for job', jobId, err);
+          console.warn('[loadJobMessages] Failed to restore images from ImageStore for job', activeJobId, err);
         }
 
         const lastMsg = baseMsgs[baseMsgs.length - 1];
@@ -1579,10 +1621,10 @@ ${logsText}`);
             (Array.isArray(rawResult.scoutItems) && rawResult.scoutItems.length > 0)
               ? rawResult.scoutItems
               : (Array.isArray(portionClarify?.scoutItems) ? portionClarify.scoutItems : []);
-          let assistantClarifyMsg = baseMsgs.find((m: any) => m.id === `msg_assistant_clarify_${jobId}` || (m.role === 'assistant' && (m.data?.portionClarify || m.data?.needsPortionClarify)));
+          let assistantClarifyMsg = baseMsgs.find((m: any) => m.id === `msg_assistant_clarify_${activeJobId}` || (m.role === 'assistant' && (m.data?.portionClarify || m.data?.needsPortionClarify)));
           if (!assistantClarifyMsg) {
             assistantClarifyMsg = {
-              id: `msg_assistant_clarify_${jobId}`,
+              id: `msg_assistant_clarify_${activeJobId}`,
               role: 'assistant',
               content: promptMsg,
               timestamp: job.updatedAt || new Date().toISOString(),
@@ -1611,7 +1653,7 @@ ${logsText}`);
           setMessages(baseMsgs, false);
         } else if ((job.status === 'queued' || job.status === 'running') && lastMsg?.role === 'user') {
           const liveMsg: ChatMessage = {
-            id: `msg_live_${jobId}`,
+            id: `msg_live_${activeJobId}`,
             role: 'assistant',
             content: job.statusMessage || (type === 'medical' ? 'Analyzing medical data in the background...' : 'Analyzing your meal in the background...'),
             timestamp: job.updatedAt || new Date().toISOString(),
@@ -1636,7 +1678,7 @@ ${logsText}`);
       } else {
         const welcome = getWelcomeMessage();
         const userMsg: ChatMessage = {
-          id: `msg_user_${jobId}`,
+          id: `msg_user_${activeJobId}`,
           role: 'user',
           content: job.inputSnapshot?.text || '',
           timestamp: job.createdAt,
@@ -1645,7 +1687,7 @@ ${logsText}`);
 
         if ((job.inputSnapshot as any)?.hasImage || remotePhoto) {
           try {
-            const images = await ImageStore.getImages(jobId);
+            const images = await ImageStore.getImages(activeJobId);
             if (images && images.length > 0) {
               userMsg.imageUrl = typeof images[0] === 'string' ? images[0] : URL.createObjectURL(images[0] as Blob);
               userMsg.imageUrls = images.map(img => typeof img === 'string' ? img : URL.createObjectURL(img as Blob));
@@ -1665,10 +1707,9 @@ ${logsText}`);
         if (job.status === 'succeeded' && (job.result?.data || job.result?.pendingFoodLog || job.result?.mealBuild || job.mealBuild || job.result?.foodData || type === 'medical' || resolvePendingFoodLog(job))) {
           const foodLog = resolvePendingFoodLog(job);
 
-          // Attach images from ImageStore or remotePhoto if foodLog lacks them
           try {
             if (foodLog && (!foodLog.imageUrls || foodLog.imageUrls.length === 0 || foodLog.imageUrls.some((u: string) => u.startsWith('blob:')))) {
-              const imgs = await ImageStore.getImages(jobId);
+              const imgs = await ImageStore.getImages(activeJobId);
               if (imgs?.length) {
                 const base64Imgs = await Promise.all(imgs.map(async (img) => {
                   if (typeof img === 'string') return img;
@@ -1707,7 +1748,7 @@ ${logsText}`);
             : reviewCmds2;
           const rawContent2 = raw.message || raw.reply || raw.globalSummary || 'Analysis complete.';
           const assistantMsg: ChatMessage = {
-            id: `msg_assistant_${jobId}`,
+            id: `msg_assistant_${activeJobId}`,
             role: 'assistant',
             content: isReview2 ? sanitizeReviewReply(rawContent2, cmds2, biomarkerHistory || [], unitMap2) : rawContent2,
             timestamp: job.updatedAt || new Date().toISOString(),
@@ -1765,7 +1806,13 @@ ${logsText}`);
               }
             ];
           }
-          setMessages([welcome, userMsg, assistantMsg], false);
+
+          const isDefaultWelcome = !userMsg.content && !userMsg.imageUrl && !userMsg.imageUrls?.length;
+          if (isDefaultWelcome) {
+            setMessages([assistantMsg], false);
+          } else {
+            setMessages([welcome, userMsg, assistantMsg], false);
+          }
         } else if (job.status === 'awaiting_user') {
           const rawResult = job.result?.clean_result || job.result || (job as any).clean_result || {};
           const portionClarify =
@@ -1776,7 +1823,7 @@ ${logsText}`);
             rawResult.scoutItems ||
             [];
           const assistantClarifyMsg: ChatMessage = {
-            id: `msg_assistant_clarify_${jobId}`,
+            id: `msg_assistant_clarify_${activeJobId}`,
             role: 'assistant',
             content: promptMsg,
             timestamp: job.updatedAt || new Date().toISOString(),
@@ -1799,7 +1846,7 @@ ${logsText}`);
           setMessages([welcome, userMsg, assistantClarifyMsg], false);
         } else if (job.status === 'failed') {
           const assistantMsg: ChatMessage = {
-            id: `msg_assistant_${jobId}`,
+            id: `msg_assistant_${activeJobId}`,
             role: 'assistant',
             content: `⚠️ **Analysis failed**\n\n${humanizeJobFailure(job.error?.message)}`,
             timestamp: job.updatedAt || new Date().toISOString(),
@@ -1808,16 +1855,15 @@ ${logsText}`);
           setMessages([welcome, userMsg, assistantMsg], false);
         } else if (job.status === 'cancelled') {
           const assistantMsg: ChatMessage = {
-            id: `msg_assistant_${jobId}`,
+            id: `msg_assistant_${activeJobId}`,
             role: 'assistant',
             content: `⚠️ **Analysis cancelled**\n\nThe user cancelled this analysis request.`,
             timestamp: job.updatedAt || new Date().toISOString()
           };
           setMessages([welcome, userMsg, assistantMsg], false);
         } else {
-          // Queued or running background task status
           const liveMsg: ChatMessage = {
-            id: `msg_live_${jobId}`,
+            id: `msg_live_${activeJobId}`,
             role: 'assistant',
             content: job.statusMessage || (type === 'medical' ? 'Analyzing medical data in the background...' : 'Analyzing your meal in the background...'),
             timestamp: job.updatedAt || new Date().toISOString(),
@@ -1842,14 +1888,13 @@ ${logsText}`);
 
     loadJobMessages();
 
-    // Subscribe to job updates to dynamically update UI if the job is running or completes!
     const unsubscribe = JobStore.subscribe(() => {
       loadJobMessages();
     });
     return () => {
       unsubscribe();
     };
-  }, [jobId, isOpen, type]);
+  }, [jobId, isOpen, type, messages.length]);
 
   // Cleanly reset isAnalyzing and isSending when modal closes
   useEffect(() => {
@@ -3832,7 +3877,9 @@ ${logsText}`);
               bodyData.extractedData = extractedData;
             }
             
-            if (remainingText) {
+            if (lastProcessedIndex !== null && lastProcessedIndex !== undefined) {
+              bodyData.lastProcessedIndex = lastProcessedIndex;
+            } else if (remainingText) {
               bodyData.remainingText = remainingText;
             }
             if (currentBatch > 1) {

@@ -504,6 +504,22 @@ describe('server_pure_helpers', () => {
       expect(nutrients.sugar).toBeLessThanOrEqual(nutrients.carbohydrates || 0);
     });
   });
+
+  describe('synchronizeNarrativeText', () => {
+    it('does not cross-pollinate protein numbers into carbohydrates across conjunctions', async () => {
+      const { synchronizeNarrativeText } = await import('./server_pure_helpers');
+      const input = "You got 6g of plant protein and quality complex carbohydrates from the rolled oats to fuel your morning.";
+      const result = synchronizeNarrativeText(input, 240, 6, 7, 1, 0, 42);
+      expect(result).toBe("You got 6g of plant protein and quality complex carbohydrates from the rolled oats to fuel your morning.");
+    });
+
+    it('correctly updates standalone carbohydrate and protein numbers', async () => {
+      const { synchronizeNarrativeText } = await import('./server_pure_helpers');
+      const input = "This meal provides 5g of protein and 40g of carbohydrates.";
+      const result = synchronizeNarrativeText(input, 240, 6, 7, 1, 0, 42);
+      expect(result).toBe("This meal provides 6g of protein and 42g of carbohydrates.");
+    });
+  });
 });
 
 import { isLabelPanelItem } from "./server_pure_helpers.js";
