@@ -97,5 +97,22 @@ describe('namesReferToSameFood', () => {
     expect(namesReferToSameFood('Chicken Sandwich', 'Grilled Chicken Sandwich')).toBe(true);
     expect(namesReferToSameFood('Butter Croissant', 'Croissant')).toBe(true);
     expect(namesReferToSameFood('Cinnamon Roll', 'Cinnamon Swirl')).toBe(true);
+    expect(namesReferToSameFood('Coca-Cola Vanila Zero Sugar', 'Cola, zero calorie, vanilla')).toBe(true);
+  });
+
+  it('does not duplicate items when dietitian emits standard names for foreign/brand packaged goods', () => {
+    const scoutItems = [
+      { scoutIndex: 0, originalName: 'Indomaret Kuaci Rasa Susu', keyword: 'milk flavored sunflower seeds' },
+      { scoutIndex: 1, originalName: 'Coca-Cola Vanila Zero Sugar', keyword: 'vanilla zero sugar cola' }
+    ];
+    const dietitian = [
+      { scoutIndex: 0, canonicalDbName: 'Sunflower seed kernels, dry roasted' },
+      { scoutIndex: 1, canonicalDbName: 'Cola, zero calorie, vanilla' }
+    ];
+    const { items, reinjected } = reconcileDietitianToScout(dietitian, scoutItems);
+    expect(reinjected).toHaveLength(0);
+    expect(items).toHaveLength(2);
+    expect(items[0].scoutIndex).toBe(0);
+    expect(items[1].scoutIndex).toBe(1);
   });
 });

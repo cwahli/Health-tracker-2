@@ -8817,6 +8817,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             visionScoutItems.forEach((sItem: any) => {
               const sIndex = sItem.scoutIndex;
               if (sIndex !== undefined && sIndex !== null && !usedIndices.has(sIndex)) {
+                if (rawFoodData.itemsBreakdown.some((it: any) => it.scoutIndex !== undefined && Number(it.scoutIndex) === Number(sIndex))) {
+                  return;
+                }
                 if (breakdownAlreadyHasScoutName(rawFoodData.itemsBreakdown, sItem)) {
                   return;
                 }
