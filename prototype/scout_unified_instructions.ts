@@ -10,14 +10,15 @@ STEP 2: UNIVERSAL DISH EXTRACTION & DEDUPLICATION
 - USER CONSTRAINTS: The user's explicit text sentence is absolute ground truth. If the user specifies portion weight (e.g. "80g of oats"), calibrate the portion. If the user explicitly limits consumption (e.g. "I only ate the salad"), extract ONLY specified items.
 - CROSS-IMAGE DEDUPLICATION: If photos show BOTH a menu screen and physical food, or raw grocery packages and the cooked dish prepared from them, extract each distinct dish ONCE.
 - KNOWN BRANDS: For any restaurant chain or branded product (e.g. Yolk, Starbucks, Lidl, Sainsbury), output the brand name alone in 'chainName' and the exact dish title in 'originalName'. Leave 'chainName' null for unbranded or home-cooked foods.
-- DIRECT LABEL ATTACHMENT (NO DUMMY LABEL ITEMS): If an image shows a package nutrition label or menu panel for a visible food dish, transcribe all printed facts directly into that food item's 'rawNutritionLabel' field. NEVER create a separate "Nutrition Facts Label" dish entry. Exactly 1 item per real food dish.
-- DYNAMIC PRINTED OCR: Nutrition labels and menu boards vary widely in format (some only show calories, others show a full panel including fiber and salt). Transcribe EVERY literally printed value from the image into 'rawNutritionLabel' using standard normalized keys. Leave any unprinted key as null.
+- DIRECT LABEL ATTACHMENT & LITERAL OCR: If an image shows a package nutrition label or menu panel for a visible food dish, transcribe all printed facts directly into that food item's 'rawNutritionLabel' field as literal raw strings exactly as printed (e.g. "190 kcal", "8.8g", "Per 100g: 12g"). DO NOT perform unit conversions, math, or serving size scaling on OCR text — the backend pipeline will clean, parse, and normalize raw OCR strings. NEVER create a separate "Nutrition Facts Label" dish entry. Exactly 1 item per real food dish.
+- DYNAMIC PRINTED OCR: Transcribe EVERY literally printed value from the image into 'rawNutritionLabel' using standard normalized keys. Leave any unprinted key as null.
 
-STEP 3: 14 DISH NUTRIENTS ESTIMATION & ZERO-DUPLICATION RULE
+STEP 3: 15 DISH NUTRIENTS ESTIMATION & ZERO-DUPLICATION RULE
 - FIELD-BY-FIELD ZERO DUPLICATION:
-  * For any nutrient literally visible/printed on the image: put it in 'rawNutritionLabel' and set that exact key to null in 'nutrients' (never duplicate printed numbers).
-  * For any nutrient NOT visible/printed on the image (or for unpackaged dishes where 'rawNutritionLabel' is null): provide a realistic numeric portion estimate in 'nutrients' across the remaining keys (calories, protein, totalFat, saturatedFat, transFat, sugar, addedSugar, totalFibre, sodium, potassium, omega3, calcium, iron, magnesium, vitaminD).
-- NOTE: Carbohydrates is calculated deterministically via the thermodynamic Atwater energy equation ((Calories - 4P - 9F) / 4) when not on a printed label.
+  * For any nutrient literally visible/printed on the image: put the raw string in 'rawNutritionLabel' and set that exact key to null in 'nutrients' (never duplicate printed numbers).
+  * For any nutrient NOT visible/printed on the image (or for unpackaged dishes where 'rawNutritionLabel' is null): provide a realistic numeric portion estimate in 'nutrients' across the 15 required keys (calories, protein, totalFat, saturatedFat, transFat, sugar, addedSugar, totalFibre, sodium, potassium, omega3, calcium, iron, magnesium, vitaminD).
+- ZERO-MATH FOR SCOUT: DO NOT calculate carbohydrates, unsaturated fat, or salt conversions. The backend pipeline automatically derives carbs via Atwater ((Calories - 4P - 9F) / 4), salt via sodium conversion, and unsaturated fat from total fat.
+- CONCISE REASONING: Keep '_internalReasoning' under 20 words (1 sentence max).
 - CULINARY & REGIONAL CALIBRATION: Calibrate portion unit sizes, default ingredients, and cooking fat to specific cuisine norms (e.g. fried coatings absorb 25–35% fat by weight; stir-fry adds +5–10g oil; steamed/boiled is fat-neutral).
 - INGREDIENTS: Plain string list in 'ingredients' (e.g. ["chicken", "breadcrumbs", "vegetable oil"]).
 - COOKING METHOD: 'raw' | 'baked' | 'grilled' | 'boiled' | 'steamed' | 'deep_fried' | 'pan_fried' | 'stir_fried'.

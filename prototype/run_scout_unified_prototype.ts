@@ -9,21 +9,32 @@ import {
 
 dotenv.config();
 
-const testCases = [
+interface TestCase {
+  name: string;
+  imageFiles: string[];
+  userPrompt: string;
+}
+
+const testCases: TestCase[] = [
   {
     name: "Case 1: Yolk Restaurant Sandwich (Brand Lock / Single Dish)",
-    imageFile: "01_yolk_panini_wrap.jpg",
+    imageFiles: ["01_yolk_panini_wrap.jpg"],
     userPrompt: "I had it from Yolk",
   },
   {
     name: "Case 2: Lidl Chicken Bites with UK Nutrition Label",
-    imageFile: "02_lidl_chicken_muffin.jpg",
+    imageFiles: ["02_lidl_chicken_muffin.jpg"],
     userPrompt: "Analyze this meal",
   },
   {
     name: "Case 3: Salmon Sushi Roll & Shrimp Salad (Visual Plated Dishes)",
-    imageFile: "03_sushi_shrimp_salad.jpg",
+    imageFiles: ["03_sushi_shrimp_salad.jpg"],
     userPrompt: "Analyze this meal photo",
+  },
+  {
+    name: "Case 4: Multi-Image Menu Set (Page 1 + Page 2 Analyzed Together)",
+    imageFiles: ["set_page_1.jpg", "set_page_2.jpg"],
+    userPrompt: "Analyze these 2 menu pages together and extract all options",
   },
 ];
 
@@ -43,19 +54,33 @@ async function runUnifiedScoutPrototype() {
   console.log("================================================================================\n");
 
   for (const tc of testCases) {
-    const imgPath = path.join(imagesDir, tc.imageFile);
-    if (!fs.existsSync(imgPath)) {
-      console.error(`Image not found: ${imgPath}`);
-      continue;
+    const parts: any[] = [];
+    let allFound = true;
+    for (const f of tc.imageFiles) {
+      const imgPath = path.join(imagesDir, f);
+      if (!fs.existsSync(imgPath)) {
+        console.error(`Image not found: ${imgPath}`);
+        allFound = false;
+        break;
+      }
+      const imageBuffer = fs.readFileSync(imgPath);
+      parts.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: imageBuffer.toString("base64"),
+        },
+      });
     }
+    if (!allFound) continue;
 
     console.log(`\n--------------------------------------------------------------------------------`);
     console.log(`RUNNING: ${tc.name}`);
-    console.log(`Image: ${tc.imageFile} | Prompt: "${tc.userPrompt}"`);
+    console.log(`Images (${tc.imageFiles.length}): ${tc.imageFiles.join(", ")} | Prompt: "${tc.userPrompt}"`);
     console.log(`--------------------------------------------------------------------------------`);
 
-    const imageBuffer = fs.readFileSync(imgPath);
-    const base64Data = imageBuffer.toString("base64");
+    parts.push({
+      text: `${tc.userPrompt}. Identify all dishes in these images and provide full nutrient estimations. If printed package labels or menu screens are visible, transcribe them into rawNutritionLabel on that specific food item.`,
+    });
 
     const startTime = Date.now();
 
@@ -65,17 +90,7 @@ async function runUnifiedScoutPrototype() {
         contents: [
           {
             role: "user",
-            parts: [
-              {
-                inlineData: {
-                  mimeType: "image/jpeg",
-                  data: base64Data,
-                },
-              },
-              {
-                text: `${tc.userPrompt}. Identify all dishes in this image and provide full nutrient estimations. If printed package labels or menu screens are visible, transcribe them into rawNutritionLabel on that specific food item.`,
-              },
-            ],
+            parts,
           },
         ],
         config: {
