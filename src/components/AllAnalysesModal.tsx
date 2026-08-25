@@ -65,6 +65,8 @@ export function AllAnalysesModal({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [expandedLogIds, setExpandedLogIds] = useState<Record<string, boolean>>({});
   const [previewImage, setPreviewImage] = useState<{ src: string; foodName?: string } | null>(null);
+  const [deletingJobIds, setDeletingJobIds] = useState<Record<string, boolean>>({});
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   // Subscribe to JobStore updates
   useEffect(() => {
     if (!isOpen) return;
@@ -327,8 +329,18 @@ export function AllAnalysesModal({
 
   // Delete job from store
   const handleDeleteJob = async (jobId: string) => {
+    setDeletingJobIds(prev => ({ ...prev, [jobId]: true }));
     await JobStore.deleteJob(jobId);
-    showToast('Analysis deleted.');
+    setDeletingJobIds(prev => ({ ...prev, [jobId]: false }));
+  };
+
+  const handleDeleteAllJobs = async () => {
+    setIsDeletingAll(true);
+    const jobIds = jobs.map(j => j.id);
+    for (const id of jobIds) {
+      await JobStore.deleteJob(id);
+    }
+    setIsDeletingAll(false);
   };
 
   // Retry failed job
@@ -385,6 +397,24 @@ export function AllAnalysesModal({
             >
               <Check className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Mark Read</span>
+            </button>
+          )}
+
+          {jobs.length > 0 && (
+            <button
+              onClick={handleDeleteAllJobs}
+              disabled={isDeletingAll}
+              className="p-2.5 rounded-2xl bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-900/50 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
+              title="Delete all analyses"
+            >
+              {isDeletingAll ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                  <span className="text-xs font-bold text-slate-300 pr-1">Deleting...</span>
+                </>
+              ) : (
+                <Trash2 className="w-5 h-5" />
+              )}
             </button>
           )}
 
@@ -530,6 +560,7 @@ export function AllAnalysesModal({
                 isSaving={!!savingJobIds[job.id]}
                 onViewInLog={() => handleNavigateToJob(job)}
                 onDelete={() => handleDeleteJob(job.id)}
+                isDeleting={!!deletingJobIds[job.id]}
                 onRetry={() => handleRetryJob(job)}
                 isExpanded={!!expandedLogIds[job.id]}
                 onToggleExpand={() =>
@@ -564,6 +595,7 @@ interface AnalysisCardProps {
   isSaving: boolean;
   onViewInLog: () => void;
   onDelete: () => void;
+  isDeleting?: boolean;
   onRetry: () => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
@@ -576,6 +608,7 @@ function AnalysisCard({
   isSaving,
   onViewInLog,
   onDelete,
+  isDeleting,
   onRetry,
   isExpanded,
   onToggleExpand,
@@ -822,7 +855,12 @@ function AnalysisCard({
             <span>View</span>
           </button>
 
-          {isConfirmingDelete ? (
+          {isDeleting ? (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-slate-900 border border-slate-800">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" />
+              <span className="text-[10px] font-bold text-slate-400">Deleting..</span>
+            </div>
+          ) : isConfirmingDelete ? (
             <div className="flex items-center gap-1 bg-rose-950/40 rounded-xl px-1 border border-rose-900/50">
               <button
                 onClick={onDelete}

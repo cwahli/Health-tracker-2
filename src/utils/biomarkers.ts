@@ -63,6 +63,7 @@ export interface BiomarkerDefinition {
   unit: string;
   normalRange: string;
   structuredRanges?: any[];
+  customRanges?: any[];
   descriptions: { [lang: string]: string };
   benefitRisk?: string;
   riskCategories?: string[];
@@ -80,6 +81,19 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     category: 'blood_sugar',
     unit: 'mmol/mol',
     normalRange: '20 - 41',
+    customRanges: [
+      {
+        filters: {},
+        range: {
+          type: 'bracket',
+          brackets: [
+            { min: 48, max: null, alias: 'Critical', severity: 'Critical' },
+            { min: 39, max: 48, alias: 'Elevated', severity: 'At risk' },
+            { min: 20, max: 39, alias: 'Normal', severity: 'Normal' }
+          ]
+        }
+      }
+    ],
     descriptions: {
       en: 'Average blood glucose levels over the past 2-3 months.',
       fr: 'Moyenne de la glycémie sur les 2-3 derniers mois.',
@@ -2520,7 +2534,8 @@ export const getBiomarkerStatus = (key: string, val: number | string, normalRang
   // Simple default bounds based on standard definitions or passed custom range
   if (!rangeStr || rangeStr.toLowerCase() === 'unknown') return 'unknown';
 
-  if (rangeStr === '0' || rangeStr === '0 - 0' || key.endsWith('_score') || key.endsWith('_index')) {
+  const hasExplicitMinMaxRange = !!(rangeStr && /([\d.]+)\s*-\s*([\d.]+)/.test(rangeStr) && rangeStr.trim() !== '0 - 0');
+  if (!hasExplicitMinMaxRange && (rangeStr === '0' || rangeStr === '0 - 0' || key.endsWith('_score') || key.endsWith('_index'))) {
     if (valueToEvaluate <= 0) return 'normal';
     if (valueToEvaluate >= 3) return 'critical';
     return 'high';

@@ -1327,7 +1327,7 @@ export default function Header({
                   const queuedCount = queuedJobs.length;
                   const readyCount = succeededUnsavedJobs.length;
 
-                  if (runningCount === 0 && queuedCount === 0 && readyCount === 0) return null;
+                  if (jobs.length === 0) return null;
 
                   const activeRunning = runningJobs[0];
                   const activeProgress = activeRunning?.progressPercent || 0;
