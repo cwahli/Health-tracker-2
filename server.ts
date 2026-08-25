@@ -8410,6 +8410,14 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       ) {
         const origItems = activeMeal.itemsBreakdown;
         const SPATIAL_PRESERVE_KEYS = ['boundingBox2D', 'sourceImageIndex'];
+        // NOTE: Only weight-INDEPENDENT reference data belongs in this list — things that
+        // identify WHICH food/label/database match this is, not the computed nutrient
+        // totals for a specific weight. 'calories', 'protein', 'totalFat', 'saturatedFat',
+        // 'sodium', 'carbohydrates', 'truthNutrients', and 'lockedNutrientKeys' were
+        // removed from here: they are absolute totals computed for the PRE-EDIT weight,
+        // and carrying them forward unscaled after a weight edit (e.g. 200g -> 70g) froze
+        // the meal's numbers at the old weight instead of letting them recalculate fresh
+        // from the preserved rawNutritionLabel / primaryBase100g reference data below.
         const IDENTITY_PRESERVE_KEYS = [
           'primaryBase100g',
           'primaryBaseWeightG',
@@ -8424,19 +8432,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           'visualIngredients',
           'components',
           'cookingAdded',
-          'truthNutrients',
           'syntheticBase100g',
-          'hasLockedTruth',
-          'lockedNutrientKeys',
           'isDishEstimate',
           'dbSource',
           'dbId',
-          'calories',
-          'protein',
-          'totalFat',
-          'saturatedFat',
-          'sodium',
-          'carbohydrates',
         ];
         rawFoodData.itemsBreakdown = await Promise.all(rawFoodData.itemsBreakdown.map(async (newItem: any, idx: number) => {
           const origItemByScout = (newItem.scoutIndex !== undefined && newItem.scoutIndex !== null)
