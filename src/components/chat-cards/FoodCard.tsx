@@ -2416,8 +2416,6 @@ export const FoodCard: React.FC<AgentCardProps & {
                                   // it must never be shown as a "nutrition label" — it's already surfaced
                                   // correctly in the "Top Nutrients for Mode D" bar directly below.
                                   return null;
-
-                                  return null;
                                 })()}
                                  {/* Top Nutrients for Mode D */}
                                 {group.averageNutrients && Object.keys(group.averageNutrients).length > 0 && (

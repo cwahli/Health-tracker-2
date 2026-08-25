@@ -23,10 +23,13 @@ export const FoodEvaluationComparisonCard: React.FC<FoodEvaluationComparisonCard
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
             {(msg.agentResult.comparisonSet?.optionMeals || msg.agentResult.comparison?.options).map((opt: any, i: number) => {
               const name = opt.content?.name || opt.name || opt.title || `Option ${i + 1}`;
-              const calories = opt.nutrients?.calories || opt.calories || 0;
-              const protein = opt.nutrients?.protein || opt.protein || 0;
-              const carbs = opt.nutrients?.carbohydrates || opt.carbohydrates || opt.carbs || 0;
-              const fat = opt.nutrients?.fat || opt.fat || 0;
+              const protein = Number(opt.nutrients?.protein ?? opt.protein) || 0;
+              const carbs = Number(opt.nutrients?.carbohydrates ?? opt.nutrients?.carbs ?? opt.carbohydrates ?? opt.carbs) || 0;
+              const fat = Number(opt.nutrients?.totalFat ?? opt.nutrients?.fat ?? opt.totalFat ?? opt.fat) || 0;
+              let calories = Number(opt.nutrients?.calories ?? opt.calories) || 0;
+              if (calories <= 0 && (protein > 0 || carbs > 0 || fat > 0)) {
+                calories = Math.round(4 * protein + 4 * carbs + 9 * fat);
+              }
               const rec = opt.content?.recommendation || opt.recommendation || opt.verdict || '';
 
               return (
