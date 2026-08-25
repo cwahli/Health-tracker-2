@@ -771,15 +771,29 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
 
                               // A number only represents a genuine "per serving / per 100g" printed
                               // reference when it was actually transcribed into rawNutritionLabel.
-                              // When it falls back to item.nutritionFacts, the backend has already
-                              // computed that number as the FINAL TOTAL for the item's actual consumed
-                              // weight — showing that same number again in the per-serving column
-                              // falsely implies a doubling/calculation error. Gate the per-serving
-                              // column on the value's true origin instead of always populating it.
+                              // The checkmark badge (rendered elsewhere in this row) is what signals
+                              // OCR-verified vs AI-estimated — this column must always show a real,
+                              // correctly-scaled number so the table never looks incomplete.
                               const originalValIsFromRawLabel = item.rawNutritionLabel?.[k] !== undefined &&
                                                                  item.rawNutritionLabel?.[k] !== null &&
                                                                  !item.rawNutritionLabel?._synthetic &&
                                                                  LABEL_PRINTABLE_NUTRIENT_KEYS.has(k.toLowerCase());
+
+                              // Reference "per serving" weight, computed the same way as the rest of
+                              // this table, so AI-estimated rows can be scaled down from their total
+                              // to a genuine per-serving figure instead of being left blank.
+                              const weightToDisplayForServing = item.primaryBaseWeightG || item.estimatedWeightGrams || 100;
+                              let labelServingGramsForDisplay = weightToDisplayForServing;
+                              {
+                                const ssServingSizeForDisplay = String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').trim();
+                                const isExplicit100gForDisplay = /\b100\s*g\b/i.test(ssServingSizeForDisplay);
+                                const bTypeForDisplay = item.rawNutritionLabel?.basisType || item.basisType || (isExplicit100gForDisplay ? 'per_100g' : ((item.source === 'brand_official' || item.brandPriority) ? 'per_dish' : 'per_100g'));
+                                const isDishBasisForDisplay = !isExplicit100gForDisplay && (bTypeForDisplay === 'per_dish' || bTypeForDisplay === 'total' || bTypeForDisplay === 'per_portion' || bTypeForDisplay === 'per_serving' || bTypeForDisplay === 'per_pack');
+                                labelServingGramsForDisplay = isDishBasisForDisplay ? weightToDisplayForServing : 100;
+                                if (item.rawNutritionLabel?.servingSize) {
+                                  labelServingGramsForDisplay = parseServingSizeGrams(String(item.rawNutritionLabel.servingSize), weightToDisplayForServing);
+                                }
+                              }
 
                               let totalStr = '-';
                               let originalDisplay = '-';
@@ -793,7 +807,16 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                 if (isServingField) {
                                   originalDisplay = hasUnit ? String(originalVal) : `${originalVal}${defaultUnit}`;
                                 } else if (!originalValIsFromRawLabel) {
-                                  originalDisplay = '-';
+                                  // AI-estimated value: originalVal is already the TOTAL for the item's
+                                  // actual weight. Scale it down to the per-serving reference so the
+                                  // column is populated with a real, correctly-derived number.
+                                  if (numVal !== null && weightToDisplayForServing > 0 && labelServingGramsForDisplay > 0) {
+                                    const perServingVal = (numVal / weightToDisplayForServing) * labelServingGramsForDisplay;
+                                    const perServingStr = perServingVal.toFixed(2).replace(/0$/, '').replace(/\.$/, '').replace(/^(-?\d+)\.$/, '$1');
+                                    originalDisplay = isCalorieKey ? `${Math.round(perServingVal)} kcal` : `${perServingStr}${unit}`;
+                                  } else {
+                                    originalDisplay = '-';
+                                  }
                                 } else if (isCalorieKey && numVal !== null) {
                                   originalDisplay = `${numVal} kcal`;
                                 } else {
