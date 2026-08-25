@@ -13,7 +13,8 @@
  */
 
 import { 
-  biomarkerDefinitions, 
+  biomarkerDefinitions,
+  getMergedBiomarkerDef, 
   BiomarkerDefinition,
   getMappedBiomarkerKey,
   CLINICAL_SYNONYM_MAP,
@@ -446,7 +447,7 @@ export function getDuplicateAliasGroups(
   const allKeys = Array.from(allKeysSet);
 
   const getDef = (key: string) => {
-    return customBiomarkers[key] || catalogByKey.get(key.toLowerCase()) || biomarkerDefinitions.find((b: any) => b.key === key) || {};
+    return getMergedBiomarkerDef(key, catalogByKey.get(key.toLowerCase()), customBiomarkers[key], biomarkerHistory);
   };
 
   const adjacency: { [key: string]: Set<string> } = {};
@@ -677,7 +678,7 @@ export function runGeneralizedBiomarkerAudit(
 
   // Helper to get definition
   const getDef = (key: string) => {
-    return customBiomarkers[key] || catalogByKey.get(key.toLowerCase()) || biomarkerDefinitions.find((b: any) => b.key === key) || {};
+    return getMergedBiomarkerDef(key, catalogByKey.get(key.toLowerCase()), customBiomarkers[key], biomarkerHistory);
   };
 
   const fakeProfile = { customBiomarkers, deletedCustomBiomarkerKeys };
@@ -1004,18 +1005,20 @@ export function runGeneralizedBiomarkerAudit(
     // Check Missing Metadata & Catalog Matches
     const hasNormalRange = !!def.normalRange && def.normalRange !== 'Unknown' && def.normalRange.trim() !== '';
     const hasRangeBrackets = Array.isArray(def.rangeBrackets) && def.rangeBrackets.length > 0;
-    const isRangeMissing = !hasNormalRange && !hasRangeBrackets;
+    const isRangeMissing = (!hasNormalRange && !hasRangeBrackets) && !catalogMatchDef;
     // Mirror isBiomarkerApproved() in src/utils/biomarkers.ts exactly, so the Audit's
     // "clean" verdict can never disagree with the Dictionary's approval gate.
     const hasRiskCategoryTag = Array.isArray(def.riskCategories) && def.riskCategories.length > 0 && def.riskCategories.some((r: string) => r.trim() !== '' && r !== 'Uncategorized');
     const hasPotentialConditionTag = Array.isArray(def.potentialMedicalConditions) && def.potentialMedicalConditions.length > 0 && def.potentialMedicalConditions.some((c: string) => c.trim() !== '');
     const isRiskCategoryMissing = !hasRiskCategoryTag;
     const isConditionsMissing = !hasPotentialConditionTag;
-    const isCategoryMissing = !def.category || def.category === 'other' || def.category === 'wellness' || def.needsApproval || !def.standardMedicalGrouping || def.standardMedicalGrouping === 'Other' || isRiskCategoryMissing || isConditionsMissing;
-    const isBracketsMissing = hasNormalRange && !hasRangeBrackets;
-    const isDescriptionMissing = !def.description && !def.descriptions?.en;
-
-    if (isRangeMissing || isCategoryMissing || isDescriptionMissing || isBracketsMissing) {
+        // If this is a perfect catalog match, and the catalog genuinely has "other" or missing risk categories, we shouldn't punish the user in an infinite loop.
+        const isMatched = !!catalogMatchDef;
+    const isCategoryMissing = (!def.category || def.category === 'other' || def.category === 'wellness' || !def.standardMedicalGrouping || def.standardMedicalGrouping === 'Other' || isRiskCategoryMissing || isConditionsMissing) && !isMatched;
+    const isBracketsMissing = false; // We no longer strictly require detailed brackets if the catalog doesn't provide them, aligning with isBiomarkerApproved
+    const isDescriptionMissing = false; // Aligning with isBiomarkerApproved which doesn't strictly check descriptions
+    
+    if (isRangeMissing || isCategoryMissing) {
       missingMetadata = {
         missingRange: !!isRangeMissing,
         missingCategory: !!isCategoryMissing,

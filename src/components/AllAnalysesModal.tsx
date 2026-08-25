@@ -65,8 +65,6 @@ export function AllAnalysesModal({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [expandedLogIds, setExpandedLogIds] = useState<Record<string, boolean>>({});
   const [previewImage, setPreviewImage] = useState<{ src: string; foodName?: string } | null>(null);
-  const [jobToDelete, setJobToDelete] = useState<string | null>(null);
-
   // Subscribe to JobStore updates
   useEffect(() => {
     if (!isOpen) return;
@@ -328,16 +326,9 @@ export function AllAnalysesModal({
   };
 
   // Delete job from store
-  const handleDeleteJob = (jobId: string) => {
-    setJobToDelete(jobId);
-  };
-
-  const confirmDeleteJob = async () => {
-    if (jobToDelete) {
-      await JobStore.deleteJob(jobToDelete);
-      showToast('Analysis deleted.');
-      setJobToDelete(null);
-    }
+  const handleDeleteJob = async (jobId: string) => {
+    await JobStore.deleteJob(jobId);
+    showToast('Analysis deleted.');
   };
 
   // Retry failed job
@@ -369,9 +360,7 @@ export function AllAnalysesModal({
                 {jobs.length} total
               </span>
             </div>
-            <p className="text-xs text-slate-400 truncate max-w-md hidden sm:block">
-              Manage, review, save to history, or re-run all food & medical analyses in full-screen mode.
-            </p>
+            
           </div>
         </div>
 
@@ -562,29 +551,7 @@ export function AllAnalysesModal({
         />
       )}
 
-      {/* Delete Confirmation Modal */}
-      {jobToDelete && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl shadow-2xl max-w-sm w-full">
-            <h3 className="text-lg font-bold text-white mb-2">Delete Analysis?</h3>
-            <p className="text-slate-400 text-sm mb-6">Are you sure you want to delete this analysis task from your history? This action cannot be undone.</p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setJobToDelete(null)}
-                className="px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDeleteJob}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      
     </div>,
     document.body
   );
@@ -614,6 +581,7 @@ function AnalysisCard({
   onToggleExpand,
   onPreviewImage
 }: AnalysisCardProps) {
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const isMedical = job.kind === 'medical';
   const isFood = job.kind === 'food_log' || job.kind === 'food' || job.kind === 'food_compare' || !job.kind;
   
@@ -854,13 +822,31 @@ function AnalysisCard({
             <span>View</span>
           </button>
 
-          <button
-            onClick={onDelete}
-            className="p-1.5 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition-colors cursor-pointer"
-            title="Delete analysis task"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {isConfirmingDelete ? (
+            <div className="flex items-center gap-1 bg-rose-950/40 rounded-xl px-1 border border-rose-900/50">
+              <button
+                onClick={onDelete}
+                className="px-2 py-1 text-[10px] font-bold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+              >
+                Confirm
+              </button>
+              <div className="w-[1px] h-3 bg-rose-900/50" />
+              <button
+                onClick={() => setIsConfirmingDelete(false)}
+                className="px-2 py-1 text-[10px] font-bold text-slate-400 hover:text-slate-300 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsConfirmingDelete(true)}
+              className="p-1.5 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Delete analysis task"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         <div>

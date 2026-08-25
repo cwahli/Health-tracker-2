@@ -282,6 +282,22 @@ export const BiomarkerExpandedSection: React.FC<BiomarkerExpandedSectionProps> =
         </div>
       </div>
 
+      {/* Clinical Risk Tags */
+      ((def.riskCategories && def.riskCategories.length > 0) || (def.potentialMedicalConditions && def.potentialMedicalConditions.length > 0)) && (
+        <div className="flex flex-wrap gap-1.5 px-1 py-0.5 mt-2">
+          {def.riskCategories && def.riskCategories.length > 0 && def.riskCategories.map((catName: string, i: number) => (
+            <span key={`risk-${i}`} className="px-1.5 py-0.5 text-[9px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-md border border-rose-100/60 dark:border-rose-900/40 whitespace-nowrap">
+              {catName}
+            </span>
+          ))}
+          {def.potentialMedicalConditions && def.potentialMedicalConditions.length > 0 && def.potentialMedicalConditions.map((cond: string, i: number) => (
+            <span key={`cond-${i}`} className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-md border border-amber-100/60 dark:border-amber-900/40 whitespace-nowrap">
+              {cond}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Collapsible More Details Accordion */}
       <div className="border border-slate-200/60 dark:border-slate-800/60 rounded-xl overflow-hidden bg-theme-bg-card">
         <button

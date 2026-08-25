@@ -3044,9 +3044,25 @@ export function getMergedBiomarkerDef(key: string, builtIn?: any, custom?: any, 
     : (Array.isArray(centralDef?.riskCategories) && centralDef.riskCategories.length > 0 ? centralDef.riskCategories : defaults.risks);
   const riskCategories = Array.from(new Set(rawRisks.map(canonicalizeRiskCategory)));
 
-  const potentialMedicalConditions = (Array.isArray(custom?.potentialMedicalConditions) && custom.potentialMedicalConditions.length > 0)
+    const potentialMedicalConditions = (Array.isArray(custom?.potentialMedicalConditions) && custom.potentialMedicalConditions.length > 0)
     ? custom.potentialMedicalConditions
     : (Array.isArray(centralDef?.potentialMedicalConditions) && centralDef.potentialMedicalConditions.length > 0 ? centralDef.potentialMedicalConditions : defaults.conditions);
+
+  const category = (custom?.category && custom.category !== 'other' && custom.category !== 'wellness') 
+    ? custom.category 
+    : (centralDef?.category || 'other');
+    
+  const rangeBrackets = (Array.isArray(custom?.rangeBrackets) && custom.rangeBrackets.length > 0)
+    ? custom.rangeBrackets
+    : (centralDef?.rangeBrackets || []);
+
+  const structuredRanges = (Array.isArray(custom?.structuredRanges) && custom.structuredRanges.length > 0)
+    ? custom.structuredRanges
+    : (centralDef?.structuredRanges || []);
+
+  const descriptions = (custom?.descriptions && Object.keys(custom.descriptions).length > 0)
+    ? custom.descriptions
+    : (centralDef?.descriptions || {});
 
   return {
     ...centralDef,
@@ -3058,6 +3074,10 @@ export function getMergedBiomarkerDef(key: string, builtIn?: any, custom?: any, 
     standardMedicalGrouping,
     riskCategories,
     potentialMedicalConditions,
+    category,
+    rangeBrackets,
+    structuredRanges,
+    descriptions,
     needsApproval: custom?.needsApproval
   };
 }
