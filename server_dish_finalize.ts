@@ -17,6 +17,7 @@ import {
   deriveCarbohydratesFromEnergy,
   decomposeSaucedEntree,
 } from './server_derivation';
+import { backfillSparseMicronutrients } from './server_pure_helpers';
 
 export interface FinalizeInput {
   item: any;
@@ -318,6 +319,8 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
   nutrients.unsaturatedFat = computeUnsaturatedFat(nutrients.totalFat, nutrients.saturatedFat, nutrients.transFat);
   nutrients.salt = computeSaltFromSodium(nutrients.sodium);
 
+  // 6. Complete Micronutrient Backfill for Sparse Composite Estimates
+  backfillSparseMicronutrients(originalName, consumedWeight, nutrients, dbSource, originalName);
 
   return {
     scoutIndex,

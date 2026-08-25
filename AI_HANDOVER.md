@@ -3,6 +3,13 @@
 **Updated:** 2026-08-25
 **Status:** Bottom-Up Calorie Derivation & Dietitian Clinical Audit Complete (80/80 test files, 751/751 tests passing, all master assertion gates passing).
 
+- **Edit Mode Quality & Diagnostics Refinements (`server.ts`, `agents/dietitianInstructions.ts`, `server_dish_finalize.ts` - 2026-08-25):**
+  - **Narrative Edit Confirmation:** Updated `buildModeAEditInstruction` so Beat 1 of the Dietitian narrative explicitly confirms the user's specific edit (e.g. *"Updated your iced tea to unsweetened, removing 18g of added sugar"*) before delivering clinical balance coaching.
+  - **Descriptive Dish Name Preservation:** Updated `origItemSameFood` in `server.ts` to preserve descriptive dish titles (e.g. `"Sizzling Steak with Wedges and Vegetables"`) during edit merges rather than allowing them to be downgraded to generic keywords (`"steak meal"`).
+  - **Dining Environment Inheritance:** Ensured `diningEnvironment` is inherited from `activeMeal.diningEnvironment` across edit turns, preventing fallback to `"unknown"`.
+  - **Complete Micronutrient Backfilling:** Integrated `backfillSparseMicronutrients` into `finalizeDishLedger` in `server_dish_finalize.ts` so all 33 nutrient columns have complete trace mineral and vitamin estimates.
+  - **Verification & Gates:** 81/81 vitest files (764/764 tests) passing, `tsc --noEmit` exit 0, all 5 master assertion gates passing (`assert-budgets.mjs`, `assert-biomarker-lifecycle-m31.mjs`, `assert-biomarker-ingest.mjs`, `assert-agent-governance.mjs`).
+
 - **Edit Mode Continuity & Full Nutrient Aggregation Re-evaluation (`server.ts`, `server_nutrient_aggregation.ts`, `server_dietitian_adjustment.test.ts` - 2026-08-25):**
   - **Problem & Root Cause:** In text-only edit mode (`!hasImages && activeMeal`), `visionScoutItems` and `preCalculatedItems` were empty because no new scout ran, causing `server.ts` to fall through to the legacy multi-component aggregator where `isAlreadyPrepared` was hardcoded to `false`. This re-added phantom frying/cooking oils across all items ($55\text{g fat} \to 94.4\text{g fat}$, $1,363\text{ kcal} \to 1,718\text{ kcal}$). Furthermore, when users specified `"unsweetened"`, the LLM reasoned about it but omitted numerical overrides in its JSON, leaving the iced tea at 72 kcal.
   - **Edit State Continuity & Pre-Calculated Injection:** Added automatic backfill of `visionScoutItems` from `activeMeal.itemsBreakdown` in `server.ts` during edit sessions, running `finalizeDishLedger` to establish `preCalculatedItems`.

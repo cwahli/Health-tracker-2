@@ -4024,8 +4024,9 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
           scoutConfidenceComment = scoutResult.scoutConfidenceComment;
           scoutCookingMethod = scoutResult.scoutCookingMethod;
           visionScoutContentType = scoutResult.visionScoutContentType;
-          scoutRecommendedMode = scoutResult.scoutRecommendedMode;
-          diningEnvironment = scoutResult.diningEnvironment || "unknown";
+          diningEnvironment = (scoutResult.diningEnvironment && scoutResult.diningEnvironment !== 'unknown')
+            ? scoutResult.diningEnvironment
+            : (activeMeal?.diningEnvironment || "unknown");
           
           if (req.body.userSelectedMode === 'review') {
             scoutRecommendedMode = "new_log";
@@ -8517,6 +8518,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
           // Only preserve database resolution and food composition if it refers to the same food
           if (origItemSameFood) {
+            // Preserve descriptive dish name if new emitted name is just a generic keyword
+            if (origItemSameFood.originalName && (!merged.originalName || merged.originalName.length < origItemSameFood.originalName.length)) {
+              merged.originalName = origItemSameFood.originalName;
+            }
             for (const key of IDENTITY_PRESERVE_KEYS) {
               if ((merged[key] === undefined || merged[key] === null) && origItemSameFood[key] !== undefined && origItemSameFood[key] !== null) {
                 merged[key] = origItemSameFood[key];
@@ -8669,9 +8674,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       parsedData.scoutConfidenceRating = sanitizeString(rawFoodData.scoutConfidenceRating, scoutConfidenceRating || "High (>90%)");
       parsedData.scoutConfidenceComment = rawFoodData.scoutConfidenceComment !== undefined ? sanitizeString(rawFoodData.scoutConfidenceComment, "") : (scoutConfidenceComment || "");
       // diningEnvironment is intentionally NOT re-read from the Dietitian's output.
-      // The Vision Scout is the sole source of truth for this classification (server.ts:2528);
-      // the Dietitian's schema copy of this field was unguided (no prompt instructions) and was
-      // silently overwriting correct Scout classifications (e.g. "airline") with bad guesses.
+      // The Vision Scout is the sole source of truth for this classification (server.ts:2528).
+      if ((!diningEnvironment || diningEnvironment === 'unknown') && activeMeal?.diningEnvironment) {
+        diningEnvironment = activeMeal.diningEnvironment;
+      }
       parsedData.diningEnvironment = diningEnvironment;
 
       // Map and construct itemsBreakdown and aggregate all nutrients
