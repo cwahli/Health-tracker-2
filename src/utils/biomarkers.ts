@@ -751,7 +751,7 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     },
     riskCategories: ['Cardiovascular'],
     standardMedicalGrouping: 'Other',
-    aliases: ['qrisk2_10yr_risk_percent', 'qrisk2_score', 'qrisk_2', 'qrisk2_10_year_cardiovascular_risk', 'qrisk2_percent']
+    aliases: ['qrisk2_10yr_risk_percent', 'qrisk2_score', 'qrisk_2', 'qrisk2_10_year_cardiovascular_risk', 'qrisk2_percent', 'qrisk2_10yr_risk']
   },
   {
     key: 'audit_score',
@@ -914,6 +914,10 @@ export const CLINICAL_SYNONYM_MAP: Record<string, string> = {
   'nonhdl': 'non_hdl_cholesterol',
   'nonhdlcholesterol': 'non_hdl_cholesterol',
   'cholesterolhdlratio': 'cholesterol_hdl_ratio',
+
+  // Other / Screenings
+  'qrisk2_10yr_risk': 'qrisk2',
+  'qrisk210yrrisk': 'qrisk2',
 
   // Blood Sugar & Metabolic
   'hba1c': 'hba1c',
@@ -1192,8 +1196,8 @@ const CUSTOM_KEY_ALIASES: Record<string, string> = {
   'serum_albumin_2': 'serum_albumin',
   'serum_albumin_g_l': 'serum_albumin',
   'serum_globulin_g_l': 'serum_globulin',
-  'qrisk2_10_year_risk': 'qrisk2_10yr_risk',
-  'qrisk2_10_year_risk_score': 'qrisk2_10yr_risk',
+  'qrisk2_10_year_risk': 'qrisk2',
+  'qrisk2_10_year_risk_score': 'qrisk2',
   'serum_sodium_mmol_l': 'serum_sodium',
   'serum_calcium_mmol_l': 'serum_calcium',
   'alkaline_phosphatase_2': 'alkaline_phosphatase',

@@ -563,7 +563,14 @@ export function aggregateItemsNutrients(
       else if (/\b(apple|banana|berry|berries|orange|fruit|grape|melon|peach|mango)\b/.test(lower)) foodType = 'fruit';
       else if (/\b(salad|lettuce|spinach|kale|cabbage|greens|cucumber|broccoli)\b/.test(lower)) foodType = 'leafy_veg';
       else if (/\b(potato|potatoes|carrot|carrots|beet|beetroot|sweet potato|yam|radish)\b/.test(lower)) foodType = 'root_veg';
+      else if (/\b(zero\s*sugar|zero\s*calorie|diet\s*soda|diet\s*cola|coca[- ]*cola\s*zero|pepsi\s*zero|pepsi\s*max|coke\s*zero|diet\s*pepsi|diet\s*coke|water|sparkling\s*water|club\s*soda|seltzer|black\s*coffee|espresso|green\s*tea|black\s*tea|herbal\s*tea)\b/i.test(lower) || (itemNutrients.calories <= 5 && itemNutrients.protein === 0 && itemNutrients.totalFat === 0 && itemNutrients.carbohydrates === 0 && /\b(cola|soda|drink|beverage|tea|coffee|water)\b/i.test(lower))) foodType = 'beverage_zero';
+      else if (/\b(cola|soda|soft\s*drink|juice|beverage|drink|tea|coffee|lemonade|punch)\b/.test(lower) || foodType === 'beverage') foodType = 'beverage';
       else foodType = 'unknown';
+    }
+
+    // Special case: If item is recognized as a beverage or has zero macros with beverage keywords, force beverage_zero
+    if (foodType === 'beverage' && itemNutrients.calories <= 5 && itemNutrients.protein === 0 && itemNutrients.totalFat === 0 && itemNutrients.carbohydrates <= 1) {
+      foodType = 'beverage_zero';
     }
 
     const traceNutrients = { ...getTraceNutrientsForFoodType(foodType, itemWeight) };

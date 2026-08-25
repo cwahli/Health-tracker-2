@@ -25,6 +25,23 @@ describe('getTraceNutrientsForFoodType', () => {
     expect(result).toEqual(unknown);
   });
 
+  it('returns all zeros for beverage_zero at any weight', () => {
+    const result = getTraceNutrientsForFoodType('beverage_zero', 390);
+    expect(result.calcium).toBe(0);
+    expect(result.phosphorus).toBe(0);
+    expect(result.magnesium).toBe(0);
+    expect(result.vitaminA).toBe(0);
+    expect(result.vitaminC).toBe(0);
+    expect(result.iron).toBe(0);
+  });
+
+  it('returns low realistic values for standard beverage', () => {
+    const result = getTraceNutrientsForFoodType('beverage', 250);
+    expect(result.calcium).toBeCloseTo(12.5, 1);
+    expect(result.phosphorus).toBeCloseTo(25, 1);
+    expect(result.vitaminA).toBe(0);
+  });
+
   it('returns all zeros at weightGrams = 0', () => {
     const result = getTraceNutrientsForFoodType('fish_fatty', 0);
     expect(result.omega3).toBe(0);

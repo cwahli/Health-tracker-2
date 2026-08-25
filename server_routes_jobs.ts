@@ -357,3 +357,60 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
     res.status(500).json({ error: err.message || 'Failed to fetch debug payload' });
   }
 });
+
+jobsRouter.post(['/api/jobs/prune-debug-logs', '/api/debug-logs/prune'], async (req, res) => {
+  try {
+    const { userId, maxRetention } = req.body || {};
+    const effectiveRetention = typeof maxRetention === 'number' && maxRetention > 0 ? maxRetention : 10;
+    const { pruneUserDebugLogs } = await import('./src/utils/debugLogRetention.js');
+
+    if (userId) {
+      const result = await pruneUserDebugLogs(String(userId), { maxRetention: effectiveRetention });
+      return res.json(result);
+    }
+
+    // If no specific userId, query distinct firebase_uids or current authenticated user
+    const { supabaseAdmin } = await import('./supabaseAdmin.js');
+    const { data: foods } = await supabaseAdmin.from('food_logs').select('firebase_uid');
+    const uids = Array.from(new Set((foods || []).map((f: any) => f.firebase_uid).filter(Boolean)));
+
+    let totalPruned = 0;
+    let totalKept = 0;
+    let totalProtected = 0;
+    const userResults: Record<string, any> = {};
+
+    for (const uid of uids) {
+      const resForUser = await pruneUserDebugLogs(uid, { maxRetention: effectiveRetention });
+      totalPruned += resForUser.prunedCount;
+      totalKept += resForUser.keptCount;
+      totalProtected += resForUser.bugProtectedCount;
+      userResults[uid] = resForUser;
+    }
+
+    return res.json({
+      success: true,
+      maxRetention: effectiveRetention,
+      usersCount: uids.length,
+      totalPruned,
+      totalKept,
+      totalProtected,
+      userResults,
+    });
+  } catch (err: any) {
+    console.error('[API] /api/debug-logs/prune error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to prune debug logs' });
+  }
+});
+
+jobsRouter.get('/api/debug-logs/protected-refs', async (_req, res) => {
+  try {
+    const { getBugTrackerProtectedRefs } = await import('./src/utils/debugLogRetention.js');
+    const { supabaseAdmin } = await import('./supabaseAdmin.js');
+    const refs = await getBugTrackerProtectedRefs(supabaseAdmin);
+    return res.json({ refs: Array.from(refs) });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to get protected refs' });
+  }
+});
+
+

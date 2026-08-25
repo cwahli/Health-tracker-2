@@ -1398,25 +1398,49 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {match ? (
+                          {match && (
                             <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 rounded border border-emerald-200 dark:border-emerald-800">
                               Catalog Match Found
                             </span>
-                          ) : item.missingMetadata?.missingRange ? (
+                          )}
+                          {!match && item.missingMetadata?.missingRange && (
                             <span className="text-[10px] font-bold px-2 py-0.5 bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 rounded">
                               Range: Unknown
                             </span>
-                          ) : item.missingMetadata?.missingCategory ? (
+                          )}
+                          {!match && item.missingMetadata?.missingCategory && (
                             <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 rounded">
                               Category Needed
                             </span>
-                          ) : (
+                          )}
+                          {!match && !item.missingMetadata?.missingRange && !item.missingMetadata?.missingCategory && (
                             <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 rounded">
                               Brackets Needed
                             </span>
                           )}
                           {renderDeleteButton(item.key, item.name)}
                         </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {item.missingMetadata?.missingRange && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200 rounded shrink-0">Missing Range</span>
+                        )}
+                        {item.missingMetadata?.missingCategory && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200 rounded shrink-0">Missing Category</span>
+                        )}
+                        {item.missingMetadata?.missingBrackets && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 rounded shrink-0">Missing detailed brackets</span>
+                        )}
+                        {item.missingMetadata?.missingRiskCategory && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200 rounded shrink-0">Missing Risk Category</span>
+                        )}
+                        {item.missingMetadata?.missingConditions && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 rounded shrink-0">Missing Potential Conditions</span>
+                        )}
+                        {item.missingMetadata?.missingDescription && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 rounded shrink-0">Missing Description</span>
+                        )}
                       </div>
 
                       {match && (

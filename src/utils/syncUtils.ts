@@ -610,15 +610,22 @@ export const fetchAllConsolidatedLogs = async (
       const cleanDelBenefits = mergeDeleteMaps(result.profileData?.profile?.deletedDailyBenefitIds || result.profileData?.deletedDailyBenefitIds || {});
 
       if (result.success && result.foods) {
+        const foodMap = new Map<string, FoodLog>();
         result.foods.forEach((row: any) => {
           const t = cleanDelFoods[row.id];
           const rowUpdatedAt = row.updated_at ? new Date(row.updated_at).getTime() : 0;
           if (!t || rowUpdatedAt > t) {
-            serverFoods.push(supabaseRowToFoodLog(row));
+            const foodLog = supabaseRowToFoodLog(row);
+            const existing = foodMap.get(foodLog.id);
+            if (!existing || (foodLog.updated_at || 0) > (existing.updated_at || 0)) {
+              foodMap.set(foodLog.id, foodLog);
+            }
           }
         });
+        serverFoods = Array.from(foodMap.values());
       }
       if (result.success && result.biomarkers) {
+        const bioMap = new Map<string, BiomarkerLog>();
         result.biomarkers.forEach((row: any) => {
           const t = cleanDelBios[row.id];
           const rowUpdatedAt = row.updated_at ? new Date(row.updated_at).getTime() : 0;
@@ -628,10 +635,14 @@ export const fetchAllConsolidatedLogs = async (
             // Do NOT strip keys via deletedCustomBiomarkerKeys — that map is for dictionary defs only.
             const hasData = Object.keys(cleanedBiomarkers).length > 0 || (bioLog.note && bioLog.note.trim()) || (bioLog.summary && bioLog.summary.trim()) || (bioLog.tests && bioLog.tests.length > 0);
             if (hasData) {
-              serverBiomarkers.push({ ...bioLog, biomarkers: cleanedBiomarkers });
+              const existing = bioMap.get(bioLog.id);
+              if (!existing || (bioLog.updated_at || 0) > (existing.updated_at || 0)) {
+                bioMap.set(bioLog.id, { ...bioLog, biomarkers: cleanedBiomarkers });
+              }
             }
           }
         });
+        serverBiomarkers = Array.from(bioMap.values());
       }
       if (result.success && result.profileData) {
         const rawP = result.profileData.profile || result.profileData;
@@ -1205,7 +1216,57 @@ export function mergeBiomarkerHistory(
     }
   });
 
-  return Array.from(bioMap.values());
+  // Date-level consolidation to merge redundant duplicate logs on the exact same date
+  const logsByDate = new Map<string, BiomarkerLog[]>();
+  bioMap.forEach(log => {
+    const d = toYYYYMMDD(log.date);
+    if (!logsByDate.has(d)) logsByDate.set(d, []);
+    logsByDate.get(d)!.push(log);
+  });
+
+  const consolidatedList: BiomarkerLog[] = [];
+  logsByDate.forEach((group) => {
+    if (group.length === 1) {
+      consolidatedList.push(group[0]);
+      return;
+    }
+
+    // Sort by updated_at descending (newest first)
+    const sorted = [...group].sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
+    const survivor = { ...sorted[0] };
+
+    // If timestamps are equal across duplicate logs on the same date, union them;
+    // otherwise the newest survivor's biomarkers object is strictly authoritative so deleted keys never resurrect.
+    let finalBiomarkers: Record<string, any>;
+    if (sorted.length > 1 && (sorted[0].updated_at || 0) === (sorted[1].updated_at || 0)) {
+      const unionBios: Record<string, any> = {};
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        Object.assign(unionBios, sorted[i].biomarkers || {});
+      }
+      finalBiomarkers = unionBios;
+    } else {
+      finalBiomarkers = { ...(survivor.biomarkers || {}) };
+    }
+
+    // For any older duplicate IDs that are now absorbed into survivor, record into cleanDeletedMap and deletedBioLogs
+    for (let i = 1; i < sorted.length; i++) {
+      const dupId = sorted[i].id;
+      if (dupId && dupId !== survivor.id) {
+        const now = Date.now();
+        cleanDeletedMap[dupId] = Math.max(cleanDeletedMap[dupId] || 0, now);
+        if (deletedBioLogs && typeof deletedBioLogs === 'object') {
+          deletedBioLogs[dupId] = Math.max(deletedBioLogs[dupId] || 0, now);
+        }
+      }
+    }
+
+    consolidatedList.push({
+      ...survivor,
+      biomarkers: finalBiomarkers
+    });
+  });
+
+  return consolidatedList;
 }
 
 

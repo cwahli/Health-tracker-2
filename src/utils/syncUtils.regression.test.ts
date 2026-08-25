@@ -244,6 +244,23 @@ describe('mergeBiomarkerHistory', () => {
     expect(out).toHaveLength(1);
     expect(out[0].id).toBe('new');
   });
+
+  it('multiple duplicate logs on same date: newer survivor is authoritative and does not resurrect deleted keys from older duplicate', () => {
+    const local = [
+      log('log_new_38keys', 20, { alt: 30, ast: 25 }, { date: '2026-06-05' })
+    ];
+    const cloud = [
+      log('log_old_40keys', 10, { alt: 30, ast: 25, hdl: 55.3, hemoglobin: 166 }, { date: '2026-06-05' })
+    ];
+    const delMap: Record<string, number> = {};
+    const out = mergeBiomarkerHistory(cloud, local, delMap);
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe('log_new_38keys');
+    expect(out[0].biomarkers).toEqual({ alt: 30, ast: 25 });
+    expect(out[0].biomarkers.hdl).toBeUndefined();
+    expect(out[0].biomarkers.hemoglobin).toBeUndefined();
+    expect(delMap['log_old_40keys']).toBeGreaterThan(0);
+  });
 });
 
 describe('food log supabase mapper round-trip identity', () => {

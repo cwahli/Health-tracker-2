@@ -24,6 +24,7 @@ import TaskPlaceholderCard from './TaskPlaceholderCard';
 import { CroppedFoodImage, isValidBoundingBox, getFoodImageUrl } from './chat-cards/FoodCard';
 import { ZoomableImage } from './ZoomableImage';
 import { buildDebugMarkdownReport } from '../utils/debugPayload';
+import { calculateMealDebugRetentionStatus } from '../utils/debugLogRetention';
 
 interface FoodHistoryTabProps {
   profile: UserProfile;
@@ -108,6 +109,27 @@ export default function FoodHistoryTab({
   const [zoomState, setZoomState] = useState<{ src: string; boundingBox?: number[] | null; foodName?: string; items: any[]; currentIdx: number; resolvedImgs: string[] } | null>(null);
   // Lazy-fetched heavy detail fields per log id (composition, scoutItems, itemsBreakdown, chatTranscript)
   const [detailOverrides, setDetailOverrides] = useState<Record<string, { composition?: string; scoutItems?: any[]; itemsBreakdown?: any[]; chatTranscript?: any[] }>>({});
+  const [protectedRefs, setProtectedRefs] = useState<Set<string>>(new Set());
+
+  // Fetch protected references from bug tracker to protect associated debug logs
+  useEffect(() => {
+    let isMounted = true;
+    fetch('/api/debug-logs/protected-refs')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (isMounted && data && Array.isArray(data.refs)) {
+          setProtectedRefs(new Set(data.refs.map((r: string) => String(r).toLowerCase())));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const retentionStatusMap = React.useMemo(() => {
+    return calculateMealDebugRetentionStatus(foodLogs, protectedRefs, 10);
+  }, [foodLogs, protectedRefs]);
 
   // Fetch heavy detail fields when a log is expanded and we don't already have them
   useEffect(() => {
@@ -538,7 +560,56 @@ export default function FoodHistoryTab({
     });
 
     return deduped.sort((a, b) => {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      const getIsoDate = (item: typeof a): string => {
+        if (item.type === 'log') {
+          return toYYYYMMDD((item.data as any)?.date);
+        }
+        const job = item.data as any;
+        const pending = job?.result?.pendingFoodLog || job?.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog;
+        if (pending?.date) return toYYYYMMDD(pending.date);
+        if (job?.createdAt) return toYYYYMMDD(job.createdAt);
+        return '1970-01-01';
+      };
+
+      const dateA = getIsoDate(a);
+      const dateB = getIsoDate(b);
+
+      if (dateA !== dateB) {
+        return dateB.localeCompare(dateA); // Newest date first (e.g. 2026-08-25 before 2026-08-24)
+      }
+
+      // If dates match, sort by latest timestamp within that date
+      const getTime = (item: typeof a) => {
+        if (item.type === 'log') {
+          const l = item.data as any;
+          if (l.updated_at && typeof l.updated_at === 'number') return l.updated_at;
+          if (l.id && typeof l.id === 'string') {
+            const match = l.id.match(/\d{10,13}/);
+            if (match) {
+              const parsed = parseInt(match[0], 10);
+              if (!isNaN(parsed) && parsed > 1000000000) return parsed;
+            }
+          }
+          if (item.createdAt) {
+            const t = new Date(item.createdAt).getTime();
+            if (!isNaN(t)) return t;
+          }
+          return 0;
+        } else {
+          const j = item.data as any;
+          if (j.createdAt) {
+            const t = new Date(j.createdAt).getTime();
+            if (!isNaN(t)) return t;
+          }
+          if (j.updatedAt) {
+            const t = new Date(j.updatedAt).getTime();
+            if (!isNaN(t)) return t;
+          }
+          return 0;
+        }
+      };
+
+      return getTime(b) - getTime(a);
     });
   }, [activeFoodLogs, jobs]);
 
@@ -2069,20 +2140,47 @@ export default function FoodHistoryTab({
                           )}
 
                           {/* Debug Log Download (Inside Expanded Log) */}
-                          {(log.debugUrl || (log as any).backendLogs || (log as any).jobId) && (
-                            <div className="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Diagnostic Log</span>
-                              <button
-                                type="button"
-                                onClick={() => handleDownloadDebugLog(log)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200/60 dark:border-indigo-800/60 transition-colors cursor-pointer"
-                                title="Download complete diagnostic report (.md)"
-                              >
-                                <Download className="w-3.5 h-3.5 text-indigo-500" />
-                                <span>Download Debug Log</span>
-                              </button>
-                            </div>
-                          )}
+                          {(log.debugUrl || (log as any).backendLogs || (log as any).jobId) && (() => {
+                            const retention = retentionStatusMap.get(log.id);
+                            const isAvailable = retention ? retention.kept : true;
+                            const isBugProtected = Boolean(retention?.isBugProtected);
+                            const isLast10 = Boolean(retention?.isLast10);
+                            const rank = retention?.rank;
+
+                            return (
+                              <div className="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Diagnostic Log</span>
+                                  {isAvailable && isBugProtected && !isLast10 && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/60" title="Kept beyond 10 meals because it is linked in Bug Tracker">
+                                      Bug Tracker Hold
+                                    </span>
+                                  )}
+                                  {isAvailable && isLast10 && typeof rank === 'number' && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60" title="Retained as one of the 10 most recent meals">
+                                      Recent {rank}/10
+                                    </span>
+                                  )}
+                                </div>
+                                {isAvailable ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadDebugLog(log)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200/60 dark:border-indigo-800/60 transition-colors cursor-pointer"
+                                    title="Download complete diagnostic report (.md)"
+                                  >
+                                    <Download className="w-3.5 h-3.5 text-indigo-500" />
+                                    <span>Download Debug Log</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-[11px] text-slate-400 dark:text-slate-500 italic">
+                                    Log pruned (10-meal retention policy)
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
+
                         </div>
                       )}
                     </>

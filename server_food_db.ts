@@ -4,7 +4,7 @@
 export type FoodType =
   | 'red_meat' | 'poultry' | 'fish_fatty' | 'fish_lean' | 'shellfish'
   | 'egg' | 'dairy' | 'leafy_veg' | 'root_veg' | 'legume'
-  | 'grain' | 'fruit' | 'processed' | 'unknown';
+  | 'grain' | 'fruit' | 'processed' | 'beverage' | 'beverage_zero' | 'unknown';
 export interface TraceNutrients {
   unsaturatedFat: number; omega3: number;
   magnesium: number; calcium: number; iron: number; zinc: number;
@@ -28,6 +28,8 @@ export const FOOD_TYPE_TRACE_NUTRIENTS: Record<FoodType, TraceNutrients> = {
   grain:      { unsaturatedFat:0.5, omega3:0.02, magnesium:28, calcium:15, iron:0.8, zinc:1.0, selenium:10, iodine:1,   phosphorus:100, vitaminD:0,   vitaminB12:0,   folate:30,  vitaminC:0,  vitaminE:0.4, vitaminK:2,   vitaminA:0,    vitaminB6:0.10, thiamine:0.15, riboflavin:0.03, niacin:2.0 },
   fruit:      { unsaturatedFat:0.1, omega3:0.02, magnesium:10, calcium:10, iron:0.2, zinc:0.1, selenium:0.5,iodine:0.5, phosphorus:18,  vitaminD:0,   vitaminB12:0,   folate:20,  vitaminC:40, vitaminE:0.5, vitaminK:5,   vitaminA:100,  vitaminB6:0.10, thiamine:0.03, riboflavin:0.02, niacin:0.5 },
   processed:  { unsaturatedFat:3.0, omega3:0.02, magnesium:10, calcium:20, iron:0.5, zinc:0.5, selenium:5,  iodine:5,   phosphorus:80,  vitaminD:0,   vitaminB12:0,   folate:10,  vitaminC:0,  vitaminE:0.2, vitaminK:2,   vitaminA:10,   vitaminB6:0.05, thiamine:0.10, riboflavin:0.05, niacin:1.0 },
+  beverage:   { unsaturatedFat:0.0, omega3:0.0,  magnesium:2,  calcium:5,  iron:0.05,zinc:0.05,selenium:0.2,iodine:0.2, phosphorus:10,  vitaminD:0,   vitaminB12:0,   folate:1,   vitaminC:1,  vitaminE:0.0, vitaminK:0,   vitaminA:0,    vitaminB6:0.01, thiamine:0.01, riboflavin:0.01, niacin:0.1 },
+  beverage_zero: { unsaturatedFat:0.0, omega3:0.0, magnesium:0, calcium:0, iron:0,   zinc:0,   selenium:0,   iodine:0,   phosphorus:0,   vitaminD:0,   vitaminB12:0,   folate:0,   vitaminC:0,  vitaminE:0,   vitaminK:0,   vitaminA:0,    vitaminB6:0,    thiamine:0,    riboflavin:0,    niacin:0 },
   unknown:    { unsaturatedFat:2.0, omega3:0.05, magnesium:20, calcium:30, iron:0.8, zinc:0.8, selenium:5,  iodine:3,   phosphorus:80,  vitaminD:0,   vitaminB12:0.2, folate:20,  vitaminC:5,  vitaminE:0.3, vitaminK:5,   vitaminA:50,   vitaminB6:0.10, thiamine:0.07, riboflavin:0.07, niacin:1.5 },
 };
 export function getTraceNutrientsForFoodType(foodType: string, weightGrams: number): TraceNutrients {

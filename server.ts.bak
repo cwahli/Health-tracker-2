@@ -11446,12 +11446,7 @@ Return ONLY raw JSON.`;
             },
             {
               title: "Glycemic Stability and Preventive Cardiology Guidelines",
-              summary: "The American Diabetes Association (ADA) 2026 standards highlight early lifestyle intervention at borderline HbA1c thresholds, demonstrating a 58% reduction in the 10-year transition rate to formal insulin deficiency through physical activity and fiber loading.",
-              link: "https://pubmed.ncbi.nlm.nih.gov/34922236/"
-            }
-          ]
-        };
-      } else if (agentType === "biomarker_review") {
+              summary: "The American Diabetes Association (ADA) 2026 standards highlight early lifestyle intervention a      } else if (agentType === "biomarker_review") {
         systemInstruction = `identity:
   role: "Expert AI Clinical Diagnostic & Biomarker Review Agent"
   purpose: "Perform comprehensive diagnostic review and optimization for user biomarkers."
@@ -11465,18 +11460,26 @@ rules:
     - "Set 'isEthnicitySpecific' to true and 'ethnicityTag' to the ethnicity name if applicable."
     - "When no correction or override is needed, set 'proposal' to null."
     - "If you identify anomalies or unit mix-ups in the log history, provide a 'modificationCommand' list to correct them."
+  reply_format:
+    - "In your conversational 'reply', provide a natural, concise explanation of your findings and any corrections made."
     - "Do not use rigid formatting, numbered lists, or forced structural templates for your reply."
     - "The JSON response must be well-formed and valid."`;
+      } else if (agentType === "data_review") {Total Bilirubin in mg/dL by 17.1 to get µmol/L), not a new clinical finding or decimal placement error. Do NOT speculate about diagnoses from a unit conversion."
+
+instructions:
+  - "The JSON response must be well-formed and valid."`;
       } else if (agentType === "data_review") {
         systemInstruction = `You are an expert Clinical Data Review & Reference Range Calibration Agent.
 You will receive user demographics and a list of biomarkers in the user's current batch.
-
 === DEMOGRAPHIC CALIBRATION MANDATE ===
 You MUST customize the reference ranges and risk context precisely for the user's specific age, gender, and ethnicity found in the USER PROFILE.
-
 CRITICAL OVERRIDE: Unless the biomarker is a clinical severity score, in which case the CLINICAL SYMPTOM & DISEASE SEVERITY INDEX EVALUATION MANDATE strictly overrides all demographic adjustments.
 CRITICAL: Never output boilerplate text stating that demographic details are not available. They are always provided. Even if any values are missing, dynamically assume a standard reference profile (e.g., 35-year-old female of Caucasian ethnicity) and calibrate all reference ranges for that profile.
 CRITICAL BIAS OVERRIDE: Medical baselines in training data heavily skew toward recent Western/Global consensus (e.g., KDIGO, WHO global). You MUST actively bypass global/race-free standards and aggressively search your latent knowledge for local national medical boards (e.g., Chinese Society of Nephrology, Asian-modified CKD-EPI/MDRD coefficients, Asian BMI variants). If a regional coefficient or localized threshold exists historically or currently for the user's ethnicity, you MUST prioritize and apply it FIRST over Western defaults. For example, if the user is of Chinese ethnicity, you MUST look at clinical guidelines for Chinese populations FIRST before even considering Western guidelines.
+
+=== UNVALIDATED PROFILE METADATA GUARDRAILS ===
+Check patient metadata before evaluation:
+- If patient 'age' in USER PROFILE is 0, missing, or invalid:
   1) State in '_demographicAudit.ageAndGenderShifts': "Age unprovided (age: 0). Adult male baseline applied as fallback."
   2) Include a clear warning in 'specificRiskContext': "⚠️ Note: Profile age is 0. Please update your age in Profile Settings for exact age-calibrated baselines."
 

@@ -744,6 +744,8 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           scoutItems: finalPayload?.scoutItems || undefined,
           scoutContentType: finalPayload?.scoutContentType || undefined,
           photoUrl: photoUrl || undefined,
+          photoUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : undefined),
+          imageUrls: photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : undefined),
           debugUrl: undefined as string | undefined,
           backendLogsUrl: logsUrl || undefined,
           backendLogs: logsUrl ? `[Logs stored in R2: ${logsUrl}]` : priorLogsNote + rawLogsText.slice(0, 5000),
@@ -946,6 +948,17 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           }).catch((e: any) => console.warn('[ServerJobs] auto-file:', e?.message || e));
         } catch (autoErr: any) {
           console.warn('[ServerJobs] auto-file skipped:', autoErr?.message || autoErr);
+        }
+
+        if (userId && userId !== 'anonymous') {
+          try {
+            const { pruneUserDebugLogs } = await import('./src/utils/debugLogRetention.js');
+            void pruneUserDebugLogs(userId, { maxRetention: 10 }).catch((e: any) =>
+              console.warn('[ServerJobs] debug prune:', e?.message || e)
+            );
+          } catch (pruneErr: any) {
+            console.warn('[ServerJobs] debug prune skipped:', pruneErr?.message || pruneErr);
+          }
         }
       };
 

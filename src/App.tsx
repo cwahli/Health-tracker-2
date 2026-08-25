@@ -2380,14 +2380,14 @@ export default function App() {
                 ...(cloudProfile?.deletedFoodLogIds || {}),
                 ...(serverProfile?.deletedFoodLogIds || {})
               };
-              v2Foods = (isIncrementalPull ? mergeFoodLogsDeduped(localFoods, serverFoods) : serverFoods)
+              v2Foods = (forceReplaceLocal ? serverFoods : mergeFoodLogsDeduped(localFoods, serverFoods))
                 .filter(f => f && f.sync_state !== 'delete' && (!activeDeletedFoodIds[f.id] || (f.updated_at || 0) > activeDeletedFoodIds[f.id]));
               const activeDeletedBioIds = {
                 ...(localProfile?.deletedBiomarkerLogIds || {}),
                 ...(cloudProfile?.deletedBiomarkerLogIds || {}),
                 ...(serverProfile?.deletedBiomarkerLogIds || {})
               };
-              v2Logs = (isIncrementalPull ? mergeBiomarkerHistory(serverBiomarkers, localBioHistory, deletedBioLogs || cloudProfile?.deletedBiomarkerLogIds || localProfile?.deletedBiomarkerLogIds || {}) : serverBiomarkers)
+              v2Logs = (forceReplaceLocal ? serverBiomarkers : mergeBiomarkerHistory(serverBiomarkers, localBioHistory, activeDeletedBioIds))
                 .filter(b => b && b.sync_state !== 'delete' && (!activeDeletedBioIds[b.id] || (b.updated_at || 0) > activeDeletedBioIds[b.id]));
               if (serverProfile) spProfile = serverProfile;
               if (Array.isArray(serverActions)) spActions = serverActions;
@@ -2840,13 +2840,19 @@ export default function App() {
                 const serverHasImage = isUsableImageUrl(serverItem.imageUrl);
                 const localUrls = (existingLocal.imageUrls || []).filter(isUsableImageUrl);
                 const serverUrls = (serverItem.imageUrls || []).filter(isUsableImageUrl);
+                const combinedUrls = Array.from(new Set([
+                  ...localUrls,
+                  ...serverUrls,
+                  existingLocal.imageUrl,
+                  serverItem.imageUrl
+                ])).filter(isUsableImageUrl);
                 foodUnionMap.set(serverItem.id, {
                   ...serverItem,
                   ...existingLocal,
                   imageUrl: localHasImage
                     ? existingLocal.imageUrl
-                    : (serverHasImage ? serverItem.imageUrl : existingLocal.imageUrl),
-                  imageUrls: localUrls.length > 0 ? localUrls : (serverUrls.length > 0 ? serverUrls : existingLocal.imageUrls)
+                    : (serverHasImage ? serverItem.imageUrl : (combinedUrls[0] || existingLocal.imageUrl)),
+                  imageUrls: combinedUrls.length > 0 ? combinedUrls : existingLocal.imageUrls
                 });
               }
             });
@@ -5112,67 +5118,122 @@ export default function App() {
     const targetLog = biomarkerHistory.find(b => b.id === id);
     if (!targetLog) return;
 
+    const targetDate = toYYYYMMDD(targetLog.date);
     const canonicalKeyToDelete = (getMappedBiomarkerKey(key) || key).toLowerCase().replace(/[\s_]/g, '');
-    const keysToDelete = Object.keys(targetLog.biomarkers || {}).filter(k => {
-      const canK = (getMappedBiomarkerKey(k) || k).toLowerCase().replace(/[\s_]/g, '');
-      return k === key || canK === canonicalKeyToDelete || k.toLowerCase().replace(/[\s_]/g, '') === canonicalKeyToDelete;
-    });
 
-    const remainingKeys = Object.keys(targetLog.biomarkers || {}).filter(k => !keysToDelete.includes(k));
-    
-    if (remainingKeys.length > 0) {
-      const now = Date.now();
-      const updatedHistory = biomarkerHistory.map(log => {
-        if (log.id === id) {
-          const newBiomarkers = { ...log.biomarkers };
-          keysToDelete.forEach(k => delete newBiomarkers[k]);
-          return {
-            ...log,
-            biomarkers: newBiomarkers,
-            sync_state: 'update' as const,
-            updated_at: now
-          };
-        }
-        return log;
-      });
-      setBiomarkerHistory(updatedHistory);
-      
-      let updatedProfile = profile;
-      if (canonicalKeyToDelete === 'bmi' || key.toLowerCase() === 'bmi') {
-        updatedProfile = profile ? {
-          ...profile,
-          bmiAutoLogged: true,
-          deletedCustomBiomarkerKeys: mergeDeleteMaps(profile.deletedCustomBiomarkerKeys, { bmi: now })
-        } : null;
-        if (updatedProfile) setProfile(updatedProfile);
+    const now = Date.now();
+    const deletedLogIds: string[] = [];
+    const updatedLogIds: string[] = [];
+    const updatedHistory: BiomarkerLog[] = [];
+
+    biomarkerHistory.forEach(log => {
+      const isTarget = log.id === id || (targetDate && toYYYYMMDD(log.date) === targetDate);
+      if (!isTarget) {
+        updatedHistory.push(log);
+        return;
       }
 
-      const recomputedBiomarkers: { [key: string]: number | string } = {};
-      [...updatedHistory].filter(b => b.sync_state !== 'delete' && !(updatedProfile?.deletedBiomarkerLogIds?.[b.id] && (updatedProfile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0))).sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
+      const keysToDelete = Object.keys(log.biomarkers || {}).filter(k => {
+        const canK = (getMappedBiomarkerKey(k) || k).toLowerCase().replace(/[\s_]/g, '');
+        return k === key || canK === canonicalKeyToDelete || k.toLowerCase().replace(/[\s_]/g, '') === canonicalKeyToDelete;
+      });
+
+      if (keysToDelete.length === 0) {
+        updatedHistory.push(log);
+        return;
+      }
+
+      const newBiomarkers = { ...log.biomarkers };
+      keysToDelete.forEach(k => delete newBiomarkers[k]);
+
+      const remainingKeys = Object.keys(newBiomarkers);
+      if (remainingKeys.length > 0) {
+        updatedLogIds.push(log.id);
+        updatedHistory.push({
+          ...log,
+          biomarkers: newBiomarkers,
+          sync_state: 'update' as const,
+          updated_at: now
+        });
+      } else {
+        deletedLogIds.push(log.id);
+        updatedHistory.push({
+          ...log,
+          biomarkers: {},
+          sync_state: 'delete' as const,
+          updated_at: now
+        });
+      }
+    });
+
+    let updatedProfile = profile;
+    if (deletedLogIds.length > 0 && profile) {
+      const newDeletes: Record<string, number> = {};
+      deletedLogIds.forEach(delId => {
+        newDeletes[delId] = now;
+      });
+      updatedProfile = {
+        ...profile,
+        deletedBiomarkerLogIds: mergeDeleteMaps(profile.deletedBiomarkerLogIds, newDeletes)
+      };
+      setProfile(updatedProfile);
+    }
+
+    if (canonicalKeyToDelete === 'bmi' || key.toLowerCase() === 'bmi') {
+      updatedProfile = (updatedProfile || profile) ? {
+        ...(updatedProfile || profile)!,
+        bmiAutoLogged: true,
+        deletedCustomBiomarkerKeys: mergeDeleteMaps((updatedProfile || profile)?.deletedCustomBiomarkerKeys, { bmi: now })
+      } : null;
+      if (updatedProfile) setProfile(updatedProfile);
+    }
+
+    setBiomarkerHistory(updatedHistory);
+
+    const recomputedBiomarkers: { [key: string]: number | string } = {};
+    [...updatedHistory]
+      .filter(b => b.sync_state !== 'delete' && !(updatedProfile?.deletedBiomarkerLogIds?.[b.id] && (updatedProfile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0)))
+      .sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date)))
+      .forEach(log => {
         Object.entries(log.biomarkers).forEach(([k, v]) => {
           recomputedBiomarkers[k] = v as string | number;
         });
       });
-      setBiomarkers(recomputedBiomarkers);
-      
-      await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog', targetId: id });
-    } else {
-      await handleDeleteBiomarkerLog(id);
-    }
+    setBiomarkers(recomputedBiomarkers);
+
+    await saveAndSync(updatedProfile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, {
+      type: 'biomarkerLogsBatch',
+      targetIds: updatedLogIds.length > 0 ? updatedLogIds : undefined,
+      deletedIds: deletedLogIds.length > 0 ? deletedLogIds : undefined
+    });
   };
   const handleEditBiomarkerLog = async (id: string, key: string, value: string | number, newDate?: string) => {
+    const targetLog = biomarkerHistory.find(b => b.id === id);
+    const targetDate = targetLog ? toYYYYMMDD(targetLog.date) : '';
+    const canonicalKey = (getMappedBiomarkerKey(key) || key).toLowerCase().replace(/[\s_]/g, '');
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    const finalVal = isNaN(numValue) ? value : numValue;
+    const now = Date.now();
+    const updatedIds: string[] = [];
+
     const updatedHistory = biomarkerHistory.map(log => {
-      if (log.id === id) {
-        const numValue = typeof value === 'string' ? parseFloat(value) : value;
+      const isTarget = log.id === id || (targetDate && toYYYYMMDD(log.date) === targetDate);
+      if (isTarget) {
+        const matchingKey = Object.keys(log.biomarkers || {}).find(k => {
+          const canK = (getMappedBiomarkerKey(k) || k).toLowerCase().replace(/[\s_]/g, '');
+          return k === key || canK === canonicalKey || k.toLowerCase().replace(/[\s_]/g, '') === canonicalKey;
+        }) || key;
+
+        updatedIds.push(log.id);
         return {
           ...log,
           date: newDate || log.date,
           biomarkers: {
             ...log.biomarkers,
-            [key]: isNaN(numValue) ? value : numValue
+            [matchingKey]: finalVal
           },
           sync_state: 'update' as const,
-          updated_at: Date.now()
+          updated_at: now
         };
       }
       return log;
@@ -5180,23 +5241,37 @@ export default function App() {
     updatedHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
     setBiomarkerHistory(updatedHistory);
     const recomputedBiomarkers: { [key: string]: number | string } = {};
-    [...updatedHistory].filter(b => b.sync_state !== 'delete' && !(profile?.deletedBiomarkerLogIds?.[b.id] && (profile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0))).sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date))).forEach(log => {
-      Object.entries(log.biomarkers).forEach(([k, v]) => {
-        recomputedBiomarkers[k] = v as string | number;
+    [...updatedHistory]
+      .filter(b => b.sync_state !== 'delete' && !(profile?.deletedBiomarkerLogIds?.[b.id] && (profile?.deletedBiomarkerLogIds?.[b.id] || 0) >= (b.updated_at || 0)))
+      .sort((a, b) => toYYYYMMDD(a.date).localeCompare(toYYYYMMDD(b.date)))
+      .forEach(log => {
+        Object.entries(log.biomarkers).forEach(([k, v]) => {
+          recomputedBiomarkers[k] = v as string | number;
+        });
       });
-    });
     setBiomarkers(recomputedBiomarkers);
-    await saveAndSync(profile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, { type: 'biomarkerLog', targetId: id });
+    await saveAndSync(profile, foodLogs, recomputedBiomarkers, updatedHistory, actions, dailyBenefits, report, {
+      type: 'biomarkerLogsBatch',
+      targetIds: updatedIds.length > 0 ? updatedIds : [id]
+    });
   };
   const handleBatchDeleteBiomarkersFromLogs = async (deletions: { id: string; key: string }[]) => {
     if (!deletions || deletions.length === 0) return;
 
     const deletionsByLogId = new Map<string, Set<string>>();
+    const deletionsByDate = new Map<string, Set<string>>();
     deletions.forEach(d => {
       if (!deletionsByLogId.has(d.id)) {
         deletionsByLogId.set(d.id, new Set());
       }
       deletionsByLogId.get(d.id)!.add(d.key);
+
+      const target = biomarkerHistory.find(b => b.id === d.id);
+      if (target) {
+        const dStr = toYYYYMMDD(target.date);
+        if (!deletionsByDate.has(dStr)) deletionsByDate.set(dStr, new Set());
+        deletionsByDate.get(dStr)!.add(d.key);
+      }
     });
 
     const now = Date.now();
@@ -5204,8 +5279,13 @@ export default function App() {
     const updatedHistory: BiomarkerLog[] = [];
 
     biomarkerHistory.forEach(log => {
-      const keysToDelete = deletionsByLogId.get(log.id);
-      if (!keysToDelete) {
+      const keysToDelete = new Set<string>();
+      const byId = deletionsByLogId.get(log.id);
+      if (byId) byId.forEach(k => keysToDelete.add(k));
+      const byDate = deletionsByDate.get(toYYYYMMDD(log.date));
+      if (byDate) byDate.forEach(k => keysToDelete.add(k));
+
+      if (keysToDelete.size === 0) {
         updatedHistory.push(log);
         return;
       }
@@ -5278,22 +5358,36 @@ export default function App() {
     if (!updates || updates.length === 0) return;
 
     const updatesByLogId = new Map<string, { key: string; value: string | number }[]>();
+    const updatesByDate = new Map<string, { key: string; value: string | number }[]>();
     updates.forEach(u => {
       if (!updatesByLogId.has(u.id)) {
         updatesByLogId.set(u.id, []);
       }
       updatesByLogId.get(u.id)!.push(u);
+
+      const target = biomarkerHistory.find(b => b.id === u.id);
+      if (target) {
+        const dStr = toYYYYMMDD(target.date);
+        if (!updatesByDate.has(dStr)) updatesByDate.set(dStr, []);
+        updatesByDate.get(dStr)!.push(u);
+      }
     });
 
     const now = Date.now();
     const updatedHistory = biomarkerHistory.map(log => {
-      const logUpdates = updatesByLogId.get(log.id);
+      const logUpdates = updatesByLogId.get(log.id) || updatesByDate.get(toYYYYMMDD(log.date));
       if (!logUpdates) return log;
 
       const newBiomarkers = { ...log.biomarkers };
       logUpdates.forEach(u => {
+        const canonicalUKey = (getMappedBiomarkerKey(u.key) || u.key).toLowerCase().replace(/[\s_]/g, '');
+        const matchingKey = Object.keys(newBiomarkers).find(k => {
+          const canK = (getMappedBiomarkerKey(k) || k).toLowerCase().replace(/[\s_]/g, '');
+          return k === u.key || canK === canonicalUKey || k.toLowerCase().replace(/[\s_]/g, '') === canonicalUKey;
+        }) || u.key;
+
         const numValue = typeof u.value === 'string' ? parseFloat(u.value) : u.value;
-        newBiomarkers[u.key] = isNaN(numValue) ? u.value : numValue;
+        newBiomarkers[matchingKey] = isNaN(numValue) ? u.value : numValue;
       });
 
       return {

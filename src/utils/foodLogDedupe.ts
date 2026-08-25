@@ -272,7 +272,15 @@ export function mergeFoodLogsDeduped<T extends DedupableFoodLog>(a: T[], b: T[])
     }
   });
 
-  return aggKept.map((id) => byId.get(id) as T).filter(Boolean);
+  const results = aggKept.map((id) => byId.get(id) as T).filter(Boolean);
+  return results.sort((a, b) => {
+    const dateA = toYYYYMMDD(a.date);
+    const dateB = toYYYYMMDD(b.date);
+    if (dateA !== dateB) return dateB.localeCompare(dateA);
+    const timeA = typeof a.updated_at === 'number' ? a.updated_at : 0;
+    const timeB = typeof b.updated_at === 'number' ? b.updated_at : 0;
+    return timeB - timeA;
+  });
 }
 
 /**
@@ -295,22 +303,48 @@ export function rehydrateFoodImagesFromDonors<T extends DedupableFoodLog>(
   });
 
   return targets.map((t) => {
-    if (!t || hasUsableFoodImage(t)) return t;
+    if (!t) return t;
     let donor =
       (t.id && byId.get(String(t.id))) || byFp.get(foodLogFingerprint(t)) || null;
     if (!donor) {
       donor = donorList.find((d) => shouldSoftMerge(d, t)) || null;
     }
-    if (!donor || !hasUsableFoodImage(donor)) return t;
-    const candidates = resolveMealImageCandidates({
+    
+    const targetCandidates = resolveMealImageCandidates({
+      imageUrl: t.imageUrl,
+      imageUrls: t.imageUrls,
+    });
+
+    if (!donor || !hasUsableFoodImage(donor)) {
+      if (targetCandidates.length > 0) {
+        return {
+          ...t,
+          imageUrl: targetCandidates[0],
+          imageUrls: targetCandidates
+        };
+      }
+      return t;
+    }
+
+    const donorCandidates = resolveMealImageCandidates({
       imageUrl: donor.imageUrl,
       imageUrls: donor.imageUrls,
     });
-    if (candidates.length === 0) return t;
+
+    const combinedUrls: string[] = [];
+    const seen = new Set<string>();
+    [...targetCandidates, ...donorCandidates].forEach(url => {
+      if (url && typeof url === 'string' && !seen.has(url)) {
+        seen.add(url);
+        combinedUrls.push(url);
+      }
+    });
+
+    if (combinedUrls.length === 0) return t;
     return {
       ...t,
-      imageUrl: candidates[0],
-      imageUrls: candidates.length > 1 ? candidates : donor.imageUrls || [candidates[0]],
+      imageUrl: combinedUrls[0],
+      imageUrls: combinedUrls,
     };
   });
 }

@@ -429,4 +429,137 @@ export async function fetchLogsFromR2(jobId: string): Promise<string | null> {
   return null;
 }
 
+export async function deleteR2ObjectByKey(key: string): Promise<boolean> {
+  if (!key) return false;
+  if (typeof window === 'undefined') {
+    try {
+      const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+      const CLOUDFLARE_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
+      const CLOUDFLARE_R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
+      const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
+      const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
+
+      if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
+        return false;
+      }
+
+      const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+      const client = new S3Client({
+        region: 'auto',
+        endpoint: s3Endpoint,
+        credentials: {
+          accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
+          secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+        },
+      });
+
+      const cleanKey = key.replace(/^\/+/, '');
+      await client.send(new DeleteObjectCommand({
+        Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+        Key: cleanKey,
+      }));
+      return true;
+    } catch (err: any) {
+      console.warn(`[R2Storage] Failed to delete key "${key}":`, err?.message || err);
+      return false;
+    }
+  }
+
+  try {
+    const res = await fetch('/api/r2/delete-debug', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+    return res.ok;
+  } catch (err) {
+    return false;
+  }
+}
+
+export async function deleteDebugPayloadFromR2(jobIdOrKey: string, userId?: string): Promise<boolean> {
+  if (!jobIdOrKey) return false;
+  if (typeof window === 'undefined') {
+    try {
+      const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+      const CLOUDFLARE_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
+      const CLOUDFLARE_R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
+      const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
+      const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
+
+      if (!CLOUDFLARE_R2_ACCESS_KEY_ID || !CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
+        return false;
+      }
+
+      const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+      const client = new S3Client({
+        region: 'auto',
+        endpoint: s3Endpoint,
+        credentials: {
+          accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
+          secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+        },
+      });
+
+      const rawKey = jobIdOrKey.trim();
+      const keysToDelete = new Set<string>();
+
+      if (rawKey.startsWith('http')) {
+        const match = rawKey.match(/(debug\/[^\s?#]+|logs\/[^\s?#]+|jobs\/[^\s?#]+)/i);
+        if (match) keysToDelete.add(match[1]);
+        const jobIdMatch = rawKey.match(/debug\/(?:[^\/]+\/)?([a-zA-Z0-9_\-]+)\.json/i);
+        if (jobIdMatch) {
+          const jid = jobIdMatch[1];
+          keysToDelete.add(`debug/${jid}.json`);
+          keysToDelete.add(`logs/${jid}.log`);
+          keysToDelete.add(`jobs/${jid}_result.json`);
+        }
+      } else if (rawKey.includes('/')) {
+        keysToDelete.add(rawKey.replace(/^\/+/, ''));
+      } else {
+        const cleanJid = rawKey.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 120);
+        keysToDelete.add(`debug/${rawKey}.json`);
+        keysToDelete.add(`debug/${cleanJid}.json`);
+        keysToDelete.add(`logs/${rawKey}.log`);
+        keysToDelete.add(`logs/${cleanJid}.log`);
+        keysToDelete.add(`jobs/${rawKey}_result.json`);
+        keysToDelete.add(`jobs/${cleanJid}_result.json`);
+        if (userId && userId !== 'anonymous') {
+          const cleanUid = String(userId).replace(/[^a-zA-Z0-9_\-@.]/g, '_').slice(0, 120);
+          keysToDelete.add(`debug/${cleanUid}/${cleanJid}.json`);
+          keysToDelete.add(`debug/${cleanUid}/${rawKey}.json`);
+        }
+        keysToDelete.add(`debug/anonymous/${cleanJid}.json`);
+      }
+
+      for (const key of keysToDelete) {
+        try {
+          await client.send(new DeleteObjectCommand({
+            Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+            Key: key,
+          }));
+        } catch {
+          // ignore individual key delete error
+        }
+      }
+      return true;
+    } catch (err: any) {
+      console.warn(`[R2Storage] deleteDebugPayloadFromR2 failed for "${jobIdOrKey}":`, err?.message || err);
+      return false;
+    }
+  }
+
+  try {
+    const res = await fetch('/api/r2/delete-debug', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobId: jobIdOrKey, userId }),
+    });
+    return res.ok;
+  } catch (err) {
+    return false;
+  }
+}
+
 /* stripHeavyImages coldDebugR2Key COLD_DEBUG_LOG opts?: { userId? */
+

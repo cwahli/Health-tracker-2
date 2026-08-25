@@ -65,6 +65,7 @@ export function AllAnalysesModal({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [expandedLogIds, setExpandedLogIds] = useState<Record<string, boolean>>({});
   const [previewImage, setPreviewImage] = useState<{ src: string; foodName?: string } | null>(null);
+  const [jobToDelete, setJobToDelete] = useState<string | null>(null);
 
   // Subscribe to JobStore updates
   useEffect(() => {
@@ -327,10 +328,15 @@ export function AllAnalysesModal({
   };
 
   // Delete job from store
-  const handleDeleteJob = async (jobId: string) => {
-    if (window.confirm('Delete this analysis task from your history?')) {
-      await JobStore.deleteJob(jobId);
+  const handleDeleteJob = (jobId: string) => {
+    setJobToDelete(jobId);
+  };
+
+  const confirmDeleteJob = async () => {
+    if (jobToDelete) {
+      await JobStore.deleteJob(jobToDelete);
       showToast('Analysis deleted.');
+      setJobToDelete(null);
     }
   };
 
@@ -554,6 +560,30 @@ export function AllAnalysesModal({
           foodName={previewImage.foodName}
           onClose={() => setPreviewImage(null)}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {jobToDelete && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl shadow-2xl max-w-sm w-full">
+            <h3 className="text-lg font-bold text-white mb-2">Delete Analysis?</h3>
+            <p className="text-slate-400 text-sm mb-6">Are you sure you want to delete this analysis task from your history? This action cannot be undone.</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setJobToDelete(null)}
+                className="px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteJob}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>,
     document.body

@@ -2129,7 +2129,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                       )}
                       <div className="flex items-center justify-between border-b border-theme-border/50 pb-2 gap-2">
                         <h4 className="font-bold text-theme-text text-sm break-words flex flex-wrap items-center gap-1.5 w-full">
-                          <span className="shrink-0">t.comparisonLabel</span> <span className="text-indigo-600 dark:text-indigo-400 font-bold break-words">
+                          <span className="shrink-0">{t.comparisonLabel || 'Comparison'}</span> <span className="text-indigo-600 dark:text-indigo-400 font-bold break-words">
                             {(() => {
                               const val = comparisonData?.comparisonTitle || comparisonData?.keyNutrientConcern || 'Nutrients of Concern';
                               return typeof val === 'string' ? val.replace(/^key\s*:\s*/i, '') : val;
@@ -2317,11 +2317,53 @@ export const FoodCard: React.FC<AgentCardProps & {
                                   <h4 className="font-bold text-slate-800 dark:text-slate-100 text-[15px] leading-snug">
                                     {group.groupName}
                                   </h4>
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    {(v?.label || group.suitability) && (
-                                      <div className={`${colorCls} uppercase tracking-wider text-[10px] font-bold px-2 py-0.5 rounded-md inline-block w-fit`}>
-                                        {(v?.label || group.suitability).toUpperCase()}
-                                      </div>
+                                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {(v?.label || group.suitability) && (
+                                        <div className={`${colorCls} uppercase tracking-wider text-[10px] font-bold px-2 py-0.5 rounded-md inline-block w-fit`}>
+                                          {(v?.label || group.suitability).toUpperCase()}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {onLogFood && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (isLoggingRef.current) return;
+                                          isLoggingRef.current = true;
+                                          const foodToLog = {
+                                            name: group.groupName || 'Comparison Option',
+                                            title: group.groupName || 'Comparison Option',
+                                            items: group.items || [],
+                                            itemsBreakdown: group.items || [],
+                                            nutrients: group.averageNutrients || {},
+                                            message: group.message || group.recommendation || '',
+                                            healthImpact: group.recommendation || group.message || '',
+                                            verdict: group.verdict || (v?.label ? { label: v.label, level: v.level } : undefined),
+                                            source: 'food_compare',
+                                            imageUrls: messageImages || [],
+                                            date: new Date().toISOString(),
+                                          };
+                                          const logResult = onLogFood(foodToLog as any);
+                                          setLoggedMessageIds?.(prev => [...prev, `${msg.id}-opt-${idx}`]);
+                                          Promise.resolve(logResult).finally(() => {
+                                            isLoggingRef.current = false;
+                                          });
+                                        }}
+                                        disabled={isAlreadyLogged || (loggedMessageIds && loggedMessageIds.includes(`${msg.id}-opt-${idx}`))}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer ${
+                                          (isAlreadyLogged || (loggedMessageIds && loggedMessageIds.includes(`${msg.id}-opt-${idx}`)))
+                                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                            : 'bg-indigo-600 hover:bg-indigo-700 text-white active:scale-95'
+                                        }`}
+                                      >
+                                        <Check className="w-3.5 h-3.5" />
+                                        <span>
+                                          {(isAlreadyLogged || (loggedMessageIds && loggedMessageIds.includes(`${msg.id}-opt-${idx}`)))
+                                            ? t.savedToLog || 'Logged'
+                                            : 'Log Option'}
+                                        </span>
+                                      </button>
                                     )}
                                   </div>
                                 </div>
@@ -3438,6 +3480,25 @@ export const FoodCard: React.FC<AgentCardProps & {
                                                 <div>{displayName}</div>
                                                 <div className="mt-1 flex flex-wrap items-center gap-1">
                                                   <PhysicalFormBadge item={item} />
+                                                  {(item.isEdited || item.wasModified || item.modified) && (
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/50">
+                                                      ✏️ Modified
+                                                    </span>
+                                                  )}
+                                                  {item.calorieDelta !== undefined && item.calorieDelta !== 0 && (
+                                                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                                                      item.calorieDelta < 0
+                                                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-800/50'
+                                                        : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 border-rose-200/50 dark:border-rose-800/50'
+                                                    }`}>
+                                                      {item.calorieDelta > 0 ? `+${item.calorieDelta} kcal` : `${item.calorieDelta} kcal`}
+                                                    </span>
+                                                  )}
+                                                  {item.weightDelta !== undefined && item.weightDelta !== 0 && (
+                                                    <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/50">
+                                                      {item.weightDelta > 0 ? `+${item.weightDelta}g` : `${item.weightDelta}g`}
+                                                    </span>
+                                                  )}
                                                   {(item.chainName || item.brand) && (item.dbSource === 'brand_official' || String(item.dbId || '').includes('brand_menu_') || String(item.fdcId || '').includes('brand_menu_')) && (
                                                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50">
                                                       {item.chainName || item.brand}

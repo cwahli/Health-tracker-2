@@ -1,6 +1,6 @@
 import { JobStore } from './JobStore';
 import { AgentJob } from './types';
-import { uploadPhotoToR2, uploadDebugPayloadToR2 } from '../utils/r2Storage';
+import { uploadPhotoToR2, uploadPhotosToR2, uploadDebugPayloadToR2 } from '../utils/r2Storage';
 import { upsertJobToSupabase } from './SupabaseJobSync';
 import { ImageStore } from './ImageStore';
 import { auth } from '../firebase';
@@ -119,19 +119,23 @@ class JobQueueRunnerImpl {
 
       const isServerOwned = (job.kind === 'food_log' || job.kind === 'food_compare') && (photoUrl || debugUrl || updatedJob.result?.pendingFoodLog);
 
+      let photoUrls: string[] = updatedJob.result?.photoUrls || (photoUrl ? [photoUrl] : []);
+
       try {
-        if (!photoUrl && !isServerOwned) {
+        if ((!photoUrl || photoUrls.length === 0) && !isServerOwned) {
           const images = await ImageStore.getImages(job.id);
           if (images && images.length > 0) {
-            let firstImg = '';
-            if (typeof images[0] === 'string') {
-              firstImg = images[0];
-            } else if ((images[0] as any) instanceof Blob || (images[0] as any) instanceof File) {
-              firstImg = URL.createObjectURL(images[0]);
+            const formattedImages: string[] = [];
+            for (const img of images) {
+              if (typeof img === 'string') {
+                formattedImages.push(img);
+              } else if ((img as any) instanceof Blob || (img as any) instanceof File) {
+                formattedImages.push(URL.createObjectURL(img));
+              }
             }
-            
-            if (firstImg) {
-              photoUrl = await uploadPhotoToR2(job.id, firstImg);
+            if (formattedImages.length > 0) {
+              photoUrls = await uploadPhotosToR2(job.id, formattedImages);
+              photoUrl = photoUrls[0] || '';
             }
           }
         }
@@ -157,6 +161,7 @@ class JobQueueRunnerImpl {
         const cleanResult = strippedResult ? {
           ...strippedResult,
           photoUrl: photoUrl || strippedResult.photoUrl,
+          photoUrls: photoUrls.length > 0 ? photoUrls : (strippedResult.photoUrls || (photoUrl ? [photoUrl] : [])),
           debugUrl: debugUrl || strippedResult.debugUrl,
           mealBuild: strippedResult.mealBuild, // ensure mealBuild is persisted
         } : undefined;

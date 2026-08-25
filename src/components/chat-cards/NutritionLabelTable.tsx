@@ -88,6 +88,29 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
   return 100;
 }
 
+function isVolumeServing(item: any): boolean {
+  const servingStr = String(item?.rawNutritionLabel?.servingSize || item?.nutritionFacts?.servingSize || '').toLowerCase();
+  return servingStr.includes('ml') || servingStr.includes('liter') || servingStr.includes('fl oz');
+}
+
+function getResolvedItemWeightGrams(item: any): number | null {
+  if (!item) return null;
+  const directW = Number(item.primaryBaseWeightG || item.estimatedWeightGrams || item.weightGrams);
+  if (!isNaN(directW) && directW > 0) {
+    return directW;
+  }
+  // Try computing from serving size * servings per container
+  const rawServing = String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').trim();
+  const rawServingsCount = Number(item.rawNutritionLabel?.servingsPerContainer ?? item.nutritionFacts?.servingsPerContainer);
+  if (rawServing && !isNaN(rawServingsCount) && rawServingsCount > 0) {
+    const parsedG = parseServingSizeGrams(rawServing, 0);
+    if (parsedG > 0 && parsedG !== 100) {
+      return Math.round(parsedG * rawServingsCount);
+    }
+  }
+  return null;
+}
+
 function normalizeNutritionKeys(obj: any) {
   if (!obj || typeof obj !== 'object') return obj;
   const normalized: any = {};
@@ -492,8 +515,10 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
             const hasNut = item.nutritionFacts && Object.keys(item.nutritionFacts).length > 0;
             const hasIngredients = !!(item.ingredientsList && String(item.ingredientsList).trim());
 
-            const isStandaloneLabelPhoto = item.source === 'label' && (!item.estimatedWeightGrams || Number(item.estimatedWeightGrams) === 0);
-            const missingWeight = !isStandaloneLabelPhoto && (!item.estimatedWeightGrams || isNaN(Number(item.estimatedWeightGrams)));
+            const resolvedWeight = getResolvedItemWeightGrams(item);
+            const isVolume = isVolumeServing(item);
+            const isStandaloneLabelPhoto = item.source === 'label' && (!resolvedWeight || resolvedWeight === 0);
+            const missingWeight = !isStandaloneLabelPhoto && (!resolvedWeight || resolvedWeight <= 0);
 
             const cleanAnomalyFlags = (item.anomalyFlags || []).filter((f: string) => 
               typeof f === 'string' &&
@@ -636,9 +661,13 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                   {item.isRealTruth && (
                     <div className="font-medium text-theme-neutral">
                       <span className="text-slate-400 font-normal">
-                        {String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').toLowerCase().includes('ml') ? 'Volume:' : t.weightLabelWithColon}
+                        {isVolume ? 'Volume:' : t.weightLabelWithColon}
                       </span>{' '}
-                      {missingWeight ? <span className="text-amber-500 font-bold">{t.unknown}</span> : `${item.estimatedWeightGrams}${String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').toLowerCase().includes('ml') ? 'ml' : 'g'}`}
+                      {missingWeight ? (
+                        <span className="text-amber-500 font-bold">{t.unknown}</span>
+                      ) : (
+                        `${resolvedWeight}${isVolume ? 'ml' : 'g'}`
+                      )}
                     </div>
                   )}
                   {((item.rawNutritionLabel?.servingsPerContainer !== undefined && item.rawNutritionLabel?.servingsPerContainer !== null) || 
@@ -728,12 +757,12 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                               <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50">
                                 {(() => {
                                    const ssRaw = String(item.rawNutritionLabel?.servingSize || item.nutritionFacts?.servingSize || '').trim();
-                                   const totalG = (item.primaryBaseWeightG || item.estimatedWeightGrams) ? Number(item.primaryBaseWeightG || item.estimatedWeightGrams) : null;
-                                   const ssGramsMatch = ssRaw.match(/^(\d+(?:\.\d+)?)\s*g$/i);
-                                   const isExplicit100g = /\b100\s*g\b/i.test(ssRaw);
+                                   const totalG = resolvedWeight;
+                                   const ssGramsMatch = ssRaw.match(/^(\d+(?:\.\d+)?)\s*(?:g|ml)$/i);
+                                   const isExplicit100g = /\b100\s*(?:g|ml)\b/i.test(ssRaw);
                                    const rawBasis = item.rawNutritionLabel?.basisType || item.basisType;
                                    if (isExplicit100g || rawBasis === 'per_100g') {
-                                     return 'Per 100g';
+                                     return isVolume ? 'Per 100ml' : 'Per 100g';
                                    }
                                    if (ssRaw && ssGramsMatch && totalG && Math.abs(parseFloat(ssGramsMatch[1]) - totalG) < 0.5) {
                                      return 'Serving Size (1 dish)';
@@ -742,11 +771,11 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                    if (rawBasis === 'per_dish' || rawBasis === 'total' || rawBasis === 'per_portion') {
                                      return 'Per Dish';
                                    }
-                                   return 'Per 100g';
+                                   return isVolume ? 'Per 100ml' : 'Per 100g';
                                 })()}
                               </th>
                               <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50 whitespace-nowrap">
-                                Total{(item.primaryBaseWeightG || item.estimatedWeightGrams) ? ` (${item.primaryBaseWeightG || item.estimatedWeightGrams}g)` : ''}
+                                Total{resolvedWeight ? ` (${resolvedWeight}${isVolume ? 'ml' : 'g'})` : ''}
                               </th>
                             </tr>
                           </thead>
@@ -792,7 +821,7 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                               const nutDef = nutrientDefinitions.find((n: any) => n.key.toLowerCase() === normLower || n.key.toLowerCase() === kLower);
                               const defaultUnit = isCalorieKey ? 'kcal' : (isServingField ? '' : (nutDef ? nutDef.unit : 'g'));
 
-                              const weightToDisplay = item.primaryBaseWeightG || item.estimatedWeightGrams || item.weightGrams || 100;
+                              const weightToDisplay = resolvedWeight || 100;
 
                               let originalDisplay = '-';
                               let totalStr = '-';
@@ -1263,9 +1292,10 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
       const cals = itemLabelSource.calories ?? itemLabelSource.energy;
       if (cals != null && cals !== '') {
         const isDishBasis = itemLabelSource.basisType === 'per_dish' || itemLabelSource.basisType === 'total' || itemLabelSource.basisType === 'per_portion' || itemLabelSource.basisType === 'per_serving' || itemLabelSource.basisType === 'per_pack';
+        const itemW = getResolvedItemWeightGrams(item) || 100;
         const servingSizeStr = itemLabelSource.servingSizeGrams 
           ? `${itemLabelSource.servingSizeGrams}g` 
-          : (isDishBasis ? `${item.estimatedWeightGrams || item.weightGrams || 100}g` : '100g');
+          : (isDishBasis ? `${itemW}g` : '100g');
         const calNum = parseLabelCalories(cals) ?? Number(cals);
         itemRawLabel = {
           servingSize: servingSizeStr,
@@ -1309,9 +1339,10 @@ export function checkHasNutritionLabels(activeScoutItems: any[]): boolean {
         const cals = source.calories ?? source.energy;
         if (cals != null && cals !== '') {
           const isDishBasis = source.basisType === 'per_dish' || source.basisType === 'total' || source.basisType === 'per_portion' || source.basisType === 'per_serving' || source.basisType === 'per_pack';
+          const itemW = getResolvedItemWeightGrams(item) || 100;
           const servingSizeStr = source.servingSizeGrams 
             ? `${source.servingSizeGrams}g` 
-            : (isDishBasis ? `${item.estimatedWeightGrams || item.weightGrams || 100}g` : '100g');
+            : (isDishBasis ? `${itemW}g` : '100g');
           const calNum = parseLabelCalories(cals) ?? Number(cals);
           correctedRaw = {
             servingSize: servingSizeStr,

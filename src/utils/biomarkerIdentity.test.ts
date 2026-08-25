@@ -31,7 +31,7 @@ describe('getMappedBiomarkerKey — identity', () => {
     expect(getMappedBiomarkerKey('hematocrit_l_l')).toBe('hematocrit');
     expect(getMappedBiomarkerKey('serum_albumin_g_l')).toBe('serum_albumin');
     expect(getMappedBiomarkerKey('total_white_cell_count_wbc')).toBe('wbc');
-    expect(getMappedBiomarkerKey('qrisk2_10_year_risk_score')).toBe('qrisk2_10yr_risk');
+    expect(getMappedBiomarkerKey('qrisk2_10_year_risk_score')).toBe('qrisk2');
   });
 
   it('maps symptom aliases that share one score key (dedupe pressure)', () => {

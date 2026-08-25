@@ -389,9 +389,96 @@ syncRouter.post("/api/sync/supabase-pull", async (req, res) => {
     if (bioRes.error) console.error('[Supabase Pull] biomarker query error:', bioRes.error.message);
     if (profileRes.error) console.error('[Supabase Pull] profile query error:', profileRes.error.message);
 
-    const foods = foodRes.error ? [] : (foodRes.data || []);
-    const biomarkers = bioRes.error ? [] : (bioRes.data || []);
+    const rawFoods = foodRes.error ? [] : (foodRes.data || []);
+    const rawBiomarkers = bioRes.error ? [] : (bioRes.data || []);
     const profiles = profileRes.error ? [] : (profileRes.data || []);
+
+    // Deduplicate foods by ID (keeping newest updated_at)
+    const foodMap = new Map<string, any>();
+    rawFoods.forEach((f: any) => {
+      if (!f || !f.id) return;
+      const existing = foodMap.get(f.id);
+      if (!existing) {
+        foodMap.set(f.id, f);
+      } else {
+        const existingTs = existing.updated_at ? new Date(existing.updated_at).getTime() : 0;
+        const fTs = f.updated_at ? new Date(f.updated_at).getTime() : 0;
+        if (fTs > existingTs) {
+          foodMap.set(f.id, f);
+        }
+      }
+    });
+    const foods = Array.from(foodMap.values());
+
+    // Deduplicate biomarkers by ID and consolidate by Date (keeping newest updated_at)
+    const bioMap = new Map<string, any>();
+    rawBiomarkers.forEach((b: any) => {
+      if (!b || !b.id) return;
+      const existing = bioMap.get(b.id);
+      if (!existing) {
+        bioMap.set(b.id, b);
+      } else {
+        const existingTs = existing.updated_at ? new Date(existing.updated_at).getTime() : 0;
+        const bTs = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+        if (bTs > existingTs) {
+          bioMap.set(b.id, b);
+        }
+      }
+    });
+
+    const bioByDate = new Map<string, any[]>();
+    bioMap.forEach((b: any) => {
+      const d = b.date ? String(b.date).trim() : 'unknown';
+      if (!bioByDate.has(d)) bioByDate.set(d, []);
+      bioByDate.get(d)!.push(b);
+    });
+
+    const biomarkers: any[] = [];
+    const obsoleteDuplicateBioIds: string[] = [];
+
+    bioByDate.forEach(group => {
+      if (group.length === 1) {
+        biomarkers.push(group[0]);
+        return;
+      }
+      const sorted = [...group].sort((a, b) => {
+        const aTs = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+        const bTs = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+        return bTs - aTs;
+      });
+      const survivor = { ...sorted[0] };
+      const topTs = survivor.updated_at ? new Date(survivor.updated_at).getTime() : 0;
+      const secondTs = sorted[1]?.updated_at ? new Date(sorted[1].updated_at).getTime() : 0;
+
+      if (topTs === secondTs) {
+        const mergedBios: Record<string, any> = {};
+        for (let i = sorted.length - 1; i >= 0; i--) {
+          Object.assign(mergedBios, sorted[i].biomarkers || {});
+        }
+        survivor.biomarkers = mergedBios;
+      } else {
+        survivor.biomarkers = { ...(survivor.biomarkers || {}) };
+      }
+      biomarkers.push(survivor);
+
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i]?.id && sorted[i].id !== survivor.id) {
+          obsoleteDuplicateBioIds.push(sorted[i].id);
+        }
+      }
+    });
+
+    if (obsoleteDuplicateBioIds.length > 0) {
+      Promise.resolve(
+        supabaseAdmin
+          .from('biomarker_logs')
+          .delete()
+          .in('id', obsoleteDuplicateBioIds)
+      ).then(({ error: delErr }: any) => {
+        if (delErr) console.warn('[Supabase Pull] Obsolete duplicate biomarker cleanup error:', delErr.message);
+        else console.log(`[Supabase Pull] Cleaned up ${obsoleteDuplicateBioIds.length} obsolete duplicate biomarker rows from DB`);
+      }).catch((e: any) => console.warn('[Supabase Pull] Obsolete duplicate biomarker cleanup exception:', e));
+    }
 
     let profileData: any = null;
     if (profiles.length > 0) {
@@ -745,7 +832,16 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
         if (error) {
           console.error('[Supabase Push] Food upsert error:', error.message);
           pushErrors.push({ table: 'food_logs', op: 'upsert', message: error.message });
-        } else foodCount += foodsToUpsert.length;
+        } else {
+          foodCount += foodsToUpsert.length;
+          // Asynchronously enforce 10-meal debug log retention policy
+          try {
+            const { pruneUserDebugLogs } = await import('./src/utils/debugLogRetention.js');
+            void pruneUserDebugLogs(canonicalUid, { maxRetention: 10 }).catch((e: any) =>
+              console.warn('[SyncPush] Debug log prune:', e?.message || e)
+            );
+          } catch {}
+        }
       }
     }
 
