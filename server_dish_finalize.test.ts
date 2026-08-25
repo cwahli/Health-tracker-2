@@ -101,6 +101,52 @@ describe("server_dish_finalize", () => {
     expect(ledger.lockedNutrientKeys).toContain("protein");
   });
 
+  it("recognizes Gemini totalCarbohydrate alias in OCR label and scales correctly for user portion edit", async () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: "Rolled Oats Bowl",
+      keyword: "rolled oats",
+      estimatedWeightGrams: 80,
+      nutrientBasisWeight: 80,
+      rawNutritionLabel: {
+        servingSize: "30 g",
+        calories: "120 kcal",
+        protein: "3 g",
+        totalFat: "3.5 g",
+        saturatedFat: "0.5 g",
+        transFat: null,
+        totalCarbohydrate: "21 g",
+        sugar: "0 g",
+        addedSugar: null,
+        sodium: "0 mg",
+        salt: null,
+        potassium: null,
+        totalFibre: "3 g",
+        solubleFibre: null,
+      },
+    };
+
+    const ledger = await finalizeDishLedger({
+      item,
+      nutrientBasisWeight: 80,
+      consumedWeight: 80,
+    });
+
+    expect(ledger.dbSource).toBe("label");
+    // Scale factor = 80 / 30 = 2.6667
+    expect(ledger.nutrients.calories).toBe(320); // 120 * 80/30
+    expect(ledger.nutrients.protein).toBe(8); // 3 * 80/30
+    expect(ledger.nutrients.totalFat).toBe(9.3); // 3.5 * 80/30
+    expect(ledger.nutrients.saturatedFat).toBe(1.3); // 0.5 * 80/30
+    expect(ledger.nutrients.carbohydrates).toBe(56); // 21 * 80/30
+    expect(ledger.nutrients.totalFibre).toBe(8); // 3 * 80/30
+    expect(ledger.nutrients.sugar).toBe(0);
+    expect(ledger.nutrients.sodium).toBe(0);
+    expect(ledger.lockedNutrientKeys).toContain("carbohydrates");
+    expect(ledger.lockedNutrientKeys).toContain("totalFibre");
+    expect(ledger.atwaterFlag?.flagged).toBe(false);
+  });
+
   it("scales stored brand lock correctly on portion edit (D8) without re-fetching whole dish", async () => {
     // 350g Yolk sandwich with 760 kcal locked
     const storedBrandLock = {

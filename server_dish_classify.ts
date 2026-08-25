@@ -36,9 +36,9 @@ export const STAPLE_PHRASES = new Set([
   'pain au chocolat', 'tofu', 'edamame', 'kimchi', 'naan', 'pita', 'roti',
 ]);
 
-// Staples that contain a word from PARENT_DISH_RE (e.g. "roll", "croissant")
+// Staples that contain a word from PARENT_DISH_RE (e.g. "roll", "croissant", "chicken")
 const STAPLE_PHRASES_WITH_PARENT_TOKENS = new Set([
-  'dinner roll', 'butter croissant', 'pain au chocolat', 'baguette',
+  'dinner roll', 'butter croissant', 'pain au chocolat', 'baguette', 'chicken breast', 'salmon fillet', 'beef steak'
 ]);
 
 export function residualStaplePhrase(raw: string): string {

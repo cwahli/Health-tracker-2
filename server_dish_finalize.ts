@@ -106,23 +106,57 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
       : ((ocrServingGrams && ocrServingGrams > 0) ? (consumedWeight / ocrServingGrams) : R);
     
     // Process OCR nutrients
-    const rawCalStr = rawLabel?.calories ?? rawLabel?.energy ?? rawLabel?.kcal;
+    const rawCalStr = rawLabel?.calories ?? rawLabel?.energy ?? rawLabel?.kcal ?? rawLabel?.energyKcal;
     const ocrCal = typeof rawCalStr === 'number'
       ? rawCalStr
       : (rawCalStr ? parseFloat(String(rawCalStr).replace(/[^0-9.]/g, '')) : NaN);
     if (Number.isFinite(ocrCal) && ocrCal > 0) {
       nutrients.calories = Math.round(ocrCal * ocrScale);
-      lockedNutrientKeys.push('calories');
+      if (!lockedNutrientKeys.includes('calories')) lockedNutrientKeys.push('calories');
     }
 
-    const OCR_FIELDS = ['protein', 'totalFat', 'saturatedFat', 'transFat', 'carbohydrates', 'sugar', 'totalSugar', 'sodium', 'salt', 'totalFibre', 'potassium'];
-    for (const f of OCR_FIELDS) {
-      const v = rawLabel?.[f] ? parseFloat(String(rawLabel[f]).replace(/[^0-9.]/g, '')) : NaN;
-      if (Number.isFinite(v)) {
-        const normKey = f === 'totalSugar' ? 'sugar' : f;
-        nutrients[normKey] = Math.round(v * ocrScale * 10) / 10;
-        if (!lockedNutrientKeys.includes(normKey)) lockedNutrientKeys.push(normKey);
+    const OCR_FIELD_ALIASES: Record<string, string[]> = {
+      protein: ['protein', 'proteins'],
+      totalFat: ['totalFat', 'fat', 'total_fat', 'lipids'],
+      saturatedFat: ['saturatedFat', 'satFat', 'saturated_fat', 'sat_fat'],
+      transFat: ['transFat', 'trans_fat'],
+      carbohydrates: ['carbohydrates', 'totalCarbohydrate', 'totalCarbohydrates', 'carbohydrate', 'carbs', 'totalCarb', 'total_carbohydrate'],
+      sugar: ['sugar', 'sugars', 'totalSugar', 'totalSugars', 'total_sugar'],
+      addedSugar: ['addedSugar', 'addedSugars', 'added_sugar', 'includesAddedSugars'],
+      sodium: ['sodium', 'na'],
+      salt: ['salt'],
+      totalFibre: ['totalFibre', 'totalFiber', 'fiber', 'fibre', 'dietaryFiber', 'dietary_fiber'],
+      solubleFibre: ['solubleFibre', 'solubleFiber'],
+      potassium: ['potassium', 'k'],
+      calcium: ['calcium', 'ca'],
+      iron: ['iron', 'fe'],
+      magnesium: ['magnesium', 'mg'],
+      vitaminD: ['vitaminD', 'vitD', 'vitamin_d'],
+      omega3: ['omega3', 'omega_3'],
+    };
+
+    for (const [normKey, aliases] of Object.entries(OCR_FIELD_ALIASES)) {
+      let rawVal: any = undefined;
+      for (const alias of aliases) {
+        if (rawLabel?.[alias] !== undefined && rawLabel?.[alias] !== null && rawLabel?.[alias] !== '' && rawLabel?.[alias] !== '-' && rawLabel?.[alias] !== '--') {
+          rawVal = rawLabel[alias];
+          break;
+        }
       }
+      if (rawVal !== undefined && rawVal !== null) {
+        const v = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal).replace(/[^0-9.]/g, ''));
+        if (Number.isFinite(v)) {
+          nutrients[normKey] = (normKey === 'sodium' || normKey === 'potassium' || normKey === 'calcium' || normKey === 'magnesium')
+            ? Math.round(v * ocrScale)
+            : Math.round(v * ocrScale * 10) / 10;
+          if (!lockedNutrientKeys.includes(normKey)) lockedNutrientKeys.push(normKey);
+        }
+      }
+    }
+
+    if (nutrients.salt != null && (nutrients.sodium == null || !lockedNutrientKeys.includes('sodium'))) {
+      nutrients.sodium = Math.round(Number(nutrients.salt) * 400);
+      if (!lockedNutrientKeys.includes('sodium')) lockedNutrientKeys.push('sodium');
     }
   }
 

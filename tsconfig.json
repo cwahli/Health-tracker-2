@@ -27,6 +27,8 @@
     "node_modules",
     "dist",
     "studio",
-    "archive"
+    "archive",
+    "prototype/archive",
+    "app/applet/prototype"
   ]
 }

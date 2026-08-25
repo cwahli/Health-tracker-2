@@ -7622,7 +7622,13 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
       localDateStr = new Date().toISOString().split("T")[0];
     }
     const localTime = new Date().toLocaleTimeString();
-    const timeCtx = `\nCURRENT TIME CONTEXT: ${localDateStr} ${localTime}\nCRITICAL INSTRUCTION: You MUST use "${localDateStr}" in the "date" field of "foodData" unless the user explicitly provides a different date in the chat.\n`;
+    const userMentionsDate = /\b(yesterday|tomorrow|last night|january|february|march|april|may|june|july|august|september|october|november|december|\d{4}-\d{2}-\d{2})\b/i.test(message);
+    let timeCtx = `\nCURRENT TIME CONTEXT: ${localDateStr} ${localTime}\n`;
+    if (activeMeal && activeMeal.date && !userMentionsDate && (!imageDates || imageDates.length === 0)) {
+      timeCtx += `CRITICAL INSTRUCTION: This is an edit/update to an active meal originally logged on "${activeMeal.date}". You MUST use "${activeMeal.date}" in the "date" field of "foodData" unless the user explicitly provides a different date in the chat.\n`;
+    } else {
+      timeCtx += `CRITICAL INSTRUCTION: You MUST use "${localDateStr}" in the "date" field of "foodData" unless the user explicitly provides a different date in the chat.\n`;
+    }
 
     let imageCtx = "";
     if (imagePayloads && imagePayloads.length > 0) {
@@ -8562,6 +8568,12 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       parsedData.date = sanitizeString(rawFoodData.date, mostRecentImageDate || new Date().toISOString().split("T")[0]);
       if (mostRecentImageDate && (!rawFoodData.date || rawFoodData.date === 'undefined' || String(rawFoodData.date).trim() === '')) {
         parsedData.date = mostRecentImageDate;
+      }
+      if (originalModeIsModify && activeMeal && activeMeal.date && (!imageDates || imageDates.length === 0)) {
+        const userMentionsDate = /\b(yesterday|tomorrow|last night|january|february|march|april|may|june|july|august|september|october|november|december|\d{4}-\d{2}-\d{2})\b/i.test(message);
+        if (!userMentionsDate) {
+          parsedData.date = activeMeal.date;
+        }
       }
       parsedData.composition = sanitizeString(rawFoodData.composition, "Unspecified ingredients");
       

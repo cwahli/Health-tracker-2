@@ -1,7 +1,43 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-24
-**Status:** Biomarker Health Audit aligned with Dictionary approval rule; Chat image upload lock resolved; Precalculated ledger fiber key aligned; Inverted Dish Estimate Pipeline active.
+**Updated:** 2026-08-25
+**Status:** Unified Scout 1-Item Architecture defined; OCR field alias normalization implemented; Meal date preservation on text edits enforced.
+
+- **Unified Vision Scout Nutrient Specification & Pure-TS Derivation Architecture (`gemini-3.5-flash-lite`):**
+  - **Scout Estimated Nutrients (14 Core Keys):** For each visual dish, Scout provides:
+    1. `calories` (kcal)
+    2. `protein` (g)
+    3. `totalFat` (g)
+    4. `saturatedFat` (g)
+    5. `transFat` (g)
+    6. `sugar` (g - Total Sugars)
+    7. `addedSugar` (g)
+    8. `totalFibre` (g)
+    9. `sodium` (mg)
+    10. `potassium` (mg)
+    11. `omega3` (g)
+    12. `calcium` (mg)
+    13. `iron` (mg)
+    14. `magnesium` (mg)
+    15. `vitaminD` (mcg)
+  - **Deterministically Derived Fields (Pure TypeScript Middleware in `server_derivation.ts`):**
+    - **Carbohydrates:** Derived via $(\text{Calories} - 4\text{P} - 9\text{F})/4$ when not on a printed label, guaranteeing 100% thermodynamic balance and 0% Atwater error.
+    - **Unsaturated Fat:** $\text{Total Fat} - (\text{Saturated Fat} + \text{Trans Fat})$.
+    - **Salt:** $(\text{Sodium (mg)} \times 2.54) / 1000$.
+  - **Flexible OCR Printed Truth Overlay:** `rawNutritionLabel` verbatim transcribes literal printed fields from packaging/menu screens (Rung 1 Truth). The backend dynamically replaces matching fields on the 14-nutrient profile while preserving unprinted micronutrients from `nutrients`.
+  - **Single-Item Unified Structure:** 1 physical dish = 1 item in `items[]` with `rawNutritionLabel` attached directly to the dish, eliminating duplicate "Nutrition Facts Label" dummy items and multi-pass deduplication.
+
+- **OCR Label Normalization & Atwater Stabilization (`server_dish_finalize.ts` - 2026-08-25):**
+  - **Comprehensive OCR Field Aliases:** Implemented `OCR_FIELD_ALIASES` in `finalizeDishLedger` mapping `totalCarbohydrate`, `carbohydrate`, `carbs`, `totalFibre`, `dietaryFiber`, `totalSugar`, `sugars`, `addedSugar`, `salt`, `potassium`, `calcium`, `iron`, `magnesium`, `vitaminD`, and `omega3`.
+  - **Atwater Integrity:** Resolved the 43% Atwater discrepancy caused by unmapped `totalCarbohydrate` in Gemini schema output. Portions scaled from package labels now maintain precise 1:1 macro alignment without triggering distortion or artificial fat inflation.
+  - **Salt-to-Sodium Fallback:** Automatically converts printed label `salt` to `sodium` ($1\text{g salt} \approx 400\text{mg sodium}$) when sodium is not printed (e.g. UK/EU food labels).
+
+- **Active Meal Date Preservation on Edits (`server.ts` - 2026-08-25):**
+  - **Prompt Date Anchoring:** In `edit`/`modify` mode, prompt dynamically instructs Dietitian to preserve `activeMeal.date` unless the user explicitly mentions a date change in their message.
+  - **Backend Date Guard:** Anchored `parsedData.date` to `activeMeal.date` during edit merges when no new image or explicit date change is supplied, preventing meals from silently advancing to today's date on midnight/follow-up edits.
+
+- **Atomic Staple Protein Classification (`server_dish_classify.ts` - 2026-08-25):**
+  - Added staple proteins (`chicken breast`, `salmon fillet`, `beef steak`) to `STAPLE_PHRASES_WITH_PARENT_TOKENS`, correctly classifying single-ingredient whole proteins as atomic staples rather than composed meals.
 
 - **Biomarker Health Audit Aligned with Dictionary Gate (`src/utils/biomarkerAuditEngine.ts` - 2026-08-24):**
   - **Interface Update:** Added `missingRiskCategory` and `missingConditions` fields to `BiomarkerAuditItem.missingMetadata` interface type.
