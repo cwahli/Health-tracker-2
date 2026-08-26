@@ -410,34 +410,49 @@ export function purgeHallucinatedAndCorruptedData(
     const dateStr = String(log.date || '').trim();
     const formattedDate = toYYYYMMDD(dateStr);
     const noteStr = String(log.note || '');
-    const keys = Object.keys(log.biomarkers || {});
+    
+    const cleanedBiomarkers = { ...log.biomarkers };
+    let biomarkersModified = false;
+
+    // Migrate old keys/aliases to canonical keys FIRST, so the specific key checks below actually match
+    for (const k of Object.keys(cleanedBiomarkers)) {
+      const canonical = getMappedBiomarkerKey(k);
+      if (canonical && canonical !== k && canonical !== 'Unknown') {
+        if (!(canonical in cleanedBiomarkers)) {
+          cleanedBiomarkers[canonical] = cleanedBiomarkers[k];
+        }
+        delete cleanedBiomarkers[k];
+        biomarkersModified = true;
+      }
+    }
+
+    const canonicalKeys = Object.keys(cleanedBiomarkers);
 
     // Check 1: Synthetic 2026-08-16 panel
     const isSyntheticAug16 = formattedDate === '2026-08-16' && (
       noteStr.toLowerCase().includes('synthetic') ||
       noteStr.toLowerCase().includes('parser') ||
-      keys.includes('estimated_average_glucose') ||
-      (keys.length > 5 && !noteStr.includes('NHS') && !noteStr.includes('AlyssaFRS') && !noteStr.includes('OlaFRS'))
+      canonicalKeys.includes('estimated_average_glucose') ||
+      (canonicalKeys.length > 5 && !noteStr.includes('NHS') && !noteStr.includes('AlyssaFRS') && !noteStr.includes('OlaFRS'))
     );
 
     // Check 2: Auto-BMI phantom logs
     const isAutoBmiPhantom = (
-      (keys.length === 1 && keys[0] === 'bmi') ||
+      (canonicalKeys.length === 1 && canonicalKeys[0] === 'bmi') ||
       noteStr.includes('Auto-logged default BMI')
     );
 
     // Check 4: Phantom Calibration Agent clones (late July / early Aug)
     let isPhantomClone = false;
-    const rawKeys = log.biomarkers || {};
     
     if (formattedDate === '2026-08-02' || formattedDate === '2026-07-29') {
-      if (rawKeys['white_blood_cells'] === 5.7 || rawKeys['platelets'] === 227 || rawKeys['whitebloodcells'] === 5.7) isPhantomClone = true;
+      if (cleanedBiomarkers['white_blood_cells'] === 5.7 || cleanedBiomarkers['platelets'] === 227 || cleanedBiomarkers['wbc'] === 5.7) isPhantomClone = true;
     } else if (formattedDate === '2026-07-31') {
-      if (rawKeys['mean_corpuscular_haemoglobin'] === 30.3 || rawKeys['mch'] === 30.3) isPhantomClone = true;
+      if (cleanedBiomarkers['mean_corpuscular_hemoglobin'] === 30.3 || cleanedBiomarkers['mch'] === 30.3) isPhantomClone = true;
     } else if (formattedDate === '2026-08-03') {
-      if (rawKeys['hematocrit'] === 48 || rawKeys['basophils'] === 0.05) isPhantomClone = true;
+      if (cleanedBiomarkers['hematocrit'] === 48 || cleanedBiomarkers['hematocrit'] === 0.48 || cleanedBiomarkers['basophils'] === 0.05 || cleanedBiomarkers['basophil_count'] === 0.05) isPhantomClone = true;
     } else if (formattedDate === '2026-07-09' || formattedDate === '2026-07-14') {
-      if (rawKeys['hba1c'] === 40 || rawKeys['triglycerides'] === 1.07) isPhantomClone = true;
+      if (cleanedBiomarkers['hba1c'] === 40 || cleanedBiomarkers['triglycerides'] === 1.07) isPhantomClone = true;
     }
 
     if (isSyntheticAug16 || isAutoBmiPhantom || isPhantomClone) {
@@ -449,9 +464,6 @@ export function purgeHallucinatedAndCorruptedData(
     }
 
     // Check 5: Cross-Contamination & Date Bleed inside specific logs
-    const cleanedBiomarkers = { ...log.biomarkers };
-    let biomarkersModified = false;
-
     if (formattedDate === '2026-06-05') {
       if (cleanedBiomarkers['total_cholesterol'] === 6.1) { delete cleanedBiomarkers['total_cholesterol']; biomarkersModified = true; }
       if (cleanedBiomarkers['triglycerides'] === 1.07) { delete cleanedBiomarkers['triglycerides']; biomarkersModified = true; }
@@ -489,7 +501,7 @@ export function purgeHallucinatedAndCorruptedData(
     if (formattedDate === '2024-04-02') {
       const phantomLFTs = ['alt', 'sgpt', 'serum_albumin', 'albumin', 'total_bilirubin', 'bilirubin', 'alkaline_phosphatase', 'alp'];
       phantomLFTs.forEach(k => {
-        if (k in cleanedBiomarkers && cleanedBiomarkers[k] === 28 || cleanedBiomarkers[k] === 44 || cleanedBiomarkers[k] === 13 || cleanedBiomarkers[k] === 41) {
+        if (k in cleanedBiomarkers && (cleanedBiomarkers[k] === 28 || cleanedBiomarkers[k] === 44 || cleanedBiomarkers[k] === 13 || cleanedBiomarkers[k] === 41)) {
           delete cleanedBiomarkers[k]; biomarkersModified = true;
         }
       });
@@ -516,9 +528,11 @@ export function purgeHallucinatedAndCorruptedData(
       if ('basophil_count' in cleanedBiomarkers || 'basophils' in cleanedBiomarkers) {
         delete cleanedBiomarkers['basophil_count']; delete cleanedBiomarkers['basophils']; biomarkersModified = true;
       }
-      const redundantAudit2020 = ['audit_total_score', 'audit_typical_units', 'audit_typical_consumption', 'audit_typical_consumption_score', 'alcohol_consumption'];
-      redundantAudit2020.forEach(k => {
-        if (k in cleanedBiomarkers) {
+      
+      // Robust removal of unmapped alias strings that appear as duplicates
+      Object.keys(cleanedBiomarkers).forEach(k => {
+        const lk = k.toLowerCase();
+        if (lk === 'audit_total_score' || lk === 'audit total score' || lk.includes('typical_consumption') || lk.includes('typical consumption') || lk === 'alcohol_consumption' || lk === 'alcohol consumption') {
           delete cleanedBiomarkers[k]; biomarkersModified = true;
         }
       });
@@ -542,19 +556,7 @@ export function purgeHallucinatedAndCorruptedData(
       }
     }
 
-    // Migrate old keys/aliases to canonical keys (e.g. haemoglobinestimation -> hemoglobin)
-    for (const k of Object.keys(cleanedBiomarkers)) {
-      const canonical = getMappedBiomarkerKey(k);
-      if (canonical && canonical !== k && canonical !== 'Unknown') {
-        if (!(canonical in cleanedBiomarkers)) {
-          cleanedBiomarkers[canonical] = cleanedBiomarkers[k];
-        }
-        delete cleanedBiomarkers[k];
-        biomarkersModified = true;
-      }
-    }
-
-    if (Object.keys(cleanedBiomarkers).length === 0 && keys.length > 0) {
+    if (Object.keys(cleanedBiomarkers).length === 0 && canonicalKeys.length > 0) {
       if (log.id) deletedLogIds[log.id] = now;
       purgedCount++;
       continue; // whole record became empty
@@ -564,8 +566,12 @@ export function purgeHallucinatedAndCorruptedData(
     let cleanNote = log.note;
     if (cleanNote && cleanNote.includes(' | Auto-synced from Google Fit')) {
       cleanNote = cleanNote.replace(' | Auto-synced from Google Fit', '').trim();
-    } else if (cleanNote === 'Auto-synced from Google Fit' && keys.some(k => k !== 'steps')) {
+    } else if (cleanNote === 'Auto-synced from Google Fit' && canonicalKeys.some(k => k !== 'steps')) {
       cleanNote = ''; // remove misleading note from clinical tests
+    }
+    
+    if (biomarkersModified || cleanNote !== log.note) {
+      purgedCount++;
     }
 
     cleanedHistory.push({
@@ -593,9 +599,13 @@ export function purgeHallucinatedAndCorruptedData(
     if (!targetLog) {
       targetLog = { id: `injected_${injection.date}_${Date.now()}`, date: injection.date, biomarkers: {}, note: 'Recovered from source medical sheet' };
       cleanedHistory.push(targetLog);
+      purgedCount++;
     }
     for (const [k, v] of Object.entries(injection.keys)) {
-      targetLog.biomarkers[k] = v;
+      if (targetLog.biomarkers[k] !== v) {
+        targetLog.biomarkers[k] = v;
+        purgedCount++;
+      }
     }
   }
 
