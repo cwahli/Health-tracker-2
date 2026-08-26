@@ -219,6 +219,64 @@ const LABEL_PRINTABLE_NUTRIENT_KEYS = new Set([
   'sodium', 'salt', 'potassium'
 ]);
 
+// Standard International Nutrition Facts sort order:
+// 1. Calories -> 2. Total Fat (Saturated, Trans, Unsaturated) -> 3. Carbohydrates (Fiber, Total Sugars, Added Sugars) -> 4. Protein -> 5. Sodium / Salt & Cholesterol -> 6. Vitamins & Minerals
+const STANDARD_NUTRIENT_ORDER: Record<string, number> = {
+  // 1. Calories / Energy
+  calories: 10,
+  energy: 11,
+
+  // 2. Fat & Lipids
+  totalfat: 20,
+  fat: 21,
+  saturatedfat: 22,
+  transfat: 23,
+  unsaturatedfat: 24,
+  omega3: 25,
+
+  // 3. Carbohydrates, Fiber, Sugars
+  totalcarbohydrate: 30,
+  carbohydrates: 31,
+  carbs: 32,
+  totalcarbs: 33,
+  totalfibre: 34,
+  fiber: 35,
+  fibre: 36,
+  solublefibre: 37,
+  sugar: 38,
+  totalsugar: 39,
+  addedsugar: 40,
+
+  // 4. Protein
+  protein: 50,
+
+  // 5. Sodium / Salt & Cholesterol (placed after macros)
+  sodium: 60,
+  salt: 61,
+  cholesterol: 62,
+
+  // 6. Micronutrients / Minerals / Vitamins
+  potassium: 70,
+  calcium: 71,
+  iron: 72,
+  magnesium: 73,
+  zinc: 74,
+  selenium: 75,
+  iodine: 76,
+  phosphorus: 77,
+  vitamind: 80,
+  vitamina: 81,
+  vitaminc: 82,
+  vitamine: 86,
+  vitamink: 87,
+  thiamine: 88,
+  riboflavin: 89,
+  niacin: 90,
+  vitaminb6: 91,
+  folate: 92,
+  vitaminb12: 93
+};
+
 const NON_NUTRIENT_LABEL_KEYS = new Set([
   '_synthetic',
   'issynthetic',
@@ -346,7 +404,25 @@ function buildSynthesizedRawLabel(item: any, source: any) {
   return rawLabel;
 }
 
-export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOpen = true, hideOwnToggle = false, language = "en", isSaved = false }: { activeScoutItems: any[], onConfirmItem?: (idx: any) => void, defaultOpen?: boolean, hideOwnToggle?: boolean, language?: string, isSaved?: boolean }) {
+export function NutritionLabelTable({ 
+  activeScoutItems, 
+  onConfirmItem, 
+  defaultOpen = true, 
+  hideOwnToggle = false, 
+  language = "en", 
+  isSaved = false,
+  onScalePortion,
+  currentPortionRatio
+}: { 
+  activeScoutItems: any[], 
+  onConfirmItem?: (idx: any) => void, 
+  defaultOpen?: boolean, 
+  hideOwnToggle?: boolean, 
+  language?: string, 
+  isSaved?: boolean,
+  onScalePortion?: (ratio: number) => void,
+  currentPortionRatio?: number
+}) {
   const t = translations[language || "en"] || translations.en;
   const [showEstimatedMap, setShowEstimatedMap] = React.useState<Record<number, boolean>>({});
   const [confirmedIndices, setConfirmedIndices] = React.useState<Set<number>>(new Set());
@@ -608,7 +684,16 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
               return true;
             });
 
-              const rawTitle = item.primaryBaseMatchName || item.labelProductName || item.scoutOriginalName || item.originalName || item.keyword || 'Food Item';
+            // Sort nutrients to strictly follow official FDA/International Nutrition Facts order (Calories -> Fat -> Sodium -> Carbs -> Protein -> Vitamins)
+            allKeys.sort((a, b) => {
+              const aKey = String(a).toLowerCase().replace(/[\s_-]/g, '');
+              const bKey = String(b).toLowerCase().replace(/[\s_-]/g, '');
+              const aOrder = STANDARD_NUTRIENT_ORDER[aKey] ?? 999;
+              const bOrder = STANDARD_NUTRIENT_ORDER[bKey] ?? 999;
+              return aOrder - bOrder;
+            });
+
+            const rawTitle = item.primaryBaseMatchName || item.labelProductName || item.scoutOriginalName || item.originalName || item.keyword || 'Food Item';
               const cleanTitle = String(rawTitle)
                 .replace(/^Estimated:\s*/i, '')
                 .replace(/\s*\(category fallback\)/gi, '')
@@ -658,18 +743,31 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                   </div>
 
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 text-[10px]">
-                  {item.isRealTruth && (
-                    <div className="font-medium text-theme-neutral">
-                      <span className="text-slate-400 font-normal">
-                        {isVolume ? 'Volume:' : t.weightLabelWithColon}
-                      </span>{' '}
-                      {missingWeight ? (
-                        <span className="text-amber-500 font-bold">{t.unknown}</span>
+                  <div className="font-medium text-theme-neutral flex items-center flex-wrap gap-1">
+                    <span className="text-slate-400 font-normal">
+                      {isVolume ? 'Volume:' : t.weightLabelWithColon}
+                    </span>{' '}
+                    {missingWeight ? (
+                      <span className="text-amber-500 font-bold">{t.unknown}</span>
+                    ) : (
+                      <span className="font-semibold">{resolvedWeight}{isVolume ? 'ml' : 'g'}{cookingMethod ? ` ${cookingMethod}` : ''}</span>
+                    )}
+                    {item.packGrams ? (
+                      <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[9px] font-semibold border border-indigo-200/40">
+                        {item.portionDescription || `${Math.round(((resolvedWeight || 0) / item.packGrams) * 100)}% of ${item.packGrams}g pack`}
+                      </span>
+                    ) : (
+                      item.portionRatio !== undefined && item.portionRatio !== 1 ? (
+                        <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[9px] font-semibold border border-indigo-200/40">
+                          {item.portionDescription || `${item.portionRatio}x portion`}
+                        </span>
                       ) : (
-                        `${resolvedWeight}${isVolume ? 'ml' : 'g'}`
-                      )}
-                    </div>
-                  )}
+                        <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[9px] font-semibold border border-indigo-200/40">
+                          1.0x portion
+                        </span>
+                      )
+                    )}
+                  </div>
                   {((item.rawNutritionLabel?.servingsPerContainer !== undefined && item.rawNutritionLabel?.servingsPerContainer !== null) || 
                     (item.nutritionFacts?.servingsPerContainer !== undefined && item.nutritionFacts?.servingsPerContainer !== null)) && (
                     <div className="font-medium text-theme-neutral">
@@ -677,6 +775,36 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                       {item.rawNutritionLabel?.servingsPerContainer !== undefined && item.rawNutritionLabel?.servingsPerContainer !== null 
                         ? item.rawNutritionLabel.servingsPerContainer 
                         : item.nutritionFacts?.servingsPerContainer}
+                    </div>
+                  )}
+
+                  {onScalePortion && !isSaved && (
+                    <div className="w-full flex items-center gap-1.5 mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex-wrap">
+                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Dish portion:</span>
+                      {[0.5, 1.0, 1.5, 2.0].map((ratio) => {
+                        const activeRatio = currentPortionRatio || item.portionRatio || 1.0;
+                        const baseWeight = resolvedWeight ? Math.round(resolvedWeight / activeRatio) : 0;
+                        const chipWeight = baseWeight > 0 ? Math.round(baseWeight * ratio) : 0;
+                        const isSelected = Math.abs(activeRatio - ratio) < 0.05;
+                        return (
+                          <button
+                            key={ratio}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onScalePortion(ratio);
+                            }}
+                            className={`px-2 py-0.5 rounded-md text-[9.5px] font-bold transition-all cursor-pointer flex items-center ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-400'
+                                : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600'
+                            }`}
+                          >
+                            <span>{ratio}x</span>
+                            {chipWeight > 0 && <span className="font-normal opacity-80 ml-1">({chipWeight}g)</span>}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -771,7 +899,9 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                                    if (rawBasis === 'per_dish' || rawBasis === 'total' || rawBasis === 'per_portion') {
                                      return 'Per Dish';
                                    }
-                                   return isVolume ? 'Per 100ml' : 'Per 100g';
+                                   const isCooked = (item.cookingMethod && item.cookingMethod !== 'raw') || 
+                                     /porridge|cooked|boiled|soup|stew|hotpot|fried|baked|steamed/i.test(item.originalName || item.keyword || item.name || '');
+                                   return isVolume ? 'Per 100ml' : (isCooked ? 'Per 100g (cooked)' : 'Per 100g');
                                 })()}
                               </th>
                               <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50 whitespace-nowrap">
@@ -1062,15 +1192,20 @@ export function NutritionLabelTable({ activeScoutItems, onConfirmItem, defaultOp
                           const isStandardRef = ['canonical_dict', 'canonical', 'internal_catalog', 'usda'].includes(sibSrc);
                           const isBrand = !isStandardRef && (sib.dbSource === 'brand_official' || sib.source === 'brand_official' || Boolean(sib.brandName || sib.chainName || sib.brand));
                           const brandLabel = sib.chainName || sib.brandName || sib.brand;
-                          const isUsda = !isBrand && (sib.dbSource === 'usda' || String(sib.dbId).length > 4 || String(sib.name).includes('fdc.nal.usda.gov'));
-                          const isOff = !isBrand && !isUsda && (sib.dbSource === 'off' || sib.source === 'off' || String(sib.name).includes('world.openfoodfacts.org'));
-                          const sourceBadge = isBrand
-                            ? (brandLabel ? `${brandLabel} Official` : 'Brand Official')
-                            : (isUsda 
-                                ? 'USDA FoodData Central' 
-                                : (isOff
-                                    ? 'Open Food Facts'
-                                    : (sib.dbSource === 'canonical_dict' ? 'Base Catalog Truth' : 'Standard Reference')));
+                          const hasRealDbId = Boolean(sib.dbId) && sib.dbId !== 'undefined' && sib.dbId !== 'null';
+                          const isLabel = Boolean(sib.rawNutritionLabel || sib.dbSource === 'label' || sib.source === 'label');
+                          const isUsda = !isBrand && !isLabel && (sib.dbSource === 'usda' || (hasRealDbId && String(sib.dbId).length > 4) || (Boolean(sib.name) && String(sib.name).includes('fdc.nal.usda.gov')));
+                          const isOff = !isBrand && !isLabel && !isUsda && (sib.dbSource === 'off' || sib.source === 'off' || (Boolean(sib.name) && String(sib.name).includes('world.openfoodfacts.org')));
+                          const isEstimated = sib.dbSource === 'estimated' || sib.source === 'estimated' || sib.source === 'visual';
+                          const sourceBadge = isLabel
+                            ? 'Nutrition Facts Label'
+                            : (isBrand
+                                ? (brandLabel ? `${brandLabel} Official` : 'Brand Official')
+                                : (isUsda 
+                                    ? 'USDA FoodData Central' 
+                                    : (isOff
+                                        ? 'Open Food Facts'
+                                        : (sib.dbSource === 'canonical_dict' ? 'Base Catalog Truth' : (isEstimated ? 'AI Estimated' : 'Standard Reference')))));
                           
                           const cals = sib.calories ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.calories || 0) * (sibWeight / 100)) : null);
                           const protein = sib.protein ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.protein || 0) * (sibWeight / 100) * 10) / 10 : null);

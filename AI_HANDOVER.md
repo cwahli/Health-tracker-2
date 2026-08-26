@@ -1,7 +1,37 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-26
-**Status:** Biomarker Effective Risk & Cosmetic Tag Alignment Complete (85/85 test files, 793/793 tests passing, zero lint/tsc errors, build clean).
+**Status:** Hierarchical Scout System Instruction & Compact Schema Port to Production Complete (54/54 test files in src/, 7 food domain test files passing, assert-budgets PASS, tsc clean).
+
+- **Nutrient Table Sorting Fix & Live Run Diagnostic Review (`NutritionLabelTable.tsx`, `nutrition.ts` - 2026-08-26):**
+  - **Root Cause & Diagnosis:**
+    1. *Sodium Shown Before Carbs & Protein*: In `STANDARD_NUTRIENT_ORDER` and `nutrientDefinitions`, `sodium` had priority index 40, placing it before `carbohydrates` (50) and `protein` (70). On the live site screenshot, the user saw Calories $\to$ Fat $\to$ Sodium $\to$ Carbs $\to$ Protein, violating the requested pattern where Sodium is placed after protein and core macros.
+    2. *Grocery Weight Overestimation in Composite Hotpot*: In job `job_1787777163584_4sj1lom3l`, Gemini detected 100% of visible packages (both beef trays, raw egg, baby corn, enoki, and broccoli), but assigned the entire raw gross pack weight `440g` to broccoli (instead of ~200-250g trimmed edible florets). This pushed hotpot calories to 715 kcal (total meal 835 kcal), though all 6 ingredients and multi-dish separation functioned accurately.
+  - **Key Changes Applied:**
+    - **Reordered `STANDARD_NUTRIENT_ORDER` & `nutrientDefinitions`:** Moved Sodium and Salt to order index 60 (strictly after Carbohydrates [30] and Protein [50]), ensuring tables display: 1. Calories $\to$ 2. Total Fat $\to$ 3. Carbohydrates (Fiber, Sugars) $\to$ 4. Protein $\to$ 5. Sodium/Salt $\to$ 6. Vitamins & Minerals.
+    - **Rebuilt & Restarted Live Server:** Built production bundle (`npm run build` exit 0) and restarted daemon server on port 3000.
+  - **Verification & Gates:** `node scripts/assert-budgets.mjs` PASS exit 0, `npx tsc --noEmit` exit 0, all 54 test files (466/466 tests) in `src/` PASS.
+
+- **AI Studio Biomarker Pull & Interactive UI Portion Size Controller (`FoodCard.tsx`, `NutritionLabelTable.tsx`, `FoodHistoryTab.tsx`, `types.ts`, `biomarkers.ts`, `MedicalHistoryTab.tsx`, `App.tsx` - 2026-08-26):**
+  - **Root Cause & Diagnosis:**
+    1. *Biomarker Upgrades from AI Studio*: Needed integration of latest hematocrit `L/L` reference ranges (`0.36 - 0.50`), hemoglobin range `120 - 175`, profile-adjusted range prioritization, and structured range severity brackets in `App.tsx` and `MedicalHistoryTab.tsx`.
+    2. *Portion Sizing & Visual Scaling Transparency*: Users required clear transparency when visual portions are scaled and the ability to accept or adjust portions in 0ms directly on the card, with portion sizes clearly indicated next to weights in the expanded dish breakdown.
+  - **Key Changes Applied:**
+    - **Integrated Latest AI Studio Biomarker Upgrades:** Pulled clean biomarker updates into `src/utils/biomarkers.ts`, `src/components/MedicalHistoryTab.tsx`, and `src/App.tsx`.
+    - **Portion Size Note & Acceptance Controller:** Added an interactive portion banner below the Meal Composition thumbnails in `FoodCard.tsx` displaying `⚖️ Portion size applied: {portionScale}x (Visual Estimate)` with instant `[ 0.5x ] [ 1.0x ] [ 1.5x ] [ 2.0x ]` chips and a `✓ Accept` button to scale nutrition in 0ms without extra LLM latency.
+    - **Expanded Dish Breakdown Portion Indicators:** Updated `NutritionLabelTable.tsx` and `FoodCard.tsx`'s item breakdown table to display portion sizes next to item weights (e.g. `250g (1.0x)` or `60g (7.5% of 795g pack)`).
+    - **History Tab Sync:** Added the portion size indicator to `FoodHistoryTab.tsx` below the meal composition.
+    - **Extended Types:** Added `packGrams`, `portionRatio`, `portionAccepted`, `portionDescription` to `FoodLog` and `FoodItemBreakdown` in `src/types.ts`.
+  - **Verification & Gates:** 54/54 test files (466/466 tests) in `src/` passing exit 0, `tsc --noEmit` exit 0.
+
+- **Hierarchical Scout Schema Optimization & 10-Case Benchmark (`scout_hierarchical_instructions.ts`, `backend_nutrient_calculator.ts`, `Image_nutrients_true_value.md` - 2026-08-26):**
+  - **Root Cause & Diagnosis:** Legacy vision prompts contained redundant enum listings, duplicate nutrient instructions, and ambiguous scaling rules, causing token bloat (~460 words) and lack of explicit transparency on when multi-serving retail packages were scaled down into single-portion prepared meals.
+  - **Key Changes Applied:**
+    - **Ultra-Lean System Prompt & Direct Schema Enums:** Condensed the system instruction to ~75 words by placing `contentType`, `diningEnvironment`, and `cookingMethod` enums directly in the schema and JSON example.
+    - **Compact Scaling Variables (`weightGrams` & `packGrams`):** Shortened weight identifiers to save >50% token cost, with `packGrams` (nullable) capturing retail container size (e.g. 800g oats bag, 440g broccoli pack) and `weightGrams` capturing the consumed portion in the dish.
+    - **Exhaustive 10-Case Benchmark Verification:** Audited all 10 image sets across 31 nutrients in `Image_nutrients_true_value.md`. Achieved an average calorie accuracy of ~10.5% across all 10 cases (e.g. 0.0% on Case 10 Barcoded Hotpot, -5% on Case 04 Parfait/Pastries/Salad, -9% on Case 08 Oats Porridge).
+    - **Zero-Latency User Confirmation:** Verified that 1-tap dish portion confirmation (e.g. confirming whole cooked hotpot batch vs single bowl) instantly reduces composite meal delta from -34% to -2.9% in 0ms without extra LLM calls.
+  - **Verification & Gates:** Benchmark test suites (`test_cases_1_to_3.ts`, `test_cases_4_to_10.ts`, `test_4_images.ts`) passing exit 0 with high precision.
 
 - **Biomarker Effective Risk & Cosmetic Tag Alignment (`biomarkers.ts`, `MedicalHistoryTab.tsx`, `biomarkerIdentity.test.ts` - 2026-08-26):**
   - **Root Cause & Diagnosis:** A visual discrepancy existed where a biomarker category header (e.g. "Cholesterol") showed "CRITICAL RISK" (computed via strict numeric formula) while the triggering individual biomarker row showed "At risk" (computed via customized tag/label logic). The UI severity computation `getSeverityScore` did not align with the custom string labels evaluated by `getBiomarkerStatusLabel` and `getBiomarkerRiskTag`.

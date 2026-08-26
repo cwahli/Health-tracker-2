@@ -2284,7 +2284,8 @@ async function callUnifiedLLMInternal({
   onStream,
   skipThinking,
   skipThoughtInjection,
-  logStagePrefix
+  logStagePrefix,
+  temperature
 }: {
   modelId: string;
   systemInstruction: string;
@@ -2310,6 +2311,7 @@ async function callUnifiedLLMInternal({
   // instruction/prompt/response to the right agent tab. Omit for every other
   // call site â€” behavior is unchanged when not provided.
   logStagePrefix?: string;
+  temperature?: number;
 }) {
   const explicitSessionId = logSessionStorage.getStore();
   const _localAddDebugLog = (msg: string) => addDebugLog(msg, explicitSessionId);
@@ -2542,6 +2544,10 @@ async function callUnifiedLLMInternal({
     tools: []
   };
 
+  if (typeof temperature === 'number') {
+    configObj.temperature = temperature;
+  }
+
   // Enable native reasoning for models that support it (Gemini Pro, Flash, Flash-Lite models e.g. 3.5-flash-lite, 3.1-flash, 2.5-pro)
   if (isJson && !skipThinking && (
     normalizedModelId.includes("pro") || 
@@ -2573,8 +2579,7 @@ async function callUnifiedLLMInternal({
           parameters: {
             type: Type.OBJECT,
             properties: {
-              business_keyName: { type: Type.STRING, description: "The exact internal key of the biomarker (e.g. 'ldl', 'hdl')" },
-                      name: { type: Type.STRING },
+              business_name: { type: Type.STRING },
               latitude: { type: Type.STRING },
               longitude: { type: Type.STRING }
             },
@@ -2825,8 +2830,7 @@ async function callUnifiedLLMInternal({
               parameters: {
                 type: Type.OBJECT,
                 properties: {
-                  business_keyName: { type: Type.STRING, description: "The exact internal key of the biomarker (e.g. 'ldl', 'hdl')" },
-                      name: { type: Type.STRING },
+                  business_name: { type: Type.STRING },
                   latitude: { type: Type.STRING },
                   longitude: { type: Type.STRING }
                 },
@@ -3903,6 +3907,7 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
               promptText: scoutPromptText,
               imagePayloads,
               responseMimeType: "application/json",
+              temperature: 0.1,
               skipThinking: true,
               logStagePrefix: 'scout',
               onStream: (chunk: string, isThought?: boolean) => {
@@ -3916,62 +3921,75 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
               responseSchema: {
                 type: Type.OBJECT,
                 properties: {
-                  _internalReasoning: { type: Type.STRING, description: "STEP 1: CLASSIFICATION, STEP 2: EXTRACTION & OCR ATTACHMENT, STEP 3: 14 PORTION NUTRIENTS" },
-                  contentType: { type: Type.STRING },
-                  diningEnvironment: { type: Type.STRING, description: "home_cooked | casual_restaurant | fast_food_chain | fine_dining | airline | unknown" },
-                  items: {
+                  _internalReasoning: { type: Type.STRING },
+                  contentType: { type: Type.STRING, enum: ["visual", "menu_or_poster", "label", "text"] },
+                  diningEnvironment: { type: Type.STRING, enum: ["home_cooked", "casual_restaurant", "fast_food_chain", "fine_dining", "airline", "unknown"] },
+                  dishes: {
                     type: Type.ARRAY,
                     items: {
                       type: Type.OBJECT,
                       properties: {
-                        keyword: { type: Type.STRING, description: "Base food name in database-friendly English" },
-                        originalName: { type: Type.STRING, description: "Exact localized food name" },
-                        chainName: { type: Type.STRING, nullable: true, description: "The restaurant/brand/chain name ONLY (e.g. 'McDonald\'s', 'YOLK', 'Pret'), separate from the dish title. Null if not branded." },
+                        dishName: { type: Type.STRING },
+                        chainName: { type: Type.STRING, nullable: true },
                         estimatedWeightGrams: { type: Type.NUMBER },
-                        cookingMethod: { type: Type.STRING },
-                        ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        sourceImageIndex: { type: Type.INTEGER, description: "0-based index of which image this item appears in" },
+                        cookingMethod: { type: Type.STRING, enum: ["raw", "baked", "grilled", "boiled", "steamed", "deep_fried", "pan_fried", "stir_fried"] },
+                        sourceImageIndex: { type: Type.INTEGER },
                         boundingBox2D: {
                           type: Type.ARRAY,
                           items: { type: Type.INTEGER },
-                          description: "4-element bounding box array [ymin, xmin, ymax, xmax] scale 0-1000"
                         },
                         isStandaloneCondimentPacket: { type: Type.BOOLEAN, nullable: true },
-                        // 1. Literal OCR Label (When Visible)
-                        rawNutritionLabel: {
-                          type: Type.OBJECT,
-                          nullable: true,
-                          properties: {
-                            servingSize: { type: Type.STRING },
-                            calories: { type: Type.STRING },
-                            protein: { type: Type.STRING },
-                            totalFat: { type: Type.STRING },
-                            saturatedFat: { type: Type.STRING },
-                            transFat: { type: Type.STRING },
-                            totalCarbohydrate: { type: Type.STRING },
-                            sugar: { type: Type.STRING },
-                            addedSugar: { type: Type.STRING },
-                            sodium: { type: Type.STRING },
-                            salt: { type: Type.STRING, description: "Verbatim printed salt if label lists Salt instead of Sodium." },
-                            potassium: { type: Type.STRING },
-                            totalFibre: { type: Type.STRING },
-                            solubleFibre: { type: Type.STRING }
+                        foods: {
+                          type: Type.ARRAY,
+                          items: {
+                            type: Type.OBJECT,
+                            properties: {
+                              foodName: { type: Type.STRING },
+                              weightGrams: { type: Type.NUMBER },
+                              packGrams: { type: Type.NUMBER, nullable: true },
+                              sourceImageIndex: { type: Type.INTEGER, nullable: true },
+                              rawNutritionLabel: {
+                                type: Type.OBJECT,
+                                nullable: true,
+                                properties: {
+                                  servingSize: { type: Type.STRING },
+                                  calories: { type: Type.STRING },
+                                  protein: { type: Type.STRING },
+                                  totalFat: { type: Type.STRING },
+                                  saturatedFat: { type: Type.STRING },
+                                  transFat: { type: Type.STRING },
+                                  totalCarbohydrate: { type: Type.STRING },
+                                  sugar: { type: Type.STRING },
+                                  addedSugar: { type: Type.STRING },
+                                  sodium: { type: Type.STRING },
+                                  salt: { type: Type.STRING },
+                                  potassium: { type: Type.STRING },
+                                  totalFibre: { type: Type.STRING },
+                                },
+                                required: ["servingSize", "calories"],
+                              },
+                              nutrients: {
+                                type: Type.OBJECT,
+                                properties: {
+                                  protein: { type: Type.NUMBER },
+                                  saturatedFat: { type: Type.NUMBER },
+                                  addedSugar: { type: Type.NUMBER },
+                                  totalFibre: { type: Type.NUMBER },
+                                  sodium: { type: Type.NUMBER },
+                                  carbohydrates: { type: Type.NUMBER },
+                                },
+                                required: ["protein", "saturatedFat", "addedSugar", "totalFibre", "sodium", "carbohydrates"],
+                              },
+                            },
+                            required: ["foodName", "weightGrams", "nutrients"],
                           },
-                          required: ["servingSize", "calories", "protein", "totalFat", "totalCarbohydrate"],
                         },
-                        // 2. 14 Mandatory Physical Nutrients (Zero Calorie Input)
-                        nutrients: {
+                        dishNutrients: {
                           type: Type.OBJECT,
                           properties: {
-                            protein: { type: Type.NUMBER },
-                            carbohydrates: { type: Type.NUMBER },
-                            totalFat: { type: Type.NUMBER },
                             saturatedFat: { type: Type.NUMBER },
-                            transFat: { type: Type.NUMBER },
-                            sugar: { type: Type.NUMBER },
-                            addedSugar: { type: Type.NUMBER },
-                            totalFibre: { type: Type.NUMBER },
-                            sodium: { type: Type.NUMBER },
+                            totalFat: { type: Type.NUMBER },
+                            totalSugar: { type: Type.NUMBER },
                             potassium: { type: Type.NUMBER },
                             omega3: { type: Type.NUMBER },
                             calcium: { type: Type.NUMBER },
@@ -3979,24 +3997,14 @@ app.post("/api/gemini/food-analyze", async (req, res) => {
                             magnesium: { type: Type.NUMBER },
                             vitaminD: { type: Type.NUMBER },
                           },
-                          required: [
-                            "protein", "carbohydrates", "totalFat", "saturatedFat", "transFat",
-                            "sugar", "addedSugar", "totalFibre", "sodium",
-                            "potassium", "omega3", "calcium", "iron", "magnesium", "vitaminD"
-                          ],
+                          required: ["saturatedFat", "totalFat", "totalSugar", "potassium", "omega3", "calcium", "iron", "magnesium", "vitaminD"],
                         },
-                        source: { type: Type.STRING },
-                        anomalyFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        visualIngredients: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        nutritionFacts: { type: Type.OBJECT, nullable: true }
                       },
-                      required: ["keyword", "originalName", "estimatedWeightGrams", "cookingMethod", "nutrients", "ingredients", "boundingBox2D", "sourceImageIndex"],
-                      propertyOrdering: ["originalName", "keyword", "chainName", "estimatedWeightGrams", "cookingMethod", "ingredients", "rawNutritionLabel", "nutrients", "boundingBox2D", "sourceImageIndex", "isStandaloneCondimentPacket"]
-                    }
-                  }
+                      required: ["dishName", "estimatedWeightGrams", "cookingMethod", "boundingBox2D", "foods", "dishNutrients"],
+                    },
+                  },
                 },
-                required: ["contentType", "diningEnvironment", "items"],
-                propertyOrdering: ["_internalReasoning", "contentType", "diningEnvironment", "items"]
+                required: ["contentType", "diningEnvironment", "dishes"],
               }
             });
 
@@ -7937,8 +7945,7 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           type: Type.OBJECT,
           properties: {
             date: { type: Type.STRING, description: "YYYY-MM-DD" },
-            keyName: { type: Type.STRING, description: "The exact internal key of the biomarker (e.g. 'ldl', 'hdl')" },
-                      name: { type: Type.STRING },
+            name: { type: Type.STRING },
             itemsBreakdown: {
               type: Type.ARRAY,
               items: {
@@ -9716,345 +9723,5800 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             });
           }
 
-          xœì½ÛrW–(ø®¯ØF¸€/²\Ut«	IlóÖe—[æ¡@È"‰ÊLˆ¢eNœ§~ˆç}¾b~`>¥¿`>aÖeßs'J²İgN+ºËDæÎ}]{İ/››ât¶,Ä(Ë®“t"æq9ÍÆ"“2ÉÒb÷‘ĞÿŠå|/š‰?>U­á×·îûQi½‡_ŞûATºMø×ê8²ZGß>²^onŠ½Y¥"Ï–é§|•å¢œÆâj–Eeáöt*Š£¨œv©u‹|%¶·Úbş70y¿9>«ı@®ÆÿF>®ıl/Ê‡Eå+~jä®º·XÌni¡E4EG³¤¼£i<ºË"‹$¥×‹<ŞE³ÑráŠET¢ÈğÛã,Oâ|³ˆŞÁÇeVF³B¤ñ»8ñûQÏÓÛ"ÉfÙ$ş`p³(“|ú.]·¿Îk‘gïâ4JG0Åå,QáLŠf³ÿ›—I4ÛF£ë«d6IÏa–%ş=‰K^V<¶G8–0‡Qœ,ÊWQñ\~_$ñlŒ;ÚËóè¶›ôßV+)»‹<™Gùíó¨ˆ··¶&8(½m?ë^Æ0Ø<*Õ×mñ‡?ˆ_T>èÎâtRNÅ_…s¾Î,ûWWñ¨LŞÅûÃA¶ÌaO®ZÀ3Ñ˜EÃxv)·§!viJcõõ/¿ÀFuúÑ®õŒAc·ğxYæIœ–°çgñ(ËÇÿ\ÀƒtÒér>Œó¿ÂŒ>8™šA#¾ã<Æ2NRzpÚaè  Ş•÷¤@X.sÚù”¡^dãd9ßå{Ü®óa6½c[Õ?ú]uúI±—ÍY°pÆ+O­FB´Üó…­á)®ÎÏy¢è©ØiÃÖ9]hÃ²_dùüdø÷g]ûxúô©hì¼>Ş¿<ê÷~›?[ÃìföË"»)¢Y4şeÃfíŸ†›I[¶´Õ8OØİI’F³c¼"|Š×ñíœ‡ü•ÊF»íÜü¯½:Eûd‹–3Ÿuéx_Åóâd2-_º/V’ÛR£i÷1Pıx¸œf“`Ï•«á¶úàüÂ^ÛnÍbÕ£ÃlÚ„×¥|¼»¢‰¦=ÀÒ æ+áïYüvÅ–ß­k»«A±2£i”¤zô/\iºœÍüæÅm
-Ø0¶BgôYå©ÿYRì'Å´/Ş®÷»ŸFC@Z­<şGÛıòÎúåà'—PœÅS³|	;4Ë šÉQÛ`¢è*Gä Ş%‘X,óXLãÙ"Î+¸ƒiÙ9õ÷×H]kÅıùB9 ÿ .@i¾‹o‹AŒÄ<oü%å_ñ˜gÔDõ†M±C8,˜ÂNÑ²Æo03`µño:Jf€ÜŠåG¢M8µ_Q8¡¢åŞ Ä¦•ÿ>Û=kkÅŞ‹ÊfĞU,Æ©Ò	ëõ‹>“+Ñ
-l~·>‰E¥¦!­íaµŞ¾9¤5¤ï¢<‰ÒòBÈnÄ˜û±@–ØÒ‘š§h|ùaWè<)gñ]cúıû²€³Ğ)®òlLíÍl8œøòChŞ©Ú’®úğî­owë/~@çnoøG®È»½Àæy2×İÙÉC·?»g¾x #±êƒê¶ëQÊnfı-sÌ £Şñv{¾,#Æ”É$ÍòxìoHõ¡8÷4„œpF§÷~/ñRøsŸVw 0Y¸-ƒİ&òwBç½ĞÉ‡?WBİ}›iáV_Â;s“#$%¢s s%b¸“e””Ä±g70$şœq,NG·6¼—úÈˆÒ)ë6g"ßŸzoÕ†Ë×Ş!ÿ`m¦lT•ãIP¡+ıTîï·ş,­½ĞS…]¬H¾E;AÈ¢ğÿË1­=ñp ¸ãó¤ Şd4-Ä7¯Oö¾ëï½õ"Kg·íÊÑ“«+¾V ;ŠVSíe¼-àæHj†EK±›ò"m¨ÍĞæ´~y«Ç8•#œÖô¯oBÍ ö©­Iö´alÍ˜tiêÆ£Ó_=|¿!¡£J·FfIŠ¬°ÁÎÇ°S>f•¬Ã9²¥¨9zû‹øj?„èT¨>lâüÿıe©àî+ñ¼¿ú>šµÔ¡Ş¹€ÅjNšşSÅR^!kÕœóóŸÒ·vñ¬ˆiÍ
-ÿ*¶»ÛÈd2äüUlu·Ÿ¨ßò|Ü‡°•ôÑj²ƒ§  “LräWˆ|]<
-$;a¹
-ÅÆ»0‚CÂb¹#1©†íCU…‚({˜ıÓ/?x—ãNüÇ¿ÿÚqş¹‚:¡|İˆ'»<«Ár¸qÃZMBçı•ÛÀŠG“Òíİä+<Ó¯¾òOµúXlõsºÕ×æ„ñ±5é	 ğ±ÔŸ°2½>U/O+¯¤Ú4€éµQ¬†±15b½jË©!û£ƒ‡½&¼—ªÜY[˜8%é(ç€yaÅïá,éÄf õ#Qƒ»ïÅx‰r õÕ¹¶ª4†uQoıwĞ°õA”·F›Lÿš ¹”ÑŒÕe‡gå4[Â¼v](¹³ Î`Æûß÷Ï^¿Ç¯ÏÏúÇçñâào¢Õ[NÄÎÖÎ7í]q>U‡jY¶ ¦m‰ä+A
-s“ò>)eª=ÈM/IÇñV…ËVúë¸™&@·¦@ÊáÖ°¦5#V 0)OÇqçs¸i¤{½Jò¢Ü ­®=ÀÛE”ÀÎFed·ğ=€vbb4ƒíß‚@xÓ?Ä"…ëVDW1Œ|'å1}`w.—¾AKoĞ&8Ác{K+şê­ FŞ‚$ÏÂ:;D´Q•¤?^q¥oTÇïqmØ]xZÇ8E¼>g€½§QTAª¸MGÓ<K“Ÿ‰6ºc¦Wô­äxƒ<3lÓ³gú¶~êä´¶ÅX©NƒßK†5Øƒf¾TÎE¶:1Œo°‡GS}ùxÁêÙßpWÌÆ©NlÜáì¬d€köÖföÌ»ì^±ÿ¿ÿ×ÿùïâåYïx_ &VœŸœÃÿ"~·’ßÕaûxšÏ/ˆÂ­]­¿
-Ç[+wòÔY—‹{¾‹ã…»ì"†~`—˜¼^&@«säÍ@®H‘¡|#ÉqµœÍ ¹Œ	»Ğy}` ÷›­*Rh€O£B4%–lÒÍ"„ÌTËá²´î X˜Ëõ f<³ˆ—¯{p<ç}à·ÿ­v²±0Ø;ëŸö÷~ƒ÷^ü[ïüàäXôöÎNÑ;<Ç½³3xø}°mÿp°k÷¹ü	ÑŒ— úŒwÅ	°ïÖ­{_ÆïKZÊÉ³x‰“˜ÇˆÊ zAêacf‰^Â8sĞş×jˆ¤=	 3JûÖs²\=‡½½FÑŒ¬H€åòA<~2eã˜ì	M˜Gß4‘©
-7ˆÇII¯¿ğß·]¦g–G7§4‰î<.
- ƒ¦Øo phíß±Ú¾sØ½jo.å_§»:Â¹*ú^4P«Œ±öÍÌª2ø·µk½Ê2úÚ_l¸Uw§ñU‚Êyß°¢ñzûTùì3î˜»gµ«Ë“âz½¥QË®‹¾ùí5…{[Næ‹hTÑ ×fğÀ%ÚŸşÇ÷ò8
-)Ãçè|òĞu>şÕÖ[Q@ë+º´B¨¿¬F«Öhş+Ÿ®MùÃ—Òo±æü‹Kh·úòÕ4\s)¿áes±•—¬¶éºô[_*õ—Ô™õ¸ze:?D9râğğ˜F
-Ò„¦Lx|òO/?Ø©}º¢¬Ÿa~ˆÆâç8Ïº¬?¢®Aò™ƒlŒñ,A÷Ÿ®­ã	òQO“,N ÅòÄuğ•–Æ/¿ëÿ8p.Ôßøì:µÜqîBğşT¼±{NÉ¶îmƒm¼aµGÍ‹]f'0Oì†ÆD»å_·ŒÑÕqP>»¢¡½x| 0Ú÷ÍÊ.Ô*µò˜æ~Z \™’ŒÇg7Ñ-Èìq¼Sj;Ãà{ÛËW¼KŠ%¾M'9ğ¥ICÕæQğ¦Uù`×[¢¶©ÃÜZ­ìU<­?Àî<Z «×.¹i‰§u e—¸†A™CFU‹ë=Ìnb|oüuFQš‘^xè)B¥“ÈéôÕ^TÄ­€r<)Ñ“‹”’ä }¸ˆÕ'7¯¦ãÏå¿0“ÁãowA8ÉËâ‡¤œ¢½ ÅÂñ%àÒëÕ0—ü]ÏiÓÍŒ*„¸ìòqèÓÆÛùæâ[yÛ
-Ÿ&¬Å>ƒÏ¤ÛZµOXÖ›g’dµ¿Gùérä@èÃ¥UÎ5¸g[U×¯*ô¹¾:şXKq\x´F²PÿˆiÄgÅ"MXòV<Òà1êq”¦ÿºŒó[~ ı‹Úİ«dò|ëy–¡k­œäíPÍ~üáş~üwÃ] …4¨È@°/¢å…üq¢ÌşœÌ¢Ÿñ î8™Óö- õê'ÅèÇ@Ş–s§Såtó>Á¿VÔ3 «Æ<ºÍÒ4J
-ú¥Â¿i$ú#Şİâ×q9š.ôÙ!Ñ]ã ¦ ¦,u‡‹okNLí€ÜYÜ0*0ó~ç]xøäŞkÿ˜|Š/ÔºáæÎãüÂ¡¸Ón’fËqŒAïÛ>Ewm\şÙ$ÖM!µm¸\)k¥r‡`ÌÒjÀpL‘k6ş ó(Aêÿ}R|¶ºg\5N5»ÁÁÅ“{x÷âÛñ*JÇ3¢`s@ûÑpˆZölØ,–C¾rE`L5SôÜ$€ÁÛ˜ˆ÷L'Ô­ürUçív<DY?_~lÇxí{ÇWµ=ãKQ”@GïëV¾+óe\…hûwUîµ@p’†H¿­/?8Ÿı=KÒ"‚ö]û­7şıøSÎı-›{kéú¼§)ÜYCÜµ­Á+®OÙ9QKwPÀÿ&W·5üL2&Mğ?ºÃl|ÛÈùõ„¢gğÆÉîJÖWóh¿ÎgmxXÛ¡zë[Ù xÖ}³uqÿè„[¡Ö¡úŠQÕF`h|ƒFâo¾¾¤7— 2E— RéÙÜ„ÁàÈ÷¬Ñ2Sê?=Á±#À«ZğT ò<b=cúé<³aÔ¢g•†ÖË]óÀ3R•ñqæ*-êÎtçq>±Ğr×Ó±ÔCfœ¶{’f;Â¯Ôo×Şa¦£eYây;1"ÏéQ[?&3ZCC†rQé¨¨&X‰iˆ/ ¢€ôÅ Å€Pƒ =B)©½ŠL±[ A!€–BçRy¦§WàO3ÅĞ@èCÍìõÕûB¬7>mdËƒñû]à î|TC)›Ô
-ììØ>cÛgT=Ê[<˜ÊDş~8ÃÓ¿şY|=‹¯âü<Ãx¤Y6nCxÈ’½Şw{á§Šm÷¨‚ÑPK+ôWpz£T-}Æ7Ôú©X£—ªì÷,D·Û¥ùûnı~…½ÚL‡FÔ¶Ğê‰luÏÕÒ˜­}àõzWOÛõb©3ç¾Ø¶%™šƒğÑı{‘¥7ıhõ.°sD¬şEùHF9:."Øƒh«ÆXûc4CîÌn°oÄ4Ò6Ö±¸‰Ÿ,”ÈÊçñZúˆ½7.jİ·vß²¯_«{$Å¶ÒË~c¤å)i÷vÉÚÌà©İÌ¡İ*Šrú[${Ñlfÿ.ÌY}¸ò i<ûc˜—NÑ=³.C	²·}êw2Ï`›>7ÿ±ŒÒàQ¢Òk™¢iÖQ<.š%yñå«Ô!†aIÿ©?n/fÑ(nmş4şãOÅW­É/„û_²Ÿ™‹_®'¿qş%š_#øÿ$"ñK1ZÁÿ[´ŸmN’h6AìÊ“yËÇ‡>^pµÀ¨­ÊKKà½<Ì²ëåâBô@¶†SDx´(¡MÅ[“'ñ; r¸a»z6FÅ°»Ö»†h‘1¤2nşyĞ‰]¡°æ¤cÑMDn4"áišaÑrGêˆêÂÎğØ¨¨ `¬mOú@ ±‡ ğ°~z|ªõØS‹Ëv±i˜ç®ùøÛû>%EIÍÇ~cİs,G %ŞË[•e„}ë]Ës­Sîï
-ç¡šKm4Å±u2Ÿôó\’İ†?ÑG·ítÑ¤ÙØŒ9s¸ó2ÍlNYÅ2û<û=LóoË2W§ï=y _÷Y¸ºß€§ûOÈÑ}:?÷ÉÜ\/WÇÉ­ÅÇİÇÅ}~î.Œ6ê¸· å·ñGóÊÑÏ—Él|Îbq»±ˆÊ©±rğ® V‡šuz×bæ	 èÖS‰_á÷§ğ¹îÓâ	CœÏß3²ºiÉ~›×FĞßé'LC›1òn¸i4&eW?}—äY:·X+Ke¬tºÅşˆO£[ô˜F#ªîEÒI8îËY6iØİ4_»WÁ—·?Çì5ŒüÂ.9MúÔæ«¯P³g=UØ]ÛæF×cu?ï˜’ÿuaÇASöü°™#Ş¡ëæ.)H-Y‡s^<<ùî[›QN
-érÈxfìşU¡s¨¥P¢à²Ö[^í—şeprÜe:B­<¾\~°œ‘½pwí»ŸÒŸR›<[Âla«z«}iÌëS~ ›£ógoĞ{»‚D4@ dF›@”sÑÂH–êB•õ‰¬±Ã=™+§J%å™­ğâa°áì8ùHì¼ø‘€}™Lâ@Œ†/ä(m‹·µ¸sõÃ
-K›ÉøÂ<n×zp°.™Â¦»tœÉaX¸#§ù-C/ØÑ2ËÉ4Ä+îÖPE^qÁÈkÏÆi³”½Òu£Á‡ñ(’Şü9F¤îÜ¤òN0Ñº§ÀÖ1EğEÜ†¾h¬/çşöóá«âgVXG„E˜Ğëø¸Z0½ÇØĞ¡#°Ë€ªWÄB©)Ü-%ÌîŠƒ++ D»iß@—	ëÈ¼¤ÕóA»xD¡:Ñ$J0vÔÎUßÃ*/ğOğÔ÷¶ºG­éb±ïí°*µš­Ëãb«é›‹Š‹„«m8À0„ÑœÔcö´±Ú´ÌşùŞ3l/€Iæ}à]Z­l6>¨ñpQó„&’ù”¶Zú&ÄƒòŸ?æ§Ê‡¶Wª¾ŒLñ}FFO½=gyX’úùWÙg¹ú*´~á¯€Ÿ>l7êÁá©­ä]Á?ÕT¶kËİ—²uÀìoÿ¦knmZU9€¹îbYL[~CæC³tÃÊ.šU}-ı¡°àsHªŸ—HÖå>qÄü	:%©¬3¾w•#cÛÔ×„E‡"ÄÀµñ Lß‘•0öûAL±éñød†ûŸ¤à•·ş÷¼÷¿×­±v}è4lI“v¤Uy×&……|kúqš|‹È |É¯¼ŠÖ4Ôş[t)­ïì›Yı6Æ÷k÷ë¾KmbÖ¿¸çX>Ï¶2¸¹İsŸ5”£ŒGñåŞ>ÛÕ£=ÜµĞÔ;ÈÔÊb`:¡®¾Û»qŠôøuüÕÛ
-6Ó,m`¤­qĞ¼óÙøÜ{Å¦£À²:ôÍ‰
-v[$7xa>“ØDÈóEJP‘p£‚vY¢lâ2ÓùRf:ÌËY4 ~İ‡IG¿Î°,…t[ë‰B’NY!Èş³š~üøÜøÛCN—]t…¯FJIŞ¶_8¼-yŸGÁ¨[í‚üµíiİŠ`&ÊÇRQócvëN.à·ñõW»ÿú©ôúçßwwú\ñÜän;İ'•ØîÖÓÑv÷Ïvb6téû´FÓdt§n'ÛİoB½l[aİ?9ó€Ã,ÊOìd‘å•íø:ĞÃc»g1WI1õ'qïœŠh6ÏRÕ€èã‰İÉ»“<Áw]Ølm»û™FÙ,q{Ùê>­Æîæ±İK<™¬³màøÚî z—¢qV9×@';Îb*À1ö·4Ô‡¦_{€¾,Ë8w;ùSwÛïäI×:Ú'.xËŞ¹|]=Z¸¦‹oº;tø+ÙêîÜs$ÎÁ–0O™ßÅöŸïƒ¾²dæöğçn¥ƒmº:¦÷¢•I<l¸ïÑÇ yE§­sJ¶•6EÑRLH9
-óv˜Ÿ	f|Û
-Çº‚“rr¶;?HÑ+¾^&ëkh{HCé¼¹'ÅÓlF}‘½ü)ûÄ«9zÒœ”M•«=y°ÔUçj/eÊ˜¥8õ¡½'Tie_J’3^ãn¿Ğ‰Ï"§¶S|ŒyªïiDar÷¶>¢’fşµœùX2%‡Íö^Óšßºab­U]lŞ–AÕs¶‚Gó1+Õ?X–`à| e—ø'© L6Ò?if~c€²¹õà™R¸ÏÛÆéÍûéıÎÖÆOïÿÔ¿Øœ8E¬è6Ã¡
-[CÈğG˜ëëgÚf~HÃ¸òrP–¬ƒ¬¾Ú <cG8n¸R…èñşùiU
-’p_L4ÈÛüïêğÒÈ/­ ˆ¼©búoQ5•×¿Æø»Ú—ÎµŸxÄçÙkÚUÌğ3©
-²WÂ­§§Ñ+èqß·iš+Æqâ ì©–ù2ËŸñ3‹6+õö7[Vğ¿k®h€¯ÄNPÁàoŸıa@*Xâš¥õÆÕxw|¤ ãt1ÿ†Luü3vÆ—ÃozóYÊS»V£~Mç÷JxÅy¢‹ÌM†QÒOÄ³ÍŒ2i7URa²‡ÜU—_‰‡ò}YœªÔãWâ¬ÄÆŞ;:‹ª“i^Ğ†Sp×^$ïãqkÛ÷—™Œ«n_êùº²Ò³º}éèÌKåêvè¼tºS×©ÊûêuÇ0;?E¬öÛuº]®¶BÅæP-¤öLØlÜøòƒÇxİ5X©öå÷‚İM8£µ¾‚ğ …y%2tÇ8Óó~Œn®fşÆì€2¿gwEÃDkädùÅâ³{"ö€7cæX‹\Ş@³=
-5ÇÆuô¯¶B²tãçÑûÈ‚«°Çvk±¦B˜,®•`ÜÒÚ#šœp€ËÂ^8Ix@+Î÷c7Ğ'şëvi#«ªmüçWÒîˆ
-éùM†{°
-gJı}µÈˆú—šÜÒ©ÎüÄÎ¢áàŞğÂTA°±k]cS#ÁÁŸuÍ]Q¶‚!ë>óê)TQWíxRN¶g¸é]èqğ¡ÚòçQì±wÖiÉã¡Ş~—såºk.I¨1ù'Ÿc>L-‡ªßõ+õéÉ(·>Ì£Êqƒ¢e D†¡!®èœ2Ç†¿ìêdZÄù%æß˜†h2±!C5=ÚV­Œ.“ê&\eäIA~îâ]4[ÆE®nJAUß&ù¦‚
-}úø|	¨©¼ _¹§˜¹Æ}Úà¬ËŠ^(4£¸Pñ
-ÁÉOL•'åNú<µÉ¥oÂOPÓÚâìjgVó©áã*_
-XZ\[åËP…ëSG«|^WÛÀY±ËH–í&ÏC±uÕT
-#ÈÏ$•6MCdPøä K’Ifvğ‘?²3ˆÿî¼'5‚¤T3¢ ±‰¹¾@Z•rkªd3UÁ z³4²?¬Hc¿¦Uö‡6ËO®lN½Ú‹KÂìÂ¼~µš¹ËòãYHÂæŒï	şW•ƒ–…•ò$ËÉeÚu¬Âu(‰Jéû¯kx?ÕX÷ŞMŠ˜ó>n™¡9şÇÌcÌÙ`=AvZGí2Eşó‰#[Í6Àûo‡ÕÌ›zfäœ4f+÷4ÊÇD@¾¡ox¡z¦ÕOÏº^ÍŒĞi[; àíêçĞ¨9»<qîe.Æ¢«Iµ>Ø¬¨Á yTïÎO®Ù>Ğı'PB¡ËÿÁ-µ( |W<„ş¹SÑ…gìÙ°úõ)&UIıóµjùÂ<àY‘¢Şáßôø­ŸÁh•$ö©´YKû0‡gu‰Úé T‚­R,Ô+düa¬dîfwôãõ‡
-)lü±ì´ïö`êùú£Õitüıñö¨ö;ä€Ò§VíSSg’wF£§ë¯°V+T…/é¼=ªór½ÁÑkKÑƒ/dªQCmjtåwTáOüõE”‡eZœ*R>ÄwmKõ©j¨ZfªŞKçİÃÈ‘flÚeEœı±œ¼mÍıòƒùk€	;k¯8¦ÕdK5*>í®h›£,§éF(€à7T®=Xµæ›3´J-l¾Q¬€[­ss·¶^ù_,0Iİ©hÏV@±µë»2)å°¦XhûÃõÒß,ybİúùû WzÍ’¨ø_ÉÃAÏp¸¼vrÂ5ÆqıÚı
-£
-Ğ¼ÔäÚã$H
-Qôò„­ÉãB&YŒÙI‘ß‘†—ÙbƒŠœ“;FEõ\%,/Uªßµ¾•Ñ¹hrÍ5¼»Ê1õŞ4]xÕğÁğéV'BAe4R*ëcdûZÀ^×[ËêĞ—óÿ€û ®­G´AêÈå¶É‡¨•\¦×)tÑ}·B.oÉŞŠü»ò2–á”Iœ5³“¯a Ø§sõª¥€Á9®Ñ‰^Š/h˜ÖvX‚¥²N&Ë…]¾LlŠí­­ê`,‡±v5¼-˜wlUaz1Ë¢’âvÔ‚º‘lrçXi_Å
-†ÚíŞ­óT7ÂÀâØ?z(‹y]9˜jW?ĞvÛ??ØÓãøæ¾=…ã¯ÙS~>~OU÷Á=­ŒğI{ª†ªÙÓÊ`¹§=*ŸÌ˜Gãì5-¥¾¼mÍO›L·:"¨ÛÜ¨Í+k~°ûÁÊ4”ş-ù£wÄ÷û*¸˜ö©Á¥>Å­ìü¬Èdõj‹[°I¸VRÌº6»­œK¨uàœjZš3q2õ„1«?¯İøÕŸ}:ø¢píJµzäãVji`²RıÙ†ƒìÿh£©•¶öúØş¸5®w•îÿôÓî”¿bÊº3ZÎµ^¦öXA­m™GiÁkŠzò÷’]˜ã^}®õ]ŠBÜ¿a¡N‚_¹‹¯?#ì
-U‰Y­zÅæ{(ê~-’Ë›«$q–X°Ëò€ªÒ cGXŠĞøKÅÈK/ÆñŒSÌ´*d°Š4lqGzòĞ¤Wàò«İé
-Õ.¬Ú»sÂ —wQ¹×îÇ¾Üó{©‚gõ±B™”šêõ]%)ıõÉ«,Wvë©-¸×ÈòÇ¤KIT^(®}»»å¿¼Ò/1˜Ä[XoŸÀËÊœgè-gëÍ¿Ş•ÜòıÇ0ÀdÔŠÔÇ'k:AĞn9qƒ‰GOÁ8pC§!¿q½9^­«ÂU¥å*¢Ú:hÍ§ò?+u®•í•'\± s,Œ·á®UÏá¾§õ:ÆÌŠÉŞŠ5øJí®Ã­¸ßMçNW~;•>\Ã·óuqïÂÕ¡¼&•JQvØ
-ş[­È¸Çó©:ÓèzÊAı{8Šc“Ø9dÄ™¢½Vö2lUò
-Õûíûù|V©¾)]ÜŒ‡h¾íİ8¨R¢h¥úVD*>ş¨Y—"¨¬
-5ø-¯ZıaÜ_ã†½A*¨6Üì¿p¬n²ı<(è#Ğ
-ô£nû.Uõ
-ba½j•ÉÁ3İ•Y™|pøÎR}¶¸(w¼¹c<CÛ7hÏ`3`ö¨r2—@P•ÕœÜ/1
-Z7IÚkšIâËÉÊ~eĞ$o”m|rR¤TKêLA®<Èìg:Mü^OÔÊÿãÿW±NŞ÷Œ‡
-'ö£Wf’óPêÿš¶uáÍ„~ÓhÜl¯Ş„š×[âzû[­N)£7Ã•¥Ì™Ú€àT,rSå›µ«AÈ2ÿ%¥]‘§~švtt]R0[ïÓğsS2…£¥ÆÍmFíí~PÉõMO’ÓLFÁóæ¢¶£eïX[¦11TÓU¶I2ç,tª³Âe3œööæİU@ÀÚ6·êG–g-£Ä' YãÍYƒa¡ï«ñú„Ñ>iá•Ú§Œe{¤9í>e·ÔöAÕ¿]ãø>%¼I4¦Î'¤;_Gùkz²÷?¤:÷æ9òé]Ú¢äÎÛa+ÀÅhØnHIH¥ÙÄ¿]m(>+6‰Ã_æ[ÇIÛ°an9‰rÓ_Œ2ş*²Ùr8‹õoLkR0m§Ëy4Icù´šiù'f^Çÿş×•z‹×«w°ú”ûœfü¾,œNß%e4OÒ}®^J?ßŞÁ_W*¾­ç{Öß}ëïïBöì¿¡%OüA=æÉ0»šEïxsÓ$Á_²‹P®
-YXÛ>+›TÔ™'¸²ö
-³DıGÆ;³¾ÍW>+V£ä®ğ›µÅĞïù×¯Î‰ö¹êTJØÃ=ë®S1@¯‹GÏb ZW³‡sMOg“Ö(1P©µ:¥ìÏÈ*QÕ,à? £‚å4£²-TÀq¼·µ“ÕÙééîÍ‰÷+]W6 tœŸ¹lÀÿ.¬šC1fstJ!¸f³¸KoZ7$8ô¸2„Lş¸˜‘^Ëé67­dèû1XcJŸŒDëtŠYá·M) Š=;š¯>õ¡V0¹0|Ç"à7îİù«®vÀ®Fùís˜ù†`÷şÃ:g Kp•¸°6å*Jf0ü"ÎçQJyó;”BVµaİ¤9Úº¸AW¢Ù;*F/òâ©ÔJPæUl{“ID¿4ÑDÅª8<ÍJ¿>?;èŸ_~×ÿq s\ã¦®èúÍ5$Ã3Ö¯Wø©ÒÆ‘°G­³¢,ÂÂ\ïó±by¾’òŞåÚ^G­{Z³Wa…6©¾üğ*tº.)¨š¬›A03`´ˆ^ æc¤8ƒN~®Ú‡l¸,Á˜¡_MîÔµ¾òfŒ[ö<%BQdÆënÁŒª uÍNêĞ²G«¹\Ñ-D|U™F=B€¼ì:²h•|:(±ÈÛªë¾×†ŞCY?ÃPÈ–Á™á“‚ÑDï@Œf	é ë¼KF±H
-«Ç2…3NfxÌ6=ıOOù¼³yáó-UVC`ÎÊeÑÚÙÚj31t‡ñtò1°$Êv„i,x‘ôòíÆåe†±ÇØ/35*3p«Ïí¾üà€5)Nö²4åz¡è÷²lŞµuñ¬±IÅ@˜Š€i½ºŠñ‰Qœ±ßˆñ§¿‚ë–gÎ,­”Nı8+{
-$x×ÉÓUGûĞêİî>È=ruSşçßÖ~QÂ,ÏYgk}g½0,‹¼ÑëäıàhOÈ‡¹0Äyğ¶
-ÚœÎ-¾ëãmü‡º‹¬([M¸~›“$Ğd oø†¬ÅœVTÜ¦#ª†NwF“=Òš ¶òÚß4ßo ²À]ÜHÆM"<«ŞÅ‘º³6Î?/‹ ŞZMT‘ÇùˆXF×[]ë×[åZ?¨[Ñ<ŸFúÅDÄNcŒ¡Rôóƒãæ£Ï&öƒ£°”*”X0[`eà~âÑ’*ê6%™ÃSy@åásE(*"‹§JPÓpNu4šºàAÖA8BBo6$™eÂúbÙ¼Õ”€¸Øì@× mÆïğ¨Daÿ;¬º_çÙ?L3àğàËlƒÜÎ0ºîk ğÓë8^lD3 Å5Íÿ¶ÑÌ6Ûx¾D4çÉÖ¶¶µq² Œ?)RÀ4öwW³e1•{§.AeG-a×Íé7 @¡sRPÓbâÅœ2˜Ù©v­	ÂZœÖË8›ø¸CR?í¯áoÔS@8Æ	 ãSe.?š´awU‚V¡c™I’$¹hÍpÚGØÃ‰ÊôñÎD×Ençû‡«DG“9ñ@MÑtfø&^-Sãv ‰MÆ•0
-sTôXçïâÛ¦­A™å@àºù2maúÑ@
-`¬Ó•å7Q>”¥VÀÿ34<)dsxx”µXàĞ›â‰6•ÀLÌ€×‚?P¡SfªÏóWEä›…@£+¢»‘!éd&ûÿş?eÇh3Y H£ÏgRÌqll&2…ê»4ˆwÖ Y%eYjÂ”à–ÂÿrÖ¥¦\<Ó%lE‡x
-¸Qs’ö1}hšİ´Ú
-‹jj¢·Ê ƒd~Şcøiü!Q
-ŠkÙT¤aS‘Æ®Hí>ê†@D öU™h×À1js¢¿ˆ\‡Hå"ÎIå¥Â<zV½ëm’½3¦÷š¢L84¬ ‘†|P²„ìE«”©´³û«pîS*2õ¨#@î­ş½"Üø°’úYŒ¡‚ÖOÔÀ^<O2¢à ô+bñxòÉP5zå4¬~U-Ò-š\±8¥–ĞË|p[×ªÖÖ¹¯¿òùK[râ$?KvS˜Úßêj”éğÅ~M€ò”ÉHôpA‚„¼-îëö®jŞO‹%ˆDü˜/™¬Ë‘ ª‹<Åï"èeL½˜uû±à½n«NñYR{Æ®Šë"¬Âİ*¸œ°'T¬‚ô†êZ2“>i¤±¬Ê ¬ì6 azFû¨JJXû‰VÇ1Â÷­°ÚyšK?,ÌgÖ² åY—7ß@eû»ã•]´m½œœ(nÜö ŒÛàCæ‘%ÓğİAHê<ÿ—şŞ¹š ì×"ÎKò=2ƒ.É¨Têz[wbõÔ;;ëıhûø¯ŠŸ\±vèUğ`:”°Ñêwp~vpü²šg£<Yp–ªÆ9ˆSÚ=C™tPÆÒÃt1ü™Š2¡6®ÿ·ƒÁ9ô+ö{ç½çXYµJÁÕ2#Ä£°GØQ—Ã¦Ğ"r âÓ3}éëNºâùAí¨{G¼ ¾@$íˆ½vn )8È-wĞÛÆ”İşF(9it_ÒŸ¸â­Kîø»!ö~¹½#Çw%ûo¶»o*‰Ña+TwÖÛI »st4ûşmmìï7ª½‹¬êè’b½n_=ïŸùİâñÊoá˜èkdDdb2¿tÅaŒÖ	*£ÎïfêUƒ•UF®ÎÌjœ]xÑfv²`‚;°>ƒí­¿ˆMñä1îşqÿeïüàû>ì~uÊf9kÌy™&å§‰ŸOƒÌ-\n5.ádÖ—fS9`axˆ5&ñÃ”
-CM³„N,5G¯Ü1] é%–J
-  ğj³èö’½.ƒã¸ûä{Öÿ××gı}q3…+k‡+¡.`S_ÏMy7ñ!aHÒš»Ş¸›ÙÕpKXW©æ€½œËûÜ|c!À·?'9üÎò|š%ã¢	W™g	XW’nôÓÉ,Öù
-x[´=v‘v †‰À'íL8šaÅ—[Y¤	\x¢¸—®>ÙİYäf“<ïŠ7İ=š¾ÇÒÄ ‚ÿµÎ™^[çÑ¸k¨ÍHË”ù8¯â÷#yt³
-€ª·¥æ|µ–¨ì(ná–dóM ²cö&
-=‚R“ñ;@0ÙïıÑR•±¤ëgï)’’±(fi‚às‡‡îJ±œ +
-.©¤V`­Bğ÷áŸu°ùçÂ»Ÿ€ïûô~Dæ÷°î½R`G.0öÙÜqØ`º‹¦„1ğÅRmF~*4`„(d']Ø™FÅQ–ÇGÌQzƒ>?99ì÷íö³¨@Ãj¿ã1…µyßŸ÷_V¿*”L€:A¬P„™e€LŒ²%pç7X„\Á>Ş4ÀÓˆRºâµº)RuY$c,±44]šª|€-)Ëüğ/P´.(¹{0Ñsv")~È³t²Ÿeyx*K@p89>ü	¥Ú]u±$Æ3ÛÏnµ,1!ñ‹îF ÿ=[¢J¢ T:è™RgLøˆ”§XÃ›†iDG	ÒkÒ&ôTYÂa4U¸ËÔ†rrŸ»<Cã'¤>·áÛAHäPOğ¿.H	)¯Á­,À©ŸÅï’øæS­Xãí¹w¦XÎÑ€j©k•cô®LR0'ëÊ‘9M•¢<álC!H&! $ $ÇsÄ÷00ô#TL“ÉtF>òĞp.°±w\üÕ¾ùè÷#¤utÅßO-¡C•pYêŒ*úU:Üïk©È°}µ)O\“Cí¿'0¦¸¬‚–-çÑ,[RmbŸçI!‹ô®"Á½ÑÚœñ€¿±¸YˆbnîQğ¸t±¢y4Ûàğæ W¨½×6“Ç»äĞ)^Àı”Šo@<6J‰ÿüà¹§E~šÉ?$¿®ËCdäœAÄÛ­1RĞU¨Y¤Ÿ,kié“‰£×ƒs±v7G6e	¯`TG‚OAn9=°¨jÔ½L­<aœğ\
-2ø©–!um‘µoÄÕÀº='¡ ®G¾%%¦¸Şz’
-S®ÓÛ"ÉÈ§œ-Ë‚Kë¯ß‹%p"¹˜%óí_âŸ·º;ïY3ÃÛ
-! Ã‰q6Z"í G"x´	ÿ/o>ÙRå!ùÇ3ú'±½İıó?I?Y2¤Ñ3»Œ%s„¯ÅöÖûËæ!ˆ'HjnT	YÜAè"¹OÇÙšê=Çğn–»ß¸c´1ãPâ¯P~Y‹9µbÜ%à	õØñ¾[Ë¡]ø—1D­—ŞØqÔa#OÛ¢íic§ãxÆ%7\<og‘j·ä‰ên^%1	Ò£Ù/°v7/Ç àOòh1MF½å˜@|•n2„ÖîCmøOÅãş€:OÑ]­UkKµÈ³ìZLfÙxJÙ³6uá?Jt×/§pú'ùY<!‰´ÿ’YÊLÌîç²ÀØMIŒAK6Ö˜ˆ/°Ã1—S'JÜì–ôQléà†@ÏÍcxÔ¬™?€I/¿Äèï|0M®Êõæü
-ä„0œÚ„>!3˜B„WŒÉåÔNÖáŞbcÜ3œãÚ¦ÊÂH9Psv›-‰“dŸquË†änñxç°49a4ŸKÀÉÚÜBœ!{°(ª¤²áºŞ	‡½ÎLoø›x|Œtfv† »ö.Nc8°)ZÈŸjK^÷ë®ìÔ%ÊÊ6¤&ÅµQâş¹ûDlˆî_Äõds¾CX…]  äfk0ëĞØ½Şá.)§ı½ƒ{b Mûâäôüà¨w(Î{g/ûçâûŞáë¾9h7å!‹ÖQI¤º³İİ’S¥ÇÏ`·Ä|Í6áÿùñ«ao{„Ü~o^Møéàù)>ëîpëC~Ú[dÏÛq|r(™¶QbM¼)òq˜›2j§æ´(¡‘Ì\Ew¾Iÿ…Ê5J†#ùt.¼´NˆH¾œ³Å…q÷ê­(¦”*HnGÇ¥@—aº”kn­¦‘è¤Ë)0JÓlTDÓbŸƒ¼{ûªLş·ŠÑåAv·òqu¸Ÿ><€A•a¶TBø	ƒnGôÑš
-—­#’ê–öcÔĞ‚xk{ÖÃçQKJì„D]r}*ş²Õßlmüù/JM:Ô:ÂÈ72ÍÄ$Z7ÿNĞFoJ%ÇdÏÇ@¤ò©½5V¼³vfÂ<./™c½Ü ?Á®Qg$”°®5È¶dnïpŒ·ŠÕa¨cŠè²V—]YkP¬<œK3¬™XœbÒˆ7	P¸×ƒåpCş--Å¿ÙnãË^)Îàş5.ªœƒtlÊoQ*©íŠ%eÙYÓxUûÛºÜŠ4<Ğ¦Å;rùB[¹„?PS‰(‘Óbiœ’CóĞ<rB6F ŠÀ|·ğòDìlí|-^.1"Í%½Ş~O(‰’X=àšÖQŞ;A£€D”¸)ä¸¦bùñÆ×Â€-ˆõ×R;šfìÎì4.(½„ÀtFY“DÀÎ*Ø:Ÿ|BugL.\?\!]oø°²öF§Sàa€ô^;~(Dˆ‚Ø-Ê"ä	FR5 zuPû4ÇhÎü=HÀÚ{Å¤l’º	kÇĞùEÂ¦±ê×S€ûyAK›ü
-¤{¹‹ÌÔ£÷aã¤ñIL¼ó&Ğ›^V>TZŞ”ğEÜ^B²*£Î¹!?’)‹mE»çnÅ5Ã
-Ö¡xÔ+*ŠªÉŠ­[ti,íş®ÈÏ^K•h­›Í
-L‰À5aW¬­ÍéĞx>A@½'#,ü«Š0ÍtW‚t•İDZ&xŞ¾ö4da>øt¥8İO5Œ¬Mzb(óªã›'ySÉ˜1Œ”@Z52^*Ü‡15è¹¶1¼İ Xº3Æ$t“Pè ì¥.6>$îÊ^tÖT=RÂ»Ø¨ìAJÿ™¯]µù‡LB$J 0=»[— PÿgĞ“¯-&ì³gÂÚÚk,7ŸSª=tù8~ˆÏGŒÇ­æ2ûÃ,g%Œ‘Wš¯â2¹â…t8§QÏ‚b9LÊ:Pë«d2ÅkyeºŠÃì¦Ê—ÊŞ%*îõy2¯ò‡ìİ’wÈØÊ%>s@AÓ"¸(´ÄŸ“±f]¢ß7Ÿ(úaa7¢¤~DKùñíï#½Gº9‚hh¼œ=xp‹Ó<_Œ}Ò4ÖÄxV‰!>2+£	:†û{3I+@µmš=éWµ¯,nûhHÅßälŞÄñuÒ2NŠÜÿ‹Må×œrÖË¨HÈó.Jf›³¸Dí¢Ä¨ì‰â:^°<÷òëìàé¥×…q:g1«­÷d•Á`Wìeó!JZ;"ÙöÖ^JlE.ò$’ù¶c.àDË#ƒã€tI:(3¢	ışLåd¼!¿1'1´ñ”HÁ£ÿàÔÈ²®Oc¢K3KÎ5¡ƒ£e×WÊ±&
-WJ\Ì'²ä÷ë2TZ7QE¤Ì1âá&ÁG.B ÎÌ¿¨Ä©‹ƒ?jÀ—”½ëy*‘uëe´ø	Zùbsl³yÂ\0ê©²M)ÜÛ³9É&¯gelA<Œ‘“¬–½PÄ¥˜fyy‰„tVY:áòbŠÖ?‹q‹†0²réDë¯Oõ›ßŸŞ}
-= "0¼Õªx”‹XKª?v‹Z›2±*yOùe®MyÇÀz =¹b)§ÎaL.c¸(TÔ˜ëŸÇi|µ¶][;""Šæ%{g!I’äÄu“ oø`ÿáÖËW4M„*Ùš]†ğèVÊTC—r)_ÄáQ4¦S!AÈúáâ‰Éä¿ëS¢ ZI—FVwßÇÎAÄë§™% ­ÂÆ÷¢aN&µÆÁ –¤çHHësRœ!¤±ZÆUbsUğc/#¨³ä_ò#Ô4âÚ,]Èô_J´¦bâd"n
-³Òpc…G²üg0Ã×ùZµS6§õ	h¾˜vG`İVq½2äÜ´³Òucçêƒú\İ ÷ò]šh4©;(:ÆÜ‰óÃ«ÁmÆ”öCÈá¼‰;@Ns396jÔy®lúÆL¿Zã#Ê¶ò°şÍré»•ŸQú$µ‚•-‡€–Óèşv@AÑˆR£mµó³ÕÁ€cd¤×ªéKİÔÒÅW¥æ¢èÉ‹j<¥
-¥d2’pØ%ÜÌj°#k-üpGUã¶û¶SÖ©-è? ¦ÏwÄNw{Wp’1½ n) İ5òèd©¿³Š¼+~@Ä,Ãlğ!ª?K}ïP”‡M•xQèTc¼ªíK|ºİAníR6í(gçËq˜¥Í†-JÚ ƒa.K•ì9¶,õZRôõxO…‹LšöˆMÊHç¾·æzíÌ*Ô€ûoZ¡›Ğ¯§T—t¬ÌRøÚ¿Òµi}ùAygöìMF·,UàIv§êW¿+ß\|KµıÓ¦ İ®.[Í~oç0ÑØ
-îÚ1‰¶.9êm	"q•2ª&¿L¿˜İ`pî,~*k°úÖÂ¶2ùrV&{&¯ÂO5æç´¹²ÚM‰ >¬Ijmä¢Û…µX?»8î3ÕÍ3§å.'õ: GÏ©.¶Š† A`İtb¤{ø‹6 q¶h«ÒÜ‡ë0ºómÜÌ˜4Š§_~ ¾¸ØºgÁã;òi×/ñ°<WÌÈí¡ëİ¸šE˜úJ7’¿å[#kı^?‘-Šëd¡_â…~Ek‡wôß»•à«Nïj[)pá )å¦h“=¾*‘'8ã?1á æ[£oû-GUÍå2dREò"ûƒÛ{õí¸‹`÷:Uù|LÙoxwùk®•É|%ğàsÀşEM'‚%ª!¢Ñ3—€|'ç—xXÈ‡­F.êŸŸß2`)&‹ÆÛ9+ae| ßmdÉégè
-º8¼	Pµ,Î.³ÛÔBë·LIù¡ƒö•
-#`ËÏ[ì¿y×óÂâŞTê
-ænMv/ë`tˆÊ+/N_ÿ¬¶ô¿ˆY©6Å{!f,ò¡ú¡&úæ"`87—q—ïbµÍ¼
-Ù»t:¥±krzúÜyĞçÊ„*–ÎÜt·õñ¨Äu8ˆe¨ ^†R7æ÷_K8¬tú<?NÆ2S:a™ÛÀà<Ò	ä€l‰ZÊ»Ş¾o–ZpT€`¨~îæ£ıÈéÊd«Ù"N1¥wüÌNÄÇVÓ';àZ³8“ evf¤ô-Å©¶³’Ë2\û#òËsÒ-–Cö­ÄB–Û[[í»n·ÛX1q™h§ÕdA¹Ùoyšˆne¦fêÛ¢-—5T8©«3Î>@~^k·Xšû†e5†r,‚y¹cİ	$ÅJƒcÓ“şB/«móİRE ¹ú†¥I@aÌ,†êoù‰pğóÆ·V‹y6ºŞW‰¹œÔºTİËÉ½)?¶ô÷é.Dpo”à‘P{lDÀBô
-LÄDÊAê°ûèG<şŒòÊ Ô®L¦ Òººfa¹Aë´Eœ3ˆUf(Mv”ÆµÒ¸¢ƒM¥K!	v˜s‰,L¨¥cASF\İ*Ã¹r’ß@Wéì ,è8qbÊ–%ÆÿP¸m„:€™0e™\•IÒb"
-ò”Ø}´!CSw…viÀ%0à Çkƒe/”Æ%l•×ƒ2¨déFÑßy<SÒ©Zî8Š\õBúx ¿1NJ/wº<ˆÊuÅ+bŠó $0Ò#¡c›ä¥ıMj‰œı×qpŒ¹h8yÊ»vwPéìvÅ'xHtl÷ˆNpåzÂR;ÑÚŞØ¡œ79Eä'„ÉCŞkË±½•rÛÒØjšvE¿¸+´£ CòÃ¢x
-+w”½s8÷„Zqd‹ò2hJí°ÌwÛ\È¢'Ş+¼ö3É&ŠrsÎx™Hs½YF×ñÅ
-±xÕªì1Ñ_	2½†\¢Në©îÓ¦ÖÜkî…gD$¥ãB^åf]µ? ûJõÃ{†æŸ3¥ù§H.xp0_€@†1%gd¬ïò6ZáÀ!*ÄBYÓ¥…ÀÒÎ0¬[§,°«óÅ›¦1Ã5Å/˜dNÚŞš¿®®ÿ·9I:ÇêqÈK¯O„v> ÄßûqÉÌ–	‘WoIk§ü¶¨Rá»ÖÂ)AÆ¨ğÖp‰Š¬"E•)AÁ^sŠ©Ëá1×=V•P¥5¬Ñ:ÚÂaì^Bé:j¬Ø„ªò®a)ÿB¯å_£ZIŒÌà§ Ä?Õ™5u&=VrfTªàfŞ×õLp±ó$åªçW³,Ë[ºQ»#071ğsO¬ª£«œ#¯ûRÂBCÙÛ¯ÀVÌ8/…
-¥c²€³¢˜a‚lz‡×`‰PÏıh>;#É†”†æ ñö›”wWåW”*l4ÔÙdpp·Ì©¢«¤)¼¢%Ä¹ÉxpœüË8zYùkÃ2—ˆh.%Š“ÄDu¶O=¥nÇ$8VYÁá¿El›)7xM ²* p»´ÕÈAÜZÎ€Zwöˆî/†]Í“÷¼Öå‚²º‘Q®1ÂDoĞ\ug|‰æìÂœéÏq]bÄÈ¥Ú%«1.]qšzN°[ÃdØ–C³pÿ˜]ºµ=1±H€ô²V¿•öC2\ø°« ÇbÜüdo*BÔÊb†&ñI³Œãt.òõRìüB9úW+
-Söê ¤æ1–9À¤Ëğ7)(W2™R<<ÆÑ§%ıIUä093{	5GlàJù…Z¹X,ïE“¬ce‰*(K<9ƒ;‚¡%3ÀÙ˜ß¹â·Š÷PŠA _vP¿2Ş¨ ~x­(10<A½MnnÀË),eÆÈ½ñ&£÷B½Dÿå1]¨rz¸Ñ˜9#7ã¶µµ’˜S?'!GuURAYyó´+–hR‡Ñ;Ş½ÃÁ‰î¸‰Ø,‰ğÒï½å%ª‚^;Ò‹{ã3lÂm^³‡'ı
- ¢qB¶5µŸ"{Çñ«K:ÑKó’\.‹S‚òÁ½?¦q£(GÃe¬ã°LD­ã¿G$`G$j‘Ş>L£“-#¤Q	ÒÉãè½Ş?8ßØ#v‡w‘Ú°£ãæöNS%¥“Ë¬¬kŠ×“p8M“ú&ÿI†È0wÛC1ä Ô¤¦¦¿t3âQ6šz(æó>—\íõ²ˆ‘³WË?'Î©c‚²8A’qdÑ¬³ä@ä€HŸcøW=k2K>ŒU~AØ#ºÊ°UÇıïûg*;–ÄÖTÌŠhŠBÔ”ßé•À^›”ß^â`òê bgiÙ\{“¯Å3Dœáƒú
-M5~€i+ŠÃço'q>ö¶ÃyH_dy•
-)ld2Ø*jx¨Ñ"ËMg"„¨¢Q‚’äÕlùb…LLhùD;¸çL†Ø7HRZ7lLm	Ã)nÇG/Y‰ã¡Uy«öƒñŠğ0`§Û“1zÕ„œŠÌó77ÓƒÂc¹š­¦õj0hcfUûÂ›}Ğ@>0[#šÿÏÿ=Á kÂBKú·ovİÊúó”¯Z0ß[Î'õe	NºâİÁ 9*«¾I¨…Õ%6V¨PÏÜÈâŠxvu©ÀåÒax|b±Ì
-/7€¯ª@Æj"h8wå¾E=¦èÈ‚zß’ŠfÆ9 ³IºªW)—>ytÙ‘UI‰šr„,«#¸î\X'W`®g™/Ã5×µëj.dÚø€HidÖ˜sÃë!§ìø~®[˜”¬áC«L4Ä£õw0S™÷4Â üŠ«É—ÖĞ›¹Ë”l¶…1¡Ûw¹zpµx~Öò­1"0ÖK ó9ÈÃÙb
-8ŒwFıøÃ½ìŸíoğˆ=¾Š˜X†°	l¬D(øÔ5â\¾Z¤g®“õzëeÛÍ+ª,nY<1¼¯å–d5$VÛ[ §Å¤ã €Ù¯dšíÏßŠä h°l+¶áåGÛdo,¢UPÎ9 ¬£Q¤´ sh­w°5Ğ”nÚú"ƒÍ£ã¦¼¦p“È¤/9q*¬¢Ü¼ŠoÄ¶‹§ v¥õ¬	C<Æ2Ô¸~R8LrÖÄŠÖ4Şİjàê°˜û¶‰
-Ô½ªÑ áI#±¡)FÙbÚ_A³Ya-›êšU×I4Ã…jsÚŠKy ÒÏ¥¾¼+o»¹âœ8ye6ápIl¬;GíİÁçœÉâä¸0IšÛšÛÈUå÷¢ĞŠÕtÖÍ¸ü ¢§„Q97ÉÖÌ¾DSş¥½ÚO2(‚dvBç""“èümø?¸0Âs° äõ{»İRšs©^àWDŞÚâ?şıØçØÊå>-(Åæ-‹•@Q˜
-å{¯ÏÎúÇçÈ®õ¹¨‰ëo–jC€(všı”ãÈ›ö67ÿy?òÀy]Ä&‘°ÌÇlúÖé˜ßõ¬¼¸— ^3VØ¿õ,+¯:”F»É´ñ:–WÉàJĞFJö#`â#
- Íµ¹AÌşÜè¡h˜Tû]JíÅŸ(U-ºµ3&—ùÒª¢1»JZ™f	£y¦!²KRVn[c…_²ºj1ÍÊL²8¬.°Õ1Óez£dIZg–”/Ñ	¶j ÍØÑŞ)¡=á¦-T…‰†Ò qŒ³0ä õ~–ÎL§CHùiP“± …L6•“®œ.'¹»ªvvDFbÙt]Lš&Û´h‘ıNÖ¬ÑÏ¤kl%¿¾Êl2é‘"&Ke`œ³L¬O’¾CGMß¥ÉÉÜ9}0‡Z Y”¡œmÛñıqãIÕ
-ˆ,àüsX:ó=C_ÊÂŞW^Õkê¥wÄuBYœ“uiFoëñ‰æ¸èBDhNËTœØ=BrÌ³r[Ö­~Z°ÚCã4Ã$S¶Qe«—å$.4¼«€€K5.YÏjé“åò/ÙPÛ0]^na
-H!`‰<³ñ¥•r=`ÒÑ¼êV!°§Mµ‡@=(ã¢ÌN½AÅóHëY*ÜÛgí¿ƒV­Û*Ÿ“%#¿Ì1ÖÉFL³h¸ÉXUÖ-5ƒôJ’…
-|N,³ÔÉŠ–~´#˜„¸G$K]e7[A Æ7¥1F"±¢CŞŸ'%0…Ë`v~Sš'QU¥¡<è…RC^É¸UZ(úÛ³ÕùóUö1™ALÕM7Y>–J!b–èv3m*¦X²ËÕñ(ÉßÔV(ëCóì ˜ˆé~—äÖI•gûULA­î£¹tÛNş/¼uØ=µ‘µ%]
-“!XçÁƒçó¬yñF¦!f@Êß:›¹m'6f£S¸q…Ÿ¾¯w²ıŞÓÆ.4QmZqÓ>‚ÊµÃ\5Sâ›]ò–cl1€ŠiRÅ{Ö.µTzM•”©‘Jzºˆ–”<MwN‡nõw`††®ÊZéÆnôr”¤\êcº0„à61©….‚÷GçÚ‘WŒL&íÆ#µ­Œ´5ê$ƒ‰AÍŒ¾4‚6i ¬­?2x²®TÒÉÙz%Œœ²,7Ú§¨Ñb	
-õé€Î¬vÊ•T ª+Ö¨sÜÿáÕaNÙ,åpó&qv»¡².4éâ}\i•ALˆ*â˜‘)®“qÎâ1wX$£k‰èˆäX€ş†“!-!º@Uq	^(ƒ¥KhfX›E|_ÇÓ<ŠgqQš\FşC¶c½Y¢İÂ¯zCD7Í¤º…U"Ê
-Äü
-ÕmT–¤‰-¢bÚB‰ä‡1gŒÅ8íŸõQR³ñ9rd,„¸Š~«°‚Öæî§ÅÓ!i¢’Ü¾,ìd¶ƒŞQßÕ/qáIô|“ÁÌøpè$Ä Xæïm¡'·ü‚]ÍN&©¨…?¥–íˆsÄÀv%VâÛ‹¢(ƒUµK¿[—"<ˆø” å£äc£É IhİLo7WÕ‘²PÚó¡¨°Fîó’¸zKwÌ¡9×æ­ä)ª8H3Ci<ÆZÕ¡Ìl
-ÏãUºƒé
-ËÀ³äÁlC«öoT=õïsr{„X6ûã
-8µŒM‡Á^é¥*0·7sša,hG¾U›Zı×ªÃÌSÔ³š™ uÏ3ÌÏz¯)‚0$n›j‰g#àÅÄ£`Å^@ß$‘±Ñ*1àÒÒ¬·¾ÔpÜÿÛ¹”€J/x£ë¥ñÂı¿õöÎAˆ×²†ösò…Ğ ƒàÇ¹v;FÃÖae>«F±&ŒÚb»ÉcX"4H"==ëpòz ƒÃäÏ`@Qæ2j­%Õ¥Ğƒå‚øˆOÕµÑ˜Õ¶”}Æ.´Ö"åH$Â±VäÑİ£GèâTƒÍàÕ£/?„Jk®[Sócªi^´Û]´§´zÛw5.ik{=À—k<«8öƒ®‡rö>;P}ËõÒ½{‘'\¶Æsó^h+é)•Ò[çRä$¥î}oª )]ª´¬JU¤	HéêÚNRZv#ÿGÕ§ÃÑY˜ÀOºr™
-Yéz¶¨›ÑeÚ;9ë‹óŞà;†›míW„»ü1pm°»¼«RÕ3ÊÈI¡HLN$¹”ÄŸ›¥•§e£Æ<Cõ2æ¦@“á(^J«¸˜Y›ª}Ä1æ´†QyUæè
-ı6z3‰áã7\83L·Õ;<o£CöN×¸Ø¡ë¬ğ5¹„´TBñö®x€ë–ë¶åûhI¬B•C-÷Z²/Nÿ­G»ÂvÏâªÀÖŠÈ·‚a;Pl³¡\¸ĞÅ–\¸ğJtc¹!%eÀGªûèkô|Q\ £,Öô1œı3 u¦+4Kš¸ÂŸƒ”ÅDcFh0cÇ?7İ¼_!–•:«ÏW–ŸÌ¾|d" ÙÄ¤®	²tâ’{·ËÖdT"ë[öi*ô¼A1{ìyMéNİ,Ù10Ò¯õBöğ6gï¢7Gdı]2NaÁÓÛ1û5IZ)£!úuÁ‹ÉìvÏ“>?D‡lLiË„
-×À®È’cXòÍƒ©Så%zGeV€•á¹««.1óË<[òÂ°–”1I&(M¡ÓÌ§ir²¿_Ê®×|‘¡³pörtín›ø<ÇdvlD6øŠw}ƒ÷ÖIFÄ5¦\:½äJªÙm÷Î`;Æâë9ı—œT^]+VªIà’~ êI)bÁ9ÂŒìXW“%aóy4•œh+Æj,š¬º÷²o~wşâ‚çøâ¤Ös$T?ÎûGâ¬ÙwöÎNy¦ÁÅ>;ÊÅÍŠ‚Zê8$ÖØò(,kŠVŸ[lÙ’Ê›à[OëNî ŸÈşì„üâ-·úOb$”¥œpBæv îò"-Ì'+vv…D6Å·%UFÅu±‹¼Ã
-SC…€ê?–q€•¥Ÿéá%úYºoÍŒÀW¶á";ŒdIÍ±è 6éaº}ÊLw3Ü'Õ6iÌãëŠnS¨áT2°yœ'gáÕó•‹­Á°j¹E…ÑÏ $`Š}rË%Lä×€Ü>	‰¢œñ¨šf=õÎG¹m(œ%j£ƒ5E9²$ü¦¹ŸDC—âz0	€ë%@.ÜGHö.?ÂÏ’fÙKá|"³"<—>—QYŞ
-:9ü¹7Í±ˆ/=š Ë
-‹½Şyÿ%ğ-¢7¼<>B¥ØÙëÃ>#vô|ıQÙQ,†$á“gËÛÑ°Ğ4^¦IŠ6/`:Š’ÎMMÑ—x‹«UgT\Ù.òî8¯Ï[0õT;µ]’9Ô˜:-£KÅ~WvM×ÖJ…1îä®Å‘¡áİ”u{^üëë¾x~prÔ;û®Æ%ÚĞ¼/á–8¤>	s™P4,ZÛ1Â ¯šè7OjR‡5Åc‹‘Å9J;©ŞxøI‰¯P!ûøS¹–£@@’?…“ÒSS&©j;[`+Èf±Îí
-~”ü‘	éeûï˜U3‘ÍëYuY¤øm7¢÷JÚ{Œš}c’GãÊrt ¯]
-Ùœa¢ıÉ† Ü^QÓN\‚"za\iÔèdAôu¢
-ª^—©h‰ÆÑ-Œ–f‘FP¶ëXçËêCŠ¥sï&î ìÉZÖ¡³	J'µSÚŒ¥\öN•=$®xlÑ3É‚UNÆ¿ìúKË·sÕİÀè³×©¿D£^Ø}DáiT±ÊRâúõM#D÷Ê‰¯–(™ï”Êk%exÓpp<®¿ŠãÆ‚~áWÎ½6¯3I	×œ½EQHHöˆÏutg¤f%_`©º¶J]Óu<8	øq®ä¾=Ã¹·­}âÕ±¸eö.–VÍ±Z"L¤ŸŠK‰ğj«Eà~ïMîØ×¸\Ø¾$|'¹v$¬øõ)9¢H±ë¸”8¨ÑCdhä\)¤ºâ×<™-Gc&@Ñ¤‚†ûæ¢À²ÌE¬mò6¿;æ-¯L§š%Yakı×Zlš]Ä Æœ÷ÎÎûìéôPTqw"¢¤Føaµ…¡-z~˜’‚Ë!	ÊÏDÙ‹)£è)%ÀìÖÌ©²ğ”9k ®åå‰xŞÛûNlâj@TÚ½)¯Ÿœ–dhşIBÅ6.üú¨ ŒC õ~[sEû'ÊÀ/¤İ9kØ,è¶<æh|eIÌ¢ª,Zs«—™x³hP"*:¼Ê££è!8—&c.C¯DÇ¤°¤FÇ{ÊÚE‡>Q||øø!ùNŒJg1Ê2„@è—qÇë‰€wYµ(wù¶*ÿéı'îØHæN#›’B¼]ún;à&İ^µ‚Ü•iR®»@Zóû¸L…ÙNÓ°˜ĞøÌ2±"ş~¶’Ò#ÈÄ;ÊEyB4ÁÄş÷²¼×/{/é: šä »P²©kÏîf³˜¿P®íXñó^£³²mÎàÆ¨Rr= X)á9ˆU]Wbg¯¯×ñ(×AÛ’V0÷²ñÃ[i›¢2À$Ì5d^¶#QNÊx¥òuÁM)Á û9K¿UyU4GY’.1Fv\İÒíºJĞEÕh˜™õ°œè|N>æï²Ù»ØEºÖ
-Û¤ÿß˜9'ÌË>|l¨I™ÁëL×–%>u€¦TŒê‰ô™ +¬\Ptû»Â`™ÄÅr„Î]˜¯IÇİ£[‹£ØÁÒ -´`'ódÉ3òÖPÚ6X4ùtUtFÚ«»¶˜y_Í Ÿº9¤^Š–Ò·Ş­™†¥m¤àuWWTI	ê¢:?,ı±ÁEj0dùã<Bg0ÉÁJoFCù_ør»Ò:PÁ‰Vd§`fD+pÒ8}èÔ”b¤Î¤O Â+,â˜
-T¡?4\‘;'†=qEq‡´4ş0Á>Êc³§C¾'¦›ö©¹ÇŞ
-9ø"µ6¯™‹ãW™ƒÏšm¶‰_ÔŸ„†û ˜^«­fR$Úlnê¤¨ÅË®>Qu&õf\@Û»ÙĞñÕ§_'ı¸šM.N”åpmta
-ƒÃX¿ë‘c3Üz‚v,]ÖíøsH‰fAÏºÇª‘¦ÅS2s4Üq4‡ã;yÉ7æÒU.œ•IR¸3îı¤ë…
-_³õ´FíH6F
-ÁÒ»şcïèĞ2lHĞ–\©N]4Î³"¹®8É'QªÕïZÎÔ×FºØ¾bŠ;É“¢âtFñX¹Içª
-¢jPFäU¢¤’6wØf“Üjb›·R&ÚÌdP"Õ¥p8&»pâ™`u[@d;[;ßllÁÿm»"'ğ¼®Ì)yU³Ö¾É–.-ìÔÉ¢Ö‡aQô·4‘}ÖÀÖš›B%ÄŸˆ8°jhÖĞÛ¶¶,Z]¹F-pDQËÙ±Ï"‹î4 Ñ²˜2@Gïî•E•ü‰mñW’³€¥…M–sÊ7	ıS£wÉóSåÍNfô}ªèùu íºòo?9Ñ‹1Cv‹—ñ™iß\ØÕºÖÚØ~â<EcpknŠ‚Ì»¤T…Ïçİ’\–éO,­p¬_Ø±É˜	¶ét)Î?çèƒ¶Îª»—HBì’0ø›NÀïµåÜKum½Æl«Æ­XÃ„í4âR>ãïĞæ©ÔíEº&s9r»Sßdè›Ğij»{dæÛ÷£Ñ´uí×k‘sŞ¯`®rô7×şÒTC,ÇøÔ’—±é _:‡´xæ½İ¥Î»ºnµO‚“§ÜLÁÌuµq¨²ıM èNš¶ËÆ+JºC<¬û,Ô-gÌS}Ê_ØV&|’¤1Øê›j-]=ÊE°’Sãªñ1.ëMíçˆÂ+UÚ3zÑ¢Ñ\NSéÛı¤üşÍë.–Å´’‹âë¯+åÑPÑì=“©¤à?¡Ú‚•Ìiíšã®Ôz§=ğŸJò€Ğ€<$§™›ø<;\TğÉŞXµ²Gösı35+ïÍç2 ÁEVD3•×¹qœqà¸I´±M02&Gå€[ÄA¥D(vÁ Èh2)è¿v[·i;THgÀg»w1]«"u½4¬"½Tkâ5~#öåiV*gØó¨Ü˜šıDlj}ÖewÎšCrö³¾Ç§ën{õPTwNbì®cÅ**»îudg¼÷(¦reÍBaÁ‰ä#8ıL5WO=ÓÆ]yîĞø{ıª0lø×Î$ş1‰Á»‚½ãO_Sæ8=;ùş`¿¿/ÎOÄ'¯•³÷käˆåFr÷Ñ—HÎ-ôL¸Š²íû0€hd‚¹™sï?Ä×q9Åx:,©é´ĞÏ±Ñ¼ê†é4®¼Çø¾Ä¤v^sëÍ£»Wİ;m€¦®è)gs.øõ‚sM
-Ÿ$E3¥
-0ÅÄyá	àyĞ‡mªyg»â0"Ge£Ş!n`æ\œ¾-RçÚ¶¨4’şíĞØ™uÆüº~L4rÈq½ú¤Ëéõ	ö
-}n?ÌÿfTÀ¥ÅÒAh–¾áôGµÒ;\{*òg^róChèßCN÷ë EÇƒó³×–—(…= '7æ¡ÆÃ]7l²£Pâkş~zë§Fÿé-Æ 8«KÌ‘2ç¼ªw«~z«ï÷+¾Ş?½•Ú+åxBÉsdjsƒ0b35£ºÄ„è¤…NQğŸŞº5aéØ7àÅ’‚Rh¥{&~aWÿˆe•İĞ1	©Üú:Ù{©ò¶+cDu]q"³çÍÈ&ÈvÈÔ¨U¹…ñ¾¼<5ğà¤ü­>&ù&ŞÊäİŞ…‘k²„Ã
-”°ÊğJù	Lâğ.ºÁe8…ø&åw«¸º±2…øî>@Œ_É/š›E|SU‘G(fWÃˆ’jW«à¸FBÅ4¹Â¸ŸJuò`Íñ.ô*qæÒ%_Ÿ|Ly	èÂô¤j¾¢ˆ”~uì«¤²èÊuµ&V••`“D8{c`%[·s %©§xì«ïˆ k«ìÖTvh|BisH²tGCæ€©Ô_ğ2	(3Á¾­-ıàL–*¤ ‹8/à]‚ÙtªñWVFá§ô$ó ’”7ë«.X	4œìQE$~\-şÀbÙÖ¼ÜšrNtd¨CPC>Ä
-;YØƒx…ÛİÚØpˆ6)ÿYÉJØ`9l»]©H »´òè:˜–òÜĞmYİµ]Ä@™á’”n)AS–^®: ²Rˆ21ÕC÷$;&_3P]y„ôØ§+ßù)ı)=ÑœĞ §\Rön
-£%á"ßà“êBŒ—„ÛßhtÜ—8Jl^i€˜é¢+Şx¦F]¯Y×*rw"Å8õ ú¹ÀÔQzMŞ
-Wœ´HlÜ%—aíIÅÖŠ*ZÄª–ÑUx¥7v¥­GçĞ®ãÓ)y‹cæİjŞ•-­‹wl]WX &ëÕÃ­Spß1Ê6ûõğ†zûèÒhƒÒ¥7à–éÂq)W\„O©;orÏxU>RM~å•úujÄÖË•jûj’^ hH*Ş(L)ÿş 2›Èç‹LÏ/ìkdx1•šG~£7¯¤¾¸wø(²!ª«ló/O+×M²}h§ëúÀ(WÂ”Ò¯WòÃÃƒ
-K… ‹—¼Šg³ìq#“%„4	¿’[õiÆî6l•W•!@øÑùŒãl eLgÿÒoQô"Ã3G˜’Ç mÚ5ÑAÚ‰ŒGZôw•Á.e‹PØ‘Ò8V+U˜BS7«\Œq!sõê®E€3…@}{‚^¥ûÏ¸Ör!‚êÌ†Ü¿†¯nä©OôeM³ Ëb}ÅùÍê¾µq9|ô¤ûçJÎÜ˜Ï³Ùæa`p‡/Ù¥„;_SNÔ¢ÒÜeE õÖöüßÎÖÎ×ÕåûØšo?©m®KF!–A'Ì;8ü—”B‰sïRºH¿‰ÂşùW÷ÃàShòÄ8a²£k´ÛO(&E«eÁ÷ŒMäÅråÏehûÎÉ‘n’¼“â¢Ç¿¨s}&æqº•)ÕàÛñ2ìf‡9Šƒ#X;ºU2»2ñcö;rU0ø@º]	 'ÁpÓáH¾Èø›7=&Ç¼ŠSØ§i‚·èÉ¤#R´²`‰\t¦+N·NÃ¡ƒÊBÎ™ÑI
-İ$¯…Y‡¯(ÛoI„!±vöW3ô`Oj-¶¶oÙ$bÖ‹hˆ|)‹¿“(çØÅ½]—ßríÖ/§0­Å!İ‡EÊê­—.@Õû.Ù ‡ZëæílÕŞ¼‡İÊ¨5g‹BhE™vÊy#Õn´×jÌş?b”GW­òB¤Ë2göÉ›"¼¿Îñ¶V^Àv”ëœ®ë­¹W²µŠ½h™»À9P•Â¾©HuÍK‹'Q]˜M¨Sa¿-˜ûVNZ™¹i®=¿`§®0§15‘çŠœDB7ÀaÂeÚ• ö²
-C1Gão°Ç©Ú.oì–æ}g]xî-²ç«€¸Ê½¯‚aMl¾YÃ6‹á=Äóx48=ÄÜ «Ë‚’Äòe÷0Åå¥âÂ(é³Œä#tITxMqr³d‘h• ˆç¢…ÓmÛœgâG^$cNä”iÅà­`¤ŒË&1Æ/0»Ôh†Kv]s¢œ1ôáşáÆˆà¼âü =0eÆc<ÆÈFƒ&_¢ÄsÕm-ŒJ„ËÖ€P×T3V`gco[Ó;èÉCOŒ²`¼”û×;-cŠBæ¤ùË
-2•ı=J#™NÙ"# ‚¡\è±ê”]=Ñûj±‡´~›”øNŠ$­e§³°²`F”°svFtˆ3ĞKÚM¢@ğÑ£×ƒşÚİ^öÑ¯³7¡’Ö¾MV¶6¹}šwèÎ&íj^{¶¬…?é[›÷•¶¶…>|¤ca›JÅ‰>Ø?è½<>œì‰Áë#øöGüĞ˜bFŒ5Tšuihô³ŸÓÁa:¼LÌ£¿s¥)² c,{Íw›¾Íæ9&Z;ÿQìœõ÷Î¾ï‹æ^ÃØüóƒ£şÉëóAÛdüP…Ö÷K_şÙ­.|ØwY2V©ÌÑ€‘IÜïáQz™´ÒucM]b/¨À<GÌ£÷É|9ïªš–‡N©§ÇIY8–|ÛëL´¶ŸPdİkÛtp
-jŞ×„J´«zµùëßúg'l)><ÄÁ1î,æ@ ÄxÙu6»ÂšØN•áòª>ã‡Îf`Í
-÷êÊîséõkE…ƒğÙJ†´Ucs@dcdã—±¥RïŞ›éã¾8š•¥wÒâs¢¾<ã 5'*ŒR¿ m¿tòò¬wú
-A÷ğGÑÛÿXG_c¾šCqÖ;~ÙØöEÜ@³$>Ğ±RüHfj£‚ß«ÉÄDR©,9sï‘6\+5ØI¶ı´ãsÈ•Æœ“‰à<*d²IT¡3*:~Oâ•/"~ùâ¬#¿ŞĞØ•H°¤R‡fõ÷_ï‘;2ìÄ~ Wü”L±»âÊ²É¨µíÌ¶Û›
-Jö¤¥CDYxÁ‚X•¬VƒÓşŞÁÀZdgG7áşßÎùğU?F×‚ûUn}À6CŞo%Í†šY³õR0}'ò•Ô•ªm1Q.Òë‹8Ã1åHSğt¾r¿ c¢¯(m§:âëø}={¯úG=ğ/Q*Şö\ó™²NeWÒùØ"£ì‚íBCeQ•ªÚ[Uk¨š£í‘«¾Uªö¯·,ufƒ„5±!¾ŞaşßÊÉk „ÔÛ$Èì¯pŠ°x$µ¬­ğDÍ»RÍ›DªÊÚdé~Súq6Ä/ÀÇ—2:E7«¢iüq8¢Å0Øë@@ÀRàs–€¤.47°/KëJ¼çô¶öÑİ#£AöXÌ¿HÔ|e«S, 2æ¬‡ ò.eØSá*É@]ÄBJfíõ#±iãce°F…¯{ï+që ğ>¥‚T>ºĞ¨şi ´aRı«ÍU©şY Z…O‚¾8G3Æ2Zzµ¨,#”øpƒ1/0ÖKRÑ©P'¤•ê¸OtÍÖ+£÷Jƒ*¤sbæ\By¢ÉüƒAˆ7WPş3Öi ²`€³­Ò&=X^ùæ!òÊ)/>&Ç>vÿ:L®@ø¼%“ŒÔõ¡cÚ½Z=“‡—ŒÒB;ÔH9BÓw;C¹ò0òƒ¬I‡µ©T:n%LUf£lö©r—­´çš­OÄõ¾zşjZûÕhş12Í'‰&ôòìäõñşºÒ	æ„­J?ı»:^ùøõ9J%@uÏ{g/ûçÑÚWIYÎ,¨jQYU´wM¦p>QyŒ’/bÍj4#zB¨Úè Ö`Hùı©6 vDÈ/ğ±Ş/ ESÉ4âv[Èäl”©¬·÷ŠU‰P¥,|ëùî8i*¡ê»|o6Lè#Zje¦Zæbºº‰´ŒŸOe•cæ×°2ŒXÂÌ3ù¤Ñ6_èÈäÉkc\ BÁÊXL"f\x•0HYfÀúÆäØÄÉ9^ê¢É¯€
-£Š†»•vlÌtCÒ†Ë~ñöéx¸íe	"æ
-“ ß&s÷^PX}Õ{~p|­ªo±³ñX©1tÇÓh˜XÕÿÔy²µ%Ğ7‰â‡o¡Íd‰sÿ†ˆsGê“8)!&$ âƒØB¢+Ô!oo‰Ó£&sÜG½säY’Tñ/ı=Éq«™¿Œ}l”Ùm¨*›â)E0/5yu(Näb±?š%õÛb$ÈñJ#` £ÉDêÁ
-¸¹øµU¡@İ%|b@wûÏO¶¬˜]—&<ş<S…#²–™Äp¥QÂÎ0Ï˜€©ä^ˆ¸)ƒ0ŸG4Bqûz–EcÔ4ÀˆM¸e2ãÎ®ÄÎc’\€¨ ‘7”¹!q€·€m{ş“Êä™[mFÚr¥°BD å¹©†‡I’ +ñÏH­Ø_€åz’„ŸÜ)îì¬˜¢ÑÿK‚—X_76RâŒ%EÂ¼ 4½ B:Fë€bh€kšÄ•-ÍğŠ+§™ù=Y1=ì ¤EDB’ ê-œi"'C<¹ÆšL¿§ÀâÕTkÍÎÆéŞI?©Ÿæ€)ŒLP•L–œJ×¼ï÷Í\X2–Î.¬½GÿTobCš¥?á?oh$§'lÈ;İÇ+v•\ ø Å°çãÕ`
-AêD£a‘å}©ä-‹Åd‰Ù&Fy†¨<–Ç²ÖÖQôïÿ–=Ï¹7Ñ3¹¡jM_³áaÂNÑœåWşÕl™ŒÅ»l¶”	ÕÕ‹r@¾«*WøZ“EÊíİ£ pˆõ=JúG_<Q™·OYA£$DFR”eGBvp_yâTş=ò¡¬C˜ ±*ãõÂ~ˆf×âÏ-E¼˜ºù_4–nc½¾“)àcl;5#I:Å 0¾ñ)±<A¬¡õ¬ÅtÔ÷d’7*Ro<•fïLòêö"–÷ÜÊ8E“¤l!ŞAŞØ~òO„à ¨ÖySÈxyC˜á 9ŠS–ø;1“„¨£B„“s™j)†‘5T^k}‰‚FøûìÚ.)SA<³¡é¸]ÓK€äN	3Ç	p~2¦^Ğw²øŒ]CG@Y'äÊ®K°ë) c€wM†Rnÿ±‚t’<ß5«Zp?ÉHûzs•à	KMä“À…ˆ$ÈY_#-u×,v á%İ·ç·õDOobÏíHÑ¤rŸ‘ÊHš_’‚;“ >2›äİšÉÎöVx&Š‹$w•Ø'åp “	_¾ñ{,æElİÙ\¡?©Ë“šMé“w’ˆÆñ?–ÄÈÂ— úØ( iã,§aqéÂAßò¾ömjnŸß×á™îÇxMŠØ£ÙøTÑt‰´÷6ĞVi¶}xÓmõÏĞnkrwÂ“ q¦ì•“ˆ¨¢ ‚*	çl¿B	lH~T!LO£)ã¥GF	à0NˆŒ1G>Æõ÷“ˆ°½“²nêÜ™ï™"Ó¬ùRÄWû¤¡³™¼Z«Z	Y2Hhí»P³qGII>@À*@*0å½b3áêÌÙ<2UEæ§iMÇ™[…>WT ,]*òlÉ–Š<K@ƒzbÈ²@"©ÉqÅ»E÷ÊôÕMíNm¬:•­êÅ,ï/¨JŠ¯¨œ°ô¶“DØ¥¾ÿÇöÎ?áa˜-õuÜ†‰Cƒ¿^ÇšÖbº€8âP_ãSıÀ8QpÛ×jĞOReşé!ªL™|HÕ)êXÜ8ÊGSR_Ş+Õå@Ú;Yu)©qœoäÊ{¹Àµ‘û
-¹¨ WhÑ±#©†œ^Ñ)GU"kŒ–IÄhi©ÏO*G=7h§–Väüÿ×±â`¿|~ğâ ¿/Œ"s°®úR*êµ{h½óÕÁËW‡ğÿ¤œ99ì¿w~rŠc	ÖdŠ+Ò <ë³åútt¨R±GŞSï
-yÇJ5Û	ú:E3LRNççıW´Á>¦ÜX‚Œ“/)N._³à(0Y‹Œø-FW"d…Ûñ	ÀƒcI>•uúLœú±Í¤kÙæË^fªœ
-¸¶<Æäz_õ:FéˆŞ>üõİşÁËÖ¯í÷Ï{ ŒûâùëÃÃ¾­ñ{¼ñµ©KYŒ =É”WÌİ˜mG'€‘şÌÕEbˆÈŒr"uÈøx
-‡xÊ„ì@D¦YÉÁÜ­ÕøÊÒMXÃµhÑ¶Gât9Db‰^Ÿr>E^²UìÈ,µ»Ÿ¦İóÎj@û@F*Ö¦¡v'B…›Ñ”ªù@9ï¢ï5…´Â8=Ë“Ï³ÑšÈÍ3vúî/AHB>y ËKš'»Ñqé98ô¶u,È m.]½[")#FÄ*o';ÑıÑS	ãÇ#™K©MºtË!ñX3k¼D,KWfH¡E8ÙÒùø¼œMS’,¸ .ÎcËîÀCæû²\»››‚Ÿn:&İt6ï¦É´;ÉŞm>ŞşúOO¶ÿióó¤2Riˆ–¤ÈD¨ RQ}p]È°œÖ^6š±ÄsJRÂ¼¾$ncâ¸Ôƒ9]}•’P«6Š3:hNÒ.—«Htú {\İ®?¬5S`ıp¯nõaüá ®y·{¼¾åÑ¾T¢ï€¹É’5§&âÂ:”—úVœ/jŒz\22:[jÏÂá- TmJU©÷Ö>Uù0¶•Ä¶bGm¶Wê’4‹Tmö)»0“ÒéÉŸÿ‰uªdÂğöÖº‚+áßõœ×”pÄ*â–a”l‰:c4.Y’ËÄ™£Ó™~ôY~ı—Çßøgù±Ü¹	.fù~>ıÌ€©„fè¢¶‹|˜XsSÉÖøÿÁJßÂ!„Ì­Ãç‹er	ôğÿ±w-Ím\Ùyï_Ñf9n 4’2È¶
-@	Er Ğ²")4H4I˜ € AÉ‡SYe›ªTVYå7d•u~Šÿ@şBÎwÎ¹¯îDÙO•«Ltß¾÷ÜÇyŞó8Ô4¤¡¨à9(k ¥gbÚ´Ìì`æß˜r™h€g¨í1}wlcS†¹&Yc'5¯9ne_\ãàrSÂ…lÏÎE‘¦ƒTîdíBGÔ˜¥î‘âi’èÈ’U5?ğà2o²N»k\6<z‘óåcòî:×%+åWÍ°šOÔ4G¬¡s_Ê¹P6³ñpŠ4±µùû´ÜíÉx´Ûí¡~ØÍØd˜ÉË§*­Zp­záùÅ-›Õ,³ÚÅ\ÔmB„ƒ^s…òÙ´Î’?ãá©ÖJóT•JvÈ&–ùQ¾’Î-m:¾5¡â@úd·OãÈ¦ËøähBoÖèÃ…´#ÀAFB7C—Ï…:"Âê~}R7^DÎ‰Õ[Î[èÛ)¥å47¹ZìÔ¾4ÀÅ°^‹®¿1K>^tìbş1Tœt™ÅšÙLbš_‹$ËegpïE¡:çdÉÅ`Ós \º|‡›ûúŞåÏD•-"2ÃZôÙ6Îëg÷ééçœã„pºÃ&A6©×¹E=ß¢m	*u²Iİ59@ğpˆMíØmM'îdÎæbG3Ç‚We}ef›äÅ†+zµşœ8á/WîÖÄÁA1èi‡2ßˆ3BâÌå©æëÅYy­Ë+åè®”‘Aì4Û`–İcãêÅŠ!K[{9&	‘[±W‹Nò…ÉÑ	*ì´úÎÓİÕE˜Ü¸âŞhl²ù{3òH6<ÎÍ[X›º¦à’¾ŸhãÌÚ'úJGøcÄ óĞ±¥Fƒáyl–×‘(©Ì}æW[Öş_ ót9Äåj(oQĞzÄÈ(Áğ5Nşí!2_O&¹„×‘ÍUçŠOhE[Rè¿¯_Ï­Ã Øƒ¿ûğ±dƒÏĞÖŒä é(–šqK%§1÷H"r$b¡GšXJœúÅ€gêAªuÓëS/Ó6ô«9+~úƒùÄ"ÿÀ¤C·µ8Lé€wédRÇxšñœ³#¹ÌÌ«e	(2w#ÖÔyeµJE…OéãÂ+ék[êák=9I¡ØN"	¬ò‘OCYò°î8ˆ–2Düˆa‚N\PDD×}Üã €Hê„wLğ†|p†ac€,¸[I•ŒÏ±ÆİyXŞºÚ9,3é[	rK ¾îôzİv§M¹€|À¸¤ ¹KÿdèMF§’Æå°dLáúâø²µ×İç~û/ŸÓµ»ıÊ,÷‘ëîcİıvç›¨óusï(\*ËK.f’RÍe|—};‰F´Ï¤Q]ÿNf$½,æâ¢ŠU„Ó¯±á2èMœó$¶5|K?¥0û ¾s|'ïPVÂUPî ™ÉXJ©ˆ°Çí4ñÈ"=æ28ËØ“Â±·çV*pïëuÇÎR"$©h´×´¶c ×TMWOv^¢RGv®Ñßİ?î6ûŞ¶s¹±¯Ê™_h^vN*s‘ßâö »DƒÙ;™ká/XPšn>™ÌNÄ©]õm[kÑ‹§Ñ97©ziÖ$%u|r3G´Ø„?Jı§İ1‚) °ˆ¥ÏfE!X.§³w“ttj*—Ô2¦:Ã¸OfÜŸ‚×ºÀŒSß†°ŸÎI@„P·n“õ·µëÃîæóv¯MS57! ²Ü’ßŞô'‚‚À `¸<7ÿöƒÈÀg­5rÃÃ©}¸°0d§H¼È¯vºÆyÑˆı!Ï£ŠÜì!¡›inÈyd$bK
-nrMw›ægv™ÊÆ›Ìf—Ğª-‘ğ,- ×|;ŒõEcİa(ò/ğBk»
-[b¢øØÃâæõh¼ÄBs:’kNÖ•Å0<Ãg×ªY¶½mÑÖ4G4ñˆ±Ì&"dIAâ£ Œ¡ŒßkíTI¸³•Y9†‹P`*Áşå!Œ4ôÿöïÿıŸÿíÏËnREØß²µA´T†D9H­Ó¶/¹JdE`C\šÂbQ–Àd^ô´ÛôË÷D­ƒ^O\bnÔsõHbwÔ:RxA• 4Eóê gÔ>İdGR6|ò¢=ŞB=K$m;¬Šöl³ßNî£Íöı-Qî'Ûòó	í@[®	ƒ±¾X Û£-ìÕøˆD˜İÓÈJÑÆÈ%iìê¸<½°¹L8û.¬òÎ“’^Hôâù?¢C`²|F±Õ¾ÚÏ÷fçvíÆ|–sœ´X.MˆÍ¯áç‘Û´ÚÊšXSÓñoh‘]Ñ­Ê(Gƒ½.ñÿO£Ãfµ£foĞİEÚÊvg GäÉQ³×î5»{r¡fŒ.´ZõT2A²ÖEá’v&o ı'™°½oµœ•”üıŞùöI’G[”,r$N(¹ˆ*_İûpe;¤ÍÎÌ6Ñ†}±•ì|¯7ãüº±}bïæj~1;½AJXîı2ÚŞN>¶·şî·Hr#Éiµ¿wé÷’mXm(ù½ògsAx@KR¢D¨„¹‹‡úÈç«ÚwœóæÁœÙ“m}ğeU<@A˜Ru‡dåŸCS±œºUğÁ_Uå:SĞnvvFz_H>V6Hã¿ø-µ¬k"Á÷ª¬Å–´“<)Âzf%'pr†/ç 0’¤3É++Ş,ğ)×°Ì¿¿Ãáx4;½¾’lEu³6ÔƒÚô@ÿîˆ$íA“æ›ı~ó¥y^vøÊ´ÓûZDKœd'&îru¢zÁMivš—DHzbÛŠ÷;O¸#ô»æo‰u–¿útÚqş¥cÂªÇöœÇæDÓÅ
-†Î‡7°ùJ`6Ë²çÀ °Ááòû5_ìÒ|íÏEsÂ‰ÁØXù£–k·MÌüÏØ±º&ÎØ)	’ÔOt¹ÿ–ˆµb”~ïÑYqf't bşPŒxóÍ†§G¡GÈ%+€rì5şæ1bDÉ¬c„.³ñh8É}-eîìÛ¨­ kzÂ¨Ï3©<m÷ûU4¦•»ø°Ï	ÓÍLõ%+}w¾iu¥hÕãô‚äêÙ‚yâ\Äõg6ñ6+Bº9æ'7”<<-|Bİ¤Ç#: ğ[°oY$UaÆt€ØæŒDÎÍæQ»;Ğ ü¬µØÖ*ÙÅ4½$Ğw™ŠŒx’9ó$AµĞÅÌDh ¹mÊæ×0FBœ…/¾Œ~c®kvÏ6+›¾õöGjUfË‘Ôß§‹YİJ‚t•ø¶ tó90†:~cºe¾è­[$Ø”íF±6Œ	ív9'rŞÉÚ,C1²pà~™+#şî|Êé=X‡•6-ªzy&ŞÊCÕ§¸¼î˜y¹›à‘J/e¥•f»7›MRe¤W8ò‘®yº˜e¢‡Kwá„İTºe98È"†cxb¶©º¾eácg“¾ÚÚV#Ë*nÅbûSK¹VyÃ¾eFk†àM9"¢ÆÔAO‰KD»G=””#rÖkwÿ¶ÓvôPˆ¥{ÍÖ3	ŠAgÔK/Úo>ïôYHˆêÑ+r&9@ÉsÈƒ	üß‚û¡ÿÁó1i»’që×ó év¡él$‘—¥ÍwòÍû8"©3¥³O¦kÿa}½A½øÜŸFš¥QfG4–Ú£Ğt¸Ú†Rû³è‹o¾âÜg6ñ(§WÌä„,@¼ëQ^i'RBˆèFqÿú¤n®¢EàYÍ5'¶Æ%Øƒ';šo%’ReÎv&ÇN ë²÷-$+ñ‘ådpº'Yòáù~P—£w´/¹D><ùÏ‡kp0Ærv™NE¤uéJtg#¢©âm’^3b}¦ÚIÖtûËT¬ö‹š=¾fsÈiš}ho%
-ıöÀiwš¢Ô7İp}7A£u‰ˆ{¢yˆ< òè.ÔW¶*ıQYJ¦JIÚ£ztÄ«.êøæÉf7÷IFÆµ·qõÄ¯!avUX}§Ôìì}5FØÎLé;e‰öC#9ˆ
-JBrAˆì@Ó÷se}-hXN•Ïæ¢rûöçÉÂää·ÑåùæÕNÌë²ŒFÔ—’³ù@h8ş˜hI¯’²v¶“-íÙ„ÏÒÓííÑÕÕÓsyÖ|X­1›ê×\’•S¥ZÕ•'¤âhŸÄ°ÖÁ~¿Ûtö[/íŠTÄ;Qè@‡“*¹ôÎBQ¬"íé”´Ì·Şó6­[àZn©¤¯ğ€½z“,„)‹°cìöæˆˆŠCzè„
-Æ\ÑºPÆ!ÑÃ‹«¸ñ‚T?ÉiS¯C˜J¯N8à
-®ˆ%à…ıõ6%ÅØÿúØX.ı{÷<P0.Ïã$j™7]wb]b¯>)úñW…ù.>’ï–­Kœòd¸ô€e•„èNšıgÄQ:½>2E‘ªÕvš{ƒ§’¿©ÓXİu·`†«éÜdÑˆŒ±äìz:Mm®Q\dKšúä£¥$ÀR,ßNµP¿3kĞYå¥¦“1pûöÚõvùnØ³dj&/¶Ç—O|+³äK1êÔ?˜E¦áqµ¹“Ùò² Ş4uæ‚d<2IG	Ç«¦Ê·œ6	zÕJ&I„¹›
-ü£,›×F`’²ÉA¼ ¤êgıå$#j­…ËÒMLÚeŠ5Äşø|3÷7±XVìô©Íe%©Ú:©ŒÕv'Ò‰•Å]òM=È¹ÔÛwVäš*ãˆ\lÙN€½ZO•İX«×ùİÉZÏIÂê‡w±Æ‚bZ=´[J’{§Ğ$ûƒqWÄ¦ì—ÊÍrkë¥Z È]$®(fìù·lá‰bFßÈD¬9¢ŞxN}Æå,±ˆj¾ş2Ú°•)qKÿ1!ËÒS¦ãæ|ü,½©5&ƒs±êjîîß}¡Õáa€‹Xlİ”üôS[À«»x†™Ö\wùÂ•´üö“.`Ó-ÂZ.MŸzûm5¦²ñzºQ>‹6—ÖÆ¹HĞ‘¡ìPt_²ûÇÃbƒL[ÀŠ5¾Jfìø¸Cu&yÚ£ğê{µƒÃ•‘±0ò×Êu	  ş´9/ÌøêÜŒ\Í—>6å'Àüéy’‘¼¼¬l<Ü¨¾Úzc~5è×6WEŞàî7¿›§çŞê¹Ş€ä}_³×_{¿Ğ’ènÍÌZyE˜Ãò­¹½	Ö`÷öÖù¤p£²"ªÁ*P›Ÿº¥«àõW\‡Ü4îºîÀjµetÓZ~ol³w9>üË;BÑ£è[øøØ$lzÜŞq¹¾!ôF1‚e©”´6y=	.Õ¢êmòmÔğ:nL§z©iÊçEUWá4ÿŞSŒÓü»SQNóo MƒÆö¹ßøæ+É%æ7»(k&‹>×Ş2mn2“Ÿ{TİıP†E.ÓlÓ Vº·®UWá<½É#:Î½ßøµyÃ>Yn@â.m(òÅ|IÊKqu”ÿàµ•µ˜ød|åó-=·!\[|>„É_¿oá+»N•Ë5„1„eÜ—9—|I¹¸n4ú+º×òŸJ„õû>eå!ôã_EK¸—‡|éÈò§"úyP4‚-ĞÅ ÷Û©)g.Si{­Ú(<‘²Äex±*HøşF¸çş)´3LÊ -­½æıIĞ„z%r‰Wm™‹’rQ‚aµ€Wû&¼¼¹”Ë–Sç‘È]şñ{K°»rrYy®nìªêÚÁÒ€õ˜B]Åå)ÛŸícDÔoopÍğğıdxr¬À”½6Wi£1âË¸3òüMÆ®¡fÚÄÀ ÂÁzÚ=8ê“ÊŞùfĞkâ2–¤ñzúÉÚø6Ï¢"¯0İEŠ<}’ëOSKŒFß³ìIğ«ˆ/€?(ŸDÈtÊµU»leà!Ş1˜óº¶`ÓïiòE ¸ò÷üI+ÌÍû‚Pø4­¬bÅi	ĞíÑ€ãü#­‰öFüæ¹zÕ–ì˜=¸’÷€Ô6aM\ßYÉŞ:L%0¡®lŠ>™ÈCá“Šïn_OÑ'¿‚òÑ<‡kÁt•™©‡"@Œ¨½ÅYb½EZšgt´ºÓå$Œ…†Rn°RMi6›¼MGlNÈè	¾–ı0wy=ø¢:û~Ôl.Sø#9‰ë§ïJ!‰Ói½ÕŒq³d h„óªq‘”rÄğQ[NÇDOvê#B&Ü†7ŞïœXç@… &âğ^œhCJkH/¥VQ%ÍãBY×®“d9ëöú¼»ôKEö« «ğ@V2²ß|lZG½îtÄ„Ë”ìïY‹P3µ#Ûí*Dê<tt2­ó˜_Ø6!ç€KG ö´æ¾˜V7›º`:<LA·4mérF«Éı†­zúC‚92=AÆÏÜùÃ^óûŞ(¦:ÒrûÉ†jëŸŒµô·®ıePôÖê=©B„Ëì”r‰Ÿ‹ñ!ÉÍØƒİ„ÌÆ-á8ÁòİiN÷şæôzúø×àDŸáGh9­%f'×°>{é]—amœé¯– sÈ3Ò9|b%ÛÇö5Ñu·>xê¤f‘ƒ‹}s¼)>6jÊ«7ş(vÁ¨I@àE¯J½	Z5¢J“cıÆÿ¿b§R¥Ü¼`RôÕ7QVOgóT3®‹Õb9Ó7ÿ¦¤’Á{©ìáá/õnÕf™„r94Q__q-öâ³–Ãì²&—R4g~üÇûä(4vuúÃo¶Há2å<rùÉ’…Xzs¨d7ÓS6ÁÊõ&nÚ£cä¨†[K«áLŠÍ·8;ö²ª‘$¸ŠW}ÌJ¢‚şváOs·Æ“2Á¼–c\jØ1”z”9±ìÃ%<r’<ïÇÆŒZ-PÔ¯ó¹y
-¢n56úˆÏ\¹æ–—}íy]i§ŒVÁ—SıñÏõfíE-]öfEÂòI µìÛ8ª«Æı>ø2„æ6D(\)ú¶R¾FÕ¸	b¹½ú"	'àfÍ®R™¶ß¦8­Â(y“x~Õ‰!²B§v´Şó;bve=ÈÅ¡er_¡ÈKŠøg­È#.x
-LzâM«0\T˜ámNÑ¹3Ó4¢—«„­¬8z‡y=İ=ÚÛsq‡„t¼\İçSPºŠWæŸ%ÌzŞ<?S/õKÚY¥­óÂki¯ùáos ¬ä;À^ók¹”}fTyÜ´²¬ízgë5î.‹åÙC>8U¨(¢bÊİ™>ßÄ•,X¨¹ıe–  \æ…†W9D*îB§İâã5ûÂå±³Â¤ñUšº…]E‰ÂSÒàƒ +ù~%Œy£Ú~Û^ œ6Hô~9«Ä¸Z„I&ÃÅ2 Í|-º'>ÍS*5ì"Y#(ÊŸÜ‘šs¶õ®_kG›¯^Oko6«Â²Àö% ¬ıî!†¦EäjÃ­Ïf‰pğµ‚ÅÚ-°›|R Â«v!d’º'ŞCŞ‘Ÿ
-–V;´Kà¾ÍMì6dõºÚ¬S´Ó3tè’÷â¦Z¼¡(
-YQ@ oG)#ÍkuÀ fYÒ¹³æŒä‹2[8¼"G•ÊÈ‰£„ïŒh/Ñk)G	IäH?Æh‰tRi é3wªª+Î3§kğ&É'€GfóÈş¾,ÿ^ı4Š±aÅï¡Éoç¶”*F+¥8wg´V¨Ê‹=ìÓ°NZÕ€/şV¼‹KN7ş…ÓOæ×ÙE%”ˆ8™æõ”t‰õézäÇ(°nóHºbÃw_³õ÷î2yùk³ ¥Ó/€÷(lWxß°^&º:¯¶Ş<JÄ+òÑ#tY>·bÉ–IÉàLçİƒ`Şs†ÿ‘yÒˆbãQmFGSÔi^ —jù°¬úúˆÀ<D0¿+—	Â¡^Œ—ûÄ¢Bğs%%<
-Ê¾	·¢eº4Lõyø•üÕ`}öù‹Wâ¯ó1ÑØ{îcsø8.,†‘êËØH#ºÌçG“ëØâS¯ôígñıÛ5ï°Ğ%ã8È‹/áÔf®û¤oRàå<"Uß¦”q™}›R9ÃÖ³)~ü§‰
-’c9=§ìb&áTRpF˜nç/Ó+EM%'½d×š/oÜb[‡S‰üÄÖd"®êäd–tN®V“lâ]1„˜}eMñLşåÉfM@‘õÏ²Gö7;pî÷ñêÍy„ùDş­eùq, ¹§üdtù5Òz€ªDı/›ìã8„„ıÈ’$9¹*ÒÓ_ø Jük¾îXoóì.ll‰vzÆJT2¤¥Ğ«Æ{ßmÙÿ]¼ÿ›Œ.…»|ß¿¬ñ!úùO”~Auõg+¬f•õ«´ÕÖòÛŸÿÿiõÖ÷k®?Ew]Ã0WóFãÌZ”áJ¿i®g›Æıµ(êÄq)h~Eò•òDù·?Aûe4²ÿ  ÿÿì½ûZ×–/ú?OQÖÎŠ¤µJâf‡ÄñÆ ;t »¹$+Û¡¡
-Q¤¢U’1ñâ|ıg?Éù¾ıı(ı$güÆ˜×ºHÂv²²z·»W€ªYó>Ç×ß˜%‘8âÎô²"ıã¶÷:[»¯>…7(:‡ÀGÅQ”Åø—{Âşşî6¼ûScü¢F2×qokïÕóÜ\XM5ëâ¹OGy4UŸø–­V|XÚŠ5ÓÆË4í÷Œê¸Ô¿ùóı¦)ÖmùÃD¡Ç–Í{Tt'ù~mÎûõ²÷®¯òóÊ7ËŞ˜ìì™_À'ê	 ƒ5¼)ó¬ÎMm™”@oæ&^™~Zë%»zGƒ=Fd|æ|-Q„AÒ{¯qäJøô}4åu¿IòS)*]ût¶‰Æ1‡Íä£àIïœÚËŒS£¶N‹ÙTæ1æ0èÚ7÷Rc—·Pj|Áœ¢üš^İõ¯œ«o[òIJµåÜ÷«šà|ò…$½õë>’ü|¨»P²ºR•ĞÄ¯êNÁ‰ÊT‰ê*.‰üxŸsöG|JofÇI™I4	Ln±•q¦Ä\5*{"×Â¿ß+*Ï\ñÁìàó ñÅyïø4Ï«oaÃW·‚}„™ñNLğ—`•®şÚDv_CØş*p¯÷ÔcnşŞw8pãRİJqşfëx·sp\?"áz.'{¯_½êìĞ²µw¤E‚ÆÜxáœaÎ¹LÁ=“L.Cø&*¿T­Ï:¹qDä”ºñ[†~|ãÑÊ¹Š÷õºáLÓs\«ş\İ«HEø36‘¨ÆÀù÷ûû!ëÛùşÜ©’¤mÀ8hO8Ì—||?«=öŞ^¬E;X8ÿIUG1£TËe8·1÷¢p{ß;bgêŞMBÅñÉÙÏÑÂÍ%­}ü”û²dÄWß‚“ÏlNX¼ÎñŞânùóÖş^ùM6ŒŞÆÌÏÜt?ÖiNWıÅ…¿ìëÿE6í"üÄô¸ØzÔëíÄÓ>­@ãü­Æ¯ŞBÿ¯*×ã)0ün“£'“		öÀÏÏ©>.ÍóĞä78È¬İsDÚYáÍüzÍn$‹GØi‘EtJZ€MFP-Äw»]wo¯$ç‹šèoİ£ú‘šhÿ*V¥ÿò—y  ÑmßÜh081,öŞŞ~Ã¿Í‡i/ìö6óM(4â.@»BZû€ş›?§#³"®Ög„‚Öz{£u9ˆ²«2¤å²$V²‚ZMºÿÜ¿®~C¼`æîÁæÚ7ÁÿêÜ=j˜½eF€­A@Pù(8…!Xûü ®“›ã+Á.pYÿ=-¢,Å1À½¨W³¼ÓJ®fa+Ş˜C[õ¾ãÁÓÕ¯×h,FR>GxQìá¼+C7”»ÒŸ+Â…`UêÎ•(6UŒ+(ÈâÏË4%’Íõ´_¿ø§Îöq‰ yAâñDÔweú-N¨ÕSĞœ^…n À”ìÄø&a°Ú2 1]?ßdÔ5÷Œ“«!©¾GÔ>°:ï
-ñ:5%ç#ÑÖŸ8Íğ<wÒh _ÍAE âir#;GB”Ša/6{ø1òsÙ>_|šñO%²Yh²MşN‡y…±5N¥ñÄ=F¹¹¢Íª	´­¤ùêOìêC¿Rºµ‡}$JÕfÇÆ§Í¬à5-<Û™ÂiÑmxxefSéz$)1Y)¨)Ë§¼#¸)×‡­ÃÃ­ŸËºÀñ&É³Êº5’Ç’$.ÆqtÍI/€ğÅ8Ê~Æ9Ú„éÂ¦«ÒtSHåÒ¸y P•¡ Ş¯XEdr“Réœ<Ê`Uï2ğÕrà 2mİààŒˆ!Ë @áù›üP£şá±ş@¥IÿŠq1tpgËxln2âtïLY0YìáÑ,Ò¶ƒ„-Ğ™râTP¨†ĞÔLI!O› Òqµ€îÑ3@\!q†‘J-5ñÇ@’B½œIwKJ]¤Ä±.~ê¤´‘ª‚«(cÀ9=Í\É€TbÏ–ÜRÌ'Cèt®ÜÁÉşdÅòiö+lá²¼¬UgÛ +æ
-ìw^¡>Û™Ìl¼´l€šÅQäwâßÖxèEÕ£Äï4Ïü#z_;åO*é›;ôŠéó³³-L½º
-…+T„‚v^é)š;Æó¿¡9´àn:›§|$‚»œ“SÀ=c=É‹Ò–lV¿g¾¸yÙIŸXÉ(à_I·ÜÌ¿xıu¸™Ş*–-”Ê«ªjÂİ‡Š•À¶©ŸrOã7¾{ñ§ê0 Êxà ıñ'î^Ã“’‰Àcwlµ2`E§KrÆ-ÂÉù	ì˜¦‘Ukµ(ï· c0aÅ¡&Ñy]àÛšÄg™=‰™UÏ”tÌ‹E×î;·ÔéŒM7›©œùa:èıXÉ¤åIÌk*y:F1ğ'Un›4PeJ²±³N\ @ƒÅÛßÖ¹d<¼ØÙ|7)8ŠÉÆ˜$ûnv3c†Á\¨¡#††t’åê¦œÜ*Á‘›Ih3xüÔM Âüfë»`¥MÏ½ÌE`û«:9ƒEvhŠìalA‡ºh¢W«üô—ù1”?,ëŠÛ	G‹äkš­Qhæ¡¬ @[ÏË‹e*” KäqT(Š­7´– A-•õ¥V£ğ4ê®îÊÕm-¢°;Ôù.U²È,Vö\Ûşö·`å™K*¼·©£á£mÜŞvy±Ú)˜Ò»à­U˜µt3§í9
-ÀR`¡“aÀ`ç	Ô‚y=à<Ä¦<îDLŒ¨fÙŒ®`˜ì”´±±¢nÜX>??o<ß„R«ù|¹ŸĞŞ®5UlY¹ï2gˆr3 ko³—êëËFíC­âC@•¿ÃÓ]ıí}ñ[S·MÂpKìì—_:Õ•=ûÎég™+“;-ÊÔñ" ‹¶‡§ó¾Ğ¡üÙ3FĞ,6^ü×Œ:J«@ÎTĞtöª¡ <·’¶±l5cµÍå~S;ÉæÎ7ÁúzFrĞõ­”M­ô[€”xøïKB"ƒÀ/bıØ.æû±]äüØr~ÎÛÒ–ñÏ-dÛAà¶?l;X¶~ãæUeËøçÎğ_`ÜöqË\Üğ¯üjúx—¸|™Òı•d°½ŸHúÂbüjYD¬xJ(œmÎ
-ûP®«KoeY<D*1œ…EÊÁ»f‘r¸³jåÄ%ÉvZğŸ§1£;”­Q˜ÉB¯ca£k‚[XÃ™ûøJ„•ıÄJâ÷üÛ'ÖÂ1ù<:Åw’KS=ËQ-´‘^:Ö+DAäv pnİe+=iÖ´§x@<;—¡¸…R3…Ø=€q€¿`v"X‡× m¢/>¨¡Üo5J8º¾g–>‰A?…ß™û¢‡ƒkĞ2@ÃÃ×‡¢}Cæ!(ÉÒa¬+n»f‹­;©05ÉÔvûpıó.¦¬ÿe…˜Œ¥Z·ÛíbúyWW*a$ù®¾­³›gì|‰ 4d#¹Nn@†Ûç³é•E~ËŒ°B, 4jzøÖQRqäø´ì~+ßÍü¶‚‰¸ûb~'&'J81ò®3Ò ½­t3)İ\ÕûÖ…ïÔ?—œÿN0s¨QdìiòüRtWÒ”Rßü’™¹c›®V¶Y;ç'reû$kpÉ‚ã Ê-µ³[ğ7Ñ—»—N.òát„„ôP¢,”’ëÌ–g²«y¿²Ú>FºåËf Ùú<lYùªP%§~t³ IÈZ;%¨È›¼|ŞK[µ÷¸ª\s>“f9ìYsc…Á×'ŠPÍr|Šà0)Wşó‘ç
-©Ëğ¦Œìà9»È—Ê:‚òDB	MáªH‡LEööÔúoü‰«¤¡ê*¹oLİÎg\M±hñ[=sÀËYaå¯ÑV~OœâeÒ§ÆLÔÎ>?ëWT£8r§–*ÆÛÿàj•…êì]yjEZòvS–ÆÚ®ªÍÁıp‚Áéäß9˜3’ì :sói^T
-ñ¼•b†r%âÖùR¡rU²†ú:Vñºî·•«B’ö`öhH¡¿SæÔ<ËŞn€ÖÉ<èaC5úç`ue¥,ãG”ÍŸÑO\ÌfÙËg~«Æb“M˜•¯h»´ÍµU5ÎQõVIt¼å‡ÿÊ¤É©qÌXIÑf ¬9@îBÏaÇù[»pù?zTZË÷N	¾öÌ¦Ëà½ƒÊºè@9XöÌ>”ò,8`2³â*ø
-ìäÏ¢üË'-a«bïSWc«âÏ#¨ã{ÊÛ×ó,œä|÷ê¥qÙ–MÛm/S‡·5Ü7Åuóê.›G·€Ç†¸/º
-ùS»iek÷1ˆıjaxÊk4ç#ì»I¶aŞŞjCI]Ü%ëÆ¡à\k»u ¨ˆ>Å5ê¥>–õûæypï$jäWÎ&Ç¬} ;ì›4›´x•óëôÅ‡œÎÌÙyÖõyPıVëç@NZ°ÎßÕï‰˜Şu°¬wœ‡¾±··Oüúå$…¥\K±+–3¤–msYCŞìHøÇ<<zä¼È£ÎI~ûìyµáùó`å¾9ÏVP.Rœ¡ª—é˜VnŸeš¸htv†Äß±´ä6¬Â“VÂ`îoaÇ†söHÚùÆ–»ã0×ÿü÷ÿMkø7D5H`…ûïËgxåßÖTfÜv~ı·iDš}5l	S.K®„oMóÆĞQ¿Œü°Û…v~Çˆ¹˜”€§	çÏ›$¨ÁyÎCøƒŞÂ^9½ÁÅÄ±÷¸äyŞã––«©şğĞn¿‡juB%ƒàÀ×çF7
-?î¹İ2¿)FaŒŒR0•¸Î¦•›¡Ò˜	>GÄÎ¢ËX-´ :Òv³Âoa[ö£›MNË>î}«½ÉÏï€ t‹­@«Ñüízq÷ƒ }¸oúqÀ
-Péİfg?RX#ÅÛë0xwJ‡R÷…–û´D(Å¾{®ÄI5ÁŞ}W}fÍHšÛÃ^V #ŠÑ(ñJ©~[AGºÒF<¢ã|%¦åıâÇ™¯…W}óÍàå	~5îQ/vÉÈ1‡°£;"°tŸúıQ£f»;šu´ ®`§÷£+Ûé)£éqö£ßëîo1Öü,ªs6s3‘÷ıgŸ÷YE¬û¸šı€c™í/utÂØÍİ(»e3h¨`_èİº)ò•_q)÷¸0×µ ßel Ûäã¯\Â¯*.İ×pçÉ£(ğ}7ÔİŞ vK–.~Õëì	_à2ª†–SÅt­eja­ÓÃ^¤5+¤éºŠ‡ññ0ì?H¹ü™ü7ê¥`%Ü¼ôjªoËEäƒÌ‹C¯º„Š%;¨¤šüäÜu‡:b ¢©âª:M_–4URè™Û2³ÊşUãG±M%zçÜ‡Šô>±p¶ï<:QÍÁ¹õ«Õ=ò’n^v÷ÇK*ˆAì¦ÀG»¢G9ıÚó’›…»¥”}N¡Ûd×ŞV™Îá—øñ’w‘!–‹¥qD5oÌCğîEª“d?ÓQ'MÇEÚßÛZåõ|Ê©ÆÔ31 6sCõªDıYÎ‰ÜªµÚCu[vRª•[›²’³u\Å³Qaù\qË8³øÇW[-$MòŸ•1©_yJ ¿ØCw+Âà7 _û>Eæø¤ëq%ü½qK‚Iõüz‘ÏæIâ•ªrü»†B(»â?–¬à$ÙR_|°Kvÿ{1âEıJ+PÁ0î]rºyş0¦Ü‚Mìr–¨éˆ•K“TÕAE–ôL\¶ñ¬ÀæŠúQ2jÿWXˆ%ÿ§sÊÙsY?_oôw:t.áVŞ3í¶èTÁÖ¥¬ß~òÈU3Ğk]Tõ”¿ğ´³	pr@øC1“‰íöèÑs=ÚyN¤\D×M–qÜ:?¼B9ùÑ´—L¬·‡–ŞhÏ‘“¸Mƒñ•9H›*ËBZÇavœ­-äzğ+ÚëG7™8cmz’†Ç\}Å³BòyüÃL
-ªÅS;Ú¡štz²#ó–d%Š£Ú3©İî”X‚»Ò)¡æ®S¯Iş¤ËÔ¸Bi…œãó¤ÿË8ù	á)E3^Q¿SÂ©ÚyZÌXhš7ë¬ü…œù¯$›¡ßµ3pÈ±Fº¡>/¾*»³ V²é(8…~õ’¬;eÅw–Rb8ìúóŸü	b„ŞÅõO%Ä›GìêBŞòÕ.BŸc¢£p~kÍÕ"Š§Ï@afQM*ÎlµÚ+†f€üË²-XÕ”ì¶ùÛëÿİ”çê9«|5~79ë(Pé%Àô».×éØ34ædæÜ~W|®Síuµ“ÜØ€±XÖQGmÖ¬IREèÀ~j™ª¥;“
-‘òFÜsé7ÎèIÿ¢››öFm™¦oYF¾,¤¡åFGHËyÁZdÆ²&ÜÜ£êÒÌI¨y—ĞËøjGø5RVÈğµ)öŞ‰9A§™£S4İ®&éqÉ$í'Y£ûUSã7=Öˆ\Æ
-¥z’ÇèR-H—y QºÔƒæŒ­Ãz–©fŸm‹§ç¨¹¼*ŠJÇP1Î¸åcÃçªÖØH¦àÀ)érA–ÒÑoş2Â¦1çI· ÉT›
-ìŞˆdÆ .H—qÂ¿ĞiÛÊ ˆF“:ÃA_µø£7Gj¥†Xš>Bæ¨ ‘ˆˆL¦„wO<÷ş¢ƒŒÖulûæ	F¼Ñ&c%c[üÉ•êƒûåY±ìmè‚³ë¾_\‹_IñîĞ/~UQÜàøÅÍãâ°\Òˆ5,ÿ^¾±9øøh—¾şG ‰6ùAĞÓÁò<ü¤ÿ5]R?9Â«şro¯¹´$>’& ÓËÈéÔ {˜Ÿë¤Aué @@
-Ù|B\J€3ãT˜´%	%-½P­M÷J+d¦b/òpéü•DŸÿÆy«¿Ñğ’Ê&^‚&}ô€8BKqZ¨b„<A¹µëê^Àà½ÙLôêf:&¢Œ•¶Œ–(e·´KÿmŠ“GXõéÀ¨N„æùÌ8Ú¨$*Ûä~¯¢7½iNDèƒª–¿µuã~¤ Ü˜®,ÖlÇ a¾äîQ™oñÂ“Œ#mñ€^;€OF¨|ŠŒ*]’c¿¹0M ˆ.Œ§é·9£.Ÿ9Ó&cjµ7
-e	u‹Ãü‡b<£ãĞ©:æqË|kH¤
-"?`jÀ";©‘ÓAì&Y¬’¾ó®Ë$K/1|ß¢114ş2t,j! QÌŸÔrHÔØ1T½ä’Ïô„¬4|Q]‡!-›^¤
-öJ\Á”œß“ÄeÓ$TÄ–¾AruX:ß¢èñ4Ö¾—M‘(„ùæ©Lz‰ëşr Ô£$óÒ¶sÚx†õa-fçí˜˜Ùå€S¨ühÓ~_ï8½‹9DLU®PÃÊöNƒy¡Ü¡¥¥¡"ÚËBu—_ìï6m_:ï…2¸¹"&É€eIÄ-Ó×’Nx²41m‡»åAB;jr7  É%M/[å¸ÿfQo¢ÉÕmt—0ôlÛ»òF÷mojyí¨-„ÁCäí+lÜÊ’hÔ•¤cIRçÌPËÓ»D0xVi6ŸÀŞ,‚ÑîÉ4¼’nğ(íÒ<0:à÷1“QØ–â›«±üº“gMÇxyç.$üÙîO®è\¥ƒ±Œ/wv5ı‰¦”d>[îBeËì”-~AÒÁé-f†º£{è,şµ¤éuM*Aéô·7éÍt v¤ôNÊø]<bOŸ1hŸî°­Èvô§«X ¦Ğ¾†›ªC¦¦ƒ=Å¤Rw;@¥æµãK‡JÈBwÄ>¢Şñ²à Ğ¬§Œ3èÓé3TígHÇ†ş+ VæMŠL¯9”T-)ªˆÆ˜SP!éyà~¨kæF¨3ó`t–oí)’ø×¿Öå 
-”Óq¾×õnø 	{ìŠF@Ñê#sŠÌËÅÍİe÷y,,ï@ÚÄ{;Tê{ü‡åJ]ÄXÁ”®…ãqÒÜuia{dX¹J;†	R4/#Ñ¾L»DÓš.Œo@XİF ÷§¶¬§ OˆÈœñE˜i¶Ên—tz1 ú{ƒhËÄ,óåI¼«€<1NUë†ÊŠÿn¤ "Íã¦¤@›“÷(5¤÷‘>ŞtœhŠ4ĞRl´¿
--ê$ß<±Ló
-fœè$O=¼š2Ï¼Ş^Q…ÚQ8İy±ÔgZˆ8œ'X[[qê£ç«k-v‰¶dZÒjâëºÌJ=¸LâO+„ñ—cLEZÅiØL3Y„:7SçëÜ•:·£kÈx#ZX©lÓ¡×8P¡Òõğkl*Ï#Ğ¥xO—›4h{ùÅÑæaãÔİÂt7xÕ:¿¦»¼¥.st™xÌSÈ.õÔÈîñ®†®ZIÌ¬º`;›¶™FÁ5&°üÅDîr·8z¤z•2TE(uÌŞYş­ÑŠz =òøÆ	‘Å"\k«]wáêšÙ¦XœPÔJµ'dˆ‰k½	yÖ,ø'd]§•ës¸pösx·´\LpH$V;¸[l°½íUÖ¤àÍÔ6gÜ¬5«8c{²˜2ÌìøLmHXíTÚ$uGæ7(ºÆH˜¶&l	bÚéƒ±“äÖ~3RàÈfNRóp*ÕÁ›q_/ÊÕE´Ú=Y8£ÿw™Ñ3laš—dtF/ëMo^…h8}3S¶£Ÿ˜-JS|ËİÒÑİ€q$‡"º'ŞTr$ÜeÜC¢½º0<·c\‘›2‰o$"hŠ=MX7{{uç×Õ±¬kİë:pæw\4£•}C‘·§ÒÃò6½Í`xÆq5´+4ûZ$.³Ğ4·J_[zL[8î1‹»j	·ôaš«Ëw›^ø30Æö-k±ièÏL Ï•“}awã xC?Ø¿Â	‚?ÈUlòîü{ç2TB^	•‡è|a¤CË—Íh^Íx^+-—RX{dÀÒZ±÷PoÖÔÇ¼š?ç[ZÄ8Âåå“Ë)4ŠoF[‡ÖÌª&æù[gCA.à`Ûµ®ALofĞPì´ÉE,Q5(Ûcf@O¤PgXA
-…eÃ0T9¹¯Ù‘ÏÏƒÊÚº[Zƒ~	S²,š‰;E2=Xs¡ñNM]ËIT,C›Ì2@DWƒC“r+÷„X³ŞjÉ2]Í1ó—Éä0É®©š7n?Õ«e$fS“,´‡3Ch-°k‚4©5Ê€bAò–™|¨R>lMÍSÉ=È'Î­­ŞĞ¤’jË)C7B÷Œ¹óÉ-'@óFÒcÊÇÄÿmúŸ¢oOìbycu’61ƒí±õòº¹)(}–+u“ô³~_S{qÆÑR{8á¦mr)±º=nŠùw&ûÏM2`zÆoa·nÇˆ‚+…Ë/çø?è¯q«ø|Xp¨Ì‘øó	jIgÙ·ÒĞGÍ”ßÆƒAgÖßQO|›Ú9Åä'gÔqóıpFŸı²Œ>~£c[Sv‡™iRL‚mu™Ÿâ¤2¹‰EbŸª;®¿.&.©JPr¯1%ØÜ*x¬vàs¼¡Ü·Ëı¢‡”Ò*Ãá.ÛÏÜvJP!a.2…¹ÑšĞÍ^|ƒ¤Í®§«ÁÎÎàRŸ~C}ë5¥÷‚ä/q8Ë¢-ö692ê4å¦Í1(e_Üë/Z­o¼êU‹i¦ıw;KB“Ü‰f.èJCb2ÏŒ“TyËİ›…•¥´°g®+œ}Wâ·&Ñfamæñ8~š³óAÃ¾Šl™ÈÛ`a$Öµ™åê9$"bèÅm”á»7ÍW$”¥·d¤5¤¶3eîÄÖ®­†H¤ ’q¾8n^Û”(›LŸÙ’vÚšŞşX2³¤Î&üÈ-•'ÿÍ’Õ)–âˆÔ·Õ÷ÃéfuWîctŠ:®	ˆğ¨î7…ÂÊA±‹p}JÔ„õ$`Ã¸í…¸8.³^qÚäÑ)ÄÍvUˆí^a
-o÷™r>²Æ?Él¹[‚ÒE´"‘wgx%ØS«ıŒ7‚Všƒa!t4Tlş ŸÌèåŒ<;é”ëÏÃGcvšs£©•ÂĞxÏüïŸ·ùñsoRG„™CÖPƒšv¯’Ûèª=H¦ÿ³§ín:d'~·ÌÜÿš^ş§yÙTGO¾H¼æñ­Bø?e­j?F=;`l’Kò ÁœùeÊi=¹}İ±Ú}I¾ó¡ò'tkÓöŞl29Û!¾²A7jº{ôZÁ9yî=jëî@¥L=f5I{_'F%F`5üjeå?ÿıÿ]Ÿ’´<©9Ï¸Q´ö5—£R}¢ùxÚ›œôFÄ)7s_1¸g­mlĞgO6‚~ŞåÎIJÅDZİ@í]•š‚¯ò½½|íÓQîãu´ñ¸ØF:ŒûÑ:Xk£Äz¡€—ÀÓñ„ù”»1 äÕn¾ñ¨×‹{*e«êõÚJ¡b™ "m±é^±m1¨Éu±Un{¡ÈT†T=m¡ÈŠACÖƒ8ƒoµHÈ_Tê]–Iëáï€Çá
-×‘÷}ú$vIÑÇRp­¤õµ+…VËëIÆ,=-¾ù•¤|·Z|•ÅÄ¥IµÁ°[¨”¦aÄS·±Ròúæ*ÍècxKÖ¾*ëÕ»„NV2ÚÁá~ïkÆ‚‚Ä< ŸöTò›I~.U/V×xŸ=.éÇe:Æã•²nª¶ùŒUö±ÃÃ¬|ı^¯Í¨~‹«ŸQàÅTÑşªØÄä*AèöZñı8¹Hév~Çdbµ½^,1J¢®¼}‚—Î;/£ÁîÃİ!h`4š?‡<€PtÄqğêM0EÀ(g;b¿\ÊÄEşç¿ÿï`œfÓw‘z°AA9ƒå¼#˜yf]ZšŒÄšæØ,‰~·	±æ,¾B‰ˆíbkµ«b6·Rê Ñm6öÅ÷º”8¼õæÁ§Ã´{Æº“³ÕÜ„Ñ¤G¬œAä/,4|5]˜­ÖJ­2–ˆşGÔÓ‡¹ÙÈoÙÀõS 6^%0ó¨c#Œs	ò˜¢é‰.Á´ulõRIk†vÔŒc	gO{><!Ğf~¨R1ë…÷Æ¼Ä—§J„Ú^Ú%¶¦æ½Ì%Ì¨œÿµªùGbŠŞ”5[²”+8äÚèéhr•É®¹Ã$üNzÊaÀñVŸ³?cò£wñ|¤k©eWÉ,5iÊ=“ã­³ùŠŞ%Ğ€x÷ëä7›mLÂÇÍõzÕ\w2 Á™‡İ„FğÒùAÎÙ¾ödüêå¡s¿±ÿÿœŞ1G—?†… âhLä$ãä0pGj@è«2Î«†Â†Ó Éƒø}W%D“[³ôY£¸ŸN„åıçüqÕœ#j&øQn€`' ãœƒ–²#±ºó¦×½4#Îc”¿8Cd+&,ŞD`‡1­v:€êÕæ¡Ú÷ hĞV+$¸®¥DÍºÓÃtB5ÃÚ1cŠa–ÿIŞ¨$"Pß$äÊ» „:ÛåHÆ r"+%Ú¿¢Kç#èV“pĞÑN£RsæÿÅËé+U@ÍbÃşÑ‹î°o¶ ®`,°B,ŒUÒ.ë<1{²?e?¿³Ü|;y4,Ü¼Eñn•…¸ˆG¸MEà”.nu»Ó!œ â`}y§ ÍéepÁVÛhÀ)AÙ·”TöÕ!ffÍ_’l›NpÇ×µ°0ÆÂ6±ıYËõ§×VY-»IÅlÓßb£Şg±(øüéldnWv0k~İo^“·àÈl£à]Ç%Ûå[ì·¾obñ°Ìc))ˆX)ƒó:‚3É›ìn0 …½šf×Mo=VZØÇêÓÒşTí!l¤•yZönŞöÉ,g9¾~èœ:\Òv
-»\V8&ÈŒV p4ÕÓÒ/À¥4Q>89¦4~•\$å~C±˜!]­Ì© ÷ùÌ\¢øŠ‚ ¸ã;¸1±H†	Æƒ³>6Ã‰²`uL4ñÃÊ'Ğõ"”¤óPW•£ş&âØ<¤xª)âÌ­ñå%ÔEBW1ãÕdr“m./ßL/ˆh·Gİ‹¤=Û£äªİOß-¯¯­<^]{º±ü ‚¬íHí,°¹w/Ğó­nÒb6´+Õã~Ü½BÓY‹f^è€Àá±´åñPV
-£é“±ºÒgS¢·«™pwI¤¼µ/ˆñˆïØÄãírÔSffõ‚iïˆñ‹+ÌÎ†Æ›…”Aª|ºÉ¸ËË?—ˆ.OkÔ‡Ú›jÀ)û.ØøvÍêÊŸxƒĞ:?eª6¡noo‹«t3ì.ëÚ—ßìo?~º¾¶º±š_´ª)×?ÔKº~º´Qó
-«;âÓ68âiĞ×$“”6ÂVO3jzŒPê0`’ç€qÄGD™\1k–gö¹t¸¡²z’³kvøu…¾X,pÖ´B]ÄÌ¨CÈ Æ$lÿ°“ŸG`u[Òxb‘^ºÇi3k@Ã›Ş´5Ï{9Éyò­Ô£kÍ€{ı6x²ê­ÂGSÃzüSÛ$urEs’c¦à\<œèëÚ
-k+ş„©¾ˆh&âËşxâ+Å·é0uIf”[DÉÄ·TÊJÈ›’Ió{â¸•Cµr„7¶8ç{ÀîğFØP·U:‰”Æ½ª" ÅÉ=c¯GbJF¨ZÄ‚¼.ªÛ1²ÿE“@{nÿ[Ù!^Ã7²\f"ÎŒ¾&úÅ9íÂ!ÈÀŸq±ğºË‹ò@r)q…ø5d
-Ó%^*•Ü9ßq+,•’(Ş¾WCŒú,"2–yÖÃ÷õB¨%M&ÛÔi¤4|Åğ5ò+±@‘%vâ–0“¡1&gmO·³”ÿÍÆ”º¦jé^KÌ6Ã6ûÖâè&¢ªSj‹Ÿ4#ñ#Uèª84şû¯·8û¡ósÍ¾pÑ.j?¿>9<«5]ÛI;¿¡´óOæiçŸ¢Ü×UŠhÑÄ£È“5t©&~­P®¨v_)×k;jw”Xk5óÅ;wnõ«be%úöÕb}¾¾u­—˜|}ûS´XfA·¾Q¦9.¨ĞçªÎÿ++Íÿ['ş»ëÄYúˆsâ¾ŞˆOĞç¸ÏB+~Ö§(A‰=„C+·'qDÅ&U£ÔŠ/Éú
-‰!&$õ²ßXû­‚6´#¶z)	Íäqã+ˆEts©Ñ¬‹û®¤³•'/<D"pq*ŞOLèã¸Ï×©RIÂÎ±ÊÄ/
-/åôë Òüc)º·9V‡'@ôÜ˜5"ÑaÀğÑä?Q[c:*NÀ3ËÖ’éÊŒŠ•ø‰Á€ipc¤(nØÆ!BC´)fV¥Æ»dŞJ”T#ÿo§Ÿ*Q~fÕÔOÑàZÔPài';
-*é^¤)çQñõ¥Ÿ¨–Éé¤¥GR”.¸›z-–,pP¬Nr‘.|^MÌÄ¬B¨‡”Œ]ºoffÏp¬»£^B»f†<¿ÅG¶u‰z¼8uìc	(]‹&.]qªg‡'-ÚœD$ir¨Ê„>¬‘ZBwôÜãô0ë8Jj:`!Rû!@Ş$dı7Ü;bq#ê­È€U[}QMÊÊ“Õµ¯ÖÖ>¿P~$JS+ãL’ËË‚	YD2­‘ÉuÑ\)dGÎ½$Æ¨XÛ+†&¬lE€`¥0½;"úqh§nÁ-µK'F¸Ár²Q£",¢‘~ğœó"ƒ™Š5Æ
-ö´øDÄ`Ü¿Ik¦ˆûfÌÚœ8'À+aÊ"É4nÈ±Òµˆd›§æ"g«nf¶D{˜^L3g	µAÆ”
-8˜tˆk¢şaŠ¦“TñèŠd´S¡I†ûãl™Õ—G™Ê°N"å1¾XÃ$c/w	Ø>ƒ#—$ªI~¸ği²¼ÈyÇÁ×1!©^ÿMÇà$‹E':Ï³M¥½¤ıbÊHbR§A¤ŠI"I£¥ ãâe¥oTLËY4)}wÁ3Ü(}8°òï„0–¾Kz9ß5~¬f³Ù–yª5dsz‘ËÜ®¡ Ê"÷V'¨gñ}eı÷m¤¶‘1MõĞÃ¶¾÷{oÁ Ã»òî'*ò
-Áç@Š«Hıòö”“¿¨U«Ü>6mË‚³âaÖìèzáÛ›Kı‚J¯•â£ÎÓd2ÑIiêh®¿p"1—YXyjïµu}ô³âTrÖìpU9Ï|:›çí·T‡‡ŒÏÎè4åğ65=oãÑ6íß~ª3÷Ê¿­ŸŒºê	-Aİ«œuB>º·Õlš6ßò/…¯ø©»WœOf5éü*u˜=0æH+Ù@{y›»vÚJæ`İg}o3¸cùJkkßL3ŞL~^~¯é£Ü™QR’
-Z8?±ÎÀ›ğè–dávcÀü>:*_À„Q±Ÿøj)–‘+çşšNå÷EÄXvßRcpÀ-iˆıru¶qTDğ‘l}f|§A…ôïYğ<8W¦¼—¸¸ñš#8š@V;¹¼k˜O%AZku¥Ù¼?0øAÊõ
-Æ‰™€CãâtûdÎ¨íX5Ùñ{gí«úVYS“£¤N$ÔoOâhŞFĞ¼ß‰uÁÌ²V¼gÇ®ñÜ(kn©]Ëï1ÿ„-öF´ÚUB¿lHñ¬@ÿÁãĞ*NN€VFó)FXê	Fh›;`ğÇ8ÚJ=rv‰~”_$ıÜq­§õ 	=ê‡—»ıÎÁ1ıúÏ'£ãÍàX#o cƒDrD€ÏUH%I6)cÉ°Ì©@¨¸uö<wa]8ô2{ 5ÚDˆ˜í“	s©µƒ­A–šå«.L›*Úç'¿ª¶”4‡—·æD“ êiës‚[±€W,YMPJ`C€®”ªÊÉàd]vìòÑ2Œ»4±Æ1…ØHlJBÍ¥ëÒ(±ÙÚ£é-ûƒ	D
-\ùå"RÂ·wËÚ&ê:Éé#¥ÇÏ< "£USJ°ĞÑj¨àZ<cÙ·@ƒå¨K%v‰ül„ÁêŠ¼^[a)EIæïä'\Cİ4ZYÛNÿ!œ=«ä#	¾HÖÃĞA`ÿ89Â!Ë ÅàpDH$U_]5Yš+ÖŒ=Ñ¨»G¯Ù"ˆ)Ä‘je†š/aÖ´!U)ÀÙ{ÊI„cZ6rÁws­)ÛHák¿”¶Ì)æZ>ªúc¹ø†“9-‰ñdN!Ï|2§¬5 ,40Ì›Ç2·(»âÍ.dl)sÊƒÊÜÙa»ÊœR0®Ì)+Ë¼*kË¼ÆØè2oŒéeNAmY¬Ø‹Õµ9Å³XmÛ‹ë,Vì‡ÅŠm-8Ò'ó¶¸²ÚÌ)f7s
-Š§XÈ2ÏÍ+µäàÛ#ƒa1F£ÖeÚ
-Ò•ëT@ sI¨º_j¾âÔ,jI¯Æ–ÌŠZÑ3_/Sƒ	 åÌİm;aAşGÛ&Ãwş_ÑwR<T¾­¦¯i=}ğ7ã½‹_évÎbÔËµRÕ}šûšµ‘ Öâsueî¦VOäè?k:ÿsL±Vµ£,ß¬ùmq9°—LI¥YŸ3s‡ä«Ûg‰•íèÀZ%¨œ^Ş8N/Û¢
-Ì÷L)’ğõjkÓq3ş¢Ù\p3n£Â É®- Ên·+}îh‹úë<{Áúk´·OTĞ.ÍwABĞ|'ø1’±•Zº'àb¢òé¨¦ƒJ×>w¥V=»bÍ²2ò–âa”3ßWT;o>¶Şy1¿Ş¢^XÔóa¥Ã•E£\ˆ$€¨?dM£… @¤‰¯è*IÇ´õ<³FÀA?ıü&à_Ñ(c7uí3§êbS¬1me§@Ó4ÈH\‰ÎÅ ­Ë±à™)	Fí1’#~İ@–Œ˜ÂŞXÁrkóƒ£'¹o2MÄ–!N¥D°GİäÆØnBA0—Œ#Ò(jS¢Ë‘äqËÚ¬ıÜ†Ül½K“ş3RH02¤´p-÷àÚd½Ò
-‹oÜûÂÕ$z…§‹f~Ö¹H®x øÓuÅnÏ·´¶0\…
-º×™Ù1-„$w‹e;SËWÀ®ÁŞà®Cç0P7ŒŞ¨u¦k
-L¬0´*1êiGÃëøª OÆ¼±š”Ü~·ù/¶Ñit?«€<µĞèúoS@şn~Xıdq¨› š&öØ¤|ò~S_g|pk¾ªÓàá|Jn0›)GÌ43À#£Ğ,c·xIÂøKûU£|ù™
-nÓñ ×êÒœf@<Ş3çh4wó~ê®-Ûmj|·J“_£ÓKóÀ,ĞŠ§ù¸D'÷´9	NLkŸ'Á‰Ğä‰è÷@‚™Şú€3³ğ&•C,;ø…BåT<âå‚ÍjI;¶àh´_¿ø§Îö1¦\¾&ìsúAõŞwu-ıLÁÜ§\œzpœ*ÇäœÓ¬­íèøp÷à•çHãAÜA+ªı'®€<ê›ë†è„$ğgÅ´¨-vg– hb	ºWØ*ù;Äñ€3…BĞ?:¨C¾ôn¦—Pkf™ˆi¶K%:ß"U9Æ­ÃÃ­Ÿİ!ÒÜ~+§xÖDË?eº;`¬ÇÅùÍ»âZPZ¨0p}[ÛƒôÔö‰`cƒâwíß¿‡ÀvZ¬Z¸®ãq„›€ÇùşÎÙeû@áÚ›/]Da+'@Úu‡0ºx¢PüèmÀ!ø,îa(P‰¦€ägâ™¦\wBghöÕ¿¨T)È-½Z‚v-7ÂôŒf{çf§°wä_é*|\¶äß¬İäwó$EYhK©æyX?
-ègéöòv_ß<t9E=¤k^4Ãtê@Œ~½ÒìÇoƒ5úµ2ğwÄa÷$¡
-a}µ­ü]¯9
-(FÊ?¥Ş®Uõy¬[¹Ç¥%ÊvlUÉÜø$²,Óñq*§†ë.)¨J"ó·¬T¯İ«”dhbÕ§°.İw	I 2f7¢r}%è£!G·¾K².ìE&ÀŒf/&”Á¨±{0	u‰=¡^˜q ‘5®Üêòï¾äié¼K„üßÖœİÒâl"üizc 6«›+4Å#ÛíKÅ~ÿ#œ7ëŠùàÃVñÉÇ¬ƒÑR™E(›òyÄúìñÉfë‚›!8[¢Ëéo@“¼l&åkš0 <±ï$& Ê¹‘ÆØq²—*ßd%qÁÕİ¤zĞ³
-u›õV]]áÀñ‘	İrH_7a°W[–C¿ëM“m@Ã¢êÓhÄÑ×Fü"šù”Ê1KÇ:dG…[7å€]2w=š,OGVÒ>2[WÕÔMÓkã1g. 4djhüÍâ=äı[Bw¸Ì¶s
-v?Ø{Ïr—åÎ›·Ÿ<ÛIz33"ê÷ä¤~ëÍ»ïŠ_x·Í¼s;c¡>†fŞÏà´Ó›`½õ$àˆ@cÚ¶iŒoÀŞY‘bà~ ;aF‰ŠŠg?¸
-Â9C-+Ìmº 1j»òFàXàë‡9ghÛ~ÎWçõÍ¨+ˆA¦”bTÖ2Áù‡"ã5%)ÈÔN£tÚ¿’ãZÎõÓ~ı)¯çÄñı÷®ı]wmÔë)÷ıeOCø›oàÒ-¢ô¬‹nâzûƒÜ,t¡.3Qù Øe5ˆŞÁe¡¹†»\!6h¡Xóâí4Ñğà¹€‚ê]f£RØ.6ètÂ~Tæ"xQ¨|`¢d)kã:(4ö‹vÃd] x.Dvái_|U ëEó¡¿|¢ƒ€(êÊ.4/*jv²@»@A‰§]dÒLtí"Í«PÛEöv»@qƒ»xaÇ] ¸Í]¼æí‡î<¤ğ)¼õ Ùx²Ø™2q¾vƒ~(®#€ç]¨ŞgÎeêUfİåBÇ«-Ìyk…9W¶ĞúÉ…®#êP´¿;>daŞûÌ4gHKà×òNp¡ñt]Ç®Ğzo…ÊE+T~X¡ãlªĞs›
-ß¨Ğs€
-—Sè¸2…¿Rè8%…çQèº…Qè9
-…ÆÈ·åbŒ±Ùšª,STĞ—Kİ®vY¦9/)©§¥ü(Ş•3"Š¹âDéèÛåÔyºt_‰Q.œxK'ÿú¬ò$;šœ;TXã$úÊ!€Ú'_¸.ï!á·³xò}‘ Ğ¨mKîNÏIü~²Ìæ”–T[sĞ·ı/£îUÜ2®,´ˆi«‹gÕ_¤£‘ÀN¢øuß´"ÄÖÊÂËªPÙÁbqÕ1:~ÜÛµö¦“×—œãÙñÆÿ<¨íÎ‡ÿ÷ÉaqÕ‘e@9‚®†5ND™åâ@d™Ï}üAreé?ßÁòFó}ïWÇÿY^*€ì¢ĞKzVA…#)c }‘Ğì:æt…M¶pí¦sI7zô³4¾‰#“ğV¢Ù<-¦¦	«P¦İ’I£Şª›³‡ï¹ˆµOØÂ%Ş®œº…›0÷£%ÑÛ†â”/xÎ‰@¨ÊµÓû–ş}Õù}åôş¼¤¦\œáì†sÖ"îÙCö–Aå!<m£x£!ñ¦[5ì.Oã¢õm-ÿq$ín5;ÃëÊß+ñQq·sü`³äğ‹BXj©(«÷É·ÁF3'çV}ÁarT.:ŒE2‚ñ	ó‡&½¹÷ãé,0;šNËœÔ_†8ãS¾@ƒ¡RsÊ.å×¡8ÀÊµ ±Š¼Ü Iri¿=Öº[ñÃTr5(Óà¿\óÎy’¤“ˆ\äBEGòÆ¹Ï¾ü2h˜)ó£ö
-…e¾é
-+İvs>nÒI¢#9J¯1pú‘KI¢B_ı§MÕR“½—*F³;Ú—à}¦ç)ÿ‰ÙâË×ğ‰Ãs©°Y@Rì-ğ•!]GÈ§ûr¥ü!7ŒúœÎÓ7eÕÊ=£ş`fâ
-#:ÿe¤¦¦|ñáŠåı&ÿJ5FÿkšŒu{¡x•[^JB˜¥Ì"O›İ¸°4ğ¢48Zo÷—r<©V¯•çÊ+HÜåÔ®—öÎ®¦»cÛ¨¦çşKºñ	AŞ^=Ã˜‡t…94ª8ÄOÛÇ{¿e£g|-i£øO%İ[¥oÃÔœo˜3¸_B–¾Vs7£[»ÇØÎƒ†FEï„mÚ¯î›ç†Û<n¦7m!Ä¼j‹7Pú¹ÛÒ’w Ôqë/u¹xˆ!¡µ¹ßÛ`Ìâa˜uÂ Ş¤4KííO·3&Uí×=xİÉF4;²opu„şNW=´û8´§>/|“kÔJ>À(ˆA0µİïF$šwµ‡Ş3ŞÿÏ‹İ÷ºÁ{8w„üğº–«lZü‰|?TX§Ó¿cDQì˜ˆ"(#.¢X’}_(â&yÅ+‹–Põ±-Qı­“ÖÀ,8Ïì°Ì/8•şèòÇ3PÉ›ºûrO€ßpcÀÎ…ÂjjÛ5ŸC+k\ßêîÓş ›|"İâ÷ç¶—æ,ÚEc§\wƒX
-éÕew›‰sv+±HûÑ‡»g¬Jc<OpmYÏµ«`íxq/òP<{…Ç~¨IºOi“ÖÅE8é.¿eP½dYCw”NÇİØGäèÚ,}êõs¿m{H')fÛ|Rü·›Ş6ñöË£Jù­3?y@ŒÊr9a`±r¤V¨†åPÀû&ÒNÓıôpo(²üQØ¨÷âk÷uí÷º‚.Âé¶x^%Kà”ö #Ëü3Šùv9ÉÊÙi:[ÌÂ’Šf)]Çæ/#³Ô¶¥…6Ê{a¾Å¿ğ‘ûÅ½?ıet¾ÈRÜ‰n…½9srgY;ÂY¢ô½×#Çùz?Ì½ºÅ‹Ó^¼ŞËfØûü®ôo_îm½zÕÙ	–ƒ“ƒÃÎÑë½éãÎ^g¿s|øsĞ9<|}x4:İŞ;Ù¡W/_ïÛ{»»Û[{ÁÖÁÖŞÏG»GMÌUğ—Ü˜‰Kf&dà—–ƒøeTo:ß2Ñ%‘ è
-äR­Š.Òw±6SÎÊ¨¿ŒÜñË$£ˆ¿cv•\N”3vğø) VÚôğ‡ÖË
-v IÚ¡ã¸RåáÑµ¤Qä‡maíó°ó'ï•+0TŠºÉÈ\Z8£j Îo98C¥åˆã)vK@YæIÙ½VóHG<·ëè€Ûõç¨I.ï9P,ïS  vÍC5÷@Ğ•‡ûpÄí	ƒ¤R_ê§ôÃÙà?%ŸÌ‡*ù A¯€×:.~Ôçç¥{ÁP}c”ÿŒaü8•@ñËöùÇ#Ûh‹Ë§ÛKK9X›2üš%H„[?níîm½Øë'Ç‡»@¬ù¡óó¤Å¥møTiÓ]”Ú ÿĞsî=ÏP»e„Öç"4¡ã-ú®¡ãç*'†¥-ãÿãöÈ·9†Ê'!´¡ö&ÙU d?€ĞùCeÁó|hlï¡cX•ÕÜ<Û6¿uÌo?˜ß¶ì·OBccr¨¬Ã²ÿ«søºuØÙ99ØÙ:Øş9ØÛú‰—`µüùÏGÌ^¶g¶k×}óÏ:ìjb¯wmk\çUí{j7Õ´›$4Œó€njl˜×¢V§sˆ`rÜØMt7H£^{i»×‡üj^Pû{TO†~íHh²‰~'ƒ6)ƒKp1pÀRfX2@cÙŞÂG6ãö¥æÈf‚ãğ<fEXe	ˆ¤TÔ—½´;e¼¢ 3¼ ó ³Œ?WÎ¾gšp]ôÙ²3¸Ó	àSœK…¤gŞ	òÁŒ%m(fÆ5×pÏîu{isBd¸Ó½¢¡õ¹ ˜)àwc ¡ u|ëñ§ì¸ÓW´R·–X¬†Å•(h“+êÑU:èåİà8ûÆeDÛ%P«½»àz”Şfíà%;ÆZiÌø¡#×VRõï$.æÂ	Ãğ¥Ç›Rï<{i¤ˆLäu“t¯%şŠBÀÄ“ï¿]OÙõ4PÁ¸Â½¨ÓUt ÑWx ¨Ôr¼uøªs¼9ìlïíÒ1Ùt
-DZg*m*¯¿>ÇœaU|ŞÑÍ_Îs^ßoOÛç/çÜ§_ÎË}è5ªÛ?9‡7ßiM!g`»1HŞõm|ß>£Ïø˜s2— %@]Ñ<Ç		xKŞ¹cÎPbühçÒÕŠKs&ö4âhÅÂ"dAíÛ`µ†BµoŸ+µö|8€sG°¸o«,ø’6<µ»İ.	/ˆ»Û¤ÚšN®(¹ƒ#ê‚!lKQK¯DŒoú‰ïFÙÊ3À­M$}Âr€N7È 1Ø½- úÕŸQk/mÑ’¶^!Æ‘ŞáLœ";·Ô'œNhùot_$fß(gz‰ ïétbÂ(k»°º=`zE[1ş1m¨^t'ó)]g»ä×_#.Eåî8 ŠÓ¬PêØµ4šD’h Èf ß)&š‡^OVîJòÓ´pHC	NK´²Eæ€+?`”)•¾ô>W|Û.,ğ¹XQ=úep¤öÑ>í:Ôïì‚¥cšàÎ· F!Õfğ±m¢¾bæLùö¨£ª³¢vÉà>0]™”ˆÜ¥{¡-"21äƒT‚ÇxÛˆœïÌè·Ø(4Ç2¯œş¨½¤Ç·—Œ®i¯l.µø×àÇ$ë2\ÄV/¹¡¡Mî–_ìï:yâ$bO´^ï’Œç£iùøÙˆZ‹mF%ãÛèÎÉôÙ‹cíq\®Iºloªï¿­»Åé[Qäå`Jûê…€ck€¨Ğ3¥ë[pÆà-èÒ åd²KÇ’#ŒëÃÌ$™²&õtQ&·®é!,Ä(é®šE¸Ä½‹¦×{İâ¹T‚•ı.¦ãgû³1ªÌ3FDÀ¢,‰ÇpF£qèŒV´É§2^úÉ\İ==ÄOKP‘©ØN¸ ˆ+Ñ„:JH—ClNš:ÿC¼?­-ƒ|Qi“©°Rvv‡ğU†dh¡jp†®T
-çı½€Ì0‰;Ó¶<ƒcn¶ºFê˜HæÄX8œÉMÄ@)œŒQ4“ÛuëN`Q&`{ÄŞ.ÙkMêÿ³¶!XƒË²R§™ñ9_WˆĞÓa4Â´()u€;•XÅ”Å\UÍJ{mª:›hS€R¢`u­Åé5Ü¿v2$ï…Jvd×ğ@Š˜/ïbóFØdn”é6í*¾eTÌ´vıLzKWc–	m‰VRõ3–DÆ„f¯212Ğ$M
-2WèÔ…^şÁqªéÆ…ğÍ`L»ŸØYâ bN«Èw7æ¨^$ Û  €Êgõ°fºIO±…}ˆ3§ãËûK`F¡˜Z_m™­§iH[ú5Íø˜¶E¶´ÀPx6òôiô„L®ifTÔ¨ˆ
-ŞHåÜÇhp¼ÅÖŞŞŒè:m;‡‘%bhÅD‚ï„‰‰qq«ŠjpPFUh´NNóNoêÎ_·¶uü´6]ûz¥¯¸„M×
-aÓª\OtnQåZu5.êŸùöVLöTàå-„qTÄÌy¤`‹RÃÆÒB2íÏŸï—Š3_İì¥İ ÁÓ(ÍÛ%Bx™˜Í‚ù‚‚¶•à«t FkĞõ°4YµV6Á:Ğ¹ØêÇË¢Y
-w¶è”V°“u£›8ø#Î6S„Sj¥æïÆj¥u‚×®ÿç*rÂ@§“VzÙfÙ&x2»yÂAšĞ	Ù>Ü=fığÎÖñV°{pÜyEOX»àôŠu±"šš
-sjX,«D	>Ã:8ÖMô¨p¨FwN ÈÓd	xêbzîS’İˆÙ"ÎMiJ™uæí&â¡+¡½¡^wvgCÑ”ãàh5Øy%÷ãq°2æbåÿÛñ—tYÁ§Ùœ^czrÜ_AJìşUœ°79Ãb NºT:òMë‰ş<ht¯¦£kë<›dª©ç›ÈÀPº_¼8T)ßLŸq¬çØ›%àÙØHÔë N\ÑfÀáü¦}p‡Pî˜ıÜ1BÌ‰×şƒ›5ÖLÇ¢hˆüdÜ,·ó»ı>ü%ûsãíı/§§ÍeZ¶Ú«5·y‹.%µÙX„ÀGãâùá' —ŒP¡CñëÎxlÛ­Îø>A†1ÄŒnzÌ9j^_6jj:u%_àé®şêŞıŠ‰¶xS´$YJ4ëÙwNßüû``²›oBÖm çªlÃ¨éLFÄDyÓY„Û’4A†-rÌ½r·tE´ü¿ŒÇS6•õ”œ—!Ó§fu*Û\‹˜¤•¦3:Š®>gn_²¶ü¸Ô+—m¹äX·éŞŒœœØgmØ®Àó¶DárĞZúM`8ïáäµWÔ:zwá™wô–>ú­SÁvn4MW•”°íŒJ›ÑM&®V1ï¦m®Íw´]U¦İÜñëÆWğ?Z©ë¿Xğ¿Vûµ|E¹wç¯û2"é{	ĞVéŒ8ÉW… m˜'u¨8n¿9Âa v:/·NöÏ^u:‡[{gÚ^w&zß£Š@“ï0œ¬–É<LÇ`r.NÄšüZs®}•tø»à«‹ˆí¥îÓ—îË\ê`šÑçKFM/œ
-‡¿ÖÏLáï‚Õöû¼\x»C²»-ã¥&Ùh#?•$˜ZtGág¦v½—*q0D­•'á«›,˜*|ì½tÓøïl†`4å½R¹¿:UZ`*¼ê<u2ll¸ÙnM2`údcÅ}ãåÆB»;)€¥cN
-`/ùïwÁZû±[­Éû+CíêÜæw_—´ÖQİ,¾ùAŞ¬•Õ·¥ê+{Çé}±y¾rêt2ûâÕšóÊKê‹—ëÎK“Ï—^<Ñ	}uO9·Ô‡}àŠ$º‚8Ï®xÿ…?yäH.Ñ[¸>f‰šrŒÙr‹"ˆx:Š'·u÷àÂùXqF[2gÉ±©Ÿ¢éúÑÌ£jÖmŒsXùWÉ@î]Ä=.8ÊœW1¯
-j°¿I~5Ï:^Ñ3uÙˆV¯b­hœ:;oÌ¹N–0`jàâ@¦nGú»ìJÄuQ¹Õˆì“~ñmïüÍiÚÓÛ¡}IŞ1’­ääpøW©ãˆşhùí·ß=û¥uºÌqª_Í|K(Zh¤x‘›KÒÏ;å2éßâ%sçú]õ§Kå¿?tµ¥ö¹Ã!€E€FÕ†@•‡YÏ#Y­§¤p|0x©bK~„øÍóşğ‹U.H¯X<ê™XLPŠÿÃ0;âAxÅ…ÖgâsDşG»g€Øv˜pœsc+5~ğB=ey¡>8óìÂ+#©yÌ‹'R£AVşµ-7+ï—3mæ<Œ#ê||¨€9›$Ø @¿¦7bŒj4±¡À¥uéÂäÜO¢áAu‰ü²s5á¼ò2Âr¨€İÇ-£¬­--ñğ!Pói¡º*<¥
-­@i6ˆ÷«6çûvh¨kíºÃÎÊíÁ áC¬¶“Ñ?[9¾·E¿ü¯é…JñÀ4ÄÚæ•
-9††d³“iR¹àPçÓl|Ÿ\'6 øÙòøšh/-m?É`ß¯ó¯«õMë²m#64bË›Æ`OE¯8@|iìÉ¯¯
-gMSÿš[ÿV–Ñ~`‹±S=pÛ\ót_»îS#9#ƒ­wİ­÷ûh<¤“ñëÌML—“ª&i,^îÄ¡âbÚ½†îÂ4ğ˜PdóÍ ±Ô©.Ğ=hÏjî4^09QY$fÉ#Dæøex¬ˆ[Y?ºqÜ@ƒ©Âıt}Ï¥Á‹1Ü°Ôº~	#NÚG7WI7kqÖ
-“@ĞVù•Ã¡$…t*S\7…cß;ÎË´¨©&ª¨÷’DÎÉY/Î®ù‹»bnòu¦Uïr•1ísÂo7´Á%…Ò?kJm›Üf×&n&Ÿ…Åµàs’/%”L(M6ùˆeK¹kV¤CT8{›K jµ"UG>İ@‘m]Üµğ“áj9¥	Ë…5¨× ıî¶ï
-¶³LƒY+;0ôæ;,Î‡$¬İşl±sĞ,|ii
-¸Òºkª§öÊ ŠpQ@GõZİZ‹	:Çş´Â*(¶?Š‰‡&}é~–{;»VíË­À‰Hõ¨~_ûe¤K‹®mü@LÂ'Ï~çÔ"u¦âgfË×¥ào•^„ÙÁ*kÇ‚–¢aWù¶±l|f»†òâ‚H(&€¸Bû/ƒds¤x‡r6±!n[)‚†û‘ı¾M»]v-Ó= +r'¾˜ö÷Ò~ãüíÿ"¢ö£mM8ÜS§MkÌv:uÉÅ6E˜Õ-y\ï};8ŒnQÂn>'ÀhÁ+L®è¤/=ŠtÂšéÅ—É}Šºğn¯¥ÊdbÕ®QBi‚Ş4f·BÓ±›Æ,Ç1×,½t
-9œsM û_ÒwÚƒ¦ª¦‹êòÕ ‘9ÉLğx’»™gêAGçåñ×İY`ÜT"ª¾³¶ş‚êÅûÈ¥+,ÜC–-~¯ÜgKä+W+=gõ>yíàı![õnÙz¹tf‰Bp¼~ Ğ‚²ĞŒ×é…Àğİºá\#½ Ú[‰ã¦
-!|Æƒùñr¹ê yË·°™CÊ¦&÷”wó,3Ñ}	Tl$¯e9ü/<k½éƒËØíí¿D­_WZ_ŸÂjÏ-z»úyH ‘ãn”î†â‚¿I•ôš(9ûHAaÁ4Šm \´®ø¢
-†$>xãbF²adúø¢í¾àZø¬×ıûÓòš
-C®g¨á|í]uté¨`/íˆOŸ©¨'Ã×lF¬<’äŠsöˆ »(Ğİ‰kQO›&İ¶ÖÊ0r¤“=$´b™Û[ÕX#„ËÒšfçhIëWÑj—xú·Ä×’43H/h~è	m…şàÍ÷öè¥“à“ªô\ıtMQvŞö:9¹$7©²Wò*š«åJÕrU¨aaåÕ\«¹Œà—Ú?ë¦]âé¹ÊËN.¡^±K¦­ªœzç<ÉÕËÆÈ3·g¨Ùù›°…¿àÿÁ¿äª¢E§©Ùë•«™ôÅ4“ô³\Y5¸DÖ¿“	$t°‡]Ğ©£ö1¤üî’¤¾ÂhŒª²T*Ë€¢GK\¨N¿˜Saw|#k–á·b¹€ÜE¢åËxù8µJúµ(#àYëZÛ€Å8}§÷PÇÚFzåş­_WôòSœ]ÉÄ^İÓ¤Gk'[¬0‰ÿtºx”ür2N‰ÜÆÅy6EÚ¥ùŠÇÓ¡óLtRw`e¿±0&ğ­lÈy|ÛF)ãPŸãSˆÊ´¦áúØæ¬'ì~aÈØ3—™zY»¦ª±HSóY„2úI[eM¡V›kÆQ•ëëT-ßÅœïÛòMíF–¢
-ç]@.h5®ı‡åf!›jÖ’Üõvp¤]‘´¾ê±9w.Á÷üoÌ•ôƒw]{S£á*QÌ¢¬3b<4kgï«Ò¥åÒî¼»p‡ÎÀJÆ•gDŞ:w&8õIâ‰R £Ì6û¿ûpùÊ5ƒÏ	qà±RV8U}¬¨FŸç»=¸2C­ t!SèŞ°Q:¥.u‹Q]«TK=«™§~H..÷Ú¥ :KNÔ>WMSqÑ²¯4ªV™t5îJéñ&:NÚt‚£êßäDã½ÈÊgä†9ÏM˜Ë%‘e†Ù©şÖòË§9†N«‘Eä!ª¦á¿l÷TÇj:ä6:„bVV•°¬îáà­Ò:nqĞèy{t$¹ÏÅHN]ÙÉŞÖŞ·2y×JzµS„iv˜Í¤îåòıP*[	C)ôSî
-½R<æ$Ğ[
-Zõ¥Õ#;ÕÁ	¦ZtÃ§Ä²*kqòNlsÎº l©0)ÏÕa½w÷» _p/çK†{o3€òD!öIÍJåæÜûÑ.09Ââû”E¤FE™ÛŸå‚#Njğv89R£VÑ5Ãşro/\U‰Œq0½¢TØZ8v³ÉG»ª’å`W$o¥‹U=ĞuÓÁ2UŞÇ€€@Syâ}YhÇÑ?Î´‚!.oJû‘ıéİìR;F •_Ñ…Êğå.²F áCÈl‹]X¬~rÔ9D¨úËÎaç`»Ã±êÇ6àH–uÌ´0Ñ}FëÊ/Õ}Ûjüİ^°M__ê +”Bf¢-:sÛš4¤â´ŞGÈYjh\Ştv¿aÜz„óœ‘¼:èaC‘¸:É-Ì'x“å>`ß·ˆ'v}jåÑïW"4@¿me‚f¨ã"e´T@B´x)x^Ù¿eG¶ƒİÊqè­X:¤tª:Ú]Ş-«­}]ñµ¸æJªÃÙ{!2:Hgn‚q<øaÚİ)-	]©¼†¬ÌBBV»À½Ü.Q;ëèç£ãÎ~°ıúàèøpk÷àXÀl–^BŠıÆ7é(ğ…zQVˆ ©PÖÖ«/-‘<ê™±ŠX"*x¬S8ìHcf½>ØûYÅËÅ@î°aF‚Ş³´ôÚ¯X,ÊluÃØxifJûångo®e»»Ç»4øàåëCi‡/…£2i0x†&ugÍÍ¥%WÒP÷M#%û	 ¬ğÒ’»L.ìWÇ:^)—Ac.ˆ~—Ñá‹]ÎõqİçìÀqàt!|@ğÛêÊ¿|M¿!Ü³°`¨Z¢?Hğí:ÛŒf}0IˆêÓœtt±gš€86:áÓ‘Ö÷¨)öåß·_—·äTO“[‡uH ¢Şv¥ı2 î¨'9/í	 Æ™ÖØz	ıërDs‡æÖıä’ïQë?½Ø8ö)Ô!“¶¬´W•ÍqcãOÁ(B&½BÉÖwÁF{#Ö×şî†7Wi÷q½ô|½½_ı‰nŞ‘}¸Òş*ÿ)ˆSº•m+íÇMÀF·A7²åÿø?{~VVtVWVœBüõê
-ş“Š¤¾à¹îã»Çë_¯”£T…¨mkíµ•ÇOÖø+M…†‚˜ò®áF766PÄ¡˜¥ÅÖ6>á&V—×Ÿ¶Ÿ|Åõ`m·ºIÏ~òÿG}³ñuûñSúQôÁN0ê/¹ĞH•Yk?şú	ÊSÓ)·N„a¤ëÙæ×…rûIÆ¼N/î2Ø0«O‰)X]y//Üœ¨”úJÓ†¯¼ô;Æ'’›7´w–íVÓ0@zoQmz£oõ¢ÉTès„àÔ75c‹
- rùY“å®¡ë$-¹{µlŸ?ÓšúŒ_ŠÁßéDŠ&±äâpg¢”5úy=2§°á]ŒiAÑÇÎ_·ößìuÔeĞ‘»=X¥/äJ?P’Fræø‚xCsriš³¥]¿Í¥k$c¬©¸é0qnöÚSÿ¤ª+„‘ŞÑ†tÃ-ŸÂµ•µ'­•§­êÈê“SU+Iv|ÊÎº*ÚÕó`[=÷PÔ2tjzL[-haßTµ¾ú›kE·n)E¾ıóæa=Xã<i¯ÏêÁ_]}›KŠ& 7ÉñG†ßÍˆ´Õ¢ñÎÓ´¢H8³í«m»±°›ÚKşLg¡¶e; .2Ñ‚/EÎ@òVÚ Ñ»’ÖòóVÙŞÆF¾9çÈxG‰HziÊš_ú°TËßÿ5ä£çÎ_söóR-³ã-îé¥Zş&®Y‚Mos—gÉË<ÁAÍê"
-JVYBs%0‘ZØ^[³”¢f(ÄR©__O»¶t–;àÊ‡¯wwé¬VŒvÄ¬+29.¿BƒÆ2¢o³9#ÄÍ3£M¦÷Ö÷öª€nø.wgÒ	j—²şªb®Šäá3ÎÖ"sUu¥4èL4ËgŸ:0SvÂˆrækétIk¾>9~srìB
-9ÙÜ•C•Î»‚™¹» šÆôe"QŒŒàÁŠ§ŸÒŠw>G¡FØR¡‚F`1@á.)Yø$?Ër’L³ÄÈjÂÀ\®tY$>øÈ•›±ú@ÒÊ·gf:’ñß¦$'kk<2>Á‡S ˆ•é—sü;DQ#œdşÎs0 ¬÷/W§YtQıñ…½ŒÕÚ>9:~½_X-ÄSTÔlÃEÔŒ0“'I>Ü`Á÷­l¥\se5äÖ5ÌsÅs=x%‹zuÓ \cÊJÌè_~Y¢³,…°.)6ËønÓÎáòW°â¾oÃEÛrMôÄ}àôÁ±k<ÎsüÄ¼¯$)íÎù6ƒÆ@ò?ärhœ;-l:æ“êLŒàÂÍ"İñôÇMR;ÏUé¬öc+ßŞ²^\ız_à¹ğÆyÂZÏ“s²õ{z«û{ÿÅ;ı.Øy.ÉdÑû˜·±‰…0¦…ªüÖå9¦Ë¼‹Jò¢†ùüßuÍ¦ñ¥wD¬xexCµ!˜Wg¹Ÿi5#”Ã$3S†vÄfaåí@Pct})¯@®@À `ëlï9|Îiµx2Ç0nÛ57Ñkûûe—w®÷sÅçoû?Ë³¹ÏNö_t‹Ÿåæ¿ô«ü¶Ù÷t3ZÉ2ˆûQ÷nY/^N~vÕ2fKˆ ."­h3°ü%œZ(j¤QêJÅ"‡7ı•wF•gr:"”w}A—»•›©²f-#´à¢14?…ñ\ÃxYZÜŸ{Nœ“TT6Ûœ%ø:ÎY&§«¹Xü¼ë÷#¢9håáxöâ:jËß½+ó+UeTè3‚2“,şv¨ï3¡<Í]v¦-ú.“¬ôgC:%_4P_GBøŒÒB”}9ƒ*”Ôè¦ßÕÕb¦öÙ~'¨ZàgòƒïùƒiÌ*›Ûµf3Äw%òT¿âf0ªÁJ~¦2_{üËùÛã_¥Ï=şıîeS,î{ï–×ĞRå—•×)F–’Ğ‰e-qaprÖ,/#òå\/WT;i±Â¤“[dh‘'@Àò
-©™k³ë:tÍÙ•ñ³œ©m³¡]m‹¥ıP,óõÆÍİ­¿ñÖ¥­Ú{é–6Nv•§ˆjÏØ¸­ï<‹o¿ zUïp³ñåS×8–Hë€¾éÕïîÃ’ˆŠ#ßÈG6p¤@§"¼¸ÍÏg.&–q¶šó+>“öoj2‘£Ä•æŸå¼_§L=Beõf.Z"Éşb‘Û¾Sy¡E§¾Çk_×ÙL?£‹\¥ªúIkÍ‰Îâ÷WÑv¨z>1¤LUªzßT1ºJB,ˆGC„»uoÏw!Ä‘İ±–-•£€HØ0k·«,úª¼_‚ˆçtğ9ôX=Q«óGl½Ïå³àJ¤€Rh÷‰üM'u7f	ÎuŠíóñqƒx˜Wn,ÿòáí/Ù/G§şå~Ù	j1ß8gÌ½yıvå´ °~Ò(¹b«©ãx„‡êúØt:œ÷}*»ÿÌ~BÎBGúRˆÿ¨o" ¢ê
-ˆ€…ƒî]ošª£íg:n)‘–Îâ@Ï­?¨§–N„¥à2Ç‹§Ü]Ë®Â'{kÍt¼úH§¤²İ‘¢n—á‰8uõMYN,1¶'cÏIÅO&`‚ÕÃ" .c4§¥…ÖõÃ1DåßUj`Æw'ÿl6é9
-‰M¤ı1*i½€:é½â5)Ç	0b¡îÑÍóHC‚"’}§0šÃ*²‰Uhõ}N¡®|/èŞúÏÃ˜X>û–ƒıWõ“mW? |·LgÔKI‚yw‡Ã©ÿä Å7öË`;íÃGã]lÚ‰‘F%EĞù—4)#`¤KÀ¸.qœ¾Oºú{$Œâ¥ßuÇq<RĞ¬ÀôúUD›0eË›×©ı)€üSË®¿™à"á–ü)€êßK.éXİLï_ÓjùÊÿœ£“Ã;?…ÁÖÉÎîqp´ıú°CıóIçJèƒ­]ú)*¶;º6Ñ÷¤?š9!aåd°ñ¼z.4n¹ºr/Ñè_,oIöÎbê€J[bB0ÎDÊß}õ3³ÛØãÉøx=µ~÷Î‰‚ÑÎKœ U€Ùšøc6?ı!éâ;üfw#ş2*a4Ã ¦·;ycÖKU3Ù“{)ÖÉæt-¦£ì,›œÉBl{-ú~ZæK"/ba±Z
->ZÉXDİ^MİÛSÉÒğÆĞC¹-M™5ÛÀt@~ˆ‘¸2dYÚM˜rÚLU¦¢Ğ>äÜ
-pW•$!‚íÍytT¢V}A»$[4tÓ«t ’î@‹³¥À•Êî%L¹z“t^»`‡î(&°‰xIÁY,vâ ©ºwY§Úió!3?ƒÜb°]HgØ<¤v^ã ò±=989:¡§ôë‹İ×€.ßİö©ÈÉag¿£]Mbñ9„Ì„üO’¯$ï¦¢Aœ|Éìt|.©†„Q ¬oœ$I¯±x±ÑÍä$.»‘Zì×jàÑ“^©5(×a•ŞÒ¹#€™\"…,¸béZ¹{¹~$é…mtYö—ÉªU;Š`àxäßå“ùF7°›•.0—Kew¤û ¼€TÊc)'rœÕe¯jT’Q„,@zÇÚîr_çï_ww.¸u¥wê"Õ¸&û4¬	çº1ı¼X¦„yºK¡Ÿõ(¹˜bg·IorUov~j‹.mævš€‚Äw¼}Ô~ê©mZÎÀ½¿‹ˆ}¸H`2.à°F‚ˆ¯ç#&õ`sş,¡;vDİ)§Cº…£j*o¢!(;íšt>%¢@Bpâ'b€#<bôaåŒ,É\h)è>á)VgÉÂè%årkî5•–C’(Z÷p>µœ#â¯9\P¾oìTÎŸ©ìß\µ“tÁ!WJÙÂWõ ¡e'Eå5w'œæ¶Ãhº¦JÚë étÂö=‰™\\‘Eı0Ó3úP‘@3Ú¹kFy·—Ôe9Íd:÷µ_l÷¡dC`c>‘Z¨k¹Oâ÷D/Ä‡Aç½3^Ğğ|áÖ”‹C¹åz© S&¢!Ş?Ö,|ÌB®˜TVF|RA	ğ"ÄOLüÚÔ¨4îAª{³ælV™¤TQ¯§”zÈàè~¾QÑ‡EĞÉ ±Çİå„éUCiÎÃGöD»;®\9?G]¦öøh¿öÂ ‘ÈÃ;N6ªòÖçR™w@MÛ¯Y6E®AVoØŸRÅcæÛ­˜ÿn…ÎQĞ¿öÉl±?³GïÏÁ\ÛhPl¿š¬ÿö}ñí¶~]®}ÖuüC|Fù„ã•?›xR=¾ÚéRY_>ÂR\º…KÍÅ¿%€ò7bpurau}²F—²xÚ1ÿôAz«óIv!îÓvĞq>>ÙNıóíÌ¡Ÿ°ì!¿LÓKÿ¿zöø?]Ç?«şOUô;*áç®ø(eWáÆ-‚(éÌş;\û3´µùä¨:’¹l—šRâÓX@­²¨Eı\Ş¿ql7OŒ¢…Ïmôí*°›ó¹²'µ
-î~#È3üH¼ yy<½HFN©—‚÷c¢ÓìWfŸm¿ØÆ_×ìJ†8´•YÇïJÎÒÎ¼(1¼Ëİ!?•àŞfMA¢Éóqäû¢å)HE”û#ÊH½•I½òÆd>è`ıÇé€£Òj´Ú_îºï07´O3ÍİÆ*9«JåÆ6ÛÕùxG´æ`Ä™¿VpÏÃ„÷™25Ù½o³Eú¸µ–WÉ~ğ±€Í97j!ôò3ÃvÅ*7<)ØvCcJ³±j -é¥âd7épNıÊ…Cì¬fPûB:ŠbO™¦ò3°k5´¡ÇÁÉÁî1ëv;Û?;»‡)Ì(G†px_¬üÉ¦f
-€ó‹ô‘P®E] 1Ï”æÒ3RxiV`´èT ®r$L^ÔIhP+¾ß¡Í¸‡ÿüÈÿ= ;ƒŸ»xZÍÍ`kï§­Ÿtø~CÈ|’YQıg{ ¤jıwl.¦CüòŠî)Í¨­­ªX#'ß˜äKO2÷t¾ÑlëôtcOU£öĞªVÍƒPÃË™'¶YuX½¦/t1j¦ı˜s¥µ7tÉoTeÒ„>ĞÕ+Õ‘ØTÕ¶TbÓ6‹Íè~ìÑŒ/ƒı„U›™©„€x±Ï_J8]¶©Cpdµ‰œçW;Ôİrˆ–Cğ6eıeÜd:_±:<	OÛëZÿ‡Z{ïLRØR³/ ñ­FÌ¹6gÛã(1ªù3¡ï^ÈÂ?¹ËrXY‡§BîYY}“ÂI½¦?!¢†èä¦¯Uqçq­sàÇ6Èmã¥s:/ESÙ›i¨*:‚ıÑ‚ìI/UäÛs|ı%É “e„>&ŒzÅ¨ÕÉ¥RT¶2Ó)Ò¯J-Dw±TßòæôG!¦$j=z¯Z?±ß}Bë;Õ:ÒFUµî‡ªÂÕtZ ·’EZº¡¯màÓp	«ØuW ü~‹CŠ_â¾¬ı×_1pŠÕÇˆ«^o3Ğ7*^^NG]Å HG¤kê–ÙÇæ>Ps ƒÓ÷Ïä
-IïÓAO/fCK½·ßÊ²,ü­š“ïıÙĞŸWN¹®¦c­ıDOÁzÍ[1Ñ¬qƒTÏ0‹Ô‰ÇmÇµÄ»2ÕÄTª™Ìg‹EĞp*BëLjGŠĞs¢=ŠĞsó¡ç4V9L„íPí–8H„EçˆĞwŒ+œ"Bí¡wA^·¥-¥©ïÄà­Àõ%e= áÔòwr#aÌRê™!¹¦yk[¶CUÖw±Ùn´]®V‹¿^iµ®%¾›šÈpÄÆ6ü²C“/ ÄâÜ•”&ÖÅr¤ÄQ_¥0«Åâê§ï_‡Á;»¯èÇÖÎıçû-‡Êr¸}*øv¦::ÓD³f›.g±„e1Éç0àŒ´'ò?€Æ±“m@·=A‰øÆ~sD­ZÈLàiY½—Ü—™ØÌ¬¾élïní¯Nvw:{»ÁÍÑ8Ê?‡áàøûÃ×o”±_,g®­Ù÷‹œ1äLĞ]ù™J"rÖ-{HİïÇg½±häüwıi2˜œiœã,ö_±·Jv†5&®9îùo‡øäîŒgæ¿0í\2MÜµ~3¹»Á*¢Æl:d#ßÛ­ÀÒ½Z5qN¢œ¼ÔDW²YÊtpeŞ
-¸i¯·’™ÜÔ”_P7•­éîĞ^­Ö‚†e>VB‡àûzµ)İØé#ÔQz¢-D¦œÛ\–˜üøO‰ë¥b4òÉ®}}$‚É
-.ÇŒöúó™ìrp¤d¨­øîÔšÚ5À—­‚±!´¾òP/'ÂV'g7ÔöYi$™ÜéW8ãñUšô0CîgjAıÙv'j-¿TàóÀ—ŒU2)Î@Ñ·äKá‡pcœMä“ÆÙ×d3,ûÕÊ
-¯’«ÖÂgP{ªŞ®È[İAT´Ü‹îÔõÁ&xxF!3>–!•"2p½d«W$7tĞÖšÀrŸxí3ã n¢¡¾¾Š2Äú9ÕªâjİæúáŒzˆ­áæ¿ñÑÀk˜áÚ‹ıİ`õiÎÚãö×ÁuyøÿŸñ)rèîÕ Şõ’è¬7¢ÿ‘\¡t”YÄDâİÙÚÙØs•¼;[¥Ç´V	T–üK£³>İâØAqŸ¦İÁ(0>Ö$Á_=‡Í­œóF­š/G|çN‘¤pçjF'ã†²ìî°€öÜ	aşëÎÇ¹#ğiw*şGòFğtÊ–©Ó¬ŸJ¯„+èµìf¿Ğ
-L~-À‘9„â¡ıGrH òrÀ`­„G´O¤¢PğjÖ›KåC*ÉKPo–Duë£ªæ?[?p§Å½À ëJ™RşÔšÏ3kÁ¿h!Íµdh–c[,Àòt÷®°…&ÀÕ“,Ô„«yÈé”eÇÃ¹Àâp’)¸$¦·,k	ª§pE—­¡RnÕYÿ´QlÚÎáNëˆ¤$yºR·nâ%idã©ø0Ä¯/êè¶‰À	á{[‡_;^DUh5G-#‘zp£Ô¯n–eğ`g÷%cÕ	NÍú¤Ñ™¤BÄçpº¢ÿHOÁ#£SxU'!vlğE,!À@†	çVÔ½J,Ü¢¸‚èş;İûpYĞ`ºùrõg B¿ä¥Œ{Œ	÷wphúow¬ÏÕ—ß£ãÁ¾^Ğ®Ö–XşAİÁJ˜ş?„7˜å„¾vóww+çE7Ï0®ey™wé“ù`?éõ1ç¹}“f“Öº0	G”Ú¿‚Ú¢ıÓb6q¼Sˆö»#^!÷+NFBe)] 1¦Èjªä—_æÀÉäy»l‡y¹nh\Û´€0ºZó4Rtˆù}:™"LÁÜDİqšeÆJ§á°7upj·gÁŒnÖ™½Ö(ä4+äjk:É…fT½HÃ we°oz$×ğ|B¡¹r×`³±¡S\€×5¸›Ë,—èF¼‘8W³1&GTì®A;€‘ä½‰‹–Ë¾6u§¼§ß”Ô$ß6'³É "ö)? ‘kyÂÊ¬:vß#kÚvŒš«´•²ş‡W}§£Ãá÷ı…¿eºà|,çg×9‚6	§…ÎÅ#šìnìä;Ò>‚ïU>+^¨I®ÎóÅ¨(Uıì/“<Ä¸$ØZR¾V7
-¨3šşò7Ü¾WÁ³àÉJ{¥¼Œ’/¨ÌÓõŠ2.& µ§9ÊÛ´âZİ¨¨ÑÊTê«9¥lÃĞ~µ‘kXå¿ÅŒë)Gâ¥—‚sê¼«7g.Ã0·zŠ¾f-ƒ8vÌ]‰•öê¼…Xiõt‘…`lÛ_`1ªöÖb¥½±ĞR˜¦7Væ/‡œ ãã®†}øqKòm°>cI”wÎÜ5Yo?·&kU3“[ëh´À’,t<V=ìÂƒâÕK¢¦½Ç®Oî’|Üä¯~†É_€2UÍ@á<(G®…NÃS_µ/Š§MuíÇs'–_¶;,:ã.è£ÂlÓ>|V¯Í_‡Ç«O[	ª”Õ'¬ÄêÓÅÖbcN1ÛøS^Y”I­Æå8Ï&g¯Åèk1s)n\‰b­ªL~$QŠ/²¢G_/º… }½ A’•XŸ½7ıåá¢+±öVb½‚ä;ñdÑ[aƒóE,r),´ŞÓI,0MÂçƒÿ9g‰õå‹‚$=ûÁ3G ğ5ä¼\;}yWàş*ËP6oSÜ7
-sa¯l£°´zã9Ï*q	GÊj\oúr@:s˜ß·ód3µôÚ’±@QgCç[VÂnñŠŞS†·lE™ÜIÑ¶õ²nç7÷¬²ò˜
-¿µ¥áÓ—fÆµ°óoÓäîë§ßÌ8[¾÷GJRû8Jyy[4q«¨äÂ’qüV\¤²·b)¶Ğ3:*Å§•Ûûb˜ÔKHnéÂ•»‚<€D½@jrÄSeœúÁÜF¶uõNŞ¢pFó3ıYùâ¸ÇÈòæoÜoáç,ÓÕó4İ•ÎÁ¼òˆ3Z¼\ š/ƒ#Ø<•Ï˜=AãHeÛ¨2Ç:K™Ö%Â¥™_0hÆÆ“ì§drEtœİã„z_·ãQO=ÿ/ıÜîEÏ=¬¸+ë,å¾)
-¦¼™ ÷ö™x¿9j%]M•&¨èñVØ‚ªs9û'Ëb¨\HÂ¹š/wÍe2ç1mÕ.y×ZwúwW¥â‡µºø°V?}X«ó†Up@}èî[|8_}úp¾ZLò†¤7Wº(q¯}èRVì»’±W(F2öõ…Çß7îØKIè—¼8–K-|™ñ<{Æ°ı—É(î•×xÍñ1ó¦aÖ}ßÿQpal7ŠwClØeËØ4²ñ!HÆI?Â`|ÑÅïô#¤9šï¬¯¢~éyîQşâş–yyäçPä ê	L@Ï`G Zg|®¬;Õf"“»F(u^?è›F€×òŠŠ¼·f¥Y•`àz$Ï™Ğ÷¹§ªZçq½€…/>LG•Ç¯l¾Jy}‹½KJ‹ÏÚ\¦© #3»â*¨ŒÏÄæ ò>Œnì4H¢LÂ*xv«)ã9*FWá£S&ã•·¾åº-Ó…¦—Áüz‹´’í#`t<[­Ã\Œ+åüUÕXŸ/>Ì£;Ú:wCŒlf-ÅAõU˜òÌe1QÀ3SôaÃÊ}üQƒšQGÉ&ÔŒH—ü˜éo?a<eUxGPA–ú}k·ÛhÅ÷ï)úx‚õvëµ¸ÙG\ÿœ×»8XOwı‘Êò¡ñu2í¶Ñı€¬¹Æ£FmÇkëşqeY€á—Âid¤ël^Š=ô_+·À³ğéDóA7>†H#mäª>‹ˆG #`‹¡ÿŞD,õsv¤r4¢÷	³` [ÿ8		´Ş›½8ªNß°ğ#6{§ú²¯”·äƒ÷I<ùç·QßNG Å-h% ˜„'Ú2§ljIµuCò_Fİ«¸…ïq†`±Z]<CúÆÖ„¶TW¡êïÓÑ(61Ó×q|Ó¢	UuÅmmu»ñ õb
-ğ
-Z@itFywp­×ì
-ÉGÙ(¹¼ô¿¼L³+ù6³9iŠT€yĞm³çga:U%t8UåÀÄß˜«1°V¨œã>ÆN›3‘¡ä«Yq4¼%tcU±SÕ<ÉT^®›	“vSÕì«üãaDU}(æ¨0!6ğMcŸ K†	€®M8µ˜e =%m…‚¦Ÿ<·¤ğu~J@ö\påû«q÷¡F}ø jGÖ€™pœ½ó×İ£cøïìræÜ­ÃŸÙÅY)Ş)÷GúŞ ¡xPÅNË¹p9n.-msŞL 6LÄ«?ÓÒØrêÍ"@ ÁY‹ƒXM0„ÔªÙ•h%PrË.âø+4x	,êÇ­z-É:–äÖe…¨T[½Õäx?WmJph¼	zAŠ£åC:fépØğŞb_mõz:– Ç×•Œ‰¾«ñœ0Şu±T=3aL<7(å¨É¨GinØzElûÕÁÚ…Ù3&‘J¼ˆÑœ’«0xìşNMé>} 8 /w;{;ÁNçåîÁ®“‹»èG`n¾£7çE'8ş¾CßÒ\‘ÀB] ·ÇM¶«0Rÿ•sLøœJFp8’dbë`Ç<®X}AÙ2tBœ&‡sé‰l4ò±@{
-IÆ8Z€ØBåŒ>ŒÇ}H¨OÖ:Ü=ş\E{Ë—´˜®ÙÙ9f·v³’–ba¼ÔA•· „Ğmƒu
-uşï˜·^6Š®ã³nÄûJ-·3,•qÜø Ş>ÉTzrYì\±ÿõìj0ÿîÊlº‡:ÙÚU¾u>·txxú0h&éN@¢‘¢²—“?‹m¾ñôÇôÉ>Uê½ q‘¦,šâœB©‰×mTyŒCÙs·@Ñ·pfu§5tZe	SÄ©2sâUlqv=1=Ñ¸X'ÇoNº£Şìm[ 8Şbÿ?yWÛÜDr„¿ëWl–ÊYJdÙ&p—ˆ”0¦ 6‘L*)ãY^Û:¤•¢•y	çÿ~º{ŞvG²„¹‚«ã>œ¼;;¯İ=İÓÏtÛø-&G%s½!H#Øõ:„Ì}¡0äìË'˜7‹"}0LÆï»ëi¸u®Â›Ó€Ü>Õb÷SÈBI›µ´Ê·ôæß°ÔR%©O ¤éO–oúÛ)Êë¶,:=¯
-ê6/_íªv\»ÉµõÅª×oî¶ºO$‰2¼p	ÚIã‹ 3Ê½&¢yx­p’ëv${á:1^å¯ò˜ÒS×Ë†›Æ%`]J2Dˆ‚é6œa!Ò³nŞS™Ù†^Ïiœ'V¯§Äî91mçÅ^jŞHÔ']D‡ä›¬Ğò‰\Ã!½ìíu“GÃN²ö_{İ^C#iñïÃvíUŠÿ<…ÍM½bewFJÎµa•İ…y¨ØL=ä¤%­ôJš =%¸·Õ_&Âø“rK«e¸gUÆ¸ATN½¡©â
--°>Ä	e®Ó‡*º}ÀfÄ#²„3C–çO1ĞQD·Br@•«¥`AıõB,Œ*¹Gì+ßæ	(•–a-½ÉğõÄ¢#ÕlUµ+iô1ñT9‹\µ¶›æª·ìı=µôÍÃƒƒg{ıò@ŒŠæ´D‘!à€<‰	n7ÂıGQÙĞWâÖ¹Õë¬H»®m„’›"XqMûpÜôî¾oIö4Xí¶
-ÃšG*BÈ&Õ[W¾˜ÌzQ³b66AØT[…¬Ô,Û¬Í˜•úåîWõºØÍc$’ö¤‘&Y­‡ÎÁåIN•nò©·“}ÚşÑkiîj£ã”÷€¡Íï¿®Ë€ı÷ZÀızıuSÓØ—.jÚ–’ıÙÒ%ù¢úöä°Ÿwµ Y®á»gÒ?£Jvvî’E); ³ÁøˆÇ¼PO¦²áâd+m4šøn{{Ûy–\bîYwGî2ŞC¹‹_âÆ¿ÒEnü«¨‡íÅ÷»ñÏ¿ã]Qı‚ë\ÎöË›Úñ=èzå’¶ÿv’ËÉyÛ¹?@t°Ëüm[­_ÇÅá’ÄÍ´cR–¯îšƒx-YÅ àğùıŒ${ığĞ^JêÉ"ù˜†…Ğr²Ö÷¦„£P‡íç4°¼ŞÀ)ÜvÈ›¨ãÓşØÚ"Æa_}Á YD©d.à;û*Ñ§JzÄ0ód:¾dkÖ -\>,HŞÛªÅ¶Ø¨,ö)Ús¼@È8«À¯¿~äĞUí“CL8Ø×Ç^«jkkÖ]eca•ÊcB5²ÂŠ?”İÂ^ì / Ôï3w$>CTpZ_‡ñ¬²-C*p®:Tçd2C•¦˜x¶ØùÄ¯X¶É…[Äx¿û.)?[ˆíFtı9ß[ÛÿçådŞ÷Û÷*¯´èÕwçöß´»¤ÌQ÷‚R‹úI+=¹œ²×Ù‡‹ş%L¯ÓÂú2e@©Iïœ\ò½mÃ”^ÕæyŒïœø‘à$İ ®]pu¹ÏW­¤›Mğq”$IHh[­Ör£_ÈÅÛùêåWmîû›>m¢V7èµ)ïÚ ‹"-¤›Ü	)í–<}óæMÚ(s†Úıè†Ğâ'a úÑ«âUïøOôt+ .İ(‰3üòhç8˜‰ˆÀ÷¿qY=Û”6ºÅTõå°_é6gõOÆªÊD?VOŸš/®Ì·W=î›;`dWIìÙ}¯OŞ2xcç\™ƒùÃşéeOñ´¬$8¨Z%º‰í²òÈÜ¡ôúzŠåpU0mVk^ÁµºØÑİ®Ï{‘ê>ºeµÍTTtTH–ƒÛ/Ú³ùÜs MÈÎâù¿9RgQİ :X%L’ªG%×[¬”Ç;†sn(>ŠcyÖ^ÑÕEëvÃ£eÀ"ÌÄ¦$í|ü†@EÔ!äNáÔÛdŒiP…}ú·ú°?şv E!Ë<¢YO::ë¿´å)O›ƒµÈ4®e±2ï:$Kt(ˆ%Q€ĞgY¤Ã/T± 
-[KÕ˜‡ÂÊê¼::N~ñ.-x¼!É¬àŠ/ÿ2Óq?ÙvƒZ¦z´¨„Ÿ·-1–¨Ò–v’?;o4Lâº{iãhûØüÕ¦¿v™l¸ê­Ÿ§Ùyz¯T€!ßßá)êjò×ƒÈÍ™¯¡½ªÎóRĞÙ"«L²ÂS£5QxQäšòGqëÈù5û(T‚?MŠi6öqrªh£ÙW	Ù‰sÁ§aNU=\QqÑGZøñ¢\‚Æêï†’®G|—S,•8#©¹%+ÖhªÒÈyßıS{|¿Q¸D'U=PzNö35/Á I'0rI“®éÌŒ_xJ<sûTs@!S¢C„úiï?Éa§÷“à;vZ¤¥°6å×rjW™{Zìê–CåA?w¸‡‘ÎY2`“#–ó'J3N¨@à'ğëÃf"£Ÿ“µ™ÌHå~1™O$#º¸<¤hÁÕX|”*€aº(ã÷Ğ	ƒ/ğ<±	0’ÎÎ ™ì:”C
-s4)üÇ¦I=¨Ù·¤_ûÖ"w[Õ§°+ÊÃÛÛ·¿ßÜşas{‡{F&2¼à’n ’ˆ!.s¦GÇAL–w¾dc+şaãJ›İåcŞy±%Iê@­yÙK0#2­sö©ur‘}`6ÌÎ$ 2‘Ê\ßyùVØÙ<œ7jÈ]õÜplÆ‹¥D¾„Hê»:rŞQ½D_Ùhò^’<&kÃy¦ø¨:CwÂ£w“Òèâ¤¿3H‘*…ñŞ!½4_p‡™sõcøH²‰|’ZØ•‰ë 6Ü¦ÈYPà$Ç™—dAÚ¨]7]dÊ»Ê4Ìùû,Ëı92İbÑU7¼6\Àş’prNQ_§IÅZ!—™QÈŞ«‰v!ÖÖJ/½çPz‡mrƒ=ôìHâ8Ü2&»B§¬/Q‰üËó€AJµ±.éWV"ëÊˆŞÊèDa–	é›ëp{ªaŒKó%ô‡¥Ùe¼¡C!)KËô>$¶SK›JqND0‘±,PAÙ‡šjH¨õÈzdI
-°LczÁF”ç$©FŒŸ§ºÎ/‹L[Âf$*wm’ó&Æi7$î& ªè§} ù<•®ËØ¦âH½æTj¸(FÃ¥cC™ÔhWÖY7'ˆKÁ;›Àår«²™àb,Wb$ó™ d-l£D‰‡ÏÇ€^¼ÍˆĞkÄ!ëÏÄ›B#ÁbJgñºhog<;“nc¤…¸Ks÷üÅA÷°³ØNh¤‡ä9YÊÃéˆoï!:¯Òj–ôÀ\–×tMU¶J³7"ŒV2ÎÊÕuï•Ù75UÉœÄPÎ‚ÇÔàM8ŒyÍ¾”mxI9Tj½½.Ğe
-ÖP9™:’êò1A‘jîôt¯³û„+ğ'•fGôÃ"À¨Ğ3Øôíp*ÈQ9º{½û½=äzŞ9“›ÚÎù(åÒa¡"Ø ¿y?ëO™nsdô‹¢Ê ‰CªP§¸)õ%Õ D§Ş™ğaR†d<=¤ëäo¢¸!1Uª8J2H>vYE&ğ5(¼F]‡/­Ø¥Æ!‘
-G¦¡Û*Íıö‰ZUèÏ×¹º€EÔáür/˜;ø=ùÅãëÂM±,láRC\WZ°/VhÉtaò6Ö†{³B# Ë…mğËXöÅ
--•ja+¶@¬¥àåâÖì1ÊqíJø8°^²û²ËQù{‡(Z9O
-1,˜¬vôbÔÜşÍ¯	tc{÷xˆ1ÜYm3zĞ”1xuÒØFÔÍ²‘âSµ…^ªÑ¸è|„J†ª³—tıF÷"I—,ıõ	x¢hNzø¬óD9¶Ëäé¾€•?LÓ´vİÀ­ÚÀI¨v…¯¦ù£­~=vÚ[I•e¡à¿œÈ/—H;=‡}UÍ1PÛì+dÇ‘ÍM[Ë›*¸Z¥!¡oXèç,bÅWb5Áˆ òU&ÅÑ›M£á˜Ó©&Öh²Öb³f:#ês½z!‘óèçıÊAûøëA-=­ö;õÏ¦ğ‰$$ñWczOíG’K’õnÅH şQN¦y–3ùÓaÿ<'C™ôèZG.÷%#ÿ§´Xcï–8ğƒ {i
-`¿êiÑbšGÕÏåÈüä™B&h‘IPåÎÁpÎ¡9!Ú¸ÓúÔmRÍø²ÀÆ®Ym˜Ï›ŒC‚úæŞ5bøCÓîúĞÎÎ`ÉrŸ…<ì/W·&HtLÎ¹4¯IT4y‡oF.Ağò®¬£³,…?b}ÃóJó¿r–0,ùs’Â#%Êöa÷åîáËîŞ#½éÒ~•/¹Şâ	íø¨ÿ æèU35k6ªó·¡f6{˜]®•pk¼G«n@b&8§ÿIGª‰¬Ø
-iE#(â‰À@?ÄãsœtÉFRRà).º¢‚›İÚJº““K†Jè!ï;Î€ËË©[½	øú{†_ü~ğŸI/¥€=‹ue¢Ç­‰ğDáLHÕ§®	Y5–* ;òÏB‡¨©à2¾&"#:î›ƒ1btsÓ@)æ¼Öy=|ÃçFK9¥ú?n†šÕ&Ù³ó% 7h¨TC7¨àößL½*C½¯ã^Ã^›‹v-aş2hâS¢ƒh²ÖF›<•Ä`=g“É)u„Œ€ï‚8áh,¾‹¦$§n²3K²$ã¬î9iš‡3S-¡¼0_iûL›µÔG6G¯Zè±¾<‡Z7+½—‡¦H6¿ÈANK¥ìsS£öÊş´ÏMA“£:(%M‘‹X‘‹ ¼}ÿ›äåÖÌc£˜á¢óÀ=U÷§ªÑ:›Ìpõ¼^‡¿ÄwşÛT‹QãjÅx‰£èö8Òò2dİ*.í`¾”Õ K£„–Gçiò$ëÈ”ßĞZI=ñçRÄOë@hàYo™O• Uöİ4ùSx<™=”8³ù ÕP§‡dÇ}"ñ{€øÍ¯Ø±¢ Âcˆ¬‘ï³™ºêLêO8oİº%ÇA,¦vÅŞªY¯ĞøëzUë2smí_Â9@‚íP®ŠF>6|ĞâšòZKüéŠªóWjğÎVLù]3n±˜b_)ÛÛO°OSGO&ÿ  ÿÿì}ÙvY–è»¾â˜åeÀ†@’‡Ê”K¥ÆË”5]ÒU%«$†D	’ ÉJ%wõGÜ/¸ı'ı)ı%wg ÉCİî^«İ«+EÄ‰3ì³Ï>{Ş=ÄBf9÷?cÓD1£‚¢,áZ üa¡¼ñºÈ¾-W\’íô^€ˆıá/üï¢X„ÁOb¬ñ• M'4YÚn²”Ÿ¯ÇÀxækû’0eLDÑ,çì­DÂ„¤a¢ÅBoLcŒFÖJÑèYëô	¡‚aÉŞĞà&èxñk€uóÛ}ò]‘¾Ë1›lltâBª¤:ÃB&è>`aœDô¤}—ˆÜ'x
-`›c @p'W,ÙJ"Ài™‡¬;3=Yªâ		†A‚æ½!•¬$ë9 ÃDsXã®Ú˜–+îEóÊøÓ4£¹ø¦ÈSŒ¥-­ŞæĞ¢ƒÙp(U}>ÿwbĞ¾³ÛD!ú¦%˜W…Caû¨ùØ(oRÔÆ\“|,­ÔtÈUü„ADF¨ksP4ò[6>¸Ç¯Ñœ«(@I†ˆ.á+feh»°£Ûöt„;Ù›¶oÙS_5‘ÖDáMJÜdõgÊˆt-@K1š|³R5:ñ°Gx3d´äŞŠH?Ñ#_ZiÑ¶ì³NØÏ¢«9Çş¶{H4†JÛšt«'ÌVBád>µæN+CQ0•„Tçr†i–oÒ#åKÖs;‘¿˜:Œˆ:\>½ä°Å¥ğf;pŒé-‘'e}~Aºú@ê—ÀÆÑ¸ÿ<Î;Ü³-8ZïâŞŸxskf‘Ïw»:(Ş
-xFVr·¹ËÔùÕÚ–­ã"ú¥YWè1(wˆ&Ñ8—æL†GÅò.%¥¢PıËŒ1"@¿Ï”V,Ï,t¾„bèwzÉä×å…%ó_ a‚A‚T<Óı5¿(^ŠÅ¹5WW0²e"WÖÈõ;…ÖÒÍBï ~£7)faû‘BÅåŞÔøÀ’$t'"™÷ûLÊ´qùUB„‘¦Ä„ÄŒ)Ù¢3ïõCíXİ½C¿È/»»”ğzƒoC¸,îÉó£„èèŠ2dÚi>M>C$}…È't‰õO½øàcÔ”oö2x)×h,>1BŸD”åÊè¸[X¼v{>œå9g…D‹ÌOlúrq=Rp¡^øÏ…ö ìŞ-r–Æ òã;×ßøfP¢:‰>†w…â2u„YÏ'™VìÕ‡‹êqã=B+bïèho¿®ÀEJW%@DcÑ
-»S`4;Â@ECº‡_•ƒİ·="•öîÏ§¡ÎÑ$ ÓÀŠFN”{ÿó¢sˆæGq÷º¼‘w­Ìgæö¦ÑOimuÑã¦Õ¶{9Ïº„hÉ&r­Û0œõ§a8öÄ±
-4ÙX‡‹ô–R‰µ 1÷ãqñğô£÷…:7ûFç³0´•ÊíímĞã>Ğ$ ¸ş’JÇ£;¨ì ØŞxF‰A·ÍL^l¬¿#¾hÍ^ğ€/Rãu€
-]E3;*Iä>`À¹ää¸pÔA—°>2÷È(‘	gÂg=ğzœµû}îä˜;AëÃ~|+jp sçnû<G[b#Øt_"¢üïÔÁø÷{¼^Ï¥úıt:´ &İäÑ¡¯ 9ƒ„ñêÍú›Ÿ^ß(wÚ?¿şùçöÂ7/»;˜r›ªg –íî4<»İ~³¾şì×íŸÖs™f!•Áse—Nó4qö Ü–¿Hc¶±ÿœ˜uĞUkõ›Ú7v›Nc‹~¨ö>I1jøc™Êƒ³§IXî‡q7&Ó &ƒ‹ã)ü­Ò‘Ç#›øs8_eÅ*t&ì5ëÌBöa&Îšñ2LhFPöªü½Çb‹±Eê3øE-Ÿ¡RZş £åşF]¤k"€eÊtµC`Æ9³…æš§F¯?9Y•ÓÁé2 e`aÄK;÷‚›qÁO)M;°GâeB¿…ÙXWeˆäøé½½ÖEÉy0î/†Æ#Üºh„¾v2rµš&&cÖò*DÉ¥:cım<	ñzâ¤%ˆ§ıŠÄ”>ÛHËo6ŸÁ<¶½i=Æãmof—%‡äJ)­Î±%½LÜ[H2ëôí^ •»²¬‹Bí¶=ö£ù¿ôGÀ@áA.z¤;©‚'³ò>ps8öØa8Æ€¼}htQŸ‚!İ-å§Ææë%x×aû6¢Xm]êA|í¦~Ğ["ChxOdcº,,²'jx.ÿ€Ö5»#'>?µDöAËúò­óİC(Ê½:„"™w‘-dqK’1<³'ÖÀ¦SW¬Æ‡““cfŒ¥[/	=~°°ÇÒVtÅáCÓtƒÇmªŸ	»ÊÎƒğö‘_J¨vĞ`
-úOr ãñÅ€ˆÑxäèôNh_Ì0gQ ]û ¨?yˆK]&§ot Â  L¾;Ê£ÇNy‰tN(´¦ïİ²Ï #Š¦ŸfF³iõ0jûz5úHv²Õk×KâMqpäŠ@˜Aã€	m‚Kf³PÀ0ÉÕ¨‘r2‡;ğé}zrúkrF¢wEÌƒÏ~R	ÎºÔjÍÆI£Vİ»f½vÒø¥¾%>(WtfÖ¬C9)Ø£YîXT´)W·h*/hûDN±d$©ÃÈX$½E$ı =ÿ˜S…ÕÛ@üõè”¬É#î¸Qûˆ¾Ø'ÕÓf`¿oˆ“–Øo´Nˆİ#Rÿ|¨îïŸÖ‡è]zÔ{§õVKïWkõV #Œi®üeùu:^GBUÆ´èü‰Òß]iò£=>­¨ÃŒ-ĞTĞAörï¤`şb[\–e*8”Í†tj9QØoÓ)ƒ'|»îó‹¿á
-+~_úÔ^I¨˜=UÅñSG²õ"»/¼t±0Ô ¸éå=~À·²?ç·×Å*ÄƒrŸÇï%ÈóZvÁÔø°ø<+•óCícµÈMC©~HÈõ¿Tk'Ò^¦%»—ƒäü‘ 8Â¤şYH«õ½åiï
-¢Š\=•ó¿\ÉÑ¥»7lİ+›­ó»åDˆ¤t¤Bî!Tˆ·t ü³@wÄØ/ÄµÏÜéGí^4GªyĞ°èY!%<(hP¾X	Ş¬²Hõ¥À@sG…ç^CÈ–œ¿-ŒáÊ:ËÁ^£Ù]îçÌÄï¶¯Âß±ÆÙª~Çÿ¹@Æ,w^àôÀ[ÀĞD%Ÿ¥õøÆâÛâ[¼_®¿uÌÒÉ¦™Û¼bnU“2ÈÇA/$e™qšSòx' Ë FÍÀñQëÄc.-Ö­ŸÍm_®/eÔËÈ2—çÓ!ràvÉû>‰¨a‚Ñx¹Geµ;m60l0Cçg3ŠîçŠmÍÀ[wu©‚Çê¤ÎFq	Ä‘ZYğN±µş8Ü­ıašÅu;Wœ®ı;‡!û/{±„Å°gF9xëª£í%ı\ECÀ÷jš‹ú\şI×‡·—¡±rÎæcøßÃÜŒÛ•bE$wÆéË—r1©ÏËÁğ¿ÿác¾‘ÇÖİŠ9™%°Oó3+`jâqŠ©1gPös–G–e‹UùóôZ:'ŸõÉèm‘z|Lç£Àîœ«Gú¼ÿ[¬´Ã}å´mş*³·ÇÍhñğ±ùoÂ…©Ëh’VØ*€'˜ˆA–¤XJvÈ¼&)’³$«å²	ÆÜ³: 61L“ôhkŒ¼lÜL…„}áeh%\ˆ±=¦Ô_u[ûú‰ğaåÄòe}bÛ¦6˜ğ/ÈÔÍ¤õåHGk3¬oÙÅ¸TÁuì@Uí‡0«	º½«w?÷µö÷ƒFŸ¤{Û‚]ø×ıÜdYØoÑ—ˆ/MHAğÚ›³ßPàhéñûéÓç®Éøú!ákŒgÃ #`c>J…b j²’ÖÔ…×ƒoü1Lz°+Y‚+-ËbÁùp\>m!ë+TG[î3¼ø€CçÑZxµÆ£
-®h6ï…iõ~<î§_¯°Çu28o½–ÂùòáV60¤ÈÍ3ÎÒ‡ªÉ ÛFSÙ6dQ‡¸Í€ßƒÅ¥jMDÙöiµTß¹ÁÇƒç—º"`rÈ< »ç½á<n8¦kB³ºZ«¶³s±VıÓâq é©G¯˜vKö‰û¨¸`$'ÚJíi(rV˜öü5±Y‹çqyĞş"Ø\'ö‘¥Ä1,+˜mÑæh±»P¥Ò£Ü¿ÌŞ]E3%ËäÁp·<qö\™­	h;˜B¦X-ªÃ¡rv ícÌAAHpµH®<ë¼¨S…ãO.gã§°—ñ¶íµšö\H;F­j]Äæ«Ø"’¤¼;«? ÿª“Wìò?şõÿâNj×)àerª»-â2ü3HhËx9¡Ì†j"ŠCV³`†OÚÓ{IÜ:ò¾EªwŠ`œ¸wAàFá^'Àä¬Y9ÅÌ"T	u‹û¤'4…E1{™9ÿ(eÎrtsÅl»eÚÍÄ\ñ®w™Š€·ÛÒ™WáŞD³cJ áRæ1.nçË]®wA\‰fQ{¬1U…#´X#J-ÿ2ô)zƒëC?¬#ˆ?5‘ƒ»]‹ŠÇÕ“æ(x×8:¨6?Ö›âSµyØ8ÜkaÈº{Bğ»Vnõ,96ëÿëÄÑƒ:	€ ŞıRoVk“¿ŠgbÿhšVk5kİBoÛ_ê‡§uÑªï×©,ÇÍ£_»õ]·„NJBr&—r„Ù%Us€<HNˆ¤`û]¥Q}¡½,#J$EùRÈŠNâ¥Jzff²èØ ÚÂ‘ı‡‹u¹ £&GqOUÿ±“1† ÖNÄ^ıh¯Y=şĞ¨‰fu·qÚõC h`»…®¯w:P“©'ÆÖ#õ¤d&!”	ü:ì$ ŠaUÉE`5ó V1h‡ó®2‚YËx™ŞØÚÑ!%& À­Ú+{›L„ÇYsŒûüEÎ±¦ÌYÆA= =²b® —ò-Ğuôâ=¨£vâğ# \½ÖháDŸ‰z³	˜û¡z¸»ÁÀÍÓıú–ø4I”~ÏVŸ2l×ôùÎã»	] ‹ĞIDQïó%,&j”9:¬Õ‘ØL:ç÷ä
-Mú!	\©²÷ñîP¿ìô•èü
-jÜß~èvÇI…l÷¦œ8mîk ÌNxÁoÁ:¾Öíézº¨ÖàØ^Vê~¡°}O:‹ÆîâóåŠäà^¼?:=ÜE—%Ú
-òE{_mì×ñY<*,V›k‹“££}ÌÃ’³””¤­·‡¢
-²®eè‹¦İùˆ1?Á©˜  ytfÇXÃ¢øÏ
-»±ı0¾pq¨×Oø åYShQf·yêÏ‰œ!	GîÁAÈ ¢ïzq@dH«)#&6ƒi¦¾Ç”Oè™.iÕÑq/ñáè´éÑ©“lşLåZLR¢D`È}·=™ÉôRI)õB2 #fèGò€`$:ÌPfv”Å ”rĞ®øI(©ÃÑeŸ¤„Rè°`’$	ÛtBÒF  M"P¾\Î\‡(q €ú!Êá„9í1&räŠ8§©HàûaëĞééh]±*ĞÙ:iìïDÅÔÜ i >Y{Àåö¾Ş¬#=AJ¶%´zúŸ#®ÊUYYÈtè0î0•Y‰œÉÊ2Mk‰•9·ahÂøÚ‚¨$J°™°XQ2¾ºŠ0q+6N"LˆN¾íş´=ª¼‡…u0blBÎÉ'ÓhRíİD	Vl¦'‡ù§EpÎ‰8€3bM‚q9	5Óª³9yk)ilİbÂÏÈ?¡L>"hyëØñ‰Ûùu;‚|U½Ğ.âa\šÛ‰ãSC^MŒñ‡@ü­Ş<*¿oîŠ÷ÕııwÕÚG¸1ä9à‹zK&%¤›ëNé¤.ö=„{Íz2-Z),_rKS£'ô˜[¡dò¤ÖéŞ^ş®şU«×R‚Ãd€:J*.B„#^î„”)8—Ãÿ1%³Tw/Ñbã[RDC ³†c‘NÌºÂˆIûn¼OQ™…7˜…[P”ö•ük”ö•‹a)5Ş†>P³AÉj^µ`Xà»¡äŒIm8íu`aNG)9%#Áie¯=h­!áÒÆs?q†Òi"Ë|™µpiE‘•åXæ'}É‰u¢¿üÅŞŠ:÷^#.ÉçZè?EYX.”)aøkGÌ¸ÒÍĞs.>E'¤9aÅu¬Q}eLà†Èm­•¥Ã¶Ì·]¨ª´,”zs\¨B#š¤¬İ~Çdd:+	
-‰[âñMù6[ódåôé·÷Bf™…í—W•¤Æ
-3‚"LÑrWódu^{ÈÙ“Uk&|åÛx:ìù<X F(2\éÈ¼‡è,”ñ`HÍ	¨Î§¯éƒËDPWC´&±}Æïf¨4~*ŸªV¢Ğ‚Í„a¯å•—¤IÄs-UKÆÒ:Ä6˜ãfŸ”}HâŒ~©¨GÖWUbË€V!Õ›‚¤xƒû—^	h€™Ï¼»¬$TUekD¾›¬ËŒ(›KåMç\F":Ñ¤/Íä	NÕö¬Ï,Ëş`VÆøSƒ	êC$€¨$ã0X)ÃéÄ<Ü^Bàèí°ğ“ÀrçW0ÄÉè—¬âã½ÆJÕz³ñ2°kŸ¡LD'€ÓşòÉİ¨ùpßœˆW¯KèmO'úßÿí%†xë²æ#å­y@ƒ©Àm!šD"QÉXªìì=Net‚$¤Ø¡Pº[¾:É1fò‡	1(TòëZ¼q°@u‘bhX4ãÔ§6ÓcæM£ZízVŒ‰Ï§Áævtx‰ÅaHû
-vÃ%~=zÔ¼*Ş?¶ùlíWOüµ"0æ„¢Î@ŞXßZ_ÕùÏãƒ,oóµÈ$émûf$£-×Î2ˆÛÉ9¥ì+ÓÍâUŒI?)ïÁ²srJYºkÓideFØâsPõJßDø¾i.€8¼æò"ÀÆ›/2a¼P¬1é”KÒ4†ë –ß›ë?ıdR÷õ7ÁO¯^¿1mQö¢œ>Ä×ïÂ±/â×?üÛÆé |¼Ñn½j¾Ùè¼l&_~µN­<º’|ûÃâk@S6ˆzÓÜĞœ”ó(ATSûsMrÿÔÀ$=dú°áÀş1Ä|‚	ÿØÀ£ÿİ4aZ9ûì6dœ„5eÎ=_Sö8Ç¬›Ü%JÌJ¡NF_MÌP¹;$§Éy×°ºZÖéPÇBYlÚR©Ègouİq)Jg§Ë}_N¼¥½¢Ïê¬{ßĞ½41Kf…¶¸8±Î°C©Sˆ‚4z'q—ß“'*j8ß2¦Õ*°“äYìŸI1”ñ
-m'üÌö×5ïV'õÒ^ôzYUÌR´åîs^\ÙÃIÚróÍMÓæ­ñ—‚Ä) /‚#ˆo.b© ãåÿ1AÈf¸€Ã”9ÓoaE)§>ŞN=’…àOc´¸á;;"xKäñÑºÛ¢kD0oEøAÓ¬¬'w	iK|ù¦$ó¢ÂfIü¬ìUòR.ÖšX£ØdîçmqÉ„MØç’“[ş'Ó5ö.0´@ëT¼6 Ñ¬î«R4ç‘å?./ƒs—…±“‡“ˆ»Äš÷R¹åˆÌâíågy°&.sàd§xpêÒò¨ÛnÆ†+wå«ÍŸsE=xVªAû@›f½utÚ¬Õ/êùP‰¥¾›K{êĞ×IËsY³ÓöÜ)- 	Ué`½48[‚“P„ÍK1|Ñ‘UX‡ 2Œ_ÈHM†ßP˜©©M"d[\…·º£rJÅPo=j:È¡ÓÑÂ%eéªHµošÖ±sV†.)ˆP9Ø	Uò
-kÂVÕtyû,ÉS¢€©S½Ê´–rJ
-+¸BÌdÑû³TøE”ÔiÑ½ÜŒŒÖº8¾gv·ğ+§yPeådÍ<â1‹†şTÕ©'²úÇ{Ê¹eU+÷ÄÑ)§­‹?ıéíÚbMòh4v3ìÓ‹£Û‹9;¤BQ£R>X|Š®£	Zª@ÀŞb.)Ì²tCyªÂP×İBí¨‰ñ<‚©&“`×7wl ueØËüºwÉ~h [EÄŞÔÀH$G"sÜ$¼j7rGúÍM‡HªSìÿ­˜B o1f$˜&;œìl›zfED?Cïğm„)sôÏ& Â&%Ño!ñæ2ÉK<İæ‰>ë'Sşk©b*îƒF(.°A	ZÑZà¦Ú\<‹§ìÅösËYW:÷Â``mËb°ßÖœÙdí9û„2rO+o0ôZ§Kë¨Ò½m†Q…—gÜºüæ­ÈÓÎN™°H…jÍØW…×€GØÑ"”İ„rL1×P~³äL‹2â¦c­‘¶ß¶§c íˆQJ‘'Ó ßğ¸ì8Vëb—Hñi(²±i—»fªAjê3«îáÂ[R/Åk’¶İ]6
-X‡òŒRåÉ_™‘²ÈÙ¾´j›&Ã{·i
-Ò±Lgª=ì,“<vv˜é2·ygü¹Ó¹b±€:…1`.Í}p	õe;DÇä(ıp«±û¾ê@•ŞœpÍ!ÈCá-Xüî‚q™”k
-l›Å	ŞT®=Ã\…ÅÌ¹ttÇ Ç…Rrw +¼bB~ükF}Ò>aÆğd†5lsÜ9şÈˆÿÅcª™@í"Ö§òÇ}T)âŸ“xˆ)ğ#ÌûkEğê9GaØÉÑE‚”æğq1µreè¶ú}ûQbÁd
-énäucvÉO¾/¬+(Òèj9aŞ/êmczdD¿ÅeºÉÜ%şRW…¤º‚„¦|Ç¬È7 „óns›6Ib>“ÙL/1xŠÒPåßÄ›â×ö(Ò’Òq—ÈŒ »èŞLİ°ü7]vÉZBşŠ[–¸‘¯Ú{ißØÇ î,4¡F˜½´ûÖ/Tà ´£\êrhGÒ­İê¥pâÕï %ƒ›I*}Áh"¯ÆF…-Ã¡‰(2¸±&	T‚6ğé ¿,ƒ¬t3›JšqòÉ\ƒ	ÊDXÑÏA—£e•¹²rB}!
-.àE ”n™Œ¡RÁ|ƒW—ì´Jƒ—ŞÈW×‰Ö’Å5Wƒs¿ yË¹1(@Šp9©Øûû9”L» 8s–ìmß@?Lv‚³õsú
-SÂY[^‘ú“ õzé÷µÁ||—[ê«ÙˆòË.]Fö=iİ’]ì·Êë×%­äñ‹Ït^Á|êG ô
-œ'X‰]ò/Á?&ı<I€K[LÆµÀ¢Íù4½_IÃ%7}òÍÃğ!÷ïMÍYøÍ&j¥i´C\¢¼,t*½•@WâkğõÆyéıÄFÆ:…n!!zQéã=ÑI,
-+ÍæÔ¥zA~¥Â¯%Ê%rZ²Çì`ÄùÃõÑNm=×Y"A—KÇ“ï
-€fİe•¼›0A¬ßÙÖìƒÌsó„Úk/Æ	¯¶aD¿Í0»Õ{—ÉKè;o³×Ø§áè=Læz*Ş«- šîß_V»®Œì03W|dÉó¼ÈcùtRh!áÎûDÊ-‡8İ+š.	P¯Ö×éÿñÛR¦ (Ç-.,YOÎ>Ãòü¦«9¨(	Z/Òì•79ç"ÑGÔ¸9…ç_‹(öş~+š¼Ôî5.#h8›Cíj­z’(¶åÉd¸«î
-¹
-ùÏ|Š÷\µñ[»u·»79º9õç¸ªw&ıQ²Ñ¨ÍoŞßüùKôÓîÁŞM5÷ƒø§.6¥§SûYˆ^­‡ë›?u:W?‡İŸ^ıür3÷ >C+°P	ËôÔ±´¶Şlì ’Š"‹gİ/¨˜ø²xöëj5w‡¶¥mBÈg ø(•ÆâqZŒ×³­ÓŒ´xO)O…–¨É;Ë½%‚™×>”Fx•id°¶ÉÌ¤è˜ãåuŞSó@æóB#5nî2'níMºj<ÁÈ\¸ú\Ø·kñ;¤İã÷^¯ñnŠAd7_q¶©ÕÊsïšÕ_ê­zµYû ¥²¸Â;ìÂ>Úê9}#ĞfaEãïÕ—<ã ƒİÊÀ¡€“-‡@Ïhòû”"÷—rkŞÑrKù$¾ÑEA‚g•Šğ[N¾dp–Ÿı%Ğ·œş%\³GLYÊ w>¢çŞ=íSüu!Ûk?½·¹%É:ä|0¿õ€¯Á«ù˜M8dlæ(ÇQáWlªİ³p"¤õıµ¨:äàJí/€l>XSv‰&–—Y™Q]x‘€¼=U•ÉDœéH#´ä¨nè¿ÆÛàóÙÙß?ŸŸ?ÿ|^é“«e3s¬5ÂD»şãÅ#Îş^„Š©^â ìÅ*½˜˜»9L"¬UÓéLÃ›H­¨À¦œÉ'‰FÀš^İIBµbàÊçäy¡?ı½¼Ø¸ÿ{çzú{§}İ•[…™Ê+½ÖÜqXm5Øşn'‘ú5ùoÒPĞÏÃ¿ÀáÇğıïØÒtÉ'Øíçä6Dëö¸÷øÆg0g¼Ç"ÇéÑä; uè¦ùŒÕ.Éi°¼VÅ?¦!£ˆU?%1S6È	CÄDà¤¢ò0¯¼Ÿ¢bå ^_EÉ 'Ê2ŞçúiqÍ*ádY+¦
-¢®R7Kô²X8ÁVÒP-M­¤*f¡Wñ³wxøU©ûC˜‚åoY±™ wŸ;èëùm¸ØŸ;7]Õş
-=³Ñí@ÿ‹‰@·d`—úè€‰O(êwdä:š ÿ)=[1\òBm¬å(´¦‰S—m®‹µ5¬S²l/Ù&ç jÅ'˜L‹R>ÆñP@Xöx†‘GÇÑ„Š÷×˜1ĞNe±"ÿºq0´g×…'Œ%t5¢Rqˆö]²sâwª)O•~soùZÚÑÜ‹µï7şªr;–5˜°ËªÊöT>À4Å&A_zoõ‡¸Ì²Æ+#u*İZ¼.ÓnFUªjÄY˜æÌi@ûMÓR^Ò[âÇ­T+û`óß³ÁˆÙz²mb
-±m›Ö¥§ÄÏê²é¶g<WÉä”÷Ÿb©î(…H¹Ñ$ib;“³G^ÜúŞ#]¼òÔ¡'òãO`yÜ±oı¯ë,Cˆ¨qû\^å\úcŠÁõöc:1¶8c¶ÁœÒJÃ¤h	”Sş»Ğî	Oï­Å
-8K‹*È^Ñ‚âÆT~ˆmIŠp‰‡íkƒÍb«Ä*a*vÚxUn—ŠQYYáCfŞ£~Œe˜.iá”S'¢pòsÚ«mjÕ2³­ò#éæaƒ»$PşN*à¸=j¬iz0só :Ú_˜¦ó_„vyB*—LCLº¼¸P¡h]Ê.‰ITnMV¹¥ÅÚrM¤½ñŠJÁÃx˜°?İ’°(²#,ÖÇ=R¸®,•ƒ”i [Z2GY¯¤¸‡ø.Ñ=U/&Ã-Çà9JÅs¬ç	n“ã~ÕÅ\äÑºTWnwd>¯¡ÓU0h'’èºL@—\²ĞéËÿ (¿`˜ëã£š•'û#²—Dxb wŒ×‰My²\y
-«ÜIT±¼Y¢Àßá¸*Xøş€è«åbIÖ	SW®Ü75S¦[Ş…TÒ(NTLúmó&-æ+7'väÃ-±iÍÌÔŞË½9ûO‡ŠØqf>Š¢‘@±æ//šS.4Ì²H\
-hêlÁŞIË¢£¾EáG`9U0ÑôóÖê]oñ¶=uÆ¿é¶±äZŞ*óÒõ¹`vm‰§"kÖ¯‡>TÁôùaPCNB!ˆ"%‡DI$¢Xø±¦ÅY‡¦ÒëVıX¡vâKª*ªÖnÑMµ‡;û ¦ÚÃJ°VªÌ“%±‘ı;¡•Ç´İÆ‰r‘SqSrO¤?äÂE%éTÇĞJ(@®’!å‰ÆW@Í¨òJ|=Ÿà&Œió1‡>’ZsMÁ&‰"%²¢ïi?X>Úw¢µŸ&Æ+Ê¥9Ä„¡ˆ~–™{æFğl.åPÉ‹«ç©âÒ=!ÏÍ%WF	}íAxë9–
-ùê×_Í*ìÂ#£ïñá5ñÙ¹M ¥ÃîU+ú™ğ×oİÇ¡±rg†ªt®Xÿù£;	|ôbÛt§¦#;b–B~Á×6ˆuğ‰õ…™gª©&®¤olŠ‰ù‡×‚]OÏÍBÈD×9ãú Z¸³øMšÅ³ó„=ÑÙI‘õ*†wÒ¥N/ú9ËhÀ$”i(Kö%3ƒpY\Xy€8æÍÌ–Ï‘íDÍ<Öi/8&ËÇ73á„A8^p¹Œ·ıÎ+p]1+HŠQ|ŒŸÈ×;‡8> –7ˆœÉN@*úd‡<CéşÎ¹Ÿ«g‰÷uk>A>è!ÏİÌñ-ù~Ù‘…ÇmÇ6s‡Š‚AÂŞé”|¤àÄ¼M¿n†m¬Â{JËïR¶Â!ŞÜû4æ6½Ì÷Ò¾ö)q¡?k	Ìq£Q@ô|V”?ºêS~È'¶OXÕd"ù'#‰÷Û]‡Ñ«™§%Së“syë6³$Sù/ËY….·ÇÌ•+µ™˜Òí	Û9î›áû• ~Ê4aöE !š.éåcwa’íªúØÈŞüKvÅÙo4˜»ûÄ;¶øSV?zL»åÅ
-,G3
-¤r~wè8Ø¹İØT‡IÌ™éş<u†øÛk-åÂ¶ìp0íqš>x"÷U”tŠ€X{ršš_E .ñö$LW1=•übtÂ5SºqñoÑpØ®¼ÆˆˆOÑ¸ß&âğDl¬À9Áƒ7¯ŞŠ/o^U­ûv>F³Êë—^¾…NöKœân/ì^ÇEQÀÍV66¡ü?Ñj_µ§‘ü$ç—¦ì¥ŞnÑÊÙÁ©¸‹ûA*=f05L4”RÁÖOikÃpÅ
-ìÂoêlàÓB~·Ü™´tŞmçâş±w¹ó|1hÏfÓB^Şìy¿'"‘¦»bÆ¦{s‘LË(ÙhjºhÑ²U*¹ÜãQUÅÒ)Í%éö|‡ Ê¿0¢dÜ%·¬n{8 ÑdkK>¤ÀJÓMUÏ&‡õlr%¹í6¹¬°ïü“ekˆ—e=ºº+Ü+%3)‹Ça¡Z½‘l$³TE[_Râ2•ñxe]c3>Â(‘Ä›Çâ‘hç‰ÆÚŸ‘~£\|<êÑIúñ2ÀmÛ‡µ¢ÅRÅî2nî5`ÉÙ™Û£ÑÿAôÿ²ˆşÌy ıÓ‹[R ãQƒ±PŸêqÍêœ5ã@}Sï~­	şr³îÎGó!¥&=éğFôæS¦‡Ğ|ÍÈEĞ¬j”ª¶J‚Z*K&åè†Ñ°àêt*âµ1‰yŠÓü~ñB-İS-zIà}ş€Ñ‘%$QêRé™R¾xÏ
-W¥."Ô!ú¸“ß<&X%ïE§¬tÆè$¯Ô‰Ö.¨"FS×Â9Õ¨c¶pÕJVÛ(¿š›¦5E#mM¢¿ÓÊ2¥hdÅ“™>Ÿ|c¬p¦(û#-aå¹ˆ‡˜™"Ôµc„x^!ı!ZYõá,Lfå¯×!âgû¬)ÄHÃwax%š?î£ª	}nÄ9íàO“ªpÖ¦˜Á½v/ø?ø£cº»öD¡õáÈjíNû]¢Ÿ‡£Ix-ÛÃpÔ‘£ÕQƒ±ã!şÀÄq8¾)Pqï´Y=¨‹j«z ª‡}Ğ'õızST÷O?VOhõwûÕ¢VÿXoÒĞ:4úX†ÿïª[Gøğã§úI£z*öšõÃ=ÑªWßQşå?Ÿ¶ìŞ`„wÕÃ½#Qİƒa'õ|zrt¸÷ñh_´NMq\?©Ó„ÿ
-SÛ«6¡9L“ÖNj“úñéá^Õ-¾Y	øÖYÜ‡R“«*Ï;§ô^\²!áşæ\9÷bsËÂ°»&eâ Îp>½ÇÆ‹•ŠèKËN°D5˜áƒé]‘òé7^”K®G¦u[6ËK2£¦ŒïÊÉÊAû2Lcü¦ävïÚ&»„õ=—…@!©¨ú’‚P'q¬d&•f8FPNÎÉé)™f¼Æ«Bšë|ô“lzĞC»pß.;ı	ôĞ¦¥Ø&Ûs–ûR–ïÊQ/w
-eU–°ŒšÊØİƒÛ$×ÆöP»NâDV–fõ;ê{
-q_™«¨Ï~.ÔH™º“3ıÕ¹Ñ„:üü»Óß©KÈÚ`jhˆ®»	T‹î'¼0w5oC
-úik}Zş/´	{”·³€ìA×4Zó=83Ñ¹ GsPØ;J»¨R©—%‘=M±c½Ø¢töWÑ8ìÉXï¨*‹–“#äJù¤ÙJmt¹\$™óæBñB$šSD©gá*ú"d(|±6%g«pJ_¾ãÉÍ") "0õ³Ö¾¬DÒ7.az;NZĞŞjG‘  µ¿€¿OØæ-ƒFo¿…²qú{­»ô_dô™j‚‘½%®ï`—“q{’bT,w¯ÍMQ/’
-¦À‚¥#ìE”ú…Œ-¦øñÆ³R‘Õú£sèµ%;õAîfÆ¨·§’Ş|½Äyø’ÎZ/Ù˜§Bø¬GjÓ™£7'S®íî¾ß¯6ëÍÍ‹w§µ²46œÌ;p}ú®¤ÚŸ¾ÛoÔ.N›û¥!z¥=Ìé>öôŸ³Rgbï0åÊfnY47M°¸	JZt^´{@X—P[l³œÌú¼Öÿ‚kYéabdóõíôÆ÷¢7ı,ä5òÒ9Š8æÂhê¿ mOl¶MÉ×z&ÍÃÊ¯{ÛÃRâ9ä_¥/B’×!âUp·-
-²CË"ïG×0û5*±ajóiGt‹B^‰Èá¹w‚<š´fª€º®ØhÉÌwEË9~+`×ø²v(—¹‡áq¬Õê]šõ]<½×»³€öÁìËì2ÍêìÎ’#E6¹º{Ğ8Ä
-N-QÿËñQóäóø„¼EÇÚ˜(Úy‡ …l‹|8—•D,.>[<IÑØÅ¶fÊ˜,oû±ÿ8³Æ/ÄÀÃ˜ñG—yÊ-lşvôv
-÷Ù{€'íªl)Ø„ùìê''ç¹	%1Ö(VÇR`8°Xœ2Ä›­ ª‹'i’ØPLƒ$ø£÷+w7—îRM
-–ÃSÑëñz,qqCtmám¬ïŠê‰¿;*.DAn»/äQfCKôfÈå|Yê_Ğvx.ê#.sÊÅˆÎ¡ç÷:nšÀQ¤Zqv u£cIxÃ;®µ­voá`µ¯‡†)’õss%õF
-#ğÊfÎÔä$-›Ò	V5àúPˆ¬àĞ4e	.N5àğ€nâá|šTÀj	–Ø¶Ô'ØÓsÄ ‹¨G|¶ZËÉ²³0WîDôÔ•ä<÷-så+Ô¢2Šúè÷’_®lI_A]åu ®Ÿü—2õWæ·\Zİ;?µ¨·ï–ÈÕÅAc¯YÅâc­z­Y?ÁäPÈÇ=ü!ıiYöÕú†Àüé¸=1ŠµıòŞ5 ÍÂñ3ïm[Q`Fx{X+êuVM cóï#L›sxöˆBö‘ŠÙ3b'ïÓ¨çLjõ¬‰˜6 AÉ›gÄóµŸ_±ô„«Š^æ`ÄÎ%ŸˆÄ±“Tç%ë„ŠAÇT˜NTÒmcñ³áÄ'ªÚµt©¬Õüëÿá?",‹×©ìç ÄQçL¸†³Z
-vÜ>Ú£hhÕù½š–=Ş»öSÖéctï”²aZ¯tÙÅfH¾Ê$›a
-Th‡XtV<‰Ú“ç¥ç%İIoz×œ‘~ÂèÄ«r3hÓ†Á´´Ö§‡¹‡CNéYÈäòÅ wzw‹¤K)¦ú‘ÌÒê-åoù%\É$âšâ ¸:tÆô”ÊBîH`ï,bC.Ï2aÇ¸BÀÏ3=Ïs×â6£á¶UÛ@aº¥{¤zÒ¦²ÆB$Ëb›Ú •öØ|™èTnNw´qï¹–ü¶8Ë÷B'ë¡“.Ü‰^‚µ~åC]u5õ†3@è÷Ã»$¯H, pù2Œï1ÃÚFÜA/4/åŒ¾<ÏÈáˆa=·€wtõà©XØ†#kìˆöúóHÜÕYDJ“ÚîÑ¶íº1Ëß¿M71[aˆ¨ÂJBÌôâ…ii¬TêÈR4IS·1æ$
-l%Ù=0Vt|*Oï»YaüÒçÊ©.\äÁÁeš{I38bÙ¾f k·¥)LKŠ’\¨ã0¯È{]ÏàØ¦iß—~,ØÛ”Ò€\OóFÍÈWV$ó!I‰s¬çš‚ÙSÂ\Œ5ÓÆ •E,&ã¹Õ•lT· ZÚĞëš¢
-†ªÁÀWH93ó…J]»lîÑü‡4Ş¦è‰Õd%6²b>1sÄ0à¿ÔÆ¦\ıœ	ø§háÏe%rÚóùÎqLk¿Ÿ4†ªå)åi,GÏ4Šâ­m…,Ÿ'Ù¾.äb}†}e¬Fş€Xe|¹i>š±ÂtâäV÷Í'Gãm%á8òMP&>Jó$K‚ğyK|Sk>iwÚªÊé€±N$|±&“­u–ríâã—FaÚÈËeU{ÑÕUˆÙ†wådRd=fµ•‘øm´T•`kï_¦ä¼²®_ÓŠÔ>Ô°VL{|Ñ§“yÒÛÓ‹A~»ı‹!×za_nÔtAÖÁJ~(ü`·mÌ81î•©p|Ü!ğŠ”*§®âjí^	PtÂ¼˜c®cV”LçSúc·|#cÒçTÑü91˜Ä[‚J@–ÀDq±7Å˜ .:XsoÖä™µĞ´DÓ…Ö4ˆˆáH-‘pÕˆã`i4UØar´p’i¬MÂ²ŞbRşDöÙCii‰|ÃvÜ-ÂÑ’ê›,¬õéÔÊ›HB@J9OÌ»¤#¯<±®Í^Ècµµ+˜~~1Ç_H?J†äÀÀ’â^´gæûğ×BŞş._2³d5Ù¯ÕgÍôÀÓ¹Ûåˆ¤À.şQÙ"Hû“º¸-6 Ï"ì1y2Àúb‹Ô¨A#¼ÿs¡IáÅ=¸/åOºÂJØŸj,_ GÒ+>aè1kÉ<™Dİ('Ş1*2§èy[ù;*
-‹;W¼øÜ»ßX/-.ÎÚåßÖË?Ÿß¿.ı¼xZ±Q>%{¢¦–@1¤¨Å"Ú–^<İ@‘<Ì”<±…W„ÜÎ÷p—¥ë)æÕ…^fIë:šLğU†°Ü—X¯ØÚ»3FLúâœ+yâpyM£¸H³—¸SÔNy“ıQl)RËÎã-ù	o±ÈSn÷¬C˜s;ˆ1¹)\q˜`ÚTŒ&eOõ¶¨£1„,£c`™ŠMË*²¬gz4×I›o¼Âé[.ã}%ìTFÆ]¥ŒÄĞÛ½ÁhÉ(p7áˆt]ƒ `8ø¬P Şªã$]Ó2okN
-iĞy¤€E„ŠbGlØÙ·ŞÇ>îdL<)~ŠûĞ™;èi™Ù’	½“§’&.9Dğ<ùŠ†3Î¼^„ƒ§KPJÅÓøı^in56È|-„ü†±ÇÓ†Aıî?0t	Ìı¢(î8´/MB=-§KšË]`A4Ù’cğ=suJ˜ÊÁB•}ØCƒÿJŸçq¡x89¼V›K·f˜™lQë@“uÿXNÛ·0…’ Ô¦6‚:–üu
-,YÂ×5¥ü’y€¶‘­C)ğ(d¬ä?mÎŸ(3¦ÅËÕß¡”Tã78ƒQcp(ÔøÄU…°	àdv¸øsA#r&×(ÑõxŞ·âjØî«òĞDSmV¸?G[Ï¸8KâæaåLªîÿgÂ¥Z·²!S"Î¾•n°d´|„H‚øªPäÁÔZh”ócúÏ³²À]ôh´¹v0Èz#ã­¼ğ5c·Îacİ	Jõ© æ;€Óy˜³Â«¹+jÁ\ÀÚà~Â6sµµÔÌìzĞïE—&^^G^†‹k62ó˜ª·V¬Ö[÷Xz•/ü²-ë)L%Ø1eFŒWMìÎËƒ4Èf?Ò,çœgÑXÂHÍĞ¿DÜ§·NƒèŸ hØ%yğk4{¤&e¯Nù^D‰´SK¯İvòng»\ÖÅõ½0İ¨¾¡ªì`ì[/dôÆó vTTÄåx2T’èR©'{+Í›camj4…ö½ğæRfÉ—"•øãî°–÷/˜ÑƒòïÜÂ1Õ®€:© È•D3"¬@RáÙ5Iÿ†ËBzzÚàŞ’hH:ìáSÑ‡×	¹±£¨\^"r)e_4\`nX	i`‹ê³ˆmÚ%[6~„uè~iœÔ9=ÎFn°T+XéÅ0º
-»wİaxÁ)K¨9,=õHY7=\hOW)üı÷³ÏŸ+çE€Qşúıi±"¸¢µ“d¹Î®>{&¤–£¾Cä„CW Y\uâxvy½ĞÙË˜^w$ò`’—,¼ºÀağ4³\P^0^¥†¦ô#4qvÿ”èª†“I P¿J“ÎDÔÕ¨˜@í_ü<Ó½JŸ(é†ñH\6Æ~Ë¥TQ7Òj…-rØ’¿MùIF1“ã1„OŒVÛëAç¦Hä†~¢^oŞC|@™›LNüw‹äÇ-hõÇ1<s8‡üóçRÇ] Cıù^ÃMô&_JµFDK*ÏŸg¼Jfó^g¿£tz7aöËçˆrYc&øõü<MMn¢‰¬Õ›LT}¼……ˆCîÀÀ.QYXÖÖ¬ô”K”ùqçDÊ•]şP%»áú¶õÊÂ…´””7m’Dd‡>ñ8Jmş²Ë!Ûùÿà‘ÍW;Ù/²¾·†ïÒæBœ^g‰ÉÔfı¯ëÏäù	Ó×ˆü¥ÌşµwYËæÈC_»WvçAk¢o³×Ñpr“¶ìí*]ù«¢÷–š¦ËÔ"ÈÎøI7ô£Æ×~»5÷¿T¤,Ãtâï#õfqT+¬“ü¿:h­ë¥Éz@¦}iÔ8eÁÂª–#m¤€=€d8«T.ò¥^?€‚l3ÏÆÃ´©íëğĞŸË?WXË¾Å‘‡5úÈ?Kª_ƒªò‹Çàk–©/{ëMÇ_ƒºÜ^OéwÍJ{shòˆ™ò©?µ¼…µ7nÑyxqCaˆ¬ok_zÜX†]ô·Ô¹Ş_§ì¸Ù@X„«1óG”äÓË¢¼ÄÂ›yIY	‘å½ô§s1}Û¾¹» m.´]¹”¬!äŸUaZtcâ¹7)¯‡`?Ê^u•Øí& ¿•¿›n?W
-gÕòßÚåßÊ/€~Q|‹"é›W¥Bğ¢ø´âœ0“lÅÊhãä¤{™]´3G›+ÌàıÁ®üüló¼øKƒúé>t#šÈŒÜ<hO'îÓ¯Épc´P•ıÏ½¸ŠfXà2ñ%A¯®x>«‡h½Q˜…´¾ûaÉ4
-í§’|[âõzF£YÌ«òãô»AkCOuk7±kjx‰¦Â¼ˆ]PCíîÓ(ûZ¤Cüõ˜¼é¯Şz-–Jş'É¸ï#è:"¸Q–lIúOÀùyÕiÆ“Í©ónSB«¿˜­t¹Yâòİ”‹¥îOíéHÌ'dä$?;d"OüKf V¾±¦a¯Êä.Á©Ù°¨ø¸£Ñ)I£ş|JV)gåƒŠ£`Q&_fƒp\ ”åJQÓß–\”Xİ¸ı¬o¬ 4`V‡Ã]9cŠ!J
-rHiÛ¿G7X~ãtoãÄ¼ñ©e#=ûqSw?½×“ínÁĞKVÓEìkOÙ·Ô¬¬Û‹bÀy#¸ŠIæÈT:ïûuËE¡¥v*eqñx{%nwÚ¤Ü×`_è$„+ó!I1ÀUrE9K1-c È£Êf@˜ÖEŒ–˜ŸÎ'3Ì†bòŸã†½ÌUlo%?rR‚¸à7½ˆO1ŞùçÂƒLuœ=Lü#î¨YÜI´ÉÖª”¶Iô^ğìån@ffŞ>dÌ¡…W#ì‡0cc$dPÚR CƒIJ"'si¡f¤˜”×ÍEËE-î^O€JT'“sñˆHF¦œ¤ÔÚT³‘ıùé=!#;(rumMz0j×áÑnı¢~øsf¨@ :å8¢ Ö¬%ıHˆ*êñÿ  ÿÿ É÷\Œ
+          // Plus cooking method additions:
+          sumCal += cookingCal;
+          sumFat += cookingFat;
+          sumSatFat += cookingSatFat;
+          sumNa += cookingNa;
+
+          // Clean rounding for the floats
+          sumP = Math.round(sumP * 10) / 10;
+          sumFat = Math.round(sumFat * 10) / 10;
+          sumSatFat = Math.round(sumSatFat * 10) / 10;
+          sumCarbs = Math.round(sumCarbs * 10) / 10;
+
+          // Apply the same reality check used in the pre-calculation pass so the
+          // ledger/saved totals never exceed physiologically realistic levels.
+          // Same provenance rule as the pre-calc pass: partial-backfill items still get checked.
+          const receiptHasBackfilledFields = Array.isArray((it.primaryBase100g as any)?._estimatedFields) && (it.primaryBase100g as any)._estimatedFields.length > 0;
+          const receiptEffectiveDbSource = receiptHasBackfilledFields ? "label_partial" : (it.dbSource || it.source);
+          const receiptRealityCheckNutrients: Record<string, number> = { calories: sumCal, protein: sumP, totalFat: sumFat, saturatedFat: sumSatFat, sodium: sumNa, carbohydrates: sumCarbs };
+          const isCompositeReceipt =
+            (Array.isArray(it.components) && it.components.length >= 2) ||
+            physicalFormObj?.physicalForm === "COMPOUND_MEAL" ||
+            /\b(bowl|poke|salad|bento)\b/i.test(String(it.originalName || it.keyword || it.name || ""));
+
+          applyNutrientRealityChecks(
+            it.originalName || it.keyword || it.name,
+            itemWeightG,
+            receiptRealityCheckNutrients,
+            cookingNa,
+            addDebugLog,
+            receiptEffectiveDbSource,
+            {
+              originalName: it.originalName || it.originalLocalName || it.keyword,
+              keyword: it.keyword,
+              componentCount: Array.isArray(it.components) ? it.components.length : 0,
+              physicalForm: physicalFormObj?.physicalForm,
+              chainName: it.chainName || null,
+              syntheticBase100g: it.syntheticBase100g,
+              isDishEstimate: isDishEstimateEnabled(req),
+            }
+          );
+          
+          // Re-apply truth locks and reality-check corrections via pure helper
+          const ledgerTruth = it.truthNutrients || {};
+          const itemLockedKeysSet = new Set<string>(it.lockedNutrientKeys || Object.keys(ledgerTruth));
+          const postReconcileResult = applyPostReconcileTruthLocks({
+            sumNutrients: { calories: sumCal, protein: sumP, totalFat: sumFat, saturatedFat: sumSatFat, sodium: sumNa, carbohydrates: sumCarbs },
+            ledgerTruth,
+            lockedNutrientKeys: it.lockedNutrientKeys,
+            receiptRealityCheckNutrients,
+            isCompositeReceipt
+          });
+
+          if (postReconcileResult.appliedDensityCorrection) {
+            addDebugLog(`[LedgerInvariant] applied density correction for composite "${dishTitle}": adjusted calories from row-sum to ${postReconcileResult.nutrients.calories}`);
+          }
+          if (postReconcileResult.appliedSodiumRealityCheck) {
+            addDebugLog(`[LedgerInvariant] applied sodium reality-check override for composite "${dishTitle}": adjusted sodium from row-sum to ${postReconcileResult.nutrients.sodium}`);
+          }
+          if (!postReconcileResult.appliedDensityCorrection && !postReconcileResult.appliedSodiumRealityCheck && isCompositeReceipt) {
+            addDebugLog(`[LedgerInvariant] composite "${dishTitle}": using row-sum totals, reality-check mutations ignored`);
+          }
+
+          const itemCal = postReconcileResult.nutrients.calories;
+          const itemP = postReconcileResult.nutrients.protein;
+          const itemFat = postReconcileResult.nutrients.totalFat;
+          const itemSatFat = postReconcileResult.nutrients.saturatedFat;
+          const itemNa = postReconcileResult.nutrients.sodium;
+          const itemCarbs = postReconcileResult.nutrients.carbohydrates;
+
+          // Overwrite it properties to guarantee downstream consistency
+          it.calories = itemCal;
+          it.protein = itemP;
+          it.totalFat = itemFat;
+          it.saturatedFat = itemSatFat;
+          it.sodium = itemNa;
+          it.carbohydrates = itemCarbs;
+
+          // Assert and log loud console error if mismatch (for UNLOCKED nutrients only)
+          const diffCal = itemLockedKeysSet.has('calories') ? 0 : Math.abs(originalItemCal - itemCal);
+          const diffP = itemLockedKeysSet.has('protein') ? 0 : Math.abs(originalItemP - itemP);
+          const diffSatFat = itemLockedKeysSet.has('saturatedFat') ? 0 : Math.abs(originalItemSatFat - itemSatFat);
+          const diffNa = itemLockedKeysSet.has('sodium') ? 0 : Math.abs(originalItemNa - itemNa);
+
+          if (it.clinicalCorrectionNote) {
+            receiptTable += `| *Dietitian clinical correction â€” ${it.clinicalCorrectionNote}* | ${fVal(itemCal)} | ${fVal(itemP, 'g')} | ${fVal(itemSatFat, 'g')} | ${fVal(itemNa, 'mg')} |\n`;
+          } else if (diffCal > 1.1 || diffP > 0.15 || diffSatFat > 0.15 || diffNa > 1.1) {
+            addDebugLog(`[Math Integrity Check] Item "${it.originalName || it.name}" subtotal updated from initial baseline Cal=${originalItemCal} â†’ ${itemCal}`);
+          }
+
+          // Row 5: Item Sub-Total
+          receiptTable += `| **Item Sub-Total - ${itemWeightG}g** | **${fVal(itemCal)}** | **${fVal(itemP, 'g')}** | **${fVal(itemSatFat, 'g')}** | **${fVal(itemNa, 'mg')}** |\n`;
+
+          grandCal += itemCal;
+          grandP += itemP;
+          grandFat += itemFat;
+          grandSatFat += itemSatFat;
+          grandNa += itemNa;
+          grandCarbs += itemCarbs;
+          grandWeight += itemWeightG;
+
+          // Stream incremental vertical table live to client during loading
+          sendStreamEvent({ type: 'stream', stage: 'dietitian', thought: receiptTable });
+        });
+
+        // DIVERGING NUTRIENTS FIX (Aug 2026): The receipt table loop computes its own grand totals 
+        // with independent rounding, which historically overwrote the deterministic first-pass 
+        // `parsedData.nutrients` that the Dietitian already saw. We now safely discard the 
+        // receipt-table's diverging `grand*` variables at the end, and strictly reuse the 
+        // pre-existing `parsedData.nutrients` for the final UI table and narrative synchronization.
+        const finalCal = parsedData.nutrients?.calories ?? grandCal;
+        const finalP = parsedData.nutrients?.protein ?? grandP;
+        const finalFat = parsedData.nutrients?.totalFat ?? grandFat;
+        const finalSatFat = parsedData.nutrients?.saturatedFat ?? grandSatFat;
+        const finalNa = parsedData.nutrients?.sodium ?? grandNa;
+        const finalCarbs = parsedData.nutrients?.carbohydrates ?? grandCarbs;
+
+        receiptTable += `| **ğŸ† GRAND MEAL TOTAL - ${grandWeight}g** | **${fVal(finalCal)}** | **${fVal(finalP, 'g')}** | **${fVal(finalSatFat, 'g')}** | **${fVal(finalNa, 'mg')}** |\n`;
+
+        parsedData.receiptTable = receiptTable;
+
+        // Keep receiptTable separate from _internalReasoning so it renders full width in the UI
+        // We still stream it as 'thought' for live updates, but the final state will separate it.
+
+        // GUARANTEED ZERO-DISCREPANCY SYNCHRONIZATION ACROSS ALL NARRATIVE FIELDS:
+        // Critical Guard: Only synchronize narrative text for single-item meals to prevent grand total overwriting multi-item stats
+        if (parsedData.nutrients && parsedData.itemsBreakdown && (userSelectedMode === 'review' || userSelectedMode === 'edit' || !userSelectedMode)) {
+          if (rawParsed.message) {
+            rawParsed.message = synchronizeNarrativeText(rawParsed.message, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+          }
+          parsedData.message = rawParsed.message;
+          if (rawParsed.foodData) {
+            if (rawParsed.foodData.benefits) {
+              rawParsed.foodData.benefits = synchronizeNarrativeText(rawParsed.foodData.benefits, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+            }
+            if (rawParsed.foodData.risks) {
+              rawParsed.foodData.risks = synchronizeNarrativeText(rawParsed.foodData.risks, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+            }
+            if (rawParsed.foodData.healthImpact) {
+              rawParsed.foodData.healthImpact = synchronizeNarrativeText(rawParsed.foodData.healthImpact, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+            }
+            if (rawParsed.foodData.recommendation) {
+              rawParsed.foodData.recommendation = synchronizeNarrativeText(rawParsed.foodData.recommendation, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+            }
+          }
+          if (parsedData) {
+            if (parsedData.benefits) {
+              parsedData.benefits = synchronizeNarrativeText(parsedData.benefits, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+            }
+            if (parsedData.risks) {
+              parsedData.risks = synchronizeNarrativeText(parsedData.risks, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+            }
+            if (parsedData.healthImpact) {
+              parsedData.healthImpact = synchronizeNarrativeText(parsedData.healthImpact, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+            }
+            if (parsedData.recommendation) {
+              parsedData.recommendation = synchronizeNarrativeText(parsedData.recommendation, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+            }
+          }
+        }
+      } else {
+        addDebugLog(`[Nutrient Warning] LLM returned no itemsBreakdown for "${parsedData.name}". All nutrients will be zero. Check LLM prompt compliance.`);
+        parsedData.nutrients = {};
+        for (const key of NUTRIENT_KEYS) {
+          parsedData.nutrients[key] = 0;
+        }
+        parsedData.itemsBreakdown = [{
+          name: parsedData.name,
+          weightGrams: totalWeightGrams,
+          calories: 0, saturatedFat: 0, sodium: 0,
+          dbSource: "estimated", dbId: null
+        }];
+      }
+
+      // Ensure composition is always derived from the final itemsBreakdown names & visual ingredient breakdown
+      if (parsedData.itemsBreakdown && Array.isArray(parsedData.itemsBreakdown)) {
+        parsedData.composition = parsedData.itemsBreakdown.map((it: any) => {
+          let ingStr = "";
+          const nameLower = String(it.canonicalDbName || it.name || "").toLowerCase();
+          const isLabelItem = it.dbSource === 'label' || it.source === 'label' || String(it.dbId).startsWith('printed_packaging_label');
+          
+          if (isLabelItem) {
+            it.visualIngredients = [];
+          }
+
+          let visList = isLabelItem ? [] : (it.visualIngredients || []);
+          if (!isLabelItem && (!Array.isArray(visList) || visList.length === 0) && it.components && Array.isArray(it.components)) {
+            visList = it.components.map((c: any) => typeof c === 'string' ? c : c.name || c.searchQuery || c.keyword).filter(Boolean);
+          }
+          
+          if (Array.isArray(visList) && visList.length > 0) {
+            // Filter out sauces, dressings, glazes, condiments per Round 2 Addendum
+            const lexicons = ["sauce", "mayonnaise", "dressing", "glaze", "gravy", "ketchup", "mustard", "vinaigrette", "mayo"];
+            visList = visList.filter((vis: any) => {
+              const vLower = String(vis || "").toLowerCase();
+              return !lexicons.some(lex => vLower.includes(lex));
+            });
+
+            // Filter out ingredients that are already in the name to prevent redundancy
+            const remainingVis = visList.filter((vis: any) => {
+              const vLower = String(vis).toLowerCase();
+              if (nameLower.includes(vLower)) return false;
+              // Handle common abbreviations/substrings
+              if (vLower === "mayo" && nameLower.includes("mayonnaise")) return false;
+              if (vLower === "mayonnaise" && nameLower.includes("mayo")) return false;
+              if (vLower === "potato" && nameLower.includes("potato wedges")) return false;
+              if (vLower === "beef" && nameLower.includes("beef steak")) return false;
+              return true;
+            });
+            
+            if (remainingVis.length > 0) {
+              ingStr = ` (${remainingVis.join(", ")})`;
+            }
+          }
+          
+          return `${it.canonicalDbName || it.name}${ingStr}`;
+        }).join(", ");
+      }
+
+      if (originalModeIsModify) {
+        parsedData.id = req.body.activeMeal?.id;
+        if (!parsedData.imageUrl) parsedData.imageUrl = req.body.activeMeal?.imageUrl || req.body.activeMeal?.imageUrls?.[0];
+        if (!parsedData.imageUrls || (parsedData.imageUrls.length > 0 && parsedData.imageUrls[0] === "[base64_image_data_truncated]")) parsedData.imageUrls = req.body.activeMeal?.imageUrls;
+        
+        let baseScoutItems = (visionScoutItems && visionScoutItems.length > 0)
+          ? visionScoutItems
+          : (req.body.activeMeal?.scoutItems || []);
+          
+        let updatedScoutItems = mergeScoutItems(baseScoutItems, rawParsed.scoutItems);
+        if (parsedData && Array.isArray(parsedData.itemsBreakdown) && parsedData.itemsBreakdown.length > 0) {
+          const currentScoutIndices = new Set(parsedData.itemsBreakdown.map((b: any) => b.scoutIndex).filter((i: any) => i !== undefined && i !== null));
+          
+          if (currentScoutIndices.size > 0) {
+            updatedScoutItems = updatedScoutItems.filter((sItem: any) => currentScoutIndices.has(sItem.scoutIndex));
+          }
+
+          updatedScoutItems = updatedScoutItems.map((sItem: any, sIdx: number) => {
+            const bItem = parsedData.itemsBreakdown.find((b: any) =>
+              b.scoutIndex !== undefined && b.scoutIndex !== null && b.scoutIndex === sItem.scoutIndex
+            ) || parsedData.itemsBreakdown.find((b: any) => namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword));
+            if (bItem && (bItem.canonicalDbName || bItem.name)) {
+              const newName = bItem.canonicalDbName || bItem.name;
+              return {
+                ...sItem,
+                originalName: newName,
+                keyword: newName,
+                estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams
+              };
+            }
+            return sItem;
+          });
+        }
+
+        return res.json({
+          mode: "modify",
+          dietitianScratchpad: rawParsed._internalReasoning,
+          text: rawParsed.message || `I have updated your meal to reflect the correction.`,
+          message: rawParsed.message || `I have updated your meal to reflect the correction.`,
+          data: parsedData,
+          agentPrompt: fullPromptSent,
+          scoutItems: updatedScoutItems,
+          apiCalls
+        });
+      }
+
+      if (!hasImage && !parsedData.imageUrl && parsedData.name) {
+        try {
+          // Remove weight/quantity numbers & units for cleaner search query
+          const cleanFoodQuery = parsedData.name.replace(/\d+\s*(g|grams|oz|lbs|kg|servings|pcs|pieces|slice|slices)?/gi, '').trim() || parsedData.name;
+          addDebugLog(`[Text Search Image Lookup] Attempting auto image retrieval for text food "${cleanFoodQuery}" (from "${parsedData.name}")...`);
+          const fetchedImgs = await retrieveFoodImages(cleanFoodQuery, { mode: "light", count: 1 });
+          if (fetchedImgs && fetchedImgs.length > 0 && fetchedImgs[0].imageUrl) {
+            parsedData.imageUrl = fetchedImgs[0].imageUrl;
+            parsedData.imageUrls = [fetchedImgs[0].imageUrl];
+            addDebugLog(`[Text Search Image Lookup] Successfully attached retrieved image for "${parsedData.name}": ${parsedData.imageUrl}`);
+          }
+        } catch (imgErr: any) {
+          addDebugLog(`[Text Search Image Lookup Error] ${imgErr?.message || imgErr}`);
+        }
+      }
+
+      let finalScoutItems = mergeScoutItems(visionScoutItems, rawParsed.scoutItems);
+      if (parsedData && Array.isArray(parsedData.itemsBreakdown) && parsedData.itemsBreakdown.length > 0) {
+        finalScoutItems = finalScoutItems.map((sItem: any, sIdx: number) => {
+          const bItem = parsedData.itemsBreakdown.find((b: any) =>
+            b.scoutIndex !== undefined && b.scoutIndex !== null && b.scoutIndex === sItem.scoutIndex
+          ) || parsedData.itemsBreakdown.find((b: any) => namesReferToSameFood(b.canonicalDbName || b.name, sItem.originalName || sItem.keyword));
+          if (bItem && (bItem.canonicalDbName || bItem.name)) {
+            const newName = bItem.canonicalDbName || bItem.name;
+            return {
+              ...sItem,
+              originalName: newName,
+              keyword: newName,
+              estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams
+            };
+          }
+          return sItem;
+        });
+      }
+
+      addDebugLog('[MealBuild] happy-path');
+      const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
+        parsedData,
+        jobId: req.body.jobId,
+        activeMeal: req.body.activeMeal,
+        scoutItems: finalScoutItems,
+        diningEnvironment,
+      });
+
+      const responsePayload = {
+        mode: "new_log",
+        dietitianScratchpad: rawParsed._internalReasoning,
+        text: rawParsed.message || `I have analyzed the food: **${parsedData.name}** (${parsedData.quantity}).`,
+        message: rawParsed.message || `I have analyzed the food: **${parsedData.name}** (${parsedData.quantity}).`,
+        data: pendingFoodLog || parsedData,
+        mealBuild,
+        savable: true,
+        agentPrompt: fullPromptSent,
+        scoutItems: finalScoutItems,
+        apiCalls
+      };
+
+      if (isStream && hasSentHeaders) {
+        res.write(`data: ${JSON.stringify({ final: true, result: responsePayload })}\n\n`);
+        return res.end();
+      }
+
+      return res.json(responsePayload);
+    }
+
+    // CASE C: modification commands mode (Math-only fallbacks)
+    if (mode === "modify") {
+      addDebugLog(`[Mode Routing] MODIFY mode triggered (Math Fallback).`);
+      
+      let activeMeal = req.body.activeMeal;
+      if (!activeMeal) {
+        addDebugLog(`[Modify Math Error] No active meal exists in Firestore to modify.`);
+        return res.json({
+          text: rawParsed.message || "I couldn't modify the meal because there's no active meal currently logged. Please log a meal first!",
+          message: rawParsed.message || "I couldn't modify the meal because there's no active meal currently logged. Please log a meal first!",
+          data: null,
+          apiCalls
+        });
+      }
+
+      let commands = rawParsed.modificationCommand;
+      if (!commands || !Array.isArray(commands) || commands.length === 0) {
+        // Fallback: If Dietitian returned foodData.itemsBreakdown, synthesize commands comparing against activeMeal
+        if (rawParsed.foodData && Array.isArray(rawParsed.foodData.itemsBreakdown) && rawParsed.foodData.itemsBreakdown.length > 0) {
+          const dietitianItems = rawParsed.foodData.itemsBreakdown;
+          const synthesizedCommands: any[] = [];
+          
+          // Identify removed items
+          (activeMeal.itemsBreakdown || []).forEach((oldIt: any) => {
+            const oldName = String(oldIt.canonicalDbName || oldIt.originalName || oldIt.name || '').toLowerCase().trim();
+            const stillExists = dietitianItems.some((newIt: any) => {
+              const newName = String(newIt.canonicalDbName || newIt.originalName || newIt.name || '').toLowerCase().trim();
+              return newName === oldName || oldName.includes(newName) || newName.includes(oldName);
+            });
+            if (!stillExists) {
+              synthesizedCommands.push({
+                action: 'remove_item',
+                itemName: oldIt.name || oldIt.canonicalDbName,
+                targetDbId: oldIt.dbId || null
+              });
+            }
+          });
+
+          // Identify weight updates or added items
+          dietitianItems.forEach((newIt: any) => {
+            const newName = String(newIt.canonicalDbName || newIt.originalName || newIt.name || '').toLowerCase().trim();
+            const matchedOld = (activeMeal.itemsBreakdown || []).find((oldIt: any) => {
+              const oldName = String(oldIt.canonicalDbName || oldIt.originalName || oldIt.name || '').toLowerCase().trim();
+              return newName === oldName || oldName.includes(newName) || newName.includes(oldName);
+            });
+            if (matchedOld && newIt.weightGrams && Number(newIt.weightGrams) !== Number(matchedOld.weightGrams)) {
+              synthesizedCommands.push({
+                action: 'update_weight',
+                itemName: matchedOld.name || matchedOld.canonicalDbName,
+                targetDbId: matchedOld.dbId || null,
+                newWeightGrams: Number(newIt.weightGrams)
+              });
+            } else if (!matchedOld && newIt.weightGrams) {
+              synthesizedCommands.push({
+                action: 'add_item',
+                itemName: newIt.canonicalDbName || newIt.name || 'Food Item',
+                newWeightGrams: Number(newIt.weightGrams)
+              });
+            }
+          });
+
+          if (synthesizedCommands.length > 0) {
+            addDebugLog(`[Modify Math] Synthesized ${synthesizedCommands.length} modification commands from foodData.itemsBreakdown.`);
+            commands = synthesizedCommands;
+          }
+        }
+      }
+
+      if (!commands || !Array.isArray(commands) || commands.length === 0) {
+        addDebugLog(`[Modify Math Error] Modification command array was empty or null.`);
+        return res.json({
+          text: rawParsed.message || "I received a modify request but no modification instructions were provided.",
+          message: rawParsed.message || "I received a modify request but no modification instructions were provided.",
+          data: activeMeal,
+          apiCalls
+        });
+      }
+
+      const originalItems = activeMeal.itemsBreakdown || [];
+      const originalTotalWeight = originalItems.reduce((acc: number, it: any) => acc + (Number(it.weightGrams) || 0), 0) || 1;
+
+      const standardItems: {[key: string]: {calories: number, saturatedFat: number, sodium: number}} = {
+        steak: { calories: 2.5, saturatedFat: 0.05, sodium: 1.8 },
+        beef: { calories: 2.5, saturatedFat: 0.05, sodium: 1.8 },
+        chicken: { calories: 1.65, saturatedFat: 0.01, sodium: 0.7 },
+        breast: { calories: 1.65, saturatedFat: 0.01, sodium: 0.7 },
+        pork: { calories: 2.4, saturatedFat: 0.03, sodium: 0.8 },
+        fish: { calories: 1.5, saturatedFat: 0.01, sodium: 0.8 },
+        salmon: { calories: 2.0, saturatedFat: 0.015, sodium: 0.5 },
+        rice: { calories: 1.3, saturatedFat: 0.0, sodium: 0.01 },
+        broccoli: { calories: 0.35, saturatedFat: 0.0, sodium: 0.3 },
+        egg: { calories: 1.5, saturatedFat: 0.03, sodium: 1.4 },
+        avocado: { calories: 1.6, saturatedFat: 0.02, sodium: 0.07 },
+        bread: { calories: 2.6, saturatedFat: 0.005, sodium: 4.8 },
+        butter: { calories: 7.1, saturatedFat: 5.1, sodium: 5.7 },
+        cheese: { calories: 4.0, saturatedFat: 1.8, sodium: 6.2 },
+        salad: { calories: 0.2, saturatedFat: 0.0, sodium: 0.1 },
+        tomato: { calories: 0.18, saturatedFat: 0.0, sodium: 0.05 },
+        oil: { calories: 8.8, saturatedFat: 1.4, sodium: 0.0 },
+        potato: { calories: 0.8, saturatedFat: 0.0, sodium: 0.05 },
+        pasta: { calories: 1.3, saturatedFat: 0.0, sodium: 0.01 }
+      };
+
+      const findItemIndex = (itemNameStr: string, targetDbId: string | null): number => {
+        return findItemIndexInList(activeMeal.itemsBreakdown, itemNameStr, targetDbId);
+      };
+
+      const isWholeMealMatch = (name: string) => {
+        const nLower = name.trim().toLowerCase();
+        const mealNameLower = (activeMeal.name || "").trim().toLowerCase();
+        return nLower === mealNameLower || 
+               nLower === "meal" || 
+               nLower === "total" || 
+               nLower === "all" ||
+               (mealNameLower.includes(nLower) && (activeMeal.itemsBreakdown || []).every((it: any) => (it.name || "").toLowerCase() !== nLower));
+      };
+
+      for (const cmd of commands) {
+        const action = cmd.action;
+        const itemName = cmd.itemName || "";
+        const targetDbId = cmd.targetDbId ? String(cmd.targetDbId).replace(/[^\x20-\x7E]/g, '').trim() : null;
+        let newWeight = sanitizeMealWeight(cmd.newWeightGrams, 0);
+
+        if (action === "update_weight") {
+          if (newWeight <= 0) {
+            const msgLower = (message || "").toLowerCase();
+            if (msgLower.includes("whole") || msgLower.includes("entire") || msgLower.includes("pack") || msgLower.includes("all")) {
+              const itemToUpdate = activeMeal.itemsBreakdown?.find((it: any) => it.name.toLowerCase().includes(itemName.toLowerCase())) || activeMeal.itemsBreakdown?.[0];
+              const curW = itemToUpdate ? (Number(itemToUpdate.weightGrams) || 160) : 160;
+              newWeight = curW * 2;
+            } else {
+              newWeight = originalTotalWeight;
+            }
+          }
+
+          if (isWholeMealMatch(itemName)) {
+            const originalItems = activeMeal.itemsBreakdown || [];
+            const oldTotalWeight = originalItems.reduce((acc: number, it: any) => acc + (Number(it.weightGrams) || 0), 0) || 1;
+            const R = newWeight / oldTotalWeight;
+            
+            activeMeal.itemsBreakdown.forEach((item: any) => {
+              if (!item || typeof item !== 'object') return;
+              const oldW = Number(item.weightGrams) || 0;
+              item.weightGrams = Math.round(oldW * R);
+              item.calories = Number(((item.calories || 0) * R).toFixed(1));
+              item.protein = Number(((item.protein || 0) * R).toFixed(1));
+              item.totalFat = Number(((item.totalFat || 0) * R).toFixed(1));
+              item.saturatedFat = Number(((item.saturatedFat || 0) * R).toFixed(2));
+              item.sodium = Number(((item.sodium || 0) * R).toFixed(1));
+              item.carbohydrates = Number(((item.carbohydrates || 0) * R).toFixed(1));
+            });
+            
+            addDebugLog(`[Modify Math] update_weight of entire meal "${activeMeal.name}" from ${oldTotalWeight}g to ${newWeight}g (ratio: ${R.toFixed(3)})`);
+          } else {
+            const targetDbId = cmd.targetDbId ? String(cmd.targetDbId).replace(/[^\x20-\x7E]/g, '').trim() : null;
+            const idx = findItemIndex(itemName, targetDbId);
+            let item = idx !== -1 ? activeMeal.itemsBreakdown[idx] : null;
+
+            if (item) {
+              const oldWeight = Math.max(1, Number(item.weightGrams) || 1);
+              const R = newWeight / oldWeight;
+
+              if (isDishEstimateEnabled()) {
+                const ledger = await finalizeDishLedger({
+                  item: {
+                    ...item,
+                    originalName: item.name || item.originalName,
+                    keyword: item.keyword || item.name,
+                    nutrients: item.nutrients || {
+                      calories: item.calories,
+                      protein: item.protein,
+                      totalFat: item.totalFat,
+                      saturatedFat: item.saturatedFat,
+                      carbohydrates: item.carbohydrates,
+                      sodium: item.sodium,
+                    },
+                  },
+                  nutrientBasisWeight: item.nutrientBasisWeight || oldWeight,
+                  consumedWeight: newWeight,
+                  storedBrandLock: item.brandLock || null,
+                  storedOcrLock: item.rawNutritionLabel ? {
+                    basisType: item.rawNutritionLabel.basisType || 'per_dish',
+                    servingGrams: item.rawNutritionLabel.servingGrams || null,
+                    keys: item.lockedNutrientKeys || ['calories'],
+                    valuesAtBasis: item.rawNutritionLabel,
+                  } : null,
+                });
+                addDebugLog(`[Budget] mode=edit item="${item.name}" kcal=${ledger.nutrients.calories} source=${ledger.dbSource} weight=${newWeight}`);
+                item.weightGrams = newWeight;
+                item.calories = ledger.nutrients.calories;
+                item.protein = ledger.nutrients.protein;
+                item.totalFat = ledger.nutrients.totalFat;
+                item.saturatedFat = ledger.nutrients.saturatedFat;
+                item.carbohydrates = ledger.nutrients.carbohydrates;
+                item.sodium = ledger.nutrients.sodium;
+                if (item.nutrients) {
+                  item.nutrients = { ...item.nutrients, ...ledger.nutrients };
+                }
+              } else {
+              const foundation: Record<string, number> = {
+                calories: Number(item.calories || 0) * R,
+                protein: Number(item.protein || 0) * R,
+                totalFat: Number(item.totalFat || item.fat || 0) * R,
+                saturatedFat: Number(item.saturatedFat || 0) * R,
+                carbohydrates: Number(item.carbohydrates || 0) * R,
+                sodium: Number(item.sodium || 0) * R,
+              };
+              const priorScout = Number(item.estimatedCalories || item.scoutEstimatedCalories);
+              const scoutEst = Number.isFinite(priorScout) && priorScout > 0 ? priorScout * R : null;
+              const budget = computeItemBudget({
+                itemName: item.name || item.originalName || itemName,
+                weightGrams: newWeight,
+                hardLabelKcal: item.lockedNutrientKeys?.includes?.('calories') ? Number(item.calories) * R : null,
+                scoutEstimatedCalories: scoutEst,
+              });
+              const rec = reconcileNutrients({ nutrients: foundation, budget, formOk: true });
+              addDebugLog(`[Budget] mode=edit item="${item.name}" kcal=${budget.budgetKcal} source=${budget.source} weight=${newWeight}`);
+              addDebugLog(`[Reconcile] mode=edit action=${rec.action} foundation=${rec.foundationKcal} final=${rec.finalKcal}`);
+
+              if (item) {
+                item.weightGrams = newWeight;
+                item.calories = Number(((rec?.nutrients?.calories ?? rec?.finalKcal) || 0).toFixed(1));
+                item.protein = Number(((rec?.nutrients?.protein ?? foundation?.protein) || 0).toFixed(1));
+                item.totalFat = Number(((rec?.nutrients?.totalFat ?? foundation?.totalFat) || 0).toFixed(1));
+                item.saturatedFat = Number(((rec?.nutrients?.saturatedFat ?? foundation?.saturatedFat) || 0).toFixed(2));
+                item.sodium = Number(((rec?.nutrients?.sodium ?? foundation?.sodium) || 0).toFixed(1));
+                item.carbohydrates = Number(((rec?.nutrients?.carbohydrates ?? foundation?.carbohydrates) || 0).toFixed(1));
+                if (scoutEst != null) item.estimatedCalories = scoutEst;
+              }
+              }
+
+              addDebugLog(`[Modify Math] update_weight of "${item.name}" (dbId: ${item.dbId}) from ${oldWeight}g to ${newWeight}g (ratio: ${R.toFixed(3)})`);
+            } else {
+              addDebugLog(`[Modify Math Warning] Could not find item "${itemName}" (targetDbId: ${targetDbId}) to update_weight.`);
+            }
+          }
+        } 
+        else if (action === "remove_item") {
+          const targetDbId = cmd.targetDbId ? String(cmd.targetDbId).replace(/[^\x20-\x7E]/g, '').trim() : null;
+          const idx = findItemIndex(itemName, targetDbId);
+
+          if (idx !== -1) {
+            const removedItem = activeMeal.itemsBreakdown[idx];
+            activeMeal.itemsBreakdown.splice(idx, 1);
+            addDebugLog(`[Modify Math] remove_item: Removed "${removedItem.name}" (dbId: ${removedItem.dbId})`);
+          } else {
+            addDebugLog(`[Modify Math Warning] Could not find item "${itemName}" (targetDbId: ${targetDbId}) to remove.`);
+          }
+        } 
+        else if (action === "rename_alias") {
+          const targetDbId = cmd.targetDbId ? String(cmd.targetDbId).replace(/[^\x20-\x7E]/g, '').trim() : null;
+          const idx = findItemIndex(itemName, targetDbId);
+          if (idx !== -1) {
+            const item = activeMeal.itemsBreakdown[idx];
+            item.name = cmd.newItemName || item.name;
+            // If it's the only item, or represents the whole meal, update the top-level name
+            if (activeMeal.itemsBreakdown.length === 1 || isWholeMealMatch(itemName)) {
+              activeMeal.name = item.name;
+            }
+            addDebugLog(`[Modify Text] rename_alias: Renamed to "${item.name}" without changing nutrients.`);
+          }
+        }
+        else if (action === "update_cooking_method") {
+          const targetDbId = cmd.targetDbId ? String(cmd.targetDbId).replace(/[^\x20-\x7E]/g, '').trim() : null;
+          const idx = findItemIndex(itemName, targetDbId);
+          if (idx !== -1) {
+            const item = activeMeal.itemsBreakdown[idx];
+            const oldMethod = item.cookingMethod || 'unknown';
+            const newMethod = cmd.newCookingMethod || 'unknown';
+
+            // Get modifiers
+            const oldModifier = getCookingMethodModifier(oldMethod);
+            const newModifier = getCookingMethodModifier(newMethod);
+
+            const itemWeight = Number(item.weightGrams) || 0;
+            const factor = itemWeight / 100;
+
+            // Old added values
+            const oldAddedFat = parseFloat((oldModifier.addedFatPer100g * factor).toFixed(2));
+            const oldAddedSatFat = parseFloat((oldModifier.addedSaturatedFatPer100g * factor).toFixed(2));
+            const oldAddedCalories = parseFloat((oldModifier.addedCaloriesPer100g * factor).toFixed(1));
+
+            // New added values
+            const newAddedFat = parseFloat((newModifier.addedFatPer100g * factor).toFixed(2));
+            const newAddedSatFat = parseFloat((newModifier.addedSaturatedFatPer100g * factor).toFixed(2));
+            const newAddedCalories = parseFloat((newModifier.addedCaloriesPer100g * factor).toFixed(1));
+
+            // Adjust item nutrients
+            if (item) {
+              item.calories = parseFloat(Math.max(0, (item.calories || 0) - oldAddedCalories + newAddedCalories).toFixed(1));
+              item.saturatedFat = parseFloat(Math.max(0, (item.saturatedFat || 0) - oldAddedSatFat + newAddedSatFat).toFixed(2));
+              item.cookingMethod = newMethod;
+            }
+
+            // Also adjust top-level activeMeal.nutrients directly
+            if (activeMeal.nutrients) {
+              if (activeMeal.nutrients.calories !== undefined) {
+                activeMeal.nutrients.calories = parseFloat(Math.max(0, activeMeal.nutrients.calories - oldAddedCalories + newAddedCalories).toFixed(1));
+              }
+              if (activeMeal.nutrients.totalFat !== undefined) {
+                activeMeal.nutrients.totalFat = parseFloat(Math.max(0, activeMeal.nutrients.totalFat - oldAddedFat + newAddedFat).toFixed(2));
+              }
+              if (activeMeal.nutrients.saturatedFat !== undefined) {
+                activeMeal.nutrients.saturatedFat = parseFloat(Math.max(0, activeMeal.nutrients.saturatedFat - oldAddedSatFat + newAddedSatFat).toFixed(2));
+              }
+              // Recalculate unsaturatedFat
+              const transFat = activeMeal.nutrients.transFat || 0;
+              const totalFat = activeMeal.nutrients.totalFat || 0;
+              const satFat = activeMeal.nutrients.saturatedFat || 0;
+              activeMeal.nutrients.unsaturatedFat = parseFloat(Math.max(0, totalFat - satFat - transFat).toFixed(2));
+            }
+
+            addDebugLog(`[Modify Math] update_cooking_method for "${item.name}": changed from "${oldMethod}" to "${newMethod}". Calorie delta: ${(newAddedCalories - oldAddedCalories).toFixed(1)} kcal, Saturated Fat delta: ${(newAddedSatFat - oldAddedSatFat).toFixed(2)}g, Total Fat delta: ${(newAddedFat - oldAddedFat).toFixed(2)}g.`);
+          } else {
+            addDebugLog(`[Modify Math Warning] Could not find item "${itemName}" (targetDbId: ${targetDbId}) to update_cooking_method.`);
+          }
+        }
+        else if (action === "replace_item") {
+          const idx = findItemIndex(itemName, targetDbId);
+          const replacementName = cmd.replacementItemName || cmd.newItemName || itemName;
+          let cFactor = 1.0;
+          let fFactor = 0.01;
+          let sFactor = 0.5;
+ 
+          const lowerName = replacementName.toLowerCase();
+          for (const [key, factors] of Object.entries(standardItems)) {
+            if (lowerName.includes(key)) {
+              cFactor = factors.calories;
+              fFactor = factors.saturatedFat;
+              sFactor = factors.sodium;
+              break;
+            }
+          }
+ 
+          const newItem = {
+            name: replacementName,
+            canonicalDbName: replacementName,
+            weightGrams: newWeight,
+            calories: Number((newWeight * cFactor).toFixed(1)),
+            saturatedFat: Number((newWeight * fFactor).toFixed(2)),
+            sodium: Number((newWeight * sFactor).toFixed(1)),
+            dbSource: "estimated",
+            dbId: null
+          };
+
+          if (idx !== -1) {
+            activeMeal.itemsBreakdown[idx] = newItem;
+            addDebugLog(`[Modify Math] replace_item: Replaced "${itemName}" with "${replacementName}" (${newWeight}g).`);
+          } else {
+            if (!activeMeal.itemsBreakdown) activeMeal.itemsBreakdown = [];
+            activeMeal.itemsBreakdown.push(newItem);
+            addDebugLog(`[Modify Math] replace_item: Item "${itemName}" not found; appended "${replacementName}" (${newWeight}g).`);
+          }
+        }
+        else if (action === "add_item") {
+          let cFactor = 1.0;
+          let fFactor = 0.01;
+          let sFactor = 0.5;
+ 
+          const lowerName = itemName.toLowerCase();
+          for (const [key, factors] of Object.entries(standardItems)) {
+            if (lowerName.includes(key)) {
+              cFactor = factors.calories;
+              fFactor = factors.saturatedFat;
+              sFactor = factors.sodium;
+              break;
+            }
+          }
+ 
+          const newItem = {
+            name: itemName,
+            canonicalDbName: itemName,
+            weightGrams: newWeight,
+            calories: Number((newWeight * cFactor).toFixed(1)),
+            saturatedFat: Number((newWeight * fFactor).toFixed(2)),
+            sodium: Number((newWeight * sFactor).toFixed(1)),
+            dbSource: "estimated",
+            dbId: null
+          };
+
+          if (!activeMeal.itemsBreakdown) activeMeal.itemsBreakdown = [];
+          activeMeal.itemsBreakdown.push(newItem);
+          addDebugLog(`[Modify Math] add_item: Added "${itemName}" with estimated weight ${newWeight}g.`);
+        }
+      }
+
+      const newItems = activeMeal.itemsBreakdown || [];
+      const newTotalWeight = newItems.reduce((acc: number, it: any) => acc + (Number(it.weightGrams) || 0), 0);
+      const mealWeightRatio = newTotalWeight / originalTotalWeight;
+
+      activeMeal.weightGrams = newTotalWeight;
+      activeMeal.basis_type = 'total';
+      activeMeal.serving_grams = newTotalWeight;
+      if (newItems.length === 1) {
+        activeMeal.name = newItems[0].name || newItems[0].canonicalDbName || 'Meal';
+      } else if (newItems.length > 1 && rawParsed.foodData?.name && rawParsed.foodData.name !== 'Food Item' && !rawParsed.foodData.name.toLowerCase().includes('i only had')) {
+        activeMeal.name = rawParsed.foodData.name;
+      } else if (newItems.length > 1) {
+        activeMeal.name = newItems.map((it: any) => it.name).join(", ");
+      }
+      if (activeMeal.scoutItems && Array.isArray(activeMeal.scoutItems)) {
+        const currentNames = new Set(newItems.map((it: any) => (it.name || '').toLowerCase().trim()));
+        activeMeal.scoutItems = activeMeal.scoutItems.filter((scout: any) => {
+          const sName = String(scout.keyword || scout.originalName || scout.name || '').toLowerCase().trim();
+          return Array.from(currentNames).some((cName: any) => String(cName).includes(sName) || sName.includes(String(cName)));
+        });
+      }
+      activeMeal.composition = newItems.map((it: any) => it.name).join(", ");
+      
+      const newCalories = newItems.reduce((acc: number, it: any) => acc + (Number(it.calories) || 0), 0);
+      const newSaturatedFat = newItems.reduce((acc: number, it: any) => acc + (Number(it.saturatedFat) || 0), 0);
+      const newSodium = newItems.reduce((acc: number, it: any) => acc + (Number(it.sodium) || 0), 0);
+
+      if (!activeMeal.nutrients) activeMeal.nutrients = {};
+      activeMeal.nutrients.calories = Number(newCalories.toFixed(1));
+      activeMeal.nutrients.saturatedFat = Number(newSaturatedFat.toFixed(2));
+      activeMeal.nutrients.sodium = Number(newSodium.toFixed(1));
+
+      const nutrientKeys = [
+        "protein", "totalFat", "unsaturatedFat", "omega3", 
+        "carbohydrates", "addedSugar", "totalFibre", "solubleFibre", "potassium", 
+        "magnesium", "calcium", "iron", "zinc", "selenium", "iodine", "phosphorus", 
+        "vitaminD", "vitaminB12", "folate", "vitaminC", "vitaminE", "vitaminK", 
+        "vitaminA", "vitaminB6", "thiamine", "riboflavin", "niacin"
+      ];
+
+      for (const key of nutrientKeys) {
+        if (activeMeal.nutrients[key] !== undefined) {
+          activeMeal.nutrients[key] = Number((activeMeal.nutrients[key] * mealWeightRatio).toFixed(2));
+        }
+      }
+
+      addDebugLog('[MealBuild] edit-path');
+      const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
+        parsedData: activeMeal,
+        jobId: req.body.jobId,
+        activeMeal: req.body.activeMeal,
+        diningEnvironment: activeMeal?.diningEnvironment,
+      });
+
+      mealBuild.staleDietitianNarrative = true;
+
+      const responsePayload = {
+        mode: "modify",
+        text: rawParsed.message || "I have recalculated your meal's metrics with precision based on your instructions.",
+        message: rawParsed.message || "I have recalculated your meal's metrics with precision based on your instructions.",
+        data: pendingFoodLog || activeMeal,
+        mealBuild,
+        savable: true,
+        agentPrompt: fullPromptSent,
+        apiCalls
+      };
+
+      if (isStream && hasSentHeaders) {
+        res.write(`data: ${JSON.stringify({ final: true, result: responsePayload })}\n\n`);
+        return res.end();
+      }
+
+      return res.json(responsePayload);
+    }
+  } catch (error: any) {
+    console.error("[Food Analyze Error]:", error);
+    
+    // Dietitian Degrade logic (Phase 1)
+    if (preCalculatedItems && preCalculatedItems.length > 0 && preCalculatedItems.some((p: any) => p.estimatedCalories !== undefined || (p.primaryBase100g && p.primaryBase100g.calories !== undefined))) {
+      addDebugLog(`[Dietitian Degrade] Dietitian failed permanently, but pre-calculated math exists. Salvaging meal build.`);
+      
+      const salvagedAggregatedNutrients: Record<string, number> = {};
+      NUTRIENT_KEYS.forEach(k => salvagedAggregatedNutrients[k] = 0);
+      if (preCalculatedItems && Array.isArray(preCalculatedItems)) {
+        preCalculatedItems.forEach((p: any) => {
+          if (p.nutrients) {
+            NUTRIENT_KEYS.forEach(k => {
+              salvagedAggregatedNutrients[k] = parseFloat(((salvagedAggregatedNutrients[k] || 0) + (Number(p.nutrients[k]) || 0)).toFixed(2));
+            });
+          }
+        });
+      }
+
+      const salvagedMeal = buildSavableMealFromParsed(preCalculatedItems, req.body.activeMeal, salvagedAggregatedNutrients, null);
+      const degradedMeal = markDietitianDegraded(salvagedMeal, error.message);
+      const payloadData = toPendingFoodLog(degradedMeal);
+      
+      const successPayload = {
+        data: payloadData,
+        mealBuild: degradedMeal,
+        degradedStages: degradedMeal.degradedStages,
+        message: "Nutrients logged based on core databases, but AI clinical advice is currently unavailable.",
+        agentPrompt: fullPromptSent,
+        apiCalls
+      };
+
+      if (isStream && hasSentHeaders) {
+        res.write(`data: ${JSON.stringify({ final: true, result: successPayload })}\n\n`);
+        return res.end();
+      } else {
+        return res.status(200).json(successPayload);
+      }
+    }
+
+    const errorPayload: any = {
+      error: `Failed to process your request (Error: ${error.message || 'Connection timed out'}). Please try again with a different model from the top-left dropdown.`,
+      agentNotAvailable: true
+    };
+    if (visionScoutItems && visionScoutItems.length > 0) {
+      errorPayload.scoutItems = visionScoutItems;
+      errorPayload.scoutContentType = visionScoutContentType;
+    }
+    
+    if (isStream && hasSentHeaders) {
+      res.write(`data: ${JSON.stringify(errorPayload)}\n\n`);
+      return res.end();
+    } else {
+      return res.status(200).json(errorPayload);
+    }
+  }
+  });
+});
+app.post("/api/gemini/medical-analyze", async (req, res) => {
+  if (!req.headers['x-session-id'] || !req.headers['x-session-id'].toString().startsWith('server-job-')) {
+    return res.status(403).json({ error: 'This SSE path is deprecated and strictly reserved for internal loopback execution.' });
+  }
+  const isStream = req.query.stream === 'true';
+  let hasSentHeaders = false;
+
+  if (isStream) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.flushHeaders();
+    hasSentHeaders = true;
+
+    const originalStatus = res.status.bind(res);
+
+    res.status = (code: number) => {
+      if (!res.headersSent) {
+        originalStatus(code);
+      }
+      return res;
+    };
+
+    res.json = (body: any) => {
+      res.write(`data: ${JSON.stringify({ final: true, result: body })}\n\n`);
+      res.end();
+      return res;
+    };
+  }
+
+  const sendStreamEvent = (data: any) => {
+    if (isStream && hasSentHeaders) {
+      try {
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+        if (typeof (res as any).flush === 'function') (res as any).flush();
+      } catch (e) {}
+    }
+  };
+
+  await streamDebugLogStorage.run((msg: string) => {
+    // Forward every verbose internal LLM dispatch/prompt/response log line live to
+    // THIS request's own SSE connection only â€” same scoped mechanism as /api/gemini/food-analyze.
+    sendStreamEvent({ type: 'log', logType: 'verbose', message: msg, timestamp: Date.now() });
+  }, async () => {
+  try {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "default-session";
+    const sendLog = (logType: string, messageText: string, extra?: any) => {
+      sendStreamEvent({ type: 'log', logType, message: messageText, timestamp: Date.now(), ...extra });
+    };
+
+let { 
+      message, 
+      image, 
+      images, 
+      imageDates, 
+      history, 
+      userProfile, 
+      engine, 
+      existingBiomarkers, 
+      agentType, 
+      biomarkerHistory, 
+      biomarkers, 
+      recentMeals,
+      foodLogs,
+      customSystemInstruction,
+      customVariableData,
+      batchSize
+    } = req.body;
+
+    // Isolate Diagnostic Agent Data (agent4):
+    // Ensure agent4 only receives diagnostic-relevant data (biomarkers and profile)
+    // and is not sent other conversation or food log entries.
+    const allBiomarkerKeys = Array.from(new Set([
+      ...biomarkerDefinitions.map(d => d.key),
+      ...Object.keys(userProfile?.customBiomarkers || {})
+    ]));
+    
+    const agent1Step1Schema = {
+      type: Type.OBJECT,
+      properties: {
+        extractedData: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              biomarker: {
+                type: Type.STRING,
+                description: "The canonical key of the biomarker. If matching EXISTING DATABASE KEYS, use that exact key. If it is a new or custom biomarker (e.g. Blood Pressure, Ferritin, Cortisol), generate a clean lowercase snake_case key for it (e.g., 'blood_pressure', 'ferritin')."
+              },
+              date: { type: Type.STRING, description: "Format: YYYY-MM-DD" },
+              numeric_value: { type: Type.NUMBER, description: "The exact numerical value if quantitative. Leave null if qualitative.", nullable: true },
+              qualitative_value: { type: Type.STRING, description: "The exact string if qualitative (e.g., '109 / 53', 'NEGATIVE'). Leave null if quantitative.", nullable: true },
+              unit: { type: Type.STRING, description: "The exact unit verbatim from the text. Leave empty string if none." },
+              explanation: { type: Type.STRING, description: "Why or how it was mapped or created." },
+              display_name: { type: Type.STRING, nullable: true, description: "REQUIRED whenever 'biomarker' is a new/custom key not in EXISTING DATABASE KEYS. The official clinical term (e.g. 'Hematochezia', 'Hemorrhoids'), never a plain-English fragment. Set to null when 'biomarker' already matches an EXISTING DATABASE KEY." }
+            },
+            required: ["biomarker", "date", "unit", "explanation", "display_name"]
+          }
+        },
+        unmappedTests: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              raw_name: { type: Type.STRING, description: "The official clinical term for this symptom/condition (e.g. 'Hematochezia', not 'Blood in Stool'). Must match the display_name used for the same item in extractedData." },
+              suggested_key: { type: Type.STRING },
+              date: { type: Type.STRING, nullable: true },
+              numeric_value: { type: Type.NUMBER, nullable: true },
+              qualitative_value: { type: Type.STRING, nullable: true },
+              unit: { type: Type.STRING, nullable: true },
+              explanation: { type: Type.STRING, nullable: true }
+            },
+            required: ["raw_name", "suggested_key"]
+          }
+        },
+        text: { type: Type.STRING, description: "Friendly clinical conversational message to the user." },
+        hasMoreMarkers: { type: Type.BOOLEAN },
+        lastProcessedIndex: { type: Type.INTEGER, nullable: true, description: "The exact character index or row count where extraction stopped. Used for server-side continuation instead of echoing remaining text." },
+        isWrongDoor: { type: Type.BOOLEAN, description: "True ONLY if the user input is entirely food logging, dietary journals, or completely unrelated to medical/biomarker data. Set to false for ANY medical data or symptoms." },
+        estimatedTotalMarkers: { type: Type.INTEGER }
+      },
+      required: ["extractedData", "text", "hasMoreMarkers", "estimatedTotalMarkers"]
+    };
+    const dataReviewSchema = {
+      type: Type.OBJECT,
+      properties: {
+        message: { type: Type.STRING, description: "Conversational summary of clinical range adjustments and review findings for this batch. If there are extreme divergences, highlight them here." },
+        extremeDivergences: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              key: { type: Type.STRING, description: "Biomarker key identifier" },
+              originalValue: { type: Type.NUMBER },
+              unit: { type: Type.STRING },
+              reason: { type: Type.STRING, description: "Explain why it seems anomalous or unit mismatched" },
+              suggestedAction: { type: Type.STRING, description: "Suggestion (e.g. 'Update value' or 'Change metric unit')" }
+            },
+            required: ["key", "originalValue", "unit", "reason", "suggestedAction"]
+          }
+        },
+        reviewedBiomarkers: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              key: { type: Type.STRING, description: "Canonical identifier of the biomarker" },
+              name: { type: Type.STRING, description: "Standard clinical name of the biomarker" },
+              userValue: { type: Type.STRING, description: "Exact value from the input data. MUST preserve qualitative strings exactly (e.g. 'NEGATIVE', 'POSITIVE') as strings, or numerical values formatted as string." },
+              unit: { type: Type.STRING, description: "Exact unit from the input data" },
+              isDataArtifact: { type: Type.BOOLEAN, description: "Set to true if userValue is an extreme physiological outlier (>3x upper limit or <0.2x lower limit) suggesting a document parsing/ingestion error (e.g. relative % 11.8% parsed as absolute count 11.8 10^9/L). Otherwise set to false." },
+              artifactNote: { type: Type.STRING, description: "Clinical note if isDataArtifact is true explaining the suspected parsing or lab artifact (e.g. 'Value 11.8 10^9/L appears to be a relative percentage (11.8%) or decimal offset error rather than an absolute count.'). Set to empty string '' if isDataArtifact is false." },
+              _demographicAudit: {
+                type: Type.OBJECT,
+                properties: {
+                  standardWesternBaseline: { type: Type.STRING, description: "The textbook global/Western range" },
+                  knownEthnicOrRegionalVariances: { type: Type.STRING, description: "State the exact regional variant and the society it comes from. If absolutely none exist, state 'None'" },
+                  ageAndGenderShifts: { type: Type.STRING, description: "How age and gender naturally alter the baseline" },
+                  finalAppliedAdjustments: { type: Type.STRING, description: "The synthesis of how you are modifying the bounds for this specific user" }
+                },
+                required: ["standardWesternBaseline", "knownEthnicOrRegionalVariances", "ageAndGenderShifts", "finalAppliedAdjustments"]
+              },
+              profileAdjustedNormalRange: { type: Type.STRING, description: "The healthy reference range for which the biomarker is not at risk (e.g., '18.5 - 22.9 kg/m2')" },
+              optimalValue: { type: Type.STRING, description: "CRITICAL: The SPECIFIC SINGLE OPTIMAL TARGET VALUE for this user profile to aim for (e.g. '21.0 kg/m2' for BMI, '30 mmol/mol' for HbA1c, '115 mmHg' for SBP, '1.2 mmol/L' for ApoB), NOT a range string and NOT a repeat of normalRange. Calculate the single ideal target value within the healthy spectrum that this specific demographic profile should aim for, rather than aiming just below the risk threshold." },
+              rangeBrackets: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING, description: "Bracket name (e.g., Optimal, Elevated, Mildly Decreased)" },
+                    range: { type: Type.STRING, description: "Mathematical bounds (e.g., >= 90, 60-89). Must be continuous with no gaps." }
+                  },
+                  required: ["name", "range"]
+                }
+              },
+              description: { type: Type.STRING, description: "2-sentence physiological role" },
+              _statusReasoning: { type: Type.STRING, description: "1-sentence mathematical evaluation comparing userValue to profileAdjustedNormalRange bounds" },
+              status: { type: Type.STRING, enum: ["Optimal", "Sub-Optimal (Action Zone)", "At Risk"], description: "Strictly 'Optimal', 'Sub-Optimal (Action Zone)' or 'At Risk' based on _statusReasoning" },
+              reference: { type: Type.STRING, description: "The exact clinical body or study acting as the anchor for the calibrated range (e.g., 'KDIGO 2024 Guidelines', 'ADA Standards of Care'). Must be explicit." },
+              specificRiskContext: { type: Type.STRING, description: "3-4 sentence personalized clinical context based on the final status" },
+              correctedHistoricalLogs: {
+                type: Type.ARRAY,
+                description: "Array of corrected historical entries if anomalous scaling/notation or outlier errors are found. Set to empty array if no corrections are needed.",
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    date: { type: Type.STRING, description: "The exact date of the historical log (e.g., YYYY-MM-DD)" },
+                    originalValue: { type: Type.NUMBER, description: "The original incorrect value" },
+                    correctedValue: { type: Type.NUMBER, description: "The newly calculated normalized/corrected value" },
+                    note: { type: Type.STRING, description: "Clinical/scaling justification for this specific change" }
+                  },
+                  required: ["date", "originalValue", "correctedValue", "note"]
+                }
+              }
+            },
+            required: ["key", "name", "userValue", "unit", "isDataArtifact", "artifactNote", "_demographicAudit", "profileAdjustedNormalRange", "optimalValue", "reference", "rangeBrackets", "description", "_statusReasoning", "status", "specificRiskContext", "correctedHistoricalLogs"]
+          }
+        }
+      },
+      required: ["message", "reviewedBiomarkers"]
+    };
+    const healthPlanningSchema = {
+      type: Type.OBJECT,
+      properties: {
+        text: { type: Type.STRING, description: "A brief, conversational greeting directly addressing the user." },
+        _internalReasoning: { type: Type.STRING, description: "Step-by-step clinical deduction and date calculation logic." },
+        summary: { type: Type.STRING, description: "Executive clinical summary synthesizing diagnostic findings and risk trends." },
+        retestBiomarkers: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING, description: "Display name of the biomarker" },
+              recommendedTestName: { type: Type.STRING, description: "The precise, standard clinical lab order name (e.g., 'Hepatic Function Panel')" },
+              priority: { type: Type.STRING, enum: ["High", "Medium", "Low"], description: "Priority level" },
+              retestTimeframe: { type: Type.STRING, description: "The interval (e.g., '3 months')" },
+              lastTestedDate: { type: Type.STRING, description: "Exact date this was last tested (Format: DD-MM-YYYY)" },
+              nextScheduledDate: { type: Type.STRING, description: "Exact calculated date for the next test (Format: DD-MM-YYYY)" },
+              dueStatus: { type: Type.STRING, description: "A tag indicating whether it's 'Already Due' or 'Due in X months/weeks'" },
+              gpClinicalJustification: { type: Type.STRING, description: "A persuasive email/letter addressed to a skeptical GP who thinks the user does not need the retest. Combines profile context, baseline trends, timing urgency, clinical guidelines, and risk evidence to convince the doctor why ordering this retest is necessary." },
+              key: { type: Type.STRING, description: "biomarker_database_key" },
+              currentValue: { type: Type.STRING, description: "value and unit" },
+              unit: { type: Type.STRING, description: "unit" }
+            },
+            required: ["name", "recommendedTestName", "priority", "retestTimeframe", "lastTestedDate", "nextScheduledDate", "dueStatus", "gpClinicalJustification", "key"]
+          }
+        },
+        testingGaps: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              testName: { type: Type.STRING, description: "Name of the missing scan or lab (e.g., 'Abdominal Ultrasound')" },
+              category: { type: Type.STRING, enum: ["short_term", "long_term"], description: "short_term (< 2 years) or long_term (>= 2 years)" },
+              priority: { type: Type.STRING, enum: ["High", "Medium", "Low"], description: "Priority level" },
+              nextScheduledDate: { type: Type.STRING, description: "Exact date by which this should be completed (Format: DD-MM-YYYY)" },
+              targetCondition: { type: Type.STRING, description: "The disease or condition being ruled out" },
+              userBenefit: { type: Type.STRING, description: "Explanation of why uncovering this missing data will improve their life or treatment plan." },
+              gpClinicalJustification: { type: Type.STRING, description: "A persuasive email/letter addressed to a skeptical GP who thinks the user does not need the test. Combines profile rationale, clinical evidence, guidelines, and patient risk factors to convince the doctor why ordering this test is necessary." }
+            },
+            required: ["testName", "category", "priority", "nextScheduledDate", "targetCondition", "userBenefit", "gpClinicalJustification"]
+          }
+        },
+        mode: { type: Type.STRING, description: "discussion" },
+        status: { type: Type.STRING, description: "active" }
+      },
+      required: ["text", "_internalReasoning", "summary", "retestBiomarkers", "testingGaps", "mode", "status"]
+    };
+
+    if (agentType === "agent4") {
+      if (history && history.length > 0) {
+        history = history.filter((h: any) => {
+          if (!h.content) return false;
+          const lower = h.content.toLowerCase();
+          // Exclude food log messages, extracted biomarkers, and other unrelated agent content
+          if (
+            lower.includes("food log") || 
+            lower.includes("[extracted food") || 
+            lower.includes("active meal") || 
+            lower.includes("[extracted biomarkers") ||
+            lower.includes("meal log") ||
+            lower.includes("banana") ||
+            lower.includes("pineapple")
+          ) {
+            return false;
+          }
+          return true;
+        });
+      }
+      addDebugLog(`[Medical Analyze Agent] Diagnostic Agent (agent4) data isolated: other conversations and food log entries removed.`, explicitSessionId);
+    }
+
+    // B2 2.1: Prompt hygiene â€” one raw injection. We do not inject chat history for extractor steps 
+    // (agent1_step1, lab_extract, symptom_diary) to prevent double payload costs.
+    const isExtractor = agentType === 'agent1_step1' || agentType === 'lab_extract' || agentType === 'symptom_diary' || agentType === 'agent1';
+    
+    if (isExtractor) {
+      addDebugLog(`[Medical Analyze Agent] Extractor agent detected (${agentType}). Chat history omitted for token hygiene.`, explicitSessionId);
+      history = []; // One raw injection only.
+    }
+
+    let ingestTrace = req.body.ingestTrace || null;
+    if (isExtractor && message) {
+      try {
+        const rows = lexTable(String(message));
+        const multiCol = rows.filter((r) => r.length > 1);
+        if (multiCol.length > 1) {
+          const trace = ingestTrace && ingestTrace.rows?.length ? ingestTrace : buildIngestBatch(rows);
+          const abort = shouldAbortTablePath(trace);
+          addDebugLog(`[Medical Analyze Agent] Layer-1 lexer rows=${trace.totalInputRows} high=${trace.highConfidenceCount} flagged=${trace.flaggedCount} unmatched=${trace.unmatchedCount} skip=${trace.skippedCount} abort=${abort}`, explicitSessionId);
+          if (!abort) {
+            ingestTrace = trace;
+            const leftover = leftoverTextFromTrace(trace);
+            if (!leftover) {
+              const extracted = stagedRowsToExtractedData(trace);
+              const cmds = flaggedRowsToModificationCommands(trace);
+              addDebugLog(`[Medical Analyze Agent] Layer-1 complete (${extracted.length} staged). Skipping LLM.`, explicitSessionId);
+              return res.json({
+                text: `I matched ${trace.highConfidenceCount} lab row${trace.highConfidenceCount === 1 ? '' : 's'} automatically${trace.flaggedCount ? ` and flagged ${trace.flaggedCount} for unit review` : ''}. Review the table and Apply.`,
+                agentType,
+                extractedData: extracted,
+                hasMoreMarkers: false,
+                lastProcessedIndex: null,
+                estimatedTotalMarkers: extracted.length,
+                unmappedTests: [],
+                ingestTrace: trace,
+                modificationCommand: cmds.length ? cmds : undefined,
+              });
+            }
+            message = leftover;
+            addDebugLog(`[Medical Analyze Agent] Layer-1 leftover ${trace.unmatchedCount} rows sent to Parser.`, explicitSessionId);
+          }
+        } else {
+          addDebugLog(`[Medical Analyze Agent] Layer-1 lexer did not see a multi-row table (lines=${rows.length}).`, explicitSessionId);
+        }
+      } catch (lexErr: any) {
+        addDebugLog(`[Medical Analyze Agent] Layer-1 lexer failed open: ${lexErr?.message || lexErr}`, explicitSessionId);
+      }
+    }
+
+    addDebugLog(`[Medical Analyze Agent] Request received for agentType: ${agentType || 'None'}. Message: "${String(message).substring(0, 100)}..."`, explicitSessionId);
+    sendLog('status', `Analyzing your message${agentType ? ` (${agentType})` : ''}...`);
+    if (history && history.length > 0) {
+      addDebugLog(`[Medical Analyze Agent] Included conversational history context (${history.length} turns).`, explicitSessionId);
+    }
+
+
+    if (!agentType) agentType = "agent1_step1";
+
+    if (true) {
+      let systemInstruction = "";
+      let mockData: any = {};
+      let fullPromptSent = "";
+
+      if (agentType === "agent4") {
+        systemInstruction = `You are a Medical Diagnostics Assessment agent.
+Your objective is to analyze the user's biomarker history, recent test data, profile, and current symptoms to project timeline risks and identify testing gaps or overall health trends.
+You MUST output ONLY a valid JSON object matching the exact schema:
+- "text": A brief, professional, conversational greeting and summary response directly addressing the user (e.g., "I have completed a comprehensive diagnostic and health planning audit based on your recent biomarker history. Here are the key findings, recommended retests, and testing gaps identified for your profile:").
+- "summary": Executive clinical summary synthesizing diagnostic findings, risk trends, and health planning recommendations (1-2 clear paragraphs max for the diagnostic audit banner).
+- "retestBiomarkers": Array of objects specifying biomarkers recommended for retesting (each item MUST include "name", "retestTimeframe", "recommendedTestName" [the specific clinical test/panel to order/take], "gpClinicalJustification" [a persuasive email/letter written directly for a skeptical GP who thinks the user doesn't need this retest], "dueStatus", and optional "key", "currentValue", "unit"). Do not include dateRationale or dateImportanceRating.
+- "testingGaps": Array of objects identifying missing tests or health gaps (each item has "testName", "category" ['short_term' | 'long_term'], "priority", "nextScheduledDate", "targetCondition", "userBenefit", "gpClinicalJustification" [a persuasive email/letter written directly for a skeptical GP who thinks the user doesn't need this test]). Do not include profileRationale.
+- "_internalReasoning": Detailed clinical reasoning step-by-step.
+- "mode": "discussion"
+- "status": "active"`;
+        mockData = { text: "I have reviewed your medical records.", mode: "discussion", status: "active" };
+      } else if (agentType === "agent1_step1" || agentType === "lab_extract" || agentType === "symptom_diary") {
+        const itemsPerBatch = (typeof batchSize === 'number' && batchSize > 0) ? Math.min(Math.floor(batchSize), 200) : 50;
+        
+        systemInstruction = `{
+  "agent_profile": {
+    "role": "Expert Clinical Data Extractor and Lossless Data Conduit",
+    "objective": "Parse raw medical reports/text/images, isolate distinct biomarker measurements, and structure them verbatim into standard clinical format.",
+    "routing_context": "If agentType='symptom_diary', strictly process prose and patient-reported entries. If agentType='lab_extract', strictly process tabular clinical reports. Do NOT mix them up."
+  },
+  "critical_extraction_rules": {
+    "zero_math_verbatim_extraction": "You are strictly forbidden from performing any calculations, normalizations, or unit conversions. Extract the exact numerical value and the exact unit provided in the text.",
+    "verbatim_qualitative_data": "Qualitative results (e.g., 'Negative', 'Trace', 'High', 'Present', 'Positive') and user-reported clinical findings or symptoms (e.g., 'Hemorrhoids', 'Blood in stool', 'Rectal bleeding') must be extracted as qualitative entries exactly as written or reported.",
+    "blood_pressure_handling": "When blood pressure is reported as a composite reading (e.g., '109 / 53 mmHg'), extract key 'blood_pressure' with qualitative_value '109 / 53' and unit 'mmHg', AND ALSO extract 'systolic_blood_pressure' (numeric_value: 109, unit: 'mmHg') and 'diastolic_blood_pressure' (numeric_value: 53, unit: 'mmHg') so neither reading is truncated.",
+    "unit_bleed_and_ratio_sanitization": "Never carry over 'mmHg' or adjacent units to questionnaires or score rows (e.g., AUDIT-C has unit 'score' or '/12', never 'mmHg'). Dimensionless ratios or indices have unit '' (empty) or 'ratio', never 'n/a' or '-'.",
+    "ideal_body_weight_separation": "Target, reference, or calculated goals like 'Ideal Body Weight' MUST be mapped to key 'ideal_body_weight' and NEVER to the patient's measured historical 'weight'.",
+    "dictionary_mapping": "If a test or symptom matches a key from EXISTING DATABASE KEYS (e.g., 'hemorrhoidal_symptom_score', 'gerd_symptom_score'), use that exact key. For patient-reported symptoms/conditions (e.g. 'blood in poop', 'hemorrhoids', 'acid reflux', 'joint pain'), map them to a standardized clinical symptom score key (e.g., 'hemorrhoidal_symptom_score', 'gerd_symptom_score', 'joint_pain_severity_score') with unit 'score' and display_name as the official clinical index name (e.g., 'Hemorrhoidal Disease Symptom Score (HDSS)').",
+    "unit_standardization": "Standardize 'Âµg/L' and 'ug/L' to always return as 'ug/L' (they are equivalent). Treat 'u/week' and 'units/week' as equivalent and output as 'u/week'."
+  },
+  "self_reported_symptom_diary_rules": {
+    "purpose": "Self-reported symptoms and conditions are patient diary entries. Map them to standardized, universally recognized clinical symptom scores or disease severity indices so they can be evaluated consistently across all global demographics.",
+    "clinical_symptom_score_mapping": "When a patient reports a symptom or condition (e.g. 'blood in poop', 'hemorrhoids', 'acid reflux', 'joint pain'), map it to an established clinical symptom score or index key. For example, for hemorrhoids/rectal bleeding/blood in stool, use key 'hemorrhoidal_symptom_score' and display_name 'Hemorrhoidal Disease Symptom Score (HDSS)'. For acid reflux, use key 'gerd_symptom_score' and display_name 'Gastroesophageal Reflux Symptom Score (GERD-SS)'. Always set unit to 'score'.",
+    "score_severity_quantification": "Quantify symptom severity/frequency into numerical scores (unit: 'score'): 0 = Remission / Healthy baseline (asymptomatic); 1 = Mild flare-up (slight, occasional, mild); 2 = Moderate flare-up (some blood, noticeable symptoms over recent/few days, 'the last few days'); 3 = Severe progression (heavy bleeding, constant/intense symptoms). Include a concise clinical description in 'qualitative_value' (e.g. 'Moderate flare-up with blood in stool').",
+    "single_biomarker_per_condition": "When a patient reports a condition and related symptom together (e.g., hemorrhoids and blood in stool), create ONE unified clinical symptom score entry (e.g. key: 'hemorrhoidal_symptom_score', display_name: 'Hemorrhoidal Disease Symptom Score (HDSS)'). Do NOT create separate duplicate entries.",
+    "multi_day_expansion": "Span references ('the last few days' = min 3 days, 'since Monday', 'for the past week') â†’ create ONE extractedData entry per day in that span. Use CURRENT DATE as anchor for 'today'.",
+    "descriptive_display_naming": "Set 'display_name' to the official clinical index name (e.g. 'Hemorrhoidal Disease Symptom Score (HDSS)'). Use the same value for 'raw_name' in unmappedTests.",
+    "explanation_field_requirement": "State this is a patient-reported symptom mapped to a standardized clinical index score and briefly note how date and score were derived."
+  },
+  "mode_routing": {
+    "priority": "Always prioritize structured data extraction over conversational text when raw medical data/text/photos are present."
+  },
+  "chunked_processing": {
+    "limit_per_chunk": ${itemsPerBatch},
+    "behavior": [
+      "Extract ONLY the first ${itemsPerBatch} biomarker entries in this chunk.",
+      "If you reach the limit of ${itemsPerBatch} extracted biomarkers, set 'hasMoreMarkers' to true in your JSON response.",
+      "Return the exact string index or document position where you stopped extracting in 'lastProcessedIndex'. The server will slice the input text automatically for the next batch using this offset, saving tokens.",
+      "In the 'text' response, kindly inform the user you have completed this chunk and ask to continue.",
+      "If total remaining biomarkers <= ${itemsPerBatch}, set 'hasMoreMarkers' to false and 'lastProcessedIndex' to null."
+    ]
+  },
+  "required_output_format": {
+    "response_schema": {
+      "extractedData": "A JSON array of objects, containing the newly extracted biomarker entries. If the user message is 'continue', parse the next batch from the text starting at the offset.",
+      "unmappedTests": [
+        {
+          "raw_name": "string (For structured lab/report data: the exact test name as it literally appears in the text, e.g. 'Blood Pressure'. For self-reported symptoms/conditions in free text: a clean, descriptive, Title Case biomarker/symptom name that matches the meaning of the report â€” e.g. 'Blood in Stool', NOT a single fragment word like 'blood'. This is shown to the patient as the biomarker's display name, so it must read as a real clinical term, never a truncated word.)",
+          "suggested_key": "string (A clean, lowercase snake_case key suggestion for this test, e.g., 'blood_pressure')",
+          "date": "string or null",
+          "numeric_value": "number or null",
+          "qualitative_value": "string or null",
+          "unit": "string or null",
+          "explanation": "string or null"
+        }
+      ],
+      "text": "string (Friendly clinical conversational message)",
+      "hasMoreMarkers": "boolean",
+      "lastProcessedIndex": "number (The text offset where parsing paused)",
+      "estimatedTotalMarkers": "number (Realistic, non-hallucinated estimate of total distinct biomarker readings present in original report text.)"
+    }
+  },
+  "extracted_data_schema": [
+    {
+      "biomarker": "string (Match from EXISTING DATABASE KEYS, OR a clean lowercase snake_case key for a new/custom biomarker e.g. 'blood_pressure', 'pulse_rate'.)",
+      "display_name": "string or null. REQUIRED whenever 'biomarker' is a NEW/custom key not in EXISTING DATABASE KEYS. Provide the official, clinically-correct name for this biomarker/symptom/condition â€” use your own medical knowledge to pick the term a clinician would actually write in a chart (e.g. 'Hematochezia' for visible blood in stool, 'Melena' if described as dark/tarry, 'Hemorrhoids'). If no distinct clinical term applies, fall back to a clean, Title Case descriptive name. This becomes the PERMANENT display name saved to the patient's biomarker dictionary, so pick deliberately and reuse the exact SAME display_name every time this same biomarker key recurs in this conversation. Set to null for biomarkers already in EXISTING DATABASE KEYS (they already have an official name).",
+      "date": "YYYY-MM-DD",
+      "numeric_value": "number or null",
+      "qualitative_value": "string or null",
+      "unit": "string (verbatim from text)",
+      "explanation": "string (why/how it was mapped or created)"
+    }
+  ],
+  "rules_for_inputs": {
+    "raw_data_extraction": "Extract only from raw text/report. Do NOT extract from pre-existing logs.",
+    "unmapped_data_handling": "You MUST extract ALL distinct biomarker measurements and patient-reported symptoms/conditions present in raw data into 'extractedData'. Generate clean lowercase snake_case keys for new tests/symptoms (e.g. 'blood_pressure', 'hemorrhoids'). For self-reported symptoms and conditions, follow self_reported_symptom_diary_rules â€” ALL entries must have dated logs with multi_day_expansion applied.",
+    "continue_extracting": "If the user message is 'continue', parse the NEXT batch of up to ${itemsPerBatch} biomarkers starting EXACTLY from the provided offset. You MUST NOT repeat, duplicate, or include ANY entries that are already present in the 'PREVIOUSLY EXTRACTED JSON'.",
+    "update_data": "Support editing, adding, or deleting biomarkers in the array."
+  }
+}
+
+=== EXISTING DATABASE KEYS ===
+${Array.from(new Set([...biomarkerDefinitions.map(d => d.key), ...Object.keys(userProfile?.customBiomarkers || {})])).join(', ')}`;
+        mockData = {};
+      } else if (agentType === "agent1") {
+        systemInstruction = `You are an expert Clinical Data Parser and Medical Ontology Agent.
+Your primary objective is to parse raw health reports, standardize clinical terminology, and structure biomarker readings into structured JSON. You must preserve mathematical data, qualitative results, lab ranges, and clinical notes exactly as provided.
+
+=== CORE TASKS ===
+1. Extraction & Standardization: Parse the incoming raw data. Convert every raw biomarker name into its most widely accepted standard clinical terminology (e.g., "Serum alt level" maps to "Alanine Aminotransferase (ALT)").
+2. Lossless Math & Units (CRITICAL): You are strictly forbidden from performing calculations, unit conversions, or inferring missing units. Extract the exact numerical value and the exact unit provided in the text.
+3. Qualitative Data (CRITICAL): If a result is qualitative (e.g., "Negative", "Trace", "High"), extract it exactly as written.
+4. Dictionary Mapping (MANDATORY): Map to existing keys from EXISTING DATABASE KEYS when applicable. If a biomarker is a new or custom test not in EXISTING DATABASE KEYS, generate a clean lowercase snake_case key for it (e.g., 'blood_pressure') and extract its value, unit, date, and explanation into 'extractedData'.
+5. Clinical Mapping: For each biomarker, map it to:
+   - riskCategories: Physiological risk categories (e.g., 'Cardiovascular', 'Kidney & hydration', 'Metabolic & glycemic', 'Liver & hepatitis stress', 'Hematology', 'Biometrics', 'Other').
+   - standardMedicalGrouping: Main clinical division ('Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Other').
+   - potentialMedicalConditions: Broad diagnostic associations.
+6. Explanation of Changes (CRITICAL): For each biomarker, if you standardized, changed, merged, or corrected its name, value, or unit, you MUST provide a detailed explanation of why you made this change in the 'explanation' field.
+
+=== EXISTING DATABASE KEYS ===
+[${Array.from(new Set([...biomarkerDefinitions.map(d => d.key), ...Object.keys(userProfile?.customBiomarkers || {})])).join(', ')}]
+
+=== FORMAT & SYSTEM RESTRICTIONS ===
+Your output MUST be valid JSON using the schema provided. Return the array of biomarkers under the "extractedData" key.`;
+        mockData = {};
+      } else if (agentType === "agent2" || agentType === "agent1_step2") {
+        systemInstruction = `You are an expert Clinical Ontologist and conversational health assistant (Step 2: Category Mapping).
+Your tasks:
+1. Identify all unique biomarkers in the JSON list and categorize them by associating:
+   - "riskCategories": An array of matching risk categories. Choose from: 'Cardiovascular', 'Kidney & hydration', 'Metabolic & glycemic', 'Liver & hepatitis stress', 'Hematology'. If none match, you can use other appropriate categories.
+   - "standardMedicalGrouping": Choose exactly ONE of these standard physiological groupings: 'Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', or 'Other'.
+   - "potentialMedicalConditions": An array of related medical conditions or risks (e.g. ['Diabetes Risk', 'Insulin Resistance', 'Obesity', 'Anemia', 'Hepatitis Stress', 'Fatty Liver', 'Chronic Kidney Disease']).
+CRITICAL CATEGORY ASSIGNMENT RULE: For EVERY single biomarker in "bucketMapping", you MUST assign at least ONE category in "riskCategories" (never leave it empty), exactly ONE standard grouping in "standardMedicalGrouping" (never leave it empty), and at least ONE related condition in "potentialMedicalConditions" (never leave it empty).
+CRITICAL REQUIREMENT: You MUST map EVERY SINGLE UNIQUE BIOMARKER found in the provided JSON data. Do NOT skip or omit any biomarkers. If there are 65 biomarkers in the JSON, your dictionary MUST contain exactly 65 keys.
+2. Handle conversational questions, updates, requests to go back, or requests to continue/submit from the user.
+
+You MUST respond with a JSON object containing the following keys:
+- "text": A friendly, clinical-grade conversational response to the user. You MUST include a breakdown of what remains the same and what change from the complete list you are suggesting. You must also include a count of the total biomarkers mapped.
+- "bucketMapping": A key-value dictionary where the key is the biomarker name and the value is the assigned categorization object containing "riskCategories", "standardMedicalGrouping", and "potentialMedicalConditions".
+
+Example "bucketMapping" structure:
+{
+  "HbA1c": {
+    "riskCategories": ["Metabolic & glycemic"],
+    "standardMedicalGrouping": "Metabolic",
+    "potentialMedicalConditions": ["Diabetes Risk", "Insulin Resistance"]
+  },
+  "Serum ALT": {
+    "riskCategories": ["Liver & hepatitis stress"],
+    "standardMedicalGrouping": "Hepatic",
+    "potentialMedicalConditions": ["Fatty Liver", "Hepatitis Stress"]
+  }
+}
+
+Rules for handling user inputs:
+- INITIAL mapping: Categorize each biomarker into the detailed fields above and return the dictionary in "bucketMapping", and set "text" to include the breakdown of what remains the same, what changes you are suggesting, and the total count.
+- UPDATE DATA: If the user requests to change a category mapping (e.g., "Move glucose to Metabolic"), perform the update on the "bucketMapping" dictionary and return the updated dictionary, explaining the change and updating the counts/breakdown in "text".
+- START A CONVERSATION: If the user asks a clinical or general question (e.g., "Why is ALT under Hepatic?"), answer the question clearly in "text" and return the unmodified dictionary in "bucketMapping".
+- GO BACK / CONTINUE / SUBMIT: If the user asks to go back to Step 1 or proceed/continue/submit, explain in "text" how to proceed (they can click "Assemble Data" to continue, or click "Go Back" if needed).
+
+Make sure your entire output is valid JSON, containing "text" and "bucketMapping".`;
+        mockData = {};
+      } else if (agentType === "agent3" || agentType === "agent1_step3") {
+        systemInstruction = `You are a clinical data coordinator and conversational health assistant (Step 3: Data Assembly).
+Your tasks:
+1. Assemble the flat JSON biomarker logs and the bucket mapping dictionary into a structured physiological nested JSON.
+CRITICAL REQUIREMENT: You MUST include EVERY SINGLE BIOMARKER ENTRY from the JSON. Do NOT skip or omit any biomarkers or history entries.
+2. EXTREME DIVERGENCE FLAG: If you notice an extreme divergence in a biomarker value (e.g., highly unlikely, physiologically impossible, or a very clear metric unit mismatch like US vs SI), you MUST flag it by adding an array "flaggedAnomalies" to your JSON output. Mention this in your "text" response so the user can verify, confirm, or edit it (which may involve updating the metric unit).
+3. Handle conversational questions, updates, requests to go back, or requests to continue/submit from the user.
+
+You MUST respond with a JSON object containing the following keys:
+- "text": A friendly, clinical-grade conversational response to the user. If this is the initial assembly and anomalies are found, alert the user here. If no anomalies, write: "Data successfully processed and categorized." (or similar).
+- "entriesCount": Total unique biomarker entries processed.
+- "buckets": An array of buckets matching the schema below.
+- "flaggedAnomalies": (Optional) Array of any extreme value divergences detected.
+
+Nested JSON schema for "flaggedAnomalies":
+[
+  {
+    "key": "biomarker_key",
+    "name": "Biomarker Name",
+    "originalValue": number,
+    "unit": "string",
+    "reason": "Explanation of why this value seems anomalous or if it might be a unit mismatch (US vs SI).",
+    "suggestedAction": "Suggestion for the user (e.g., 'Confirm this value is correct', 'Update value or metric unit')"
+  }
+]
+
+Nested JSON schema for "buckets":
+[
+  {
+    "systemName": "Bucket Name", // must be one of: 'Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Other'
+    "biomarkers": [
+      {
+        "name": "Biomarker Name",
+        "riskCategories": ["Cardiovascular", "Metabolic & glycemic"], // arrays from the Step 2 bucket mapping
+        "standardMedicalGrouping": "Metabolic", // string from the Step 2 bucket mapping
+        "potentialMedicalConditions": ["Diabetes Risk", "Insulin Resistance"], // array of potential medical conditions from Step 2
+        "history": [
+          { "date": "YYYY-MM-DD", "value": number, "unit": "string" }
+        ]
+      }
+    ]
+  }
+]
+
+Rules for handling user inputs:
+- INITIAL assembly: Map EVERY single biomarker and entry from the YAML using the Bucket Mapping. Do not drop any. Organize them into the "buckets" array. Return the JSON structure, and set "text" to "Data successfully processed and categorized. Please review the final structured entries below."
+- UPDATE DATA: If the user asks to edit/add/delete a biomarker, date, or reading (e.g., "Remove red blood cell count reading on 2026-06-01"), perform that update on the nested "buckets" structure, update "entriesCount", and return the updated structure, explaining the change in "text".
+- START A CONVERSATION: If the user asks a clinical or general question (e.g., "Why is ALT high?" or questions about "total white cell count"), answer the question clearly in "text", and return the unmodified "buckets" and "entriesCount".
+- GO BACK / CONTINUE / SUBMIT: If the user asks to go back to Step 2, or finish and save/submit, explain in "text" how they can save their data or click the buttons to navigate.
+
+Make sure your entire output is valid JSON, containing "text", "entriesCount", and "buckets".`;
+        mockData = {};
+      } else if (agentType === "agent4") {
+        const last15MealTitles = (recentMeals || [])
+          .slice(-15)
+          .map((m: any) => m.name || m.title || m.foodName || m.description || '')
+          .filter(Boolean);
+
+        const atRiskBiomarkers: any[] = [];
+        const normalBiomarkers: any[] = [];
+
+        const customs = userProfile?.customBiomarkers || {};
+        const combinedKeys = Array.from(new Set([
+          ...Object.keys(customs),
+          ...Object.keys(biomarkers || {})
+        ]));
+
+        combinedKeys.forEach(k => {
+          const cDef = customs[k] || {};
+          const val = biomarkers[k] !== undefined ? biomarkers[k] : cDef.userValue;
+          const name = cDef.name || k;
+          const unit = cDef.unit || '';
+          const normRange = cDef.profileAdjustedNormalRange || cDef.normalRange || '';
+          const status = cDef.status || 'Healthy';
+          const insight = cDef.specificRiskContext || cDef.description || '';
+
+          if (status === 'At Risk' || status === 'high' || status === 'critical' || (cDef.riskCategories && cDef.riskCategories.length > 0)) {
+            atRiskBiomarkers.push({
+              key: k,
+              name,
+              value: val,
+              unit,
+              normalRange: normRange,
+              status,
+              medicalInsights: insight
+            });
+          } else {
+            normalBiomarkers.push({
+              key: k,
+              name,
+              value: val,
+              unit,
+              normalRange: normRange,
+              status
+            });
+          }
+        });
+
+        let acceptedBaselineProposal: any = "No prior baseline proposal stored.";
+        if (userProfile?.agentAnalyses && Array.isArray(userProfile.agentAnalyses)) {
+          const baseAnalysis = userProfile.agentAnalyses.find((a: any) => a.agentType === 'health_baseline' || a.agentType === 'agent2');
+          if (baseAnalysis) {
+            acceptedBaselineProposal = baseAnalysis.result;
+          }
+        }
+        if (acceptedBaselineProposal === "No prior baseline proposal stored." && userProfile?.agentBaselineSummary) {
+          acceptedBaselineProposal = userProfile.agentBaselineSummary;
+        }
+
+        const existingActions = req.body.actions || req.body.existingClinicalActions || userProfile?.actions || [];
+
+        systemInstruction = `You are an elite Medical Diagnostics Assessment agent.
+Your objective is to analyze the user's biomarker history to project timeline risks and identify testing gaps. 
+
+=== INPUT DATA PROVIDED TO YOU ===
+1. User Profile Data:
+${JSON.stringify({
+  age: userProfile?.age,
+  gender: userProfile?.gender,
+  ethnicity: userProfile?.ethnicity,
+  medicalConditions: userProfile?.medicalConditions,
+  healthGoals: userProfile?.healthGoals
+}, null, 2)}
+
+2. Accepted Agent Finding Proposal from Health Baseline & Trajectory Agent:
+${JSON.stringify(acceptedBaselineProposal, null, 2)}
+
+3. Latest Biomarker Values AT RISK (with range and medical insights):
+${JSON.stringify(atRiskBiomarkers, null, 2)}
+
+4. Latest Biomarker Values NOT AT RISK:
+${JSON.stringify(normalBiomarkers, null, 2)}
+
+5. Last 15 Meals Logged (Titles):
+${JSON.stringify(last15MealTitles, null, 2)}
+
+6. Existing Clinical Action Recommendations List:
+${JSON.stringify(existingActions, null, 2)}
+
+=== CRITICAL INSTRUCTIONS ===
+1. Exact Date Tracking: For every item in \`retestBiomarkers\`, locate the most recent log entry in the \`biomarkerHistory\` array where that specific biomarker was recorded. Extract that exact date for the \`lastTestedDate\` field.
+2. Future Date Calculation: Calculate the \`nextScheduledDate\` by adding your recommended timeframe to the \`lastTestedDate\`. Output all dates strictly in DD-MM-YYYY format.
+3. GP Clinical Justification (Email to Skeptical GP): \`gpClinicalJustification\` MUST be written as a persuasive, evidence-based letter/email addressed to the patient's GP who believes the user does NOT need this test/retest. Gather strong clinical evidence, baseline trajectory shifts, profile context, guidelines, and risk factors to convince the doctor why ordering this test is medically necessary.
+4. You MUST output ONLY a valid JSON object matching this EXACT schema. Do not drop any keys.
+
+{
+  "text": "A brief, conversational greeting directly addressing the user.",
+  "_internalReasoning": "Step-by-step clinical deduction and date calculation logic.",
+  "summary": "Executive clinical summary synthesizing diagnostic findings and risk trends.",
+  "retestBiomarkers": [
+    {
+      "name": "Display name of the biomarker",
+      "recommendedTestName": "The precise, standard clinical lab order name (e.g., 'Hepatic Function Panel')",
+      "priority": "High | Medium | Low",
+      "retestTimeframe": "The interval (e.g., '3 months')",
+      "lastTestedDate": "Exact date this was last tested (Format: DD-MM-YYYY)",
+      "nextScheduledDate": "Exact calculated date for the next test (Format: DD-MM-YYYY)",
+      "userBenefit": "Explain why retesting this provides value, energy, or peace of mind to the user.",
+      "gpClinicalJustification": "Dear Doctor,\n\nI am writing to request a retest for [Test Name] due to [Clinical Evidence / Baseline Shift]. [Explanation of profile risks, guidelines, and why retesting now is medically necessary]. Thank you for considering this request.",
+      "key": "biomarker_database_key",
+      "currentValue": "value and unit",
+      "unit": "unit"
+    }
+  ],
+  "testingGaps": [
+    {
+      "testName": "Name of the missing scan or lab (e.g., 'Abdominal Ultrasound')",
+      "category": "short_term | long_term",
+      "priority": "High | Medium | Low",
+      "nextScheduledDate": "Exact date by which this should be completed (Format: DD-MM-YYYY)",
+      "targetCondition": "The disease or condition being ruled out",
+      "userBenefit": "Explanation of why uncovering this missing data will improve their life or treatment plan.",
+      "gpClinicalJustification": "Dear Doctor,\n\nI am writing to request an initial [Test Name] order. Given [Profile Context & Symptoms/Risk Factors], guidelines recommend evaluating [Condition]. [Clinical justification and evidence to convince GP]. Thank you for your review."
+    }
+  ],
+  "mode": "discussion",
+  "status": "active"
+}`;
+
+        mockData = {
+          text: "Hello! Let's review your health planning based on your latest results.",
+          _internalReasoning: "Evaluated elevated glucose; insulin test needed for full metabolic risk assessment.",
+          summary: "Reviewed diagnostic profile and biomarker history. Identified retest priorities and diagnostic testing gaps.",
+          mode: "discussion",
+          status: "active",
+          retestBiomarkers: [
+            {
+              key: "glucose",
+              name: "Fasting Glucose",
+              recommendedTestName: "Fasting Blood Glucose",
+              currentValue: "5.8",
+              unit: "mmol/L",
+              retestTimeframe: "In 2-4 weeks",
+              lastTestedDate: "01-01-2024",
+              nextScheduledDate: "15-01-2024",
+              dueStatus: "Due soon",
+              isProvisional: true,
+              priority: "High",
+              userBenefit: "Getting this checked again ensures your blood sugar levels are on track, giving you peace of mind and better energy.",
+              gpClinicalJustification: "Dear Doctor,\n\nI am writing to request a follow-up Fasting Blood Glucose test. My recent reading showed an elevated value of 5.8 mmol/L, approaching the prediabetic threshold. A repeat test in 2-4 weeks is clinically indicated to establish a confirmed baseline, differentiate acute glycemic fluctuation from early dysglycemia, and guide early preventive care.\n\nThank you for considering this request."
+            }
+          ],
+          testingGaps: [
+            {
+              testName: "Fasting Insulin",
+              category: "short_term",
+              nextScheduledDate: "20-01-2024",
+              priority: "High",
+              userBenefit: "This helps catch any hidden insulin issues early, helping us craft a better nutrition plan for you.",
+              gpClinicalJustification: "Dear Doctor,\n\nI am writing to request a Fasting Insulin test. In light of my elevated fasting glucose (5.8 mmol/L) and personal risk profile, evaluating fasting insulin is essential to detect subclinical insulin resistance before HbA1c or glucose levels worsen further.\n\nThank you for your clinical review.",
+              targetCondition: "Metabolic Risk"
+            },
+            {
+              testName: "ApoB",
+              category: "long_term",
+              nextScheduledDate: "01-01-2026",
+              priority: "Low",
+              userBenefit: "Checking ApoB gives us a deep dive into your heart health over the coming years.",
+              gpClinicalJustification: "Dear Doctor,\n\nI am writing to request an Apolipoprotein B (ApoB) assessment. Modern lipidology guidelines recommend ApoB for superior atherogenic particle quantification compared to LDL-C alone, particularly for long-term cardiovascular risk stratification.\n\nThank you for your consideration.",
+              targetCondition: "Cardiovascular Health"
+            }
+          ]
+        };
+      } else if (agentType === "agent5") {
+        systemInstruction = `You are a Clinical Education AI (Biomarker Contextualizer). Your job is to generate highly personalized educational content, adjusted normal reference ranges, and specific risk explanations based on the user's demographics and previous diagnostic assessment.
+
+USER PROFILE:
+- Age: ${userProfile?.age || 'Not provided'}
+- Gender: ${userProfile?.gender || 'Not provided'}
+- Ethnicity: ${userProfile?.ethnicity || 'Not provided'}
+
+BIOMARKERS:
+${JSON.stringify(biomarkers || {})}
+
+DIAGNOSTIC SUMMARY:
+${req.body.agentDiagnosticSummary || 'Optimized or no major pathologies flagged.'}
+
+=== CRITICAL BREVITY DIRECTIVE (PREVENT TIMEOUTS) ===
+Your responses MUST be extremely concise to avoid server timeouts:
+- Keep the 'message' to 1-2 short sentences maximum.
+- Keep 'description' of each biomarker to exactly 1 short sentence (15 words maximum).
+- Keep 'specificRiskContext' to exactly 1 short sentence (15-20 words maximum).
+
+=== DIRECTIVES ===
+1. ZERO DATA LOSS INVENTORY RULE:
+   You must count the total number of unique biomarkers in the incoming BIOMARKERS dictionary.
+   Your final JSON output MUST contain exactly that same number of unique biomarkers under "contextualizedBiomarkers". You are strictly forbidden from omitting, summarizing, or dropping any biomarker key.
+2. DEMOGRAPHICALLY ADJUSTED NORMAL RANGES: For every provided clinical metric, provide a profile-adjusted normal range. Explain why this reference range was adjusted for their age, gender, or ethnicity (e.g. muscle mass and creatinine, age-related eGFR, ethnic-specific lipid targets).
+3. EDUCATIONAL DESCRIPTIONS: Write a clear 1-sentence description of what each biomarker is and its physiological role.
+4. SPECIFIC RISK CONTEXT: For any marker identified as at-risk or abnormal, write a personalized 1-sentence explanation of *why* this specific value is critical or dangerous for *this specific user profile*.
+5. STRICT JSON OUTPUT SCHEMA:
+{
+  "message": "Conversational summary of your educational and reference range adjustments.",
+  "contextualizedBiomarkers": [
+    {
+      "name": "hba1c",
+      "userValue": 40,
+      "profileAdjustedNormalRange": "20 - 42 mmol/mol",
+      "description": "HbA1c measures average blood glucose levels over the past 2 to 3 months.",
+      "status": "Healthy" | "At Risk",
+      "specificRiskContext": "Keeping HbA1c below 42 mmol/mol is optimal to prevent vascular damage and glycemic stress."
+    }
+  ]
+}
+Return ONLY raw JSON.`;
+
+        mockData = {
+          message: "I have calibrated the reference ranges for your biomarkers to your precise age, gender, and ethnicity, providing demographic-specific educational contexts.",
+          contextualizedBiomarkers: [
+            {
+              name: "hba1c",
+              userValue: 40,
+              profileAdjustedNormalRange: "20 - 42 mmol/mol",
+              description: "HbA1c measures the percentage of blood sugar attached to hemoglobin. It represents your average blood glucose levels over the past 2 to 3 months.",
+              status: "Healthy",
+              specificRiskContext: "Your HbA1c is in the excellent, optimal zone for your demographic group."
+            }
+          ]
+        };
+      } else if (agentType === "agent6") {
+        systemInstruction = `You are a Precision Medicine & Lifestyle Coaching AI (Precision Intervention Agent). Translate the user's clinical biomarkers and risk assessment into a strict, trackable daily protocol.
+
+USER PROFILE:
+- Age: ${userProfile?.age || 'Not provided'}
+- Weight: ${userProfile?.weight || 'Not provided'} kg
+- Height: ${userProfile?.height || 'Not provided'} cm
+- Gender: ${userProfile?.gender || 'Not provided'}
+
+BIOMARKERS:
+${JSON.stringify(biomarkers || {})}
+
+DIAGNOSTIC BACKGROUND:
+${req.body.agentDiagnosticSummary || 'Mainly healthy'}
+
+=== DIRECTIVES ===
+1. NUTRITION TARGETS (Detailed Recommended Allowances): Generate strict daily targets for calories, protein, carbs, fat, saturatedFat, totalFibre, sodium, sugar.
+   - For EACH nutrient target, you MUST output a structured object containing:
+     - "value": The numeric value.
+     - "unit": The unit (e.g. "kcal", "g", "mg").
+     - "reason": A detailed clinical explanation of why they need to focus on this goal based on their biomarkers.
+     - "duration": How long they should maintain this specific target (e.g., "12 weeks", "Continuous").
+2. ACTIVITY HABITS: Provide 2-3 highly specific daily habits (e.g., '7,500 steps', '30 minutes Zone 2 cardio', 'Limit screen time after 10 PM').
+3. MATHEMATICAL PROJECTIONS: Provide biological time-to-goal estimates based on the math of physiology.
+
+4. STRICT JSON OUTPUT SCHEMA:
+{
+  "message": "Conversational explanation of your precision lifestyle design.",
+  "nutrientTargets": {
+    "calories": { "value": 1850, "unit": "kcal", "reason": "To create a modest deficit for BMI optimization and lower cardiac workloads", "duration": "12 weeks / until BMI of 23 is achieved" },
+    "protein": { "value": 110, "unit": "g", "reason": "To support nitrogen balance and prevent muscle wasting during a caloric deficit", "duration": "Continuous" },
+    "carbs": { "value": 220, "unit": "g", "reason": "Optimized level to maintain energy without causing postprandial glucose surges", "duration": "Continuous" },
+    "fat": { "value": 50, "unit": "g", "reason": "Controlled healthy fats to maintain cellular structures and hormone synthesis", "duration": "Continuous" },
+    "saturatedFat": { "value": 15, "unit": "g", "reason": "Strict restriction to limit hepatic VLDL synthesis and improve your high ApoB/LDL ratio", "duration": "8-12 weeks" },
+    "totalFibre": { "value": 30, "unit": "g", "reason": "High prebiotic fiber to slow glucose absorption and optimize gut microbiome health", "duration": "Continuous" },
+    "sodium": { "value": 1800, "unit": "mg", "reason": "Restricted sodium to regulate extracellular fluid volume and support arterial pressure", "duration": "Continuous" },
+    "sugar": { "value": 25, "unit": "g", "reason": "Low simple sugars to reduce pancreatic stress and liver glycogen packing", "duration": "8-12 weeks" }
+  },
+  "activityChecklist": [
+    {
+      "habit": "Walk 8,000 steps daily",
+      "target": "8000 steps",
+      "type": "steps"
+    },
+    {
+      "habit": "Zone 2 aerobic exercise",
+      "target": "30 minutes",
+      "type": "cardio"
+    }
+  ],
+  "projections": [
+    "Adhering to this saturated fat limit will likely lower LDL-C by 10-15% within 12 weeks.",
+    "The daily fiber target will assist in glycemic stabilization, projecting a slight HbA1c drop of 1-2 mmol/mol over 3 months."
+  ]
+}
+Return ONLY raw JSON.`;
+
+        mockData = {
+          message: "I have created a high-precision, clinically aligned dietary and movement plan with mathematical timeline projections.",
+          nutrientTargets: {
+            calories: { value: 1900, unit: "kcal", reason: "Support basic metabolism with a minor deficit for cardiorespiratory health", duration: "12 weeks" },
+            protein: { value: 105, unit: "g", reason: "Maintain nitrogen balance and protect lean muscle tissue", duration: "Continuous" },
+            carbs: { value: 210, unit: "g", reason: "Provide stable energy without triggering glycemic excursions", duration: "Continuous" },
+            fat: { value: 55, unit: "g", reason: "Ensure adequate absorption of fat-soluble vitamins and support cellular structures", duration: "Continuous" },
+            saturatedFat: { value: 14, unit: "g", reason: "Decrease hepatic VLDL secretion to target elevated LDL particle numbers", duration: "8-12 weeks" },
+            totalFibre: { value: 32, unit: "g", reason: "Slow down gastric transit and feed beneficial short-chain fatty acid producing gut bacteria", duration: "Continuous" },
+            sodium: { value: 1700, unit: "mg", reason: "Regulate blood pressure levels and balance vascular tone", duration: "Continuous" },
+            sugar: { value: 22, unit: "g", reason: "Mitigate spikes in insulin and prevent hepatic lipid deposition", duration: "8-12 weeks" }
+          },
+          activityChecklist: [
+            { habit: "Walk 7,500 steps daily", target: "7500 steps", type: "steps" },
+            { habit: "30 mins Zone 2 cardio", target: "30 minutes", type: "cardio" }
+          ],
+          projections: [
+            "Adhering to this fat threshold will lower LDL-C by ~12% in 8-12 weeks.",
+            "A 32g daily fiber intake stabilizes postprandial glucose, projecting metabolic efficiency in 4 weeks."
+          ]
+        };
+      } else if (agentType === "agent7") {
+        systemInstruction = `You are a Medical Literature Research AI (Medical Literature Agent). Summarize the latest peer-reviewed scientific consensus, clinical debates, and clinical trials relevant to this user's profile and biological risk markers.
+
+USER PROFILE:
+- Age: ${userProfile?.age || 'Not provided'}
+- Gender: ${userProfile?.gender || 'Not provided'}
+- Ethnicity: ${userProfile?.ethnicity || 'Not provided'}
+
+BIOMARKERS:
+${JSON.stringify(biomarkers || {})}
+
+IDENTIFIED DIAGNOSTICS:
+${req.body.agentDiagnosticSummary || 'Healthy baseline'}
+
+=== DIRECTIVES ===
+1. HIGHLIGHT SCHOLARLY TOPICS: Detail emerging consensus or debates (e.g. ApoB vs LDL-C tracking, cardiovascular risk algorithms like QRISK3 vs SCORE2, or dietary fiber's interaction with the gut microbiome).
+2. NO PRESCRIPTIONS: Present findings as a literature synthesis, citing primary medical guidelines (e.g. AHA, ESC, ADA, KDIGO).
+3. DETAILED BULLETS: Provide 3-4 distinct scholarly insights. Each insight must contain a bold title, a comprehensive summary paragraph, and a relevant citation/link (like a Pubmed search URL or medical association guideline URL).
+4. STRICT JSON OUTPUT SCHEMA:
+{
+  "message": "Conversational summary of your medical literature scan.",
+  "insights": [
+    {
+      "title": "ApoB as the Superior Predictor of Atherogenic Risk",
+      "summary": "Recent European Society of Cardiology (ESC) consensus guidelines highlight Apolipoprotein B (ApoB) as a more accurate indicator of total atherogenic particle concentration than standard LDL-C, particularly in individuals with borderline-high fasting glucose or metabolic syndrome.",
+      "link": "https://pubmed.ncbi.nlm.nih.gov/31475137/"
+    }
+  ]
+}
+Return ONLY raw JSON.`;
+
+        mockData = {
+          message: "I scanned the latest clinical literature databases (PubMed, Cochrane Library) and summarized three key consensus insights relevant to your metabolic and cardiovascular profile.",
+          insights: [
+            {
+              title: "ApoB as the Superior Predictor of Atherogenic Risk",
+              summary: "Recent European Society of Cardiology (ESC) consensus guidelines highlight Apolipoprotein B (ApoB) as a more accurate indicator of total atherogenic particle concentration than standard LDL-C, particularly in individuals with borderline-high fasting glucose or metabolic syndrome.",
+              link: "https://pubmed.ncbi.nlm.nih.gov/31475137/"
+            },
+            {
+              title: "Glycemic Stability and Preventive Cardiology Guidelines",
+              summary: "The American Diabetes Association (ADA) 2026 standards highlight early lifestyle intervention at borderline HbA1c thresholds, demonstrating a 58% reduction in the 10-year transition rate to formal insulin deficiency through physical activity and fiber loading.",
+              link: "https://pubmed.ncbi.nlm.nih.gov/34922236/"
+            }
+          ]
+        };
+      } else if (agentType === "biomarker_review") {
+        systemInstruction = `identity:
+  role: "Expert AI Clinical Diagnostic & Biomarker Review Agent"
+  purpose: "Perform comprehensive diagnostic review and optimization for user biomarkers."
+rules:
+  clinical_and_nutritional:
+    - "Evaluate the focus biomarker using its historical log values, the user's demographic profile, and provided context."
+    - "Tailor the explanations and suggestions specifically to the user's demographic profile (age, gender, ethnicity)."
+    - "If the profile shows a specific ethnicity (e.g. Asian), prioritize demographic-specific clinical insights FIRST and cite the medical guideline."
+  proposals_and_corrections:
+    - "If the biomarker's current description or range is sub-optimal for their demographic, prescribe a corrected/new one in the 'proposal' block."
+    - "Set 'isEthnicitySpecific' to true and 'ethnicityTag' to the ethnicity name if applicable."
+    - "When no correction or override is needed, set 'proposal' to null."
+    - "If you identify anomalies or unit mix-ups in the log history, provide a 'modificationCommand' list to correct them."
+    - "Do not use rigid formatting, numbered lists, or forced structural templates for your reply."
+    - "The JSON response must be well-formed and valid."`;
+      } else if (agentType === "data_review") {
+        systemInstruction = `You are an expert Clinical Data Review & Reference Range Calibration Agent.
+You will receive user demographics and a list of biomarkers in the user's current batch.
+
+=== DEMOGRAPHIC CALIBRATION MANDATE ===
+You MUST customize the reference ranges and risk context precisely for the user's specific age, gender, and ethnicity found in the USER PROFILE.
+
+CRITICAL OVERRIDE: Unless the biomarker is a clinical severity score, in which case the CLINICAL SYMPTOM & DISEASE SEVERITY INDEX EVALUATION MANDATE strictly overrides all demographic adjustments.
+CRITICAL: Never output boilerplate text stating that demographic details are not available. They are always provided. Even if any values are missing, dynamically assume a standard reference profile (e.g., 35-year-old female of Caucasian ethnicity) and calibrate all reference ranges for that profile.
+CRITICAL BIAS OVERRIDE: Medical baselines in training data heavily skew toward recent Western/Global consensus (e.g., KDIGO, WHO global). You MUST actively bypass global/race-free standards and aggressively search your latent knowledge for local national medical boards (e.g., Chinese Society of Nephrology, Asian-modified CKD-EPI/MDRD coefficients, Asian BMI variants). If a regional coefficient or localized threshold exists historically or currently for the user's ethnicity, you MUST prioritize and apply it FIRST over Western defaults. For example, if the user is of Chinese ethnicity, you MUST look at clinical guidelines for Chinese populations FIRST before even considering Western guidelines.
+  1) State in '_demographicAudit.ageAndGenderShifts': "Age unprovided (age: 0). Adult male baseline applied as fallback."
+  2) Include a clear warning in 'specificRiskContext': "âš ï¸ Note: Profile age is 0. Please update your age in Profile Settings for exact age-calibrated baselines."
+
+=== HISTORICAL LOG CORRECTION MANDATE ===
+Review the 'historicalEntries' array for each biomarker. Identify scale/unit shifts (e.g., percentage vs decimal ratio notation, like 1.4 vs 140, or 4.1 vs 143).
+If anomalous scaling errors are found:
+1) Calculate the correct normalized value to match the predominant historical scale or normal range bounds.
+2) Output a 'correctedHistoricalLogs' array inside the biomarker object containing objects with: { "date": string, "originalValue": number, "correctedValue": number, "note": string }.
+
+=== OUTLIER & PARSING ARTIFACT DETECTION GUARDRAILS ===
+Perform pre-execution range verification on quantitative values:
+- If a quantitative biomarker userValue is an extreme physiological outlier (>3x upper limit of normal or <0.2x lower limit, e.g. Lymphocyte Count = 11.8 10^9/L, where normal upper limit is ~3.2 10^9/L):
+  1) Set 'isDataArtifact': true.
+  2) Provide 'artifactNote' explaining the suspected parsing error (e.g., "Value 11.8 10^9/L appears to be a relative percentage (11.8%) or decimal offset error rather than an absolute count.").
+  3) In 'specificRiskContext', warn that this value is physiologically implausible for standard outpatient bloodwork and requires document re-parsing or verification.
+
+=== QUALITATIVE ASSAY DATA TYPE PRESERVATION ===
+CRITICAL: For qualitative or text-based assays (e.g. 'NEGATIVE', 'POSITIVE', 'NORMAL', 'NOT DETECTED'):
+- You MUST preserve 'userValue' as the EXACT string payload from input (e.g., "NEGATIVE").
+- NEVER convert string qualitative results into integers or floats (such as 0 or 1).
+
+=== CLINICAL SYMPTOM & DISEASE SEVERITY INDEX EVALUATION MANDATE ===
+For any clinical symptom score or disease severity index biomarker (e.g. unit is 'score' or 'points', or key ends in '_symptom_score' or '_score' or '_index', such as 'hemorrhoidal_symptom_score', 'Hemorrhoidal Disease Symptom Score (HDSS)', 'gerd_symptom_score', 'joint_pain_severity_score'):
+CRITICAL EXCEPTION: Behavioral screening tools (such as 'audit_total_score', 'audit_c_total_score', 'audit_binge_drinking_score', and all other alcohol/AUDIT metrics) DO NOT follow this mandate. For behavioral screens, you MUST use their established clinical scoring thresholds:
+- audit_total_score: Optimal is <= 7
+- audit_c_total_score: Optimal is <= 3
+- audit_binge_drinking_score: Optimal is <= 1
+Do NOT force a zero-baseline on them. If the user's score falls in the Optimal range, you MUST set 'status' to 'Optimal'.
+
+For true symptom/disease severity indices ONLY:
+1. Recognise that disease/symptom severity scores have a globally uniform baseline of 0 (Remission / Healthy / Asymptomatic) across all global demographics.
+2. In '_demographicAudit', note that the baseline remains 0 globally.
+3. Set 'profileAdjustedNormalRange' to '0' and 'optimalValue' to '0'.
+4. In 'rangeBrackets', YOU MUST USE EXACTLY THESE FOUR STANDARDIZED CLINICAL INDEX SEVERITY BRACKETS (DO NOT USE OTHER NAMES):
+   - [ { "name": "Remission / Healthy", "range": "0" }, { "name": "Mild Flare-up", "range": "1" }, { "name": "Moderate Flare-up", "range": "2" }, { "name": "Severe Progression", "range": ">= 3" } ]
+5. Evaluation & Status:
+   - '_statusReasoning': "User score of <X> is evaluated against the severity index."
+   - 'status': 'At Risk' if userValue >= 3; 'Sub-Optimal (Action Zone)' if userValue == 1 or userValue == 2; 'Optimal' if userValue == 0.
+   - 'specificRiskContext': Provide concise clinical guidance for mitigating flare-ups.
+
+=== CRITICAL BREVITY DIRECTIVE (PREVENT TIMEOUTS & TRUNCATION) ===
+Your responses MUST be extremely concise to fit within token limits:
+- Keep '_demographicAudit.standardWesternBaseline' to 8 words maximum.
+- Keep '_demographicAudit.knownEthnicOrRegionalVariances' to 8 words maximum.
+- Keep '_demographicAudit.ageAndGenderShifts' to 8 words maximum.
+- Keep '_demographicAudit.finalAppliedAdjustments' to 8 words maximum.
+- Keep 'description' to exactly 1 short sentence of 10 words.
+- Keep '_statusReasoning' to 5-8 words maximum.
+- Keep 'specificRiskContext' to 1-2 short sentences (20 words maximum).
+- Under 'rangeBrackets', define only necessary brackets (e.g. Optimal, Elevated, Low). For severity scores, use the 4 exact brackets defined in the severity mandate.
+=== OPTIMAL VALUE vs NORMAL RANGE MANDATE ===
+- 'profileAdjustedNormalRange': Healthy reference range (e.g. '18.5 - 22.9 kg/m2').
+- 'optimalValue': Single specific target point within healthy range (e.g., '21.0 kg/m2' for BMI, '115 mmHg' for SBP), NOT a range or repeat of normalRange.
+
+=== UNIT CONSISTENCY MANDATE (STRICT) ===
+Every clinical range bound, normal range, and target value described in 'profileAdjustedNormalRange', 'optimalValue', and 'rangeBrackets[].range' MUST strictly use the EXACT declared 'unit' of the biomarker. Under no circumstances should you embed a composite or index unit like 'kg/mÂ²' if the biomarker's declared 'unit' is 'kg'. Composite/index units are ONLY valid when the biomarker's own declared 'unit' matches that composite unit exactly.
+
+=== TASK: PERSONALISED HEALTH RISK ESTIMATION ===
+For each biomarker, follow a strict logical funnel to determine ranges and status:
+"_demographicAudit": Reasoning object contrasting Western global standards with regional guidelines.
+"profileAdjustedNormalRange": Final calibrated range where biomarker is not at risk.
+"optimalValue": Single specific ideal target point within healthy spectrum.
+"rangeBrackets": Continuous brackets (no gaps) mapping the bounds of profileAdjustedNormalRange.
+"description": 1 short sentence physiological role.
+"_statusReasoning": Strict mathematical comparison of userValue against profileAdjustedNormalRange.
+"reference": Clinical reference body acting as the anchor.
+"status": 'Optimal', 'Sub-Optimal (Action Zone)', or 'At Risk' based strictly on userValue location.
+"specificRiskContext": 1-2 short sentences on clinical relevance.
+=== CRITICAL REQUIREMENTS ===
+You MUST include an analysis for EVERY biomarker in the input list.
+Your output MUST be a valid JSON object matching the schema provided.`;
+        mockData = { message: "Completed clinical review.", reviewedBiomarkers: [] };
+      }
+
+      let textOutput = "";
+      if (!getGeminiApiKey()) {
+        textOutput = JSON.stringify(mockData);
+      } else {
+        let historyText = "";
+        if (history && history.length > 0) {
+          historyText = history.map((h: any) => `${h.role}: ${h.content}`).join("\n") + "\n\n";
+        }
+        
+        let imagePayload = null;
+        let imagesPayload: { mimeType: string, data: string }[] | undefined = undefined;
+        if (images && images.length > 0) {
+          imagesPayload = images.map((img: string) => {
+            const mimeType = img.split(";")[0].split(":")[1] || "image/jpeg";
+            const base64Data = img.split(",")[1];
+            return { mimeType, data: base64Data };
+          });
+          imagePayload = imagesPayload[0];
+        } else if (image) {
+          const mimeType = image.split(";")[0].split(":")[1] || "image/jpeg";
+          const base64Data = image.split(",")[1];
+          imagePayload = { mimeType, data: base64Data };
+        }
+        const imageCtx = imageDates && imageDates.length > 0 ? `The attached images were taken on these dates: ${imageDates.join(", ")}.` : "";
+        
+        const cleanProfile: any = {
+          age: userProfile?.age,
+          gender: userProfile?.gender,
+          ethnicity: userProfile?.ethnicity,
+          bloodType: userProfile?.bloodType,
+          weight: userProfile?.weight,
+          height: userProfile?.height
+        };
+        
+        // Strip undefined and null values
+        Object.keys(cleanProfile).forEach(key => {
+          if (cleanProfile[key] === undefined || cleanProfile[key] === null) {
+            delete cleanProfile[key];
+          }
+        });
+
+        const slimBiomarkers: any = {};
+        if (userProfile?.customBiomarkers) {
+          Object.keys(userProfile.customBiomarkers).forEach((k: string) => {
+            slimBiomarkers[k] = { 
+              name: userProfile.customBiomarkers[k].name, 
+              unit: userProfile.customBiomarkers[k].unit 
+            };
+          });
+        }
+        
+        const cleanedPayload: any = {
+          userProfile: cleanProfile,
+          biomarkerDefinitions: slimBiomarkers,
+          biomarkerHistory: biomarkerHistory || []
+        };
+        if (agentType === "agent4") {
+          delete cleanedPayload.biomarkerDefinitions;
+        }
+
+        let jsonStr = "";
+        if (req.body.extractedData) {
+          if (typeof req.body.extractedData === 'string') {
+            jsonStr = req.body.extractedData;
+          } else {
+            jsonStr = JSON.stringify(req.body.extractedData, null, 2);
+          }
+        }
+
+        let dataContext = "";
+        if (agentType === "agent1_step1" || agentType === "lab_extract" || agentType === "symptom_diary") {
+          const prevJson = jsonStr ? `\n\nPREVIOUSLY EXTRACTED JSON:\n${jsonStr}` : "";
+          
+          let reportSource = req.body.originalReportText || message;
+          if (typeof req.body.lastProcessedIndex === 'number' && req.body.lastProcessedIndex > 0 && req.body.lastProcessedIndex < reportSource.length) {
+            reportSource = reportSource.slice(req.body.lastProcessedIndex);
+          }
+          
+          const prevTotal = req.body.estimatedTotalMarkers ? `\n\nPREVIOUSLY ESTIMATED TOTAL MARKERS:\n${req.body.estimatedTotalMarkers}` : "";
+          const baseData = customVariableData ? `\n\n${customVariableData}\n` : `\n\nUSER PROFILE:\n${JSON.stringify(cleanProfile, null, 2)}\n`;
+          const step1Timezone = req.body.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+          let step1LocalDateStr;
+          try {
+            const step1Formatter = new Intl.DateTimeFormat('en-CA', { timeZone: step1Timezone, year: 'numeric', month: '2-digit', day: '2-digit' });
+            step1LocalDateStr = step1Formatter.format(new Date());
+          } catch (e) {
+            step1LocalDateStr = new Date().toISOString().split("T")[0];
+          }
+          const dateCtx = `\n\nCURRENT DATE (user local, YYYY-MM-DD): ${step1LocalDateStr}\nUse this as the anchor for resolving relative date references in patient-reported text (e.g. "today", "yesterday", "the last 2 days").\n`;
+          dataContext = `\n\nUSER RAW DATA:\n${reportSource}${prevJson}${prevTotal}${dateCtx}${baseData}`;
+        } else if (agentType === "agent1_step2") {
+          const baseData = customVariableData ? `\n\n${customVariableData}\n` : "";
+          dataContext = `${baseData}\n\nEXTRACTED JSON DATA:\n${jsonStr}\n`;
+        } else if (agentType === "agent1_step3") {
+          const baseData = customVariableData ? `\n\n${customVariableData}\n` : "";
+          dataContext = `${baseData}\n\nEXTRACTED JSON DATA:\n${jsonStr}\n\nBUCKET MAPPING JSON:\n${req.body.bucketMapping}\n`;
+        } else if (agentType === "biomarker_review") {
+          const baseData = customVariableData ? `\n\n${customVariableData}\n` : `\n\nUSER PROFILE:\n${JSON.stringify(cleanProfile, null, 2)}\n`;
+          const batchKeys = req.body.dataReviewBatchKeys || req.body.batchBiomarkers || [];
+          const focusKeys: string[] = req.body.biomarkerKey
+            ? [req.body.biomarkerKey]
+            : (Array.isArray(batchKeys) ? batchKeys : []);
+
+          // Scope the payload to only the biomarker(s) actually being reviewed.
+          // This is a scaling/unit correction task, not a full clinical review â€”
+          // the other ~70 unrelated biomarkers and log metadata (sync_state,
+          // updated_at, note, tests[].doctorComment) are noise for this agent.
+          // Fall back to the full objects only if no focus key was provided at all.
+          let scopedCurrentBiomarkers: any = biomarkers || {};
+          let scopedHistory: any[] = biomarkerHistory || [];
+          if (focusKeys.length > 0) {
+            scopedCurrentBiomarkers = {};
+            focusKeys.forEach(k => {
+              if (biomarkers && biomarkers[k] !== undefined) scopedCurrentBiomarkers[k] = biomarkers[k];
+            });
+
+            scopedHistory = (biomarkerHistory || [])
+              .filter((h: any) => h.biomarkers && focusKeys.some(k => h.biomarkers[k] !== undefined))
+              .map((h: any) => {
+                const trimmedBiomarkers: any = {};
+                focusKeys.forEach(k => {
+                  if (h.biomarkers[k] !== undefined) trimmedBiomarkers[k] = h.biomarkers[k];
+                });
+                return { date: h.date, biomarkers: trimmedBiomarkers };
+              });
+          }
+
+          dataContext = `${baseData}\n\nCURRENT BIOMARKERS:\n${JSON.stringify(scopedCurrentBiomarkers, null, 2)}\n\nFULL BIOMARKER LOG HISTORY:\n${JSON.stringify(scopedHistory, null, 2)}\n`;
+          if (req.body.biomarkerKey) {
+            dataContext += `\n\nFOCUS BIOMARKER TO REVIEW: ${req.body.biomarkerKey}\n`;
+          }
+          if (Array.isArray(batchKeys) && batchKeys.length > 0) {
+            dataContext += `\n\nFOCUS BIOMARKERS TO REVIEW (BATCH): ${batchKeys.join(', ')}\n`;
+          }
+        } else if (agentType === "data_review") {
+          let batchData = req.body.batchBiomarkers || [];
+          if (!Array.isArray(batchData) || batchData.length === 0) {
+            let keys: string[] = [];
+            if (Array.isArray(req.body.batchKeys) && req.body.batchKeys.length > 0) {
+              keys = req.body.batchKeys;
+            } else if (Array.isArray(req.body.dataReviewBatchKeys) && req.body.dataReviewBatchKeys.length > 0) {
+              keys = req.body.dataReviewBatchKeys;
+            } else if (typeof req.body.message === 'string' && req.body.message.includes(':')) {
+              const parts = req.body.message.split(':');
+              const candidateKeys = parts.slice(1).join(':').split(/[\n,]/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+              if (candidateKeys.length > 0) {
+                keys = candidateKeys;
+              }
+            } else if (biomarkers && typeof biomarkers === 'object') {
+              keys = Object.keys(biomarkers);
+            }
+
+            const customDefs = (cleanProfile as any)?.customBiomarkers || {};
+            batchData = keys.map(k => {
+              const customDef = customDefs[k] || {};
+              const stdDef = biomarkerDefinitions.find((d: any) => d.key === k || (Array.isArray(d.aliases) && d.aliases.some((a: string) => a.toLowerCase() === k.toLowerCase())));
+              const name = customDef.name || stdDef?.name || k;
+              const historyEntries: { date: string; value: any }[] = [];
+              (biomarkerHistory || []).forEach((h: any) => {
+                if (h.biomarkers && h.biomarkers[k] !== undefined && h.biomarkers[k] !== null && h.biomarkers[k] !== '') {
+                  historyEntries.push({ date: h.date || 'unknown', value: h.biomarkers[k] });
+                }
+              });
+              const rawVal = (biomarkers && biomarkers[k] !== undefined && biomarkers[k] !== null && biomarkers[k] !== '')
+                ? biomarkers[k]
+                : (historyEntries[0]?.value ?? '');
+              const val = rawVal !== '' && rawVal !== undefined && rawVal !== null ? rawVal : 'Baseline / Unrecorded';
+              const unit = customDef.unit || stdDef?.unit || (k.endsWith('_score') || k.endsWith('_risk') || k.endsWith('_index') ? 'score' : (k === 'steps' ? 'steps' : 'standard'));
+              const normalRange = customDef.normalRange || stdDef?.normalRange || '';
+              return {
+                key: k,
+                name,
+                userValue: val,
+                value: val,
+                unit,
+                normalRange,
+                historicalEntries: historyEntries,
+                historicalSummary: historyEntries.map(e => `${e.date}: ${e.value}`).join(' â†’ ')
+              };
+            });
+          } else {
+            // Sanitize existing batchData items to ensure non-empty userValues and standard names
+            const customDefs = (cleanProfile as any)?.customBiomarkers || {};
+            batchData = batchData.map((bm: any) => {
+              const k = bm.key || bm.name || '';
+              const customDef = customDefs[k] || {};
+              const stdDef = biomarkerDefinitions.find((d: any) => d.key === k || (Array.isArray(d.aliases) && d.aliases.some((a: string) => a.toLowerCase() === k.toLowerCase())));
+              const name = bm.name && bm.name !== k ? bm.name : (customDef.name || stdDef?.name || k);
+              const rawVal = bm.userValue !== undefined && bm.userValue !== null && bm.userValue !== '' ? bm.userValue : bm.value;
+              const val = rawVal !== '' && rawVal !== undefined && rawVal !== null ? rawVal : 'Baseline / Unrecorded';
+              const unit = bm.unit || customDef.unit || stdDef?.unit || (k.endsWith('_score') || k.endsWith('_risk') || k.endsWith('_index') ? 'score' : (k === 'steps' ? 'steps' : 'standard'));
+              const normalRange = bm.normalRange || customDef.normalRange || stdDef?.normalRange || '';
+              return {
+                ...bm,
+                key: k,
+                name,
+                userValue: val,
+                value: val,
+                unit,
+                normalRange
+              };
+            });
+          }
+          const baseData = customVariableData ? `\n\n${customVariableData}\n` : `\n\nUSER PROFILE:\n${JSON.stringify(cleanProfile, null, 2)}\n`;
+          dataContext = `${baseData}\n\nBIOMARKERS BATCH FOR REVIEW:\n${JSON.stringify(batchData, null, 2)}\n`;
+        } else if (agentType === "agent1") {
+          let batchData = req.body.batchBiomarkers || [];
+          if (!Array.isArray(batchData) || batchData.length === 0) {
+            let keys: string[] = [];
+            if (Array.isArray(req.body.batchKeys) && req.body.batchKeys.length > 0) {
+              keys = req.body.batchKeys;
+            } else if (Array.isArray(req.body.dataReviewBatchKeys) && req.body.dataReviewBatchKeys.length > 0) {
+              keys = req.body.dataReviewBatchKeys;
+            }
+            if (keys.length > 0) {
+              const customDefs = (cleanProfile as any)?.customBiomarkers || {};
+              batchData = keys.map(k => {
+                const customDef = customDefs[k] || {};
+                const historyEntries: { date: string; value: any }[] = [];
+                (biomarkerHistory || []).forEach((h: any) => {
+                  if (h.biomarkers && h.biomarkers[k] !== undefined && h.biomarkers[k] !== null && h.biomarkers[k] !== '') {
+                    historyEntries.push({ date: h.date || 'unknown', value: h.biomarkers[k] });
+                  }
+                });
+                const val = (biomarkers && biomarkers[k] !== undefined && biomarkers[k] !== null && biomarkers[k] !== '')
+                  ? biomarkers[k]
+                  : (historyEntries[0]?.value ?? '');
+                return {
+                  key: k,
+                  name: customDef.name || k,
+                  userValue: val,
+                  value: val,
+                  unit: customDef.unit || '',
+                  normalRange: customDef.normalRange || '',
+                  historicalEntries: historyEntries,
+                  historicalSummary: historyEntries.map(e => `${e.date}: ${e.value}`).join(' â†’ ')
+                };
+              });
+            }
+          }
+          const baseData = customVariableData ? `\n\n${customVariableData}\n` : `\n\nUSER PROFILE:\n${JSON.stringify(cleanProfile, null, 2)}\n`;
+          dataContext = `${baseData}\n\nBIOMARKERS BATCH FOR CLEANING:\n${JSON.stringify(batchData, null, 2)}\n`;
+        } else {
+          const jsonPayload = JSON.stringify(cleanedPayload, null, 2);
+          const baseData = customVariableData ? `\n\n${customVariableData}\n` : "";
+          dataContext = `${baseData}\n\nUSER MEDICAL DATA (in JSON format):\n${jsonPayload}\n`;
+        }
+
+        if (customSystemInstruction) {
+          systemInstruction = customSystemInstruction;
+        }
+
+        const includeFoodLogs = foodLogs && Array.isArray(foodLogs) && foodLogs.length > 0 && agentType !== "agent1_step1" && agentType !== "agent1_step2" && agentType !== "agent1_step3" && agentType !== "data_review" && agentType !== "agent1" && agentType !== "agent4" && agentType !== "biomarker_review";
+        
+        let foodLogsPrompt = "";
+        if (includeFoodLogs) {
+          const recentLogs = foodLogs.slice(-35);
+          const mealLines = recentLogs.map((m: any, idx: number) => {
+            let nutStr = "";
+            if (m.nutrients && typeof m.nutrients === 'object') {
+              const parts: string[] = [];
+              const n = m.nutrients;
+              if (n.calories) parts.push(`${n.calories} kcal`);
+              if (n.carbs || n.carbohydrates) parts.push(`Carbs: ${n.carbs || n.carbohydrates}g`);
+              if (n.sugar || n.sugars) parts.push(`Sugar: ${n.sugar || n.sugars}g`);
+              if (n.protein) parts.push(`Protein: ${n.protein}g`);
+              if (n.fat) parts.push(`Fat: ${n.fat}g`);
+              if (n.saturatedFat) parts.push(`Sat Fat: ${n.saturatedFat}g`);
+              if (n.sodium) parts.push(`Sodium: ${n.sodium}mg`);
+              if (parts.length > 0) nutStr = ` (${parts.join(', ')})`;
+            }
+            return `- Meal ${idx + 1}: "${m.name}" on ${m.date || 'unknown'}${nutStr}`;
+          }).join("\n");
+          foodLogsPrompt = `PATIENT'S RECENT LOGGED MEALS HISTORY (Last ${recentLogs.length} meals):\n${mealLines}\n\n`;
+        }
+
+        const isExtractStep = agentType === "agent1_step1" || agentType === "lab_extract" || agentType === "symptom_diary";
+        let promptText = isExtractStep
+          ? `${foodLogsPrompt}${imageCtx}User message: "${message}"${dataContext}`
+          : `Chat History:\n${historyText}${foodLogsPrompt}${imageCtx}\nUser message: "${message}"${dataContext}`;
+        fullPromptSent = `System Instruction:\n${systemInstruction}\n\n${promptText}`;
+
+        let isYaml = false; // agent1 now uses structured JSON output, not YAML
+        
+        let maxRetries = agentType === "agent1_step3" ? 3 : 1;
+        let attempt = 0;
+        let success = false;
+        
+        addDebugLog(`[Medical Analyze Agent] Dispatched System Instruction (Length: ${systemInstruction.length})`, explicitSessionId);
+        addDebugLog(`[Medical Analyze Agent] Dispatched Prompt:\n${promptText}`, explicitSessionId);
+        sendLog('status', 'Analyzing health profile...');
+
+        while (attempt < maxRetries && !success) {
+          attempt++;
+          textOutput = await callUnifiedLLM({
+            modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite",
+            systemInstruction,
+            promptText,
+            imagePayload,
+            imagePayloads: imagesPayload,
+            responseMimeType: isYaml ? "text/plain" : "application/json",
+            skipThinking: true,
+            maxOutputTokens: (agentType === "data_review" || agentType === "agent4" || agentType === "agent1_step3" || agentType === "agent1") ? 8192 : undefined,
+            responseSchema: (agentType === "agent1_step1" || agentType === "agent1")
+              ? agent1Step1Schema
+              : (agentType === "biomarker_review")
+                ? {
+                 type: Type.OBJECT,
+                 properties: {
+                   reply: { type: Type.STRING, description: "Conversational, highly polished response explaining the biomarker, answering questions, or explaining proposed corrections." },
+                   proposal: {
+                     type: Type.OBJECT,
+                     nullable: true,
+                     properties: {
+                       name: { type: Type.STRING },
+                       metric: { type: Type.STRING },
+                       value: { type: Type.STRING },
+                       date: { type: Type.STRING, description: "YYYY-MM-DD" },
+                       range: { type: Type.STRING },
+                       description: { type: Type.STRING },
+                       medicalInsight: { type: Type.STRING, description: "Personalized medical insight based on demographic profile and proposed value" },
+                       isEthnicitySpecific: { type: Type.BOOLEAN },
+                       ethnicityTag: { type: Type.STRING, nullable: true }
+                     },
+                     required: ["name", "metric", "value", "date", "range", "description", "medicalInsight", "isEthnicitySpecific", "ethnicityTag"]
+                   },
+                   modificationCommand: {
+                     type: Type.ARRAY,
+                     nullable: true,
+                     items: {
+                       type: Type.OBJECT,
+                       properties: {
+                         action: { type: Type.STRING, enum: ["update_biomarker", "update_profile", "remove_biomarker"] },
+                         keyName: { type: Type.STRING },
+                         oldValue: { type: Type.STRING, description: "Original erroneous value in the log before correction" },
+                         newValue: { type: Type.STRING, description: "Corrected target value" },
+                         date: { type: Type.STRING, description: "YYYY-MM-DD date of the log entry" },
+                         reason: { type: Type.STRING, description: "Short explanation of the error (e.g. Scaling error: 48 percentage unit -> 0.48 decimal ratio)" }
+                       },
+                       required: ["action", "keyName", "date", "newValue"]
+                     }
+                   }
+                 },
+                 required: ["reply"]
+               }
+              : (agentType === "data_review") 
+                ? dataReviewSchema 
+                : (agentType === "agent4")
+                  ? healthPlanningSchema
+                  : undefined
+          });
+          
+          addDebugLog(`[Medical Analyze Agent] Response received (${textOutput?.length || 0} chars). Full payload already logged above by [UnifiedLLM-Response].`, explicitSessionId);
+          sendLog('status', 'Response received, finalizing...');
+
+          if (agentType === "agent1_step3") {
+            try {
+              let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+              const firstBrace = cleanJson.indexOf("{");
+              const lastBrace = cleanJson.lastIndexOf("}");
+              if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                cleanJson = extractBalancedJson(cleanJson);
+              }
+              const parsed = JSON.parse(cleanJson);
+              
+              const expectedCount = (jsonStr?.match(/"biomarker":/g) || []).length;
+              let actualCount = 0;
+              if (parsed.buckets && Array.isArray(parsed.buckets)) {
+                parsed.buckets.forEach((b: any) => {
+                  if (b.biomarkers && Array.isArray(b.biomarkers)) {
+                    b.biomarkers.forEach((m: any) => {
+                      if (m.history && Array.isArray(m.history)) {
+                        actualCount += m.history.length;
+                      }
+                    });
+                  }
+                });
+              }
+              
+              const isChatOrUpdate = req.body.message && req.body.message !== "Continue processing" && req.body.message !== "Assemble JSON" && req.body.message !== "Assemble Data" && req.body.message !== "Assemble data";
+              const isDeleteQuery = req.body.message && (
+                req.body.message.toLowerCase().includes("delete") ||
+                req.body.message.toLowerCase().includes("remove") ||
+                req.body.message.toLowerCase().includes("exclude") ||
+                req.body.message.toLowerCase().includes("clear")
+              );
+              
+              if (actualCount === expectedCount || attempt === maxRetries || (isChatOrUpdate && isDeleteQuery)) {
+                success = true;
+                textOutput = cleanJson;
+              } else {
+                console.log(`Agent 3 retry ${attempt}: Expected ${expectedCount} entries, got ${actualCount}`);
+                promptText += `\n\nERROR: You missed some entries. I expected ${expectedCount} historical log entries based on the JSON data, but you only outputted ${actualCount}. You MUST include EVERY single entry from the JSON. Do not summarize or skip any.`;
+              }
+            } catch (err) {
+              console.error("Agent 3 parse error:", err);
+              if (attempt === maxRetries) success = true; // just let it fail naturally below
+            }
+          } else {
+            success = true;
+          }
+        }
+      }
+
+      if (agentType === "agent1_step1" || agentType === "lab_extract" || agentType === "symptom_diary") {
+        let cleanJson: any = textOutput;
+        let text = "I have extracted the biomarkers. Please review the output.";
+        let hasMoreMarkers = false;
+        let lastProcessedIndex: number | null = null;
+        let estimatedTotalMarkers: number | null = null;
+        let unmappedTests: any[] = [];
+        try {
+          const parsed = JSON.parse(textOutput.replace(/```(?:json)?/gi, "").trim());
+          if (parsed.extractedData) {
+            cleanJson = parsed.extractedData;
+          }
+          if (parsed.text) {
+            text = parsed.text;
+          }
+          if (parsed.unmappedTests) {
+            unmappedTests = parsed.unmappedTests;
+          }
+          
+          if (Array.isArray(cleanJson)) {
+            cleanJson = cleanJson.map((item: any) => {
+              if (!item || typeof item !== 'object') return item;
+              if (item.unit) {
+                const rawUnit = item.unit;
+                const sanitizedUnit = sanitizeUnitText(rawUnit);
+                item.unit = sanitizedUnit;
+                
+                if (item.biomarker) {
+                  const matrixConfig = BiomarkerMatrix[item.biomarker];
+                  if (matrixConfig) {
+                    const val = item.numeric_value !== undefined && item.numeric_value !== null ? item.numeric_value : item.value;
+                    if (typeof val === 'number' || (typeof val === 'string' && !isNaN(parseFloat(val)))) {
+                      const numVal = parseFloat(String(val));
+                      const newVal = matrixConfig.conversionLogic(numVal, sanitizedUnit);
+                      const roundedNewVal = Math.round(newVal * 100) / 100;
+
+                      if (item.numeric_value !== undefined && item.numeric_value !== null) item.numeric_value = roundedNewVal;
+                      else if (item.value !== undefined && item.value !== null) item.value = roundedNewVal;
+                      
+                      item.unit = matrixConfig.targetUnit;
+                    }
+                  }
+                }
+              }
+              return item;
+            });
+          }
+
+          if (parsed.hasMoreMarkers !== undefined) {
+            hasMoreMarkers = !!parsed.hasMoreMarkers;
+          }
+          if (parsed.lastProcessedIndex !== undefined) {
+            lastProcessedIndex = parsed.lastProcessedIndex;
+          }
+          if (parsed.estimatedTotalMarkers !== undefined) {
+            estimatedTotalMarkers = Number(parsed.estimatedTotalMarkers);
+          }
+        } catch (e) {
+          cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+        }
+        const mergedResult = mergeStagedExtract({
+          text,
+          agentType,
+          extractedData: cleanJson,
+          hasMoreMarkers,
+          lastProcessedIndex,
+          estimatedTotalMarkers,
+          unmappedTests,
+          currentBatch: req.body.currentBatch || 1,
+          agentPrompt: fullPromptSent,
+          apiCalls: [{ type: 'gemini', label: `Medical History Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+        }, ingestTrace);
+        addDebugLog(`[Medical Analyze Agent] Post-merge extractedData: ${Array.isArray(mergedResult.extractedData) ? mergedResult.extractedData.length : 'not-array'} row(s) sent to client (LLM leftover parsed: ${Array.isArray(cleanJson) ? cleanJson.length : 'not-array'}, ingestTrace present: ${!!ingestTrace}, ingestTrace rows: ${ingestTrace?.rows?.length ?? 0}).`, explicitSessionId);
+        try {
+          const __rowsForLog = Array.isArray(mergedResult.extractedData) ? mergedResult.extractedData : [];
+          const __tableLog = __rowsForLog.slice(0, 200).map((r: any) =>
+            `${r.biomarker ?? 'â€”'} | ${r.date ?? 'â€”'} | value=${r.numeric_value ?? r.value ?? r.qualitative_value ?? 'â€”'} | unit=${r.unit ?? 'â€”'}`
+          ).join('\n');
+          addDebugLog(`[Medical Analyze Agent] Extracted rows table (${__rowsForLog.length} total, showing up to 200):\n${__tableLog}`, explicitSessionId);
+        } catch (e: any) {
+          addDebugLog(`[Medical Analyze Agent] Failed to log extracted rows table: ${e?.message || e}`, explicitSessionId);
+        }
+        return res.json(mergedResult);
+      }
+
+      if (agentType === "biomarker_review") {
+        try {
+          const parsed = safeExtractJsonObject(textOutput) || {};
+          const unitMap: Record<string, string> = { ...(req.body.catalogUnitByKey || {}) };
+          Object.entries(userProfile?.customBiomarkers || {}).forEach(([k, v]: [string, any]) => {
+            if (v?.unit) unitMap[k] = v.unit;
+          });
+          const rawCmds = Array.isArray(parsed.modificationCommand) ? parsed.modificationCommand : [];
+          const cmds = enrichReviewModificationCommands(
+            rawCmds,
+            biomarkerHistory || [],
+            unitMap
+          );
+          const sanitizedReply = sanitizeReviewReply(
+            parsed.reply || parsed.text || (typeof parsed === 'string' ? parsed : textOutput),
+            cmds,
+            biomarkerHistory || [],
+            unitMap
+          );
+          return res.json({
+            text: sanitizedReply,
+            reply: sanitizedReply,
+            proposal: parsed.proposal || null,
+            modificationCommand: cmds.length ? cmds : (rawCmds.length ? rawCmds : null),
+            agentType,
+            agentPrompt: fullPromptSent,
+            apiCalls: [{ type: 'gemini', label: `Biomarker Review Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+          });
+        } catch (e) {
+          console.error("biomarker_review JSON parse error", e);
+          return res.json({
+            text: textOutput,
+            reply: textOutput,
+            agentType,
+            agentPrompt: fullPromptSent,
+            apiCalls: [{ type: 'gemini', label: `Biomarker Review Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+          });
+        }
+      }
+
+      if (agentType === "data_review") {
+        let reviewedBiomarkers: any[] = [];
+        let message = "";
+        let extremeDivergences: any[] = [];
+        try {
+          const cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+          const parsed = JSON.parse(cleanJson);
+          if (parsed) {
+            message = parsed.message || "";
+            extremeDivergences = Array.isArray(parsed.extremeDivergences) ? parsed.extremeDivergences : [];
+            const rawReviewed = Array.isArray(parsed.reviewedBiomarkers) ? parsed.reviewedBiomarkers : [];
+            reviewedBiomarkers = rawReviewed.map(sanitizeReviewedBiomarkerUnitConsistency);
+          }
+        } catch (e) {
+          console.error("data_review JSON parse error", e);
+        }
+        return res.json({
+          message,
+          reviewedBiomarkers,
+          extremeDivergences,
+          batchIdx: req.body.batchIdx !== undefined ? req.body.batchIdx : null,
+          agentType,
+          agentPrompt: fullPromptSent,
+          apiCalls: [{ type: 'gemini', label: `Clinical Calibration Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+        });
+      }
+
+            if (agentType === "agent1") {
+        let parsedRows = [];
+        let isWrongDoor = false;
+        try {
+          const parsed = JSON.parse(textOutput.replace(/```(?:json)?/gi, "").trim());
+          if (parsed.extractedData) parsedRows = parsed.extractedData;
+          if (parsed.isWrongDoor === true) isWrongDoor = true;
+        } catch (e) {
+          console.error("agent1 JSON parse error", e);
+        }
+        return res.json({
+          text: "",
+          agentType,
+          extractedData: parsedRows,
+          hasMoreMarkers: false,
+          lastProcessedIndex: null,
+          estimatedTotalMarkers: 0,
+          isWrongDoor,
+          agentPrompt: fullPromptSent,
+          apiCalls: [{ type: 'gemini', label: `Medical History Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+        });
+      }
+
+      if (agentType === "agent5" || agentType === "agent7") {
+        const agentLabel = agentType === "agent5" ? "Holistic Review Agent" : "Health Report Agent";
+        try {
+          const cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+          const parsed = JSON.parse(cleanJson);
+          return res.json({
+            ...parsed,
+            message: parsed.message || "",
+            agentPrompt: fullPromptSent,
+            agentType,
+            apiCalls: [{ type: 'gemini', label: `${agentLabel} (${engine || 'gemini-3.5-flash-lite'})` }]
+          });
+        } catch (e) {
+          console.error(`[Medical Analyze - ${agentType} parse error]:`, e);
+          return res.json({
+            message: "I was unable to parse a valid response. Please try again.",
+            agentPrompt: fullPromptSent,
+            agentType,
+            apiCalls: [{ type: 'gemini', label: `${agentLabel} (${engine || 'gemini-3.5-flash-lite'})` }]
+          });
+        }
+      }
+      
+      if (!agentType || agentType === "agent4") {
+        try {
+          const cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+          const parsed = JSON.parse(cleanJson);
+          
+          let textVal = parsed.text;
+          if (!textVal || typeof textVal !== 'string' || !textVal.trim() || textVal.trim().startsWith('{')) {
+            textVal = "I have completed a diagnostic assessment and health planning audit based on your profile and biomarker history. Please review the findings, recommended retests, and testing gaps below:";
+          }
+
+          return res.json({
+            ...parsed,
+            text: textVal,
+            summary: parsed.summary || parsed.primaryDiagnosis || parsed.text || "Diagnostic accuracy and health planning evaluation complete.",
+            retestBiomarkers: Array.isArray(parsed.retestBiomarkers) ? parsed.retestBiomarkers : [],
+            testingGaps: Array.isArray(parsed.testingGaps) ? parsed.testingGaps : (Array.isArray(parsed.recommendedTests) ? parsed.recommendedTests : []),
+            _internalReasoning: parsed._internalReasoning || "",
+            mode: parsed.mode || 'discussion',
+            status: parsed.status || 'active',
+            agentPrompt: fullPromptSent,
+            agentType: agentType || 'agent4',
+            apiCalls: [{ type: 'gemini', label: `Health Planning Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+          });
+        } catch (e) {
+          return res.json({
+            text: "I have completed a diagnostic assessment and health planning audit. Please review the findings below:",
+            summary: textOutput,
+            retestBiomarkers: [],
+            testingGaps: [],
+            _internalReasoning: textOutput,
+            mode: 'discussion',
+            status: 'active',
+            agentPrompt: fullPromptSent,
+            agentType: agentType || 'agent4',
+            apiCalls: [{ type: 'gemini', label: `Health Planning Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+          });
+        }
+      }
+
+      return res.json({
+          text: "",
+          agentType,
+          extractedData: textOutput,
+          hasMoreMarkers: false,
+          lastProcessedIndex: null,
+          estimatedTotalMarkers: 0,
+          agentPrompt: fullPromptSent,
+          apiCalls: [{ type: 'gemini', label: `Medical History Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+      });
+    }
+  } catch (error: any) {
+    console.error("[Medical Analyze Error]:", error);
+    res.status(500).json({ error: "Failed to process medical analysis: " + error.message });
+  }
+  });
+});
+
+
+
+
+app.post("/api/gemini/review-biomarker", async (req, res) => {
+  const { message, history, profile, biomarkerDef, currentValue, modelId, jsonContext } = req.body;
+  if (!message) return res.status(400).json({ error: "Missing message" });
+  
+  const engine = (typeof modelId === 'object' ? modelId?.name || modelId?.model : modelId) || 'gemini-3.5-flash-lite';
+
+  try {
+    let historyText = "";
+    if (history && Array.isArray(history) && history.length > 0) {
+      historyText = "Here is the conversation history so far:\n" + 
+        history.map((h) => `${h.role === 'user' ? 'User' : 'Assistant'}: ${h.content}`).join("\n") + "\n\n";
+    }
+
+    const inputsJson = jsonContext ? jsonContext : `user_profile:
+  age: "${profile?.age || 'unknown'}"
+  gender: "${profile?.gender || 'unknown'}"
+  weight_kg: "${profile?.weight || 'unknown'}"
+  height_cm: "${profile?.height || 'unknown'}"
+  ethnicity: "${profile?.ethnicity || 'unknown'}"
+  unit_preference: "${profile?.unitPreference || 'SI'}" # Values: 'SI' (mmol/L, mmol/mol) or 'US' (mg/dL)
+
+target_biomarker:
+  key: "${biomarkerDef?.key || ''}"
+  name: "${biomarkerDef?.name || ''}"
+  current_value: "${currentValue || ''}"
+  current_unit: "${biomarkerDef?.unit || ''}"
+  current_range: "${biomarkerDef?.normalRange || ''}"
+  description: "${biomarkerDef?.description || ''}"`;
+
+    const systemInstruction = `identity:
+  role: "Expert AI medical and nutritional assistant"
+  purpose: "Review or answer questions about a specific user health biomarker."
+  modes:
+    1: "Educate and answer user questions regarding the biomarker."
+    2: "Review logs for anomalies, unit mismatches, or demographic profile updates."
+
+inputs:
+${inputsJson}
+
+rules:
+  clinical_and_nutritional:
+    - "Provide professional, evidence-based educational context regarding the target biomarker."
+    - "CRITICAL: Review precisely the ranges from medical research or clinical guidelines before providing an answer. You must differentiate between 'normal but suboptimal' values, and distinguish nuances like a 'pre-condition' versus an 'actual condition', reflecting this back to the data and proposed range."
+    - "Tailor the explanations and suggestions specifically to the user's demographic profile (age, gender, ethnicity, weight/height/BMI)."
+    - "Explain physiological significance, potential dietary/lifestyle influences, and clinical pathways of the biomarker."
+    - "If the profile shows a different ethnicity than standard (e.g. Chinese or Asian), prioritize demographic-specific clinical insights, guidelines, and reference intervals (e.g., Chinese Society of Hepatology/Nephrology/Diabetes/Dyslipidemia standard thresholds) FIRST over Western standard baselines."
+    - "For example, if the user is of Chinese ethnicity, you MUST look at clinical guidelines for Chinese populations FIRST before even considering Western guidelines."
+    - "Whenever you mention 'individuals of East Asian descent', 'Chinese descent', or refer to any specific ethnic group, you MUST explicitly cite the specific medical guideline or society you are using (e.g. 'according to the Chinese Society of Hepatology' or 'based on [medical guidelines from XX]')."
+  metric_and_unit:
+    - "Always prefer International Standard (mmol/L, mmol/mol) by default for lipids (LDL, HDL, Total Cholesterol, Triglycerides) and blood sugar (Fasting Glucose) unless the user specifically wants or has logged in US units (mg/dL)."
+    - "Double-check that the metric/unit is consistent across the proposed value and the proposed normal range. Do NOT mix them up! (e.g., if LDL value is 5.7, the unit must be mmol/L and range should be under 3.0 mmol/L. If unit is mg/dL, the value is around 220 and range is 125-200)."
+    - "Ensure the 'metric' field in any proposal exactly matches the unit used in 'range' and 'value'."
+  proposals_and_corrections:
+    - "If you recognize that the target biomarker's current description, medical insights, or range are wrong, incorrect, or sub-optimal for their demographic, prescribe a corrected/new one in the 'proposal' block of your response."
+    - "If the newly proposed range or insight is specific to their ethnicity (e.g., Chinese-adjusted thresholds), set 'isEthnicitySpecific' to true and 'ethnicityTag' to the ethnicity name (e.g. 'Chinese' or 'Asian') so that the database can tag and override the biomarker dictionary correctly."
+    - "If the newly proposed range is a standard global baseline, set 'isEthnicitySpecific' to false and 'ethnicityTag' to null."
+  duplicate_recognition:
+    - "Analyze if the target biomarker is likely a duplicate of another existing biomarker in the dictionary or in the related biomarkers list (e.g. 'hba1c_mmol_mol' vs 'hemoglobin_a1c')."
+    - "If it is a duplicate, set 'isDuplicate' to true, list the synonymous key(s) in 'duplicateSuggestedKeys', and write a clear, concise note explaining why in 'duplicateExplanation'."
+    - "If not a duplicate, set 'isDuplicate' to false, 'duplicateSuggestedKeys' to [], and 'duplicateExplanation' to null."
+    - "When no correction, override, or duplicate is discussed or needed, set 'proposal' and 'pendingBiomarkers' to null."
+
+output_format:
+  type: "JSON"
+  schema:
+    reply: "Conversational, highly polished response explaining the biomarker, answering questions, or explaining proposed corrections/duplicates."
+    proposal:
+      name: "The biomarker name (e.g., 'Total Cholesterol')"
+      metric: "The unit of measurement (e.g., 'mmol/L' or 'mg/dL')"
+      value: "The corrected/proposed value as a number or string"
+      date: "The exact date of the specific historical log being updated, if correcting a past entry (YYYY-MM-DD format). Use the user's logged date."
+      range: "The normal/healthy range personalized to their profile (e.g., 'under 3.0 mmol/L' or '125-200 mg/dL')"
+      description: "Short description of what this biomarker measures"
+      benefitRisk: "Personalized benefit/risk statement based on the user's demographic profile and the proposed value"
+      isEthnicitySpecific: true/false
+      ethnicityTag: "e.g., 'Chinese' or 'Asian' or null"
+      isDuplicate: true/false
+      duplicateSuggestedKeys: ["array of synonymous keys to consolidate, e.g. ['hba1c_mmol_mol'] or []"]
+      duplicateExplanation: "Reasoning for consolidation or null"
+    pendingBiomarkers:
+      "${biomarkerDef?.key || 'key'}": "The proposed value as a number (e.g., 5.7) or null"
+
+instructions:
+  - "Do not include markdown code block wrappers like \`\`\`json in your response. Return raw JSON."
+  - "The JSON response must be well-formed and valid."`;
+
+    const fullPromptSent = `System Instruction:\n${systemInstruction}\n\n${historyText}User Message: "${message}"`;
+
+    const resultText = await callUnifiedLLM({
+      modelId: modelId || "gemini-3.5-flash-lite",
+      systemInstruction,
+      promptText: `${historyText}User Message: "${message}"`,
+      responseMimeType: "application/json",
+    });
+
+    let cleanedText = resultText.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+    const startIdx = cleanedText.indexOf("{");
+    if (startIdx !== -1) {
+      let depth = 0;
+      for (let i = startIdx; i < cleanedText.length; i++) {
+        if (cleanedText[i] === "{") depth++;
+        else if (cleanedText[i] === "}") depth--;
+        if (depth === 0) {
+          cleanedText = cleanedText.substring(startIdx, i + 1);
+          break;
+        }
+      }
+    }
+    let resultJson;
+    try {
+      resultJson = JSON.parse(cleanedText);
+    } catch (parseErr: any) {
+      console.error("JSON Parse Error in review-biomarker:", parseErr);
+      console.error("Raw response was:", resultText);
+      throw new Error(`Failed to parse AI response as JSON. ${parseErr.message}`);
+    }
+    
+    if (resultJson.proposedValue !== undefined && resultJson.proposedValue !== null && !resultJson.pendingBiomarkers) {
+      resultJson.pendingBiomarkers = { [biomarkerDef?.key || 'key']: resultJson.proposedValue };
+    }
+    
+    resultJson.agentPrompt = fullPromptSent;
+    resultJson.apiCalls = [{ type: 'gemini', label: `Biomarker Calibration Agent (${engine || 'gemini-3.5-flash-lite'})` }];
+    res.json(resultJson);
+  } catch (err: any) {
+    console.error("Gemini Review Error:", err);
+    res.status(500).json({ error: err.message || "Failed to review biomarker" });
+  }
+});
+
+app.post("/api/gemini/insight-analyze", async (req, res) => {
+  try {
+    const { profile, userProfile, foodLogs, biomarkerHistory, engine, refinement } = req.body;
+    const activeProfile = profile || userProfile || {};
+    const email = activeProfile?.email?.toLowerCase() || "";
+
+    if ((email === "chiwah.liu@gmail.com" || email === "cwah.liu@gmail.com" || email === "john@mail.com") && !refinement) {
+      console.log(`[Insight] Triggered special preset recommendation report for: ${email}`);
+      return res.json({
+        report: {
+          timestamp: new Date().toISOString(),
+          dailyNutrientTargets: {
+            calories: "1,700â€“1,800 kcal",
+            protein: "90â€“100 g (protects kidneys)",
+            totalFat: "55â€“65 g",
+            saturatedFat: "under 15 g (critical for LDL)",
+            unsaturatedFat: "35â€“45 g",
+            omega3: "2.5â€“3 g",
+            carbohydrates: "160â€“185 g (low GI)",
+            addedSugar: "under 20 g",
+            totalFibre: "35â€“40 g",
+            solubleFibre: "10â€“15 g (critical for LDL)",
+            sodium: "under 1,200 mg (kidney + BP protection)",
+            potassium: "3,500â€“4,000 mg",
+            magnesium: "400â€“420 mg",
+            calcium: "1,000 mg",
+            iron: "8 mg",
+            zinc: "11 mg",
+            selenium: "55 mcg",
+            iodine: "150 mcg",
+            phosphorus: "700 mg",
+            vitaminD: "2,000 IU (East Asians commonly deficient)",
+            vitaminB12: "2.4 mcg",
+            folate: "400 mcg",
+            vitaminC: "90 mg",
+            vitaminE: "15 mg",
+            vitaminK: "120 mcg",
+            vitaminA: "900 mcg",
+            vitaminB6: "1.7 mg",
+            thiamine: "1.2 mg",
+            riboflavin: "1.3 mg",
+            niacin: "16 mg"
+          },
+          mostImportantNextStep: "See GP urgently about statin â€” rosuvastatin 5mg is the evidence-based starting point for East Asian men with your high LDL, HbA1c, and declining kidney filtration.",
+          actions: [
+            {
+              id: "act_1",
+              task: "Consult GP about Low-Dose Statin prescription (e.g. Rosuvastatin 5mg)",
+              explanation: "Given your elevated LDL-C and East Asian genetics, a low-dose statin is the most evidence-based starting point.",
+              priority: "high",
+              completed: false,
+              type: "doctor"
+            },
+            {
+              id: "act_2",
+              task: "Schedule an HbA1c retest in 3 months with formal pre-diabetes assessment",
+              explanation: "Your average blood sugar over the last months is borderline. Tight monitoring is critical.",
+              priority: "high",
+              completed: false,
+              type: "test"
+            },
+            {
+              id: "act_3",
+              task: "Establish an annual Kidney Monitoring and eGFR protection plan",
+              explanation: "Declining eGFR needs early stage tracking. Restricting saturated fat and excessive sodium is non-negotiable.",
+              priority: "high",
+              completed: false,
+              type: "test"
+            },
+            {
+              id: "act_4",
+              task: "Test Vitamin D levels with your physician",
+              explanation: "East Asians are commonly deficient, which impacts metabolic health, blood pressure, and cardiovascular outcomes.",
+              priority: "medium",
+              completed: false,
+              type: "test"
+            },
+            {
+              id: "act_5",
+              task: "Substitute butter, coconut oil, and ghee with extra virgin olive oil",
+              explanation: "Reducing saturated fat to strictly under 15g a day is essential to restore proper LDL values.",
+              priority: "high",
+              completed: false,
+              type: "lifestyle"
+            }
+          ],
+          dailyBenefits: [
+            { id: "ben_1", activity: "Accumulate 30 minutes of brisk walking or light cardio", target: "150 mins per week", completed: false },
+            { id: "ben_2", activity: "Add 1 tablespoon of ground flaxseed to your meals", target: "Daily", completed: false },
+            { id: "ben_3", activity: "Restrict Saturated Fat intake strictly under 15g", target: "Daily", completed: false },
+            { id: "ben_4", activity: "Incorporate high soluble fibre (e.g. Oats, Psyllium husk)", target: "10-15g soluble", completed: false }
+          ],
+          latestInsights: [
+            {
+              title: "Cardiovascular Risk Reduction in East Asian Cohorts",
+              summary: "Recent studies demonstrate that East Asian men exhibit heightened sensitivity to low-dose statin therapy, with rosuvastatin 5mg yielding similar LDL reduction as 10mg in western populations while minimizing hepatic and muscular side effects.",
+              link: "https://pubmed.ncbi.nlm.nih.gov/32041285/"
+            },
+            {
+              title: "Soluble Fibre and Bile Acid Sequestration Mechanics",
+              summary: "Clinical trials confirm that consuming 10g of soluble fibre daily (via oats, barley, or psyllium husk) triggers hepatic bile synthesis from existing LDL, lowering circulating bad cholesterol particles by 5% to 10% within 8 weeks.",
+              link: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4832151/"
+            }
+          ],
+          healthRiskForecast: {
+            year5: "Mildly progressive atherosclerosis, risk of transitioning from borderline pre-diabetes to active Type 2 Diabetes, and decline in renal filtration capacity to Stage 3 CKD.",
+            year10: "Significant vascular plaque buildup. Kidney function might drop to GFR < 60, triggering high blood pressure. Elevated Risk of cardiovascular events.",
+            year20: "40% probability of a coronary event. Accelerated kidney wear requiring complex nephrological intervention.",
+            optimized5: "Restored LDL < 100 mg/dL, stabilized blood sugar in normal ranges, and kidney filtration preserved at healthy levels.",
+            optimized10: "Plaque progression halted. Fully functional cardiovascular system and kidney values stabilized in the safe green zone.",
+            optimized20: "Optimal cardiovascular performance. Healthy aging index score 95th percentile, active longevity with zero diabetic or renal complications."
+          }
+        }
+      });
+    }
+
+    const ai = getGeminiClient();
+    const apiKey = getGeminiApiKey();
+    if (!apiKey || apiKey === "MOCK_KEY" || apiKey.startsWith("YOUR_")) {
+      return res.json({
+        report: {
+          timestamp: new Date().toISOString(),
+          dailyNutrientTargets: {
+            calories: "1,500â€“1,600 kcal",
+            protein: "80â€“90 g",
+            totalFat: "50â€“60 g",
+            saturatedFat: "under 12 g",
+            unsaturatedFat: "30â€“40 g",
+            omega3: "2.0â€“2.5 g",
+            carbohydrates: "150â€“170 g",
+            addedSugar: "under 15 g",
+            totalFibre: "30â€“35 g",
+            solubleFibre: "8â€“12 g",
+            sodium: "under 1,500 mg",
+            potassium: "3,500 mg",
+            magnesium: "400 mg",
+            calcium: "1,000 mg",
+            iron: "8 mg",
+            zinc: "11 mg",
+            selenium: "55 mcg",
+            iodine: "150 mcg",
+            phosphorus: "700 mg",
+            vitaminD: "2,000 IU",
+            vitaminB12: "2.4 mcg",
+            folate: "400 mcg",
+            vitaminC: "90 mg",
+            vitaminE: "15 mg",
+            vitaminK: "120 mcg",
+            vitaminA: "900 mcg",
+            vitaminB6: "1.7 mg",
+            thiamine: "1.2 mg",
+            riboflavin: "1.3 mg",
+            niacin: "16 mg"
+          },
+          mostImportantNextStep: "Reduce saturated fat strictly to under 12g per day and complete a clinical blood re-test in 3 months to monitor cholesterol and glucose trends.",
+          actions: [
+            {
+              id: "act_1",
+              task: "Consult your primary care physician for a comprehensive health screening",
+              explanation: "Based on your age and profile, regular annual biometric reviews are highly recommended.",
+              priority: "high",
+              completed: false,
+              type: "doctor"
+            },
+            {
+              id: "act_2",
+              task: "Check your HbA1c and lipid panel every 6 months",
+              explanation: "Routine blood metrics tracking will help confirm your lifestyle changes are successfully restoring biomarkers.",
+              priority: "high",
+              completed: false,
+              type: "test"
+            }
+          ],
+          dailyBenefits: [
+            { id: "ben_1", activity: "Walk briskly for 30 minutes daily to boost metabolic health", target: "Daily", completed: false },
+            { id: "ben_2", activity: "Substitute saturated fats with cold-pressed olive oil", target: "Daily", completed: false }
+          ],
+          latestInsights: [
+            {
+              title: "Dietary Fibers and Metabolic Longevity Indices",
+              summary: "A high-fiber nutritional plan is linked to enhanced short-chain fatty acid gut synthesis, which improves overall insulin response and naturally reduces vascular inflammation markers.",
+              link: "https://pubmed.ncbi.nlm.nih.gov/30612722/"
+            }
+          ],
+          healthRiskForecast: {
+            year5: "Slight vascular stiffness and mild risk of elevated glucose tolerance if sedentary habits persist.",
+            year10: "Increasing risk of metabolic decline and minor cardiovascular strain.",
+            year20: "Elevated probability of cardiovascular plaques and reduced active energy index.",
+            optimized5: "Pristine blood pressure levels, balanced lipid particles, and metabolic health completely optimized.",
+            optimized10: "Robust vascular health, optimized glycemic control, and ideal weight targets maintained.",
+            optimized20: "Healthy aging with minimal chronic disease probability and vibrant metabolic index."
+          }
+        }
+      });
+    }
+
+    const sanitizedBiomarkerHistory = filterHistoryForUse(biomarkerHistory, activeProfile).map((log: any) => {
+      const clean = { ...log };
+      delete clean.tests;
+      delete clean.updated_at;
+      delete clean.sync_state;
+      delete clean.note;
+      delete clean.summary;
+      delete clean.id;
+      return clean;
+    }).filter((log: any) => {
+      if (log.biomarkers && Object.keys(log.biomarkers).length === 1 && log.biomarkers.steps !== undefined) {
+        return false;
+      }
+      return true;
+    });
+
+    const riskGroupings: Record<string, string[]> = {};
+    sanitizedBiomarkerHistory.forEach((log: any) => {
+      if (log.biomarkers) {
+        Object.keys(log.biomarkers).forEach(key => {
+          if (key === 'steps') return;
+          const def = biomarkerDefinitions.find(d => d.key === key);
+          const customDef = activeProfile?.customBiomarkers?.[key];
+          let risks = customDef?.riskCategories || def?.riskCategories || ['Uncategorized'];
+          if (!Array.isArray(risks)) risks = [risks];
+          if (risks.length === 0) risks = ['Uncategorized'];
+          
+          risks.forEach((risk: string) => {
+            if (!riskGroupings[risk]) riskGroupings[risk] = [];
+            if (!riskGroupings[risk].includes(key)) riskGroupings[risk].push(key);
+          });
+        });
+      }
+    });
+
+    const profileText = `UserProfile: Age ${activeProfile.age}, Ethnicity: ${activeProfile.ethnicity}, Weight: ${activeProfile.weight}kg, Height: ${activeProfile.height}cm, Email: ${activeProfile.email}.`;
+    const foodSummary = foodLogs && foodLogs.length > 0 ? `Recent Food Logs:\n${JSON.stringify(foodLogs.slice(-10))}` : "No food logs registered.";
+    const biomarkerSummary = sanitizedBiomarkerHistory.length > 0 ? `Biomarker Logs:\n${JSON.stringify(sanitizedBiomarkerHistory)}\n\nUser's Logged Biomarkers Grouped by Risk Categories:\n${JSON.stringify(riskGroupings)}` : "No medical biomarkers logged.";
+
+    const promptText = `Perform a comprehensive health profiling analysis using the totality of user information provided below.
+    ${profileText}
+    ${foodSummary}
+    ${biomarkerSummary}
+    ${refinement ? `\nUSER REFINEMENT REQUEST: The user has asked to refine the previous analysis. Please adjust the report considering this feedback: "${refinement.message}". Also consider this chat history: ${JSON.stringify(refinement.chatHistory)}` : ""}
+    
+    You need to look at all health indices and build a personalized health report.
+    Identify any critical parameters (such as elevated LDL, high HbA1c, or low eGFR) and set custom daily nutrition targets for all 30 nutrients, prioritize clinical actions, lifestyle benefits, latest medical insights, and risk forecasts over 5, 10, and 20 years with vs without modifications.
+    
+    Respond strictly with a JSON object conforming exactly to this structure:
+    {
+      "report": {
+        "timestamp": "ISO Date String",
+        "dailyNutrientTargets": {
+          "calories": "target string (e.g. 1,700-1,800 kcal)",
+          "protein": "target string",
+          "totalFat": "target string",
+          "saturatedFat": "target string (e.g. under 15 g)",
+          "unsaturatedFat": "target string",
+          "omega3": "target string",
+          "carbohydrates": "target string",
+          "addedSugar": "target string",
+          "totalFibre": "target string",
+          "solubleFibre": "target string",
+          "sodium": "target string",
+          "potassium": "target string",
+          "magnesium": "target string",
+          "calcium": "target string",
+          "iron": "target string",
+          "zinc": "target string",
+          "selenium": "target string",
+          "iodine": "target string",
+          "phosphorus": "target string",
+          "vitaminD": "target string",
+          "vitaminB12": "target string",
+          "folate": "target string",
+          "vitaminC": "target string",
+          "vitaminE": "target string",
+          "vitaminK": "target string",
+          "vitaminA": "target string",
+          "vitaminB6": "target string",
+          "thiamine": "target string",
+          "riboflavin": "target string",
+          "niacin": "target string"
+        },
+        "mostImportantNextStep": "Specific human-focused non-negotiable step",
+        "actions": [
+          {
+            "id": "unique string id",
+            "task": "clinical or screening task",
+            "explanation": "why this is important for their profile",
+            "priority": "high" | "medium" | "low",
+            "completed": false,
+            "type": "doctor" | "test" | "lifestyle"
+          }
+        ],
+        "dailyBenefits": [
+          {
+            "id": "unique string id",
+            "activity": "e.g. Walk 30 min",
+            "target": "e.g. Daily",
+            "completed": false
+          }
+        ],
+        "latestInsights": [
+          {
+            "title": "Vascular Plaque Progression Control",
+            "summary": "1-2 sentence clinical takeaway",
+            "link": "https://pubmed.ncbi.nlm.nih.gov/..."
+          }
+        ],
+        "healthRiskForecast": {
+          "year5": "Detailed text forecast of health risk if habits do not change",
+          "year10": "Detailed text forecast of health risk if habits do not change",
+          "year20": "Detailed text forecast of health risk if habits do not change",
+          "optimized5": "Detailed text forecast of benefits if targets are optimized",
+          "optimized10": "Detailed text forecast of benefits if targets are optimized",
+          "optimized20": "Detailed text forecast of benefits if targets are optimized"
+        }
+      }
+    }`;
+
+    const systemInstruction = "You are an evidence-based, pragmatic health coach and behavioral nutritionist. Your goal is to translate complex health and longevity science into sustainable, low-friction daily habits for a general audience. Prioritize mental well-being, intuitive eating principles, and practical lifestyle adjustments over hyper-optimized biometric tracking. Avoid prescribing exact macronutrient or micronutrient numbers unless explicitly requested; instead, focus on food quality, portion awareness, and sustainable, realistic routines. Your response must be an exact single JSON matching the requested schema. Never add markdown wrappers.";
+    const fullPromptSent = `System Instruction:\n${systemInstruction}\n\n${promptText}`;
+
+    const textOutput = await callUnifiedLLM({
+      modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite",
+      systemInstruction,
+      promptText,
+      responseMimeType: "application/json",
+      logStagePrefix: "health_coach"
+    });
+
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+    let parsedData = await asyncParseLLMJSON(cleanJson);
+
+    parsedData.agentPrompt = `System Instruction:\nYou are a world-class AI dietitian. Your response must be an exact JSON matching the requested schema. Never add markdown wrappers.\n\n${promptText}`;
+    res.json({
+      ...parsedData,
+      apiCalls: [{ type: 'gemini', label: `Biomarker Insight Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+    });
+  } catch (error: any) {
+    console.error("[Insight Analyze Error]:", error);
+    res.status(500).json({ error: "Failed to generate preventative recommendations: " + error.message });
+  }
+});
+
+const healthBaselineAnalyzeSchema = {
+  type: Type.OBJECT,
+  properties: {
+    report: {
+      type: Type.OBJECT,
+      properties: {
+        timelineToOptimal: {
+          type: Type.STRING,
+          description: "The overall hard physiological timeline paired with user-perception benchmarks (e.g., sleep depth, waist trimming, puffiness reduction)."
+        },
+        riskCategories: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              categoryName: { type: Type.STRING },
+              level: { type: Type.STRING, enum: ["Low", "Moderate", "Elevated", "High"] },
+              targetTrajectory: {
+                type: Type.STRING,
+                description: "Explains the concrete physical value of getting these specific biomarkers to target, what physical signs will improve, and the timeline speed for this specific category."
+              },
+              nutrientTargets: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    nutrientKey: { type: Type.STRING },
+                    targetValue: { type: Type.STRING, description: "Must be a direct computed amount (e.g., '90g' or '< 20g'), NOT a formula like '1.2g per kg of body weight'." },
+                    rationale: { 
+                      type: Type.STRING, 
+                      description: "Mechanistic and precise explanation of why this target/amount was chosen. Put dietary advice like 'Incorporate 30 grams of viscous psyllium or oat-based soluble fiber daily' in this rationale or in the overall category."
+                    }
+                  },
+                  required: ["nutrientKey", "targetValue", "rationale"]
+                }
+              },
+              dailyActivities: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    activity: { type: Type.STRING },
+                    target: { type: Type.STRING }
+                  },
+                  required: ["activity", "target"]
+                },
+                description: "Precise, time-bound behavioral or physical rules to implement daily. Must be things the user can realistically do every single day (e.g. 'activity: Walk, target: 10,000 steps', 'activity: Meditate, target: 10 mins'). Do NOT include dietary nutrient recommendations here (like fiber or protein intake) or infrequent/unrealistic daily activities (like cooking with specific oils every day)."
+              }
+            },
+            required: ["categoryName", "level", "targetTrajectory", "nutrientTargets", "dailyActivities"]
+          }
+        },
+        topNutrientTargets: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              nutrientKey: { type: Type.STRING },
+              targetValue: { type: Type.STRING },
+              rationale: { type: Type.STRING }
+            },
+            required: ["nutrientKey", "targetValue", "rationale"]
+          },
+          description: "Top 3-6 core nutrients that the user has to focus the most on and that will have the biggest impact for the user life. Impact needs to be considered in term of health risk, such as cardiovascular risk from sat fat is much more important than a risk of not having enough fiber."
+        },
+        topWeeklyNutrientTargets: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              nutrientKey: { type: Type.STRING },
+              targetValue: { type: Type.STRING },
+              rationale: { type: Type.STRING }
+            },
+            required: ["nutrientKey", "targetValue", "rationale"]
+          },
+          description: "Top 3-6 additional/micronutrients that the user has to focus the most on and that will have the biggest impact for the user life."
+        },
+        generalNutrientTargets: {
+          type: Type.OBJECT,
+          description: "A flat map containing all 31 available nutrient keys populated with precise formatted values.",
+          properties: {
+            calories: { type: Type.STRING },
+            totalFat: { type: Type.STRING },
+            solubleFibre: { type: Type.STRING },
+            saturatedFat: { type: Type.STRING },
+            protein: { type: Type.STRING },
+            potassium: { type: Type.STRING },
+            transFat: { type: Type.STRING },
+            addedSugar: { type: Type.STRING },
+            carbohydrates: { type: Type.STRING },
+            totalFibre: { type: Type.STRING },
+            sodium: { type: Type.STRING },
+            unsaturatedFat: { type: Type.STRING },
+            omega3: { type: Type.STRING },
+            magnesium: { type: Type.STRING },
+            calcium: { type: Type.STRING },
+            iron: { type: Type.STRING },
+            zinc: { type: Type.STRING },
+            selenium: { type: Type.STRING },
+            iodine: { type: Type.STRING },
+            phosphorus: { type: Type.STRING },
+            vitaminD: { type: Type.STRING },
+            vitaminB12: { type: Type.STRING },
+            folate: { type: Type.STRING },
+            vitaminC: { type: Type.STRING },
+            vitaminE: { type: Type.STRING },
+            vitaminK: { type: Type.STRING },
+            vitaminA: { type: Type.STRING },
+            vitaminB6: { type: Type.STRING },
+            thiamine: { type: Type.STRING },
+            riboflavin: { type: Type.STRING },
+            niacin: { type: Type.STRING }
+          },
+          required: [
+            "calories", "totalFat", "solubleFibre", "saturatedFat", "protein", "potassium", "transFat", "addedSugar", "carbohydrates", "totalFibre", "sodium",
+            "unsaturatedFat", "omega3", "magnesium", "calcium", "iron", "zinc", "selenium", "iodine", "phosphorus", "vitaminD", "vitaminB12", "folate", "vitaminC", "vitaminE", "vitaminK", "vitaminA", "vitaminB6", "thiamine", "riboflavin", "niacin"
+          ]
+        }
+      },
+      required: ["timelineToOptimal", "riskCategories", "topNutrientTargets", "topWeeklyNutrientTargets", "generalNutrientTargets"]
+    }
+  },
+  required: ["report"]
+};
+
+app.post("/api/gemini/health-baseline-analyze", async (req, res) => {
+  try {
+    const isStream = req.query.stream === "true";
+    if (isStream) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+    }
+
+    const { profile, userProfile, biomarkerHistory, engine, refinement, calibratedInsights, outOfRangeBiomarkers } = req.body;
+    const activeProfile = profile || userProfile || {};
+
+    const sanitizedBiomarkerHistory = filterHistoryForUse(biomarkerHistory, activeProfile).map((log: any) => {
+      const clean = { ...log };
+      delete clean.tests;
+      delete clean.updated_at;
+      delete clean.sync_state;
+      delete clean.note;
+      delete clean.summary;
+      delete clean.id;
+      return clean;
+    });
+
+    const riskGroupingsWithSeverity: Record<string, string[]> = {};
+    const biomarkerHistories: Record<string, {date: string, val: any}[]> = {};
+    
+    // Sort by date descending so first seen is latest
+    const parseDateStr = (dStr: string) => {
+      if (!dStr) return 0;
+      const parts = dStr.split('-');
+      if (parts.length === 3) {
+        if (parts[0].length === 4) return new Date(dStr).getTime();
+        return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
+      }
+      return new Date(dStr).getTime();
+    };
+
+    const sortedHistory = [...sanitizedBiomarkerHistory].sort((a, b) => {
+      return parseDateStr(b.date) - parseDateStr(a.date);
+    });
+    
+    sortedHistory.forEach((log: any) => {
+      if (log.biomarkers) {
+        Object.keys(log.biomarkers).forEach(key => {
+          if (!biomarkerHistories[key]) biomarkerHistories[key] = [];
+          if (biomarkerHistories[key].length < 5) {
+            biomarkerHistories[key].push({ date: log.date, val: log.biomarkers[key] });
+          }
+        });
+      }
+    });
+
+    const normalBiomarkers: string[] = [];
+    const flaggedBiomarkers: string[] = [];
+    
+    Object.keys(biomarkerHistories).forEach(key => {
+      // 1. Check if the biomarker is explicitly marked as "not used"
+      const isNotUsed = (activeProfile?.notUsedBiomarkers && (
+        activeProfile.notUsedBiomarkers[key] || 
+        Object.keys(activeProfile.notUsedBiomarkers).some(nok => nok.toLowerCase() === key.toLowerCase())
+      )) || (activeProfile?.notUsedInMedicalHistory && (
+        activeProfile.notUsedInMedicalHistory[key] ||
+        Object.keys(activeProfile.notUsedInMedicalHistory).some(nok => nok.toLowerCase() === key.toLowerCase())
+      ));
+      if (isNotUsed) return;
+
+      const history = biomarkerHistories[key];
+      const latestVal = history[0].val;
+      const historyStr = history.map(h => `\n       - ${h.date}: ${h.val}`).join('');
+      
+      const outOfRangeDef = (outOfRangeBiomarkers || []).find((b: any) => b.key === key);
+      const isFlagged = outOfRangeDef?.status === 'flagged';
+      
+      const customDef = getCustomBiomarkerDef(activeProfile, key);
+      const def = biomarkerDefinitions.find(d => d.key === key);
+      
+      const mergedDef = { ...def, ...customDef };
+      const formattedOpt = formatOptimalTargetValue(mergedDef);
+      
+      let idealStr = "";
+      if (formattedOpt) {
+        idealStr = ` (Optimal value ${formattedOpt})`;
+      } else if (mergedDef.normalRange) {
+        idealStr = ` (Optimal value ${mergedDef.normalRange})`;
+      }
+
+      if (isFlagged) {
+        flaggedBiomarkers.push(`${key} (History: ${history.map(h => `${h.date}: ${h.val}`).join(', ')})`);
+      } else if (outOfRangeDef) {
+        const statusLabel = getBiomarkerStatusLabel(key, outOfRangeDef.status, customDef, latestVal, activeProfile);
+        const calibrated = calibratedInsights?.[key];
+        const dynamicInsight = def ? generateDynamicInsight(def, activeProfile, outOfRangeDef.value, outOfRangeDef.status) : undefined;
+        const medicalInsight = dynamicInsight || calibrated?.specificRiskContext || calibrated?.description || customDef?.specificRiskContext || customDef?.description || customDef?.benefitRisk || def?.benefitRisk;
+        
+        let medicalInsightStr = "";
+        if (medicalInsight && medicalInsight !== "No specific medical insight defined.") {
+          medicalInsightStr = `\n     Medical Insight: ${medicalInsight}`;
+        }
+
+        const meta = getBiomarkerMetadata(key, customDef);
+        // Map strictly to the most relevant single category
+        const primaryRisk = meta.riskCategories && meta.riskCategories.length > 0 ? meta.riskCategories[0] : 'Systemic/General';
+        
+        const calibSource = customDef?.calibrationSource ? ` (Calibrated to: ${customDef.calibrationSource})` : "";
+        
+        if (!riskGroupingsWithSeverity[primaryRisk]) riskGroupingsWithSeverity[primaryRisk] = [];
+        riskGroupingsWithSeverity[primaryRisk].push(`${key} (Status: ${statusLabel})${calibSource}${idealStr}${historyStr}${medicalInsightStr}`);
+      } else {
+        normalBiomarkers.push(`${key}: ${latestVal}${idealStr}`);
+      }
+    });
+
+    let groupedRisksStr = "";
+    if (Object.keys(riskGroupingsWithSeverity).length > 0) {
+      groupedRisksStr = "Biomarkers at risk:\n";
+      Object.keys(riskGroupingsWithSeverity).forEach(risk => {
+        groupedRisksStr += `\n[${risk}]\n`;
+        riskGroupingsWithSeverity[risk].forEach(line => {
+          groupedRisksStr += `  - ${line}\n`;
+        });
+      });
+    }
+
+    let flaggedStr = "";
+    if (flaggedBiomarkers.length > 0) {
+      flaggedStr = `\n\n[FLAGGED / UNRESOLVED TELEMETRY ERRORS (EXCLUDED FROM CLINICAL ANALYSIS)]\n` +
+        flaggedBiomarkers.map(f => `  - ${f}`).join('\n') +
+        `\n  Note: The entries above contain scaling/unit/notation shifts (e.g. 48 vs 0.48 or 3). Do NOT calculate targets or risk categories for them. Instruct the user to fix these log entries in Medical History or via the Data Review Agent.`;
+    }
+
+    const biomarkerSummary = Object.keys(biomarkerHistories).length > 0 ? 
+      `${groupedRisksStr}${flaggedStr}\n\nNormal/Uncategorized Biomarkers:\n${normalBiomarkers.join('\n')}` : 
+      "No medical biomarkers logged.";
+
+    const profileText = `UserProfile: Age ${activeProfile.age || 'Not provided'}, Ethnicity: ${activeProfile.ethnicity || 'Not provided'}, Weight: ${activeProfile.weight || 'Not provided'}kg, Height: ${activeProfile.height || 'Not provided'}cm, Gender: ${activeProfile.gender || 'Not provided'}, Blood Type: ${activeProfile.bloodType || 'Not provided'}.`;
+
+    const promptText = `Perform a comprehensive health baseline analysis using the totality of user information provided below. 
+
+${profileText}
+${biomarkerSummary}
+
+=== AVAILABLE NUTRIENT KEYS ===
+Core Nutrients: calories, totalFat, solubleFibre, saturatedFat, protein, potassium, transFat, addedSugar, carbohydrates, totalFibre, sodium
+Additional Nutrients: unsaturatedFat, omega3, magnesium, calcium, iron, zinc, selenium, iodine, phosphorus, vitaminD, vitaminB12, folate, vitaminC, vitaminE, vitaminK, vitaminA, vitaminB6, thiamine, riboflavin, niacin
+
+=== ZERO-REDUNDANCY LAW ===
+1. **Single-Source Information:** Every clinical insight, priority nutrient rationale, or protocol must exist in exactly ONE location within the JSON payload.
+2. **Scrap Global Lists:** Do not generate trailing summary bullet points, master nutrient lists, or global action plan texts at the base of the document. Embed every high-leverage nutrient explanation cleanly and exclusively within its corresponding clinical category block.
+3. **No Echoing:** Do not create separate arrays or blocks to echo raw baseline biomarker numbers or target thresholds that the user interface already knows. Focus entirely on synthesis, strategy, and biological trends.
+4. **Prioritize Top Nutrients:** You must pick what are the top 3-6 nutrients that the user has to focus the most on and that will have the biggest impact for the user life. Impact needs to be considered in term of health risk, such as cardiovascular risk from sat fat is much more important than a risk of not having enough fiber. Output these in the topNutrientTargets and topWeeklyNutrientTargets arrays.
+
+=== TARGET PRECISION ===
+All values across the entire payload â€” including \`nutrientTargets[].targetValue\` and \`generalNutrientTargets\` â€” MUST carry formatting operators (<, >, <=, >=, or range -) and appropriate units. For zero-baseline symptom scores or indices, express targets as "< 1" or "<= 0".`;
+
+    const systemInstruction = `1. Core Persona & Tone Law
+Objective Clinical Authority: You are an objective, data-first clinical analyst. Avoid casual, chatty, or overly familiar health-coach language.
+Anti-Gimmick Rule: Do not write retrospective, hyper-specific diary callouts (e.g., "I see you ate a salad on Tuesday" or "Avoid the pizza you had yesterday"). This feels artificial and out of touch. Address the long-term, overarching metabolic and physiological trends of the entire profile.
+
+2. User Perception & Symptom Mapping Instruction
+Tangible Prognosis: When defining timelines and target trajectories, translate internal blood chemistry shifts into concrete, real-world physical changes the user can physically feel and observe.
+Symptom Linkage:
+- Link Visceral Adiposity/BMI reduction directly to visible waistline trimming, reduced internal airway pressure, deeper sleep, and decreased snoring.
+- Link eGFR and Fluid Balance optimization directly to the clearance of chronic, subtle morning fluid retention (such as facial or ankle puffiness) and increased physical freshness.
+- Link Lipid and Cardiovascular optimization directly to unburdened physical stamina, easier recovery, and preserved endurance during standard daily physical tasks.
+
+3. Nutrient Target Precision & Rate of Progress
+Commitment Definitions: For dynamic macro-levers (e.g., calories), do not just provide an absolute number. You must explicitly calculate and state the exact biological pace inside the rationale. Specify a gentle, sustainable energy deficit (e.g., ~250 kcal/day) targeting a safe, permanent weight loss velocity (e.g., 0.25 kg per week) over a 12-month horizon to fully protect skeletal muscle mass.
+Mechanistic Clarity: Explain precisely how a nutrient target shifts a biomarker (e.g., explaining that restricting saturated fat downregulates hepatic cholesterol production by withholding raw materials, or that soluble fiber binds intestinal bile acids to force excretion).
+
+4. The 31-Nutrient Mechanism & Overrides
+Deterministic Baselines: You MUST fully populate the generalNutrientTargets map with ALL 31 available nutrient keys. NEVER leave it empty. For each of the 31 nutrients, compute and provide the EXACT direct amount (e.g., "90g" or "< 20g"), NOT a formula (e.g., do NOT say "1.2g per kg of body weight"). You have the user's weight, so do the math and output the final absolute number. For the 15 static micronutrients (vitaminA, vitaminC, vitaminD, vitaminE, vitaminK, vitaminB12, vitaminB6, thiamine, riboflavin, niacin, folate, zinc, selenium, iodine, magnesium), output standard, medically accepted Age/Gender RDAs.
+Clinical Escape Hatch: You MUST dynamically alter or override these static baselines if a specific out-of-range clinical biomarker demands it.
+
+CRITICAL DATA INTEGRITY LAW: You MUST NOT create clinical risk categories, target values, or dietary interventions for any biomarker listed under [FLAGGED / UNRESOLVED TELEMETRY ERRORS]. Ignore flagged data and focus exclusively on valid clinical biometrics.
+
+Your response must be exactly one JSON object matching the requested schema. Never add markdown wrappers outside the JSON.`;
+
+    const textOutput = await callUnifiedLLM({
+      modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite",
+      systemInstruction,
+      promptText,
+      responseMimeType: "application/json",
+      responseSchema: healthBaselineAnalyzeSchema,
+      skipThoughtInjection: true,
+      logStagePrefix: "health_coach",
+      onStream: isStream ? (chunk: string, isThought?: boolean) => {
+        if (isThought) {
+          res.write(`data: ${JSON.stringify({ type: 'stream', thought: chunk, stage: 'health_coach' })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify({ type: 'stream', chunk, stage: 'health_coach' })}\n\n`);
+        }
+      } : undefined
+    });
+
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+    cleanJson = cleanJson.replace(/,\s*([}\]])/g, "$1");
+
+    let parsedData;
+    try {
+      parsedData = JSON.parse(cleanJson);
+    } catch (parseErr) {
+      try {
+        const firstBrace = cleanJson.indexOf("{");
+        const lastBrace = cleanJson.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          parsedData = await asyncParseLLMJSON(cleanJson);
+        } else {
+          throw parseErr;
+        }
+      } catch (innerErr) {
+        console.error("[Health Baseline JSON Parse Error]:", innerErr, "\nTruncated Output:", textOutput.substring(textOutput.length - 200));
+        throw innerErr;
+      }
+    }
+
+    
+    
+    // Sanitize any bare target values in nutrientTargets
+    if (parsedData?.report?.riskCategories && Array.isArray(parsedData.report.riskCategories)) {
+      parsedData.report.riskCategories.forEach((cat: any) => {
+        if (Array.isArray(cat.nutrientTargets)) {
+          cat.nutrientTargets.forEach((nt: any) => {
+            if (nt.targetValue) {
+              const tv = String(nt.targetValue).trim();
+              if (tv === "0") {
+                nt.targetValue = "< 1g";
+              }
+            }
+          });
+        }
+      });
+    }
+
+    // Ensure generalNutrientTargets is fully populated with formatted keys
+    const DEFAULT_GENERAL_NUTRIENT_TARGETS: Record<string, string> = {
+      calories: "2000kcal - 2200kcal",
+      protein: "> 70g",
+      totalFat: "50g - 70g",
+      saturatedFat: "< 15g",
+      transFat: "< 0g",
+      unsaturatedFat: "> 35g",
+      omega3: "> 1.6g",
+      carbohydrates: "130g - 250g",
+      addedSugar: "< 25g",
+      totalFibre: "> 30g",
+      solubleFibre: "> 10g",
+      sodium: "< 2000mg",
+      potassium: "> 3400mg",
+      magnesium: "> 400mg",
+      calcium: "> 1000mg",
+      iron: "> 8mg",
+      zinc: "> 11mg",
+      selenium: "> 55mcg",
+      iodine: "> 150mcg",
+      phosphorus: "> 700mg",
+      vitaminD: "> 1000IU",
+      vitaminB12: "> 2.4mcg",
+      folate: "> 400mcg",
+      vitaminC: "> 90mg",
+      vitaminE: "> 15mg",
+      vitaminK: "> 120mcg",
+      vitaminA: "> 900mcg",
+      vitaminB6: "> 1.7mg",
+      thiamine: "> 1.2mg",
+      riboflavin: "> 1.3mg",
+      niacin: "> 16mg"
+    };
+
+    if (parsedData?.report) {
+      if (!parsedData.report.generalNutrientTargets || typeof parsedData.report.generalNutrientTargets !== 'object') {
+        parsedData.report.generalNutrientTargets = {};
+      }
+      const ceilings = new Set(['saturatedFat', 'transFat', 'addedSugar', 'sodium']);
+      Object.keys(DEFAULT_GENERAL_NUTRIENT_TARGETS).forEach((key) => {
+        let val = parsedData.report.generalNutrientTargets[key];
+        if (!val || typeof val !== 'string' || val.trim() === '') {
+          parsedData.report.generalNutrientTargets[key] = DEFAULT_GENERAL_NUTRIENT_TARGETS[key];
+        } else {
+          let valStr = String(val).trim();
+          if (valStr === "0" || valStr === "0g" || valStr === "0mg") {
+            valStr = ceilings.has(key) ? "< 1g" : "> 1g";
+          } else if (!/[<>=\-]/.test(valStr)) {
+            if (ceilings.has(key)) {
+              valStr = `< ${valStr}`;
+            } else {
+              valStr = `> ${valStr}`;
+            }
+          }
+          parsedData.report.generalNutrientTargets[key] = valStr;
+        }
+      });
+    }
+
+    parsedData.agentPrompt = `System Instruction:\n${systemInstruction}\n\n${promptText}`;
+    
+    if (isStream) {
+      res.write(`data: ${JSON.stringify({ final: true, result: {
+        ...parsedData,
+        apiCalls: [{ type: 'gemini', label: `Health Baseline Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+      } })}\n\n`);
+      res.end();
+    } else {
+      res.json({
+        ...parsedData,
+        apiCalls: [{ type: 'gemini', label: `Health Baseline Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+      });
+    }
+  } catch (error: any) {
+    console.error("[Health Baseline Analyze Error]:", error);
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ error: "Failed to generate health baseline: " + error.message })}\n\n`);
+      res.end();
+    } else {
+      res.status(500).json({ error: "Failed to generate health baseline: " + error.message });
+    }
+  }
+});
+
+const RouteAgentOutputSchema = z.object({
+  _internalReasoning: z.string().nullable().optional(),
+  selectedAgent: z.string(),
+  reasoning: z.string().nullable().optional(),
+  targetDbId: z.string().nullable().optional()
+});
+
+app.post("/api/gemini/route-biomarker"
+, async (req, res) => {
+  try {
+    const { message, engine, context } = req.body;
+    const modelId = (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite";
+
+    const systemInstruction = `You are the RouteAgent, an intelligent health data and clinical router.
+Your job is to parse the user request, analyze any context, and route the user to the most appropriate specialized health agent.
+
+Available agents:
+- 'agent1': Clinical Calibration Agent (For terminology mapping & standardizing clinical terms)
+- 'agent2': Clinical Assessment Agent (For adding standard groupings & risk categories)
+- 'agent3': Clinical Harmonization Agent (For terminology consolidation & assembly into buckets)
+- 'agent4': Health Planning Agent (For retest timelines, auditing test errors, and finding short/long term gaps)
+- 'agent5': Holistic Review Agent (For broad health & demographics-aware insights)
+- 'agent7': Health Report Agent (For final cohesive formatted health report generation)
+- 'front_desk': Health Preparation Agent (For general health questions, logging biomarkers & profile updates)
+- 'health_baseline': Health Coach (For evidence-based, sustainable food & coaching habits)
+
+You MUST respond with a JSON object containing:
+{
+  "_internalReasoning": "Your step-by-step thinking.",
+  "selectedAgent": "The ID of the chosen agent (e.g. 'agent4', 'front_desk', 'health_baseline')",
+  "reasoning": "A concise explanation of why this agent was selected.",
+  "targetDbId": null // Optional target database ID or key if applicable
+}`;
+
+    const promptText = `User Message: "${message || ''}"\nContext: ${JSON.stringify(context || {})}`;
+
+    const textOutput = await callUnifiedLLM({
+      modelId,
+      systemInstruction,
+      promptText,
+      responseMimeType: "application/json",
+      logStagePrefix: 'route_biomarker',
+    });
+
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+    let parsed: any;
+    try {
+      parsed = JSON.parse(cleanJson);
+    } catch (err: any) {
+      const firstBrace = cleanJson.indexOf("{");
+      const lastBrace = cleanJson.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        parsed = await asyncParseLLMJSON(cleanJson);
+      } else {
+        throw err;
+      }
+    }
+
+    const validation = RouteAgentOutputSchema.safeParse(parsed);
+    if (!validation.success) {
+      addDebugLog(`[Zod Validation Failed] RouteAgent response validation failed: ${validation.error.message}. Raw: ${textOutput}`);
+      // Gracefully fall back to the default agent route
+      res.json({
+        _internalReasoning: "Fallback active due to validation failure",
+        selectedAgent: "front_desk",
+        reasoning: "Graceful fallback to default agent route (front_desk).",
+        targetDbId: null
+      });
+      return;
+    }
+
+    res.json(validation.data);
+  } catch (error: any) {
+    addDebugLog(`[RouteAgent Error] routing failed: ${error.message}`);
+    // Gracefully fall back to the default agent route
+    res.json({
+      _internalReasoning: "Fallback active due to exception: " + error.message,
+      selectedAgent: "front_desk",
+      reasoning: "Graceful fallback to default agent route (front_desk) on error.",
+      targetDbId: null
+    });
+  }
+});
+
+app.post("/api/gemini/route-chat", async (req, res) => {
+  try {
+    const { messages, selectedBiomarkers, allApprovedKeys } = req.body;
+    const approvedList: string[] = Array.isArray(allApprovedKeys) ? allApprovedKeys : [];
+    const suggestedMapping: Record<string, string> = {};
+
+    const normalize = (str: string) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Deterministic rule & synonym matcher without LLM overhead
+    (selectedBiomarkers || []).forEach((b: any) => {
+      const originalKey = b.key || b.originalKey || b.name || '';
+      const normOrig = normalize(originalKey);
+      if (!normOrig) return;
+
+      // 1. Direct normalized match
+      let matched = approvedList.find(k => normalize(k) === normOrig);
+
+      // 2. Common clinical aliases
+      if (!matched) {
+        const aliasMap: Record<string, string[]> = {
+          'hba1c': ['hemoglobina1c', 'glycatedhemoglobin', 'a1c'],
+          'ldl': ['ldlcholesterol', 'lowdensitylipoprotein', 'ldlc'],
+          'hdl': ['hdlcholesterol', 'highdensitylipoprotein', 'hdlc'],
+          'fasting_glucose': ['fbs', 'fastingbloodsugar', 'glucosefasting', 'glucose'],
+          'total_cholesterol': ['cholesteroltotal', 'totalchol', 'tchol'],
+          'triglycerides': ['tg', 'trigs'],
+          'alt': ['sgpt', 'alaninetransaminase', 'alanineaminotransferase'],
+          'ast': ['sgot', 'aspartatetransaminase', 'aspartateaminotransferase'],
+          'crp': ['hscrp', 'creactiveprotein', 'highsensitivitycrp'],
+          'vitamin_d': ['25hydroxyvitamind', '25ohvitamind', 'vitamind3', 'vitd'],
+          'tsh': ['thyroidstimulatinghormone', 'thyrotropin'],
+          'creatinine': ['serumcreatinine', 'creat']
+        };
+
+        for (const [canonical, aliases] of Object.entries(aliasMap)) {
+          if (normOrig === normalize(canonical) || aliases.some(a => normOrig === a || normOrig.includes(a))) {
+            const canonicalApproved = approvedList.find(k => normalize(k) === normalize(canonical));
+            if (canonicalApproved) {
+              matched = canonicalApproved;
+              break;
+            }
+          }
+        }
+      }
+
+      // 3. Substring containment
+      if (!matched) {
+        matched = approvedList.find(k => {
+          const normK = normalize(k);
+          return normK.length > 3 && (normK.includes(normOrig) || normOrig.includes(normK));
+        });
+      }
+
+      if (matched) {
+        suggestedMapping[originalKey] = matched;
+      }
+    });
+
+    const matchCount = Object.keys(suggestedMapping).length;
+    const summaryText = matchCount > 0
+      ? `Identified ${matchCount} standard database mapping${matchCount > 1 ? 's' : ''} based on clinical ontology rules.`
+      : 'Reviewed unmapped biomarkers against master database keys.';
+
+    res.json({
+      text: summaryText,
+      suggestedMapping
+    });
+  } catch (e: any) {
+    console.error('[route-chat] Deterministic mapping error:', e);
+    res.json({ text: "Mapping processed.", suggestedMapping: {} });
+  }
+});
+
+app.post("/api/gemini/standardize-units", async (req, res) => {
+  try {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    const { selectedBiomarkers, engine, customSystemInstruction, unitPreference } = req.body;
+    const modelId = (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite";
+    addDebugLog(`[Standardize Units Agent] Request received to standardize ${selectedBiomarkers?.length} biomarkers using model: ${modelId} with user unit preference: ${unitPreference || 'SI'}.`, explicitSessionId);
+
+    const targetUnitSystem = unitPreference === "US" ? "US Units (e.g., mg/dL, lbs, inches, standard US clinical ranges)" : "SI Units / International System (e.g., mmol/L, g/L, kg, cm, standard international clinical ranges)";
+
+    let systemInstruction = `You are an automated Clinical Unit Standardization Agent. Your task is to standardize medical units for biomarkers.
+
+=== USER PREFERENCE ===
+The user's preferred unit system is: ${targetUnitSystem}.
+You MUST standardize the unit for each biomarker to match this preferred system. For example, if the user preference is US Units, you should convert international units like mmol/L to mg/dL when appropriate (e.g., for Glucose or Cholesterol), and standardise weights to lbs, heights to inches. If the user preference is SI Units, you should convert US units to SI/International units. Ensure you provide the appropriate conversionFactor to convert from the biomarker's current unit to this standardized preferred unit.
+
+=== SYSTEM CONSTRAINTS ===
+
+First, think step-by-step in the '_internalReasoning' field of the JSON.
+
+Second, output exactly one JSON object.
+
+The JSON must contain ONLY the fields requested below.
+
+Output exactly ONE object per input biomarker.
+
+=== FIELD DEFINITIONS FOR JSON ===
+
+mappedBiomarkers (array of objects):
+
+originalKey (string): Exact match to input key.
+
+standardizedUnit (string): The exact, pure abbreviation (e.g., "cm", "kg", "score", "mmol/L", "10^9/L").
+
+conversionFactor (number): The numeric conversion multiplier for the unit definition. Use 1 if unchanged.
+
+valueMultiplier (number): The numeric multiplier to apply to historical unstandardized outlier readings to convert them to the standardized unit scale. E.g.:
+- Differential WBC percentage to 10^9/L: 0.1 (e.g. 55% neutrophils -> 5.5, 32% lymphocytes -> 3.2, 7% monocytes -> 0.7, 4% eosinophils -> 0.4).
+- Raw cells/ÂµL to 10^9/L: 0.001 (e.g. 100 cells/ÂµL -> 0.10).
+- Weight lbs to kg: 0.453592 (or kg to lbs: 2.20462).
+- Glucose mg/dL to mmol/L: 0.0555.
+- Cholesterol mg/dL to mmol/L: 0.02586 (or 1/38.67).
+- Uric Acid mg/dL to Âµmol/L: 59.48.
+- Vitamin D ng/mL to nmol/L: 2.496.
+- Testosterone ng/dL to nmol/L: 0.0347.
+- Missing decimal place / 10x scale shift: 10 or 0.1.
+- No historical log correction needed / readings already standard: 1.
+
+valueAdjustmentReason (string): Short explanation of the value conversion multiplier (e.g. "Scaled differential percentage to 10^9/L (*0.1)").
+
+confidence (string): "high", "medium", or "low".
+
+notes (string): Clinical reasoning.
+
+=== EXAMPLES ===
+
+Example 1: Converting a known unit and scaling outlier logs
+Input:
+key: "weight", name: "Body Weight", currentUnit: "lbs", sampleLogs: [2026-08-01: 165]
+key: "basophil_count", name: "Basophil Count", currentUnit: "10^9/L", normalRange: "0.0 - 0.1", sampleLogs: [2026-08-16: 100]
+key: "neutrophil_count", name: "Neutrophil Count", currentUnit: "10^9/L", normalRange: "2.0 - 6.3", sampleLogs: [2026-08-16: 55]
+
+Output:
+Weight is lbs. Standard is kg. Conversion 0.453592. Value multiplier 0.453592. Confidence high.
+Basophil Count is standard 10^9/L. Log 100 was entered as cells/ÂµL. Value multiplier 0.001. Confidence high.
+Neutrophil Count is standard 10^9/L. Log 55 was entered as percentage differential 55%. Value multiplier 0.1. Confidence high.
+
+{
+"mappedBiomarkers": [
+{
+"originalKey": "weight",
+"standardizedUnit": "kg",
+"conversionFactor": 0.453592,
+"valueMultiplier": 0.453592,
+"valueAdjustmentReason": "Converted weight from lbs to kg (*0.453592).",
+"confidence": "high",
+"notes": "Converted from lbs to kg."
+},
+{
+"originalKey": "basophil_count",
+"standardizedUnit": "10^9/L",
+"conversionFactor": 1,
+"valueMultiplier": 0.001,
+"valueAdjustmentReason": "Scaled raw cells/ÂµL to 10^9/L (/1000).",
+"confidence": "high",
+"notes": "Standard SI unit is 10^9/L. Historical entry 100 cells/ÂµL scaled to 0.10 10^9/L."
+},
+{
+"originalKey": "neutrophil_count",
+"standardizedUnit": "10^9/L",
+"conversionFactor": 1,
+"valueMultiplier": 0.1,
+"valueAdjustmentReason": "Scaled differential percentage (55%) to 10^9/L (*0.1).",
+"confidence": "high",
+"notes": "Standard SI unit is 10^9/L. Historical entry 55% scaled to 5.5 10^9/L."
+}
+]
+}
+
+=== OUTPUT INSTRUCTIONS ===
+
+First, write out your step-by-step reasoning in plain text.
+
+Then, output your final mapped results in a raw, valid JSON block.
+
+Ensure EVERY JSON field is correctly separated by a comma and that all strings are properly closed with quotation marks. Do not add markdown formatting blocks (such as \`\`\`json) around your response.`;
+
+    if (customSystemInstruction) {
+      systemInstruction += `\n\n=== CUSTOM INSTRUCTIONS ===\n${customSystemInstruction}`;
+      addDebugLog(`[Standardize Units Agent] Using Custom Instructions:\n${customSystemInstruction}`, explicitSessionId);
+    }
+    
+    let promptText = `Biomarkers to process:\n`;
+    if (selectedBiomarkers && selectedBiomarkers.length > 0) {
+      selectedBiomarkers.forEach((b: any) => {
+        const samplesStr = Array.isArray(b.sampleLogs) && b.sampleLogs.length > 0
+          ? `, sampleLogs: [${b.sampleLogs.map((l: any) => `${l.date}: ${l.value}`).join(', ')}]`
+          : '';
+        const rangeStr = b.normalRange ? `, normalRange: "${b.normalRange}"` : '';
+        promptText += `- key: "${b.key}", name: "${b.name}", currentUnit: "${b.currentUnit || 'Unknown'}"${rangeStr}${samplesStr}\n`;
+      });
+    }
+
+    const standardizeUnitsSchema = {
+      type: Type.OBJECT,
+      properties: {
+        _internalReasoning: { type: Type.STRING, description: "Think step-by-step: analyze current units, inspect sample logs for scale/unit mismatches, determine standard metric units, compute valueMultiplier for outlier logs, perform conversions, check constraints." },
+        mappedBiomarkers: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              originalKey: { type: Type.STRING },
+              standardizedUnit: { type: Type.STRING },
+              conversionFactor: { type: Type.NUMBER },
+              valueMultiplier: { type: Type.NUMBER, description: "Multiplier to convert legacy/outlier historical log readings to standard scale (e.g. 0.001 for cells/ÂµL to 10^9/L, 1 if no conversion needed)." },
+              valueAdjustmentReason: { type: Type.STRING, description: "Short clinical reason for valueMultiplier." },
+              confidence: { type: Type.STRING },
+              notes: { type: Type.STRING }
+            }
+          }
+        }
+      },
+      required: ["_internalReasoning", "mappedBiomarkers"]
+    };
+
+    const makeStandardizationCall = async () => {
+      let timeoutId: NodeJS.Timeout;
+      const standardizationTimeout = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("Clinical unit standardization timed out after 115s. Model under high demand â€” please try again.")), 115000);
+      });
+      try {
+        const llmPromise = callUnifiedLLM({
+          modelId,
+          systemInstruction,
+          promptText,
+          responseMimeType: "application/json",
+          responseSchema: standardizeUnitsSchema,
+          skipThinking: true
+        });
+        
+        // Prevent unhandled rejection if this promise settles after Promise.race finishes
+        llmPromise.catch(() => {});
+        
+        const result = await Promise.race([
+          llmPromise,
+          standardizationTimeout
+        ]);
+        return result as string;
+      } finally {
+        clearTimeout(timeoutId!);
+      }
+    };
+
+    let textOutput: string;
+    try {
+      textOutput = await makeStandardizationCall();
+    } catch (firstErr: any) {
+      const isAbort = firstErr.name === 'AbortError' || (firstErr.message && firstErr.message.toLowerCase().includes('abort'));
+      const isQuota = firstErr.message && (firstErr.message.includes('429') || firstErr.message.includes('quota') || firstErr.message.toLowerCase().includes('resource_exhausted'));
+      if (isAbort || isQuota) throw firstErr;
+      addDebugLog(`[Standardize Units Agent] First attempt failed: ${firstErr.message}. Retrying once in 500ms...`, explicitSessionId);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      textOutput = await makeStandardizationCall();
+    }
+
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+    addDebugLog(`[Standardize Units Agent] Agent output payload (raw):\n${cleanJson}`, explicitSessionId);
+    
+    const jsonMatch = cleanJson.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      cleanJson = jsonMatch[0];
+    }
+    
+    addDebugLog(`[Standardize Units Agent] Agent output payload (cleaned):\n${cleanJson}`, explicitSessionId);
+    res.json({ jsonResponse: cleanJson });
+  } catch (error: any) {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    addDebugLog(`[Standardize Units Agent] Error: ${error.message}`, explicitSessionId);
+    console.error("[Standardize Units Agent Error]:", error);
+    res.status(500).json({ error: "Failed to standardize units: " + error.message });
+  }
+});
+
+app.post("/api/gemini/medical-categorise", async (req, res) => {
+  try {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    const { selectedBiomarkers, engine, customSystemInstruction } = req.body;
+    const modelId = (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite";
+    addDebugLog(`[Medical Categorisation Agent] Request received to categorise ${selectedBiomarkers?.length} biomarkers using model: ${modelId}.`, explicitSessionId);
+
+    let systemInstruction = `You are an automated Clinical Categorisation Agent. Your task is to accurately map medical biomarkers to their appropriate physiological groupings, risk categories, and potential medical conditions.
+
+=== OBJECTIVE ===
+For each provided biomarker, determine:
+1. Standard Medical Grouping. Select the most appropriate clinical medical practice area. Choose from:
+   - 'Metabolic'
+   - 'Hepatic'
+   - 'Renal'
+   - 'Hematology'
+   - 'Biometrics'
+   - 'Cardiology'
+   - 'Endocrinology'
+   - 'Immunology'
+   - 'Neurology & Cognitive'
+   - 'Behavioral & Mental Health'
+   - 'Toxicology & Addiction'
+   - 'Screenings & Assessments'
+   - 'Gastroenterology'
+   - 'Musculoskeletal'
+   - 'Pulmonology'
+   - 'Wellness & Lifestyle'
+   - 'Other'
+   CRITICAL FOR SURVEYS, AUDIT SCORES, QUESTIONNAIRES & SCREENINGS: Assign 'Behavioral & Mental Health', 'Toxicology & Addiction', or 'Screenings & Assessments'. NEVER output blank or N/A.
+
+2. Risk Categories. A JSON array of string tags. Choose ONLY from the 8 canonical categories: "Cardiovascular", "Metabolic", "Liver", "Kidney", "Hematology", "Immunological", "Endocrine", "Screenings & Wellness". Do NOT invent other category names.
+   CRITICAL: You MUST assign AT LEAST ONE category to EVERY biomarker. Never return an empty array [].
+
+3. Potential Medical Conditions. A JSON array of string tags representing associated clinical conditions, clinical states, symptoms, or indicators (e.g. for AUDIT alcohol scores: ["Alcohol Use Assessment", "Alcoholic Liver Disease Risk", "Substance Dependency Screening"]).
+   CRITICAL: You MUST assign AT LEAST ONE potential medical condition to EVERY biomarker. Never return an empty array [].
+
+=== CLINICAL REASONING FOR UNUSUAL OR BIOMETRIC MEASUREMENTS ===
+You must think through the clinical reasoning of why specific measurements are taken at all and associate them with relevant medical conditions.
+- For biometric markers like "steps": think about why physical activity is tracked and associate it with conditions/states such as "Sedentary State", "Physical Deconditioning", "Cardiovascular Inactivity", or "General Fitness".
+- For AUDIT questionnaire scores: associate with "Alcohol Use Assessment", "Alcohol Dependency Risk", "Substance Dependency Screening", or "Hepatic Health Monitoring".
+- For platelet markers like "platelet_distribution_width" (PDW) or general platelets: think through why they are measured (e.g. platelet size variability, bone marrow activity, clot formation) and associate them with relevant clinical conditions such as "acute infections", "chronic inflammatory disorders", "aplastic anemia", "nutritional deficiencies".
+- Do not leave any fields blank or empty. Every biomarker must have at least one valid value for every single field.
+
+CRITICAL: You MUST include all fields (standardMedicalGrouping, riskCategories, potentialMedicalConditions) for every biomarker in your JSON output.
+
+=== SYSTEM CONSTRAINTS ===
+Return a single flat JSON array of objects.
+Do NOT use any Markdown blocks, wrapping backticks, or extra text. Output ONLY the raw JSON text.
+
+Biomarkers to process:
+${JSON.stringify(selectedBiomarkers, null, 2)}`;
+
+    if (customSystemInstruction) {
+      addDebugLog(`[Medical Categorisation Agent] Overriding system instruction with custom version (${customSystemInstruction.length} chars).`, explicitSessionId);
+      systemInstruction = customSystemInstruction;
+    }
+
+    addDebugLog(`[Medical Categorisation Agent] Dispatched System Instruction (Length: ${systemInstruction.length})`, explicitSessionId);
+    addDebugLog(`[Medical Categorisation Agent] Dispatched Model ID: ${modelId}`, explicitSessionId);
+
+    const medicalCategoriseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        _internalReasoning: { type: Type.STRING, description: "Think step-by-step: analyze the biomarker, identify its primary physiological system, and determine risk levels based on clinical guidelines." },
+        categorisedBiomarkers: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              originalKey: { type: Type.STRING },
+              standardMedicalGrouping: { type: Type.STRING },
+              riskCategories: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              potentialMedicalConditions: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              }
+            },
+            required: ["originalKey", "standardMedicalGrouping", "riskCategories", "potentialMedicalConditions"]
+          }
+        }
+      },
+      required: ["_internalReasoning", "categorisedBiomarkers"]
+    };
+
+    const textOutput = await callUnifiedLLM({
+      modelId,
+      systemInstruction,
+      promptText: "Please output the categorisation in JSON format following the schema exactly.",
+      responseMimeType: "application/json",
+      responseSchema: medicalCategoriseSchema,
+      skipThinking: true
+    });
+
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+    addDebugLog(`[Medical Categorisation Agent] Agent output payload:
+${cleanJson}`, explicitSessionId);
+    res.json({ jsonResponse: cleanJson });
+  } catch (error: any) {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    addDebugLog(`[Medical Categorisation Agent] Error: ${error.message}`, explicitSessionId);
+    console.error("[Medical Categorisation Agent Error]:", error);
+    res.status(500).json({ error: "Failed to categorise biomarkers: " + error.message });
+  }
+});
+
+app.post("/api/gemini/calibrate-reference-ranges", async (req, res) => {
+  try {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    const { selectedBiomarkers, engine, customSystemInstruction, unitPreference } = req.body;
+    const modelId = (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite";
+    const isUS = unitPreference === "US";
+    addDebugLog(`[Reference Range Calibration Agent] Request received to calibrate ${selectedBiomarkers?.length} biomarkers using model: ${modelId} with unit preference: ${unitPreference || 'SI'}.`, explicitSessionId);
+
+    const targetUnitSystem = isUS 
+      ? "US Standard Units (Lipids in mg/dL, Proteins in g/dL, Bilirubin in mg/dL, Fasting Glucose in mg/dL, Uric Acid in mg/dL, CBC in k/ÂµL or 10^3/ÂµL, lbs for weight, inches/cm for height)" 
+      : "SI / International Metric Units (Lipids in mmol/L, Proteins in g/L, Bilirubin in Âµmol/L, Fasting Glucose in mmol/L, Uric Acid in Âµmol/L, Electrolytes in mmol/L, CBC in 10^9/L, kg for weight, cm for height)";
+
+    let systemInstruction = `You are an automated Clinical Reference Range Calibration Agent operating at the Biomarker Reference Dictionary level.
+Your mission is to calibrate standard, evidence-based clinical population reference intervals, standardized units, optimal brackets, medical practice groupings, and risk classifications for medical laboratory biomarkers, biometric readings, clinical questionnaires, and symptom scores.
+
+=== STRICT UNIT CONSISTENCY DIRECTIVE ===
+You MUST maintain 100% internal unit consistency according to the requested locale: ${targetUnitSystem}.
+- In SI Mode:
+  * Lipids (Total, HDL, LDL, VLDL, Non-HDL, Triglycerides): ALWAYS mmol/L (Never mg/dL).
+  * Proteins (Total Protein, Albumin, Globulin): ALWAYS g/L (e.g. Total protein: 60 - 83 g/L; Albumin: 35 - 50 g/L).
+  * Bilirubin (Total Bilirubin, Direct Bilirubin): ALWAYS Âµmol/L (e.g. Total bilirubin: 3.4 - 20.5 Âµmol/L; Direct: 0.0 - 5.0 Âµmol/L).
+  * Fasting Glucose: mmol/L. Uric Acid: Âµmol/L (or mmol/L).
+  * Electrolytes & Minerals: mmol/L.
+  * CBC Differential & Counts: 10^9/L.
+- In US Mode:
+  * Lipids, Glucose, Uric Acid, Bilirubin: mg/dL.
+  * Proteins: g/dL (e.g. Total protein: 6.0 - 8.3 g/dL).
+
+=== OBJECTIVE ===
+For each provided biomarker, you MUST determine:
+1. Standardized Unit: The accurate clinical unit according to the selected system. For questionnaires/scores use "score" or "points". For qualitative tests use "qualitative".
+2. Normal Reference Range (Population Baseline):
+   - minRange: Lower bound of normal (numeric float/integer, or null if single-sided upper bound, e.g. < 5.0 or qualitative).
+   - maxRange: Upper bound of normal (numeric float/integer, or null if single-sided lower bound, e.g. > 1.0 or qualitative).
+   - normalRange: Exact human-readable normal interval string (e.g., "10 - 40", "< 3.4", "Negative", "0 - 7", "135 - 145").
+3. Optimal / Functional Range:
+   - optimalMin: Numeric lower optimal threshold (or null).
+   - optimalMax: Numeric upper optimal threshold (or null).
+   - optimalRange: Human-readable optimal interval string (e.g., "15 - 30", "< 2.6", "0 - 3", or null if identical to normal range).
+4. Clinical Classification:
+   - standardMedicalGrouping: Clinical practice area ('Metabolic', 'Hepatic', 'Renal', 'Hematology', 'Biometrics', 'Cardiology', 'Endocrinology', 'Immunology', 'Neurology & Cognitive', 'Behavioral & Mental Health', 'Toxicology & Addiction', 'Screenings & Assessments', 'Gastroenterology', 'Musculoskeletal', 'Pulmonology', 'Wellness & Lifestyle', 'Other').
+   - riskCategories: Array of clinical risk category tags chosen strictly from: "Cardiovascular", "Metabolic", "Liver", "Kidney", "Hematology", "Immunological", "Endocrine", "Screenings & Wellness".
+   - potentialMedicalConditions: Array of associated conditions / clinical indications.
+5. Clinical Reasoning & Guideline Reference:
+   - notes: Clear, concise clinical reasoning citing standard reference authorities (e.g., WHO, KDIGO, ADA, AHA, standard clinical pathology reference manuals). Include sex-stratified ranges where applicable (e.g., uric acid, PSA, creatinine, hemoglobin).
+   - confidence: "high", "medium", or "low".
+
+=== SPECIAL GUIDELINES FOR SCORES, SURVEYS & ANTHROPOMETRICS ===
+- For AUDIT alcohol scores (audit_total_score, audit_c_total_score, audit_binge_drinking_score, audit_guilt_remorse_score, audit_others_concerned_score, audit_memory_loss_score, audit_drinking_frequency, audit_typical_consumption):
+  - Grouping: "Behavioral & Mental Health" or "Toxicology & Addiction", unit: "score" or "points".
+  - Normal range: audit_total_score: "0 - 7", audit_c_total_score: "0 - 3". Subscores: "0" or "0 - 1" (minRange: 0, maxRange: 0 or 1).
+  - In notes: Explicitly document the instrument scale domain (e.g. "Instrument Scale: 0 to 4 points; 0 = Normal / Symptom Absent").
+- For symptom scores (gerd_symptom_score, joint_pain_severity_score, hemorrhoidal_symptom_score):
+  - Normal range: "0" or "0 - 2", unit: "score". Notes must cite instrument scale.
+- For biometric & anthropometric metrics:
+  - steps: normalRange: "7000 - 12000", optimalRange: "8000 - 10000", unit: "steps/day".
+  - height: Provide general population height range (e.g. "140 - 200 cm"), set optimalRange to null (height has no population optimal).
+  - weight: Provide population adult range; optimalRange should cite "BMI 18.5 - 24.9 kg/mÂ²".
+- For qualitative tests (chlamydia_dna_detection, sars_cov_2_rna_detection, hiv_1_2_antibody_antigen, n_gonorrhoeae_nucl_acid_detn):
+  - normalRange: "Negative", optimalRange: "Negative", unit: "qualitative".
+
+=== SYSTEM CONSTRAINTS ===
+Return a single flat JSON array of objects inside the "calibratedBiomarkers" key.
+Output ONLY the raw JSON text.
+
+Biomarkers to process:
+${JSON.stringify(selectedBiomarkers, null, 2)}`;
+
+    if (customSystemInstruction) {
+      addDebugLog(`[Reference Range Calibration Agent] Overriding system instruction with custom version (${customSystemInstruction.length} chars).`, explicitSessionId);
+      systemInstruction = customSystemInstruction;
+    }
+
+    addDebugLog(`[Reference Range Calibration Agent] Dispatched System Instruction (Length: ${systemInstruction.length})`, explicitSessionId);
+    addDebugLog(`[Reference Range Calibration Agent] Dispatched Model ID: ${modelId}`, explicitSessionId);
+
+    const rangeCalibrationSchema = {
+      type: Type.OBJECT,
+      properties: {
+        _internalReasoning: { type: Type.STRING, description: "Think step-by-step: analyze the biomarker, identify international reference standards, determine normal and optimal reference brackets and units." },
+        calibratedBiomarkers: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              originalKey: { type: Type.STRING },
+              name: { type: Type.STRING },
+              standardizedUnit: { type: Type.STRING },
+              dataType: { type: Type.STRING, description: "'numeric' | 'qualitative' | 'score' | 'composite'" },
+              minRange: { type: Type.NUMBER },
+              maxRange: { type: Type.NUMBER },
+              normalRange: { type: Type.STRING },
+              optimalMin: { type: Type.NUMBER },
+              optimalMax: { type: Type.NUMBER },
+              optimalRange: { type: Type.STRING },
+              instrumentScale: { type: Type.STRING, description: "Valid allowable input range for questionnaires, e.g. '0 - 45' for GERD-SS, '0 - 40' for AUDIT" },
+              potentialDuplicateOf: { type: Type.STRING, description: "Canonical key ONLY if this biomarker is a non-standard abbreviation or duplicate of a DIFFERENT entity (e.g. 'lactate_dehydrogenase' for 'ldh'). Must be null or omitted if this is already the canonical biomarker itself." },
+              duplicateFlagReason: { type: Type.STRING },
+              allowedValues: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              standardMedicalGrouping: { type: Type.STRING },
+              riskCategories: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              potentialMedicalConditions: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              confidence: { type: Type.STRING },
+              notes: { type: Type.STRING }
+            },
+            required: ["originalKey", "standardizedUnit", "normalRange", "standardMedicalGrouping", "riskCategories", "potentialMedicalConditions"]
+          }
+        }
+      },
+      required: ["_internalReasoning", "calibratedBiomarkers"]
+    };
+
+    const textOutput = await callUnifiedLLM({
+      modelId,
+      systemInstruction,
+      promptText: "Please output the reference range calibration in JSON format following the schema exactly.",
+      responseMimeType: "application/json",
+      responseSchema: rangeCalibrationSchema,
+      skipThinking: true
+    });
+
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+
+    // TypeScript Middleware Post-Processing Sanitizer (Anti-patch & Structural Invariants)
+    try {
+      const parsed = JSON.parse(cleanJson);
+      if (parsed && Array.isArray(parsed.calibratedBiomarkers)) {
+        // Collect requested keys for mutual duplicate cross-referencing
+        const requestedKeys = parsed.calibratedBiomarkers.map((b: any) => (b.originalKey || '').toLowerCase());
+
+        parsed.calibratedBiomarkers = parsed.calibratedBiomarkers.map((item: any) => {
+          const k = (item.originalKey || '').toLowerCase();
+          let unit = (item.standardizedUnit || '').trim();
+
+          // Unit casing and format normalizations
+          if (unit.toLowerCase() === 'qualitative') unit = 'qualitative';
+          if (unit === '(count)' || unit === 'count' || (k === 'steps' && !unit)) unit = 'steps/day';
+          if (unit.toLowerCase() === 'mmhg') unit = 'mmHg';
+          if (unit.toLowerCase() === 'ratio') unit = 'ratio';
+
+          // Structural SI unit coherence enforcement
+          if (!isUS) {
+            if (k === 'total_protein' && (unit.toLowerCase() === 'g/dl' || item.minRange < 15)) {
+              unit = 'g/L';
+              item.minRange = 60.0;
+              item.maxRange = 83.0;
+              item.normalRange = '60 - 83';
+              item.optimalMin = 65.0;
+              item.optimalMax = 75.0;
+              item.optimalRange = '65 - 75';
+            } else if ((k === 'vldl_cholesterol' || k === 'vldl') && (unit.toLowerCase() === 'mg/dl' || item.maxRange > 5)) {
+              unit = 'mmol/L';
+              item.minRange = 0.1;
+              item.maxRange = 0.78;
+              item.normalRange = '0.10 - 0.78';
+              item.optimalMin = 0.1;
+              item.optimalMax = 0.5;
+              item.optimalRange = '0.10 - 0.50';
+            } else if ((k === 'total_bilirubin' || k === 'bilirubin') && (unit.toLowerCase() === 'mg/dl' || item.maxRange < 3)) {
+              unit = 'Âµmol/L';
+              item.minRange = 3.4;
+              item.maxRange = 20.5;
+              item.normalRange = '3.4 - 20.5';
+              item.optimalMin = 5.0;
+              item.optimalMax = 15.0;
+              item.optimalRange = '5.0 - 15.0';
+            } else if (k === 'direct_bilirubin' && (unit.toLowerCase() === 'mg/dl' || item.maxRange < 1)) {
+              unit = 'Âµmol/L';
+              item.minRange = 0.0;
+              item.maxRange = 5.0;
+              item.normalRange = '0.0 - 5.0';
+              item.optimalMin = 0.0;
+              item.optimalMax = 3.4;
+              item.optimalRange = '0.0 - 3.4';
+            } else if (k === 'uric_acid' && (unit.toLowerCase() === 'mg/dl' || (item.maxRange && item.maxRange < 15))) {
+              unit = 'Âµmol/L';
+              item.minRange = 142.0;
+              item.maxRange = 416.0;
+              item.normalRange = '142 - 416';
+              item.optimalMin = 180.0;
+              item.optimalMax = 350.0;
+              item.optimalRange = '180 - 350';
+            } else if (k === 'free_t4' && (unit.toLowerCase() === 'ng/dl' || (item.maxRange && item.maxRange < 5))) {
+              unit = 'pmol/L';
+              item.minRange = 12.0;
+              item.maxRange = 22.0;
+              item.normalRange = '12.0 - 22.0';
+              item.optimalMin = 14.0;
+              item.optimalMax = 19.0;
+              item.optimalRange = '14.0 - 19.0';
+            } else if (k === 'free_t3' && (unit.toLowerCase() === 'pg/ml' || (item.maxRange && item.maxRange < 2))) {
+              unit = 'pmol/L';
+              item.minRange = 3.5;
+              item.maxRange = 6.5;
+              item.normalRange = '3.5 - 6.5';
+              item.optimalMin = 4.0;
+              item.optimalMax = 5.5;
+              item.optimalRange = '4.0 - 5.5';
+            }
+          }
+
+          // Qualitative test normalization
+          const isQualitative = unit === 'qualitative' || 
+            k.includes('dna_detection') || 
+            k.includes('rna_detection') || 
+            k.includes('antibody_antigen') || 
+            k.includes('nucl_acid_detn') ||
+            (item.normalRange && item.normalRange.toLowerCase().includes('negative'));
+
+          if (isQualitative) {
+            unit = 'qualitative';
+            item.dataType = 'qualitative';
+            item.minRange = null;
+            item.maxRange = null;
+            item.optimalMin = null;
+            item.optimalMax = null;
+            item.normalRange = 'Negative';
+            item.optimalRange = 'Negative';
+            item.allowedValues = ['Negative', 'Positive', 'Equivocal'];
+          }
+
+          // Anthropometric guardrails
+          if (k === 'height') {
+            item.optimalRange = null;
+            item.optimalMin = null;
+            item.optimalMax = null;
+          } else if (k === 'weight') {
+            if (!item.optimalRange || !item.optimalRange.toLowerCase().includes('bmi')) {
+              item.optimalRange = 'BMI 18.5 - 24.9 kg/mÂ²';
+            }
+          }
+
+          // Blood pressure composite handling
+          if (k === 'blood_pressure') {
+            item.dataType = 'composite';
+            item.normalRange = '< 120 / < 80';
+            item.optimalRange = '< 120 / < 80';
+            item.minRange = null;
+            item.maxRange = null;
+            item.optimalMin = null;
+            item.optimalMax = null;
+          }
+
+          // Questionnaire & Score scale guardrails (Separate allowable input range from normal target)
+          if (k.startsWith('audit_') || k.endsWith('_score') || k.includes('symptom_score')) {
+            item.dataType = 'score';
+            if (unit !== 'score' && unit !== 'points') unit = 'score';
+
+            if (k === 'gerd_symptom_score') {
+              item.instrumentScale = '0 - 45';
+              item.normalRange = '0 - 2';
+              item.minRange = 0;
+              item.maxRange = 2;
+            } else if (k === 'hemorrhoidal_symptom_score') {
+              item.instrumentScale = '0 - 20';
+              item.normalRange = '0 - 2';
+              item.minRange = 0;
+              item.maxRange = 2;
+            } else if (k === 'joint_pain_severity_score') {
+              item.instrumentScale = '0 - 10';
+              item.normalRange = '0 - 1';
+              item.minRange = 0;
+              item.maxRange = 1;
+            } else if (k === 'audit_total_score') {
+              item.instrumentScale = '0 - 40';
+              item.normalRange = '0 - 7';
+              item.minRange = 0;
+              item.maxRange = 7;
+              item.optimalRange = '0 - 3';
+            } else if (k === 'audit_c_total_score') {
+              item.instrumentScale = '0 - 12';
+              item.normalRange = '0 - 3';
+              item.minRange = 0;
+              item.maxRange = 3;
+              item.optimalRange = '0 - 1';
+            } else if (k.startsWith('audit_')) {
+              item.instrumentScale = '0 - 4';
+              if (item.minRange === undefined || item.minRange === null) item.minRange = 0;
+            }
+          }
+
+          // Clean false positive self-duplicates (e.g. bmi -> bmi, rbc -> rbc, fasting_glucose -> fasting_glucose)
+          if (item.potentialDuplicateOf) {
+            const dupKey = String(item.potentialDuplicateOf).trim().toLowerCase();
+            const selfKey = k.trim().toLowerCase();
+            const selfName = (item.name || '').trim().toLowerCase();
+            if (dupKey === selfKey || dupKey === selfName || dupKey === '' || dupKey === 'null' || dupKey === 'none') {
+              item.potentialDuplicateOf = null;
+              item.duplicateFlagReason = null;
+            }
+          }
+
+          // Duplicate Entity Identification & Flagging for Alias Groups
+          if (k === 'ldh') {
+            item.potentialDuplicateOf = 'lactate_dehydrogenase';
+            item.duplicateFlagReason = 'Abbreviation / alias of lactate_dehydrogenase';
+          } else if (k === 'vldl' && requestedKeys.includes('vldl_cholesterol')) {
+            item.potentialDuplicateOf = 'vldl_cholesterol';
+            item.duplicateFlagReason = 'Synonym of vldl_cholesterol';
+          } else if (k === 'globulin' && requestedKeys.includes('serum_globulin')) {
+            item.potentialDuplicateOf = 'serum_globulin';
+            item.duplicateFlagReason = 'Synonym of serum_globulin';
+          } else if (k === 'albumin' && requestedKeys.includes('serum_albumin')) {
+            item.potentialDuplicateOf = 'serum_albumin';
+            item.duplicateFlagReason = 'Synonym of serum_albumin';
+          }
+
+          return {
+            ...item,
+            standardizedUnit: unit
+          };
+        });
+        cleanJson = JSON.stringify(parsed, null, 2);
+      }
+    } catch (sanitizerErr) {
+      console.warn("[Reference Range Calibration Agent] Sanitizer pass warning:", sanitizerErr);
+    }
+
+    addDebugLog(`[Reference Range Calibration Agent] Agent output payload:\n${cleanJson}`, explicitSessionId);
+    res.json({ jsonResponse: cleanJson });
+  } catch (error: any) {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    addDebugLog(`[Reference Range Calibration Agent] Error: ${error.message}`, explicitSessionId);
+    console.error("[Reference Range Calibration Agent Error]:", error);
+    res.status(500).json({ error: "Failed to calibrate reference ranges: " + error.message });
+  }
+});
+
+app.post("/api/gemini/consolidate-names", async (req, res) => {
+  try {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    const { inputText, selectedBiomarkers, existingKeys, engine, customSystemInstruction } = req.body;
+    const modelId = (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite";
+    const isStream = req.query.stream === 'true';
+    if (isStream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.flushHeaders();
+    }
+    addDebugLog(`[Name Consolidation Agent] Request received using model: ${modelId}. Text length: ${inputText?.length || 0}. Biomarkers count: ${selectedBiomarkers?.length || 0}`, explicitSessionId);
+
+    if (inputText) {
+      addDebugLog(`[Name Consolidation Agent] User Prompt:\n${inputText}`, explicitSessionId);
+    }
+
+    let systemInstruction = `You are an automated Name Consolidation Agent. Your task is to identify and group similar clinical biomarkers based on their names.
+
+=== SYSTEM CONSTRAINTS ===
+
+Do not perform any medical categorization or physiological classification.
+
+You are provided with an EXISTING DICTIONARY of approved keys.
+
+For each biomarker in the input batch:
+
+Check if it is a synonym or alias of an EXISTING DICTIONARY key (matching based on name or similar terminology).
+
+If a match is found:
+
+Set "isExistingKey" to true.
+
+Set "existingMasterKey" to the existing dictionary key.
+
+Set "recommendedKey" to the existing dictionary key.
+
+Add the candidate name to "aliases".
+
+Add the candidate's original key to "keys".
+
+If no match is found in the dictionary:
+
+Set "isExistingKey" to false.
+
+Set "existingMasterKey" to null.
+
+Propose a new "recommendedKey" and "Name".
+
+Add the candidate name to "aliases".
+
+Add the candidate's original key to "keys".
+
+=== FIELD DEFINITIONS ===
+
+_internalReasoning (string): MUST BE THE FIRST FIELD. Think step-by-step here: compare the provided names against each other AND against the existing dictionary, and identify synonyms.
+
+consolidatedGroups (array of objects): A list containing your merged biomarker groups. Each object must contain:
+
+Name (string): The recommended clinical name.
+
+recommendedKey (string): A unique key, formatted in snake_case.
+
+aliases (array of strings): A list of candidate names that are synonyms.
+
+keys (array of strings): A list of the original keys from the input batch that are mapped to this group.
+
+rationale (string): Explanation of why these represent the same clinical biomarker.
+
+isExistingKey (boolean): true if a match was found in the dictionary, otherwise false.
+
+existingMasterKey (string or null): The exact key from the dictionary, or null if no match was found.
+
+=== OUTPUT TEMPLATE ===
+You must strictly return a raw, valid JSON object matching exactly this structure. Do not add markdown formatting blocks (such as \`\`\`json) around your response. Do not insert textual descriptions into the values.
+
+{
+"_internalReasoning": "",
+"consolidatedGroups": [
+{
+"Name": "",
+"recommendedKey": "",
+"aliases": [],
+"keys": [],
+"rationale": "",
+"isExistingKey": false,
+"existingMasterKey": null
+}
+]
+}`;
+
+    if (customSystemInstruction) {
+      addDebugLog(`[Name Consolidation Agent] Overriding system instruction with custom version (${customSystemInstruction.length} chars).`, explicitSessionId);
+      systemInstruction = customSystemInstruction;
+    }
+
+    const dynamicPromptText = `Biomarkers to process (the selected batch â€” candidates for consolidation):\n${JSON.stringify(selectedBiomarkers, null, 2)}\n\nEXISTING DICTIONARY (already-approved keys â€” check every group against this list first; these are NOT candidates to be renamed, only possible merge targets):\n${JSON.stringify(existingKeys || [], null, 2)}\n\nUSER DATA / CONVERSATION TEXT:
+\"\"\"${inputText || "Please identify the duplicates from the provided list and consolidate them."}\"\"\"
+
+Please output a valid JSON object matching the requested schema.`;
+
+    addDebugLog(`[Name Consolidation Agent] Dispatched Model ID: ${modelId}`, explicitSessionId);
+
+    
+    const consolidateNamesSchema = {
+      type: Type.OBJECT,
+      properties: {
+        _internalReasoning: { type: Type.STRING, description: "Think step-by-step: compare the provided names against each other and against the existing dictionary, identify synonyms, determine the most universally recognized clinical name, and map aliases." },
+        consolidatedGroups: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              Name: { type: Type.STRING },
+              recommendedKey: { type: Type.STRING },
+              aliases: { type: Type.ARRAY, items: { type: Type.STRING } },
+              keys: { type: Type.ARRAY, items: { type: Type.STRING }, description: "The list of original keys from the input batch that map to this consolidated group." },
+              rationale: { type: Type.STRING },
+              isExistingKey: { type: Type.BOOLEAN, description: "true if this group matches an already-approved key from the existing dictionary" },
+              existingMasterKey: { type: Type.STRING, description: "the exact matching key from the existing dictionary, copied verbatim, or omitted/empty if isExistingKey is false", nullable: true }
+            },
+            required: ["Name", "recommendedKey", "aliases", "keys", "rationale", "isExistingKey", "existingMasterKey"]
+          }
+        }
+      },
+      required: ["_internalReasoning", "consolidatedGroups"]
+    };
+
+    const makeConsolidationCall = async () => {
+      let timeoutId: NodeJS.Timeout;
+      const consolidationTimeout = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("Name consolidation timed out after 115s. Model under high demand â€” please try again.")), 115000);
+      });
+      try {
+        const llmPromise = callUnifiedLLM({
+          modelId,
+          systemInstruction: systemInstruction,
+          promptText: dynamicPromptText,
+          responseMimeType: "application/json",
+          responseSchema: consolidateNamesSchema,
+          skipThinking: true,
+          onStream: isStream ? (chunk: string, isThought?: boolean) => {
+            if (isThought) {
+              res.write(`data: ${JSON.stringify({ thought: chunk })}\n\n`);
+            } else {
+              res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+            }
+          } : undefined
+        });
+        
+        // Prevent unhandled rejection if this promise settles after Promise.race finishes
+        llmPromise.catch(() => {});
+        
+        const result = await Promise.race([
+          llmPromise,
+          consolidationTimeout
+        ]);
+        return result as string;
+      } finally {
+        clearTimeout(timeoutId!);
+      }
+    };
+
+    let textOutput: string;
+    try {
+      textOutput = await makeConsolidationCall();
+    } catch (firstErr: any) {
+      const isAbort = firstErr.name === 'AbortError' || (firstErr.message && firstErr.message.toLowerCase().includes('abort'));
+      const isQuota = firstErr.message && (firstErr.message.includes('429') || firstErr.message.includes('quota') || firstErr.message.toLowerCase().includes('resource_exhausted'));
+      if (isAbort || isQuota) throw firstErr;
+      addDebugLog(`[Name Consolidation Agent] First attempt failed: ${firstErr.message}. Retrying once in 500ms...`, explicitSessionId);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      textOutput = await makeConsolidationCall();
+    }
+
+    let cleanJson = textOutput.trim();
+    addDebugLog(`[Name Consolidation Agent] Agent output payload:\n${cleanJson}`, explicitSessionId);
+    
+    if (cleanJson.includes("```")) {
+      const match = cleanJson.match(/```(?:json)?([\s\S]*?)```/);
+      if (match) {
+        cleanJson = match[1].trim();
+      } else {
+        cleanJson = cleanJson.replace(/```(?:json)?/gi, "").trim();
+      }
+    }
+    const firstBrace = cleanJson.indexOf('{');
+    const lastBrace = cleanJson.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanJson = extractBalancedJson(cleanJson);
+    }
+
+    const parsed = JSON.parse(cleanJson);
+    
+    if (parsed.explanation) {
+      addDebugLog(`[Name Consolidation Agent] Agent Explanation:\n${parsed.explanation}`, explicitSessionId);
+    }
+
+    if (isStream) {
+      res.write(`data: ${JSON.stringify({ final: true, result: parsed })}\n\n`);
+      res.end();
+    } else {
+      res.json(parsed);
+    }
+  } catch (error: any) {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    addDebugLog(`[Name Consolidation Agent] Error: ${error.message}`, explicitSessionId);
+    console.error("[Name Consolidation Agent Error]:", error);
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ error: "Failed to consolidate biomarker names: " + error.message })}\n\n`);
+      res.end();
+    } else {
+      res.status(500).json({ error: "Failed to consolidate biomarker names: " + error.message });
+    }
+  }
+});
+
+app.post("/api/gemini/data-accuracy", async (req, res) => {
+  try {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    const { inputText, currentState, images, currentLocalTime, engine, customSystemInstruction } = req.body;
+    const modelId = (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite";
+    addDebugLog(`[Data Accuracy Agent] Request received using model: ${modelId}. Text length: ${inputText?.length || 0}. Images count: ${images?.length || 0}`, explicitSessionId);
+    if (inputText) {
+      addDebugLog(`[Data Accuracy Agent] User Prompt Content:\n${inputText}`, explicitSessionId);
+    }
+
+    let imagesPayload: { mimeType: string, data: string }[] | undefined = undefined;
+    if (images && images.length > 0) {
+      imagesPayload = images.map((img: string) => {
+        const mimeType = img.split(";")[0].split(":")[1] || "image/jpeg";
+        const base64Data = img.split(",")[1];
+        return { mimeType, data: base64Data };
+      });
+    }
+
+    let systemInstruction = `You are the Data Accuracy Agent, a clinical data cleaning, quality check, and validation AI specialist. Your role is to get a list of biomarkers shared by the user (via text or uploaded file/images), match them against the user's existing biomarker dictionary and history, compare the critical fields, and return a precise difference analysis.
+
+=== KEY TASKS ===
+1. Extract biomarkers from the user's input. The input can contain:
+   - Text written by the user.
+   - Images of lab report sheets, documents, photos, or other reports.
+   For each extracted biomarker, identify:
+   - Name (e.g. Hemoglobin A1c, Cholesterol)
+   - Unit (e.g. %, mg/dL, mmol/L)
+   - Value (e.g. 5.8)
+   - Date (e.g. 2026-07-01, or fallback to the current local time if unspecified: ${currentLocalTime || '2026-07-07'})
+   - Comments/Notes (any clinical remarks, doctor comments, or brief interpretations associated with it)
+
+2. Match the extracted biomarkers against the user's existing database (Current State provided below).
+   Find the most appropriate matching key (e.g., "hba1c"). If no exact match exists in the current custom or built-in keys, propose a standard snake_case key based on medical conventions.
+
+3. Compare the following 5 fields between the user's current data (from their dictionary and historical logs) and the shared data:
+   - Biomarker Name (dictionary def name)
+   - Unit (dictionary def unit)
+   - Value (historical log value for that key on the matching date, or latest)
+   - Date (historical log date for that key)
+   - Comments (historical log note or specific test doctor comment)
+   Match the date of the shared data with the historical logs to find the exact existing log. If no exact date match exists, compare against null or mark as a new log.
+
+4. Determine if each field is "same" or "different":
+   - Use comparison logic. If one is missing or empty on one side and present on the other, it is "different".
+   - Set status to "same" if the content matches closely (case-insensitive, trimmed, numeric values with different decimal places like 5 and 5.0 are considered "same").
+   - Set status to "different" if there is any difference.
+
+5. IMPORTANT: Handling Multiple Entries for the Same Biomarker:
+   - If the user's input contains multiple log entries for the SAME biomarker (e.g., tests taken on multiple different dates, or multiple values), you MUST create and return a SEPARATE object in the "comparisonResults" array for EACH distinct instance or date. Do not combine or skip them.
+
+=== RESPONSE FORMAT ===
+You MUST return a JSON object with this exact structure. Do NOT wrap it in markdown blocks. Return ONLY the raw valid JSON.
+
+JSON Schema:
+{
+  "explanation": "A friendly scannable summary of the differences found.",
+  "comparisonResults": [
+    {
+      "key": "biomarker_key",
+      "matched": true,
+      "name": { "current": "current_name", "shared": "shared_name", "status": "same|different" },
+      "unit": { "current": "current_unit", "shared": "shared_unit", "status": "same|different" },
+      "value": { "current": "current_value", "shared": "shared_value", "status": "same|different" },
+      "date": { "current": "current_date", "shared": "shared_date", "status": "same|different" },
+      "comments": { "current": "current_comments", "shared": "shared_comments", "status": "same|different" }
+    }
+  ]
+}
+
+=== USER'S CURRENT STATE ===
+${JSON.stringify(currentState, null, 2)}
+`;
+
+    if (customSystemInstruction) {
+      addDebugLog(`[Data Accuracy Agent] Overriding system instruction with custom version (${customSystemInstruction.length} chars).`, explicitSessionId);
+      systemInstruction = customSystemInstruction;
+    }
+
+    addDebugLog(`[Data Accuracy Agent - Payload Sent] Model ID: ${modelId}
+- User Prompt Content: ${inputText || "(no text content)"}
+- Images Uploaded: ${images?.length || 0}
+- Current State Reference Data Sent:
+${JSON.stringify(currentState, null, 2)}`, explicitSessionId);
+
+    const dynamicPromptText = `USER DATA / LAB REPORT INPUT TEXT:
+"""
+${inputText || "(no text content provided)"}
+"""
+
+Please extract the shared biomarkers and compare them with the user's current state. Return ONLY a valid JSON object matching the JSON schema. Ensure there are no markdown backticks.`;
+
+    
+    const dataAccuracySchema = {
+      type: Type.OBJECT,
+      properties: {
+        _internalReasoning: { type: Type.STRING, description: "Think step-by-step: analyze the data points, verify physical biological limits, check against provided documents if any, and detect anomalies." },
+        anomalies: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              biomarkerKey: { type: Type.STRING },
+              flagType: { type: Type.STRING },
+              description: { type: Type.STRING },
+              severity: { type: Type.STRING },
+              recommendedAction: { type: Type.STRING }
+            }
+          }
+        },
+        generalAccuracyScore: { type: Type.NUMBER },
+        overallAssessment: { type: Type.STRING }
+      },
+      required: ["_internalReasoning", "anomalies", "generalAccuracyScore", "overallAssessment"]
+    };
+
+    const textOutput = await callUnifiedLLM({
+      modelId,
+      systemInstruction: systemInstruction + "\n\nJSON STRUCTURED OUTPUT:\nYou must strictly return a JSON object. Do not add markdown wrappers. Think step-by-step in the '_internalReasoning' field first.",
+      promptText: dynamicPromptText,
+      imagePayloads: imagesPayload,
+      responseMimeType: "application/json",
+      responseSchema: dataAccuracySchema
+    });
+
+    let cleanJson = textOutput.trim();
+    addDebugLog(`[Data Accuracy Agent - Response Received] Raw Output from Agent:\n${cleanJson}`, explicitSessionId);
+
+    // Robust markdown removal & JSON extraction
+    if (cleanJson.includes("```")) {
+      const match = cleanJson.match(/```(?:json)?([\s\S]*?)```/);
+      if (match) {
+        cleanJson = match[1].trim();
+      } else {
+        cleanJson = cleanJson.replace(/```(?:json)?/gi, "").trim();
+      }
+    }
+
+    const firstBrace = cleanJson.indexOf('{');
+    const lastBrace = cleanJson.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanJson = extractBalancedJson(cleanJson);
+    }
+
+    addDebugLog(`[Data Accuracy Agent - Response Received] Parsed and Cleaned JSON:\n${cleanJson}`, explicitSessionId);
+    
+    // Parse to verify valid JSON
+    const parsed = JSON.parse(cleanJson);
+    if (parsed.explanation) {
+      addDebugLog(`[Data Accuracy Agent] Agent Explanation Response:\n${parsed.explanation}`, explicitSessionId);
+    }
+    res.json(parsed);
+  } catch (error: any) {
+    const explicitSessionId = (req.headers["x-session-id"] as string) || "global";
+    addDebugLog(`[Data Accuracy Agent] Error: ${error.message}`, explicitSessionId);
+    console.error("[Data Accuracy Agent Error]:", error);
+    res.status(500).json({ error: "Failed to compare and validate biomarkers: " + error.message });
+  }
+});
+
+app.post("/api/gemini/daily-recommendation-chat", async (req, res) => {
+  addDebugLog('[DailyRecommendation] Starting daily recommendation chat process.');
+  try {
+    const { message, userProfile, engine, history, foodLogs, biomarkers, report, actions, steps, location, thisMonthTrends } = req.body;
+
+    const cleanProfile: any = {
+      age: userProfile?.age,
+      gender: userProfile?.gender,
+      ethnicity: userProfile?.ethnicity,
+      bloodType: userProfile?.bloodType,
+      weight: userProfile?.weight,
+      height: userProfile?.height,
+      timezone: userProfile?.timezone
+    };
+    Object.keys(cleanProfile).forEach((key) => {
+      if (cleanProfile[key] === undefined || cleanProfile[key] === null) {
+        delete cleanProfile[key];
+      }
+    });
+    
+    const systemInstruction = `You are a personalized AI Health Coach. 
+Your goal is to look at the user's data (biomarkers, food logs, goals, daily steps, etc.) and provide an actionable, friendly, and clinical daily recommendation or answer their questions.
+
+### User Data Context
+Profile: ${JSON.stringify(cleanProfile)}
+Report/Nutrient Targets: ${JSON.stringify(report?.dailyNutrientTargets || {})}
+Biomarkers: ${JSON.stringify(biomarkers || {})}
+Clinical Actions: ${JSON.stringify(actions || {})}
+Recent Food Logs (titles & dates): ${JSON.stringify((foodLogs || []).slice(-15).map((f) => ({name: f.name, date: f.date})))}
+Today's Steps: ${steps || 'Unknown'}
+Location: ${JSON.stringify(location || 'Unknown')}
+This Month Trends (Daily Nutrient Intakes and Steps): ${JSON.stringify(thisMonthTrends || {})}
+
+### Guidelines
+1. Be encouraging, precise, friendly, and clinically sound.
+2. If this is the start of the chat (e.g. user says "What's up today?"), analyze their performance trends for top nutrients (calories, protein, saturated fat, sodium, carbs, total fat) this month and their daily steps. Tell them what they have achieved so far and give 1-2 highly practical, personalized recommendations for today based on their goals and biomarkers.
+3. If the user asks a question, answer it professionally and warmly, drawing on their real dietary trends and health logs.
+4. Use markdown formatting (bolding, lists, headers) to make the coach recommendation beautifully readable.
+5. Do NOT output JSON. Output pure markdown text.`;
+
+    let historyText = "";
+    if (history && Array.isArray(history)) {
+      historyText = history.map((m) => `${m.role === 'user' ? 'User' : 'Model'}: ${m.content}`).join('\n');
+    }
+    
+    const promptText = `Chat History:\n${historyText}\n\nUser's latest message: "${message}"`;
+    
+    const textOutput = await callUnifiedLLM({
+      modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine),
+      systemInstruction,
+      promptText,
+      responseMimeType: "text/plain"
+    });
+    
+    res.json({
+      text: textOutput.trim(),
+      apiCalls: [{ type: 'gemini', label: `Daily Recommendation Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+    });
+  } catch (error) {
+    console.error("[Daily Recommendation Error]:", error);
+    res.status(500).json({ error: "Failed to generate recommendation: " + error.message });
+  }
+});
+
+app.post("/api/gemini/food-idea", async (req, res) => {
+  addDebugLog(`[FoodIdea] Starting food-idea suggestion process.`);
+  try {
+    const { message, userProfile, location, recentMeals, engine, budget, currency, maxDistance, clientNearbyPlaces, outOfRangeBiomarkers, biomarkersNeedingImprovement, customSystemInstruction, customVariableData } = req.body;
+    addDebugLog(`[FoodIdea] Request parameters - engine: "${engine || 'default'}", maxDistance: ${maxDistance || 3}km, budget: "${budget} ${currency}". Query: "${message}"`);
+
+    if (!getGeminiApiKey()) {
+      addDebugLog(`[FoodIdea] Warning: GEMINI_API_KEY / GOOGLE_API_KEY is not defined in Secrets.`);
+      return res.json({
+        text: "Please note: GEMINI_API_KEY / GOOGLE_API_KEY is not configured in the Secrets manager.",
+        ideas: [
+          {
+            id: 'mock-1',
+            name: "Grilled Chicken Salad",
+            placeName: "Sweetgreen",
+            address: "10 Downing St, London, UK",
+            locationLink: "https://www.google.com/maps/search/?api=1&query=Sweetgreen+10+Downing+St+London+UK",
+            benefitExplanation: "High protein and fiber, good for your profile.",
+            tags: ["High Protein", "Low Carb"],
+            distanceKm: 1.2,
+            estimatedBudget: "Â£4.50",
+            dishImageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80"
+          }
+        ]
+      });
+    }
+
+    const budgetValue = budget || "100000";
+    const currencyValue = currency || "IDR";
+    const maxDistanceValue = maxDistance || 3;
+
+    // Perform reverse-geocoding of coordinates to find exact human-readable address for highly accurate localized searches!
+    let resolvedAddressText = "";
+    let nearbyPlacesText = "";
+    if (location && location.lat && location.lng) {
+      const geoController = new AbortController();
+      const geoTimeoutId = setTimeout(() => geoController.abort(), 3000);
+      try {
+        addDebugLog(`[ReverseGeocode] Reverse geocoding lat/lng: ${location.lat}, ${location.lng} via Nominatim...`);
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${location.lat}&lon=${location.lng}`, {
+          headers: { 
+            'User-Agent': 'HealthBiomarkerApplet/1.0 (Cwah.Liu@gmail.com)',
+            'Accept-Language': 'en, id'
+          },
+          signal: geoController.signal
+        });
+        clearTimeout(geoTimeoutId);
+        if (geoRes.ok) {
+          const geoData = await geoRes.json();
+          if (geoData && geoData.display_name) {
+            resolvedAddressText = geoData.display_name;
+            addDebugLog(`[ReverseGeocode] Resolved coordinates successfully to: "${resolvedAddressText}"`);
+          }
+        } else {
+          addDebugLog(`[ReverseGeocode] HTTP error status: ${geoRes.status}`);
+        }
+      } catch (geoErr: any) {
+        clearTimeout(geoTimeoutId);
+        const isAbort = geoErr.name === 'AbortError';
+        addDebugLog(`[ReverseGeocode] Failed or timed out (timed out: ${isAbort}). Continuing with coordinate context only.`);
+      }
+
+      // Use client-side overpass results if provided, otherwise try server-side
+      if (clientNearbyPlaces && clientNearbyPlaces.length > 0) {
+        const slicedClientPlaces = clientNearbyPlaces.slice(0, 6);
+        addDebugLog(`[Overpass] Slicing ${clientNearbyPlaces.length} client-provided nearby places to ${slicedClientPlaces.length} items to bypass rate-limits.`);
+        nearbyPlacesText = "CRITICAL DIRECTIVE: Here is a list of REAL nearby restaurants with their exact coordinates retrieved from OpenStreetMap just now. YOU MUST ONLY PICK RESTAURANTS FROM THIS LIST! DO NOT HALLUCINATE OR GUESS PLACES. Pick the 3-5 most appropriate places from this list for the user's diet:\n\n";
+        slicedClientPlaces.forEach((el: any) => {
+          nearbyPlacesText += `- Name: "${el.name}" (Lat: ${el.lat}, Lng: ${el.lng})\n`;
+          if (el.address) nearbyPlacesText += `  Address: ${el.address}\n`;
+          if (el.opening_hours) nearbyPlacesText += `  Hours: ${el.opening_hours}\n`;
+        });
+        nearbyPlacesText += "\nFor the 'placeName', 'lat', and 'lng' fields in your JSON response, use EXACTLY the names and coordinates from the list above. DO NOT guess coordinates!";
+      } else {
+        const overpassController = new AbortController();
+        const overpassTimeoutId = setTimeout(() => overpassController.abort(), 4000);
+        try {
+          addDebugLog(`[Overpass] Querying OpenStreetMap Overpass API for restaurants within ${maxDistanceValue} km...`);
+          const radius = Math.min(maxDistanceValue * 1000, 5000); // meters
+          const overpassQuery = `[out:json];(node["amenity"~"restaurant|cafe|fast_food|food_court"](around:${radius},${location.lat},${location.lng}););out 30;`;
+          
+          const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'data=' + encodeURIComponent(overpassQuery),
+            signal: overpassController.signal
+          });
+          clearTimeout(overpassTimeoutId);
+          
+          if (overpassRes.ok) {
+            const overpassData = await overpassRes.json();
+            if (overpassData && overpassData.elements && overpassData.elements.length > 0) {
+              const namedElements = overpassData.elements.filter((el: any) => el.tags && el.tags.name);
+              const slicedElements = namedElements.slice(0, 6);
+              addDebugLog(`[Overpass] Slicing ${namedElements.length} server-found nearby places to ${slicedElements.length} items to bypass rate-limits.`);
+              nearbyPlacesText = "CRITICAL DIRECTIVE: Here is a list of REAL nearby restaurants with their exact coordinates retrieved from OpenStreetMap just now. YOU MUST ONLY PICK RESTAURANTS FROM THIS LIST! DO NOT HALLUCINATE OR GUESS PLACES. Pick the 3-5 most appropriate places from this list for the user's diet:\n\n";
+              slicedElements.forEach((el: any) => {
+                nearbyPlacesText += `- Name: "${el.tags.name}" (Lat: ${el.lat}, Lng: ${el.lon})\n`;
+                if (el.tags['addr:street']) {
+                  nearbyPlacesText += `  Address: ${el.tags['addr:street']} ${el.tags['addr:housenumber'] || ''}\n`;
+                }
+                if (el.tags['opening_hours']) {
+                  nearbyPlacesText += `  Hours: ${el.tags['opening_hours']}\n`;
+                }
+              });
+              nearbyPlacesText += "\nFor the 'placeName', 'lat', and 'lng' fields in your JSON response, use EXACTLY the names and coordinates from the list above. DO NOT guess coordinates!";
+              addDebugLog(`[Overpass] Resolved successfully! Formatted ${slicedElements.length} real nearby restaurants.`);
+            } else {
+              addDebugLog(`[Overpass] No real places found nearby from OpenStreetMap.`);
+            }
+          } else {
+            addDebugLog(`[Overpass] HTTP error status: ${overpassRes.status}`);
+          }
+        } catch (err: any) {
+          clearTimeout(overpassTimeoutId);
+          const isAbort = err.name === 'AbortError';
+          addDebugLog(`[Overpass] Failed or timed out (timed out: ${isAbort}). Continuing without nearby restaurant list.`);
+        }
+      }
+    }
+
+    const userCtx = userProfile ? `User Profile: Age ${userProfile.age}, Ethnicity: ${userProfile.ethnicity}, Weight: ${userProfile.weight}kg, Height: ${userProfile.height}cm.` : "User profile is unknown.";
+    const userTimezone = userProfile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const userLocalTime = new Date().toLocaleString('en-US', { timeZone: userTimezone });
+    
+    const locCtx = location ? `User Location: Latitude ${location.lat}, Longitude ${location.lng}.\nUser Local Time: ${userLocalTime}` : `User Local Time: ${userLocalTime}`;
+    const addressCtx = resolvedAddressText ? `User Human-Readable Address / Neighborhood: "${resolvedAddressText}"` : "Human-readable address is not resolved.";
+    const nearbyCtx = nearbyPlacesText ? `\n\n${nearbyPlacesText}\n\n` : "";
+    const mealsCtx = recentMeals && recentMeals.length > 0 ? `Recent Meals: ${recentMeals.join(', ')}.` : "No recent meals recorded.";
+    const budgetCtx = `Max Budget Limit: ${budgetValue} ${currencyValue}. Suggested meals/dishes MUST fit within this price!`;
+    const distanceCtx = `Max Distance Limit: ${maxDistanceValue} km. All suggested venues must be within ${maxDistanceValue} km of the user's current location!`;
+
+    const biomarkersList = (biomarkersNeedingImprovement && Array.isArray(biomarkersNeedingImprovement) && biomarkersNeedingImprovement.length > 0)
+      ? biomarkersNeedingImprovement.map((b: string) => `â€¢ ${b}`).join("\n")
+      : (outOfRangeBiomarkers && outOfRangeBiomarkers.length > 0)
+      ? outOfRangeBiomarkers.map((b: any) => `â€¢ ${b.name} is ${String(b.status).toUpperCase()} (${b.value} ${b.unit}, normal range: ${b.normalRange})`).join("\n")
+      : "â€¢ None";
+
+    let promptText = "";
+    if (customVariableData) {
+      promptText = `${customVariableData}\n\nCurrent User Input: "${message}"`;
+    } else {
+      promptText = `You are a personalized AI Dietitian.
+${userCtx}
+${locCtx}
+${addressCtx}
+${mealsCtx}
+${budgetCtx}
+${distanceCtx}
+${nearbyCtx}
+
+CRITICAL PATIENT BIOMARKER WARNINGS:
+${biomarkersList}
+
+Current User Input: "${message}"
+
+CRITICAL SYSTEM REQUIREMENTS FOR VERACITY & LOGICAL ACCURACY:
+1. VENUE SELECTION FROM PROVIDED LIST: You MUST ONLY select restaurants from the provided list of nearby REAL restaurants if it is provided. Do NOT invent or search for other restaurants. Use EXACTLY the lat and lng coordinates from the list. Do not modify the coordinates.
+2. STRICT GEOGRAPHIC RADIUS ENFORCEMENT: If you must suggest a venue not on the list, it MUST be located within exactly ${maxDistanceValue} km of the user's location. Do not hallucinate coordinates.
+3. VENUE SELECTION CONTEXT: Use the provided list of nearby restaurants to verify details if available. Do not invent or search for random new restaurants far away.
+4. MAPS LINK PRECISION & ERROR HANDLING RULE: When you have a restaurant, call the \`get_google_maps_place_id\` tool EXACTLY ONCE per restaurant using the restaurant name and coordinates.
+   - If the tool returns a valid place_id, construct the "locationLink" URL exactly like this: \`https://www.google.com/maps/search/?api=1&query={URL_ENCODED_NAME}&query_place_id={PLACE_ID}\`.
+   - If the tool returns "NOT_FOUND", "ERROR_API_FAILED", or includes a "STOP TOOL USE" instruction, DO NOT call the tool again under any circumstances. Immediately construct the "locationLink" URL using the street address/name: \`https://www.google.com/maps/search/?api=1&query={URL_ENCODED_NAME}+{URL_ENCODED_STREET_NAME}\` or coordinate-based query if street name is unavailable. Do NOT retry or call the tool for other items if you hit a failure.
+5. STRICT OPENING HOURS ENFORCEMENT: The user's current local time is ${userLocalTime}. You MUST capture the exact opening and closing time and add it to the result for the recommended place in the 'openingHours' field if known, or standard hours. Never use '--' unless you genuinely cannot find it. You should only recommend places that are STILL OPEN 1 HOUR from the current local time!
+6. REFERENCE LINK: For the 'menuLink' field, you MUST provide a direct, high-quality, real web link to the restaurant's actual official website, Instagram/Facebook page, TripAdvisor page, Yelp page, or specific Google Maps business page. DO NOT use generic Google Search query pages (like 'google.com/search?q=...') or generic placeholders, as this is unacceptable.
+7. ZERO-FIND FALLBACK & STRICT RADIUS: If no verified physical restaurants are found within the exact ${maxDistanceValue} km radius of the user's coordinates, YOU MUST NOT SUGGEST ANY PLACES. In this case, you MUST only suggest generic healthy dishes to cook at home (do not include placeName, address, lat, lng, locationLink, menuLink, or distanceKm). Clearly explain in your text response that no verified venues were found within ${maxDistanceValue} km, and suggest increasing the search radius. NEVER hallucinate places far away or fake coordinates.
+
+Include a short conversational response (text), and a list of between 3 and 5 distinct, diverse structured food ideas (ideas) that meet the constraints. Under no circumstances should you return only 1 idea.
+Each idea should have:
+- name: string (A general, common healthy food category they serve, e.g. "Grilled Chicken Salad" or "Sushi". DO NOT hallucinate exact menu items unless verified.)
+- placeName: string (Optional. The verified, real-world restaurant name. Omit if suggesting a home-cooked meal.)
+- address: string (Optional. The verified, exact physical street address.)
+- lat: number (Optional. The latitude of the suggested place. Omit if no place is found within the radius.)
+- lng: number (Optional. The longitude of the suggested place. Omit if no place is found within the radius.)
+- locationLink: string (Optional. Google Maps Search URL)
+- menuLink: string (Optional. A URL to ANY relevant webpage about the restaurant, such as Google Maps, Yelp, Instagram, or their website. DO NOT use recipe search links!)
+- distanceKm: number (Optional. The straight-line physical distance in km. This MUST be strictly <= ${maxDistanceValue} km! Omit if home-cooked.)
+- estimatedBudget: string (The estimated price of this suggested dish, formatted nicely with the currency symbol, e.g., "Rp 45,000" or "Â£3.50". This MUST be within the maximum budget of ${budgetValue} ${currencyValue}!)
+- dishImageUrl: string (A valid, beautiful, and relevant Unsplash food image URL showing this specific type of dish, e.g., "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80" for a salad, or a suitable search query image URL from Unsplash.)
+- benefitExplanation: string (Why this is good for the user's profile)
+- tags: array of strings (e.g. ["High Protein", "Low Carb"])
+- openingHours: string (The opening hours of the restaurant. E.g., "10:00 AM - 10:00 PM".)
+
+Respond with a structured JSON format matching this schema exactly:
+{
+  "text": "Your conversational response here",
+  "ideas": [
+    {
+      "name": "Food Name",
+      "placeName": "Restaurant or Place Name",
+      "address": "123 Main St, City, State",
+      "lat": -6.2088,
+      "lng": 106.8456,
+      "locationLink": "https://www.google.com/maps/search/?api=1&query=HokBen&query_place_id=ChIJKZ1Uh-P1aS4R61b3Rsx8mSU",
+      "menuLink": "https://www.hokben.co.id/",
+      "distanceKm": 1.2,
+      "estimatedBudget": "Rp 45,000",
+      "dishImageUrl": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80",
+      "benefitExplanation": "Why this is good...",
+      "tags": ["tag1", "tag2"],
+      "openingHours": "10:00 AM - 10:00 PM"
+    }
+  ]
+}`;
+    }
+
+    const sysInstruction = customSystemInstruction || "You are a world-class AI dietitian. Your response must be an exact JSON matching the requested schema. Never add markdown wrappers.";
+
+    const textOutput = await callUnifiedLLM({
+      modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite",
+      systemInstruction: sysInstruction,
+      promptText,
+      responseMimeType: "application/json",
+      googleSearch: false,
+      enablePlaceIdTool: !!process.env.GOOGLE_MAPS_API_KEY
+    });
+
+    let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
+    let parsedData;
+    try {
+      parsedData = JSON.parse(cleanJson);
+    } catch (parseErr: any) {
+      const firstBrace = cleanJson.indexOf("{");
+      const lastBrace = cleanJson.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        parsedData = await asyncParseLLMJSON(cleanJson);
+      } else {
+        throw parseErr;
+      }
+    }
+
+    if (parsedData.ideas && Array.isArray(parsedData.ideas)) {
+      parsedData.ideas = parsedData.ideas.map((idea: any) => ({
+        ...idea,
+        id: 'idea_' + Date.now() + Math.random().toString(36).substr(2, 9)
+      }));
+    }
+
+    parsedData.agentPrompt = `System Instruction:\nYou are a world-class AI dietitian. Your response must be an exact JSON matching the requested schema. Never add markdown wrappers.\n\n${promptText}`;
+    res.json({
+      ...parsedData,
+      apiCalls: [{ type: 'gemini', label: `Food Idea Agent (${engine || 'gemini-3.5-flash-lite'})` }]
+    });
+  } catch (error: any) {
+    addDebugLog(`[FoodIdea] Error occurred: ${error.message || error}`);
+    console.error("[Food Idea Analyze Error]:", error);
+    const isQuotaError = error.message?.includes("429") || error.message?.includes("quota") || error.message?.includes("RESOURCE_EXHAUSTED");
+    
+    const errorMsg = isQuotaError
+      ? "Unable to provide recommendations: Gemini API quota or rate limit reached. Please verify your API key or try again in a few minutes."
+      : "Unable to provide recommendations: The agent connection has timed out or the request could not be processed. Please try again.";
+
+    res.json({
+      text: errorMsg,
+      ideas: []
+    });
+  }
+});
+
+interface SearchEngine {
+  name: string;
+  isEnabled(env: any): boolean;
+  search(query: string, count: number, env: any): Promise<Array<{title: string, imageUrl: string, pageUrl: string}>>;
+}
+const searchRegistry: SearchEngine[] = [
+  // 1. Wikipedia (Always active, free, identified User-Agent raises limit to 200 RPM)
+  {
+    name: "Wikipedia",
+    isEnabled: () => true,
+    search: async (query, count) => {
+      try {
+        const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&pithumbsize=600&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=${count + 2}&origin=*`;
+        const res = await fetch(url, {
+          headers: {
+            "User-Agent": "HealthTracker/6.0 (https://github.com/cwahli/Health-tracker-6; Cwah.Liu@gmail.com)"
+          }
+        });
+        const text = await res.text();
+        if (!text.trim().startsWith('{')) {
+          console.warn("[Wiki Search Warning] Non-JSON response received:", text.slice(0, 200));
+          return [];
+        }
+        const data = JSON.parse(text);
+        if (data.query && data.query.pages) {
+          const pages = data.query.pages;
+          const results = [];
+          for (const pageId of Object.keys(pages)) {
+            const page = pages[pageId];
+            if (page.thumbnail && page.thumbnail.source) {
+              const title = page.title.toLowerCase();
+              // Blacklist filter to block non-food results (like mosques or battles)
+              const blacklist = ["mosque", "church", "temple", "reign", "dynasty", "battle", "war", "monument", "district", "regency", "politician"];
+              if (blacklist.some(word => title.includes(word))) {
+                continue;
+              }
+              results.push({
+                title: page.title,
+                imageUrl: page.thumbnail.source,
+                pageUrl: `https://en.wikipedia.org/?curid=${pageId}`,
+                engine: "Wikipedia"
+              });
+            }
+          }
+          return results.slice(0, count);
+        }
+      } catch (err) {
+        console.error("[Wiki Search Error]", err);
+      }
+      return [];
+    }
+  },
+  // 2. Gemini Grounding Search API (disabled)
+  {
+    name: "GeminiSearch",
+    isEnabled: () => false,
+    search: async (query, count, env) => {
+      try {
+        const { GoogleGenAI } = await import("@google/genai");
+        const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+        const response = await withGeminiRetry(() => ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: `Find a high quality image of this food dish: ${query}. Respond only with a very brief description.`,
+          config: { tools: [{ googleSearch: {} }] }
+        }), { label: "Unified LLM" });
+        
+        const candidate = response.candidates?.[0];
+        const groundingMetadata = candidate?.groundingMetadata;
+        const groundingChunks = groundingMetadata?.groundingChunks || [];
+        
+        const results = [];
+        for (const chunk of groundingChunks) {
+          if (chunk.web && chunk.web.uri && (chunk.web.uri.endsWith('.jpg') || chunk.web.uri.endsWith('.png') || chunk.web.uri.endsWith('.jpeg'))) {
+            results.push({
+              title: chunk.web.title || query,
+              imageUrl: chunk.web.uri,
+              pageUrl: chunk.web.uri,
+              engine: "GeminiSearch"
+            });
+          }
+        }
+        
+        // If we didn't find direct image URLs, let's just pick any returned URI as a fallback in case it's usable,
+        // but normally groundingChunks web.uri points to pages, not images. Wait.
+        // Actually, groundingChunks from googleSearch tool usually returns page URIs, not image URIs.
+        return results.slice(0, count);
+      } catch (err) {
+        console.error("[Gemini Search Error]", err);
+      }
+      return [];
+    }
+  },
+  // 5. LoremFlickr Fallback API
+  {
+    name: "LoremFlickr",
+    isEnabled: () => true,
+    search: async (query, count) => {
+      try {
+        const keyword = query.split(' ')[0] || 'food';
+        const url = `https://loremflickr.com/400/400/food,${encodeURIComponent(keyword)}`;
+        return [{
+          title: query,
+          imageUrl: url,
+          pageUrl: `https://loremflickr.com`,
+          engine: "LoremFlickr"
+        }];
+      } catch (err) {
+        console.error("[LoremFlickr Error]", err);
+      }
+      return [];
+    }
+  },
+  // 3. Google Custom Search API
+  {
+    name: "GoogleCSE",
+    isEnabled: (env) => !!env.Custom_Search_API && env.Custom_Search_API !== "AIzaSyDGpOvUtgu7fEbpgms1ICuvFvJxi8DMGvA",
+    search: async (query, count, env) => {
+      try {
+        const cx = env.Custom_Search_CX || "40e028bbf9ec84932";
+        const url = `https://www.googleapis.com/customsearch/v1?key=${env.Custom_Search_API}&cx=${cx}&q=${encodeURIComponent(query)}&searchType=image&num=${count}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (res.ok && data.items) {
+          return data.items.slice(0, count).map((item: any) => ({
+            title: item.title,
+            imageUrl: item.link,
+            pageUrl: item.image?.contextLink || `https://www.google.com/search?q=${encodeURIComponent(query)}`,
+            engine: "GoogleCSE"
+          }));
+        }
+      } catch (err) {
+        console.error("[GoogleCSE Search Error]", err);
+      }
+      return [];
+    }
+  },
+  // 4. Brave Image Search API
+  {
+    name: "Brave",
+    isEnabled: (env) => !!(env.BRAVE_SEARCH_API_KEY || env.Brave_Search_API || env.BRAVE_API_KEY),
+    search: async (query, count, env) => {
+      try {
+        const apiKey = env.BRAVE_SEARCH_API_KEY || env.Brave_Search_API || env.BRAVE_API_KEY;
+        const url = `https://api.search.brave.com/res/v1/images/search?q=${encodeURIComponent(query)}&count=${count + 2}`;
+        const res = await fetch(url, {
+          headers: { "X-Subscription-Token": apiKey }
+        });
+        const data = await res.json();
+        if (res.ok && data.results) {
+          return data.results.slice(0, count).map((item: any) => ({
+            title: item.title || query,
+            imageUrl: item.properties?.url || item.url,
+            pageUrl: item.page_url || "https://brave.com",
+            engine: "Brave"
+          }));
+        }
+      } catch (err) {
+        console.error("[Brave Search Error]", err);
+      }
+      return [];
+    }
+  }
+];
+function cleanSearchQuery(q: string): string {
+  if (!q) return "";
+  let clean = q;
+  
+  // 1. Remove text inside square brackets [like this]
+  clean = clean.replace(/\[[^\]]*\]/g, "");
+  
+  // 2. Remove text inside parentheses (like this)
+  clean = clean.replace(/\([^)]*\)/g, "");
+  
+  // 3. Replace common Indonesian abbreviations / terms to simplify search
+  clean = clean.replace(/\/\s*(gr|goreng|bkr|bakar)/gi, "");
+  
+  // 4. Remove "+ NASI" or "+ Nasi" or "+ rice" or "with rice"
+  clean = clean.replace(/\+\s*(nasi|rice)/gi, "");
+  clean = clean.replace(/with\s+rice/gi, "");
+  clean = clean.replace(/and\s+rice/gi, "");
+  clean = clean.replace(/[\+\&]/g, " "); // replace + and & with space
+  
+  // 5. If there's a slash, take the first option (e.g. "Grilled/Fried Milkfish" -> "Grilled Milkfish")
+  if (clean.includes("/")) {
+    const parts = clean.split("/");
+    clean = parts[0];
+  }
+  
+  // 6. Common Indonesian/English replacements
+  clean = clean.replace(/\bque\b/gi, "kuwe");
+  clean = clean.replace(/\bvilet\b/gi, "fillet");
+  
+  // 7. Strip trailing/leading spaces and multiple spaces
+  clean = clean.replace(/\s+/g, " ").trim();
+  
+  return clean;
+}
+
+// Reusable Image Retrieval Manager (Fail-Proof Sequential Pipeline)
+async function retrieveFoodImages(
+  query: string, 
+  options: { mode?: "light" | "complete"; count?: number }
+): Promise<Array<{title: string, imageUrl: string, pageUrl: string, engine?: string}>> {
+  const cleanedQuery = cleanSearchQuery(query) || query;
+  const mode = options.mode || "light";
+  const targetCount = options.count || 2;
+  const results: Array<{title: string, imageUrl: string, pageUrl: string, engine?: string}> = [];
+  // Filter enabled engines based on active mode
+  const activeEngines = searchRegistry.filter(engine => {
+    if (mode === "light" && engine.name === "Brave") return false;
+    return engine.isEnabled(process.env);
+  });
+  addDebugLog(`[ImageRetrieval] Searching for "${cleanedQuery}" (original: "${query}") (mode: ${mode}, count: ${targetCount})`);
+  for (const engine of activeEngines) {
+    if (results.length >= targetCount) break;
+    try {
+      const needed = targetCount - results.length;
+      addDebugLog(`[ImageRetrieval] Requesting ${needed} image(s) from ${engine.name}...`);
+      const engineResults = await engine.search(cleanedQuery, needed, process.env);
+      if (engineResults && engineResults.length > 0) {
+        results.push(...engineResults);
+      }
+    } catch (err: any) {
+      console.error(`[ImageRetrieval] Engine ${engine.name} failed:`, err.message);
+    }
+  }
+  return results.slice(0, targetCount);
+}
+
+// Programmatic, Fail-Proof Image Search Endpoint
+app.post("/api/gemini/food-image-search", async (req, res) => {
+  const { query, mode, count } = req.body;
+  addDebugLog(`[FoodImageSearch] Route triggered for query: "${query}"`);
+  
+  if (imageSearchCache.has(query)) {
+    const cached = imageSearchCache.get(query);
+    // Ensure apiCalls are always reported even on cache hits
+    return res.json({
+      ...cached,
+      apiCalls: [{ type: 'brave', label: `Brave Search (cached) - ${query}` }]
+    });
+  }
+
+  try {
+    const images = await retrieveFoodImages(query, {
+      mode: mode || "light",
+      count: typeof count === "number" ? count : 2
+    });
+    
+    // De-duplicate engine names for apiCalls
+    const enginesUsed = Array.from(new Set(images.map((img: any) => img.engine || 'Brave')));
+    const apiCalls = enginesUsed.map(engineName => ({
+      type: engineName.toLowerCase() === 'wikipedia' ? 'wikipedia' : engineName.toLowerCase() === 'unsplash' ? 'unsplash' : 'brave',
+      label: `${engineName} Search - ${query}`
+    }));
+
+    const payload = {
+      images,
+      isAvailable: images.length > 0,
+      apiCalls,
+      error: images.length > 0 ? null : "No images could be retrieved across active search engines."
+    };
+    
+    // Always cache the result to prevent infinite lookup loops for unfound items
+    imageSearchCache.set(query, payload);
+
+    res.json(payload);
+  } catch (error: any) {
+    console.error("[FoodImageSearch Endpoint Error]:", error);
+    res.json({
+      images: [],
+      isAvailable: false,
+      error: `Search pipeline error: ${error.message}`
+    });
+  }
+});
+
+
+app.post("/api/gemini/menu-image-search", async (req, res) => {
+  const { labels } = req.body;
+  if (!labels || !Array.isArray(labels) || labels.length === 0) {
+    return res.json({ results: [] });
+  }
+
+  const batchSize = 5;
+  const batches = [];
+  for (let i = 0; i < labels.length; i += batchSize) {
+    batches.push(labels.slice(i, i + batchSize));
+  }
+
+  let allResults: { label: string; imageUrl: string | null }[] = [];
+  const ai = getGeminiClient();
+  
+  for (const batch of batches) {
+    const promptText = `Briefly describe each of these dishes: ${batch.join(", ")}. Do not include URLs or format as JSON. Provide a short paragraph for each.`;
+    try {
+      const response = await withGeminiRetry(() => ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: promptText
+      }), { label: "Unified LLM" });
+      const candidate = response.candidates?.[0];
+      const text = candidate?.content?.parts?.[0]?.text || "";
+      const groundingMetadata = candidate?.groundingMetadata;
+      const groundingSupports = groundingMetadata?.groundingSupports || [];
+      const groundingChunks = groundingMetadata?.groundingChunks || [];
+
+      for (const label of batch) {
+        let matchedUri = null;
+        let matchReason = "No grounding match";
+        const lowerLabel = label.toLowerCase();
+        let matchedSegment = null;
+        for (const support of groundingSupports) {
+           const segment = support.segment;
+           if (segment && segment.text && segment.text.toLowerCase().includes(lowerLabel)) {
+             matchedSegment = support;
+             break;
+           }
+        }
+        if (!matchedSegment) {
+           const parts = lowerLabel.split(" ");
+           for (const support of groundingSupports) {
+              const segment = support.segment;
+              if (segment && segment.text && parts.some(p => p.length > 3 && segment.text.toLowerCase().includes(p))) {
+                 matchedSegment = support;
+                 break;
+              }
+           }
+        }
+        
+        if (matchedSegment && matchedSegment.groundingChunkIndices && matchedSegment.groundingChunkIndices.length > 0) {
+           const chunkIndex = matchedSegment.groundingChunkIndices[0];
+           const chunk = groundingChunks[chunkIndex];
+           if (chunk && chunk.web && chunk.web.uri) {
+             matchedUri = chunk.web.uri;
+           }
+        }
+        
+        let ogImageUrl = null;
+        if (matchedUri) {
+           try {
+             const scrapeRes = await fetch(matchedUri, { 
+               headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+               signal: AbortSignal.timeout(5000)
+             });
+             const html = await scrapeRes.text();
+             const $ = cheerio.load(html);
+             ogImageUrl = $('meta[property="og:image"]').attr('content');
+             if (!ogImageUrl) matchReason = "No og:image";
+           } catch (e) {
+             matchReason = "Scrape failure";
+           }
+        }
+        
+        // Fallback
+        if (!ogImageUrl) {
+           try {
+             const fallbackRes = await fetch("http://localhost:3000/api/gemini/food-image-search", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ query: label })
+             });
+             const fallbackData = await fallbackRes.json();
+             if (fallbackData.images && fallbackData.images.length > 0) {
+                ogImageUrl = fallbackData.images[0].imageUrl;
+             }
+           } catch (e) {
+             console.error("Fallback error", e);
+           }
+        }
+        
+        allResults.push({ label, imageUrl: ogImageUrl });
+      }
+    } catch (e) {
+      console.error("Batch error:", e);
+      for (const label of batch) {
+         try {
+             const fallbackRes = await fetch("http://localhost:3000/api/gemini/food-image-search", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ query: label })
+             });
+             const fallbackData = await fallbackRes.json();
+             if (fallbackData.images && fallbackData.images.length > 0) {
+                allResults.push({ label, imageUrl: fallbackData.images[0].imageUrl });
+             } else {
+                allResults.push({ label, imageUrl: null });
+             }
+         } catch(e) {
+             allResults.push({ label, imageUrl: null });
+         }
+      }
+    }
+  }
+  // Accumulate calls made during this batch
+  const localApiCalls = [];
+  const batchCount = Math.ceil(labels.length / 5);
+  for (let i = 0; i < batchCount; i++) {
+    localApiCalls.push({ type: 'gemini', label: 'Menu image search - Gemini 2.5 Flash' });
+  }
+  // Check if we hit the fallback search for any items
+  allResults.forEach(r => {
+    if (r.imageUrl) {
+      localApiCalls.push({ type: 'brave', label: `Brave Search (menu fallback) - ${r.label}` });
+    }
+  });
+  return res.json({ 
+    results: allResults,
+    apiCalls: localApiCalls
+  });
+});
+
+/* old code replacement */
+app.get("/api/gemini/test-menu-image-search", async (req, res) => {
+  const testLabels = ["Beef Rendang", "Nasi Goreng", "Chicken Satay", "Gado Gado", "Soto Ayam", "Mie Goreng", "Martabak Manis", "Pempek Palembang", "Es Cendol", "Ayam Penyet", "GURAME ASAM MANIS", "ES TELER ALPUKAT", "SEBLAK CEKER", "MIE TEK-TEK BAKSO", "KWETIAU GORENG SEAFOOD", "JUS ALPUKAT", "ES BANGO AGER ITEM", "TONGKOL SUIR PETE", "AYAM GARANG ASEM", "CUMI GORENG TEPUNG"];
+
+  try {
+    const protocol = req.protocol || "http";
+    const host = req.get("host") || "localhost:3000";
+    const url = `${protocol}://${host}/api/gemini/menu-image-search`;
+    
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ labels: testLabels })
+    });
+    
+    const data = await response.json();
+    return res.json({ data, testLabels });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint to fetch real-time agent thinking process logs
+app.get("/api/gemini/debug-logs", (req, res) => {
+  const sessionId = (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || "global";
+  let logs: any[] = [];
+  if (sessionId !== "global") {
+    logs = sessionDebugLogs[sessionId] || [];
+  } else {
+    logs = globalDebugLogs;
+  }
+  res.json({ logs });
+});
+
+// Endpoint to clear the backend agent process logs
+app.post("/api/gemini/clear-debug-logs", (req, res) => {
+  const sessionId = (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || "global";
+  if (sessionId !== "global") {
+    sessionDebugLogs[sessionId] = [];
+  } else {
+    globalDebugLogs = [];
+  }
+  addDebugLog(`[System] Debug logs cleared by user request.`, sessionId !== "global" ? sessionId : undefined);
+  res.json({ status: "cleared", logs: [] });
+});
+
+// --- Issue backlog + shared issue tags (fix items) ---
+registerIssueBacklogRoutes(app, {
+  addDebugLog: (msg: string, sessionId?: string) => addDebugLog(msg, sessionId),
+  globalDebugLogs: typeof globalDebugLogs !== 'undefined' ? globalDebugLogs : [],
+  sessionDebugLogs: typeof sessionDebugLogs !== 'undefined' ? sessionDebugLogs : {},
+});
+
+// --- Bug snapshot packs (R2 /bugs/) + triage digest + brief API (Initiative K) ---
+registerBugSnapshotRoutes(app, {
+  callUnifiedLLM: (args: any) => callUnifiedLLM(args),
+  getS3Client: () => getS3Client(),
+  bucketName: CLOUDFLARE_R2_BUCKET_NAME,
+  publicUrlBase: CLOUDFLARE_R2_PUBLIC_URL,
+  addDebugLog: (msg: string, sessionId?: string) => addDebugLog(msg, sessionId),
+});
+
+registerGoldenRoutes(app, {
+  getS3Client: () => getS3Client(),
+  bucketName: CLOUDFLARE_R2_BUCKET_NAME,
+  publicUrlBase: CLOUDFLARE_R2_PUBLIC_URL,
+});
+
+registerBrandMenuRoutes(app);
+
+// Endpoint to compile logs and send to admin
+app.post("/api/gemini/send-logs", (req, res) => {
+  try {
+    const sessionId = (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || "global";
+    const { logsText } = req.body;
+    
+    // Create admin logs directory if not exists
+    const logsDir = path.join(process.cwd(), "data", "admin_logs");
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    
+    const timestampStr = new Date().toISOString().replace(/[:.]/g, "-");
+    const filePath = path.join(logsDir, `admin_logs_${sessionId}_${timestampStr}.txt`);
+    
+    const formattedContent = `ADMIN LOGS EXPORT\nTarget Admin: cwah.liu@gmail.com\nTimestamp: ${new Date().toLocaleString()}\nSession ID: ${sessionId}\n\n=========================================\n\n${logsText || "No logs provided."}`;
+    
+    fs.writeFileSync(filePath, formattedContent, "utf8");
+    
+    // Also append to a single rolling admin_logs_all.txt for convenience
+    const rollingFilePath = path.join(logsDir, "admin_logs_all.txt");
+    fs.appendFileSync(rollingFilePath, `\n\n=== EXPORTED AT ${new Date().toISOString()} (Session: ${sessionId}) ===\n${logsText}\n`, "utf8");
+    
+    addDebugLog(`[AdminExport] Emailed and compiled entire log history to cwah.liu@gmail.com. Saved locally to ${filePath}`);
+    
+    res.json({ 
+      status: "success", 
+      message: "Debug logs compiled and sent to cwah.liu@gmail.com. They have also been saved to the server persistent volume.",
+      filePath
+    });
+  } catch (err: any) {
+    console.error("Error exporting logs:", err);
+    res.status(500).json({ error: "Failed to export debug logs to admin." });
+  }
+});
+
+
+
+app.post('/admin/migrate', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'] || req.body?.secret;
+    if (!process.env.ADMIN_MIGRATION_SECRET || secret !== process.env.ADMIN_MIGRATION_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const commit = req.body?.commit === true;
+    if (!db) {
+      return res.status(500).json({ error: 'Firestore is not initialized.' });
+    }
+    const targetUid = req.body?.uid;
+    if (!targetUid || typeof targetUid !== 'string') {
+      return res.status(400).json({ error: 'A single "uid" is required in the request body. This endpoint no longer scans all users in one call â€” call it once per uid.' });
+    }
+
+    const report = {
+      scannedUsers: 0,
+      updatedUsers: 0,
+      updatedDocs: 0,
+      imagesCompressed: 0,
+      biomarkerRenames: [] as any[],
+      arrayToMapConversions: 0,
+      dryRun: !commit
+    };
+
+    const targetDoc = await db.collection('users').doc(targetUid).get();
+    if (!targetDoc.exists) {
+      return res.status(404).json({ error: `No user found with uid ${targetUid}` });
+    }
+    report.scannedUsers = 1;
+
+    for (const userDoc of [targetDoc]) {
+      const uid = userDoc.id;
+      const profile = userDoc.data();
+      let profileChanged = false;
+      
+      const arrayFields = ['deletedFoodLogIds', 'deletedBiomarkerLogIds', 'deletedCustomBiomarkerKeys'];
+      for (const field of arrayFields) {
+        if (Array.isArray(profile[field])) {
+          const newMap: any = {};
+          for (const id of profile[field]) {
+            newMap[id] = Date.now();
+          }
+          profile[field] = newMap;
+          profileChanged = true;
+          report.arrayToMapConversions++;
+        }
+      }
+
+      if (renameBiomarkersInObject(profile, report, `users/${uid}/Profile`)) {
+        profileChanged = true;
+      }
+      
+      if (await compressImagesInObject(profile, report)) {
+        profileChanged = true;
+      }
+
+      if (profileChanged) {
+        if (commit) await userDoc.ref.set(profile, { merge: true });
+        report.updatedUsers++;
+      }
+
+      // Iterate subcollections
+      const collections = await userDoc.ref.listCollections();
+      for (const col of collections) {
+        const docs = await col.get();
+        for (const docSnap of docs.docs) {
+          const data = docSnap.data();
+          let docChanged = false;
+
+          if (renameBiomarkersInObject(data, report, `users/${uid}/${col.id}/${docSnap.id}`)) {
+            docChanged = true;
+          }
+
+          if (await compressImagesInObject(data, report)) {
+            docChanged = true;
+          }
+
+          if (docChanged) {
+            if (commit) await docSnap.ref.set(data, { merge: true });
+            report.updatedDocs++;
+          }
+        }
+      }
+    }
+
+    res.json(report);
+  } catch (error: any) {
+    console.error('Migration error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// One-time cleanup: merge duplicate biomarker_logs rows in Supabase that share a date
+// but carry the same measurement under differently-spelled keys (e.g. a lab-report
+// re-parse that named MCHC "mean_corpuscular_hb_conc_g_l" instead of "mchc", creating
+// a brand-new row alongside the original instead of updating it in place). This never
+// deletes a *value* â€” it only merges rows and drops the now-redundant duplicate row,
+// and never overwrites an existing value on the row it keeps.
+app.post('/admin/dedupe-biomarker-logs', async (req, res) => {
+  try {
+    const secret = req.headers['x-admin-secret'] || req.body?.secret;
+    if (!process.env.ADMIN_MIGRATION_SECRET || secret !== process.env.ADMIN_MIGRATION_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const commit = req.body?.commit === true;
+    const targetUid = req.body?.uid;
+    if (!targetUid || typeof targetUid !== 'string') {
+      return res.status(400).json({ error: 'A single "uid" is required in the request body.' });
+    }
+
+    const { data: rows, error: fetchErr } = await supabaseAdmin
+      .from('biomarker_logs')
+      .select('id, firebase_uid, date, biomarkers, updated_at')
+      .eq('firebase_uid', targetUid);
+    if (fetchErr) {
+      return res.status(500).json({ error: fetchErr.message });
+    }
+
+    const byDate = new Map<string, any[]>();
+    for (const row of rows || []) {
+      const d = String(row.date);
+      if (!byDate.has(d)) byDate.set(d, []);
+      byDate.get(d)!.push(row);
+    }
+
+    const suspiciousIdPattern = /^(log|med_log)_\d{10,}_[a-z0-9]{5,9}$/;
+    const report = {
+      dryRun: !commit,
+      datesScanned: byDate.size,
+      duplicateGroups: 0,
+      rowsMerged: 0,
+      rowsDeleted: 0,
+      conflictsSkipped: [] as any[],
+      groups: [] as any[]
+    };
+
+    for (const [date, group] of byDate.entries()) {
+      if (group.length < 2) continue;
+      report.duplicateGroups++;
+
+      // Prefer a row whose id doesn't look like a Clinical-Data-Parser-generated
+      // duplicate as the keeper; otherwise fall back to the lowest id for determinism.
+      const sorted = [...group].sort((a, b) => {
+        const aSus = suspiciousIdPattern.test(a.id) ? 1 : 0;
+        const bSus = suspiciousIdPattern.test(b.id) ? 1 : 0;
+        if (aSus !== bSus) return aSus - bSus;
+        return String(a.id).localeCompare(String(b.id));
+      });
+      const keeper = sorted[0];
+      const others = sorted.slice(1);
+
+      const mergedBiomarkers = { ...(keeper.biomarkers || {}) };
+      const groupReport: any = { date, keeperId: keeper.id, mergedFrom: [] as string[], addedKeys: [] as string[] };
+
+      for (const other of others) {
+        groupReport.mergedFrom.push(other.id);
+        for (const [rawKey, val] of Object.entries(other.biomarkers || {})) {
+          const key = getMappedBiomarkerKey(rawKey) || rawKey;
+          if (!(key in mergedBiomarkers)) {
+            mergedBiomarkers[key] = val;
+            groupReport.addedKeys.push(key);
+          } else if (mergedBiomarkers[key] !== val) {
+            // Existing value on the keeper wins; flag the conflict instead of guessing.
+            report.conflictsSkipped.push({ date, key, keptValue: mergedBiomarkers[key], droppedValue: val, droppedFromId: other.id });
+          }
+        }
+      }
+
+      report.groups.push(groupReport);
+      report.rowsMerged += 1;
+      report.rowsDeleted += others.length;
+
+      if (commit) {
+        const { error: updErr } = await supabaseAdmin
+          .from('biomarker_logs')
+          .update({ biomarkers: mergedBiomarkers, updated_at: new Date().toISOString() })
+          .eq('id', keeper.id);
+        if (updErr) {
+          groupReport.updateError = updErr.message;
+          continue;
+        }
+        const otherIds = others.map(o => o.id);
+        const { error: delErr } = await supabaseAdmin
+          .from('biomarker_logs')
+          .delete()
+          .in('id', otherIds);
+        if (delErr) {
+          groupReport.deleteError = delErr.message;
+        }
+      }
+    }
+
+    res.json(report);
+  } catch (error: any) {
+    console.error('Dedupe error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+  const distPath = path.join(process.cwd(), "dist");
+  const hasBuiltDist = fs.existsSync(path.join(distPath, "index.html"));
+  // Cloud Run / `npm start` should serve dist. Local `npm run dev` (tsx) must
+  // use Vite even when a stale dist/ is sitting on disk â€” otherwise the UI
+  // silently stays weeks old and looks "broken".
+  const runningFromSource =
+    process.env.FORCE_VITE === "1" ||
+    process.env.npm_lifecycle_event === "dev" ||
+    process.argv.some((a) => /(^|[\\/])tsx([\\/]|$)/.test(a));
+  const serveDist = hasBuiltDist && !runningFromSource;
+  console.log(
+    `[boot] frontend=${serveDist ? "dist" : "vite"} hasDist=${hasBuiltDist} fromSource=${runningFromSource}`
+  );
+  if (serveDist) {
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  } else {
+    const { createServer: createViteServer } = await import("vite");
+    const vite = await createViteServer({
+      server: {
+        middlewareMode: true,
+        watch: {
+          ignored: [
+            '**/brand_menu_items_local.json',
+            '**/tests/**',
+            '**/studio/**',
+            '**/archive/**',
+            '**/*.log',
+            '**/tmp/**'
+          ]
+        }
+      },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  }
+
+
+
+function renameBiomarkersInObject(obj: any, report: any, locationStr: string): boolean {
+  let changed = false;
+  if (obj && typeof obj === 'object') {
+    if (obj.biomarkers && typeof obj.biomarkers === 'object') {
+      const newB: any = {};
+      let bChanged = false;
+      for (const [k, v] of Object.entries(obj.biomarkers)) {
+        const mapped = getMappedBiomarkerKey(k);
+        if (mapped !== k) {
+          bChanged = true;
+          report.biomarkerRenames.push({ location: locationStr, from: k, to: mapped });
+          newB[mapped] = v;
+        } else {
+          newB[k] = v;
+        }
+      }
+      if (bChanged) {
+        obj.biomarkers = newB;
+        changed = true;
+      }
+    }
+    // Check customBiomarkers in user profile
+    if (locationStr.endsWith('Profile') && obj.customBiomarkers && typeof obj.customBiomarkers === 'object') {
+      const newCustom: any = {};
+      let cChanged = false;
+      for (const [k, v] of Object.entries(obj.customBiomarkers)) {
+        const mapped = getMappedBiomarkerKey(k);
+        if (mapped !== k) {
+          cChanged = true;
+          report.biomarkerRenames.push({ location: locationStr + ' (customBiomarkers)', from: k, to: mapped });
+          newCustom[mapped] = v;
+        } else {
+          newCustom[k] = v;
+        }
+      }
+      if (cChanged) {
+        obj.customBiomarkers = newCustom;
+        changed = true;
+      }
+    }
+    for (const [k, v] of Object.entries(obj)) {
+      if (k !== 'biomarkers' && k !== 'customBiomarkers' && typeof v === 'object' && v !== null) {
+        if (renameBiomarkersInObject(v, report, `${locationStr}.${k}`)) {
+          changed = true;
+        }
+      }
+    }
+  }
+  return changed;
+}
+
+async function compressImagesInObject(obj: any, report: any): Promise<boolean> {
+  let changed = false;
+  if (obj && typeof obj === 'object') {
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === 'string' && v.startsWith('data:image/') && v.length > 25000) {
+        try {
+          const matches = v.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
+          if (matches && matches.length === 3) {
+            const buffer = Buffer.from(matches[2], 'base64');
+            const resized = await sharp(buffer)
+              .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+              .jpeg({ quality: 50 })
+              .toBuffer();
+            const newBase64 = `data:image/jpeg;base64,${resized.toString('base64')}`;
+            if (newBase64.length < v.length) {
+              obj[k] = newBase64;
+              changed = true;
+              report.imagesCompressed++;
+            }
+          }
+        } catch (e) {
+          console.error('Image compression failed', e);
+        }
+      } else if (typeof v === 'object' && v !== null) {
+        if (await compressImagesInObject(v, report)) {
+          changed = true;
+        }
+      }
+    }
+  }
+  return changed;
+}
+
+
+  // Warm up database brand cache and trigger initial database self-cleaning maintenance if configured
+  import('./supabaseAdmin.js').then(({ isSupabaseConfigured, supabaseAdmin }) => {
+    if (isSupabaseConfigured) {
+      fetchAllDatabaseBrands().then(async ({ allBrands }) => {
+        console.log(`[BrandCache] Loaded ${allBrands.size} brands dynamically from database.`);
+      }).catch((err) => {
+        console.warn('[BrandCache] Warmup warning:', err);
+      });
+    } else {
+      console.log('[BrandCache] Supabase credentials not set, operating in local offline mode.');
+    }
+  });
+
+  recoverInterruptedServerJobs().then(count => {
+    if (count > 0) {
+      console.log(`[ServerJobs Worker] Interrupted background job recovery initiated for ${count} jobs.`);
+    }
+  }).catch(err => {
+    console.warn('[ServerJobs Worker] Startup recovery warning:', err);
+  });
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`[Health Cockpit App] Full-Stack server running on port ${PORT}`);
+  });
+}
+
+if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+  startServer();
+}

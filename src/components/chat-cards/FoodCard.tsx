@@ -1,5 +1,6 @@
 import { formatMessageContent } from '../../utils/formatUtils';
 import { NutritionLabelTable, checkHasNutritionLabels } from "./NutritionLabelTable";
+import { MealPortionController } from './MealPortionController';
 import { trackApiCall } from '../../utils/apiTracker';
 import { PhysicalFormBadge } from '../PhysicalFormBadge';
 import React, { useState, useEffect, useRef } from 'react';
@@ -18,6 +19,7 @@ import { toPendingFoodLog } from '../../mealBuild/adapters';
 import { namesReferToSameFood } from '../../../server_scout_reconcile';
 import { extractMostRecentImageDate, getCurrentDateInTimezone } from '../../utils/dateUtils';
 import { normalizeMealImageUrl } from '../../utils/foodImageSources';
+import { scaleMealPortion, scaleSingleDishPortion } from '../../utils/portionUtils';
 function foodCardName(item: any): string {
   return item?.canonicalDbName || item?.name || item?.originalName || item?.keyword || '';
 }
@@ -1634,6 +1636,9 @@ export const FoodCard: React.FC<AgentCardProps & {
         labelProductName: matchingScout?.labelProductName || item.labelProductName || null,
         estimatedWeightGrams: item.weightGrams || item.estimatedWeightGrams || matchingScout?.estimatedWeightGrams,
         weightGrams: item.weightGrams || item.estimatedWeightGrams,
+        portionRatio: item.portionRatio || matchingScout?.portionRatio || 1.0,
+        portionDescription: item.portionDescription || matchingScout?.portionDescription,
+        packGrams: item.packGrams || matchingScout?.packGrams,
         boundingBox2D: item.boundingBox2D || (matchingScout ? matchingScout.boundingBox2D : null),
         sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : (matchingScout ? matchingScout.sourceImageIndex : null),
         itemConfidence: matchingScout ? matchingScout.itemConfidence : "High (>90%)",
@@ -1685,6 +1690,29 @@ export const FoodCard: React.FC<AgentCardProps & {
   const [previewState, setPreviewState] = React.useState<{ groupIdx: number, itemIdx: number, resolvedImgSrc?: string, overrideSrc?: string } | null>(null);
   const [scoutPreviewIdx, setScoutPreviewIdx] = React.useState<number | null>(null);
   const [externalPreviewImg, setExternalPreviewImg] = React.useState<{ url: string; title: string } | null>(null);
+
+  // Portion Scaling State
+  const [portionScale, setPortionScale] = React.useState<number>(msg.data?.pendingFoodLog?.portionRatio || 1.0);
+  const [portionAccepted, setPortionAccepted] = React.useState<boolean>(Boolean(msg.data?.pendingFoodLog?.portionAccepted));
+
+  const handleScalePortion = (ratio: number) => {
+    setPortionScale(ratio);
+    setPortionAccepted(true);
+    const currentLog = msg.data?.pendingFoodLog || msg.pendingFoodLog;
+    if (!currentLog) return;
+    const updatedLog = scaleMealPortion(currentLog, ratio);
+    if (msg.data) msg.data.pendingFoodLog = updatedLog;
+    msg.pendingFoodLog = updatedLog;
+  };
+
+  const handleScaleSingleDish = (dishIdx: number, ratio: number) => {
+    setPortionAccepted(true);
+    const currentLog = msg.data?.pendingFoodLog || msg.pendingFoodLog;
+    if (!currentLog) return;
+    const updatedLog = scaleSingleDishPortion(currentLog, dishIdx, ratio);
+    if (msg.data) msg.data.pendingFoodLog = updatedLog;
+    msg.pendingFoodLog = updatedLog;
+  };
 
   // Card-wide parent image search state hooks
   const [onlineImageUrls, setOnlineImageUrls] = React.useState<Record<string, string>>({});
@@ -3216,22 +3244,34 @@ export const FoodCard: React.FC<AgentCardProps & {
                                          Confidence: {(item.itemConfidence || '').split('(')[0].trim()}
                                        </span>
                                      )}
-
                                    </div>
                                  );
                                })}
                              </div>
 
+                             {/* Interactive Portion Size Note & Controller */}
+                             <MealPortionController
+                               displayedScoutItems={displayedScoutItems}
+                               portionScale={portionScale}
+                               portionAccepted={portionAccepted}
+                               onScalePortion={handleScalePortion}
+                               onScaleSingleDish={handleScaleSingleDish}
+                               onAcceptPortion={() => setPortionAccepted(true)}
+                               isSaved={isAlreadyLogged}
+                             />
+
                              {openLabelIdx !== null && displayedScoutItems[openLabelIdx] && (
-                               <div className="mt-2 w-full">
-                                 <NutritionLabelTable
-                                   defaultOpen={true}
-                                   hideOwnToggle={true}
-                                   activeScoutItems={[displayedScoutItems[openLabelIdx]]}
-                                   isSaved={isAlreadyLogged}
-                                   onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))}
-                                 />
-                               </div>
+                                <div className="mt-2 w-full">
+                                  <NutritionLabelTable
+                                    defaultOpen={true}
+                                    hideOwnToggle={true}
+                                    activeScoutItems={[displayedScoutItems[openLabelIdx]]}
+                                    isSaved={isAlreadyLogged}
+                                    onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))}
+                                    onScalePortion={(ratio) => handleScaleSingleDish(openLabelIdx, ratio)}
+                                    currentPortionRatio={displayedScoutItems[openLabelIdx]?.portionRatio || 1.0}
+                                  />
+                                </div>
                              )}
                              
                              {/* Uncertain Items Helper Button */}
@@ -3297,13 +3337,21 @@ export const FoodCard: React.FC<AgentCardProps & {
                               }
                               const itemsBreakdown = msg.data?.pendingFoodLog?.itemsBreakdown || msg.data?.agentResult?.itemsBreakdown;
                               if (Array.isArray(itemsBreakdown) && itemsBreakdown.length > 1) {
+                                const currentName = msg.data?.pendingFoodLog?.name || '';
+                                if (currentName && (currentName.includes('&') || currentName.toLowerCase().includes(' and '))) {
+                                  return currentName;
+                                }
                                 const names = itemsBreakdown.map((it: any) => it.name || it.scoutOriginalName || it.keyword).filter(Boolean);
                                 if (names.length > 1) {
-                                  const baseName = names[0];
-                                  const others = names.slice(1).join(' & ');
-                                  const currentName = msg.data?.pendingFoodLog?.name || '';
-                                  if (!currentName.toLowerCase().includes(others.toLowerCase()) && !currentName.toLowerCase().includes('&')) {
-                                    return `${currentName || baseName} & ${others}`;
+                                  const uniqueNames: string[] = [];
+                                  names.forEach((n: string) => {
+                                    const clean = n.trim();
+                                    if (clean && !uniqueNames.some(u => u.toLowerCase().includes(clean.toLowerCase()) || clean.toLowerCase().includes(u.toLowerCase()))) {
+                                      uniqueNames.push(clean);
+                                    }
+                                  });
+                                  if (uniqueNames.length > 1) {
+                                    return uniqueNames.join(' & ');
                                   }
                                 }
                               }
@@ -3513,7 +3561,20 @@ export const FoodCard: React.FC<AgentCardProps & {
                                                 </div>
                                               </td>
                                               <td className="p-2 text-right font-mono text-slate-500">
-                                                {formatNutrientValue(item.weightGrams, 'g')}
+                                                 <div className="flex flex-col items-end">
+                                                   <span className="font-semibold">{formatNutrientValue(item.weightGrams, 'g')}</span>
+                                                   {item.packGrams ? (
+                                                     <span className="text-[9px] font-sans text-indigo-500 dark:text-indigo-400 font-semibold">
+                                                       {item.portionDescription || `${Math.round(((item.weightGrams || 0) / item.packGrams) * 100)}% of ${item.packGrams}g`}
+                                                     </span>
+                                                   ) : (
+                                                     (item.portionRatio !== undefined && item.portionRatio !== 1) ? (
+                                                       <span className="text-[9px] font-sans text-indigo-500 dark:text-indigo-400 font-semibold">
+                                                         {item.portionDescription || `${item.portionRatio}x`}
+                                                       </span>
+                                                     ) : null
+                                                   )}
+                                                 </div>
                                               </td>
                                               <td className="p-2 text-right font-mono text-orange-600 dark:text-orange-400 font-semibold">
                                                 {formatNutrientValue(item.calories, 'kcal')}
@@ -3702,6 +3763,18 @@ export const FoodCard: React.FC<AgentCardProps & {
                     );
                   })}
                 </div>
+
+                {/* Interactive Portion Size Note & Controller */}
+                <MealPortionController
+                  displayedScoutItems={displayedScoutItems}
+                  portionScale={portionScale}
+                  portionAccepted={portionAccepted}
+                  onScalePortion={handleScalePortion}
+                  onScaleSingleDish={handleScaleSingleDish}
+                  onAcceptPortion={() => setPortionAccepted(true)}
+                  isSaved={isAlreadyLogged}
+                />
+
                 {openLabelIdx !== null && displayedScoutItems[openLabelIdx] && (
                   <div className="mt-2 w-full">
                     <NutritionLabelTable
@@ -3710,6 +3783,8 @@ export const FoodCard: React.FC<AgentCardProps & {
                       activeScoutItems={[displayedScoutItems[openLabelIdx]]}
                       isSaved={isAlreadyLogged}
                       onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))}
+                      onScalePortion={(ratio) => handleScaleSingleDish(openLabelIdx, ratio)}
+                      currentPortionRatio={displayedScoutItems[openLabelIdx]?.portionRatio || 1.0}
                     />
                   </div>
                 )}

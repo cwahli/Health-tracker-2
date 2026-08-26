@@ -8,23 +8,31 @@ export interface NutrientMeta {
 }
 
 export const nutrientDefinitions: NutrientMeta[] = [
-  // Macronutrients
+  // 1. Energy
   { key: 'calories', category: 'macro', unit: 'kcal', labels: { en: 'Calories', fr: 'Calories', zh: '卡路里', id: 'Kalori' } },
-  { key: 'protein', category: 'macro', unit: 'g', labels: { en: 'Protein', fr: 'Protéines', zh: '蛋白质', id: 'Protein' } },
+
+  // 2. Fat & Lipids
   { key: 'totalFat', category: 'macro', unit: 'g', labels: { en: 'Total Fat', fr: 'Lipides Totaux', zh: '总脂肪', id: 'Lemak Total' } },
   { key: 'saturatedFat', category: 'macro', unit: 'g', labels: { en: 'Saturated Fat', fr: 'Acides Gras Saturés', zh: '饱和脂肪', id: 'Lemak Jenuh' } },
   { key: 'transFat', category: 'macro', unit: 'g', labels: { en: 'Trans Fat', fr: 'Acides Gras Trans', zh: '反式脂肪', id: 'Lemak Trans' } },
   { key: 'unsaturatedFat', category: 'macro', unit: 'g', labels: { en: 'Unsaturated Fat', fr: 'Acides Gras Insaturés', zh: '不饱和脂肪', id: 'Lemak Tak Jenuh' } },
   { key: 'omega3', category: 'macro', unit: 'g', labels: { en: 'Omega-3', fr: 'Oméga-3', zh: 'Omega-3 脂肪酸', id: 'Omega-3' } },
+
+  // 3. Carbohydrates, Fiber, Sugars
   { key: 'carbohydrates', category: 'macro', unit: 'g', labels: { en: 'Carbohydrates', fr: 'Glucides', zh: '碳水化合物', id: 'Karbohidrat' } },
-  { key: 'sugar', category: 'macro', unit: 'g', labels: { en: 'Total Sugar', fr: 'Sucre Total', zh: '总糖量', id: 'Gula Total' } },
-  { key: 'addedSugar', category: 'macro', unit: 'g', labels: { en: 'Added Sugar', fr: 'Sucres Ajoutés', zh: '添加糖', id: 'Gula Tambahan' } },
   { key: 'totalFibre', category: 'macro', unit: 'g', labels: { en: 'Total Fibre', fr: 'Fibres Totales', zh: '膳食纤维总量', id: 'Serat Total' } },
   { key: 'solubleFibre', category: 'macro', unit: 'g', labels: { en: 'Soluble Fibre', fr: 'Fibres Solubles', zh: '可溶性膳食纤维', id: 'Serat Larut' } },
+  { key: 'sugar', category: 'macro', unit: 'g', labels: { en: 'Total Sugar', fr: 'Sucre Total', zh: '总糖量', id: 'Gula Total' } },
+  { key: 'addedSugar', category: 'macro', unit: 'g', labels: { en: 'Added Sugar', fr: 'Sucres Ajoutés', zh: '添加糖', id: 'Gula Tambahan' } },
 
-  // Minerals
+  // 4. Protein
+  { key: 'protein', category: 'macro', unit: 'g', labels: { en: 'Protein', fr: 'Protéines', zh: '蛋白质', id: 'Protein' } },
+
+  // 5. Sodium / Salt & Minerals
   { key: 'sodium', category: 'mineral', unit: 'mg', labels: { en: 'Sodium', fr: 'Sodium', zh: '钠', id: 'Natrium' } },
   { key: 'salt' as any, category: 'mineral', unit: 'g', labels: { en: 'Salt', fr: 'Sel', zh: '盐', id: 'Garam' } },
+
+  // 6. Minerals & Trace Elements
   { key: 'potassium', category: 'mineral', unit: 'mg', labels: { en: 'Potassium', fr: 'Potassium', zh: '钾', id: 'Kalium' } },
   { key: 'magnesium', category: 'mineral', unit: 'mg', labels: { en: 'Magnesium', fr: 'Magnésium', zh: '镁', id: 'Magnesium' } },
   { key: 'calcium', category: 'mineral', unit: 'mg', labels: { en: 'Calcium', fr: 'Calcium', zh: '钙', id: 'Kalsium' } },

@@ -2000,13 +2000,20 @@ export default function FoodHistoryTab({
                                     <p className="text-xs text-slate-750 dark:text-slate-300 font-semibold leading-relaxed">{effectiveComposition}</p>
                                   </div>
                                 )}
+
+                                {/* Note below Meal Composition indicating portion size applied */}
+                                <div className="pt-2 border-t border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between text-[10.5px] text-slate-600 dark:text-slate-300 font-sans">
+                                  <span className="flex items-center gap-1.5 font-medium">
+                                    <span>⚖️</span>
+                                    <span>Portion size applied: <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{log.portionRatio ? `${log.portionRatio}x` : '1.0x (Standard)'}</strong></span>
+                                  </span>
+                                  {log.portionAccepted && (
+                                    <span className="text-[9.5px] text-emerald-600 dark:text-emerald-400 font-semibold">✓ Accepted</span>
+                                  )}
+                                </div>
                               </div>
                             );
                           })()}
-
-
-
-
 
                           <div className="space-y-4 py-2 bg-slate-50 dark:bg-slate-900/40 rounded-2xl px-3.5">
                             <div>

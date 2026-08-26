@@ -22,21 +22,70 @@ export const ScoutNutrientsSchema = z.object({
   vitaminD: z.number().nullable().optional(),
 }).passthrough();
 
+export const ScoutFoodSchema = z.object({
+  foodName: z.string().nullable().optional(),
+  weightGrams: z.number().finite().nonnegative().nullable().optional(),
+  packGrams: z.number().finite().nonnegative().nullable().optional(),
+  sourceImageIndex: z.number().nullable().optional(),
+  rawNutritionLabel: z.record(z.string(), z.any()).nullable().optional(),
+  nutrients: z.object({
+    protein: z.number().nullable().optional(),
+    saturatedFat: z.number().nullable().optional(),
+    addedSugar: z.number().nullable().optional(),
+    totalFibre: z.number().nullable().optional(),
+    sodium: z.number().nullable().optional(),
+    carbohydrates: z.number().nullable().optional(),
+  }).passthrough().nullable().optional(),
+}).passthrough();
+
+export const ScoutDishSchema = z.object({
+  dishName: z.string().nullable().optional(),
+  chainName: z.string().nullable().optional(),
+  estimatedWeightGrams: z.number().finite().nonnegative().nullable().optional(),
+  cookingMethod: z.string().nullable().optional(),
+  sourceImageIndex: z.number().nullable().optional(),
+  boundingBox2D: z.array(z.number()).nullable().optional(),
+  isStandaloneCondimentPacket: z.boolean().nullable().optional(),
+  foods: z.array(ScoutFoodSchema).nullable().optional(),
+  dishNutrients: z.object({
+    saturatedFat: z.number().nullable().optional(),
+    totalFat: z.number().nullable().optional(),
+    totalSugar: z.number().nullable().optional(),
+    potassium: z.number().nullable().optional(),
+    omega3: z.number().nullable().optional(),
+    calcium: z.number().nullable().optional(),
+    iron: z.number().nullable().optional(),
+    magnesium: z.number().nullable().optional(),
+    vitaminD: z.number().nullable().optional(),
+  }).passthrough().nullable().optional(),
+}).passthrough();
+
 export const ScoutItemComponentSchema = z.object({
+  name: z.string().nullable().optional(),
   searchQuery: z.string().nullable().optional(),
+  weightGrams: z.number().finite().nonnegative().nullable().optional(),
+  packGrams: z.number().finite().nonnegative().nullable().optional(),
   volumePercentage: z.number().finite().positive().nullable().optional(),
   visualSheen: z.number().min(0.0).max(1.0).nullable().optional(),
   visualCoating: z.number().min(0.0).max(1.0).nullable().optional(),
   pieceCount: z.number().nullable().optional(),
   suggestedFdcId: z.string().nullable().optional(),
+  rawNutritionLabel: z.record(z.string(), z.any()).nullable().optional(),
+  nutrients: z.record(z.string(), z.any()).nullable().optional(),
+  calories: z.number().nullable().optional(),
 });
 
 export const ScoutItemSchema = z.object({
   originalName: z.string().nullable().optional(),
   keyword: z.string().nullable().optional(),
   itemConfidence: z.string().nullable().optional(),
+  weightGrams: z.number().finite().nonnegative().nullable().optional(),
+  packGrams: z.number().finite().nonnegative().nullable().optional(),
   estimatedWeightGrams: z.number().finite().nonnegative().nullable().optional(),
   nutrientBasisWeight: z.number().finite().nonnegative().nullable().optional(),
+  portionRatio: z.number().nullable().optional(),
+  portionAccepted: z.boolean().nullable().optional(),
+  portionDescription: z.string().nullable().optional(),
   /** Soft visual calorie estimate for the WHOLE item portion (legacy mirror of nutrients.calories). */
   estimatedCalories: z.number().finite().nonnegative().nullable().optional(),
   isStandaloneCondimentPacket: z.boolean().nullable().optional(),
@@ -105,76 +154,57 @@ export function canMergeScoutLabelIntoFood(
 }
 
 export const VisionScoutSchema = z.object({
+  dishes: z.array(ScoutDishSchema).nullable().optional(),
   items: z.array(ScoutItemSchema).nullable().optional(),
+  contentType: z.string().nullable().optional(),
   diningEnvironment: z.string().nullable().optional(),
 }).passthrough();
 
 export const scoutSystemInstruction = `System Instruction:
-STEP 1: SCENE CLASSIFICATION & ENVIRONMENT
-- 'contentType': 'visual' (food photo), 'menu_or_poster' (menu/kiosk screen), 'label' (nutrition panel), or 'text'.
-- 'diningEnvironment': 'casual_restaurant' | 'fast_food_chain' | 'home_cooked' | 'fine_dining' | 'airline' | 'unknown'.
+- HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'. Never merge ingredients from separate pots/bowls into a single dish.
+- FULL GROCERY INGESTION: Inspect every sticker/barcode: multiple packages of same type (e.g. 2 meat trays: 110g+115g) and raw plate items (eggs) must all be included into foods[]. Never drop packages.
+- WEIGHTS & PACKAGES: For each food, output 'weightGrams' (portion consumed in dish) and 'packGrams' (total printed weight of grocery pack/container if visible, else null).
+- DIRECT OCR: Transcribe nutrition labels into 'rawNutritionLabel' including 'calories' (printed energy/kkal/kJ), servingSize, and macros.
+- BRANDS & CONDIMENTS: Set 'chainName' for known brands (else null). Set 'isStandaloneCondimentPacket' to true only for tiny condiment packets <=30g.
+- COOKING FATS: In 'dishNutrients.totalFat', include cooking oils, dressings, and broth fats based on the dish 'cookingMethod'.
 
-STEP 2: UNIVERSAL DISH EXTRACTION & OCR ATTACHMENT
-- USER SCOPE ANCHOR: Extract EVERY distinct physical food, drink, side, or companion dish in 'items'. For open cups, estimate weight by fill level. The user's explicit text sentence is absolute ground truth. If the user explicitly limits consumption (e.g. "I only had 1 croissant", "I just ate the salad"), strictly extract ONLY specified items and skip all others. If prompt mentions dishes not in photo, extract visible food directly with minimal internal reasoning.
-- CROSS-IMAGE DEDUPLICATION: If photos show menu + food, or raw grocery packages + prepared dish, extract each distinct dish ONCE. Never create separate dummy "Nutrition Facts Label" items.
-- KNOWN BRANDS: For any restaurant chain or branded product (e.g. McDonald's, Yolk, Starbucks, Pret, Lidl, Sainsbury), output brand name alone in 'chainName' and exact dish title in 'originalName'. Leave 'chainName' null for unbranded items. Apply brand name only to branded items; emit companion fresh fruits/drinks as unbranded.
-- DIRECT OCR FIRST: If a package label or menu panel is visible, transcribe ALL printed facts directly into 'rawNutritionLabel' FIRST (including servingSize, calories, protein, totalFat, saturatedFat, totalCarbohydrate, sugar, sodium). Omit unprinted label keys completely (NEVER emit "key": null). If no label is visible, set 'rawNutritionLabel' to null.
-- PRECISE COUNTING: Inspect open pastry bags/boxes for stacked items. Split into individual items with realistic weights.
-
-STEP 3: 14 MANDATORY PHYSICAL NUTRIENTS (ZERO CALORIE INPUT)
-- For EVERY dish, provide numeric portion estimates across all 14 required keys in 'nutrients': protein, carbohydrates, totalFat, saturatedFat, transFat, sugar, addedSugar, totalFibre, sodium, potassium, omega3, calcium, iron, magnesium, vitaminD.
-- ZERO-CALORIE INPUT: Do not estimate calories. Backend computes Calories = (4 * Protein) + (4 * Carbohydrates) + (9 * TotalFat).
-- DIRECT CARBOHYDRATES: Estimate carbohydrates based on visible starch mass (potatoes ~20–25%, batter ~25–30%, meat/fish 0%, rice/pasta ~25–28%, bread ~50%) and sweet liquids.
-- CULINARY & REGIONAL CALIBRATION: Calibrate portion unit sizes, default ingredients, and cooking fat to specific cuisine norms (fried coatings absorb 25–35% fat; stir-fry adds +5–10g oil; steamed/boiled is fat-neutral).
-- INGREDIENTS: Plain string list in 'ingredients' (e.g. ["noodles", "chicken", "vegetables"]).
-- COOKING METHOD: 'raw' | 'baked' | 'grilled' | 'boiled' | 'steamed' | 'deep_fried' | 'pan_fried' | 'stir_fried'.
-- CONDIMENTS: Set 'isStandaloneCondimentPacket' to true ONLY for tiny standalone sauce/ketchup packets, butter tubs, or jam packs <=30g, false for main meals.
-
-=== SYSTEM CONSTRAINTS ===
-Output exactly ONE JSON object matching this schema. You MUST include 'nutrients' with realistic estimated numeric values for every item:
+=== REQUIRED OUTPUT JSON SCHEMA ===
+Output exactly ONE JSON object matching this schema:
 {
-  "_internalReasoning": "string",
-  "contentType": "visual | menu_or_poster | text",
+  "_internalReasoning": "string (<15 words)",
+  "contentType": "visual | menu_or_poster | label | text",
   "diningEnvironment": "home_cooked | casual_restaurant | fast_food_chain | fine_dining | airline | unknown",
-  "items": [
+  "dishes": [
     {
-      "originalName": "string",
-      "keyword": "string",
-      "chainName": "string | null",
-      "estimatedWeightGrams": 250,
-      "cookingMethod": "boiled",
-      "ingredients": ["noodles", "chicken", "spices"],
-      "rawNutritionLabel": {
-        "servingSize": "100g",
-        "calories": "190 kcal",
-        "protein": "8.8g",
-        "totalFat": "6.4g",
-        "totalCarbohydrate": "22g"
-      },
-      "nutrients": {
-        "protein": 22,
-        "carbohydrates": 62,
-        "totalFat": 16,
-        "saturatedFat": 4.5,
-        "transFat": 0,
-        "sugar": 3,
-        "addedSugar": 1,
-        "totalFibre": 4,
-        "sodium": 750,
-        "potassium": 380,
-        "omega3": 0.2,
-        "calcium": 45,
-        "iron": 3.2,
-        "magnesium": 55,
-        "vitaminD": 0
-      },
-      "boundingBox2D": [150, 200, 800, 750],
-      "sourceImageIndex": 0,
-      "isStandaloneCondimentPacket": false
+      "dishName": "Vegetable and Beef Hotpot",
+      "chainName": null,
+      "estimatedWeightGrams": 650,
+      "cookingMethod": "raw | baked | grilled | boiled | steamed | deep_fried | pan_fried | stir_fried",
+      "boundingBox2D": [300, 200, 850, 900],
+      "sourceImageIndex": 1,
+      "isStandaloneCondimentPacket": false,
+      "foods": [
+        {
+          "foodName": "Beef Blade",
+          "weightGrams": 110,
+          "packGrams": 110,
+          "sourceImageIndex": 0,
+          "rawNutritionLabel": null,
+          "nutrients": { "protein": 24.0, "saturatedFat": 2.5, "addedSugar": 0, "totalFibre": 0, "sodium": 65, "carbohydrates": 0 }
+        },
+        {
+          "foodName": "Rolled Oats",
+          "weightGrams": 30,
+          "packGrams": 800,
+          "sourceImageIndex": 2,
+          "rawNutritionLabel": { "servingSize": "30 g", "calories": "120 kkal", "protein": "3 g", "totalCarbohydrate": "21 g", "totalFat": "3.5 g" },
+          "nutrients": { "protein": 3.0, "saturatedFat": 0.5, "addedSugar": 0, "totalFibre": 3.0, "sodium": 0, "carbohydrates": 21.0 }
+        }
+      ],
+      "dishNutrients": { "saturatedFat": 5.8, "totalFat": 18.2, "totalSugar": 5.0, "potassium": 1450, "omega3": 0.15, "calcium": 190, "iron": 5.5, "magnesium": 120, "vitaminD": 0 }
     }
   ]
-}
-`;
+}`;
 
 function validateOrFallback<T>(
   schema: z.ZodType<T>,
@@ -866,6 +896,94 @@ export function parseAndHealVisionScout(
   if (parsedScout) {
     let lowestConfidence = "High (>90%)";
     let globalComment = "";
+
+    // Ingest hierarchical dishes if returned by Scout
+    if (Array.isArray(parsedScout.dishes) && parsedScout.dishes.length > 0) {
+      if (!parsedScout.items) parsedScout.items = [];
+      parsedScout.dishes.forEach((d: any) => {
+        const dishFoods = Array.isArray(d.foods) ? d.foods : [];
+        let sumP = 0, sumC = 0, sumSatFat = 0, sumAddedSugar = 0, sumFibre = 0, sumNa = 0;
+        const components: any[] = [];
+
+        dishFoods.forEach((f: any) => {
+          const fn = f.foodName || "Ingredient";
+          const fw = f.weightGrams ?? f.estimatedWeightGrams ?? 0;
+          const fnuts = f.nutrients || {};
+          const fp = Number(fnuts.protein) || 0;
+          const fc = Number(fnuts.carbohydrates) || 0;
+          const fsat = Number(fnuts.saturatedFat) || 0;
+          const fas = Number(fnuts.addedSugar) || 0;
+          const ffib = Number(fnuts.totalFibre) || 0;
+          const fna = Number(fnuts.sodium) || 0;
+
+          sumP += fp;
+          sumC += fc;
+          sumSatFat += fsat;
+          sumAddedSugar += fas;
+          sumFibre += ffib;
+          sumNa += fna;
+
+          components.push({
+            name: fn,
+            searchQuery: fn,
+            weightGrams: fw,
+            packGrams: f.packGrams ?? null,
+            rawNutritionLabel: f.rawNutritionLabel ?? null,
+            nutrients: fnuts,
+            calories: Math.round(4 * fp + 4 * fc + 9 * fsat)
+          });
+        });
+
+        const dNuts = d.dishNutrients || {};
+        let totalFat = Number(dNuts.totalFat) || Math.round(sumSatFat * 1.5 * 10) / 10;
+        let satFat = Math.max(sumSatFat, Number(dNuts.saturatedFat) || 0);
+        if (totalFat < satFat) totalFat = satFat;
+        const totalSugar = Number(dNuts.totalSugar) || sumAddedSugar;
+        const totalCalories = Math.round(4 * sumP + 4 * sumC + 9 * totalFat);
+
+        const convertedNutrients = {
+          calories: totalCalories, protein: Math.round(sumP * 10) / 10, carbohydrates: Math.round(sumC * 10) / 10,
+          totalFat: Math.round(totalFat * 10) / 10, saturatedFat: Math.round(satFat * 10) / 10, transFat: 0,
+          sugar: Math.round(totalSugar * 10) / 10, addedSugar: Math.round(sumAddedSugar * 10) / 10,
+          totalFibre: Math.round(sumFibre * 10) / 10, sodium: Math.round(sumNa),
+          potassium: Number(dNuts.potassium) || 0, omega3: Number(dNuts.omega3) || 0,
+          calcium: Number(dNuts.calcium) || 0, iron: Number(dNuts.iron) || 0,
+          magnesium: Number(dNuts.magnesium) || 0, vitaminD: Number(dNuts.vitaminD) || 0,
+        };
+
+        let dishWeight = d.estimatedWeightGrams || (components.reduce((acc, c) => acc + (c.weightGrams || 0), 0) || 250);
+        let dishRawLabel: any = null;
+        if (components.length === 1 && components[0].weightGrams > 0) {
+          const comp = components[0];
+          dishRawLabel = comp.rawNutritionLabel ?? null;
+          const isWaterCooked = /boiled|steamed|poached/i.test(d.cookingMethod || '');
+          const isDryStaple = /oat|rice|pasta|noodle|grain|cereal|porridge|quinoa|lentil|bean/i.test(comp.name || d.dishName || '');
+          if (comp.rawNutritionLabel || (isWaterCooked && isDryStaple && dishWeight > comp.weightGrams * 1.5)) {
+            dishWeight = comp.weightGrams;
+          }
+        }
+
+        const convertedItem: any = {
+          keyword: d.dishName || "Dish",
+          originalName: d.dishName || "Dish",
+          chainName: d.chainName || null,
+          estimatedWeightGrams: dishWeight,
+          cookingMethod: d.cookingMethod || "cooked",
+          sourceImageIndex: d.sourceImageIndex ?? 0,
+          boundingBox2D: d.boundingBox2D || [0, 0, 1000, 1000],
+          isStandaloneCondimentPacket: d.isStandaloneCondimentPacket || false,
+          components: components.length > 0 ? components : undefined,
+          ingredients: components.map(c => c.name),
+          rawNutritionLabel: dishRawLabel,
+          source: dishRawLabel ? "brand_official" : "estimated",
+          dbSource: dishRawLabel ? "brand_official" : "estimated",
+          nutrients: convertedNutrients,
+          truthNutrients: convertedNutrients,
+        };
+
+        parsedScout.items.push(convertedItem);
+      });
+    }
     if (parsedScout.queriesToSearch && Array.isArray(parsedScout.queriesToSearch)) {
       const chainNames = (parsedScout.items || [])
         .map((it: any) => String(it?.chainName || '').toLowerCase().trim())

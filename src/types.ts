@@ -262,6 +262,10 @@ export interface FoodItemBreakdown {
   components?: string[] | string | null;
   confidenceRating?: 'Low' | 'Medium' | 'High';
   confidenceComment?: string;
+  packGrams?: number | null;
+  portionRatio?: number;
+  portionAccepted?: boolean;
+  portionDescription?: string;
   physicalFormClassification?: PhysicalFormClassification;
   matchReasonInfo?: {
     matchType?: string;
@@ -282,6 +286,10 @@ export interface FoodLog {
   weightGrams: number;
   quantity: string;
   consumedAmount?: number;
+  packGrams?: number | null;
+  portionRatio?: number;
+  portionAccepted?: boolean;
+  portionDescription?: string;
   benefits?: string;
   risks?: string;
   healthImpact?: string;
