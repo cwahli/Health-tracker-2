@@ -452,76 +452,127 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
-              {localProposal.name && (
-                <DiffRow 
-                  label="Name" 
-                  oldVal={currentDef.name} 
-                  newVal={localProposal.name} 
-                />
-              )}
-              {localProposal.metric && (
-                <DiffRow 
-                  label="Unit" 
-                  oldVal={currentDef.unit} 
-                  newVal={localProposal.metric} 
-                />
-              )}
-              {localProposal.range && (
-                <DiffRow 
-                  label="Reference Range" 
-                  oldVal={currentDef.normalRange || (currentDef as any).range} 
-                  newVal={localProposal.range} 
-                />
-              )}
-              {localProposal.rangeBrackets && localProposal.rangeBrackets.length > 0 && (
-                <div className="flex flex-col gap-1.5 py-1">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Structured Range Brackets</span>
-                  <div className="flex flex-col gap-1 mt-1">
-                    {localProposal.rangeBrackets.map((b: any, idx: number) => (
-                      <div key={idx} className="flex items-center gap-2 text-xs">
-                        <span className={`px-2 py-0.5 rounded font-bold text-[10px] uppercase tracking-wider ${
-                          b.severity === 'critical' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300' :
-                          b.severity === 'high' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300' :
-                          b.severity === 'low' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300' :
-                          'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300'
-                        }`}>
-                          {b.severity}
-                        </span>
-                        <span className="font-medium text-slate-700 dark:text-slate-300 min-w-[80px]">
-                          {b.label}:
-                        </span>
-                        <span className="font-mono text-indigo-600 dark:text-indigo-400">
-                          {b.min !== undefined && b.min !== null && b.max !== undefined && b.max !== null
-                            ? `${b.min} - ${b.max}`
-                            : b.min !== undefined && b.min !== null
-                            ? `≥ ${b.min}`
-                            : b.max !== undefined && b.max !== null
-                            ? `< ${b.max}`
-                            : '—'}
-                        </span>
-                      </div>
-                    ))}
+            <div className="space-y-4">
+              {/* Current Baseline Box */}
+              <div className="bg-slate-50/50 dark:bg-slate-800/30 rounded-xl p-3 border border-slate-100 dark:border-slate-800">
+                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-2 block">Current Baseline</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Name</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300">{currentDef.name || '—'}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Unit</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300">{currentDef.unit || '—'}</span>
+                  </div>
+                  <div className="flex flex-col sm:col-span-2">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Reference Range</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300">{currentDef.normalRange || (currentDef as any).range || '—'}</span>
                   </div>
                 </div>
-              )}
-              {localProposal.description && (
-                <DiffRow 
-                  label="Description" 
-                  oldVal={currentDef.description || currentDef.descriptions?.en || currentDef.descriptions?.zh || currentDef.descriptions?.fr} 
-                  newVal={localProposal.description} 
-                />
-              )}
-              {localProposal.medicalInsight && (
-                <div className="mt-2 pt-2 border-t border-indigo-100/50 dark:border-indigo-900/30">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300 block mb-1">
-                    Diagnostic Insight & Guidance
-                  </span>
-                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed bg-indigo-50/40 dark:bg-indigo-950/30 p-2.5 rounded-lg border border-indigo-100/40 dark:border-indigo-900/20">
-                    {localProposal.medicalInsight}
-                  </p>
-                </div>
-              )}
+              </div>
+
+              {/* Proposed Updates */}
+              {(() => {
+                const normalize = (s: string | undefined | null) => s?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+                const normRange = (s: string | undefined | null) => s?.toLowerCase().replace(/[^\d<>=.-]/g, '') || '';
+                
+                const isNameChanged = localProposal.name && normalize(currentDef.name) !== normalize(localProposal.name) && !(currentDef.aliases || []).some((a: string) => normalize(a) === normalize(localProposal.name));
+                const isUnitChanged = localProposal.metric && currentDef.unit !== localProposal.metric;
+                const isRangeChanged = localProposal.range && normRange(currentDef.normalRange || (currentDef as any).range) !== normRange(localProposal.range);
+                const isDescChanged = localProposal.description && (currentDef.description || currentDef.descriptions?.en || currentDef.descriptions?.zh || currentDef.descriptions?.fr) !== localProposal.description;
+                
+                return (
+                  <div className="space-y-2">
+                    {Boolean(isNameChanged || isUnitChanged || isRangeChanged || isDescChanged || (localProposal.rangeBrackets && localProposal.rangeBrackets.length > 0)) && (
+                      <span className="text-[10px] uppercase font-bold text-indigo-500 tracking-wider mb-1 block">Proposed Updates</span>
+                    )}
+                    
+                    {isNameChanged && (
+                      <DiffRow 
+                        label="Name" 
+                        oldVal={currentDef.name} 
+                        newVal={localProposal.name!} 
+                      />
+                    )}
+                    {isUnitChanged && (
+                      <DiffRow 
+                        label="Unit" 
+                        oldVal={currentDef.unit} 
+                        newVal={localProposal.metric!} 
+                      />
+                    )}
+                    {isRangeChanged && (
+                      <DiffRow 
+                        label="Reference Range" 
+                        oldVal={currentDef.normalRange || (currentDef as any).range} 
+                        newVal={localProposal.range!} 
+                      />
+                    )}
+                    
+                    {localProposal.rangeBrackets && localProposal.rangeBrackets.length > 0 && (
+                      <div className="flex flex-col gap-1.5 py-2 border-b border-slate-100 dark:border-slate-800/50 last:border-0">
+                        <span className="text-[11px] uppercase font-medium text-slate-400 tracking-wide">Structured Range Brackets</span>
+                        <div className="flex flex-col gap-1 mt-1">
+                          {localProposal.rangeBrackets.map((b: any, idx: number) => {
+                            // Infer max from next bracket's min if max is null
+                            let effectiveMax = b.max;
+                            if ((effectiveMax === undefined || effectiveMax === null) && idx < localProposal.rangeBrackets.length - 1) {
+                              effectiveMax = localProposal.rangeBrackets[idx + 1].min;
+                            }
+                            // Infer min from prev bracket's max if min is null
+                            let effectiveMin = b.min;
+                            if ((effectiveMin === undefined || effectiveMin === null) && idx > 0) {
+                              effectiveMin = localProposal.rangeBrackets[idx - 1].max;
+                            }
+                            
+                            return (
+                              <div key={idx} className="flex items-center gap-2 text-xs">
+                                <span className={`px-2 py-0.5 rounded font-bold text-[10px] uppercase tracking-wider ${
+                                  b.severity === 'critical' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300' :
+                                  b.severity === 'high' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300' :
+                                  b.severity === 'low' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300' :
+                                  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300'
+                                }`}>
+                                  {b.label}
+                                </span>
+                                <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/30 px-2 py-0.5 rounded border border-indigo-200/50 dark:border-indigo-800/30">
+                                  {effectiveMin !== undefined && effectiveMin !== null && effectiveMax !== undefined && effectiveMax !== null
+                                    ? `${effectiveMin} - ${effectiveMax}`
+                                    : effectiveMin !== undefined && effectiveMin !== null
+                                    ? `≥ ${effectiveMin}`
+                                    : effectiveMax !== undefined && effectiveMax !== null
+                                    ? `< ${effectiveMax}`
+                                    : '—'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {isDescChanged && (
+                      <DiffRow 
+                        label="Description" 
+                        oldVal={currentDef.description || currentDef.descriptions?.en || currentDef.descriptions?.zh || currentDef.descriptions?.fr} 
+                        newVal={localProposal.description!} 
+                      />
+                    )}
+
+                    {localProposal.medicalInsight && (
+                      <div className="mt-2 pt-2 border-t border-indigo-100/50 dark:border-indigo-900/30">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300 block mb-1">
+                          Diagnostic Insight & Guidance
+                        </span>
+                        <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed bg-indigo-50/40 dark:bg-indigo-950/30 p-2.5 rounded-lg border border-indigo-100/40 dark:border-indigo-900/20">
+                          {localProposal.medicalInsight}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
