@@ -2588,6 +2588,21 @@ export function sanitizeBiomarkerHistoryOnLoad(
 export function matchRangeBracket(num: number, rangeBrackets: any[] | undefined): any | null {
   if (!Array.isArray(rangeBrackets) || rangeBrackets.length === 0 || isNaN(num)) return null;
   for (const br of rangeBrackets) {
+    // Numeric-bounds bracket shape (e.g. AI clinical calibration brackets):
+    // { label, severity, min, max }. Checked first because these brackets carry
+    // no `range` string for the block below to parse. Bounds are inclusive on
+    // both ends; a null/undefined bound is treated as unbounded in that direction.
+    const hasNumericBound = (br?.min !== undefined && br?.min !== null && !isNaN(Number(br.min)))
+      || (br?.max !== undefined && br?.max !== null && !isNaN(Number(br.max)));
+    if (hasNumericBound) {
+      const min = (br?.min !== undefined && br?.min !== null && !isNaN(Number(br.min))) ? Number(br.min) : null;
+      const max = (br?.max !== undefined && br?.max !== null && !isNaN(Number(br.max))) ? Number(br.max) : null;
+      const aboveMin = min === null || num >= min;
+      const belowMax = max === null || num <= max;
+      if (aboveMin && belowMax) return br;
+      continue;
+    }
+
     const rangeStr = String(br?.range || '').trim().toLowerCase()
       .replace(/≥/g, '>=')
       .replace(/≤/g, '<=');
@@ -2662,7 +2677,7 @@ export const getBiomarkerStatus = (key: string, val: number | string, normalRang
   if (Array.isArray(customDef?.rangeBrackets) && customDef.rangeBrackets.length > 0) {
     const matchedBracket = matchRangeBracket(valueToEvaluate, customDef.rangeBrackets);
     if (matchedBracket) {
-      const label = String(matchedBracket.name || '').toLowerCase();
+      const label = String(matchedBracket.name || matchedBracket.label || '').toLowerCase();
       if (label.includes('optimal') || label.includes('ideal') || label.includes('normal') || label.includes('healthy') || label.includes('remission')) return 'normal';
       if (label.includes('severe') || label.includes('critical') || label.includes('at risk')) return 'critical';
       if (label.includes('low') || label.includes('decreased') || label.includes('under')) return 'low';
@@ -3019,7 +3034,7 @@ export const getCustomStatusLabel = (key: string, value: number | string, custom
   if (Array.isArray(brackets) && brackets.length > 0) {
     const matchedBracket = matchRangeBracket(num, brackets);
     if (matchedBracket) {
-      return matchedBracket.name;
+      return matchedBracket.name || matchedBracket.label || null;
     }
     console.warn(`[getCustomStatusLabel] rangeBrackets present for "${key}" but value ${num} matched none of them; falling back to default status label.`, brackets);
   }
