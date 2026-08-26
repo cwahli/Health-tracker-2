@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { Calculator, Check, Shield, ChevronDown, ChevronUp } from 'lucide-react';
-import { isAsianEthnicity } from '../utils/biomarkers';
+import { isAsianEthnicity, getBmiThresholds } from '../utils/biomarkers';
 import { evaluateRangeBracketMatch } from '../utils/agentCalibration';
 
 interface BiomarkerCalculationPanelProps {
@@ -20,35 +20,19 @@ interface BiomarkerCalculationPanelProps {
   onEditBiomarkerDef?: (key: string, normalRange: string, unit: string) => void;
 }
 
-const getBmiPercentage = (bmi: number, isAsian: boolean): number => {
-  if (isAsian) {
-    if (bmi < 18.5) {
-      const ratio = (bmi - 10) / (18.5 - 10);
-      return Math.min(35, Math.max(5, 5 + ratio * 30));
-    } else if (bmi <= 22.9) {
-      const ratio = (bmi - 18.5) / (22.9 - 18.5);
-      return 35 + ratio * 20;
-    } else if (bmi <= 24.9) {
-      const ratio = (bmi - 22.9) / (24.9 - 22.9);
-      return 55 + ratio * 15;
-    } else {
-      const ratio = (bmi - 24.9) / (35 - 24.9);
-      return Math.min(95, 70 + ratio * 25);
-    }
+const getBmiPercentage = (bmi: number, normalMax: number, overweightMax: number): number => {
+  if (bmi < 18.5) {
+    const ratio = (bmi - 10) / (18.5 - 10);
+    return Math.min(35, Math.max(5, 5 + ratio * 30));
+  } else if (bmi <= normalMax) {
+    const ratio = (bmi - 18.5) / (normalMax - 18.5);
+    return 35 + ratio * 30;
+  } else if (bmi <= overweightMax) {
+    const ratio = (bmi - normalMax) / (overweightMax - normalMax);
+    return 65 + ratio * 15;
   } else {
-    if (bmi < 18.5) {
-      const ratio = (bmi - 10) / (18.5 - 10);
-      return Math.min(35, Math.max(5, 5 + ratio * 30));
-    } else if (bmi <= 24.9) {
-      const ratio = (bmi - 18.5) / (24.9 - 18.5);
-      return 35 + ratio * 30;
-    } else if (bmi <= 29.9) {
-      const ratio = (bmi - 24.9) / (29.9 - 24.9);
-      return 65 + ratio * 15;
-    } else {
-      const ratio = (bmi - 29.9) / (35 - 29.9);
-      return Math.min(95, 80 + ratio * 15);
-    }
+    const ratio = (bmi - overweightMax) / (35 - overweightMax);
+    return Math.min(95, 80 + ratio * 15);
   }
 };
 
@@ -102,10 +86,9 @@ export default function BiomarkerCalculationPanel({
 
   const roundedBmi = Math.round(currentBmiNum * 10) / 10;
 
-  // Bracket limits
-  const limits = isAsianUser 
-    ? { underweight: 18.5, normal: 22.9, overweight: 24.9, obese: 29.9 }
-    : { underweight: 18.5, normal: 24.9, overweight: 29.9, obese: 30.0 };
+  // Bracket limits — sourced from biomarkers.ts so this can never drift again
+  const { normalMax, overweightMax } = getBmiThresholds(profile);
+  const limits = { underweight: 18.5, normal: normalMax, overweight: overweightMax, obese: overweightMax };
 
   const isMale = gender.startsWith('m');
   const targetBmi = isAsianUser ? 21.0 : (isMale ? 22.5 : 21.7);
@@ -282,8 +265,8 @@ export default function BiomarkerCalculationPanel({
     );
   }
 
-  const currentPercent = Math.min(95, Math.max(5, getBmiPercentage(roundedBmi, isAsianUser)));
-  const targetPercent = Math.min(95, Math.max(5, getBmiPercentage(targetBmi, isAsianUser)));
+  const currentPercent = Math.min(95, Math.max(5, getBmiPercentage(roundedBmi, normalMax, overweightMax)));
+  const targetPercent = Math.min(95, Math.max(5, getBmiPercentage(targetBmi, normalMax, overweightMax)));
   const targetIsLeft = targetPercent < currentPercent;
 
   return (
@@ -366,7 +349,7 @@ export default function BiomarkerCalculationPanel({
               <span className="block text-[10px] font-extrabold uppercase text-slate-400 font-sans">{t.plainLogicCalculations}</span>
               <p>• Matched Profile Ethnicity: <span className="text-slate-800 dark:text-white font-semibold">{profile.ethnicity || 'Not set'}</span></p>
               <p>• Matched Profile Gender: <span className="text-slate-800 dark:text-white font-semibold">{profile.gender || 'Not set'}</span></p>
-              <p>• Active Diagnostic Standard: <span className="text-slate-800 dark:text-white font-semibold">{isAsianUser ? 'Asian Bracket (Normal: 18.5 - 22.9, Overweight: 23.0 - 24.9)' : 'Global Bracket (Normal: 18.5 - 24.9, Overweight: 25.0 - 29.9)'}</span></p>
+              <p>• Active Diagnostic Standard: <span className="text-slate-800 dark:text-white font-semibold">{isAsianUser ? `Asian Bracket (Normal: 18.5 - ${normalMax}, Overweight: up to ${overweightMax})` : `Global Bracket (Normal: 18.5 - ${normalMax}, Overweight: up to ${overweightMax})`}</span></p>
               <p>• Flagged Status for Profile: <span className="text-amber-600 font-bold">{diagnostic}</span></p>
             </div>
 

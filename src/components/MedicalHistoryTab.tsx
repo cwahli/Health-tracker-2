@@ -6,7 +6,7 @@ import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart a
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { getBiomarkerRangeSourceInfo } from '../utils/biomarkerLifecycle';
 import { generateDynamicInsight } from '../utils/biomarkerInsights';
-import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, canonicalizeRiskCategory, getActiveStructuredRangeRule, formatCustomRangesSummary } from '../utils/biomarkers';
+import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, canonicalizeRiskCategory, getActiveStructuredRangeRule, formatCustomRangesSummary, getMappedBiomarkerKey } from '../utils/biomarkers';
 import { getAgentCalibration, getAllAgentCalibrationRecords, formatOptimalTargetValue } from '../utils/agentCalibration';
 import { getDuplicateAliasGroups } from '../utils/biomarkerAuditEngine';
 import { handleUnitChange } from '../utils/biomarkerLifecycle';
@@ -505,36 +505,73 @@ export default function MedicalHistoryTab({
   };
 
   const exportLogEntriesToCSV = () => {
-    const headers = ["Biomarker", "Date", "Value", "Comment"];
+    const headers = ["Biomarker", "Date", "Value", "Unit", "Comment"];
     const rows: string[] = [];
 
     const sortedHistory = [...activeHistory].sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
 
     const escapeCsvField = (field: any) => {
       if (field === null || field === undefined) return '';
-      const str = String(field);
+      const str = String(field).trim();
       if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
         return `"${str.replace(/"/g, '""')}"`;
       }
       return str;
     };
 
+    const formatKeyToTitle = (k: string) => {
+      return k
+        .split('_')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+    };
+
     sortedHistory.forEach(h => {
       if (!h.biomarkers) return;
       const formattedDate = formatToDDMMYYYY(h.date) || h.date;
+      const seenCanonicalKeys = new Set<string>();
 
       Object.keys(h.biomarkers).forEach(key => {
         const val = h.biomarkers[key];
-        const def = allDefinitions.find(d => d.key === key) || biomarkerDefinitions.find(d => d.key === key);
-        const customDef = getCustomBiomarkerDef(profile, key);
-        const testDetail = h.tests?.find(t => t.key === key);
-        const name = def?.name || customDef?.name || testDetail?.originalTestName || key;
-        const comment = testDetail?.doctorComment || h.note || '';
+        if (val === undefined || val === null || val === '') return;
+
+        const canonicalKey = getMappedBiomarkerKey(key) || key;
+        if (seenCanonicalKeys.has(canonicalKey)) {
+          return;
+        }
+        seenCanonicalKeys.add(canonicalKey);
+
+        const def = allDefinitions.find(d => d.key === canonicalKey || d.key === key) || biomarkerDefinitions.find(d => d.key === canonicalKey || d.key === key);
+        const customDef = getCustomBiomarkerDef(profile, canonicalKey) || getCustomBiomarkerDef(profile, key);
+        const testDetail = h.tests?.find(t => t.key === key || t.key === canonicalKey);
+        
+        let name = def?.name || customDef?.name || testDetail?.originalTestName;
+        if (!name) {
+          name = formatKeyToTitle(key);
+        }
+
+        const unit = h.observationMeta?.[key]?.rawUnit || testDetail?.unit || customDef?.unit || def?.unit || '';
+
+        let comment = testDetail?.doctorComment || '';
+        if (!comment && h.note) {
+          const isGeneralCalcNote = h.note.includes('Mifflin-St Jeor') || h.note.includes('Auto-logged BMI update');
+          const isBodyCompMarker = ['bmi', 'weight', 'height', 'ideal_body_weight'].includes(canonicalKey);
+          if (!isGeneralCalcNote || isBodyCompMarker) {
+            comment = h.note;
+          }
+        }
+
+        // Clean leading punctuation like ". " or "."
+        comment = comment.trim();
+        if (comment.startsWith('.')) {
+          comment = comment.replace(/^\.\s*/, '').trim();
+        }
 
         rows.push([
           escapeCsvField(name),
           escapeCsvField(formattedDate),
           escapeCsvField(val),
+          escapeCsvField(unit),
           escapeCsvField(comment)
         ].join(','));
       });

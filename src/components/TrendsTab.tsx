@@ -35,7 +35,7 @@ const parseTargetBounds = (targetStr: string | undefined, nutrientKey: string, d
 
 const getBiomarkerTargetBounds = (key: string, report: any) => {
   if (key === 'ldl') return { min: 0, max: 100 };
-  if (key === 'hba1c') return { min: 0, max: 5.7 };
+  if (key === 'hba1c') return { min: 0, max: 39 };
   if (key === 'egfr') return { min: 90, max: Infinity };
   if (key === 'steps') {
     const stepsStr = report?.dailyNutrientTargets?.steps;
@@ -276,7 +276,7 @@ export default function TrendsTab({
     
     return {
       ldl: { label: 'LDL Cholesterol', unit: 'mg/dL', color: 'var(--color-amber-500)', target: 100 },
-      hba1c: { label: 'HbA1c Blood Glucose', unit: '%', color: 'var(--color-indigo-500)', target: 5.7 },
+      hba1c: { label: 'HbA1c Blood Glucose', unit: 'mmol/mol', color: 'var(--color-indigo-500)', target: 39 },
       egfr: { label: 'eGFR Kidney Filtration', unit: 'mL/min', color: 'var(--color-rose-500)', target: 90 },
       steps: { label: 'Daily Steps', unit: 'steps', color: 'var(--color-emerald-500)', target: report?.dailyNutrientTargets?.steps ? parseTarget(report.dailyNutrientTargets.steps, 3000) : 3000 },
     }[selectedMetric] || { label: 'Metric', unit: '', color: 'var(--color-indigo-500)', target: 0 };
@@ -583,7 +583,7 @@ export default function TrendsTab({
               </option>
             ))}
             <option value="ldl">LDL Cholesterol (mg/dL)</option>
-            <option value="hba1c">HbA1c (%)</option>
+            <option value="hba1c">HbA1c (mmol/mol)</option>
             <option value="egfr">eGFR Kidney Filtration</option>
           </select>
         </div>

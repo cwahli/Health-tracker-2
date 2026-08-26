@@ -35,6 +35,40 @@ export function getActiveStructuredRangeRule(customDef: any, profile?: any): any
   return null;
 }
 
+export function getEffectiveRangeText(key: string, profile?: any): string {
+  const def = biomarkerDefinitions.find(d => d.key === key);
+  if (!def) return '';
+  const rule = getActiveStructuredRangeRule(def, profile);
+  if (rule?.range?.type === 'bracket' && Array.isArray(rule.range.brackets)) {
+    const normalBracket = rule.range.brackets.find((b: any) =>
+      (b.severity || '').toLowerCase() === 'normal' || (b.alias || '').toLowerCase() === 'normal'
+    );
+    if (normalBracket) {
+      const hasMin = normalBracket.min !== null && normalBracket.min !== undefined;
+      const hasMax = normalBracket.max !== null && normalBracket.max !== undefined;
+      if (hasMin && hasMax) return `${normalBracket.min} - ${normalBracket.max}`;
+      if (hasMin) return `>= ${normalBracket.min}`;
+      if (hasMax) return `<= ${normalBracket.max}`;
+    }
+  }
+  return def.normalRange || '';
+}
+
+export function getBmiThresholds(profile?: any): { normalMax: number; overweightMax: number } {
+  const fallback = { normalMax: 24.9, overweightMax: 30.0 };
+  const def = biomarkerDefinitions.find(d => d.key === 'bmi');
+  if (!def) return fallback;
+  const rule = getActiveStructuredRangeRule(def, profile);
+  const brackets = rule?.range?.type === 'bracket' ? rule.range.brackets : null;
+  if (!Array.isArray(brackets)) return fallback;
+  const normalBracket = brackets.find((b: any) => (b.severity || '').toLowerCase() === 'normal');
+  const overweightBracket = brackets.find((b: any) => (b.severity || '').toLowerCase() === 'at risk');
+  return {
+    normalMax: normalBracket?.max ?? fallback.normalMax,
+    overweightMax: overweightBracket?.max ?? fallback.overweightMax
+  };
+}
+
 export function evaluateStructuredRange(num: number, customDef: any, profile?: any): { label: string, severity: string } | null {
   if (!customDef) return null;
   const { rangeConfig, customRanges } = customDef;
