@@ -668,7 +668,7 @@ const DictionaryItem = React.memo(({
                           type="button"
                           onClick={() => onOpenAudit('corrupted_units')}
                           className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-                          title="Open in Biomarker Health & Quality Audit to resolve corrupted unit"
+                          title="Open in Biomarker diagnostic to resolve corrupted unit"
                         >
                           <Sliders className="w-3.5 h-3.5" />
                           <span>Audit & Fix Unit</span>

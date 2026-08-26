@@ -3,7 +3,7 @@ import { UserProfile, FoodLog, HealthAction, DailyBenefit, RecommendationReport,
 import { translations } from '../utils/translations';
 import { CheckCircle2, Circle, AlertCircle, AlertTriangle, ShieldAlert, Wrench, ArrowRight, Heart, ChevronDown, ChevronUp, Calendar, MapPin, Search, Sparkles, Trash2, Clock, Settings, X, TrendingUp, Activity, Copy, FlaskConical, Plus, BrainCircuit, Loader, Loader2, CheckSquare, Square, Edit2, Save, Check, Zap } from 'lucide-react';
 import { parseActionDetails, getDynamicTimeTag, sortActionsByDueDate } from '../utils/actionUtils';
-import { getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity, getBiomarkerMetadata, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, isBiomarkerApproved, isBiomarkerValueImprobable, diagnoseTelemetryIssue, getMappedBiomarkerKey } from '../utils/biomarkers';
+import { getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity, getBiomarkerMetadata, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, isBiomarkerApproved, isBiomarkerValueImprobable, diagnoseTelemetryIssue, getMappedBiomarkerKey, getIdealBmiTarget } from '../utils/biomarkers';
 
 const getBiomarkerDef = (key: string) => biomarkerDefinitions.find(d => d.key === key);
 import { getAgentCalibration, formatOptimalTargetValue } from '../utils/agentCalibration';
@@ -231,7 +231,7 @@ export default function HomeTab({
         const isAsian = isAsianEthnicity(profile.ethnicity);
         const gender = (profile.gender || 'male').toLowerCase();
         const isMale = gender.startsWith('m');
-        const targetBmi = isAsian ? 21.0 : (isMale ? 22.5 : 21.7);
+        const targetBmi = getIdealBmiTarget(profile);
         const targetWeight = Math.round(targetBmi * Math.pow((profile.height || 170) / 100, 2) * 10) / 10;
         return {
           ...d,
@@ -256,7 +256,7 @@ export default function HomeTab({
             const isAsian = isAsianEthnicity(profile.ethnicity);
             const gender = (profile.gender || 'male').toLowerCase();
             const isMale = gender.startsWith('m');
-            const targetBmi = isAsian ? 21.0 : (isMale ? 22.5 : 21.7);
+            const targetBmi = getIdealBmiTarget(profile);
             const targetWeight = Math.round(targetBmi * Math.pow((profile.height || 170) / 100, 2) * 10) / 10;
             existing.normalRange = isAsian ? '18.5 - 22.9' : '18.5 - 24.9';
             existing.descriptions = {

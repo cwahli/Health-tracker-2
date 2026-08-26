@@ -1235,8 +1235,6 @@ export function mergeBiomarkerHistory(
     const sorted = [...group].sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
     const survivor = { ...sorted[0] };
 
-    // If timestamps are equal across duplicate logs on the same date, union them;
-    // otherwise the newest survivor's biomarkers object is strictly authoritative so deleted keys never resurrect.
     let finalBiomarkers: Record<string, any>;
     if (sorted.length > 1 && (sorted[0].updated_at || 0) === (sorted[1].updated_at || 0)) {
       const unionBios: Record<string, any> = {};
@@ -1245,7 +1243,35 @@ export function mergeBiomarkerHistory(
       }
       finalBiomarkers = unionBios;
     } else {
-      finalBiomarkers = { ...(survivor.biomarkers || {}) };
+      const survivorKeys = Object.keys(survivor.biomarkers || {});
+      const isWearableOnly = survivorKeys.length === 1 && survivorKeys[0] === 'steps';
+      if (isWearableOnly && sorted.length > 1) {
+        const baseBios: Record<string, any> = {};
+        for (let i = sorted.length - 1; i >= 1; i--) {
+          Object.assign(baseBios, sorted[i].biomarkers || {});
+        }
+        finalBiomarkers = { ...baseBios, steps: survivor.biomarkers.steps };
+      } else {
+        finalBiomarkers = { ...(survivor.biomarkers || {}) };
+      }
+    }
+
+    // Merge observationMeta if present
+    const unionMeta: Record<string, any> = {};
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const meta = (sorted[i] as any).observationMeta;
+      if (meta && typeof meta === 'object') {
+        Object.assign(unionMeta, meta);
+      }
+    }
+
+    // Preserve clinical notes if the survivor note is just an auto-sync note or empty
+    let finalNote = survivor.note || '';
+    if (!finalNote || finalNote.includes('Auto-synced from Google Fit') || finalNote.includes('Auto-logged default BMI')) {
+      const clinicalLog = sorted.find(s => s.note && !s.note.includes('Auto-synced from Google Fit') && !s.note.includes('Auto-logged default BMI'));
+      if (clinicalLog?.note) {
+        finalNote = clinicalLog.note;
+      }
     }
 
     // For any older duplicate IDs that are now absorbed into survivor, record into cleanDeletedMap and deletedBioLogs
@@ -1260,10 +1286,16 @@ export function mergeBiomarkerHistory(
       }
     }
 
-    consolidatedList.push({
+    const consolidatedItem: any = {
       ...survivor,
+      note: finalNote,
       biomarkers: finalBiomarkers
-    });
+    };
+    if (Object.keys(unionMeta).length > 0) {
+      consolidatedItem.observationMeta = unionMeta;
+    }
+
+    consolidatedList.push(consolidatedItem);
   });
 
   return consolidatedList;

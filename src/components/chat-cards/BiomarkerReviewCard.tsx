@@ -1,8 +1,22 @@
 import * as React from 'react';
 import { AgentCardProps } from './types';
-import { Check, Edit2, Sparkles, ArrowRight } from 'lucide-react';
+import { Check, Edit2, Sparkles, ArrowRight, X, RotateCcw, MessageSquare, ShieldCheck, AlertCircle, Info } from 'lucide-react';
 
 import { biomarkerDefinitions } from '../../utils/biomarkers';
+
+export function getMappedBiomarkerKey(rawNameOrKey: string): string {
+  if (!rawNameOrKey) return '';
+  const lower = rawNameOrKey.trim().toLowerCase();
+  if (lower === 'hs-crp' || lower === 'hscrp' || lower === 'crp-hs' || lower === 'crphs' || lower === 'high sensitivity c-reactive protein' || lower === 'c-reactive protein') {
+    return 'hscrp';
+  }
+  const matched = biomarkerDefinitions.find(d => 
+    d.key.toLowerCase() === lower || 
+    d.name.toLowerCase() === lower ||
+    (d as any).aliases?.some((a: string) => a.toLowerCase() === lower)
+  );
+  return matched ? matched.key : lower.replace(/[^a-z0-9_]/g, '_');
+}
 
 const COMMON_UNITS = [
   '%',
@@ -188,12 +202,16 @@ export function extractFallbackModifications(text: string, history: any[], profi
 }
 
 export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedical, profile, biomarkerHistory }) => {
-  const targetKey = msg.data?.targetBiomarkerKey || msg.data?.agentResult?.targetBiomarkerKey || msg.data?.agentResult?.proposal?.name || msg.data?.proposal?.name || (msg.agentResult as any)?.targetBiomarkerKey || '';
-  const currentDef = profile?.customBiomarkers?.[targetKey] || biomarkerDefinitions.find(d => d.key === targetKey) || {};
-
+  const rawTargetKey = msg.data?.targetBiomarkerKey || msg.data?.agentResult?.targetBiomarkerKey || msg.data?.agentResult?.proposal?.key || msg.data?.agentResult?.proposal?.keyName || msg.data?.proposal?.key || msg.data?.proposal?.name || (msg.agentResult as any)?.targetBiomarkerKey || '';
   const proposal = msg.data?.agentResult?.proposal || msg.data?.proposal || (msg.agentResult as any)?.proposal || null;
   const mods = msg.data?.agentResult?.modificationCommand || msg.data?.modificationCommand || msg.modificationCommand || (msg.agentResult as any)?.modificationCommand || null;
   const reply = msg.data?.agentResult?.reply || msg.data?.agentResult?.text || msg.content;
+
+  const targetKey = getMappedBiomarkerKey(rawTargetKey || proposal?.name || '') || rawTargetKey || 'hscrp';
+  const currentDef = profile?.customBiomarkers?.[targetKey] || biomarkerDefinitions.find(d => d.key === targetKey || d.name.toLowerCase() === targetKey.toLowerCase()) || {};
+
+  const initialStatus: 'pending' | 'accepted' | 'refused' = msg.data?.proposalStatus || (msg.data?.agentResult as any)?.proposalStatus || 'pending';
+  const [decisionState, setDecisionState] = React.useState<'pending' | 'accepted' | 'refused'>(initialStatus);
 
   const [localMods, setLocalMods] = React.useState<any[]>([]);
   const [localProposal, setLocalProposal] = React.useState<any>(null);
@@ -216,8 +234,8 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
     if (initialMods) {
       initialMods.forEach((m: any) => {
         if (m.keyName && !initialUnits[m.keyName]) {
-          const currentDef = profile?.customBiomarkers?.[m.keyName] || biomarkerDefinitions.find(d => d.key === m.keyName) || {};
-          initialUnits[m.keyName] = currentDef.unit || '';
+          const foundDef = profile?.customBiomarkers?.[m.keyName] || biomarkerDefinitions.find(d => d.key === m.keyName) || {};
+          initialUnits[m.keyName] = foundDef.unit || '';
         }
       });
     }
@@ -229,31 +247,148 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
 
   const hasModifications = localMods && localMods.length > 0;
 
+  const handleAccept = () => {
+    if (onLogMedical) {
+      const profileUpdates: any = {};
+      
+      // 1. If we have a local proposal (definition update), build its customBiomarkers entry
+      if (localProposal) {
+        const resolvedKey = getMappedBiomarkerKey(localProposal.name || targetKey) || targetKey || 'hscrp';
+        profileUpdates.customBiomarkers = {
+          [resolvedKey]: {
+            ...currentDef,
+            name: localProposal.name || currentDef.name || resolvedKey,
+            unit: localUnits[resolvedKey] || localProposal.metric || currentDef.unit || '',
+            normalRange: localProposal.range || currentDef.normalRange || '',
+            description: localProposal.description || currentDef.description || '',
+            specificRiskContext: localProposal.medicalInsight || (currentDef as any).specificRiskContext || '',
+            demographicAdjusted: !!(localProposal.isEthnicitySpecific || localProposal.ethnicityTag),
+            ethnicityTag: localProposal.ethnicityTag || undefined
+          }
+        };
+      }
+
+      // 2. Add units for other modified biomarkers to the profileUpdates
+      localMods.forEach((m: any) => {
+        if (m.action === 'update_biomarker' && m.keyName) {
+          const key = m.keyName;
+          const chosenUnit = localUnits[key];
+          if (chosenUnit !== undefined) {
+            if (!profileUpdates.customBiomarkers) {
+              profileUpdates.customBiomarkers = {};
+            }
+            const foundDef = profile?.customBiomarkers?.[key] || biomarkerDefinitions.find(d => d.key === key) || {};
+            profileUpdates.customBiomarkers[key] = {
+              ...foundDef,
+              name: foundDef.name || key,
+              unit: chosenUnit,
+              normalRange: foundDef.normalRange || (foundDef as any).range || 'Unknown',
+              description: foundDef.description || '',
+              specificRiskContext: (foundDef as any).specificRiskContext || ''
+            };
+          }
+        }
+      });
+
+      // Parse numeric values correctly
+      const parsedMods = localMods.map((m: any) => {
+        if (m.action === 'update_biomarker' && m.newValue !== undefined && m.newValue !== null) {
+          const num = Number(m.newValue);
+          return {
+            ...m,
+            newValue: Number.isFinite(num) ? num : m.newValue
+          };
+        }
+        return m;
+      });
+
+      onLogMedical({}, Object.keys(profileUpdates).length > 0 ? profileUpdates : undefined, undefined, undefined, parsedMods);
+    }
+
+    setDecisionState('accepted');
+    if (msg.data) msg.data.proposalStatus = 'accepted';
+    if (msg.data?.agentResult) (msg.data.agentResult as any).proposalStatus = 'accepted';
+  };
+
+  const handleRefuse = () => {
+    setDecisionState('refused');
+    if (msg.data) msg.data.proposalStatus = 'refused';
+    if (msg.data?.agentResult) (msg.data.agentResult as any).proposalStatus = 'refused';
+  };
+
+  const handleReconsider = () => {
+    setDecisionState('pending');
+    if (msg.data) msg.data.proposalStatus = 'pending';
+    if (msg.data?.agentResult) (msg.data.agentResult as any).proposalStatus = 'pending';
+  };
+
   return (
-    <div className="mt-3 bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/30 rounded-2xl p-4 w-full">
-      <div className="flex items-center gap-2 mb-3">
-        <Sparkles className="w-4 h-4 text-indigo-500" />
-        <h4 className="text-sm font-bold text-indigo-900 dark:text-indigo-200">AI Review & Calibration</h4>
+    <div className="mt-3 bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/30 rounded-2xl p-4 w-full space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-2 border-b border-indigo-100/50 dark:border-indigo-800/30">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+          <h4 className="text-xs font-bold text-indigo-950 dark:text-indigo-200 tracking-wider uppercase font-display">
+            Biomarker Clinical Review & Calibration
+          </h4>
+        </div>
+        {decisionState === 'accepted' && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40">
+            <Check className="w-3 h-3" />
+            Accepted & Applied
+          </span>
+        )}
+        {decisionState === 'refused' && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/40">
+            <X className="w-3 h-3" />
+            Proposal Declined
+          </span>
+        )}
       </div>
 
+      {/* Agent Narrative Response */}
       {reply && (
-        <div className="mb-4 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
+        <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed bg-white/70 dark:bg-slate-900/50 p-3.5 rounded-xl border border-indigo-50 dark:border-indigo-800/20">
           {reply}
         </div>
       )}
 
+      {/* Proposed Biomarker Definition & Clinical Diagnostics */}
       {localProposal && (
-        <div className="space-y-2 mb-4 bg-white/60 dark:bg-slate-900/40 p-3 rounded-xl border border-indigo-50 dark:border-indigo-800/20">
-          <div className="flex items-center justify-between mb-1.5 border-b border-indigo-100/30 dark:border-indigo-900/10 pb-1.5">
-            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Biomarker Definition</div>
-            <button
-              onClick={() => setIsEditingProposal(!isEditingProposal)}
-              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-350 flex items-center gap-1 cursor-pointer"
-            >
-              <Edit2 className="w-2.5 h-2.5" />
-              {isEditingProposal ? 'Finish Editing' : 'Edit Definition'}
-            </button>
+        <div className="space-y-3 bg-white/80 dark:bg-slate-900/60 p-3.5 rounded-xl border border-indigo-100/80 dark:border-indigo-800/40 shadow-xs">
+          <div className="flex items-center justify-between border-b border-indigo-100/50 dark:border-indigo-900/30 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                {localProposal.name || currentDef.name || targetKey}
+              </span>
+              {(localProposal.isEthnicitySpecific || localProposal.ethnicityTag) && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40">
+                  {localProposal.ethnicityTag || 'Demographic-Specific'}
+                </span>
+              )}
+            </div>
+            {decisionState === 'pending' && (
+              <button
+                type="button"
+                onClick={() => setIsEditingProposal(!isEditingProposal)}
+                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+              >
+                <Edit2 className="w-3 h-3" />
+                {isEditingProposal ? 'Done Editing' : 'Edit Definition'}
+              </button>
+            )}
           </div>
+
+          {/* Current log context if available */}
+          {(localProposal.value !== undefined || localProposal.date) && (
+            <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-2 bg-indigo-50/50 dark:bg-indigo-950/30 px-2.5 py-1 rounded-lg">
+              <Info className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <span>
+                Reviewed Record: <strong className="font-mono text-slate-800 dark:text-slate-200">{localProposal.value ?? ''} {localProposal.metric || currentDef.unit || ''}</strong>
+                {localProposal.date ? ` on ${localProposal.date}` : ''}
+              </span>
+            </div>
+          )}
 
           {isEditingProposal ? (
             <div className="space-y-3 pt-1">
@@ -264,7 +399,7 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                     type="text"
                     value={localProposal.name || ''}
                     onChange={(e) => setLocalProposal({ ...localProposal, name: e.target.value })}
-                    className="w-full px-2 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 bg-white/80 dark:bg-slate-900/80 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -278,7 +413,7 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                       setLocalProposal({ ...localProposal, metric: val });
                       setLocalUnits(prev => ({ ...prev, [targetKey]: val }));
                     }}
-                    className="w-full px-2 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 bg-white/80 dark:bg-slate-900/80 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full px-2.5 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                   <datalist id="proposal-units-list">
                     {COMMON_UNITS.map(unit => (
@@ -293,8 +428,8 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                   type="text"
                   value={localProposal.range || ''}
                   onChange={(e) => setLocalProposal({ ...localProposal, range: e.target.value })}
-                  className="w-full px-2 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 bg-white/80 dark:bg-slate-900/80 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  placeholder="e.g. 13.5 - 17.5"
+                  className="w-full px-2.5 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  placeholder="e.g. < 1.0 mg/L"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -303,33 +438,67 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                   value={localProposal.description || ''}
                   onChange={(e) => setLocalProposal({ ...localProposal, description: e.target.value })}
                   rows={2}
-                  className="w-full px-2 py-1 text-xs text-slate-800 dark:text-slate-200 bg-white/80 dark:bg-slate-900/80 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+                  className="w-full px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Medical Insight</label>
+                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Medical Insight & Recommendations</label>
                 <textarea
                   value={localProposal.medicalInsight || ''}
                   onChange={(e) => setLocalProposal({ ...localProposal, medicalInsight: e.target.value })}
-                  rows={2}
-                  className="w-full px-2 py-1 text-xs text-slate-800 dark:text-slate-200 bg-white/80 dark:bg-slate-900/80 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+                  rows={3}
+                  className="w-full px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
                 />
               </div>
             </div>
           ) : (
-            <>
-              {localProposal.name && <DiffRow label="Name" oldVal={currentDef.name} newVal={localProposal.name} />}
-              {localProposal.metric && <DiffRow label="Unit" oldVal={currentDef.unit} newVal={localProposal.metric} />}
-              {localProposal.range && <DiffRow label="Range" oldVal={currentDef.normalRange} newVal={localProposal.range} />}
-              {localProposal.description && <DiffRow label="Description" oldVal={currentDef.description || currentDef.descriptions?.en} newVal={localProposal.description} />}
-              {localProposal.medicalInsight && <DiffRow label="Medical Insight" oldVal={(currentDef as any).specificRiskContext || currentDef.medicalInsight || ''} newVal={localProposal.medicalInsight} />}
-            </>
+            <div className="space-y-2">
+              {localProposal.name && (
+                <DiffRow 
+                  label="Name" 
+                  oldVal={currentDef.name} 
+                  newVal={localProposal.name} 
+                />
+              )}
+              {localProposal.metric && (
+                <DiffRow 
+                  label="Unit" 
+                  oldVal={currentDef.unit} 
+                  newVal={localProposal.metric} 
+                />
+              )}
+              {localProposal.range && (
+                <DiffRow 
+                  label="Reference Range" 
+                  oldVal={currentDef.normalRange || (currentDef as any).range} 
+                  newVal={localProposal.range} 
+                />
+              )}
+              {localProposal.description && (
+                <DiffRow 
+                  label="Description" 
+                  oldVal={currentDef.description || currentDef.descriptions?.en || currentDef.descriptions?.zh || currentDef.descriptions?.fr} 
+                  newVal={localProposal.description} 
+                />
+              )}
+              {localProposal.medicalInsight && (
+                <div className="mt-2 pt-2 border-t border-indigo-100/50 dark:border-indigo-900/30">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300 block mb-1">
+                    Diagnostic Insight & Guidance
+                  </span>
+                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed bg-indigo-50/40 dark:bg-indigo-950/30 p-2.5 rounded-lg border border-indigo-100/40 dark:border-indigo-900/20">
+                    {localProposal.medicalInsight}
+                  </p>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
 
+      {/* Proposed Log Modifications (History Updates) */}
       {hasModifications && (
-        <div className="space-y-3 mb-4 bg-white/60 dark:bg-slate-900/40 p-3 rounded-xl border border-indigo-50 dark:border-indigo-800/20">
+        <div className="space-y-3 bg-white/80 dark:bg-slate-900/60 p-3.5 rounded-xl border border-indigo-100/80 dark:border-indigo-800/40 shadow-xs">
           <div className="text-xs font-bold text-indigo-950 dark:text-indigo-200 uppercase tracking-wider mb-2 flex items-center justify-between">
             <span>Proposed Log Modifications</span>
             <span className="text-[10px] font-normal text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-100/80 dark:bg-indigo-900/50 px-2 py-0.5 rounded-full font-bold">
@@ -366,7 +535,6 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between bg-white/40 dark:bg-slate-900/30 p-2.5 rounded-lg border border-indigo-100/30 dark:border-indigo-900/10">
-                    {/* Current value display */}
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span className="text-slate-500 dark:text-slate-400 font-medium text-[10px] uppercase tracking-wider">Current:</span>
                       <span className="line-through text-rose-500 font-mono font-bold bg-rose-50 dark:bg-rose-950/30 px-2 py-0.5 rounded border border-rose-200/40 dark:border-rose-800/20">
@@ -376,30 +544,29 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
 
                     <div className="hidden sm:block text-slate-400 font-light">→</div>
 
-                    {/* Editable Inputs for manual override */}
                     <div className="flex flex-wrap items-center gap-3">
-                      {/* Fixed Value Input */}
                       <div className="flex items-center gap-1.5">
                         <span className="text-slate-500 dark:text-slate-400 font-medium text-[10px] uppercase tracking-wider">Fixed:</span>
                         <input
                           type="text"
                           value={mod.newValue ?? ''}
+                          disabled={decisionState !== 'pending'}
                           onChange={(e) => {
                             const val = e.target.value;
                             setLocalMods(prev => prev.map((m, idx) => idx === i ? { ...m, newValue: val } : m));
                           }}
-                          className="w-20 px-2 py-1 text-xs font-mono font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-center"
+                          className="w-20 px-2 py-1 text-xs font-mono font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-center disabled:opacity-75"
                           placeholder="value"
                         />
                       </div>
 
-                      {/* Unit Input using datalist */}
                       <div className="flex items-center gap-1.5">
                         <span className="text-slate-500 dark:text-slate-400 font-medium text-[10px] uppercase tracking-wider">Unit:</span>
                         <input
                           type="text"
                           list={`units-list-${i}`}
                           value={localUnits[mod.keyName] || ''}
+                          disabled={decisionState !== 'pending'}
                           onChange={(e) => {
                             const val = e.target.value;
                             setLocalUnits(prev => ({ ...prev, [mod.keyName]: val }));
@@ -407,7 +574,7 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                               setLocalProposal({ ...localProposal, metric: val });
                             }
                           }}
-                          className="w-24 px-2 py-1 text-xs font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-300 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          className="w-24 px-2 py-1 text-xs font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-300 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-75"
                           placeholder="e.g. pg/mL"
                         />
                         <datalist id={`units-list-${i}`}>
@@ -431,91 +598,122 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
         </div>
       )}
 
-      <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-indigo-100/50 dark:border-indigo-800/30">
+      {/* Decision Status Badges and Actions */}
+      {decisionState === 'accepted' && (
+        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 rounded-xl flex items-center justify-between">
+          <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-200 text-xs font-semibold">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>Proposal changes successfully accepted and applied to your health records.</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleReconsider}
+            className="text-[11px] text-emerald-700 dark:text-emerald-300 font-bold hover:underline ml-2 shrink-0 cursor-pointer flex items-center gap-1"
+          >
+            <RotateCcw className="w-3 h-3" />
+            Re-evaluate
+          </button>
+        </div>
+      )}
+
+      {decisionState === 'refused' && (
+        <div className="p-3 bg-slate-100 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between">
+          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-xs font-semibold">
+            <AlertCircle className="w-4 h-4 text-slate-500 shrink-0" />
+            <span>Proposal declined. Original settings and records were kept unchanged.</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleAccept}
+            className="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline ml-2 shrink-0 cursor-pointer flex items-center gap-1"
+          >
+            <Check className="w-3 h-3" />
+            Accept Anyway
+          </button>
+        </div>
+      )}
+
+      {/* Action Footer */}
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-indigo-100/50 dark:border-indigo-800/30">
         <button
+          type="button"
           onClick={() => {
             const textarea = document.querySelector('textarea');
             if (textarea) textarea.focus();
           }}
-          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+          className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
         >
+          <MessageSquare className="w-3.5 h-3.5" />
           Keep Discussing
         </button>
-        <button
-          onClick={() => {
-            if (onLogMedical) {
-              const profileUpdates: any = {};
-              
-              // 1. If we have a local proposal (definition update), build its customBiomarkers entry
-              if (localProposal) {
-                const key = msg.data?.targetBiomarkerKey || localProposal.keyName || 'unknown';
-                profileUpdates.customBiomarkers = {
-                  [key]: {
-                    name: localProposal.name,
-                    unit: localUnits[key] || localProposal.metric,
-                    normalRange: localProposal.range,
-                    description: localProposal.description,
-                    specificRiskContext: localProposal.medicalInsight // Save into specificRiskContext correctly
-                  }
-                };
-              }
 
-              // 2. Add units for other modified biomarkers to the profileUpdates
-              localMods.forEach((m: any) => {
-                if (m.action === 'update_biomarker' && m.keyName) {
-                  const key = m.keyName;
-                  const chosenUnit = localUnits[key];
-                  if (chosenUnit !== undefined) {
-                    if (!profileUpdates.customBiomarkers) {
-                      profileUpdates.customBiomarkers = {};
-                    }
-                    const currentDef = profile?.customBiomarkers?.[key] || biomarkerDefinitions.find(d => d.key === key) || {};
-                    profileUpdates.customBiomarkers[key] = {
-                      ...currentDef,
-                      name: currentDef.name || key,
-                      unit: chosenUnit,
-                      normalRange: currentDef.normalRange || currentDef.range || 'Unknown',
-                      description: currentDef.description || '',
-                      specificRiskContext: currentDef.specificRiskContext || ''
-                    };
-                  }
-                }
-              });
-
-              // Parse numeric values correctly
-              const parsedMods = localMods.map((m: any) => {
-                if (m.action === 'update_biomarker' && m.newValue !== undefined && m.newValue !== null) {
-                  const num = Number(m.newValue);
-                  return {
-                    ...m,
-                    newValue: Number.isFinite(num) ? num : m.newValue
-                  };
-                }
-                return m;
-              });
-
-              onLogMedical({}, Object.keys(profileUpdates).length > 0 ? profileUpdates : undefined, undefined, undefined, parsedMods);
-            }
-          }}
-          className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
-        >
-          <Check className="w-3.5 h-3.5" />
-          Approve & Apply
-        </button>
+        {decisionState === 'pending' && (
+          <>
+            <button
+              type="button"
+              onClick={handleRefuse}
+              className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/40 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <X className="w-3.5 h-3.5" />
+              Refuse Proposal
+            </button>
+            <button
+              type="button"
+              onClick={handleAccept}
+              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
+            >
+              <Check className="w-3.5 h-3.5" />
+              Accept Proposal
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
 };
 
-const DiffRow = ({ label, oldVal, newVal }: { label: string, oldVal?: string, newVal: string }) => (
-  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-4 py-1 border-b border-slate-100 dark:border-slate-800/50 last:border-0">
-    <span className="text-[11px] text-slate-400 font-medium uppercase tracking-wide shrink-0 w-24">{label}</span>
-    
-    <div className="flex flex-col gap-0.5 w-full">
-      {oldVal && oldVal !== newVal && (
-        <span className="text-[10px] text-slate-400 dark:text-slate-500 line-through truncate">{oldVal}</span>
-      )}
-      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">{newVal}</span>
+const DiffRow = ({ label, oldVal, newVal }: { label: string, oldVal?: string, newVal: string }) => {
+  const isChanged = Boolean(oldVal && oldVal.trim() !== '' && oldVal.trim() !== newVal.trim());
+  const isNew = Boolean(!oldVal || oldVal.trim() === '');
+
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-4 py-2 border-b border-slate-100 dark:border-slate-800/50 last:border-0">
+      <div className="flex items-center gap-1.5 shrink-0 sm:w-32">
+        <span className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">{label}</span>
+        {isChanged && (
+          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300">
+            Changed
+          </span>
+        )}
+      </div>
+      
+      <div className="flex flex-col gap-1 w-full">
+        {isChanged ? (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-[11px]">
+              <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 w-14 shrink-0">Before:</span>
+              <span className="line-through text-rose-600 dark:text-rose-400 font-medium bg-rose-50 dark:bg-rose-950/30 px-2 py-0.5 rounded border border-rose-200/50 dark:border-rose-800/30">
+                {oldVal}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 w-14 shrink-0">Proposed:</span>
+              <span className="font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded border border-emerald-200/50 dark:border-emerald-800/30 break-words">
+                {newVal}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">{newVal}</span>
+            {isNew && (
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300">
+                New
+              </span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};

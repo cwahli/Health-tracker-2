@@ -7,13 +7,19 @@ import { GenericAgentResultView } from '../AgentResultViews';
 import { biomarkerDefinitions } from '../../utils/biomarkers';
 import { AgentType, AGENT_REGISTRY } from '../../utils/agentConfig';
 import { translations } from '../../utils/translations';
+import { BiomarkerReviewCard } from './BiomarkerReviewCard';
 
-export const BiomarkerCard: React.FC<AgentCardProps> = ({
-  language, msg, messages, idx, profile, biomarkerHistory, globalLiveLogs,
-  handleAgent1Step, handleContinueExtractionChunk, setLoggedMessageIds,
-  loggedMessageIds, onAgentFinish, handleSend, setActiveInstructionAgentType,
-  setActiveInstructionPrompt, onLogMedical, isAnalyzing
-}) => {
+export const BiomarkerCard: React.FC<AgentCardProps> = (props) => {
+  const {
+    language, msg, messages, idx, profile, biomarkerHistory, globalLiveLogs,
+    handleAgent1Step, handleContinueExtractionChunk, setLoggedMessageIds,
+    loggedMessageIds, onAgentFinish, handleSend, setActiveInstructionAgentType,
+    setActiveInstructionPrompt, onLogMedical, isAnalyzing
+  } = props;
+
+  if (msg.agentType === 'biomarker_review') {
+    return <BiomarkerReviewCard {...props} />;
+  }
   const t = translations[language || "en"] || translations.en;
   const effectiveAgentResult = React.useMemo(() => {
     if (msg.data?.agentResult) return msg.data.agentResult;

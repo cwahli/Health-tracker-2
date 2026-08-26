@@ -695,13 +695,10 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">Biomarker Health & Quality Audit</h2>
-                <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold rounded-md border border-indigo-200/60 dark:border-indigo-800/60">
-                  Full Suite Diagnostic
-                </span>
+                <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">Biomarker diagnostic</h2>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Audited <strong className="text-slate-700 dark:text-slate-200">{report.totalScanned}</strong> custom biomarkers • Automatic Proposals & Agent Support
+                <strong className="text-slate-700 dark:text-slate-200">{report.totalScanned}</strong> custom biomarkers
               </p>
             </div>
           </div>

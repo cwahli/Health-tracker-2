@@ -344,4 +344,24 @@ describe('Golden Biomarker — G-B9 Vision N/A (CONFORMANCE_SHAPE)', () => {
   });
 });
 
+describe('Golden Biomarker — Multi-Panel Ingestion & Plausibility Validation Architecture', () => {
+  it('resolves multi-panel NHS / UK laboratory print names correctly without alias collision', () => {
+    expect(getMappedBiomarkerKey('haemoglobin_estimation')).toBe('hemoglobin');
+    expect(getMappedBiomarkerKey('haemoglobin_estimation_hb')).toBe('hemoglobin');
+    expect(getMappedBiomarkerKey('mean_corpuscular_hb_conc')).toBe('mean_corpuscular_hemoglobin_concentration');
+    expect(getMappedBiomarkerKey('meancorpuschbconcmchc')).toBe('mean_corpuscular_hemoglobin_concentration');
+    expect(getMappedBiomarkerKey('serum_inorganic_phosphate')).toBe('serum_inorganic_phosphate');
+    expect(getMappedBiomarkerKey('serum_adjusted_calcium')).toBe('serum_adjusted_calcium');
+  });
+
+  it('verifies unit conversions in ANALYTE_CONVERSIONS for hematology and metabolic panels', () => {
+    expect(ANALYTE_CONVERSIONS.ldl.multiply).toBeCloseTo(0.02586, 5);
+    expect(ANALYTE_CONVERSIONS.hematocrit.multiply).toBe(0.01);
+    expect(ANALYTE_CONVERSIONS.hemoglobin.multiply).toBe(10);
+    expect(ANALYTE_CONVERSIONS.mean_corpuscular_hemoglobin_concentration.multiply).toBe(10);
+    expect(ANALYTE_CONVERSIONS.calcium.multiply).toBeCloseTo(0.2495, 4);
+    expect(ANALYTE_CONVERSIONS.serum_inorganic_phosphate.multiply).toBeCloseTo(0.3229, 4);
+  });
+});
+
 

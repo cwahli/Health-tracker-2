@@ -104,6 +104,7 @@ import { isUsableImageUrl } from "./utils/foodImageSources";
 import { sanitizeBiomarkerHistoryOnLoad } from "./utils/biomarkers";
 import { recalibrateProfileOverlays } from "./utils/biomarkerLifecycle";
 import type { SanitizeProposal } from "./utils/dataSanitize";
+import { purgeHallucinatedAndCorruptedData } from "./utils/dataSanitize";
 import { compressImage } from "./utils/imageCompressor";
 /** Cap bulk foodImages Firestore reads per sync (console showed 209 — free-tier death). Rest stay lazy. */
 const MAX_IMAGE_FETCH_PER_SYNC = 24;
@@ -487,12 +488,12 @@ function sanitizeProfile(incomingProfile: any, activeEmail?: string): any {
       ...incomingProfile,
       email: 'cwah.liu@gmail.com',
       nickname: (!incomingProfile.nickname || nick.includes('john doe')) ? 'C. Liu' : incomingProfile.nickname,
-      age: incomingProfile.age || 28,
+      age: incomingProfile.age ?? 28,
       ethnicity: (incomingProfile.ethnicity === 'Unknown' || !incomingProfile.ethnicity || incomingProfile.ethnicity === 'Caucasian')
         ? 'Chinese'
         : incomingProfile.ethnicity,
-      weight: incomingProfile.weight || 70,
-      height: incomingProfile.height || 175,
+      weight: incomingProfile.weight ?? 70,
+      height: incomingProfile.height ?? 175,
       gender: (incomingProfile.gender === 'Unknown' || !incomingProfile.gender) ? 'Male' : incomingProfile.gender,
       userType: 'Admin'
     };
@@ -1776,8 +1777,9 @@ export default function App() {
           ...log.biomarkers,
           steps: stepsVal
         };
-        if (!log.note || !log.note.includes('Auto-synced from Google Fit')) {
-          log.note = log.note ? `${log.note} | Auto-synced from Google Fit` : 'Auto-synced from Google Fit';
+        // Only set note to Google Fit if there was no clinical note previously
+        if (!log.note) {
+          log.note = 'Auto-synced from Google Fit';
         }
         log.sync_state = 'update';
         log.updated_at = Date.now();
@@ -3223,6 +3225,21 @@ export default function App() {
             loadedActions = parsedLocal.actions || [];
             loadedBenefits = parsedLocal.dailyBenefits || [];
             loadedReport = parsedLocal.report || null;
+
+            const purged = purgeHallucinatedAndCorruptedData(loadedHistory, loadedBiomarkers, loadedProfile);
+            if (purged.purgedCount > 0) {
+              loadedHistory = purged.biomarkerHistory;
+              loadedBiomarkers = purged.biomarkers;
+              if (loadedProfile) {
+                loadedProfile = {
+                  ...loadedProfile,
+                  deletedBiomarkerLogIds: {
+                    ...(loadedProfile.deletedBiomarkerLogIds || {}),
+                    ...(purged.profileUpdates.deletedBiomarkerLogIds || {})
+                  }
+                };
+              }
+            }
             
             // If we loaded a lightweight fallback, show a warning but do NOT auto-sync.
             // The user must manually click "Sync Now" to pull cloud data.
@@ -3471,7 +3488,7 @@ export default function App() {
                 { lastSyncTime: Date.now() - 60000 }
               );
               if (serverFoods.length > 0) setFoodLogs(prevFoods => mergeFoodLogsDeduped(prevFoods, serverFoods));
-              if (serverBiomarkers.length > 0) setBiomarkerHistory(prevBio => mergeByRecency(prevBio, serverBiomarkers));
+              if (serverBiomarkers.length > 0) setBiomarkerHistory(prevBio => mergeBiomarkerHistory(prevBio, serverBiomarkers));
               if (serverProfile) setProfile(prevProfile => mergeProfiles(serverProfile, prevProfile));
               if (serverActions && serverActions.length > 0) setActions(prevActs => mergeActions(serverActions, prevActs));
               if (serverBenefits && serverBenefits.length > 0) setDailyBenefits(prevBens => mergeBenefits(serverBenefits, prevBens));
@@ -3489,10 +3506,27 @@ export default function App() {
           const parsedLocal = await get(storageKey);
           if (parsedLocal && parsedLocal.profile) {
             try {
-              if (parsedLocal.profile) setProfile(parsedLocal.profile);
+              let restoredBio = parsedLocal.biomarkers || {};
+              let restoredHistory = parsedLocal.biomarkerHistory || [];
+              let restoredProfile = parsedLocal.profile;
+
+              const purged = purgeHallucinatedAndCorruptedData(restoredHistory, restoredBio, restoredProfile);
+              if (purged.purgedCount > 0) {
+                restoredBio = purged.biomarkers;
+                restoredHistory = purged.biomarkerHistory;
+                restoredProfile = {
+                  ...restoredProfile,
+                  deletedBiomarkerLogIds: {
+                    ...(restoredProfile.deletedBiomarkerLogIds || {}),
+                    ...(purged.profileUpdates.deletedBiomarkerLogIds || {})
+                  }
+                };
+              }
+
+              if (restoredProfile) setProfile(restoredProfile);
               if (parsedLocal.foodLogs) setFoodLogs(parsedLocal.foodLogs);
-              if (parsedLocal.biomarkers) setBiomarkers(parsedLocal.biomarkers);
-              if (parsedLocal.biomarkerHistory) setBiomarkerHistory(parsedLocal.biomarkerHistory);
+              setBiomarkers(restoredBio);
+              setBiomarkerHistory(restoredHistory);
               if (parsedLocal.actions) setActions(parsedLocal.actions);
               if (parsedLocal.dailyBenefits) setDailyBenefits(parsedLocal.dailyBenefits);
               if (parsedLocal.report) setReport(parsedLocal.report);
@@ -3543,75 +3577,6 @@ export default function App() {
     };
     safeSaveToLocalStorage(getStorageKey(profile?.email), bundle);
   }, [profile, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, foodIdeas, report]);
-  // Automatically log BMI on initial load if profile has height/weight but BMI is missing from history or biomarkers
-  useEffect(() => {
-    if (isAuthChecking || syncState === 'syncing' || syncState === 'conflict') return;
-    if (profile && profile.weight && profile.height && !profile.bmiAutoLogged) {
-      if (profile.deletedCustomBiomarkerKeys?.bmi || (profile.deletedBiomarkerLogIds && Object.keys(profile.deletedBiomarkerLogIds).some(id => id.includes('bmi')))) {
-        return;
-      }
-      const hasBmiInHistory = biomarkerHistory.some(h => h.biomarkers && h.biomarkers.bmi !== undefined && h.sync_state !== 'delete');
-      const hasBmiInBiomarkers = biomarkers.bmi !== undefined;
-      if (!hasBmiInHistory || !hasBmiInBiomarkers) {
-        const heightInMeters = Number(profile.height) / 100;
-        const bmiScore = Number(profile.weight) / (heightInMeters * heightInMeters);
-        if (Number.isNaN(bmiScore) || !isFinite(bmiScore)) return;
-        const roundedBmi = parseFloat(bmiScore.toFixed(1));
-        const recordDate = getCurrentDateInTimezone(profile.timezone);
-        const logId = `med_log_bmi_init_${Date.now()}`;
-        
-        const updatedProfile: UserProfile = {
-          ...profile,
-          bmiAutoLogged: true
-        };
-        setProfile(updatedProfile);
-        
-        setBiomarkers(prev => {
-          if (prev.bmi === roundedBmi) return prev;
-          return { ...prev, bmi: roundedBmi };
-        });
-        setBiomarkerHistory(prev => {
-          const updatedHistory = [...prev];
-          const existingLogIndex = updatedHistory.findIndex(h => toYYYYMMDD(h.date) === toYYYYMMDD(recordDate));
-          
-          let targetIdToSave = logId;
-          if (existingLogIndex >= 0) {
-            targetIdToSave = updatedHistory[existingLogIndex].id;
-            if (updatedHistory[existingLogIndex].biomarkers?.bmi === roundedBmi) {
-              return prev; // no change
-            }
-            updatedHistory[existingLogIndex] = {
-              ...updatedHistory[existingLogIndex],
-              biomarkers: {
-                ...updatedHistory[existingLogIndex].biomarkers,
-                bmi: roundedBmi
-              }
-            };
-          } else {
-            updatedHistory.push({
-              id: logId,
-              date: recordDate,
-              biomarkers: {
-                bmi: roundedBmi
-              },
-              note: `Auto-logged default BMI: ${profile.weight} kg, ${profile.height} cm.`
-            });
-          }
-          updatedHistory.sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
-          // Trigger saveAndSync in background (safely flagged as an auto log)
-          setTimeout(() => {
-            const updatedBiomarkers = { ...biomarkers, bmi: roundedBmi };
-            saveAndSync(updatedProfile, foodLogs, updatedBiomarkers, updatedHistory, actions, dailyBenefits, report, { 
-              type: 'biomarkerLog', 
-              targetId: targetIdToSave,
-              isAutoLog: true 
-            });
-          }, 0);
-          return updatedHistory;
-        });
-      }
-    }
-  }, [isAuthChecking, syncState, profile?.weight, profile?.height, profile?.bmiAutoLogged, biomarkerHistory.length, biomarkers.bmi]);
   // Auto-restore missing food images from chat history
   useEffect(() => {
     if (foodLogs.length === 0) return;
@@ -4543,7 +4508,14 @@ export default function App() {
         }) : null;
         if (stdMatch) {
           keyMapping[rawKey] = stdMatch.key;
-          return; // Map to standard key, drop custom def
+          if (def.normalRange || def.profileAdjustedNormalRange || def.specificRiskContext || def.description || (def.unit && def.unit !== stdMatch.unit)) {
+            currentCustoms[stdMatch.key] = {
+              ...(currentCustoms[stdMatch.key] || {}),
+              ...cleanDef,
+              name: cleaned
+            };
+          }
+          return;
         }
         // Check existing custom match
         let existingKey = Object.keys(currentCustoms).find(k => {
@@ -7181,7 +7153,10 @@ export default function App() {
                   ? row.numeric_value
                   : (row.value !== undefined ? row.value : row.qualitative_value);
                 
-                const entryDate = row.date || new Date().toISOString().split('T')[0];
+                const entryDate = row.date;
+                if (!entryDate || typeof entryDate !== 'string') {
+                  return; // Skip writing to history without a verified lab report date
+                }
                 const standardDate = String(entryDate).split('T')[0].trim();
 
                 if (rawVal !== undefined && rawVal !== null && rawVal !== '') {

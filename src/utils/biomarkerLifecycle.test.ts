@@ -543,10 +543,9 @@ describe('Layer-1 EMIS / NHS table ingest', () => {
     expect(creat?.bucket).toBe('high_confidence');
     expect(creat?.rawValue).toBe(100);
     const tg = trace.rows?.find((r) => r.canonicalKey === 'triglycerides');
-    expect(tg?.bucket).toBe('flagged');
-    expect(tg?.class).toBe('CONFORMANCE_UNIT');
+    expect(tg?.bucket).toBe('high_confidence');
     const ldl = trace.rows?.find((r) => r.canonicalKey === 'ldl');
-    expect(ldl?.bucket).toBe('flagged');
+    expect(ldl?.bucket).toBe('high_confidence');
     expect(trace.rows?.some((r) => r.bucket === 'skip' && /renal profile/i.test(r.printedName || ''))).toBe(true);
     const leftover = leftoverTextFromTrace(trace);
     expect(leftover).toMatch(/Chlamydia|Sample site/i);

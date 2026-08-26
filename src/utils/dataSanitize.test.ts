@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDataSanitizePlan, applyDataSanitizePlan, cleanupInventedBiomarkerCatalog } from './dataSanitize';
+import { buildDataSanitizePlan, applyDataSanitizePlan, cleanupInventedBiomarkerCatalog, purgeHallucinatedAndCorruptedData } from './dataSanitize';
 
 describe('cleanupInventedBiomarkerCatalog (P2)', () => {
   it('remaps custom aliases, drops junk metric_N and pending without unit/history, clears needsApproval on builtins, and strips negative ranges', () => {
@@ -108,3 +108,57 @@ describe('buildDataSanitizePlan', () => {
     expect(result.foodLogs).toHaveLength(1);
   });
 });
+
+describe('purgeHallucinatedAndCorruptedData', () => {
+  it('purges synthetic 2026-08-16 panel, drops auto-BMI phantom logs, and repairs corrupted clinical notes', () => {
+    const history = [
+      {
+        id: 'synth_1',
+        date: '2026-08-16',
+        biomarkers: {
+          glucose: 5.4,
+          estimated_average_glucose: 5.6,
+          total_cholesterol: 4.8,
+          hdl: 1.4,
+          ldl: 2.8,
+          triglycerides: 1.2
+        },
+        note: 'Extracted by Synthetic Clinical Data Parser'
+      },
+      {
+        id: 'bmi_phantom_1',
+        date: '2026-07-28',
+        biomarkers: { bmi: 22.9 },
+        note: 'Auto-logged default BMI: 70 kg, 175 cm.'
+      },
+      {
+        id: 'real_lab_1',
+        date: '2026-06-05',
+        biomarkers: {
+          hba1c: 40,
+          serum_sodium: 143,
+          serum_potassium: 4.3,
+          serum_creatinine: 100
+        },
+        note: '(AlyssaFRS) - 01. Satisfactory - No Action | Auto-synced from Google Fit'
+      }
+    ];
+
+    const profile = {
+      deletedBiomarkerLogIds: {}
+    };
+
+    const res = purgeHallucinatedAndCorruptedData(history, { hba1c: 40, estimated_average_glucose: 5.6 }, profile);
+
+    expect(res.purgedCount).toBe(2);
+    expect(res.biomarkerHistory).toHaveLength(8);
+    const realLab1 = res.biomarkerHistory.find((h: any) => h.id === 'real_lab_1');
+    expect(realLab1).toBeDefined();
+    expect(realLab1?.note).toBe('(AlyssaFRS) - 01. Satisfactory - No Action');
+    expect(res.biomarkers['estimated_average_glucose']).toBeUndefined();
+    expect(res.biomarkers['hba1c']).toBe(40);
+    expect(res.profileUpdates.deletedBiomarkerLogIds?.['synth_1']).toBeDefined();
+    expect(res.profileUpdates.deletedBiomarkerLogIds?.['bmi_phantom_1']).toBeDefined();
+  });
+});
+

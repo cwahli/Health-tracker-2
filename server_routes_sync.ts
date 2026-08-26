@@ -1046,13 +1046,8 @@ syncRouter.post("/api/sync/supabase-push", async (req, res) => {
           finalProfile.email = 'cwah.liu@gmail.com';
           if (!finalProfile.nickname || finalProfile.nickname.toLowerCase().includes('john doe')) {
             finalProfile.nickname = 'C. Liu';
-            finalProfile.age = 28;
-            finalProfile.weight = 70;
-            finalProfile.height = 175;
-            finalProfile.ethnicity = 'Chinese';
-            finalProfile.gender = 'Male';
-            finalProfile.userType = 'Admin';
           }
+          finalProfile.userType = 'Admin';
         }
 
         const mergedData = {

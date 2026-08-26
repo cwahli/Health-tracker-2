@@ -8,6 +8,19 @@ import { ANALYTE_CONVERSIONS } from './analyteConversions';
 import type { BiomarkerLog } from '../types';
 
 export { ANALYTE_CONVERSIONS } from './analyteConversions';
+export {
+  SOURCE_CHANNEL_ALLOWLIST,
+  WEARABLE_ALLOWED_METRICS,
+  isKeyAllowedForSource,
+  validateSourceIngestion,
+  filterAllowedBiomarkersForSource,
+} from './sourceIngestionGuard';
+export {
+  sanitizeNumericInput,
+  applyPlausibilityRangeGates,
+  generateBiomarkerRecordKey,
+} from './plausibilityGates';
+export type { PlausibilityGateResult } from './plausibilityGates';
 
 export type UnitChangeMode = 'relabel' | 'convert';
 

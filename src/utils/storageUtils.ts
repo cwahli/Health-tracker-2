@@ -484,12 +484,12 @@ export const getAggregatedAppData = async (email?: string | null): Promise<any> 
     cleanProfile = {
       ...(cleanProfile || {}),
       email: 'cwah.liu@gmail.com',
-      nickname: 'C. Liu',
-      age: 28,
-      ethnicity: 'Chinese',
-      weight: 70,
-      height: 175,
-      gender: 'Male',
+      nickname: cleanProfile?.nickname && !cleanProfile.nickname.toLowerCase().includes('john doe') ? cleanProfile.nickname : 'C. Liu',
+      age: cleanProfile?.age ?? 28,
+      ethnicity: (cleanProfile?.ethnicity && cleanProfile.ethnicity !== 'Unknown' && cleanProfile.ethnicity !== 'Caucasian') ? cleanProfile.ethnicity : 'Chinese',
+      weight: cleanProfile?.weight ?? 70,
+      height: cleanProfile?.height ?? 175,
+      gender: (cleanProfile?.gender && cleanProfile.gender !== 'Unknown') ? cleanProfile.gender : 'Male',
       userType: 'Admin'
     };
   }

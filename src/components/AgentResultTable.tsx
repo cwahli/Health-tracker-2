@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { biomarkerDefinitions } from '../utils/biomarkers';
 import { formatOptimalTargetValue, evaluateRangeBracketMatch } from '../utils/agentCalibration';
 import { HealthPlanningResultView } from './HealthPlanningResultView';
-import { extractFallbackModifications } from './chat-cards/BiomarkerReviewCard';
+import { extractFallbackModifications, getMappedBiomarkerKey } from './chat-cards/BiomarkerReviewCard';
 import { enrichReviewModificationCommands, collectCatalogUnitMap } from '../utils/biomarkerLifecycle';
 import { 
   Maximize2, 
@@ -1595,6 +1595,30 @@ export const AgentResultTable: React.FC<AgentResultTableProps> = ({
             insight: bm.insight || ''
           };
         });
+      }
+
+      const prop = candidate?.proposal || candidate?.agentResult?.proposal || (agentResult as any)?.proposal;
+      if (prop) {
+        const rawKey = prop.key || prop.keyName || prop.biomarkerKey || getMappedBiomarkerKey(prop.name) || 'reviewed_marker';
+        const customDef = profile?.customBiomarkers?.[rawKey];
+        const stdDef = biomarkerDefinitions.find(d => d.key === rawKey || d.name.toLowerCase() === String(prop.name || rawKey).toLowerCase());
+        const name = prop.name || customDef?.name || stdDef?.name || rawKey;
+        const unit = prop.metric || prop.unit || customDef?.unit || stdDef?.unit || '';
+        const group = customDef?.standardMedicalGrouping || (stdDef as any)?.standardMedicalGrouping || (stdDef as any)?.category || 'Clinical Calibration';
+        return [{
+          biomarker: name,
+          key: rawKey,
+          date: prop.date || '',
+          value: prop.value !== undefined ? prop.value : '',
+          unit,
+          group,
+          isChanged: true,
+          isNew: false,
+          status: 'Calibrated',
+          reason: prop.medicalInsight || prop.description || 'Clinical calibration proposal',
+          description: prop.description || prop.medicalInsight || '',
+          insight: prop.medicalInsight || ''
+        }];
       }
     }
 

@@ -21,6 +21,8 @@ export const ANALYTE_CONVERSIONS: Record<string, AnalyteConversionSpec> = {
   direct_bilirubin: { from: 'mg/dl', to: 'umol/l', multiply: 17.1 },
   bilirubin: { from: 'mg/dl', to: 'umol/l', multiply: 17.1 },
   hemoglobin: { from: 'g/dl', to: 'g/l', multiply: 10 },
+  mean_corpuscular_hemoglobin_concentration: { from: 'g/dl', to: 'g/l', multiply: 10 },
+  mchc: { from: 'g/dl', to: 'g/l', multiply: 10 },
   hematocrit: { from: '%', to: 'l/l', multiply: 0.01 },
   albumin: { from: 'g/dl', to: 'g/l', multiply: 10 },
   serum_albumin: { from: 'g/dl', to: 'g/l', multiply: 10 },
@@ -35,6 +37,9 @@ export const ANALYTE_CONVERSIONS: Record<string, AnalyteConversionSpec> = {
   phosphate: { from: 'mg/dl', to: 'mmol/l', multiply: 0.3229 },
 };
 
-export function specForAnalyte(mappedKey: string): AnalyteConversionSpec | undefined {
+export function specForAnalyte(mappedKey: string, customDef?: any): AnalyteConversionSpec | undefined {
+  if (customDef?.conversions && Array.isArray(customDef.conversions) && customDef.conversions.length > 0) {
+    return customDef.conversions[0];
+  }
   return ANALYTE_CONVERSIONS[mappedKey];
 }

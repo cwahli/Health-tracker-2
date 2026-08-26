@@ -14,6 +14,7 @@ import {
   isBiomarkerDuplicateCandidate,
   selfHealCustomBiomarkerDefinitions,
   biomarkerDefinitions,
+  getBiomarkerEffectiveRisk,
 } from './biomarkers';
 
 describe('getMappedBiomarkerKey — identity', () => {
@@ -308,3 +309,50 @@ describe('selfHealCustomBiomarkerDefinitions — structural self-healing', () =>
     expect(updatedCustoms.my_custom_biomarker.riskCategories.length).toBeGreaterThan(0);
   });
 });
+
+describe('getBiomarkerEffectiveRisk — tag-aligned category scoring', () => {
+  it('returns At risk tag and score 3 for non-hdl cholesterol with at-risk structured range', () => {
+    const risk = getBiomarkerEffectiveRisk(
+      'non_hdl_cholesterol',
+      4.7,
+      { key: 'non_hdl_cholesterol', normalRange: '< 3.4', name: 'Non-HDL Cholesterol' },
+      {
+        customBiomarkers: {
+          non_hdl_cholesterol: {
+            name: 'Non-HDL Cholesterol',
+            structuredRanges: [
+              { min: 0, max: 3.4, name: 'Optimal', isNormal: true },
+              { min: 3.4, max: 10, name: 'At risk', isNormal: false },
+            ]
+          }
+        }
+      }
+    );
+
+    expect(risk.score).toBe(3);
+    expect(risk.tag).toBe('At risk');
+    expect(risk.bg).toBe('bg-amber-500');
+    expect(risk.text).toBe('text-white');
+  });
+
+  it('returns Critical Risk and score 4 for severe single-sided anomaly', () => {
+    const risk = getBiomarkerEffectiveRisk('non_hdl_cholesterol', 5.5, { key: 'non_hdl_cholesterol', normalRange: '< 3.4' });
+    expect(risk.score).toBe(4);
+    expect(risk.tag.toLowerCase()).toContain('critical');
+    expect(risk.bg).toBe('bg-rose-600');
+  });
+
+  it('returns Normal and score 2 for within-range values', () => {
+    const risk = getBiomarkerEffectiveRisk('hdl_cholesterol', 1.4, { key: 'hdl_cholesterol', normalRange: '> 1.0' });
+    expect(risk.score).toBe(2);
+    expect(risk.tag.toLowerCase()).toContain('normal');
+    expect(risk.bg).toBe('bg-emerald-600');
+  });
+
+  it('returns No Data and score 0 for empty or missing values', () => {
+    const risk = getBiomarkerEffectiveRisk('hba1c', undefined);
+    expect(risk.score).toBe(0);
+    expect(risk.tag).toBe('No Data');
+  });
+});
+

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { Calculator, Check, Shield, ChevronDown, ChevronUp } from 'lucide-react';
-import { isAsianEthnicity, getBmiThresholds } from '../utils/biomarkers';
+import { isAsianEthnicity, getBmiThresholds, getIdealBmiTarget } from '../utils/biomarkers';
 import { evaluateRangeBracketMatch } from '../utils/agentCalibration';
+import { calculateMifflinStJeor } from '../utils/clinicalCalculators';
 
 interface BiomarkerCalculationPanelProps {
   language?: string;
@@ -77,7 +78,7 @@ export default function BiomarkerCalculationPanel({
     }
   }, [hasPendingAlert]);
 
-  // 1. Calculations for BMI
+  // 1. Calculations for BMI via unified Clinical Calculator Engine
   const currentBmiNum = typeof currentValue === 'number' 
     ? currentValue 
     : typeof currentValue === 'string' 
@@ -86,49 +87,21 @@ export default function BiomarkerCalculationPanel({
 
   const roundedBmi = Math.round(currentBmiNum * 10) / 10;
 
-  // Bracket limits — sourced from biomarkers.ts so this can never drift again
-  const { normalMax, overweightMax } = getBmiThresholds(profile);
+  const isMale = gender.startsWith('m');
+  const mifflinResult = calculateMifflinStJeor(profile, { weight, height, age, gender, ethnicity });
+  const { normalMax, overweightMax, targetBmi, targetWeight, estimatedCalories, bmr: bmrBase } = mifflinResult.values as any;
   const limits = { underweight: 18.5, normal: normalMax, overweight: overweightMax, obese: overweightMax };
 
-  const isMale = gender.startsWith('m');
-  const targetBmi = isAsianUser ? 21.0 : (isMale ? 22.5 : 21.7);
-  const targetWeight = Math.round(targetBmi * Math.pow(height / 100, 2) * 10) / 10;
-
-  // Mifflin-St Jeor Equation Target Calories
-  let bmrBase = 0;
-  if (isMale) {
-    bmrBase = (10 * weight) + (6.25 * height) - (5 * age) + 5;
-  } else {
-    bmrBase = (10 * weight) + (6.25 * height) - (5 * age) - 161;
-  }
-  
-  // Guarantee exact target 1665 for the test profile (weight 62, height 170) or calculate dynamically
-  const estimatedCalories = (weight === 62 && height === 170) ? 1665 : Math.round((bmrBase * 1.375) - 300);
-
-  // Get diagnostic status
-  let diagnostic = '';
-  let diagnosticColor = '';
-  if (roundedBmi < limits.underweight) {
-    diagnostic = 'Underweight';
-    diagnosticColor = 'text-sky-500';
-  } else if (roundedBmi <= limits.normal) {
-    diagnostic = 'Normal weight';
-    diagnosticColor = 'text-emerald-500';
-  } else if (roundedBmi <= limits.overweight) {
-    diagnostic = 'Overweight';
-    diagnosticColor = 'text-amber-500';
-  } else {
-    diagnostic = 'Obese';
-    diagnosticColor = 'text-rose-500';
-  }
+  const diagnostic = mifflinResult.diagnosticSummary || '';
+  const diagnosticColor = mifflinResult.statusColor || 'text-emerald-500';
 
   const handleApply = () => {
     if (onApplyRecommendations) {
-      const descriptionExplain = `Target calories calculated using Mifflin-St Jeor equation: BMR (${bmrBase} kcal) * 1.375 (light activity multiplier) - 300 kcal calorie deficit to support ideal target weight of ${targetWeight} kg (BMI: ${targetBmi} ${isAsianUser ? 'Asian standard' : 'Global standard'}).`;
+      const descriptionExplain = mifflinResult.recommendations?.descriptionExplain || `Target calories calculated using Mifflin-St Jeor equation: BMR (${bmrBase} kcal) * 1.375 (light activity multiplier) - 300 kcal calorie deficit to support ideal target weight of ${targetWeight} kg (BMI: ${targetBmi} ${isAsianUser ? 'Asian standard' : 'Global standard'}).`;
       onApplyRecommendations({
         targetCalories: estimatedCalories,
         targetWeight,
-        addedBenefit: 'Walking 30 min a day',
+        addedBenefit: mifflinResult.recommendations?.activityAdvice || 'Walking 30 min a day',
         descriptionExplain,
       });
       setApplied(true);

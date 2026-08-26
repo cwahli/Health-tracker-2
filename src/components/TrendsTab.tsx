@@ -6,7 +6,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { TrendingUp, BarChart2, Calendar, EyeOff, Copy, Check } from 'lucide-react';
 import { toYYYYMMDD, formatTimelineDate } from '../utils/dateUtils';
 import { getDuplicateAliasGroups } from '../utils/biomarkerAuditEngine';
-import { getBiomarkerStatus, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity } from '../utils/biomarkers';
+import { getBiomarkerStatus, getBiomarkerStatusLabel, biomarkerDefinitions, parseNormalRangeBounds, getEffectiveRangeText, isAsianEthnicity } from '../utils/biomarkers';
 const parseTargetBounds = (targetStr: string | undefined, nutrientKey: string, defaultMin: number = 0, defaultMax: number = Infinity) => {
   if (!targetStr) return { min: defaultMin, max: defaultMax };
   const lowerStr = targetStr.toLowerCase().replace(/,/g, '');
@@ -33,14 +33,16 @@ const parseTargetBounds = (targetStr: string | undefined, nutrientKey: string, d
   return { min: defaultMin, max: defaultMax };
 };
 
-const getBiomarkerTargetBounds = (key: string, report: any) => {
-  if (key === 'ldl') return { min: 0, max: 100 };
-  if (key === 'hba1c') return { min: 0, max: 39 };
-  if (key === 'egfr') return { min: 90, max: Infinity };
+const getBiomarkerTargetBounds = (key: string, report: any, profile?: UserProfile) => {
   if (key === 'steps') {
     const stepsStr = report?.dailyNutrientTargets?.steps;
     const nums = stepsStr ? String(stepsStr).replace(/,/g, '').match(/\d+/) : null;
     return { min: nums ? parseInt(nums[0], 10) : 3000, max: Infinity };
+  }
+  const effectiveDef = profile?.customBiomarkers?.[key] || biomarkerDefinitions.find(d => d.key === key);
+  if (effectiveDef?.normalRange) {
+    const bounds = parseNormalRangeBounds(effectiveDef.normalRange);
+    return { min: bounds.min ?? 0, max: bounds.max ?? Infinity };
   }
   return { min: 0, max: Infinity };
 };
@@ -126,6 +128,31 @@ export default function TrendsTab({
     });
     return keys;
   }, [duplicateGroups]);
+
+  const availableBiomarkerKeys = useMemo(() => {
+    const keys = new Set<string>();
+    activeHistory.forEach(b => {
+      if (b.biomarkers) {
+        Object.keys(b.biomarkers).forEach(k => {
+          if (!aliasKeysToHide.has(k)) {
+            keys.add(k);
+          } else {
+            const master = duplicateGroups.find(g => g.candidateAliases.includes(k))?.suggestedMasterKey;
+            if (master) keys.add(master);
+          }
+        });
+      }
+    });
+    if (profile?.customBiomarkers) {
+      Object.keys(profile.customBiomarkers).forEach(k => {
+        if (!aliasKeysToHide.has(k)) keys.add(k);
+      });
+    }
+    // Ensure core default biomarkers are always discoverable
+    ['ldl', 'hba1c', 'egfr', 'fasting_glucose', 'triglycerides', 'hdl', 'apob', 'hscrp'].forEach(k => keys.add(k));
+    return Array.from(keys);
+  }, [activeHistory, aliasKeysToHide, duplicateGroups, profile?.customBiomarkers]);
+
   const activeFoodLogs = React.useMemo(() => (foodLogs || []).filter(f => f.sync_state !== 'delete'), [foodLogs]);
   const [selectedMetric, setSelectedMetric] = useState<string>(() => {
     return localStorage.getItem('trends_selected_metric') || 'calories';
@@ -191,19 +218,12 @@ export default function TrendsTab({
         return undefined;
       };
       
-      const ldlVal = getBioVal('ldl');
-      const hba1cVal = getBioVal('hba1c');
-      const egfrVal = getBioVal('egfr');
-
       let value = 0;
       const isNutrient = nutrientDefinitions.some(n => n.key === selectedMetric);
       
       if (isNutrient) {
         value = daysFoods.reduce((acc, f) => acc + (f.nutrients?.[selectedMetric as keyof NutrientBreakdown] || 0), 0);
-      } else if (selectedMetric === 'ldl') value = typeof ldlVal === 'string' ? parseFloat(ldlVal) : Number(ldlVal || 0);
-      else if (selectedMetric === 'hba1c') value = typeof hba1cVal === 'string' ? parseFloat(hba1cVal) : Number(hba1cVal || 0);
-      else if (selectedMetric === 'egfr') value = typeof egfrVal === 'string' ? parseFloat(egfrVal) : Number(egfrVal || 0);
-      else if (selectedMetric === 'steps') {
+      } else if (selectedMetric === 'steps') {
         const today = new Date().toISOString().split('T')[0];
         if (dateStr === today) {
           const todaySteps = localStorage.getItem(`googleSteps${emailSuffix}`);
@@ -211,6 +231,9 @@ export default function TrendsTab({
         } else {
           value = stepsHistory.find(h => toYYYYMMDD(h.date) === dateStr)?.value || 0;
         }
+      } else {
+        const bioVal = getBioVal(selectedMetric);
+        value = typeof bioVal === 'string' ? parseFloat(bioVal) : Number(bioVal || 0);
       }
 
       return {
@@ -274,12 +297,23 @@ export default function TrendsTab({
       return { label: nutDef.labels[profile.language] || nutDef.labels.en, unit: nutDef.unit, color: 'var(--color-indigo-500)', target: t || 100 };
     }
     
-    return {
-      ldl: { label: 'LDL Cholesterol', unit: 'mg/dL', color: 'var(--color-amber-500)', target: 100 },
-      hba1c: { label: 'HbA1c Blood Glucose', unit: 'mmol/mol', color: 'var(--color-indigo-500)', target: 39 },
-      egfr: { label: 'eGFR Kidney Filtration', unit: 'mL/min', color: 'var(--color-rose-500)', target: 90 },
-      steps: { label: 'Daily Steps', unit: 'steps', color: 'var(--color-emerald-500)', target: report?.dailyNutrientTargets?.steps ? parseTarget(report.dailyNutrientTargets.steps, 3000) : 3000 },
-    }[selectedMetric] || { label: 'Metric', unit: '', color: 'var(--color-indigo-500)', target: 0 };
+    if (selectedMetric === 'steps') {
+      return { label: 'Daily Steps', unit: 'steps', color: 'var(--color-emerald-500)', target: report?.dailyNutrientTargets?.steps ? parseTarget(report.dailyNutrientTargets.steps, 3000) : 3000 };
+    }
+
+    const effectiveDef = profile?.customBiomarkers?.[selectedMetric] || biomarkerDefinitions.find(d => d.key === selectedMetric);
+    if (effectiveDef) {
+      const bounds = parseNormalRangeBounds(effectiveDef.normalRange);
+      const targetVal = bounds.max !== undefined ? bounds.max : (bounds.min !== undefined ? bounds.min : 0);
+      return {
+        label: effectiveDef.name || selectedMetric,
+        unit: effectiveDef.unit || '',
+        color: 'var(--color-indigo-500)',
+        target: targetVal
+      };
+    }
+
+    return { label: selectedMetric, unit: '', color: 'var(--color-indigo-500)', target: 0 };
   };
   const metricMeta = getMetricMeta();
 
@@ -577,14 +611,25 @@ export default function TrendsTab({
             className="w-full text-xs font-bold bg-theme-bg-card border border-theme-border/80 rounded-xl px-2.5 py-2.5 text-theme-neutral focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           >
             <option value="steps">Daily Steps</option>
-            {nutrientDefinitions.map(nut => (
-              <option key={nut.key} value={nut.key}>
-                {nut.labels[profile.language] || nut.labels.en} ({nut.unit})
-              </option>
-            ))}
-            <option value="ldl">LDL Cholesterol (mg/dL)</option>
-            <option value="hba1c">HbA1c (mmol/mol)</option>
-            <option value="egfr">eGFR Kidney Filtration</option>
+            <optgroup label="Nutrients">
+              {nutrientDefinitions.map(nut => (
+                <option key={nut.key} value={nut.key}>
+                  {nut.labels[profile.language] || nut.labels.en} ({nut.unit})
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Biomarkers">
+              {availableBiomarkerKeys.map(k => {
+                const def = profile?.customBiomarkers?.[k] || biomarkerDefinitions.find(d => d.key === k);
+                const name = def?.name || k.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                const unitStr = def?.unit ? ` (${def.unit})` : '';
+                return (
+                  <option key={k} value={k}>
+                    {name}{unitStr}
+                  </option>
+                );
+              })}
+            </optgroup>
           </select>
         </div>
 
@@ -610,7 +655,7 @@ export default function TrendsTab({
 
       {/* Responsive Recharts Viewport */}
       <div id="trends-chart-card" className="relative">
-        {hideSensitive && ['ldl', 'hba1c', 'egfr'].includes(selectedMetric) ? (
+        {hideSensitive && !nutrientDefinitions.some(n => n.key === selectedMetric) && selectedMetric !== 'steps' ? (
           /* Masked view to respect privacy toggles in trends as well */
           <div className="h-60 flex flex-col items-center justify-center text-center text-slate-400">
             <EyeOff className="w-8 h-8 text-rose-400 mb-2" />

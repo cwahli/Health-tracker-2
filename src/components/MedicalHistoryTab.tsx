@@ -6,7 +6,7 @@ import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart a
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { getBiomarkerRangeSourceInfo } from '../utils/biomarkerLifecycle';
 import { generateDynamicInsight } from '../utils/biomarkerInsights';
-import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, canonicalizeRiskCategory, getActiveStructuredRangeRule, formatCustomRangesSummary, getMappedBiomarkerKey } from '../utils/biomarkers';
+import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isBiomarkerMissingCategory, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, canonicalizeRiskCategory, getActiveStructuredRangeRule, formatCustomRangesSummary, getMappedBiomarkerKey, getIdealBmiTarget, getBiomarkerEffectiveRisk, BiomarkerEffectiveRisk } from '../utils/biomarkers';
 import { getAgentCalibration, getAllAgentCalibrationRecords, formatOptimalTargetValue } from '../utils/agentCalibration';
 import { getDuplicateAliasGroups } from '../utils/biomarkerAuditEngine';
 import { handleUnitChange } from '../utils/biomarkerLifecycle';
@@ -266,7 +266,7 @@ export default function MedicalHistoryTab({
         const isAsian = isAsianEthnicity(profile.ethnicity);
         const gender = (profile.gender || 'male').toLowerCase();
         const isMale = gender.startsWith('m');
-        const targetBmi = isAsian ? 21.0 : (isMale ? 22.5 : 21.7);
+        const targetBmi = getIdealBmiTarget(profile);
         const targetWeight = Math.round(targetBmi * Math.pow((profile.height || 170) / 100, 2) * 10) / 10;
         return {
           ...d,
@@ -292,7 +292,7 @@ export default function MedicalHistoryTab({
             const isAsian = isAsianEthnicity(profile.ethnicity);
             const gender = (profile.gender || 'male').toLowerCase();
             const isMale = gender.startsWith('m');
-            const targetBmi = isAsian ? 21.0 : (isMale ? 22.5 : 21.7);
+            const targetBmi = getIdealBmiTarget(profile);
             const targetWeight = Math.round(targetBmi * Math.pow((profile.height || 170) / 100, 2) * 10) / 10;
             existing.normalRange = isAsian ? '18.5 - 22.9' : '18.5 - 24.9';
             existing.descriptions = {
@@ -704,14 +704,8 @@ export default function MedicalHistoryTab({
       const getSeverityScore = (key: string) => {
         const val = getLatestValue(key);
         if (val === undefined) return -1;
-        
         const def = allDefinitions.find(d => d.key === key);
-        const status = getBiomarkerStatus(key, val, def?.normalRange, def, profile);
-        
-        if (status === 'critical') return 4;
-        if (status === 'high' || status === 'low') return 3;
-        if (status === 'normal') return 2;
-        return 1; // unknown
+        return getBiomarkerEffectiveRisk(key, val, def, profile).score;
       };
 
       const getLatestDate = (key: string) => {
@@ -778,33 +772,24 @@ export default function MedicalHistoryTab({
       return { label: 'Biomarkers to Review', bg: 'bg-amber-600', text: 'text-white' };
     }
     const groupMarkers = getBiomarkersForSubCategory(cat);
-    let maxScore = 0;
-    let worstMarkerName = '';
-    let worstMarkerStatusLabel = '';
+    let highestRisk: BiomarkerEffectiveRisk = {
+      score: 0,
+      tag: 'No Data',
+      bg: 'bg-slate-200 dark:bg-slate-800/50',
+      text: 'text-theme-text-secondary'
+    };
     
     groupMarkers.forEach(def => {
       const val = getLatestValue(def.key);
-      if (val !== undefined) {
-        const status = getBiomarkerStatus(def.key, val, def.normalRange, def, profile);
-        let score = 0;
-        if (status === 'critical') score = 4;
-        else if (status === 'high' || status === 'low') score = 3;
-        else if (status === 'normal') score = 2;
-        else score = 1;
-        
-        if (score > maxScore) {
-          maxScore = score;
-          worstMarkerName = def.name;
-          worstMarkerStatusLabel = getBiomarkerStatusLabel(def.key, status, getCustomBiomarkerDef(profile, def.key), val, profile);
+      if (val !== undefined && val !== null && val !== '' && !isValEmpty(val)) {
+        const risk = getBiomarkerEffectiveRisk(def.key, val, def, profile);
+        if (risk.score > highestRisk.score) {
+          highestRisk = risk;
         }
       }
     });
     
-    if (maxScore === 4) return { label: 'Critical Risk', bg: 'bg-rose-600', text: 'text-white' };
-    if (maxScore === 3) return { label: 'At risk', bg: 'bg-amber-500', text: 'text-white' };
-    if (maxScore === 2) return { label: 'Normal', bg: 'bg-emerald-600', text: 'text-white' };
-    if (maxScore === 1) return { label: 'Unknown', bg: 'bg-slate-400', text: 'text-white' };
-    return { label: 'No Data', bg: 'bg-slate-200 dark:bg-slate-800/50', text: 'text-theme-text-secondary' };
+    return { label: highestRisk.tag, bg: highestRisk.bg, text: highestRisk.text };
   };
 
   // Sort subcategories
@@ -823,12 +808,9 @@ export default function MedicalHistoryTab({
         let maxScore = 0;
         groupMarkers.forEach(def => {
           const val = getLatestValue(def.key);
-          if (val !== undefined) {
-            const status = getBiomarkerStatus(def.key, val, def.normalRange, def, profile);
-            if (status === 'critical') maxScore = Math.max(maxScore, 4);
-            else if (status === 'high' || status === 'low') maxScore = Math.max(maxScore, 3);
-            else if (status === 'normal') maxScore = Math.max(maxScore, 2);
-            else maxScore = Math.max(maxScore, 1);
+          if (val !== undefined && val !== null && val !== '' && !isValEmpty(val)) {
+            const risk = getBiomarkerEffectiveRisk(def.key, val, def, profile);
+            maxScore = Math.max(maxScore, risk.score);
           }
         });
         return maxScore;
@@ -853,11 +835,7 @@ export default function MedicalHistoryTab({
         const val = getLatestValue(key);
         if (val === undefined) return -1;
         const def = allDefinitions.find(d => d.key === key);
-        const status = getBiomarkerStatus(key, val, def?.normalRange, def, profile);
-        if (status === 'critical') return 4;
-        if (status === 'high' || status === 'low') return 3;
-        if (status === 'normal') return 2;
-        return 1;
+        return getBiomarkerEffectiveRisk(key, val, def, profile).score;
       };
       const getLatestDate = (key: string) => {
         const logs = activeHistory.filter(h => h.biomarkers[key] !== undefined);
@@ -1052,10 +1030,11 @@ export default function MedicalHistoryTab({
                       const colorClass = isEmptyVal ? 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30' : getBiomarkerColor(statusLabel || status);
                       const isExpanded = expandedKey === def.key;
                       const riskTag = (hasVal && !isEmptyVal) ? getBiomarkerRiskTag(def.key, status, customDef, val, profile) : null;
-                      const isNeedsApproval = !!(def as any).needsApproval || !!profile.customBiomarkers?.[def.key]?.needsApproval;
-                      const isMissingUnit = !def.unit || def.unit.trim() === '';
-                      const isMissingCategory = !def.standardMedicalGrouping || def.standardMedicalGrouping.trim() === '' || def.standardMedicalGrouping === 'Other' || !def.riskCategories || def.riskCategories.length === 0 || (def.riskCategories as string[]).includes('Uncategorized');
-                      const isPendingApproval = !isBiomarkerApproved(def.key, profile, activeHistory);
+                      const isApproved = isBiomarkerApproved(def.key, profile, activeHistory);
+                      const isNeedsApproval = !isApproved && (!!(def as any).needsApproval || !!profile.customBiomarkers?.[def.key]?.needsApproval);
+                      const isMissingUnit = !isApproved && (!def.unit || def.unit.trim() === '');
+                      const isMissingCategory = !isApproved && isBiomarkerMissingCategory(def.key, profile, activeHistory);
+                      const isPendingReview = isBiomarkerNeedingReview(def.key, profile, activeHistory, biomarkers, allDefinitions, flaggedTelemetryKeys);
                       
                       const latestLogForUnit = [...(activeHistory || [])]
                         .filter((h: any) => h.biomarkers && h.biomarkers[def.key] !== undefined)
@@ -1126,7 +1105,7 @@ export default function MedicalHistoryTab({
                                   }
                                   return null;
                                 })()}
-                                {isNeedsApproval && (
+                                {isNeedsApproval && !isPendingReview && (
                                   <span className="px-1.5 py-0.5 text-[8px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 rounded-md border border-amber-300/80 dark:border-amber-700/60 whitespace-nowrap flex items-center gap-1 animate-pulse">
                                     <Clock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
                                     Biomarker to Review

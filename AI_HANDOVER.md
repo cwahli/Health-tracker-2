@@ -1,7 +1,37 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-25
-**Status:** Bottom-Up Calorie Derivation & Dietitian Clinical Audit Complete (80/80 test files, 751/751 tests passing, all master assertion gates passing).
+**Updated:** 2026-08-26
+**Status:** Biomarker Effective Risk & Cosmetic Tag Alignment Complete (85/85 test files, 793/793 tests passing, zero lint/tsc errors, build clean).
+
+- **Biomarker Effective Risk & Cosmetic Tag Alignment (`biomarkers.ts`, `MedicalHistoryTab.tsx`, `biomarkerIdentity.test.ts` - 2026-08-26):**
+  - **Root Cause & Diagnosis:** A visual discrepancy existed where a biomarker category header (e.g. "Cholesterol") showed "CRITICAL RISK" (computed via strict numeric formula) while the triggering individual biomarker row showed "At risk" (computed via customized tag/label logic). The UI severity computation `getSeverityScore` did not align with the custom string labels evaluated by `getBiomarkerStatusLabel` and `getBiomarkerRiskTag`.
+  - **Key Changes Applied:**
+    - **Unified Risk Evaluator:** Introduced `getBiomarkerEffectiveRisk` in `biomarkers.ts` which evaluates both the underlying numeric severity score (1-4) and the rendered cosmetic string tag, ensuring the mathematical severity is tightly coupled to the cosmetic outcome (e.g., if the tag evaluates to "At risk", the score mathematically defaults to 3; "Critical" to 4; "Normal" to 2).
+    - **UI Aggregation Harmonization:** Updated `MedicalHistoryTab.tsx` to use `getBiomarkerEffectiveRisk` for computing category header statuses (`highestRisk.tag`, `highestRisk.bg`), completely eliminating divergent calculations.
+    - **Verification & Gates:** 85/85 vitest files (793/793 tests) passing, `tsc --noEmit` exit 0, full production compilation succeeded.
+
+- **Biomarker Diagnostic UI Streamlining & Category Harmonization (`BiomarkerAuditModal.tsx`, `BiomarkerDictionaryModal.tsx`, `biomarkers.ts`, `MedicalHistoryTab.tsx` - 2026-08-26):**
+  - **Root Cause & Diagnosis:**
+    1. *Diagnostic Modal Header*: Contained legacy verbose text ("Biomarker Health & Quality Audit", "Full Suite Diagnostic", "• Automatic Proposals & Agent Support", "Audited") that added UI clutter.
+    2. *Missing Category Discrepancy*: Standard clinical score definitions (e.g. `hemorrhoidal_symptom_score`, `gerd_symptom_score`, `joint_pain_severity_score`, `audit_c_total_score`, `qrisk2`, `audit_score`, `weekly_alcohol_consumption`) were configured with `standardMedicalGrouping: 'Other'`, which caused `isMissingCategory` in `MedicalHistoryTab.tsx` to flag them with `"Missing Category (To Be Approved)"` even though they were catalog built-ins and did not appear in the Dictionary's approval queue.
+  - **Key Changes Applied:**
+    - **Streamlined Diagnostic Modal UI:** Updated the header title in `BiomarkerAuditModal.tsx` to `"Biomarker diagnostic"` and removed the badges/subtitles (`"Full Suite Diagnostic"`, `"• Automatic Proposals & Agent Support"`, `"Audited"`), rendering a clean counter: `<strong className="text-slate-700 dark:text-slate-200">{report.totalScanned}</strong> custom biomarkers`.
+    - **Clinical Scoring Groupings Harmonization:** Updated `standardMedicalGrouping` for clinical scores to their appropriate medical practices (`'Gastrointestinal'`, `'Musculoskeletal'`, `'Cardiovascular'`, `'Screenings & Assessments'`).
+    - **Shared Category Validation Helper:** Added `isBiomarkerMissingCategory` in `src/utils/biomarkers.ts` and wired it to `MedicalHistoryTab.tsx`, ensuring approved built-in biomarkers are never falsely marked as missing category or pending approval.
+    - **Verification & Gates:** 85/85 vitest files (793/793 tests) passing, `tsc --noEmit` exit 0, full production compilation succeeded.
+
+- **Hallucinated Data Cleanup & Robust Sync Stabilization (`dataSanitize.ts`, `biomarkers.ts`, `syncUtils.ts`, `server_routes_sync.ts`, `storageUtils.ts`, `App.tsx` - 2026-08-26):**
+  - **Root Cause & Diagnosis:** Discrepancies between authentic NHS/EMIS lab reports and app records originated from four distinct vectors:
+    1. *Synthetic Panels*: Artificially generated panels (e.g. 16-08-2026 synthetic metabolic panel with `estimated_average_glucose`) entered the dataset via chat agent simulations and fallback date defaulting (`new Date().toISOString()`) when dates were omitted.
+    2. *Auto-BMI Phantom History Generator*: A reactive `useEffect` in `App.tsx` created daily history entries with `"Auto-logged default BMI: 70 kg, 175 cm."`, polluting history logs with artificial single-marker entries.
+    3. *Clinical Note Contamination*: Wearable sync (`handleGoogleStepsUpdated`) appended `" | Auto-synced from Google Fit"` across all biomarkers on the same date, clobbering authentic lab notes.
+    4. *Sync Overwrite & Data Collision*: Hardcoded profile fallbacks (`weight: 70`, `height: 175`, `age: 28`) in `server_routes_sync.ts` and `storageUtils.ts` clobbered real user profiles, while Supabase realtime syncing used naive `mergeByRecency` instead of `mergeBiomarkerHistory`.
+  - **Key Changes Applied:**
+    - **Hallucinated Data Purge:** Added `purgeHallucinatedAndCorruptedData` in `dataSanitize.ts`, automatically removing synthetic 16-08-2026 panels, dropping phantom auto-BMI logs, and stripping contaminated Google Fit notes from clinical records while recording deleted IDs to prevent cloud resurrection.
+    - **Eliminated Phantom Auto-Logging & Date Defaulting:** Removed the auto-BMI history generation `useEffect` in `App.tsx` and prevented the clinical data parser from falling back to `today` when lab dates are missing.
+    - **Sanitized Mathematical Conversions:** Removed synthetic substitutions (hardcoded 143 sodium, dividing lymphocytes by 6) in `normalizeHistoricalTelemetryErrors` in `biomarkers.ts`.
+    - **Sync Resiliency & Profile Preservation:** Updated `mergeBiomarkerHistory` in `syncUtils.ts` to preserve non-conflicting wearable steps and clinical notes across same-day logs. Removed hardcoded profile overrides in `server_routes_sync.ts` and `storageUtils.ts` to protect authentic user demographic data.
+    - **Verification & Gates:** 84/84 vitest test files (775/775 tests) passing, `tsc --noEmit` exit 0, all master assertion gates passing (`assert-biomarker-lifecycle-m31.m31`, `assert-biomarker-flow.mjs`).
 
 - **Edit Mode Quality & Diagnostics Refinements (`server.ts`, `agents/dietitianInstructions.ts`, `server_dish_finalize.ts` - 2026-08-25):**
   - **Narrative Edit Confirmation:** Updated `buildModeAEditInstruction` so Beat 1 of the Dietitian narrative explicitly confirms the user's specific edit (e.g. *"Updated your iced tea to unsweetened, removing 18g of added sugar"*) before delivering clinical balance coaching.
