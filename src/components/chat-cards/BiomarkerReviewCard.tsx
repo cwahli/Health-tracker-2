@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { AgentCardProps } from './types';
-import { Check, Edit2, Sparkles, ArrowRight, X, RotateCcw, MessageSquare, ShieldCheck, AlertCircle, Info } from 'lucide-react';
+import { Check, Edit2, Sparkles, ArrowRight, X, RotateCcw, MessageSquare, ShieldCheck, AlertCircle, Info, Trash2 } from 'lucide-react';
 
 import { biomarkerDefinitions } from '../../utils/biomarkers';
 
@@ -201,7 +201,7 @@ export function extractFallbackModifications(text: string, history: any[], profi
   return results;
 }
 
-export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedical, profile, biomarkerHistory }) => {
+export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedical, profile, biomarkerHistory, onDeleteMessage }) => {
   const rawTargetKey = msg.data?.targetBiomarkerKey || msg.data?.agentResult?.targetBiomarkerKey || msg.data?.agentResult?.proposal?.key || msg.data?.agentResult?.proposal?.keyName || msg.data?.proposal?.key || msg.data?.proposal?.name || (msg.agentResult as any)?.targetBiomarkerKey || '';
   const proposal = msg.data?.agentResult?.proposal || msg.data?.proposal || (msg.agentResult as any)?.proposal || null;
   const mods = msg.data?.agentResult?.modificationCommand || msg.data?.modificationCommand || msg.modificationCommand || (msg.agentResult as any)?.modificationCommand || null;
@@ -262,6 +262,7 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
             normalRange: localProposal.range || currentDef.normalRange || '',
             description: localProposal.description || currentDef.description || '',
             specificRiskContext: localProposal.medicalInsight || (currentDef as any).specificRiskContext || '',
+            rangeBrackets: localProposal.rangeBrackets || (currentDef as any).rangeBrackets || undefined,
             demographicAdjusted: !!(localProposal.isEthnicitySpecific || localProposal.ethnicityTag),
             ethnicityTag: localProposal.ethnicityTag || undefined
           }
@@ -363,7 +364,7 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
               </span>
               {(localProposal.isEthnicitySpecific || localProposal.ethnicityTag) && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40">
-                  {localProposal.ethnicityTag || 'Demographic-Specific'}
+                  {localProposal.ethnicityTag ? `${localProposal.ethnicityTag} Specific` : 'Demographic-Specific'}
                 </span>
               )}
             </div>
@@ -441,15 +442,6 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                   className="w-full px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
                 />
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Medical Insight & Recommendations</label>
-                <textarea
-                  value={localProposal.medicalInsight || ''}
-                  onChange={(e) => setLocalProposal({ ...localProposal, medicalInsight: e.target.value })}
-                  rows={3}
-                  className="w-full px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
-                />
-              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -511,10 +503,23 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                     )}
                     
                     {localProposal.rangeBrackets && localProposal.rangeBrackets.length > 0 && (
-                      <div className="flex flex-col gap-1.5 py-2 border-b border-slate-100 dark:border-slate-800/50 last:border-0">
-                        <span className="text-[11px] uppercase font-medium text-slate-400 tracking-wide">Structured Range Brackets</span>
-                        <div className="flex flex-col gap-1 mt-1">
-                          {localProposal.rangeBrackets.map((b: any, idx: number) => {
+                      <div className="flex flex-col gap-1.5 py-3 border-b border-slate-100 dark:border-slate-800/50 last:border-0">
+                        <div className="flex items-center gap-1.5 shrink-0 sm:w-32 mb-1">
+                          <span className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">Range Brackets</span>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300">
+                            Upgraded
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] mb-2">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 w-14 shrink-0">Before:</span>
+                          <span className="line-through text-rose-600 dark:text-rose-400 font-medium bg-rose-50 dark:bg-rose-950/30 px-2 py-0.5 rounded border border-rose-200/50 dark:border-rose-800/30">
+                            {currentDef.normalRange || (currentDef as any).range || '—'}
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-2 text-[11px]">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 w-14 shrink-0 mt-1">Proposed:</span>
+                          <div className="flex flex-col gap-1 w-full">
+                            {localProposal.rangeBrackets.map((b: any, idx: number) => {
                             // Infer max from next bracket's min if max is null
                             let effectiveMax = b.max;
                             if ((effectiveMax === undefined || effectiveMax === null) && idx < localProposal.rangeBrackets.length - 1) {
@@ -529,10 +534,22 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                             return (
                               <div key={idx} className="flex items-center gap-2 text-xs">
                                 <span className={`px-2 py-0.5 rounded font-bold text-[10px] uppercase tracking-wider ${
-                                  b.severity === 'critical' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300' :
-                                  b.severity === 'high' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300' :
-                                  b.severity === 'low' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300' :
-                                  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300'
+                                  (() => {
+                                    const num = typeof b.severity === 'number' ? b.severity : (typeof b.severity === 'string' && !isNaN(Number(b.severity)) ? Number(b.severity) : null);
+                                    if (num !== null) {
+                                      if (num >= 5 || num <= -5) return 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300';
+                                      if (num >= 3) return 'bg-orange-100 text-orange-700 dark:bg-orange-900/60 dark:text-orange-300';
+                                      if (num >= 1) return 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300';
+                                      if (num === 0) return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300';
+                                      return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300';
+                                    }
+                                    const s = String(b.severity || b.label || '').toLowerCase();
+                                    if (s.includes('critical') || s.includes('emergency')) return 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300';
+                                    if (s.includes('high') || s.includes('elevated') || s.includes('severe')) return 'bg-orange-100 text-orange-700 dark:bg-orange-900/60 dark:text-orange-300';
+                                    if (s.includes('borderline') || s.includes('mild') || s.includes('moderate')) return 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300';
+                                    if (s.includes('low') || s.includes('deficient')) return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300';
+                                    return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300';
+                                  })()
                                 }`}>
                                   {b.label}
                                 </span>
@@ -548,6 +565,7 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                               </div>
                             );
                           })}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -720,34 +738,27 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
         <button
           type="button"
           onClick={() => {
-            const textarea = document.querySelector('textarea');
-            if (textarea) textarea.focus();
+            if (onDeleteMessage) {
+              onDeleteMessage(msg.id);
+            } else {
+              handleRefuse();
+            }
           }}
-          className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+          className="px-2.5 py-1.5 bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 border border-transparent hover:border-rose-200 dark:hover:border-rose-800/40 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center shrink-0"
+          title="Dismiss Proposal"
         >
-          <MessageSquare className="w-3.5 h-3.5" />
-          Keep Discussing
+          <Trash2 className="w-4 h-4" />
         </button>
 
         {decisionState === 'pending' && (
-          <>
-            <button
-              type="button"
-              onClick={handleRefuse}
-              className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/40 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <X className="w-3.5 h-3.5" />
-              Refuse Proposal
-            </button>
-            <button
-              type="button"
-              onClick={handleAccept}
-              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
-            >
-              <Check className="w-3.5 h-3.5" />
-              Accept Proposal
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={handleAccept}
+            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
+          >
+            <Check className="w-3.5 h-3.5" />
+            Accept Proposal
+          </button>
         )}
       </div>
     </div>
