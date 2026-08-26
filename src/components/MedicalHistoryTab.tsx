@@ -1,4 +1,4 @@
-import { toYYYYMMDD } from "../utils/dateUtils";
+import { toYYYYMMDD, formatToDDMMYYYY } from "../utils/dateUtils";
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { UserProfile, BiomarkerLog, ChatMessage, FoodLog } from '../types';
 import { translations } from '../utils/translations';
@@ -499,6 +499,53 @@ export default function MedicalHistoryTab({
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', `biomarkers_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportLogEntriesToCSV = () => {
+    const headers = ["Biomarker", "Date", "Value", "Comment"];
+    const rows: string[] = [];
+
+    const sortedHistory = [...activeHistory].sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
+
+    const escapeCsvField = (field: any) => {
+      if (field === null || field === undefined) return '';
+      const str = String(field);
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    sortedHistory.forEach(h => {
+      if (!h.biomarkers) return;
+      const formattedDate = formatToDDMMYYYY(h.date) || h.date;
+
+      Object.keys(h.biomarkers).forEach(key => {
+        const val = h.biomarkers[key];
+        const def = allDefinitions.find(d => d.key === key) || biomarkerDefinitions.find(d => d.key === key);
+        const customDef = getCustomBiomarkerDef(profile, key);
+        const testDetail = h.tests?.find(t => t.key === key);
+        const name = def?.name || customDef?.name || testDetail?.originalTestName || key;
+        const comment = testDetail?.doctorComment || h.note || '';
+
+        rows.push([
+          escapeCsvField(name),
+          escapeCsvField(formattedDate),
+          escapeCsvField(val),
+          escapeCsvField(comment)
+        ].join(','));
+      });
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `biomarker_log_entries_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1162,7 +1209,7 @@ export default function MedicalHistoryTab({
           </div>
           <div className="flex items-center gap-2">
             <BrainCircuit className="w-4 h-4 text-indigo-500" />
-            <span>Total Log Entries: <strong className="text-slate-800 dark:text-slate-200 font-bold">{activeHistory.reduce((sum, h) => sum + Object.keys(h.biomarkers).length, 0)}</strong></span>
+            <span onClick={exportLogEntriesToCSV} className="cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" title="Download as CSV">Total Log Entries: <strong className="text-slate-800 dark:text-slate-200 font-bold">{activeHistory.reduce((sum, h) => sum + Object.keys(h.biomarkers).length, 0)}</strong></span>
           </div>
         </div>
       </div>
