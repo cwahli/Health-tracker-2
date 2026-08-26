@@ -123,18 +123,19 @@ export function formatOptimalTargetValue(bm: any): string {
 }
 
 export function evaluateRangeBracketMatch(
-  br: { name?: string; range?: string; lowerBound?: number; upperBound?: number },
+  br: { name?: string; range?: string; lowerBound?: number; upperBound?: number; label?: string; min?: number; max?: number; severity?: string },
   userValue: any,
   status?: string,
   allBrackets?: any[]
 ): { isMatched: boolean; isOptimal: boolean; colorScheme: 'emerald' | 'rose' | 'amber' | 'slate' } {
   if (!br) return { isMatched: false, isOptimal: false, colorScheme: 'slate' };
 
-  const brName = (br.name || '').toLowerCase();
-  const isOptimal = (brName.includes('optimal') && !brName.includes('sub-optimal')) || brName.includes('healthy') || brName.includes('target') || brName.includes('normal');
+  const brName = (br.name || br.label || '').toLowerCase();
+  const brSeverity = (br.severity || '').toLowerCase();
+  const isOptimal = (brName.includes('optimal') && !brName.includes('sub-optimal')) || brName.includes('healthy') || brName.includes('target') || brName.includes('normal') || brSeverity === 'normal' || brSeverity === 'optimal';
   const isActionZone = brName.includes('action zone') || brName.includes('sub-optimal') || brName.includes('mildly decreased');
-  const isHigh = brName.includes('elevated') || brName.includes('high') || brName.includes('critical') || brName.includes('overweight') || brName.includes('at risk');
-  const isLow = brName.includes('low') || brName.includes('underweight') || brName.includes('decreased');
+  const isHigh = brName.includes('elevated') || brName.includes('high') || brName.includes('critical') || brName.includes('overweight') || brName.includes('at risk') || brSeverity === 'high' || brSeverity === 'critical';
+  const isLow = brName.includes('low') || brName.includes('underweight') || brName.includes('decreased') || brSeverity === 'low';
 
   const strVal = userValue !== undefined && userValue !== null ? String(userValue).trim() : '';
   const numVal = parseFloat(strVal);
@@ -143,8 +144,13 @@ export function evaluateRangeBracketMatch(
   let isMatched = false;
 
   if (isNumeric) {
-    const rangeStr = br.range || (br.lowerBound !== undefined ? `${br.lowerBound}-${br.upperBound}` : '');
-    if (rangeStr) {
+    if (br.min !== undefined || br.max !== undefined) {
+      isMatched = true;
+      if (br.min !== null && br.min !== undefined && numVal < br.min) isMatched = false;
+      if (br.max !== null && br.max !== undefined && numVal > br.max) isMatched = false;
+    } else {
+      const rangeStr = br.range || (br.lowerBound !== undefined ? `${br.lowerBound}-${br.upperBound}` : '');
+      if (rangeStr) {
       const gteMatch = rangeStr.match(/>=\s*(\d+(?:\.\d+)?)/);
       const gtMatch = !gteMatch && rangeStr.match(/>\s*(\d+(?:\.\d+)?)/);
       const lteMatch = rangeStr.match(/<=\s*(\d+(?:\.\d+)?)/);
@@ -168,6 +174,7 @@ export function evaluateRangeBracketMatch(
         const high = parseFloat(rangeBoundsMatch[2]);
         if (!isNaN(low) && !isNaN(high) && numVal >= low && numVal <= high) isMatched = true;
       }
+    }
     }
   } else if (strVal) {
     const rangeStr = (br.range || '').toLowerCase();

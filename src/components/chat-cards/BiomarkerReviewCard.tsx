@@ -474,6 +474,37 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                   newVal={localProposal.range} 
                 />
               )}
+              {localProposal.rangeBrackets && localProposal.rangeBrackets.length > 0 && (
+                <div className="flex flex-col gap-1.5 py-1">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Structured Range Brackets</span>
+                  <div className="flex flex-col gap-1 mt-1">
+                    {localProposal.rangeBrackets.map((b: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-2 text-xs">
+                        <span className={`px-2 py-0.5 rounded font-bold text-[10px] uppercase tracking-wider ${
+                          b.severity === 'critical' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300' :
+                          b.severity === 'high' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300' :
+                          b.severity === 'low' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300' :
+                          'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300'
+                        }`}>
+                          {b.severity}
+                        </span>
+                        <span className="font-medium text-slate-700 dark:text-slate-300 min-w-[80px]">
+                          {b.label}:
+                        </span>
+                        <span className="font-mono text-indigo-600 dark:text-indigo-400">
+                          {b.min !== undefined && b.min !== null && b.max !== undefined && b.max !== null
+                            ? `${b.min} - ${b.max}`
+                            : b.min !== undefined && b.min !== null
+                            ? `≥ ${b.min}`
+                            : b.max !== undefined && b.max !== null
+                            ? `< ${b.max}`
+                            : '—'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {localProposal.description && (
                 <DiffRow 
                   label="Description" 
