@@ -564,8 +564,8 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     key: 'hematocrit',
     name: 'Hematocrit',
     category: 'hematology',
-    unit: '%',
-    normalRange: '36 - 50',
+    unit: 'L/L',
+    normalRange: '0.36 - 0.50',
     descriptions: {
       en: 'The proportion of blood made up of red blood cells.',
       fr: 'Proportion de globules rouges dans le sang.',
@@ -578,7 +578,7 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     name: 'Hemoglobin',
     category: 'hematology',
     unit: 'g/L',
-    normalRange: '12.0 - 17.5',
+    normalRange: '120 - 175',
     descriptions: {
       en: 'Oxygen-carrying protein in red blood cells.',
       fr: 'Protéine transporteuse d\'oxygène dans les globules rouges.',
@@ -1983,7 +1983,7 @@ export function isBiomarkerValueImprobable(key: string, val: number | string, no
   const normalizedKey = (key || '').toLowerCase();
 
   // Structural check 1: Unit scale mismatch (e.g. decimal ratio entered when normal range is percentage or whole numbers)
-  if (refMax !== undefined && refMax >= 10 && num > 0 && num < 1.0) {
+  if (bounds.min !== undefined && refMax !== undefined && refMax >= 10 && num > 0 && num < 1.0) {
     return true; // Decimal fraction entered when reference range is whole unit (e.g., 0.48 for 36-50%)
   }
 
@@ -2093,7 +2093,7 @@ export function diagnoseTelemetryIssue(
     };
   }
 
-  if (refMax !== undefined && refMax >= 10 && !isNaN(num) && num > 0 && num < 1.0) {
+  if (bounds.min !== undefined && refMax !== undefined && refMax >= 10 && !isNaN(num) && num > 0 && num < 1.0) {
     return {
       issueTitle: `Unit Scale Error: Decimal Ratio (${val}) vs Percentage`,
       preciseCause: `Logged value (${val}) was entered as a decimal ratio (0.xx) while reference range (${rangeStr}) uses whole percentage notation (${refMin}-${refMax}%).`,
@@ -2580,7 +2580,9 @@ export function sanitizeBiomarkerHistoryOnLoad(
 export const getBiomarkerStatus = (key: string, val: number | string, normalRangeStr?: string, customDef?: any, profile?: any): 'normal' | 'low' | 'high' | 'critical' | 'flagged' | 'unknown' => {
   let rangeStr = normalRangeStr;
   if (!rangeStr) {
-    if (customDef?.normalRange) {
+    if (customDef?.profileAdjustedNormalRange) {
+      rangeStr = customDef.profileAdjustedNormalRange;
+    } else if (customDef?.normalRange) {
       rangeStr = customDef.normalRange;
     } else {
       const def = biomarkerDefinitions.find(d => d.key === key);
@@ -2607,7 +2609,7 @@ export const getBiomarkerStatus = (key: string, val: number | string, normalRang
 
   let valueToEvaluate = num;
   const rangeBounds = parseNormalRangeBounds(rangeStr);
-  if (rangeBounds.max !== undefined && rangeBounds.max >= 10 && valueToEvaluate > 0 && valueToEvaluate < 1.0) {
+  if (rangeBounds.min !== undefined && rangeBounds.max !== undefined && rangeBounds.max >= 10 && valueToEvaluate > 0 && valueToEvaluate < 1.0) {
     valueToEvaluate *= 100;
   }
 
@@ -3230,7 +3232,8 @@ export function inferUnitFromKeyOrName(key: string, name?: string): string {
   if (k.includes('albumin') || n.includes('albumin') || k.includes('globulin') || n.includes('globulin') || k.includes('total_protein') || n.includes('total protein')) return 'g/L';
   if (k.includes('bilirubin') || n.includes('bilirubin') || k.includes('creatinine') || n.includes('creatinine') || k.includes('urate') || k.includes('uric_acid')) return 'umol/L';
   if (k.includes('calcium') || k.includes('sodium') || k.includes('potassium') || k.includes('chloride') || k.includes('bicarbonate') || k.includes('phosphate') || k.includes('magnesium') || k.includes('urea')) return 'mmol/L';
-  if (k.includes('rdw') || n.includes('rdw') || k.includes('hematocrit') || n.includes('hematocrit') || k.includes('hct') || n.includes('hct')) return '%';
+  if (k.includes('rdw') || n.includes('rdw')) return '%';
+  if (k.includes('hematocrit') || n.includes('hematocrit') || k.includes('hct') || n.includes('hct')) return 'L/L';
   if (k.includes('wbc') || n.includes('wbc') || k.includes('neutrophil') || k.includes('lymphocyte') || k.includes('monocyte') || k.includes('eosinophil') || k.includes('basophil')) return '10^9/L';
 
   if (k.includes('psa') || n.includes('psa')) return 'ng/mL';

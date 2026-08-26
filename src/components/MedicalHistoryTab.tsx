@@ -301,9 +301,13 @@ export default function MedicalHistoryTab({
             };
             existing.structuredRanges = def.structuredRanges || existing.structuredRanges;
           } else {
-            existing.name = def.name || existing.name; existing.normalRange = (def.normalRange && def.normalRange !== 'Unknown') ? def.normalRange : existing.normalRange;
+            existing.name = def.name || existing.name;
+            const validRange = def.normalRange && def.normalRange !== 'Unknown' && def.normalRange.trim() !== '' && def.normalRange !== 'n/a' && def.normalRange !== 'unset' && def.normalRange !== '-';
+            existing.normalRange = validRange ? def.normalRange : existing.normalRange;
             existing.structuredRanges = def.structuredRanges || existing.structuredRanges;
-            existing.unit = def.unit || existing.unit; existing.standardMedicalGrouping = def.standardMedicalGrouping || existing.standardMedicalGrouping; existing.potentialMedicalConditions = def.potentialMedicalConditions || existing.potentialMedicalConditions; existing.riskCategories = def.riskCategories || existing.riskCategories;
+            const validUnit = def.unit && def.unit !== 'Unknown' && def.unit.trim() !== '' && def.unit !== 'n/a' && def.unit !== 'unset' && def.unit !== '-';
+            existing.unit = validUnit ? def.unit : existing.unit;
+            existing.standardMedicalGrouping = def.standardMedicalGrouping || existing.standardMedicalGrouping; existing.potentialMedicalConditions = def.potentialMedicalConditions || existing.potentialMedicalConditions; existing.riskCategories = def.riskCategories || existing.riskCategories;
             if (def.description) {
               existing.descriptions = { ...existing.descriptions, en: def.description };
             }

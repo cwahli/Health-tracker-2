@@ -3488,7 +3488,7 @@ export default function App() {
                 { lastSyncTime: Date.now() - 60000 }
               );
               if (serverFoods.length > 0) setFoodLogs(prevFoods => mergeFoodLogsDeduped(prevFoods, serverFoods));
-              if (serverBiomarkers.length > 0) setBiomarkerHistory(prevBio => mergeBiomarkerHistory(prevBio, serverBiomarkers));
+              if (serverBiomarkers.length > 0) setBiomarkerHistory(prevBio => mergeBiomarkerHistory(serverBiomarkers, prevBio, deletedBios));
               if (serverProfile) setProfile(prevProfile => mergeProfiles(serverProfile, prevProfile));
               if (serverActions && serverActions.length > 0) setActions(prevActs => mergeActions(serverActions, prevActs));
               if (serverBenefits && serverBenefits.length > 0) setDailyBenefits(prevBens => mergeBenefits(serverBenefits, prevBens));
@@ -6947,7 +6947,7 @@ export default function App() {
             }
 
             const proposal = agentResult?.proposal;
-            if (proposal && (proposal.range || proposal.metric)) {
+            if (proposal && (proposal.range || proposal.metric || proposal.rangeBrackets)) {
               const rawKey = agentResult.biomarkerKey || proposal.key || proposal.name || commands[0]?.keyName || '';
               const overlayKey = getMappedBiomarkerKey(String(rawKey)) || String(rawKey).toLowerCase().replace(/[^a-z0-9]/g, '_');
               if (overlayKey) {
@@ -6959,6 +6959,20 @@ export default function App() {
                   unit: proposal.metric || prev.unit,
                   profileAdjustedNormalRange: proposal.range || prev.profileAdjustedNormalRange,
                   description: proposal.description || prev.description || '',
+                  rangeBrackets: proposal.rangeBrackets || prev.rangeBrackets,
+                  structuredRanges: proposal.rangeBrackets ? [{
+                    targetGender: 'Any',
+                    targetEthnicity: 'Any',
+                    range: {
+                      type: 'bracket',
+                      brackets: proposal.rangeBrackets.map((b: any) => ({
+                        min: b.min !== undefined ? b.min : null,
+                        max: b.max !== undefined ? b.max : null,
+                        alias: b.label,
+                        severity: b.severity
+                      }))
+                    }
+                  }] : prev.structuredRanges,
                   overlayFingerprint: overlayFingerprint(updatedProfile),
                 };
               }
