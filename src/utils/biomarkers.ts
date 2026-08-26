@@ -2577,6 +2577,52 @@ export function sanitizeBiomarkerHistoryOnLoad(
   return { history: history || [], fixedCount: flaggedKeys.length, current, flaggedKeys };
 }
 
+// Shared bracket-string matcher: parses a bracket's `range` string (supports
+// "<", ">", "<=", ">=", the Unicode "≤"/"≥" operators, "under"/"over", plain
+// "X - Y" bounds, and exact-value brackets like "0") and returns the matching
+// bracket object, or null. Used by both getBiomarkerStatus() (severity enum)
+// and getCustomStatusLabel() (display label) so AI-proposed rangeBrackets
+// overrides (e.g. ethnicity-specific calibration) evaluate consistently
+// instead of each call site re-implementing (and drifting from) its own
+// parsing logic.
+export function matchRangeBracket(num: number, rangeBrackets: any[] | undefined): any | null {
+  if (!Array.isArray(rangeBrackets) || rangeBrackets.length === 0 || isNaN(num)) return null;
+  for (const br of rangeBrackets) {
+    const rangeStr = String(br?.range || '').trim().toLowerCase()
+      .replace(/≥/g, '>=')
+      .replace(/≤/g, '<=');
+    if (!rangeStr) continue;
+
+    if (rangeStr.includes('<') || rangeStr.includes('under')) {
+      const valMatch = rangeStr.match(/[\d.]+/);
+      if (valMatch) {
+        const limit = parseFloat(valMatch[0]);
+        const inclusive = rangeStr.includes('<=');
+        if (inclusive ? num <= limit : num < limit) return br;
+      }
+      continue;
+    }
+    if (rangeStr.includes('>') || rangeStr.includes('over')) {
+      const valMatch = rangeStr.match(/[\d.]+/);
+      if (valMatch) {
+        const limit = parseFloat(valMatch[0]);
+        const inclusive = rangeStr.includes('>=');
+        if (inclusive ? num >= limit : num > limit) return br;
+      }
+      continue;
+    }
+    const boundsMatch = rangeStr.match(/([\d.]+)\s*-\s*([\d.]+)/);
+    if (boundsMatch) {
+      const min = parseFloat(boundsMatch[1]);
+      const max = parseFloat(boundsMatch[2]);
+      if (num >= min && num <= max) return br;
+      continue;
+    }
+    if (/^[\d.]+$/.test(rangeStr) && num === parseFloat(rangeStr)) return br;
+  }
+  return null;
+}
+
 export const getBiomarkerStatus = (key: string, val: number | string, normalRangeStr?: string, customDef?: any, profile?: any): 'normal' | 'low' | 'high' | 'critical' | 'flagged' | 'unknown' => {
   let rangeStr = normalRangeStr;
   if (!rangeStr) {
@@ -2611,6 +2657,19 @@ export const getBiomarkerStatus = (key: string, val: number | string, normalRang
   const rangeBounds = parseNormalRangeBounds(rangeStr);
   if (rangeBounds.min !== undefined && rangeBounds.max !== undefined && rangeBounds.max >= 10 && valueToEvaluate > 0 && valueToEvaluate < 1.0) {
     valueToEvaluate *= 100;
+  }
+
+  if (Array.isArray(customDef?.rangeBrackets) && customDef.rangeBrackets.length > 0) {
+    const matchedBracket = matchRangeBracket(valueToEvaluate, customDef.rangeBrackets);
+    if (matchedBracket) {
+      const label = String(matchedBracket.name || '').toLowerCase();
+      if (label.includes('optimal') || label.includes('ideal') || label.includes('normal') || label.includes('healthy') || label.includes('remission')) return 'normal';
+      if (label.includes('severe') || label.includes('critical') || label.includes('at risk')) return 'critical';
+      if (label.includes('low') || label.includes('decreased') || label.includes('under')) return 'low';
+      return 'high';
+    } else {
+      console.warn(`[getBiomarkerStatus] rangeBrackets present for "${key}" but value ${valueToEvaluate} matched none of them; falling back to legacy threshold logic.`, customDef.rangeBrackets);
+    }
   }
 
   const effectiveDef = customDef || biomarkerDefinitions.find(d => d.key === key);
@@ -2958,45 +3017,11 @@ export const getCustomStatusLabel = (key: string, value: number | string, custom
   // If there are range brackets, parse them to find the matching one
   const brackets = customDef.rangeBrackets;
   if (Array.isArray(brackets) && brackets.length > 0) {
-    for (const br of brackets) {
-      const rangeStr = String(br.range || '').toLowerCase();
-      
-      // Check `<` or `under`
-      if (rangeStr.includes('<') || rangeStr.includes('under')) {
-        const valMatch = rangeStr.match(/[\d.]+/);
-        if (valMatch) {
-          const limit = parseFloat(valMatch[0]);
-          if (rangeStr.includes('=')) {
-            if (num <= limit) return br.name;
-          } else {
-            if (num < limit) return br.name;
-          }
-        }
-      }
-      // Check `>` or `over`
-      else if (rangeStr.includes('>') || rangeStr.includes('over')) {
-        const valMatch = rangeStr.match(/[\d.]+/);
-        if (valMatch) {
-          const limit = parseFloat(valMatch[0]);
-          if (rangeStr.includes('=')) {
-            if (num >= limit) return br.name;
-          } else {
-            if (num > limit) return br.name;
-          }
-        }
-      }
-      // Check range `X - Y`
-      else {
-        const match = rangeStr.match(/([\d.]+)\s*-\s*([\d.]+)/);
-        if (match) {
-          const min = parseFloat(match[1]);
-          const max = parseFloat(match[2]);
-          if (num >= min && num <= max) {
-            return br.name;
-          }
-        }
-      }
+    const matchedBracket = matchRangeBracket(num, brackets);
+    if (matchedBracket) {
+      return matchedBracket.name;
     }
+    console.warn(`[getCustomStatusLabel] rangeBrackets present for "${key}" but value ${num} matched none of them; falling back to default status label.`, brackets);
   }
 
   // Fallback: Check if userValue falls inside customDef normalRange bounds

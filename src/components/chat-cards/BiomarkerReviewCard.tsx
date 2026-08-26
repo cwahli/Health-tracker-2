@@ -259,7 +259,9 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
             ...currentDef,
             name: localProposal.name || currentDef.name || resolvedKey,
             unit: localUnits[resolvedKey] || localProposal.metric || currentDef.unit || '',
-            normalRange: localProposal.range || currentDef.normalRange || '',
+            normalRange: (Array.isArray(localProposal.rangeBrackets)
+              ? localProposal.rangeBrackets.find((b: any) => /optimal|ideal|normal|healthy|remission/i.test(b?.name || ''))?.range
+              : undefined) || localProposal.range || currentDef.normalRange || '',
             description: localProposal.description || currentDef.description || '',
             specificRiskContext: localProposal.medicalInsight || (currentDef as any).specificRiskContext || '',
             rangeBrackets: localProposal.rangeBrackets || (currentDef as any).rangeBrackets || undefined,
