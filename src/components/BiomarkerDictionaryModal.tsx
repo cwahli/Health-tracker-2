@@ -226,7 +226,7 @@ const DictionaryItem = React.memo(({
   const initialGrouping = def.standardMedicalGrouping || '';
   const initialRisk = Array.isArray(def.riskCategories) ? def.riskCategories.join(', ') : (def.riskCategories || '');
   const initialConditions = Array.isArray(def.potentialMedicalConditions) ? def.potentialMedicalConditions.join(', ') : (def.potentialMedicalConditions || '');
-  const displayCustomRanges = customDef?.customRanges || ensureCustomRanges(itemKey, initialNormalRange, []);
+  const displayCustomRanges = customDef?.customRanges || ensureCustomRanges(itemKey, initialNormalRange, builtInDef?.customRanges || []);
   const [isEditing, setIsEditing] = useState(false);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
 
@@ -281,7 +281,7 @@ const DictionaryItem = React.memo(({
     unit: initialUnit,
     normalRange: initialNormalRange,
     rangeConfig: customDef?.rangeConfig,
-    customRanges: ensureCustomRanges(itemKey, initialNormalRange, customDef?.customRanges || []),
+    customRanges: ensureCustomRanges(itemKey, initialNormalRange, customDef?.customRanges || builtInDef?.customRanges || []),
     standardMedicalGrouping: initialGrouping,
     riskCategories: initialRisk,
     potentialMedicalConditions: initialConditions
@@ -1346,16 +1346,18 @@ export default function BiomarkerDictionaryModal({
   }, [biomarkerHistory, biomarkers, profile?.deletedCustomBiomarkerKeys]);
 
   const hasActualOverride = React.useCallback((key: string): boolean => {
-    // These keys have auto-generated custom overrides
-    const keysWithAutoOverrides = ['total_cholesterol', 'ldl', 'hdl', 'triglycerides', 'hba1c', 'fasting_glucose'];
-    if (keysWithAutoOverrides.includes(key)) {
-      return true;
-    }
+    const builtIn = biomarkerDefinitions.find((d: any) => d.key === key);
+
+    // A built-in definition can ship its own structured/custom range data
+    // (e.g. HbA1c's clinical thresholds) even when the user has never
+    // touched profile.customBiomarkers for this key. Surface those too,
+    // instead of guessing from a hardcoded key list.
+    if (builtIn?.customRanges && builtIn.customRanges.length > 0) return true;
+    if (builtIn?.structuredRanges && builtIn.structuredRanges.length > 0) return true;
 
     const custom = profile.customBiomarkers?.[key];
     if (!custom) return false;
 
-    const builtIn = biomarkerDefinitions.find((d: any) => d.key === key);
     if (!builtIn) {
       // Truly custom biomarker is always considered custom
       return true;

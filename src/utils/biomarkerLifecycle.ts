@@ -3,7 +3,7 @@
  * Relabel vs convert, Review apply, overlay fingerprint, convert table.
  */
 import { toYYYYMMDD } from './dateUtils';
-import { getMappedBiomarkerKey, isBiomarkerApproved, detectFlaggedTelemetryErrors, biomarkerDefinitions, parseNormalRangeBounds, isBiomarkerValueImprobable } from './biomarkers';
+import { getMappedBiomarkerKey, isBiomarkerApproved, detectFlaggedTelemetryErrors, biomarkerDefinitions, parseNormalRangeBounds, isBiomarkerValueImprobable, getActiveStructuredRangeRule } from './biomarkers';
 import { ANALYTE_CONVERSIONS } from './analyteConversions';
 import type { BiomarkerLog } from '../types';
 
@@ -1150,7 +1150,9 @@ export function getBiomarkerRangeSourceInfo(
   const calibratedRange = agentCalibration?.profileAdjustedNormalRange;
   const defaultRange = def?.normalRange || '';
 
-  if (customRange && typeof customRange === 'string' && customRange.trim() && customRange !== defaultRange && !custom?.overlayFingerprint) {
+  const isPlaceholderRangeValue = (v: any) => !v || typeof v !== 'string' || v.trim() === '' || v === 'Unknown' || v === 'unset' || v === 'n/a' || v === '-';
+
+  if (!isPlaceholderRangeValue(customRange) && customRange !== defaultRange && !custom?.overlayFingerprint) {
     return {
       sourceKind: 'custom',
       sourceLabel: 'User Custom Range',

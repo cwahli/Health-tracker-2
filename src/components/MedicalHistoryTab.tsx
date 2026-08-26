@@ -6,7 +6,7 @@ import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart a
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { getBiomarkerRangeSourceInfo } from '../utils/biomarkerLifecycle';
 import { generateDynamicInsight } from '../utils/biomarkerInsights';
-import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, canonicalizeRiskCategory } from '../utils/biomarkers';
+import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, canonicalizeRiskCategory, getActiveStructuredRangeRule, formatCustomRangesSummary } from '../utils/biomarkers';
 import { getAgentCalibration, getAllAgentCalibrationRecords, formatOptimalTargetValue } from '../utils/agentCalibration';
 import { getDuplicateAliasGroups } from '../utils/biomarkerAuditEngine';
 import { handleUnitChange } from '../utils/biomarkerLifecycle';
@@ -416,14 +416,22 @@ export default function MedicalHistoryTab({
       const unit = def.unit || customDef?.unit || '';
       
       const normalRange = def.normalRange || '';
-      const customRange = customDef?.normalRange || '';
+      const isPlaceholderRange = (v: any) => !v || typeof v !== 'string' || v.trim() === '' || v === 'Unknown' || v === 'unset' || v === 'n/a' || v === '-';
+      const structuredOverrideSummary = formatCustomRangesSummary(customDef?.customRanges || (def as any).customRanges);
+      const flatCustomRange = !isPlaceholderRange(customDef?.normalRange) ? customDef.normalRange : '';
+      const customRange = structuredOverrideSummary || flatCustomRange;
       
       const agentCal = agentCalibrationRecords[def.key] || null;
       const optVal = customDef?.optimalValue || (agentCal ? formatOptimalTargetValue(agentCal) : '');
       const latestLogForUnit = [...activeHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).find(h => h.biomarkers && h.biomarkers[key] !== undefined);
       
       const rangeSourceInfo = getBiomarkerRangeSourceInfo(key, def, profile, latestLogForUnit, agentCal);
-      const clinicalReferenceRange = rangeSourceInfo.sourceRange || normalRange;
+      let clinicalReferenceRange = rangeSourceInfo.sourceRange || normalRange;
+      const activeRule = getActiveStructuredRangeRule(def, profile);
+      if (activeRule && activeRule.name) {
+        const profileType = activeRule.filters?.ethnicity ? `${activeRule.filters.ethnicity} Profile` : 'General Profile';
+        clinicalReferenceRange = `${clinicalReferenceRange} (${activeRule.name} - ${profileType})`;
+      }
       
       const medicalPractice = def.standardMedicalGrouping || customDef?.standardMedicalGrouping || '';
       const riskCats = (def.riskCategories || customDef?.riskCategories || []).join('; ');
@@ -436,7 +444,7 @@ export default function MedicalHistoryTab({
       let evalStatus = 'No recent data';
       let insightText = '';
       if (hasVal) {
-        const status = getBiomarkerStatus(key, latestVal, def.normalRange, def.unit, profile);
+        const status = getBiomarkerStatus(key, latestVal, def.normalRange, def, profile);
         const statusLabel = getBiomarkerStatusLabel(key, status, customDef, latestVal, profile);
         const riskTag = getBiomarkerRiskTag(key, status, customDef, latestVal, profile);
         evalStatus = `Value: ${latestVal} | Status: ${statusLabel} | Risk: ${riskTag || 'N/A'}`;

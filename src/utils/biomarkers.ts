@@ -1,32 +1,48 @@
 
+export const isAsianEthnicity = (eth?: string): boolean => {
+  if (!eth) return false;
+  const lower = eth.toLowerCase();
+  return lower.includes('asian') || lower.includes('china') || lower.includes('chinese') || lower.includes('india') || lower.includes('indian') || lower.includes('japan') || lower.includes('japanese') || lower.includes('korea') || lower.includes('korean');
+};
+
+export function getActiveStructuredRangeRule(customDef: any, profile?: any): any | null {
+  if (!customDef) return null;
+  const { customRanges } = customDef;
+  if (!customRanges || customRanges.length === 0) return null;
+
+  for (const cr of customRanges) {
+    let match = true;
+    if (cr.filters) {
+      if (cr.filters.gender && profile?.gender && cr.filters.gender.toLowerCase() !== profile.gender.toLowerCase()) match = false;
+      if (cr.filters.ethnicity) {
+        if (!profile || !profile.ethnicity) {
+          match = false;
+        } else {
+          const t = cr.filters.ethnicity.toLowerCase();
+          const p = profile.ethnicity.toLowerCase();
+          if (t === 'asian') {
+            if (!isAsianEthnicity(p)) match = false;
+          } else if (!p.includes(t) && !t.includes(p)) {
+            match = false;
+          }
+        }
+      }
+      if (cr.filters.minAge !== undefined && cr.filters.minAge !== '' && profile?.age && profile.age < Number(cr.filters.minAge)) match = false;
+      if (cr.filters.maxAge !== undefined && cr.filters.maxAge !== '' && profile?.age && profile.age > Number(cr.filters.maxAge)) match = false;
+    }
+    if (match) return cr;
+  }
+  return null;
+}
+
 export function evaluateStructuredRange(num: number, customDef: any, profile?: any): { label: string, severity: string } | null {
   if (!customDef) return null;
   const { rangeConfig, customRanges } = customDef;
   
   if (!rangeConfig && (!customRanges || customRanges.length === 0)) return null;
 
-  let activeRange = rangeConfig;
-
-  // Check custom ranges first (they override)
-  if (customRanges && customRanges.length > 0) {
-    for (const cr of customRanges) {
-      let match = true;
-      if (profile && cr.filters) {
-        if (cr.filters.gender && profile.gender && cr.filters.gender.toLowerCase() !== profile.gender.toLowerCase()) match = false;
-        if (cr.filters.ethnicity && profile.ethnicity) {
-          const t = cr.filters.ethnicity.toLowerCase();
-          const p = profile.ethnicity.toLowerCase();
-          if (!p.includes(t) && !t.includes(p)) match = false;
-        }
-        if (cr.filters.minAge !== undefined && cr.filters.minAge !== '' && profile.age && profile.age < Number(cr.filters.minAge)) match = false;
-        if (cr.filters.maxAge !== undefined && cr.filters.maxAge !== '' && profile.age && profile.age > Number(cr.filters.maxAge)) match = false;
-      }
-      if (match) {
-        activeRange = cr.range;
-        break;
-      }
-    }
-  }
+  const activeRule = getActiveStructuredRangeRule(customDef, profile);
+  const activeRange = activeRule ? activeRule.range : rangeConfig;
 
   if (!activeRange) return null;
 
@@ -81,19 +97,6 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     category: 'blood_sugar',
     unit: 'mmol/mol',
     normalRange: '20 - 41',
-    customRanges: [
-      {
-        filters: {},
-        range: {
-          type: 'bracket',
-          brackets: [
-            { min: 48, max: null, alias: 'Critical', severity: 'Critical' },
-            { min: 39, max: 48, alias: 'Elevated', severity: 'At risk' },
-            { min: 20, max: 39, alias: 'Normal', severity: 'Normal' }
-          ]
-        }
-      }
-    ],
     descriptions: {
       en: 'Average blood glucose levels over the past 2-3 months.',
       fr: 'Moyenne de la glycémie sur les 2-3 derniers mois.',
@@ -102,7 +105,28 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     },
     riskCategories: ['Metabolic'],
     standardMedicalGrouping: 'Metabolic',
-    aliases: ['hba1cc', 'glycatedhaemoglobin', 'hemoglobin_a1c_mmol_mol', 'hba1c_mmol_mol', 'hemoglobin_a1c']
+    aliases: ['hba1cc', 'glycatedhaemoglobin', 'hemoglobin_a1c_mmol_mol', 'hba1c_mmol_mol', 'hemoglobin_a1c'],    // Makes the thresholds that getBiomarkerStatus() has always applied
+    // (see the `key === 'hba1c'` block below, left in place as a fallback)
+    // visible and editable via the Dictionary's Custom Overrides UI and
+    // the CSV export. Same 48 / 39 (IFCC mmol/mol) and 6.5 / 5.7 (DCCT %)
+    // thresholds, same precedence — purely additive, no behavior change.
+    customRanges: [
+      {
+        id: 'hba1c_default_thresholds',
+        name: 'Standard clinical thresholds (all patients)',
+        filters: {},
+        range: {
+          type: 'simple',
+          conditions: [
+            { operator: '>=', value: 48, alias: 'Critical', severity: 'critical' },
+            { operator: '>=', value: 39, alias: 'Elevated', severity: 'high' },
+            { operator: '>=', value: 20, alias: 'Normal', severity: 'normal' },
+            { operator: '>=', value: 6.5, alias: 'Critical', severity: 'critical' },
+            { operator: '>=', value: 5.7, alias: 'Elevated', severity: 'high' }
+          ]
+        }
+      }
+    ]
   },
   {
     key: 'fasting_glucose',
@@ -115,38 +139,61 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
       fr: 'Taux de sucre dans le sang à jeun.',
       zh: '空腹血糖水平。',
       id: 'Kadar gula darah setelah puasa semalaman.'
-    }
+    },
+    riskCategories: ['Metabolic'],
+    standardMedicalGrouping: 'Metabolic',
+    aliases: ['fastingbloodglucose', 'fasting_blood_glucose', 'glucose', 'serumglucose', 'fasting_plasma_glucose', 'fasting_plasma_glucose_fpg', 'fpg']
   },
   {
-    key: 'fasting_insulin',
+    key: 'insulin',
     name: 'Fasting Insulin',
     category: 'blood_sugar',
-    unit: 'uIU/mL',
-    normalRange: '2.0 - 10.0',
+    unit: 'mIU/L',
+    normalRange: '2.6 - 24.9',
     descriptions: {
       en: 'Level of insulin hormone; early warning for insulin resistance.',
       fr: 'Taux d\'insuline; indicateur précoce de résistance à l\'insuline.',
       zh: '胰岛素水平；胰岛素抵抗的早期预警指标。',
       id: 'Kadar hormon insulin; deteksi dini resistensi insulin.'
-    }
+    },
+    riskCategories: ['Metabolic'],
+    standardMedicalGrouping: 'Metabolic',
+    aliases: ['fasting_insulin', 'serum_insulin', 'fasting_insulin_level', 'insulin_milli_int_units_per_l']
   },
 
   // Lipids
   {
+
     key: 'ldl',
     name: 'LDL-C',
     category: 'lipids',
     unit: 'mg/dL',
     normalRange: 'under 100',
     descriptions: {
-      en: 'Low-Density Lipoprotein, the "bad" cholesterol linked to heart disease.',
-      fr: 'Cholestérol LDL, dit "mauvais" cholestérol lié aux risques cardiovasculaires.',
-      zh: '低密度脂蛋白胆固醇（“坏”胆固醇），与心血管风险高度相关。',
-      id: 'Low-Density Lipoprotein, kolesterol "jahat" terkait risiko jantung.'
+      en: 'Low-Density Lipoprotein, the "bad" cholesterol driving plaque.',
+      fr: 'Cholestérol LDL, dit "mauvais" cholestérol favorisant les plaques.',
+      zh: '低密度脂蛋白胆固醇（“坏”胆固醇），动脉斑块的主要驱动因素。',
+      id: 'Low-Density Lipoprotein, kolesterol "jahat" penyebab plak.'
     },
     riskCategories: ['Cardiovascular'],
     standardMedicalGrouping: 'Metabolic',
-    aliases: ['ldlc', 'ldlcholesterol', 'calculatedldlcholesterol', 'calculatedldl', 'calculated_ldl_cholesterol_mmol_l', 'calculated_ldl_cholesterol']
+    aliases: ['ldlc', 'ldlcholesterol', 'calculatedldlcholesterol', 'calculatedldl', 'calculated_ldl_cholesterol_mmol_l', 'calculated_ldl_cholesterol'],
+    // Mirrors the `key === 'ldl'` hardcoded thresholds in getBiomarkerStatus
+    // (kept as a fallback) — mg/dL only, matches this definition's unit.
+    customRanges: [
+      {
+        id: 'ldl_default_thresholds',
+        name: 'Standard clinical thresholds (all patients)',
+        filters: {},
+        range: {
+          type: 'simple',
+          conditions: [
+            { operator: '>', value: 130, alias: 'Critical', severity: 'critical' },
+            { operator: '>', value: 100, alias: 'Elevated', severity: 'high' }
+          ]
+        }
+      }
+    ]
   },
   {
     key: 'apob',
@@ -159,7 +206,23 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
       fr: 'Apolipoprotéine B, meilleur indicateur de particules athérogènes.',
       zh: '载脂蛋白B，评估动脉粥样硬化风险的黄金指标。',
       id: 'Apolipoprotein B, indikator terbaik jumlah partikel aterogenik.'
-    }
+    },
+    // Mirrors the `key === 'apob'` hardcoded thresholds in getBiomarkerStatus
+    // (kept as a fallback) — mg/dL only, matches this definition's unit.
+    customRanges: [
+      {
+        id: 'apob_default_thresholds',
+        name: 'Standard clinical thresholds (all patients)',
+        filters: {},
+        range: {
+          type: 'simple',
+          conditions: [
+            { operator: '>', value: 110, alias: 'Critical', severity: 'critical' },
+            { operator: '>', value: 90, alias: 'Elevated', severity: 'high' }
+          ]
+        }
+      }
+    ]
   },
   {
     key: 'total_cholesterol',
@@ -209,7 +272,6 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     standardMedicalGrouping: 'Metabolic',
     aliases: ['trig', 'serum_triglycerides', 'serum_triglycerides_mmol_l']
   },
-
   // Kidneys
   {
     key: 'egfr',
@@ -225,9 +287,25 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     },
     riskCategories: ['Kidney'],
     standardMedicalGrouping: 'Renal',
-    aliases: ['egfrmlmin173m2', 'egfrmlmin173', 'egfr_ml_min_1_73m2', 'egfr_mlmin173m2']
+    aliases: ['egfrmlmin173m2', 'egfrmlmin173', 'egfr_ml_min_1_73m2', 'egfr_mlmin173m2'],
+    // Mirrors the `key === 'egfr'` hardcoded thresholds in getBiomarkerStatus
+    // (kept as a fallback). Note: the <90 band maps to "Low" (not "Elevated")
+    // because eGFR is inverted — lower filtration is worse.
+    customRanges: [
+      {
+        id: 'egfr_default_thresholds',
+        name: 'Standard clinical thresholds (all patients)',
+        filters: {},
+        range: {
+          type: 'simple',
+          conditions: [
+            { operator: '<', value: 60, alias: 'Critical', severity: 'critical' },
+            { operator: '<', value: 90, alias: 'Low', severity: 'low' }
+          ]
+        }
+      }
+    ]
   },
-
   {
     key: 'bun',
     name: 'BUN (Blood Urea Nitrogen)',
@@ -241,10 +319,9 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
       id: 'Kadar nitrogen urea darah; kadar tinggi menunjukkan beban ginjal.'
     }
   },
-
-  // Hematology
-
   {
+  // Hematology
+  
     key: 'rbc',
     name: 'Red Blood Cell (RBC)',
     category: 'hematology',
@@ -260,7 +337,6 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     standardMedicalGrouping: 'Hematology',
     aliases: ['redbloodcell', 'redbloodcells', 'redbloodcellcount', 'red_blood_cell_count_10_12_l', 'red_blood_cell_count']
   },
-
   {
     key: 'platelets',
     name: 'Platelets',
@@ -277,7 +353,6 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     standardMedicalGrouping: 'Hematology',
     aliases: ['plateletcount', 'platelet', 'platelet_count_10_9_l', 'platelet_count']
   },
-
   // Inflammation
   {
     key: 'hscrp',
@@ -290,9 +365,24 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
       fr: 'Protéine C-réactive ultra-sensible, marqueur d\'inflammation vasculaire.',
       zh: '超敏C反应蛋白，评估血管内皮炎症和心脏风险。',
       id: 'C-Reactive Protein Sensitivitas Tinggi, penanda inflamasi pembuluh darah.'
-    }
+    },
+    // Mirrors the `key === 'hscrp'` hardcoded thresholds in getBiomarkerStatus
+    // (kept as a fallback).
+    customRanges: [
+      {
+        id: 'hscrp_default_thresholds',
+        name: 'Standard clinical thresholds (all patients)',
+        filters: {},
+        range: {
+          type: 'simple',
+          conditions: [
+            { operator: '>=', value: 3.0, alias: 'Critical', severity: 'critical' },
+            { operator: '>=', value: 1.0, alias: 'Elevated', severity: 'high' }
+          ]
+        }
+      }
+    ]
   },
-
   // Hormones
   {
     key: 'testosterone',
@@ -307,7 +397,6 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
       id: 'Hormon seks utama pria, mendukung libido, tulang, dan otot.'
     }
   },
-
   // Vitamins
   {
     key: 'vitamin_d',
@@ -320,7 +409,24 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
       fr: 'Vitamine essentielle pour le métabolisme osseux, l\'immunité et les hormones.',
       zh: '骨骼代谢、全身免疫及多项激素合成必不可少的维生素。',
       id: 'Vitamin penting untuk metabolisme tulang, imun, dan sintesis hormon.'
-    }
+    },
+    // Mirrors the `key === 'vitamin_d'` hardcoded thresholds in
+    // getBiomarkerStatus (kept as a fallback). <30 maps to "Low" since
+    // vitamin D is inverted — lower is worse.
+    customRanges: [
+      {
+        id: 'vitamin_d_default_thresholds',
+        name: 'Standard clinical thresholds (all patients)',
+        filters: {},
+        range: {
+          type: 'simple',
+          conditions: [
+            { operator: '<', value: 20, alias: 'Critical', severity: 'critical' },
+            { operator: '<', value: 30, alias: 'Low', severity: 'low' }
+          ]
+        }
+      }
+    ]
   },
   {
     key: 'vitamin_b12',
@@ -341,6 +447,32 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     category: 'other',
     unit: 'kg/m2',
     normalRange: '18.5 - 24.9',
+    customRanges: [
+      {
+        filters: { ethnicity: 'Asian' },
+        range: {
+          type: 'bracket',
+          brackets: [
+            { min: 27.5, max: null, alias: 'Obese', severity: 'Critical' },
+            { min: 22.9, max: 27.5, alias: 'Overweight', severity: 'At risk' },
+            { min: 18.5, max: 22.9, alias: 'Normal', severity: 'Normal' },
+            { min: null, max: 18.5, alias: 'Underweight', severity: 'Low' }
+          ]
+        }
+      },
+      {
+        filters: {},
+        range: {
+          type: 'bracket',
+          brackets: [
+            { min: 30.0, max: null, alias: 'Obese', severity: 'Critical' },
+            { min: 24.9, max: 30.0, alias: 'Overweight', severity: 'At risk' },
+            { min: 18.5, max: 24.9, alias: 'Normal', severity: 'Normal' },
+            { min: null, max: 18.5, alias: 'Underweight', severity: 'Low' }
+          ]
+        }
+      }
+    ],
     descriptions: {
       en: 'A measure of body fat based on height and weight.',
       fr: 'Une mesure de la corpulence basée sur la taille et le poids.',
@@ -749,7 +881,22 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     },
     riskCategories: ['Hematology'],
     standardMedicalGrouping: 'Hematology',
-    aliases: ['mean_platelet_volume', 'meanplateletvolume', 'mean_platelet_volume_mpv', 'mpv_fl', 'mean_platelet_volume_fl']
+    aliases: ['mean_platelet_volume', 'meanplateletvolume', 'mean_platelet_volume_mpv', 'mpv_fl', 'mean_platelet_volume_fl'],
+    // Mirrors the `key === 'mpv'` hardcoded threshold in getBiomarkerStatus
+    // (kept as a fallback). MPV has no "critical" tier, only "elevated".
+    customRanges: [
+      {
+        id: 'mpv_default_thresholds',
+        name: 'Standard clinical thresholds (all patients)',
+        filters: {},
+        range: {
+          type: 'simple',
+          conditions: [
+            { operator: '>', value: 13.0, alias: 'Elevated', severity: 'high' }
+          ]
+        }
+      }
+    ]
   },
   {
     key: 'qrisk2',
@@ -2394,13 +2541,14 @@ export const getBiomarkerStatus = (key: string, val: number | string, normalRang
     valueToEvaluate *= 100;
   }
 
-  const evalRes = evaluateStructuredRange(valueToEvaluate, customDef, profile);
+  const effectiveDef = customDef || biomarkerDefinitions.find(d => d.key === key);
+  const evalRes = evaluateStructuredRange(valueToEvaluate, effectiveDef, profile);
   if (evalRes && evalRes.severity) {
     const sev = evalRes.severity.toLowerCase();
     if (sev.includes('normal') || sev.includes('optimal') || sev.includes('healthy')) return 'normal';
     if (sev.includes('critical')) return 'critical';
     const label = (evalRes.label || '').toLowerCase();
-    if (label.includes('low') || label.includes('decreased') || label.includes('under')) return 'low';
+    if (label.includes('low') || label.includes('decreased') || label.includes('under') || sev.includes('low')) return 'low';
     return 'high';
   }
 
@@ -2576,11 +2724,6 @@ export const getBiomarkerStatus = (key: string, val: number | string, normalRang
 
   return 'unknown';
 };
-export const isAsianEthnicity = (eth?: string): boolean => {
-  if (!eth) return false;
-  const lower = eth.toLowerCase();
-  return lower.includes('asian') || lower.includes('china') || lower.includes('chinese') || lower.includes('india') || lower.includes('indian') || lower.includes('japan') || lower.includes('japanese') || lower.includes('korea') || lower.includes('korean');
-};
 export const isValEmpty = (val: any): boolean => {
   if (val === undefined || val === null || val === '') return true;
   if (typeof val === 'number' && Number.isNaN(val)) return true;
@@ -2657,12 +2800,64 @@ export const getBiomarkerBorderColor = (status: 'normal' | 'low' | 'high' | 'cri
   return 'border-slate-500/10';
 };
 
+/**
+ * Renders a CustomRangeDef[] (profile.customBiomarkers[key].customRanges, or
+ * a built-in definition's own customRanges) into a short human-readable
+ * summary for the CSV export and Dictionary UI — who it applies to (filters,
+ * e.g. ethnicity/gender/age, or "All patients" when unfiltered), and the
+ * named thresholds (e.g. "Elevated: >=39"). Read-only formatting; does not
+ * affect evaluation.
+ */
+export function formatCustomRangesSummary(customRanges?: any[]): string {
+  if (!Array.isArray(customRanges) || customRanges.length === 0) return '';
+
+  const describeFilters = (filters: any): string => {
+    if (!filters || Object.keys(filters).length === 0) return 'All patients';
+    const parts: string[] = [];
+    if (filters.gender) parts.push(String(filters.gender));
+    if (filters.ethnicity) parts.push(String(filters.ethnicity));
+    if (filters.minAge !== undefined && filters.minAge !== '') parts.push(`age ${filters.minAge}+`);
+    if (filters.maxAge !== undefined && filters.maxAge !== '') parts.push(`up to age ${filters.maxAge}`);
+    return parts.length > 0 ? parts.join(', ') : 'All patients';
+  };
+
+  const describeRange = (range: any): string => {
+    if (!range) return '';
+    if (range.type === 'simple' && Array.isArray(range.conditions)) {
+      return range.conditions
+        .map((c: any) => `${c.alias || c.severity || 'Flag'}: ${c.operator}${c.value}`)
+        .join('; ');
+    }
+    if (range.type === 'bracket' && Array.isArray(range.brackets)) {
+      return range.brackets
+        .map((b: any) => {
+          const hasMin = b.min !== null && b.min !== undefined;
+          const hasMax = b.max !== null && b.max !== undefined;
+          const bound = hasMin && hasMax ? `${b.min} - ${b.max}` : hasMin ? `>= ${b.min}` : hasMax ? `<= ${b.max}` : 'default';
+          return `${b.alias || b.severity || 'Flag'}: ${bound}`;
+        })
+        .join('; ');
+    }
+    return '';
+  }
+
+  return customRanges
+    .map((cr: any) => {
+      const label = describeFilters(cr.filters);
+      const body = describeRange(cr.range);
+      return body ? `[${label}] ${body}` : '';
+    })
+    .filter(Boolean)
+    .join(' | ');
+}
+
 export const getCustomStatusLabel = (key: string, value: number | string, customDef: any, profile?: any): string | null => {
-  if (!customDef) return null;
+  const effectiveDef = customDef || biomarkerDefinitions.find(d => d.key === key);
+  if (!effectiveDef) return null;
   const num = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(num)) return null;
 
-  const res = evaluateStructuredRange(num, customDef, profile);
+  const res = evaluateStructuredRange(num, effectiveDef, profile);
   if (res) return res.label;
 
   if (customDef.structuredRanges && customDef.structuredRanges.length > 0) {
@@ -3328,7 +3523,7 @@ export function buildReviewBiomarkerContext(
       description: def.description || def.descriptions?.[profile.language || 'en'] || def.descriptions?.en || '',
       medical_insights: customDef.specificRiskContext || customDef.benefitRisk || def.medicalInsight || '',
       optimal_value: customDef.optimalValue || def.optimalValue || '',
-      severity_rating: getBiomarkerStatusLabel(biomarkerKey, getBiomarkerStatus(biomarkerKey, currentValue, def.normalRange, def.unit, profile), customDef, currentValue, profile),
+      severity_rating: getBiomarkerStatusLabel(biomarkerKey, getBiomarkerStatus(biomarkerKey, currentValue, def.normalRange, def, profile), customDef, currentValue, profile),
       medical_categorisation: {
         risk_categories: targetMeta.riskCategories || [],
         potential_conditions: targetMeta.potentialMedicalConditions || [],

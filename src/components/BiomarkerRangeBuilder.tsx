@@ -194,7 +194,7 @@ export const BiomarkerRangeBuilder: React.FC<BiomarkerRangeBuilderProps> = ({ ra
         {activeTab === 'custom' && (
           <div className="space-y-4">
             {customRanges.map((cr, idx) => (
-              <div key={cr.id} className="border border-theme-border rounded-lg p-3 bg-white dark:bg-slate-950">
+              <div key={cr.id || `custom_range_${idx}`} className="border border-theme-border rounded-lg p-3 bg-white dark:bg-slate-950">
                 <div className="flex justify-between items-center mb-3 pb-2 border-b border-theme-border">
                   <h4 className="text-xs font-bold text-theme-neutral">Custom Range Override #{idx + 1}</h4>
                   <button type="button" onClick={() => {
