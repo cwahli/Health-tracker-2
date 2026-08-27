@@ -7,7 +7,7 @@ export interface FoodLogLike {
   calories?: number;
   saturatedFat?: number;
   sodium?: number;
-  nutrients?: Record<string, number>;
+  nutrients?: Record<string, any>;
   itemsBreakdown?: any[];
   portionRatio?: number;
   portionAccepted?: boolean;
