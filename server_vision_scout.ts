@@ -925,6 +925,21 @@ export function parseAndHealVisionScout(
         let totalFat = Number(dNuts.totalFat) || Math.round(sumSatFat * 1.5 * 10) / 10;
         let satFat = Math.max(sumSatFat, Number(dNuts.saturatedFat) || 0);
         if (totalFat < satFat) totalFat = satFat;
+
+        // Reconcile dish-level fat back to ingredients (cooking oil / deep-frying absorption)
+        const sumCompFat = components.reduce((acc, c) => acc + c.totalFat, 0);
+        if (totalFat > sumCompFat && components.length > 0) {
+          const diffFat = totalFat - sumCompFat;
+          const totalWeight = components.reduce((acc, c) => acc + (c.weightGrams || 1), 0);
+          components.forEach(c => {
+            const weightShare = (c.weightGrams || 1) / totalWeight;
+            const fatShare = diffFat * weightShare;
+            c.totalFat = Math.round((c.totalFat + fatShare) * 10) / 10;
+            c.fat = c.totalFat;
+            c.calories = Math.round(4 * c.protein + 4 * c.carbohydrates + 9 * c.totalFat);
+          });
+        }
+
         const totalSugar = Number(dNuts.totalSugar) || sumAddedSugar;
         const totalCalories = Math.round(4 * sumP + 4 * sumC + 9 * totalFat);
         const convertedNutrients = {

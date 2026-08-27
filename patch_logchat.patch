@@ -1,0 +1,11 @@
+--- src/components/LogChat.tsx
++++ src/components/LogChat.tsx
+@@ -2459,6 +2459,9 @@
+ 
+   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
++    // Pre-warm auth session token to prevent unauthenticated fallbacks on slow connections
++    auth.currentUser?.getIdToken(true).catch(() => {});
++
+     const inputEl = e.target;
+     const fileList = inputEl.files ? Array.from(inputEl.files) : [];
+     

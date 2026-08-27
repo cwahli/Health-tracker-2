@@ -336,7 +336,7 @@ export function buildPortionClarifyPayload(scoutItems: any[]): PortionClarifyPay
     if (subComps.length > 1) {
       subComps.forEach((comp: any, cIdx: number) => {
         if (!comp) return;
-        const compIndex = (si * 100) + (cIdx + 1);
+        const compIndex = 10000 + (si * 100) + cIdx;
         const compFound = detectPortionAmbiguity(comp, compIndex);
         if (compFound) {
           items.push(compFound);
@@ -402,7 +402,7 @@ export function applyPortionChoices(
       let subCompsChanged = false;
       const updatedSubComps = subComps.map((comp: any, cIdx: number) => {
         if (!comp) return comp;
-        const compIndex = (si * 100) + (cIdx + 1);
+        const compIndex = 10000 + (si * 100) + cIdx;
         const compW =
           choices[String(compIndex)] ??
           choices[compIndex as any] ??
@@ -427,6 +427,9 @@ export function applyPortionChoices(
         }
         if (Array.isArray(it.components) && it.components.length > 0) {
           updatedItem.components = updatedSubComps;
+        }
+        if (Array.isArray(it.componentsDetailList) && it.componentsDetailList.length > 0) {
+          updatedItem.componentsDetailList = updatedSubComps;
         }
         // If subcomponent weights changed, update parent composite dish total weight
         const totalCompWeight = updatedSubComps.reduce((sum: number, c: any) => sum + (Number(c.weightGrams ?? c.estimatedWeightGrams) || 0), 0);

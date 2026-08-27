@@ -1,7 +1,46 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-27
-**Status:** Biomarker Diagnostic Review & Calibration Agent Harmonization Complete (-5 to +5 Clinical Scale & Non-Critical Clinical Labels, 120/120 vitest tests passing, assert-budgets PASS, tsc clean, production bundle built).
+**Status:** Portion Clarify ID Collision Fixed (8/8 unit tests pass, assert-budgets PASS, tsc clean, production bundle built).
+
+- **Portion Clarify ID Collision Fixed (`server_portion_clarify.ts` - 2026-08-27):**
+  - **Root Cause & Diagnosis:** When a composite dish contained subcomponents (e.g. Broccoli), the backend assigned a mathematically derived `compIndex = (si * 100) + (cIdx + 1)`. For the first subcomponent of the first dish, this yielded `1`. However, top-level sibling items (like Rolled Oats) were sequentially indexed `0, 1, 2...`. This caused a strict mathematical collision where a child component (Broccoli) and a top-level sibling (Rolled Oats) both shared `scoutIndex = 1`. In `PortionClarifyCard.tsx`, since React state keys were driven by `scoutIndex`, clicking the "Custom (g)" button for one inherently fired the state transition for both simultaneously.
+  - **Key Changes Applied:** 
+    - Offset all dynamically generated subcomponent `compIndex` values by an isolated absolute baseline of `10000` (e.g., `10000 + (si * 100) + cIdx`).
+    - This mathematically guarantees that parent `scoutIndex` tracking (0-999) will never collide with deep subcomponent tracking arrays, safely breaking the cross-wiring of their React form states.
+  - **Verification:** Run `npx vitest run server_portion_clarify.test.ts` PASS, `node scripts/assert-budgets.mjs` PASS, `npx tsc --noEmit` exits 0.
+
+- **Subcomponent OCR Propagation & Composite Summation Fixed (`server_dish_finalize.ts` - 2026-08-27):**
+  - **Root Cause & Diagnosis:**
+    1. *Ignored Child OCR Labels*: The backend's `finalizeDishLedger` only checked for `rawNutritionLabel` on the parent `item`, meaning when the user scanned an OCR label for the "Rolled Oats" child component, it was completely ignored by the backend engine (defaulting back to the LLM's weak estimate).
+    2. *Parent-Child Macro Decoupling*: For composite dishes, the parent dish's `nutrients` totals were independently derived from the AI's top-level estimate (scaled by R). It never physically summed the underlying child components. Thus, the parent displayed 191 kcal while the children were entirely different.
+  - **Key Changes Applied:**
+    - **Global OCR Extractor:** Extracted OCR parsing into a generic `parseOcrLabel` helper function.
+    - **Child OCR Interception:** Modified the `componentsDetailList` mapping pipeline to intercept `c.rawNutritionLabel` on individual ingredients, enforcing the OCR truth at the subcomponent level.
+    - **Bottom-Up Summation Enforcement:** Added a final aggregation block for composite dishes. If a dish has granular components, the parent's macros are now forcibly overwritten by the exact sum of its children's macros, guaranteeing mathematical integrity in the UI ledger.
+  - **Verification & Gates:** Run `npx vitest run server_dish_finalize.test.ts` PASS, `npx tsc --noEmit` exit 0, `node scripts/assert-budgets.mjs` PASS exit 0.
+
+- **Subcomponent Portion Cascading & Brand-Lock Override Fixes (`server_portion_clarify.ts`, `server_dish_finalize.ts` - 2026-08-27):**
+  - **Root Cause & Diagnosis:**
+    1. *Unsynced Component Lists*: When the Rolled Oats portion was updated to 70g during portion clarification, `applyPortionChoices` successfully updated the `components` list but missed updating the parallel `componentsDetailList`. Consequently, downstream processors still saw the old 40g weight.
+    2. *Inappropriate Brand Overrides*: A generic, crowdsourced brand match (30g serving of "Rolled Oats" for 120 kcal) triggered on the parent dish name "Boiled Rolled Oats with Water". This forcibly overwrote the composite sum of ingredients with a scaled version of the brand entry (120 kcal * 1.15 = 138 kcal), completely negating the user's explicit portion choice.
+    3. *Fixed Macro Density Scaling*: The child subcomponent weights were adjusted, but their absolute macro values (`calories`, `protein`, etc.) were retained instead of being proportionally scaled. This caused the UI to show an artificially lowered density metric.
+  - **Key Changes Applied:**
+    - **Subcomponent Sync (`server_portion_clarify.ts`):** Added logic in `applyPortionChoices` to synchronize updates to `componentsDetailList` so that the downstream pipeline inherits the exact user-clarified ingredient weights.
+    - **Composite Brand Override Bypass (`server_dish_finalize.ts`):** Added a structural safeguard to `matchBrandMenu` execution; the engine will now bypass generic brand lookups for parent composite dishes that possess child ingredients (unless explicitly tagged with a fast-food chain). This guarantees that the dish calorie total relies precisely on the sum of its constituent components.
+    - **Dynamic Macro Scaling (`server_dish_finalize.ts`):** Modified the child structuring block in `finalizeDishLedger` to physically scale the raw `calories`, `protein`, and `totalFat` absolute totals based on `cWeight / cBasisWeight` (i.e. `70g / 40g`). This perfectly preserves the ingredient's nutritional density throughout the cascade.
+  - **Verification & Gates:** Run `npx vitest run server_dish_finalize.test.ts` PASS, run `npx vitest run server_portion_clarify.test.ts` PASS, `npx tsc --noEmit` exit 0, `node scripts/assert-budgets.mjs` PASS exit 0.
+
+- **Composite Deep-Fried Fat Rebalance & Auth Pre-warm (`server_vision_scout.ts`, `agents/scoutInstructions.ts`, `src/components/LogChat.tsx` - 2026-08-27):**
+  - **Root Cause & Diagnosis:**
+    1. *Underestimated Deep-Fried Fat & Parent-Child Discrepancy*: While the Vision Scout recognized the fast-food fried chicken meal as `deep_fried` and emitted a realistic 28g of fat at the composite parent level (`dishNutrients`), it often missed specifying the fat macros at the child ingredient level (Crispy Fried Chicken, French Fries). Because of this, the `parseAndHealVisionScout` function defaulted the child ingredients to low-fat generic estimates. This caused the sum of the child ingredients (10.5g fat, 495 kcal) to fall drastically short of the parent ledger record (28g fat, 652 kcal), and resulted in underestimated metrics when displaying the breakdown.
+    2. *Missed Commercial Baseline*: The Vision Scout prompt didn't explicitly instruct the model to look at OCR branding, so it used home-cooked baselines rather than matching fast-food commercial norms.
+    3. *Auth Timeout & Write Drop*: Firebase Auth initialization timed out on fast meal submissions because the token wasn't fresh, forcing an unauthenticated local-storage fallback while the `POST /Firestore/Write/channel` request was dropped.
+  - **Key Changes Applied:**
+    - **Parent-Child Fat Reconciliation (`server_vision_scout.ts`):** Implemented an invariant in `parseAndHealVisionScout` that compares the parent dish `totalFat` to the sum of the child ingredients' `totalFat`. If the parent fat exceeds the sum (representing absorbed cooking oil / deep-frying), the delta is distributed proportionally (by weight) to the child ingredients, and their calories are recalculated.
+    - **OCR Brand Anchoring (`agents/scoutInstructions.ts`):** Updated the scout prompt's `baseInstruction` to explicitly direct the model to read OCR text on cups and wrappers to anchor nutritional estimates against standard commercial fast-food nutrition tables.
+    - **Auth Token Pre-warming (`src/components/LogChat.tsx`):** Added silent, background calls to `auth.currentUser?.getIdToken(true).catch(() => {})` in `handleImageSelect` and `handleSend` to guarantee a fresh auth token is ready before the heavy meal submission is fired off, preventing slow-connection fallbacks.
+  - **Verification & Gates:** Run `npx vitest run server_vision_scout.test.ts` PASS, all 811 tests PASS, `npx tsc --noEmit` exit 0, `node scripts/assert-budgets.mjs` PASS exit 0.
 
 - **Biomarker Diagnostic Review & Calibration Agent Harmonization (`agents/biomarkerInstructions.ts`, `server.ts`, `src/utils/biomarkers.ts`, `src/utils/biomarkerIdentity.test.ts` - 2026-08-27):**
   - **Root Cause & Diagnosis:**

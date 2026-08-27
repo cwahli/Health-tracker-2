@@ -2458,6 +2458,9 @@ ${logsText}`);
 
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Pre-warm auth session token to prevent unauthenticated fallbacks on slow connections
+    auth.currentUser?.getIdToken(true).catch(() => {});
+
     const inputEl = e.target;
     const fileList = inputEl.files ? Array.from(inputEl.files) : [];
     
@@ -2514,6 +2517,9 @@ ${logsText}`);
   };
 
   const handleSend = async (overrideText?: string | { text?: string; imageUrls?: string[]; compareOnly?: boolean; compareItems?: string[]; sourceMsgId?: string; skipScout?: boolean; activeScoutItems?: any; scoutContentType?: any; overrideMode?: string; userSelectedMode?: string; } | any, extraImages?: any[], extraOptions?: any) => {
+    // Pre-warm auth session token to prevent unauthenticated fallbacks on slow connections
+    auth.currentUser?.getIdToken(true).catch(() => {});
+
     if (isCompressing) {
       console.log('[handleSend] Blocked — image compression in progress.');
       return;
