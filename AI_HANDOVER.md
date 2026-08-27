@@ -1,7 +1,18 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-27
-**Status:** Composite Dish Breakdown Weight & Complete Ingredient Title Propagation Fix Complete (86/86 test files passing, assert-budgets PASS, tsc clean).
+**Status:** Biomarker Diagnostic Review & Calibration Agent Harmonization Complete (-5 to +5 Clinical Scale & Non-Critical Clinical Labels, 120/120 vitest tests passing, assert-budgets PASS, tsc clean, production bundle built).
+
+- **Biomarker Diagnostic Review & Calibration Agent Harmonization (`agents/biomarkerInstructions.ts`, `server.ts`, `src/utils/biomarkers.ts`, `src/utils/biomarkerIdentity.test.ts` - 2026-08-27):**
+  - **Root Cause & Diagnosis:**
+    1. *False "Critical" Alarm on Chronic Biomarkers*: In `biomarkerDefinitions`, chronic metabolic markers (LDL-C, eGFR, hs-CRP, Vitamin D, HbA1c, ApoB, Triglycerides) had conditions hardcoded with `alias: 'Critical', severity: 'critical'`, and fallback heuristics branded anything >1.3x normal as `"critical"`. For an LDL of 4.3 mmol/L (normal < 2.6), this displayed a panic "CRITICAL" badge despite LDL 4.3 being elevated cardiovascular risk, not an acute emergency room crisis.
+    2. *Pipeline Disconnect for Diagnostic Review Agent*: `agents/biomarkerInstructions.ts` was a 1-line stub; `server.ts` had an inline prompt copy instead of importing from `agents/`; and the Gemini `responseSchema` for `proposal` lacked `rangeBrackets` and `keyName`, blocking Gemini Flash Lite in constrained decoding mode from emitting demographic-calibrated clinical bracket arrays.
+  - **Key Changes Applied:**
+    - **Unified Clinical Prompt (`agents/biomarkerInstructions.ts`):** Implemented the structured YAML prompt enforcing the standard clinical $-5$ to $+5$ integer severity scale ($0$ = Optimal, $+1\dots+4$ = Progressive Elevation, $-1\dots-4$ = Progressive Deficiency, $\pm 5$ = Acute Panic Emergency only), forbidding the word "Critical" for non-emergency chronic markers, and prioritizing demographic/ethnicity-specific guidelines.
+    - **Single Source of Truth & Constrained Schema Upgrade (`server.ts`):** Imported `biomarkerReviewSystemInstruction` into `server.ts` directly from `agents/biomarkerInstructions`, and updated `responseSchema` to include `keyName` and `rangeBrackets` with integer `severity` and numeric `min`/`max`.
+    - **Catalog Clinical Labels & Numeric Severity (`src/utils/biomarkers.ts`):** Replaced non-emergency `'Critical'` aliases across built-in definitions with established clinical terms (`'Very High'`, `'Decreased (CKD G3)'`, `'High risk'`, `'Severe deficiency'`) and integer severities ($4$ and $-4$).
+    - **Dynamic Agent Clinical Label Priority (`src/utils/biomarkers.ts`):** Updated `getCustomStatusLabel` to prioritize the agent's calibrated `rangeBrackets` clinical labels FIRST over generic catalog definitions. Aligned `getBiomarkerStatus` and `evaluateStructuredRange` so that only severities $\le -5$ or $\ge +5$ return `'critical'`, values with deficiency severities ($-1\dots-4$) or low keywords return `'low'`, and elevated severities ($+1\dots+4$) return `'high'`. Extended `getBiomarkerColor` and `getBiomarkerStatusLabel` to properly color and display clinical labels across `HomeTab` and `MedicalHistoryTab`.
+  - **Verification & Gates:** All 120 biomarker tests in `vitest` PASS, `node scripts/assert-budgets.mjs` PASS exit 0, `node scripts/assert-biomarker-ingest.mjs` and `node scripts/assert-biomarker-lifecycle-m31.mjs` PASS exit 0, `npx tsc --noEmit` exit 0 (zero type errors), `npm run build` production bundle built cleanly in 17.5s.
 
 - **Composite Dish Sub-Ingredient Weight & Title Component Completeness (`NutritionLabelTable.tsx`, `server_dish_finalize.ts`, `server_vision_scout.ts`, `server.ts` - 2026-08-27):**
   - **Root Cause & Diagnosis:**

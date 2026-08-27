@@ -374,6 +374,7 @@ import {
   parseAndHealVisionScout 
 } from "./server_vision_scout";
 import { buildVisualScoutPrompt } from "./agents/scoutInstructions";
+import { biomarkerReviewSystemInstruction } from "./agents/biomarkerInstructions";
 import { isDishEstimateEnabled } from "./server_food_flags";
 import { finalizeDishLedger } from "./server_dish_finalize";
 import { matchBrandMenu } from "./server_brand_match";
@@ -11479,21 +11480,7 @@ Return ONLY raw JSON.`;
           ]
         };
       } else if (agentType === "biomarker_review") {
-        systemInstruction = `identity:
-  role: "Expert AI Clinical Diagnostic & Biomarker Review Agent"
-  purpose: "Perform comprehensive diagnostic review and optimization for user biomarkers."
-rules:
-  clinical_and_nutritional:
-    - "Evaluate the focus biomarker using its historical log values, the user's demographic profile, and provided context."
-    - "Tailor the explanations and suggestions specifically to the user's demographic profile (age, gender, ethnicity)."
-    - "If the profile shows a specific ethnicity (e.g. Asian), prioritize demographic-specific clinical insights FIRST and cite the medical guideline."
-  proposals_and_corrections:
-    - "If the biomarker's current description or range is sub-optimal for their demographic, prescribe a corrected/new one in the 'proposal' block."
-    - "Set 'isEthnicitySpecific' to true and 'ethnicityTag' to the ethnicity name if applicable."
-    - "When no correction or override is needed, set 'proposal' to null."
-    - "If you identify anomalies or unit mix-ups in the log history, provide a 'modificationCommand' list to correct them."
-    - "Do not use rigid formatting, numbered lists, or forced structural templates for your reply."
-    - "The JSON response must be well-formed and valid."`;
+        systemInstruction = biomarkerReviewSystemInstruction;
       } else if (agentType === "data_review") {
         systemInstruction = `You are an expert Clinical Data Review & Reference Range Calibration Agent.
 You will receive user demographics and a list of biomarkers in the user's current batch.
@@ -11892,6 +11879,7 @@ Your output MUST be a valid JSON object matching the schema provided.`;
                      type: Type.OBJECT,
                      nullable: true,
                      properties: {
+                       keyName: { type: Type.STRING },
                        name: { type: Type.STRING },
                        metric: { type: Type.STRING },
                        value: { type: Type.STRING },
@@ -11900,7 +11888,21 @@ Your output MUST be a valid JSON object matching the schema provided.`;
                        description: { type: Type.STRING },
                        medicalInsight: { type: Type.STRING, description: "Personalized medical insight based on demographic profile and proposed value" },
                        isEthnicitySpecific: { type: Type.BOOLEAN },
-                       ethnicityTag: { type: Type.STRING, nullable: true }
+                       ethnicityTag: { type: Type.STRING, nullable: true },
+                       rangeBrackets: {
+                         type: Type.ARRAY,
+                         nullable: true,
+                         items: {
+                           type: Type.OBJECT,
+                           properties: {
+                             label: { type: Type.STRING },
+                             severity: { type: Type.INTEGER, description: "Integer between -5 and +5 (0 = Optimal, +1 to +4 = Progressive Elevation, -1 to -4 = Progressive Deficiency, +/-5 = Acute Panic Emergency only)" },
+                             min: { type: Type.NUMBER, nullable: true },
+                             max: { type: Type.NUMBER, nullable: true }
+                           },
+                           required: ["label", "severity"]
+                         }
+                       }
                      },
                      required: ["name", "metric", "value", "date", "range", "description", "medicalInsight", "isEthnicitySpecific", "ethnicityTag"]
                    },

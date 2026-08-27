@@ -167,11 +167,11 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
         range: {
           type: 'simple',
           conditions: [
-            { operator: '>=', value: 48, alias: 'Critical', severity: 'critical' },
-            { operator: '>=', value: 39, alias: 'Elevated', severity: 'high' },
-            { operator: '>=', value: 20, alias: 'Normal', severity: 'normal' },
-            { operator: '>=', value: 6.5, alias: 'Critical', severity: 'critical' },
-            { operator: '>=', value: 5.7, alias: 'Elevated', severity: 'high' }
+            { operator: '>=', value: 48, alias: 'Elevated (Diabetes)', severity: 4 },
+            { operator: '>=', value: 39, alias: 'Elevated', severity: 2 },
+            { operator: '>=', value: 20, alias: 'Normal', severity: 0 },
+            { operator: '>=', value: 6.5, alias: 'Elevated (Diabetes)', severity: 4 },
+            { operator: '>=', value: 5.7, alias: 'Elevated', severity: 2 }
           ]
         }
       }
@@ -237,9 +237,9 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
         range: {
           type: 'simple',
           conditions: [
-            { operator: '>', value: 3.4, alias: 'Critical', severity: 'critical' },
-            { operator: '>', value: 2.6, alias: 'Elevated', severity: 'high' },
-            { operator: '<=', value: 2.6, alias: 'Optimal', severity: 'normal' }
+            { operator: '>', value: 3.4, alias: 'Very High', severity: 4 },
+            { operator: '>', value: 2.6, alias: 'Elevated', severity: 2 },
+            { operator: '<=', value: 2.6, alias: 'Optimal', severity: 0 }
           ]
         }
       }
@@ -265,9 +265,9 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
         range: {
           type: 'simple',
           conditions: [
-            { operator: '>', value: 110, alias: 'Critical', severity: 'critical' },
-            { operator: '>', value: 90, alias: 'Elevated', severity: 'high' },
-            { operator: '<=', value: 90, alias: 'Optimal', severity: 'normal' }
+            { operator: '>', value: 110, alias: 'Very High', severity: 4 },
+            { operator: '>', value: 90, alias: 'Elevated', severity: 2 },
+            { operator: '<=', value: 90, alias: 'Optimal', severity: 0 }
           ]
         }
       }
@@ -328,9 +328,9 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
         range: {
           type: 'simple',
           conditions: [
-            { operator: '>=', value: 5.6, alias: 'Critical', severity: 'critical' },
-            { operator: '>=', value: 1.7, alias: 'Elevated', severity: 'high' },
-            { operator: '<', value: 1.7, alias: 'Optimal', severity: 'normal' }
+            { operator: '>=', value: 5.6, alias: 'Very High', severity: 4 },
+            { operator: '>=', value: 1.7, alias: 'Elevated', severity: 2 },
+            { operator: '<', value: 1.7, alias: 'Optimal', severity: 0 }
           ]
         }
       }
@@ -360,9 +360,9 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
         range: {
           type: 'simple',
           conditions: [
-            { operator: '<', value: 60, alias: 'Critical', severity: 'critical' },
-            { operator: '<', value: 90, alias: 'Low', severity: 'low' },
-            { operator: '>=', value: 90, alias: 'Optimal', severity: 'normal' }
+            { operator: '<', value: 60, alias: 'Decreased (CKD G3)', severity: -4 },
+            { operator: '<', value: 90, alias: 'Low', severity: -2 },
+            { operator: '>=', value: 90, alias: 'Optimal', severity: 0 }
           ]
         }
       }
@@ -438,9 +438,9 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
         range: {
           type: 'simple',
           conditions: [
-            { operator: '>=', value: 3.0, alias: 'Critical', severity: 'critical' },
-            { operator: '>=', value: 1.0, alias: 'Elevated', severity: 'high' },
-            { operator: '<', value: 1.0, alias: 'Optimal', severity: 'normal' }
+            { operator: '>=', value: 3.0, alias: 'High risk', severity: 4 },
+            { operator: '>=', value: 1.0, alias: 'Elevated', severity: 2 },
+            { operator: '<', value: 1.0, alias: 'Optimal', severity: 0 }
           ]
         }
       }
@@ -481,9 +481,9 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
         range: {
           type: 'simple',
           conditions: [
-            { operator: '<', value: 20, alias: 'Critical', severity: 'critical' },
-            { operator: '<', value: 30, alias: 'Low', severity: 'low' },
-            { operator: '>=', value: 30, alias: 'Optimal', severity: 'normal' }
+            { operator: '<', value: 20, alias: 'Severe deficiency', severity: -4 },
+            { operator: '<', value: 30, alias: 'Low', severity: -2 },
+            { operator: '>=', value: 30, alias: 'Optimal', severity: 0 }
           ]
         }
       }
@@ -2684,17 +2684,18 @@ export const getBiomarkerStatus = (key: string, val: number | string, normalRang
     if (validBrackets.length > 0) {
       const matchedBracket = matchRangeBracket(valueToEvaluate, validBrackets);
       if (matchedBracket) {
+        const label = String(matchedBracket.name || matchedBracket.label || '').toLowerCase();
+        const isBracketLow = label.includes('low') || label.includes('decreased') || label.includes('under') || label.includes('deficien');
         if (typeof matchedBracket.severity === 'number' || (typeof matchedBracket.severity === 'string' && matchedBracket.severity.trim() !== '' && !isNaN(Number(matchedBracket.severity)))) {
           const numSev = Number(matchedBracket.severity);
           if (numSev === 0) return 'normal';
-          if (numSev <= -4 || numSev >= 4) return 'critical';
-          if (numSev < 0) return 'low';
+          if (numSev <= -5 || numSev >= 5) return 'critical';
+          if (numSev < 0 || isBracketLow) return 'low';
           return 'high';
         }
-        const label = String(matchedBracket.name || matchedBracket.label || '').toLowerCase();
         if (label.includes('optimal') || label.includes('ideal') || label.includes('normal') || label.includes('healthy') || label.includes('remission')) return 'normal';
         if (label.includes('severe') || label.includes('critical') || label.includes('at risk')) return 'critical';
-        if (label.includes('low') || label.includes('decreased') || label.includes('under')) return 'low';
+        if (isBracketLow) return 'low';
         return 'high';
       }
     }
@@ -2702,12 +2703,20 @@ export const getBiomarkerStatus = (key: string, val: number | string, normalRang
 
   const effectiveDef = customDef || biomarkerDefinitions.find(d => d.key === key);
   const evalRes = evaluateStructuredRange(valueToEvaluate, effectiveDef, profile);
-  if (evalRes && evalRes.severity) {
-    const sev = evalRes.severity.toLowerCase();
+  if (evalRes && evalRes.severity !== undefined && evalRes.severity !== null) {
+    const label = (evalRes.label || '').toLowerCase();
+    const isEvalLow = label.includes('low') || label.includes('decreased') || label.includes('under') || label.includes('deficien');
+    if (typeof evalRes.severity === 'number' || (typeof evalRes.severity === 'string' && evalRes.severity.trim() !== '' && !isNaN(Number(evalRes.severity)))) {
+      const numSev = Number(evalRes.severity);
+      if (numSev === 0) return 'normal';
+      if (numSev <= -5 || numSev >= 5) return 'critical';
+      if (numSev < 0 || isEvalLow) return 'low';
+      return 'high';
+    }
+    const sev = String(evalRes.severity).toLowerCase();
     if (sev.includes('normal') || sev.includes('optimal') || sev.includes('healthy')) return 'normal';
     if (sev.includes('critical')) return 'critical';
-    const label = (evalRes.label || '').toLowerCase();
-    if (label.includes('low') || label.includes('decreased') || label.includes('under') || sev.includes('low')) return 'low';
+    if (isEvalLow || sev.includes('low')) return 'low';
     return 'high';
   }
 
@@ -2831,6 +2840,7 @@ export const getBiomarkerColor = (status: 'normal' | 'low' | 'high' | 'critical'
   }
   if (
     s.includes('at risk') ||
+    s.includes('risk') ||
     s.includes('sub-optimal') ||
     s.includes('suboptimal') ||
     s.includes('action zone') ||
@@ -2838,6 +2848,10 @@ export const getBiomarkerColor = (status: 'normal' | 'low' | 'high' | 'critical'
     s.includes('elevated') ||
     s.includes('overweight') ||
     s.includes('underweight') ||
+    s.includes('high') ||
+    s.includes('low') ||
+    s.includes('decreased') ||
+    s.includes('deficien') ||
     s === 'low' ||
     s === 'high'
   ) {
@@ -2863,6 +2877,7 @@ export const getBiomarkerBorderColor = (status: 'normal' | 'low' | 'high' | 'cri
   if (s.includes('critical') || s.includes('obese')) return 'border-rose-500/20';
   if (
     s.includes('at risk') ||
+    s.includes('risk') ||
     s.includes('sub-optimal') ||
     s.includes('suboptimal') ||
     s.includes('action zone') ||
@@ -2870,6 +2885,10 @@ export const getBiomarkerBorderColor = (status: 'normal' | 'low' | 'high' | 'cri
     s.includes('elevated') ||
     s.includes('overweight') ||
     s.includes('underweight') ||
+    s.includes('high') ||
+    s.includes('low') ||
+    s.includes('decreased') ||
+    s.includes('deficien') ||
     s === 'low' ||
     s === 'high'
   ) {
@@ -3008,10 +3027,22 @@ export const getCustomStatusLabel = (key: string, value: number | string, custom
   const num = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(num)) return null;
 
+  // If the agent or user provided custom range brackets, prioritize the agent's custom clinical label FIRST
+  const brackets = customDef?.rangeBrackets || effectiveDef?.rangeBrackets;
+  if (Array.isArray(brackets) && brackets.length > 0) {
+    const validBrackets = brackets.filter((b: any) => b && !String(b.range || '').toLowerCase().startsWith('unknown'));
+    if (validBrackets.length > 0) {
+      const matchedBracket = matchRangeBracket(num, validBrackets);
+      if (matchedBracket) {
+        return matchedBracket.label || matchedBracket.name || matchedBracket.alias || null;
+      }
+    }
+  }
+
   const res = evaluateStructuredRange(num, effectiveDef, profile);
   if (res) return res.label;
 
-  if (customDef.structuredRanges && customDef.structuredRanges.length > 0) {
+  if (customDef?.structuredRanges && customDef.structuredRanges.length > 0) {
     for (const r of customDef.structuredRanges) {
       let profileMatch = true;
       if (profile) {
@@ -3037,19 +3068,6 @@ export const getCustomStatusLabel = (key: string, value: number | string, custom
       
       if (valMatch) {
         return r.name; // Use terminology (e.g. Overweight)
-      }
-    }
-  }
-
-
-  // If there are range brackets, parse them to find the matching one
-  const brackets = customDef.rangeBrackets;
-  if (Array.isArray(brackets) && brackets.length > 0) {
-    const validBrackets = brackets.filter((b: any) => b && !String(b.range || '').toLowerCase().startsWith('unknown'));
-    if (validBrackets.length > 0) {
-      const matchedBracket = matchRangeBracket(num, validBrackets);
-      if (matchedBracket) {
-        return matchedBracket.name || matchedBracket.label || null;
       }
     }
   }
@@ -3085,8 +3103,9 @@ export const getBiomarkerRiskTag = (key: string, status: string, customDef?: any
 export const getBiomarkerStatusLabel = (key: string, status: string, customDef?: any, userValue?: number | string, profile?: any): string => {
   if (status === 'flagged') return 'FLAGGED (Please Review Log)';
   let label = status;
-  if (customDef && userValue !== undefined) {
-    const customLabel = getCustomStatusLabel(key, userValue, customDef, profile);
+  if (userValue !== undefined) {
+    const effectiveDef = customDef || biomarkerDefinitions.find(d => d.key === key);
+    const customLabel = getCustomStatusLabel(key, userValue, effectiveDef, profile);
     if (customLabel) label = customLabel;
   }
   if (key === 'bmi') {
