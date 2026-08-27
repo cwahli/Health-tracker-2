@@ -24,12 +24,12 @@ describe('detectPortionAmbiguity & buildPortionClarifyPayload', () => {
     expect(res?.options.some((o) => o.weightGrams === 38)).toBe(true);
   });
 
-  it('correctly labels Whole pack as actual pack weight (85g) when label is per 100g', () => {
+  it('correctly labels Whole pack as actual pack weight (85g) when label is per 100g and portion is 50g', () => {
     const item = {
       scoutIndex: 1,
-      originalName: 'Southern Style Chicken Bites',
+      originalName: 'Southern Style Chicken Bites 85g',
       keyword: 'southern fried chicken bites',
-      estimatedWeightGrams: 85,
+      estimatedWeightGrams: 50,
       rawNutritionLabel: {
         servingSize: '100g',
         calories: '210 kcal',
@@ -40,7 +40,7 @@ describe('detectPortionAmbiguity & buildPortionClarifyPayload', () => {
     };
     const res = detectPortionAmbiguity(item, 1);
     expect(res).not.toBeNull();
-    expect(res?.name).toBe('Southern Style Chicken Bites');
+    expect(res?.name).toBe('Southern Style Chicken Bites 85g');
     // Whole pack option should be 85g, NOT 100g
     const wholePackOpt = res?.options.find((o) => o.label.startsWith('Whole pack'));
     expect(wholePackOpt).toBeDefined();
@@ -52,6 +52,37 @@ describe('detectPortionAmbiguity & buildPortionClarifyPayload', () => {
     expect(panelOpt).toBeDefined();
     expect(panelOpt?.label).toContain('100g');
     expect(panelOpt?.label).not.toContain('Whole pack');
+  });
+
+  it('does NOT trigger portionClarify when packGrams equals estimatedWeightGrams', () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: 'Beef Blade Tray',
+      keyword: 'beef blade',
+      estimatedWeightGrams: 110,
+      packGrams: 110,
+      rawNutritionLabel: {
+        servingSize: '100g',
+        calories: '150 kcal',
+        protein: '22g',
+        totalFat: '6g',
+      },
+    };
+    expect(detectPortionAmbiguity(item, 0)).toBeNull();
+  });
+
+  it('triggers portionClarify when packGrams (440g) differs from estimated portion (150g)', () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: 'Tenderstem Broccoli Pack',
+      keyword: 'broccoli',
+      estimatedWeightGrams: 150,
+      packGrams: 440,
+    };
+    const res = detectPortionAmbiguity(item, 0);
+    expect(res).not.toBeNull();
+    expect(res?.options.some((o) => o.weightGrams === 150)).toBe(true);
+    expect(res?.options.some((o) => o.weightGrams === 440)).toBe(true);
   });
 
   it('builds generic multi-item clarification payload when multiple foods have ambiguous portions', () => {
@@ -87,6 +118,38 @@ describe('detectPortionAmbiguity & buildPortionClarifyPayload', () => {
     expect(payload).not.toBeNull();
     expect(payload?.items).toHaveLength(2);
     expect(payload?.promptMessage).toContain('Confirm portions for:');
+  });
+
+  it('triggers portion clarify for composite subcomponents with packGrams discrepancy', () => {
+    const compositeMeal = [
+      {
+        scoutIndex: 0,
+        originalName: 'Stir-fry Dish',
+        keyword: 'stir-fry dish',
+        estimatedWeightGrams: 300,
+        components: [
+          {
+            name: 'Broccoli',
+            keyword: 'broccoli',
+            estimatedWeightGrams: 100,
+            packGrams: 100, // no discrepancy
+          },
+          {
+            name: 'Baby Corn Pack',
+            keyword: 'baby corn',
+            estimatedWeightGrams: 50,
+            packGrams: 200, // 200g pack vs 50g portion
+            rawNutritionLabel: {
+              servingSize: '100g',
+              calories: '30 kcal',
+            },
+          },
+        ],
+      },
+    ];
+    const payload = buildPortionClarifyPayload(compositeMeal);
+    expect(payload).not.toBeNull();
+    expect(payload?.items.some((it) => it.name.toLowerCase().includes('baby corn'))).toBe(true);
   });
 });
 

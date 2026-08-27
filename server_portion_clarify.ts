@@ -56,6 +56,9 @@ function hasEnoughLabelFields(raw: any): boolean {
 export function detectPackNetWeightGrams(item: any): number | null {
   if (!item) return null;
   // 1. Explicit package weight fields
+  if (item.packGrams != null && Number(item.packGrams) > 0) {
+    return Math.round(Number(item.packGrams));
+  }
   if (item.packageWeightGrams != null && Number(item.packageWeightGrams) > 0) {
     return Math.round(Number(item.packageWeightGrams));
   }
@@ -64,6 +67,9 @@ export function detectPackNetWeightGrams(item: any): number | null {
   }
   if (item.packWeight != null && Number(item.packWeight) > 0) {
     return Math.round(Number(item.packWeight));
+  }
+  if (Array.isArray(item.components) && item.components.length === 1 && item.components[0].packGrams != null && Number(item.components[0].packGrams) > 0) {
+    return Math.round(Number(item.components[0].packGrams));
   }
 
   const raw = item.rawNutritionLabel || {};
@@ -102,11 +108,6 @@ export function detectPackNetWeightGrams(item: any): number | null {
     }
   }
 
-  // NOTE: Do NOT fall back to item.estimatedWeightGrams here. That is the Vision Scout's
-  // photo-estimated weight of the single visible item, not a printed pack net weight.
-  // Falling back to it previously caused detectPortionAmbiguity()'s "Whole pack of N"
-  // option to collide with the "1 unit" option's weight (both showing the same grams),
-  // which also made the frontend highlight both buttons as selected simultaneously.
   return null;
 }
 
@@ -148,17 +149,19 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   const nameL = name.toLowerCase();
   const ing = String(item.ingredientsList || item.ingredients || '').toLowerCase();
   const blob = `${nameL} ${ing} ${String(item.keyword || '').toLowerCase()}`;
-  const w = Math.round(Number(item.estimatedWeightGrams) || 0);
+  const w = Math.round(Number(item.estimatedWeightGrams ?? item.weightGrams) || 0);
   const raw = item?.rawNutritionLabel;
   const rawServing = String(raw?.servingSize || raw?.serving || '').trim();
   const ssG = parseServingGramsFromLabel(rawServing) ?? (raw ? 100 : null);
+
+  // 1. Detect explicit pack weight from fields, components, OCR, or label
+  let packGrams = detectPackNetWeightGrams(item);
 
   // Universal Unit Count Match: matches any digit preceding common packaging / unit words
   const unitCountMatch = blob.match(/\b(\d+)\s*(?:pack|pk|slices?|bagels?|rolls?|thins?|buns?|wraps?|tortillas?|pancakes?|muffins?|crumpets?|waffles?|pieces?|pcs?|bars?|bakes?|sachets?|pouches?|biscuits?|cookies?|patties?|fillets?|sausages?|cutlets?|meatballs?|servings?|units?)\b/i);
   let detectedUnits = unitCountMatch ? parseInt(unitCountMatch[1], 10) : 0;
 
   // Extract leading digit from item name (e.g. "2 butter croissants" → 2, "4 chicken strips" → 4).
-  // This fires BEFORE unit-noun defaults so we never override an explicit quantity with a category guess.
   if (!detectedUnits) {
     const nameLeadingDigit = nameL.match(/^(\d+)\s+\w/);
     if (nameLeadingDigit) {
@@ -175,41 +178,49 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   const unitNoun = extractFoodUnitNoun(name, blob, rawServing);
   const isDiscreteUnitFood = unitNoun !== 'portion' && unitNoun !== 'serving';
 
-  // Check if item is a multi-unit or discrete food product
-  if (detectedUnits >= 2 || isDiscreteUnitFood) {
-    if (!detectedUnits || detectedUnits < 2 || detectedUnits > 24) {
-      // Visual-source items (freshly made, restaurant, canteen) without an explicit unit count are
-      // single-serve by nature. The multi-serve pack UX is for packaged grocery products only.
-      const isVisual = item.source === 'visual' || item.contentType === 'visual' || item.contentType === 'visual_food' || !item.rawNutritionLabel;
-      if (isVisual) return null;
-      if (/\b(bagel|thin|wrap|patty|fillet|muffin|crumpet|roll|bun)\b/i.test(unitNoun)) detectedUnits = 4;
-      else if (/\b(biscuit|cookie|piece|sausage)\b/i.test(unitNoun)) detectedUnits = 6;
-      else detectedUnits = 4;
+  // Multi-serve package / container / servings check
+  const servingsRaw = raw?.servingsPerContainer ?? raw?.servings ?? raw?.numberOfServings;
+  const servings =
+    servingsRaw != null && String(servingsRaw).trim() !== ''
+      ? Math.round(Number(String(servingsRaw).match(/[\d.]+/)?.[0] || 0))
+      : null;
+
+  // If packGrams wasn't directly found, derive it if item is a multipack or has servings count
+  if (!packGrams || packGrams <= 0) {
+    const isVisual = item.source === 'visual' || item.contentType === 'visual' || item.contentType === 'visual_food' || !item.rawNutritionLabel;
+    if (isVisual && (!detectedUnits || detectedUnits < 2)) {
+      return null;
     }
+    if (detectedUnits >= 2 && w > 0) {
+      packGrams = detectedUnits * w;
+    } else if (servings != null && servings >= 2 && w > 0) {
+      packGrams = Math.round(servings * w);
+    } else if (isDiscreteUnitFood && !isVisual && w > 0) {
+      detectedUnits = 4;
+      packGrams = 4 * w;
+    }
+  }
 
-    // Determine single unit weight and total pack weight
+  // CORE LAW: Portion clarify ONLY appears when there is a difference between packGrams and weightGrams!
+  if (!packGrams || packGrams <= 0 || Math.abs(packGrams - w) <= 1) {
+    return null;
+  }
+
+  // If discrete unit food (e.g. croissants, bars, biscuits, patties)
+  if (detectedUnits >= 2 || isDiscreteUnitFood) {
     const isIndividualUnit = /\b(bar|biscuit|cookie|bagel|thin|wrap|slice|patty|fillet|sausage|pancake|muffin|crumpet|roll|bun|croissant)\b/i.test(unitNoun);
-    const explicitPackWeight = detectPackNetWeightGrams(item);
-
     let singleUnitGrams: number;
-    let packGrams: number;
-    let packLabel: string;
-
     if (isIndividualUnit && w > 0 && w <= 95) {
       singleUnitGrams = w;
-      packGrams = explicitPackWeight || (singleUnitGrams * detectedUnits);
-      packLabel = `Whole pack of ${detectedUnits} (${packGrams}g)`;
     } else if (unitCountMatch && w > 0 && w <= 95) {
       singleUnitGrams = w;
-      packGrams = explicitPackWeight || (singleUnitGrams * detectedUnits);
-      packLabel = `Whole pack of ${detectedUnits} (${packGrams}g)`;
     } else {
-      packGrams = explicitPackWeight || (w > 0 ? w : detectedUnits * 45);
-      singleUnitGrams = Math.max(5, Math.round(packGrams / detectedUnits));
-      packLabel = unitCountMatch ? `Whole pack of ${detectedUnits} (${packGrams}g)` : `Whole pack (${packGrams}g)`;
+      singleUnitGrams = Math.max(5, Math.round(packGrams / (detectedUnits || 4)));
     }
+
     const options: PortionOption[] = [];
     const pluralNoun = unitNoun.endsWith('s') ? unitNoun : `${unitNoun}s`;
+    const packLabel = unitCountMatch ? `Whole pack of ${detectedUnits} (${packGrams}g)` : `Whole pack (${packGrams}g)`;
 
     options.push({ id: `unit_1_${singleUnitGrams}`, label: `1 ${unitNoun} (${singleUnitGrams}g)`, weightGrams: singleUnitGrams });
     if (detectedUnits >= 2) {
@@ -218,123 +229,79 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
     if (detectedUnits >= 3 && detectedUnits !== 4) {
       options.push({ id: `unit_3_${singleUnitGrams * 3}`, label: `3 ${pluralNoun} (${singleUnitGrams * 3}g)`, weightGrams: singleUnitGrams * 3 });
     }
-    options.push({ id: `pack_${packGrams}`, label: packLabel, weightGrams: packGrams });
-    if (ssG === 100 || !ssG) {
+    if (!options.some((o) => o.weightGrams === packGrams)) {
+      options.push({ id: `pack_${packGrams}`, label: packLabel, weightGrams: packGrams });
+    }
+    if ((ssG === 100 || !ssG) && !options.some((o) => o.weightGrams === 100)) {
       options.push({ id: 'panel_100', label: '100g (nutrition panel basis)', weightGrams: 100 });
     }
 
     return {
       scoutIndex,
       name,
-      estimatedWeightGrams: singleUnitGrams,
+      estimatedWeightGrams: w > 0 ? w : singleUnitGrams,
       labelServingGrams: ssG || 100,
       options,
       reason: `Multi-serve pack (${detectedUnits} units) — confirm how much you ate`,
     };
   }
 
-  if (!hasPrintedCalories(raw) || !hasEnoughLabelFields(raw)) return null;
-
-  const servingsRaw = raw.servingsPerContainer ?? raw.servings ?? raw.numberOfServings;
-  const servings =
-    servingsRaw != null && String(servingsRaw).trim() !== ''
-      ? Math.round(Number(String(servingsRaw).match(/[\d.]+/)?.[0] || 0))
-      : null;
-
-  const looksMultiServePack =
-    (servings != null && servings >= 2) ||
-    /\b(slice|sliced|topside|rashers|servings?|per slice|4 servings|pack of|tub|deli|pot|tray|bowl|bag)\b/i.test(blob) ||
-    (ssG === 100 &&
-      w > 0 &&
-      w < 100 &&
-      /\b(beef|chicken|ham|turkey|cheese|salmon|bacon|meat|fish|salad|bites|dip|spread|hummus)\b/i.test(nameL));
-
-  if (!(ssG === 100 && looksMultiServePack)) {
-    return null;
-  }
-
-  const detectedPackWeight = detectPackNetWeightGrams(item) || w || 100;
+  // General multi-serve grocery / container item
   const options: PortionOption[] = [];
   const seen = new Set<number>();
 
-  // If we know the actual pack weight (e.g. 80g, 150g, 200g, 350g, 400g)
-  if (detectedPackWeight > 0 && detectedPackWeight !== 100) {
-    // 1. Offer the actual whole pack
-    options.push({
-      id: `pack_${detectedPackWeight}`,
-      label: `Whole pack (${detectedPackWeight}g)`,
-      weightGrams: detectedPackWeight,
-    });
-    seen.add(detectedPackWeight);
-
-    // 2. Portion fractions based on actual pack size or servings
-    if (servings != null && servings >= 2 && servings <= 12) {
-      const sliceGrams = Math.max(5, Math.round(detectedPackWeight / servings));
-      for (let n = 1; n < servings; n++) {
-        const grams = sliceGrams * n;
-        if (!seen.has(grams) && grams > 0) {
-          seen.add(grams);
-          const label = n === 1 ? `1 slice / portion (${grams}g)` : `${n} slices / portions (${grams}g)`;
-          options.push({ id: `n${n}_${grams}`, label, weightGrams: grams });
-        }
-      }
-    } else {
-      const half = Math.round(detectedPackWeight / 2);
-      if (half >= 15 && !seen.has(half)) {
-        seen.add(half);
-        options.push({ id: `half_${half}`, label: `Half pack (${half}g)`, weightGrams: half });
-      }
-      const quarter = Math.round(detectedPackWeight / 4);
-      if (quarter >= 15 && !seen.has(quarter)) {
-        seen.add(quarter);
-        options.push({ id: `quarter_${quarter}`, label: `1/4 pack (${quarter}g)`, weightGrams: quarter });
-      }
-    }
-
-    // 3. Always offer 100g as the panel reference (clearly labeled as panel basis)
-    if (!seen.has(100)) {
-      seen.add(100);
-      options.push({
-        id: 'panel_100',
-        label: '100g (nutrition panel basis)',
-        weightGrams: 100,
-      });
-    }
-  } else {
-    // Pack weight is 100g or unknown
-    const unit =
-      servings != null && servings >= 2 && servings <= 12
-        ? Math.max(5, Math.round(100 / servings))
-        : 25;
-    const maxN =
-      servings != null && servings >= 2 && servings <= 12 ? servings : Math.max(2, Math.round(100 / unit));
-
-    for (let n = 1; n <= maxN; n++) {
-      const grams = unit * n;
-      if (grams > 500) break;
-      if (seen.has(grams)) continue;
-      seen.add(grams);
-      let label: string;
-      if (n === 1) label = `1 slice / portion (${grams}g)`;
-      else if (n === maxN && grams === 100) label = `Whole pack (${grams}g)`;
-      else if (n === maxN) label = `All servings (${grams}g)`;
-      else label = `${n} slices / portions (${grams}g)`;
-      options.push({ id: `n${n}_${grams}`, label, weightGrams: grams });
-    }
-
-    if (!seen.has(100)) {
-      options.push({ id: 'pack_100', label: 'Whole pack / 100g (panel)', weightGrams: 100 });
-      seen.add(100);
-    }
-  }
-
-  if (w > 0 && !seen.has(w)) {
+  // 1. Portion in dish / photo estimate
+  if (w > 0) {
     options.push({
       id: `photo_${w}`,
-      label: `Photo estimate (${w}g)`,
+      label: `Portion in dish (${w}g)`,
       weightGrams: w,
     });
     seen.add(w);
+  }
+
+  // 2. Whole pack
+  if (!seen.has(packGrams)) {
+    options.push({
+      id: `pack_${packGrams}`,
+      label: `Whole pack (${packGrams}g)`,
+      weightGrams: packGrams,
+    });
+    seen.add(packGrams);
+  }
+
+  // 3. Portion fractions based on actual pack size or servings
+  if (servings != null && servings >= 2 && servings <= 12) {
+    const sliceGrams = Math.max(5, Math.round(packGrams / servings));
+    for (let n = 1; n < servings; n++) {
+      const grams = sliceGrams * n;
+      if (!seen.has(grams) && grams > 0 && grams !== packGrams) {
+        seen.add(grams);
+        const label = n === 1 ? `1 slice / portion (${grams}g)` : `${n} slices / portions (${grams}g)`;
+        options.push({ id: `n${n}_${grams}`, label, weightGrams: grams });
+      }
+    }
+  } else if (packGrams >= 100) {
+    const half = Math.round(packGrams / 2);
+    if (half >= 15 && !seen.has(half) && half !== packGrams) {
+      seen.add(half);
+      options.push({ id: `half_${half}`, label: `Half pack (${half}g)`, weightGrams: half });
+    }
+    const quarter = Math.round(packGrams / 4);
+    if (quarter >= 15 && !seen.has(quarter) && quarter !== packGrams) {
+      seen.add(quarter);
+      options.push({ id: `quarter_${quarter}`, label: `1/4 pack (${quarter}g)`, weightGrams: quarter });
+    }
+  }
+
+  // 4. Always offer 100g if label is per-100g
+  if (ssG === 100 && !seen.has(100)) {
+    seen.add(100);
+    options.push({
+      id: 'panel_100',
+      label: '100g (nutrition panel basis)',
+      weightGrams: 100,
+    });
   }
 
   if (options.length < 2) return null;
@@ -342,11 +309,10 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   return {
     scoutIndex,
     name,
-    estimatedWeightGrams: detectedPackWeight || w || 100,
+    estimatedWeightGrams: w,
     labelServingGrams: ssG,
     options,
-    reason:
-      'Multi-serve pack with per-100g nutrition label — confirm how much you ate before we calculate the meal',
+    reason: `Package weight (${packGrams}g) differs from estimated portion (${w}g) — confirm how much you ate`,
   };
 }
 
@@ -356,7 +322,27 @@ export function buildPortionClarifyPayload(scoutItems: any[]): PortionClarifyPay
   scoutItems.forEach((it, idx) => {
     const si = it.scoutIndex != null ? Number(it.scoutIndex) : idx;
     const found = detectPortionAmbiguity(it, si);
-    if (found) items.push(found);
+    if (found) {
+      items.push(found);
+    }
+
+    // Check composite sub-components
+    const subComps: any[] = (Array.isArray(it.compositeSiblings) && it.compositeSiblings.length > 0)
+      ? it.compositeSiblings
+      : ((Array.isArray(it.components) && it.components.length > 0)
+        ? it.components
+        : []);
+
+    if (subComps.length > 1) {
+      subComps.forEach((comp: any, cIdx: number) => {
+        if (!comp) return;
+        const compIndex = (si * 100) + (cIdx + 1);
+        const compFound = detectPortionAmbiguity(comp, compIndex);
+        if (compFound) {
+          items.push(compFound);
+        }
+      });
+    }
   });
   if (items.length === 0) return null;
   const names = items.map((i) => i.name).join('; ');
@@ -385,21 +371,72 @@ export function applyPortionChoices(
       choices[si as any] ??
       choices[String(idx)] ??
       null;
-    if (w == null || !(Number(w) > 0)) return it;
-    const weightGrams = Math.round(Number(w));
-    const prevW = Math.round(Number(it.estimatedWeightGrams) || 0) || weightGrams;
-    const next: any = {
-      ...it,
-      estimatedWeightGrams: weightGrams,
-      nutrientBasisWeight: it.nutrientBasisWeight || prevW,
-    };
-    if (!isDishEstimateEnabled()) {
-      const estCal = Number(it.estimatedCalories);
-      if (estCal > 0 && prevW > 0) {
-        next.estimatedCalories = Math.round(estCal * (weightGrams / prevW));
+
+    let updatedItem = { ...it };
+
+    if (w != null && Number(w) > 0) {
+      const weightGrams = Math.round(Number(w));
+      const prevW = Math.round(Number(it.estimatedWeightGrams) || 0) || weightGrams;
+      updatedItem = {
+        ...updatedItem,
+        estimatedWeightGrams: weightGrams,
+        nutrientBasisWeight: it.nutrientBasisWeight || prevW,
+        portionChoiceApplied: weightGrams,
+      };
+      if (!isDishEstimateEnabled()) {
+        const estCal = Number(it.estimatedCalories);
+        if (estCal > 0 && prevW > 0) {
+          updatedItem.estimatedCalories = Math.round(estCal * (weightGrams / prevW));
+        }
       }
     }
-    next.portionChoiceApplied = weightGrams;
-    return next;
+
+    // Also apply choices to composite sub-components if present
+    const subComps: any[] = (Array.isArray(it.compositeSiblings) && it.compositeSiblings.length > 0)
+      ? it.compositeSiblings
+      : ((Array.isArray(it.components) && it.components.length > 0)
+        ? it.components
+        : []);
+
+    if (subComps.length > 1) {
+      let subCompsChanged = false;
+      const updatedSubComps = subComps.map((comp: any, cIdx: number) => {
+        if (!comp) return comp;
+        const compIndex = (si * 100) + (cIdx + 1);
+        const compW =
+          choices[String(compIndex)] ??
+          choices[compIndex as any] ??
+          choices[`${si}-${cIdx + 1}`] ??
+          null;
+        if (compW != null && Number(compW) > 0) {
+          subCompsChanged = true;
+          const cWeightGrams = Math.round(Number(compW));
+          return {
+            ...comp,
+            weightGrams: cWeightGrams,
+            estimatedWeightGrams: cWeightGrams,
+            portionChoiceApplied: cWeightGrams,
+          };
+        }
+        return comp;
+      });
+
+      if (subCompsChanged) {
+        if (Array.isArray(it.compositeSiblings) && it.compositeSiblings.length > 0) {
+          updatedItem.compositeSiblings = updatedSubComps;
+        }
+        if (Array.isArray(it.components) && it.components.length > 0) {
+          updatedItem.components = updatedSubComps;
+        }
+        // If subcomponent weights changed, update parent composite dish total weight
+        const totalCompWeight = updatedSubComps.reduce((sum: number, c: any) => sum + (Number(c.weightGrams ?? c.estimatedWeightGrams) || 0), 0);
+        if (totalCompWeight > 0) {
+          updatedItem.estimatedWeightGrams = totalCompWeight;
+          updatedItem.weightGrams = totalCompWeight;
+        }
+      }
+    }
+
+    return updatedItem;
   });
 }

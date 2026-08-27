@@ -955,6 +955,7 @@ export function parseAndHealVisionScout(
             dishTitle = `${dishTitle} with ${missingFoods.join(', ')}`;
           }
         }
+        const compPackGrams = components.length === 1 ? (components[0].packGrams ?? null) : (d.packGrams ?? null);
         const convertedItem: any = {
           keyword: dishTitle,
           originalName: dishTitle,
@@ -962,6 +963,7 @@ export function parseAndHealVisionScout(
           chainName: d.chainName || null,
           estimatedWeightGrams: dishWeight,
           nutrientBasisWeight: dishWeight,
+          packGrams: compPackGrams,
           cookingMethod: d.cookingMethod || "cooked",
           sourceImageIndex: d.sourceImageIndex ?? 0,
           boundingBox2D: d.boundingBox2D || [0, 0, 1000, 1000],

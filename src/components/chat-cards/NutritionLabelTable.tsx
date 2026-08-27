@@ -563,9 +563,22 @@ export function NutritionLabelTable({
                 : []);
             const hasTabs = subComps.length > 1;
             const activeTab = activeTabMap[i] || 0;
-            const dishTotalWeight = getResolvedItemWeightGrams(rootItem) || 0;
+            const staticDishTotalWeight = getResolvedItemWeightGrams(rootItem) || 0;
+            const dishTotalWeight = hasTabs
+              ? subComps.reduce((sum: number, comp: any, cIdx: number) => {
+                  const compW = customPortionMap[`${i}-${cIdx + 1}`] || resolveComponentWeightGrams(comp, staticDishTotalWeight, subComps.length);
+                  return sum + compW;
+                }, 0)
+              : staticDishTotalWeight;
 
             let item = rootItem;
+            if (activeTab === 0 && hasTabs) {
+              item = {
+                ...rootItem,
+                weightGrams: dishTotalWeight,
+                estimatedWeightGrams: dishTotalWeight,
+              };
+            }
             let activeTitle = rootItem.primaryBaseMatchName || rootItem.labelProductName || rootItem.scoutOriginalName || rootItem.originalName || rootItem.keyword || 'Food Item';
             let activePackGrams = rootItem.packGrams || null;
 
