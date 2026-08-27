@@ -459,7 +459,6 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
     degradedStages: result.degradedStages,
     lastUserAction: result.lastUserAction || msg?.data?.lastUserAction,
     userActionBreadcrumbs: result.userActionBreadcrumbs || msg?.data?.userActionBreadcrumbs || job?.inputSnapshot?.userActionBreadcrumbs,
-    userActionBreadcrumbs: result.userActionBreadcrumbs || msg?.data?.userActionBreadcrumbs,
     clientConsoleLogs: result.clientConsoleLogs || msg?.data?.clientConsoleLogs,
     networkErrors: result.networkErrors || msg?.data?.networkErrors,
     usdaSearchResults: result.usdaSearchResults,
