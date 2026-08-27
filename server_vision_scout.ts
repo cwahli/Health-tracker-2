@@ -2,7 +2,6 @@ import { z } from "zod";
 import { extractBalancedJson } from "./server_pure_helpers";
 import { parseLabelCalories } from "./server_budget_reconcile";
 import { isStandaloneCondimentPacket, reconcileContainerVolumeBudget } from "./server_dish_classify";
-
 export const ScoutNutrientsSchema = z.object({
   calories: z.number().nullable().optional(),
   protein: z.number().nullable().optional(),
@@ -21,7 +20,6 @@ export const ScoutNutrientsSchema = z.object({
   magnesium: z.number().nullable().optional(),
   vitaminD: z.number().nullable().optional(),
 }).passthrough();
-
 export const ScoutFoodSchema = z.object({
   foodName: z.string().nullable().optional(),
   weightGrams: z.number().finite().nonnegative().nullable().optional(),
@@ -37,7 +35,6 @@ export const ScoutFoodSchema = z.object({
     carbohydrates: z.number().nullable().optional(),
   }).passthrough().nullable().optional(),
 }).passthrough();
-
 export const ScoutDishSchema = z.object({
   dishName: z.string().nullable().optional(),
   chainName: z.string().nullable().optional(),
@@ -59,7 +56,6 @@ export const ScoutDishSchema = z.object({
     vitaminD: z.number().nullable().optional(),
   }).passthrough().nullable().optional(),
 }).passthrough();
-
 export const ScoutItemComponentSchema = z.object({
   name: z.string().nullable().optional(),
   searchQuery: z.string().nullable().optional(),
@@ -74,7 +70,6 @@ export const ScoutItemComponentSchema = z.object({
   nutrients: z.record(z.string(), z.any()).nullable().optional(),
   calories: z.number().nullable().optional(),
 });
-
 export const ScoutItemSchema = z.object({
   originalName: z.string().nullable().optional(),
   keyword: z.string().nullable().optional(),
@@ -100,7 +95,6 @@ export const ScoutItemSchema = z.object({
   boundingBox2D: z.array(z.number()).nullable().optional(),
   sourceImageIndex: z.number().nullable().optional(),
 }).passthrough();
-
 const LABEL_STOPWORDS = new Set([
   'nutrition', 'facts', 'label', 'back', 'of', 'package', 'informasi', 'nilai', 'gizi', 'komposisi', 'the', 'a', 'and',
 ]);
@@ -110,7 +104,6 @@ const GENERIC_FOOD_TOKENS = new Set([
 ]);
 const HAM_DRY_CURED = new Set(['serrano', 'iberico', 'prosciutto', 'parma', 'jamon', 'reserva', 'gran']);
 const HAM_COOKED_FORMED = new Set(['reformed', 'formed', 'cooked']);
-
 function tokenizeScoutName(s: string): string[] {
   return String(s || '')
     .toLowerCase()
@@ -119,7 +112,6 @@ function tokenizeScoutName(s: string): string[] {
     .filter((t) => t.length > 2 && !LABEL_STOPWORDS.has(t))
     .map((t) => (t.endsWith('s') && t.length > 3 ? t.slice(0, -1) : t));
 }
-
 /** Pure: should a standalone nutrition-label scout item fold into this food item? */
 export function canMergeScoutLabelIntoFood(
   labelItem: { originalName?: string; keyword?: string },
@@ -152,14 +144,12 @@ export function canMergeScoutLabelIntoFood(
   }
   return { ok: false, score, reason: 'name overlap too weak' };
 }
-
 export const VisionScoutSchema = z.object({
   dishes: z.array(ScoutDishSchema).nullable().optional(),
   items: z.array(ScoutItemSchema).nullable().optional(),
   contentType: z.string().nullable().optional(),
   diningEnvironment: z.string().nullable().optional(),
 }).passthrough();
-
 export const scoutSystemInstruction = `System Instruction:
 - HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'. Never merge ingredients from separate pots/bowls into a single dish.
 - FULL GROCERY INGESTION: Inspect every sticker/barcode: multiple packages of same type (e.g. 2 meat trays: 110g+115g) and raw plate items (eggs) must all be included into foods[]. Never drop packages.
@@ -167,7 +157,6 @@ export const scoutSystemInstruction = `System Instruction:
 - DIRECT OCR: Transcribe nutrition labels into 'rawNutritionLabel' including 'calories' (printed energy/kkal/kJ), servingSize, and macros.
 - BRANDS & CONDIMENTS: Set 'chainName' for known brands (else null). Set 'isStandaloneCondimentPacket' to true only for tiny condiment packets <=30g.
 - COOKING FATS: In 'dishNutrients.totalFat', include cooking oils, dressings, and broth fats based on the dish 'cookingMethod'.
-
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:
 {
@@ -205,7 +194,6 @@ Output exactly ONE JSON object matching this schema:
     }
   ]
 }`;
-
 function validateOrFallback<T>(
   schema: z.ZodType<T>,
   parsed: any,
@@ -237,7 +225,6 @@ function validateOrFallback<T>(
   }
   return result.data;
 }
-
 export function mergeScoutItems(visionItems: any[], llmItems: any[] | null | undefined): any[] {
   if (!visionItems || visionItems.length === 0) {
     return (llmItems && llmItems.length > 0) ? llmItems : [];
@@ -278,7 +265,6 @@ export function mergeScoutItems(visionItems: any[], llmItems: any[] | null | und
     return vItem;
   });
 }
-
 export interface VisionScoutResult {
   items: any[];
   scoutConfidenceRating: string;
@@ -290,27 +276,22 @@ export interface VisionScoutResult {
   visionScoutRanAndReturnedItems: boolean;
   diningEnvironment: string;
 }
-
 export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) => void): { valid: boolean; reason?: string } {
   if (!parsedScout || typeof parsedScout !== "object") {
     return { valid: false, reason: "Parsed scout output is null or not an object" };
   }
-
   const items = parsedScout.items;
   if (!items || !Array.isArray(items)) {
     return { valid: false, reason: "Parsed scout output lacks 'items' array" };
   }
-
   const jsonKeyHeuristics = [
     "components", "searchquery", "cookingmethod", "itemconfidence", 
     "estimatedweightgrams", "originalname", "boundingbox2d", "sourceimageindex",
     "anomalyflags", "visualingredients", "ingredientslist", "rawnutritionlabel"
   ];
-
   for (let idx = 0; idx < items.length; idx++) {
     const item = items[idx];
     if (!item || typeof item !== "object") return { valid: false, reason: `Item at index ${idx} is not an object` };
-
     for (const [key, value] of Object.entries(item)) {
       if (typeof value === "string") {
         const isLongText = ['ingredientsList', 'confidenceComment', 'scoutConfidenceComment', 'description', 'notes', 'reason', 'summary'].includes(key);
@@ -322,7 +303,6 @@ export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) =>
         }
       }
     }
-
     if (Array.isArray(item.visualIngredients)) {
       if (item.visualIngredients.length > 20) return { valid: false, reason: `Item visualIngredients exceeds limit (20)` };
       for (let j = 0; j < item.visualIngredients.length; j++) {
@@ -335,7 +315,6 @@ export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) =>
         }
       }
     }
-
     if (Array.isArray(item.components)) {
       for (let j = 0; j < item.components.length; j++) {
         const comp = item.components[j];
@@ -350,10 +329,8 @@ export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) =>
       }
     }
   }
-
   return { valid: true };
 }
-
 export function resolvePackageAndContextItems(
   items: any[],
   addDebugLog: (msg: string) => void,
@@ -361,12 +338,10 @@ export function resolvePackageAndContextItems(
   isCompareMode: boolean = false
 ): any[] {
   if (!items || items.length <= 1) return items || [];
-
   const LABEL_STOPWORDS = new Set(["nutrition", "facts", "label", "back", "of", "package", "informasi", "nilai", "gizi", "komposisi", "the", "a", "and", "taste", "difference"]);
   const tokenize = (s: string): string[] =>
     (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/)
       .filter(t => t.length > 2 && !LABEL_STOPWORDS.has(t));
-
   const nameSimilarity = (strA: string, strB: string): number => {
     const tokensA = tokenize(strA);
     const tokensB = tokenize(strB);
@@ -374,7 +349,6 @@ export function resolvePackageAndContextItems(
     const overlap = tokensA.filter(t => tokensB.includes(t)).length;
     return overlap / Math.min(tokensA.length, tokensB.length);
   };
-
   const isBulkPackageItem = (item: any): boolean => {
     const name = (item.originalName || item.keyword || "").toLowerCase();
     const weight = Number(item.estimatedWeightGrams) || 0;
@@ -401,15 +375,12 @@ export function resolvePackageAndContextItems(
       (printedCal && (isPackageKeyword || /\bnutrition\b/i.test(name)));
     return looksLikeLabelOnly && isBulkWeight;
   };
-
   const contextItemIndices = new Set<number>();
-
   // In compare mode, distinct options must NEVER be eliminated as package context
   if (!isCompareMode) {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (contextItemIndices.has(i)) continue;
-
       if (isBulkPackageItem(item)) {
         // Guard: multi-component visual meal on the plate is food, not packaging context
         if (
@@ -420,17 +391,14 @@ export function resolvePackageAndContextItems(
         ) {
           continue;
         }
-
         for (let j = 0; j < items.length; j++) {
           if (i === j || contextItemIndices.has(j)) continue;
           const otherItem = items[j];
-
           // Items from separate source images are distinct uploaded items, unless explicitly titled as a label panel
           const isExplicitLabelPanel = /\b(nutrition facts|package label|label only|back of package|unopened box)\b/i.test(String(item.originalName || item.keyword || ""));
           if (typeof item.sourceImageIndex === "number" && typeof otherItem.sourceImageIndex === "number" && item.sourceImageIndex !== otherItem.sourceImageIndex && !isExplicitLabelPanel) {
             continue;
           }
-
           let componentMatch = false;
           if (otherItem.components && Array.isArray(otherItem.components)) {
             for (const comp of otherItem.components) {
@@ -445,14 +413,11 @@ export function resolvePackageAndContextItems(
               }
             }
           }
-
           const dishNameSimilarity = nameSimilarity(item.originalName || item.keyword, otherItem.originalName || otherItem.keyword);
-
           // Only eliminate item if it is explicitly a sub-component match OR explicitly an unparsed label panel
           if (componentMatch || (isExplicitLabelPanel && dishNameSimilarity >= 0.5)) {
             contextItemIndices.add(i);
             addDebugLog(`[Package Context Filter] Identified bulk package item "${item.originalName || item.keyword}" (${item.estimatedWeightGrams}g) as reference packaging/label context for dish "${otherItem.originalName || otherItem.keyword}". Excluding package from eaten items.`);
-
             if (item.rawNutritionLabel && (!otherItem.rawNutritionLabel || Object.keys(otherItem.rawNutritionLabel).length === 0)) {
               otherItem.rawNutritionLabel = item.rawNutritionLabel;
             }
@@ -465,7 +430,6 @@ export function resolvePackageAndContextItems(
       }
     }
   }
-
   if (userMessage && userMessage.trim().length > 0) {
     const cleanMsg = userMessage.toLowerCase();
     if (!isCompareMode) {
@@ -473,7 +437,6 @@ export function resolvePackageAndContextItems(
         if (contextItemIndices.has(i)) continue;
         const item = items[i];
         const name = (item.originalName || item.keyword || "").toLowerCase();
-
         if (isBulkPackageItem(item) && (cleanMsg.includes("oat") || cleanMsg.includes("fruit") || cleanMsg.includes("50g") || cleanMsg.includes("pack") || cleanMsg.includes("bowl"))) {
           const hasOtherDish = items.some((it, idx) => idx !== i && !contextItemIndices.has(idx) && (it.source === "visual" || (it.components && it.components.length > 0)));
           if (hasOtherDish) {
@@ -483,7 +446,6 @@ export function resolvePackageAndContextItems(
         }
       }
     }
-
     // Explicit User Gram & Volume Weight Anchor: Check if user message specifies portion weights/volumes (e.g. "Lassi is 1L the other is 500ml" or "50g of oats")
     const weightVolumeMatches = Array.from(cleanMsg.matchAll(/(\d+(?:\.\d+)?)\s*(g|grams?|ml|milliliters?|millilitres?|l|liters?|litres?)\b/gi));
     if (weightVolumeMatches.length > 0) {
@@ -503,22 +465,18 @@ export function resolvePackageAndContextItems(
         if (explicitWeight > 0 && explicitWeight <= 5000) {
           const matchIdx = m.index || 0;
           const matchEnd = matchIdx + m[0].length;
-          
           // Extract immediate clause boundaries: stop at commas, pluses, semicolons, or sentence breaks
           const rawBefore = cleanMsg.substring(Math.max(0, matchIdx - 30), matchIdx);
           const rawAfter = cleanMsg.substring(matchEnd, Math.min(cleanMsg.length, matchEnd + 40));
-          
           const clauseBefore = rawBefore.split(/[,;+.]/).pop() || '';
           const clauseAfter = (rawAfter.split(/[,;+.]/)[0] || '').replace(/\b(with|and|then)\b.*$/i, '');
           const immediatePhrase = `${clauseBefore} ${clauseAfter}`.toLowerCase();
           const phraseTokens = immediatePhrase
             .split(/[^a-z0-9]+/)
             .filter(w => w.length >= 3 && !ANCHOR_STOPWORDS.has(w));
-
           let bestItemIdx = -1;
           let bestScore = 0;
           let bestMatchedComp: any = null;
-
           // PASS 1: Score items based on content word overlap with the immediate modifier phrase
           for (let i = 0; i < items.length; i++) {
             if (contextItemIndices.has(i) || claimedItems.has(i)) continue;
@@ -527,14 +485,12 @@ export function resolvePackageAndContextItems(
             const itemWords = nameStr
               .split(/[^a-z0-9]+/)
               .filter((w: string) => w.length >= 3 && !ANCHOR_STOPWORDS.has(w));
-            
             let itemScore = 0;
             itemWords.forEach((w: string) => {
               if (phraseTokens.some(pt => pt === w || (w.length >= 4 && (pt.includes(w) || w.includes(pt))))) {
                 itemScore += 2;
               }
             });
-
             let matchedCompForItem: any = null;
             if (item.components && Array.isArray(item.components)) {
               item.components.forEach((c: any) => {
@@ -554,14 +510,12 @@ export function resolvePackageAndContextItems(
                 }
               });
             }
-
             if (itemScore > bestScore) {
               bestScore = itemScore;
               bestItemIdx = i;
               bestMatchedComp = matchedCompForItem;
             }
           }
-
           if (bestItemIdx >= 0 && bestScore > 0) {
             const item = items[bestItemIdx];
             if (bestMatchedComp && Number(bestMatchedComp.volumePercentage) > 0 && item.components && item.components.length > 1) {
@@ -595,17 +549,14 @@ export function resolvePackageAndContextItems(
       });
     }
   }
-
   return items.filter((_, idx) => !contextItemIndices.has(idx));
 }
-
 export function clusterSpatialCompositeDishes(
   items: any[],
   addDebugLog?: (msg: string) => void,
   isCompareMode: boolean = false
 ): any[] {
   if (!items || items.length <= 1 || isCompareMode) return items || [];
-
   const getBBox = (it: any): [number, number, number, number] => {
     if (Array.isArray(it.boundingBox2D) && it.boundingBox2D.length === 4) {
       return [
@@ -617,22 +568,18 @@ export function clusterSpatialCompositeDishes(
     }
     return [0, 0, 1000, 1000];
   };
-
   const getArea = (box: [number, number, number, number]): number => {
     const h = Math.max(0, box[2] - box[0]);
     const w = Math.max(0, box[3] - box[1]);
     return h * w;
   };
-
   const getOverlapRatio = (boxA: [number, number, number, number], boxB: [number, number, number, number]): { overlap: number; iou: number } => {
     const areaA = getArea(boxA);
     const areaB = getArea(boxB);
     if (areaA <= 0 || areaB <= 0) return { overlap: 0, iou: 0 };
-
     const interH = Math.max(0, Math.min(boxA[2], boxB[2]) - Math.max(boxA[0], boxB[0]));
     const interW = Math.max(0, Math.min(boxA[3], boxB[3]) - Math.max(boxA[1], boxB[1]));
     const interArea = interH * interW;
-
     const minArea = Math.min(areaA, areaB);
     const unionArea = areaA + areaB - interArea;
     return {
@@ -640,91 +587,133 @@ export function clusterSpatialCompositeDishes(
       iou: unionArea > 0 ? interArea / unionArea : 0
     };
   };
-
   const isDefaultBox = (b: [number, number, number, number]): boolean => {
     return (b[0] <= 10 && b[1] <= 10 && b[2] >= 990 && b[3] >= 990) ||
            (b[0] === 100 && b[1] === 100 && b[2] === 900 && b[3] === 900);
   };
-
   const hasDistinctNutrientLabel = (it: any): boolean => {
     const raw = it.rawNutritionLabel;
     if (!raw || typeof raw !== 'object') return false;
     const c = raw.calories ?? raw.energiTotal;
     return c != null && String(c).trim() !== '' && parseFloat(String(c).replace(/[^\d.]/g, '')) > 0;
   };
-
   const clusteredIndices = new Set<number>();
   const resultDishes: any[] = [];
-
   for (let i = 0; i < items.length; i++) {
     if (clusteredIndices.has(i)) continue;
     const primary = { ...items[i] };
     const boxA = getBBox(primary);
     const coLocatedIndices: number[] = [];
-
     for (let j = i + 1; j < items.length; j++) {
       if (clusteredIndices.has(j)) continue;
       const other = items[j];
-
       // Skip clustering if either item is from spreadsheet or has default bounding box
       if (primary.source === 'spreadsheet' || other.source === 'spreadsheet' || primary.isSpreadsheet || other.isSpreadsheet || isDefaultBox(boxA)) {
         continue;
       }
-
       // Same source image check
       const sameImg = (primary.sourceImageIndex ?? 0) === (other.sourceImageIndex ?? 0);
       if (!sameImg) continue;
-
       // Avoid clustering two distinct packaged commercial items that both have distinct printed nutrition labels
       if (hasDistinctNutrientLabel(primary) && hasDistinctNutrientLabel(other)) {
         continue;
       }
-
       const boxB = getBBox(other);
       if (isDefaultBox(boxB)) continue;
 
-      const { overlap, iou } = getOverlapRatio(boxA, boxB);
+      // Do NOT cluster if items are distinct standalone plated foods (e.g. egg, bread roll, separate side)
+      // or already full composite dishes from separate plates/bowls unless there is true heavy containment/inclusion.
+      const nameA = String(primary.originalName || primary.keyword || '').toLowerCase();
+      const nameB = String(other.originalName || other.keyword || '').toLowerCase();
+      const cleanKeyA = nameA.replace(/[^a-z0-9\s]/g, '').trim();
+      const cleanKeyB = nameB.replace(/[^a-z0-9\s]/g, '').trim();
+      const isExactSameFood = cleanKeyA.length > 0 && cleanKeyA === cleanKeyB;
 
-      // High spatial co-location inside the same container / bowl / plate
-      if (overlap >= 0.60 || iou >= 0.45) {
+      const { overlap, iou } = getOverlapRatio(boxA, boxB);
+      // High spatial co-location inside the exact same container / bowl / plate
+      // Only merge if:
+      // 1) It's the exact same food item/ingredient, OR
+      // 2) True high containment/overlap (overlap >= 0.70 or IoU >= 0.55) AND neither item is a distinct side dish/separate entity with its own structured components
+      const hasSeparateComponents = (primary.components?.length > 1 && other.components?.length > 1);
+      if (!hasSeparateComponents && (isExactSameFood ? (overlap >= 0.35 || iou >= 0.25) : (overlap >= 0.70 || iou >= 0.55))) {
         coLocatedIndices.push(j);
       }
     }
-
     if (coLocatedIndices.length > 0) {
       // Aggregate into 1 composite dish
       const clusterGroup = [primary, ...coLocatedIndices.map(idx => items[idx])];
       coLocatedIndices.forEach(idx => clusteredIndices.add(idx));
       clusteredIndices.add(i);
-
       const totalWeight = clusterGroup.reduce((sum, it) => sum + (Math.max(10, Number(it.estimatedWeightGrams) || 100)), 0);
-
       // Build unified components breakdown
       const compositeComponents: any[] = [];
       clusterGroup.forEach(it => {
         const itWeight = Math.max(10, Number(it.estimatedWeightGrams) || 100);
         const itPct = Math.max(1, Math.round((itWeight / totalWeight) * 100));
-
         if (Array.isArray(it.components) && it.components.length > 0) {
           it.components.forEach((c: any) => {
             const cPct = Math.max(1, Math.round(((Number(c.volumePercentage) || 100) / 100) * itPct));
+            const cWeight = Number(c.weightGrams ?? c.estimatedWeightGrams ?? Math.round(totalWeight * (cPct / 100)));
+            const cName = String(c.name || c.searchQuery || c.keyword || it.originalName || it.keyword || 'Ingredient').trim();
+            const cNuts = c.nutrients || {};
+            const cProt = Number(c.protein ?? cNuts.protein ?? 0);
+            const cFat = Number(c.totalFat ?? c.fat ?? cNuts.totalFat ?? cNuts.fat ?? cNuts.saturatedFat ?? 0);
+            const cSat = Number(c.saturatedFat ?? cNuts.saturatedFat ?? 0);
+            const cCarbs = Number(c.carbohydrates ?? c.carbs ?? cNuts.carbohydrates ?? 0);
+            const cNa = Number(c.sodium ?? cNuts.sodium ?? 0);
+            const cCals = Number(c.calories ?? cNuts.calories ?? Math.round(4 * cProt + 4 * cCarbs + 9 * cFat));
             compositeComponents.push({
-              searchQuery: c.searchQuery || c.name || c.keyword || it.originalName || it.keyword,
+              name: cName,
+              searchQuery: c.searchQuery || cName,
+              weightGrams: cWeight,
+              estimatedWeightGrams: cWeight,
               volumePercentage: cPct,
+              packGrams: c.packGrams ?? it.packGrams ?? null,
               suggestedFdcId: c.suggestedFdcId || null,
-              rawNutritionLabel: it.rawNutritionLabel || undefined
+              rawNutritionLabel: c.rawNutritionLabel || it.rawNutritionLabel || undefined,
+              nutrients: c.nutrients || undefined,
+              calories: cCals,
+              protein: cProt,
+              totalFat: cFat,
+              fat: cFat,
+              saturatedFat: cSat,
+              carbohydrates: cCarbs,
+              sodium: cNa,
+              dbSource: c.dbSource || it.dbSource || 'estimated',
+              dbId: c.dbId || it.dbId || null,
             });
           });
         } else {
+          const cName = String(it.originalName || it.keyword || 'Ingredient').trim();
+          const itNuts = it.nutrients || {};
+          const itProt = Number(it.protein ?? itNuts.protein ?? 0);
+          const itFat = Number(it.totalFat ?? it.fat ?? itNuts.totalFat ?? itNuts.fat ?? itNuts.saturatedFat ?? 0);
+          const itSat = Number(it.saturatedFat ?? itNuts.saturatedFat ?? 0);
+          const itCarbs = Number(it.carbohydrates ?? it.carbs ?? itNuts.carbohydrates ?? 0);
+          const itNa = Number(it.sodium ?? itNuts.sodium ?? 0);
+          const itCals = Number(it.calories ?? itNuts.calories ?? Math.round(4 * itProt + 4 * itCarbs + 9 * itFat));
           compositeComponents.push({
-            searchQuery: it.originalName || it.keyword,
+            name: cName,
+            searchQuery: cName,
+            weightGrams: itWeight,
+            estimatedWeightGrams: itWeight,
             volumePercentage: itPct,
+            packGrams: it.packGrams ?? null,
             suggestedFdcId: null,
-            rawNutritionLabel: it.rawNutritionLabel || undefined
+            rawNutritionLabel: it.rawNutritionLabel || undefined,
+            nutrients: it.nutrients || undefined,
+            calories: itCals,
+            protein: itProt,
+            totalFat: itFat,
+            fat: itFat,
+            saturatedFat: itSat,
+            carbohydrates: itCarbs,
+            sodium: itNa,
+            dbSource: it.dbSource || 'estimated',
+            dbId: it.dbId || null,
           });
         }
       });
-
       // Normalize component percentages to 100%
       const compSum = compositeComponents.reduce((acc, c) => acc + (c.volumePercentage || 0), 0);
       if (compSum > 0 && compSum !== 100) {
@@ -733,19 +722,21 @@ export function clusterSpatialCompositeDishes(
           c.volumePercentage = Math.max(1, Math.round((c.volumePercentage || 0) * factor));
         });
       }
-
       // Union bounding box
       const min0 = Math.min(...clusterGroup.map(it => getBBox(it)[0]));
       const min1 = Math.min(...clusterGroup.map(it => getBBox(it)[1]));
       const max2 = Math.max(...clusterGroup.map(it => getBBox(it)[2]));
       const max3 = Math.max(...clusterGroup.map(it => getBBox(it)[3]));
-
       // Composite clean dish title
-      const distinctNames = Array.from(new Set(clusterGroup.map(it => (it.originalName || it.keyword || '').trim()).filter(Boolean)));
-      const baseName = distinctNames[0] || 'Composed Dish';
-      const subNames = distinctNames.slice(1);
-      const compositeDishTitle = subNames.length > 0 ? `${baseName} with ${subNames.join(', ')}` : baseName;
-
+      const allCompNames = compositeComponents.map(c => c.name).filter(Boolean);
+      const distinctNames = Array.from(new Set(allCompNames));
+      let compositeDishTitle = primary.originalName || primary.keyword || 'Composed Dish';
+      if (distinctNames.length > 1) {
+        const missingNames = distinctNames.filter(n => !compositeDishTitle.toLowerCase().includes(n.toLowerCase()));
+        if (missingNames.length > 0) {
+          compositeDishTitle = `${compositeDishTitle} with ${missingNames.join(', ')}`;
+        }
+      }
       // Merge nutrients if multiple items with nutrients are clustered
       if (clusterGroup.length > 1 && clusterGroup.some(it => it.nutrients && typeof it.nutrients === 'object')) {
         const mergedNutrients: Record<string, number> = {};
@@ -760,7 +751,7 @@ export function clusterSpatialCompositeDishes(
         }
         primary.nutrients = mergedNutrients;
       }
-
+      const compNamesList = compositeComponents.map(c => c.name);
       primary.originalName = compositeDishTitle;
       primary.keyword = compositeDishTitle;
       primary.name = compositeDishTitle;
@@ -768,38 +759,37 @@ export function clusterSpatialCompositeDishes(
       primary.nutrientBasisWeight = totalWeight;
       primary.boundingBox2D = [min0, min1, max2, max3];
       primary.components = compositeComponents;
+      primary.componentsDetailList = compositeComponents;
+      primary.compositeSiblings = compositeComponents;
+      primary.hasComponents = compositeComponents.length > 1;
+      primary.ingredients = compNamesList;
+      primary.visualIngredients = compNamesList;
+      primary.ingredientsList = compNamesList.join(', ');
       primary.isCompositeDish = true;
       primary.itemConfidence = 'High (>90%)';
-
       if (addDebugLog) {
         addDebugLog(
           `[Spatial Clustering] Clustered ${clusterGroup.length} co-located ingredients into composite dish "${compositeDishTitle}" (${totalWeight}g) with ${compositeComponents.length} components.`
         );
       }
-
       resultDishes.push(primary);
     } else {
       resultDishes.push(primary);
     }
   }
-
   return resultDishes;
 }
-
 export const CONDIMENT_DRESSING_REGEX = /\b(ranch(?:\s+dressing)?|caesar(?:\s+dressing)?|vinaigrette|mayonnaise|mayo|salad\s+dressing|dressing|tahini|aioli|pesto|honey\s+mustard|blue\s+cheese\s+dressing|thousand\s+island|french\s+dressing|italian\s+dressing|gravy|sour\s+cream|guacamole|hummus|olive\s+oil|vinaigre|sauce|gherkins?|pickles?|cornichons?)\b/i;
-
 // Common raw salad/garnish vegetables that Vision Scout's own component decomposition
 // tends to drop even when they're explicitly present in ingredientsList/visualIngredients
 // (e.g. "red onion" listed on a Cobb salad label but missing from the modeled components).
 // Kept separate from CONDIMENT_DRESSING_REGEX since these aren't condiments — grouping them
 // under a differently-named constant keeps the two lists semantically honest.
 export const GARNISH_VEGETABLE_REGEX = /\b(red\s+onion|white\s+onion|spring\s+onion|scallions?|shallots?|olives?|jalape[nñ]os?|banana\s+peppers?|croutons?|capers?|zucchini|courgettes?|carrots?|cucumbers?|bell\s*peppers?|peppers?|broccoli|peas?|corn|mushrooms?|edamame|cabbage|radish(?:es)?|tomatoes?|celery|green\s*beans?|bok\s*choy|pak\s*choi)\b/i;
-
 export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: string) => void): void {
   if (!item || !item.components || !Array.isArray(item.components) || item.components.length === 0) {
     return;
   }
-
   const candidateIngredients: string[] = [];
   if (item.ingredientsList && typeof item.ingredientsList === 'string') {
     item.ingredientsList.split(/[,;\n•]+/).forEach((part: string) => {
@@ -812,13 +802,10 @@ export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: 
       if (typeof v === 'string' && v.trim()) candidateIngredients.push(v.trim());
     });
   }
-
   if (candidateIngredients.length === 0) return;
-
   const currentCompNames = item.components.map((c: any) => {
     return String(typeof c === 'string' ? c : (c.searchQuery || c.name || c.keyword || '')).toLowerCase();
   });
-
   const missingIngredients: string[] = [];
   for (const ing of candidateIngredients) {
     const match = ing.match(CONDIMENT_DRESSING_REGEX) || ing.match(GARNISH_VEGETABLE_REGEX);
@@ -830,20 +817,17 @@ export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: 
       }
     }
   }
-
   if (missingIngredients.length > 0) {
     const allocatedPerItem = Math.min(8, Math.max(5, Math.floor(20 / missingIngredients.length)));
     for (const missing of missingIngredients) {
       const allocatedPct = allocatedPerItem;
       const currentPctSum = item.components.reduce((acc: number, c: any) => acc + (Number(c.volumePercentage) || 0), 0) || 100;
       const scaleFactor = (100 - allocatedPct) / currentPctSum;
-      
       item.components.forEach((c: any) => {
         if (typeof c === 'object' && c !== null) {
           c.volumePercentage = Math.max(1, Math.round((Number(c.volumePercentage) || 0) * scaleFactor));
         }
       });
-
       const newComp = {
         searchQuery: missing.toLowerCase(),
         volumePercentage: allocatedPct,
@@ -856,7 +840,6 @@ export function reconcileIngredientsToComponents(item: any, addDebugLog?: (msg: 
     }
   }
 }
-
 export function parseAndHealVisionScout(
   scoutOutput: any,
   addDebugLog: (msg: string) => void,
@@ -873,7 +856,6 @@ export function parseAndHealVisionScout(
     extractedScratchpad = cleanOutput.replace(jsonStr, "").trim();
     parsedScout = JSON.parse(jsonStr);
   }
-
   parsedScout = validateOrFallback(
     VisionScoutSchema,
     parsedScout,
@@ -882,7 +864,6 @@ export function parseAndHealVisionScout(
     { items: [] },
     addDebugLog
   );
-
   let visionScoutItems: any[] = [];
   let scoutConfidenceRating = "High (>90%)";
   let scoutConfidenceComment = "";
@@ -892,11 +873,9 @@ export function parseAndHealVisionScout(
   let queriesToSearch: string[] = [];
   let visionScoutRanAndReturnedItems = false;
   let diningEnvironment = "casual_restaurant";
-
   if (parsedScout) {
     let lowestConfidence = "High (>90%)";
     let globalComment = "";
-
     // Ingest hierarchical dishes if returned by Scout
     if (Array.isArray(parsedScout.dishes) && parsedScout.dishes.length > 0) {
       if (!parsedScout.items) parsedScout.items = [];
@@ -904,43 +883,50 @@ export function parseAndHealVisionScout(
         const dishFoods = Array.isArray(d.foods) ? d.foods : [];
         let sumP = 0, sumC = 0, sumSatFat = 0, sumAddedSugar = 0, sumFibre = 0, sumNa = 0;
         const components: any[] = [];
-
         dishFoods.forEach((f: any) => {
-          const fn = f.foodName || "Ingredient";
+          const fn = String(f.foodName || "Ingredient").trim();
           const fw = f.weightGrams ?? f.estimatedWeightGrams ?? 0;
           const fnuts = f.nutrients || {};
           const fp = Number(fnuts.protein) || 0;
           const fc = Number(fnuts.carbohydrates) || 0;
           const fsat = Number(fnuts.saturatedFat) || 0;
+          const ffat = Number(fnuts.totalFat) || Number(fnuts.fat) || Math.round(fsat * 1.5 * 10) / 10;
           const fas = Number(fnuts.addedSugar) || 0;
           const ffib = Number(fnuts.totalFibre) || 0;
           const fna = Number(fnuts.sodium) || 0;
-
+          const fcal = Math.round(4 * fp + 4 * fc + 9 * (ffat > 0 ? ffat : fsat));
           sumP += fp;
           sumC += fc;
           sumSatFat += fsat;
           sumAddedSugar += fas;
           sumFibre += ffib;
           sumNa += fna;
-
           components.push({
             name: fn,
             searchQuery: fn,
             weightGrams: fw,
+            estimatedWeightGrams: fw,
             packGrams: f.packGrams ?? null,
             rawNutritionLabel: f.rawNutritionLabel ?? null,
             nutrients: fnuts,
-            calories: Math.round(4 * fp + 4 * fc + 9 * fsat)
+            calories: fcal,
+            protein: fp,
+            totalFat: ffat,
+            fat: ffat,
+            saturatedFat: fsat,
+            carbohydrates: fc,
+            carbs: fc,
+            sodium: fna,
+            dbSource: 'estimated',
+            dbId: null,
           });
         });
-
         const dNuts = d.dishNutrients || {};
         let totalFat = Number(dNuts.totalFat) || Math.round(sumSatFat * 1.5 * 10) / 10;
         let satFat = Math.max(sumSatFat, Number(dNuts.saturatedFat) || 0);
         if (totalFat < satFat) totalFat = satFat;
         const totalSugar = Number(dNuts.totalSugar) || sumAddedSugar;
         const totalCalories = Math.round(4 * sumP + 4 * sumC + 9 * totalFat);
-
         const convertedNutrients = {
           calories: totalCalories, protein: Math.round(sumP * 10) / 10, carbohydrates: Math.round(sumC * 10) / 10,
           totalFat: Math.round(totalFat * 10) / 10, saturatedFat: Math.round(satFat * 10) / 10, transFat: 0,
@@ -950,7 +936,6 @@ export function parseAndHealVisionScout(
           calcium: Number(dNuts.calcium) || 0, iron: Number(dNuts.iron) || 0,
           magnesium: Number(dNuts.magnesium) || 0, vitaminD: Number(dNuts.vitaminD) || 0,
         };
-
         let dishWeight = d.estimatedWeightGrams || (components.reduce((acc, c) => acc + (c.weightGrams || 0), 0) || 250);
         let dishRawLabel: any = null;
         if (components.length === 1 && components[0].weightGrams > 0) {
@@ -962,25 +947,38 @@ export function parseAndHealVisionScout(
             dishWeight = comp.weightGrams;
           }
         }
-
+        const compNames = components.map(c => c.name).filter(Boolean);
+        let dishTitle = d.dishName || (compNames.length > 0 ? compNames.join(', ') : "Dish");
+        if (compNames.length > 1) {
+          const missingFoods = compNames.filter(cn => !dishTitle.toLowerCase().includes(cn.toLowerCase()));
+          if (missingFoods.length > 0) {
+            dishTitle = `${dishTitle} with ${missingFoods.join(', ')}`;
+          }
+        }
         const convertedItem: any = {
-          keyword: d.dishName || "Dish",
-          originalName: d.dishName || "Dish",
+          keyword: dishTitle,
+          originalName: dishTitle,
+          name: dishTitle,
           chainName: d.chainName || null,
           estimatedWeightGrams: dishWeight,
+          nutrientBasisWeight: dishWeight,
           cookingMethod: d.cookingMethod || "cooked",
           sourceImageIndex: d.sourceImageIndex ?? 0,
           boundingBox2D: d.boundingBox2D || [0, 0, 1000, 1000],
           isStandaloneCondimentPacket: d.isStandaloneCondimentPacket || false,
           components: components.length > 0 ? components : undefined,
-          ingredients: components.map(c => c.name),
+          componentsDetailList: components.length > 0 ? components : undefined,
+          compositeSiblings: components.length > 0 ? components : undefined,
+          hasComponents: components.length > 1,
+          ingredients: compNames,
+          visualIngredients: compNames,
+          ingredientsList: compNames.length > 0 ? compNames.join(', ') : null,
           rawNutritionLabel: dishRawLabel,
           source: dishRawLabel ? "brand_official" : "estimated",
           dbSource: dishRawLabel ? "brand_official" : "estimated",
           nutrients: convertedNutrients,
           truthNutrients: convertedNutrients,
         };
-
         parsedScout.items.push(convertedItem);
       });
     }
@@ -1020,21 +1018,18 @@ export function parseAndHealVisionScout(
     if (parsedScout.items && parsedScout.items.length <= 1 && scoutRecommendedMode === "evaluation") {
       scoutRecommendedMode = "new_log";
     }
-
     // Parse compactSpreadsheet if present
     if (Array.isArray(parsedScout.compactSpreadsheet) && parsedScout.compactSpreadsheet.length > 0) {
       const spreadsheetItems: any[] = [];
       parsedScout.compactSpreadsheet.forEach((row: string) => {
         if (!row || typeof row !== 'string') return;
         const parts = row.split('|');
-        
         if (parts.length >= 5) {
           const category = parts[0]?.trim();
           const keyword = parts[1]?.trim();
           const originalName = parts[2]?.trim();
           const weightOrPrice = parts[3]?.trim();
           const bboxStr = parts[4]?.trim();
-          
           let weightGrams = 150;
           if (weightOrPrice) {
             const cleanWeight = parseFloat(weightOrPrice.replace(/[^0-9.]/g, ''));
@@ -1042,7 +1037,6 @@ export function parseAndHealVisionScout(
               weightGrams = cleanWeight > 50 ? cleanWeight : 300;
             }
           }
-          
           let boundingBox2D = [0, 0, 1000, 1000];
           if (bboxStr) {
             const coords = bboxStr.split(',').map(c => parseFloat(c.trim()));
@@ -1050,7 +1044,6 @@ export function parseAndHealVisionScout(
               boundingBox2D = coords;
             }
           }
-          
           spreadsheetItems.push({
             keyword,
             originalName: category ? `[${category}] ${originalName}` : originalName,
@@ -1090,7 +1083,6 @@ export function parseAndHealVisionScout(
         parsedScout.items = [...parsedScout.items, ...spreadsheetItems];
       }
     }
-
     if (Array.isArray(parsedScout.items)) {
       let explodedItems: any[] = [];
       parsedScout.items.forEach((item: any) => {
@@ -1103,21 +1095,17 @@ export function parseAndHealVisionScout(
           (item.nutrients.carbohydrates != null && item.nutrients.carbohydrates > 0) ||
           (item.nutrients.totalFat != null && item.nutrients.totalFat > 0)
         );
-
         // Check for multiple commas OUTSIDE of parentheses
         const outsideParens = rawOriginal.replace(/\([^)]*\)/g, '').trim();
         const hasMultipleCommas = (outsideParens.match(/,/g) || []).length >= 2;
-
         // If the item ALREADY has a structured component breakdown or direct nutrients, keep it intact as a single dish!
         // Exploding by comma is ONLY for legacy multi-item strings without component breakdowns or direct nutrients.
         if (!hasPrintedMacros && !hasDirectNutrients && hasMultipleCommas && !hasComponents) {
           const dishNames = outsideParens.split(",").map((n: string) => n.trim()).filter((n: string) => n.length > 0);
           const splitWeight = Math.round((item.estimatedWeightGrams || 300) / Math.max(1, dishNames.length));
-
           dishNames.forEach((dishName: string) => {
             const cleanDishName = dishName.replace(/^(and|or)\s+/i, '').trim();
             if (!cleanDishName) return;
-
             let singleComponent = [{ searchQuery: cleanDishName, volumePercentage: 100 }];
             explodedItems.push({
               ...item,
@@ -1154,14 +1142,12 @@ export function parseAndHealVisionScout(
           explodedItems.push(item);
         }
       });
-
       visionScoutItems = explodedItems.map((item: any, idx: number) => {
         let newItem = {
           ...item,
           scoutIndex: idx,
           nutrientBasisWeight: item.nutrientBasisWeight || item.estimatedWeightGrams,
         };
-
         // Volumetric Tuning for standalone high-density condiments (never parent dishes)
         if (newItem.isStandaloneCondimentPacket === true || (newItem.isStandaloneCondimentPacket !== false && isStandaloneCondimentPacket(newItem))) {
           if (newItem.estimatedWeightGrams > 50) {
@@ -1172,7 +1158,6 @@ export function parseAndHealVisionScout(
             addDebugLog(`[Volumetric Tuning] Capped high-density condiment "${newItem.keyword || newItem.originalName}" to 30g.`);
           }
         }
-
         if (!newItem.boundingBox2D || !Array.isArray(newItem.boundingBox2D) || newItem.boundingBox2D.length !== 4) {
           newItem.boundingBox2D = [100, 100, 900, 900];
         }
@@ -1223,7 +1208,6 @@ export function parseAndHealVisionScout(
             const match = String(val).match(/[\d.]+/);
             return match ? parseFloat(match[0]) : null;
           };
-
           if (!newItem.rawNutritionLabel) newItem.rawNutritionLabel = {};
           const rawCalVal = newItem.rawNutritionLabel.calories ?? newItem.rawNutritionLabel.energy;
           if (rawCalVal != null) {
@@ -1232,11 +1216,9 @@ export function parseAndHealVisionScout(
               newItem.rawNutritionLabel.calories = `${parsedC} kcal`;
             }
           }
-          
           const fat = getVal('totalFat') || getVal('fat') || 0;
           const carbs = getVal('totalCarbohydrate') || getVal('carbohydrate') || getVal('carbohydrates') || 0;
           const protein = getVal('protein') || 0;
-          
           // 1. Fat Overflow (Saturated Fat > Total Fat)
           const satFat = getVal('saturatedFat') || 0;
           let correctedFat = fat;
@@ -1248,7 +1230,6 @@ export function parseAndHealVisionScout(
             if (newItem.rawNutritionLabel.totalFat !== undefined) newItem.rawNutritionLabel.totalFat = satFat;
             else newItem.rawNutritionLabel.fat = satFat;
           }
-          
           // 2. Serving Mismatch / Macros Overflow
           let servingSizeGrams = 100; // default for per 100g
           if (newItem.rawNutritionLabel && newItem.rawNutritionLabel.servingSize) {
@@ -1265,17 +1246,14 @@ export function parseAndHealVisionScout(
             if (!newItem.anomalyFlags) newItem.anomalyFlags = [];
             newItem.anomalyFlags.push(`macros overflow: sum of fat, carbs, protein (${totalMacros}g) exceeds serving size (${servingSizeGrams}g)`);
           }
-
           // 3. The Algebraic Healer
           const safeMath = (value: number) => Math.max(0, Math.round(value * 10) / 10);
           const expectedCalories = (correctedFat * 9) + (carbs * 4) + (protein * 4);
           const rawC = getRawVal('calories') ?? getRawVal('energiTotal') ?? getRawVal('energy');
-
           const missingFat = getRawVal('totalFat') === null && getRawVal('fat') === null;
           const missingCarbs = getRawVal('totalCarbohydrate') === null && getRawVal('carbohydrate') === null && getRawVal('carbs') === null;
           const missingProtein = getRawVal('protein') === null;
           const knownMacrosCount = (!missingFat ? 1 : 0) + (!missingCarbs ? 1 : 0) + (!missingProtein ? 1 : 0);
-
           const healAnomaly = (itm: any, macroName: string) => {
               if (itm.anomalyFlags && Array.isArray(itm.anomalyFlags)) {
                   itm.anomalyFlags = itm.anomalyFlags.filter((f: string) => !f.toLowerCase().includes(macroName) && !f.toLowerCase().includes('legible'));
@@ -1284,7 +1262,6 @@ export function parseAndHealVisionScout(
                   }
               }
           };
-
           if (!newItem.rawNutritionLabel) newItem.rawNutritionLabel = {};
           if (rawC !== null && expectedCalories > 0 && knownMacrosCount === 3 && Math.abs(expectedCalories - rawC) / expectedCalories > 0.20) {
               newItem.originalCalories = rawC;
@@ -1309,14 +1286,12 @@ export function parseAndHealVisionScout(
                   healAnomaly(newItem, "protein");
               }
           }
-
           if (newItem.anomalyFlags && Array.isArray(newItem.anomalyFlags)) {
               newItem.anomalyFlags = newItem.anomalyFlags.filter((f: string) => !f.toLowerCase().includes('ingredient'));
               if (newItem.anomalyFlags.length === 0) {
                   newItem.itemConfidence = "High";
               }
           }
-
           // Correct a visually-guessed estimatedWeightGrams using the printed "per pack"
           // column, when the label actually prints one. The per-100g values are reliably
           // transcribed; the guessed weight is the error source. Back-calculating weight
@@ -1345,7 +1320,6 @@ export function parseAndHealVisionScout(
         }
         return newItem;
       });
-
       // Merge standalone label items (e.g., from back of package photo) into primary packaged product item.
       // IDENTITY-BASED matching: a label may only merge into a food item it can be shown to
       // belong to (name/token similarity and/or adjacent sourceImageIndex). It must never merge
@@ -1356,7 +1330,6 @@ export function parseAndHealVisionScout(
         const isLabelContainer = (item: any) => {
           const orig = (item.originalName || item.keyword || "").toLowerCase();
           const isLabelName = orig.includes("nutrition fact") || orig.includes("informasi nilai gizi") || orig.includes("komposisi") || orig.includes("nutrition label") || orig.includes("back of package") || orig.includes("printed_packaging_label");
-
           const hasRealData = item.rawNutritionLabel && typeof item.rawNutritionLabel === 'object'
             ? Object.keys(item.rawNutritionLabel).some((k: string) => {
                 if (k === 'servingSize' || k === 'weight' || k === 'servingsPerContainer') return false;
@@ -1364,12 +1337,9 @@ export function parseAndHealVisionScout(
                 return v !== undefined && v !== null && v !== '' && v !== '-' && v !== '--';
               })
             : false;
-
           const hasIngredients = item.ingredientsList && String(item.ingredientsList).trim().length > 0;
-
           return isLabelName || ((hasRealData || hasIngredients) && (!item.keyword || item.keyword.toLowerCase().includes("label") || item.keyword.toLowerCase().includes("nutrition") || item.keyword.toLowerCase().includes("back of package")));
         };
-
         // Token-overlap similarity between a label's own name (e.g. "Organic Semi-Skimmed Milk
         // Nutrition Facts Label") and a candidate food item's name (e.g. "Organic Semi-Skimmed Milk").
         // Strip label-only vocabulary first so it doesn't dilute the comparison.
@@ -1377,7 +1347,6 @@ export function parseAndHealVisionScout(
         const tokenize = (s: string): string[] =>
           (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/)
             .filter(t => t.length > 2 && !LABEL_STOPWORDS.has(t));
-
         const normalizeToken = (t: string): string => t.endsWith('s') && t.length > 3 ? t.slice(0, -1) : t;
         const nameSimilarity = (labelItem: any, candidate: any): number => {
           const labelTokens = tokenize(labelItem.originalName || labelItem.keyword || "").map(normalizeToken);
@@ -1386,19 +1355,15 @@ export function parseAndHealVisionScout(
           const overlap = labelTokens.filter(t => candTokens.includes(t)).length;
           return overlap / Math.min(labelTokens.length, candTokens.length);
         };
-
         // Process every label item found (not just the first) so multi-package uploads with
         // several distinct labels each find their own correct product.
         let labelIdx: number;
         while ((labelIdx = visionScoutItems.findIndex(isLabelContainer)) !== -1) {
           const labelItem = visionScoutItems[labelIdx];
-
           const candidates = visionScoutItems
             .map((it, idx) => ({ it, idx }))
             .filter(({ it, idx }) => idx !== labelIdx && !isLabelContainer(it));
-
           let primaryItem: any = null;
-
           // Signal A: same sourceImageIndex as the label (a label photographed together with
           // its product in one frame) always wins outright.
           const sameImageMatch = candidates.find(({ it }) =>
@@ -1406,7 +1371,6 @@ export function parseAndHealVisionScout(
             it.sourceImageIndex === labelItem.sourceImageIndex
           );
           if (sameImageMatch) primaryItem = sameImageMatch.it;
-
           // Signal B: strongest name/token similarity above a real threshold — proves the label
           // text (e.g. "Organic Semi-Skimmed Milk...") actually names the candidate product.
           if (!primaryItem) {
@@ -1423,12 +1387,10 @@ export function parseAndHealVisionScout(
               primaryItem = bestCandidate;
             }
           }
-
           // Fallback: when unambiguous by construction (exactly 2 items total OR exactly 1 non-label food candidate).
           if (!primaryItem && (visionScoutItems.length === 2 || candidates.length === 1)) {
             primaryItem = candidates[0]?.it || null;
           }
-
           if (!primaryItem) {
             // No confident match found (3+ items, no image/name signal). Leave the label as its
             // own item rather than guessing — a wrong guess silently corrupts a different item's
@@ -1436,7 +1398,6 @@ export function parseAndHealVisionScout(
             addDebugLog(`[Label Merge] Could not confidently match label "${labelItem.originalName || labelItem.keyword}" (sourceImageIndex=${labelItem.sourceImageIndex}) to any food item. Leaving unmerged rather than guessing.`);
             break;
           }
-
           const cleanLabel = (labelItem.originalName || labelItem.keyword || "").toLowerCase().replace(/nutrition\s*facts?\s*label|nutrition\s*label/g, '').replace(/[^a-z0-9]/g, '');
           const cleanTarget = (primaryItem.originalName || primaryItem.keyword || "").toLowerCase().replace(/[^a-z0-9]/g, '');
           if (cleanLabel.length > 2 && (cleanLabel === cleanTarget || cleanTarget.includes(cleanLabel) || cleanLabel.includes(cleanTarget))) {
@@ -1444,7 +1405,6 @@ export function parseAndHealVisionScout(
           } else {
             addDebugLog(`[Label Merge] Matched label "${labelItem.originalName || labelItem.keyword}" (sourceImageIndex=${labelItem.sourceImageIndex}) -> "${primaryItem.originalName || primaryItem.keyword}" (sourceImageIndex=${primaryItem.sourceImageIndex}).`);
           }
-
           const labelHasRealData = labelItem.rawNutritionLabel && typeof labelItem.rawNutritionLabel === 'object'
             ? Object.keys(labelItem.rawNutritionLabel).some((k: string) => {
                 if (k === 'servingSize' || k === 'weight' || k === 'servingsPerContainer') return false;
@@ -1468,7 +1428,6 @@ export function parseAndHealVisionScout(
           visionScoutItems.splice(labelIdx, 1);
         }
       }
-
       // Multi-Photo Fuzzy Package Deduplication Engine
       // Merges items from multi-photo package uploads that represent the same product from different camera angles
       if (visionScoutItems.length > 1) {
@@ -1476,20 +1435,15 @@ export function parseAndHealVisionScout(
         for (let i = 0; i < visionScoutItems.length; i++) {
           const itemA = visionScoutItems[i];
           let isDuplicate = false;
-
           for (let j = 0; j < mergedList.length; j++) {
             const itemB = mergedList[j];
-
             const nameA = (itemA.originalName || itemA.keyword || "").toLowerCase();
             const nameB = (itemB.originalName || itemB.keyword || "").toLowerCase();
-
             const tokensA = nameA.replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter((t: string) => t.length > 2);
             const tokensB = nameB.replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter((t: string) => t.length > 2);
-
             const overlapCount = tokensA.filter((t: string) => tokensB.includes(t)).length;
             const maxLen = Math.max(tokensA.length, tokensB.length);
             const overlapRatio = maxLen > 0 ? overlapCount / maxLen : 0;
-
             const calA = itemA.rawNutritionLabel?.calories || null;
             const calB = itemB.rawNutritionLabel?.calories || null;
             const parseCalNum = (c: any) => typeof c === 'number' ? c : (typeof c === 'string' ? parseFloat(c.replace(/[^0-9.]/g, '')) : null);
@@ -1499,30 +1453,24 @@ export function parseAndHealVisionScout(
             const hasCalB = numCalB !== null && !isNaN(numCalB);
             const samePrintedCalories = hasCalA && hasCalB && Math.abs(numCalA - numCalB) < 2;
             const diffPrintedCalories = hasCalA && hasCalB && Math.abs(numCalA - numCalB) >= 2;
-
             const sameSourceImage = itemA.sourceImageIndex !== undefined
               && itemB.sourceImageIndex !== undefined
               && itemA.sourceImageIndex === itemB.sourceImageIndex;
-
             const cleanKeyA = (itemA.originalName || itemA.keyword || "").toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
             const cleanKeyB = (itemB.originalName || itemB.keyword || "").toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
             const exactKeyMatch = cleanKeyA.length > 0 && cleanKeyA === cleanKeyB;
-
             const hasLabelA = itemA.rawNutritionLabel && Object.keys(itemA.rawNutritionLabel).some((k: string) => itemA.rawNutritionLabel[k] !== null && itemA.rawNutritionLabel[k] !== undefined && itemA.rawNutritionLabel[k] !== "");
             const hasLabelB = itemB.rawNutritionLabel && Object.keys(itemB.rawNutritionLabel).some((k: string) => itemB.rawNutritionLabel[k] !== null && itemB.rawNutritionLabel[k] !== undefined && itemB.rawNutritionLabel[k] !== "");
-
             // Cross-image deduplication engine:
             // Merges items detected across different photos of the same meal (e.g. kiosk screen photo vs actual food photo)
             // DISABLED in compare mode, since the user is intentionally uploading multiple distinct items to compare.
             // MUST NOT merge items if both have distinct nutrition labels with different calories, or different labels without exact key match.
             const hasConflictingLabels = diffPrintedCalories || (hasLabelA && hasLabelB && !samePrintedCalories && !exactKeyMatch);
-
             const isCrossImageDuplicate = !isCompareMode && !sameSourceImage && !hasConflictingLabels && (
               (samePrintedCalories && overlapRatio >= 0.4) ||
               exactKeyMatch ||
               (overlapRatio >= 0.75)
             );
-
             if (isCrossImageDuplicate) {
               addDebugLog(`[Multi-Photo Merge] Merged duplicate cross-photo item "${itemA.originalName || itemA.keyword}" (Image ${itemA.sourceImageIndex}) into "${itemB.originalName || itemB.keyword}" (Image ${itemB.sourceImageIndex}).`);
               if (itemA.ingredientsList && !itemB.ingredientsList) {
@@ -1541,7 +1489,6 @@ export function parseAndHealVisionScout(
                 }
                 itemB.rawNutritionLabel = mergedLabel;
               }
-
               // If both items are visual dishes without printed nutrition labels, combine their weights and nutrients
               if (!hasLabelA && !hasLabelB) {
                 const weightA = Number(itemA.estimatedWeightGrams) || 0;
@@ -1558,7 +1505,6 @@ export function parseAndHealVisionScout(
                   }
                 }
               }
-
               if (itemA.components && Array.isArray(itemA.components) && itemA.components.length > 0 && (!itemB.components || itemB.components.length === 0)) {
                 itemB.components = itemA.components;
               }
@@ -1569,28 +1515,23 @@ export function parseAndHealVisionScout(
               break;
             }
           }
-
           if (!isDuplicate) {
             mergedList.push(itemA);
           }
         }
         visionScoutItems = mergedList;
       }
-
       visionScoutItems = resolvePackageAndContextItems(visionScoutItems, addDebugLog, userMessage, isCompareMode);
       visionScoutItems = clusterSpatialCompositeDishes(visionScoutItems, addDebugLog, isCompareMode);
       visionScoutItems = reconcileContainerVolumeBudget(visionScoutItems, addDebugLog);
-
       // Re-index finalized items so scoutIndex is contiguous (0, 1, 2, ...) after deduplicating labels
       visionScoutItems = visionScoutItems.map((item: any, idx: number) => ({
         ...item,
         scoutIndex: idx
       }));
-
       for (const item of visionScoutItems) {
         // Enforce Label-to-Component reconciliation for dressings/sauces/condiments detected via OCR or vision
         reconcileIngredientsToComponents(item, addDebugLog);
-
         // Issue #6: Persistent Web Search Override on Generic Items.
         // Restrict queriesToSearch strictly to detected restaurant chains or packaged brand names (chainName !== null).
         if (item.chainName) {
@@ -1617,7 +1558,6 @@ export function parseAndHealVisionScout(
       }
     }
   }
-
   // Perform structural sanity check on final items (Fix 2)
   const sanity = checkScoutSanity({ items: visionScoutItems }, addDebugLog);
   if (!sanity.valid) {
@@ -1625,7 +1565,6 @@ export function parseAndHealVisionScout(
     addDebugLog(warningMsg);
     throw new Error(warningMsg);
   }
-
   return {
     items: visionScoutItems,
     scoutConfidenceRating,

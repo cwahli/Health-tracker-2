@@ -1221,7 +1221,8 @@ export function synchronizeNarrativeText(
   grandFat: number,
   grandSatFat: number,
   grandNa: number,
-  grandCarbs?: number
+  grandCarbs?: number,
+  grandFiber?: number
 ): string {
   if (!text || typeof text !== 'string') return text;
 
@@ -1244,7 +1245,7 @@ export function synchronizeNarrativeText(
   const naRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(mg\\s*(?:of\\s+)?${safeAdj}sodium)\\b`, 'gi');
   updated = updated.replace(naRe, (match, num, rest) => `${naFormatted}${rest}`);
   updated = updated.replace(/(sodium\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*mg[^)]*\))/gi, (match, p1, num, p3) => `${p1}${naFormatted}${p3}`);
-  updated = updated.replace(/(sodium\s*(?:to\s+|is\s+|at\s+|:\s*))([\d,]+(?:\.\d+)?)(\s*mg)/gi, (match, p1, num, p3) => `${p1}${naFormatted}${p3}`);
+  updated = updated.replace(/(sodium\s*(?:[a-zA-Z-]+\s+){0,3}(?:to|is|at|under|below|around|of|:)\s*)([\d,]+(?:\.\d+)?)(\s*mg)/gi, (match, p1, num, p3) => `${p1}${naFormatted}${p3}`);
 
   // 3. Saturated Fat
   const satFatRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}saturated\\s*fat)\\b`, 'gi');
@@ -1268,6 +1269,16 @@ export function synchronizeNarrativeText(
     const carbRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}(?:carbohydrates|carbs))\\b`, 'gi');
     updated = updated.replace(carbRe, (match, num, rest) => `${carbVal}${rest}`);
   }
+
+  // 7. Fiber
+  if (grandFiber !== undefined && grandFiber >= 0) {
+    const fiberVal = Math.round(grandFiber * 10) / 10;
+    const fiberRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}(?:fiber|fibre|dietary\\s*fiber))\\b`, 'gi');
+    updated = updated.replace(fiberRe, (match, num, rest) => `${fiberVal}${rest}`);
+    updated = updated.replace(/(fiber\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*g[^)]*\))/gi, (match, p1, num, p3) => `${p1}${fiberVal}${p3}`);
+    updated = updated.replace(/(fiber\s*(?:[a-zA-Z-]+\s+){0,3}(?:to|is|at|under|below|around|of|:)\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => `${p1}${fiberVal}${p3}`);
+  }
+
   return updated;
 }
 

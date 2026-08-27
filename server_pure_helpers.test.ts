@@ -519,6 +519,16 @@ describe('server_pure_helpers', () => {
       const result = synchronizeNarrativeText(input, 240, 6, 7, 1, 0, 42);
       expect(result).toBe("This meal provides 6g of protein and 42g of carbohydrates.");
     });
+
+    it('correctly synchronizes protein, fiber, and sodium in complex multi-item hotpot narratives', async () => {
+      const { synchronizeNarrativeText } = await import('./server_pure_helpers');
+      const input = "You secured an impressive 70.6g of high-quality protein and nearly 17g of fiber from the lean beef, egg, and fresh vegetables. This nourishing home-cooked hotpot combination keeps sodium exceptionally low at 357mg while providing steady energy. Enjoying warm, fiber-rich broths supports smooth gastric emptying and gentle hydration. Take a comfortable 15-minute stroll to aid digestion and maintain your metabolic rhythm.";
+      const result = synchronizeNarrativeText(input, 650, 45.2, 18.0, 4.5, 850, 30.0, 8.5);
+      expect(result).toContain("45.2g of high-quality protein");
+      expect(result).toContain("nearly 8.5g of fiber");
+      expect(result).toContain("keeps sodium exceptionally low at 850mg");
+      expect(result).toContain("15-minute stroll");
+    });
   });
 });
 

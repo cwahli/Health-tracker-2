@@ -1,7 +1,18 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-26
-**Status:** Hierarchical Scout System Instruction & Compact Schema Port to Production Complete (54/54 test files in src/, 7 food domain test files passing, assert-budgets PASS, tsc clean).
+**Updated:** 2026-08-27
+**Status:** Composite Dish Breakdown Weight & Complete Ingredient Title Propagation Fix Complete (86/86 test files passing, assert-budgets PASS, tsc clean).
+
+- **Composite Dish Sub-Ingredient Weight & Title Component Completeness (`NutritionLabelTable.tsx`, `server_dish_finalize.ts`, `server_vision_scout.ts`, `server.ts` - 2026-08-27):**
+  - **Root Cause & Diagnosis:**
+    1. *0g Sub-Ingredient Weights*: In `NutritionLabelTable.tsx`, `sibWeight` evaluated `sib.weightGrams || sib.estimatedWeightGrams || 0`. When sub-components in composite dishes arrived from the vision scout or budget ledger under alternative keys (or without pre-scaled gram weights), the breakdown rows rendered `(0g)` and failed to calculate proportional sub-component calories and macronutrients.
+    2. *Incomplete Dish Titles & Missing Visual Components*: When dishes contained multiple ingredients (e.g. broccoli, baby corn, chicken egg), the dish name and footer lists only captured the primary base name if the Scout or Dietitian emitted a truncated label, and `server.ts` `itemsBreakdown` mapping dropped `componentsDetailList`/`compositeSiblings` when transferring from `preCalculatedItems` and `preMatch`.
+  - **Key Changes Applied:**
+    - **End-to-End Component Preservation in Backend Ledger (`server_dish_finalize.ts` & `server_vision_scout.ts`):** Populated `componentsDetailList`, `compositeSiblings`, `hasComponents`, and `ingredientsList` in `finalizeDishLedger`, `clusterSpatialCompositeDishes`, and `parsedScout.dishes` processing, ensuring every constituent item retains its exact physical weight and nutrient profile.
+    - **Comprehensive Dish Title Assembly:** When multiple constituent components are identified in a single dish, the dish title automatically incorporates all constituent ingredients (e.g. *"Broccoli with Baby Corn, Chicken Egg"*), and `visualIngredients` / `ingredientsList` are completely populated.
+    - **Reconciliation & Dietitian Context Enrichment (`server.ts`):** Propagated `componentsDetailList` and `compositeSiblings` through `preCalculatedItems`, `preCalculatedCtx` (providing the Dietitian LLM with full breakdown transparency), and final `itemsBreakdown` reconstruction.
+    - **Robust Frontend Rendering & Fallback Math (`NutritionLabelTable.tsx`):** Enhanced `sibWeight` computation to check `weightGrams`, `estimatedWeightGrams`, `weight`, and volumetric percentages, and added comprehensive fallback macro calculations (`calories`, `protein`, `totalFat`, `carbohydrates`) directly from the constituent component records.
+  - **Verification & Gates:** 86/86 vitest test files (800/800 tests) passing, `node scripts/assert-budgets.mjs` PASS exit 0, `node scripts/assert-agent-governance.mjs` PASS exit 0, `node scripts/assert-biomarker-lifecycle-m31.mjs` PASS exit 0, `npx tsc --noEmit` exit 0.
 
 - **Nutrient Table Sorting Fix & Live Run Diagnostic Review (`NutritionLabelTable.tsx`, `nutrition.ts` - 2026-08-26):**
   - **Root Cause & Diagnosis:**

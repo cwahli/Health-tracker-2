@@ -383,8 +383,8 @@ describe("server_vision_scout", () => {
       expect(item.components.length).toBe(initialCount);
     });
   });
-});
 
+  describe("canMergeScoutLabelIntoFood & spatial clustering", () => {
     it("does not merge sweet chilli mini fillets label", () => {
       const label = { originalName: "Quorn Sweet Chilli Mini Fillets Nutrition Facts Label" };
       const food = { originalName: "Quorn Sweet Chilli Mini Fillets" };
@@ -485,4 +485,38 @@ describe("server_vision_scout", () => {
       expect(result.items[0].nutrients.totalFat).toBe(13);
       expect(result.items[0].nutrients.sodium).toBe(380);
     });
+
+    it("does not merge separate plates or distinct dishes with their own components", () => {
+      const items = [
+        {
+          originalName: "Uncooked Plate Ingredients",
+          keyword: "uncooked plate ingredients",
+          estimatedWeightGrams: 300,
+          boundingBox2D: [390, 0, 990, 439],
+          sourceImageIndex: 0,
+          components: [
+            { name: "Broccoli", weightGrams: 250 },
+            { name: "Baby Corn", weightGrams: 50 }
+          ]
+        },
+        {
+          originalName: "Raw Egg",
+          keyword: "raw egg",
+          estimatedWeightGrams: 65,
+          boundingBox2D: [790, 350, 990, 489],
+          sourceImageIndex: 0,
+          components: [
+            { name: "Chicken Egg", weightGrams: 65 }
+          ]
+        }
+      ];
+
+      const clustered = clusterSpatialCompositeDishes(items, () => {});
+      // Raw egg and plate ingredients on separate coordinates should remain distinct dishes
+      expect(clustered).toHaveLength(2);
+      expect(clustered[0].originalName).toBe("Uncooked Plate Ingredients");
+      expect(clustered[1].originalName).toBe("Raw Egg");
+    });
+  });
+});
 

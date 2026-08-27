@@ -1998,35 +1998,7 @@ export default function FoodHistoryTab({
                                   </div>
                                 )}
 
-                                {/* Interactive Portion Controller & Status for Saved History Log */}
-                                <div className="pt-2.5 border-t border-slate-200/50 dark:border-slate-800/50 space-y-2">
-                                  <div className="flex items-center justify-between text-[10.5px] text-slate-600 dark:text-slate-300 font-sans">
-                                    <span className="flex items-center gap-1.5 font-medium">
-                                      <span>⚖️</span>
-                                      <span>Portion size applied: <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{log.portionRatio ? `${log.portionRatio}x` : '1.0x (Standard)'}</strong></span>
-                                    </span>
-                                    {log.portionAccepted && (
-                                      <span className="text-[9.5px] text-emerald-600 dark:text-emerald-400 font-semibold">✓ Accepted</span>
-                                    )}
-                                  </div>
-                                  <MealPortionController
-                                    displayedScoutItems={scoutItemsList}
-                                    portionScale={log.portionRatio || 1.0}
-                                    portionAccepted={Boolean(log.portionAccepted)}
-                                    onScalePortion={(ratio) => {
-                                      const updated = scaleMealPortion(log, ratio);
-                                      onUpdateFoodLog(updated as FoodLog);
-                                    }}
-                                    onScaleSingleDish={(dishIdx, ratio) => {
-                                      const updated = scaleSingleDishPortion(log, dishIdx, ratio);
-                                      onUpdateFoodLog(updated as FoodLog);
-                                    }}
-                                    onAcceptPortion={() => {
-                                      onUpdateFoodLog({ ...log, portionAccepted: true } as FoodLog);
-                                    }}
-                                    isSaved={true}
-                                  />
-                                </div>
+                                {/* Portion controls now handled inside item tab views */}
                               </div>
                             );
                           })()}

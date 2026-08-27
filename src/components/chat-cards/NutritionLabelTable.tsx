@@ -4,6 +4,7 @@ import { nutrientDefinitions } from '../../utils/nutrition';
 import { translations } from '../../utils/translations';
 import { PositionedTooltip } from '../ui/PositionedTooltip';
 import { PortionDropdown } from './PortionDropdown';
+import { PackPortionRow } from './PackPortionRow';
 
 function parseLabelCalories(raw: any): number | null {
   if (raw == null) return null;
@@ -405,6 +406,29 @@ function buildSynthesizedRawLabel(item: any, source: any) {
   return rawLabel;
 }
 
+function resolveComponentWeightGrams(comp: any, dishWeight: number = 0, compCount: number = 1): number {
+  if (!comp) return 0;
+  if (typeof comp === 'string') return compCount > 0 && dishWeight > 0 ? Math.round(dishWeight / compCount) : 0;
+  const direct = Number(
+    comp.weightGrams ??
+    comp.estimatedWeightGrams ??
+    comp.weight ??
+    comp.portionWeightGrams ??
+    comp.servingSizeGrams ??
+    0
+  );
+  if (direct > 0 && !isNaN(direct)) return direct;
+  const volPct = Number(comp.volumePercentage || comp.percentage || comp.volume_percentage || 0);
+  if (volPct > 0 && dishWeight > 0) {
+    const derived = Math.round(dishWeight * (volPct / 100));
+    if (derived > 0) return derived;
+  }
+  if (dishWeight > 0 && compCount > 0) {
+    return Math.round(dishWeight / compCount);
+  }
+  return 0;
+}
+
 export function NutritionLabelTable({ 
   activeScoutItems, 
   onConfirmItem, 
@@ -427,6 +451,9 @@ export function NutritionLabelTable({
   const t = translations[language || "en"] || translations.en;
   const [showEstimatedMap, setShowEstimatedMap] = React.useState<Record<number, boolean>>({});
   const [confirmedIndices, setConfirmedIndices] = React.useState<Set<number>>(new Set());
+  const [activeTabMap, setActiveTabMap] = React.useState<Record<number, number>>({});
+  const [customPortionMap, setCustomPortionMap] = React.useState<Record<string, number>>({});
+
   const toggleShowEstimated = (idx: number) => {
     setShowEstimatedMap(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
@@ -439,15 +466,17 @@ export function NutritionLabelTable({
     items = [];
   }
 
-  // Decompose composite items into their individual sub-components if available
+  // Preserve composite items with their sub-components
   const expandedItems: any[] = [];
   items.forEach(item => {
     if (!item) return;
 
     // Collect all sub-components that actually have a nutrient profile
-    const allDishComps = (Array.isArray(item.componentsDetailList) && item.componentsDetailList.length > 0)
-      ? item.componentsDetailList
-      : ((Array.isArray(item.components) && item.components.length > 0) ? item.components : []);
+    const allDishComps = (Array.isArray(item.compositeSiblings) && item.compositeSiblings.length > 0)
+      ? item.compositeSiblings
+      : (Array.isArray(item.componentsDetailList) && item.componentsDetailList.length > 0)
+        ? item.componentsDetailList
+        : ((Array.isArray(item.components) && item.components.length > 0) ? item.components : []);
 
     const subComps = allDishComps.filter((c: any) => {
       if (!c) return false;
@@ -457,70 +486,20 @@ export function NutritionLabelTable({
       return true;
     });
 
-    const isGenuineComposite = (item.dbSource === 'composite' || item.isComposite) && Array.isArray(subComps) && subComps.length > 1;
-
-    // Only decompose into individual tables if the sub-components are OFFICIAL brand or label records.
-    // Estimated ingredients should NOT render standalone tables; they stay grouped in the main receipt.
-    const officialSubComps: any[] = [];
-    if (isGenuineComposite) {
-      subComps.forEach((comp: any) => {
-        const cleanName = String(comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || 'Ingredient').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/^[📖\s]+/, '').trim();
-        const isGenericStaple = /^(milk|semi-skimmed milk|whole milk|skimmed milk|water|ice|sugar|salt|flour|white sugar|brown sugar)$/i.test(cleanName);
-        const isStandardRef = ['canonical_dict', 'canonical', 'internal_catalog', 'usda'].includes(comp.dbSource || comp.source);
-        const hasDirectBrand = Boolean((comp.dbId && String(comp.dbId).includes('brand_menu_')) || (comp.fdcId && String(comp.fdcId).includes('brand_menu_')) || (comp.chainName && !isGenericStaple) || (comp.brand && !isGenericStaple));
-        const isCompOfficial = !isStandardRef && (comp.dbSource === 'brand_official' || comp.dbSource === 'label' || comp.dbSource === 'off' || comp.dbSource === 'open_food_facts' || comp.dbSource === 'openfoodfacts' || comp.source === 'brand_official' || comp.source === 'label' || Boolean(comp.isRealTruth) || hasDirectBrand);
-        const compLabelSource = comp.syntheticBase100g || comp.baseNutrients100g || comp.primaryBase100g || comp.labelNutrientsPerServing || comp.nutrients || comp.nutrients_per_100g || comp.core_nutrients;
-        if (isCompOfficial && (comp.rawNutritionLabel || compLabelSource)) {
-          const compRawLabel = comp.rawNutritionLabel || buildSynthesizedRawLabel(comp, compLabelSource);
-
-          officialSubComps.push({
-            ...comp,
-            keyword: cleanName,
-            originalName: cleanName,
-            name: cleanName,
-            chainName: hasDirectBrand ? (comp.chainName || comp.brand || comp.brandName || null) : null,
-            brand: hasDirectBrand ? (comp.brand || comp.chainName || comp.brandName || null) : null,
-            primaryBaseMatchName: cleanName,
-            dbSource: comp.dbSource || comp.source || (hasDirectBrand ? 'brand_official' : 'usda'),
-            source: comp.source || comp.dbSource || (hasDirectBrand ? 'brand_official' : 'usda'),
-            rawNutritionLabel: compRawLabel,
-            isRealTruth: Boolean(hasDirectBrand || comp.dbSource === 'brand_official' || comp.rawNutritionLabel),
-            isComponentOfComposite: true
-          });
-        }
-      });
+    const isMultiCompComposite = (Array.isArray(subComps) && subComps.length >= 2) || item.dbSource === 'composite' || item.isComposite;
+    const itemLabelSource = item.syntheticBase100g || item.baseNutrients100g || item.primaryBase100g || item.labelNutrientsPerServing || item.nutrients || item.nutritionFacts || item.nutrients_per_100g || item.core_nutrients || item;
+    let itemRawLabel = item.rawNutritionLabel;
+    
+    if ((!itemRawLabel || Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length === 0) && itemLabelSource && typeof itemLabelSource === 'object') {
+      itemRawLabel = buildSynthesizedRawLabel(item, itemLabelSource);
     }
 
-    if (officialSubComps.length > 0) {
-      officialSubComps.forEach((comp) => {
-        const siblings = allDishComps.filter((c: any) => {
-          const cName = String(c.primaryBaseMatchName || c.name || c.searchQuery || c.keyword || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/^[📖\s]+/, '').trim().toLowerCase();
-          const compName = String(comp.primaryBaseMatchName || comp.name || comp.keyword || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/^[📖\s]+/, '').trim().toLowerCase();
-          return cName !== compName && c !== comp;
-        });
-
-        expandedItems.push({
-          ...comp,
-          compositeSiblings: siblings
-        });
-      });
-    } else {
-      // Include the top-level dish/item when there are no decomposed official subcomponents
-      const isMultiCompComposite = (Array.isArray(subComps) && subComps.length >= 2) || item.dbSource === 'composite';
-      const itemLabelSource = item.syntheticBase100g || item.baseNutrients100g || item.primaryBase100g || item.labelNutrientsPerServing || item.nutrients || item.nutritionFacts || item.nutrients_per_100g || item.core_nutrients || item;
-      let itemRawLabel = item.rawNutritionLabel;
-      
-      if ((!itemRawLabel || Object.keys(normalizeNutritionKeys(itemRawLabel) || {}).length === 0) && itemLabelSource && typeof itemLabelSource === 'object') {
-        itemRawLabel = buildSynthesizedRawLabel(item, itemLabelSource);
-      }
-
-      expandedItems.push({
-        ...item,
-        rawNutritionLabel: itemRawLabel || item.rawNutritionLabel || {},
-        dbSource: item.dbSource || (isMultiCompComposite ? 'composite' : (item.source === 'label' ? 'label' : 'visual')),
-        compositeSiblings: isMultiCompComposite ? allDishComps : []
-      });
-    }
+    expandedItems.push({
+      ...item,
+      rawNutritionLabel: itemRawLabel || item.rawNutritionLabel || {},
+      dbSource: item.dbSource || (isMultiCompComposite ? 'composite' : (item.source === 'label' ? 'label' : 'visual')),
+      compositeSiblings: subComps
+    });
   });
 
   const processedItems = expandedItems.map(item => {
@@ -576,7 +555,76 @@ export function NutritionLabelTable({
 
   if (!hasLabels) return null;
 
-  const renderedItems = processedItems.map((item: any, i: number) => {
+  const renderedItems = processedItems.map((rootItem: any, i: number) => {
+            const subComps: any[] = (Array.isArray(rootItem.compositeSiblings) && rootItem.compositeSiblings.length > 0)
+              ? rootItem.compositeSiblings
+              : ((Array.isArray(rootItem.components) && rootItem.components.length > 0)
+                ? rootItem.components
+                : []);
+            const hasTabs = subComps.length > 1;
+            const activeTab = activeTabMap[i] || 0;
+            const dishTotalWeight = getResolvedItemWeightGrams(rootItem) || 0;
+
+            let item = rootItem;
+            let activeTitle = rootItem.primaryBaseMatchName || rootItem.labelProductName || rootItem.scoutOriginalName || rootItem.originalName || rootItem.keyword || 'Food Item';
+            let activePackGrams = rootItem.packGrams || null;
+
+            if (activeTab > 0 && subComps[activeTab - 1]) {
+              const comp = subComps[activeTab - 1];
+              const compWeight = customPortionMap[`${i}-${activeTab}`] || resolveComponentWeightGrams(comp, dishTotalWeight, subComps.length);
+              const compName = String(comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || (typeof comp === 'string' ? comp : 'Ingredient'))
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                .replace(/^[📖\s]+/, '')
+                .replace(/\s*\((internal_catalog|usual_catalog|canonical base)\)/gi, '')
+                .trim();
+              
+              let base100g = comp.baseNutrients100g || comp.syntheticBase100g || comp.primaryBase100g;
+              if (!base100g && comp.nutrients && compWeight > 0) {
+                base100g = {
+                  calories: Math.round(((comp.calories ?? comp.nutrients.calories ?? 0) / compWeight) * 100),
+                  protein: Math.round(((comp.protein ?? comp.nutrients.protein ?? 0) / compWeight) * 100 * 10) / 10,
+                  totalFat: Math.round(((comp.totalFat ?? comp.fat ?? comp.nutrients.totalFat ?? comp.nutrients.fat ?? 0) / compWeight) * 100 * 10) / 10,
+                  saturatedFat: Math.round(((comp.saturatedFat ?? comp.nutrients.saturatedFat ?? 0) / compWeight) * 100 * 10) / 10,
+                  carbohydrates: Math.round(((comp.carbohydrates ?? comp.carbs ?? comp.nutrients.carbohydrates ?? 0) / compWeight) * 100 * 10) / 10,
+                  sodium: Math.round(((comp.sodium ?? comp.nutrients.sodium ?? 0) / compWeight) * 100),
+                };
+              }
+
+              const scale = (compWeight || 100) / 100;
+              const mergedNutrients: Record<string, any> = { ...(comp.nutrients || {}) };
+              if (base100g) {
+                Object.entries(base100g).forEach(([k, v]) => {
+                  if (typeof v === 'number' && Number.isFinite(v)) {
+                    mergedNutrients[k] = Math.round(v * scale * 10) / 10;
+                  }
+                });
+              }
+
+              const rawLabel = comp.rawNutritionLabel || (base100g ? buildSynthesizedRawLabel({ weightGrams: compWeight }, base100g) : buildSynthesizedRawLabel({ weightGrams: compWeight }, mergedNutrients));
+
+              item = {
+                ...comp,
+                name: compName,
+                keyword: compName,
+                originalName: compName,
+                primaryBaseMatchName: compName,
+                weightGrams: compWeight,
+                estimatedWeightGrams: compWeight,
+                packGrams: comp.packGrams ?? null,
+                cookingMethod: comp.cookingMethod || rootItem.cookingMethod || 'cooked',
+                dbSource: comp.dbSource || 'estimated',
+                source: comp.source || comp.dbSource || 'visual',
+                rawNutritionLabel: normalizeNutritionKeys(rawLabel),
+                nutritionFacts: normalizeNutritionKeys(mergedNutrients),
+                nutrients: mergedNutrients,
+                baseNutrients100g: base100g,
+                isComponentOfComposite: true,
+              };
+
+              activeTitle = compName;
+              activePackGrams = comp.packGrams ?? null;
+            }
+
             const meaningfulRawKeys = item.rawNutritionLabel
               ? Object.keys(item.rawNutritionLabel).filter((k: string) =>
                   !NON_NUTRIENT_LABEL_KEYS.has(k) &&
@@ -694,95 +742,113 @@ export function NutritionLabelTable({
               return aOrder - bOrder;
             });
 
-            const rawTitle = item.primaryBaseMatchName || item.labelProductName || item.scoutOriginalName || item.originalName || item.keyword || 'Food Item';
-              const cleanTitle = String(rawTitle)
-                .replace(/^Estimated:\s*/i, '')
-                .replace(/\s*\(category fallback\)/gi, '')
-                .trim();
-              const visualText = Array.isArray(item.visualIngredients) && item.visualIngredients.length > 0
-                ? item.visualIngredients.join(', ')
-                : (item.components || []).map((c: any) => typeof c === 'string' ? c : (c.searchQuery || c.name || c.keyword)).join(', ');
-              const mainName = item.originalName || item.keyword || item.primaryBaseMatchName;
-              const hasDescription = visualText && visualText.toLowerCase().trim() !== (mainName || '').toLowerCase().trim();
-              const cookingMethod = item.cookingMethod || item.cooking_method;
-              const sourceBadge = getSourceBadge(item);
+            const rootTitle = rootItem.primaryBaseMatchName || rootItem.labelProductName || rootItem.scoutOriginalName || rootItem.originalName || rootItem.keyword || 'Food Item';
+            const cleanDishTitle = String(rootTitle)
+              .replace(/^Estimated:\s*/i, '')
+              .replace(/\s*\(category fallback\)/gi, '')
+              .trim();
+            const cookingMethod = item.cookingMethod || item.cooking_method;
+            const sourceBadge = getSourceBadge(item);
 
-              return (
-                <div
-                  key={`nut-${i}`}
-                  className="text-[10px] text-theme-text-secondary bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-theme-border/80"
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex flex-col text-left min-w-0">
-                      <strong className="block text-slate-800 dark:text-slate-200 font-display text-xs">
-                        {(item.chainName || item.brand || item.brandName) && (item.dbSource === 'brand_official' || String(item.dbId || '').includes('brand_menu_') || String(item.fdcId || '').includes('brand_menu_')) ? (
-                          <>
-                            <span className="text-indigo-500 dark:text-indigo-400">{item.chainName || item.brand || item.brandName}</span>
-                            {' · '}
-                          </>
-                        ) : null}
-                        {cleanTitle}
-                      </strong>
-                      {hasDescription && (
-                        <span className="text-[10px] font-medium leading-relaxed text-indigo-600 dark:text-indigo-400 break-words mt-0.5 font-sans">
-                          {visualText}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {sourceBadge && (
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium shrink-0 ${sourceBadge.className}`}>
-                          {sourceBadge.text}
-                        </span>
-                      )}
-                      {cookingMethod && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 shrink-0 capitalize">
-                          {cookingMethod}
-                        </span>
-                      )}
-                    </div>
+            return (
+              <div
+                key={`nut-${i}`}
+                className="text-[10px] text-theme-text-secondary bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-theme-border/80"
+              >
+                {/* Header Title with Brand & Badges */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex flex-col text-left min-w-0">
+                    <strong className="block text-slate-800 dark:text-slate-200 font-display text-xs">
+                      {(rootItem.chainName || rootItem.brand || rootItem.brandName) && (rootItem.dbSource === 'brand_official' || String(rootItem.dbId || '').includes('brand_menu_') || String(rootItem.fdcId || '').includes('brand_menu_')) ? (
+                        <>
+                          <span className="text-indigo-500 dark:text-indigo-400">{rootItem.chainName || rootItem.brand || rootItem.brandName}</span>
+                          {' · '}
+                        </>
+                      ) : null}
+                      {cleanDishTitle}
+                    </strong>
                   </div>
-
-                <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 text-[10px]">
-                  <div className="font-medium text-theme-neutral flex items-center flex-wrap gap-1.5">
-                    <span className="text-slate-400 font-normal">
-                      {isVolume ? 'Volume:' : t.weightLabelWithColon}
-                    </span>{' '}
-                    {missingWeight ? (
-                      <span className="text-amber-500 font-bold">{t.unknown}</span>
-                    ) : (
-                      <span className="font-semibold">{resolvedWeight}{isVolume ? 'ml' : 'g'}{cookingMethod ? ` ${cookingMethod}` : ''}</span>
-                    )}
-                    {item.packGrams ? (
-                      <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[9px] font-semibold border border-indigo-200/40">
-                        {item.portionDescription || `${Math.round(((resolvedWeight || 0) / item.packGrams) * 100)}% of ${item.packGrams}g pack`}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {sourceBadge && (
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium shrink-0 ${sourceBadge.className}`}>
+                        {sourceBadge.text}
                       </span>
-                    ) : null}
-
-                    {onScalePortion && !isSaved && (
-                      <div className="inline-flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-300 dark:border-slate-700">
-                        <span className="text-slate-400 font-normal">Dish Portion:</span>
-                        <PortionDropdown
-                          baseWeight={(() => {
-                            const activeRatio = currentPortionRatio || item.portionRatio || 1.0;
-                            return resolvedWeight ? (resolvedWeight / activeRatio) : 100;
-                          })()}
-                          currentWeight={resolvedWeight || 100}
-                          onScale={onScalePortion}
-                        />
-                      </div>
+                    )}
+                    {cookingMethod && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 shrink-0 capitalize">
+                        {cookingMethod}
+                      </span>
                     )}
                   </div>
-                  {((item.rawNutritionLabel?.servingsPerContainer !== undefined && item.rawNutritionLabel?.servingsPerContainer !== null) || 
-                    (item.nutritionFacts?.servingsPerContainer !== undefined && item.nutritionFacts?.servingsPerContainer !== null)) && (
-                    <div className="font-medium text-theme-neutral">
-                      <span className="text-slate-400 font-normal">{t.servingsPerContainerColon}</span>{' '}
-                      {item.rawNutritionLabel?.servingsPerContainer !== undefined && item.rawNutritionLabel?.servingsPerContainer !== null 
-                        ? item.rawNutritionLabel.servingsPerContainer 
-                        : item.nutritionFacts?.servingsPerContainer}
-                    </div>
-                  )}
                 </div>
+
+                {/* Composite Dish Tabset */}
+                {hasTabs && (
+                  <div className="flex items-stretch gap-1.5 p-1 bg-slate-200/70 dark:bg-slate-900/70 rounded-xl mb-3 overflow-x-auto border border-slate-300/40 dark:border-slate-800/60">
+                    {/* Tab 0: Whole Dish */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTabMap(prev => ({ ...prev, [i]: 0 }))}
+                      className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-lg text-xs font-semibold transition-all min-w-[70px] cursor-pointer ${
+                        activeTab === 0
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-300/40 dark:hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <span className="capitalize">{rootItem.dishName || 'Dish'}</span>
+                      <span className={`text-[10px] font-normal leading-tight mt-0.5 ${activeTab === 0 ? 'text-indigo-100' : 'text-slate-400'}`}>
+                        {dishTotalWeight}g
+                      </span>
+                    </button>
+
+                    {/* Tabs 1..N: Sub-components */}
+                    {subComps.map((comp: any, cIdx: number) => {
+                      const isActive = activeTab === cIdx + 1;
+                      const compW = customPortionMap[`${i}-${cIdx + 1}`] || resolveComponentWeightGrams(comp, dishTotalWeight, subComps.length);
+                      const cName = String(comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || (typeof comp === 'string' ? comp : 'Ingredient'))
+                        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                        .replace(/^[📖\s]+/, '')
+                        .replace(/\s*\((internal_catalog|usual_catalog|canonical base)\)/gi, '')
+                        .trim();
+
+                      return (
+                        <button
+                          key={cIdx}
+                          type="button"
+                          onClick={() => setActiveTabMap(prev => ({ ...prev, [i]: cIdx + 1 }))}
+                          className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-lg text-xs font-semibold transition-all min-w-[70px] cursor-pointer ${
+                            isActive
+                              ? 'bg-indigo-600 text-white shadow-sm'
+                              : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-300/40 dark:hover:bg-slate-800/60'
+                          }`}
+                        >
+                          <span className="capitalize truncate max-w-[120px]">{cName}</span>
+                          <span className={`text-[10px] font-normal leading-tight mt-0.5 ${isActive ? 'text-indigo-100' : 'text-slate-400'}`}>
+                            {compW}g
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Pack Portion Selection with 5s Accept Feedback */}
+                {activePackGrams && activePackGrams > 0 && Math.abs(activePackGrams - (resolvedWeight || 0)) > 1 && (
+                  <PackPortionRow
+                    key={`portion-${i}-${activeTab}`}
+                    foodName={activeTitle}
+                    packGrams={activePackGrams}
+                    currentWeight={resolvedWeight || 100}
+                    dishWeight={activeTab === 0 ? dishTotalWeight : undefined}
+                    onScaleWeight={(newWeight) => {
+                      if (activeTab > 0) {
+                        setCustomPortionMap(prev => ({ ...prev, [`${i}-${activeTab}`]: newWeight }));
+                      } else if (onScalePortion && dishTotalWeight > 0) {
+                        onScalePortion(newWeight / dishTotalWeight);
+                      }
+                    }}
+                  />
+                )}
 
                 {item.lockedNutrientKeys && Array.isArray(item.lockedNutrientKeys) && item.lockedNutrientKeys.length > 0 && (
                   <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-[10px] text-amber-800 dark:text-amber-200 flex items-start gap-1.5">
@@ -1138,85 +1204,6 @@ export function NutritionLabelTable({
                     </div>
                   );
                 })()}
-
-                {item.compositeSiblings && item.compositeSiblings.length > 0 && (
-                  <div className="mt-3 pt-2.5 border-t border-theme-border/60">
-                    <details className="group [&_summary::-webkit-details-marker]:hidden" open>
-                      <summary className="flex items-center gap-1 cursor-pointer font-bold text-theme-text-secondary uppercase tracking-wider text-[9px] select-none">
-                        <svg
-                          className="w-3 h-3 transition-transform group-open:rotate-90"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                        </svg>
-                        <span>Estimated Ingredient Breakdown</span>
-                      </summary>
-                      <div className="space-y-1.5 mt-2 ml-1">
-                        {item.compositeSiblings.map((sib: any, sibIdx: number) => {
-                          const sibName = String(sib.primaryBaseMatchName || sib.name || sib.searchQuery || sib.keyword || 'Ingredient')
-                            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-                            .replace(/^[📖\s]+/, '')
-                            .replace(/\s*\((internal_catalog|usual_catalog|canonical base)\)/gi, '')
-                            .trim();
-                          const sibWeight = sib.weightGrams || sib.estimatedWeightGrams || 0;
-                          const isLiquid = /milk|water|juice|oil|broth|sauce|drink|beverage|soup/i.test(sibName);
-                          const unitLabel = isLiquid ? 'ml' : 'g';
-                          const sibSrc = String(sib.dbSource || sib.source || '').toLowerCase();
-                          const isStandardRef = ['canonical_dict', 'canonical', 'internal_catalog', 'usda'].includes(sibSrc);
-                          const isBrand = !isStandardRef && (sib.dbSource === 'brand_official' || sib.source === 'brand_official' || Boolean(sib.brandName || sib.chainName || sib.brand));
-                          const brandLabel = sib.chainName || sib.brandName || sib.brand;
-                          const hasRealDbId = Boolean(sib.dbId) && sib.dbId !== 'undefined' && sib.dbId !== 'null';
-                          const isLabel = Boolean(sib.rawNutritionLabel || sib.dbSource === 'label' || sib.source === 'label');
-                          const isUsda = !isBrand && !isLabel && (sib.dbSource === 'usda' || (hasRealDbId && String(sib.dbId).length > 4) || (Boolean(sib.name) && String(sib.name).includes('fdc.nal.usda.gov')));
-                          const isOff = !isBrand && !isLabel && !isUsda && (sib.dbSource === 'off' || sib.source === 'off' || (Boolean(sib.name) && String(sib.name).includes('world.openfoodfacts.org')));
-                          const isEstimated = sib.dbSource === 'estimated' || sib.source === 'estimated' || sib.source === 'visual';
-                          const sourceBadge = isLabel
-                            ? 'Nutrition Facts Label'
-                            : (isBrand
-                                ? (brandLabel ? `${brandLabel} Official` : 'Brand Official')
-                                : (isUsda 
-                                    ? 'USDA FoodData Central' 
-                                    : (isOff
-                                        ? 'Open Food Facts'
-                                        : (sib.dbSource === 'canonical_dict' ? 'Base Catalog Truth' : (isEstimated ? 'AI Estimated' : 'Standard Reference')))));
-                          
-                          const cals = sib.calories ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.calories || 0) * (sibWeight / 100)) : null);
-                          const protein = sib.protein ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.protein || 0) * (sibWeight / 100) * 10) / 10 : null);
-                          const fat = (sib.totalFat ?? sib.fat) ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.totalFat ?? sib.baseNutrients100g.fat ?? 0) * (sibWeight / 100) * 10) / 10 : null);
-                          const carbs = (sib.carbohydrates ?? sib.carbs ?? sib.totalCarbohydrate) ?? (sib.baseNutrients100g ? Math.round((sib.baseNutrients100g.totalCarbohydrate ?? sib.baseNutrients100g.carbohydrates ?? 0) * (sibWeight / 100) * 10) / 10 : null);
-                          const base100gCals = sib.baseNutrients100g?.calories ?? (sibWeight > 0 && cals ? Math.round((cals / sibWeight) * 100) : null);
-
-                          return (
-                            <div key={`sib-${sibIdx}`} className="p-2 rounded-lg bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100/60 dark:border-indigo-900/40 text-[10px]">
-                              <div className="flex items-center justify-between gap-2 mb-1">
-                                <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                  <span>{sibName}</span>
-                                  <span className="text-slate-500 dark:text-slate-400 font-normal">({sibWeight}{unitLabel})</span>
-                                </div>
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-medium bg-indigo-100/80 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
-                                  [{sourceBadge}]
-                                </span>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-slate-600 dark:text-slate-300 text-[9.5px]">
-                                {cals != null && (
-                                  <span>
-                                    <strong>{cals} kcal</strong>
-                                    {base100gCals ? <span className="text-slate-400 font-normal text-[8.5px]"> ({base100gCals} kcal/100{unitLabel})</span> : null}
-                                  </span>
-                                )}
-                                {protein != null && <><span className="text-slate-400 opacity-60">·</span> <span>Protein: <strong>{protein}g</strong></span></>}
-                                {fat != null && <><span className="text-slate-400 opacity-60">·</span> <span>Fat: <strong>{fat}g</strong></span></>}
-                                {carbs != null && <><span className="text-slate-400 opacity-60">·</span> <span>Carbs: <strong>{carbs}g</strong></span></>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </details>
-                  </div>
-                )}
 
                 {item.ingredientsList && String(item.ingredientsList).trim() && (
                   <div className="mt-2.5 p-2 bg-slate-100/60 dark:bg-slate-800/40 rounded-lg text-[9.5px] leading-normal border border-slate-200/40 dark:border-slate-700/30 text-left">

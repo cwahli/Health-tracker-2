@@ -26,7 +26,8 @@ export function synchronizeNarrativeText(
   grandFat: number,
   grandSatFat: number,
   grandNa: number,
-  grandCarbs?: number
+  grandCarbs?: number,
+  grandFiber?: number
 ): string {
   if (!text || typeof text !== 'string') return text;
 
@@ -49,7 +50,7 @@ export function synchronizeNarrativeText(
   const naRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(mg\\s*(?:of\\s+)?${safeAdj}sodium)\\b`, 'gi');
   updated = updated.replace(naRe, (_match, _num, rest) => `${naFormatted}${rest}`);
   updated = updated.replace(/(sodium\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*mg[^)]*\))/gi, (_match, p1, _num, p3) => `${p1}${naFormatted}${p3}`);
-  updated = updated.replace(/(sodium\s*(?:to\s+|is\s+|at\s+|:\s*))([\d,]+(?:\.\d+)?)(\s*mg)/gi, (_match, p1, _num, p3) => `${p1}${naFormatted}${p3}`);
+  updated = updated.replace(/(sodium\s*(?:[a-zA-Z-]+\s+){0,3}(?:to|is|at|under|below|around|of|:)\s*)([\d,]+(?:\.\d+)?)(\s*mg)/gi, (_match, p1, _num, p3) => `${p1}${naFormatted}${p3}`);
 
   // 3. Saturated Fat
   const satFatRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}saturated\\s*fat)\\b`, 'gi');
@@ -72,6 +73,15 @@ export function synchronizeNarrativeText(
     const carbVal = Math.round(grandCarbs * 10) / 10;
     const carbRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}(?:carbohydrates|carbs))\\b`, 'gi');
     updated = updated.replace(carbRe, (_match, _num, rest) => `${carbVal}${rest}`);
+  }
+
+  // 7. Fiber
+  if (grandFiber !== undefined && grandFiber >= 0) {
+    const fiberVal = Math.round(grandFiber * 10) / 10;
+    const fiberRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}(?:fiber|fibre|dietary\\s*fiber))\\b`, 'gi');
+    updated = updated.replace(fiberRe, (_match, _num, rest) => `${fiberVal}${rest}`);
+    updated = updated.replace(/(fiber\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*g[^)]*\))/gi, (_match, p1, _num, p3) => `${p1}${fiberVal}${p3}`);
+    updated = updated.replace(/(fiber\s*(?:[a-zA-Z-]+\s+){0,3}(?:to|is|at|under|below|around|of|:)\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (_match, p1, _num, p3) => `${p1}${fiberVal}${p3}`);
   }
 
   return updated;
@@ -245,12 +255,13 @@ export function scaleMealPortion<T extends FoodLogLike>(currentLog: T, ratio: nu
   const grandSatFat = updatedNutrients.saturatedFat ?? 0;
   const grandNa = updatedNutrients.sodium ?? 0;
   const grandCarbs = updatedNutrients.carbsGrams ?? updatedNutrients.carbohydrates ?? 0;
+  const grandFiber = updatedNutrients.fiberGrams ?? updatedNutrients.fiber ?? 0;
 
   if (resLog.message) {
-    resLog.message = synchronizeNarrativeText(resLog.message, grandCal, grandP, grandFat, grandSatFat, grandNa, grandCarbs);
+    resLog.message = synchronizeNarrativeText(resLog.message, grandCal, grandP, grandFat, grandSatFat, grandNa, grandCarbs, grandFiber);
   }
   if (resLog.description) {
-    resLog.description = synchronizeNarrativeText(resLog.description, grandCal, grandP, grandFat, grandSatFat, grandNa, grandCarbs);
+    resLog.description = synchronizeNarrativeText(resLog.description, grandCal, grandP, grandFat, grandSatFat, grandNa, grandCarbs, grandFiber);
   }
 
   return resLog;
@@ -363,12 +374,13 @@ export function scaleSingleDishPortion<T extends FoodLogLike>(currentLog: T, dis
   const grandSatFat = newTotalSatFat;
   const grandNa = newTotalSodium;
   const grandCarbs = aggregateNutrients.carbsGrams ?? aggregateNutrients.carbohydrates ?? 0;
+  const grandFiber = aggregateNutrients.fiberGrams ?? aggregateNutrients.fiber ?? 0;
 
   if (resLog.message) {
-    resLog.message = synchronizeNarrativeText(resLog.message, grandCal, grandP, grandFat, grandSatFat, grandNa, grandCarbs);
+    resLog.message = synchronizeNarrativeText(resLog.message, grandCal, grandP, grandFat, grandSatFat, grandNa, grandCarbs, grandFiber);
   }
   if (resLog.description) {
-    resLog.description = synchronizeNarrativeText(resLog.description, grandCal, grandP, grandFat, grandSatFat, grandNa, grandCarbs);
+    resLog.description = synchronizeNarrativeText(resLog.description, grandCal, grandP, grandFat, grandSatFat, grandNa, grandCarbs, grandFiber);
   }
 
   return resLog;

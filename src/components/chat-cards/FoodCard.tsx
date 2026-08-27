@@ -3295,16 +3295,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                })}
                              </div>
 
-                             {/* Interactive Portion Size Note & Controller */}
-                             <MealPortionController
-                               displayedScoutItems={displayedScoutItems}
-                               portionScale={portionScale}
-                               portionAccepted={portionAccepted}
-                               onScalePortion={handleScalePortion}
-                               onScaleSingleDish={handleScaleSingleDish}
-                               onAcceptPortion={() => setPortionAccepted(true)}
-                               isSaved={isAlreadyLogged}
-                             />
+                             {/* Portion controller now managed inside tabbed item views */}
 
                              {openLabelIdx !== null && displayedScoutItems[openLabelIdx] && (
                                 <div className="mt-2 w-full">
@@ -3824,16 +3815,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                   })}
                 </div>
 
-                {/* Interactive Portion Size Note & Controller */}
-                <MealPortionController
-                  displayedScoutItems={displayedScoutItems}
-                  portionScale={portionScale}
-                  portionAccepted={portionAccepted}
-                  onScalePortion={handleScalePortion}
-                  onScaleSingleDish={handleScaleSingleDish}
-                  onAcceptPortion={() => setPortionAccepted(true)}
-                  isSaved={isAlreadyLogged}
-                />
+                {/* Portion controller now managed inside tabbed item views */}
 
                 {openLabelIdx !== null && displayedScoutItems[openLabelIdx] && (
                   <div className="mt-2 w-full">

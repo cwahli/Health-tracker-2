@@ -553,16 +553,16 @@ export const BiomarkerReviewCard: React.FC<AgentCardProps> = ({ msg, onLogMedica
                                     return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300';
                                   })()
                                 }`}>
-                                  {b.label}
+                                  {b.name || b.label || b.alias || 'Range'}
                                 </span>
                                 <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/30 px-2 py-0.5 rounded border border-indigo-200/50 dark:border-indigo-800/30">
-                                  {effectiveMin !== undefined && effectiveMin !== null && effectiveMax !== undefined && effectiveMax !== null
+                                  {b.range || (effectiveMin !== undefined && effectiveMin !== null && effectiveMax !== undefined && effectiveMax !== null
                                     ? `${effectiveMin} - ${effectiveMax}`
                                     : effectiveMin !== undefined && effectiveMin !== null
                                     ? `≥ ${effectiveMin}`
                                     : effectiveMax !== undefined && effectiveMax !== null
                                     ? `< ${effectiveMax}`
-                                    : '—'}
+                                    : '—')}
                                 </span>
                               </div>
                             );

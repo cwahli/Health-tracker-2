@@ -107,6 +107,18 @@ describe('Bug #9 — visual-source portion-clarify guard', () => {
     expect(detectPortionAmbiguity(item, 2)).toBeNull();
   });
 
+  it('does NOT trigger portionClarify for visual single-serve ice cream cone', () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: 'Yogurt Ice Cream Cone with Yogurt Soft Serve, Waffle Cone',
+      keyword: 'Yogurt Ice Cream Cone with Yogurt Soft Serve, Waffle Cone',
+      estimatedWeightGrams: 120,
+      contentType: 'visual',
+      rawNutritionLabel: null,
+    };
+    expect(detectPortionAmbiguity(item, 0)).toBeNull();
+  });
+
   it('uses leading digit from name for "2 butter croissants" (never the biscuit-default of 6)', () => {
     // Before fix: unitNoun='piece' → default 6 units. After fix: detectedUnits=2 from name.
     const item = {

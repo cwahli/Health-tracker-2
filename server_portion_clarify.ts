@@ -128,6 +128,7 @@ export function extractFoodUnitNoun(name: string, blob: string, servingSizeStr?:
   if (/\b(sausages?|bangers?|frankfurters?|hot\s*dogs?)\b/i.test(text)) return 'sausage';
   if (/\b(wraps?|tortillas?|fajitas?)\b/i.test(text)) return 'wrap';
   if (/\b(rolls?|bread\s*rolls?|buns?|baps?|barm\s*cakes?)\b/i.test(text)) return 'roll';
+  if (/\b(cone|ice\s*cream|soft\s*serve|sundae)\b/i.test(text)) return 'portion';
   if (/\b(pancakes?|crepes?|waffles?)\b/i.test(text)) return 'pancake';
   if (/\b(croissants?|pastries?|danishes?|viennoiseries?)\b/i.test(text)) return 'croissant';
   if (/\b(crumpets?|muffins?|scones?)\b/i.test(text)) return 'piece';
@@ -152,14 +153,6 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
   const rawServing = String(raw?.servingSize || raw?.serving || '').trim();
   const ssG = parseServingGramsFromLabel(rawServing) ?? (raw ? 100 : null);
 
-  // Clear single-serve container (pot/cup/bottle) with large estimated weight — trust scout
-  if (/\b(yogurt|yoghurt|parfait|smoothie|drink|bottle|can of)\b/i.test(nameL) && w >= 150) {
-    return null;
-  }
-  if (/\b(pot|cup|tub)\b/i.test(nameL) && w >= 180 && Math.abs(w - 215) < 40) {
-    return null; // classic UK yogurt pot
-  }
-
   // Universal Unit Count Match: matches any digit preceding common packaging / unit words
   const unitCountMatch = blob.match(/\b(\d+)\s*(?:pack|pk|slices?|bagels?|rolls?|thins?|buns?|wraps?|tortillas?|pancakes?|muffins?|crumpets?|waffles?|pieces?|pcs?|bars?|bakes?|sachets?|pouches?|biscuits?|cookies?|patties?|fillets?|sausages?|cutlets?|meatballs?|servings?|units?)\b/i);
   let detectedUnits = unitCountMatch ? parseInt(unitCountMatch[1], 10) : 0;
@@ -174,6 +167,11 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
     }
   }
 
+  // Clear single-serve container or visual dessert (ice cream cone, soft serve, sundae, pot/cup/bottle) — trust scout
+  if (/\b(ice\s*cream|soft\s*serve|sundae|cone|waffle\s*cone|popsicle|gelato|sorbet|parfait|smoothie)\b/i.test(nameL) && !detectedUnits) {
+    return null;
+  }
+
   const unitNoun = extractFoodUnitNoun(name, blob, rawServing);
   const isDiscreteUnitFood = unitNoun !== 'portion' && unitNoun !== 'serving';
 
@@ -182,7 +180,8 @@ export function detectPortionAmbiguity(item: any, scoutIndex: number): PortionCl
     if (!detectedUnits || detectedUnits < 2 || detectedUnits > 24) {
       // Visual-source items (freshly made, restaurant, canteen) without an explicit unit count are
       // single-serve by nature. The multi-serve pack UX is for packaged grocery products only.
-      if (item.source === 'visual') return null;
+      const isVisual = item.source === 'visual' || item.contentType === 'visual' || item.contentType === 'visual_food' || !item.rawNutritionLabel;
+      if (isVisual) return null;
       if (/\b(bagel|thin|wrap|patty|fillet|muffin|crumpet|roll|bun)\b/i.test(unitNoun)) detectedUnits = 4;
       else if (/\b(biscuit|cookie|piece|sausage)\b/i.test(unitNoun)) detectedUnits = 6;
       else detectedUnits = 4;

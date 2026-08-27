@@ -56,6 +56,11 @@ export interface DishLedger {
   dbId: string | null;
   atwaterFlag: { deviationPct: number; flagged: boolean } | null;
   usdaQueries: string[];
+  components?: any[];
+  componentsDetailList?: any[];
+  compositeSiblings?: any[];
+  hasComponents?: boolean;
+  ingredientsList?: string | null;
 }
 
 const ATWATER_TOLERANCE = 0.35;
@@ -322,6 +327,57 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
   // 6. Complete Micronutrient Backfill for Sparse Composite Estimates
   backfillSparseMicronutrients(originalName, consumedWeight, nutrients, dbSource, originalName);
 
+  // 7. Structure Composite Components with Scaled Weights and Nutrients
+  const rawComps = Array.isArray(item.componentsDetailList) && item.componentsDetailList.length > 0
+    ? item.componentsDetailList
+    : (Array.isArray(item.components) && item.components.length > 0 ? item.components : (Array.isArray(item.compositeSiblings) ? item.compositeSiblings : []));
+
+  let componentsDetailList: any[] | undefined = undefined;
+  if (rawComps.length > 0) {
+    const origWeight = Math.max(1, Number(item.estimatedWeightGrams || nutrientBasisWeight || consumedWeight));
+    const scale = consumedWeight / origWeight;
+    componentsDetailList = rawComps.map((c: any) => {
+      const cName = String(c.name || c.searchQuery || c.keyword || 'Ingredient').trim();
+      const origCW = Number(c.weightGrams ?? c.estimatedWeightGrams ?? (c.volumePercentage ? Math.round(origWeight * (c.volumePercentage / 100)) : 0));
+      const cWeight = Math.max(1, Math.round(origCW * scale));
+      const cNuts = c.nutrients || {};
+      const cProt = Number(c.protein ?? cNuts.protein ?? 0);
+      const cFat = Number(c.totalFat ?? c.fat ?? cNuts.totalFat ?? cNuts.fat ?? cNuts.saturatedFat ?? 0);
+      const cSat = Number(c.saturatedFat ?? cNuts.saturatedFat ?? 0);
+      const cCarbs = Number(c.carbohydrates ?? c.carbs ?? cNuts.carbohydrates ?? 0);
+      const cNa = Number(c.sodium ?? cNuts.sodium ?? 0);
+      const cCals = Number(c.calories ?? cNuts.calories ?? Math.round(4 * cProt + 4 * cCarbs + 9 * cFat));
+      const base100g = cWeight > 0 ? {
+        calories: Math.round((cCals / cWeight) * 100),
+        protein: Math.round((cProt / cWeight) * 100 * 10) / 10,
+        totalFat: Math.round((cFat / cWeight) * 100 * 10) / 10,
+        saturatedFat: Math.round((cSat / cWeight) * 100 * 10) / 10,
+        carbohydrates: Math.round((cCarbs / cWeight) * 100 * 10) / 10,
+        sodium: Math.round((cNa / cWeight) * 100),
+      } : null;
+      return {
+        ...c,
+        name: cName,
+        searchQuery: c.searchQuery || cName,
+        weightGrams: cWeight,
+        estimatedWeightGrams: cWeight,
+        calories: cCals,
+        protein: cProt,
+        totalFat: cFat,
+        fat: cFat,
+        saturatedFat: cSat,
+        carbohydrates: cCarbs,
+        carbs: cCarbs,
+        sodium: cNa,
+        dbSource: c.dbSource || 'estimated',
+        dbId: c.dbId || null,
+        baseNutrients100g: c.baseNutrients100g || base100g,
+      };
+    });
+  }
+
+  const finalIngredientsList = ingredients.length > 0 ? ingredients.join(', ') : (item.ingredientsList || (componentsDetailList ? componentsDetailList.map((c: any) => c.name).join(', ') : null));
+
   return {
     scoutIndex,
     originalName,
@@ -329,8 +385,8 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
     chainName,
     weightGrams: consumedWeight,
     nutrientBasisWeight,
-    ingredients,
-    visualIngredients,
+    ingredients: ingredients.length > 0 ? ingredients : (componentsDetailList ? componentsDetailList.map((c: any) => c.name) : []),
+    visualIngredients: visualIngredients.length > 0 ? visualIngredients : (componentsDetailList ? componentsDetailList.map((c: any) => c.name) : []),
     nutrients,
     lockedNutrientKeys,
     brandLock,
@@ -339,5 +395,10 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
     dbId,
     atwaterFlag,
     usdaQueries,
+    components: componentsDetailList || item.components || undefined,
+    componentsDetailList: componentsDetailList || undefined,
+    compositeSiblings: componentsDetailList || undefined,
+    hasComponents: Boolean(componentsDetailList && componentsDetailList.length > 1),
+    ingredientsList: finalIngredientsList,
   };
 }

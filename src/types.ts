@@ -155,7 +155,7 @@ export interface UserProfile {
       sameAsCatalog?: boolean;
       catalogApproved?: boolean;
       rangeVariesBy?: ('age' | 'sex' | 'ethnicity')[];
-      rangeBrackets?: { name?: string; range?: string }[];
+      rangeBrackets?: { name?: string; label?: string; range?: string; min?: number | null; max?: number | null; severity?: number | string }[];
     }
   };
   lastUpdatedAt?: number;
