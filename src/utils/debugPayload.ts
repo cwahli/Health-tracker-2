@@ -78,6 +78,7 @@ export type DebugReportInput = {
   photoUrls?: string[];
   exportedAt?: string;
   mode?: string;
+  agentType?: string;
   savable?: boolean;
   degradedStages?: string[];
   lastUserAction?: any;
@@ -267,7 +268,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
 
   // 5. Nutrition Calculation (Source of Truth)
   const food = input.pendingFoodLog;
-  if (food && typeof food === 'object') {
+  if (food && typeof food === 'object' && input.agentType !== 'biomarker_review' && input.mode !== 'biomarker_review') {
     lines.push(`## 📊 Nutrition Calculation & Breakdown`);
     lines.push('');
     lines.push(`- **Meal Name:** ${food.name || food.title || '—'}`);
@@ -445,6 +446,7 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
     jobId: job?.id || msg?.id,
     status: job?.status,
     mode: result.mode || job?.inputSnapshot?.mode,
+    agentType: msg?.agentType || job?.inputSnapshot?.agentType,
     message: result.message || result.text || msg?.content,
     backendLogs: typeof logs === 'string' ? logs : String(logs || ''),
     pendingFoodLog: food,
@@ -456,6 +458,7 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
     exportedAt: new Date().toISOString(),
     degradedStages: result.degradedStages,
     lastUserAction: result.lastUserAction || msg?.data?.lastUserAction,
+    userActionBreadcrumbs: result.userActionBreadcrumbs || msg?.data?.userActionBreadcrumbs || job?.inputSnapshot?.userActionBreadcrumbs,
     userActionBreadcrumbs: result.userActionBreadcrumbs || msg?.data?.userActionBreadcrumbs,
     clientConsoleLogs: result.clientConsoleLogs || msg?.data?.clientConsoleLogs,
     networkErrors: result.networkErrors || msg?.data?.networkErrors,

@@ -802,7 +802,7 @@ export function NutritionLabelTable({
                     <button
                       type="button"
                       onClick={() => setActiveTabMap(prev => ({ ...prev, [i]: 0 }))}
-                      className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-lg text-xs font-semibold transition-all min-w-[70px] cursor-pointer ${
+                      className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-lg text-xs font-semibold transition-all min-w-[70px] shrink-0 cursor-pointer ${
                         activeTab === 0
                           ? 'bg-indigo-600 text-white shadow-sm'
                           : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-300/40 dark:hover:bg-slate-800/60'
@@ -829,7 +829,7 @@ export function NutritionLabelTable({
                           key={cIdx}
                           type="button"
                           onClick={() => setActiveTabMap(prev => ({ ...prev, [i]: cIdx + 1 }))}
-                          className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-lg text-xs font-semibold transition-all min-w-[70px] cursor-pointer ${
+                          className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-lg text-xs font-semibold transition-all min-w-[70px] shrink-0 cursor-pointer ${
                             isActive
                               ? 'bg-indigo-600 text-white shadow-sm'
                               : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-300/40 dark:hover:bg-slate-800/60'

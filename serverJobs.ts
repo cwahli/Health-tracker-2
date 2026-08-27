@@ -462,7 +462,10 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           ingestTrace: prebuiltIngestTrace
         };
       } else {
-        const endpoint = dbKind === 'medical' ? '/api/gemini/medical-analyze?stream=true' : '/api/gemini/food-analyze?stream=true';
+        let endpoint = dbKind === 'medical' ? '/api/gemini/medical-analyze?stream=true' : '/api/gemini/food-analyze?stream=true';
+        if (payload.agentType === 'health_baseline') {
+          endpoint = '/api/gemini/health-baseline-analyze?stream=true';
+        }
         try {
         response = await fetch(`${baseUrl}${endpoint}`, {
           method: 'POST',

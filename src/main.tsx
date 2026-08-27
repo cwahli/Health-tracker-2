@@ -21,6 +21,12 @@ declare global {
 window.__clientConsoleLogs = window.__clientConsoleLogs || [];
 window.__clientNetworkErrors = window.__clientNetworkErrors || [];
 
+window.addEventListener('error', (e) => {
+      try { fetch('/api/log-error', { method: 'POST', body: e.message || e.error?.message }).catch(()=>null); } catch(err){}
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      try { fetch('/api/log-error', { method: 'POST', body: e.reason?.message || String(e.reason) }).catch(()=>null); } catch(err){}
+    });
 const origError = console.error;
 const origWarn = console.warn;
 

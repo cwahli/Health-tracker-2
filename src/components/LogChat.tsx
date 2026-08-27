@@ -545,7 +545,8 @@ export default function LogChat({
   const activeAgentConfig = AGENT_REGISTRY[activeAgentKey] || AGENT_REGISTRY[type as AgentType];
   const isUnified = ['food', 'medical', 'food_idea', 'daily_recommendation'].includes(type) && getAgentRolloutStatus(type as AgentType) === 'unified';
 
-  const isAgent = (targetType: AgentType) => {
+  const isAgent = (targetType: AgentType | string) => {
+    if (agentType === targetType) return true;
     if (['medical', 'food', 'food_idea', 'daily_recommendation'].includes(targetType)) {
       return type === targetType;
     }
@@ -3027,6 +3028,7 @@ ${logsText}`);
               clientSubmitPending: false,
             });
             JobQueueRunner.wake();
+            clearBreadcrumbs();
           })
           .catch(err => {
             console.error('[LogChat] Server submit failed after retries, delegating to JobQueueRunner:', err);
