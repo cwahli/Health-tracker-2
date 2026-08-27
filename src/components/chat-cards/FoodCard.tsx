@@ -1590,6 +1590,9 @@ export const FoodCard: React.FC<AgentCardProps & {
     return items;
   }, [msg.data, confirmedScoutIndices]);
 
+  // Version counter to trigger re-renders when portion scaling updates in-place log data
+  const [portionLogVersion, setPortionLogVersion] = React.useState<number>(0);
+
   const displayedScoutItems = React.useMemo(() => {
     const itemsBreakdown = msg.data?.pendingFoodLog?.itemsBreakdown || msg.data?.data?.itemsBreakdown || msg.data?.itemsBreakdown || msg.data?.agentResult?.data?.itemsBreakdown;
     if (!itemsBreakdown || itemsBreakdown.length === 0) {
@@ -1665,7 +1668,7 @@ export const FoodCard: React.FC<AgentCardProps & {
         nutrientSourceMap: item.nutrientSourceMap || matchingScout?.nutrientSourceMap || null
       };
     });
-  }, [activeScoutItems, msg.data]);
+  }, [activeScoutItems, msg.data, portionLogVersion]);
 
   const isAlreadyLogged = React.useMemo(() => {
     if (!msg.data?.pendingFoodLog) return false;
@@ -1698,20 +1701,63 @@ export const FoodCard: React.FC<AgentCardProps & {
   const handleScalePortion = (ratio: number) => {
     setPortionScale(ratio);
     setPortionAccepted(true);
+    setPortionLogVersion((v) => v + 1);
     const currentLog = msg.data?.pendingFoodLog || msg.pendingFoodLog;
     if (!currentLog) return;
     const updatedLog = scaleMealPortion(currentLog, ratio);
-    if (msg.data) msg.data.pendingFoodLog = updatedLog;
+    const logId = currentLog.id || (msg as any).loggedFoodId;
+    if (logId) {
+      updatedLog.id = logId;
+    }
+    if (msg.data) {
+      msg.data.pendingFoodLog = updatedLog;
+      if (updatedLog.scoutItems) msg.data.scoutItems = updatedLog.scoutItems;
+      if (updatedLog.receiptTable) msg.data.receiptTable = updatedLog.receiptTable;
+      if (updatedLog.message) msg.data.message = updatedLog.message;
+      if (msg.data.agentResult) {
+        if (updatedLog.message) msg.data.agentResult.message = updatedLog.message;
+        if (updatedLog.receiptTable) msg.data.agentResult.receiptTable = updatedLog.receiptTable;
+        if (updatedLog.scoutItems) msg.data.agentResult.scoutItems = updatedLog.scoutItems;
+      }
+      msg.data = { ...msg.data };
+    }
     msg.pendingFoodLog = updatedLog;
+
+    if ((isAlreadyLogged || (loggedMessageIds && loggedMessageIds.includes(msg.id))) && onLogFood) {
+      onLogFood(updatedLog as any);
+    }
   };
 
   const handleScaleSingleDish = (dishIdx: number, ratio: number) => {
     setPortionAccepted(true);
+    setPortionLogVersion((v) => v + 1);
     const currentLog = msg.data?.pendingFoodLog || msg.pendingFoodLog;
     if (!currentLog) return;
     const updatedLog = scaleSingleDishPortion(currentLog, dishIdx, ratio);
-    if (msg.data) msg.data.pendingFoodLog = updatedLog;
+    const logId = currentLog.id || (msg as any).loggedFoodId;
+    if (logId) {
+      updatedLog.id = logId;
+    }
+    if (msg.data) {
+      msg.data.pendingFoodLog = updatedLog;
+      if (updatedLog.scoutItems) msg.data.scoutItems = updatedLog.scoutItems;
+      if (updatedLog.receiptTable) msg.data.receiptTable = updatedLog.receiptTable;
+      if (updatedLog.message) msg.data.message = updatedLog.message;
+      if (msg.data.agentResult) {
+        if (updatedLog.message) msg.data.agentResult.message = updatedLog.message;
+        if (updatedLog.receiptTable) msg.data.agentResult.receiptTable = updatedLog.receiptTable;
+        if (updatedLog.scoutItems) msg.data.agentResult.scoutItems = updatedLog.scoutItems;
+      }
+      msg.data = { ...msg.data };
+    }
     msg.pendingFoodLog = updatedLog;
+    if (updatedLog.portionRatio) {
+      setPortionScale(updatedLog.portionRatio);
+    }
+
+    if ((isAlreadyLogged || (loggedMessageIds && loggedMessageIds.includes(msg.id))) && onLogFood) {
+      onLogFood(updatedLog as any);
+    }
   };
 
   // Card-wide parent image search state hooks
@@ -1842,7 +1888,7 @@ export const FoodCard: React.FC<AgentCardProps & {
     }
 
     return null;
-  }, [msg]);
+  }, [msg, portionLogVersion]);
 
   if (effectiveFoodLog) {
     if (!msg.data) msg.data = {};
@@ -3638,7 +3684,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                             type="button"
                             onClick={() => {
                               if (isLoggingRef.current) return;
-                              const logTarget = effectiveFoodLog || msg.data?.pendingFoodLog;
+                              const logTarget = msg.data?.pendingFoodLog || msg.pendingFoodLog || effectiveFoodLog;
                               if (logTarget && onLogFood) {
                                 isLoggingRef.current = true;
                                 const mostRecentImageDate = extractMostRecentImageDate(
@@ -3646,8 +3692,12 @@ export const FoodCard: React.FC<AgentCardProps & {
                                 );
                                 const foodToLog = {
                                   ...logTarget,
+                                  id: logTarget.id || (msg.data?.pendingFoodLog as any)?.id || (msg as any).loggedFoodId,
                                   date: logTarget.date || mostRecentImageDate || (profile?.timezone ? getCurrentDateInTimezone(profile.timezone) : new Date().toISOString().split('T')[0]),
-                                  scoutItems: msg.data?.scoutItems || logTarget.scoutItems || [],
+                                  scoutItems: logTarget.scoutItems || (logTarget.itemsBreakdown && logTarget.itemsBreakdown.length > 0 ? logTarget.itemsBreakdown : msg.data?.scoutItems) || [],
+                                  itemsBreakdown: logTarget.itemsBreakdown || logTarget.scoutItems || msg.data?.scoutItems || [],
+                                  portionRatio: logTarget.portionRatio || portionScale || 1.0,
+                                  portionAccepted: true,
                                   imageUrl: logTarget.imageUrl || (messageImages.length > 0 ? messageImages[0] : undefined),
                                   imageUrls: (logTarget.imageUrls && logTarget.imageUrls.length > 0)
                                     ? logTarget.imageUrls
@@ -3664,7 +3714,17 @@ export const FoodCard: React.FC<AgentCardProps & {
                                 };
                                 const logResult = onLogFood(foodToLog as FoodLog);
                                 setLoggedMessageIds?.(prev => [...prev, msg.id]);
-                                Promise.resolve(logResult).finally(() => {
+                                Promise.resolve(logResult).then((res: any) => {
+                                  const savedId = res?.id || foodToLog.id;
+                                  if (savedId) {
+                                    if (msg.data) {
+                                      if (!msg.data.pendingFoodLog) msg.data.pendingFoodLog = { ...foodToLog };
+                                      msg.data.pendingFoodLog.id = savedId;
+                                    }
+                                    if (msg.pendingFoodLog) msg.pendingFoodLog.id = savedId;
+                                    (msg as any).loggedFoodId = savedId;
+                                  }
+                                }).finally(() => {
                                   isLoggingRef.current = false;
                                 });
                               }

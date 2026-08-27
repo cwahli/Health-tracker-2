@@ -4248,7 +4248,13 @@ export default function App() {
       const newFingerprint = foodLogFingerprint(compressedFood);
       const recentDuplicateIndex = foodLogs.findIndex(f => {
         if (!f.updated_at || (now - f.updated_at) > DUPLICATE_WINDOW_MS) return false;
-        return foodLogFingerprint(f) === newFingerprint;
+        if (compressedFood.id && f.id === compressedFood.id) return true;
+        if (foodLogFingerprint(f) === newFingerprint) return true;
+        const nameA = (f.name || '').toLowerCase().trim();
+        const nameB = (compressedFood.name || '').toLowerCase().trim();
+        const dateA = toYYYYMMDD(f.date);
+        const dateB = toYYYYMMDD(compressedFood.date);
+        return nameA && nameB && nameA === nameB && dateA === dateB;
       });
       if (recentDuplicateIndex !== -1) {
         console.warn('[handleLogFood] Near-duplicate submission detected within 5 min window, updating existing entry instead of creating a new one:', newFingerprint);

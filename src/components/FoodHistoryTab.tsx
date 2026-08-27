@@ -18,6 +18,8 @@ import { fetchFoodLogDetail } from '../utils/syncUtils';
 export const FOOD_HISTORY_PAGE_SIZE = 15;
 import { NutrientPieChart } from './NutrientPieChart';
 import { NutritionLabelTable } from './chat-cards/NutritionLabelTable';
+import { MealPortionController } from './chat-cards/MealPortionController';
+import { scaleMealPortion, scaleSingleDishPortion } from '../utils/portionUtils';
 import { PhysicalFormBadge } from './PhysicalFormBadge';
 import { JobStore } from '../jobs/JobStore';
 import TaskPlaceholderCard from './TaskPlaceholderCard';
@@ -1564,15 +1566,10 @@ export default function FoodHistoryTab({
                               onClick={() => {
                                 const m = parseFloat(editMultiplier);
                                 if (isNaN(m) || m <= 0 || m === 1 || !editLogState) return;
-                                const newNutrients = { ...(editLogState.nutrients || {}) };
-                                Object.keys(newNutrients).forEach(k => {
-                                  newNutrients[k as keyof NutrientBreakdown] = Number(((newNutrients[k as keyof NutrientBreakdown] || 0) * m).toFixed(2));
-                                });
-                                setEditLogState({
-                                  ...editLogState,
-                                  weightGrams: Number(((editLogState.weightGrams || 0) * m).toFixed(1)),
-                                  nutrients: newNutrients as NutrientBreakdown
-                                });
+                                const currentRatio = editLogState.portionRatio || 1.0;
+                                const newRatio = Math.round(currentRatio * m * 100) / 100;
+                                const scaled = scaleMealPortion(editLogState, newRatio);
+                                setEditLogState(scaled);
                                 setEditMultiplier('1');
                               }}
                               className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 rounded text-[10px] font-bold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
@@ -2001,15 +1998,34 @@ export default function FoodHistoryTab({
                                   </div>
                                 )}
 
-                                {/* Note below Meal Composition indicating portion size applied */}
-                                <div className="pt-2 border-t border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between text-[10.5px] text-slate-600 dark:text-slate-300 font-sans">
-                                  <span className="flex items-center gap-1.5 font-medium">
-                                    <span>⚖️</span>
-                                    <span>Portion size applied: <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{log.portionRatio ? `${log.portionRatio}x` : '1.0x (Standard)'}</strong></span>
-                                  </span>
-                                  {log.portionAccepted && (
-                                    <span className="text-[9.5px] text-emerald-600 dark:text-emerald-400 font-semibold">✓ Accepted</span>
-                                  )}
+                                {/* Interactive Portion Controller & Status for Saved History Log */}
+                                <div className="pt-2.5 border-t border-slate-200/50 dark:border-slate-800/50 space-y-2">
+                                  <div className="flex items-center justify-between text-[10.5px] text-slate-600 dark:text-slate-300 font-sans">
+                                    <span className="flex items-center gap-1.5 font-medium">
+                                      <span>⚖️</span>
+                                      <span>Portion size applied: <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{log.portionRatio ? `${log.portionRatio}x` : '1.0x (Standard)'}</strong></span>
+                                    </span>
+                                    {log.portionAccepted && (
+                                      <span className="text-[9.5px] text-emerald-600 dark:text-emerald-400 font-semibold">✓ Accepted</span>
+                                    )}
+                                  </div>
+                                  <MealPortionController
+                                    displayedScoutItems={scoutItemsList}
+                                    portionScale={log.portionRatio || 1.0}
+                                    portionAccepted={Boolean(log.portionAccepted)}
+                                    onScalePortion={(ratio) => {
+                                      const updated = scaleMealPortion(log, ratio);
+                                      onUpdateFoodLog(updated as FoodLog);
+                                    }}
+                                    onScaleSingleDish={(dishIdx, ratio) => {
+                                      const updated = scaleSingleDishPortion(log, dishIdx, ratio);
+                                      onUpdateFoodLog(updated as FoodLog);
+                                    }}
+                                    onAcceptPortion={() => {
+                                      onUpdateFoodLog({ ...log, portionAccepted: true } as FoodLog);
+                                    }}
+                                    isSaved={true}
+                                  />
                                 </div>
                               </div>
                             );

@@ -3,6 +3,7 @@ import { Camera, Search } from 'lucide-react';
 import { nutrientDefinitions } from '../../utils/nutrition';
 import { translations } from '../../utils/translations';
 import { PositionedTooltip } from '../ui/PositionedTooltip';
+import { PortionDropdown } from './PortionDropdown';
 
 function parseLabelCalories(raw: any): number | null {
   if (raw == null) return null;
@@ -95,7 +96,7 @@ function isVolumeServing(item: any): boolean {
 
 function getResolvedItemWeightGrams(item: any): number | null {
   if (!item) return null;
-  const directW = Number(item.primaryBaseWeightG || item.estimatedWeightGrams || item.weightGrams);
+  const directW = Number(item.weightGrams || item.estimatedWeightGrams || item.primaryBaseWeightG);
   if (!isNaN(directW) && directW > 0) {
     return directW;
   }
@@ -363,7 +364,7 @@ const NUTRIENT_DEFAULT_UNITS: Record<string, string> = {
 function buildSynthesizedRawLabel(item: any, source: any) {
   if (!source || typeof source !== 'object') return null;
   const isDishBasis = source.basisType === 'per_dish' || source.basisType === 'total' || source.basisType === 'per_portion' || source.basisType === 'per_serving' || source.basisType === 'per_pack' || item.basisType === 'per_dish';
-  const itemWeight = Number(item.estimatedWeightGrams || item.weightGrams || item.primaryBaseWeightG || 100);
+  const itemWeight = Number(item.weightGrams || item.estimatedWeightGrams || item.primaryBaseWeightG || 100);
   const isExplicit100g = Boolean(item.syntheticBase100g || item.baseNutrients100g || item.primaryBase100g || source.servingSizeGrams === 100 || source.basisType === 'per_100g');
   
   // If the source holds portion-total macros and is not an explicit 100g baseline, calculate per-100g scaling:
@@ -743,7 +744,7 @@ export function NutritionLabelTable({
                   </div>
 
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 text-[10px]">
-                  <div className="font-medium text-theme-neutral flex items-center flex-wrap gap-1">
+                  <div className="font-medium text-theme-neutral flex items-center flex-wrap gap-1.5">
                     <span className="text-slate-400 font-normal">
                       {isVolume ? 'Volume:' : t.weightLabelWithColon}
                     </span>{' '}
@@ -756,16 +757,20 @@ export function NutritionLabelTable({
                       <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[9px] font-semibold border border-indigo-200/40">
                         {item.portionDescription || `${Math.round(((resolvedWeight || 0) / item.packGrams) * 100)}% of ${item.packGrams}g pack`}
                       </span>
-                    ) : (
-                      item.portionRatio !== undefined && item.portionRatio !== 1 ? (
-                        <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[9px] font-semibold border border-indigo-200/40">
-                          {item.portionDescription || `${item.portionRatio}x portion`}
-                        </span>
-                      ) : (
-                        <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[9px] font-semibold border border-indigo-200/40">
-                          1.0x portion
-                        </span>
-                      )
+                    ) : null}
+
+                    {onScalePortion && !isSaved && (
+                      <div className="inline-flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-300 dark:border-slate-700">
+                        <span className="text-slate-400 font-normal">Dish Portion:</span>
+                        <PortionDropdown
+                          baseWeight={(() => {
+                            const activeRatio = currentPortionRatio || item.portionRatio || 1.0;
+                            return resolvedWeight ? (resolvedWeight / activeRatio) : 100;
+                          })()}
+                          currentWeight={resolvedWeight || 100}
+                          onScale={onScalePortion}
+                        />
+                      </div>
                     )}
                   </div>
                   {((item.rawNutritionLabel?.servingsPerContainer !== undefined && item.rawNutritionLabel?.servingsPerContainer !== null) || 
@@ -775,36 +780,6 @@ export function NutritionLabelTable({
                       {item.rawNutritionLabel?.servingsPerContainer !== undefined && item.rawNutritionLabel?.servingsPerContainer !== null 
                         ? item.rawNutritionLabel.servingsPerContainer 
                         : item.nutritionFacts?.servingsPerContainer}
-                    </div>
-                  )}
-
-                  {onScalePortion && !isSaved && (
-                    <div className="w-full flex items-center gap-1.5 mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex-wrap">
-                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Dish portion:</span>
-                      {[0.5, 1.0, 1.5, 2.0].map((ratio) => {
-                        const activeRatio = currentPortionRatio || item.portionRatio || 1.0;
-                        const baseWeight = resolvedWeight ? Math.round(resolvedWeight / activeRatio) : 0;
-                        const chipWeight = baseWeight > 0 ? Math.round(baseWeight * ratio) : 0;
-                        const isSelected = Math.abs(activeRatio - ratio) < 0.05;
-                        return (
-                          <button
-                            key={ratio}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onScalePortion(ratio);
-                            }}
-                            className={`px-2 py-0.5 rounded-md text-[9.5px] font-bold transition-all cursor-pointer flex items-center ${
-                              isSelected
-                                ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-400'
-                                : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600'
-                            }`}
-                          >
-                            <span>{ratio}x</span>
-                            {chipWeight > 0 && <span className="font-normal opacity-80 ml-1">({chipWeight}g)</span>}
-                          </button>
-                        );
-                      })}
                     </div>
                   )}
                 </div>
