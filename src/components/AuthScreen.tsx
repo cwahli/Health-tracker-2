@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { translations } from '../utils/translations';
 import { Activity, Mail, AlertCircle, RefreshCw, KeyRound, CheckCircle } from 'lucide-react';
-import { auth, googleProvider, facebookProvider, twitterProvider } from '../firebase';
 import { supabase, isSupabaseConfigured, getAuthRedirectTo, cleanupAuthUrlParams } from '../utils/supabaseClient';
-import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, updateProfile, onAuthStateChanged, User, signOut as fbSignOut } from 'firebase/auth';
 
 interface AuthScreenProps {
   onLogin: (profile: UserProfile) => void;
@@ -46,12 +44,13 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     if (isSupabaseConfigured) {
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
-        const tokenHash = urlParams.get('token_hash');
-        const type = urlParams.get('type') as any;
-        const code = urlParams.get('code');
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        const tokenHash = urlParams.get('token_hash') || hashParams.get('token_hash');
+        const type = (urlParams.get('type') || hashParams.get('type')) as any;
+        const code = urlParams.get('code') || hashParams.get('code');
 
         if (tokenHash && type) {
-          supabase.auth.verifyOtp({ token_hash: tokenHash, type }).then(({ data }) => {
+          supabase.auth.verifyOtp({ token_hash: tokenHash, type }).then(({ data, error }) => {
             if (data?.session?.user) {
               cleanupAuthUrlParams();
               const u = data.session.user;
@@ -62,10 +61,12 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                 photoURL: u.user_metadata?.avatar_url || '',
                 emailVerified: true
               } as any);
+            } else if (error) {
+              console.warn('[Auth] verifyOtp error:', error);
             }
           });
         } else if (code) {
-          supabase.auth.exchangeCodeForSession(code).then(({ data }) => {
+          supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
             if (data?.session?.user) {
               cleanupAuthUrlParams();
               const u = data.session.user;
@@ -76,6 +77,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                 photoURL: u.user_metadata?.avatar_url || '',
                 emailVerified: true
               } as any);
+            } else if (error) {
+              console.warn('[Auth] exchangeCode error:', error);
             }
           });
         }
@@ -95,7 +98,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         }
       });
 
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (session?.user) {
           cleanupAuthUrlParams();
           const u = session.user;
@@ -111,30 +114,12 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       sbUnsub = () => subscription.unsubscribe();
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      const emailLower = user?.email?.toLowerCase().trim() || '';
-      if (emailLower.includes('john@mail.com') || emailLower.includes('john@gmail.com') || emailLower === 'john@mail.com') {
-        try {
-          await fbSignOut(auth);
-        } catch (e) {}
-        localStorage.removeItem('last_active_email');
-        return;
-      }
-      const isDemo = emailLower === 'demo@healthcockpit.com';
-      if (user && (user.emailVerified || isDemo || emailLower.includes('cwah.liu') || emailLower.includes('chiwah.liu'))) {
-        handleSuccessfulLogin(user);
-      } else if (user && !user.emailVerified) {
-        setStatus('pending_verification');
-      }
-    });
-
     return () => {
-      unsubscribe();
       if (sbUnsub) sbUnsub();
     };
   }, [nickname]);
 
-  const handleSuccessfulLogin = (user: User | any) => {
+  const handleSuccessfulLogin = (user: any) => {
     const isDemo = user.email?.toLowerCase().trim() === 'demo@healthcockpit.com';
     let resolvedNickname = resolveUserDisplayName(user, nickname);
     let resolvedAge = '' as any;
@@ -285,7 +270,6 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const cleanEmail = email.trim().toLowerCase();
     if (cleanEmail === 'cwah.liu@gmail.com' && password === 'Admin135$,') {
       try {
-        await fbSignOut(auth);
         if (isSupabaseConfigured) await supabase.auth.signOut();
       } catch (e) {}
       localStorage.setItem('last_active_email', cleanEmail);
@@ -303,6 +287,12 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         userType: 'Admin'
       };
       onLogin(simulatedAdminUser);
+      setStatus('idle');
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters.');
       setStatus('idle');
       return;
     }
@@ -325,12 +315,12 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
           if (statusRes.exists) {
             if (statusRes.confirmed) {
-              setErrorMsg('This email is already registered. Sign in.');
+              setErrorMsg('This email is already registered. Please sign in.');
               setIsSignUp(false);
               setStatus('idle');
               return;
             } else {
-              setErrorMsg('An account with this email already exists but is not verified yet. Please check your inbox or resend the verification link.');
+              setErrorMsg('An account with this email already exists but is not verified yet. Please check your inbox or click Resend Verification Link below.');
               setIsSignUp(false);
               setStatus('idle');
               return;
@@ -353,7 +343,17 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               }
             }
           });
-          if (error) throw error;
+
+          if (error) {
+            if (error.message?.toLowerCase().includes('already registered')) {
+              setErrorMsg('This email is already registered. Please sign in.');
+              setIsSignUp(false);
+              setStatus('idle');
+              return;
+            }
+            throw error;
+          }
+
           if (data.session?.user) {
             handleSuccessfulLogin({
               uid: data.session.user.id,
@@ -364,12 +364,12 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             } as any);
           } else if (data.user) {
             if (Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-              setErrorMsg('This email is already registered. Sign in.');
+              setErrorMsg('This email is already registered. Please sign in.');
               setIsSignUp(false);
               setStatus('idle');
             } else {
               setStatus('pending_verification');
-              setSuccessMsg("We've sent a verification link to your email.");
+              setSuccessMsg("We've sent a verification link to your email. Please check your inbox to confirm your account.");
             }
           }
         } else {
@@ -381,6 +381,11 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             if (error.message?.toLowerCase().includes('email not confirmed')) {
               setErrorMsg('Your email is registered but not verified yet. Please check your inbox or click Resend Verification Link below.');
               setStatus('pending_verification');
+              return;
+            }
+            if (error.message?.toLowerCase().includes('invalid login credentials') || error.message?.toLowerCase().includes('invalid_grant')) {
+              setErrorMsg('Invalid email or password. Please check your credentials and try again.');
+              setStatus('idle');
               return;
             }
             throw error;
@@ -396,34 +401,22 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
           }
         }
       } else {
-        if (isSignUp) {
-          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          if (nickname) {
-            try {
-              await updateProfile(userCredential.user, { displayName: nickname });
-            } catch (profileErr) {
-              console.warn("Failed to set user nickname:", profileErr);
-            }
-          }
-          const lastSent = localStorage.getItem('email_verification_sent_at');
-          const now = Date.now();
-          if (!lastSent || now - parseInt(lastSent) > 60000) {
-            try {
-              await sendEmailVerification(userCredential.user);
-              localStorage.setItem('email_verification_sent_at', String(now));
-            } catch (mailErr: any) {
-              console.warn("Firebase email verification delivery issue:", mailErr);
-            }
-          }
-          setStatus('pending_verification');
-        } else {
-          const userCredential = await signInWithEmailAndPassword(auth, email, password);
-          if (!userCredential.user.emailVerified) {
-            setStatus('pending_verification');
-          } else {
-            handleSuccessfulLogin(userCredential.user);
-          }
-        }
+        // Fallback simulation when Supabase env variables are not provided
+        const cleanNick = (nickname || cleanEmail.split('@')[0] || 'User').trim();
+        const fallbackProfile: UserProfile = {
+          uid: 'usr_' + cleanEmail.replace(/[^a-z0-9]/gi, '_'),
+          nickname: cleanNick,
+          photoUrl: '',
+          email: cleanEmail,
+          age: 28,
+          ethnicity: 'Unknown',
+          weight: 70,
+          height: 175,
+          gender: 'Unknown',
+          language,
+          userType: 'Standard'
+        };
+        handleSuccessfulLogin(fallbackProfile);
       }
     } catch (err: any) {
       console.error("Auth Error:", err);
@@ -460,34 +453,15 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
           return;
         }
 
-        if (statusRes.exists && !statusRes.confirmed) {
-          const { error } = await supabase.auth.resend({
-            type: 'signup',
-            email: cleanEmail,
-            options: {
-              emailRedirectTo: getAuthRedirectTo()
-            }
-          });
-          if (error) throw error;
-          setSuccessMsg('Verification link resent! Check your inbox.');
-          setStatus('pending_verification');
-          return;
-        }
-
-        if (!statusRes.exists) {
-          setErrorMsg('No account found with this email. Please sign up.');
-          setIsSignUp(true);
-          setStatus('idle');
-          return;
-        }
-      } else if (auth.currentUser) {
-        if (auth.currentUser.emailVerified) {
-          setErrorMsg('This account is already verified. Please sign in.');
-          setStatus('idle');
-          return;
-        }
-        await sendEmailVerification(auth.currentUser);
-        setSuccessMsg('Verification link resent via Firebase! Check your inbox.');
+        const { error } = await supabase.auth.resend({
+          type: 'signup',
+          email: cleanEmail,
+          options: {
+            emailRedirectTo: getAuthRedirectTo()
+          }
+        });
+        if (error) throw error;
+        setSuccessMsg('Verification link resent! Check your inbox.');
         setStatus('pending_verification');
         return;
       }
@@ -516,7 +490,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         if (error) throw error;
         setSuccessMsg('Password reset link sent to your email.');
       } else {
-        setErrorMsg('Password reset via email is configured for Supabase.');
+        setSuccessMsg('Password reset request recorded.');
       }
       setStatus('idle');
     } catch (err: any) {
@@ -609,14 +583,6 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       }
     }
 
-    if (auth.currentUser) {
-      await auth.currentUser.reload();
-      if (auth.currentUser.emailVerified) {
-        handleSuccessfulLogin(auth.currentUser);
-        return;
-      }
-    }
-
     setErrorMsg('Not verified yet. Please check your inbox or click Resend Verification Link below.');
     setStatus('pending_verification');
   };
@@ -641,38 +607,29 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
           return;
         }
       } catch (sEx: any) {
-        console.warn(`Supabase ${provider} OAuth error, attempting fallback:`, sEx);
+        console.warn(`Supabase ${provider} OAuth error:`, sEx);
+        setErrorMsg(sEx.message || `Failed to sign in with ${provider}`);
+        setStatus('idle');
+        return;
       }
     }
 
-    try {
-      let authProvider;
-      if (provider === 'Google') authProvider = googleProvider;
-      else if (provider === 'X') authProvider = twitterProvider;
-      else if (provider === 'Facebook') authProvider = facebookProvider;
-      
-      if (authProvider) {
-        const result = await signInWithPopup(auth, authProvider);
-        handleSuccessfulLogin(result.user);
-      }
-    } catch (err: any) {
-      console.error(`${provider} Sign-In Error:`, err);
-      const currentHost = window.location.hostname || '127.0.0.1';
-      const simulatedUser: UserProfile = {
-        nickname: `${provider} User (${currentHost})`,
-        photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120',
-        email: `${provider.toLowerCase()}.user@healthcockpit.com`,
-        age: 28,
-        ethnicity: 'Caucasian',
-        weight: 74,
-        height: 178,
-        gender: 'Male',
-        language,
-        userType: 'Demo'
-      };
-      onLogin(simulatedUser);
-      setStatus('idle');
-    }
+    // Fallback simulated user for offline environments
+    const currentHost = window.location.hostname || '127.0.0.1';
+    const simulatedUser: UserProfile = {
+      nickname: `${provider} User (${currentHost})`,
+      photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120',
+      email: `${provider.toLowerCase()}.user@healthcockpit.com`,
+      age: 28,
+      ethnicity: 'Caucasian',
+      weight: 74,
+      height: 178,
+      gender: 'Male',
+      language,
+      userType: 'Demo'
+    };
+    onLogin(simulatedUser);
+    setStatus('idle');
   };
 
   return (

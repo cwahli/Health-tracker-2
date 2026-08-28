@@ -1838,20 +1838,20 @@ export default function App() {
 
 
   const getEffectiveUser = () => {
+    if (profile?.email) {
+      const cleanEmail = profile.email.toLowerCase().trim();
+      const uid = profile.uid || ('usr_' + cleanEmail.replace(/[^a-z0-9]/gi, '_'));
+      return {
+        uid,
+        email: profile.email,
+        displayName: profile.nickname || 'User'
+      };
+    }
     if (auth.currentUser) {
       return {
         uid: auth.currentUser.uid,
         email: auth.currentUser.email || '',
         displayName: auth.currentUser.displayName || ''
-      };
-    }
-    if (profile?.email) {
-      const cleanEmail = profile.email.toLowerCase().trim();
-      const uid = profile.uid || ('admin_' + cleanEmail.replace(/[^a-z0-9]/gi, '_'));
-      return {
-        uid,
-        email: profile.email,
-        displayName: profile.nickname || 'Admin User'
       };
     }
     return null;
@@ -3354,16 +3354,14 @@ export default function App() {
               u.user_metadata?.avatar_url || ''
             );
           } else if (event === 'SIGNED_OUT' || !session) {
-            if (!auth.currentUser) {
-              setProfile(null);
-              setFoodLogs([]);
-              setBiomarkers({});
-              setBiomarkerHistory([]);
-              setActions([]);
-              setDailyBenefits([]);
-              setReport(null);
-              setIsAuthChecking(false);
-            }
+            setProfile(null);
+            setFoodLogs([]);
+            setBiomarkers({});
+            setBiomarkerHistory([]);
+            setActions([]);
+            setDailyBenefits([]);
+            setReport(null);
+            setIsAuthChecking(false);
           }
         });
         unsubs.push(() => subscription.unsubscribe());
@@ -3388,51 +3386,34 @@ export default function App() {
         }
       }
 
-      // Step B: Firebase Auth Listener
-      const unsubscribeFb = onAuthStateChanged(auth, async (user) => {
-        clearTimeout(fallbackTimeout);
-        if (user) {
-          const emailLower = user.email?.toLowerCase().trim() || '';
-          if (emailLower.includes('john@mail.com') || emailLower.includes('john@gmail.com')) {
-            try { await fbSignOut(auth); } catch (e) {}
-            localStorage.removeItem('last_active_email');
+      // If no Supabase user found, reset state cleanly
+      if (!isSupabaseConfigured) {
+        // Fallback for offline development without Supabase configured
+        const unsubscribeFb = onAuthStateChanged(auth, async (user) => {
+          clearTimeout(fallbackTimeout);
+          if (user) {
+            await loadUserData(
+              user.uid,
+              user.email || '',
+              user.displayName || '',
+              user.photoURL || ''
+            );
+          } else {
             setProfile(null);
+            setFoodLogs([]);
+            setBiomarkers({});
+            setBiomarkerHistory([]);
+            setActions([]);
+            setDailyBenefits([]);
+            setReport(null);
             setIsAuthChecking(false);
-            return;
           }
-          if (user.email) { runCleanupMigration(user.uid, user.email).catch(console.error); }
-          await loadUserData(
-            user.uid,
-            user.email || '',
-            user.displayName || '',
-            user.photoURL || ''
-          );
-        } else {
-          if (isSupabaseConfigured) {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-              const u = session.user;
-              await loadUserData(
-                u.id,
-                u.email || '',
-                resolveSbNick(u),
-                u.user_metadata?.avatar_url || ''
-              );
-              return;
-            }
-          }
-          // No user signed in
-          setProfile(null);
-          setFoodLogs([]);
-          setBiomarkers({});
-          setBiomarkerHistory([]);
-          setActions([]);
-          setDailyBenefits([]);
-          setReport(null);
-          setIsAuthChecking(false);
-        }
-      });
-      unsubs.push(unsubscribeFb);
+        });
+        unsubs.push(unsubscribeFb);
+      } else {
+        clearTimeout(fallbackTimeout);
+        setIsAuthChecking(false);
+      }
     };
 
     initializeAuthAndData().catch(err => {
