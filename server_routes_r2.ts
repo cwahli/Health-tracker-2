@@ -1,0 +1,634 @@
+import { Router } from 'express';
+import path from 'path';
+import fs from 'fs';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+
+export const r2Router = Router();
+
+// Load firebaseConfig for client migrations
+let firebaseConfig: any = null;
+try {
+  const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(firebaseConfigPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
+  }
+} catch (e) {}
+
+const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'd17eecca64f82625d29dc38b14f46c14';
+export const CLOUDFLARE_R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'health-tracker-photos';
+export const CLOUDFLARE_R2_PUBLIC_URL = (process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev').replace(/\/$/, '');
+const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || '';
+const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '';
+
+const s3Endpoint = `https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+let s3Client: any = null;
+export function getS3Client() {
+  if (!s3Client && CLOUDFLARE_R2_ACCESS_KEY_ID && CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
+    s3Client = new S3Client({
+      region: 'auto',
+      endpoint: s3Endpoint,
+      credentials: {
+        accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID,
+        secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+      },
+    });
+  }
+  return s3Client;
+}
+
+export async function uploadBase64ToR2(id: string, base64Data: string, index: number = 0): Promise<string> {
+  const client = getS3Client();
+  const safeId = String(id || 'unknown').replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 120);
+  const suffix = index > 0 ? `_${index}` : '';
+  const objectKey = `photos/${safeId}${suffix}.jpg`;
+  const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/${objectKey}`;
+  const proxyUrl = `/photos/${safeId}${suffix}.jpg`;
+
+  if (!client) {
+    console.warn('[R2 uploadBase64ToR2] S3 Client not configured, returning proxyUrl');
+    return proxyUrl;
+  }
+
+  try {
+    let body;
+    let contentType = 'image/jpeg';
+
+    if (base64Data.startsWith('data:')) {
+      const match = base64Data.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (match) {
+        contentType = match[1];
+        body = Buffer.from(match[2], 'base64');
+      } else {
+        body = Buffer.from(base64Data);
+      }
+    } else {
+      body = Buffer.from(base64Data, 'base64');
+    }
+
+    const command = new PutObjectCommand({
+      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+      Key: objectKey,
+      Body: body,
+      ContentType: contentType,
+    });
+    await client.send(command);
+    return publicUrl;
+  } catch (err) {
+    console.error('[R2 uploadBase64ToR2] Failed uploading to R2:', err);
+    return proxyUrl;
+  }
+}
+
+/** Stream meal photo from R2 (works when bucket is private). B11d. */
+export async function streamR2Photo(res: any, rawKey: string) {
+  const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+  const client = getS3Client();
+  if (!client) {
+    res.status(404).send('R2 client not configured');
+    return;
+  }
+  let filename = String(rawKey || '')
+    .replace(/^\/+/, '')
+    .replace(/\.\./g, '')
+    .slice(0, 200);
+  if (!filename) {
+    res.status(400).send('key required');
+    return;
+  }
+  if (!filename.includes('.')) filename = `${filename}.jpg`;
+  const key = filename.startsWith('photos/') ? filename : `photos/${filename}`;
+
+  const tryKeys = [key];
+  // legacy without extension
+  if (key.endsWith('.jpg')) tryKeys.push(key.replace(/\.jpg$/i, ''));
+
+  let lastErr: any = null;
+  for (const k of tryKeys) {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+        Key: k,
+      });
+      const s3Res = await client.send(command);
+      if (s3Res.ContentType) res.setHeader('Content-Type', s3Res.ContentType);
+      else res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.setHeader('X-Photo-Key', k);
+      const stream = s3Res.Body as any;
+      if (stream && typeof stream.pipe === 'function') {
+        stream.pipe(res);
+        return;
+      }
+      if (stream && typeof stream.transformToByteArray === 'function') {
+        const bytes = await stream.transformToByteArray();
+        res.send(Buffer.from(bytes));
+        return;
+      }
+    } catch (err: any) {
+      lastErr = err;
+    }
+  }
+  res.status(404).send(lastErr?.message || 'Photo not found');
+}
+
+r2Router.get(['/debug/:key(*)', '/api/r2/debug/:key(*)'], async (req, res) => {
+  try {
+    const rawKey = req.params.key || req.path.replace(/^\/(api\/r2\/)?debug\//, '');
+    const cleanKey = rawKey.startsWith('debug/') ? rawKey : `debug/${rawKey}`;
+    const jobIdMatch = cleanKey.match(/([a-zA-Z0-9_\-]+)\.json$/);
+    const jobId = jobIdMatch ? jobIdMatch[1] : cleanKey;
+
+    return res.redirect(`/api/jobs/debug?jobId=${encodeURIComponent(jobId)}&format=markdown`);
+  } catch (err: any) {
+    console.error('[API] /debug proxy error:', err);
+    res.status(500).json({ error: 'Failed to retrieve debug file' });
+  }
+});
+
+r2Router.post('/api/r2/upload-photo', async (req, res) => {
+  try {
+    const { jobId, payload } = req.body;
+    const safeId = String(jobId || 'unknown').replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 120);
+    const objectKey = `photos/${safeId}.jpg`;
+    // B11d: same-origin proxy works with private buckets; publicUrl is secondary
+    const proxyUrl = `/photos/${safeId}.jpg`;
+    const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/${objectKey}`;
+    const client = getS3Client();
+    if (!client) {
+      return res.json({ url: proxyUrl, proxyUrl, publicUrl });
+    }
+
+    let body;
+    let contentType = 'image/jpeg';
+
+    if (payload.startsWith('data:')) {
+      const match = payload.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (match) {
+        contentType = match[1];
+        body = Buffer.from(match[2], 'base64');
+      } else {
+        body = Buffer.from(payload);
+      }
+    } else {
+      body = Buffer.from(payload);
+    }
+
+    const command = new PutObjectCommand({
+      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+      Key: objectKey,
+      Body: body,
+      ContentType: contentType,
+    });
+    await client.send(command);
+
+    res.json({ url: proxyUrl, proxyUrl, publicUrl, key: objectKey });
+  } catch (err) {
+    console.error('Failed to upload photo to R2:', err);
+    res.status(500).json({ error: 'Failed to upload photo' });
+  }
+});
+
+r2Router.post('/api/r2/migrate-firestore-images', async (req, res) => {
+  try {
+    console.log('[Firestore API Migrate] Fetching food logs from Supabase to match existing images...');
+    const { supabaseAdmin } = await import('./supabaseAdmin.js');
+    const { data: foodLogs, error: supabaseErr } = await supabaseAdmin
+      .from('food_logs')
+      .select('id, image_urls, firebase_uid');
+
+    if (supabaseErr) {
+      console.error('[Firestore API Migrate] Error: Failed to fetch food logs from Supabase:', supabaseErr.message);
+      return res.status(500).json({ error: 'Failed to fetch food logs from Supabase', details: supabaseErr.message });
+    }
+
+    if (!foodLogs || foodLogs.length === 0) {
+      return res.json({ success: true, message: 'No food logs found in Supabase.', stats: { inspected: 0, skipped: 0, matched: 0, migrated: 0, updated: 0 } });
+    }
+
+    const { initializeApp: initializeClientApp } = await import('firebase/app');
+    const { initializeFirestore: initializeClientFirestore, doc: clientDoc, getDoc: clientGetDoc, updateDoc: clientUpdateDoc } = await import('firebase/firestore');
+
+    const clientApp = initializeClientApp(firebaseConfig);
+    const clientDb = firebaseConfig?.firestoreDatabaseId
+      ? initializeClientFirestore(clientApp, {}, firebaseConfig.firestoreDatabaseId)
+      : initializeClientFirestore(clientApp, {});
+
+    let migratedCount = 0;
+    let matchedCount = 0;
+    let docsUpdatedCount = 0;
+    let skippedCount = 0;
+
+    for (const log of foodLogs) {
+      const docId = log.id;
+      const userId = log.firebase_uid;
+
+      if (!userId) {
+        skippedCount++;
+        continue;
+      }
+
+      const docRef = clientDoc(clientDb, 'users', userId, 'foodImages', docId);
+      let docSnapShot;
+      try {
+        docSnapShot = await clientGetDoc(docRef);
+      } catch (docErr: any) {
+        console.warn(`[Firestore API Migrate] Failed to fetch doc users/${userId}/foodImages/${docId}:`, docErr.message || docErr);
+        continue;
+      }
+
+      if (!docSnapShot.exists()) {
+        skippedCount++;
+        continue;
+      }
+
+      const data = docSnapShot.data();
+      matchedCount++;
+
+      let hasNewR2Urls = false;
+      const newUrls: string[] = [];
+
+      if (data.imageUrl && data.imageUrl.startsWith('data:')) {
+        try {
+          const r2Url = await uploadBase64ToR2(docId, data.imageUrl, 0);
+          newUrls.push(r2Url);
+          hasNewR2Urls = true;
+        } catch (uploadErr) {
+          console.error(`[Firestore API Migrate] Failed to upload main image for doc ${docId}:`, uploadErr);
+        }
+      }
+
+      if (Array.isArray(data.imageUrls)) {
+        for (let i = 0; i < data.imageUrls.length; i++) {
+          const url = data.imageUrls[i];
+          if (url && url.startsWith('data:')) {
+            try {
+              const r2Url = await uploadBase64ToR2(docId, url, i);
+              if (!newUrls.includes(r2Url)) newUrls.push(r2Url);
+              hasNewR2Urls = true;
+            } catch (uploadErr) {
+              console.error(`[Firestore API Migrate] Failed to upload multi-image ${i} for doc ${docId}:`, uploadErr);
+            }
+          }
+        }
+      }
+
+      if (hasNewR2Urls && newUrls.length > 0) {
+        const mergedUrls = Array.from(new Set([...(log.image_urls || []), ...newUrls]));
+        const { error: updateSbErr } = await supabaseAdmin
+          .from('food_logs')
+          .update({ image_urls: mergedUrls })
+          .eq('id', docId);
+
+        if (updateSbErr) {
+          console.error(`[Firestore API Migrate] Failed to update Supabase food_logs for doc ${docId}:`, updateSbErr.message);
+        } else {
+          migratedCount++;
+        }
+
+        try {
+          await clientUpdateDoc(docRef, {
+            migratedToR2: true,
+            imageUrl: newUrls[0] || data.imageUrl,
+            imageUrls: newUrls.length > 0 ? newUrls : data.imageUrls,
+            migratedAt: new Date().toISOString()
+          });
+          docsUpdatedCount++;
+        } catch (updateDocErr: any) {
+          console.warn(`[Firestore API Migrate] Warning: failed to mark migratedToR2 on doc users/${userId}/foodImages/${docId}:`, updateDocErr.message || updateDocErr);
+        }
+      }
+    }
+
+    console.log(`[Firestore API Migrate] Migration completed. Matched: ${matchedCount}, Migrated: ${migratedCount}, Docs Updated: ${docsUpdatedCount}, Skipped: ${skippedCount}`);
+    res.json({
+      success: true,
+      stats: {
+        inspected: foodLogs.length,
+        skipped: skippedCount,
+        matched: matchedCount,
+        migrated: migratedCount,
+        docsUpdated: docsUpdatedCount
+      }
+    });
+  } catch (err: any) {
+    console.error('Failed to run Firestore migration via API:', err);
+    res.status(500).json({ error: 'Firestore migration failed', details: err?.message || String(err) });
+  }
+});
+
+r2Router.post('/api/r2/upload-logs', async (req, res) => {
+  try {
+    const { jobId, logsText } = req.body || {};
+    if (!jobId || logsText === undefined) {
+      return res.status(400).json({ error: 'jobId and logsText are required' });
+    }
+    const { uploadLogsToR2 } = await import('./src/utils/r2Storage.js');
+    const url = await uploadLogsToR2(String(jobId), String(logsText));
+    return res.json({ success: true, url });
+  } catch (err: any) {
+    console.error('[API] /api/r2/upload-logs failed:', err);
+    return res.status(500).json({ error: err.message || 'Failed to upload logs' });
+  }
+});
+
+r2Router.post('/api/r2/migrate-backend-logs', async (req, res) => {
+  try {
+    console.log('[MigrateLogs] Starting migration of backend logs from Supabase & Firestore to R2...');
+    const { uploadLogsToR2 } = await import('./src/utils/r2Storage.js');
+    const { supabaseAdmin } = await import('./supabaseAdmin.js');
+
+    let supabaseInspected = 0;
+    let supabaseMigrated = 0;
+    let totalBytesSaved = 0;
+
+    const { data: jobs, error: sbErr } = await supabaseAdmin
+      .from('agent_jobs')
+      .select('id, clean_result, status_message');
+
+    if (sbErr) {
+      console.error('[MigrateLogs] Supabase query failed:', sbErr.message);
+    } else if (jobs && jobs.length > 0) {
+      supabaseInspected = jobs.length;
+      for (const job of jobs) {
+        let cleanRes = job.clean_result;
+        if (!cleanRes || typeof cleanRes !== 'object') continue;
+
+        const rawLogs = cleanRes.backendLogs || cleanRes.agentResult?.backendLogs || '';
+        if (!rawLogs || typeof rawLogs !== 'string' || rawLogs.startsWith('[Logs stored in R2') || rawLogs.startsWith('http')) {
+          continue;
+        }
+
+        const logLength = rawLogs.length;
+        if (logLength < 10) continue;
+
+        const logsUrl = await uploadLogsToR2(job.id, rawLogs);
+        if (!logsUrl) {
+          console.warn(`[MigrateLogs] Failed to upload logs to R2 for job ${job.id}`);
+          continue;
+        }
+
+        const updatedCleanRes = { ...cleanRes };
+        updatedCleanRes.backendLogsUrl = logsUrl;
+        updatedCleanRes.backendLogs = `[Logs stored in R2: ${logsUrl}]`;
+        if (updatedCleanRes.agentResult) {
+          updatedCleanRes.agentResult = {
+            ...updatedCleanRes.agentResult,
+            backendLogsUrl: logsUrl,
+            backendLogs: `[Logs stored in R2: ${logsUrl}]`,
+          };
+        }
+
+        const { error: updateErr } = await supabaseAdmin
+          .from('agent_jobs')
+          .update({ clean_result: updatedCleanRes })
+          .eq('id', job.id);
+
+        if (!updateErr) {
+          supabaseMigrated++;
+          totalBytesSaved += logLength;
+        } else {
+          console.error(`[MigrateLogs] Failed updating job ${job.id} in Supabase:`, updateErr.message);
+        }
+      }
+    }
+
+    let firestoreInspected = 0;
+    let firestoreMigrated = 0;
+    try {
+      const { initializeApp: initializeClientApp } = await import('firebase/app');
+      const { initializeFirestore: initializeClientFirestore, collectionGroup, getDocs, updateDoc } = await import('firebase/firestore');
+
+      if (firebaseConfig && firebaseConfig.apiKey) {
+        const clientApp = initializeClientApp(firebaseConfig);
+        const clientDb = firebaseConfig.firestoreDatabaseId
+          ? initializeClientFirestore(clientApp, {}, firebaseConfig.firestoreDatabaseId)
+          : initializeClientFirestore(clientApp, {});
+
+        const snapshot = await getDocs(collectionGroup(clientDb, 'agentAnalyses'));
+        firestoreInspected = snapshot.size;
+
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          const rawLogs = data.backendLogs || data.globalLiveLogs || data.agentResult?.backendLogs || '';
+          if (!rawLogs || typeof rawLogs !== 'string' || rawLogs.startsWith('[Logs stored in R2') || rawLogs.startsWith('http')) {
+            continue;
+          }
+
+          const logsUrl = await uploadLogsToR2(docSnap.id, rawLogs);
+          if (logsUrl) {
+            await updateDoc(docSnap.ref, {
+              backendLogsUrl: logsUrl,
+              backendLogs: `[Logs stored in R2: ${logsUrl}]`,
+              globalLiveLogs: `[Logs stored in R2: ${logsUrl}]`
+            });
+            firestoreMigrated++;
+            totalBytesSaved += rawLogs.length;
+          }
+        }
+      }
+    } catch (fsErr: any) {
+      console.warn('[MigrateLogs] Firestore log migration skipped/failed:', fsErr.message || fsErr);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Backend logs migration completed',
+      stats: {
+        supabaseInspected,
+        supabaseMigrated,
+        firestoreInspected,
+        firestoreMigrated,
+        totalBytesSavedKB: Math.round(totalBytesSaved / 1024)
+      }
+    });
+  } catch (err: any) {
+    console.error('[MigrateLogs] Migration endpoint failed:', err);
+    return res.status(500).json({ error: 'Migration failed', details: err?.message || String(err) });
+  }
+});
+
+r2Router.get(['/photos/:key', '/api/r2/photos/:key'], async (req, res) => {
+  try {
+    await streamR2Photo(res, req.params.key);
+  } catch (err: any) {
+    res.status(404).send('Photo not found');
+  }
+});
+
+r2Router.get('/api/r2/photo-url', async (req, res) => {
+  try {
+    let key = String(req.query.key || '').replace(/^\/+/, '');
+    const rawUrl = String(req.query.url || '');
+    if (!key && rawUrl) {
+      const m = rawUrl.match(/\/photos\/([^?#]+)/i);
+      if (m) key = m[1];
+    }
+    if (!key) return res.status(400).json({ error: 'key or url required' });
+    if (!key.includes('.')) key = `${key}.jpg`;
+    key = key.replace(/\.\./g, '').slice(0, 200);
+
+    const proxyUrl = `/photos/${key}`;
+    const objectKey = key.startsWith('photos/') ? key : `photos/${key}`;
+    const wantSigned = String(req.query.signed || '') === '1' || String(req.query.signed || '') === 'true';
+
+    let signedUrl: string | null = null;
+    if (wantSigned) {
+      const client = getS3Client();
+      if (client) {
+        try {
+          const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+          const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+          const cmd = new GetObjectCommand({
+            Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+            Key: objectKey,
+          });
+          signedUrl = await getSignedUrl(client as any, cmd, { expiresIn: 3600 });
+        } catch (e: any) {
+          console.warn('[B11d] signed URL failed, using proxy:', e?.message || e);
+        }
+      }
+    }
+
+    res.json({
+      key: objectKey,
+      proxyUrl,
+      url: signedUrl || proxyUrl,
+      signed: !!signedUrl,
+      expiresIn: signedUrl ? 3600 : null,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'photo-url failed' });
+  }
+});
+
+r2Router.get('/api/r2/log-proxy', async (req, res) => {
+  try {
+    const rawUrl = String(req.query.url || '');
+    const jobId = String(req.query.jobId || '');
+    const { fetchLogsFromR2 } = await import('./src/utils/r2Storage.js');
+
+    let targetJobId = jobId;
+    if (!targetJobId && rawUrl) {
+      const match = rawUrl.match(/\/logs\/([^/?#]+)\.log/i) || rawUrl.match(/job_\d+_[a-z0-9]+/i);
+      if (match) {
+        targetJobId = match[1] || match[0];
+      }
+    }
+
+    if (targetJobId) {
+      try {
+        const logs = await fetchLogsFromR2(targetJobId);
+        if (logs) {
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          return res.send(logs);
+        }
+      } catch (r2Err) {
+        console.warn('[API] R2 fetch error in proxy, trying memory fallback:', r2Err);
+      }
+      const { getInMemoryServerJob } = await import('./serverJobs.js');
+      const memJob = getInMemoryServerJob(targetJobId);
+      if (memJob) {
+        const memLogs = (Array.isArray(memJob.accumulatedLogs) && memJob.accumulatedLogs.length > 0)
+          ? memJob.accumulatedLogs.join('\n')
+          : (Array.isArray(memJob.turn1Logs) && memJob.turn1Logs.length > 0 ? memJob.turn1Logs.join('\n') : (memJob.clean_result?.backendLogs || ''));
+        if (memLogs) {
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          return res.send(memLogs);
+        }
+      }
+    }
+
+    if (rawUrl && /^https?:\/\//i.test(rawUrl)) {
+      const r2Res = await fetch(rawUrl);
+      if (r2Res.ok) {
+        const text = await r2Res.text();
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        return res.send(text);
+      }
+    }
+
+    return res.status(404).send('Log file not found');
+  } catch (err: any) {
+    console.error('[API] /api/r2/log-proxy error:', err);
+    return res.status(500).send(err?.message || 'Failed to fetch R2 log');
+  }
+});
+
+r2Router.post('/api/r2/upload-debug', async (req, res) => {
+  try {
+    const { jobId, payload, userId } = req.body;
+    const { stripHeavyImages, coldDebugR2Key, COLD_DEBUG_LOG } = await import('./src/utils/debugPayload.js');
+    const key = coldDebugR2Key(String(jobId || 'unknown'), userId || payload?.userId || 'anonymous');
+    const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/${key}`;
+    const client = getS3Client();
+    if (!client) {
+      return res.json({ url: publicUrl });
+    }
+
+    const stripped = stripHeavyImages(payload || {});
+    const body = Buffer.from(JSON.stringify(stripped, null, 2));
+
+    const command = new PutObjectCommand({
+      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+      Key: key,
+      Body: body,
+      ContentType: 'application/json',
+    });
+    await client.send(command);
+    console.log(`${COLD_DEBUG_LOG} api ok key=${key} bytes=${body.length}`);
+
+    res.json({ url: publicUrl });
+  } catch (err) {
+    console.error('Failed to upload debug to R2:', err);
+    res.status(500).json({ error: 'Failed to upload debug' });
+  }
+});
+
+r2Router.post('/api/r2/upload-job-result', async (req, res) => {
+  try {
+    const { jobId, payload } = req.body;
+    if (!jobId || !payload) {
+      return res.status(400).json({ error: 'Missing jobId or payload' });
+    }
+    const publicUrl = `${CLOUDFLARE_R2_PUBLIC_URL}/jobs/${jobId}_result.json`;
+    const client = getS3Client();
+    if (!client) {
+      return res.json({ url: publicUrl });
+    }
+
+    const body = Buffer.from(JSON.stringify(payload, null, 2));
+
+    const command = new PutObjectCommand({
+      Bucket: CLOUDFLARE_R2_BUCKET_NAME,
+      Key: `jobs/${jobId}_result.json`,
+      Body: body,
+      ContentType: 'application/json',
+    });
+    await client.send(command);
+    console.log(`[JobResult R2 API] Uploaded ok key=jobs/${jobId}_result.json bytes=${body.length}`);
+
+    res.json({ url: publicUrl });
+  } catch (err: any) {
+    console.error('Failed to upload job result to R2:', err);
+    res.status(500).json({ error: err.message || 'Failed to upload job result' });
+  }
+});
+
+r2Router.post('/api/r2/delete-debug', async (req, res) => {
+  try {
+    const { key, jobId, userId } = req.body || {};
+    const { deleteR2ObjectByKey, deleteDebugPayloadFromR2 } = await import('./src/utils/r2Storage.js');
+    if (key) {
+      const ok = await deleteR2ObjectByKey(String(key));
+      return res.json({ success: ok });
+    }
+    if (jobId) {
+      const ok = await deleteDebugPayloadFromR2(String(jobId), userId ? String(userId) : undefined);
+      return res.json({ success: ok });
+    }
+    return res.status(400).json({ error: 'Either key or jobId is required' });
+  } catch (err: any) {
+    console.error('[API] /api/r2/delete-debug error:', err);
+    res.status(500).json({ error: err?.message || 'Failed to delete R2 debug object' });
+  }
+});

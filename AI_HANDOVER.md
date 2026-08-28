@@ -1,9 +1,17 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-27
-**Status:** Portion Clarify ID Collision Fixed (8/8 unit tests pass, assert-budgets PASS, tsc clean, production bundle built).
+**Updated:** 2026-08-28
+**Status:** Backend Modularization Complete & Verified (All files <450KB; AI Studio 512KB corruption eliminated; 86/86 test files & 811/811 vitest tests PASS, assert-budgets PASS, assert-biomarkers PASS, tsc exit 0, full production bundle built).
 
-- **Portion Clarify ID Collision Fixed (`server_portion_clarify.ts` - 2026-08-27):**
+- **Backend Modularization & AI Studio Corruption Fix (`server.ts`, `server_routes_r2.ts`, `server_routes_medical_gemini.ts`, `server_routes_food_analyze.ts` - 2026-08-28):**
+  - **Root Cause & Diagnosis:** Forensic analysis confirmed that when Google AI Studio commits files to GitHub, its web transport splits commits into 512 KB payload buffers. When a single file exceeds 512 KB, chunk 1 (plain text 523,834 bytes) and chunk 2 (compressed deflate stream) collided on unchunking, truncating the file at byte 523,834 with binary garbage. `server.ts` had grown to 836 KB (15,550 lines), triggering this corruption repeatedly.
+  - **Key Changes Applied:**
+    - **`server_routes_r2.ts` (22 KB / 634 lines):** Extracted Cloudflare R2 S3 photo uploading, log migration, streaming proxies, and signed URL generation into a standalone router.
+    - **`server_routes_medical_gemini.ts` (210 KB / 3,805 lines):** Extracted all Gemini medical/diagnostic routes (`/api/gemini/medical-analyze`, `/api/gemini/review-biomarker`, `/api/gemini/health-baseline-analyze`, `/api/gemini/insight-analyze`, etc.) into a dedicated Express router.
+    - **`server_routes_food_analyze.ts` (430 KB / 7,774 lines):** Extracted the monolithic `/api/gemini/food-analyze` and `/api/gemini/front-desk` vision scout/dietitian analysis pipelines into a dedicated Express router.
+    - **Clean Top-Level Architecture (`server.ts` - 160 KB / 3,548 lines):** Unnested routes and utilities from inside `async function startServer()`, making all shared LLM dispatchers and schema validators top-level module exports. Sunk frontend Vite/static middleware into `startServer()` right before `app.listen()`, preventing top-level await errors in CJS bundling.
+    - **Guaranteed Sub-450KB File Threshold:** Every single file across the entire repository is now strictly under 450 KB (well below the 512 KB boundary), permanently safeguarding AI Studio workflows against web buffer truncations.
+  - **Verification:** `npx tsc --noEmit` exit 0 (zero errors); `npx vitest run` 86/86 test files and 811/811 tests PASS; `node scripts/assert-budgets.mjs` PASS; `node scripts/assert-biomarker-ingest.mjs` & `assert-biomarker-lifecycle-m31.mjs` PASS; `npm run build` production client + CJS backend bundle built cleanly.
   - **Root Cause & Diagnosis:** When a composite dish contained subcomponents (e.g. Broccoli), the backend assigned a mathematically derived `compIndex = (si * 100) + (cIdx + 1)`. For the first subcomponent of the first dish, this yielded `1`. However, top-level sibling items (like Rolled Oats) were sequentially indexed `0, 1, 2...`. This caused a strict mathematical collision where a child component (Broccoli) and a top-level sibling (Rolled Oats) both shared `scoutIndex = 1`. In `PortionClarifyCard.tsx`, since React state keys were driven by `scoutIndex`, clicking the "Custom (g)" button for one inherently fired the state transition for both simultaneously.
   - **Key Changes Applied:** 
     - Offset all dynamically generated subcomponent `compIndex` values by an isolated absolute baseline of `10000` (e.g., `10000 + (si * 100) + cIdx`).
