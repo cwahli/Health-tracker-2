@@ -398,6 +398,8 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         biomarkerKey: payload.biomarkerKey,
         biomarkers: payload.biomarkers || {},
         biomarkerHistory: payload.biomarkerHistory || [],
+        calibratedInsights: (payload as any).calibratedInsights || undefined,
+        outOfRangeBiomarkers: (payload as any).outOfRangeBiomarkers || [],
         dataReviewBatchKeys: payload.dataReviewBatchKeys || [],
         batchKeys: payload.batchKeys || payload.dataReviewBatchKeys || [],
         batchBiomarkers: payload.batchBiomarkers || [],
@@ -759,6 +761,11 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           proposal: finalPayload?.proposal || finalPayload?.agentResult?.proposal || undefined,
           reply: finalPayload?.reply || finalPayload?.text || finalPayload?.agentResult?.reply || undefined,
           targetBiomarkerKey: finalPayload?.targetBiomarkerKey || finalPayload?.biomarkerKey || finalPayload?.agentResult?.targetBiomarkerKey || undefined,
+          // Health Coach fix: the health-baseline-analyze route returns its full
+          // structured output nested under `report`. It was never added to this
+          // whitelist, so it was silently dropped here even though the backend
+          // generated it correctly — the client always saw an empty report.
+          report: finalPayload?.report || undefined,
           networkErrors: payload.networkErrors || [],
           userActionBreadcrumbs: payload.userActionBreadcrumbs || [],
           // M-FIX1: Medical/biomarker agents (agent1_step1 and friends) return these
