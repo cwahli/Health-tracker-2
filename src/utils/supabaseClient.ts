@@ -1,7 +1,5 @@
 /// <reference types="vite/client" />
 import { createClient } from '@supabase/supabase-js';
-import { getAuth } from 'firebase/auth';
-import { getApp } from 'firebase/app';
 
 const getEnvVar = (key: string): string | undefined => {
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
@@ -25,11 +23,10 @@ export const isSupabaseConfigured = Boolean(
 );
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  accessToken: async () => {
-    try { getApp(); } catch (e) { return null; }
-    const user = getAuth().currentUser;
-    if (!user) return null;
-    return await user.getIdToken();
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
   }
 });
 

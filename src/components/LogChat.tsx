@@ -1384,6 +1384,7 @@ ${logsText}`);
         (job.result as any)?.data?.photoUrl ||
         (job as any).clean_result?.photoUrl ||
         (job as any).photo_url;
+      const remotePhotos = job.result?.imageUrls || job.result?.photoUrls || job.result?.clean_result?.imageUrls || job.result?.clean_result?.photoUrls || (job as any).clean_result?.imageUrls || (job as any).clean_result?.photoUrls || (remotePhoto ? [remotePhoto] : []);
 
       if (job.status === 'succeeded' && type === 'food') {
         let currentResult = job.result?.clean_result || job.result || (job as any).clean_result || {};
@@ -1443,15 +1444,15 @@ ${logsText}`);
             if (images && images.length > 0) {
               userMsg.imageUrl = typeof images[0] === 'string' ? images[0] : URL.createObjectURL(images[0] as Blob);
               userMsg.imageUrls = images.map(img => typeof img === 'string' ? img : URL.createObjectURL(img as Blob));
-            } else if (remotePhoto) {
-              userMsg.imageUrl = remotePhoto;
-              userMsg.imageUrls = [remotePhoto];
+            } else if (remotePhotos && remotePhotos.length > 0) {
+              userMsg.imageUrl = remotePhotos[0];
+              userMsg.imageUrls = remotePhotos;
             }
           } catch (err) {
             console.warn('Failed to load images from ImageStore for LogChat:', err);
-            if (remotePhoto) {
-              userMsg.imageUrl = remotePhoto;
-              userMsg.imageUrls = [remotePhoto];
+            if (remotePhotos && remotePhotos.length > 0) {
+              userMsg.imageUrl = remotePhotos[0];
+              userMsg.imageUrls = remotePhotos;
             }
           }
         }
@@ -1463,15 +1464,15 @@ ${logsText}`);
           if (foodLog && imgs?.length) {
             foodLog.imageUrls = imgs.map(img => typeof img === 'string' ? img : URL.createObjectURL(img as Blob));
             foodLog.imageUrl = foodLog.imageUrls[0];
-          } else if (foodLog && remotePhoto) {
-            foodLog.imageUrl = foodLog.imageUrl || remotePhoto;
-            foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : [remotePhoto];
+          } else if (foodLog && remotePhotos && remotePhotos.length > 0) {
+            foodLog.imageUrl = foodLog.imageUrl || remotePhotos[0];
+            foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : remotePhotos;
           }
         } catch (err) {
           console.warn('Failed to load images from ImageStore for LogChat:', err);
-          if (foodLog && remotePhoto) {
-            foodLog.imageUrl = foodLog.imageUrl || remotePhoto;
-            foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : [remotePhoto];
+          if (foodLog && remotePhotos && remotePhotos.length > 0) {
+            foodLog.imageUrl = foodLog.imageUrl || remotePhotos[0];
+            foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : remotePhotos;
           }
         }
 
@@ -1575,11 +1576,12 @@ ${logsText}`);
         });
 
         const remotePhoto = job.photoUrl || job.result?.photoUrl || (job.result as any)?.clean_result?.photoUrl;
+        const remotePhotos = job.result?.imageUrls || job.result?.photoUrls || job.result?.clean_result?.imageUrls || job.result?.clean_result?.photoUrls || (job as any).clean_result?.imageUrls || (job as any).clean_result?.photoUrls || (remotePhoto ? [remotePhoto] : []);
         try {
           const realImages = await ImageStore.getImages(activeJobId);
           const realUrls = (realImages && realImages.length > 0)
             ? realImages.map((img: any) => typeof img === 'string' ? img : URL.createObjectURL(img as Blob))
-            : (remotePhoto ? [remotePhoto] : []);
+            : remotePhotos;
 
           if (realUrls.length > 0) {
             baseMsgs.forEach((m: any) => {
@@ -1692,15 +1694,15 @@ ${logsText}`);
             if (images && images.length > 0) {
               userMsg.imageUrl = typeof images[0] === 'string' ? images[0] : URL.createObjectURL(images[0] as Blob);
               userMsg.imageUrls = images.map(img => typeof img === 'string' ? img : URL.createObjectURL(img as Blob));
-            } else if (remotePhoto) {
-              userMsg.imageUrl = remotePhoto;
-              userMsg.imageUrls = [remotePhoto];
+            } else if (remotePhotos && remotePhotos.length > 0) {
+              userMsg.imageUrl = remotePhotos[0];
+              userMsg.imageUrls = remotePhotos;
             }
           } catch (err) {
             console.warn('Failed to load images from ImageStore for LogChat:', err);
-            if (remotePhoto) {
-              userMsg.imageUrl = remotePhoto;
-              userMsg.imageUrls = [remotePhoto];
+            if (remotePhotos && remotePhotos.length > 0) {
+              userMsg.imageUrl = remotePhotos[0];
+              userMsg.imageUrls = remotePhotos;
             }
           }
         }
@@ -1725,16 +1727,16 @@ ${logsText}`);
                 if (foodLog.imageUrls.length > 0) {
                   foodLog.imageUrl = foodLog.imageUrls[0];
                 }
-              } else if (remotePhoto) {
-                foodLog.imageUrl = foodLog.imageUrl || remotePhoto;
-                foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : [remotePhoto];
+              } else if (remotePhotos && remotePhotos.length > 0) {
+                foodLog.imageUrl = foodLog.imageUrl || remotePhotos[0];
+                foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : remotePhotos;
               }
             }
           } catch (err) {
             console.warn('Failed to load images from ImageStore for LogChat:', err);
-            if (foodLog && remotePhoto) {
-              foodLog.imageUrl = foodLog.imageUrl || remotePhoto;
-              foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : [remotePhoto];
+            if (foodLog && remotePhotos && remotePhotos.length > 0) {
+              foodLog.imageUrl = foodLog.imageUrl || remotePhotos[0];
+              foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : remotePhotos;
             }
           }
 

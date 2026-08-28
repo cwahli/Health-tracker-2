@@ -1218,12 +1218,21 @@ export function NutritionLabelTable({
                   );
                 })()}
 
-                {item.ingredientsList && String(item.ingredientsList).trim() && (
-                  <div className="mt-2.5 p-2 bg-slate-100/60 dark:bg-slate-800/40 rounded-lg text-[9.5px] leading-normal border border-slate-200/40 dark:border-slate-700/30 text-left">
-                    <span className="font-bold text-theme-text-secondary uppercase tracking-wider block mb-1 text-[8.5px]">{t.ingredientsLabel}</span>
-                    <span className="text-theme-neutral font-normal">{item.ingredientsList}</span>
-                  </div>
-                )}
+                {(() => {
+                  const ingList = String(item.ingredientsList || '').trim();
+                  if (!ingList) return null;
+                  const isRedundant = 
+                    ingList.toLowerCase() === String(item.originalName || '').trim().toLowerCase() || 
+                    ingList.toLowerCase() === String(item.keyword || '').trim().toLowerCase();
+                  if (isRedundant) return null;
+                  
+                  return (
+                    <div className="mt-2.5 p-2 bg-slate-100/60 dark:bg-slate-800/40 rounded-lg text-[9.5px] leading-normal border border-slate-200/40 dark:border-slate-700/30 text-left">
+                      <span className="font-bold text-theme-text-secondary uppercase tracking-wider block mb-1 text-[8.5px]">{t.ingredientsLabel}</span>
+                      <span className="text-theme-neutral font-normal">{item.ingredientsList}</span>
+                    </div>
+                  );
+                })()}
 
                 {showWarning && (
                   <div className="mt-2 flex flex-col gap-1.5 bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-800/50 rounded-lg p-2 font-sans">

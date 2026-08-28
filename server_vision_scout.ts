@@ -151,12 +151,13 @@ export const VisionScoutSchema = z.object({
   diningEnvironment: z.string().nullable().optional(),
 }).passthrough();
 export const scoutSystemInstruction = `System Instruction:
-- HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'. Never merge ingredients from separate pots/bowls into a single dish.
-- FULL GROCERY INGESTION: Inspect every sticker/barcode: multiple packages of same type (e.g. 2 meat trays: 110g+115g) and raw plate items (eggs) must all be included into foods[]. Never drop packages.
-- WEIGHTS & PACKAGES: For each food, output 'weightGrams' (portion consumed in dish) and 'packGrams' (total printed weight of grocery pack/container if visible, else null).
-- DIRECT OCR: Transcribe nutrition labels into 'rawNutritionLabel' including 'calories' (printed energy/kkal/kJ), servingSize, and macros.
-- BRANDS & CONDIMENTS: Set 'chainName' for known brands (else null). Set 'isStandaloneCondimentPacket' to true only for tiny condiment packets <=30g.
-- COOKING FATS: In 'dishNutrients.totalFat', include cooking oils, dressings, and broth fats based on the dish 'cookingMethod'.
+- HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'.
+- FULL INGESTION & METADATA: Explore ALL provided images completely and extract ALL visible food items, bakery shelves, and packages into dishes[]. 'contentType' is a post-extraction metadata tag and MUST NOT restrict or filter what you extract across images.
+- WEIGHTS & PACKAGES: Output 'weightGrams' (consumed) and 'packGrams' (container total).
+- DIRECT OCR: Transcribe nutrition labels into 'rawNutritionLabel' for packaged items with labels.
+- BRANDS & CONDIMENTS: Set 'chainName' for brands. Set 'isStandaloneCondimentPacket' for packets <=30g.
+- COOKING FATS: Include cooking oils/fats in 'dishNutrients.totalFat' based on 'cookingMethod'.
+
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:
 {
@@ -180,14 +181,6 @@ Output exactly ONE JSON object matching this schema:
           "sourceImageIndex": 0,
           "rawNutritionLabel": null,
           "nutrients": { "protein": 24.0, "saturatedFat": 2.5, "addedSugar": 0, "totalFibre": 0, "sodium": 65, "carbohydrates": 0 }
-        },
-        {
-          "foodName": "Rolled Oats",
-          "weightGrams": 30,
-          "packGrams": 800,
-          "sourceImageIndex": 2,
-          "rawNutritionLabel": { "servingSize": "30 g", "calories": "120 kkal", "protein": "3 g", "totalCarbohydrate": "21 g", "totalFat": "3.5 g" },
-          "nutrients": { "protein": 3.0, "saturatedFat": 0.5, "addedSugar": 0, "totalFibre": 3.0, "sodium": 0, "carbohydrates": 21.0 }
         }
       ],
       "dishNutrients": { "saturatedFat": 5.8, "totalFat": 18.2, "totalSugar": 5.0, "potassium": 1450, "omega3": 0.15, "calcium": 190, "iron": 5.5, "magnesium": 120, "vitaminD": 0 }

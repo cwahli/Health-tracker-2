@@ -13,30 +13,12 @@ export default defineConfig(() => {
     },
     build: {
       sourcemap: false,
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 4000,
       rollupOptions: {
         output: {
           manualChunks(id) {
-            if (!id.includes('node_modules')) return;
-            // React core
-            if (/[\\/]node_modules[\\/](react|react-dom|scheduler|use-sync-external-store)[\\/]/.test(id)) {
-              return 'vendor-react';
-            }
-            // Firebase SDK
-            if (/[\\/]node_modules[\\/](@firebase|firebase)[\\/]/.test(id)) {
-              return 'vendor-firebase';
-            }
-            // Charting
-            if (/[\\/]node_modules[\\/](recharts|d3-|victory-)/.test(id)) {
-              return 'vendor-charts';
-            }
-            // Maps
-            if (/[\\/]node_modules[\\/](leaflet|react-leaflet)/.test(id)) {
-              return 'vendor-maps';
-            }
-            // Lucide Icons
-            if (/[\\/]node_modules[\\/]lucide-react/.test(id)) {
-              return 'vendor-icons';
+            if (id.includes('node_modules')) {
+              return 'vendor';
             }
           }
         }

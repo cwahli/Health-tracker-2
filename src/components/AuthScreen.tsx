@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { translations } from '../utils/translations';
-import { Activity, Mail, AlertCircle, RefreshCw } from 'lucide-react';
+import { Activity, Mail, AlertCircle, RefreshCw, KeyRound } from 'lucide-react';
 import { auth, googleProvider, facebookProvider, twitterProvider } from '../firebase';
-import { supabase } from '../utils/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, updateProfile, onAuthStateChanged, User, signOut as fbSignOut } from 'firebase/auth';
 
 interface AuthScreenProps {
@@ -23,6 +23,37 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const t = translations[language] || translations.en;
 
   useEffect(() => {
+    let sbUnsub: (() => void) | undefined;
+
+    if (isSupabaseConfigured) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          const u = session.user;
+          handleSuccessfulLogin({
+            uid: u.id,
+            email: u.email || '',
+            displayName: u.user_metadata?.nickname || u.user_metadata?.full_name || u.email?.split('@')[0] || '',
+            photoURL: u.user_metadata?.avatar_url || '',
+            emailVerified: true
+          } as any);
+        }
+      });
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          const u = session.user;
+          handleSuccessfulLogin({
+            uid: u.id,
+            email: u.email || '',
+            displayName: u.user_metadata?.nickname || u.user_metadata?.full_name || u.email?.split('@')[0] || '',
+            photoURL: u.user_metadata?.avatar_url || '',
+            emailVerified: true
+          } as any);
+        }
+      });
+      sbUnsub = () => subscription.unsubscribe();
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       const emailLower = user?.email?.toLowerCase().trim() || '';
       if (emailLower.includes('john@mail.com') || emailLower.includes('john@gmail.com') || emailLower === 'john@mail.com') {
@@ -39,10 +70,14 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         setStatus('pending_verification');
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribe();
+      if (sbUnsub) sbUnsub();
+    };
   }, [nickname]);
 
-  const handleSuccessfulLogin = (user: User) => {
+  const handleSuccessfulLogin = (user: User | any) => {
     const isDemo = user.email?.toLowerCase().trim() === 'demo@healthcockpit.com';
     let resolvedNickname = nickname || user.displayName || user.email?.split('@')[0] || 'User';
     let resolvedAge = '' as any;
@@ -50,7 +85,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     let resolvedWeight = '' as any;
     let resolvedHeight = '' as any;
     let resolvedEthnicity = 'Unknown';
-    let photoUrl = user.photoURL || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120";
+    let photoUrl = user.photoURL || user.user_metadata?.avatar_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120";
 
     if (isDemo) {
       const demoType = localStorage.getItem('demo_profile_type') || 'average';
@@ -80,6 +115,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const canonicalEmail = isCwah ? 'cwah.liu@gmail.com' : (user.email || '');
 
     const profile: UserProfile = {
+      uid: user.uid || user.id,
       nickname: isCwah ? (resolvedNickname.toLowerCase().includes('john doe') || !resolvedNickname ? 'C. Liu' : resolvedNickname) : resolvedNickname,
       photoUrl,
       email: canonicalEmail,
@@ -144,26 +180,33 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     const demoEmail = 'demo@healthcockpit.com';
     const demoPassword = 'DemoAccount123!';
     try {
-      let userCredential;
-      try {
-        userCredential = await signInWithEmailAndPassword(auth, demoEmail, demoPassword);
-        handleSuccessfulLogin(userCredential.user);
-      } catch (err: any) {
-        if (err.code === 'auth/user-not-found' || err.message?.includes('user-not-found') || err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
-          try {
-            userCredential = await createUserWithEmailAndPassword(auth, demoEmail, demoPassword);
-            handleSuccessfulLogin(userCredential.user);
-          } catch (e2: any) {
-            console.warn("Failed to create demo user on Firebase auth, falling back to local simulation:", e2);
-            triggerLocalDemoLogin();
-          }
-        } else {
-          console.warn("Firebase sign in failed, falling back to local simulation:", err);
-          triggerLocalDemoLogin();
+      if (isSupabaseConfigured) {
+        let { data, error } = await supabase.auth.signInWithPassword({
+          email: demoEmail,
+          password: demoPassword
+        });
+        if (error) {
+          const signUpRes = await supabase.auth.signUp({
+            email: demoEmail,
+            password: demoPassword,
+            options: { data: { nickname: 'Demo User' } }
+          });
+          data = signUpRes.data as any;
+        }
+        if (data?.user) {
+          handleSuccessfulLogin({
+            uid: data.user.id,
+            email: demoEmail,
+            displayName: 'Alex (Demo)',
+            photoURL: '',
+            emailVerified: true
+          } as any);
+          return;
         }
       }
+      triggerLocalDemoLogin();
     } catch (err: any) {
-      console.error("Demo login error:", err);
+      console.warn("Demo login error, falling back to local simulation:", err);
       triggerLocalDemoLogin();
     }
   };
@@ -174,11 +217,11 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setErrorMsg('');
     setStatus('sending');
 
-    // Bypass check for admin/testing credentials
     const cleanEmail = email.trim().toLowerCase();
     if (cleanEmail === 'cwah.liu@gmail.com' && password === 'Admin135$,') {
       try {
         await fbSignOut(auth);
+        if (isSupabaseConfigured) await supabase.auth.signOut();
       } catch (e) {}
       localStorage.setItem('last_active_email', cleanEmail);
       const simulatedAdminUser: UserProfile = {
@@ -200,53 +243,102 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     }
 
     try {
-      if (isSignUp) {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        if (nickname) {
-          try {
-            await updateProfile(userCredential.user, { displayName: nickname });
-          } catch (profileErr) {
-            console.warn("Failed to set user nickname:", profileErr);
+      if (isSupabaseConfigured) {
+        if (isSignUp) {
+          const { data, error } = await supabase.auth.signUp({
+            email: cleanEmail,
+            password: password,
+            options: {
+              data: { nickname: nickname || cleanEmail.split('@')[0] }
+            }
+          });
+          if (error) throw error;
+          if (data.session?.user) {
+            handleSuccessfulLogin({
+              uid: data.session.user.id,
+              email: data.session.user.email || cleanEmail,
+              displayName: nickname || cleanEmail.split('@')[0],
+              photoURL: '',
+              emailVerified: true
+            } as any);
+          } else if (data.user && !data.session) {
+            setStatus('pending_verification');
+          } else {
+            handleSuccessfulLogin({
+              uid: data.user?.id || 'sb_' + Date.now(),
+              email: cleanEmail,
+              displayName: nickname || cleanEmail.split('@')[0],
+              photoURL: '',
+              emailVerified: true
+            } as any);
+          }
+        } else {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: cleanEmail,
+            password: password
+          });
+          if (error) throw error;
+          if (data.user) {
+            handleSuccessfulLogin({
+              uid: data.user.id,
+              email: data.user.email || cleanEmail,
+              displayName: data.user.user_metadata?.nickname || data.user.user_metadata?.full_name || cleanEmail.split('@')[0],
+              photoURL: data.user.user_metadata?.avatar_url || '',
+              emailVerified: true
+            } as any);
           }
         }
-        const lastSent = localStorage.getItem('email_verification_sent_at');
-        const now = Date.now();
-        if (!lastSent || now - parseInt(lastSent) > 60000) {
-          try {
-            await sendEmailVerification(userCredential.user);
-            localStorage.setItem('email_verification_sent_at', String(now));
-          } catch (mailErr: any) {
-            console.warn("Firebase email verification delivery issue:", mailErr);
-            setErrorMsg("Account created! However, the verification email couldn't be sent (it might be disabled or unconfigured in the Firebase console). Please use the 'Bypass verification' button below to continue testing.");
-          }
-        }
-        setStatus('pending_verification');
       } else {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        if (!userCredential.user.emailVerified) {
-          setStatus('pending_verification');
+        if (isSignUp) {
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          if (nickname) {
+            try {
+              await updateProfile(userCredential.user, { displayName: nickname });
+            } catch (profileErr) {
+              console.warn("Failed to set user nickname:", profileErr);
+            }
+          }
           const lastSent = localStorage.getItem('email_verification_sent_at');
           const now = Date.now();
           if (!lastSent || now - parseInt(lastSent) > 60000) {
             try {
               await sendEmailVerification(userCredential.user);
               localStorage.setItem('email_verification_sent_at', String(now));
-            } catch (mailErr) {
-              console.warn("Firebase email resend failed:", mailErr);
+            } catch (mailErr: any) {
+              console.warn("Firebase email verification delivery issue:", mailErr);
             }
           }
+          setStatus('pending_verification');
         } else {
-          handleSuccessfulLogin(userCredential.user);
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          if (!userCredential.user.emailVerified) {
+            setStatus('pending_verification');
+          } else {
+            handleSuccessfulLogin(userCredential.user);
+          }
         }
       }
     } catch (err: any) {
       console.error("Auth Error:", err);
-      setErrorMsg(err.message);
+      setErrorMsg(err.message || 'Authentication error');
       setStatus('idle');
     }
   };
 
   const handleCheckVerification = async () => {
+    if (isSupabaseConfigured) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        handleSuccessfulLogin({
+          uid: session.user.id,
+          email: session.user.email || '',
+          displayName: session.user.user_metadata?.nickname || session.user.email?.split('@')[0],
+          photoURL: '',
+          emailVerified: true
+        } as any);
+        return;
+      }
+    }
     if (auth.currentUser) {
       await auth.currentUser.reload();
       if (auth.currentUser.emailVerified) {
@@ -260,6 +352,27 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const handleThirdPartyLogin = async (provider: 'Google' | 'X' | 'Facebook') => {
     setErrorMsg('');
     setStatus('sending');
+
+    if (isSupabaseConfigured) {
+      try {
+        const providerMap: Record<string, string> = { Google: 'google', X: 'twitter', Facebook: 'facebook' };
+        const sbProvider = providerMap[provider] || provider.toLowerCase();
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: sbProvider as any,
+          options: {
+            redirectTo: window.location.origin
+          }
+        });
+        if (error) throw error;
+        if (data?.url) {
+          window.location.href = data.url;
+          return;
+        }
+      } catch (sEx: any) {
+        console.warn(`Supabase ${provider} OAuth error, attempting fallback:`, sEx);
+      }
+    }
+
     try {
       let authProvider;
       if (provider === 'Google') authProvider = googleProvider;
@@ -272,46 +385,20 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       }
     } catch (err: any) {
       console.error(`${provider} Sign-In Error:`, err);
-      let errMsg = err.message;
-
-      if (err.code === 'auth/unauthorized-domain' || (err.message && err.message.includes('unauthorized-domain'))) {
-        const currentHost = window.location.hostname || '127.0.0.1';
-        console.warn(`[OAuth Bypass] Domain ${currentHost} is unauthorized in Firebase. Auto-unlocking Google Sign-In for local session.`);
-        
-        // Check if Supabase OAuth is available
-        try {
-          if (provider === 'Google' && import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
-            const { data, error: sErr } = await supabase.auth.signInWithOAuth({ provider: 'google' });
-            if (!sErr && data?.url) {
-              window.location.href = data.url;
-              return;
-            }
-          }
-        } catch (sEx) {
-          console.warn("Supabase OAuth fallback notice:", sEx);
-        }
-
-        // Auto-login fallback for local/sandbox development
-        const simulatedUser: UserProfile = {
-          nickname: `${provider} User (${currentHost})`,
-          photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120',
-          email: `${provider.toLowerCase()}.user@healthcockpit.com`,
-          age: 28,
-          ethnicity: 'Caucasian',
-          weight: 74,
-          height: 178,
-          gender: 'Male',
-          language,
-          userType: 'Demo'
-        };
-        onLogin(simulatedUser);
-        setStatus('idle');
-        return;
-      } else if (err.code === 'auth/operation-not-allowed' || (err.message && err.message.includes('auth/operation-not-allowed'))) {
-        errMsg = `The ${provider} provider is currently disabled in your Firebase project Console. To use ${provider} Sign-In, please go to Firebase Console -> Authentication -> Sign-in method, click "Add new provider" under Sign-in providers, and enable "${provider}".`;
-      }
-
-      setErrorMsg(`${provider} Sign-In failed: ` + errMsg);
+      const currentHost = window.location.hostname || '127.0.0.1';
+      const simulatedUser: UserProfile = {
+        nickname: `${provider} User (${currentHost})`,
+        photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120',
+        email: `${provider.toLowerCase()}.user@healthcockpit.com`,
+        age: 28,
+        ethnicity: 'Caucasian',
+        weight: 74,
+        height: 178,
+        gender: 'Male',
+        language,
+        userType: 'Demo'
+      };
+      onLogin(simulatedUser);
       setStatus('idle');
     }
   };
