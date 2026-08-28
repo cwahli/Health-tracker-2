@@ -287,7 +287,24 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
     },
     riskCategories: ['Cardiovascular'],
     standardMedicalGrouping: 'Metabolic',
-    aliases: ['cholesterol', 'serumtotalcholesterol', 'serum_cholesterol']
+    aliases: ['cholesterol', 'serumtotalcholesterol', 'serum_cholesterol'],
+    // Mirrors LDL: 1.3× the “Aim under 5.0” heuristic used to brand 6.5 as
+    // Critical. Chronic lipids are Elevated / Very High, never ER-critical.
+    customRanges: [
+      {
+        id: 'total_cholesterol_default_thresholds',
+        name: 'Standard clinical thresholds (all patients)',
+        filters: {},
+        range: {
+          type: 'simple',
+          conditions: [
+            { operator: '>', value: 6.2, alias: 'Very High', severity: 4 },
+            { operator: '>', value: 5.0, alias: 'Elevated', severity: 2 },
+            { operator: '<=', value: 5.0, alias: 'Optimal', severity: 0 }
+          ]
+        }
+      }
+    ]
   },
   {
     key: 'hdl',
@@ -361,7 +378,7 @@ export const biomarkerDefinitions: BiomarkerDefinition[] = [
           type: 'simple',
           conditions: [
             { operator: '<', value: 60, alias: 'Decreased (CKD G3)', severity: -4 },
-            { operator: '<', value: 90, alias: 'Low', severity: -2 },
+            { operator: '<', value: 90, alias: 'Mildly Decreased (CKD G2)', severity: -2 },
             { operator: '>=', value: 90, alias: 'Optimal', severity: 0 }
           ]
         }
@@ -2944,7 +2961,8 @@ export const getBiomarkerStatus = (key: string, val: number | string, normalRang
     if (valMatch) {
       const threshold = parseFloat(valMatch[0]);
       if (valueToEvaluate > threshold) {
-        if (valueToEvaluate >= threshold * 1.3) return 'critical';
+        // 1.3× is raised, not an acute emergency. Critical is reserved for
+        // numeric severity ±5 (see evaluateStructuredRange / rangeBrackets).
         return 'high';
       }
       return 'normal';
@@ -2955,7 +2973,6 @@ export const getBiomarkerStatus = (key: string, val: number | string, normalRang
     if (valMatch) {
       const threshold = parseFloat(valMatch[0]);
       if (valueToEvaluate < threshold) {
-        if (valueToEvaluate <= threshold * 0.7) return 'critical';
         return 'low';
       }
       return 'normal';
@@ -3090,7 +3107,7 @@ export function getBiomarkerEffectiveRisk(
   }
 
   const customDef = getCustomBiomarkerDef(profile, key);
-  const rawStatus = getBiomarkerStatus(key, val, def?.normalRange, def, profile);
+  const rawStatus = getBiomarkerStatus(key, val, def?.normalRange, customDef || def, profile);
   const statusLabel = getBiomarkerStatusLabel(key, rawStatus, customDef, val, profile);
   const riskTag = getBiomarkerRiskTag(key, rawStatus, customDef, val, profile);
   const tag = riskTag || statusLabel || rawStatus;
@@ -3115,7 +3132,11 @@ export function getBiomarkerEffectiveRisk(
     s.includes('underweight') ||
     s.includes('stage') ||
     s.includes('flagged') ||
-    (s === 'high' || s === 'low')
+    s.includes('very high') ||
+    s.includes('decreased') ||
+    s.includes('deficien') ||
+    s.includes('high') ||
+    s.includes('low')
   ) {
     return { score: magnitude === null ? UNKNOWN_RISK_SCORE : magnitude, severity, tag: tag || 'At risk', bg: 'bg-amber-500', text: 'text-white' };
   }
@@ -3269,6 +3290,22 @@ export const getBiomarkerRiskTag = (key: string, status: string, customDef?: any
   return null;
 };
 
+/** Map raw status enums so agents/UI never parrot "critical" for chronic markers. */
+export function sanitizeStatusLabel(key: string, label: string, status?: string): string {
+  const trimmed = (label || '').trim();
+  if (!trimmed) return trimmed;
+  if (key === 'bmi') return trimmed;
+  const lower = trimmed.toLowerCase();
+  if (lower === 'critical' || lower === 'critically high') {
+    return status === 'low' ? 'Very Low' : 'Very High';
+  }
+  if (lower === 'critically low') return 'Very Low';
+  if (lower === 'high') return 'Elevated';
+  if (lower === 'normal') return 'Optimal';
+  if (lower === 'low') return 'Low';
+  return trimmed;
+}
+
 export const getBiomarkerStatusLabel = (key: string, status: string, customDef?: any, userValue?: number | string, profile?: any): string => {
   if (status === 'flagged') return 'FLAGGED (Please Review Log)';
   let label = status;
@@ -3287,7 +3324,8 @@ export const getBiomarkerStatusLabel = (key: string, status: string, customDef?:
   }
   
   // Clean up "(At risk)", "(Healthy)" from label
-  return label.replace(/\s*\(\s*(at risk|healthy|stage.*?)\s*\)/i, '').trim();
+  label = label.replace(/\s*\(\s*(at risk|healthy|stage.*?)\s*\)/i, '').trim();
+  return sanitizeStatusLabel(key, label, status);
 };
 
 export const getProfileFingerprint = (profile: UserProfile): string => {

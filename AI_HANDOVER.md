@@ -1,7 +1,9 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-28  
-**Status:** Universal -5..+5 Severity Magnitude for Biomarker Ranking Implemented & Verified (Unified clinician-aligned -5..+5 severity scale for sorting/ranking, store auto-compatibility, vitest & compile_applet exit 0).
+**Status:** Fill-template prototype C2 green (`prototype/biomarkers/`). Remaining C1–C7: `plan/BIOMARKER_FILL_TEMPLATE_CASES.md`. Ranking: universal -5..+5 severity on main.
+
+- **C2 fill-template + status sanitizer (2026-08-28):** Prototype at `prototype/biomarkers/` (18 hits / 12 pending, 2-turn live PASS). `getBiomarkerStatusLabel` never injects Critical for chronic 1.3× (TC 6.5 → Very High; eGFR 80 → Mildly Decreased (CKD G2)). Instruction + full payloads: `prototype/biomarkers/reports/C2_live.md`. Remaining C1–C7: `plan/BIOMARKER_FILL_TEMPLATE_CASES.md`.
 
 - **Universal -5..+5 Severity Magnitude for Biomarker Ranking (`src/utils/biomarkers.ts`, `src/components/MedicalHistoryTab.tsx`, `src/utils/biomarkerIdentity.test.ts` - 2026-08-28):**
   - **Root Cause & Diagnosis:** Previously, biomarker ranking sorted the Medical History tab using a coarse 5-bucket scale (4=Critical, 3=At risk/High/Low/Elevated/Borderline/Flagged, 2=Normal, 1=Unknown, 0=No data). Because many disparate biomarkers (LDL-C, eGFR, HbA1c, Cholesterol/HDL, Steps) all landed on bucket 3, ties fell back to "most recently logged" — causing Steps (auto-synced daily) to always outrank LDL-C regardless of clinical significance.

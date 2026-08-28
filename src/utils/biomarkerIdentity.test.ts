@@ -18,6 +18,7 @@ import {
   getBiomarkerSeverityScore,
   getBiomarkerStatus,
   getBiomarkerStatusLabel,
+  sanitizeStatusLabel,
 } from './biomarkers';
 
 describe('getMappedBiomarkerKey — identity', () => {
@@ -342,16 +343,18 @@ describe('getBiomarkerEffectiveRisk — tag-aligned category scoring (score = -5
     expect(risk.text).toBe('text-white');
   });
 
-  it('caps the uncalibrated fallback magnitude at 3 even for a status-critical anomaly', () => {
+  it('caps the uncalibrated fallback magnitude at 3 even for a large single-sided exceedance (not ER-critical)', () => {
     const risk = getBiomarkerEffectiveRisk('non_hdl_cholesterol', 5.5, { key: 'non_hdl_cholesterol', normalRange: '< 3.4' });
     // Fallback magnitude: (5.5 - 3.4) / 3.4 = 0.617 -> capped at 3.
     // Magnitudes 4-5 are reserved for biomarkers with an actual
     // clinician-calibrated severity number (rangeBrackets/structured ranges),
     // so an uncalibrated marker can never claim the top of the scale.
+    // Display label is Elevated (sanitized); 1.3× is not Critical.
     expect(risk.score).toBe(3);
     expect(risk.severity).toBe(3);
-    expect(risk.tag.toLowerCase()).toContain('critical');
-    expect(risk.bg).toBe('bg-rose-600');
+    expect(risk.tag.toLowerCase()).toMatch(/elevated|high|at risk/);
+    expect(risk.tag.toLowerCase()).not.toContain('critical');
+    expect(risk.bg).toBe('bg-amber-500');
   });
 
   it('uses the clinician-calibrated severity number directly when rangeBrackets are present, up to magnitude 5', () => {
@@ -380,7 +383,7 @@ describe('getBiomarkerEffectiveRisk — tag-aligned category scoring (score = -5
     const risk = getBiomarkerEffectiveRisk('hdl_cholesterol', 1.4, { key: 'hdl_cholesterol', normalRange: '> 1.0' });
     expect(risk.score).toBe(0);
     expect(risk.severity).toBe(0);
-    expect(risk.tag.toLowerCase()).toContain('normal');
+    expect(risk.tag.toLowerCase()).toMatch(/normal|optimal/);
     expect(risk.bg).toBe('bg-emerald-600');
   });
 
@@ -433,6 +436,38 @@ describe('Clinical Diagnostic Scale & Non-Critical Chronic Labels', () => {
     expect(status).toBe('low');
     const label = getBiomarkerStatusLabel('egfr', status, undefined, 45);
     expect(label).toBe('Decreased (CKD G3)');
+  });
+
+  it('maps eGFR 80 to low with Mildly Decreased (CKD G2), not Low', () => {
+    const status = getBiomarkerStatus('egfr', 80);
+    expect(status).toBe('low');
+    const label = getBiomarkerStatusLabel('egfr', status, undefined, 80);
+    expect(label).toBe('Mildly Decreased (CKD G2)');
+    expect(label.toLowerCase()).not.toBe('low');
+  });
+
+  it('maps total cholesterol 6.5 mmol/L to high with Very High (never critical)', () => {
+    const status = getBiomarkerStatus('total_cholesterol', 6.5);
+    expect(status).toBe('high');
+    const label = getBiomarkerStatusLabel('total_cholesterol', status, undefined, 6.5);
+    expect(label).toBe('Very High');
+    expect(label.toLowerCase()).not.toContain('critical');
+  });
+
+  it('maps raw status enums away from critical/high/normal', () => {
+    expect(sanitizeStatusLabel('alt', 'high', 'high')).toBe('Elevated');
+    expect(sanitizeStatusLabel('alt', 'critical', 'critical')).toBe('Very High');
+    expect(sanitizeStatusLabel('hdl', 'normal', 'normal')).toBe('Optimal');
+    expect(sanitizeStatusLabel('ldl', 'Very High', 'high')).toBe('Very High');
+  });
+
+  it('scores Very High / Decreased display tags from calibrated severity, not unknown', () => {
+    const ldl = getBiomarkerEffectiveRisk('ldl', 4.3);
+    expect(ldl.score).toBe(4);
+    expect(ldl.tag).toBe('Very High');
+    const egfr = getBiomarkerEffectiveRisk('egfr', 80);
+    expect(egfr.score).toBe(2);
+    expect(egfr.tag).toBe('Mildly Decreased (CKD G2)');
   });
 
   it('maps hs-CRP 3.5 mg/L to high with High risk label (never critical)', () => {

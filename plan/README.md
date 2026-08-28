@@ -9,6 +9,7 @@
 | [FOOD.md](./FOOD.md) | 2 Pipeline + meal |
 | [RELIABILITY.md](./RELIABILITY.md) | 3 Infra / quotas |
 | [QUALITY.md](./QUALITY.md) | 4 Test method |
+| [BIOMARKER_FILL_TEMPLATE_CASES.md](./BIOMARKER_FILL_TEMPLATE_CASES.md) | Fill-template prototype C1–C7 remaining work (not a fifth pillar) |
 
 `archive/` = completed or abandoned sources (text already merged into the five files above).
 
