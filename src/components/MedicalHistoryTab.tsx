@@ -6,7 +6,7 @@ import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart a
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { getBiomarkerRangeSourceInfo } from '../utils/biomarkerLifecycle';
 import { generateDynamicInsight } from '../utils/biomarkerInsights';
-import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isBiomarkerMissingCategory, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, canonicalizeRiskCategory, getActiveStructuredRangeRule, formatCustomRangesSummary, getMappedBiomarkerKey, getIdealBmiTarget, getBiomarkerEffectiveRisk, BiomarkerEffectiveRisk } from '../utils/biomarkers';
+import { biomarkerDefinitions, getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, getBiomarkerRiskTag, BiomarkerDefinition, isAsianEthnicity, getPhysiologicalBucket, getBiomarkerMetadata, BIOMARKER_GROUPING_OPTIONS, getCustomBiomarkerDef, getMergedBiomarkerDef, isBiomarkerApproved, isBiomarkerMissingCategory, isValEmpty, isBiomarkerMissingRange, isBiomarkerNeedingReview, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, canonicalizeRiskCategory, getActiveStructuredRangeRule, formatCustomRangesSummary, getMappedBiomarkerKey, getIdealBmiTarget, getBiomarkerEffectiveRisk, BiomarkerEffectiveRisk, NO_DATA_RISK_SCORE } from '../utils/biomarkers';
 import { getAgentCalibration, getAllAgentCalibrationRecords, formatOptimalTargetValue } from '../utils/agentCalibration';
 import { getDuplicateAliasGroups } from '../utils/biomarkerAuditEngine';
 import { handleUnitChange } from '../utils/biomarkerLifecycle';
@@ -19,7 +19,7 @@ import { lazyWithRetry } from '../utils/lazyWithRetry';
 const BiomarkerDictionaryModal = lazyWithRetry(() => import('./BiomarkerDictionaryModal'));
 import NotUsedBiomarkersModal from './NotUsedBiomarkersModal';
 import TaskPlaceholderCard from './TaskPlaceholderCard';
-import { JobStore } from '../jobs/JobStore';
+import { JobStore, isJobBlank } from '../jobs/JobStore';
 
 interface MedicalHistoryTabProps {
   profile: UserProfile;
@@ -101,20 +101,20 @@ export default function MedicalHistoryTab({
 }: MedicalHistoryTabProps) {
   const t = translations[profile.language] || translations.en;
   
-  const [jobs, setJobs] = useState(() => JobStore.getAllJobs().filter(j => j.kind === 'medical'));
+  const [jobs, setJobs] = useState(() => JobStore.getAllJobs().filter(j => j.kind === 'medical' && !isJobBlank(j)));
   useEffect(() => {
     const unsubscribe = JobStore.subscribe(() => {
-      setJobs(JobStore.getAllJobs().filter(j => j.kind === 'medical'));
+      setJobs(JobStore.getAllJobs().filter(j => j.kind === 'medical' && !isJobBlank(j)));
     });
     return () => { unsubscribe(); };
   }, []);
 
   const activeMedicalJobs = useMemo(() => {
     return jobs.filter(job => {
-      if (job.status === 'draft') return false;
+      if (job.status === 'draft' || isJobBlank(job)) return false;
       const hasText = !!job.inputSnapshot?.text?.trim();
-      const hasPayload = hasText || !!(job.inputSnapshot as any)?.extractedData || !!(job.inputSnapshot as any)?.remainingText || !!(job.inputSnapshot as any)?.hasImage;
-      if (!hasPayload && job.status === 'queued') return false;
+      const hasPayload = hasText || !!(job.inputSnapshot as any)?.extractedData || !!(job.inputSnapshot as any)?.remainingText || !!(job.inputSnapshot as any)?.hasImage || !!(job.result?.biomarkers && Object.keys(job.result.biomarkers).length > 0);
+      if (!hasPayload && (job.status === 'queued' || job.status === 'succeeded')) return false;
       return true;
     });
   }, [jobs]);
@@ -707,7 +707,7 @@ export default function MedicalHistoryTab({
       // Sort by importance: critical > high/low > normal > unknown > no data
       const getSeverityScore = (key: string) => {
         const val = getLatestValue(key);
-        if (val === undefined) return -1;
+        if (val === undefined) return NO_DATA_RISK_SCORE;
         const def = allDefinitions.find(d => d.key === key);
         return getBiomarkerEffectiveRisk(key, val, def, profile).score;
       };
@@ -777,7 +777,8 @@ export default function MedicalHistoryTab({
     }
     const groupMarkers = getBiomarkersForSubCategory(cat);
     let highestRisk: BiomarkerEffectiveRisk = {
-      score: 0,
+      score: NO_DATA_RISK_SCORE,
+      severity: null,
       tag: 'No Data',
       bg: 'bg-slate-200 dark:bg-slate-800/50',
       text: 'text-theme-text-secondary'
@@ -809,7 +810,7 @@ export default function MedicalHistoryTab({
       const getCatScore = (cat: string) => {
         if (cat === 'Biomarkers to Review') return -1;
         const groupMarkers = getBiomarkersForSubCategory(cat);
-        let maxScore = 0;
+        let maxScore = NO_DATA_RISK_SCORE;
         groupMarkers.forEach(def => {
           const val = getLatestValue(def.key);
           if (val !== undefined && val !== null && val !== '' && !isValEmpty(val)) {
@@ -837,7 +838,7 @@ export default function MedicalHistoryTab({
     } else {
       const getSeverityScore = (key: string) => {
         const val = getLatestValue(key);
-        if (val === undefined) return -1;
+        if (val === undefined) return NO_DATA_RISK_SCORE;
         const def = allDefinitions.find(d => d.key === key);
         return getBiomarkerEffectiveRisk(key, val, def, profile).score;
       };

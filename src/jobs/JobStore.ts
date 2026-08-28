@@ -16,6 +16,91 @@ function serializeJobs(jobs: AgentJob[]): string {
   });
 }
 
+export function isJobBlank(job: Partial<AgentJob> | undefined | null): boolean {
+  if (!job) return true;
+  // Draft jobs are unsubmitted client-side composer states, not background AI analysis tasks
+  if (job.status === 'draft') return true;
+
+  const hasText = !!(
+    job.inputSnapshot?.text &&
+    job.inputSnapshot.text.trim() &&
+    job.inputSnapshot.text.trim() !== 'Analyze this meal photo.'
+  );
+
+  const hasImage = !!(
+    job.photoUrl ||
+    job.debugUrl ||
+    job.inputSnapshot?.hasImage ||
+    (job.inputSnapshot?.imageRefs && job.inputSnapshot.imageRefs.length > 0) ||
+    (job.inputSnapshot?.imageUrls && job.inputSnapshot.imageUrls.length > 0)
+  );
+
+  const pendingLog =
+    job.result?.pendingFoodLog ||
+    job.result?.clean_result?.pendingFoodLog ||
+    job.result?.raw?.data ||
+    job.result?.data ||
+    job.result?.foodData ||
+    job.result?.mealBuild?.content ||
+    job.mealBuild?.content ||
+    job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
+    job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
+
+  const hasFoodData = !!(
+    pendingLog?.foodName ||
+    pendingLog?.name ||
+    pendingLog?.title ||
+    pendingLog?.summary ||
+    (pendingLog?.items && pendingLog.items.length > 0) ||
+    (pendingLog?.itemsBreakdown && pendingLog.itemsBreakdown.length > 0) ||
+    (pendingLog?.calories && pendingLog.calories > 0) ||
+    (job.result?.items && job.result.items.length > 0) ||
+    (job.result?.scoutItems && job.result.scoutItems.length > 0) ||
+    (job.mealBuild?.items && job.mealBuild.items.length > 0) ||
+    (job.mealBuild?.content?.name && job.mealBuild.content.name !== 'Meal')
+  );
+
+  const hasMedicalData = !!(
+    (job.result?.biomarkers && Object.keys(job.result.biomarkers).length > 0) ||
+    job.result?.extractedData ||
+    job.result?.doctorSummary
+  );
+
+  const hasSummary = !!(
+    job.result?.summary ||
+    job.result?.doctorSummary ||
+    (typeof job.result?.text === 'string' && job.result.text.trim().length > 0) ||
+    (typeof job.result?.message === 'string' && job.result.message.trim().length > 0)
+  );
+
+  const hasResult = hasFoodData || hasMedicalData || hasSummary;
+  const isActivelyProcessing =
+    job.status === 'queued' ||
+    job.status === 'running' ||
+    job.status === 'processing' ||
+    job.status === 'awaiting_user';
+
+  const hasMeaningfulMessages = !!(
+    job.messages &&
+    job.messages.length > 0 &&
+    job.messages.some((m: any) => m.content?.trim() || m.pendingFoodLog || m.data?.pendingFoodLog)
+  );
+
+  const hasError = !!job.error?.message;
+
+  // If it has NO input AND NO result AND is NOT actively processing AND has NO error AND has NO meaningful messages -> it's blank
+  if (!hasText && !hasImage && !hasResult && !isActivelyProcessing && !hasError && !hasMeaningfulMessages) {
+    return true;
+  }
+
+  // If status is 'succeeded' or 'cancelled' but it has zero food/medical result and zero text/image input -> it's a blank phantom job
+  if ((job.status === 'succeeded' || job.status === 'cancelled') && !hasText && !hasImage && !hasResult) {
+    return true;
+  }
+
+  return false;
+}
+
 class JobStoreImpl {
   private jobs: Map<string, AgentJob> = new Map();
   private deletedJobIds: Set<string> = new Set();
@@ -54,6 +139,13 @@ class JobStoreImpl {
         const parsed = JSON.parse(stored) as AgentJob[];
         for (const job of parsed) {
           delete job.abortController;
+          // Draft jobs are ephemeral composer sessions and should not be restored as persistent background jobs
+          if (job.status === 'draft') {
+            continue;
+          }
+          if (isJobBlank(job)) {
+            continue;
+          }
           if (job.status === 'running') {
             const hasServerJob = !!(job.result?.jobId || job.requestId);
             if (!hasServerJob) {
@@ -157,6 +249,13 @@ class JobStoreImpl {
     finishedJobs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     const jobsToDelete: string[] = [];
+
+    // Delete any lingering blank jobs or stale drafts
+    for (const job of this.jobs.values()) {
+      if (isJobBlank(job)) {
+        jobsToDelete.push(job.id);
+      }
+    }
 
     // Delete jobs older than 24 hours OR beyond the 15 most recent finished jobs
     finishedJobs.forEach((job, index) => {

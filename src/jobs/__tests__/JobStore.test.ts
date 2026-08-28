@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { JobStore } from '../JobStore';
+import { JobStore, isJobBlank } from '../JobStore';
 import { ImageStore } from '../ImageStore';
 
 vi.mock('idb-keyval', () => {
@@ -73,5 +73,33 @@ describe('JobStore', () => {
     unsub();
     JobStore.updateJob('s1', { status: 'running' });
     expect(calls).toBe(2);
+  });
+
+  it('correctly detects blank jobs vs valid jobs', () => {
+    // Draft is considered blank
+    expect(isJobBlank({ status: 'draft' as any })).toBe(true);
+
+    // Empty succeeded job with no text, image, or results is blank
+    expect(isJobBlank({ id: 'b1', status: 'succeeded' as any })).toBe(true);
+
+    // Job with valid text input
+    expect(isJobBlank({ id: 'b2', status: 'queued' as any, inputSnapshot: { text: '2 eggs and toast', imageRefs: [] } })).toBe(false);
+
+    // Job with photo URL
+    expect(isJobBlank({ id: 'b3', status: 'queued' as any, photoUrl: 'data:image/jpeg;base64,...' })).toBe(false);
+
+    // Job with food result
+    expect(isJobBlank({
+      id: 'b4',
+      status: 'succeeded' as any,
+      result: { pendingFoodLog: { foodName: 'Oatmeal with berries', calories: 250 } } as any
+    })).toBe(false);
+
+    // Job with medical result
+    expect(isJobBlank({
+      id: 'b5',
+      status: 'succeeded' as any,
+      result: { biomarkers: { glucose: 95 } } as any
+    })).toBe(false);
   });
 });

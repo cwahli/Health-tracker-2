@@ -2643,6 +2643,150 @@ export function matchRangeBracket(num: number, rangeBrackets: any[] | undefined)
   return null;
 }
 
+// Tunable constants for the simple-bounds/structuredRanges severity fallback
+// (see getBiomarkerSeverityScore). Deliberately conservative: a raw
+// percentage-deviation formula has no clinical calibration behind it, so it
+// is capped at SEVERITY_FALLBACK_MAX_MAGNITUDE. Magnitudes 4-5 ("Very High"
+// / "Acute Panic Emergency" on the -5..+5 clinical scale used in
+// rangeBrackets/structured ranges, see agents/biomarkerInstructions.ts) are
+// reserved for biomarkers that have an actual clinician-calibrated severity
+// number, so an uncalibrated lifestyle lifestyle metric (e.g. Steps) can never
+// out-rank a calibrated lab value at the same tier.
+export const SEVERITY_FALLBACK_BREAKPOINTS = [0.10, 0.25]; // -> magnitudes 1, 2; anything beyond -> 3
+export const SEVERITY_FALLBACK_MAX_MAGNITUDE = 3;
+
+/**
+ * Converts a fractional deviation beyond a violated boundary into a
+ * magnitude on the same 0-5 scale used by clinician-calibrated severity
+ * numbers, capped at SEVERITY_FALLBACK_MAX_MAGNITUDE. `ratio` is
+ * excess-beyond-boundary divided by a reference width (see call sites for
+ * how that width is chosen for one-sided vs two-sided ranges).
+ */
+function fallbackMagnitudeFromRatio(ratio: number): number {
+  if (!isFinite(ratio) || ratio <= 0) return 0;
+  if (ratio <= SEVERITY_FALLBACK_BREAKPOINTS[0]) return 1;
+  if (ratio <= SEVERITY_FALLBACK_BREAKPOINTS[1]) return 2;
+  return SEVERITY_FALLBACK_MAX_MAGNITUDE;
+}
+
+/**
+ * Universal severity score for ranking, on the same signed -5..+5 scale
+ * clinician-calibrated brackets already use (0 = optimal, +/-5 = acute
+ * emergency). Returns null when no severity can be established at all
+ * (missing value, no usable range, or a non-numeric result) — callers must
+ * treat null as its own "unknown" tier rather than folding it into 0, since
+ * 0 now means "confirmed normal", not "no data".
+ *
+ * Priority order (highest-fidelity source wins):
+ *   1. customDef.rangeBrackets numeric severity (matchRangeBracket)
+ *   2. evaluateStructuredRange numeric severity
+ *   3. customDef.structuredRanges (isNormal buckets, no severity number) —
+ *      distance-from-normal-boundary fallback, capped at magnitude 3
+ *   4. plain normalRange string bounds (parseNormalRangeBounds) —
+ *      distance-from-boundary fallback, capped at magnitude 3
+ * Never mutates or depends on getBiomarkerStatus's string category, so
+ * existing status/label behavior is unaffected.
+ */
+export function getBiomarkerSeverityScore(key: string, val: number | string, normalRangeStr?: string, customDef?: any, profile?: any): number | null {
+  let rangeStr = normalRangeStr;
+  if (!rangeStr) {
+    if (customDef?.profileAdjustedNormalRange) {
+      rangeStr = customDef.profileAdjustedNormalRange;
+    } else if (customDef?.normalRange) {
+      rangeStr = customDef.normalRange;
+    } else {
+      const def = biomarkerDefinitions.find(d => d.key === key);
+      rangeStr = def?.normalRange;
+    }
+  }
+
+  const num = typeof val === 'string' ? parseFloat(val) : val;
+  if (isNaN(num)) return null;
+
+  let valueToEvaluate = num;
+  const rangeBoundsForScaling = parseNormalRangeBounds(rangeStr);
+  if (rangeBoundsForScaling.min !== undefined && rangeBoundsForScaling.max !== undefined && rangeBoundsForScaling.max >= 10 && valueToEvaluate > 0 && valueToEvaluate < 1.0) {
+    valueToEvaluate *= 100;
+  }
+
+  // 1. Clinician-calibrated rangeBrackets — use the numeric severity directly.
+  if (Array.isArray(customDef?.rangeBrackets) && customDef.rangeBrackets.length > 0) {
+    const validBrackets = customDef.rangeBrackets.filter((b: any) => b && !String(b.range || '').toLowerCase().startsWith('unknown'));
+    if (validBrackets.length > 0) {
+      const matchedBracket = matchRangeBracket(valueToEvaluate, validBrackets);
+      if (matchedBracket && (typeof matchedBracket.severity === 'number' || (typeof matchedBracket.severity === 'string' && matchedBracket.severity.trim() !== '' && !isNaN(Number(matchedBracket.severity))))) {
+        return Number(matchedBracket.severity);
+      }
+    }
+  }
+
+  // 2. Structured range (rangeConfig / bracket-type customRanges) numeric severity.
+  const effectiveDef = customDef || biomarkerDefinitions.find(d => d.key === key);
+  const evalRes = evaluateStructuredRange(valueToEvaluate, effectiveDef, profile);
+  if (evalRes && (typeof evalRes.severity === 'number' || (typeof evalRes.severity === 'string' && evalRes.severity.trim() !== '' && !isNaN(Number(evalRes.severity))))) {
+    return Number(evalRes.severity);
+  }
+
+  // 3. customDef.structuredRanges: named min/max buckets with an isNormal flag
+  // but no severity number. Derive magnitude from how far the matched bucket
+  // sits beyond the nearest normal boundary, capped at SEVERITY_FALLBACK_MAX_MAGNITUDE.
+  if (customDef?.structuredRanges?.length > 0) {
+    const ranges = customDef.structuredRanges;
+    let matchedRange: any = null;
+    for (const r of ranges) {
+      let profileMatch = true;
+      if (profile) {
+        if (r.targetGender && profile.gender && r.targetGender.toLowerCase() !== profile.gender.toLowerCase()) profileMatch = false;
+        if (r.targetEthnicity && profile.ethnicity) {
+          const targetEth = r.targetEthnicity.toLowerCase();
+          const pEth = profile.ethnicity.toLowerCase();
+          if (!pEth.includes(targetEth) && !targetEth.includes(pEth)) profileMatch = false;
+        }
+        if (r.targetAgeMin !== undefined && r.targetAgeMin !== '' && profile.age && profile.age < Number(r.targetAgeMin)) profileMatch = false;
+        if (r.targetAgeMax !== undefined && r.targetAgeMax !== '' && profile.age && profile.age > Number(r.targetAgeMax)) profileMatch = false;
+      }
+      if (!profileMatch) continue;
+      let valMatch = true;
+      if (r.min !== undefined && r.min !== '') { if (valueToEvaluate < Number(r.min)) valMatch = false; }
+      if (r.max !== undefined && r.max !== '') { if (valueToEvaluate >= Number(r.max)) valMatch = false; }
+      if (valMatch) { matchedRange = r; break; }
+    }
+
+    if (matchedRange) {
+      if (matchedRange.isNormal) return 0;
+      const normalRange = ranges.find((r: any) => r.isNormal);
+      const isAboveNormal = normalRange ? (normalRange.max !== undefined && normalRange.max !== '' && valueToEvaluate >= Number(normalRange.max)) : true;
+      const nearestBoundary = normalRange
+        ? (isAboveNormal ? Number(normalRange.max) : Number(normalRange.min))
+        : (matchedRange.min !== undefined ? Number(matchedRange.min) : 0);
+      const bucketWidth = (matchedRange.min !== undefined && matchedRange.max !== undefined && isFinite(Number(matchedRange.max)))
+        ? Math.abs(Number(matchedRange.max) - Number(matchedRange.min))
+        : Math.abs(nearestBoundary) || 1;
+      const excess = Math.abs(valueToEvaluate - nearestBoundary);
+      const magnitude = fallbackMagnitudeFromRatio(excess / bucketWidth);
+      return isAboveNormal ? magnitude : -magnitude;
+    }
+  }
+
+  // 4. Plain "min - max" / one-sided normalRange string — distance-from-boundary fallback.
+  if (!rangeStr || rangeStr.toLowerCase() === 'unknown') return null;
+  const bounds = parseNormalRangeBounds(rangeStr);
+  if (bounds.min === undefined && bounds.max === undefined) return null;
+
+  if (bounds.min !== undefined && valueToEvaluate < bounds.min) {
+    const referenceWidth = bounds.max !== undefined ? Math.abs(bounds.max - bounds.min) : Math.abs(bounds.min) || 1;
+    const excess = bounds.min - valueToEvaluate;
+    return -fallbackMagnitudeFromRatio(excess / referenceWidth);
+  }
+  if (bounds.max !== undefined && valueToEvaluate > bounds.max) {
+    const referenceWidth = bounds.min !== undefined ? Math.abs(bounds.max - bounds.min) : Math.abs(bounds.max) || 1;
+    const excess = valueToEvaluate - bounds.max;
+    return fallbackMagnitudeFromRatio(excess / referenceWidth);
+  }
+  if (bounds.min !== undefined || bounds.max !== undefined) return 0;
+  return null;
+}
+
 export const getBiomarkerStatus = (key: string, val: number | string, normalRangeStr?: string, customDef?: any, profile?: any): 'normal' | 'low' | 'high' | 'critical' | 'flagged' | 'unknown' => {
   let rangeStr = normalRangeStr;
   if (!rangeStr) {
@@ -2907,15 +3051,33 @@ export const getBiomarkerBorderColor = (status: 'normal' | 'low' | 'high' | 'cri
 };
 
 export interface BiomarkerEffectiveRisk {
+  // Ranking score: the magnitude (0-5) of the biomarker's clinical severity
+  // on the same -5..+5 scale used by rangeBrackets/structured ranges, used
+  // by every sort/comparator. Two sentinels sit outside that 0-5 band so
+  // "no data" and "unknown" never collide with a confirmed-normal (0) value:
+  //   -Infinity = No Data (value missing entirely)
+  //   -1        = Unknown (value present, but status/range unresolvable)
+  // Real biomarkers always land in 0-5; there is no case where a logged,
+  // resolvable biomarker reports anything but its true severity magnitude.
   score: number;
+  // The signed -5..+5 severity (direction: negative = low-side, positive =
+  // high-side), or null when no numeric severity could be established
+  // (No Data / Unknown). Use this, not `score`, if direction matters.
+  severity: number | null;
   tag: string;
   bg: string;
   text: string;
 }
 
+export const NO_DATA_RISK_SCORE = -Infinity;
+export const UNKNOWN_RISK_SCORE = -1;
+
 /**
  * Returns the effective risk evaluation for a biomarker based on its actual
- * display tag, custom status label, and severity score.
+ * display tag, custom status label, and its severity magnitude on the
+ * clinical -5..+5 scale (see getBiomarkerSeverityScore). `score` is what
+ * every ranking/sort comparator should use; `tag`/`bg`/`text` remain the
+ * same category-based display values as before.
  */
 export function getBiomarkerEffectiveRisk(
   key: string,
@@ -2924,7 +3086,7 @@ export function getBiomarkerEffectiveRisk(
   profile?: any
 ): BiomarkerEffectiveRisk {
   if (val === undefined || val === null || val === '' || isValEmpty(val)) {
-    return { score: 0, tag: 'No Data', bg: 'bg-slate-200 dark:bg-slate-800/50', text: 'text-theme-text-secondary' };
+    return { score: NO_DATA_RISK_SCORE, severity: null, tag: 'No Data', bg: 'bg-slate-200 dark:bg-slate-800/50', text: 'text-theme-text-secondary' };
   }
 
   const customDef = getCustomBiomarkerDef(profile, key);
@@ -2933,6 +3095,13 @@ export function getBiomarkerEffectiveRisk(
   const riskTag = getBiomarkerRiskTag(key, rawStatus, customDef, val, profile);
   const tag = riskTag || statusLabel || rawStatus;
   const s = (tag || '').toLowerCase().trim();
+
+  const severity = getBiomarkerSeverityScore(key, val, def?.normalRange, customDef || def, profile);
+  // Flagged (implausible-value) entries need review before they can even be
+  // clinically assessed, so they rank at the top alongside Critical
+  // regardless of what a naive range comparison would say about the number.
+  const isFlagged = rawStatus === 'flagged' || s.includes('flagged');
+  const magnitude = isFlagged ? 5 : (severity === null ? null : Math.min(5, Math.abs(severity)));
 
   // 1. If the display tag explicitly indicates a non-critical risk category (e.g. "At risk", "High", "Elevated")
   if (
@@ -2948,12 +3117,12 @@ export function getBiomarkerEffectiveRisk(
     s.includes('flagged') ||
     (s === 'high' || s === 'low')
   ) {
-    return { score: 3, tag: tag || 'At risk', bg: 'bg-amber-500', text: 'text-white' };
+    return { score: magnitude === null ? UNKNOWN_RISK_SCORE : magnitude, severity, tag: tag || 'At risk', bg: 'bg-amber-500', text: 'text-white' };
   }
 
   // 2. If tag or status is Critical / Obese
   if (s.includes('critical') || s.includes('obese') || rawStatus === 'critical') {
-    return { score: 4, tag: tag || 'Critical Risk', bg: 'bg-rose-600', text: 'text-white' };
+    return { score: magnitude === null ? UNKNOWN_RISK_SCORE : magnitude, severity, tag: tag || 'Critical Risk', bg: 'bg-rose-600', text: 'text-white' };
   }
 
   // 3. Normal / Optimal / Healthy
@@ -2964,10 +3133,10 @@ export function getBiomarkerEffectiveRisk(
     s.includes('ok') ||
     rawStatus === 'normal'
   ) {
-    return { score: 2, tag: tag || 'Normal', bg: 'bg-emerald-600', text: 'text-white' };
+    return { score: 0, severity: 0, tag: tag || 'Normal', bg: 'bg-emerald-600', text: 'text-white' };
   }
 
-  return { score: 1, tag: tag || 'Unknown', bg: 'bg-slate-400', text: 'text-white' };
+  return { score: UNKNOWN_RISK_SCORE, severity: null, tag: tag || 'Unknown', bg: 'bg-slate-400', text: 'text-white' };
 }
 
 /**

@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronUp, FileText, Activity, CheckCheck,
   AlertCircle, AlertTriangle, Scale, Layers
 } from 'lucide-react';
-import { JobStore } from '../jobs/JobStore';
+import { JobStore, isJobBlank } from '../jobs/JobStore';
 import { AgentJob } from '../jobs/types';
 import { UserProfile, FoodLog } from '../types';
 import { ImageStore } from '../jobs/ImageStore';
@@ -72,8 +72,18 @@ export function AllAnalysesModal({
     if (!isOpen) return;
     const updateJobs = () => {
       const all = JobStore.getAllJobs();
+      const valid = all.filter(j => !isJobBlank(j));
+
+      // Asynchronously prune any orphaned blank/draft jobs from the store
+      const blank = all.filter(j => isJobBlank(j));
+      if (blank.length > 0) {
+        blank.forEach(b => {
+          JobStore.deleteJob(b.id).catch(() => {});
+        });
+      }
+
       // Sort newest first
-      setJobs([...all].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
+      setJobs([...valid].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
     };
     updateJobs();
     const unsubscribe = JobStore.subscribe(updateJobs);
@@ -101,26 +111,28 @@ export function AllAnalysesModal({
 
   // Group job metrics
   const readyJobs = useMemo(() => {
-    return jobs.filter(j => j.status === 'succeeded' && !j.result?.savedToHistory && !j.viewed && !j.result?.viewed && !j.savedToLog);
+    return jobs.filter(j => !isJobBlank(j) && j.status === 'succeeded' && !j.result?.savedToHistory && !j.viewed && !j.result?.viewed && !j.savedToLog);
   }, [jobs]);
 
   const activeJobs = useMemo(() => {
-    return jobs.filter(j => j.status === 'running' || j.status === 'queued' || j.status === 'processing');
+    return jobs.filter(j => !isJobBlank(j) && (j.status === 'running' || j.status === 'queued' || j.status === 'processing' || j.status === 'awaiting_user'));
   }, [jobs]);
 
   const completedJobs = useMemo(() => {
-    return jobs.filter(j => j.status === 'succeeded' && (j.result?.savedToHistory || j.viewed || j.result?.viewed || j.savedToLog));
+    return jobs.filter(j => !isJobBlank(j) && j.status === 'succeeded' && (j.result?.savedToHistory || j.viewed || j.result?.viewed || j.savedToLog));
   }, [jobs]);
 
   // Filter jobs based on active tab, kind filter, and search text
   const filteredJobs = useMemo(() => {
     return jobs.filter(job => {
+      if (isJobBlank(job)) return false;
+
       // Tab filter
       if (activeTab === 'ready') {
         const isReady = job.status === 'succeeded' && !job.result?.savedToHistory && !job.viewed && !job.result?.viewed && !job.savedToLog;
         if (!isReady) return false;
       } else if (activeTab === 'active') {
-        const isActive = job.status === 'running' || job.status === 'queued' || job.status === 'processing';
+        const isActive = job.status === 'running' || job.status === 'queued' || job.status === 'processing' || job.status === 'awaiting_user';
         if (!isActive) return false;
       } else if (activeTab === 'completed') {
         const isDone = job.status === 'succeeded' && (job.result?.savedToHistory || job.viewed || job.result?.viewed || job.savedToLog);
@@ -145,6 +157,7 @@ export function AllAnalysesModal({
           job.statusMessage,
           job.inputSnapshot?.text,
           pendingFoodLog?.foodName,
+          pendingFoodLog?.name,
           pendingFoodLog?.summary,
           job.result?.summary,
           job.result?.doctorSummary,
@@ -162,6 +175,7 @@ export function AllAnalysesModal({
   function getPendingFoodLog(job: AgentJob): any {
     return (
       job.result?.pendingFoodLog ||
+      job.result?.clean_result?.pendingFoodLog ||
       job.result?.raw?.data ||
       job.result?.data ||
       job.result?.foodData ||
@@ -627,15 +641,25 @@ function AnalysisCard({
   // Extract analysis details
   const pendingFoodLog = (
     job.result?.pendingFoodLog ||
+    job.result?.clean_result?.pendingFoodLog ||
     job.result?.raw?.data ||
     job.result?.data ||
     job.result?.foodData ||
     job.result?.mealBuild?.content ||
     job.mealBuild?.content ||
+    job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
+    job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog ||
     null
   );
 
-  const foodName = pendingFoodLog?.foodName || job.inputSnapshot?.text || (isMedical ? 'Medical Document Analysis' : 'AI Analysis Task');
+  const foodName =
+    pendingFoodLog?.foodName ||
+    pendingFoodLog?.name ||
+    pendingFoodLog?.title ||
+    (job.mealBuild?.items?.length ? job.mealBuild.items.map((i: any) => i.name || i).join(', ') : null) ||
+    (job.result?.items?.length ? job.result.items.map((i: any) => i.name || i).join(', ') : null) ||
+    job.inputSnapshot?.text ||
+    (isMedical ? 'Medical Document Analysis' : 'Meal Analysis');
   const mealType = pendingFoodLog?.mealType || 'snack';
   const calories = pendingFoodLog?.calories || 0;
   const nutrients = pendingFoodLog?.nutrients || {};

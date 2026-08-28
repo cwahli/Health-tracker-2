@@ -1,17 +1,35 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-28  
-**Status:** Supabase Auth Redirects Fixed & Verified (Dynamic `window.location.origin` helper, all auth actions updated, URL token cleanup implemented, tsc exit 0, all tests PASS).
+**Status:** Universal -5..+5 Severity Magnitude for Biomarker Ranking Implemented & Verified (Unified clinician-aligned -5..+5 severity scale for sorting/ranking, store auto-compatibility, vitest & compile_applet exit 0).
 
-- **Supabase Auth Redirect Dynamic Origin & Token Cleanup (`src/utils/supabaseClient.ts`, `src/components/AuthScreen.tsx`, `src/App.tsx` - 2026-08-28):**
-  - **Root Cause & Diagnosis:** Supabase GoTrue defaults to the dashboard "Site URL" (`http://localhost:3000`) when `redirectTo` or `emailRedirectTo` are not explicitly provided. In Google AI Studio preview environments (`https://*.asia-southeast1.run.app`), signup confirmation emails, password reset links, magic links, and OAuth flows redirected users back to `http://localhost:3000`, causing verification tokens to be lost and breaking the preview session.
+- **Universal -5..+5 Severity Magnitude for Biomarker Ranking (`src/utils/biomarkers.ts`, `src/components/MedicalHistoryTab.tsx`, `src/utils/biomarkerIdentity.test.ts` - 2026-08-28):**
+  - **Root Cause & Diagnosis:** Previously, biomarker ranking sorted the Medical History tab using a coarse 5-bucket scale (4=Critical, 3=At risk/High/Low/Elevated/Borderline/Flagged, 2=Normal, 1=Unknown, 0=No data). Because many disparate biomarkers (LDL-C, eGFR, HbA1c, Cholesterol/HDL, Steps) all landed on bucket 3, ties fell back to "most recently logged" — causing Steps (auto-synced daily) to always outrank LDL-C regardless of clinical significance.
   - **Key Changes Applied:**
-    - **`getAuthRedirectTo()` Helper (`src/utils/supabaseClient.ts`):** Created a dynamic helper returning `window.location.origin` (without trailing slashes), preventing any hardcoding of localhost or Cloud Run URLs.
-    - **`cleanupAuthUrlParams()` Helper (`src/utils/supabaseClient.ts`):** Implemented URL history cleanup using `window.history.replaceState` to strip `#access_token=...`, `#refresh_token=...`, and `?code=...` from the browser address bar once the session is established.
-    - **Dynamic Auth Redirects (`src/components/AuthScreen.tsx`):** Updated all Supabase auth calls (`signUp`, `signInWithOAuth`, demo login, resend verification, and `resetPasswordForEmail`) to explicitly provide `redirectTo` / `emailRedirectTo` via `getAuthRedirectTo()`.
-    - **Session Return & Verification Handling (`src/components/AuthScreen.tsx`):** Added URL param cleanup on session detection, immediate transition to user dashboard upon confirmation return, "Resend Verification Link" button, and "Forgot password?" reset flow.
-    - **Sign Out Integration (`src/App.tsx`):** Connected `supabase.auth.signOut()` to `handleSignOut` so Supabase and Firebase sessions are consistently cleared.
-  - **Verification:** `npx tsc --noEmit` exit 0 (zero errors); all 86 test files & 811 vitest tests PASS; `node scripts/assert-budgets.mjs` PASS.
+    - **Unified Severity Score (`getBiomarkerSeverityScore`):** Created a universal severity score on the signed -5..+5 clinician-calibrated scale (0 = optimal, +/-5 = acute emergency).
+    - **Precision Fallbacks:** Added a conservative fractional deviation fallback (breakpoints at 10% and 25%, capped at magnitude 3) for uncalibrated biomarkers so they never outrank clinician-calibrated lab values.
+    - **Effective Risk Realignment (`getBiomarkerEffectiveRisk`):** Realigned the interface and ranking scores so real biomarkers report their exact severity magnitude (0-5), while sentinels handle edge cases (`-Infinity` for No Data, `-1` for Unknown) so they never collide with confirmed normal values (0).
+    - **Medical History Tab Sort & Headers (`MedicalHistoryTab.tsx`):** Updated Category and Subcategory sort comparators to respect the new sentinel-and-severity model, preventing Normal categories/biomarkers from collapsing into the "No Data" tier.
+    - **Test Coverage (`biomarkerIdentity.test.ts`):** Rewrote existing test blocks to align with the new -5..+5 score contract and added tests validating uncalibrated scaling, calibration prioritization, sentinel ranking, and flagged telemetry behavior.
+  - **Verification:** `npx tsc --noEmit` exit 0 (zero errors); unit tests in `biomarkerIdentity.test.ts` PASS (52/52); all 86 test files PASS; applet compilation succeeded.
+
+- **Blank Food Analysis & Phantom Job Filtering (`src/jobs/JobStore.ts`, `src/components/AllAnalysesModal.tsx`, `src/components/Header.tsx`, `src/components/FoodHistoryTab.tsx`, `src/components/MedicalHistoryTab.tsx` - 2026-08-28):**
+  - **Root Cause & Diagnosis:** When users opened LogChat or Quick Actions without submitting, unsubmitted draft jobs (`status: 'draft'`) or phantom jobs without any prompt, photo, or result data were retained in `JobStore`. `AllAnalysesModal` and `Header.tsx` did not validate job content or exclude drafts, causing empty food analysis cards to appear. Clicking "View" opened LogChat for the draft job, which deleted the draft on modal close—making them appear to vanish on click.
+  - **Key Changes Applied:**
+    - **`isJobBlank` Validation Helper (`src/jobs/JobStore.ts`):** Exported a comprehensive content validation predicate that checks whether a job has legitimate input (text, photo, image refs) or valid AI result data (nutrients, items, meal build, biomarkers, doctor summary). Draft jobs and empty completed/cancelled tasks without payload are classified as blank.
+    - **Store Rehydration & Cleanup (`src/jobs/JobStore.ts`):** Updated `loadJobs()` and `cleanupOldJobs()` to automatically prune draft and blank phantom jobs from `localStorage` and memory on startup.
+    - **Modal Filtering & Auto-Pruning (`src/components/AllAnalysesModal.tsx`):** Excluded draft/blank jobs across all metrics (`readyJobs`, `activeJobs`, `completedJobs`, `filteredJobs`) and asynchronously purged orphan blank jobs from the store.
+    - **Header Badge Precision (`src/components/Header.tsx`):** Filtered jobs with `!isJobBlank(j)` and suppressed the badge when `runningCount === 0 && queuedCount === 0 && readyCount === 0`, preventing misleading "Ready (0)" badges.
+    - **History Tab Invariants (`FoodHistoryTab.tsx`, `MedicalHistoryTab.tsx`):** Enforced `!isJobBlank(job)` in timeline job aggregation.
+  - **Verification:** Unit tests added in `src/jobs/__tests__/JobStore.test.ts` (PASS 6/6); full vitest suite PASS (86/86 files); `compile_applet` build succeeded with zero errors.
+
+- **WebSocket Teardown & Benign Client Error Filtering (`src/main.tsx`, `src/logger.ts`, `server.ts`, `src/jobs/SupabaseJobSync.ts`, `src/utils/syncUtils.ts` - 2026-08-28):**
+  - **Root Cause & Diagnosis:** When React components mounted/unmounted or switched auth states, Supabase realtime channels were unsubscribed while the underlying WebSocket was still in the `CONNECTING` state. Browsers emit a benign `WebSocket closed without opened` error, which the global `window.addEventListener('error'/'unhandledrejection')` handlers caught and sent to `/api/client-error`, polluting `[LLM DEBUG]` server logs.
+  - **Key Changes Applied:**
+    - **Safe Teardown:** Wrapped `supabase.removeChannel()` calls in `src/jobs/SupabaseJobSync.ts` and `src/utils/syncUtils.ts` with `.catch(() => {})` and safe try/catch blocks.
+    - **Benign Error Filtering (`src/main.tsx`, `src/logger.ts`):** Added `isBenignError` predicate to ignore harmless WebSocket aborts, disabled Vite HMR reconnects, ResizeObserver notifications, and AbortController signals before dispatching to `/api/client-error`.
+    - **Server Log Hygiene (`server.ts`):** Filtered incoming benign error payloads in the `/api/client-error` Express endpoint to prevent cluttering container debug streams.
+  - **Verification:** `npx tsc --noEmit` exit 0 (zero errors); all 86 test files & 811 vitest tests PASS; `node scripts/assert-budgets.mjs` PASS; full applet compilation succeeded.
 
 - **Backend Modularization & AI Studio Corruption Fix (`server.ts`, `server_routes_r2.ts`, `server_routes_medical_gemini.ts`, `server_routes_food_analyze.ts` - 2026-08-28):**
   - **Root Cause & Diagnosis:** Forensic analysis confirmed that when Google AI Studio commits files to GitHub, its web transport splits commits into 512 KB payload buffers. When a single file exceeds 512 KB, chunk 1 (plain text 523,834 bytes) and chunk 2 (compressed deflate stream) collided on unchunking, truncating the file at byte 523,834 with binary garbage. `server.ts` had grown to 836 KB (15,550 lines), triggering this corruption repeatedly.

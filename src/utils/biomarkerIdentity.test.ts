@@ -15,6 +15,7 @@ import {
   selfHealCustomBiomarkerDefinitions,
   biomarkerDefinitions,
   getBiomarkerEffectiveRisk,
+  getBiomarkerSeverityScore,
   getBiomarkerStatus,
   getBiomarkerStatusLabel,
 } from './biomarkers';
@@ -312,8 +313,8 @@ describe('selfHealCustomBiomarkerDefinitions — structural self-healing', () =>
   });
 });
 
-describe('getBiomarkerEffectiveRisk — tag-aligned category scoring', () => {
-  it('returns At risk tag and score 3 for non-hdl cholesterol with at-risk structured range', () => {
+describe('getBiomarkerEffectiveRisk — tag-aligned category scoring (score = -5..+5 severity magnitude, not a 0-4 bucket)', () => {
+  it('returns At risk tag and a positive severity magnitude for non-hdl cholesterol with at-risk structured range', () => {
     const risk = getBiomarkerEffectiveRisk(
       'non_hdl_cholesterol',
       4.7,
@@ -331,30 +332,91 @@ describe('getBiomarkerEffectiveRisk — tag-aligned category scoring', () => {
       }
     );
 
-    expect(risk.score).toBe(3);
+    // No calibrated severity number exists here (structuredRanges has no
+    // `severity` field), so magnitude comes from the distance-from-boundary
+    // fallback: (4.7 - 3.4) / (10 - 3.4) = 0.197 -> bucket (0.10, 0.25] -> 2.
+    expect(risk.score).toBe(2);
+    expect(risk.severity).toBe(2);
     expect(risk.tag).toBe('At risk');
     expect(risk.bg).toBe('bg-amber-500');
     expect(risk.text).toBe('text-white');
   });
 
-  it('returns Critical Risk and score 4 for severe single-sided anomaly', () => {
+  it('caps the uncalibrated fallback magnitude at 3 even for a status-critical anomaly', () => {
     const risk = getBiomarkerEffectiveRisk('non_hdl_cholesterol', 5.5, { key: 'non_hdl_cholesterol', normalRange: '< 3.4' });
-    expect(risk.score).toBe(4);
+    // Fallback magnitude: (5.5 - 3.4) / 3.4 = 0.617 -> capped at 3.
+    // Magnitudes 4-5 are reserved for biomarkers with an actual
+    // clinician-calibrated severity number (rangeBrackets/structured ranges),
+    // so an uncalibrated marker can never claim the top of the scale.
+    expect(risk.score).toBe(3);
+    expect(risk.severity).toBe(3);
     expect(risk.tag.toLowerCase()).toContain('critical');
     expect(risk.bg).toBe('bg-rose-600');
   });
 
-  it('returns Normal and score 2 for within-range values', () => {
+  it('uses the clinician-calibrated severity number directly when rangeBrackets are present, up to magnitude 5', () => {
+    const rangeBrackets = [
+      { label: 'Optimal', severity: 0, min: 0, max: 2.6 },
+      { label: 'Mild Elevation', severity: 1, min: 2.6, max: 3.4 },
+      { label: 'Very High', severity: 4, min: 3.4, max: 5.0 },
+      { label: 'Acute Panic Crisis', severity: 5, min: 5.0, max: null },
+    ];
+    // rangeBrackets live on profile.customBiomarkers[key] (the shape
+    // getCustomBiomarkerDef reads), matching how MedicalHistoryTab actually
+    // calls getBiomarkerEffectiveRisk(key, val, def, profile).
+    const risk = getBiomarkerEffectiveRisk(
+      'ldl',
+      5.5,
+      { key: 'ldl', name: 'LDL-C' },
+      { customBiomarkers: { ldl: { name: 'LDL-C', rangeBrackets } } }
+    );
+    expect(risk.score).toBe(5);
+    expect(risk.severity).toBe(5);
+    expect(risk.tag).toBe('Acute Panic Crisis');
+    expect(risk.bg).toBe('bg-rose-600');
+  });
+
+  it('returns Normal with score 0 and severity 0 for within-range values', () => {
     const risk = getBiomarkerEffectiveRisk('hdl_cholesterol', 1.4, { key: 'hdl_cholesterol', normalRange: '> 1.0' });
-    expect(risk.score).toBe(2);
+    expect(risk.score).toBe(0);
+    expect(risk.severity).toBe(0);
     expect(risk.tag.toLowerCase()).toContain('normal');
     expect(risk.bg).toBe('bg-emerald-600');
   });
 
-  it('returns No Data and score 0 for empty or missing values', () => {
+  it('returns No Data with score -Infinity (sorts below every real severity, including Normal\'s 0) for empty or missing values', () => {
     const risk = getBiomarkerEffectiveRisk('hba1c', undefined);
-    expect(risk.score).toBe(0);
+    expect(risk.score).toBe(-Infinity);
+    expect(risk.severity).toBe(null);
     expect(risk.tag).toBe('No Data');
+  });
+
+  it('ranks a flagged (implausible-value) entry at the top, tied with Critical, ahead of a merely At-risk value', () => {
+    // hs-CRP plausibleBounds max is 500; 50000 is wildly implausible and gets
+    // caught by isBiomarkerValueImprobable before normal range logic runs.
+    const risk = getBiomarkerEffectiveRisk('hscrp', 50000);
+    expect(risk.score).toBe(5);
+    expect(risk.tag.toLowerCase()).toContain('flagged');
+  });
+});
+
+describe('getBiomarkerSeverityScore — universal -5..+5 severity for ranking', () => {
+  it('returns null (not 0) when there is no usable range at all', () => {
+    expect(getBiomarkerSeverityScore('totally_unmapped_key_xyz', 42)).toBe(null);
+  });
+
+  it('returns 0 for a value inside a plain min-max normalRange', () => {
+    expect(getBiomarkerSeverityScore('hba1c', 30, '20 - 41')).toBe(0);
+  });
+
+  it('scales magnitude with severity for a one-sided low-is-bad range (e.g. Steps), never exceeding the fallback cap', () => {
+    // Steps 6130 vs a 7000 floor: (7000-6130)/7000 = 0.124 -> bucket (0.10,0.25] -> magnitude 2, negative (low side).
+    expect(getBiomarkerSeverityScore('steps', 6130, '>= 7000')).toBe(-2);
+  });
+
+  it('prefers a clinician-calibrated rangeBrackets severity over the fallback formula', () => {
+    const customDef = { rangeBrackets: [{ label: 'Low', severity: -2, min: 60, max: 89 }] };
+    expect(getBiomarkerSeverityScore('egfr', 80, undefined, customDef)).toBe(-2);
   });
 });
 

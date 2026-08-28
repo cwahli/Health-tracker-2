@@ -28,7 +28,7 @@ const UserManagementTab = lazyWithRetry(() => import('./UserManagementTab'));
 const BackupRestoreTab = lazyWithRetry(() => import('./BackupRestoreTab'));
 const FoodCatalogAdminTab = lazyWithRetry(() => import('./FoodCatalogAdminTab').then(m => ({ default: m.FoodCatalogAdminTab })));
 import { Activity, Stethoscope, X, ChevronRight, Database, Bug, Loader } from 'lucide-react';
-import { JobStore } from '../jobs/JobStore';
+import { JobStore, isJobBlank } from '../jobs/JobStore';
 import {
   getGoogleAccessToken,
   hasGoogleToken,
@@ -1319,15 +1319,16 @@ export default function Header({
                   );
                 })()}
                 {(() => {
-                  const runningJobs = jobs.filter(j => j.status === 'running');
-                  const queuedJobs = jobs.filter(j => j.status === 'queued');
-                  const succeededUnsavedJobs = jobs.filter(j => j.status === 'succeeded' && !j.result?.savedToHistory && !j.viewed && !j.result?.viewed);
+                  const validJobs = jobs.filter(j => !isJobBlank(j));
+                  const runningJobs = validJobs.filter(j => j.status === 'running' || j.status === 'processing');
+                  const queuedJobs = validJobs.filter(j => j.status === 'queued' || j.status === 'awaiting_user');
+                  const succeededUnsavedJobs = validJobs.filter(j => j.status === 'succeeded' && !j.result?.savedToHistory && !j.viewed && !j.result?.viewed && !j.savedToLog);
                   
                   const runningCount = runningJobs.length;
                   const queuedCount = queuedJobs.length;
                   const readyCount = succeededUnsavedJobs.length;
 
-                  if (jobs.length === 0) return null;
+                  if (runningCount === 0 && queuedCount === 0 && readyCount === 0) return null;
 
                   const activeRunning = runningJobs[0];
                   const activeProgress = activeRunning?.progressPercent || 0;

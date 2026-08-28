@@ -21,21 +21,39 @@ declare global {
 window.__clientConsoleLogs = window.__clientConsoleLogs || [];
 window.__clientNetworkErrors = window.__clientNetworkErrors || [];
 
+const isBenignError = (message?: string): boolean => {
+  if (!message) return false;
+  const msg = String(message).toLowerCase();
+  return (
+    msg.includes('websocket closed without opened') ||
+    msg.includes('failed to connect to websocket') ||
+    msg.includes('[vite] failed to connect') ||
+    msg.includes('resizeobserver loop') ||
+    msg.includes('aborterror') ||
+    msg.includes('the user aborted a request') ||
+    msg.includes('the operation was aborted')
+  );
+};
+
 window.addEventListener('error', (e) => {
   try {
+    const rawMsg = e.message || e.error?.message || '';
+    if (isBenignError(rawMsg)) return;
     fetch('/api/client-error', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: e.message || e.error?.message, stack: e.error?.stack })
+      body: JSON.stringify({ message: rawMsg, stack: e.error?.stack })
     }).catch(() => null);
   } catch (err) {}
 });
 window.addEventListener('unhandledrejection', (e) => {
   try {
+    const rawMsg = e.reason?.message || String(e.reason) || '';
+    if (isBenignError(rawMsg)) return;
     fetch('/api/client-error', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: e.reason?.message || String(e.reason), stack: e.reason?.stack })
+      body: JSON.stringify({ message: rawMsg, stack: e.reason?.stack })
     }).catch(() => null);
   } catch (err) {}
 });

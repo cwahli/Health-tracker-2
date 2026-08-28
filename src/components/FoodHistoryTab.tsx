@@ -21,7 +21,7 @@ import { NutritionLabelTable } from './chat-cards/NutritionLabelTable';
 import { MealPortionController } from './chat-cards/MealPortionController';
 import { scaleMealPortion, scaleSingleDishPortion } from '../utils/portionUtils';
 import { PhysicalFormBadge } from './PhysicalFormBadge';
-import { JobStore } from '../jobs/JobStore';
+import { JobStore, isJobBlank } from '../jobs/JobStore';
 import TaskPlaceholderCard from './TaskPlaceholderCard';
 import { CroppedFoodImage, isValidBoundingBox, getFoodImageUrl } from './chat-cards/FoodCard';
 import { ZoomableImage } from './ZoomableImage';
@@ -483,32 +483,34 @@ export default function FoodHistoryTab({
 
     const jobItems = jobs
       .filter(job => {
-        if (!job) return false;
+        if (!job || isJobBlank(job)) return false;
         // Exclude draft jobs
         if (job.status === 'draft') return false;
         const hasText = !!job.inputSnapshot?.text?.trim();
         const hasImages = !!(job.inputSnapshot as any)?.hasImage || !!job.photoUrl;
         const hasServerResult = !!(
           job.result?.pendingFoodLog ||
+          job.result?.clean_result?.pendingFoodLog ||
           job.result?.raw?.data ||
           job.result?.data ||
           job.result?.photoUrl
         );
         const isActiveServerJob =
           (job.kind === 'food_log' || job.kind === 'food_compare' || (job as any).kind === 'food' || !job.kind) &&
-          ['queued', 'running', 'processing', 'awaiting_user', 'cancel_requested', 'failed', 'succeeded', 'cancelled'].includes(job.status);
+          ['queued', 'running', 'processing', 'awaiting_user', 'cancel_requested', 'failed'].includes(job.status);
 
         if (!hasText && !hasImages && !hasServerResult && !isActiveServerJob) return false;
 
         if (job.status !== 'succeeded') return true;
         const pendingFoodLog =
           job.result?.pendingFoodLog ||
+          job.result?.clean_result?.pendingFoodLog ||
           job.result?.raw?.data ||
           job.result?.data ||
           job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
           job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
 
-        if (!pendingFoodLog) return true;
+        if (!pendingFoodLog) return false;
         return !activeFoodLogs.some(f => {
           if (f.id === pendingFoodLog.id || f.id === job.id || (f as any).jobId === job.id) return true;
           // Soft match: same fingerprint or same day+name+kcal

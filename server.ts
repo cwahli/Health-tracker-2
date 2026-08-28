@@ -1405,6 +1405,17 @@ app.use((req, res, next) => {
 
   app.post("/api/client-error", (req, res) => {
     const { message, stack } = req.body || {};
+    const msgStr = String(message || '').toLowerCase();
+    if (
+      msgStr.includes('websocket closed without opened') ||
+      msgStr.includes('failed to connect to websocket') ||
+      msgStr.includes('resizeobserver loop') ||
+      msgStr.includes('aborterror') ||
+      msgStr.includes('the user aborted a request') ||
+      msgStr.includes('the operation was aborted')
+    ) {
+      return res.json({ status: "ignored" });
+    }
     addDebugLog(`[Client Error] ${message || 'Unknown Error'}\n${stack || ''}`);
     res.json({ status: "ok" });
   });

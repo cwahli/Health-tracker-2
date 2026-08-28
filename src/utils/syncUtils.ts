@@ -722,28 +722,35 @@ export const fetchAllConsolidatedLogs = async (
  */
 export const subscribeToSupabaseLogs = (uid: string, onChange: (payload?: any) => void) => {
   if (!uid || !isSupabaseConfigured) return () => {};
-  const channel = supabase
-    .channel(`user_logs_${uid}`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'food_logs', filter: `firebase_uid=eq.${uid}` },
-      (payload) => onChange(payload)
-    )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'biomarker_logs', filter: `firebase_uid=eq.${uid}` },
-      (payload) => onChange(payload)
-    )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${uid}` },
-      (payload) => onChange(payload)
-    )
-    .subscribe();
+  try {
+    const channel = supabase
+      .channel(`user_logs_${uid}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'food_logs', filter: `firebase_uid=eq.${uid}` },
+        (payload) => onChange(payload)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'biomarker_logs', filter: `firebase_uid=eq.${uid}` },
+        (payload) => onChange(payload)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${uid}` },
+        (payload) => onChange(payload)
+      )
+      .subscribe();
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
+    return () => {
+      try {
+        supabase.removeChannel(channel).catch(() => {});
+      } catch (_) {}
+    };
+  } catch (err) {
+    console.warn('[Supabase Sync] Failed to subscribe to realtime logs:', err);
+    return () => {};
+  }
 };
 
 export function mergeActions(cloudActions: HealthAction[] = [], localActions: HealthAction[] = []): HealthAction[] {

@@ -449,7 +449,9 @@ export function initSupabaseJobSync(userId?: string): () => void {
 
   return () => {
     clearInterval(fallbackPollInterval);
-    supabase.removeChannel(channel);
+    try {
+      supabase.removeChannel(channel).catch(() => {});
+    } catch (_) {}
   };
 }
 
