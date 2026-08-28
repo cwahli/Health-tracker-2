@@ -2153,6 +2153,82 @@ export function isGenericCommodityFood(query: string): boolean {
   return false;
 }
 
+const formatBrandHit = (matchedItem: any, query: string, matchScore: number, allItems: any[]) => {
+    const cleanIngredients = cleanDescriptionText(matchedItem.ingredients || matchedItem.description || '');
+    const saltG = matchedItem.nutrients?.salt ?? (matchedItem.nutrients?.sodium ? matchedItem.nutrients.sodium / 400 : undefined);
+    const sodiumMg = matchedItem.nutrients?.sodium ?? (saltG ? Math.round(saltG * 400) : undefined);
+    const cals = matchedItem.nutrients?.calories ?? null;
+    const protein = matchedItem.nutrients?.protein ?? null;
+    const fat = matchedItem.nutrients?.totalFat ?? matchedItem.nutrients?.fat ?? null;
+    const satFat = matchedItem.nutrients?.saturatedFat ?? null;
+    const carbs = matchedItem.nutrients?.carbohydrates ?? matchedItem.nutrients?.carbs ?? null;
+    const sugar = matchedItem.nutrients?.sugar ?? null;
+    const fiber = matchedItem.nutrients?.totalFibre ?? matchedItem.nutrients?.fiber ?? null;
+
+    // OCR Duplicate Broadcast Scrape Detector:
+    // Check if distinct items in the same chain share identical calorie values
+    const chainItemsWithSameCals = allItems.filter(other =>
+      other.id !== matchedItem.id &&
+      (other.chain_key === matchedItem.chain_key || other.chain_name === matchedItem.chain_name) &&
+      other.nutrients?.calories != null &&
+      Number(other.nutrients.calories) === Number(cals) &&
+      cals != null && Number(cals) > 0 &&
+      other.dish_name !== matchedItem.dish_name
+    );
+
+    const normQ = normalizeDishKey(query);
+    const isExactOrStrongMatch = matchScore >= 0.92 || normalizeDishKey(matchedItem.dish_name) === normQ;
+    const isOcrCollision = !isExactOrStrongMatch && chainItemsWithSameCals.length >= 1;
+
+    return {
+      id: `brand_menu_${matchedItem.id || matchedItem.dish_name_key || normalizeDishKey(matchedItem.dish_name)}`,
+      source: 'brand_official',
+      brandPriority: true,
+      searchQuery: query,
+      name: matchedItem.dish_name,
+      chainName: matchedItem.chain_name || matchedItem.chain_key || 'Brand',
+      servingGrams: matchedItem.serving_grams || (matchedItem.basis_type === 'per_100g' ? 100 : null),
+      calories: cals != null ? String(cals) : undefined,
+      protein: protein != null ? Number(protein) : undefined,
+      fat: fat != null ? Number(fat) : undefined,
+      saturatedFat: satFat != null ? Number(satFat) : undefined,
+      sodium: sodiumMg != null ? Number(sodiumMg) : undefined,
+      salt: saltG != null ? Number(saltG) : undefined,
+      carbohydrates: carbs != null ? Number(carbs) : undefined,
+      sugar: sugar != null ? Number(sugar) : undefined,
+      totalFibre: fiber != null ? Number(fiber) : undefined,
+      isOcrCollision,
+      anomalyFlags: isOcrCollision ? ['OCR_BROADCAST_COLLISION'] : [],
+      nutrients: matchedItem.nutrients || {
+        calories: cals,
+        protein,
+        totalFat: fat,
+        saturatedFat: satFat,
+        carbohydrates: carbs,
+        sugar,
+        sodium: sodiumMg,
+        salt: saltG,
+        totalFibre: fiber
+      },
+      ingredients: cleanIngredients,
+      basisType: 'per_dish',
+      sourceUrl: matchedItem.source_url || undefined,
+      snippet: `${matchedItem.dish_name} (${matchedItem.chain_name || matchedItem.chain_key}): ${cleanIngredients}. Nutrition: ${cals} kcal, ${protein}g protein, ${carbs}g carbs (sugar ${sugar}g), ${fat}g fat, fiber ${fiber}g, salt ${saltG ?? '—'}g (sodium ${sodiumMg ?? '—'}mg)`
+    };
+  };
+
+export async function getBrandMenuItemById(dbId: string): Promise<any | null> {
+  const allItems = await fetchAllBrandMenuItems();
+  if (!allItems || allItems.length === 0) return null;
+  const rawId = dbId.startsWith('brand_menu_') ? dbId.slice(11) : dbId;
+  const match = allItems.find(it => String(it.id) === rawId || it.dish_name_key === rawId || normalizeDishKey(it.dish_name) === rawId);
+  if (match) {
+    return formatBrandHit(match, match.dish_name, 1.0, allItems);
+  }
+  return null;
+}
+
+
 export async function searchBrandMenuItems(query: string, explicitChainKey?: string): Promise<any[]> {
   if (!query || query.trim().length < 2) return [];
 
@@ -2183,6 +2259,8 @@ export async function searchBrandMenuItems(query: string, explicitChainKey?: str
     }
     return word;
   };
+
+
 
   const scoreDishMatch = (queryKey: string, itemKey: string, chainKey?: string): number => {
     if (queryKey === itemKey) return 999;
@@ -2249,68 +2327,8 @@ export async function searchBrandMenuItems(query: string, explicitChainKey?: str
   }
 
   matches.sort((a, b) => b.score - a.score);
-
   return matches.slice(0, 5).map(({ item: matchedItem, score: matchScore }) => {
-    const cleanIngredients = cleanDescriptionText(matchedItem.ingredients || matchedItem.description || '');
-    const saltG = matchedItem.nutrients?.salt ?? (matchedItem.nutrients?.sodium ? matchedItem.nutrients.sodium / 400 : undefined);
-    const sodiumMg = matchedItem.nutrients?.sodium ?? (saltG ? Math.round(saltG * 400) : undefined);
-    const cals = matchedItem.nutrients?.calories ?? null;
-    const protein = matchedItem.nutrients?.protein ?? null;
-    const fat = matchedItem.nutrients?.totalFat ?? matchedItem.nutrients?.fat ?? null;
-    const satFat = matchedItem.nutrients?.saturatedFat ?? null;
-    const carbs = matchedItem.nutrients?.carbohydrates ?? matchedItem.nutrients?.carbs ?? null;
-    const sugar = matchedItem.nutrients?.sugar ?? null;
-    const fiber = matchedItem.nutrients?.totalFibre ?? matchedItem.nutrients?.fiber ?? null;
-
-    // OCR Duplicate Broadcast Scrape Detector:
-    // Check if distinct items in the same chain share identical calorie values
-    const chainItemsWithSameCals = allItems.filter(other =>
-      other.id !== matchedItem.id &&
-      (other.chain_key === matchedItem.chain_key || other.chain_name === matchedItem.chain_name) &&
-      other.nutrients?.calories != null &&
-      Number(other.nutrients.calories) === Number(cals) &&
-      cals != null && Number(cals) > 0 &&
-      other.dish_name !== matchedItem.dish_name
-    );
-
-    const isExactOrStrongMatch = matchScore >= 0.92 || normalizeDishKey(matchedItem.dish_name) === normQ;
-    const isOcrCollision = !isExactOrStrongMatch && chainItemsWithSameCals.length >= 1;
-
-    return {
-      id: `brand_menu_${matchedItem.id || matchedItem.dish_name_key || normalizeDishKey(matchedItem.dish_name)}`,
-      source: 'brand_official',
-      brandPriority: true,
-      searchQuery: query,
-      name: matchedItem.dish_name,
-      chainName: matchedItem.chain_name || matchedItem.chain_key || 'Brand',
-      servingGrams: matchedItem.serving_grams || (matchedItem.basis_type === 'per_100g' ? 100 : null),
-      calories: cals != null ? String(cals) : undefined,
-      protein: protein != null ? Number(protein) : undefined,
-      fat: fat != null ? Number(fat) : undefined,
-      saturatedFat: satFat != null ? Number(satFat) : undefined,
-      sodium: sodiumMg != null ? Number(sodiumMg) : undefined,
-      salt: saltG != null ? Number(saltG) : undefined,
-      carbohydrates: carbs != null ? Number(carbs) : undefined,
-      sugar: sugar != null ? Number(sugar) : undefined,
-      totalFibre: fiber != null ? Number(fiber) : undefined,
-      isOcrCollision,
-      anomalyFlags: isOcrCollision ? ['OCR_BROADCAST_COLLISION'] : [],
-      nutrients: matchedItem.nutrients || {
-        calories: cals,
-        protein,
-        totalFat: fat,
-        saturatedFat: satFat,
-        carbohydrates: carbs,
-        sugar,
-        sodium: sodiumMg,
-        salt: saltG,
-        totalFibre: fiber
-      },
-      ingredients: cleanIngredients,
-      basisType: 'per_dish',
-      sourceUrl: matchedItem.source_url || undefined,
-      snippet: `${matchedItem.dish_name} (${matchedItem.chain_name || matchedItem.chain_key}): ${cleanIngredients}. Nutrition: ${cals} kcal, ${protein}g protein, ${carbs}g carbs (sugar ${sugar}g), ${fat}g fat, fiber ${fiber}g, salt ${saltG ?? '—'}g (sodium ${sodiumMg ?? '—'}mg)`
-    };
+    return formatBrandHit(matchedItem, query, matchScore, allItems);
   });
 }
 

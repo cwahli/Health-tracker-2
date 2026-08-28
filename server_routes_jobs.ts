@@ -327,9 +327,16 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
         jobId: cleanJobId,
         status: safePayload.status,
         mode: safePayload.mode,
+        agentType: safePayload.result?.agentType || safePayload.inputSnapshot?.agentType,
         message: safePayload.result?.message || safePayload.result?.text,
         backendLogs: safePayload.backendLogs,
-        pendingFoodLog: safePayload.result?.pendingFoodLog || safePayload.result,
+        // FIX: previously fell back to the entire `safePayload.result` object when
+        // there was no pendingFoodLog. For medical/biomarker jobs that has no
+        // pendingFoodLog at all, so this was injecting the whole job result into
+        // the food-only "Nutrition Calculation" section (producing the empty
+        // "Meal Name: —" block) while the real ingestTrace/report data below was
+        // never forwarded at all. Only use an actual pendingFoodLog now.
+        pendingFoodLog: safePayload.result?.pendingFoodLog || null,
         scoutItems: safePayload.result?.scoutItems,
         receiptTable: safePayload.result?.receiptTable || safePayload.result?.pendingFoodLog?.receiptTable,
         error: safePayload.error,
@@ -343,7 +350,9 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
         brandSearchResults: safePayload.result?.brandSearchResults,
         comprehensiveNutrients: safePayload.result?.comprehensiveNutrients || safePayload.result?.pendingFoodLog?.nutrients,
         stageLedger: safePayload.result?.stageLedger,
-        historyLog: safePayload.result?.historyLog
+        historyLog: safePayload.result?.historyLog,
+        ingestTrace: safePayload.result?.ingestTrace,
+        report: safePayload.result?.report
       });
       res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.md"`);

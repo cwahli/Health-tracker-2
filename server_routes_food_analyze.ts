@@ -123,6 +123,7 @@ import {
   normalizeChainKey,
   consolidateBrandMenuItemsAndChains,
   cleanUnbrandedFoodCatalog,
+  getBrandMenuItemById,
 } from './serverBrandMenu.js';
 import {
   isGenericZeroNutrientDiluent,
@@ -1540,6 +1541,26 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
         }
       });
       const searchResultsList = await Promise.all(searchPromises);
+
+      // Ensure explicit food tags from internal catalog are present in databaseMatchesArray
+      if (Array.isArray(req.body.explicitFoodTags) && req.body.explicitFoodTags.length > 0) {
+        for (const tag of req.body.explicitFoodTags) {
+          if (tag.dbId && typeof tag.dbId === 'string' && tag.dbId.startsWith('brand_menu_')) {
+            const brandItem = await getBrandMenuItemById(tag.dbId);
+            if (brandItem) {
+              searchResultsList.push({
+                query: tag.name,
+                usda: [],
+                off: [],
+                brandHits: [brandItem],
+                web: []
+              });
+              addDebugLog(`[Explicit Tag] Injected direct brand menu lookup for tag "${tag.name}" (ID: ${tag.dbId})`);
+            }
+          }
+        }
+      }
+
       const list: string[] = [];
       const seenBrandTargets = new Set<string>();
       for (const resItem of searchResultsList) {

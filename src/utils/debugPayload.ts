@@ -92,6 +92,9 @@ export type DebugReportInput = {
   historyLog?: any[];
   version?: number;
   ingestTrace?: any;
+  /** Health Coach / medical analysis output (health-baseline-analyze route nests
+   * its full structured result under this field — see serverJobs.ts persistSucceeded). */
+  report?: any;
 };
 
 /**
@@ -157,6 +160,30 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         const why = String(r.why || r.comment || '—').replace(/\|/g, '/');
         lines.push(`| ${idx} | ${name} | ${val} | ${unit} | ${key} | ${bucket} | ${cls} | ${why} |`);
       }
+    }
+    lines.push('');
+  }
+
+  // Health Coach / Analysis Report (health-baseline-analyze and similar routes
+  // nest their full structured output under `report` — without this section the
+  // debug export looked "empty" even though the backend generated real data.
+  if (input.report != null) {
+    lines.push(`## 🩺 Health Coach / Analysis Report`);
+    lines.push('');
+    if (typeof input.report === 'string') {
+      if (input.report.trim()) {
+        lines.push(input.report.slice(0, 20_000));
+      } else {
+        lines.push('_Report field present but empty._');
+      }
+    } else {
+      lines.push('```json');
+      try {
+        lines.push(JSON.stringify(input.report, null, 2).slice(0, 20_000));
+      } catch {
+        lines.push('_Report field present but could not be serialized._');
+      }
+      lines.push('```');
     }
     lines.push('');
   }
@@ -466,7 +493,8 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
     comprehensiveNutrients: result.comprehensiveNutrients || food?.nutrients,
     stageLedger: result.stageLedger,
     historyLog: result.historyLog,
-    ingestTrace: result.ingestTrace || msg?.data?.ingestTrace || msg?.data?.agentResult?.ingestTrace || job?.clean_result?.ingestTrace
+    ingestTrace: result.ingestTrace || msg?.data?.ingestTrace || msg?.data?.agentResult?.ingestTrace || job?.clean_result?.ingestTrace,
+    report: result.report || msg?.data?.report || msg?.data?.agentResult?.report || job?.clean_result?.report
   };
 }
 

@@ -771,3 +771,8 @@
 54. **Edit Mode Reality Check Inflation & Narrative Desync**:
     - Fixed an issue in `server.ts` where edited items without a fresh database match (e.g., renamed items) would lose their `primaryBase100g` and default to 0 kcal, causing the Reality Check engine to apply generic high-density assumptions (inflating a soup to 1463 kcal). Added a fallback to `getClinicalDefaultNutrients100g` and `classifyUniversalPhysicalFormV3`.
     - Resolved the LLM narrative desynchronization where the generated Dietitian message would reference stale numbers. Expanded `synchronizeNarrativeText` in `server_pure_helpers.ts` to support adjective-modified regexes (e.g., "51g of quality protein") and newly implemented support for synchronizing `addedSugar` values directly into the final text, ensuring the LLM narrative exactly matches the deterministic ledger.
+55. **Explicit Food Tags DB Matching Fix**:
+    - Addressed an issue where explicit food tags from the frontend (e.g. user selects a specific Brand item from the catalog) were incorrectly falling back to fuzzy string matching instead of fetching the exact database item.
+    - Exported `getBrandMenuItemById` and refactored mapping logic to a shared `formatBrandHit` function in `serverBrandMenu.ts`.
+    - Modified `server_routes_food_analyze.ts` to directly fetch and inject items tagged with `dbId: "brand_menu_..."` into `searchResultsList` before DB candidates are aggregated.
+    - Tested successfully, `npm run test` and `npm run check:tests` passing, guaranteeing the explicit item selections are perfectly preserved through the resolution flow.

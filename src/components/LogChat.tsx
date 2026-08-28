@@ -1966,7 +1966,9 @@ ${logsText}`);
     const networkErrors = window.__clientNetworkErrors || [];
     const lastUserAction = window.__lastUserAction || (inputText ? { action: 'chat_submit', prompt: inputText, timestamp: new Date().toISOString() } : undefined);
 
-    const pendingFoodLog = msg?.data?.pendingFoodLog || msg?.pendingFoodLog || job?.result?.pendingFoodLog || job?.result;
+    // FIX: do not fall back to `job?.result` which is the entire job result object
+    // for non-food (medical/biomarker) jobs.
+    const pendingFoodLog = msg?.data?.pendingFoodLog || msg?.pendingFoodLog || job?.result?.pendingFoodLog;
     const scoutItems = msg?.data?.scoutItems || msg?.data?.agentResult?.scoutItems || job?.result?.scoutItems;
     const receiptTable = msg?.data?.pendingFoodLog?.receiptTable || msg?.data?.receiptTable || job?.result?.receiptTable || job?.result?.pendingFoodLog?.receiptTable;
 
@@ -2089,6 +2091,7 @@ ${logsText}`);
         jobId: resolvedJobId,
         status: job?.status,
         mode: job?.result?.mode,
+        agentType: job?.result?.agentType || msg?.data?.agentResult?.agentType || msg?.data?.agentType,
         message: job?.result?.message || msg?.content,
         backendLogs: finalBackendLogs,
         pendingFoodLog,
@@ -2101,7 +2104,9 @@ ${logsText}`);
         networkErrors: networkErrors || job?.result?.networkErrors || (typeof window !== 'undefined' ? window.__clientNetworkErrors : undefined) || [],
         usdaSearchResults: job?.result?.usdaSearchResults,
         brandSearchResults: job?.result?.brandSearchResults,
-        comprehensiveNutrients: job?.result?.comprehensiveNutrients || pendingFoodLog?.nutrients
+        comprehensiveNutrients: job?.result?.comprehensiveNutrients || pendingFoodLog?.nutrients,
+        ingestTrace: job?.result?.ingestTrace || msg?.data?.ingestTrace || msg?.data?.agentResult?.ingestTrace,
+        report: job?.result?.report || msg?.data?.report || msg?.data?.agentResult?.report
       });
       const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
@@ -3059,7 +3064,7 @@ ${logsText}`);
             userId: auth.currentUser?.uid || 'anonymous',
             kind: family === 'D' ? 'food_compare' : 'food_log',
             mode: submissionMode,
-            text: userContent || textToSend,
+            text: ((userContent || textToSend || '').replace(/\[.*?\]/g, '').replace(/\s+/g, ' ').trim()),
             images: stagedImagesForSubmit,
             imageDates: tempDates.length > 0 ? tempDates : (extraOptions?.imageDates || job?.inputSnapshot?.imageDates || undefined),
             history: persistMessages,
@@ -3082,7 +3087,8 @@ ${logsText}`);
             clientConsoleLogs: window.__clientConsoleLogs || [],
             networkErrors: window.__clientNetworkErrors || [],
             userActionBreadcrumbs: window.__userActionBreadcrumbs || [],
-            lastUserAction: window.__lastUserAction || { action: 'chat_submit', prompt: userContent || textToSend, timestamp: new Date().toISOString() }
+            lastUserAction: window.__lastUserAction || { action: 'chat_submit', prompt: userContent || textToSend, timestamp: new Date().toISOString() },
+            explicitFoodTags: explicitFoodTags.length > 0 ? explicitFoodTags : undefined
           };
 
           fetchSubmitWithRetry('/api/jobs/submit', submitPayload)

@@ -957,12 +957,6 @@ export function parseAndHealVisionScout(
         }
         const compNames = components.map(c => c.name).filter(Boolean);
         let dishTitle = d.dishName || (compNames.length > 0 ? compNames.join(', ') : "Dish");
-        if (compNames.length > 1) {
-          const missingFoods = compNames.filter(cn => !dishTitle.toLowerCase().includes(cn.toLowerCase()));
-          if (missingFoods.length > 0) {
-            dishTitle = `${dishTitle} with ${missingFoods.join(', ')}`;
-          }
-        }
         const compPackGrams = components.length === 1 ? (components[0].packGrams ?? null) : (d.packGrams ?? null);
         const convertedItem: any = {
           keyword: dishTitle,
