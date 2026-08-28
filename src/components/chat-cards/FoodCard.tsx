@@ -1308,7 +1308,8 @@ export const CroppedFoodImage: React.FC<CroppedFoodImageProps> = ({
           onClick={onTap}
           onError={(e) => {
             const t = e.target as HTMLImageElement;
-            if (!t.src.includes('unsplash.com')) t.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&q=80&auto=format';
+            const fallback = getFoodImageUrl(alt || 'food');
+            if (t.src !== fallback) t.src = fallback;
           }}
         />
       );
@@ -2440,7 +2441,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                             onClick={() => {
                                               setPreviewState({ groupIdx: idx, itemIdx: 0, resolvedImgSrc });
                                             }}
-                                            onError={(e) => { const t = e.target as HTMLImageElement; if (!t.src.includes('unsplash.com')) t.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&q=80&auto=format'; }}
+                                            onError={(e) => { const t = e.target as HTMLImageElement; const fallback = getFoodImageUrl(firstItem?.name || firstItem?.keyword || 'food'); if (t.src !== fallback) t.src = fallback; }}
                                           />
                                         );
                                       }
@@ -3783,7 +3784,8 @@ export const FoodCard: React.FC<AgentCardProps & {
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 const t = e.target as HTMLImageElement;
-                                if (!t.src.includes('unsplash.com')) t.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&q=80&auto=format';
+                                const fallback = getFoodImageUrl(item.keyword || item.originalName || 'food');
+                                if (t.src !== fallback) t.src = fallback;
                               }}
                             />
                           )}

@@ -6,6 +6,8 @@ interface PackPortionRowProps {
   currentWeight: number;
   dishWeight?: number;
   onScaleWeight?: (newWeight: number) => void;
+  onConfirmPortion?: () => void;
+  portionAccepted?: boolean;
   darkTheme?: boolean;
 }
 
@@ -15,25 +17,31 @@ export const PackPortionRow: React.FC<PackPortionRowProps> = ({
   currentWeight,
   dishWeight,
   onScaleWeight,
+  onConfirmPortion,
+  portionAccepted = false,
   darkTheme = false,
 }) => {
-  const [isAccepted, setIsAccepted] = useState(false);
+  const [isAccepted, setIsAccepted] = useState(portionAccepted);
   const [isDismissed, setIsDismissed] = useState(false);
   const [isCustomOpen, setIsCustomOpen] = useState(false);
   const [customInputGrams, setCustomInputGrams] = useState(String(currentWeight));
 
   useEffect(() => {
     setCustomInputGrams(String(currentWeight));
-    setIsAccepted(false);
-    setIsDismissed(false);
-  }, [currentWeight, packGrams]);
+    if (portionAccepted) {
+      setIsAccepted(true);
+    }
+  }, [currentWeight, packGrams, portionAccepted]);
 
-  if (isDismissed || !packGrams || packGrams <= 0 || Math.abs(packGrams - currentWeight) <= 1) {
+  if (isDismissed || !packGrams || packGrams <= 0) {
     return null;
   }
 
   const handleAccept = () => {
     setIsAccepted(true);
+    if (onConfirmPortion) {
+      onConfirmPortion();
+    }
     setTimeout(() => {
       setIsDismissed(true);
     }, 5000);

@@ -563,10 +563,11 @@ export function NutritionLabelTable({
                 : []);
             const hasTabs = subComps.length > 1;
             const activeTab = activeTabMap[i] || 0;
+            const itemKeyPrefix = rootItem.id || rootItem.keyword || String(i);
             const staticDishTotalWeight = getResolvedItemWeightGrams(rootItem) || 0;
             const dishTotalWeight = hasTabs
               ? subComps.reduce((sum: number, comp: any, cIdx: number) => {
-                  const compW = customPortionMap[`${i}-${cIdx + 1}`] || resolveComponentWeightGrams(comp, staticDishTotalWeight, subComps.length);
+                  const compW = customPortionMap[`${itemKeyPrefix}-${cIdx + 1}`] ?? customPortionMap[`${i}-${cIdx + 1}`] ?? resolveComponentWeightGrams(comp, staticDishTotalWeight, subComps.length);
                   return sum + compW;
                 }, 0)
               : staticDishTotalWeight;
@@ -584,7 +585,7 @@ export function NutritionLabelTable({
 
             if (activeTab > 0 && subComps[activeTab - 1]) {
               const comp = subComps[activeTab - 1];
-              const compWeight = customPortionMap[`${i}-${activeTab}`] || resolveComponentWeightGrams(comp, dishTotalWeight, subComps.length);
+              const compWeight = customPortionMap[`${itemKeyPrefix}-${activeTab}`] ?? customPortionMap[`${i}-${activeTab}`] ?? resolveComponentWeightGrams(comp, dishTotalWeight, subComps.length);
               const compName = String(comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || (typeof comp === 'string' ? comp : 'Ingredient'))
                 .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
                 .replace(/^[📖\s]+/, '')
@@ -817,7 +818,7 @@ export function NutritionLabelTable({
                     {/* Tabs 1..N: Sub-components */}
                     {subComps.map((comp: any, cIdx: number) => {
                       const isActive = activeTab === cIdx + 1;
-                      const compW = customPortionMap[`${i}-${cIdx + 1}`] || resolveComponentWeightGrams(comp, dishTotalWeight, subComps.length);
+                      const compW = customPortionMap[`${itemKeyPrefix}-${cIdx + 1}`] ?? customPortionMap[`${i}-${cIdx + 1}`] ?? resolveComponentWeightGrams(comp, staticDishTotalWeight, subComps.length);
                       const cName = String(comp.primaryBaseMatchName || comp.name || comp.searchQuery || comp.keyword || (typeof comp === 'string' ? comp : 'Ingredient'))
                         .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
                         .replace(/^[📖\s]+/, '')
@@ -846,16 +847,37 @@ export function NutritionLabelTable({
                 )}
 
                 {/* Pack Portion Selection with 5s Accept Feedback */}
-                {activePackGrams && activePackGrams > 0 && Math.abs(activePackGrams - (resolvedWeight || 0)) > 1 && (
+                {activePackGrams && activePackGrams > 0 && (
                   <PackPortionRow
-                    key={`portion-${i}-${activeTab}`}
+                    key={`portion-${itemKeyPrefix}-${activeTab}`}
                     foodName={activeTitle}
                     packGrams={activePackGrams}
                     currentWeight={resolvedWeight || 100}
                     dishWeight={activeTab === 0 ? dishTotalWeight : undefined}
+                    portionAccepted={Boolean(rootItem.portionAccepted || item.portionAccepted)}
+                    onConfirmPortion={() => {
+                      rootItem.portionAccepted = true;
+                      item.portionAccepted = true;
+                      if (onConfirmItem) onConfirmItem(i);
+                    }}
                     onScaleWeight={(newWeight) => {
                       if (activeTab > 0) {
-                        setCustomPortionMap(prev => ({ ...prev, [`${i}-${activeTab}`]: newWeight }));
+                        setCustomPortionMap(prev => {
+                          const updatedMap = {
+                            ...prev,
+                            [`${itemKeyPrefix}-${activeTab}`]: newWeight,
+                            [`${i}-${activeTab}`]: newWeight
+                          };
+                          // Compute new dish weight with updated subcomponent weight
+                          const newDishWeight = subComps.reduce((sum: number, c: any, cIdx: number) => {
+                            const cW = updatedMap[`${itemKeyPrefix}-${cIdx + 1}`] ?? updatedMap[`${i}-${cIdx + 1}`] ?? resolveComponentWeightGrams(c, staticDishTotalWeight, subComps.length);
+                            return sum + cW;
+                          }, 0);
+                          if (onScalePortion && staticDishTotalWeight > 0 && newDishWeight > 0) {
+                            onScalePortion(newDishWeight / staticDishTotalWeight);
+                          }
+                          return updatedMap;
+                        });
                       } else if (onScalePortion && dishTotalWeight > 0) {
                         onScalePortion(newWeight / dishTotalWeight);
                       }

@@ -255,7 +255,7 @@ export function scaleMealPortion<T extends FoodLogLike>(currentLog: T, ratio: nu
   const grandSatFat = updatedNutrients.saturatedFat ?? 0;
   const grandNa = updatedNutrients.sodium ?? 0;
   const grandCarbs = updatedNutrients.carbsGrams ?? updatedNutrients.carbohydrates ?? 0;
-  const grandFiber = updatedNutrients.fiberGrams ?? updatedNutrients.fiber ?? 0;
+  const grandFiber = updatedNutrients.fiber ?? updatedNutrients.totalFibre ?? updatedNutrients.dietaryFiber ?? updatedNutrients.totalFiber ?? updatedNutrients.fiberGrams ?? 0;
 
   if (resLog.message) {
     resLog.message = synchronizeNarrativeText(resLog.message, grandCal, grandP, grandFat, grandSatFat, grandNa, grandCarbs, grandFiber);
@@ -374,7 +374,7 @@ export function scaleSingleDishPortion<T extends FoodLogLike>(currentLog: T, dis
   const grandSatFat = newTotalSatFat;
   const grandNa = newTotalSodium;
   const grandCarbs = aggregateNutrients.carbsGrams ?? aggregateNutrients.carbohydrates ?? 0;
-  const grandFiber = aggregateNutrients.fiberGrams ?? aggregateNutrients.fiber ?? 0;
+  const grandFiber = aggregateNutrients.fiber ?? aggregateNutrients.totalFibre ?? aggregateNutrients.dietaryFiber ?? aggregateNutrients.totalFiber ?? aggregateNutrients.fiberGrams ?? 0;
 
   if (resLog.message) {
     resLog.message = synchronizeNarrativeText(resLog.message, grandCal, grandP, grandFat, grandSatFat, grandNa, grandCarbs, grandFiber);
