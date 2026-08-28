@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# User uploaded debug images & job captures
+**/images/job_*
+prototype/compare/images/job_*
+
+# Patch files
+*.patch
