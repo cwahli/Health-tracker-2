@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import compression from 'compression';
 import dns from 'node:dns';
 try {
   dns.setDefaultResultOrder('ipv4first');
@@ -1365,6 +1366,7 @@ JSON SCHEMA STRICT REQUIREMENT:
 
 const app = express();
 
+app.use(compression());
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 app.use(biomarkerRouter);
@@ -3541,18 +3543,28 @@ async function startServer() {
     console.warn('[ServerJobs Worker] Startup recovery warning:', err);
   });
 
-  // Frontend serving middleware (Vite dev server or built static bundle)
-  const runningFromSource =
-    process.env.FORCE_VITE === "1" ||
-    process.env.npm_lifecycle_event === "dev" ||
-    process.argv.some((a) => /(^|[\\/])tsx([\\/]|$)/.test(a));
-  const serveDist = hasBuiltDist && !runningFromSource;
+  // Frontend serving middleware (built static bundle or Vite dev fallback)
+  const forceVite = process.env.FORCE_VITE === "1";
+  const serveDist = hasBuiltDist && !forceVite;
   console.log(
-    `[boot] frontend=${serveDist ? "dist" : "vite"} hasDist=${hasBuiltDist} fromSource=${runningFromSource}`
+    `[boot] frontend=${serveDist ? "dist" : "vite"} hasDist=${hasBuiltDist} forceVite=${forceVite}`
   );
   if (serveDist) {
-    app.use(express.static(distPath));
+    // Compress all static assets and set immutable caching for versioned files
+    app.use(express.static(distPath, {
+      maxAge: '1y',
+      immutable: true,
+      etag: true,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        } else {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      }
+    }));
     app.get("*", (req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
       res.sendFile(path.join(distPath, "index.html"));
     });
   } else {

@@ -3,6 +3,8 @@ import { UserProfile } from '../types';
 import { translations } from '../utils/translations';
 import { Activity, Mail, AlertCircle, RefreshCw, KeyRound, CheckCircle } from 'lucide-react';
 import { supabase, isSupabaseConfigured, getAuthRedirectTo, cleanupAuthUrlParams } from '../utils/supabaseClient';
+import { auth, googleProvider, facebookProvider, twitterProvider } from '../firebase';
+import { signInWithPopup } from 'firebase/auth';
 
 interface AuthScreenProps {
   onLogin: (profile: UserProfile) => void;
@@ -591,6 +593,60 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setErrorMsg('');
     setStatus('sending');
 
+    if (provider === 'Google') {
+      try {
+        const result = await signInWithPopup(auth, googleProvider);
+        if (result?.user) {
+          handleSuccessfulLogin(result.user);
+          setStatus('idle');
+          return;
+        }
+      } catch (fbErr: any) {
+        console.warn('Firebase Google Auth error:', fbErr);
+        if (fbErr.code === 'auth/popup-closed-by-user' || fbErr.code === 'auth/cancelled-popup-request') {
+          setStatus('idle');
+          return;
+        }
+        setErrorMsg(fbErr.message || 'Failed to sign in with Google');
+        setStatus('idle');
+        return;
+      }
+    }
+
+    if (provider === 'Facebook') {
+      try {
+        const result = await signInWithPopup(auth, facebookProvider);
+        if (result?.user) {
+          handleSuccessfulLogin(result.user);
+          setStatus('idle');
+          return;
+        }
+      } catch (fbErr: any) {
+        console.warn('Firebase Facebook Auth error:', fbErr);
+        if (fbErr.code === 'auth/popup-closed-by-user' || fbErr.code === 'auth/cancelled-popup-request') {
+          setStatus('idle');
+          return;
+        }
+      }
+    }
+
+    if (provider === 'X') {
+      try {
+        const result = await signInWithPopup(auth, twitterProvider);
+        if (result?.user) {
+          handleSuccessfulLogin(result.user);
+          setStatus('idle');
+          return;
+        }
+      } catch (fbErr: any) {
+        console.warn('Firebase Twitter Auth error:', fbErr);
+        if (fbErr.code === 'auth/popup-closed-by-user' || fbErr.code === 'auth/cancelled-popup-request') {
+          setStatus('idle');
+          return;
+        }
+      }
+    }
+
     if (isSupabaseConfigured) {
       try {
         const providerMap: Record<string, string> = { Google: 'google', X: 'twitter', Facebook: 'facebook' };
@@ -712,20 +768,48 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             <button
               id="auth-bypass-verify-btn"
               type="button"
-              onClick={() => {
-                if (auth.currentUser) {
-                  handleSuccessfulLogin(auth.currentUser);
-                } else {
-                  setErrorMsg('No user currently registered.');
+              onClick={async () => {
+                if (isSupabaseConfigured) {
+                  const { data: { session } } = await supabase.auth.getSession();
+                  if (session?.user) {
+                    const u = session.user;
+                    handleSuccessfulLogin({
+                      uid: u.id,
+                      email: u.email || email || '',
+                      displayName: resolveUserDisplayName(u, nickname),
+                      photoURL: u.user_metadata?.avatar_url || '',
+                      emailVerified: true
+                    } as any);
+                    return;
+                  }
                 }
+                const cleanEmail = email.trim().toLowerCase();
+                const fallbackProfile: UserProfile = {
+                  uid: 'usr_' + (cleanEmail ? cleanEmail.replace(/[^a-z0-9]/gi, '_') : 'sandbox'),
+                  nickname: (nickname || cleanEmail.split('@')[0] || 'User').trim(),
+                  photoUrl: '',
+                  email: cleanEmail || 'user@example.com',
+                  age: 28,
+                  ethnicity: 'Unknown',
+                  weight: 70,
+                  height: 175,
+                  gender: 'Unknown',
+                  language,
+                  userType: 'Standard'
+                };
+                handleSuccessfulLogin(fallbackProfile);
               }}
               className="w-full mt-2 py-2.5 border border-theme-border hover:bg-slate-50 dark:hover:bg-slate-800 text-theme-neutral rounded-xl text-xs font-semibold active:scale-[0.98] transition-all flex items-center justify-center gap-1"
             >
               🔓 Bypass Verification (Sandbox Mode)
             </button>
             <button
-              onClick={() => {
-                auth.signOut();
+              onClick={async () => {
+                if (isSupabaseConfigured) {
+                  try {
+                    await supabase.auth.signOut();
+                  } catch (e) {}
+                }
                 setStatus('idle');
               }}
               className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 mt-2"

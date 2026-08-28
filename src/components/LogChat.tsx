@@ -1249,6 +1249,51 @@ ${logsText}`);
   }, [messages, lastSentPayload, activeConversationId]);
 
   const [inputText, setInputText] = useState('');
+
+  const [explicitFoodTags, setExplicitFoodTags] = useState<any[]>([]);
+  const [catalogMatches, setCatalogMatches] = useState<any[]>([]);
+  const [tagPortionPreFill, setTagPortionPreFill] = useState<number>(100);
+
+  useEffect(() => {
+    if (type !== 'food' || inputText.trim().length < 3) {
+      setCatalogMatches([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const regex = /\b(\d+(?:\.\d+)?)\s*(g|ml|oz|servings?|portion|pieces?)\b/i;
+      const match = inputText.match(regex);
+      if (match) {
+        setTagPortionPreFill(parseFloat(match[1]));
+      } else {
+        setTagPortionPreFill(100);
+      }
+
+      // Strip out anything inside brackets to avoid searching for already tagged items
+      const strippedInput = inputText.replace(/\[.*?\]/g, '').trim();
+      if (strippedInput.length < 3) {
+        setCatalogMatches([]);
+        return;
+      }
+      const words = strippedInput.split(/\s+/);
+      const searchTerms = words.slice(Math.max(words.length - 4, 0)).join(' ');
+      
+      try {
+        const res = await fetch(`/api/food/search?q=${encodeURIComponent(searchTerms)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.results && data.results.length > 0 && data.results.length < 4) {
+            setCatalogMatches(data.results);
+          } else {
+            setCatalogMatches([]);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [inputText, type]);
+
   const [budget, setBudget] = useState(() => localStorage.getItem('food_budget') || '');
   const [currency, setCurrency] = useState(() => localStorage.getItem('food_currency') || 'GBP');
   const [maxDistance, setMaxDistance] = useState(() => {
@@ -2703,6 +2748,24 @@ ${logsText}`);
           }
         }
 
+
+        let strippedText = userContent || '';
+        explicitFoodTags.forEach(t => {
+          strippedText = strippedText.replace(`[${t.name} ${t.weightGrams}g]`, '').replace(`[${t.name}]`, '').replace('  ', ' ').trim();
+        });
+        const hasAdditionalText = strippedText.replace(/\[.*?\]/g, '').trim().length > 0;
+        
+        if (!hasAdditionalText && finalImages.length === 0 && explicitFoodTags.length === 1 && explicitFoodTags[0].source === 'previous_meal') {
+          handleDuplicateFoodLog(explicitFoodTags[0].originalLog);
+          setInputText('');
+          setExplicitFoodTags([]);
+          clearTimeout(failsafe);
+          isSendingRef.current = false;
+          setIsSubmitting(false);
+          setIsAnalyzing(false);
+          return;
+        }
+
         const inputSnapshot = {
           text: userContent,
           imageRefs: [],
@@ -2711,9 +2774,10 @@ ${logsText}`);
           mode: submissionMode,
           portionChoices: extraOptions?.portionChoices,
           activeScoutItems: scoutItemsForJob,
-          skipScout: extraOptions?.skipScout,
+          skipScout: extraOptions?.skipScout || (!hasAdditionalText && finalImages.length === 0),
           scoutContentType: scoutContentTypeFallback,
           goldenCaseId: extraOptions?.goldenCaseId || (typeof overrideText === 'object' ? overrideText?.goldenCaseId : undefined),
+          explicitFoodTags: explicitFoodTags.length > 0 ? explicitFoodTags : undefined,
         };
 
         // Use a durable base64 data URL instead of a throwaway blob: URL, so the
@@ -2928,7 +2992,7 @@ ${logsText}`);
           );
         };
 
-        const fetchSubmitWithRetry = async (url: string, payload: any, maxRetries = 3, delayMs = 500) => {
+        const fetchSubmitWithRetry = async (url: string, payload: any, maxRetries = 4, delayMs = 600) => {
           let lastErr: any = null;
           for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
@@ -2938,15 +3002,22 @@ ${logsText}`);
                 body: safeJSONStringify(payload)
               });
               if (res.ok) return res;
-              if (res.status >= 500 && attempt < maxRetries) {
-                await new Promise(r => setTimeout(r, delayMs * Math.pow(2, attempt - 1)));
+              // Retry on 429 (Rate limit) or 5xx server errors
+              if ((res.status >= 500 || res.status === 429) && attempt < maxRetries) {
+                const retryAfterHeader = res.headers.get('Retry-After');
+                const waitMs = retryAfterHeader
+                  ? (parseInt(retryAfterHeader, 10) * 1000 || delayMs * Math.pow(2, attempt - 1))
+                  : (delayMs * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 250));
+                console.warn(`[fetchSubmitWithRetry] Got HTTP ${res.status}, retrying attempt ${attempt}/${maxRetries} in ${waitMs}ms...`);
+                await new Promise(r => setTimeout(r, waitMs));
                 continue;
               }
               return res;
             } catch (err) {
               lastErr = err;
               if (attempt < maxRetries) {
-                await new Promise(r => setTimeout(r, delayMs * Math.pow(2, attempt - 1)));
+                const waitMs = delayMs * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 250);
+                await new Promise(r => setTimeout(r, waitMs));
               }
             }
           }
@@ -3004,7 +3075,9 @@ ${logsText}`);
             skipScout: extraOptions?.skipScout || !!extraOptions?.portionChoices,
             resolvedDbCandidates: extraOptions?.resolvedDbCandidates || [],
             priorLogsUrl: extraOptions?.priorLogsUrl || '',
-            photoUrl: (extraOptions as any)?.photoUrl || job?.photoUrl || job?.result?.photoUrl || undefined,
+            photoUrl: (extraOptions as any)?.photoUrl || (extraOptions as any)?.imageUrl || job?.photoUrl || job?.result?.photoUrl || job?.inputSnapshot?.photoUrl || prunedMealForJob?.imageUrl || prunedMealForJob?.imageUrls?.[0] || undefined,
+            imageUrl: (extraOptions as any)?.imageUrl || (extraOptions as any)?.photoUrl || job?.photoUrl || job?.result?.photoUrl || prunedMealForJob?.imageUrl || undefined,
+            imageUrls: (extraOptions as any)?.imageUrls || (Array.isArray(job?.result?.imageUrls) ? job.result.imageUrls : undefined) || (prunedMealForJob?.imageUrls) || undefined,
             requestId: currentReqId,
             clientConsoleLogs: window.__clientConsoleLogs || [],
             networkErrors: window.__clientNetworkErrors || [],
@@ -6160,6 +6233,8 @@ ${logsText}`);
                                   currentJob?.result?.backendLogsUrl ||
                                   currentJob?.result?.clean_result?.backendLogsUrl ||
                                   '';
+                                const effectivePhotoUrl = currentJob?.photoUrl || currentJob?.result?.photoUrl || msg.data?.photoUrl || msg.data?.pendingFoodLog?.imageUrl || activeMeal?.imageUrl || (msg.data?.imageUrls && msg.data.imageUrls[0]);
+                                const effectiveImageUrls = (msg.data?.imageUrls && msg.data.imageUrls.length > 0) ? msg.data.imageUrls : (activeMeal?.imageUrls || (effectivePhotoUrl ? [effectivePhotoUrl] : undefined));
                                 recordBreadcrumb('confirm_portions', 'portion_clarify_card', { choices, inPlaceMsgId: msg.id });
                                 handleSend(JSON.stringify(choices), [], {
                                   portionChoices: choices,
@@ -6168,7 +6243,9 @@ ${logsText}`);
                                   activeScoutItems: clarifyScoutItems,
                                   resolvedDbCandidates,
                                   priorLogsUrl,
-                                  photoUrl: currentJob?.photoUrl || currentJob?.result?.photoUrl || msg.data?.photoUrl,
+                                  photoUrl: effectivePhotoUrl,
+                                  imageUrl: effectivePhotoUrl,
+                                  imageUrls: effectiveImageUrls,
                                   requestId: currentJob?.requestId || activeReqId,
                                   inPlaceMsgId: msg.id,  // update this message slot in-place
                                 });
@@ -6247,46 +6324,89 @@ ${logsText}`);
 
         {/* Input Dock */}
         <div className="bg-theme-bg-card border-t border-theme-border/80 p-3 flex flex-col gap-2 shrink-0 relative">
-          {matchingPreviousLogs.length > 0 && (
-            <div className="absolute bottom-full left-0 right-0 mb-2 mx-3 bg-white dark:bg-slate-800 border border-theme-border/80 rounded-2xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto z-50 animate-fade-in font-sans">
-              <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-center">
-                <span className="text-[11px] font-bold text-theme-text-secondary">Previous Matches</span>
-                <span className="text-[9px] text-slate-400">Click Add to duplicate</span>
-              </div>
-              <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                {matchingPreviousLogs.map((log) => (
-                  <div key={log.id} className="p-2.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {log.imageUrl || (log.imageUrls && log.imageUrls.length > 0) ? (
-                        <img 
-                          src={resolveFoodImage(log.imageUrl || log.imageUrls?.[0], activeFoodLogs)} 
-                          alt={log.name} 
-                          className="w-8 h-8 rounded-lg object-cover border border-slate-100 dark:border-slate-700 shrink-0"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-500 font-bold text-xs shrink-0">
-                          {log.name.charAt(0).toUpperCase()}
+          
+          
+          {(() => {
+            const combinedMatches = [
+              ...catalogMatches.map(m => ({ ...m, _listType: 'brand' })),
+              ...matchingPreviousLogs.map(m => ({ ...m, _listType: 'previous_meal' }))
+            ].filter(m => !explicitFoodTags.some(tag => tag.dbId === (m._listType === 'brand' ? m.food_id : m.id)));
+            
+            if (combinedMatches.length === 0) return null;
+            return (
+              <div className="absolute bottom-full left-0 right-0 mb-2 mx-3 bg-white dark:bg-slate-800 border border-theme-border/80 rounded-2xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto z-50 animate-fade-in font-sans">
+                <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-center">
+                  <span className="text-[11px] font-bold text-theme-text-secondary">Matches</span>
+                  <span className="text-[9px] text-slate-400">Click Add to inline</span>
+                </div>
+                <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                  {combinedMatches.map((item, idx) => (
+                    <div key={item._listType === 'brand' ? (item.food_id || idx) : item.id} className="p-2.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {item._listType === 'previous_meal' && (
+                          (item.imageUrl || (item.imageUrls && item.imageUrls.length > 0)) ? (
+                            <img 
+                              src={resolveFoodImage(item.imageUrl || item.imageUrls?.[0], activeFoodLogs)} 
+                              alt={item.name} 
+                              className="w-8 h-8 rounded-lg object-cover border border-slate-100 dark:border-slate-700 shrink-0"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-500 font-bold text-xs shrink-0">
+                              {item.name.charAt(0).toUpperCase()}
+                            </div>
+                          )
+                        )}
+                        <div className="min-w-0 flex flex-col">
+                          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
+                            {item._listType === 'brand' ? item.dish_name : item.name}
+                          </div>
+                          <div className="text-[10px] text-theme-text-secondary truncate mt-0.5">
+                            {item._listType === 'brand' ? item.chain_name : (
+                              <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider inline-block mr-1">
+                                Previous Meal
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      <div className="min-w-0">
-                        <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{log.name}</div>
-                        <div className="text-[10px] text-theme-text-secondary truncate">{log.composition || log.quantity}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {item._listType === 'brand' && (
+                          <>
+                            <input 
+                              type="number" 
+                              defaultValue={tagPortionPreFill}
+                              id={`tag-portion-${item.food_id}`}
+                              className="w-12 px-1 py-1 text-xs border rounded bg-white dark:bg-slate-700 text-center" 
+                            />
+                            <span className="text-xs text-slate-500">g</span>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (item._listType === 'brand') {
+                              const w = (document.getElementById(`tag-portion-${item.food_id}`) as HTMLInputElement)?.value || tagPortionPreFill;
+                              setExplicitFoodTags(prev => [...prev, { dbId: item.food_id, name: item.dish_name, weightGrams: Number(w), source: 'catalog_tag' }]);
+                              setInputText(prev => prev + ` [${item.dish_name} ${w}g] `);
+                            } else {
+                              setExplicitFoodTags(prev => [...prev, { dbId: item.id, name: item.name, source: 'previous_meal', originalLog: item }]);
+                              setInputText(prev => prev + ` [${item.name}] `);
+                            }
+                            setCatalogMatches([]);
+                          }}
+                          className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add
+                        </button>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDuplicateFoodLog(log)}
-                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-lg text-[10px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add
-                    </button>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
           {isCompressing && (
             <div className="flex items-center gap-2 p-2 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900 rounded-xl">
               <Loader className="w-3.5 h-3.5 text-indigo-600 animate-spin" />

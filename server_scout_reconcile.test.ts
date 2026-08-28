@@ -98,6 +98,10 @@ describe('namesReferToSameFood', () => {
     expect(namesReferToSameFood('Butter Croissant', 'Croissant')).toBe(true);
     expect(namesReferToSameFood('Cinnamon Roll', 'Cinnamon Swirl')).toBe(true);
     expect(namesReferToSameFood('Coca-Cola Vanila Zero Sugar', 'Cola, zero calorie, vanilla')).toBe(true);
+    expect(namesReferToSameFood('Chicken Egg', 'Hari Hari Fresh Telur Ayam Negeri')).toBe(true);
+    expect(namesReferToSameFood('Squid', 'Cumi-cumi')).toBe(true);
+    expect(namesReferToSameFood('Enoki Mushrooms', 'Jamur Enoki')).toBe(true);
+    expect(namesReferToSameFood('Tofu', 'Tahu Putih')).toBe(true);
   });
 
   it('does not duplicate items when dietitian emits standard names for foreign/brand packaged goods', () => {

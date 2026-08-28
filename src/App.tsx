@@ -3386,30 +3386,23 @@ export default function App() {
         }
       }
 
-      // If no Supabase user found, reset state cleanly
-      if (!isSupabaseConfigured) {
-        // Fallback for offline development without Supabase configured
-        const unsubscribeFb = onAuthStateChanged(auth, async (user) => {
+      // Listen for Firebase Auth events (supports Google Login via Firebase)
+      const unsubscribeFb = onAuthStateChanged(auth, async (user) => {
+        if (user) {
           clearTimeout(fallbackTimeout);
-          if (user) {
-            await loadUserData(
-              user.uid,
-              user.email || '',
-              user.displayName || '',
-              user.photoURL || ''
-            );
-          } else {
-            setProfile(null);
-            setFoodLogs([]);
-            setBiomarkers({});
-            setBiomarkerHistory([]);
-            setActions([]);
-            setDailyBenefits([]);
-            setReport(null);
-            setIsAuthChecking(false);
-          }
-        });
-        unsubs.push(unsubscribeFb);
+          await loadUserData(
+            user.uid,
+            user.email || '',
+            user.displayName || '',
+            user.photoURL || ''
+          );
+        }
+      });
+      unsubs.push(unsubscribeFb);
+
+      if (!isSupabaseConfigured) {
+        clearTimeout(fallbackTimeout);
+        setIsAuthChecking(false);
       } else {
         clearTimeout(fallbackTimeout);
         setIsAuthChecking(false);

@@ -1443,20 +1443,6 @@ export default function Header({
               </button>
             );
           })()}
-
-          <button
-            type="button"
-            id="header-signout-btn"
-            onClick={() => {
-              clearGoogleToken();
-              onSignOut();
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-950/50 border border-rose-200/80 dark:border-rose-900/40 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 transition-all cursor-pointer shadow-sm active:scale-95"
-            title="Sign Out of your account"
-          >
-            <LogOut className="w-3.5 h-3.5 shrink-0" />
-            <span className="hidden sm:inline">{t.signOut || 'Sign Out'}</span>
-          </button>
         </div>
       </div>
     
@@ -1889,24 +1875,6 @@ export default function Header({
                     {hideSensitive ? <EyeOff className="w-4.5 h-4.5 text-rose-500 flex-shrink-0" /> : <Eye className="w-4.5 h-4.5 text-slate-400 flex-shrink-0" />}
                   </button>
                 </div>
-              </div>
-
-
-
-              {/* Logout button */}
-              <div className="mt-4 border-t border-slate-100 dark:border-slate-800/85 pt-3">
-                <button
-                  type="button"
-                  id="signout-btn"
-                  onClick={() => {
-                    clearGoogleToken();
-                    onSignOut();
-                  }}
-                  className="w-full flex items-center justify-center gap-2 text-sm bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-950/30 border border-rose-100 dark:border-rose-900/30 rounded-xl px-3 py-2 text-rose-600 dark:text-rose-400 font-semibold transition-colors cursor-pointer"
-                >
-                  <LogOut className="w-4.5 h-4.5" />
-                  <span>{t.signOut}</span>
-                </button>
               </div>
             </div>
           </div>

@@ -24,35 +24,72 @@ const DISCRIMINATOR_CANONICAL: Record<string, string> = {
   poultry: 'chicken',
   turkey: 'turkey',
   duck: 'duck',
+  bebek: 'duck',
+  pato: 'duck',
+  canard: 'duck',
   beef: 'beef',
   steak: 'beef',
   veal: 'beef',
+  sapi: 'beef',
+  lembu: 'beef',
+  daging: 'beef',
+  carne: 'beef',
   pork: 'pork',
   bacon: 'bacon',
   ham: 'ham',
   sausage: 'sausage',
+  babi: 'pork',
+  cerdo: 'pork',
+  porc: 'pork',
   lamb: 'lamb',
   mutton: 'lamb',
+  kambing: 'lamb',
   salmon: 'salmon',
   tuna: 'tuna',
   cod: 'cod',
   haddock: 'cod',
   trout: 'trout',
+  cendro: 'cendro',
+  fish: 'fish',
+  ikan: 'fish',
+  pescado: 'fish',
+  poisson: 'fish',
   prawn: 'shrimp',
   prawns: 'shrimp',
   shrimp: 'shrimp',
+  udang: 'shrimp',
+  camaron: 'shrimp',
   crab: 'crab',
+  kepiting: 'crab',
+  cangrejo: 'crab',
   lobster: 'lobster',
   squid: 'squid',
+  cumi: 'squid',
+  cumicumi: 'squid',
+  sotong: 'squid',
   calamari: 'squid',
   octopus: 'octopus',
+  gurita: 'octopus',
   tofu: 'tofu',
+  tahu: 'tofu',
   tempeh: 'tempeh',
+  tempe: 'tempeh',
+  mushroom: 'mushroom',
+  mushrooms: 'mushroom',
+  jamur: 'mushroom',
+  enoki: 'mushroom',
   falafel: 'falafel',
   halloumi: 'halloumi',
   paneer: 'paneer',
   egg: 'egg',
   eggs: 'egg',
+  telur: 'egg',
+  telor: 'egg',
+  huevo: 'huevo',
+  huevos: 'huevo',
+  oeuf: 'oeuf',
+  ayam: 'chicken',
+  pollo: 'chicken',
   vegan: 'vegan',
   veggie: 'vegetarian',
   vegetarian: 'vegetarian',
@@ -101,6 +138,12 @@ export function namesReferToSameFood(a: unknown, b: unknown): boolean {
     if (!hasSharedDisc) {
       // Disjoint core protein/ingredient discriminators — cannot be the same food
       return false;
+    }
+    // If they share all discriminators on either side (e.g. 'egg' & 'chicken' matches 'telur' & 'ayam')
+    const allAShared = Array.from(discA).every(d => discB.has(d));
+    const allBShared = Array.from(discB).every(d => discA.has(d));
+    if (allAShared || allBShared) {
+      return true;
     }
   }
 
@@ -193,6 +236,31 @@ export function scoutItemMatchesBreakdownName(s: any, itemName: string): boolean
   if (namesReferToSameFood(itemName, s.keyword)) return true;
   if (namesReferToSameFood(itemName, s.name)) return true;
   if (namesReferToSameFood(itemName, s.canonicalDbName)) return true;
+  if (namesReferToSameFood(itemName, s.dishName)) return true;
+
+  if (Array.isArray(s.components)) {
+    for (const c of s.components) {
+      const cName = typeof c === 'string' ? c : (c.name || c.foodName || c.keyword || c.searchQuery);
+      if (cName && namesReferToSameFood(itemName, cName)) return true;
+    }
+  }
+  if (Array.isArray(s.foods)) {
+    for (const f of s.foods) {
+      const fName = typeof f === 'string' ? f : (f.foodName || f.name);
+      if (fName && namesReferToSameFood(itemName, fName)) return true;
+    }
+  }
+  if (Array.isArray(s.componentsDetailList)) {
+    for (const c of s.componentsDetailList) {
+      const cName = c.name || c.canonicalDbName || c.foodName;
+      if (cName && namesReferToSameFood(itemName, cName)) return true;
+    }
+  }
+  if (Array.isArray(s.visualIngredients)) {
+    for (const v of s.visualIngredients) {
+      if (v && namesReferToSameFood(itemName, v)) return true;
+    }
+  }
   return false;
 }
 

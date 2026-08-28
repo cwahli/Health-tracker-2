@@ -1,7 +1,30 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-28  
-**Status:** Fill-template prototype C2 green (`prototype/biomarkers/`). Remaining C1–C7: `plan/BIOMARKER_FILL_TEMPLATE_CASES.md`. Ranking: universal -5..+5 severity on main.
+**Status:** Supabase-only Auth migration & Sign-up verified. Fill-template prototype C2 green (`prototype/biomarkers/`). Remaining C1–C7: `plan/BIOMARKER_FILL_TEMPLATE_CASES.md`.
+
+- **Navigation & Profile Sign-Out Button Consolidation (`src/components/Header.tsx` - 2026-08-28):**
+  - **Root Cause & Diagnosis:** Redundant sign-out buttons were placed both on the persistent top navigation bar and in multiple locations inside the Edit Profile modal (header and footer).
+  - **Key Changes Applied:** Removed the sign-out icon button from the top navigation bar and removed the duplicate footer button in the Edit Profile modal, consolidating to a single, clean Sign Out button in the Edit Profile dialog.
+  - **Verification:** `tsc --noEmit` exit 0; `compile_applet` exit 0.
+
+- **Re-enabled Firebase Google Sign-In (`src/components/AuthScreen.tsx`, `src/App.tsx` - 2026-08-28):**
+  - **Root Cause & Diagnosis:** Supabase Google OAuth requires manual provider setup in the Supabase dashboard, while Firebase Google Sign-In is already active and provisioned on the project.
+  - **Key Changes Applied:** Re-enabled Firebase `signInWithPopup(auth, googleProvider)` in `handleThirdPartyLogin` and ensured the `onAuthStateChanged(auth, ...)` listener in `App.tsx` remains active to immediately handle Firebase Google logins.
+  - **Verification:** `tsc --noEmit` exit 0; `compile_applet` exit 0; dev server restarted.
+
+- **Development Frontend Serving & 429 Prevention (`server.ts` - 2026-08-28):**
+  - **Root Cause & Diagnosis:** In development mode, `server.ts` was bypassing pre-built `dist/` bundles even when `dist/` existed, forcing Vite dev server to serve 150+ unbundled raw TypeScript modules concurrently upon initial page load. This triggered the edge proxy burst rate limiter with HTTP 429 errors on submodules.
+  - **Key Changes Applied:** Updated `server.ts` frontend serving layer to serve optimized, pre-bundled static assets from `dist/` whenever `hasBuiltDist` is true (allowing opt-in unbundled Vite dev mode only when `FORCE_VITE=1` is explicitly set).
+  - **Verification:** `compile_applet` built `dist/` cleanly; `server.ts` booted with `frontend=dist`; linter passed with 0 errors.
+
+- **Supabase-Only Authentication & Sign-Up Transition (`src/components/AuthScreen.tsx`, `src/App.tsx`, `server.ts` - 2026-08-28):**
+  - **Root Cause & Diagnosis:** Sign-up and verification logic had legacy Firebase Auth fallbacks interleaved (`createUserWithEmailAndPassword`, `fbSignOut`, `onAuthStateChanged`), and the backend email uniqueness endpoint (`/api/auth/check-email-status`) relied on Firebase Admin instead of checking the Supabase user directory.
+  - **Key Changes Applied:**
+    - **Supabase Sign-Up Streamlined (`AuthScreen.tsx`):** Cleaned up `handleSignUp`, OTP verification (`token_hash` / `code`), resend verification, and password reset to rely exclusively on `supabase.auth`, passing user metadata properly and handling both immediate session issuance and email confirmation prompts.
+    - **Backend Email Status Verification (`server.ts`):** Directed `/api/auth/check-email-status` to query `supabaseAdmin.auth.admin.listUsers()` as the source of truth for email registration and confirmation status.
+    - **App Auth State Authority (`App.tsx`):** Ensured active user identity and session persistence prioritize `supabase.auth.onAuthStateChange` and `supabase.auth.getSession()`.
+  - **Verification:** `tsc --noEmit` exit 0 (clean lint); full application compilation (`compile_applet`) succeeded without errors.
 
 - **C2 fill-template + status sanitizer (2026-08-28):** Prototype at `prototype/biomarkers/` (18 hits / 12 pending, 2-turn live PASS). `getBiomarkerStatusLabel` never injects Critical for chronic 1.3× (TC 6.5 → Very High; eGFR 80 → Mildly Decreased (CKD G2)). Instruction + full payloads: `prototype/biomarkers/reports/C2_live.md`. Remaining C1–C7: `plan/BIOMARKER_FILL_TEMPLATE_CASES.md`.
 

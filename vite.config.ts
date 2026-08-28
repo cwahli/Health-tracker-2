@@ -18,6 +18,12 @@ export default defineConfig(() => {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
+              if (id.includes('lucide-react')) return 'vendor-icons';
+              if (id.includes('recharts') || id.includes('d3')) return 'vendor-charts';
+              if (id.includes('firebase')) return 'vendor-firebase';
+              if (id.includes('@supabase')) return 'vendor-supabase';
+              if (id.includes('leaflet')) return 'vendor-maps';
+              if (id.includes('motion')) return 'vendor-motion';
               return 'vendor';
             }
           }

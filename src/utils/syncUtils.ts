@@ -303,19 +303,24 @@ export const completeDbInteraction = (
   }));
 };
 
-async function fetchWithRetry(url: string, options: RequestInit, retries = 2, delayMs = 800): Promise<Response> {
+async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delayMs = 1000): Promise<Response> {
   for (let i = 0; i <= retries; i++) {
     try {
       const res = await fetch(url, options);
       if (res.ok) return res;
-      if (res.status >= 500 && i < retries) {
-        await new Promise(resolve => setTimeout(resolve, delayMs * (i + 1)));
+      if ((res.status >= 500 || res.status === 429) && i < retries) {
+        const retryAfterHeader = res.headers?.get('Retry-After');
+        const retryAfterSec = retryAfterHeader ? parseFloat(retryAfterHeader) : NaN;
+        const waitTime = !isNaN(retryAfterSec) && retryAfterSec > 0
+          ? retryAfterSec * 1000
+          : delayMs * Math.pow(2, i) + Math.random() * 400;
+        await new Promise(resolve => setTimeout(resolve, waitTime));
         continue;
       }
       return res;
     } catch (err: any) {
       if (i < retries) {
-        await new Promise(resolve => setTimeout(resolve, delayMs * (i + 1)));
+        await new Promise(resolve => setTimeout(resolve, delayMs * Math.pow(2, i) + Math.random() * 400));
         continue;
       }
       throw err;
@@ -415,7 +420,7 @@ export const upsertProfileToSupabase = async (
       } finally {
         resolve();
       }
-    }, 250);
+    }, 600);
   });
 };
 

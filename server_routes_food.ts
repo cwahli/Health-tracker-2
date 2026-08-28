@@ -4,11 +4,28 @@ import { buildFoodSearchQuerySet } from './server_query_set.js';
 
 export const foodRouter = Router();
 
-/**
- * Health & Query helper router for food domain
- */
 foodRouter.get('/api/food/health', (req, res) => {
   res.json({ status: 'ok', domain: 'food', timestamp: new Date().toISOString() });
+});
+
+foodRouter.get('/api/food/search', async (req, res) => {
+  const query = req.query.q as string;
+  if (!query) return res.json({ results: [] });
+  try {
+    const { searchBrandMenuItems } = await import('./serverBrandMenu.js');
+    const brandMatches = await searchBrandMenuItems(query);
+    const results = brandMatches.slice(0, 10).map((m: any) => ({
+      food_id: m.dish_key || m.id || m.name,
+      dish_name: m.dish_name || m.name,
+      chain_name: m.chain_name || m.chainName || m.brandOwner,
+      display_name: m.dish_name || m.name,
+      type: 'brand'
+    }));
+    res.json({ results });
+  } catch (err) {
+    console.error('[Search Error]', err);
+    res.status(500).json({ results: [] });
+  }
 });
 
 foodRouter.post('/api/food/query-set', (req, res) => {

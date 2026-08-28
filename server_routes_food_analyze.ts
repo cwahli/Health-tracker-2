@@ -29,6 +29,7 @@ import {
   matchBreakdownItemToScout,
   breakdownAlreadyHasScoutName,
   applySoftReceiptAlignment,
+  scoutItemMatchesBreakdownName,
 } from './server_scout_reconcile.js';
 import { rankAndClassifyCandidates, writeAliasIfHitUnique } from './server_fdc_resolve.js';
 import { buildFoodSearchQuerySet } from './server_query_set.js';
@@ -1379,6 +1380,24 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
     // specific consumed dish (scoutRecommendedMode === "new_log") should still get real
     // nutrition search for that item, even though the source photo is a menu_or_poster.
     const isMenuScale = (visionScoutContentType === "menu_or_poster" || visionScoutContentType === "text") && scoutRecommendedMode !== "new_log";
+
+    if (Array.isArray(req.body.explicitFoodTags) && req.body.explicitFoodTags.length > 0) {
+      req.body.explicitFoodTags.forEach((tag: any, idx: number) => {
+        const existing = visionScoutItems.find((vi: any) => vi.dbId === tag.dbId || vi.keyword === tag.name);
+        if (!existing) {
+          visionScoutItems.push({
+             scoutIndex: 1000 + idx, // unique offset
+             keyword: tag.name,
+             originalName: tag.name,
+             estimatedWeightGrams: tag.weightGrams,
+             source: 'catalog_tag',
+             dbId: tag.dbId,
+             dbSource: 'internal_catalog',
+          });
+        }
+      });
+      addDebugLog(`[Explicit Food Tags] Injected ${req.body.explicitFoodTags.length} catalog tags directly into vision items.`);
+    }
 
     // Clean and consolidate queries first
     const uniqueQueries = buildFoodSearchQuerySet(visionScoutItems || []);
@@ -3163,8 +3182,9 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
             const rawServingScale = itemWeight / truthServingGrams;
             const queryText = [item.originalName, item.keyword, (req as any)?.body?.message].filter(Boolean).join(' ').toLowerCase();
             const hasExplicitFraction = /\b(half|quarter|0\.5|0\.25|0\.75|1\.5|2x|double|3x|portion|bowls?|servings?|pieces?)\b/i.test(queryText);
+            const hasExplicitWeight = /\b\d+(\.\d+)?\s*(g|grams|ml|oz|lbs|kg)\b/i.test(queryText);
 
-            if (!hasExplicitFraction && rawServingScale >= 0.5 && rawServingScale <= 2.5) {
+            if (!hasExplicitFraction && !hasExplicitWeight && rawServingScale >= 0.5 && rawServingScale <= 2.5) {
               servingScale = 1.0;
               addDebugLog(`[Smart Unit Locking] Clamped scale factor ${rawServingScale.toFixed(2)} to 1.0x for branded restaurant item "${item.originalName || item.keyword}" (within standard container margin).`);
             } else {
@@ -6105,10 +6125,16 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               if (itemLower === pOrigLower || itemLower === pKwLower) {
                 return true;
               }
+              if (scoutItemMatchesBreakdownName(p, itemLower) || namesReferToSameFood(itemLower, pOrigLower) || namesReferToSameFood(itemLower, pKwLower)) {
+                return true;
+              }
               return false;
             });
             if (!preMatch && item.scoutIndex === undefined) {
-              preMatch = preCalculatedItems[idx] || null;
+              preMatch = preCalculatedItems.find((p: any) =>
+                scoutItemMatchesBreakdownName(p, item.canonicalDbName || item.name) ||
+                namesReferToSameFood(item.canonicalDbName || item.name, p.originalName || p.keyword)
+              ) || null;
             }
             if (preMatch) {
               const itemLower = (item.canonicalDbName || item.name || "").trim().toLowerCase();
@@ -6125,10 +6151,15 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               const hasStemOverlap = itemStemmed.some((t: string) => pStemmed.includes(t)) ||
                 itemTokens.some((t1: string) => pTokens.some((t2: string) => (t1.length >= 4 && t2.length >= 4 && (t1.startsWith(t2) || t2.startsWith(t1)))));
               const hasTokenOverlap = itemTokens.some((t: string) => pTokens.includes(t)) || hasStemOverlap;
+              const matchesSemantics = scoutItemMatchesBreakdownName(preMatch, itemLower) || namesReferToSameFood(itemLower, pOrigLower) || namesReferToSameFood(itemLower, pKwLower);
               
-              if (!hasKeywordMatch && !hasTokenOverlap && itemLower && (pOrigLower || pKwLower)) {
-                 addDebugLog(`[First-Principles Injection] Anomaly: index=${hasExplicitScoutIndexMatch ? 'agree' : 'no'} but names "${itemLower}" vs "${pOrigLower || pKwLower}" do not match. Aborting cross-wired injection.`);
-                 preMatch = null;
+              if (!hasKeywordMatch && !hasTokenOverlap && !matchesSemantics && itemLower && (pOrigLower || pKwLower)) {
+                if (!hasExplicitScoutIndexMatch) {
+                  addDebugLog(`[First-Principles Injection] Anomaly: index=no but names "${itemLower}" vs "${pOrigLower || pKwLower}" do not match. Aborting cross-wired injection.`);
+                  preMatch = null;
+                } else {
+                  addDebugLog(`[First-Principles Injection] Multilingual/scoutIndex match preserved for "${itemLower}" vs "${pOrigLower || pKwLower}".`);
+                }
               }
             }
 
@@ -6270,14 +6301,17 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             if (itemLower === pOrigLower || itemLower === pKwLower) {
               return true;
             }
-            return false; // Fuzzy token matching was causing ID collisions (e.g. Meatball wrap matching Falafel wrap because they both share "wrap").
+            if (scoutItemMatchesBreakdownName(p, itemLower) || namesReferToSameFood(itemLower, pOrigLower) || namesReferToSameFood(itemLower, pKwLower)) {
+              return true;
+            }
+            return false;
           });
           if (!preMatch && item.scoutIndex === undefined) {
              // Name only — never array position (4106 phantom).
-             preMatch = preCalculatedItems.find((p: any) => namesReferToSameFood(
-               item.canonicalDbName || item.name,
-               p.originalName || p.keyword
-             )) || null;
+             preMatch = preCalculatedItems.find((p: any) =>
+               scoutItemMatchesBreakdownName(p, item.canonicalDbName || item.name) ||
+               namesReferToSameFood(item.canonicalDbName || item.name, p.originalName || p.keyword)
+             ) || null;
           }
           if (preMatch) {
             const itemLower = (item.canonicalDbName || item.name || "").trim().toLowerCase();
@@ -6288,8 +6322,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             const itemTokens = stripPunctForTokens(itemLower).split(/\s+/).filter((t: string) => t.length > 2);
             const pTokens = stripPunctForTokens(pOrigLower + " " + pKwLower).split(/\s+/).filter((t: string) => t.length > 2);
             const hasTokenOverlap = itemTokens.some((t: string) => pTokens.includes(t));
+            const matchesSemantics = scoutItemMatchesBreakdownName(preMatch, itemLower) || namesReferToSameFood(itemLower, pOrigLower) || namesReferToSameFood(itemLower, pKwLower);
+            const hasExplicitScoutIndexMatch = item.scoutIndex !== undefined && item.scoutIndex !== null && preMatch.scoutIndex !== undefined && item.scoutIndex === preMatch.scoutIndex;
             
-            if (!hasKeywordMatch && !hasTokenOverlap && itemLower && (pOrigLower || pKwLower)) {
+            if (!hasKeywordMatch && !hasTokenOverlap && !matchesSemantics && itemLower && (pOrigLower || pKwLower) && !hasExplicitScoutIndexMatch) {
                preMatch = null;
             }
           }
@@ -7143,6 +7179,38 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         }).join(", ");
       }
 
+      if (!parsedData.imageUrl) {
+        if (req.body.photoUrl && typeof req.body.photoUrl === 'string' && req.body.photoUrl.trim() && req.body.photoUrl !== "[base64_image_data_truncated]") {
+          parsedData.imageUrl = req.body.photoUrl;
+        } else if (req.body.imageUrl && typeof req.body.imageUrl === 'string' && req.body.imageUrl.trim() && req.body.imageUrl !== "[base64_image_data_truncated]") {
+          parsedData.imageUrl = req.body.imageUrl;
+        } else if (Array.isArray(req.body.imageUrls) && req.body.imageUrls.length > 0 && req.body.imageUrls[0] && req.body.imageUrls[0] !== "[base64_image_data_truncated]") {
+          parsedData.imageUrl = req.body.imageUrls[0];
+        } else if (Array.isArray(images) && images.length > 0 && images[0] && images[0] !== "[base64_image_data_truncated]") {
+          parsedData.imageUrl = images[0];
+        } else if (image && typeof image === 'string' && image.trim() && image !== "[base64_image_data_truncated]") {
+          parsedData.imageUrl = image;
+        } else if (req.body.activeMeal?.imageUrl && req.body.activeMeal.imageUrl !== "[base64_image_data_truncated]") {
+          parsedData.imageUrl = req.body.activeMeal.imageUrl;
+        } else if (Array.isArray(req.body.activeMeal?.imageUrls) && req.body.activeMeal.imageUrls.length > 0 && req.body.activeMeal.imageUrls[0] !== "[base64_image_data_truncated]") {
+          parsedData.imageUrl = req.body.activeMeal.imageUrls[0];
+        } else if (req.body.activeMeal?.photoUrl && req.body.activeMeal.photoUrl !== "[base64_image_data_truncated]") {
+          parsedData.imageUrl = req.body.activeMeal.photoUrl;
+        }
+      }
+
+      if (!parsedData.imageUrls || parsedData.imageUrls.length === 0 || parsedData.imageUrls[0] === "[base64_image_data_truncated]") {
+        if (Array.isArray(req.body.imageUrls) && req.body.imageUrls.length > 0 && req.body.imageUrls[0] !== "[base64_image_data_truncated]") {
+          parsedData.imageUrls = req.body.imageUrls;
+        } else if (Array.isArray(images) && images.length > 0 && images[0] !== "[base64_image_data_truncated]") {
+          parsedData.imageUrls = images;
+        } else if (parsedData.imageUrl && parsedData.imageUrl !== "[base64_image_data_truncated]") {
+          parsedData.imageUrls = [parsedData.imageUrl];
+        } else if (Array.isArray(req.body.activeMeal?.imageUrls) && req.body.activeMeal.imageUrls.length > 0 && req.body.activeMeal.imageUrls[0] !== "[base64_image_data_truncated]") {
+          parsedData.imageUrls = req.body.activeMeal.imageUrls;
+        }
+      }
+
       if (originalModeIsModify) {
         parsedData.id = req.body.activeMeal?.id;
         if (!parsedData.imageUrl) parsedData.imageUrl = req.body.activeMeal?.imageUrl || req.body.activeMeal?.imageUrls?.[0];
@@ -7189,7 +7257,16 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         });
       }
 
-      if (!hasImage && !parsedData.imageUrl && parsedData.name) {
+      const isResumedFromImageTurn = !!(
+        req.body.portionChoices ||
+        req.body.skipScout ||
+        req.body.photoUrl ||
+        (Array.isArray(req.body.activeScoutItems) && req.body.activeScoutItems.length > 0) ||
+        (Array.isArray(visionScoutItems) && visionScoutItems.length > 0) ||
+        (Array.isArray(history) && history.some((m: any) => m.data?.photoUrl || m.photoUrl || m.data?.hasImage || m.data?.pendingFoodLog?.imageUrl || m.data?.pendingFoodLog?.imageUrls?.length))
+      );
+
+      if (!hasImage && !isResumedFromImageTurn && !parsedData.imageUrl && parsedData.name) {
         try {
           // Remove weight/quantity numbers & units for cleaner search query
           const cleanFoodQuery = parsedData.name.replace(/\d+\s*(g|grams|oz|lbs|kg|servings|pcs|pieces|slice|slices)?/gi, '').trim() || parsedData.name;

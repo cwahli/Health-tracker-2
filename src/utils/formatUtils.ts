@@ -48,13 +48,21 @@ export function formatMessageContent(content: any, msg?: any): string {
       if (parsed.summary) { const s = extractStr(parsed.summary); if (s && !s.startsWith('{')) return s; }
       if (parsed.explanation) { const s = extractStr(parsed.explanation); if (s) return s; }
 
-      // If this message belongs to an agent card that already renders structured UI,
-      // return parsed.text or parsed.summary if extracted, or fallback scratchpad/empty
-      if (msg?.agentType || parsed.riskCategories || parsed.report?.riskCategories) {
-        if (reportObj._internalReasoning && typeof reportObj._internalReasoning === 'string') {
-          return reportObj._internalReasoning;
-        }
+      // If this message belongs to an agent card or has structured data,
+      // never return _internalReasoning or raw structured json to user text.
+      if (msg?.agentType || parsed.riskCategories || parsed.report?.riskCategories || parsed.foodData || parsed.pendingFoodLog || parsed.scoutItems || parsed.dishes) {
         return '';
+      }
+
+      // If it's pure structured JSON that contains _internalReasoning, remove internal fields before printing
+      if (parsed && typeof parsed === 'object') {
+        const cleaned = { ...parsed };
+        delete cleaned._internalReasoning;
+        delete cleaned.scratchpad;
+        delete cleaned.dietitianScratchpad;
+        delete cleaned.scoutScratchpad;
+        if (Object.keys(cleaned).length === 0) return '';
+        return JSON.stringify(cleaned, null, 2);
       }
 
       // Pretty-print JSON with clean spacing if it's arbitrary structured data
@@ -72,6 +80,11 @@ export function formatMessageContent(content: any, msg?: any): string {
       const msgMatch = trimmed.match(/"message"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
       if (msgMatch && msgMatch[1]) {
         return msgMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+      }
+
+      // If raw string starts with _internalReasoning (streaming or broken json), hide it
+      if (trimmed.includes('"_internalReasoning"') || trimmed.includes('_internalReasoning:')) {
+        return '';
       }
 
       // Hide raw unparsed JSON string while message is live/thinking or assigned to an agent

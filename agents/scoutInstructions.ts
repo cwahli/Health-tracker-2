@@ -14,5 +14,5 @@ export function buildVisualScoutPrompt(message: string, imageCount: number): str
   if (isGeneric) {
     return `${baseInstruction} Extract all physical dishes and constituent foods into the hierarchical schema with weightGrams, packGrams, and nutrients.`;
   }
-  return `${baseInstruction} User note: "${cleanMsg}". Extract all physical dishes and constituent foods into the hierarchical schema with weightGrams, packGrams, and nutrients.`;
+  return `${baseInstruction} User note: "${cleanMsg}". If the user note explicitly mentions additional foods consumed (e.g. "I also had 70g of oats"), you MUST extract them as well, even if not visible in the images. Extract all physical dishes and constituent foods into the hierarchical schema with weightGrams, packGrams, and nutrients.`;
 }

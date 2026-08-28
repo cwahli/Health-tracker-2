@@ -151,7 +151,7 @@ export const VisionScoutSchema = z.object({
   diningEnvironment: z.string().nullable().optional(),
 }).passthrough();
 export const scoutSystemInstruction = `System Instruction:
-- HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'.
+- HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'. DO NOT group distinct separate grocery packages or unmixed raw ingredients into a single 'dish'. Each separate barcode package MUST be its own distinct 'dish'.
 - FULL INGESTION & METADATA: Explore ALL provided images completely and extract ALL visible food items, bakery shelves, and packages into dishes[]. 'contentType' is a post-extraction metadata tag and MUST NOT restrict or filter what you extract across images.
 - WEIGHTS & PACKAGES: Output 'weightGrams' (consumed) and 'packGrams' (container total).
 - DIRECT OCR: Transcribe nutrition labels into 'rawNutritionLabel' for packaged items with labels.

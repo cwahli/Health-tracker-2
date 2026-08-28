@@ -940,3 +940,41 @@ export async function recordSyncEvent(evt: {
   }
 }
 
+
+export async function searchFoodCatalog(query: string, limitCount = 5): Promise<any[]> {
+  if (!isSupabaseConfigured) {
+    return [];
+  }
+  await ensureFoodCatalogSchema();
+  try {
+    const q = query.toLowerCase().trim();
+    if (q.length < 2) return [];
+    
+    // First try food_items
+    const { data: foodData, error: foodError } = await supabaseAdmin
+      .from('food_items')
+      .select('*')
+      .ilike('display_name', `%${q}%`)
+      .limit(limitCount);
+      
+    // Then try dish_cache
+    const { data: dishData, error: dishError } = await supabaseAdmin
+      .from('dish_cache')
+      .select('*')
+      .ilike('display_name', `%${q}%`)
+      .limit(limitCount);
+      
+    const results = [];
+    if (!foodError && foodData) {
+      results.push(...foodData.map(f => ({ ...f, type: 'food' })));
+    }
+    if (!dishError && dishData) {
+      results.push(...dishData.map(d => ({ ...d, type: 'dish' })));
+    }
+    
+    return results.sort((a, b) => (b.confidence || 0) - (a.confidence || 0)).slice(0, limitCount);
+  } catch (err) {
+    console.error('[searchFoodCatalog] Exception:', err);
+    return [];
+  }
+}
