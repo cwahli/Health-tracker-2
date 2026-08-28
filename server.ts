@@ -1420,6 +1420,33 @@ app.use((req, res, next) => {
     res.json({ status: "ok" });
   });
 
+  app.post("/api/auth/check-email-status", async (req, res) => {
+    const email = (req.body?.email || '').trim().toLowerCase();
+    if (!email) {
+      return res.json({ exists: false, confirmed: false });
+    }
+    try {
+      const { isSupabaseConfigured, supabaseAdmin } = await import('./supabaseAdmin.js');
+      if (!isSupabaseConfigured || !supabaseAdmin) {
+        return res.json({ exists: false, confirmed: false });
+      }
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+      if (error) {
+        console.warn('[auth/check-email-status] Error listing users:', error.message);
+        return res.json({ exists: false, confirmed: false, error: error.message });
+      }
+      const user = data.users.find((u: any) => u.email?.toLowerCase() === email);
+      if (!user) {
+        return res.json({ exists: false, confirmed: false });
+      }
+      const isConfirmed = Boolean(user.email_confirmed_at || user.confirmed_at);
+      return res.json({ exists: true, confirmed: isConfirmed, userId: user.id });
+    } catch (err: any) {
+      console.warn('[auth/check-email-status] Exception:', err?.message || err);
+      return res.json({ exists: false, confirmed: false, error: String(err?.message || err) });
+    }
+  });
+
 // Robust API key resolver supporting standard GEMINI_API_KEY, Google Cloud GOOGLE_API_KEY, or API_KEY
 export const getGeminiApiKey = (): string => {
   return (

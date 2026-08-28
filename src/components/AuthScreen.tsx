@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { translations } from '../utils/translations';
-import { Activity, Mail, AlertCircle, RefreshCw, KeyRound } from 'lucide-react';
+import { Activity, Mail, AlertCircle, RefreshCw, KeyRound, CheckCircle } from 'lucide-react';
 import { auth, googleProvider, facebookProvider, twitterProvider } from '../firebase';
 import { supabase, isSupabaseConfigured, getAuthRedirectTo, cleanupAuthUrlParams } from '../utils/supabaseClient';
 import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, updateProfile, onAuthStateChanged, User, signOut as fbSignOut } from 'firebase/auth';
@@ -9,6 +9,23 @@ import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPass
 interface AuthScreenProps {
   onLogin: (profile: UserProfile) => void;
 }
+
+const resolveUserDisplayName = (u: any, explicitNick?: string): string => {
+  const cleanEmail = (u?.email || '').toLowerCase().trim();
+  const cached = cleanEmail ? localStorage.getItem(`signup_nickname_${cleanEmail}`) : null;
+  const chosen = (
+    explicitNick ||
+    u?.user_metadata?.nickname ||
+    u?.user_metadata?.full_name ||
+    u?.user_metadata?.name ||
+    u?.user_metadata?.displayName ||
+    cached ||
+    u?.displayName ||
+    (cleanEmail ? cleanEmail.split('@')[0] : '') ||
+    'User'
+  ).trim();
+  return chosen;
+};
 
 export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const [email, setEmail] = useState('');
@@ -18,6 +35,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const [status, setStatus] = useState<'idle' | 'sending' | 'pending_verification'>('idle');
   const [language, setLanguage] = useState<'en' | 'fr' | 'zh' | 'id'>('en');
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [selectedDemoType, setSelectedDemoType] = useState<'empty' | 'average' | 'complex'>('average');
 
   const t = translations[language] || translations.en;
@@ -26,6 +44,43 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     let sbUnsub: (() => void) | undefined;
 
     if (isSupabaseConfigured) {
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tokenHash = urlParams.get('token_hash');
+        const type = urlParams.get('type') as any;
+        const code = urlParams.get('code');
+
+        if (tokenHash && type) {
+          supabase.auth.verifyOtp({ token_hash: tokenHash, type }).then(({ data }) => {
+            if (data?.session?.user) {
+              cleanupAuthUrlParams();
+              const u = data.session.user;
+              handleSuccessfulLogin({
+                uid: u.id,
+                email: u.email || '',
+                displayName: resolveUserDisplayName(u, nickname),
+                photoURL: u.user_metadata?.avatar_url || '',
+                emailVerified: true
+              } as any);
+            }
+          });
+        } else if (code) {
+          supabase.auth.exchangeCodeForSession(code).then(({ data }) => {
+            if (data?.session?.user) {
+              cleanupAuthUrlParams();
+              const u = data.session.user;
+              handleSuccessfulLogin({
+                uid: u.id,
+                email: u.email || '',
+                displayName: resolveUserDisplayName(u, nickname),
+                photoURL: u.user_metadata?.avatar_url || '',
+                emailVerified: true
+              } as any);
+            }
+          });
+        }
+      }
+
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
           cleanupAuthUrlParams();
@@ -33,7 +88,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
           handleSuccessfulLogin({
             uid: u.id,
             email: u.email || '',
-            displayName: u.user_metadata?.nickname || u.user_metadata?.full_name || u.email?.split('@')[0] || '',
+            displayName: resolveUserDisplayName(u, nickname),
             photoURL: u.user_metadata?.avatar_url || '',
             emailVerified: true
           } as any);
@@ -47,7 +102,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
           handleSuccessfulLogin({
             uid: u.id,
             email: u.email || '',
-            displayName: u.user_metadata?.nickname || u.user_metadata?.full_name || u.email?.split('@')[0] || '',
+            displayName: resolveUserDisplayName(u, nickname),
             photoURL: u.user_metadata?.avatar_url || '',
             emailVerified: true
           } as any);
@@ -81,7 +136,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
   const handleSuccessfulLogin = (user: User | any) => {
     const isDemo = user.email?.toLowerCase().trim() === 'demo@healthcockpit.com';
-    let resolvedNickname = nickname || user.displayName || user.email?.split('@')[0] || 'User';
+    let resolvedNickname = resolveUserDisplayName(user, nickname);
     let resolvedAge = '' as any;
     let resolvedGender = 'Unknown';
     let resolvedWeight = '' as any;
@@ -115,6 +170,10 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
     const isCwah = user.email?.toLowerCase().includes('cwah.liu') || user.email?.toLowerCase().includes('chiwah.liu');
     const canonicalEmail = isCwah ? 'cwah.liu@gmail.com' : (user.email || '');
+
+    if (canonicalEmail && resolvedNickname && !isDemo) {
+      localStorage.setItem(`signup_nickname_${canonicalEmail.toLowerCase().trim()}`, resolvedNickname);
+    }
 
     const profile: UserProfile = {
       uid: user.uid || user.id,
@@ -220,6 +279,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     e.preventDefault();
     if (!email || !password) return;
     setErrorMsg('');
+    setSuccessMsg('');
     setStatus('sending');
 
     const cleanEmail = email.trim().toLowerCase();
@@ -250,12 +310,47 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     try {
       if (isSupabaseConfigured) {
         if (isSignUp) {
+          // Check if email already exists on Supabase Auth via server check
+          let statusRes = { exists: false, confirmed: false };
+          try {
+            const resp = await fetch('/api/auth/check-email-status', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: cleanEmail })
+            });
+            statusRes = await resp.json();
+          } catch (e) {
+            console.warn('Failed to check email status:', e);
+          }
+
+          if (statusRes.exists) {
+            if (statusRes.confirmed) {
+              setErrorMsg('This email is already registered. Sign in.');
+              setIsSignUp(false);
+              setStatus('idle');
+              return;
+            } else {
+              setErrorMsg('An account with this email already exists but is not verified yet. Please check your inbox or resend the verification link.');
+              setIsSignUp(false);
+              setStatus('idle');
+              return;
+            }
+          }
+
+          const cleanNick = (nickname || cleanEmail.split('@')[0] || 'User').trim();
+          localStorage.setItem(`signup_nickname_${cleanEmail}`, cleanNick);
+
           const { data, error } = await supabase.auth.signUp({
             email: cleanEmail,
             password: password,
             options: {
               emailRedirectTo: getAuthRedirectTo(),
-              data: { nickname: nickname || cleanEmail.split('@')[0] }
+              data: {
+                nickname: cleanNick,
+                full_name: cleanNick,
+                name: cleanNick,
+                displayName: cleanNick
+              }
             }
           });
           if (error) throw error;
@@ -263,32 +358,38 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             handleSuccessfulLogin({
               uid: data.session.user.id,
               email: data.session.user.email || cleanEmail,
-              displayName: nickname || cleanEmail.split('@')[0],
+              displayName: cleanNick,
               photoURL: '',
               emailVerified: true
             } as any);
-          } else if (data.user && !data.session) {
-            setStatus('pending_verification');
-          } else {
-            handleSuccessfulLogin({
-              uid: data.user?.id || 'sb_' + Date.now(),
-              email: cleanEmail,
-              displayName: nickname || cleanEmail.split('@')[0],
-              photoURL: '',
-              emailVerified: true
-            } as any);
+          } else if (data.user) {
+            if (Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+              setErrorMsg('This email is already registered. Sign in.');
+              setIsSignUp(false);
+              setStatus('idle');
+            } else {
+              setStatus('pending_verification');
+              setSuccessMsg("We've sent a verification link to your email.");
+            }
           }
         } else {
           const { data, error } = await supabase.auth.signInWithPassword({
             email: cleanEmail,
             password: password
           });
-          if (error) throw error;
+          if (error) {
+            if (error.message?.toLowerCase().includes('email not confirmed')) {
+              setErrorMsg('Your email is registered but not verified yet. Please check your inbox or click Resend Verification Link below.');
+              setStatus('pending_verification');
+              return;
+            }
+            throw error;
+          }
           if (data.user) {
             handleSuccessfulLogin({
               uid: data.user.id,
               email: data.user.email || cleanEmail,
-              displayName: data.user.user_metadata?.nickname || data.user.user_metadata?.full_name || cleanEmail.split('@')[0],
+              displayName: resolveUserDisplayName(data.user, nickname),
               photoURL: data.user.user_metadata?.avatar_url || '',
               emailVerified: true
             } as any);
@@ -337,22 +438,58 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       return;
     }
     setErrorMsg('');
+    setSuccessMsg('');
     setStatus('sending');
     const cleanEmail = email.trim().toLowerCase();
     try {
       if (isSupabaseConfigured) {
-        const { error } = await supabase.auth.resend({
-          type: 'signup',
-          email: cleanEmail,
-          options: {
-            emailRedirectTo: getAuthRedirectTo()
-          }
-        });
-        if (error) throw error;
-        setErrorMsg('Verification link resent! Check your inbox.');
+        let statusRes = { exists: false, confirmed: false };
+        try {
+          const resp = await fetch('/api/auth/check-email-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: cleanEmail })
+          });
+          statusRes = await resp.json();
+        } catch (e) {}
+
+        if (statusRes.exists && statusRes.confirmed) {
+          setErrorMsg('This account is already verified. Please sign in.');
+          setIsSignUp(false);
+          setStatus('idle');
+          return;
+        }
+
+        if (statusRes.exists && !statusRes.confirmed) {
+          const { error } = await supabase.auth.resend({
+            type: 'signup',
+            email: cleanEmail,
+            options: {
+              emailRedirectTo: getAuthRedirectTo()
+            }
+          });
+          if (error) throw error;
+          setSuccessMsg('Verification link resent! Check your inbox.');
+          setStatus('pending_verification');
+          return;
+        }
+
+        if (!statusRes.exists) {
+          setErrorMsg('No account found with this email. Please sign up.');
+          setIsSignUp(true);
+          setStatus('idle');
+          return;
+        }
       } else if (auth.currentUser) {
+        if (auth.currentUser.emailVerified) {
+          setErrorMsg('This account is already verified. Please sign in.');
+          setStatus('idle');
+          return;
+        }
         await sendEmailVerification(auth.currentUser);
-        setErrorMsg('Verification link resent via Firebase! Check your inbox.');
+        setSuccessMsg('Verification link resent via Firebase! Check your inbox.');
+        setStatus('pending_verification');
+        return;
       }
       setStatus('pending_verification');
     } catch (err: any) {
@@ -368,6 +505,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       return;
     }
     setErrorMsg('');
+    setSuccessMsg('');
     setStatus('sending');
     const cleanEmail = email.trim().toLowerCase();
     try {
@@ -376,7 +514,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
           redirectTo: getAuthRedirectTo()
         });
         if (error) throw error;
-        setErrorMsg('Password reset link sent to your email.');
+        setSuccessMsg('Password reset link sent to your email.');
       } else {
         setErrorMsg('Password reset via email is configured for Supabase.');
       }
@@ -389,28 +527,98 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   };
 
   const handleCheckVerification = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    setStatus('sending');
+
+    const cleanEmail = email.trim().toLowerCase();
+
     if (isSupabaseConfigured) {
-      const { data: { session } } = await supabase.auth.getSession();
+      // 1. Try to get active session in memory
+      let session = (await supabase.auth.getSession()).data.session;
+
+      // 2. If no active session in memory, scan localStorage for Supabase tokens written by another tab on same origin
+      if (!session?.user) {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('sb-') && key.endsWith('-auth-token'))) {
+            try {
+              const raw = localStorage.getItem(key);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed.access_token && parsed.refresh_token) {
+                  const setRes = await supabase.auth.setSession({
+                    access_token: parsed.access_token,
+                    refresh_token: parsed.refresh_token
+                  });
+                  if (setRes.data?.session?.user) {
+                    session = setRes.data.session;
+                    break;
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn("[Auth] Failed to restore token from localStorage:", e);
+            }
+          }
+        }
+      }
+
+      // 3. If still no session, check getUser()
+      if (!session?.user) {
+        try {
+          const userRes = await supabase.auth.getUser();
+          if (userRes.data?.user) {
+            session = (await supabase.auth.getSession()).data.session || ({ user: userRes.data.user } as any);
+          }
+        } catch (e) {}
+      }
+
+      // 4. If we have a verified user session on this origin, enter the app immediately as that user
       if (session?.user) {
         cleanupAuthUrlParams();
+        const u = session.user;
         handleSuccessfulLogin({
-          uid: session.user.id,
-          email: session.user.email || '',
-          displayName: session.user.user_metadata?.nickname || session.user.email?.split('@')[0],
-          photoURL: '',
+          uid: u.id,
+          email: u.email || cleanEmail,
+          displayName: resolveUserDisplayName(u, nickname),
+          photoURL: u.user_metadata?.avatar_url || '',
           emailVerified: true
         } as any);
         return;
       }
+
+      // 5. If no local session exists, check if email was confirmed externally (e.g. verified in a different browser)
+      if (cleanEmail) {
+        try {
+          const resp = await fetch('/api/auth/check-email-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: cleanEmail })
+          });
+          const statusRes = await resp.json();
+          if (statusRes.confirmed) {
+            setIsSignUp(false);
+            setStatus('idle');
+            setSuccessMsg('Email is verified! Please enter your password to sign in.');
+            return;
+          }
+        } catch (e) {
+          console.warn('Failed to check email status:', e);
+        }
+      }
     }
+
     if (auth.currentUser) {
       await auth.currentUser.reload();
       if (auth.currentUser.emailVerified) {
         handleSuccessfulLogin(auth.currentUser);
-      } else {
-        setErrorMsg('Email not verified yet. Please check your inbox.');
+        return;
       }
     }
+
+    setErrorMsg('Not verified yet. Please check your inbox or click Resend Verification Link below.');
+    setStatus('pending_verification');
   };
 
   const handleThirdPartyLogin = async (provider: 'Google' | 'X' | 'Facebook') => {
@@ -529,6 +737,13 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               <Mail className="w-3.5 h-3.5" />
               Resend Verification Link
             </button>
+
+            {successMsg && (
+              <div className="w-full mt-2 p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-2 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                <p>{successMsg}</p>
+              </div>
+            )}
 
             {errorMsg && (
               <div className="w-full mt-2 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-xl flex items-center gap-2 text-rose-700 dark:text-rose-400 text-xs font-semibold">
@@ -672,6 +887,13 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                 isSignUp ? 'Sign Up' : 'Continue with Email'
               )}
             </button>
+
+            {successMsg && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-2 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                <p>{successMsg}</p>
+              </div>
+            )}
 
             {errorMsg && (
               <div className="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-xl flex items-center gap-2 text-rose-700 dark:text-rose-400 text-xs font-semibold">

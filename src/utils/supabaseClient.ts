@@ -46,6 +46,8 @@ export const cleanupAuthUrlParams = (): void => {
     hash.includes('refresh_token=') ||
     hash.includes('error_description=') ||
     search.includes('code=') ||
+    search.includes('token_hash=') ||
+    search.includes('type=') ||
     search.includes('error=')
   ) {
     const cleanUrl = window.location.pathname;

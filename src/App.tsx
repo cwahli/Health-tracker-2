@@ -98,7 +98,7 @@ function firestoreReadGuard(label: string, docCount: number = 1): boolean {
   return true;
 }
 import { runCleanupMigration } from './utils/migrationTask';
-import { supabase, isSupabaseConfigured } from './utils/supabaseClient';
+import { supabase, isSupabaseConfigured, cleanupAuthUrlParams } from './utils/supabaseClient';
 import { syncLogsWithTimeBuckets, fetchAllConsolidatedLogs, subscribeToSupabaseLogs, upsertProfileToSupabase, mergeByRecency, mergeActions, mergeBenefits, mergeFoodIdeas, mergeReports, mergeProfiles, mergeBiomarkerHistory, mergeDeleteMaps, supabaseRowToFoodLog, supabaseRowToBiomarkerLog } from "./utils/syncUtils";
 import { mergeFoodLogsDeduped, rehydrateFoodImagesFromDonors, foodLogFingerprint } from "./utils/foodLogDedupe";
 import { isUsableImageUrl } from "./utils/foodImageSources";
@@ -3114,7 +3114,154 @@ export default function App() {
       setIsInitialDataLoading(false);
     }
   };
-  // Initialize from Firebase Auth and Firestore on mount
+  const loadUserData = async (uid: string, email: string, displayName?: string, photoURL?: string) => {
+    const newEmail = email.toLowerCase().trim();
+    if (!newEmail) {
+      setIsAuthChecking(false);
+      return;
+    }
+    localStorage.setItem('last_active_email', newEmail);
+    const storageKey = getStorageKey(newEmail);
+    
+    const parsedLocal = await get(storageKey);
+    const cachedSignupNick = localStorage.getItem(`signup_nickname_${newEmail}`);
+    const resolvedNickname = (
+      displayName ||
+      cachedSignupNick ||
+      parsedLocal?.profile?.nickname ||
+      newEmail.split('@')[0] ||
+      'User'
+    ).trim();
+    
+    let loadedProfile: UserProfile | null = null;
+    let loadedFoods: FoodLog[] = [];
+    let loadedBiomarkers = {};
+    let loadedHistory: BiomarkerLog[] = [];
+    let loadedActions: HealthAction[] = [];
+    let loadedBenefits: DailyBenefit[] = [];
+    let loadedReport: RecommendationReport | null = null;
+
+    if (parsedLocal) {
+      loadedProfile = parsedLocal.profile || null;
+      const deletedFoodMap = loadedProfile?.deletedFoodLogIds || {};
+      const deletedBioMap = loadedProfile?.deletedBiomarkerLogIds || {};
+      loadedFoods = (parsedLocal.foodLogs || []).filter((f: any) => f.sync_state !== 'delete' && !deletedFoodMap[f.id]);
+      loadedHistory = (parsedLocal.biomarkerHistory || []).filter((b: any) => b.sync_state !== 'delete' && !deletedBioMap[b.id]);
+      loadedBiomarkers = parsedLocal.biomarkers || {};
+      loadedActions = parsedLocal.actions || [];
+      loadedBenefits = parsedLocal.dailyBenefits || [];
+      loadedReport = parsedLocal.report || null;
+
+      const purged = purgeHallucinatedAndCorruptedData(loadedHistory, loadedBiomarkers, loadedProfile);
+      if (purged.purgedCount > 0) {
+        loadedHistory = purged.biomarkerHistory;
+        loadedBiomarkers = purged.biomarkers;
+        if (loadedProfile) {
+          loadedProfile = {
+            ...loadedProfile,
+            deletedBiomarkerLogIds: {
+              ...(loadedProfile.deletedBiomarkerLogIds || {}),
+              ...(purged.profileUpdates.deletedBiomarkerLogIds || {})
+            }
+          };
+        }
+      }
+    }
+
+    const isDemoUser = newEmail === 'demo@healthcockpit.com';
+    if (isDemoUser && (!loadedProfile || loadedHistory.length === 0)) {
+      const demoType = (localStorage.getItem('demo_profile_type') || 'average') as DemoProfileType;
+      loadedProfile = getDemoProfile(demoType);
+      loadedFoods = getDemoFoodLogs(demoType);
+      loadedHistory = getDemoBiomarkerHistory(demoType);
+      if (demoType === 'empty') {
+        loadedBiomarkers = {};
+      } else if (demoType === 'complex') {
+        loadedBiomarkers = { fasting_glucose: 131, hba1c: 7.1, total_cholesterol: 228, ldl: 151, hdl: 38, triglycerides: 198, egfr: 64, vitamin_d: 19, wbc: 6.9, hemoglobin: 14.1, bmi: 30.2 };
+      } else {
+        loadedBiomarkers = { fasting_glucose: 91, hba1c: 5.3, total_cholesterol: 208, ldl: 132, hdl: 46, triglycerides: 155, egfr: 94, vitamin_d: 22, wbc: 6.2, hemoglobin: 14.6, bmi: 23.4 };
+      }
+      loadedReport = getDemoReport(demoType);
+      loadedActions = loadedReport.actions || [];
+      loadedBenefits = loadedReport.dailyBenefits || [];
+    }
+
+    if (!loadedProfile) {
+      loadedProfile = {
+        nickname: resolvedNickname,
+        photoUrl: photoURL || '',
+        email: newEmail,
+        age: '' as any,
+        ethnicity: 'Unknown',
+        weight: '' as any,
+        height: '' as any,
+        gender: 'Unknown',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        language: 'en',
+        userType: 'Standard',
+        topNutrientsToMonitor: PRIMARY_NUTRIENTS
+      };
+    } else {
+      loadedProfile.email = newEmail;
+      if (resolvedNickname && (!loadedProfile.nickname || loadedProfile.nickname === 'Healthy User' || loadedProfile.nickname === 'User')) {
+        loadedProfile.nickname = resolvedNickname;
+      }
+      if (photoURL && !loadedProfile.photoUrl) loadedProfile.photoUrl = photoURL;
+      if (!loadedProfile.topNutrientsToMonitor) {
+        loadedProfile.topNutrientsToMonitor = PRIMARY_NUTRIENTS;
+      }
+    }
+    if (loadedProfile.nickname && loadedProfile.nickname !== 'Healthy User' && loadedProfile.nickname !== 'User') {
+      localStorage.setItem(`signup_nickname_${newEmail}`, loadedProfile.nickname);
+    }
+    loadedProfile.lastLogin = new Date().toISOString();
+
+    const bundle = {
+      profile: loadedProfile,
+      foodLogs: loadedFoods,
+      biomarkers: loadedBiomarkers,
+      biomarkerHistory: loadedHistory,
+      actions: loadedActions,
+      dailyBenefits: loadedBenefits,
+      foodIdeas,
+      report: loadedReport
+    };
+    await set(storageKey, bundle);
+
+    setProfile(loadedProfile);
+    setFoodLogs(loadedFoods);
+    setBiomarkers(loadedBiomarkers);
+    setBiomarkerHistory(loadedHistory);
+    setActions(loadedActions);
+    setDailyBenefits(loadedBenefits);
+    setReport(loadedReport);
+
+    setIsAuthChecking(false);
+
+    if (!isDemoUser) {
+      const hasSyncedThisSession = sessionStorage.getItem('synced_' + uid) === 'true';
+      const isLocalDataEmpty = loadedFoods.length === 0 && loadedHistory.length === 0;
+
+      if (!hasSyncedThisSession) {
+        sessionStorage.setItem('synced_' + uid, 'true');
+        checkForDbChanges(uid, isLocalDataEmpty).catch(err => console.warn("[Auth] Background sync error:", err)).finally(() => {
+          setIsInitialDataLoading(false);
+        });
+      } else if (isLocalDataEmpty) {
+        checkForDbChanges(uid, true).catch(err => console.warn("[Auth] Background sync error:", err)).finally(() => {
+          setIsInitialDataLoading(false);
+        });
+      } else {
+        setSyncState('synced');
+        setIsInitialDataLoading(false);
+      }
+    } else {
+      setSyncState('synced');
+      setIsInitialDataLoading(false);
+    }
+  };
+
+  // Initialize from Firebase Auth / Supabase Auth on mount
   useEffect(() => {
     let unsubs: (() => void)[] = [];
     
@@ -3131,7 +3278,6 @@ export default function App() {
         for (const key of legacyKeys) {
           try {
             const existingIdbVal = await get(key);
-            // Only migrate if IndexedDB doesn't ALREADY have data for this key
             if (!existingIdbVal) {
               const val = localStorage.getItem(key);
               if (val) {
@@ -3139,7 +3285,6 @@ export default function App() {
                 await set(key, parsed);
               }
             }
-            // Always remove the legacy heavy key from localStorage so stale copies never overwrite IndexedDB
             localStorage.removeItem(key);
           } catch (e) {
             console.error('Error migrating storage key', key, e);
@@ -3151,421 +3296,154 @@ export default function App() {
       console.error('Error scanning localStorage for legacy data', e);
     }
 
-    // Safety fallback: If Firebase auth takes too long to initialize (e.g. offline and indexedDB locked),
-    // we stop the spinner so the user can interact with the app.
-    const fallbackTimeout = setTimeout(async () => {
-      try {
-        console.warn("Auth check timed out. Falling back to local state.");
-        
-        const lastActiveEmail = localStorage.getItem('last_active_email') || 'cwah.liu@gmail.com';
-        const storageKey = getStorageKey(lastActiveEmail);
-        const parsedLocal = await get(storageKey);
-        if (parsedLocal) {
-          try {
-            if (parsedLocal.profile) setProfile(sanitizeProfile(parsedLocal.profile, lastActiveEmail));
-            if (parsedLocal.foodLogs) setFoodLogs(parsedLocal.foodLogs);
-            if (parsedLocal.biomarkers) setBiomarkers(parsedLocal.biomarkers);
-            if (parsedLocal.biomarkerHistory) setBiomarkerHistory(parsedLocal.biomarkerHistory);
-            if (parsedLocal.actions) setActions(parsedLocal.actions);
-            if (parsedLocal.dailyBenefits) setDailyBenefits(parsedLocal.dailyBenefits);
-            if (parsedLocal.report) setReport(parsedLocal.report);
-          } catch (e) {}
-        }
-        setSyncState('local');
-      } catch (err) {
-        console.error("Fallback timeout error:", err);
-      } finally {
-        setIsAuthChecking(false);
-      }
-    }, 12000);
+    const fallbackTimeout = setTimeout(() => {
+      console.warn("Auth check timed out.");
+      setIsAuthChecking(false);
+    }, 10000);
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      clearTimeout(fallbackTimeout);
-      const emailLower = user?.email?.toLowerCase().trim() || '';
-      if (emailLower.includes('john@mail.com') || emailLower.includes('john@gmail.com')) {
-        try {
-          await fbSignOut(auth);
-        } catch (e) {}
-        localStorage.removeItem('last_active_email');
-        setProfile(null);
-        setIsAuthChecking(false);
-        return;
-      }
-      if (user && user.email) { runCleanupMigration(user.uid, user.email).catch(console.error); }
-      unsubs.forEach(u => u());
-      unsubs = [];
-      
-      try {
-        // Immediately reset and blank out current user's React states
-        // to prevent any "glimpse" of previous account data during transition.
-        setProfile(null);
-        setFoodLogs([]);
-        setBiomarkers({});
-        setBiomarkerHistory([]);
-        setActions([]);
-        setDailyBenefits([]);
-        setReport(null);
+    const resolveSbNick = (u: any) => {
+      const uEmail = (u?.email || '').toLowerCase().trim();
+      const cached = uEmail ? localStorage.getItem(`signup_nickname_${uEmail}`) : null;
+      return (
+        u?.user_metadata?.nickname ||
+        u?.user_metadata?.full_name ||
+        u?.user_metadata?.name ||
+        u?.user_metadata?.displayName ||
+        cached ||
+        (uEmail ? uEmail.split('@')[0] : '') ||
+        'User'
+      ).trim();
+    };
 
-        if (user) {
-          const newEmail = user.email?.toLowerCase().trim() || '';
-          const storageKey = getStorageKey(newEmail);
-          
-          const parsedLocal = await get(storageKey);
-          
-          let loadedProfile: UserProfile | null = null;
-          let loadedFoods: FoodLog[] = [];
-          let loadedBiomarkers = {};
-          let loadedHistory: BiomarkerLog[] = [];
-          let loadedActions: HealthAction[] = [];
-          let loadedBenefits: DailyBenefit[] = [];
-          let loadedReport: RecommendationReport | null = null;
+    const initializeAuthAndData = async () => {
+      // Step A: Process Supabase Auth callback params and check Supabase session
+      if (isSupabaseConfigured) {
+        if (typeof window !== 'undefined') {
+          const urlParams = new URLSearchParams(window.location.search);
+          const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+          const tokenHash = urlParams.get('token_hash') || hashParams.get('token_hash');
+          const type = (urlParams.get('type') || hashParams.get('type')) as any;
+          const code = urlParams.get('code') || hashParams.get('code');
 
-          if (parsedLocal) {
-            loadedProfile = parsedLocal.profile || null;
-            const deletedFoodMap = loadedProfile?.deletedFoodLogIds || {};
-            const deletedBioMap = loadedProfile?.deletedBiomarkerLogIds || {};
-            // Filter out deleted entries so tombstoned items are never re-hydrated on refresh
-            loadedFoods = (parsedLocal.foodLogs || []).filter((f: any) => f.sync_state !== 'delete' && !deletedFoodMap[f.id]);
-            loadedHistory = (parsedLocal.biomarkerHistory || []).filter((b: any) => b.sync_state !== 'delete' && !deletedBioMap[b.id]);
-            loadedBiomarkers = parsedLocal.biomarkers || {};
-            loadedActions = parsedLocal.actions || [];
-            loadedBenefits = parsedLocal.dailyBenefits || [];
-            loadedReport = parsedLocal.report || null;
-
-            const purged = purgeHallucinatedAndCorruptedData(loadedHistory, loadedBiomarkers, loadedProfile);
-            if (purged.purgedCount > 0) {
-              loadedHistory = purged.biomarkerHistory;
-              loadedBiomarkers = purged.biomarkers;
-              if (loadedProfile) {
-                loadedProfile = {
-                  ...loadedProfile,
-                  deletedBiomarkerLogIds: {
-                    ...(loadedProfile.deletedBiomarkerLogIds || {}),
-                    ...(purged.profileUpdates.deletedBiomarkerLogIds || {})
-                  }
-                };
-              }
-            }
-            
-            // If we loaded a lightweight fallback, show a warning but do NOT auto-sync.
-            // The user must manually click "Sync Now" to pull cloud data.
-            // Auto-syncing here was causing large Firebase read spikes on page load.
-            if (parsedLocal._isLightweightFallback) {
-              console.warn("[Storage] Lightweight local fallback detected. Full data available via manual Sync Now.");
-            }
-          }
-
-          const isDemoUser = newEmail === 'demo@healthcockpit.com';
-          if (isDemoUser && (!loadedProfile || loadedHistory.length === 0)) {
-            const demoType = (localStorage.getItem('demo_profile_type') || 'average') as DemoProfileType;
-            loadedProfile = getDemoProfile(demoType);
-            loadedFoods = getDemoFoodLogs(demoType);
-            loadedHistory = getDemoBiomarkerHistory(demoType);
-            if (demoType === 'empty') {
-              loadedBiomarkers = {};
-            } else if (demoType === 'complex') {
-              loadedBiomarkers = { fasting_glucose: 131, hba1c: 7.1, total_cholesterol: 228, ldl: 151, hdl: 38, triglycerides: 198, egfr: 64, vitamin_d: 19, wbc: 6.9, hemoglobin: 14.1, bmi: 30.2 };
-            } else {
-              loadedBiomarkers = { fasting_glucose: 91, hba1c: 5.3, total_cholesterol: 208, ldl: 132, hdl: 46, triglycerides: 155, egfr: 94, vitamin_d: 22, wbc: 6.2, hemoglobin: 14.6, bmi: 23.4 };
-            }
-            loadedReport = getDemoReport(demoType);
-            loadedActions = loadedReport.actions || [];
-            loadedBenefits = loadedReport.dailyBenefits || [];
-          }
-
-          if (!loadedProfile) {
-            loadedProfile = {
-              nickname: user.displayName || '',
-              photoUrl: user.photoURL || '',
-              email: user.email || '',
-              age: '' as any,
-              ethnicity: 'Unknown',
-              weight: '' as any,
-              height: '' as any,
-              gender: 'Unknown',
-              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-              language: 'en',
-              topNutrientsToMonitor: PRIMARY_NUTRIENTS
-            };
-          } else {
-            loadedProfile.email = user.email || '';
-            if (!loadedProfile.topNutrientsToMonitor) {
-              loadedProfile.topNutrientsToMonitor = PRIMARY_NUTRIENTS;
-            }
-          }
-          loadedProfile.lastLogin = new Date().toISOString();
-
-          // Save the loaded state to local storage immediately
-          const bundle = {
-            profile: loadedProfile,
-            foodLogs: loadedFoods,
-            biomarkers: loadedBiomarkers,
-            biomarkerHistory: loadedHistory,
-            actions: loadedActions,
-            dailyBenefits: loadedBenefits,
-            foodIdeas,
-            report: loadedReport
-          };
-          await set(storageKey, bundle);
-
-          // Update React states
-          setProfile(loadedProfile);
-          setFoodLogs(loadedFoods);
-          setBiomarkers(loadedBiomarkers);
-          setBiomarkerHistory(loadedHistory);
-          setActions(loadedActions);
-          setDailyBenefits(loadedBenefits);
-          setReport(loadedReport);
-          
-          setIsAuthChecking(false);
-
-          // If signed in as a non-demo user, trigger background cloud sync only when needed
-          const uid = user.uid;
-          if (!isDemoUser) {
-            const hasSyncedThisSession = sessionStorage.getItem('synced_' + uid) === 'true';
-            const isLocalDataEmpty = loadedFoods.length === 0 && loadedHistory.length === 0;
-
-            if (!hasSyncedThisSession) {
-              // First time opening the app this session: sync only what is needed in background
-              console.log("[Auth] Signed in user detected. Checking for updates in background...");
-              sessionStorage.setItem('synced_' + uid, 'true');
-              checkForDbChanges(uid, isLocalDataEmpty).catch(err => console.warn("[Auth] Background sync error:", err)).finally(() => {
-                setIsInitialDataLoading(false);
-              });
-            } else if (isLocalDataEmpty) {
-              // Local cache is completely empty: perform a restore
-              console.log("[Auth] Local cache empty, restoring from cloud...");
-              checkForDbChanges(uid, true).catch(err => console.warn("[Auth] Background sync error:", err)).finally(() => {
-                setIsInitialDataLoading(false);
-              });
-            } else {
-              // Already loaded from local storage and synced in this session: skip re-fetching
-              setSyncState('synced');
-              setIsInitialDataLoading(false);
-            }
-          } else {
-            setSyncState('synced');
-            setIsInitialDataLoading(false);
-          }
-          
-          // A. One-Time Legacy Migration — only runs during an explicit manual sync session.
-          // This prevents automatic Firestore reads on every page load.
-          if (loadedProfile && sessionStorage.getItem('sessionSyncTriggered') === 'true' && !isDemoUser) {
-            if (!loadedProfile.metadata) loadedProfile.metadata = {};
-            // If user already has food logs or profile locally, mark legacy migration as completed
-            // so ancient legacy subcollections are NEVER scanned or re-injected on page reload.
-            if (loadedFoods.length > 0) {
-              loadedProfile.metadata.legacyMigratedV2 = true;
-              loadedProfile.metadata.legacyMigrated = true;
-            }
-            if (!loadedProfile.metadata.legacyMigratedV2) {
-              // Cheap check: verify against the cloud flag before doing an expensive
-              // full collection scan. Local IndexedDB may be empty (new browser,
-              // incognito, cleared cache, new device) even though the migration
-              // already completed in the cloud for this account.
-              let cloudAlreadyMigrated = false;
-              try {
-                const cloudProfileSnap = { exists: () => false, data: () => ({}) } as any; // await getDoc(doc(db, 'users', uid));
-                if (cloudProfileSnap.exists() && cloudProfileSnap.data()?.metadata?.legacyMigrated) {
-                  cloudAlreadyMigrated = !!cloudProfileSnap.data()?.metadata?.legacyMigratedV2;
-                }
-              } catch (checkErr) {
-                console.warn("[Migration] Cloud flag check failed, proceeding with caution:", checkErr);
-              }
-
-              if (cloudAlreadyMigrated) {
-                loadedProfile.metadata.legacyMigratedV2 = true; loadedProfile.metadata.legacyMigrated = true;
-              } else {
-              console.log("[Migration] Initiating one-time legacy migration to V2 consolidated bucket logs");
-              try {
-                let legacyFoodsSnap: any = { docs: [] };
-                let legacyHistorySnap: any = { docs: [] };
-                if (firestoreReadGuard('legacy migration scan')) {
-                  legacyFoodsSnap = { docs: [] } as any; // await getDocs(collection(db, 'users', uid, 'foodLogs'));
-                  legacyHistorySnap = { docs: [] } as any; // await getDocs(collection(db, 'users', uid, 'biomarkerHistory'));
-                }
-                
-                const legacyFoods: FoodLog[] = legacyFoodsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as FoodLog));
-                const legacyHistory: BiomarkerLog[] = legacyHistorySnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as BiomarkerLog));
-
-                // Never resurrect logs the user has already deleted. These IDs are the
-                // source of truth for deletions and must be respected during migration,
-                // otherwise re-running this migration (e.g. after a failed completion
-                // write) brings deleted entries back from the old subcollections.
-                const migrationDeletedFoodIds = new Set<string>([
-                  ...Object.keys(loadedProfile?.deletedFoodLogIds || {}),
-                  ...Object.keys(profile?.deletedFoodLogIds || {})
-                ]);
-                const migrationDeletedBioIds = new Set<string>(Object.keys(loadedProfile?.deletedBiomarkerLogIds || {}));
-
-                const filteredLegacyFoods = legacyFoods.filter(lf => !migrationDeletedFoodIds.has(lf.id));
-                const filteredLegacyHistory = legacyHistory.filter(lh => !migrationDeletedBioIds.has(lh.id));
-
-                const skippedFoods = legacyFoods.length - filteredLegacyFoods.length;
-                const skippedHistory = legacyHistory.length - filteredLegacyHistory.length;
-                if (skippedFoods > 0 || skippedHistory > 0) {
-                  console.log(`[Migration] Skipped ${skippedFoods} previously-deleted food logs and ${skippedHistory} previously-deleted biomarker logs`);
-                }
-
-                if (filteredLegacyFoods.length > 0 || filteredLegacyHistory.length > 0) {
-                  console.log(`[Migration] Migrating ${filteredLegacyFoods.length} foods and ${filteredLegacyHistory.length} biomarker entries`);
-                  // Merge legacy into loaded states, FORCE sync_state to pending so time buckets picks them up
-                  const mergedFoods = [...loadedFoods];
-                  filteredLegacyFoods.forEach(lf => {
-                    const existingIdx = mergedFoods.findIndex(f => f.id === lf.id);
-                    if (existingIdx === -1) {
-                      mergedFoods.push({ ...lf, sync_state: 'update' });
-                    } else {
-                      mergedFoods[existingIdx] = { ...mergedFoods[existingIdx], sync_state: 'update' };
-                    }
-                  });
-                  
-                  const mergedHistory = [...loadedHistory];
-                  filteredLegacyHistory.forEach(lh => {
-                    const existingIdx = mergedHistory.findIndex(h => h.id === lh.id);
-                    if (existingIdx === -1) {
-                      mergedHistory.push({ ...lh, sync_state: 'update' });
-                    } else {
-                      mergedHistory[existingIdx] = { ...mergedHistory[existingIdx], sync_state: 'update' };
-                    }
-                  });
-                  
-                  // Save to V2 bucket documents
-                  await syncLogsWithTimeBuckets(db, uid, mergedFoods, mergedHistory, {}, {}, (sf, sb) => {
-                    loadedFoods = sf;
-                    loadedHistory = sb;
-                    setFoodLogs(sf);
-                    setBiomarkerHistory(sb);
-                  });
-                }
-                
-                loadedProfile.metadata.legacyMigratedV2 = true; 
-                loadedProfile.metadata.legacyMigrated = true;
-                await Promise.resolve();
-                setProfile({ ...loadedProfile });
-                
-                // Immediately persist legacyMigratedV2 flag to IndexedDB so refresh never re-scans legacy subcollections
-                const migrationBundle = {
-                  profile: loadedProfile,
-                  foodLogs: loadedFoods,
-                  biomarkers: loadedBiomarkers,
-                  biomarkerHistory: loadedHistory,
-                  actions: loadedActions,
-                  dailyBenefits: loadedBenefits,
-                  report: loadedReport
-                };
-                await safeSaveToLocalStorage(storageKey, migrationBundle);
-              } catch (migErr) {
-                console.warn("[Migration] Failed to complete legacy migration:", migErr);
-              }
-              }
-            }
-          }
-          
-          // B. Real-Time Supabase Sync
-          try {
-            const supabaseUnsub = subscribeToSupabaseLogs(user.uid, async (payload: any) => {
-              if (payload && payload.new && payload.eventType !== 'DELETE') {
-                console.log(`[Supabase Realtime] Change detected on ${payload.table}: ${payload.eventType}`);
-                if (payload.table === 'food_logs') {
-                  const newLog = supabaseRowToFoodLog(payload.new);
-                  setFoodLogs(prevFoods => mergeFoodLogsDeduped(prevFoods, [newLog]));
-                  return;
-                } else if (payload.table === 'biomarker_logs') {
-                  const newBio = supabaseRowToBiomarkerLog(payload.new);
-                  setBiomarkerHistory(prevBio => mergeByRecency(prevBio, [newBio]));
-                  return;
-                }
-              }
-
-              console.log('[Supabase Realtime] Full database change detected, merging logs and profiles...');
-              const currentProfile = profileRef.current || profile;
-              const deletedFoods = currentProfile?.deletedFoodLogIds || {};
-              const deletedBios = currentProfile?.deletedBiomarkerLogIds || {};
-              const deletedCustomKeys = currentProfile?.deletedCustomBiomarkerKeys || {};
-              const activeEmail = user?.email || currentProfile?.email || auth.currentUser?.email;
-              const { serverFoods, serverBiomarkers, serverProfile, serverActions, serverBenefits, serverReport } = await fetchAllConsolidatedLogs(
-                db, 
-                user.uid, 
-                deletedFoods, 
-                deletedBios, 
-                deletedCustomKeys, 
-                activeEmail,
-                { lastSyncTime: Date.now() - 60000 }
-              );
-              if (serverFoods.length > 0) setFoodLogs(prevFoods => mergeFoodLogsDeduped(prevFoods, serverFoods));
-              if (serverBiomarkers.length > 0) setBiomarkerHistory(prevBio => mergeBiomarkerHistory(serverBiomarkers, prevBio, deletedBios));
-              if (serverProfile) setProfile(prevProfile => mergeProfiles(serverProfile, prevProfile));
-              if (serverActions && serverActions.length > 0) setActions(prevActs => mergeActions(serverActions, prevActs));
-              if (serverBenefits && serverBenefits.length > 0) setDailyBenefits(prevBens => mergeBenefits(serverBenefits, prevBens));
-              if (serverReport) setReport(prevReport => mergeReports(serverReport, prevReport));
-            });
-            unsubs.push(supabaseUnsub);
-          } catch (spErr) {
-            console.warn('[Supabase Realtime] Could not subscribe:', spErr);
-          }
-        } else {
-          // Not signed in via standard Firebase Auth SDK.
-          // Check if a saved session exists for a bypassed email (e.g. cwah.liu@gmail.com)
-          const lastActiveEmail = localStorage.getItem('last_active_email') || 'guest';
-          const storageKey = getStorageKey(lastActiveEmail);
-          const parsedLocal = await get(storageKey);
-          if (parsedLocal && parsedLocal.profile) {
+          if (tokenHash && type) {
             try {
-              let restoredBio = parsedLocal.biomarkers || {};
-              let restoredHistory = parsedLocal.biomarkerHistory || [];
-              let restoredProfile = parsedLocal.profile;
-
-              const purged = purgeHallucinatedAndCorruptedData(restoredHistory, restoredBio, restoredProfile);
-              if (purged.purgedCount > 0) {
-                restoredBio = purged.biomarkers;
-                restoredHistory = purged.biomarkerHistory;
-                restoredProfile = {
-                  ...restoredProfile,
-                  deletedBiomarkerLogIds: {
-                    ...(restoredProfile.deletedBiomarkerLogIds || {}),
-                    ...(purged.profileUpdates.deletedBiomarkerLogIds || {})
-                  }
-                };
-              }
-
-              if (restoredProfile) setProfile(restoredProfile);
-              if (parsedLocal.foodLogs) setFoodLogs(parsedLocal.foodLogs);
-              setBiomarkers(restoredBio);
-              setBiomarkerHistory(restoredHistory);
-              if (parsedLocal.actions) setActions(parsedLocal.actions);
-              if (parsedLocal.dailyBenefits) setDailyBenefits(parsedLocal.dailyBenefits);
-              if (parsedLocal.report) setReport(parsedLocal.report);
-
-              // Background sync with Supabase only if not already synced this session or if local cache is empty
-              const uid = parsedLocal.profile.uid || ('admin_' + lastActiveEmail.replace(/[^a-z0-9]/gi, '_'));
-              const hasSynced = sessionStorage.getItem('synced_' + uid) === 'true';
-              const isLocalEmpty = (!parsedLocal.foodLogs || parsedLocal.foodLogs.length === 0) && (!parsedLocal.biomarkerHistory || parsedLocal.biomarkerHistory.length === 0);
-              if (!hasSynced || isLocalEmpty) {
-                sessionStorage.setItem('synced_' + uid, 'true');
-                checkForDbChanges(uid, isLocalEmpty).catch(err => console.warn("[Auth] Session restore sync error:", err));
-              }
-            } catch (e) {
-              console.error("Failed to restore cached local storage:", e);
+              await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+            } catch (err) {
+              console.warn("[Auth] verifyOtp error:", err);
             }
-          } else {
-            setProfile(null);
-            setFoodLogs([]);
-            setBiomarkers({});
-            setBiomarkerHistory([]);
-            setActions([]);
-            setDailyBenefits([]);
-            setReport(null);
+            cleanupAuthUrlParams();
+          } else if (code) {
+            try {
+              await supabase.auth.exchangeCodeForSession(code);
+            } catch (err) {
+              console.warn("[Auth] exchangeCodeForSession error:", err);
+            }
+            cleanupAuthUrlParams();
           }
-          setSyncState('local');
         }
-      } catch (err) {
-        console.error("Auth session restore failed:", err);
-      } finally {
-        setIsAuthChecking(false);
+
+        // Listen for Supabase Auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (session?.user) {
+            cleanupAuthUrlParams();
+            const u = session.user;
+            await loadUserData(
+              u.id,
+              u.email || '',
+              resolveSbNick(u),
+              u.user_metadata?.avatar_url || ''
+            );
+          } else if (event === 'SIGNED_OUT' || !session) {
+            if (!auth.currentUser) {
+              setProfile(null);
+              setFoodLogs([]);
+              setBiomarkers({});
+              setBiomarkerHistory([]);
+              setActions([]);
+              setDailyBenefits([]);
+              setReport(null);
+              setIsAuthChecking(false);
+            }
+          }
+        });
+        unsubs.push(() => subscription.unsubscribe());
+
+        // Check active Supabase session
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            cleanupAuthUrlParams();
+            const u = session.user;
+            await loadUserData(
+              u.id,
+              u.email || '',
+              resolveSbNick(u),
+              u.user_metadata?.avatar_url || ''
+            );
+            clearTimeout(fallbackTimeout);
+            return;
+          }
+        } catch (sbErr) {
+          console.warn("[Auth] getSession error:", sbErr);
+        }
       }
+
+      // Step B: Firebase Auth Listener
+      const unsubscribeFb = onAuthStateChanged(auth, async (user) => {
+        clearTimeout(fallbackTimeout);
+        if (user) {
+          const emailLower = user.email?.toLowerCase().trim() || '';
+          if (emailLower.includes('john@mail.com') || emailLower.includes('john@gmail.com')) {
+            try { await fbSignOut(auth); } catch (e) {}
+            localStorage.removeItem('last_active_email');
+            setProfile(null);
+            setIsAuthChecking(false);
+            return;
+          }
+          if (user.email) { runCleanupMigration(user.uid, user.email).catch(console.error); }
+          await loadUserData(
+            user.uid,
+            user.email || '',
+            user.displayName || '',
+            user.photoURL || ''
+          );
+        } else {
+          if (isSupabaseConfigured) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+              const u = session.user;
+              await loadUserData(
+                u.id,
+                u.email || '',
+                resolveSbNick(u),
+                u.user_metadata?.avatar_url || ''
+              );
+              return;
+            }
+          }
+          // No user signed in
+          setProfile(null);
+          setFoodLogs([]);
+          setBiomarkers({});
+          setBiomarkerHistory([]);
+          setActions([]);
+          setDailyBenefits([]);
+          setReport(null);
+          setIsAuthChecking(false);
+        }
+      });
+      unsubs.push(unsubscribeFb);
+    };
+
+    initializeAuthAndData().catch(err => {
+      console.error("[Auth] Initial auth setup failed:", err);
+      setIsAuthChecking(false);
     });
-    return () => unsubscribe();
+
+    return () => {
+      clearTimeout(fallbackTimeout);
+      unsubs.forEach(u => u());
+    };
   }, []);
   // Keep localStorage updated with React states so that hasLocal and canSkipFetch work flawlessly!
   useEffect(() => {
@@ -4172,6 +4050,9 @@ export default function App() {
   // Sync Check on Login / Fetch user record if existing on server
   const handleLogin = async (loggedProfile: UserProfile) => {
     setProfile(loggedProfile);
+    if (loggedProfile.email) {
+      localStorage.setItem('last_active_email', loggedProfile.email.toLowerCase().trim());
+    }
     setSyncState('local');
   };
   const handleSignOut = async () => {
@@ -4185,7 +4066,17 @@ export default function App() {
       setDailyBenefits([]);
       setReport(null);
       setSyncState('local');
-      await fbSignOut(auth);
+      localStorage.removeItem('last_active_email');
+      localStorage.removeItem('demo_profile_type');
+      sessionStorage.clear();
+
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('supabase.auth.token') || key.startsWith('sb-') || key.includes('auth-token'))) {
+          localStorage.removeItem(key);
+        }
+      }
+
       if (isSupabaseConfigured) {
         try {
           await supabase.auth.signOut();
@@ -4193,10 +4084,12 @@ export default function App() {
           console.warn("Failed to sign out from Supabase:", sbErr);
         }
       }
-      // Note: Do NOT clear localStorage — user data is preserved per-email key
-      // and will load correctly when the correct user signs back in.
+      await fbSignOut(auth);
     } catch (e) {
-      console.error("Failed to sign out from Firebase:", e);
+      console.error("Failed to sign out:", e);
+    } finally {
+      setProfile(null);
+      setIsAuthChecking(false);
     }
   };
   // Selected LLM Engine shared across sections - highest RPD model is the default, and we persist the user selection

@@ -59,7 +59,7 @@ export async function getAllLocalUsers(): Promise<{
             users.push({
               email: email,
               userType: prof.userType || 'Standard',
-              nickname: prof.nickname || 'Healthy User',
+              nickname: prof.nickname || (email ? email.split('@')[0] : 'User'),
               lastLogin: prof.lastLogin || new Date().toISOString(),
               creditUsage: prof.agentCredits?.totalUsed || 0,
               profile: prof

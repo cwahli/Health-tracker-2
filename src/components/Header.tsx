@@ -1307,7 +1307,7 @@ export default function Header({
                     }
                   }}
                 >
-                  {profile.nickname || 'Healthy User'}
+                  {profile.nickname || (profile.email ? profile.email.split('@')[0] : 'User')}
                 </span>
                 {(() => {
                   const info = getAvailableCredits(profile);
@@ -1443,6 +1443,20 @@ export default function Header({
               </button>
             );
           })()}
+
+          <button
+            type="button"
+            id="header-signout-btn"
+            onClick={() => {
+              clearGoogleToken();
+              onSignOut();
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-950/50 border border-rose-200/80 dark:border-rose-900/40 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 transition-all cursor-pointer shadow-sm active:scale-95"
+            title="Sign Out of your account"
+          >
+            <LogOut className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">{t.signOut || 'Sign Out'}</span>
+          </button>
         </div>
       </div>
     
@@ -1559,7 +1573,21 @@ export default function Header({
                 <h2 className="text-lg font-bold text-theme-text">Edit Profile</h2>
                 <p className="text-xs text-slate-450 dark:text-slate-400">Update your health indicators and settings</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  id="profile-modal-top-signout-btn"
+                  onClick={() => {
+                    setIsEditing(false);
+                    clearGoogleToken();
+                    onSignOut();
+                  }}
+                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/40 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer flex items-center gap-1"
+                  title="Sign Out of your account"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>{t.signOut || 'Sign Out'}</span>
+                </button>
                 <button
                   id="profile-save-btn"
                   onClick={handleSave}

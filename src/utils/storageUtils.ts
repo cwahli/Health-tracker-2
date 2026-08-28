@@ -473,8 +473,8 @@ export const getAggregatedAppData = async (email?: string | null): Promise<any> 
     ...(primaryData.biomarkers || {})
   };
 
-  const primaryEmail = email;
-  const rawProfile = primaryData?.profile || guestData?.profile || legacyData?.profile || null;
+  const primaryEmail = email ? email.toLowerCase().trim() : '';
+  const rawProfile = primaryData?.profile || (primaryEmail ? null : (guestData?.profile || legacyData?.profile)) || null;
   let cleanProfile = rawProfile ? { ...rawProfile } : null;
   const isCwah = (primaryEmail && (primaryEmail.includes('cwah.liu') || primaryEmail.includes('chiwah.liu'))) ||
                  (cleanProfile?.email && (cleanProfile.email.includes('cwah.liu') || cleanProfile.email.includes('chiwah.liu') || cleanProfile.email.includes('john@mail.com') || cleanProfile.email.includes('john@gmail.com'))) ||
