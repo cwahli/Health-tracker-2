@@ -22,6 +22,37 @@ export const isSupabaseConfigured = Boolean(
   supabaseAnonKey !== 'placeholder-key'
 );
 
+/**
+ * Returns the exact origin of the running application (e.g. Cloud Run preview URL or localhost)
+ * with no trailing path or slash, ensuring Supabase email confirmation, magic links, and OAuth
+ * redirects return directly to the active environment instead of defaulting to Site URL (localhost).
+ */
+export const getAuthRedirectTo = (): string => {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return 'http://localhost:3000';
+};
+
+/**
+ * Cleans up Supabase token hashes and PKCE codes from the address bar after session exchange.
+ */
+export const cleanupAuthUrlParams = (): void => {
+  if (typeof window === 'undefined') return;
+  const hash = window.location.hash || '';
+  const search = window.location.search || '';
+  if (
+    hash.includes('access_token=') ||
+    hash.includes('refresh_token=') ||
+    hash.includes('error_description=') ||
+    search.includes('code=') ||
+    search.includes('error=')
+  ) {
+    const cleanUrl = window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,

@@ -98,6 +98,7 @@ function firestoreReadGuard(label: string, docCount: number = 1): boolean {
   return true;
 }
 import { runCleanupMigration } from './utils/migrationTask';
+import { supabase, isSupabaseConfigured } from './utils/supabaseClient';
 import { syncLogsWithTimeBuckets, fetchAllConsolidatedLogs, subscribeToSupabaseLogs, upsertProfileToSupabase, mergeByRecency, mergeActions, mergeBenefits, mergeFoodIdeas, mergeReports, mergeProfiles, mergeBiomarkerHistory, mergeDeleteMaps, supabaseRowToFoodLog, supabaseRowToBiomarkerLog } from "./utils/syncUtils";
 import { mergeFoodLogsDeduped, rehydrateFoodImagesFromDonors, foodLogFingerprint } from "./utils/foodLogDedupe";
 import { isUsableImageUrl } from "./utils/foodImageSources";
@@ -1267,6 +1268,11 @@ export default function App() {
                     // this whitelist never copied it from cleanResult.
                     reviewedBiomarkers: cleanResult.reviewedBiomarkers || cleanResult.agentResult?.reviewedBiomarkers || undefined,
                     extremeDivergences: cleanResult.extremeDivergences || cleanResult.agentResult?.extremeDivergences || undefined,
+                    // Health Coach fix: cleanResult.report is populated by serverJobs.ts
+                    // for the health-baseline-analyze agent, but this object's whitelist
+                    // never copied it over, so HealthBaselineCard always received an
+                    // empty report even though the backend and job layers both had it.
+                    report: cleanResult.report || cleanResult.agentResult?.report || undefined,
                     batchIdx: cleanResult.batchIdx !== undefined ? cleanResult.batchIdx : (cleanResult.agentResult?.batchIdx !== undefined ? cleanResult.agentResult.batchIdx : undefined),
                   };
 
@@ -4180,6 +4186,13 @@ export default function App() {
       setReport(null);
       setSyncState('local');
       await fbSignOut(auth);
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.auth.signOut();
+        } catch (sbErr) {
+          console.warn("Failed to sign out from Supabase:", sbErr);
+        }
+      }
       // Note: Do NOT clear localStorage — user data is preserved per-email key
       // and will load correctly when the correct user signs back in.
     } catch (e) {

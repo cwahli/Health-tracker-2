@@ -1,7 +1,17 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-28
-**Status:** Backend Modularization Complete & Verified (All files <450KB; AI Studio 512KB corruption eliminated; 86/86 test files & 811/811 vitest tests PASS, assert-budgets PASS, assert-biomarkers PASS, tsc exit 0, full production bundle built).
+**Updated:** 2026-08-28  
+**Status:** Supabase Auth Redirects Fixed & Verified (Dynamic `window.location.origin` helper, all auth actions updated, URL token cleanup implemented, tsc exit 0, all tests PASS).
+
+- **Supabase Auth Redirect Dynamic Origin & Token Cleanup (`src/utils/supabaseClient.ts`, `src/components/AuthScreen.tsx`, `src/App.tsx` - 2026-08-28):**
+  - **Root Cause & Diagnosis:** Supabase GoTrue defaults to the dashboard "Site URL" (`http://localhost:3000`) when `redirectTo` or `emailRedirectTo` are not explicitly provided. In Google AI Studio preview environments (`https://*.asia-southeast1.run.app`), signup confirmation emails, password reset links, magic links, and OAuth flows redirected users back to `http://localhost:3000`, causing verification tokens to be lost and breaking the preview session.
+  - **Key Changes Applied:**
+    - **`getAuthRedirectTo()` Helper (`src/utils/supabaseClient.ts`):** Created a dynamic helper returning `window.location.origin` (without trailing slashes), preventing any hardcoding of localhost or Cloud Run URLs.
+    - **`cleanupAuthUrlParams()` Helper (`src/utils/supabaseClient.ts`):** Implemented URL history cleanup using `window.history.replaceState` to strip `#access_token=...`, `#refresh_token=...`, and `?code=...` from the browser address bar once the session is established.
+    - **Dynamic Auth Redirects (`src/components/AuthScreen.tsx`):** Updated all Supabase auth calls (`signUp`, `signInWithOAuth`, demo login, resend verification, and `resetPasswordForEmail`) to explicitly provide `redirectTo` / `emailRedirectTo` via `getAuthRedirectTo()`.
+    - **Session Return & Verification Handling (`src/components/AuthScreen.tsx`):** Added URL param cleanup on session detection, immediate transition to user dashboard upon confirmation return, "Resend Verification Link" button, and "Forgot password?" reset flow.
+    - **Sign Out Integration (`src/App.tsx`):** Connected `supabase.auth.signOut()` to `handleSignOut` so Supabase and Firebase sessions are consistently cleared.
+  - **Verification:** `npx tsc --noEmit` exit 0 (zero errors); all 86 test files & 811 vitest tests PASS; `node scripts/assert-budgets.mjs` PASS.
 
 - **Backend Modularization & AI Studio Corruption Fix (`server.ts`, `server_routes_r2.ts`, `server_routes_medical_gemini.ts`, `server_routes_food_analyze.ts` - 2026-08-28):**
   - **Root Cause & Diagnosis:** Forensic analysis confirmed that when Google AI Studio commits files to GitHub, its web transport splits commits into 512 KB payload buffers. When a single file exceeds 512 KB, chunk 1 (plain text 523,834 bytes) and chunk 2 (compressed deflate stream) collided on unchunking, truncating the file at byte 523,834 with binary garbage. `server.ts` had grown to 836 KB (15,550 lines), triggering this corruption repeatedly.
