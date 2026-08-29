@@ -196,7 +196,9 @@ Write "message" strictly in 4 beats (Constructive, Comforting, No Shame):
 - Beat 2 (Contextual Impact & Metric): Frame higher-density items constructively using pre-calculated percentages from NUTRITIONAL TARGET STATUS without alarmist language (e.g. "The cheesy pasta contributes 18g of saturated fat, bringing today's total to 140% of your target.").
 - Beat 3 (Physiological Balance): Explain bodily balance and digestion constructively (e.g. "Pairing richer dishes with lighter, fiber-dense sides helps steady your digestion and supports sustained metabolic energy.").
 - Beat 4 (Actionable Next Step): Direct practical habit or movement (e.g. "Enjoy a gentle 20-minute post-meal walk to support circulation, and balance your next meal with colorful greens or lentils.").
+`;
 
+const REQUIRED_OUTPUT_JSON_SCHEMA = `
 === FULLY COMPLIANT FEW-SHOT EXAMPLE ===
 {
   "_internalReasoning": "The user logged grilled salmon, macaroni and cheese, avocado, and lettuce. The salmon provides lean protein and omega-3s, while mac and cheese adds saturated fat (140% of daily target). In Mode B, I praise the protein asset, frame the rich side constructively without shame, explain digestion balance, and suggest a gentle walk and fiber-rich next meal.",
@@ -240,9 +242,7 @@ Write "message" strictly in 4 beats (Constructive, Comforting, No Shame):
     ]
   }
 }
-`;
 
-const REQUIRED_OUTPUT_JSON_SCHEMA = `
 === REQUIRED OUTPUT JSON SCHEMA ===
 {
   "_internalReasoning": "string (Silently synthesize clinical evidence and plan response structure)",
@@ -363,6 +363,51 @@ DEFAULT TO CONSUMPTION: Process the identified food logs and visual scout items 
 ${REQUIRED_OUTPUT_JSON_SCHEMA}`;
 }
 
+const EDIT_OUTPUT_JSON_SCHEMA = `
+=== FULLY COMPLIANT EDIT FEW-SHOT EXAMPLE ===
+{
+  "_internalReasoning": "The user corrected the chicken breast weight to 150g, removed the mayonnaise, and added a 50g boiled egg. I will issue the corresponding editCommands and formulate a supportive message.",
+  "verdict": {
+    "label": "Supports lean muscle tissue",
+    "level": "good"
+  },
+  "message": "I've updated your chicken to 150g, removed the mayo, and added the boiled egg. You got 42g of quality protein to support your lean tissue. Pairing these protein-dense items with your salad helps steady digestion. Enjoy a short 10-minute walk to support metabolic circulation.",
+  "editCommands": [
+    { "action": "update_weight", "itemName": "Chicken Breast", "targetDbId": null, "newWeightGrams": 150, "componentName": null, "modifier": null },
+    { "action": "remove_item", "itemName": "Mayonnaise", "targetDbId": null, "newWeightGrams": null, "componentName": null, "modifier": null },
+    { "action": "add_item", "itemName": "Boiled Egg", "targetDbId": null, "newWeightGrams": 50, "componentName": null, "modifier": null }
+  ],
+  "foodData": {
+    "date": "2026-08-03",
+    "name": "Adjusted Salad with Chicken and Egg"
+  }
+}
+
+=== REQUIRED OUTPUT JSON SCHEMA ===
+{
+  "_internalReasoning": "string (Silently synthesize clinical evidence and plan response structure)",
+  "verdict": {
+    "label": "string (3-6 words max: positive outcome or pre-calculated metric overage)",
+    "level": "string ('good' | 'warning' | 'alert' | 'neutral')"
+  },
+  "message": "string (35-70 words in 4 beats as specified above)",
+  "editCommands": [
+    {
+      "action": "string ('update_weight' | 'remove_item' | 'add_item' | 'update_modifier' | 'update_component_weight')",
+      "itemName": "string (Name of the item to update or remove)",
+      "targetDbId": "string | null",
+      "newWeightGrams": "number | null (For update_weight, add_item, or update_component_weight)",
+      "componentName": "string | null (For update_component_weight: the specific component inside a parent meal)",
+      "modifier": "string | null (For update_modifier: e.g. 'unsweetened', 'no oil', 'extra sauce')"
+    }
+  ],
+  "foodData": {
+    "date": "string (YYYY-MM-DD)",
+    "name": "string (Meal title matching singular/plural form of breakdown items, or null to auto-generate)"
+  }
+}
+`;
+
 export function buildModeAEditInstruction(context: {
   biomarkersNeedingImprovement?: any[];
   remainingAllowance?: any | null;
@@ -388,7 +433,8 @@ export function buildModeAEditInstruction(context: {
         foodType: item.foodType,
         weightGrams: item.weightGrams,
         dbSource: item.dbSource,
-        cookingMethod: item.cookingMethod
+        cookingMethod: item.cookingMethod,
+        components: item.components ? item.components.map((c: any) => ({ name: c.name, weightGrams: c.weightGrams })) : undefined
       }));
     }
   }
@@ -405,11 +451,17 @@ ${biomarkersList}
 ${targetLimits}
 
 === ACTIVE TASK: ACTIVE MEAL REASSESSMENT / EDIT ===
-Update CURRENT_ACTIVE_MEAL_STATE based on the user's edit message.
-Classify item changes into "modificationCommand" (UPDATE_WEIGHT, REMOVE_ITEM, ADD_ITEM, REPLACE_ITEM).
-In "message", Beat 1 must explicitly confirm the specific modification (e.g. "Updated your iced tea to unsweetened, removing 18g added sugar"), then provide 4-beat clinical guidance on the updated totals. Retain descriptive dish names in "itemsBreakdown".
+Generate an array of explicit "editCommands" based on the user's edit message. DO NOT rebuild the entire meal array.
+Supported actions:
+- "update_weight": Change weight of a top-level item.
+- "update_component_weight": Change weight of a specific child component inside a composite meal (e.g. changing just the steak in a steak & potatoes dish).
+- "update_modifier": Apply a text modifier like 'unsweetened', 'no sugar', or 'no oil' to an item.
+- "remove_item": Delete an item entirely.
+- "add_item": Add a completely new item (must specify newWeightGrams).
 
-${REQUIRED_OUTPUT_JSON_SCHEMA}`;
+In "message", Beat 1 must explicitly confirm the specific modification (e.g. "Updated your iced tea to unsweetened, removing 18g added sugar"), then provide 4-beat clinical guidance on the updated totals.
+
+${EDIT_OUTPUT_JSON_SCHEMA}`;
 }
 
 export function buildModeDCompareInstruction(context: {

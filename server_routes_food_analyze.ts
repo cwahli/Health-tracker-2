@@ -474,7 +474,13 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
       const photoUrl = req.body.photoUrl;
       if (jobId) {
          import('./supabaseAdmin.js').then(({ supabaseAdmin }) => {
-            let cleanResult = JSON.parse(JSON.stringify(body));
+            let cleanResult: any = null;
+            try {
+               cleanResult = JSON.parse(JSON.stringify(body));
+            } catch(e) {
+               console.error('[res.json hook] Circular structure when parsing body for supabase:', e);
+               return;
+            }
             if (cleanResult.agentResult) delete cleanResult.agentResult.backendLogs;
             if (cleanResult.raw) delete cleanResult.raw;
             
@@ -508,7 +514,12 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
             }).catch(e => console.error('Failed to update supabase', e));
          });
       }
-      res.write(`data: ${JSON.stringify({ final: true, result: body })}\n\n`);
+      try {
+         res.write(`data: ${JSON.stringify({ final: true, result: body })}\n\n`);
+      } catch (stringifyErr) {
+         console.error('[res.json hook] Stringify failed:', stringifyErr);
+         res.write(`data: ${JSON.stringify({ final: true, error: "Internal Error: JSON serialization failed." })}\n\n`);
+      }
       res.end();
       return res;
     };
@@ -519,7 +530,9 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
       try {
         res.write(`data: ${JSON.stringify(data)}\n\n`);
         if (typeof (res as any).flush === 'function') (res as any).flush();
-      } catch (e) {}
+      } catch (e) {
+        console.error('[sendStreamEvent] Error serializing/sending event:', e);
+      }
     }
   };
 
@@ -979,6 +992,9 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
           dbId: it.dbId || null,
           boundingBox2D: it.boundingBox2D || null,
           sourceImageIndex: it.sourceImageIndex ?? 0,
+          componentsDetailList: it.componentsDetailList || [],
+          components: it.components || [],
+          hasComponents: it.hasComponents || false,
         }));
         visionScoutRanAndReturnedItems = true;
         addDebugLog(`[Edit Continuity] Inherited ${visionScoutItems.length} items from activeMeal into visionScoutItems for edit.`);
@@ -5837,10 +5853,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         apiCalls
       };
 
-      if (isStream && hasSentHeaders) {
-        res.write(`data: ${JSON.stringify({ final: true, result: responsePayload })}\n\n`);
-        return res.end();
-      }
 
       return res.json(responsePayload);
     }
@@ -6824,8 +6836,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
           // componentsDetailList already includes the primary component for multi-component
           // items — do not add primaryBaseWeightG on top of it (double-count weight).
-          const primaryAlreadyInList = Boolean(it.hasComponents) ||
-            (it.componentsDetailList && it.componentsDetailList.length >= 2);
+          const primaryAlreadyInList = Boolean(it.componentsDetailList && it.componentsDetailList.length > 0);
 
           if (primaryAlreadyInList && sauceWSum > 0) {
              if (Math.abs(sauceWSum - itemWeightG) > 2) {
@@ -6899,7 +6910,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
           // Row 3: Sauce / Dressing / Sub-components (if any)
           addDebugLog(`[Receipt Diagnostic] item="${cleanItemName}" dbSource="${it.dbSource}" hasComponents=${Boolean(it.hasComponents)} componentsDetailList.length=${Array.isArray(it.componentsDetailList) ? it.componentsDetailList.length : 'undefined'} components.length=${Array.isArray(it.components) ? it.components.length : 'undefined'} listIsMulti=${listIsMulti}`);
-          if (it.componentsDetailList && Array.isArray(it.componentsDetailList) && it.componentsDetailList.length > 0) {
+          if (listIsMulti && it.componentsDetailList && Array.isArray(it.componentsDetailList) && it.componentsDetailList.length > 0) {
             if (listIsMulti) {
                const rowsSummary = it.componentsDetailList.map((s: any) => `${s.name || 'unnamed'}(id=${s.dbId || 'n/a'},cal=${s.calories || 0})`).join(', ');
                addDebugLog(`[Receipt] using preCalc multi-row n=${it.componentsDetailList.length} for "${cleanItemName}": ${rowsSummary}`);
@@ -7521,10 +7532,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         apiCalls
       };
 
-      if (isStream && hasSentHeaders) {
-        res.write(`data: ${JSON.stringify({ final: true, result: responsePayload })}\n\n`);
-        return res.end();
-      }
 
       return res.json(responsePayload);
     }
@@ -7544,7 +7551,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         });
       }
 
-      let commands = rawParsed.modificationCommand;
+      let commands = rawParsed.editCommands || rawParsed.modificationCommand;
       if (!commands || !Array.isArray(commands) || commands.length === 0) {
         // Fallback: If Dietitian returned foodData.itemsBreakdown, synthesize commands comparing against activeMeal
         if (rawParsed.foodData && Array.isArray(rawParsed.foodData.itemsBreakdown) && rawParsed.foodData.itemsBreakdown.length > 0) {
@@ -7846,6 +7853,105 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             addDebugLog(`[Modify Math Warning] Could not find item "${itemName}" (targetDbId: ${targetDbId}) to update_cooking_method.`);
           }
         }
+        else if (action === "update_modifier") {
+          const targetDbId = cmd.targetDbId ? String(cmd.targetDbId).replace(/[^\x20-\x7E]/g, '').trim() : null;
+          const idx = findItemIndex(itemName, targetDbId);
+          if (idx !== -1) {
+            const item = activeMeal.itemsBreakdown[idx];
+            const modifier = (cmd.modifier || '').toLowerCase();
+            
+            if (modifier.includes('unsweetened') || modifier.includes('no sugar') || modifier.includes('zero sugar')) {
+              if (item.sugar) {
+                const sugarGrams = Number(item.sugar) || 0;
+                item.sugar = 0;
+                item.addedSugar = 0;
+                item.calories = Math.max(0, (Number(item.calories) || 0) - (sugarGrams * 4));
+                item.carbohydrates = Math.max(0, (Number(item.carbohydrates) || 0) - sugarGrams);
+                addDebugLog(`[Modify Math] update_modifier applied "unsweetened" to "${item.name}". Deducted ${sugarGrams}g sugar and ${sugarGrams * 4} calories.`);
+              }
+            } else if (modifier.includes('no oil') || modifier.includes('no fat')) {
+               if (item.totalFat) {
+                 const fatGrams = Number(item.totalFat) || 0;
+                 item.totalFat = 0;
+                 item.saturatedFat = 0;
+                 item.calories = Math.max(0, (Number(item.calories) || 0) - (fatGrams * 9));
+                 addDebugLog(`[Modify Math] update_modifier applied "no oil" to "${item.name}". Deducted ${fatGrams}g fat and ${fatGrams * 9} calories.`);
+               }
+            }
+            // Append the modifier to the name if not already there
+            if (!item.name.toLowerCase().includes(modifier)) {
+              item.name = `${modifier.charAt(0).toUpperCase() + modifier.slice(1)} ${item.name}`;
+            }
+          }
+        }
+        else if (action === "update_component_weight") {
+          const targetDbId = cmd.targetDbId ? String(cmd.targetDbId).replace(/[^\x20-\x7E]/g, '').trim() : null;
+          const idx = findItemIndex(itemName, targetDbId);
+          if (idx !== -1) {
+            let item = activeMeal.itemsBreakdown[idx];
+            if (item.components && Array.isArray(item.components) && item.components.length > 0) {
+               const compName = (cmd.componentName || '').toLowerCase();
+               const compIdx = item.components.findIndex((c: any) => (c.name || '').toLowerCase().includes(compName));
+               if (compIdx !== -1) {
+                 const comp = item.components[compIdx];
+                 const oldWeight = Number(comp.weightGrams) || 1;
+                 const R = newWeight / oldWeight;
+                 
+                 // Update the component's weight and nutrients
+                 comp.weightGrams = newWeight;
+                 comp.calories = Number((Number(comp.calories || 0) * R).toFixed(1));
+                 comp.protein = Number((Number(comp.protein || 0) * R).toFixed(1));
+                 comp.totalFat = Number((Number(comp.totalFat || 0) * R).toFixed(1));
+                 comp.saturatedFat = Number((Number(comp.saturatedFat || 0) * R).toFixed(2));
+                 comp.carbohydrates = Number((Number(comp.carbohydrates || 0) * R).toFixed(1));
+                 comp.sodium = Number((Number(comp.sodium || 0) * R).toFixed(1));
+
+                 // Also update componentsDetailList which drives the true backend ledger/receipt
+                 if (item.componentsDetailList && Array.isArray(item.componentsDetailList)) {
+                   const detailIdx = item.componentsDetailList.findIndex((c: any) => (c.name || '').toLowerCase().includes(compName));
+                   if (detailIdx !== -1) {
+                     const dComp = item.componentsDetailList[detailIdx];
+                     dComp.weightGrams = newWeight;
+                     dComp.calories = Number((Number(dComp.calories || 0) * R).toFixed(1));
+                     dComp.protein = Number((Number(dComp.protein || 0) * R).toFixed(1));
+                     dComp.totalFat = Number((Number(dComp.totalFat || 0) * R).toFixed(1));
+                     dComp.saturatedFat = Number((Number(dComp.saturatedFat || 0) * R).toFixed(2));
+                     dComp.carbohydrates = Number((Number(dComp.carbohydrates || 0) * R).toFixed(1));
+                     dComp.sodium = Number((Number(dComp.sodium || 0) * R).toFixed(1));
+                     if (dComp.nutrients) {
+                       dComp.nutrients.calories = dComp.calories;
+                       dComp.nutrients.protein = dComp.protein;
+                       dComp.nutrients.totalFat = dComp.totalFat;
+                       dComp.nutrients.saturatedFat = dComp.saturatedFat;
+                       dComp.nutrients.carbohydrates = dComp.carbohydrates;
+                       dComp.nutrients.sodium = dComp.sodium;
+                     }
+                   }
+                 }
+                 
+                 // Re-sum the parent item's totals
+                 item.weightGrams = item.components.reduce((sum: number, c: any) => sum + (Number(c.weightGrams) || 0), 0);
+                 item.calories = item.components.reduce((sum: number, c: any) => sum + (Number(c.calories) || 0), 0);
+                 item.protein = item.components.reduce((sum: number, c: any) => sum + (Number(c.protein) || 0), 0);
+                 item.totalFat = item.components.reduce((sum: number, c: any) => sum + (Number(c.totalFat) || 0), 0);
+                 item.saturatedFat = item.components.reduce((sum: number, c: any) => sum + (Number(c.saturatedFat) || 0), 0);
+                 item.carbohydrates = item.components.reduce((sum: number, c: any) => sum + (Number(c.carbohydrates) || 0), 0);
+                 item.sodium = item.components.reduce((sum: number, c: any) => sum + (Number(c.sodium) || 0), 0);
+                 
+                 if (item.nutrients) {
+                   item.nutrients = { ...item.nutrients, calories: item.calories, protein: item.protein, totalFat: item.totalFat, saturatedFat: item.saturatedFat, carbohydrates: item.carbohydrates, sodium: item.sodium };
+                 }
+                 addDebugLog(`[Modify Math] update_component_weight of "${comp.name}" inside "${item.name}" from ${oldWeight}g to ${newWeight}g. Parent is now ${item.weightGrams}g.`);
+               } else {
+                 addDebugLog(`[Modify Math Warning] Could not find component "${compName}" inside "${item.name}".`);
+               }
+            } else {
+               // Fallback: If it has no components, just update the top-level item's weight
+               addDebugLog(`[Modify Math Warning] Item "${item.name}" has no components. Falling back to update_weight.`);
+               commands.push({ action: "update_weight", itemName: itemName, targetDbId: targetDbId, newWeightGrams: cmd.newWeightGrams });
+            }
+          }
+        }
         else if (action === "replace_item") {
           const idx = findItemIndex(itemName, targetDbId);
           const replacementName = cmd.replacementItemName || cmd.newItemName || itemName;
@@ -7981,12 +8087,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         agentPrompt: fullPromptSent,
         apiCalls
       };
-
-      if (isStream && hasSentHeaders) {
-        res.write(`data: ${JSON.stringify({ final: true, result: responsePayload })}\n\n`);
-        return res.end();
-      }
-
+      
       return res.json(responsePayload);
     }
   } catch (error: any) {
@@ -8021,12 +8122,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         apiCalls
       };
 
-      if (isStream && hasSentHeaders) {
-        res.write(`data: ${JSON.stringify({ final: true, result: successPayload })}\n\n`);
-        return res.end();
-      } else {
-        return res.status(200).json(successPayload);
-      }
+      return res.json(successPayload);
     }
 
     const errorPayload: any = {
@@ -8039,7 +8135,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
     }
     
     if (isStream && hasSentHeaders) {
-      res.write(`data: ${JSON.stringify(errorPayload)}\n\n`);
+      try {
+        res.write(`data: ${JSON.stringify(errorPayload)}\n\n`);
+      } catch(errStr: any) {
+        res.write(`data: ${JSON.stringify({ error: 'Failed to process your request and serialize error payload.' })}\n\n`);
+      }
       return res.end();
     } else {
       return res.status(200).json(errorPayload);

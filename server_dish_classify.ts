@@ -152,6 +152,29 @@ export function reconcileContainerVolumeBudget(items: any[], addDebugLog?: (msg:
               }
             }
           }
+          if (Array.isArray(target.components)) {
+            target.components.forEach((c: any) => {
+              if (c.weightGrams) c.weightGrams = Math.round(c.weightGrams * scaleFactor);
+              if (c.estimatedWeightGrams) c.estimatedWeightGrams = Math.round(c.estimatedWeightGrams * scaleFactor);
+              if (c.calories) c.calories = Math.round(c.calories * scaleFactor);
+              if (c.protein) c.protein = Math.round(c.protein * scaleFactor * 10) / 10;
+              if (c.carbohydrates) c.carbohydrates = Math.round(c.carbohydrates * scaleFactor * 10) / 10;
+              if (c.carbs) c.carbs = Math.round(c.carbs * scaleFactor * 10) / 10;
+              if (c.totalFat) c.totalFat = Math.round(c.totalFat * scaleFactor * 10) / 10;
+              if (c.fat) c.fat = Math.round(c.fat * scaleFactor * 10) / 10;
+              if (c.saturatedFat) c.saturatedFat = Math.round(c.saturatedFat * scaleFactor * 10) / 10;
+              if (c.sodium) c.sodium = Math.round(c.sodium * scaleFactor);
+              if (c.nutrients && typeof c.nutrients === 'object') {
+                for (const [k, v] of Object.entries(c.nutrients)) {
+                  if (typeof v === 'number' && Number.isFinite(v)) {
+                    c.nutrients[k] = (k === 'calories' || k === 'sodium' || k === 'potassium' || k === 'calcium' || k === 'magnesium' || k === 'addedSugar' || k === 'sugar')
+                      ? Math.round(v * scaleFactor)
+                      : Math.round(v * scaleFactor * 10) / 10;
+                  }
+                }
+              }
+            });
+          }
         });
 
         let curSum = imgItems.reduce((s, it) => s + updatedItems[it._origIdx].estimatedWeightGrams, 0);

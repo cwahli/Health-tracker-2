@@ -1158,6 +1158,14 @@ export default function App() {
                         } catch(e) {}
                      }
                   }
+
+                  // If after trying to fetch the full payload it is still a stub,
+                  // DO NOT finalize the state yet. Skip this cycle and let it retry/poll again.
+                  if ((serverJob.status === 'succeeded' || serverJob.status === 'awaiting_user') && serverJob.clean_result && (serverJob.clean_result as any).is_r2) {
+                     console.warn(`[JobQueueRunner] Job ${job.id} is ${serverJob.status} but full result from R2 is not yet ready. Retrying...`);
+                     await new Promise(r => setTimeout(r, 2000));
+                     continue;
+                  }
                 }
 
                 if (serverJob.status === 'awaiting_user') {

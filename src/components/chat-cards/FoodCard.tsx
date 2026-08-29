@@ -1524,6 +1524,40 @@ const getCookingMethodChip = (method: string, hideIcon: boolean = false) => {
 };
 
 
+export const resolveHistoricalImgSrc = (item: any, messageImages: string[], foodLogs: any[], imgIdxOverride?: number) => {
+  const isExplicit = item.source === 'catalog_tag' || item.source === 'previous_meal';
+  
+  if (foodLogs && foodLogs.length > 0) {
+    if (item.dbId) {
+      const matched = foodLogs.find((f: any) => 
+        f.id === item.dbId || 
+        ((f.itemsBreakdown || []).length === 1 && (f.itemsBreakdown || [])[0].dbId === item.dbId)
+      );
+      if (matched && (matched.imageUrl || matched.imageUrls?.[0])) return resolveFoodImage(matched.imageUrl || matched.imageUrls?.[0], foodLogs) || '';
+    }
+    const nameToMatch = (item.originalName || item.keyword || item.name || '').toLowerCase();
+    if (nameToMatch) {
+      const matchedByName = foodLogs.find((f: any) => 
+        (f.name || '').toLowerCase() === nameToMatch || 
+        ((f.itemsBreakdown || []).length === 1 && (f.itemsBreakdown || [])[0].canonicalDbName?.toLowerCase() === nameToMatch)
+      );
+      if (matchedByName && (matchedByName.imageUrl || matchedByName.imageUrls?.[0])) {
+        return resolveFoodImage(matchedByName.imageUrl || matchedByName.imageUrls?.[0], foodLogs) || '';
+      }
+    }
+  }
+
+  if (isExplicit) return getFoodImageUrl(item.keyword || item.originalName || item.name);
+
+  if (typeof imgIdxOverride === 'number' && imgIdxOverride >= 0 && imgIdxOverride < messageImages.length) {
+    return messageImages.length > 0 ? messageImages[imgIdxOverride] : getFoodImageUrl(item.keyword || item.originalName || item.name);
+  }
+
+  const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
+  const imgIdx = (messageImages.length > 0 && rawIdx >= 0 && rawIdx < messageImages.length) ? rawIdx : 0;
+  return (messageImages.length > 0) ? messageImages[imgIdx] : getFoodImageUrl(item.keyword || item.originalName || item.name);
+};
+
 export const FoodCard: React.FC<AgentCardProps & {
   isSelectingMode?: boolean;
   setIsSelectingMode?: (val: boolean) => void;
@@ -1594,39 +1628,6 @@ export const FoodCard: React.FC<AgentCardProps & {
   // Version counter to trigger re-renders when portion scaling updates in-place log data
   const [portionLogVersion, setPortionLogVersion] = React.useState<number>(0);
 
-const resolveHistoricalImgSrc = (item: any, messageImages: string[], foodLogs: any[], imgIdxOverride?: number) => {
-  const isExplicit = item.source === 'catalog_tag' || item.source === 'previous_meal';
-  
-  if (foodLogs && foodLogs.length > 0) {
-    if (item.dbId) {
-      const matched = foodLogs.find((f: any) => 
-        f.id === item.dbId || 
-        ((f.itemsBreakdown || []).length === 1 && (f.itemsBreakdown || [])[0].dbId === item.dbId)
-      );
-      if (matched && (matched.imageUrl || matched.imageUrls?.[0])) return resolveFoodImage(matched.imageUrl || matched.imageUrls?.[0], foodLogs) || '';
-    }
-    const nameToMatch = (item.originalName || item.keyword || item.name || '').toLowerCase();
-    if (nameToMatch) {
-      const matchedByName = foodLogs.find((f: any) => 
-        (f.name || '').toLowerCase() === nameToMatch || 
-        ((f.itemsBreakdown || []).length === 1 && (f.itemsBreakdown || [])[0].canonicalDbName?.toLowerCase() === nameToMatch)
-      );
-      if (matchedByName && (matchedByName.imageUrl || matchedByName.imageUrls?.[0])) {
-        return resolveFoodImage(matchedByName.imageUrl || matchedByName.imageUrls?.[0], foodLogs) || '';
-      }
-    }
-  }
-
-  if (isExplicit) return getFoodImageUrl(item.keyword || item.originalName || item.name);
-
-  if (typeof imgIdxOverride === 'number' && imgIdxOverride >= 0 && imgIdxOverride < messageImages.length) {
-    return messageImages.length > 0 ? messageImages[imgIdxOverride] : getFoodImageUrl(item.keyword || item.originalName || item.name);
-  }
-
-  const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
-  const imgIdx = (messageImages.length > 0 && rawIdx >= 0 && rawIdx < messageImages.length) ? rawIdx : 0;
-  return (messageImages.length > 0) ? messageImages[imgIdx] : getFoodImageUrl(item.keyword || item.originalName || item.name);
-};
 
   const displayedScoutItems = React.useMemo(() => {
     const itemsBreakdown = msg.data?.pendingFoodLog?.itemsBreakdown || msg.data?.data?.itemsBreakdown || msg.data?.itemsBreakdown || msg.data?.agentResult?.data?.itemsBreakdown;

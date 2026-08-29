@@ -318,14 +318,17 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         lastProgressUpdate = now;
         if (isSupabaseConfigured) {
           try {
-            await supabaseAdmin.from('agent_jobs').update({
+            const { error } = await supabaseAdmin.from('agent_jobs').update({
               progress_percent: progress,
               status_message: message,
               photo_url: photoUrl || null,
               updated_at: new Date().toISOString()
             }).eq('id', jobId);
+            if (error) {
+              console.error('[ServerJobs] Failed to update progress in Supabase:', error);
+            }
           } catch (e) {
-            console.error('[ServerJobs] Failed to update progress:', e);
+            console.error('[ServerJobs] Failed to update progress (exception):', e);
           }
         }
       }
@@ -945,7 +948,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
             console.error('[ServerJobs] R2 save for success failed:', r2Err);
           }
 
-          await supabaseAdmin.from('agent_jobs').update({
+          const { error: supaErr } = await supabaseAdmin.from('agent_jobs').update({
             status: 'succeeded',
             progress_percent: 100,
             status_message: 'Analysis complete',
@@ -954,6 +957,9 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
             clean_result: lightweightResult, // lightweight R2 reference in DB!
             updated_at: new Date().toISOString(),
           }).eq('id', jobId);
+          if (supaErr) {
+            console.error('[ServerJobs] Failed to update success state in Supabase:', supaErr);
+          }
         }
 
         try {

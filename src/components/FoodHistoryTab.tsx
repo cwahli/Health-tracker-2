@@ -23,7 +23,7 @@ import { scaleMealPortion, scaleSingleDishPortion } from '../utils/portionUtils'
 import { PhysicalFormBadge } from './PhysicalFormBadge';
 import { JobStore, isJobBlank } from '../jobs/JobStore';
 import TaskPlaceholderCard from './TaskPlaceholderCard';
-import { CroppedFoodImage, isValidBoundingBox, getFoodImageUrl } from './chat-cards/FoodCard';
+import { CroppedFoodImage, isValidBoundingBox, getFoodImageUrl, resolveHistoricalImgSrc } from './chat-cards/FoodCard';
 import { ZoomableImage } from './ZoomableImage';
 import { buildDebugMarkdownReport } from '../utils/debugPayload';
 import { calculateMealDebugRetentionStatus } from '../utils/debugLogRetention';
@@ -1912,9 +1912,9 @@ export default function FoodHistoryTab({
                                   <div className="flex overflow-x-auto flex-nowrap sm:flex-wrap items-start justify-start gap-3 pt-1 pb-2 w-full font-sans scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
                                     {scoutItemsList.map((item: any, i: number) => {
                                       const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
-                                      const resolvedImgSrc = (resolvedImgs.length > 0)
+                                      const resolvedImgSrc = resolveHistoricalImgSrc(item, resolvedImgs, activeFoodLogs, undefined) || (resolvedImgs.length > 0
                                         ? (resolvedImgs[rawIdx] || resolvedImgs[0])
-                                        : (resolvedImg || getFoodImageUrl(item.keyword || item.originalName));
+                                        : (resolvedImg || getFoodImageUrl(item.keyword || item.originalName)));
                                       const hasBbox = isValidBoundingBox(item.boundingBox2D);
                                       const isSelectedLabel = openLabelLogMap[log.id] === i;
 
@@ -2217,9 +2217,9 @@ export default function FoodHistoryTab({
             const nextIdx = zoomState.currentIdx + 1;
             const item = zoomState.items[nextIdx];
             const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
-            const imgSrc = (zoomState.resolvedImgs.length > 0)
+            const imgSrc = resolveHistoricalImgSrc(item, zoomState.resolvedImgs, activeFoodLogs, undefined) || ((zoomState.resolvedImgs.length > 0)
               ? (zoomState.resolvedImgs[rawIdx] || zoomState.resolvedImgs[0])
-              : getFoodImageUrl(item.keyword || item.originalName);
+              : getFoodImageUrl(item.keyword || item.originalName));
             setZoomState({
               ...zoomState,
               currentIdx: nextIdx,
@@ -2232,9 +2232,9 @@ export default function FoodHistoryTab({
             const prevIdx = zoomState.currentIdx - 1;
             const item = zoomState.items[prevIdx];
             const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
-            const imgSrc = (zoomState.resolvedImgs.length > 0)
+            const imgSrc = resolveHistoricalImgSrc(item, zoomState.resolvedImgs, activeFoodLogs, undefined) || ((zoomState.resolvedImgs.length > 0)
               ? (zoomState.resolvedImgs[rawIdx] || zoomState.resolvedImgs[0])
-              : getFoodImageUrl(item.keyword || item.originalName);
+              : getFoodImageUrl(item.keyword || item.originalName));
             setZoomState({
               ...zoomState,
               currentIdx: prevIdx,
