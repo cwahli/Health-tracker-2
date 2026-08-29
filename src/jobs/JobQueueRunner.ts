@@ -65,9 +65,20 @@ class JobQueueRunnerImpl {
       const queue = JobStore.getQueue();
       const now = new Date();
 
-      const jobToRun = queue.find(
-        (job) => !job.retryNotBefore || new Date(job.retryNotBefore) <= now
-      );
+      const jobToRun = queue.find((job) => {
+        const retryOk = !job.retryNotBefore || new Date(job.retryNotBefore) <= now;
+        if (!retryOk) return false;
+        // Do not pick up jobs where the client UI is actively performing the network submit right now.
+        // Doing so prematurely polls /api/jobs/status and reads stale status from a completed prior turn.
+        // Fall back to runner-owned submit only if client submission timed out (>20s).
+        if (job.clientSubmitPending) {
+          const submitAgeMs = Date.now() - new Date(job.updatedAt || job.createdAt).getTime();
+          if (submitAgeMs < 20000) {
+            return false;
+          }
+        }
+        return true;
+      });
 
       if (!jobToRun) {
         await this.sleep(1000);

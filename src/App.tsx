@@ -1086,6 +1086,16 @@ export default function App() {
 
               JobStore.updateJob(job.id, { serverSubmittedAt: Date.now(), resumeStage: undefined });
             }
+
+            // Safety guard: if client is actively performing the network submit, wait briefly
+            // for it to complete so we don't read stale prior-turn status from the server.
+            let clientSubmitWait = 0;
+            while (JobStore.getJob(job.id)?.clientSubmitPending && clientSubmitWait < 30) {
+              if (abortSignal.aborted) throw new Error('AbortError');
+              await new Promise(r => setTimeout(r, 500));
+              clientSubmitWait++;
+            }
+
             console.log(`[JobQueueRunner] Job ${job.id} is server-owned. Polling /api/jobs/status...`);
             let done = false;
             const pollStartTime = Date.now();
@@ -1319,8 +1329,9 @@ export default function App() {
                     : 'food';
 
                   const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive);
+                  const hasExistingAssistantMsg = nonLiveMsgs.some((m) => m.id === `msg_assistant_${job.id}`);
                   const assistantMsg = {
-                    id: `msg_assistant_${job.id}`,
+                    id: hasExistingAssistantMsg ? `msg_assistant_${job.id}_${Date.now()}` : `msg_assistant_${job.id}`,
                     role: 'assistant',
                     content: messageText,
                     timestamp: new Date().toISOString(),

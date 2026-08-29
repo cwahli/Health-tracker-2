@@ -2903,6 +2903,8 @@ ${logsText}`);
             creditSettled: false,
             lockedModeFamily: family,
             requestId: currentReqId,
+            attemptCount: 0,
+            error: undefined,
             serverSubmittedAt: undefined,
             clientSubmitPending: true,
             statusMessage: 'Uploading to server… Keep this tab open',
