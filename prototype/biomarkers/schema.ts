@@ -1,5 +1,14 @@
-export type MatchKind = "alias" | "key" | "none";
+/** Prototype schema — strictly reflects docs/agent/domains/biomarkers.md and plan/BIOMARKER_FILL_TEMPLATE_CASES.md */
+
+export type MatchKind = "key" | "alias" | "none";
 export type WriteTarget = "observation" | "pending";
+
+export interface LogPoint {
+  date: string;
+  value: number;
+  unit?: string;
+  comment?: string | null;
+}
 
 export interface IntakeRow {
   id: string;
@@ -7,12 +16,8 @@ export interface IntakeRow {
   value: number;
   unit: string;
   date: string;
-}
-
-export interface LogPoint {
-  date: string;
-  value: number;
-  unit: string;
+  printedRange?: string;
+  optimalValue?: string | number | null;
 }
 
 export interface CatalogSnapshot {
@@ -37,6 +42,12 @@ export interface NewCatalogDraft {
   riskCategories: string[];
 }
 
+export interface DictionaryCorrection {
+  field: string;
+  correctedValue: string;
+  reason: string;
+}
+
 /** Filled template row — dictionary slots locked on hits. */
 export interface BiomarkerTemplate {
   id: string;
@@ -53,6 +64,13 @@ export interface BiomarkerTemplate {
   riskCategories: string[];
   notUsed: boolean;
   customRangePopulation: string;
+  printedRange?: string;
+  assignedRange?: string;
+  optimalValue?: string | number | null;
+  existingInsight?: string | null;
+  existingCustomRange?: string | null;
+  editReason?: string | null;
+  dictionaryCorrection?: DictionaryCorrection | null;
   // user
   customRangeOverlay: string | null;
   medicalInsight: string;
@@ -67,6 +85,11 @@ export interface ClassifiedRow {
   value: number;
   unit: string;
   date: string;
+  printedRange?: string;
+  assignedRange?: string;
+  optimalValue?: string | number | null;
+  existingInsight?: string | null;
+  existingCustomRange?: string | null;
   mappedKey: string;
   match: MatchKind;
   writeTarget: WriteTarget;
@@ -81,11 +104,18 @@ export interface FillRow {
   value: number;
   unit: string;
   date: string;
+  printedRange?: string;
+  assignedRange?: string;
+  optimalValue?: string | number | null;
+  editReason?: string | null;
+  dictionaryCorrection?: DictionaryCorrection | null;
   match: MatchKind;
   key: string | null;
   writeTarget: WriteTarget;
+  status?: string;
   medicalInsight?: string;
   customRangeOverlay?: string | null;
+  logs?: LogPoint[];
   newCatalogDraft: NewCatalogDraft | null;
 }
 
@@ -125,4 +155,7 @@ export interface ProfileFixture {
   heightCm?: number;
   weightKg?: number;
   unitPreference?: string;
+  optimalValues?: Record<string, string | number>;
+  existingInsights?: Record<string, string>;
+  existingCustomRanges?: Record<string, string>;
 }

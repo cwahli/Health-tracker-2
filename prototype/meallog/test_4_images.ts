@@ -19,10 +19,10 @@ async function runTest4Images() {
   console.log("==========================================================================================\n");
 
   const imagePaths = [
-    "prototype/images/10_beef_soup_barcode_meal_0.jpg", // Image 0: Grocery Barcodes
-    "prototype/images/10_beef_soup_barcode_meal_1.jpg", // Image 1: Cooked Hotpot & Side Plate
-    "prototype/images/08_rolled_oats_1.jpg",             // Image 2: Cooked Oats Porridge
-    "prototype/images/08_rolled_oats_2.jpg",             // Image 3: Oats Nutrition Facts Label
+    "prototype/meallog/images/10_beef_soup_barcode_meal_0.jpg", // Image 0: Grocery Barcodes
+    "prototype/meallog/images/10_beef_soup_barcode_meal_1.jpg", // Image 1: Cooked Hotpot & Side Plate
+    "prototype/meallog/images/08_rolled_oats_1.jpg",             // Image 2: Cooked Oats Porridge
+    "prototype/meallog/images/08_rolled_oats_2.jpg",             // Image 3: Oats Nutrition Facts Label
   ];
 
   const contents: any[] = [];

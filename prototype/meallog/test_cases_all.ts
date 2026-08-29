@@ -33,7 +33,7 @@ const allTestCases: TestCase[] = [
   {
     id: "01",
     name: "01: YOLK Chicken Sandwich & Roasted Sides (Brand: Yolk)",
-    imageFiles: ["prototype/images/01_yolk_panini_wrap.jpg"],
+    imageFiles: ["prototype/meallog/images/01_yolk_panini_wrap.jpg"],
     userPrompt: "I had it from Yolk",
     groundTruth: {
       weight: 600,
@@ -49,7 +49,7 @@ const allTestCases: TestCase[] = [
   {
     id: "02",
     name: "02: Lidl Chicken Bites & Chocolate Muffin (Brand: Lidl)",
-    imageFiles: ["prototype/images/02_lidl_chicken_muffin.jpg"],
+    imageFiles: ["prototype/meallog/images/02_lidl_chicken_muffin.jpg"],
     userPrompt: "Analyze this meal photo from Lidl",
     groundTruth: {
       weight: 195,
@@ -65,7 +65,7 @@ const allTestCases: TestCase[] = [
   {
     id: "03",
     name: "03: Salmon Sushi Roll, Shrimp Pasta Salad & Demi-Baguette",
-    imageFiles: ["prototype/images/03_sushi_shrimp_salad.jpg"],
+    imageFiles: ["prototype/meallog/images/03_sushi_shrimp_salad.jpg"],
     userPrompt: "Analyze this meal photo",
     groundTruth: {
       weight: 650,
@@ -81,7 +81,7 @@ const allTestCases: TestCase[] = [
   {
     id: "04",
     name: "04: Berry Parfait, Pastries & Cobb Salad",
-    imageFiles: ["prototype/images/04_seaside_fish_chips.jpg"],
+    imageFiles: ["prototype/meallog/images/04_seaside_fish_chips.jpg"],
     userPrompt: "Analyze this meal photo with parfait, pastries, and salad",
     groundTruth: {
       weight: 1000,
@@ -97,7 +97,7 @@ const allTestCases: TestCase[] = [
   {
     id: "05",
     name: "05: Airline Breakfast Tray (Congee, Croissant, Cake, Coffee)",
-    imageFiles: ["prototype/images/05_cafe_waffles_coffee.jpg"],
+    imageFiles: ["prototype/meallog/images/05_cafe_waffles_coffee.jpg"],
     userPrompt: "Analyze this airline breakfast meal tray",
     groundTruth: {
       weight: 640,
@@ -113,7 +113,7 @@ const allTestCases: TestCase[] = [
   {
     id: "06",
     name: "06: Mie Gacoan (Mie Suit, Siomay, Es Petak Umpet)",
-    imageFiles: ["prototype/images/06_indonesian_menu_page_1.jpg", "prototype/images/06_indonesian_menu_page_2.jpg"],
+    imageFiles: ["prototype/meallog/images/06_indonesian_menu_page_1.jpg", "prototype/meallog/images/06_indonesian_menu_page_2.jpg"],
     userPrompt: "Analyze this Indonesian noodle meal and receipt from Mie Gacoan",
     groundTruth: {
       weight: 570,
@@ -129,7 +129,7 @@ const allTestCases: TestCase[] = [
   {
     id: "07",
     name: "07: Fresh Fruit Plate & Greek Yogurt Oats Mug",
-    imageFiles: ["prototype/images/07_sainsbury_oat_fruits.jpg"],
+    imageFiles: ["prototype/meallog/images/07_sainsbury_oat_fruits.jpg"],
     userPrompt: "Analyze this fresh fruit and yogurt oats meal",
     groundTruth: {
       weight: 550,
@@ -145,7 +145,7 @@ const allTestCases: TestCase[] = [
   {
     id: "08",
     name: "08: Sunrise Rolled Oats Porridge (Direct Label)",
-    imageFiles: ["prototype/images/08_rolled_oats_1.jpg", "prototype/images/08_rolled_oats_2.jpg"],
+    imageFiles: ["prototype/meallog/images/08_rolled_oats_1.jpg", "prototype/meallog/images/08_rolled_oats_2.jpg"],
     userPrompt: "Analyze this rolled oats porridge with its nutrition facts label",
     groundTruth: {
       weight: 220,
@@ -161,7 +161,7 @@ const allTestCases: TestCase[] = [
   {
     id: "09",
     name: "09: Sizzling Steak & Fish & Chips Plates",
-    imageFiles: ["prototype/images/09_steak_fish_chips_1.jpg", "prototype/images/09_steak_fish_chips_2.jpg"],
+    imageFiles: ["prototype/meallog/images/09_steak_fish_chips_1.jpg", "prototype/meallog/images/09_steak_fish_chips_2.jpg"],
     userPrompt: "Analyze these two sizzling and fried meal plates with drink",
     groundTruth: {
       weight: 1135,
@@ -177,7 +177,7 @@ const allTestCases: TestCase[] = [
   {
     id: "10",
     name: "10: Indonesian Beef Hotpot (Barcoded Groceries)",
-    imageFiles: ["prototype/images/10_beef_soup_barcode_meal_0.jpg", "prototype/images/10_beef_soup_barcode_meal_1.jpg"],
+    imageFiles: ["prototype/meallog/images/10_beef_soup_barcode_meal_0.jpg", "prototype/meallog/images/10_beef_soup_barcode_meal_1.jpg"],
     userPrompt: "Analyze this home cooked beef soup meal from Hari Hari Lokasari grocery barcodes",
     groundTruth: {
       weight: 825,

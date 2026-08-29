@@ -10,7 +10,7 @@ import {
   BaseNutrients,
   calculateDerivedNutrients,
 } from "./derivation_engine.ts";
-import { formatPatientContext, DIETITIAN_CORE_DIRECTIVES } from "../agents/dietitianInstructions.ts";
+import { formatPatientContext, DIETITIAN_CORE_DIRECTIVES } from "../../../agents/dietitianInstructions.ts";
 
 dotenv.config();
 

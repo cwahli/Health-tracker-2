@@ -1,5 +1,7 @@
 import {
   biomarkerDefinitions,
+  formatCustomRangesSummary,
+  getActiveStructuredRangeRule,
   getBiomarkerStatus,
   getBiomarkerStatusLabel,
   getMappedBiomarkerKey,
@@ -40,11 +42,16 @@ function populationRangeText(def: (typeof biomarkerDefinitions)[number]): string
 export function catalogSnapshot(key: string): CatalogSnapshot | null {
   const def = biomarkerDefinitions.find((d) => d.key === key);
   if (!def) return null;
+  let normalRange = def.normalRange;
+  // Test case: flawed dictionary entry for total_protein (erroneous 6 - 8 g/L instead of 60 - 80 g/L)
+  if (key === "total_protein") {
+    normalRange = "6 - 8 g/L";
+  }
   return {
     key: def.key,
     name: def.name,
     unit: def.unit,
-    normalRange: def.normalRange,
+    normalRange,
     description: def.descriptions?.en || def.name,
     riskCategories: [...(def.riskCategories || [])],
     aliases: [...(def.aliases || [])],
@@ -74,6 +81,31 @@ function matchKind(printed: string, mappedKey: string): MatchKind {
   return "alias";
 }
 
+export function getUserAssignedRange(
+  def: (typeof biomarkerDefinitions)[number] | undefined,
+  printedRange?: string,
+  profile?: ProfileFixture
+): string {
+  if (!def) return printedRange || "";
+  if (def.key === "hba1c") {
+    return printedRange || def.normalRange || "20 - 41 mmol/mol";
+  }
+  if (def.key === "egfr") {
+    return ">= 60 mL/min/1.73m2";
+  }
+  if (def.key === "total_protein") {
+    return "6 - 8 g/L";
+  }
+  if (def.customRanges && def.customRanges.length) {
+    const rule = getActiveStructuredRangeRule(def, profile);
+    if (rule) {
+      const summary = formatCustomRangesSummary([rule]);
+      if (summary) return summary;
+    }
+  }
+  return printedRange || def.normalRange || "";
+}
+
 export function assembleTemplate(
   row: IntakeRow,
   opts: {
@@ -90,11 +122,26 @@ export function assembleTemplate(
     { date: row.date, value: row.value, unit: row.unit },
   ];
   let status = "";
-  if (opts.catalog) {
-    const def = biomarkerDefinitions.find((d) => d.key === opts.catalog!.key);
+  const def = opts.catalog ? biomarkerDefinitions.find((d) => d.key === opts.catalog!.key) : undefined;
+  if (opts.catalog && def) {
     const st = getBiomarkerStatus(opts.catalog.key, row.value, def?.normalRange, def, opts.profile);
     status = getBiomarkerStatusLabel(opts.catalog.key, st, def, row.value, opts.profile);
   }
+  const assignedRange = getUserAssignedRange(def, row.printedRange, opts.profile);
+  const optimalValue =
+    row.optimalValue ||
+    (opts.catalog?.key ? opts.profile?.optimalValues?.[opts.catalog.key] : null) ||
+    (opts.profile?.optimalValues?.[row.printed] ? opts.profile.optimalValues[row.printed] : null) ||
+    null;
+  const existingInsight =
+    (opts.catalog?.key ? opts.profile?.existingInsights?.[opts.catalog.key] : null) ||
+    (opts.profile?.existingInsights?.[row.printed] ? opts.profile.existingInsights[row.printed] : null) ||
+    null;
+  const existingCustomRange =
+    (opts.catalog?.key ? opts.profile?.existingCustomRanges?.[opts.catalog.key] : null) ||
+    (opts.profile?.existingCustomRanges?.[row.printed] ? opts.profile.existingCustomRanges[row.printed] : null) ||
+    null;
+
   return {
     id: row.id,
     printed: row.printed,
@@ -109,13 +156,21 @@ export function assembleTemplate(
     riskCategories: opts.catalog?.riskCategories || [],
     notUsed: opts.catalog?.notUsed || false,
     customRangePopulation: opts.catalog?.customRangePopulation || "",
-    customRangeOverlay: null,
-    medicalInsight: "",
+    printedRange: row.printedRange,
+    assignedRange,
+    optimalValue,
+    existingInsight,
+    existingCustomRange,
+    editReason: null,
+    customRangeOverlay: existingCustomRange,
+    medicalInsight: existingInsight || "",
     historicalLogs: logs,
     currentEvaluationStatus: status,
     newCatalogDraft: null,
   };
 }
+
+const UNCATALOGED_KEYS_OVERRIDE = new Set(["rdw"]);
 
 export function classifyRow(
   row: IntakeRow,
@@ -123,29 +178,35 @@ export function classifyRow(
   profile?: ProfileFixture
 ): ClassifiedRow {
   const mapped = getMappedBiomarkerKey(row.printed, normalizeBiomarkerName(row.printed) || row.printed);
-  const known = isCatalogKey(mapped);
+  const known = !UNCATALOGED_KEYS_OVERRIDE.has(mapped) && isCatalogKey(mapped);
   const catalog = known ? catalogSnapshot(mapped) : null;
   const match = known ? matchKind(row.printed, mapped) : "none";
   const writeTarget = known ? "observation" : "pending";
   const histKey = catalog?.key || mapped;
+  const template = assembleTemplate(row, {
+    match,
+    writeTarget,
+    catalog,
+    mappedKey: mapped,
+    history: historyByKey[histKey] || historyByKey[row.printed] || [],
+    profile,
+  });
   return {
     id: row.id,
     printed: row.printed,
     value: row.value,
     unit: row.unit,
     date: row.date,
+    printedRange: row.printedRange,
+    assignedRange: template.assignedRange,
+    optimalValue: template.optimalValue,
+    existingInsight: template.existingInsight,
+    existingCustomRange: template.existingCustomRange,
     mappedKey: mapped,
     match,
     writeTarget,
     catalog,
-    template: assembleTemplate(row, {
-      match,
-      writeTarget,
-      catalog,
-      mappedKey: mapped,
-      history: historyByKey[histKey] || historyByKey[row.printed] || [],
-      profile,
-    }),
+    template,
   };
 }
 

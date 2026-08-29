@@ -9,6 +9,7 @@ export interface FoodNutrientInput {
 
 export interface FoodItemInput {
   foodName: string;
+  packageLabelText?: string | null;
   weightGrams?: number;
   estimatedWeightGrams?: number;
   packGrams?: number | null;

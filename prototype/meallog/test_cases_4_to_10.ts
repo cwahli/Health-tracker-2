@@ -33,7 +33,7 @@ const testCasesToRun: TestCase[] = [
   {
     id: "04",
     name: "04: Berry Parfait, Pastries & Cobb Salad",
-    imageFiles: ["prototype/images/04_seaside_fish_chips.jpg"],
+    imageFiles: ["prototype/meallog/images/04_seaside_fish_chips.jpg"],
     userPrompt: "Analyze this meal photo with berry yogurt parfait, bakery pastries in bag, and cobb salad bowl",
     groundTruth: {
       weight: 1000,
@@ -49,7 +49,7 @@ const testCasesToRun: TestCase[] = [
   {
     id: "05",
     name: "05: Airline Breakfast Tray (Congee, Croissant, Cake, Coffee)",
-    imageFiles: ["prototype/images/05_cafe_waffles_coffee.jpg"],
+    imageFiles: ["prototype/meallog/images/05_cafe_waffles_coffee.jpg"],
     userPrompt: "Analyze this airline breakfast meal tray with congee, bakery, and drinks",
     groundTruth: {
       weight: 640,
@@ -65,7 +65,7 @@ const testCasesToRun: TestCase[] = [
   {
     id: "06",
     name: "06: Mie Gacoan (Mie Suit, Siomay, Es Petak Umpet)",
-    imageFiles: ["prototype/images/06_indonesian_menu_page_1.jpg", "prototype/images/06_indonesian_menu_page_2.jpg"],
+    imageFiles: ["prototype/meallog/images/06_indonesian_menu_page_1.jpg", "prototype/meallog/images/06_indonesian_menu_page_2.jpg"],
     userPrompt: "Analyze this Indonesian noodle meal and receipt from Mie Gacoan",
     groundTruth: {
       weight: 570,
@@ -81,7 +81,7 @@ const testCasesToRun: TestCase[] = [
   {
     id: "07",
     name: "07: Fresh Fruit Plate & Greek Yogurt Oats Mug",
-    imageFiles: ["prototype/images/07_sainsbury_oat_fruits.jpg"],
+    imageFiles: ["prototype/meallog/images/07_sainsbury_oat_fruits.jpg"],
     userPrompt: "Analyze this fresh fruit plate and yogurt oats mug meal",
     groundTruth: {
       weight: 550,
@@ -97,7 +97,7 @@ const testCasesToRun: TestCase[] = [
   {
     id: "08",
     name: "08: Sunrise Rolled Oats Porridge (Direct Label)",
-    imageFiles: ["prototype/images/08_rolled_oats_1.jpg", "prototype/images/08_rolled_oats_2.jpg"],
+    imageFiles: ["prototype/meallog/images/08_rolled_oats_1.jpg", "prototype/meallog/images/08_rolled_oats_2.jpg"],
     userPrompt: "Analyze this rolled oats porridge with its nutrition facts label",
     groundTruth: {
       weight: 220,
@@ -113,7 +113,7 @@ const testCasesToRun: TestCase[] = [
   {
     id: "09",
     name: "09: Sizzling Steak & Fish & Chips Plates",
-    imageFiles: ["prototype/images/09_steak_fish_chips_1.jpg", "prototype/images/09_steak_fish_chips_2.jpg"],
+    imageFiles: ["prototype/meallog/images/09_steak_fish_chips_1.jpg", "prototype/meallog/images/09_steak_fish_chips_2.jpg"],
     userPrompt: "Analyze these two sizzling and fried meal plates with iced drink",
     groundTruth: {
       weight: 1135,
@@ -129,7 +129,7 @@ const testCasesToRun: TestCase[] = [
   {
     id: "10",
     name: "10: Indonesian Beef Hotpot (Barcoded Groceries)",
-    imageFiles: ["prototype/images/10_beef_soup_barcode_meal_0.jpg", "prototype/images/10_beef_soup_barcode_meal_1.jpg"],
+    imageFiles: ["prototype/meallog/images/10_beef_soup_barcode_meal_0.jpg", "prototype/meallog/images/10_beef_soup_barcode_meal_1.jpg"],
     userPrompt: "Analyze this home cooked beef soup meal from Hari Hari Lokasari grocery barcodes",
     groundTruth: {
       weight: 825,

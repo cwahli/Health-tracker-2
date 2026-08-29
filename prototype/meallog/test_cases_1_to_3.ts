@@ -33,7 +33,7 @@ const testCases: TestCase[] = [
   {
     id: "01",
     name: "01: YOLK Chicken Sandwich & Roasted Sides (Brand: Yolk)",
-    imageFiles: ["prototype/images/01_yolk_panini_wrap.jpg"],
+    imageFiles: ["prototype/meallog/images/01_yolk_panini_wrap.jpg"],
     userPrompt: "I had it from Yolk",
     groundTruth: {
       weight: 600,
@@ -49,7 +49,7 @@ const testCases: TestCase[] = [
   {
     id: "02",
     name: "02: Lidl Chicken Bites & Chocolate Muffin (Brand: Lidl)",
-    imageFiles: ["prototype/images/02_lidl_chicken_muffin.jpg"],
+    imageFiles: ["prototype/meallog/images/02_lidl_chicken_muffin.jpg"],
     userPrompt: "Analyze this meal photo from Lidl",
     groundTruth: {
       weight: 195,
@@ -65,7 +65,7 @@ const testCases: TestCase[] = [
   {
     id: "03",
     name: "03: Salmon Sushi Roll, Shrimp Pasta Salad & Demi-Baguette",
-    imageFiles: ["prototype/images/03_sushi_shrimp_salad.jpg"],
+    imageFiles: ["prototype/meallog/images/03_sushi_shrimp_salad.jpg"],
     userPrompt: "Analyze this meal photo",
     groundTruth: {
       weight: 650,

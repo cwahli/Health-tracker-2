@@ -1,0 +1,19 @@
+{
+  "id": "C3",
+  "date": "2026-06-05",
+  "expectRowCount": 10,
+  "expectKnown": 0,
+  "expectUnknown": 10,
+  "rows": [
+    { "printed": "Se prostate specific Ag level", "value": 1.41, "unit": "ug/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "psa" },
+    { "printed": "Serum sodium", "value": 143, "unit": "mmol/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "serum_sodium" },
+    { "printed": "Serum potassium", "value": 4.3, "unit": "mmol/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "serum_potassium" },
+    { "printed": "Serum alkaline phosphatase", "value": 39, "unit": "U/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "alkaline_phosphatase" },
+    { "printed": "Serum total bilirubin level", "value": 16, "unit": "umol/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "total_bilirubin" },
+    { "printed": "Serum globulin", "value": 35, "unit": "g/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "globulin" },
+    { "printed": "Serum calcium", "value": 2.47, "unit": "mmol/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "serum_calcium" },
+    { "printed": "Serum adjusted calcium conc", "value": 2.37, "unit": "mmol/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "adjusted_calcium" },
+    { "printed": "Serum inorganic phosphate", "value": 1.12, "unit": "mmol/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "phosphate" },
+    { "printed": "Red blood cell distribut width", "value": 11.8, "unit": "%", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "rdw" }
+  ]
+}

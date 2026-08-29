@@ -25,11 +25,11 @@ describe("C2 computed status labels", () => {
     }
   });
 
-  it("labels total cholesterol 6.5 Very High and eGFR 80 Mildly Decreased (CKD G2)", () => {
-    const tc = classified.find((r) => r.template.key === "total_cholesterol");
+  it("labels eGFR 80 Mildly Decreased (CKD G2) and ALT 41 Elevated", () => {
     const egfr = classified.find((r) => r.template.key === "egfr");
-    expect(tc?.template.currentEvaluationStatus).toBe("Very High");
+    const alt = classified.find((r) => r.template.key === "alt");
     expect(egfr?.template.currentEvaluationStatus).toBe("Mildly Decreased (CKD G2)");
+    expect(alt?.template.currentEvaluationStatus).toBe("Elevated");
   });
 
   it("matches C2 expectStatus gold on classified hits", () => {

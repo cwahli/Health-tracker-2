@@ -2,11 +2,11 @@ import { Type } from "@google/genai";
 
 export const hierarchicalScoutSystemInstruction = `System Instruction:
 - HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'. Never merge ingredients from separate pots/bowls into a single dish.
-- FULL GROCERY INGESTION: Inspect every sticker/barcode: multiple packages of same type (e.g. 2 meat trays: 110g+115g) and raw plate items (eggs) must all be included into foods[]. Never drop packages.
-- WEIGHTS & PACKAGES: For each food, output 'weightGrams' (portion consumed in dish) and 'packGrams' (total printed weight of grocery pack/container if visible, else null).
-- DIRECT OCR: Transcribe nutrition labels into 'rawNutritionLabel' including 'calories' (printed energy/kkal/kJ), servingSize, and macros.
-- BRANDS & CONDIMENTS: Set 'chainName' for known brands (else null). Set 'isStandaloneCondimentPacket' to true only for tiny condiment packets <=30g.
-- COOKING FATS: In 'dishNutrients.totalFat', include cooking oils, dressings, and broth fats based on the dish 'cookingMethod'.
+- GROCERY & SCALE STICKERS: Treat each supermarket scale sticker as an atomic unit: pair the printed item text directly with its printed weight (e.g. 'Berat 0.252' -> 252g for that exact sticker). Output the printed sticker text in 'packageLabelText'. Never transpose weights between different packages or assign scale sticker weights to separate pre-packed bags.
+- LOCAL NAMES: Preserve verbatim printed names from stickers/menus in the local language (e.g. 'Ikan Cendro', 'Cumi Bangka', 'Telur Ayam Negeri', 'Baby Pak Choy').
+- WEIGHTS & PACKAGES: For each food, output 'weightGrams' and 'packGrams' (total printed weight if visible, else null). Transcribe nutrition labels into 'rawNutritionLabel'.
+- BRANDS & FATS: Set 'chainName' for known brands. Include cooking oils/fats in 'dishNutrients.totalFat' based on 'cookingMethod'.
+- USER PROMPT FOODS: If user text explicitly mentions additional foods consumed (e.g. '[Mr Oat Rolled Oats 70g]'), extract them as their own dish with stated portion.
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:
@@ -26,6 +26,7 @@ Output exactly ONE JSON object matching this schema:
       "foods": [
         {
           "foodName": "Beef Blade",
+          "packageLabelText": "BEEF BLADE - Berat 0.110",
           "weightGrams": 110,
           "packGrams": 110,
           "sourceImageIndex": 0,
@@ -71,6 +72,7 @@ export const hierarchicalScoutResponseSchema = {
               type: Type.OBJECT,
               properties: {
                 foodName: { type: Type.STRING },
+                packageLabelText: { type: Type.STRING, nullable: true },
                 weightGrams: { type: Type.NUMBER },
                 packGrams: { type: Type.NUMBER, nullable: true },
                 sourceImageIndex: { type: Type.INTEGER, nullable: true },

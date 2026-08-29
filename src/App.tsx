@@ -3112,6 +3112,7 @@ export default function App() {
     } finally {
       (window as any).isManualSyncExecuting = false;
       setIsInitialDataLoading(false);
+      setSyncState(s => (s === 'syncing' ? 'local' : s));
     }
   };
   const loadUserData = async (uid: string, email: string, displayName?: string, photoURL?: string) => {
@@ -3299,7 +3300,8 @@ export default function App() {
     const fallbackTimeout = setTimeout(() => {
       console.warn("Auth check timed out.");
       setIsAuthChecking(false);
-    }, 10000);
+      setIsInitialDataLoading(false);
+    }, 6000);
 
     const resolveSbNick = (u: any) => {
       const uEmail = (u?.email || '').toLowerCase().trim();
@@ -3344,6 +3346,7 @@ export default function App() {
 
         // Listen for Supabase Auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          clearTimeout(fallbackTimeout);
           if (session?.user) {
             cleanupAuthUrlParams();
             const u = session.user;
@@ -3362,6 +3365,7 @@ export default function App() {
             setDailyBenefits([]);
             setReport(null);
             setIsAuthChecking(false);
+            setIsInitialDataLoading(false);
           }
         });
         unsubs.push(() => subscription.unsubscribe());
@@ -4038,6 +4042,16 @@ export default function App() {
       localStorage.setItem('last_active_email', loggedProfile.email.toLowerCase().trim());
     }
     setSyncState('local');
+    setIsAuthChecking(false);
+    setIsInitialDataLoading(false);
+    if (loggedProfile.email) {
+      await loadUserData(
+        loggedProfile.uid || 'user',
+        loggedProfile.email,
+        loggedProfile.nickname,
+        loggedProfile.photoUrl
+      );
+    }
   };
   const handleSignOut = async () => {
     try {

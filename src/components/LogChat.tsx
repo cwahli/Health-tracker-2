@@ -2775,9 +2775,10 @@ ${logsText}`);
 
         let strippedText = userContent || '';
         explicitFoodTags.forEach(t => {
-          strippedText = strippedText.replace(`[${t.name} ${t.weightGrams}g]`, '').replace(`[${t.name}]`, '').replace('  ', ' ').trim();
+          const escaped = (t.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          strippedText = strippedText.replace(new RegExp(`\\[+${escaped}(?:\\s+${t.weightGrams}g)?\\]+`, 'gi'), '').replace(/\s+/g, ' ').trim();
         });
-        const hasAdditionalText = strippedText.replace(/\[.*?\]/g, '').trim().length > 0;
+        const hasAdditionalText = strippedText.replace(/\[+.*?\]+/g, '').replace(/^[+\s,.-]+/, '').trim().length > 0;
         
         if (!hasAdditionalText && finalImages.length === 0 && explicitFoodTags.length === 1 && explicitFoodTags[0].source === 'previous_meal') {
           handleDuplicateFoodLog(explicitFoodTags[0].originalLog);
@@ -3083,7 +3084,7 @@ ${logsText}`);
             userId: auth.currentUser?.uid || 'anonymous',
             kind: family === 'D' ? 'food_compare' : 'food_log',
             mode: submissionMode,
-            text: ((userContent || textToSend || '').replace(/\[.*?\]/g, '').replace(/\s+/g, ' ').trim()),
+            text: ((userContent || textToSend || '').replace(/\[+.*?\]+/g, '').replace(/^[+\s,.-]+/, '').replace(/\s+/g, ' ').trim()),
             images: stagedImagesForSubmit,
             imageDates: tempDates.length > 0 ? tempDates : (extraOptions?.imageDates || job?.inputSnapshot?.imageDates || undefined),
             history: persistMessages,
@@ -6442,12 +6443,13 @@ ${logsText}`);
                               }
                               
                               if (matchCount > 0) {
-                                const beforeWords = words.slice(0, words.length - matchCount);
-                                const beforeStr = beforeWords.join(' ');
-                                return (beforeStr ? beforeStr + ' ' : '') + `[${tagContent}] `;
-                              }
-                              
-                              return prev + (prev.endsWith(' ') ? '' : ' ') + `[${tagContent}] `;
+                                  const beforeWords = words.slice(0, words.length - matchCount);
+                                  const beforeStr = beforeWords.join(' ').replace(/\[+\s*$/, '').trim();
+                                  return (beforeStr ? beforeStr + ' ' : '') + `[${tagContent}] `;
+                                }
+                                
+                                const cleanedPrev = prev.replace(/\[+\s*$/, '').trim();
+                                return (cleanedPrev ? cleanedPrev + ' ' : '') + `[${tagContent}] `;
                             };
 
                             if (item._listType === 'brand') {

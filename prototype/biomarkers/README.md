@@ -1,6 +1,9 @@
 # Biomarker fill-template prototype
 
-**Contract (do not fork):** [TEMPLATE.md](./TEMPLATE.md) · `template.ts`
+**Contract (do not fork):** [TEMPLATE.md](./TEMPLATE.md) · `template.ts` · [BIOMARKER_FILL_TEMPLATE_CASES.md](../../plan/BIOMARKER_FILL_TEMPLATE_CASES.md)
+
+> [!IMPORTANT]
+> **MANDATORY GATE:** All 7 cases (**C1 through C7**) must pass 100% green in this prototype runner before any production implementation or modal wiring begins. Upon completion, this suite becomes the permanent automated baseline regression gate (`scripts/assert-biomarker-cases.mjs`).
 
 Hits: back-office locks dictionary slots and computes **sanitized** status; the agent only writes **medical insight** (and overlay if needed). Optimal = one sentence; else status + profile + trend.  
 Misses: pending `newCatalogDraft`.  

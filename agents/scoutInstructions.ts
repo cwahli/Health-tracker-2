@@ -4,7 +4,9 @@ export function buildVisualScoutPrompt(message: string, imageCount: number): str
   if (imageCount <= 0) {
     return `Analyze the user's message: "${message}" and extract all dishes and constituent foods into the hierarchical schema with weights and nutrients.`;
   }
-  const cleanMsg = (message || '').trim();
+  // Strip bracket markers so "[Mr Oat Rolled Oats 70g]" reaches the scout as "Mr Oat Rolled Oats 70g"
+  // (Catalog-tagged foods already resolved via explicitFoodTags bypass the scout entirely)
+  const cleanMsg = (message || '').replace(/\[+([^\]]+)\]+/g, '$1').replace(/\s+/g, ' ').trim();
   const isGeneric = !cleanMsg || /^(analyze\s*(this|the)?\s*(meal|food|photo|image)?[s.]*|log\s*meal|scan)$/i.test(cleanMsg);
   const multiImageRule = imageCount > 1 
     ? " Audit every image independently and extract distinct food items seen across ALL images. Do not stop after analyzing a label."
@@ -16,3 +18,4 @@ export function buildVisualScoutPrompt(message: string, imageCount: number): str
   }
   return `${baseInstruction} User note: "${cleanMsg}". If the user note explicitly mentions additional foods consumed (e.g. "I also had 70g of oats"), you MUST extract them as well, even if not visible in the images. Extract all physical dishes and constituent foods into the hierarchical schema with weightGrams, packGrams, and nutrients.`;
 }
+

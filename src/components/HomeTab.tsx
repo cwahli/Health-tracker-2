@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile, FoodLog, HealthAction, DailyBenefit, RecommendationReport, BiomarkerLog, ChatMessage, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
 import { CheckCircle2, Circle, AlertCircle, AlertTriangle, ShieldAlert, Wrench, ArrowRight, Heart, ChevronDown, ChevronUp, Calendar, MapPin, Search, Sparkles, Trash2, Clock, Settings, X, TrendingUp, Activity, Copy, FlaskConical, Plus, BrainCircuit, Loader, Loader2, CheckSquare, Square, Edit2, Save, Check, Zap } from 'lucide-react';
@@ -984,10 +984,18 @@ export default function HomeTab({
     return () => window.removeEventListener('googleStepsUpdated', handleGoogleUpdate);
   }, [emailSuffix]);
 
+  const [profileLoadTimeout, setProfileLoadTimeout] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setProfileLoadTimeout(true);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const hasNoData = activeFoodLogs.length === 0 && activeHistory.length === 0;
 
   if (hasNoData) {
-    if (isLoadingProfile || syncState === 'syncing') {
+    if (!profileLoadTimeout && (isLoadingProfile || syncState === 'syncing')) {
       return (
         <div id="empty-state-loading-container" className="space-y-6 pb-40 animation-fade-in max-w-md mx-auto px-4 mt-4 font-sans text-theme-text">
           <div className="text-center py-8 space-y-3">

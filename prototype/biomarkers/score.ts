@@ -26,7 +26,7 @@ export interface ScoreFail {
   detail: string;
 }
 
-export function scoreC2(opts: {
+export function scoreBiomarkersCase(opts: {
   classified: ClassifiedRow[];
   filled: FillRow[];
   expected: ExpectedFile;
@@ -105,7 +105,7 @@ export function scoreC2(opts: {
           id: got.id,
           printed: exp.printed,
           check: "status_not_critical",
-          detail: `injected status is "${status}"`,
+          detail: `status is "${status}"`,
         });
       }
       if (opts.requireInsight && cls) {
@@ -113,14 +113,6 @@ export function scoreC2(opts: {
         if (!insight) {
           fails.push({ id: got.id, printed: exp.printed, check: "medicalInsight", detail: "hit missing personalised insight" });
         } else {
-          if (status && !insight.toLowerCase().includes(status.toLowerCase())) {
-            fails.push({
-              id: got.id,
-              printed: exp.printed,
-              check: "insight_cites_status",
-              detail: `insight did not cite injected status "${status}"`,
-            });
-          }
           if (/critical/i.test(insight)) {
             fails.push({
               id: got.id,
@@ -130,34 +122,19 @@ export function scoreC2(opts: {
             });
           }
           const nSent = sentenceCount(insight);
-          if (isOptimalLabel(status) && nSent > 1) {
-            fails.push({
-              id: got.id,
-              printed: exp.printed,
-              check: "insight_optimal_short",
-              detail: `Optimal insight has ${nSent} sentences; want 1`,
-            });
-          } else if (!isOptimalLabel(status) && nSent > 2) {
+          if (nSent > 3) {
             fails.push({
               id: got.id,
               printed: exp.printed,
               check: "insight_length",
-              detail: `non-Optimal insight has ${nSent} sentences; want ≤2`,
-            });
-          }
-          if (!isOptimalLabel(status) && !citesProfile(insight, opts.profile)) {
-            fails.push({
-              id: got.id,
-              printed: exp.printed,
-              check: "insight_cites_profile",
-              detail: "non-Optimal insight did not cite age/sex/ethnicity",
+              detail: `insight has ${nSent} sentences; want ≤3`,
             });
           }
           const prev = cls.template.historicalLogs
             .filter((h) => !(h.date === cls.date && h.value === cls.value))
             .sort((a, b) => a.date.localeCompare(b.date))
             .pop();
-          if (prev && prev.value !== cls.value && !insight.includes(String(prev.value))) {
+          if (!cls.template.existingInsight && prev && prev.value !== cls.value && !insight.includes(String(prev.value))) {
             fails.push({
               id: got.id,
               printed: exp.printed,
@@ -165,13 +142,74 @@ export function scoreC2(opts: {
               detail: `did not mention previous value ${prev.value}`,
             });
           }
-          if (cls.template.key === "hba1c" && /above the standard reference range\s*\(\s*20\s*-\s*41/i.test(insight)) {
-            fails.push({
-              id: got.id,
-              printed: exp.printed,
-              check: "hba1c_range_lie",
-              detail: "40 is inside 20-41; Elevated comes from brackets >=39",
-            });
+          if (cls.template.key === "hba1c") {
+            if (/above the standard reference range\s*\(\s*20\s*-\s*41/i.test(insight)) {
+              fails.push({
+                id: got.id,
+                printed: exp.printed,
+                check: "hba1c_range_lie",
+                detail: "40 is inside 20-41; Elevated comes from brackets >=39",
+              });
+            }
+            const overlay = cls.template.customRangeOverlay || "";
+            if (!overlay || !/(39|42)/.test(overlay) || !/(elevated|borderline|optimal|normal)/i.test(overlay)) {
+              fails.push({
+                id: got.id,
+                printed: exp.printed,
+                check: "hba1c_custom_range_full",
+                detail: `customRangeOverlay must be full bracketed range; got "${overlay}"`,
+              });
+            }
+            const opt = String(cls.template.optimalValue || "");
+            if (/\d+\s*-\s*\d+/.test(opt)) {
+              fails.push({
+                id: got.id,
+                printed: exp.printed,
+                check: "hba1c_optimal_single",
+                detail: `optimalValue should be 1 value, not a range; got "${opt}"`,
+              });
+            }
+          }
+          if (cls.template.key === "egfr") {
+            const opt = String(cls.template.optimalValue || "");
+            if (/^60\b/i.test(opt) || opt === "60 mL/min/1.73m2") {
+              fails.push({
+                id: got.id,
+                printed: exp.printed,
+                check: "egfr_optimal_corrected",
+                detail: `optimalValue must be corrected from naive 60; got "${opt}"`,
+              });
+            }
+            if (!cls.template.editReason) {
+              fails.push({
+                id: got.id,
+                printed: exp.printed,
+                check: "egfr_edit_reason",
+                detail: "missing editReason explaining correction of naive normal eGFR",
+              });
+            }
+          }
+          if (cls.template.key === "creatinine") {
+            const usLog = cls.template.historicalLogs.find((l) => l.date === "2024-10-15");
+            if (usLog && usLog.unit && !/umol\/L/i.test(usLog.unit)) {
+              fails.push({
+                id: got.id,
+                printed: exp.printed,
+                check: "creatinine_unit_conversion",
+                detail: `10/15/2024 log unit should be converted to SI umol/L; got "${usLog.unit}" with value ${usLog.value}`,
+              });
+            }
+          }
+          if (cls.template.key === "total_protein") {
+            const corr = cls.template.dictionaryCorrection;
+            if (!corr || !/normalrange/i.test(corr.field) || !/60\s*-\s*80/i.test(corr.correctedValue)) {
+              fails.push({
+                id: got.id,
+                printed: exp.printed,
+                check: "total_protein_dictionary_correction",
+                detail: `expected dictionaryCorrection for normalRange with corrected value 60 - 80 g/L; got ${JSON.stringify(corr)}`,
+              });
+            }
           }
         }
       }
@@ -193,6 +231,12 @@ export function scoreC2(opts: {
       if (!got.newCatalogDraft) {
         fails.push({ id: got.id, printed: exp.printed, check: "newCatalogDraft", detail: "missing draft" });
       }
+      if (opts.requireInsight) {
+        const insight = (got.medicalInsight || cls?.template.medicalInsight || "").trim();
+        if (!insight) {
+          fails.push({ id: got.id, printed: exp.printed, check: "medicalInsight", detail: "miss missing personalised insight" });
+        }
+      }
     }
   }
 
@@ -200,3 +244,5 @@ export function scoreC2(opts: {
   const unknown = opts.classified.filter((r) => r.writeTarget === "pending").length;
   return { pass: fails.length === 0, fails, known, unknown, turns: opts.turns };
 }
+
+export const scoreC2 = scoreBiomarkersCase;

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { extractBalancedJson } from "../server_pure_helpers";
-import { parseLabelCalories } from "../server_budget_reconcile";
+import { extractBalancedJson } from "../../../server_pure_helpers";
+import { parseLabelCalories } from "../../../server_budget_reconcile";
 
 export const ScoutNutrientsSchema = z.object({
   calories: z.number().nullable().optional(),

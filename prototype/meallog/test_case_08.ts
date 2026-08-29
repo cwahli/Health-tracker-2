@@ -19,8 +19,8 @@ async function runTestCase08() {
   console.log("==========================================================================================\n");
 
   const imagePaths = [
-    "prototype/images/08_rolled_oats_1.jpg",
-    "prototype/images/08_rolled_oats_2.jpg",
+    "prototype/meallog/images/08_rolled_oats_1.jpg",
+    "prototype/meallog/images/08_rolled_oats_2.jpg",
   ];
 
   const contents: any[] = [];

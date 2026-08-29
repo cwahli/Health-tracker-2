@@ -1,7 +1,34 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-28  
-**Status:** UI text duplication, image matching, and "Calculating..." bugs resolved.
+**Updated:** 2026-08-29  
+**Status:** Production Scout system instruction promoted with atomic sticker grounding & local name preservation; bracket tag prompt sanitization applied; Auth/sync hang timeouts resolved; tsc exit 0 and tests green.
+
+- **Production Scout Local Name & Atomic Sticker Promotion (`server_vision_scout.ts`, `agents/scoutInstructions.ts` - 2026-08-29):**
+  - **Root Cause & Diagnosis:** (1) Production `scoutSystemInstruction` in `server_vision_scout.ts` lacked the `GROCERY & SCALE STICKERS` atomic grounding and `LOCAL NAMES` preservation rules from the prototype, causing "Baby Pak Choy" to be genericized to "Green Vegetable" and risk sticker weight transposition. (2) Manually-typed bracket text like `[Mr Oat Rolled Oats 70g]` in the prompt was sent into the scout user note with square brackets, confusing the scout parser.
+  - **Key Changes Applied:**
+    - Promoted `GROCERY & SCALE STICKERS` and `LOCAL NAMES` rules into production `scoutSystemInstruction` in `server_vision_scout.ts`, adding `packageLabelText` to the schema and strictly forbidding generic translations.
+    - Updated `buildVisualScoutPrompt` in `agents/scoutInstructions.ts` to sanitize square brackets in the user note so manually-typed bracketed items reach the scout as clean natural language (`Mr Oat Rolled Oats 70g`) and trigger the extra-food extraction rule.
+    - Added sync safety timeouts and cleared loading states on auth change in `src/App.tsx` and `src/components/HomeTab.tsx`.
+    - Restarted dev server on port 3000 to compile and serve updated instructions.
+  - **Verification:** Live scout execution verified: "Bok Choy" identified with authentic 252g sticker weight; `tsc --noEmit` exit 0; vitest suites (`server_vision_scout.test.ts`, `FoodAgentExecutor.test.ts`, `ModeDAndEdit.test.ts`, `status_labels.test.ts`) 100% green.
+
+- **Meal 11 Scout Atomic Sticker Grounding & Tag Leakage Fixes (`prototype/meallog/`, `src/components/LogChat.tsx`, `brand_menu_items_local.json` - 2026-08-29):**
+  - **Root Cause & Diagnosis:** (1) The Scout model transposed weights between scale stickers and pre-packaged bags because stickers were treated as a global pool without local token grounding. (2) Double brackets in inline tags (`[[Mr Oat...]]`) caused tag stripping to leak conversational prompt text into the catalog item name. (3) `Mr Oat Rolled Oats` was missing from local brand catalog, triggering a generic water-cooked porridge fallback.
+  - **Key Changes Applied:**
+    - Updated `hierarchicalScoutSystemInstruction` & schema with `packageLabelText`, enforcing that each scale sticker is an atomic unit and preserving authentic local names without translation friction.
+    - Updated `applyTag` and tag stripping in `src/components/LogChat.tsx` with regex sanitization to eliminate double brackets and prevent prompt leakage into tag names.
+    - Added `Mr Oat Rolled Oats` (400 kcal/100g) to `brand_menu_items_local.json`.
+    - Added `explicitFoodTags` forwarding to `FoodAgentExecutor.ts`.
+  - **Verification:** Meal 11 live test executed with Gemini 3.5 Flash Lite with 100% correct sticker binding (`IKAN CENDRO`: 205g, `CUMI BANGKA`: 200g, `BBY PKCHAY`: 252g, `TLR AYAM NEGERI`: 65g, `Enoki`: 150g, `Mr Oat`: 70g); `tsc --noEmit` exit 0; 87 vitest test files (825 tests) passed green.
+
+- **Prototype Meal Logging Reorganization & Meal 11 Images (`prototype/meallog/`, `prototype/meallog/images/` - 2026-08-29):**
+  - **Reorganization:** Moved all prototype meal logging scripts, test cases, and directories (`backend_nutrient_calculator.ts`, `run_hierarchical_prototype.ts`, `scout_hierarchical_instructions.ts`, `test_*.ts`, `archive/`, `compare/`, `images/`) into `/prototype/meallog/`. `prototype/` is now cleanly segmented into `prototype/biomarkers` and `prototype/meallog`.
+  - **Meal 11 Images Compressed & Cataloged:**
+    - `11_seafood_squid_fish_receipt_1.jpg` (219 KB <= 300KB, Hari Hari pasar swalayan receipt for Bangka squid and needlefish).
+    - `11_seafood_squid_fish_receipt_2.jpg` (240 KB <= 300KB, Hari Hari receipt for eggs, enoki mushrooms, and baby pak choy).
+    - `11_seafood_squid_fish_ingredients.jpg` (248 KB <= 300KB, raw ingredients display on cutting board).
+  - **Path & Import Adjustments:** Updated relative import depths in `archive/` (`../../../` to root) and image paths in meallog test scripts (`prototype/meallog/images/...`).
+  - **Verification:** `tsc --noEmit` exit 0; 87 vitest test files (825 tests) passed; biomarker suite C2 & C3 passed.
 
 - **Health Coach Debug Logging & Extraction (`server_routes_medical_gemini.ts`, `src/utils/debugPayload.ts`, `src/components/LogChat.tsx` - 2026-08-28):**
   - **Root Cause & Diagnosis:** The `/api/gemini/health-baseline-analyze` endpoint did not write events to the SSE log channel, leaving the "Backend Execution Logs" empty in the debug report. Additionally, instructions, prompts, errors, and warnings were not explicitly highlighted in the generated markdown debug report.
@@ -34,7 +61,7 @@
     - **App Auth State Authority (`App.tsx`):** Ensured active user identity and session persistence prioritize `supabase.auth.onAuthStateChange` and `supabase.auth.getSession()`.
   - **Verification:** `tsc --noEmit` exit 0 (clean lint); full application compilation (`compile_applet`) succeeded without errors.
 
-- **C2 fill-template + status sanitizer (2026-08-28):** Prototype at `prototype/biomarkers/` (18 hits / 12 pending, 2-turn live PASS). `getBiomarkerStatusLabel` never injects Critical for chronic 1.3× (TC 6.5 → Very High; eGFR 80 → Mildly Decreased (CKD G2)). Instruction + full payloads: `prototype/biomarkers/reports/C2_live.md`. Remaining C1–C7: `plan/BIOMARKER_FILL_TEMPLATE_CASES.md`.
+- **C2 fill-template + status sanitizer (2026-08-28):** Prototype at `prototype/biomarkers/` (18 hits / 12 pending, 2-turn live PASS). `getBiomarkerStatusLabel` never injects Critical for chronic 1.3× (TC 6.5 → Very High; eGFR 80 → Mildly Decreased (CKD G2)). Instruction + full payloads: `prototype/biomarkers/reports/C2_live.md`. Remaining C1–C7: `plan/BIOMARKER_FILL_TEMPLATE_CASES.md`. **Mandatory Gate:** All 7 cases (C1–C7) must pass 100% green in the prototype harness before ANY production modal implementation begins; the suite will become the permanent automated baseline regression gate (`scripts/assert-biomarker-cases.mjs`).
 
 - **Universal -5..+5 Severity Magnitude for Biomarker Ranking (`src/utils/biomarkers.ts`, `src/components/MedicalHistoryTab.tsx`, `src/utils/biomarkerIdentity.test.ts` - 2026-08-28):**
   - **Root Cause & Diagnosis:** Previously, biomarker ranking sorted the Medical History tab using a coarse 5-bucket scale (4=Critical, 3=At risk/High/Low/Elevated/Borderline/Flagged, 2=Normal, 1=Unknown, 0=No data). Because many disparate biomarkers (LDL-C, eGFR, HbA1c, Cholesterol/HDL, Steps) all landed on bucket 3, ties fell back to "most recently logged" — causing Steps (auto-synced daily) to always outrank LDL-C regardless of clinical significance.

@@ -95,5 +95,30 @@
     "notes": "Freshly-roasted mushrooms, almond bang-bang sauce, kimchi, coriander, sesame, fresh ciabatta",
     "enabled": true,
     "updated_at": "2026-07-31T22:00:00.000Z"
+  },
+  {
+    "country_code": "ID",
+    "chain_key": "mr_oat",
+    "chain_name": "Mr Oat",
+    "dish_name": "Mr Oat Rolled Oats",
+    "dish_name_key": "mr_oat_rolled_oats",
+    "basis_type": "per_100g",
+    "serving_grams": 100,
+    "nutrients": {
+      "calories": 400,
+      "protein": 11.7,
+      "totalFat": 11.7,
+      "saturatedFat": 1.7,
+      "carbohydrates": 70.0,
+      "sugar": 0,
+      "totalFibre": 10.0,
+      "salt": 0,
+      "sodium": 0
+    },
+    "ingredients": "100% Australian Whole Grain Rolled Oats",
+    "source_url": "https://mroat.com",
+    "notes": "Mr Oat Australian Rolled Oats nutrition facts per 100g",
+    "enabled": true,
+    "updated_at": "2026-08-29T00:00:00.000Z"
   }
 ]

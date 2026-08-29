@@ -19,6 +19,7 @@ export interface FoodAgentExecutorInput {
   messages?: any[]; // Only what's needed for context
   portionChoices?: any;
   activeMeal?: any;
+  explicitFoodTags?: any[];
 }
 
 export interface FoodAgentExecutorEvent {
@@ -79,6 +80,7 @@ export async function* executeFoodAgent(input: FoodAgentExecutorInput): AsyncGen
     skipScout: input.skipScout,
     scoutContentType: input.scoutContentType,
     activeScoutItems: input.activeScoutItems,
+    explicitFoodTags: input.explicitFoodTags,
   };
   
   if (profile) {

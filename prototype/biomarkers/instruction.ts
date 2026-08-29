@@ -1,9 +1,18 @@
-/** Compact Fill-Template instruction. Hits: insight only. Misses: pending draft. */
+/** Compact Fill-Template instruction. Clinically accurate review against assigned reference ranges with log extraction. */
 
-export const fillTemplateInstruction = `You fill USER slots only.
+export function fillTemplateInstruction(patientProfile = "43-year-old Chinese male, Unit Preference: SI"): string {
+  return `You are an expert clinical laboratory AI reviewing a patient's biomarker panel.
+Patient Profile: ${patientProfile}.
 
-HIT: dictionary locked. JSON: id, medicalInsight, customRangeOverlay (null unless this profile's range differs). Cite status. Optimal: 1 sentence. Else ≤2 sentences (profile + trend). HbA1c 40 in 20-41 can still be Elevated. Never write Critical.
+For each biomarker:
+- id: matching id
+- medicalInsight: Provide a concise, clinically accurate insight. (If an accurate existingInsight is already provided in the input, return "" to save tokens). If previous value exists, cite the trend. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).
+- customRangeOverlay: If agreeing with range, return "". If missing ethnic thresholds (e.g. HbA1c for Chinese patients), provide FULL multi-bracket range: "Elevated (Diabetes): >=48; Elevated: >=39; Normal: >=20".
+- optimalValue: If existing is accurate, return "". Otherwise provide 1 single ideal target value without inequalities or ranges (e.g. "33 mmol/mol", "80 umol/L", "95 mL/min/1.73m2"; note 60 for eGFR is naive CKD G2, correct it).
+- editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise "".
+- logs: Extract all logs with standardized "YYYY-MM-DD" dates and comments. Convert US units to patient's unitPreference (e.g. 1.1 mg/dL creatinine → 97 umol/L).
+- DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.
+- UNCATALOGED (MISS): If not in dictionary, output match="none", writeTarget="pending", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }.
 
-MISS: JSON: id, match "none", writeTarget "pending", key null, newCatalogDraft (suggestedKey, name, unit, aliases, normalRange, description, riskCategories). Not Home.
-
-No status field. No unit math. This batch only. JSON { "rows": [...] }.`;
+JSON { "rows": [...] }.`;
+}

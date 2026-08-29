@@ -1,6 +1,6 @@
 # Image Benchmark Ground Truth Nutrients Registry (31 Nutrients)
 
-This registry contains the verified ground truth nutritional values across all **31 canonical nutrients** for all 10 benchmark image sets in `prototype/images/`.
+This registry contains the verified ground truth nutritional values across all **31 canonical nutrients** for all 10 benchmark image sets in `prototype/meallog/images/`.
 
 All values are based on **direct OCR label transcription** where labels/barcodes exist, and rigorous USDA/culinary database standards for visible plated ingredients.
 
@@ -326,3 +326,48 @@ All values are based on **direct OCR label transcription** where labels/barcodes
 | **Potassium** | `2,450` | mg | **Riboflavin (B2)**| `0.65` | mg |
 | **Calcium** | `340` | mg | **Niacin (B3)** | `12.5` | mg |
 | **Iron** | `7.8` | mg | **Magnesium** | `225` | mg |
+
+---
+
+### Image Set 11: Indonesian Seafood & Vegetable Hotpot with Mr Oat Rolled Oats
+- **Files:** `11_seafood_squid_fish_receipt_1.jpg`, `11_seafood_squid_fish_receipt_2.jpg`, `11_seafood_squid_fish_ingredients.jpg`
+- **Environment:** `home_cooked` | **Retailer:** Hari Hari Lokasari | **Branded Add-in:** `Mr Oat`
+- **User Prompt:** `"I had [Mr Oat Rolled Oats 70g] and all food in the pictures"`
+- **Dish Breakdown:**
+  1. **Mr Oat Rolled Oats:** 70g dry (100% Australian Whole Grain Rolled Oats)
+  2. **Ikan Cendro (Hound Needlefish / Garfish):** 205g (`IKAN CENDRO` on Hari Hari sticker)
+  3. **Cumi Bangka (Bangka Squid):** 200g (`CUMI BANGKA` on Hari Hari sticker)
+  4. **Baby Pak Choy (Bok Choy):** 252g (`GU BET BBY PKCHAY/KG` on Hari Hari sticker)
+  5. **Telur Ayam Negeri (Fresh Chicken Egg):** 65g (1 large egg, `TELUR AYAM NEGERI` on Hari Hari sticker)
+  6. **Enoki Mushrooms:** 100g (`ENOKI MUSHROOM` pack on Hari Hari sticker)
+
+#### Item-by-Item Nutrient Breakdown
+| Food Item | Weight | Calories | Protein | Carbs | Fat (Sat) | Fibre | Sodium |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Mr Oat Rolled Oats** | 70g | 280 kcal | 8.2g | 49.0g | 8.2g (1.2g) | 7.0g | 0mg |
+| **Ikan Cendro (Needlefish)** | 205g | 195 kcal | 41.0g | 0.0g | 2.8g (0.6g) | 0.0g | 130mg |
+| **Cumi Bangka (Squid)** | 200g | 184 kcal | 31.2g | 6.2g | 2.8g (0.7g) | 0.0g | 90mg |
+| **Baby Pak Choy** | 252g | 33 kcal | 3.8g | 5.5g | 0.5g (0.1g) | 2.5g | 160mg |
+| **Telur Ayam Negeri (Egg)** | 65g | 93 kcal | 8.2g | 0.5g | 6.2g (2.0g) | 0.0g | 90mg |
+| **Enoki Mushrooms** | 100g | 37 kcal | 2.7g | 7.8g | 0.3g (0.0g) | 2.7g | 3mg |
+| **Total Meal 11** | **892g** | **822 kcal** | **95.1g** | **69.0g** | **20.8g (4.6g)** | **12.2g** | **473mg** |
+
+#### Comprehensive 31 Nutrients Table
+| Nutrient | Value | Unit | Nutrient | Value | Unit |
+| :--- | :---: | :---: | :--- | :---: | :---: |
+| **Calories** | `822` | kcal | **Zinc** | `8.7` | mg |
+| **Protein** | `95.1` | g | **Selenium** | `210` | mcg |
+| **Carbohydrates** | `69.0` | g | **Iodine** | `137` | mcg |
+| **Total Fat** | `20.8` | g | **Phosphorus** | `1,475` | mg |
+| **Saturated Fat** | `4.6` | g | **Vitamin D** | `3.8` | mcg |
+| **Trans Fat** | `0.0` | g | **Vitamin B12** | `7.0` | mcg |
+| **Unsaturated Fat** | `16.2` | g | **Folate** | `293` | mcg |
+| **Omega-3** | `1.78` | g | **Vitamin C** | `123` | mg |
+| **Sugar (Total)** | `3.5` | g | **Vitamin E** | `6.1` | mg |
+| **Added Sugar** | `0.0` | g | **Vitamin K** | `118.5` | mcg |
+| **Dietary Fibre** | `12.2` | g | **Vitamin A** | `835` | mcg |
+| **Soluble Fibre** | `4.6` | g | **Vitamin B6** | `1.35` | mg |
+| **Sodium** | `473` | mg | **Thiamine (B1)** | `0.85` | mg |
+| **Potassium** | `2,480` | mg | **Riboflavin (B2)**| `1.10` | mg |
+| **Calcium** | `445` | mg | **Niacin (B3)** | `24.3` | mg |
+| **Iron** | `10.5` | mg | **Magnesium** | `298` | mg |

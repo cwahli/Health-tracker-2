@@ -4,5 +4,13 @@
   "ethnicity": "Chinese",
   "heightCm": 178,
   "weightKg": 78,
-  "unitPreference": "SI"
+  "unitPreference": "SI",
+  "optimalValues": {
+    "creatinine": "80 umol/L",
+    "egfr": "60 mL/min/1.73m2"
+  },
+  "existingInsights": {
+    "creatinine": "Serum creatinine is 100 umol/L, within the normal laboratory range.",
+    "egfr": "Your eGFR of 80 is normal."
+  }
 }

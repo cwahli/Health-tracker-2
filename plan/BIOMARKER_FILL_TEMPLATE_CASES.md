@@ -1,9 +1,14 @@
 # Fill-template prototype — remaining work to close C1–C7
 
-**Status:** 2026-08-28. Prototype-only at `prototype/biomarkers/`. Production chat modal is **not** wired until the chats below are green.  
+**Status:** 2026-08-29. Prototype-only at `prototype/biomarkers/`.  
 **Architecture:** catalog / pending / overlay / observations (`BIOMARKER_LIFECYCLE.md`, `docs/agent/domains/biomarkers.md`).  
 **C2 evidence:** `prototype/biomarkers/reports/C2_live.md` (instruction + full payloads + model output).  
 **Default model:** `gemini-3.5-flash-lite`.
+
+> [!IMPORTANT]
+> **MANDATORY GATE BEFORE IMPLEMENTATION:**  
+> **All 7 prototype test cases (C1, C2, C3, C4, C5, C6, C7) MUST be completely passed and green in the prototype harness before ANY production implementation or modal wiring begins.**  
+> Once all 7 cases are green, this entire suite will become the permanent automated baseline regression gate (`scripts/assert-biomarker-cases.mjs`) to safeguard the production pipeline against regressions.
 
 This is the execute list for the **one chat modal** fill. It is not a sixth pillar; Track B architecture stays in `BIOMARKER_LIFECYCLE.md`.
 
@@ -31,15 +36,17 @@ One user send of 30 June 2026 rows. Back-office identity **18 observation / 12 p
 | Chat | User send | Done when | Depends on |
 |---|---|---|---|
 | **C1** | 2 known lines + “what does that mean” | Alias → `hba1c`/`ldl`; insight Elevated / Very High; no Critical; no “40 outside 20–41”; no practice/conditions slots | Same harness as C2, `--only C1` |
-| **C2** | 30 mixed | **PASS** (this file’s baseline). Re-score if catalog seed changes unknowns → hits | — |
-| **C3** | Onboarding + US-looking numbers | Profile 43 / male / Chinese / 178 cm / 78 kg extracted. A1c `5.7` → catalog mmol/mol, LDL `130` → mmol/L via `convertViaTable` (raw kept). Agent never asks SI. eGFR overlay + fingerprint. ALT observation, no invented ethnicity overlay. All four are hits | Back-office convert + profile parse |
-| **C4** | ~50 **known** FBC/U&E/lipid lines | One user send; zero pending; runner auto-continues until `remaining` empty | `fixtures/panel_50.json` from current catalog keys |
-| **C5** | “Log these GP results” + 3 screenshots | OCR names/values/dates from pixels; printed ranges stay on the observation; UK spellings / `umol/L` / `10*9/L` / “HbA1c levl” still hit; known → observation; not-in-seed → pending; dates not collapsed; agent continuation | Vision front door + C2 scorer shape |
-| **C6** | “sugar was high” | No invented glucose number, no pending draft | Refuse path in back-office |
-| **C7** | Delete 5 June HbA1c; hide from Home; keep dictionary | Observation tombstone; `notUsed` hide; refuse catalog destroy | Seeded store + existing tombstone helpers |
+| **C2** | 14 known catalog hits (simple, 1 turn) | **PASS**. Known catalog markers, multi-date log trends, comments, US→SI unit conversion, single peak optimal values, full multi-bracket custom range overlays, and dictionary error detection/editing | Runner `--only C2` |
+| **C3** | 10 uncataloged misses (simple, 1 turn) | **PASS**. Zero catalog hits; drafts `newCatalogDraft` schema (`suggestedKey`, `name`, `unit`, `aliases`, `normalRange`, `description`, `riskCategories`), personalized insights, single optimal values, and standardized logs | Runner `--only C3` |
+| **C4** | Onboarding + US-looking numbers | Profile 43 / male / Chinese / 178 cm / 78 kg extracted. A1c `5.7` → catalog mmol/mol, LDL `130` → mmol/L via `convertViaTable` (raw kept). Agent never asks SI. eGFR overlay + fingerprint. ALT observation, no invented ethnicity overlay. All hits | Back-office convert + profile parse |
+| **C5** | ~50 **known** FBC/U&E/lipid lines | One user send; zero pending; runner auto-continues until `remaining` empty | `fixtures/panel_50.json` from current catalog keys |
+| **C6** | “Log these GP results” + 3 screenshots | OCR names/values/dates from pixels; printed ranges stay on the observation; UK spellings / `umol/L` / `10*9/L` / “HbA1c levl” still hit; known → observation; not-in-seed → pending; dates not collapsed; agent continuation | Vision front door + C2 scorer shape |
+| **C7** | “sugar was high” | No invented glucose number, no pending draft | Refuse path in back-office |
+| **C8** | Delete 5 June HbA1c; hide from Home; keep dictionary | Observation tombstone; `notUsed` hide; refuse catalog destroy | Seeded store + existing tombstone helpers |
 
-Smoke after any prompt/schema edit: **C1 + C2 + C3 + C5**.  
-Production wire (chat modal, same instruction + schema): only after **C1, C2, C3, C4, C5** pass. C6/C7 can land in the same prototype week; they are still required before calling the lifecycle “complete.”
+**Strict Pre-Implementation Gate:**
+- **Zero implementation before 100% green:** Production wiring into the medical chat modal (`LogChat.tsx` / `server_routes_medical_gemini.ts`) is strictly forbidden until **all cases pass 100% green** in the prototype runner.
+- **Permanent baseline regression test:** Upon passing, this prototype harness becomes the official automated regression baseline test suite executed on every release gate (`scripts/assert-biomarker-cases.mjs`).
 
 ---
 
@@ -102,9 +109,11 @@ Highest-value seeds first: **non-HDL**, **ferritin**, **sodium/potassium**, **AL
 - `rangeVariesBy` actually set on catalog keys C3 needs (eGFR/lipids), so overlay has a catalog signal.
 - Persist instruction + user payload on every live run (now in the runner).
 
-### P8 — Production wire
+### P8 — Production wire & Automated Baseline Gate
 
-Same instruction + template schema into the medical chat modal. Identity/status/convert stay TypeScript. Do **not** concatenate Lab Parser + Calibrator + Review prompts.
+- **Prerequisite Gate:** ALL 7 prototype cases (**C1 through C7**) must be 100% green and verified in `runner.ts`. Zero production changes to `LogChat.tsx`, `MedicalAgentExecutor.ts`, or `server_routes_medical_gemini.ts` are permitted before this gate is completely satisfied.
+- **Wire to Production:** Port the exact proven instruction, back-office classifier, and template schema into the medical chat modal. Identity, status calculations, and unit conversions remain pure TypeScript. Do **not** concatenate Lab Parser + Calibrator + Review prompts.
+- **Permanent Baseline Regression Test:** Convert the proven `runner.ts` prototype test suite into the official automated release gate script (`scripts/assert-biomarker-cases.mjs`). Any future agent prompt revisions, catalog dictionary additions, or schema adjustments will be strictly gated against this baseline suite to guarantee zero regression.
 
 ---
 

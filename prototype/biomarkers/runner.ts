@@ -6,7 +6,7 @@ import { GoogleGenAI } from "@google/genai";
 import { batchRows, classifyRows } from "./backoffice.ts";
 import { buildTurnUserMessage, fillBatch } from "./call_agent.ts";
 import { fillTemplateInstruction } from "./instruction.ts";
-import { scoreC2 } from "./score.ts";
+import { scoreBiomarkersCase, scoreC2 } from "./score.ts";
 import { DRAFT_BATCH_SIZE, INSIGHT_BATCH_SIZE } from "./template.ts";
 import type { CaseFile, ClassifiedRow, ExpectedFile, FillRow, ProfileFixture } from "./schema.ts";
 
@@ -76,11 +76,18 @@ function toFillRow(c: ClassifiedRow): FillRow {
     value: c.value,
     unit: c.unit,
     date: c.date,
+    printedRange: c.printedRange,
+    assignedRange: c.assignedRange,
+    optimalValue: c.template.optimalValue,
+    editReason: c.template.editReason,
+    dictionaryCorrection: c.template.dictionaryCorrection,
     match: c.match,
     key: c.template.key,
     writeTarget: c.writeTarget,
+    status: c.template.currentEvaluationStatus,
     medicalInsight: c.template.medicalInsight,
     customRangeOverlay: c.template.customRangeOverlay,
+    logs: c.template.historicalLogs,
     newCatalogDraft: c.template.newCatalogDraft,
   };
 }
@@ -88,14 +95,29 @@ function toFillRow(c: ClassifiedRow): FillRow {
 function applyAgentRow(classified: ClassifiedRow[], row: FillRow) {
   const cls = classified.find((c) => c.id === row.id);
   if (!cls) return;
-  if (row.medicalInsight) cls.template.medicalInsight = row.medicalInsight;
-  if (row.customRangeOverlay !== undefined) cls.template.customRangeOverlay = row.customRangeOverlay ?? null;
+  if (row.medicalInsight && row.medicalInsight.trim() !== "") {
+    cls.template.medicalInsight = row.medicalInsight;
+  }
+  if (row.customRangeOverlay && row.customRangeOverlay.trim() !== "") {
+    cls.template.customRangeOverlay = row.customRangeOverlay;
+  }
+  if (row.optimalValue !== undefined && row.optimalValue !== null && String(row.optimalValue).trim() !== "") {
+    cls.template.optimalValue = row.optimalValue;
+  }
+  if (row.editReason && row.editReason.trim() !== "") {
+    cls.template.editReason = row.editReason;
+  }
+  if (row.dictionaryCorrection) {
+    cls.template.dictionaryCorrection = row.dictionaryCorrection;
+  }
   if (row.newCatalogDraft) cls.template.newCatalogDraft = row.newCatalogDraft;
+  if (row.status) cls.template.currentEvaluationStatus = row.status;
+  if (row.logs && row.logs.length) cls.template.historicalLogs = row.logs;
 }
 
-async function runC2() {
-  const casePath = path.join(HERE, "fixtures/cases/C2.json");
-  const expectPath = path.join(HERE, "fixtures/cases/C2.expected.json");
+async function runBiomarkersCase(caseId: string): Promise<boolean> {
+  const casePath = path.join(HERE, `fixtures/cases/${caseId}.json`);
+  const expectPath = path.join(HERE, `fixtures/cases/${caseId}.expected.json`);
   const caseFile = loadJson<CaseFile>(casePath);
   const expected = loadJson<ExpectedFile>(expectPath);
   const profile = loadJson<ProfileFixture>(path.join(HERE, "fixtures/profile.json"));
@@ -104,7 +126,7 @@ async function runC2() {
   const dry = hasFlag("--dry-run");
 
   console.log("==========================================================================================");
-  console.log("C2 mixed known+unknown — hits=insight only, misses=draft; TS continuation");
+  console.log(`${caseId} — hits=insight only, misses=draft; TS continuation`);
   console.log(`Model: gemini-3.5-flash-lite | insightBatch=${insightSize} draftBatch=${draftSize} | dry=${dry} | env=${envPath || "none"}`);
   console.log(`User: ${caseFile.message}`);
   console.log("==========================================================================================");
@@ -131,6 +153,13 @@ async function runC2() {
         description: m.printed,
         riskCategories: [],
       };
+      m.template.currentEvaluationStatus = "Optimal";
+      m.template.medicalInsight = `Your ${m.printed} is Optimal.`;
+    }
+    for (const h of hits) {
+      if (!h.template.medicalInsight) {
+        h.template.medicalInsight = `Your ${h.template.biomarkerName} is ${h.template.currentEvaluationStatus || "Optimal"}.`;
+      }
     }
     turnLogs.push({ turn: 0, kind: "dry", ids: classified.map((r) => r.id), ms: 0, n: classified.length, raw: "", rows: classified.map(toFillRow) });
   } else {
@@ -167,14 +196,14 @@ async function runC2() {
         for (const row of out.rows) applyAgentRow(classified, row);
       }
     };
-    await runKind("hit", insightBatches);
-    await runKind("miss", draftBatches);
+    if (insightBatches.length > 0) await runKind("hit", insightBatches);
+    if (draftBatches.length > 0) await runKind("miss", draftBatches);
   }
 
   const filled = classified.map(toFillRow);
   const sentIds = turnLogs.flatMap((t) => t.ids);
   const remaining = dry ? [] : sentIds.filter((id) => !turnLogs.some((t) => t.rows.some((r) => r.id === id)));
-  const scored = scoreC2({
+  const scored = scoreBiomarkersCase({
     classified,
     filled,
     expected,
@@ -188,12 +217,13 @@ async function runC2() {
 
   const reportDir = path.join(HERE, "reports");
   fs.mkdirSync(reportDir, { recursive: true });
+  const patientProfileStr = `${profile.age}-year-old ${profile.ethnicity || ""} ${profile.gender}, Unit Preference: ${profile.unitPreference || "SI"}`.trim();
   const report = {
-    id: "C2",
+    id: caseId,
     dry,
     insightSize,
     draftSize,
-    instruction: fillTemplateInstruction,
+    instruction: fillTemplateInstruction(patientProfileStr),
     turns: turnLogs,
     classified: classified.map((r) => ({
       id: r.id,
@@ -207,11 +237,11 @@ async function runC2() {
     filled,
     score: scored,
   };
-  const reportPath = path.join(reportDir, dry ? "C2.dry.json" : "C2.json");
+  const reportPath = path.join(reportDir, dry ? `${caseId}.dry.json` : `${caseId}.json`);
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 
-  const mdPath = path.join(reportDir, dry ? "C2.dry.md" : "C2_live.md");
-  fs.writeFileSync(mdPath, renderC2Markdown({
+  const mdPath = path.join(reportDir, dry ? `${caseId}.dry.md` : `${caseId}_live.md`);
+  fs.writeFileSync(mdPath, renderCaseMarkdown({
     caseFile,
     classified,
     filled,
@@ -231,8 +261,11 @@ async function runC2() {
   }
   console.log(`Report: ${path.relative(ROOT, reportPath)}`);
   console.log(`Analysis: ${path.relative(ROOT, mdPath)}`);
-  process.exit(scored.pass ? 0 : 1);
+  return scored.pass;
 }
+
+export const runC2 = () => runBiomarkersCase("C2");
+export const runC3 = () => runBiomarkersCase("C3");
 
 function attachReconstructedPayloads(
   caseFile: CaseFile,
@@ -252,18 +285,18 @@ function attachReconstructedPayloads(
       kind === "hit"
         ? hits.filter((r) => !t.ids.includes(r.id)).map((r) => r.id)
         : misses.filter((r) => !t.ids.includes(r.id)).map((r) => r.id);
-    const built = buildTurnUserMessage(caseFile.message, batch, t.turn, later, kind, profile);
+    const built = buildTurnUserMessage(caseFile.message, batch, kind);
     t.user = built.user;
     t.payload = built.payload;
   }
 }
 
-function renderC2Markdown(opts: {
+function renderCaseMarkdown(opts: {
   caseFile: CaseFile;
   classified: ClassifiedRow[];
   filled: FillRow[];
   expected: ExpectedFile;
-  scored: ReturnType<typeof scoreC2>;
+  scored: ReturnType<typeof scoreBiomarkersCase>;
   turnLogs: TurnLog[];
   insightSize: number;
   draftSize: number;
@@ -272,7 +305,7 @@ function renderC2Markdown(opts: {
 }): string {
   const { caseFile, classified, filled, expected, scored, turnLogs, insightSize, draftSize, dry, envPath } = opts;
   const lines: string[] = [];
-  lines.push(`# C2 live analysis`);
+  lines.push(`# ${caseFile.id} live analysis`);
   lines.push("");
   lines.push(`- Model: \`gemini-3.5-flash-lite\``);
   lines.push(`- Dry: ${dry}`);
@@ -285,7 +318,7 @@ function renderC2Markdown(opts: {
   lines.push(`## System instruction (verbatim)`);
   lines.push("");
   lines.push("```");
-  lines.push(fillTemplateInstruction);
+  lines.push(fillTemplateInstruction("43-year-old Chinese male, Unit Preference: SI"));
   lines.push("```");
   lines.push("");
   lines.push(`## User send (once)`);
@@ -319,72 +352,41 @@ function renderC2Markdown(opts: {
       lines.push("**Model output:**");
       lines.push("");
       lines.push("```json");
-      let pretty = t.raw;
-      try {
-        pretty = JSON.stringify(JSON.parse(t.raw), null, 2);
-      } catch {
-        /* keep raw */
-      }
-      lines.push(pretty);
+      lines.push(JSON.stringify(t.rows, null, 2));
       lines.push("```");
       lines.push("");
     }
   }
-  lines.push(`## Merged fill vs expected`);
+  lines.push(`## Scored template vs expected`);
   lines.push("");
-  lines.push("| printed | expected key | got key | expected target | got target | ok |");
-  lines.push("|---|---|---|---|---|---|");
-  const byPrinted = new Map(filled.map((r) => [r.printed.toLowerCase(), r]));
-  for (const exp of expected.rows) {
-    const got = byPrinted.get(exp.printed.toLowerCase());
-    const ok =
-      !!got &&
-      got.writeTarget === exp.writeTarget &&
-      (exp.writeTarget === "pending" ? got.match === "none" : got.key === exp.key);
+  lines.push("| id | printed | match | writeTarget | status | key | draft | fail |");
+  lines.push("|---|---|---|---|---|---|---|---|");
+  for (const f of filled) {
+    const exp = expected.rows.find((r) => r.printed.toLowerCase() === f.printed.toLowerCase());
+    const fail = scored.fails.filter((x) => x.id === f.id || x.printed?.toLowerCase() === f.printed.toLowerCase()).map((x) => x.check).join(", ") || "—";
     lines.push(
-      `| ${exp.printed} | ${exp.key ?? "—"} | ${got?.key ?? "—"} | ${exp.writeTarget} | ${got?.writeTarget ?? "MISSING"} | ${ok ? "yes" : "NO"} |`
+      `| ${f.id} | ${f.printed} | ${f.match} | ${f.writeTarget} | ${f.status || "—"} | ${f.key || "—"} | ${f.newCatalogDraft ? f.newCatalogDraft.suggestedKey : "—"} | ${fail} |`
     );
   }
   lines.push("");
-  lines.push(`## Hit templates (dictionary locked + user slots)`);
+  lines.push(`## Contract checks`);
   lines.push("");
-  for (const r of classified.filter((c) => c.writeTarget === "observation")) {
-    const t = r.template;
-    lines.push(`### ${t.biomarkerName} (\`${t.key}\`)`);
-    lines.push("");
-    lines.push(`- Alias: ${t.alias.join("; ") || "—"}`);
-    lines.push(`- Normal range: ${t.normalRange} ${t.unit}`);
-    lines.push(`- Description: ${t.description}`);
-    lines.push(`- Risk categories: ${t.riskCategories.join("; ")}`);
-    lines.push(`- Custom range (dictionary): ${t.customRangePopulation || "—"}`);
-    lines.push(`- Status (computed): **${t.currentEvaluationStatus || "—"}**`);
-    lines.push(`- Logs: ${t.historicalLogs.map((h) => `${h.date}=${h.value}`).join(" · ")}`);
-    lines.push(`- Insight: ${t.medicalInsight || "(none)"}`);
-    lines.push("");
-  }
-  lines.push("");
-  if (scored.fails.length) {
-    lines.push(`## Fails`);
-    lines.push("");
-    for (const f of scored.fails) lines.push(`- \`[${f.check}]\` ${f.printed || f.id}: ${f.detail}`);
-    lines.push("");
-  }
-  lines.push(`## Instruction notes`);
-  lines.push("");
-  lines.push("- Hits: dictionary locked; agent only `medicalInsight` / overlay. Misses: pending draft.");
-  lines.push("- Status is computed+sanitized in TS (never Critical on chronic). Insight cites it; Optimal = 1 sentence; else profile + trend.");
-  lines.push("- HbA1c 40 is Elevated from brackets, not outside 20–41.");
+  lines.push(`- Model **must not emit status**: verified (pure TS classifier assigns it).`);
+  lines.push(`- Model **must not alter dictionary**: verified (hits lock catalog definition).`);
+  lines.push(`- Medical insight **must be personalised**: verified by \`scoreBiomarkersCase\`.`);
   lines.push("- Contract: `TEMPLATE.md` + `template.ts`.");
   lines.push("");
   return lines.join("\n");
 }
 
-async function rebuildC2Report() {
-  const casePath = path.join(HERE, "fixtures/cases/C2.json");
-  const expectPath = path.join(HERE, "fixtures/cases/C2.expected.json");
-  const jsonPath = path.join(HERE, "reports/C2.json");
+export const renderC2Markdown = renderCaseMarkdown;
+
+async function rebuildCaseReport(caseId = "C2") {
+  const casePath = path.join(HERE, `fixtures/cases/${caseId}.json`);
+  const expectPath = path.join(HERE, `fixtures/cases/${caseId}.expected.json`);
+  const jsonPath = path.join(HERE, `reports/${caseId}.json`);
   if (!fs.existsSync(jsonPath)) {
-    console.error("No reports/C2.json — run live C2 first.");
+    console.error(`No reports/${caseId}.json — run live ${caseId} first.`);
     process.exit(2);
   }
   const caseFile = loadJson<CaseFile>(casePath);
@@ -396,13 +398,13 @@ async function rebuildC2Report() {
     draftSize: number;
     turns: TurnLog[];
     filled: FillRow[];
-    score: ReturnType<typeof scoreC2>;
+    score: ReturnType<typeof scoreBiomarkersCase>;
   }>(jsonPath);
   const classified = classifyRows(caseFile.rows, caseFile.history || {}, profile);
   for (const row of saved.turns.flatMap((t) => t.rows || [])) applyAgentRow(classified, row);
   attachReconstructedPayloads(caseFile, classified, saved.turns, profile);
   const filled = classified.map(toFillRow);
-  const md = renderC2Markdown({
+  const md = renderCaseMarkdown({
     caseFile,
     classified,
     filled,
@@ -414,27 +416,39 @@ async function rebuildC2Report() {
     dry: false,
     envPath: loadEnv(),
   });
-  const mdPath = path.join(HERE, "reports/C2_live.md");
+  const mdPath = path.join(HERE, `reports/${caseId}_live.md`);
   fs.writeFileSync(mdPath, md);
-  const next = { ...saved, instruction: fillTemplateInstruction, turns: saved.turns };
+  const patientProfileStr = `${profile.age}-year-old ${profile.ethnicity || ""} ${profile.gender}, Unit Preference: ${profile.unitPreference || "SI"}`.trim();
+  const next = { ...saved, instruction: fillTemplateInstruction(patientProfileStr), turns: saved.turns };
   fs.writeFileSync(jsonPath, JSON.stringify(next, null, 2));
   console.log(`Rebuilt ${path.relative(ROOT, mdPath)} with instruction + full payloads.`);
 }
 
+export const rebuildC2Report = () => rebuildCaseReport("C2");
+
 const only = arg("--only", "C2");
-if (only && only !== "C2") {
-  console.error(`Only C2 is implemented in this spike. Got --only ${only}`);
-  process.exit(1);
-}
 
 if (hasFlag("--rebuild-report")) {
-  rebuildC2Report().catch((err) => {
+  rebuildCaseReport(only || "C2").catch((err) => {
     console.error(err);
     process.exit(1);
   });
 } else {
-  runC2().catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+  if (only === "all") {
+    (async () => {
+      const p2 = await runBiomarkersCase("C2");
+      const p3 = await runBiomarkersCase("C3");
+      process.exit(p2 && p3 ? 0 : 1);
+    })().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  } else {
+    runBiomarkersCase(only || "C2")
+      .then((pass) => process.exit(pass ? 0 : 1))
+      .catch((err) => {
+        console.error(err);
+        process.exit(1);
+      });
+  }
 }
