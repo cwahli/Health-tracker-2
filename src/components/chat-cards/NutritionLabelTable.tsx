@@ -885,6 +885,44 @@ export function NutritionLabelTable({
                   />
                 )}
 
+                {/* Fallback portion control when there is no PackPortionRow */}
+                {(!activePackGrams || activePackGrams <= 0) && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-2 mb-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 text-xs font-sans">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">{activeTitle}</span>
+                      <span className="text-slate-500 dark:text-slate-400 font-normal">portion:</span>
+                      <PortionDropdown
+                        baseWeight={activeTab > 0 ? (resolveComponentWeightGrams(subComps[activeTab - 1], staticDishTotalWeight, subComps.length) || 100) : (staticDishTotalWeight || 100)}
+                        currentWeight={resolvedWeight || 100}
+                        onScale={(ratio) => {
+                          const baseW = activeTab > 0 ? (resolveComponentWeightGrams(subComps[activeTab - 1], staticDishTotalWeight, subComps.length) || 100) : (staticDishTotalWeight || 100);
+                          const newWeight = Math.round(baseW * ratio);
+                          if (activeTab > 0) {
+                            setCustomPortionMap(prev => {
+                              const updatedMap = {
+                                ...prev,
+                                [`${itemKeyPrefix}-${activeTab}`]: newWeight,
+                                [`${i}-${activeTab}`]: newWeight
+                              };
+                              // Compute new dish weight with updated subcomponent weight
+                              const newDishWeight = subComps.reduce((sum: number, c: any, cIdx: number) => {
+                                const cW = updatedMap[`${itemKeyPrefix}-${cIdx + 1}`] ?? updatedMap[`${i}-${cIdx + 1}`] ?? resolveComponentWeightGrams(c, staticDishTotalWeight, subComps.length);
+                                return sum + cW;
+                              }, 0);
+                              if (onScalePortion && staticDishTotalWeight > 0 && newDishWeight > 0) {
+                                onScalePortion(newDishWeight / staticDishTotalWeight);
+                              }
+                              return updatedMap;
+                            });
+                          } else if (onScalePortion && dishTotalWeight > 0) {
+                            onScalePortion(newWeight / dishTotalWeight);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {item.lockedNutrientKeys && Array.isArray(item.lockedNutrientKeys) && item.lockedNutrientKeys.length > 0 && (
                   <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-[10px] text-amber-800 dark:text-amber-200 flex items-start gap-1.5">
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 shrink-0 mt-0.5">

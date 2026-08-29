@@ -176,6 +176,31 @@ function scaleNutrientObj(obj?: Record<string, any>, factor: number = 1.0): Reco
   return res;
 }
 
+function scaleSubcomponents(subComps: any[] | undefined, factor: number): any[] | undefined {
+  if (!Array.isArray(subComps)) return subComps;
+  return subComps.map((c: any) => {
+    if (!c || typeof c !== 'object') return c;
+    const cWeight = c.weightGrams || c.estimatedWeightGrams;
+    const cEstWeight = c.estimatedWeightGrams || c.weightGrams;
+    const scaledItemNutrients = scaleNutrientObj(c.nutrients || c.nutritionFacts, factor);
+    const scaledTruthNutrients = scaleNutrientObj(c.truthNutrients, factor);
+    return {
+      ...c,
+      weightGrams: cWeight ? Math.round(cWeight * factor) : cWeight,
+      estimatedWeightGrams: cEstWeight ? Math.round(cEstWeight * factor) : cEstWeight,
+      calories: c.calories ? Math.round(c.calories * factor) : (scaledItemNutrients?.calories || c.calories),
+      saturatedFat: c.saturatedFat ? Math.round(c.saturatedFat * factor * 10) / 10 : (scaledItemNutrients?.saturatedFat || c.saturatedFat),
+      sodium: c.sodium ? Math.round(c.sodium * factor) : (scaledItemNutrients?.sodium || c.sodium),
+      proteinGrams: c.proteinGrams ? Math.round(c.proteinGrams * factor * 10) / 10 : (scaledItemNutrients?.proteinGrams || c.proteinGrams),
+      carbsGrams: c.carbsGrams ? Math.round(c.carbsGrams * factor * 10) / 10 : (scaledItemNutrients?.carbsGrams || c.carbsGrams),
+      fatGrams: c.fatGrams ? Math.round(c.fatGrams * factor * 10) / 10 : (scaledItemNutrients?.fatGrams || c.fatGrams),
+      nutrients: scaledItemNutrients || c.nutrients,
+      truthNutrients: scaledTruthNutrients || c.truthNutrients,
+      nutritionFacts: scaledItemNutrients || c.nutritionFacts,
+    };
+  });
+}
+
 export function scaleMealPortion<T extends FoodLogLike>(currentLog: T, ratio: number): T {
   const baseScale = currentLog.portionRatio || 1.0;
   const factor = ratio / baseScale;
@@ -204,7 +229,10 @@ export function scaleMealPortion<T extends FoodLogLike>(currentLog: T, ratio: nu
       nutrients: scaledItemNutrients || it.nutrients,
       truthNutrients: scaledTruthNutrients || it.truthNutrients,
       portionRatio: ratio,
-      portionDescription: newWeight ? `${newWeight}g` : `${ratio}x`
+      portionDescription: newWeight ? `${newWeight}g` : `${ratio}x`,
+      compositeSiblings: scaleSubcomponents(it.compositeSiblings, factor),
+      componentsDetailList: scaleSubcomponents(it.componentsDetailList, factor),
+      components: scaleSubcomponents(it.components, factor),
     };
   });
 
@@ -296,7 +324,10 @@ export function scaleSingleDishPortion<T extends FoodLogLike>(currentLog: T, dis
     nutrients: scaledItemNutrients || targetItem.nutrients,
     truthNutrients: scaledTruthNutrients || targetItem.truthNutrients,
     portionRatio: ratio,
-    portionDescription: newWeight ? `${newWeight}g` : `${ratio}x`
+    portionDescription: newWeight ? `${newWeight}g` : `${ratio}x`,
+    compositeSiblings: scaleSubcomponents(targetItem.compositeSiblings, factor),
+    componentsDetailList: scaleSubcomponents(targetItem.componentsDetailList, factor),
+    components: scaleSubcomponents(targetItem.components, factor),
   };
   items[dishIdx] = updatedDish;
 

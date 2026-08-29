@@ -1091,6 +1091,7 @@ export default function App() {
             let done = false;
             const pollStartTime = Date.now();
             const maxPollTimeMs = 5 * 60 * 1000; // Extended 5 minute timeout window (was 3 min; large multi-item edits can exceed 3 min)
+            let r2RetryCount = 0;
 
             while (!done && (Date.now() - pollStartTime) < maxPollTimeMs) {
               if (abortSignal.aborted) {
@@ -1159,12 +1160,41 @@ export default function App() {
                      }
                   }
 
+                  // Direct R2 fallback fetch from client if server failed/delayed transparent R2 fetching
+                  if (serverJob.clean_result && (serverJob.clean_result as any).is_r2 && (serverJob.clean_result as any).r2_url) {
+                     try {
+                        const directRes = await fetch((serverJob.clean_result as any).r2_url);
+                        if (directRes.ok) {
+                           const directData = await directRes.json();
+                           if (directData && !directData.is_r2) {
+                              serverJob.clean_result = directData;
+                           }
+                        }
+                     } catch (directErr) {
+                        console.warn('[JobQueueRunner] Failed to fetch clean_result directly from R2 URL:', directErr);
+                     }
+                  }
+
                   // If after trying to fetch the full payload it is still a stub,
-                  // DO NOT finalize the state yet. Skip this cycle and let it retry/poll again.
+                  // DO NOT finalize the state yet. Skip this cycle and let it retry/poll again (max 5 attempts).
                   if ((serverJob.status === 'succeeded' || serverJob.status === 'awaiting_user') && serverJob.clean_result && (serverJob.clean_result as any).is_r2) {
-                     console.warn(`[JobQueueRunner] Job ${job.id} is ${serverJob.status} but full result from R2 is not yet ready. Retrying...`);
-                     await new Promise(r => setTimeout(r, 2000));
-                     continue;
+                     r2RetryCount++;
+                     if (r2RetryCount > 5) {
+                        console.warn(`[JobQueueRunner] Job ${job.id} is ${serverJob.status} but full result from R2 timed out after 5 retries. Falling back to simple status message.`);
+                        serverJob.clean_result = {
+                           message: serverJob.status_message || 'Analysis complete',
+                           text: serverJob.status_message || 'Analysis complete',
+                           scoutItems: [],
+                           pendingFoodLog: {
+                              name: 'Meal',
+                              nutrients: { calories: 0, protein: 0, carbohydrates: 0, fat: 0 }
+                           }
+                        };
+                     } else {
+                        console.warn(`[JobQueueRunner] Job ${job.id} is ${serverJob.status} but full result from R2 is not yet ready. Retrying (${r2RetryCount}/5)...`);
+                        await new Promise(r => setTimeout(r, 2000));
+                        continue;
+                     }
                   }
                 }
 
