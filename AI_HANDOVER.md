@@ -3,6 +3,17 @@
 **Updated:** 2026-08-29  
 **Status:** Production Scout system instruction promoted with atomic sticker grounding & local name preservation; bracket tag prompt sanitization applied; Auth/sync hang timeouts resolved; tsc exit 0 and tests green.
 
+- **Edit Mode Persistence & Job Queue Stalling Resolution (`src/jobs/JobQueueRunner.ts`, `src/components/LogChat.tsx`, `src/App.tsx`, `server_routes_food_analyze.ts` - 2026-08-29):**
+  - **Root Cause & Diagnosis:** (1) `JobQueueRunner.loop()` picked up jobs immediately when `status: 'queued'` was set on edit send, without waiting for the client's asynchronous network submission (`clientSubmitPending: true`) to complete. This caused `App.tsx`'s executor to poll `/api/jobs/status` before the server received Turn 2, reading the stale Turn 1 `succeeded` status and triggering a race where the runner submitted a duplicate Turn 1 retry that wiped out the edit. (2) `attemptCount` was not reset to 0 upon a new edit send in `LogChat.tsx`, causing `App.tsx` to interpret Turn 2 as a failed retry (`effectiveAttempt > 1`). (3) Assistant messages lacked unique timestamped IDs on multi-turn edits, causing duplicate key lookups. (4) In `server_routes_food_analyze.ts`, when the LLM returned `itemsBreakdown` without explicit `editCommands`, it had fallen back to `mode = "new_log"` instead of synthesizing diff commands against `activeMeal`.
+  - **Key Changes Applied:**
+    - Guarded `JobQueueRunner.loop()` to skip jobs where `clientSubmitPending` is true until submission completes (with a 20s timeout fallback).
+    - Added a brief safety wait in `src/App.tsx` executor for `clientSubmitPending` to clear before polling `/api/jobs/status`.
+    - In `src/components/LogChat.tsx`, reset `attemptCount: 0` and `error: undefined` when submitting a new turn/edit so the runner does not classify user edits as retries.
+    - Assigned unique timestamped IDs to follow-up assistant messages (`msg_assistant_${job.id}_${Date.now()}`) to eliminate key collisions.
+    - Added inline diff synthesizer in `server_routes_food_analyze.ts` to convert modified `itemsBreakdown` into `remove_item`, `update_weight`, and `add_item` commands while remaining in the `modify` pipeline.
+    - Pushed commits `274c458` and `7aed57e` cleanly to `origin/main`.
+  - **Verification:** `npx tsc --noEmit` exit 0; vitest suites (`JobQueueRunner.test.ts`, `JobStore.test.ts`, `ModeDAndEdit.test.ts`) 100% green; git working tree clean and up to date with remote.
+
 - **Production Scout Local Name & Atomic Sticker Promotion (`server_vision_scout.ts`, `agents/scoutInstructions.ts` - 2026-08-29):**
   - **Root Cause & Diagnosis:** (1) Production `scoutSystemInstruction` in `server_vision_scout.ts` lacked the `GROCERY & SCALE STICKERS` atomic grounding and `LOCAL NAMES` preservation rules from the prototype, causing "Baby Pak Choy" to be genericized to "Green Vegetable" and risk sticker weight transposition. (2) Manually-typed bracket text like `[Mr Oat Rolled Oats 70g]` in the prompt was sent into the scout user note with square brackets, confusing the scout parser.
   - **Key Changes Applied:**
