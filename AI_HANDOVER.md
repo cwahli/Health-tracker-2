@@ -1,7 +1,15 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-28  
-**Status:** Supabase-only Auth migration & Sign-up verified. Fill-template prototype C2 green (`prototype/biomarkers/`). Remaining C1–C7: `plan/BIOMARKER_FILL_TEMPLATE_CASES.md`.
+**Status:** Health Coach Debug Logging & Extraction completed. Supabase-only Auth migration & Sign-up verified. Fill-template prototype C2 green (`prototype/biomarkers/`). Remaining C1–C7: `plan/BIOMARKER_FILL_TEMPLATE_CASES.md`.
+
+- **Health Coach Debug Logging & Extraction (`server_routes_medical_gemini.ts`, `src/utils/debugPayload.ts`, `src/components/LogChat.tsx` - 2026-08-28):**
+  - **Root Cause & Diagnosis:** The `/api/gemini/health-baseline-analyze` endpoint did not write events to the SSE log channel, leaving the "Backend Execution Logs" empty in the debug report. Additionally, instructions, prompts, errors, and warnings were not explicitly highlighted in the generated markdown debug report.
+  - **Key Changes Applied:**
+    - Instrumented the health baseline route with a `sendLog` helper to stream system instructions, prompt payloads, raw LLM outputs, and processing statuses over the SSE channel.
+    - Updated `src/utils/debugPayload.ts` to automatically scan and extract dispatched system instructions, prompts, errors, and warnings directly from the raw backend logs.
+    - Updated `src/components/LogChat.tsx` to forward `stageLedger` and `historyLog` in the debug data payload.
+  - **Verification:** `tsc --noEmit` exit 0; `compile_applet` exit 0 (Succeeded).
 
 - **Navigation & Profile Sign-Out Button Consolidation (`src/components/Header.tsx` - 2026-08-28):**
   - **Root Cause & Diagnosis:** Redundant sign-out buttons were placed both on the persistent top navigation bar and in multiple locations inside the Edit Profile modal (header and footer).
@@ -776,3 +784,8 @@
     - Exported `getBrandMenuItemById` and refactored mapping logic to a shared `formatBrandHit` function in `serverBrandMenu.ts`.
     - Modified `server_routes_food_analyze.ts` to directly fetch and inject items tagged with `dbId: "brand_menu_..."` into `searchResultsList` before DB candidates are aggregated.
     - Tested successfully, `npm run test` and `npm run check:tests` passing, guaranteeing the explicit item selections are perfectly preserved through the resolution flow.
+56. **Food Catalog Autocomplete Inline Replacement**:
+    - Addressed the issue where adding a suggested catalog item (from the dropdown) appended the tag to the input text while leaving the original search terms intact, resulting in duplicated text (e.g. `Mr oat [Mr Oat Rolled Oats 70g]`).
+    - Added `activeSearchTerms` state in `LogChat.tsx` to remember exactly which string of text triggered the active catalog suggestions.
+    - Updated the "Add" button's click handler to execute a `lastIndexOf` replacement on the current `inputText`. When clicked, it excises the original search terms and smoothly splices the `[Dish Name Weight]` bracket precisely where the user's triggering text used to be, preserving trailing/leading whitespace and keeping any text the user typed *after* the trigger intact.
+    - Result is seamless inline replacement that prevents stuttering copy.

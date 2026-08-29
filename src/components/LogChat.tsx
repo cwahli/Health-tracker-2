@@ -1252,11 +1252,13 @@ ${logsText}`);
 
   const [explicitFoodTags, setExplicitFoodTags] = useState<any[]>([]);
   const [catalogMatches, setCatalogMatches] = useState<any[]>([]);
+  const [activeSearchTerms, setActiveSearchTerms] = useState<string>('');
   const [tagPortionPreFill, setTagPortionPreFill] = useState<number>(100);
 
   useEffect(() => {
     if (type !== 'food' || inputText.trim().length < 3) {
       setCatalogMatches([]);
+      setActiveSearchTerms('');
       return;
     }
     const timer = setTimeout(async () => {
@@ -1272,6 +1274,7 @@ ${logsText}`);
       const strippedInput = inputText.replace(/\[.*?\]/g, '').trim();
       if (strippedInput.length < 3) {
         setCatalogMatches([]);
+        setActiveSearchTerms('');
         return;
       }
       const words = strippedInput.split(/\s+/);
@@ -1283,8 +1286,10 @@ ${logsText}`);
           const data = await res.json();
           if (data.results && data.results.length > 0 && data.results.length < 4) {
             setCatalogMatches(data.results);
+            setActiveSearchTerms(searchTerms);
           } else {
             setCatalogMatches([]);
+            setActiveSearchTerms('');
           }
         }
       } catch (err) {
@@ -2106,7 +2111,9 @@ ${logsText}`);
         brandSearchResults: job?.result?.brandSearchResults,
         comprehensiveNutrients: job?.result?.comprehensiveNutrients || pendingFoodLog?.nutrients,
         ingestTrace: job?.result?.ingestTrace || msg?.data?.ingestTrace || msg?.data?.agentResult?.ingestTrace,
-        report: job?.result?.report || msg?.data?.report || msg?.data?.agentResult?.report
+        report: job?.result?.report || msg?.data?.report || msg?.data?.agentResult?.report,
+        stageLedger: job?.result?.stageLedger || msg?.data?.stageLedger,
+        historyLog: job?.result?.historyLog || msg?.data?.historyLog
       });
       const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
@@ -6391,15 +6398,27 @@ ${logsText}`);
                         <button
                           type="button"
                           onClick={() => {
+                            const applyTag = (prev: string, searchTerms: string, tagContent: string) => {
+                              if (!searchTerms) return prev + ` [${tagContent}] `;
+                              const idx = prev.toLowerCase().lastIndexOf(searchTerms.toLowerCase());
+                              if (idx !== -1) {
+                                const before = prev.substring(0, idx).trimEnd();
+                                const after = prev.substring(idx + searchTerms.length).trimStart();
+                                return (before ? before + ' ' : '') + `[${tagContent}] ` + after;
+                              }
+                              return prev + ` [${tagContent}] `;
+                            };
+
                             if (item._listType === 'brand') {
                               const w = (document.getElementById(`tag-portion-${item.food_id}`) as HTMLInputElement)?.value || tagPortionPreFill;
                               setExplicitFoodTags(prev => [...prev, { dbId: item.food_id, name: item.dish_name, weightGrams: Number(w), source: 'catalog_tag' }]);
-                              setInputText(prev => prev + ` [${item.dish_name} ${w}g] `);
+                              setInputText(prev => applyTag(prev, activeSearchTerms, `${item.dish_name} ${w}g`));
                             } else {
                               setExplicitFoodTags(prev => [...prev, { dbId: item.id, name: item.name, source: 'previous_meal', originalLog: item }]);
-                              setInputText(prev => prev + ` [${item.name}] `);
+                              setInputText(prev => applyTag(prev, activeSearchTerms, item.name));
                             }
                             setCatalogMatches([]);
+                            setActiveSearchTerms('');
                           }}
                           className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0"
                         >

@@ -23,6 +23,7 @@ export interface ServerJobPayload {
   foodLogs?: any[];
   userSelectedMode?: string;
   activeScoutItems?: any[];
+  explicitFoodTags?: any[];
   agentType?: string;
   biomarkerKey?: string;
   biomarkers?: { [key: string]: number | string };
@@ -390,6 +391,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         foodLogs: payload.foodLogs || [],
         userSelectedMode: payload.userSelectedMode || mode || 'review',
         activeScoutItems: payload.activeScoutItems || [],
+        explicitFoodTags: payload.explicitFoodTags || [],
         portionChoices: payload.portionChoices,
         skipScout: payload.skipScout,
         skipPortionClarify: (payload as any).skipPortionClarify,

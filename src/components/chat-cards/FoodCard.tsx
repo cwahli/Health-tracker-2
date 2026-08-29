@@ -1594,6 +1594,37 @@ export const FoodCard: React.FC<AgentCardProps & {
   // Version counter to trigger re-renders when portion scaling updates in-place log data
   const [portionLogVersion, setPortionLogVersion] = React.useState<number>(0);
 
+const resolveHistoricalImgSrc = (item: any, messageImages: string[], foodLogs: any[], imgIdxOverride?: number) => {
+  const isExplicit = item.source === 'catalog_tag' || item.source === 'previous_meal';
+  
+  if (foodLogs && foodLogs.length > 0) {
+    if (item.dbId) {
+      const matched = foodLogs.find((f: any) => f.id === item.dbId || (f.itemsBreakdown || []).some((b: any) => b.dbId === item.dbId));
+      if (matched && (matched.imageUrl || matched.imageUrls?.[0])) return resolveFoodImage(matched.imageUrl || matched.imageUrls?.[0], foodLogs) || '';
+    }
+    const nameToMatch = (item.originalName || item.keyword || item.name || '').toLowerCase();
+    if (nameToMatch) {
+      const matchedByName = foodLogs.find((f: any) => 
+        (f.name || '').toLowerCase() === nameToMatch || 
+        (f.itemsBreakdown || []).some((b: any) => (b.canonicalDbName || b.name || '').toLowerCase() === nameToMatch)
+      );
+      if (matchedByName && (matchedByName.imageUrl || matchedByName.imageUrls?.[0])) {
+        return resolveFoodImage(matchedByName.imageUrl || matchedByName.imageUrls?.[0], foodLogs) || '';
+      }
+    }
+  }
+
+  if (isExplicit) return getFoodImageUrl(item.keyword || item.originalName || item.name);
+
+  if (typeof imgIdxOverride === 'number' && imgIdxOverride >= 0 && imgIdxOverride < messageImages.length) {
+    return messageImages.length > 0 ? messageImages[imgIdxOverride] : getFoodImageUrl(item.keyword || item.originalName || item.name);
+  }
+
+  const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
+  const imgIdx = (messageImages.length > 0 && rawIdx >= 0 && rawIdx < messageImages.length) ? rawIdx : 0;
+  return (messageImages.length > 0) ? messageImages[imgIdx] : getFoodImageUrl(item.keyword || item.originalName || item.name);
+};
+
   const displayedScoutItems = React.useMemo(() => {
     const itemsBreakdown = msg.data?.pendingFoodLog?.itemsBreakdown || msg.data?.data?.itemsBreakdown || msg.data?.itemsBreakdown || msg.data?.agentResult?.data?.itemsBreakdown;
     if (!itemsBreakdown || itemsBreakdown.length === 0) {
@@ -2234,9 +2265,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                const imgIdx = (messageImages.length > 1 && allSameIdx && allSameBox && i < messageImages.length)
                                  ? i
                                  : (rawIdx >= 0 && rawIdx < messageImages.length ? rawIdx : 0);
-                               const resolvedImgSrc = (messageImages.length > 0)
-                                 ? messageImages[imgIdx]
-                                 : getFoodImageUrl(item.keyword);
+                               const resolvedImgSrc = resolveHistoricalImgSrc(item, messageImages, foodLogs || [], imgIdx);
                                const itemWidthClass = activeScoutItems.length > 4
                                  ? 'w-[90px] sm:w-[105px] shrink-0'
                                  : activeScoutItems.length === 1 
@@ -3039,9 +3068,7 @@ export const FoodCard: React.FC<AgentCardProps & {
         const item = scoutList[scoutPreviewIdx];
         if (!item) return null;
         const imgIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
-        const resolvedImgSrc = (messageImages.length > 0)
-          ? messageImages[imgIdx >= 0 && imgIdx < messageImages.length ? imgIdx : 0]
-          : getFoodImageUrl(item.keyword || item.name || item.originalName);
+        const resolvedImgSrc = resolveHistoricalImgSrc(item, messageImages, foodLogs || [], imgIdx);
         const bb = item.boundingBox2D || item.boundingBox || null;
         return (
           <ZoomableImage 
@@ -3205,9 +3232,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                  const imgIdx = (messageImages.length > 1 && allSameIdx && allSameBox && i < messageImages.length)
                                    ? i
                                    : (rawIdx >= 0 && rawIdx < messageImages.length ? rawIdx : 0);
-                                 const resolvedImgSrc = (messageImages.length > 0)
-                                   ? messageImages[imgIdx]
-                                   : getFoodImageUrl(item.keyword);
+                                 const resolvedImgSrc = resolveHistoricalImgSrc(item, messageImages, foodLogs || [], imgIdx);
                                  const isSlider = !displayAsMenu && displayedScoutItems.length > 4;
                                  const itemWidthClass = isSlider 
                                    ? 'w-[90px] sm:w-[105px] snap-start' 
@@ -3761,7 +3786,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                   {displayedScoutItems.map((item: any, i: number) => {
                     const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
                     const imgIdx = (messageImages.length > 0 && rawIdx >= 0 && rawIdx < messageImages.length) ? rawIdx : 0;
-                    const resolvedImgSrc = (messageImages.length > 0) ? messageImages[imgIdx] : getFoodImageUrl(item.keyword);
+                    const resolvedImgSrc = resolveHistoricalImgSrc(item, messageImages, foodLogs || [], imgIdx);
                     return (
                       <div key={i} className="flex flex-col items-center gap-1 shrink-0 relative group w-[110px] sm:w-[130px]">
                         <div 

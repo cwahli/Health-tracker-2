@@ -63,6 +63,12 @@ export const PackPortionRow: React.FC<PackPortionRowProps> = ({
   const uniqueWeights = Array.from(new Set(rawOpts.filter(w => typeof w === 'number' && w > 0))).sort((a, b) => a - b);
   const options = uniqueWeights.map(w => ({ label: `${w}g`, value: w }));
 
+  // If there's only one option (packGrams === currentWeight and no different dishWeight)
+  // then the dropdown is unnecessary, hide the row entirely to reduce noise.
+  if (options.length <= 1) {
+    return null;
+  }
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 p-2 mb-2.5 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 text-slate-700 dark:text-slate-200 text-xs font-sans">
       <div className="flex items-center gap-1.5 flex-wrap">

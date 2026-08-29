@@ -2309,6 +2309,20 @@ medicalGeminiRouter.post("/api/gemini/health-baseline-analyze", async (req, res)
       res.setHeader("Connection", "keep-alive");
     }
 
+    // Debug-log instrumentation: every other Gemini route (medical-analyze,
+    // food-analyze) reports its dispatched instruction/prompt/response through
+    // this same `type: 'log'` SSE channel, which serverJobs.ts collects into
+    // the job's backendLogs. This route never did, which is why Health Coach
+    // debug exports came back with an empty "Backend Execution Logs" section
+    // even when the analysis itself succeeded.
+    const sendLog = (logType: string, messageText: string) => {
+      if (isStream) {
+        try {
+          res.write(`data: ${JSON.stringify({ type: 'log', logType, message: messageText, timestamp: Date.now() })}\n\n`);
+        } catch (e) {}
+      }
+    };
+
     const { profile, userProfile, biomarkerHistory, engine, refinement, calibratedInsights, outOfRangeBiomarkers } = req.body;
     const activeProfile = profile || userProfile || {};
 
@@ -2477,6 +2491,10 @@ CRITICAL DATA INTEGRITY LAW: You MUST NOT create clinical risk categories, targe
 
 Your response must be exactly one JSON object matching the requested schema. Never add markdown wrappers outside the JSON.`;
 
+    sendLog('status', 'Analyzing health profile...');
+    sendLog('backend', `[Health Baseline Agent] Dispatched System Instruction (Length: ${systemInstruction.length})`);
+    sendLog('backend', `[Health Baseline Agent] Dispatched Prompt:\n${promptText}`);
+
     const textOutput = await callUnifiedLLM({
       modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite",
       systemInstruction,
@@ -2493,6 +2511,9 @@ Your response must be exactly one JSON object matching the requested schema. Nev
         }
       } : undefined
     });
+
+    sendLog('backend', `[Health Baseline Agent] Response received (${textOutput?.length || 0} chars). Raw output:\n${textOutput}`);
+    sendLog('status', 'Response received, finalizing...');
 
     let cleanJson = textOutput.replace(/```(?:json)?/gi, "").trim();
     cleanJson = cleanJson.replace(/,\s*([}\]])/g, "$1");
@@ -2610,6 +2631,9 @@ Your response must be exactly one JSON object matching the requested schema. Nev
   } catch (error: any) {
     console.error("[Health Baseline Analyze Error]:", error);
     if (res.headersSent) {
+      try {
+        res.write(`data: ${JSON.stringify({ type: 'log', logType: 'error', message: `[Health Baseline Agent] Error: ${error.message}`, timestamp: Date.now() })}\n\n`);
+      } catch (e) {}
       res.write(`data: ${JSON.stringify({ error: "Failed to generate health baseline: " + error.message })}\n\n`);
       res.end();
     } else {

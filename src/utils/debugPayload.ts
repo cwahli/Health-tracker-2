@@ -439,6 +439,52 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
 
   // 8. Backend Execution Logs (deduplicated)
   const logs = String(input.backendLogs || '').trim();
+
+  // Extract "Agent Instructions & Prompts Dispatched" and "Errors & Warnings"
+  // summaries directly from the raw backend log text. This is deliberately
+  // text-based (not tied to a specific field a backend route must populate)
+  // so it works uniformly across every agent's log format without requiring
+  // per-route wiring.
+  if (logs) {
+    const logLines = logs.split('\n');
+
+    const instructionBlocks: string[] = [];
+    const instructionStartPattern = /(Dispatched System Instruction|Dispatched Prompt|System Instruction:|UnifiedLLM-Prompt|Instruction dispatched)/i;
+    for (let i = 0; i < logLines.length; i++) {
+      if (instructionStartPattern.test(logLines[i])) {
+        const block: string[] = [logLines[i]];
+        let j = i + 1;
+        while (j < logLines.length && !/^\[[A-Za-z]/.test(logLines[j]) && block.join('\n').length < 4000) {
+          block.push(logLines[j]);
+          j++;
+        }
+        instructionBlocks.push(block.join('\n').trim());
+      }
+    }
+    if (instructionBlocks.length > 0) {
+      lines.push(`## 🧠 Agent Instructions & Prompts Dispatched`);
+      lines.push('');
+      lines.push(`_Extracted from backend logs below — ${instructionBlocks.length} dispatch(es) found._`);
+      lines.push('');
+      for (const block of instructionBlocks.slice(0, 10)) {
+        lines.push('```');
+        lines.push(block.slice(0, 4000));
+        lines.push('```');
+        lines.push('');
+      }
+    }
+
+    const errorLines = logLines.filter((l) => /^\[error\]/i.test(l.trim()) || /\bError:\s/i.test(l));
+    if (errorLines.length > 0) {
+      lines.push(`## ⚠️ Errors & Warnings`);
+      lines.push('');
+      for (const el of errorLines.slice(0, 40)) {
+        lines.push(`- ${el.trim().slice(0, 500)}`);
+      }
+      lines.push('');
+    }
+  }
+
   lines.push(`## 🖥️ Backend Execution Logs`);
   lines.push('');
   if (logs) {
