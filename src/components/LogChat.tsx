@@ -2712,15 +2712,20 @@ ${logsText}`);
         }
 
         // Submission mode:
-        // If job already succeeded or has a pending food log, this submission is an edit
+        // Auto-promote to 'edit' when the job already has a result AND the user hasn't
+        // explicitly chosen 'review' (new scan intent) or 'compare'.
+        // If the user's pill is 'review' + new images: treat as a fresh scan, not an edit.
+        // If the user's pill is 'review' + no images: still allow auto-promote (text-only follow-up).
+        // If the user's pill is explicitly 'edit': always edit.
         let submissionMode: 'review' | 'compare' | 'edit' = mappedMode;
         const hasPriorResult = job && (job.status === 'succeeded' || job.result?.pendingFoodLog || job.result?.data?.pendingFoodLog || (job.messages && job.messages.some(m => m.data?.pendingFoodLog || m.pendingFoodLog)));
-        if (hasPriorResult) {
+        const userExplicitlyChoseReview = mappedMode === 'review' && finalImages.length > 0;
+        if (hasPriorResult && !userExplicitlyChoseReview && mappedMode !== 'compare') {
           submissionMode = 'edit';
         } else if (family === 'D') {
           submissionMode = 'compare';
-        } else {
-          submissionMode = 'review';
+        } else if (!hasPriorResult) {
+          submissionMode = mappedMode === 'compare' ? 'compare' : 'review';
         }
 
         // Stage images
@@ -3053,7 +3058,10 @@ ${logsText}`);
           job?.result?.data || 
           [...existingMsgs].reverse().find(m => m.data?.pendingFoodLog || m.pendingFoodLog)?.data?.pendingFoodLog || 
           [...existingMsgs].reverse().find(m => m.data?.pendingFoodLog || m.pendingFoodLog)?.pendingFoodLog ||
-          (!extraOptions?.portionChoices && finalImages.length === 0 && foodLogs && foodLogs.length > 0 ? foodLogs[foodLogs.length - 1] : null);
+          // Only fall back to the last Firestore food log as activeMeal when we are
+          // already in edit mode — never for review/compare sessions (avoids bleeding
+          // a prior confirmed log into a brand-new scan as if it were the active meal).
+          (submissionMode === 'edit' && !extraOptions?.portionChoices && finalImages.length === 0 && foodLogs && foodLogs.length > 0 ? foodLogs[foodLogs.length - 1] : null);
         let prunedMealForJob = null;
         if (lastFoodLogForJob) {
           try {
