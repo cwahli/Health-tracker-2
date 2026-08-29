@@ -296,7 +296,7 @@ export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) =>
     if (!item || typeof item !== "object") return { valid: false, reason: `Item at index ${idx} is not an object` };
     for (const [key, value] of Object.entries(item)) {
       if (typeof value === "string") {
-        const isLongText = ['ingredientsList', 'confidenceComment', 'scoutConfidenceComment', 'description', 'notes', 'reason', 'summary'].includes(key);
+        const isLongText = ['ingredientsList', 'confidenceComment', 'scoutConfidenceComment', 'description', 'notes', 'reason', 'summary', 'internalReasoning', '_internalReasoning', 'reasoning', 'rationale', 'comment', 'explanation', 'details'].includes(key);
         const maxLen = isLongText ? 3000 : 150;
         if (value.length > maxLen) return { valid: false, reason: `Item field '${key}' length (${value.length}) exceeds ${maxLen}` };
         const valLower = value.toLowerCase();
@@ -323,7 +323,7 @@ export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) =>
         if (comp && typeof comp === "object") {
           for (const [ckey, cval] of Object.entries(comp)) {
             if (typeof cval === "string") {
-              const compMaxLen = ['ingredients', 'description', 'notes', 'ingredientsList'].includes(ckey) ? 3000 : 250;
+              const compMaxLen = ['ingredients', 'description', 'notes', 'ingredientsList', 'internalReasoning', '_internalReasoning', 'reasoning', 'rationale', 'comment', 'explanation', 'details'].includes(ckey) ? 3000 : 300;
               if (cval.length > compMaxLen) return { valid: false, reason: `Component field '${ckey}' exceeds ${compMaxLen}` };
             }
           }
