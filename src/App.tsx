@@ -1090,7 +1090,7 @@ export default function App() {
             console.log(`[JobQueueRunner] Job ${job.id} is server-owned. Polling /api/jobs/status...`);
             let done = false;
             const pollStartTime = Date.now();
-            const maxPollTimeMs = 3 * 60 * 1000; // Strict 3 minute timeout window
+            const maxPollTimeMs = 5 * 60 * 1000; // Extended 5 minute timeout window (was 3 min; large multi-item edits can exceed 3 min)
 
             while (!done && (Date.now() - pollStartTime) < maxPollTimeMs) {
               if (abortSignal.aborted) {

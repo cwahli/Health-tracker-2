@@ -164,7 +164,7 @@ jobsRouter.get('/api/jobs/status', async (req, res) => {
 
       if (data && data.length > 0) {
         const now = Date.now();
-        const staleThresholdMs = 180000;
+        const staleThresholdMs = 300000; // was 180000 (3 min); large multi-item edits can legitimately take longer
         const processedJobs = await Promise.all((data || []).map(async (job: any) => {
           if (job.clean_result && typeof job.clean_result === 'object' && (job.clean_result as any).is_r2) {
             try {
