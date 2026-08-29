@@ -5861,8 +5861,55 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       const hasExplicitEditCommands = Array.isArray(rawParsed.editCommands) && rawParsed.editCommands.length > 0;
       const hasLegacyEditCommands = Array.isArray(rawParsed.modificationCommand) && rawParsed.modificationCommand.length > 0;
       if (originalModeIsModify && rawParsed.foodData?.itemsBreakdown?.length > 0 && !hasExplicitEditCommands && !hasLegacyEditCommands) {
-        addDebugLog(`[Mode Rewrite] AI fully regenerated foodData in MODIFY mode (no editCommands present). Routing through NEW_LOG pipeline to compute full nutrients.`);
-        mode = "new_log";
+        // Model returned itemsBreakdown without editCommands.
+        // If we have an activeMeal to diff against, synthesize editCommands here and stay
+        // in the MODIFY path so the edit processor (line ~7560) applies the changes against
+        // the original scout nutrient basis. Falling to new_log re-maps nutrients from the
+        // raw scout item at each array position, giving wrong values for replaced items.
+        if (activeMeal && Array.isArray(activeMeal.itemsBreakdown) && activeMeal.itemsBreakdown.length > 0) {
+          const dietitianItems: any[] = rawParsed.foodData.itemsBreakdown;
+          const synthesized: any[] = [];
+
+          // Items in activeMeal that are absent from dietitian output → remove
+          (activeMeal.itemsBreakdown as any[]).forEach((oldIt: any) => {
+            const oldName = String(oldIt.canonicalDbName || oldIt.originalName || oldIt.name || '').toLowerCase().trim();
+            const stillExists = dietitianItems.some((newIt: any) => {
+              const newName = String(newIt.canonicalDbName || newIt.originalName || newIt.name || '').toLowerCase().trim();
+              return newName === oldName || oldName.includes(newName) || newName.includes(oldName);
+            });
+            if (!stillExists) {
+              synthesized.push({ action: 'remove_item', itemName: oldIt.name || oldIt.canonicalDbName, targetDbId: oldIt.dbId || null });
+            }
+          });
+
+          // Items in dietitian output: weight update if matched, add_item if new
+          dietitianItems.forEach((newIt: any) => {
+            const newName = String(newIt.canonicalDbName || newIt.originalName || newIt.name || '').toLowerCase().trim();
+            const matchedOld = (activeMeal.itemsBreakdown as any[]).find((oldIt: any) => {
+              const oldName = String(oldIt.canonicalDbName || oldIt.originalName || oldIt.name || '').toLowerCase().trim();
+              return newName === oldName || oldName.includes(newName) || newName.includes(oldName);
+            });
+            if (matchedOld) {
+              if (newIt.weightGrams && Number(newIt.weightGrams) !== Number(matchedOld.weightGrams)) {
+                synthesized.push({ action: 'update_weight', itemName: matchedOld.name || matchedOld.canonicalDbName, targetDbId: matchedOld.dbId || null, newWeightGrams: Number(newIt.weightGrams) });
+              }
+            } else if (newIt.weightGrams) {
+              synthesized.push({ action: 'add_item', itemName: newIt.canonicalDbName || newIt.name || 'Food Item', newWeightGrams: Number(newIt.weightGrams) });
+            }
+          });
+
+          if (synthesized.length > 0) {
+            addDebugLog(`[Mode Rewrite] Model returned itemsBreakdown without editCommands — synthesized ${synthesized.length} editCommand(s) from diff. Staying in MODIFY path.`);
+            rawParsed.editCommands = synthesized;
+            // Leave mode as-is (modify/edit) — do NOT set mode = "new_log"
+          } else {
+            addDebugLog(`[Mode Rewrite] Model returned itemsBreakdown without editCommands and diff produced 0 changes — falling through to NEW_LOG pipeline.`);
+            mode = "new_log";
+          }
+        } else {
+          addDebugLog(`[Mode Rewrite] AI fully regenerated foodData in MODIFY mode (no editCommands, no activeMeal to diff). Routing through NEW_LOG pipeline to compute full nutrients.`);
+          mode = "new_log";
+        }
       } else if (originalModeIsModify && rawParsed.foodData?.itemsBreakdown?.length > 0 && (hasExplicitEditCommands || hasLegacyEditCommands)) {
         addDebugLog(`[Mode Rewrite] Skipped — editCommands present alongside foodData.itemsBreakdown. Staying in MODIFY path to process ${hasExplicitEditCommands ? rawParsed.editCommands.length : rawParsed.modificationCommand.length} command(s).`);
       }
