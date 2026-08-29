@@ -2389,7 +2389,55 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
 
       if (isModifySession && preCalculatedItems && preCalculatedItems.length > 0) {
         preCalculatedItems.forEach((pItem: any) => {
-          if (pItem.nutrients) {
+          const subComponents: any[] = (pItem.componentsDetailList && pItem.componentsDetailList.length > 0)
+            ? pItem.componentsDetailList
+            : (pItem.components && pItem.components.length > 0 ? pItem.components : []);
+
+          if (subComponents.length > 1) {
+            // Composite dish: try the modifier against each individual sub-ingredient
+            // (e.g. "the tea was unsweetened" must target the "Sweet Iced Tea" component,
+            // never the whole parent dish name it happens to be embedded in).
+            let anySubComponentChanged = false;
+            subComponents.forEach((sub: any) => {
+              const subNutrients = sub.nutrients || sub;
+              const modRes = applyNutrientModifiers(subNutrients, {
+                message,
+                foodType: sub.foodType || null,
+                name: sub.name || sub.searchQuery || sub.keyword || '',
+              });
+              if (modRes.lockedKeys.length > 0) {
+                anySubComponentChanged = true;
+                sub.nutrients = { ...(sub.nutrients || {}), ...modRes.updatedNutrients };
+                // Row-builder for the nutrition table reads top-level fields, not nested
+                // .nutrients — mirror the updated values onto the flattened component too.
+                sub.calories = modRes.updatedNutrients.calories;
+                sub.sugar = modRes.updatedNutrients.sugar;
+                sub.addedSugar = modRes.updatedNutrients.addedSugar;
+                sub.carbohydrates = modRes.updatedNutrients.carbohydrates;
+                sub.carbs = modRes.updatedNutrients.carbohydrates;
+                addDebugLog(`[Nutrient Modifier Matrix] Applied modifiers to sub-component "${sub.name}" inside "${pItem.originalName}": locked keys [${modRes.lockedKeys.join(', ')}]`);
+              }
+            });
+
+            if (anySubComponentChanged && pItem.nutrients) {
+              // Re-sum parent dish totals from the (possibly modified) sub-components so
+              // the dish-level total reflects the edited ingredient instead of staying frozen.
+              const sumCal = subComponents.reduce((acc, c) => acc + (Number(c.calories) || 0), 0);
+              const sumCarbs = subComponents.reduce((acc, c) => acc + (Number(c.carbohydrates ?? c.carbs) || 0), 0);
+              const sumSugar = subComponents.reduce((acc, c) => acc + (Number(c.sugar ?? c.nutrients?.sugar) || 0), 0);
+              const sumAddedSugar = subComponents.reduce((acc, c) => acc + (Number(c.addedSugar ?? c.nutrients?.addedSugar) || 0), 0);
+
+              pItem.nutrients.calories = Math.round(sumCal);
+              pItem.nutrients.carbohydrates = Math.round(sumCarbs * 10) / 10;
+              pItem.nutrients.sugar = Math.round(sumSugar * 10) / 10;
+              pItem.nutrients.addedSugar = Math.round(sumAddedSugar * 10) / 10;
+              pItem.lockedNutrientKeys = Array.from(new Set([...(pItem.lockedNutrientKeys || []), 'calories', 'carbohydrates', 'sugar', 'addedSugar']));
+              pItem.componentsDetailList = subComponents;
+              pItem.components = subComponents;
+              pItem.compositeSiblings = subComponents;
+            }
+          } else if (pItem.nutrients) {
+            // Single-food item (no sub-components) — unchanged behavior from before.
             const modRes = applyNutrientModifiers(pItem.nutrients, {
               message,
               foodType: pItem.foodType,
@@ -6850,6 +6898,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           }
 
           // Row 3: Sauce / Dressing / Sub-components (if any)
+          addDebugLog(`[Receipt Diagnostic] item="${cleanItemName}" dbSource="${it.dbSource}" hasComponents=${Boolean(it.hasComponents)} componentsDetailList.length=${Array.isArray(it.componentsDetailList) ? it.componentsDetailList.length : 'undefined'} components.length=${Array.isArray(it.components) ? it.components.length : 'undefined'} listIsMulti=${listIsMulti}`);
           if (it.componentsDetailList && Array.isArray(it.componentsDetailList) && it.componentsDetailList.length > 0) {
             if (listIsMulti) {
                const rowsSummary = it.componentsDetailList.map((s: any) => `${s.name || 'unnamed'}(id=${s.dbId || 'n/a'},cal=${s.calories || 0})`).join(', ');
