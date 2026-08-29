@@ -2558,8 +2558,8 @@ ${logsText}`);
             total: progress.totalCount,
             percent: progress.percentage
           });
-        }, 1400, 1400, 0.8);
-        const analysisCompressed = await compressMultipleImages(validFiles, () => {}, 1400, 1400, 0.85);
+        }, 1600, 1600, 0.85);
+        const analysisCompressed = await compressMultipleImages(validFiles, () => {}, 1600, 1600, 0.85);
         const dates = await Promise.all(validFiles.map(async (f: any) => {
           try {
             const exifData = await exifr.parse(f, ['DateTimeOriginal']);
@@ -2754,7 +2754,7 @@ ${logsText}`);
             const parts: string[] = [];
             Object.entries(choices).forEach(([key, value]) => {
               const idx = Number(key);
-              const matchedItem = !isNaN(idx) ? items[idx] : items.find((i: any) => i.id === key || i.name === key);
+              const matchedItem = !isNaN(idx) ? (items.find((i: any) => i.scoutIndex === idx) || items[idx]) : items.find((i: any) => i.id === key || i.name === key);
               const itemName = matchedItem?.name || matchedItem?.label || matchedItem?.displayName || matchedItem?.originalName || matchedItem?.description;
               if (itemName) {
                 parts.push(`${itemName}: ${value}g`);
@@ -2927,7 +2927,7 @@ ${logsText}`);
           const parts: string[] = [];
           Object.entries(choices).forEach(([key, value]) => {
             const idx = Number(key);
-            const matchedItem = !isNaN(idx) ? items[idx] : items.find((i: any) => i.id === key || i.name === key);
+            const matchedItem = !isNaN(idx) ? (items.find((i: any) => i.scoutIndex === idx) || items[idx]) : items.find((i: any) => i.id === key || i.name === key);
             const itemName = matchedItem?.name || matchedItem?.label || matchedItem?.displayName || matchedItem?.originalName || matchedItem?.description;
             if (itemName) {
               parts.push(`"${value}g portion" of ${itemName}`);
@@ -3001,7 +3001,7 @@ ${logsText}`);
           return Promise.all(
             imagesList.map(async (img) => {
               try {
-                return await compressImage(img, 1024, 1024, 0.75);
+                return await compressImage(img, 1600, 1600, 0.85);
               } catch (err) {
                 if (typeof img === 'string') {
                   return img;

@@ -63,6 +63,7 @@ export function formatPatientContext(context: {
   ];
 
   const getTarget = (key: string, defaultTarget: number) => {
+
     if (remainingAllowance) {
       if (remainingAllowance[key] !== undefined) return Math.round(Number(remainingAllowance[key]));
     }
@@ -185,10 +186,11 @@ You are a Dietician coach operating within a personalized health application. Pr
 === VERDICT LABEL GUIDELINES (3-6 WORDS MAX) ===
 - Positive/Neutral: Core physiological health outcome (e.g. "Good for your heart", "Boosts lean muscle tissue", "Supports digestive balance").
 - Overage/Risk: Metric-backed impact label (e.g. "140% over sat fat limit", "115% over sodium limit").
-- STRICTLY BANNED: Food or meal descriptions (e.g. NEVER output "Exceptional High Protein Meal", "High Protein Dish", "Nutrient Dense Meal", "Low Calorie Dinner"). The verdict label MUST state the biological health benefit/outcome or metric impact, NEVER describe the food/meal entity.
+- STRICTLY BANNED: Food or meal descriptions (e.g. NEVER output "Exceptional High Protein Meal", "Exceptional lean protein asset", "High Protein Dish", "Nutrient Dense Meal", "Low Calorie Dinner"). The verdict label MUST state the biological health benefit/outcome or metric impact, NEVER describe the food/meal entity.
 - BANNED: Vague descriptive sentences like "Elevates saturated fat and sodium limits".
 
 === MESSAGE NARRATIVE GUIDELINES (35-70 WORDS IN 4 BEATS - MODE B) ===
+- STRICTLY BANNED: Do NOT copy your '_internalReasoning' into the 'message' field. The message MUST address the user in the second person (e.g. "You got..."), while reasoning is your private third-person planning space (e.g. "The user logged... I will...").
 Write "message" strictly in 4 beats (Constructive, Comforting, No Shame):
 - Beat 1 (Asset & Metric): Praise key nutrient asset with concrete metrics (e.g. "You got 53g of quality protein and healthy omega-3s from the salmon.").
 - Beat 2 (Contextual Impact & Metric): Frame higher-density items constructively using pre-calculated percentages from NUTRITIONAL TARGET STATUS without alarmist language (e.g. "The cheesy pasta contributes 18g of saturated fat, bringing today's total to 140% of your target.").

@@ -1010,7 +1010,7 @@ export default function App() {
                 stringImages = await Promise.all(
                   rawImages.map(async (img: any) => {
                     try {
-                      return await compressImage(img, 1024, 1024, 0.75);
+                      return await compressImage(img, 1600, 1600, 0.85);
                     } catch {
                       if (typeof img === 'string') return img;
                       if (img && typeof img === 'object') {

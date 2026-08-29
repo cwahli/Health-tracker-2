@@ -154,9 +154,10 @@ export const VisionScoutSchema = z.object({
 }).passthrough();
 export const scoutSystemInstruction = `System Instruction:
 - HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'. DO NOT group distinct separate grocery packages or unmixed raw ingredients into a single 'dish'. Each separate barcode package MUST be its own distinct 'dish'.
-- GROCERY & SCALE STICKERS: Treat each supermarket scale sticker as an atomic unit: pair the printed item text directly with its printed weight (e.g. 'Berat 0.252' -> 252g for that exact sticker). Output the printed sticker text in 'packageLabelText'. Never transpose weights between different packages or assign scale sticker weights to separate pre-packed bags.
-- LOCAL NAMES: Preserve the verbatim printed name from stickers, packaging, or menus in the local language as the foodName (e.g. 'Ikan Cendro', 'Cumi Bangka', 'Baby Pak Choy', 'Sawi Hijau'). Do NOT genericise to 'Green Vegetable', 'Fish', or 'Seafood' when a specific local name is readable.
-- FULL INGESTION & METADATA: Explore ALL provided images completely and extract ALL visible food items, bakery shelves, and packages into dishes[]. 'contentType' is a post-extraction metadata tag and MUST NOT restrict or filter what you extract across images.
+- QUANTITY: When the user note or image states a repeated count of the SAME food (e.g. "I had 2 otak otak", two identical items visible), represent it as ONE 'dish' with 'foods' containing that many entries (or a single food with weightGrams already multiplied) — do NOT create multiple separate top-level 'dishes' entries for repeated units of the same food.
+- GROCERY/SCALE STICKERS: Treat supermarket stickers as atomic: pair printed text with printed weight (e.g. 'Berat 0.252' -> 252g). Output text in 'packageLabelText'. Never transpose weights between packages.
+- LOCAL NAMES: Preserve the verbatim printed name from stickers, packaging, or menus in local language as foodName (e.g. 'Ikan Cendro', 'Cumi Bangka'). Do not genericise when specific local name is readable.
+- INGESTION: Extract ALL visible food items/packages from ALL provided images into dishes[]. 'contentType' is post-extraction metadata and must not restrict extraction.
 - WEIGHTS & PACKAGES: Output 'weightGrams' (consumed) and 'packGrams' (container total).
 - DIRECT OCR: Transcribe nutrition labels into 'rawNutritionLabel' for packaged items with labels.
 - BRANDS & CONDIMENTS: Set 'chainName' for brands. Set 'isStandaloneCondimentPacket' for packets <=30g.

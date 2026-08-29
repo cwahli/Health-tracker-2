@@ -816,3 +816,8 @@
     - Added `activeSearchTerms` state in `LogChat.tsx` to remember exactly which string of text triggered the active catalog suggestions.
     - Updated the "Add" button's click handler to execute a `lastIndexOf` replacement on the current `inputText`. When clicked, it excises the original search terms and smoothly splices the `[Dish Name Weight]` bracket precisely where the user's triggering text used to be, preserving trailing/leading whitespace and keeping any text the user typed *after* the trigger intact.
     - Result is seamless inline replacement that prevents stuttering copy.
+57. **PortionChoices Missing Content Resolution**:
+    - Identified a bug where submitting portion clarifications generated missing UI text (e.g. "150g portion" instead of "150g portion of Rice") when the underlying `scoutItems` array contained items stripped or merged in earlier steps (e.g., duplicated foods).
+    - **Root cause**: The `LogChat.tsx` component attempted to look up the submitted `portionChoices` key by using it as a direct array index (`items[idx]`).
+    - **Fix**: Adjusted `matchedItem` lookup in both the user submission echo (`userContent`) and the live processing state string (`liveContent`) to query the exact `scoutIndex` rather than assuming the `scoutItems` array indexes perfectly align.
+    - Result is accurate portion item labelling even when duplicate scout items are removed from the payload.

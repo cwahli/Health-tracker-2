@@ -6469,7 +6469,13 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             (preMatch && preMatch.hasComponents) ||
             item.hasComponents ||
             (Array.isArray(preMatch?.componentsDetailList) && preMatch.componentsDetailList.length >= 2) ||
-            (Array.isArray(item.componentsDetailList) && item.componentsDetailList.length >= 2)
+            (Array.isArray(item.componentsDetailList) && item.componentsDetailList.length >= 2) ||
+            // Single genuine resolved component: componentsDetailList already IS the
+            // primary (pushed at cIdx===0 in the per-component resolution loop). Only
+            // fires when item.components had real entries — never for the sauce-injection
+            // fallback path, which starts from an empty item.components/componentsDetailList.
+            (Array.isArray(item.components) && item.components.length >= 1 &&
+             Array.isArray(item.componentsDetailList) && item.componentsDetailList.length >= 1)
           );
           const subCompsList = preMatch?.componentsDetailList || item.componentsDetailList || [];
           const allSubCompsShareBrand = isMultiCompFinal && subCompsList.length > 0 && subCompsList.every((c: any) => c.brand && c.brand.toLowerCase() === subCompsList[0].brand?.toLowerCase());
