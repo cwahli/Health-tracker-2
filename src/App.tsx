@@ -1059,10 +1059,9 @@ export default function App() {
                     let resBody: any = null;
                     try { resBody = await res.clone().json(); } catch { /* non-JSON body, treat as normal success */ }
                     if (resBody && resBody.duplicatePrevented) {
-                      throw new Error(
-                        `An earlier analysis for your account is still ${resBody.status || 'in progress'}. ` +
-                        `Please wait a moment for it to finish, then retry.`
-                      );
+                      console.log(`[JobQueueRunner] Submission for job ${job.id} was handled idempotently by server (status=${resBody.status || 'active'}). Polling job status.`);
+                      submitOk = true;
+                      break;
                     }
                     submitOk = true;
                     break;

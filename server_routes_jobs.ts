@@ -126,8 +126,19 @@ jobsRouter.get('/api/jobs/status', async (req, res) => {
     const { getInMemoryServerJob, listInMemoryServerJobs } = await import('./serverJobs.js');
 
     if (jobId) {
-      const memJob = getInMemoryServerJob(String(jobId));
+      let memJob = getInMemoryServerJob(String(jobId));
       if (memJob) {
+        if (req.query.full === 'true' && memJob.clean_result && (memJob.clean_result as any).is_r2) {
+          try {
+            const { fetchJobResultFromR2 } = await import('./src/utils/r2Storage.js');
+            const fullResult = await fetchJobResultFromR2(String(jobId));
+            if (fullResult) {
+              memJob = { ...memJob, clean_result: fullResult };
+            }
+          } catch (e) {
+            console.error(`[JobsStatus] Failed to transparently fetch R2 clean_result for memJob ${jobId}:`, e);
+          }
+        }
         return res.json({ jobs: [memJob] });
       }
     }
