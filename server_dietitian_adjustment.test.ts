@@ -185,12 +185,21 @@ describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
   });
 
   it("sanitizes generic meal descriptions to health outcome verdict labels", () => {
-    // Banned generic meal descriptor
+    // Banned generic meal descriptors
     const label1 = sanitizeVerdictLabel("Exceptional High Protein Meal", "good", { protein: 94.5, totalFibre: 14.4 });
     expect(label1).toBe("Boosts lean muscle tissue");
 
     const label2 = sanitizeVerdictLabel("High Protein Dish", "good", { protein: 45 });
     expect(label2).toBe("Boosts lean muscle tissue");
+
+    const label2b = sanitizeVerdictLabel("Exceptional lean protein asset", "good", { protein: 40 });
+    expect(label2b).toBe("Boosts lean muscle tissue");
+
+    const label2c = sanitizeVerdictLabel("Nutrient Dense Meal", "good", { totalFibre: 10 });
+    expect(label2c).toBe("Supports digestive health");
+
+    const label2d = sanitizeVerdictLabel("Low Calorie Dinner", "good", { sodium: 300, calories: 450 });
+    expect(label2d).toBe("Good for your heart");
 
     // Legitimate health outcome labels are preserved
     const label3 = sanitizeVerdictLabel("Good for your heart", "good");

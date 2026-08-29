@@ -1222,8 +1222,13 @@ export function sanitizeVerdictLabel(rawLabel: string, level?: string, nutrients
   label = label.replace(/^["']|["']$/g, '').trim();
 
   // If label is describing a food/meal entity rather than a biological health outcome or metric overage, convert it
-  const isGenericMealDescriptor = /^(?:exceptional|solid|great|good|healthy|nutrient[- ]dense|carb[- ]heavy|high[- ]protein|low[- ]calorie|high[- ]fiber|rich|balanced)?\s*(?:high[- ]protein|low[- ]sodium|fiber[- ]rich|protein[- ]packed)?\s*(?:meal|dish|dinner|lunch|breakfast|snack|food|bowl|pot|soup|platter|choice)$/i.test(label) ||
-    /\b(?:high\s+protein\s+meal|exceptional\s+high\s+protein|protein\s+packed\s+meal|balanced\s+macro\s+meal|nutrient\s+dense\s+meal)\b/i.test(label);
+  const entityNounPattern = /\b(?:meal|dish|dinner|lunch|breakfast|snack|food|bowl|pot|soup|platter|choice|asset|option|selection|entry|item|spread|entree|plate|combo|source|portion|serving)\b/i;
+  const descriptorAdjPattern = /\b(?:exceptional|solid|great|good|healthy|nutrient|dense|rich|carb|heavy|high|lean|protein|low|calorie|fiber|sodium|packed|balanced|macro)\b/i;
+
+  const isGenericMealDescriptor =
+    (entityNounPattern.test(label) && descriptorAdjPattern.test(label)) ||
+    /\b(?:high\s+protein|lean\s+protein|protein\s+packed|protein\s+dense|protein\s+rich|nutrient\s+dense|nutrient\s+rich|low\s+calorie|high\s+fiber|fiber\s+rich|carb\s+heavy|low\s+sodium|balanced\s+macro|exceptional\s+high|exceptional\s+lean)\s+(?:meal|dish|dinner|lunch|breakfast|snack|food|bowl|pot|soup|platter|choice|asset|option|selection|entry|item|spread|entree|plate|combo|source|portion|serving)\b/i.test(label) ||
+    /^(?:exceptional|solid|great|good|healthy|nutrient[- ]dense|carb[- ]heavy|high[- ]protein|lean[- ]protein|low[- ]calorie|high[- ]fiber|rich|balanced)?\s*(?:high[- ]protein|lean[- ]protein|low[- ]sodium|fiber[- ]rich|protein[- ]packed)?\s*(?:meal|dish|dinner|lunch|breakfast|snack|food|bowl|pot|soup|platter|choice|asset|option|selection|entry|item|spread|entree|plate|combo|source|portion|serving)$/i.test(label);
 
   if (isGenericMealDescriptor) {
     if (nutrients?.protein && nutrients.protein >= 30) {
