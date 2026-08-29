@@ -115,4 +115,20 @@ export function resolveMealImageCandidates(input: {
   return out;
 }
 
+/**
+ * Convert a captured Blob/File into a durable base64 data URL instead of a
+ * throwaway blob: object URL. blob: URLs only resolve in the browser tab/session
+ * that created them, so they must never be persisted into any object that is
+ * saved to a food log or pushed through sync — the server's push handler only
+ * knows how to auto-upload data:image/ URLs to R2 (see server_routes_sync.ts).
+ */
+export function blobToDurableDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error || new Error('FileReader failed'));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export const IMAGE_PRESERVE_LOG = '[ImagePreserve]';

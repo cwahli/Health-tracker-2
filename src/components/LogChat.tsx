@@ -20,6 +20,7 @@ import { compressMultipleImages, compressImage } from '../utils/imageCompressor'
 import { getCurrentDateInTimezone, toYYYYMMDD } from '../utils/dateUtils';
 import { enrichReviewModificationCommands, collectCatalogUnitMap, sanitizeReviewReply } from '../utils/biomarkerLifecycle';
 import ImageSlider from './ImageSlider';
+import { blobToDurableDataUrl } from '../utils/foodImageSources';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 const FullScreenLogViewer = lazyWithRetry(() => import('./FullScreenLogViewer'));
 import FullScreenInstructionViewer from './FullScreenInstructionViewer';
@@ -1494,8 +1495,8 @@ ${logsText}`);
           try {
             const images = await ImageStore.getImages(activeJobId);
             if (images && images.length > 0) {
-              userMsg.imageUrl = typeof images[0] === 'string' ? images[0] : URL.createObjectURL(images[0] as Blob);
-              userMsg.imageUrls = images.map(img => typeof img === 'string' ? img : URL.createObjectURL(img as Blob));
+              userMsg.imageUrls = await Promise.all(images.map(img => typeof img === 'string' ? img : blobToDurableDataUrl(img as Blob)));
+              userMsg.imageUrl = userMsg.imageUrls[0];
             } else if (remotePhotos && remotePhotos.length > 0) {
               userMsg.imageUrl = remotePhotos[0];
               userMsg.imageUrls = remotePhotos;
@@ -1514,7 +1515,7 @@ ${logsText}`);
         try {
           const imgs = await ImageStore.getImages(activeJobId);
           if (foodLog && imgs?.length) {
-            foodLog.imageUrls = imgs.map(img => typeof img === 'string' ? img : URL.createObjectURL(img as Blob));
+            foodLog.imageUrls = await Promise.all(imgs.map(img => typeof img === 'string' ? img : blobToDurableDataUrl(img as Blob)));
             foodLog.imageUrl = foodLog.imageUrls[0];
           } else if (foodLog && remotePhotos && remotePhotos.length > 0) {
             foodLog.imageUrl = foodLog.imageUrl || remotePhotos[0];
@@ -1632,7 +1633,7 @@ ${logsText}`);
         try {
           const realImages = await ImageStore.getImages(activeJobId);
           const realUrls = (realImages && realImages.length > 0)
-            ? realImages.map((img: any) => typeof img === 'string' ? img : URL.createObjectURL(img as Blob))
+            ? await Promise.all(realImages.map((img: any) => typeof img === 'string' ? img : blobToDurableDataUrl(img as Blob)))
             : remotePhotos;
 
           if (realUrls.length > 0) {
@@ -1744,8 +1745,8 @@ ${logsText}`);
           try {
             const images = await ImageStore.getImages(activeJobId);
             if (images && images.length > 0) {
-              userMsg.imageUrl = typeof images[0] === 'string' ? images[0] : URL.createObjectURL(images[0] as Blob);
-              userMsg.imageUrls = images.map(img => typeof img === 'string' ? img : URL.createObjectURL(img as Blob));
+              userMsg.imageUrls = await Promise.all(images.map(img => typeof img === 'string' ? img : blobToDurableDataUrl(img as Blob)));
+              userMsg.imageUrl = userMsg.imageUrls[0];
             } else if (remotePhotos && remotePhotos.length > 0) {
               userMsg.imageUrl = remotePhotos[0];
               userMsg.imageUrls = remotePhotos;
