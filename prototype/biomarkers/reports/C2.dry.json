@@ -3,7 +3,7 @@
   "dry": true,
   "insightSize": 20,
   "draftSize": 12,
-  "instruction": "You evaluate biomarker logs against reference ranges.\n\nFor every row, output: id, status, medicalInsight, customRangeOverlay.\n- STATUS: derive from reference range (e.g. Optimal, Normal, Elevated, High, Low, Very High). Never write Critical.\n- INSIGHT: Optimal: exactly 1 sentence. Non-optimal: ≤2 sentences citing status, profile context, and trend if present.\n- RANGE: If you agree with the reference range, customRangeOverlay is null. If you disagree for this patient profile/clinical risk (e.g. tighter target, CKD), provide the adjusted range in customRangeOverlay with the corrected status.\n- UNCATALOGED (MISS): Also include match=\"none\", writeTarget=\"pending\", key=null, and newCatalogDraft (suggestedKey, name, unit, aliases, normalRange, description, riskCategories).\n\nJSON { \"rows\": [...] }.",
+  "instruction": "You are an expert clinical laboratory AI reviewing a patient's biomarker panel.\nPatient Profile: 43-year-old Chinese male, Unit Preference: SI.\n\nFor each biomarker:\n- id: matching id\n- medicalInsight: Provide a concise, clinically accurate insight. (If an accurate existingInsight is already provided in the input, return \"\" to save tokens). If previous value exists, cite the trend. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).\n- customRangeOverlay: If agreeing with range, return \"\". If missing ethnic thresholds (e.g. HbA1c for Chinese patients), provide FULL multi-bracket range: \"Elevated (Diabetes): >=48; Elevated: >=39; Normal: >=20\".\n- optimalValue: If existing is accurate, return \"\". Otherwise provide 1 single ideal target value without inequalities or ranges (e.g. \"33 mmol/mol\", \"80 umol/L\", \"95 mL/min/1.73m2\"; note 60 for eGFR is naive CKD G2, correct it).\n- editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise \"\".\n- logs: Extract all logs with standardized \"YYYY-MM-DD\" dates and comments. Convert US units to patient's unitPreference (e.g. 1.1 mg/dL creatinine → 97 umol/L).\n- DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.\n- UNCATALOGED (MISS): If not in dictionary, output match=\"none\", writeTarget=\"pending\", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }.\n\nJSON { \"rows\": [...] }.",
   "turns": [
     {
       "turn": 0,
@@ -22,20 +22,10 @@
         "r11",
         "r12",
         "r13",
-        "r14",
-        "r15",
-        "r16",
-        "r17",
-        "r18",
-        "r19",
-        "r20",
-        "r21",
-        "r22",
-        "r23",
-        "r24"
+        "r14"
       ],
       "ms": 0,
-      "n": 24,
+      "n": 14,
       "raw": "",
       "rows": [
         {
@@ -46,493 +36,16 @@
           "unit": "mmol/mol",
           "date": "2026-06-05",
           "printedRange": "20 - 41 mmol/mol",
+          "assignedRange": "20 - 41 mmol/mol",
+          "optimalValue": null,
+          "editReason": null,
           "match": "alias",
           "key": "hba1c",
           "writeTarget": "observation",
           "status": "Elevated",
           "medicalInsight": "Your HbA1c is Elevated.",
           "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r02",
-          "op": "add",
-          "printed": "Se prostate specific Ag level",
-          "value": 1.41,
-          "unit": "ug/L",
-          "date": "2026-06-05",
-          "printedRange": "- 2.49 ug/L",
-          "match": "none",
-          "key": null,
-          "writeTarget": "pending",
-          "status": "Optimal",
-          "medicalInsight": "Your Se prostate specific Ag level is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": {
-            "suggestedKey": "prostate_specific_antigen",
-            "name": "Se prostate specific Ag level",
-            "unit": "ug/L",
-            "aliases": [],
-            "normalRange": "Varies",
-            "description": "Se prostate specific Ag level",
-            "riskCategories": []
-          }
-        },
-        {
-          "id": "r03",
-          "op": "add",
-          "printed": "Serum sodium",
-          "value": 143,
-          "unit": "mmol/L",
-          "date": "2026-06-05",
-          "printedRange": "133 - 146 mmol/L",
-          "match": "none",
-          "key": null,
-          "writeTarget": "pending",
-          "status": "Optimal",
-          "medicalInsight": "Your Serum sodium is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": {
-            "suggestedKey": "serum_sodium",
-            "name": "Serum sodium",
-            "unit": "mmol/L",
-            "aliases": [],
-            "normalRange": "Varies",
-            "description": "Serum sodium",
-            "riskCategories": []
-          }
-        },
-        {
-          "id": "r04",
-          "op": "add",
-          "printed": "Serum potassium",
-          "value": 4.3,
-          "unit": "mmol/L",
-          "date": "2026-06-05",
-          "printedRange": "3.5 - 5.3 mmol/L",
-          "match": "none",
-          "key": null,
-          "writeTarget": "pending",
-          "status": "Optimal",
-          "medicalInsight": "Your Serum potassium is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": {
-            "suggestedKey": "serum_potassium",
-            "name": "Serum potassium",
-            "unit": "mmol/L",
-            "aliases": [],
-            "normalRange": "Varies",
-            "description": "Serum potassium",
-            "riskCategories": []
-          }
-        },
-        {
-          "id": "r05",
-          "op": "add",
-          "printed": "Serum creatinine",
-          "value": 100,
-          "unit": "umol/L",
-          "date": "2026-06-05",
-          "printedRange": "64 - 104 umol/L",
-          "match": "alias",
-          "key": "creatinine",
-          "writeTarget": "observation",
-          "status": "Optimal",
-          "medicalInsight": "Your Creatinine is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r06",
-          "op": "add",
-          "printed": "eGFRcreat (CKD-EPI)/1.73 m*2",
-          "value": 80,
-          "unit": "mL/min/1.73m2",
-          "date": "2026-06-05",
-          "printedRange": "- mL/min/1.73m2",
-          "match": "alias",
-          "key": "egfr",
-          "writeTarget": "observation",
-          "status": "Mildly Decreased (CKD G2)",
-          "medicalInsight": "Your eGFR is Mildly Decreased (CKD G2).",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r07",
-          "op": "add",
-          "printed": "Serum albumin",
-          "value": 46,
-          "unit": "g/L",
-          "date": "2026-06-05",
-          "printedRange": "31 - 45 g/L",
-          "match": "key",
-          "key": "serum_albumin",
-          "writeTarget": "observation",
-          "status": "Optimal",
-          "medicalInsight": "Your Serum Albumin is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r08",
-          "op": "add",
-          "printed": "Serum ALT level",
-          "value": 41,
-          "unit": "U/L",
-          "date": "2026-06-05",
-          "printedRange": "0 - 45 U/L",
-          "match": "alias",
-          "key": "alt",
-          "writeTarget": "observation",
-          "status": "Elevated",
-          "medicalInsight": "Your ALT (SGPT) is Elevated.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r09",
-          "op": "add",
-          "printed": "Serum alkaline phosphatase",
-          "value": 39,
-          "unit": "U/L",
-          "date": "2026-06-05",
-          "printedRange": "30 - 130 U/L",
-          "match": "none",
-          "key": null,
-          "writeTarget": "pending",
-          "status": "Optimal",
-          "medicalInsight": "Your Serum alkaline phosphatase is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": {
-            "suggestedKey": "alkaline_phosphatase",
-            "name": "Serum alkaline phosphatase",
-            "unit": "U/L",
-            "aliases": [],
-            "normalRange": "Varies",
-            "description": "Serum alkaline phosphatase",
-            "riskCategories": []
-          }
-        },
-        {
-          "id": "r10",
-          "op": "add",
-          "printed": "AST serum level",
-          "value": 27,
-          "unit": "U/L",
-          "date": "2026-06-05",
-          "printedRange": "5 - 34 U/L",
-          "match": "alias",
-          "key": "ast",
-          "writeTarget": "observation",
-          "status": "Optimal",
-          "medicalInsight": "Your AST (SGOT) is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r11",
-          "op": "add",
-          "printed": "Serum total bilirubin level",
-          "value": 16,
-          "unit": "umol/L",
-          "date": "2026-06-05",
-          "printedRange": "- 21 umol/L",
-          "match": "none",
-          "key": null,
-          "writeTarget": "pending",
-          "status": "Optimal",
-          "medicalInsight": "Your Serum total bilirubin level is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": {
-            "suggestedKey": "total_bilirubin",
-            "name": "Serum total bilirubin level",
-            "unit": "umol/L",
-            "aliases": [],
-            "normalRange": "Varies",
-            "description": "Serum total bilirubin level",
-            "riskCategories": []
-          }
-        },
-        {
-          "id": "r12",
-          "op": "add",
-          "printed": "Serum total protein",
-          "value": 81,
-          "unit": "g/L",
-          "date": "2026-06-05",
-          "printedRange": "60 - 80 g/L",
-          "match": "alias",
-          "key": "total_protein",
-          "writeTarget": "observation",
-          "status": "Elevated",
-          "medicalInsight": "Your Total Protein is Elevated.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r13",
-          "op": "add",
-          "printed": "Serum globulin",
-          "value": 35,
-          "unit": "g/L",
-          "date": "2026-06-05",
-          "printedRange": "22 - 38 g/L",
-          "match": "none",
-          "key": null,
-          "writeTarget": "pending",
-          "status": "Optimal",
-          "medicalInsight": "Your Serum globulin is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": {
-            "suggestedKey": "serum_globulin",
-            "name": "Serum globulin",
-            "unit": "g/L",
-            "aliases": [],
-            "normalRange": "Varies",
-            "description": "Serum globulin",
-            "riskCategories": []
-          }
-        },
-        {
-          "id": "r14",
-          "op": "add",
-          "printed": "Serum calcium",
-          "value": 2.47,
-          "unit": "mmol/L",
-          "date": "2026-06-05",
-          "printedRange": "- mmol/L",
-          "match": "none",
-          "key": null,
-          "writeTarget": "pending",
-          "status": "Optimal",
-          "medicalInsight": "Your Serum calcium is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": {
-            "suggestedKey": "serum_calcium",
-            "name": "Serum calcium",
-            "unit": "mmol/L",
-            "aliases": [],
-            "normalRange": "Varies",
-            "description": "Serum calcium",
-            "riskCategories": []
-          }
-        },
-        {
-          "id": "r15",
-          "op": "add",
-          "printed": "Serum adjusted calcium conc",
-          "value": 2.37,
-          "unit": "mmol/L",
-          "date": "2026-06-05",
-          "printedRange": "2.08 - 2.48 mmol/L",
-          "match": "none",
-          "key": null,
-          "writeTarget": "pending",
-          "status": "Optimal",
-          "medicalInsight": "Your Serum adjusted calcium conc is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": {
-            "suggestedKey": "serum_adjusted_calcium",
-            "name": "Serum adjusted calcium conc",
-            "unit": "mmol/L",
-            "aliases": [],
-            "normalRange": "Varies",
-            "description": "Serum adjusted calcium conc",
-            "riskCategories": []
-          }
-        },
-        {
-          "id": "r16",
-          "op": "add",
-          "printed": "Serum inorganic phosphate",
-          "value": 1.12,
-          "unit": "mmol/L",
-          "date": "2026-06-05",
-          "printedRange": "0.80 - 1.50 mmol/L",
-          "match": "none",
-          "key": null,
-          "writeTarget": "pending",
-          "status": "Optimal",
-          "medicalInsight": "Your Serum inorganic phosphate is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": {
-            "suggestedKey": "serum_inorganic_phosphate",
-            "name": "Serum inorganic phosphate",
-            "unit": "mmol/L",
-            "aliases": [],
-            "normalRange": "Varies",
-            "description": "Serum inorganic phosphate",
-            "riskCategories": []
-          }
-        },
-        {
-          "id": "r17",
-          "op": "add",
-          "printed": "Total white cell count",
-          "value": 5.7,
-          "unit": "10*9/L",
-          "date": "2026-06-05",
-          "printedRange": "2.9 - 9.6 10*9/L",
-          "match": "alias",
-          "key": "wbc",
-          "writeTarget": "observation",
-          "status": "Optimal",
-          "medicalInsight": "Your White Blood Cell (WBC) is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r18",
-          "op": "add",
-          "printed": "Red blood cell (RBC) count",
-          "value": 5.47,
-          "unit": "10*12/L",
-          "date": "2026-06-05",
-          "printedRange": "4.20 - 5.80 10*12/L",
-          "match": "alias",
-          "key": "rbc",
-          "writeTarget": "observation",
-          "status": "Optimal",
-          "medicalInsight": "Your Red Blood Cell (RBC) is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r19",
-          "op": "add",
-          "printed": "Haemoglobin estimation",
-          "value": 166,
-          "unit": "g/L",
-          "date": "2026-06-05",
-          "printedRange": "125 - 170 g/L",
-          "match": "alias",
-          "key": "hemoglobin",
-          "writeTarget": "observation",
-          "status": "Optimal",
-          "medicalInsight": "Your Hemoglobin is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r20",
-          "op": "add",
-          "printed": "Haematocrit",
-          "value": 0.48,
-          "unit": "L/L",
-          "date": "2026-06-05",
-          "printedRange": "0.390 - 0.510 L/L",
-          "match": "alias",
-          "key": "hematocrit",
-          "writeTarget": "observation",
-          "status": "Optimal",
-          "medicalInsight": "Your Hematocrit is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r21",
-          "op": "add",
-          "printed": "Mean corpuscular volume (MCV)",
-          "value": 88,
-          "unit": "fL",
-          "date": "2026-06-05",
-          "printedRange": "81 - 100 fL",
-          "match": "alias",
-          "key": "mean_corpuscular_volume",
-          "writeTarget": "observation",
-          "status": "Optimal",
-          "medicalInsight": "Your Mean Corpuscular Volume (MCV) is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r22",
-          "op": "add",
-          "printed": "Mean corpusc. haemoglobin(MCH)",
-          "value": 30.3,
-          "unit": "pg",
-          "date": "2026-06-05",
-          "printedRange": "27.0 - 33.3 pg",
-          "match": "alias",
-          "key": "mean_corpuscular_hemoglobin",
-          "writeTarget": "observation",
-          "status": "Optimal",
-          "medicalInsight": "Your Mean Corpuscular Hemoglobin (MCH) is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r23",
-          "op": "add",
-          "printed": "Mean corpusc. Hb. conc. (MCHC)",
-          "value": 346,
-          "unit": "g/L",
-          "date": "2026-06-05",
-          "printedRange": "310 - 350 g/L",
-          "match": "alias",
-          "key": "mean_corpuscular_hemoglobin_concentration",
-          "writeTarget": "observation",
-          "status": "Optimal",
-          "medicalInsight": "Your Mean Corpuscular Hemoglobin Concentration (MCHC) is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": null
-        },
-        {
-          "id": "r24",
-          "op": "add",
-          "printed": "Red blood cell distribut width",
-          "value": 11.8,
-          "unit": "%",
-          "date": "2026-06-05",
-          "printedRange": "10.5 - 16.0 %",
-          "match": "none",
-          "key": null,
-          "writeTarget": "pending",
-          "status": "Optimal",
-          "medicalInsight": "Your Red blood cell distribut width is Optimal.",
-          "customRangeOverlay": null,
-          "newCatalogDraft": {
-            "suggestedKey": "rdw",
-            "name": "Red blood cell distribut width",
-            "unit": "%",
-            "aliases": [],
-            "normalRange": "Varies",
-            "description": "Red blood cell distribut width",
-            "riskCategories": []
-          }
-        }
-      ],
-      "user": "\"09-Jun-2026\",\"Sample site\",\"\",\"\",\"(AlyssaFRS) - 01. Satisfactory - No Action Urine\"\n\"09-Jun-2026\",\"CHLAMYDIA/GC PCR\",\"\",\"\",\"(AlyssaFRS) - 01. Satisfactory - No Action\"\n\"09-Jun-2026\",\"Chlamydia DNA detection\",\"\",\"\",\"NEGATIVE\"\n\"09-Jun-2026\",\"N. gonorrhoeae nucl acid detn\",\"\",\"\",\"NEGATIVE\"\n\"05-Jun-2026\",\"HbA1c levl - IFCC standardised\",\"40 mmol/mol\",\"20 - 41 mmol/mol\",\"(AlyssaFRS) - 01. Satisfactory - No Action\"\n\"05-Jun-2026\",\"Se prostate specific Ag level\",\"1.41 ug/L\",\"- 2.49 ug/L\",\"(OlaFRS) - 01. Satisfactory - No Action The normal ranges provided are for patients who have a diagnostic PSA to detect prostate cancer. In patients\n\"05-Jun-2026\",\"Renal profile\",\"\",\"\",\"(OlaFRS) - 01. Satisfactory - No Action\"\n\"05-Jun-2026\",\"Serum sodium\",\"143 mmol/L\",\"133 - 146 mmol/L\",\"\"\n\"05-Jun-2026\",\"Serum potassium\",\"4.3 mmol/L\",\"3.5 - 5.3 mmol/L\",\"\"\n\"05-Jun-2026\",\"Serum creatinine\",\"100 umol/L\",\"64 - 104 umol/L\",\"\"\n\"05-Jun-2026\",\"eGFRcreat (CKD-EPI)/1.73 m*2\",\"80 mL/min/1.73m2\",\"- mL/min/1.73m2\",\"NA Note eGFR calculated using the CKD-EPI (2009 without ethnicity) equation.\"\n\"05-Jun-2026\",\"Liver function test\",\"\",\"\",\"(SophieWFRS) - No Action required.\"\n\"05-Jun-2026\",\"Serum albumin\",\"46 g/L\",\"31 - 45 g/L\",\"\"\n\"05-Jun-2026\",\"Serum ALT level\",\"41 U/L\",\"0 - 45 U/L\",\"\"\n\"05-Jun-2026\",\"Serum alkaline phosphatase\",\"39 U/L\",\"30 - 130 U/L\",\"\"\n\"05-Jun-2026\",\"AST serum level\",\"27 U/L\",\"5 - 34 U/L\",\"\"\n\"05-Jun-2026\",\"Serum total bilirubin level\",\"16 umol/L\",\"- 21 umol/L\",\"\"\n\"05-Jun-2026\",\"Serum total protein\",\"81 g/L\",\"60 - 80 g/L\",\"\"\n\"05-Jun-2026\",\"Serum globulin\",\"35 g/L\",\"22 - 38 g/L\",\"\"\n\"05-Jun-2026\",\"Bone profile\",\"\",\"\",\"(SophieWFRS) - No Action required.\"\n\"05-Jun-2026\",\"Serum albumin\",\"46 g/L\",\"31 - 45 g/L\",\"\"\n\"05-Jun-2026\",\"Serum alkaline phosphatase\",\"39 U/L\",\"30 - 130 U/L\",\"\"\n\"05-Jun-2026\",\"Serum calcium\",\"2.47 mmol/L\",\"- mmol/L\",\"\"\n\"05-Jun-2026\",\"Serum adjusted calcium conc\",\"2.37 mmol/L\",\"2.08 - 2.48 mmol/L\",\"Please note new adjusted calcium equation and new adjusted calcium Abbott Alinity reference ranges in use from 22/09/25.\"\n\"05-Jun-2026\",\"Serum inorganic phosphate\",\"1.12 mmol/L\",\"0.80 - 1.50 mmol/L\",\"\"\n\"05-Jun-2026\",\"Full blood count - FBC\",\"\",\"\",\"(OlaFRS) - 01. Satisfactory - No Action\"\n\"05-Jun-2026\",\"Total white cell count\",\"5.7 10*9/L\",\"2.9 - 9.6 10*9/L\",\"\"\n\"05-Jun-2026\",\"Red blood cell (RBC) count\",\"5.47 10*12/L\",\"4.20 - 5.80 10*12/L\",\"\"\n\"05-Jun-2026\",\"Haemoglobin estimation\",\"166 g/L\",\"125 - 170 g/L\",\"\"\n\"05-Jun-2026\",\"Haematocrit\",\"0.48 L/L\",\"0.390 - 0.510 L/L\",\"\"\n\"05-Jun-2026\",\"Mean corpuscular volume (MCV)\",\"88 fL\",\"81 - 100 fL\",\"\"\n\"05-Jun-2026\",\"Mean corpusc. haemoglobin(MCH)\",\"30.3 pg\",\"27.0 - 33.3 pg\",\"\"\n\"05-Jun-2026\",\"Mean corpusc. Hb. conc. (MCHC)\",\"346 g/L\",\"310 - 350 g/L\",\"\"\n\"05-Jun-2026\",\"Red blood cell distribut width\",\"11.8 %\",\"10.5 - 16.0 %\",\"\"\n\nAgent turn 0 (hit). Fill ONLY ids: r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24.\n\nLast batch.\n\nHits: evaluate status from reference range. Provide status, medicalInsight, and customRangeOverlay (null if agreed, else adjusted range). Never Critical.\n\n{\n  \"batch\": [\n    {\n      \"id\": \"r01\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"HbA1c\",\n        \"key\": \"hba1c\",\n        \"alias\": [\n          \"hba1cc\",\n          \"glycatedhaemoglobin\",\n          \"hemoglobin_a1c_mmol_mol\",\n          \"hba1c_mmol_mol\",\n          \"hemoglobin_a1c\"\n        ],\n        \"normalRange\": \"20 - 41\",\n        \"unit\": \"mmol/mol\",\n        \"description\": \"Average blood glucose levels over the past 2-3 months.\",\n        \"riskCategories\": [\n          \"Metabolic\"\n        ],\n        \"customRange\": \"[All patients] Elevated (Diabetes): >= 48; Elevated: >= 39; Normal: >= 20; Elevated (Diabetes): >= 6.5; Elevated: >= 5.7\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 40,\n        \"unit\": \"mmol/mol\"\n      },\n      \"printedRange\": \"20 - 41 mmol/mol\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2024-04-04\",\n          \"value\": 39,\n          \"unit\": \"mmol/mol\"\n        },\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 40,\n          \"unit\": \"mmol/mol\"\n        }\n      ],\n      \"trend\": \"39 → 40\",\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r02\",\n      \"match\": \"none\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Se prostate specific Ag level\",\n        \"key\": null,\n        \"alias\": [],\n        \"normalRange\": \"\",\n        \"unit\": \"ug/L\",\n        \"description\": \"\",\n        \"riskCategories\": [],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 1.41,\n        \"unit\": \"ug/L\"\n      },\n      \"printedRange\": \"- 2.49 ug/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 1.41,\n          \"unit\": \"ug/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r03\",\n      \"match\": \"none\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Serum sodium\",\n        \"key\": null,\n        \"alias\": [],\n        \"normalRange\": \"\",\n        \"unit\": \"mmol/L\",\n        \"description\": \"\",\n        \"riskCategories\": [],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 143,\n        \"unit\": \"mmol/L\"\n      },\n      \"printedRange\": \"133 - 146 mmol/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 143,\n          \"unit\": \"mmol/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r04\",\n      \"match\": \"none\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Serum potassium\",\n        \"key\": null,\n        \"alias\": [],\n        \"normalRange\": \"\",\n        \"unit\": \"mmol/L\",\n        \"description\": \"\",\n        \"riskCategories\": [],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 4.3,\n        \"unit\": \"mmol/L\"\n      },\n      \"printedRange\": \"3.5 - 5.3 mmol/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 4.3,\n          \"unit\": \"mmol/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r05\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Creatinine\",\n        \"key\": \"creatinine\",\n        \"alias\": [\n          \"serumcreatinine\",\n          \"serumcreatinineumoll\",\n          \"serum_creatinine_umol_l\",\n          \"serum_creatinine\"\n        ],\n        \"normalRange\": \"44 - 106\",\n        \"unit\": \"umol/L\",\n        \"description\": \"A waste product from muscle breakdown, filtered by kidneys.\",\n        \"riskCategories\": [\n          \"Kidney\"\n        ],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 100,\n        \"unit\": \"umol/L\"\n      },\n      \"printedRange\": \"64 - 104 umol/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 100,\n          \"unit\": \"umol/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r06\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"eGFR\",\n        \"key\": \"egfr\",\n        \"alias\": [\n          \"egfrmlmin173m2\",\n          \"egfrmlmin173\",\n          \"egfr_ml_min_1_73m2\",\n          \"egfr_mlmin173m2\"\n        ],\n        \"normalRange\": \"over 90\",\n        \"unit\": \"mL/min/1.73m²\",\n        \"description\": \"Estimated Glomerular Filtration Rate, showing kidney health.\",\n        \"riskCategories\": [\n          \"Kidney\"\n        ],\n        \"customRange\": \"[All patients] Decreased (CKD G3): < 60; Mildly Decreased (CKD G2): < 90; Optimal: >= 90\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 80,\n        \"unit\": \"mL/min/1.73m2\"\n      },\n      \"printedRange\": \"- mL/min/1.73m2\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 80,\n          \"unit\": \"mL/min/1.73m2\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r07\",\n      \"match\": \"key\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Serum Albumin\",\n        \"key\": \"serum_albumin\",\n        \"alias\": [\n          \"albumin\",\n          \"serumalbumin\",\n          \"serum_albumin_g_l\"\n        ],\n        \"normalRange\": \"35 - 50\",\n        \"unit\": \"g/L\",\n        \"description\": \"Main protein produced by the liver, keeping fluid balance in vessels.\",\n        \"riskCategories\": [\n          \"Liver\",\n          \"Kidney\"\n        ],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 46,\n        \"unit\": \"g/L\"\n      },\n      \"printedRange\": \"31 - 45 g/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 46,\n          \"unit\": \"g/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r08\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"ALT (SGPT)\",\n        \"key\": \"alt\",\n        \"alias\": [\n          \"sgpt\",\n          \"alanine_aminotransferase\",\n          \"serum_alt_level_u_l\",\n          \"serum_alt_level\"\n        ],\n        \"normalRange\": \"10 - 40\",\n        \"unit\": \"U/L\",\n        \"description\": \"Alanine Aminotransferase, an enzyme found mostly in the liver.\",\n        \"riskCategories\": [\n          \"Liver\"\n        ],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 41,\n        \"unit\": \"U/L\"\n      },\n      \"printedRange\": \"0 - 45 U/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 41,\n          \"unit\": \"U/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r09\",\n      \"match\": \"none\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Serum alkaline phosphatase\",\n        \"key\": null,\n        \"alias\": [],\n        \"normalRange\": \"\",\n        \"unit\": \"U/L\",\n        \"description\": \"\",\n        \"riskCategories\": [],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 39,\n        \"unit\": \"U/L\"\n      },\n      \"printedRange\": \"30 - 130 U/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 39,\n          \"unit\": \"U/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r10\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"AST (SGOT)\",\n        \"key\": \"ast\",\n        \"alias\": [\n          \"sgot\",\n          \"aspartate_aminotransferase\",\n          \"ast_serum_level_u_l\",\n          \"ast_serum_level\"\n        ],\n        \"normalRange\": \"10 - 40\",\n        \"unit\": \"U/L\",\n        \"description\": \"Aspartate Aminotransferase, an enzyme found in liver and muscle.\",\n        \"riskCategories\": [\n          \"Liver\"\n        ],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 27,\n        \"unit\": \"U/L\"\n      },\n      \"printedRange\": \"5 - 34 U/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 27,\n          \"unit\": \"U/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r11\",\n      \"match\": \"none\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Serum total bilirubin level\",\n        \"key\": null,\n        \"alias\": [],\n        \"normalRange\": \"\",\n        \"unit\": \"umol/L\",\n        \"description\": \"\",\n        \"riskCategories\": [],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 16,\n        \"unit\": \"umol/L\"\n      },\n      \"printedRange\": \"- 21 umol/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 16,\n          \"unit\": \"umol/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r12\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Total Protein\",\n        \"key\": \"total_protein\",\n        \"alias\": [\n          \"serumtotalprotein\",\n          \"serum_total_protein_g_l\",\n          \"serum_total_protein\"\n        ],\n        \"normalRange\": \"60 - 80\",\n        \"unit\": \"g/L\",\n        \"description\": \"Measures the total amount of protein in your blood.\",\n        \"riskCategories\": [\n          \"Liver\",\n          \"Kidney\"\n        ],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 81,\n        \"unit\": \"g/L\"\n      },\n      \"printedRange\": \"60 - 80 g/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 81,\n          \"unit\": \"g/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r13\",\n      \"match\": \"none\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Serum globulin\",\n        \"key\": null,\n        \"alias\": [],\n        \"normalRange\": \"\",\n        \"unit\": \"g/L\",\n        \"description\": \"\",\n        \"riskCategories\": [],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 35,\n        \"unit\": \"g/L\"\n      },\n      \"printedRange\": \"22 - 38 g/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 35,\n          \"unit\": \"g/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r14\",\n      \"match\": \"none\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Serum calcium\",\n        \"key\": null,\n        \"alias\": [],\n        \"normalRange\": \"\",\n        \"unit\": \"mmol/L\",\n        \"description\": \"\",\n        \"riskCategories\": [],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 2.47,\n        \"unit\": \"mmol/L\"\n      },\n      \"printedRange\": \"- mmol/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 2.47,\n          \"unit\": \"mmol/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r15\",\n      \"match\": \"none\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Serum adjusted calcium conc\",\n        \"key\": null,\n        \"alias\": [],\n        \"normalRange\": \"\",\n        \"unit\": \"mmol/L\",\n        \"description\": \"\",\n        \"riskCategories\": [],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 2.37,\n        \"unit\": \"mmol/L\"\n      },\n      \"printedRange\": \"2.08 - 2.48 mmol/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 2.37,\n          \"unit\": \"mmol/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r16\",\n      \"match\": \"none\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Serum inorganic phosphate\",\n        \"key\": null,\n        \"alias\": [],\n        \"normalRange\": \"\",\n        \"unit\": \"mmol/L\",\n        \"description\": \"\",\n        \"riskCategories\": [],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 1.12,\n        \"unit\": \"mmol/L\"\n      },\n      \"printedRange\": \"0.80 - 1.50 mmol/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 1.12,\n          \"unit\": \"mmol/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r17\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"White Blood Cell (WBC)\",\n        \"key\": \"wbc\",\n        \"alias\": [\n          \"whitebloodcell\",\n          \"total_white_cell_count\",\n          \"total_white_cell_count_10_9_l\",\n          \"white_blood_cell_count\"\n        ],\n        \"normalRange\": \"4.5 - 11.0\",\n        \"unit\": \"K/uL\",\n        \"description\": \"Total white blood cell count for immune function.\",\n        \"riskCategories\": [\n          \"Hematology\"\n        ],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 5.7,\n        \"unit\": \"10*9/L\"\n      },\n      \"printedRange\": \"2.9 - 9.6 10*9/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 5.7,\n          \"unit\": \"10*9/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r18\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Red Blood Cell (RBC)\",\n        \"key\": \"rbc\",\n        \"alias\": [\n          \"redbloodcell\",\n          \"redbloodcells\",\n          \"redbloodcellcount\",\n          \"red_blood_cell_count_10_12_l\",\n          \"red_blood_cell_count\"\n        ],\n        \"normalRange\": \"4.5 - 5.9\",\n        \"unit\": \"M/uL\",\n        \"description\": \"Total red blood cell count carrying oxygen to tissue.\",\n        \"riskCategories\": [\n          \"Hematology\"\n        ],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 5.47,\n        \"unit\": \"10*12/L\"\n      },\n      \"printedRange\": \"4.20 - 5.80 10*12/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 5.47,\n          \"unit\": \"10*12/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r19\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Hemoglobin\",\n        \"key\": \"hemoglobin\",\n        \"alias\": [\n          \"haemoglobin\",\n          \"hgb\",\n          \"hb\",\n          \"hemoglobin_g_l\",\n          \"haemoglobinestimation\",\n          \"haemoglobin_estimation\",\n          \"haemoglobin_estimation_hb\",\n          \"haemoglobin_hb\",\n          \"hemoglobingl\",\n          \"hemoglobingdl\",\n          \"haemoglobingl\",\n          \"haemoglobingdl\"\n        ],\n        \"normalRange\": \"120 - 175\",\n        \"unit\": \"g/L\",\n        \"description\": \"Oxygen-carrying protein in red blood cells.\",\n        \"riskCategories\": [\n          \"Hematology\"\n        ],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 166,\n        \"unit\": \"g/L\"\n      },\n      \"printedRange\": \"125 - 170 g/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 166,\n          \"unit\": \"g/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r20\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Hematocrit\",\n        \"key\": \"hematocrit\",\n        \"alias\": [],\n        \"normalRange\": \"0.36 - 0.50\",\n        \"unit\": \"L/L\",\n        \"description\": \"The proportion of blood made up of red blood cells.\",\n        \"riskCategories\": [],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 0.48,\n        \"unit\": \"L/L\"\n      },\n      \"printedRange\": \"0.390 - 0.510 L/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 0.48,\n          \"unit\": \"L/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r21\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Mean Corpuscular Volume (MCV)\",\n        \"key\": \"mean_corpuscular_volume\",\n        \"alias\": [\n          \"mcv\",\n          \"mean_corpuscular_volume_fl\",\n          \"meancorpuscularvolume\",\n          \"meancorpuscularvolumemcv\"\n        ],\n        \"normalRange\": \"80 - 100\",\n        \"unit\": \"fL\",\n        \"description\": \"Average volume or size of red blood cells.\",\n        \"riskCategories\": [\n          \"Hematology\"\n        ],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 88,\n        \"unit\": \"fL\"\n      },\n      \"printedRange\": \"81 - 100 fL\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 88,\n          \"unit\": \"fL\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r22\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Mean Corpuscular Hemoglobin (MCH)\",\n        \"key\": \"mean_corpuscular_hemoglobin\",\n        \"alias\": [\n          \"mch\",\n          \"mean_corpuscular_hemoglobin_pg\",\n          \"meancorpuscularhemoglobin\",\n          \"meancorpuscularhemoglobinpg\",\n          \"meancorpuschaemoglobinmch\",\n          \"haemoglobin_mch\"\n        ],\n        \"normalRange\": \"27 - 33\",\n        \"unit\": \"pg\",\n        \"description\": \"Average amount of hemoglobin per red blood cell.\",\n        \"riskCategories\": [\n          \"Hematology\"\n        ],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 30.3,\n        \"unit\": \"pg\"\n      },\n      \"printedRange\": \"27.0 - 33.3 pg\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 30.3,\n          \"unit\": \"pg\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r23\",\n      \"match\": \"alias\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Mean Corpuscular Hemoglobin Concentration (MCHC)\",\n        \"key\": \"mean_corpuscular_hemoglobin_concentration\",\n        \"alias\": [\n          \"mchc\",\n          \"mean_corpuscular_hb_conc_g_l\",\n          \"mean_corpuscular_hb_concentration\",\n          \"mean_corpuscular_hb_conc\",\n          \"meancorpuschbconcmchc\",\n          \"mean_corpuscular_hemoglobin_concentration_g_l\"\n        ],\n        \"normalRange\": \"320 - 360\",\n        \"unit\": \"g/L\",\n        \"description\": \"Average concentration of hemoglobin inside red blood cells.\",\n        \"riskCategories\": [\n          \"Hematology\"\n        ],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 346,\n        \"unit\": \"g/L\"\n      },\n      \"printedRange\": \"310 - 350 g/L\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 346,\n          \"unit\": \"g/L\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    },\n    {\n      \"id\": \"r24\",\n      \"match\": \"none\",\n      \"dictionary\": {\n        \"biomarkerName\": \"Red blood cell distribut width\",\n        \"key\": null,\n        \"alias\": [],\n        \"normalRange\": \"\",\n        \"unit\": \"%\",\n        \"description\": \"\",\n        \"riskCategories\": [],\n        \"customRange\": \"\"\n      },\n      \"observation\": {\n        \"date\": \"2026-06-05\",\n        \"value\": 11.8,\n        \"unit\": \"%\"\n      },\n      \"printedRange\": \"10.5 - 16.0 %\",\n      \"historicalLogs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 11.8,\n          \"unit\": \"%\"\n        }\n      ],\n      \"trend\": null,\n      \"profile\": {\n        \"age\": 43,\n        \"gender\": \"male\",\n        \"ethnicity\": \"Chinese\"\n      }\n    }\n  ]\n}",
-      "payload": [
-        {
-          "id": "r01",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "HbA1c",
-            "key": "hba1c",
-            "alias": [
-              "hba1cc",
-              "glycatedhaemoglobin",
-              "hemoglobin_a1c_mmol_mol",
-              "hba1c_mmol_mol",
-              "hemoglobin_a1c"
-            ],
-            "normalRange": "20 - 41",
-            "unit": "mmol/mol",
-            "description": "Average blood glucose levels over the past 2-3 months.",
-            "riskCategories": [
-              "Metabolic"
-            ],
-            "customRange": "[All patients] Elevated (Diabetes): >= 48; Elevated: >= 39; Normal: >= 20; Elevated (Diabetes): >= 6.5; Elevated: >= 5.7"
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 40,
-            "unit": "mmol/mol"
-          },
-          "printedRange": "20 - 41 mmol/mol",
-          "historicalLogs": [
+          "logs": [
             {
               "date": "2024-04-04",
               "value": 39,
@@ -544,867 +57,558 @@
               "unit": "mmol/mol"
             }
           ],
-          "trend": "39 → 40",
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
           "id": "r02",
-          "match": "none",
-          "dictionary": {
-            "biomarkerName": "Se prostate specific Ag level",
-            "key": null,
-            "alias": [],
-            "normalRange": "",
-            "unit": "ug/L",
-            "description": "",
-            "riskCategories": [],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 1.41,
-            "unit": "ug/L"
-          },
-          "printedRange": "- 2.49 ug/L",
-          "historicalLogs": [
-            {
-              "date": "2026-06-05",
-              "value": 1.41,
-              "unit": "ug/L"
-            }
-          ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
-        },
-        {
-          "id": "r03",
-          "match": "none",
-          "dictionary": {
-            "biomarkerName": "Serum sodium",
-            "key": null,
-            "alias": [],
-            "normalRange": "",
-            "unit": "mmol/L",
-            "description": "",
-            "riskCategories": [],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 143,
-            "unit": "mmol/L"
-          },
-          "printedRange": "133 - 146 mmol/L",
-          "historicalLogs": [
-            {
-              "date": "2026-06-05",
-              "value": 143,
-              "unit": "mmol/L"
-            }
-          ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
-        },
-        {
-          "id": "r04",
-          "match": "none",
-          "dictionary": {
-            "biomarkerName": "Serum potassium",
-            "key": null,
-            "alias": [],
-            "normalRange": "",
-            "unit": "mmol/L",
-            "description": "",
-            "riskCategories": [],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 4.3,
-            "unit": "mmol/L"
-          },
-          "printedRange": "3.5 - 5.3 mmol/L",
-          "historicalLogs": [
-            {
-              "date": "2026-06-05",
-              "value": 4.3,
-              "unit": "mmol/L"
-            }
-          ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
-        },
-        {
-          "id": "r05",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "Creatinine",
-            "key": "creatinine",
-            "alias": [
-              "serumcreatinine",
-              "serumcreatinineumoll",
-              "serum_creatinine_umol_l",
-              "serum_creatinine"
-            ],
-            "normalRange": "44 - 106",
-            "unit": "umol/L",
-            "description": "A waste product from muscle breakdown, filtered by kidneys.",
-            "riskCategories": [
-              "Kidney"
-            ],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 100,
-            "unit": "umol/L"
-          },
+          "op": "add",
+          "printed": "Serum creatinine",
+          "value": 100,
+          "unit": "umol/L",
+          "date": "2026-06-05",
           "printedRange": "64 - 104 umol/L",
-          "historicalLogs": [
+          "assignedRange": "64 - 104 umol/L",
+          "optimalValue": "80 umol/L",
+          "editReason": null,
+          "match": "alias",
+          "key": "creatinine",
+          "writeTarget": "observation",
+          "status": "Optimal",
+          "medicalInsight": "Serum creatinine is 100 umol/L, within the normal laboratory range.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 100,
               "unit": "umol/L"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
-          "id": "r06",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "eGFR",
-            "key": "egfr",
-            "alias": [
-              "egfrmlmin173m2",
-              "egfrmlmin173",
-              "egfr_ml_min_1_73m2",
-              "egfr_mlmin173m2"
-            ],
-            "normalRange": "over 90",
-            "unit": "mL/min/1.73m²",
-            "description": "Estimated Glomerular Filtration Rate, showing kidney health.",
-            "riskCategories": [
-              "Kidney"
-            ],
-            "customRange": "[All patients] Decreased (CKD G3): < 60; Mildly Decreased (CKD G2): < 90; Optimal: >= 90"
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 80,
-            "unit": "mL/min/1.73m2"
-          },
+          "id": "r03",
+          "op": "add",
+          "printed": "eGFRcreat (CKD-EPI)/1.73 m*2",
+          "value": 80,
+          "unit": "mL/min/1.73m2",
+          "date": "2026-06-05",
           "printedRange": "- mL/min/1.73m2",
-          "historicalLogs": [
+          "assignedRange": ">= 60 mL/min/1.73m2",
+          "optimalValue": "60 mL/min/1.73m2",
+          "editReason": null,
+          "match": "alias",
+          "key": "egfr",
+          "writeTarget": "observation",
+          "status": "Mildly Decreased (CKD G2)",
+          "medicalInsight": "Your eGFR of 80 is normal.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 80,
               "unit": "mL/min/1.73m2"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
-          "id": "r07",
-          "match": "key",
-          "dictionary": {
-            "biomarkerName": "Serum Albumin",
-            "key": "serum_albumin",
-            "alias": [
-              "albumin",
-              "serumalbumin",
-              "serum_albumin_g_l"
-            ],
-            "normalRange": "35 - 50",
-            "unit": "g/L",
-            "description": "Main protein produced by the liver, keeping fluid balance in vessels.",
-            "riskCategories": [
-              "Liver",
-              "Kidney"
-            ],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 46,
-            "unit": "g/L"
-          },
+          "id": "r04",
+          "op": "add",
+          "printed": "Serum albumin",
+          "value": 46,
+          "unit": "g/L",
+          "date": "2026-06-05",
           "printedRange": "31 - 45 g/L",
-          "historicalLogs": [
+          "assignedRange": "31 - 45 g/L",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "key",
+          "key": "serum_albumin",
+          "writeTarget": "observation",
+          "status": "Optimal",
+          "medicalInsight": "Your Serum Albumin is Optimal.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 46,
               "unit": "g/L"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
-          "id": "r08",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "ALT (SGPT)",
-            "key": "alt",
-            "alias": [
-              "sgpt",
-              "alanine_aminotransferase",
-              "serum_alt_level_u_l",
-              "serum_alt_level"
-            ],
-            "normalRange": "10 - 40",
-            "unit": "U/L",
-            "description": "Alanine Aminotransferase, an enzyme found mostly in the liver.",
-            "riskCategories": [
-              "Liver"
-            ],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 41,
-            "unit": "U/L"
-          },
+          "id": "r05",
+          "op": "add",
+          "printed": "Serum ALT level",
+          "value": 41,
+          "unit": "U/L",
+          "date": "2026-06-05",
           "printedRange": "0 - 45 U/L",
-          "historicalLogs": [
+          "assignedRange": "0 - 45 U/L",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "alias",
+          "key": "alt",
+          "writeTarget": "observation",
+          "status": "Elevated",
+          "medicalInsight": "Your ALT (SGPT) is Elevated.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 41,
               "unit": "U/L"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
-          "id": "r09",
-          "match": "none",
-          "dictionary": {
-            "biomarkerName": "Serum alkaline phosphatase",
-            "key": null,
-            "alias": [],
-            "normalRange": "",
-            "unit": "U/L",
-            "description": "",
-            "riskCategories": [],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 39,
-            "unit": "U/L"
-          },
-          "printedRange": "30 - 130 U/L",
-          "historicalLogs": [
-            {
-              "date": "2026-06-05",
-              "value": 39,
-              "unit": "U/L"
-            }
-          ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
-        },
-        {
-          "id": "r10",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "AST (SGOT)",
-            "key": "ast",
-            "alias": [
-              "sgot",
-              "aspartate_aminotransferase",
-              "ast_serum_level_u_l",
-              "ast_serum_level"
-            ],
-            "normalRange": "10 - 40",
-            "unit": "U/L",
-            "description": "Aspartate Aminotransferase, an enzyme found in liver and muscle.",
-            "riskCategories": [
-              "Liver"
-            ],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 27,
-            "unit": "U/L"
-          },
+          "id": "r06",
+          "op": "add",
+          "printed": "AST serum level",
+          "value": 27,
+          "unit": "U/L",
+          "date": "2026-06-05",
           "printedRange": "5 - 34 U/L",
-          "historicalLogs": [
+          "assignedRange": "5 - 34 U/L",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "alias",
+          "key": "ast",
+          "writeTarget": "observation",
+          "status": "Optimal",
+          "medicalInsight": "Your AST (SGOT) is Optimal.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 27,
               "unit": "U/L"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
-          "id": "r11",
-          "match": "none",
-          "dictionary": {
-            "biomarkerName": "Serum total bilirubin level",
-            "key": null,
-            "alias": [],
-            "normalRange": "",
-            "unit": "umol/L",
-            "description": "",
-            "riskCategories": [],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 16,
-            "unit": "umol/L"
-          },
-          "printedRange": "- 21 umol/L",
-          "historicalLogs": [
-            {
-              "date": "2026-06-05",
-              "value": 16,
-              "unit": "umol/L"
-            }
-          ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
-        },
-        {
-          "id": "r12",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "Total Protein",
-            "key": "total_protein",
-            "alias": [
-              "serumtotalprotein",
-              "serum_total_protein_g_l",
-              "serum_total_protein"
-            ],
-            "normalRange": "60 - 80",
-            "unit": "g/L",
-            "description": "Measures the total amount of protein in your blood.",
-            "riskCategories": [
-              "Liver",
-              "Kidney"
-            ],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 81,
-            "unit": "g/L"
-          },
+          "id": "r07",
+          "op": "add",
+          "printed": "Serum total protein",
+          "value": 81,
+          "unit": "g/L",
+          "date": "2026-06-05",
           "printedRange": "60 - 80 g/L",
-          "historicalLogs": [
+          "assignedRange": "6 - 8 g/L",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "alias",
+          "key": "total_protein",
+          "writeTarget": "observation",
+          "status": "Elevated",
+          "medicalInsight": "Your Total Protein is Elevated.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 81,
               "unit": "g/L"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
-          "id": "r13",
-          "match": "none",
-          "dictionary": {
-            "biomarkerName": "Serum globulin",
-            "key": null,
-            "alias": [],
-            "normalRange": "",
-            "unit": "g/L",
-            "description": "",
-            "riskCategories": [],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 35,
-            "unit": "g/L"
-          },
-          "printedRange": "22 - 38 g/L",
-          "historicalLogs": [
-            {
-              "date": "2026-06-05",
-              "value": 35,
-              "unit": "g/L"
-            }
-          ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
-        },
-        {
-          "id": "r14",
-          "match": "none",
-          "dictionary": {
-            "biomarkerName": "Serum calcium",
-            "key": null,
-            "alias": [],
-            "normalRange": "",
-            "unit": "mmol/L",
-            "description": "",
-            "riskCategories": [],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 2.47,
-            "unit": "mmol/L"
-          },
-          "printedRange": "- mmol/L",
-          "historicalLogs": [
-            {
-              "date": "2026-06-05",
-              "value": 2.47,
-              "unit": "mmol/L"
-            }
-          ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
-        },
-        {
-          "id": "r15",
-          "match": "none",
-          "dictionary": {
-            "biomarkerName": "Serum adjusted calcium conc",
-            "key": null,
-            "alias": [],
-            "normalRange": "",
-            "unit": "mmol/L",
-            "description": "",
-            "riskCategories": [],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 2.37,
-            "unit": "mmol/L"
-          },
-          "printedRange": "2.08 - 2.48 mmol/L",
-          "historicalLogs": [
-            {
-              "date": "2026-06-05",
-              "value": 2.37,
-              "unit": "mmol/L"
-            }
-          ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
-        },
-        {
-          "id": "r16",
-          "match": "none",
-          "dictionary": {
-            "biomarkerName": "Serum inorganic phosphate",
-            "key": null,
-            "alias": [],
-            "normalRange": "",
-            "unit": "mmol/L",
-            "description": "",
-            "riskCategories": [],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 1.12,
-            "unit": "mmol/L"
-          },
-          "printedRange": "0.80 - 1.50 mmol/L",
-          "historicalLogs": [
-            {
-              "date": "2026-06-05",
-              "value": 1.12,
-              "unit": "mmol/L"
-            }
-          ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
-        },
-        {
-          "id": "r17",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "White Blood Cell (WBC)",
-            "key": "wbc",
-            "alias": [
-              "whitebloodcell",
-              "total_white_cell_count",
-              "total_white_cell_count_10_9_l",
-              "white_blood_cell_count"
-            ],
-            "normalRange": "4.5 - 11.0",
-            "unit": "K/uL",
-            "description": "Total white blood cell count for immune function.",
-            "riskCategories": [
-              "Hematology"
-            ],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 5.7,
-            "unit": "10*9/L"
-          },
+          "id": "r08",
+          "op": "add",
+          "printed": "Total white cell count",
+          "value": 5.7,
+          "unit": "10*9/L",
+          "date": "2026-06-05",
           "printedRange": "2.9 - 9.6 10*9/L",
-          "historicalLogs": [
+          "assignedRange": "2.9 - 9.6 10*9/L",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "alias",
+          "key": "wbc",
+          "writeTarget": "observation",
+          "status": "Optimal",
+          "medicalInsight": "Your White Blood Cell (WBC) is Optimal.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 5.7,
               "unit": "10*9/L"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
-          "id": "r18",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "Red Blood Cell (RBC)",
-            "key": "rbc",
-            "alias": [
-              "redbloodcell",
-              "redbloodcells",
-              "redbloodcellcount",
-              "red_blood_cell_count_10_12_l",
-              "red_blood_cell_count"
-            ],
-            "normalRange": "4.5 - 5.9",
-            "unit": "M/uL",
-            "description": "Total red blood cell count carrying oxygen to tissue.",
-            "riskCategories": [
-              "Hematology"
-            ],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 5.47,
-            "unit": "10*12/L"
-          },
+          "id": "r09",
+          "op": "add",
+          "printed": "Red blood cell (RBC) count",
+          "value": 5.47,
+          "unit": "10*12/L",
+          "date": "2026-06-05",
           "printedRange": "4.20 - 5.80 10*12/L",
-          "historicalLogs": [
+          "assignedRange": "4.20 - 5.80 10*12/L",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "alias",
+          "key": "rbc",
+          "writeTarget": "observation",
+          "status": "Optimal",
+          "medicalInsight": "Your Red Blood Cell (RBC) is Optimal.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 5.47,
               "unit": "10*12/L"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
-          "id": "r19",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "Hemoglobin",
-            "key": "hemoglobin",
-            "alias": [
-              "haemoglobin",
-              "hgb",
-              "hb",
-              "hemoglobin_g_l",
-              "haemoglobinestimation",
-              "haemoglobin_estimation",
-              "haemoglobin_estimation_hb",
-              "haemoglobin_hb",
-              "hemoglobingl",
-              "hemoglobingdl",
-              "haemoglobingl",
-              "haemoglobingdl"
-            ],
-            "normalRange": "120 - 175",
-            "unit": "g/L",
-            "description": "Oxygen-carrying protein in red blood cells.",
-            "riskCategories": [
-              "Hematology"
-            ],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 166,
-            "unit": "g/L"
-          },
+          "id": "r10",
+          "op": "add",
+          "printed": "Haemoglobin estimation",
+          "value": 166,
+          "unit": "g/L",
+          "date": "2026-06-05",
           "printedRange": "125 - 170 g/L",
-          "historicalLogs": [
+          "assignedRange": "125 - 170 g/L",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "alias",
+          "key": "hemoglobin",
+          "writeTarget": "observation",
+          "status": "Optimal",
+          "medicalInsight": "Your Hemoglobin is Optimal.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 166,
               "unit": "g/L"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
-          "id": "r20",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "Hematocrit",
-            "key": "hematocrit",
-            "alias": [],
-            "normalRange": "0.36 - 0.50",
-            "unit": "L/L",
-            "description": "The proportion of blood made up of red blood cells.",
-            "riskCategories": [],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 0.48,
-            "unit": "L/L"
-          },
+          "id": "r11",
+          "op": "add",
+          "printed": "Haematocrit",
+          "value": 0.48,
+          "unit": "L/L",
+          "date": "2026-06-05",
           "printedRange": "0.390 - 0.510 L/L",
-          "historicalLogs": [
+          "assignedRange": "0.390 - 0.510 L/L",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "alias",
+          "key": "hematocrit",
+          "writeTarget": "observation",
+          "status": "Optimal",
+          "medicalInsight": "Your Hematocrit is Optimal.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 0.48,
               "unit": "L/L"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
-          "id": "r21",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "Mean Corpuscular Volume (MCV)",
-            "key": "mean_corpuscular_volume",
-            "alias": [
-              "mcv",
-              "mean_corpuscular_volume_fl",
-              "meancorpuscularvolume",
-              "meancorpuscularvolumemcv"
-            ],
-            "normalRange": "80 - 100",
-            "unit": "fL",
-            "description": "Average volume or size of red blood cells.",
-            "riskCategories": [
-              "Hematology"
-            ],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 88,
-            "unit": "fL"
-          },
+          "id": "r12",
+          "op": "add",
+          "printed": "Mean corpuscular volume (MCV)",
+          "value": 88,
+          "unit": "fL",
+          "date": "2026-06-05",
           "printedRange": "81 - 100 fL",
-          "historicalLogs": [
+          "assignedRange": "81 - 100 fL",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "alias",
+          "key": "mean_corpuscular_volume",
+          "writeTarget": "observation",
+          "status": "Optimal",
+          "medicalInsight": "Your Mean Corpuscular Volume (MCV) is Optimal.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 88,
               "unit": "fL"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
-          "id": "r22",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "Mean Corpuscular Hemoglobin (MCH)",
-            "key": "mean_corpuscular_hemoglobin",
-            "alias": [
-              "mch",
-              "mean_corpuscular_hemoglobin_pg",
-              "meancorpuscularhemoglobin",
-              "meancorpuscularhemoglobinpg",
-              "meancorpuschaemoglobinmch",
-              "haemoglobin_mch"
-            ],
-            "normalRange": "27 - 33",
-            "unit": "pg",
-            "description": "Average amount of hemoglobin per red blood cell.",
-            "riskCategories": [
-              "Hematology"
-            ],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 30.3,
-            "unit": "pg"
-          },
+          "id": "r13",
+          "op": "add",
+          "printed": "Mean corpusc. haemoglobin(MCH)",
+          "value": 30.3,
+          "unit": "pg",
+          "date": "2026-06-05",
           "printedRange": "27.0 - 33.3 pg",
-          "historicalLogs": [
+          "assignedRange": "27.0 - 33.3 pg",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "alias",
+          "key": "mean_corpuscular_hemoglobin",
+          "writeTarget": "observation",
+          "status": "Optimal",
+          "medicalInsight": "Your Mean Corpuscular Hemoglobin (MCH) is Optimal.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 30.3,
               "unit": "pg"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
-          }
+          "newCatalogDraft": null
         },
         {
-          "id": "r23",
-          "match": "alias",
-          "dictionary": {
-            "biomarkerName": "Mean Corpuscular Hemoglobin Concentration (MCHC)",
-            "key": "mean_corpuscular_hemoglobin_concentration",
-            "alias": [
-              "mchc",
-              "mean_corpuscular_hb_conc_g_l",
-              "mean_corpuscular_hb_concentration",
-              "mean_corpuscular_hb_conc",
-              "meancorpuschbconcmchc",
-              "mean_corpuscular_hemoglobin_concentration_g_l"
-            ],
-            "normalRange": "320 - 360",
-            "unit": "g/L",
-            "description": "Average concentration of hemoglobin inside red blood cells.",
-            "riskCategories": [
-              "Hematology"
-            ],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 346,
-            "unit": "g/L"
-          },
+          "id": "r14",
+          "op": "add",
+          "printed": "Mean corpusc. Hb. conc. (MCHC)",
+          "value": 346,
+          "unit": "g/L",
+          "date": "2026-06-05",
           "printedRange": "310 - 350 g/L",
-          "historicalLogs": [
+          "assignedRange": "310 - 350 g/L",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "alias",
+          "key": "mean_corpuscular_hemoglobin_concentration",
+          "writeTarget": "observation",
+          "status": "Optimal",
+          "medicalInsight": "Your Mean Corpuscular Hemoglobin Concentration (MCHC) is Optimal.",
+          "customRangeOverlay": null,
+          "logs": [
             {
               "date": "2026-06-05",
               "value": 346,
               "unit": "g/L"
             }
           ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
+          "newCatalogDraft": null
+        }
+      ],
+      "user": "<user_upload>\n\"05-Jun-2026\",\"HbA1c levl - IFCC standardised\",\"40 mmol/mol\",\"20 - 41 mmol/mol\",\"(AlyssaFRS) - 01. Satisfactory - No Action\"\n\"05-Jun-2026\",\"Serum creatinine\",\"100 umol/L\",\"64 - 104 umol/L\",\"\"\n\"05-Jun-2026\",\"eGFRcreat (CKD-EPI)/1.73 m*2\",\"80 mL/min/1.73m2\",\"- mL/min/1.73m2\",\"NA Note eGFR calculated using the CKD-EPI (2009 without ethnicity) equation.\"\n\"05-Jun-2026\",\"Serum albumin\",\"46 g/L\",\"31 - 45 g/L\",\"\"\n\"05-Jun-2026\",\"Serum ALT level\",\"41 U/L\",\"0 - 45 U/L\",\"\"\n\"05-Jun-2026\",\"AST serum level\",\"27 U/L\",\"5 - 34 U/L\",\"\"\n\"05-Jun-2026\",\"Serum total protein\",\"81 g/L\",\"60 - 80 g/L\",\"\"\n\"05-Jun-2026\",\"Total white cell count\",\"5.7 10*9/L\",\"2.9 - 9.6 10*9/L\",\"\"\n\"05-Jun-2026\",\"Red blood cell (RBC) count\",\"5.47 10*12/L\",\"4.20 - 5.80 10*12/L\",\"\"\n\"05-Jun-2026\",\"Haemoglobin estimation\",\"166 g/L\",\"125 - 170 g/L\",\"\"\n\"05-Jun-2026\",\"Haematocrit\",\"0.48 L/L\",\"0.390 - 0.510 L/L\",\"\"\n\"05-Jun-2026\",\"Mean corpuscular volume (MCV)\",\"88 fL\",\"81 - 100 fL\",\"\"\n\"05-Jun-2026\",\"Mean corpusc. haemoglobin(MCH)\",\"30.3 pg\",\"27.0 - 33.3 pg\",\"\"\n\"05-Jun-2026\",\"Mean corpusc. Hb. conc. (MCHC)\",\"346 g/L\",\"310 - 350 g/L\",\"\"\n\nPrior medical records:\n- On 4 April 2024, HbA1c was 39 mmol/mol (annual GP checkup).\n- US clinic visit on 10/15/2024: Serum creatinine was 1.1 mg/dL (annual routine check, US lab).\n- On 12/10/2025, Serum creatinine was 95 umol/L (fasting morning sample).\n- On June 1st, 2025, Serum ALT level was 35 U/L (baseline health check).\n</user_upload>\n\nBiomarkers to review (hits - in catalog):\n{\n  \"biomarkers\": [\n    {\n      \"id\": \"r01\",\n      \"name\": \"HbA1c\",\n      \"value\": 40,\n      \"unit\": \"mmol/mol\",\n      \"range\": \"20 - 41 mmol/mol\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"20 - 41\",\n        \"unit\": \"mmol/mol\",\n        \"description\": \"Average blood glucose levels over the past 2-3 months.\"\n      },\n      \"previous\": \"39 mmol/mol\"\n    },\n    {\n      \"id\": \"r02\",\n      \"name\": \"Creatinine\",\n      \"value\": 100,\n      \"unit\": \"umol/L\",\n      \"range\": \"64 - 104 umol/L\",\n      \"optimalValue\": \"80 umol/L\",\n      \"existingInsight\": \"Serum creatinine is 100 umol/L, within the normal laboratory range.\",\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"44 - 106\",\n        \"unit\": \"umol/L\",\n        \"description\": \"A waste product from muscle breakdown, filtered by kidneys.\"\n      }\n    },\n    {\n      \"id\": \"r03\",\n      \"name\": \"eGFR\",\n      \"value\": 80,\n      \"unit\": \"mL/min/1.73m2\",\n      \"range\": \">= 60 mL/min/1.73m2\",\n      \"optimalValue\": \"60 mL/min/1.73m2\",\n      \"existingInsight\": \"Your eGFR of 80 is normal.\",\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"over 90\",\n        \"unit\": \"mL/min/1.73m²\",\n        \"description\": \"Estimated Glomerular Filtration Rate, showing kidney health.\"\n      }\n    },\n    {\n      \"id\": \"r04\",\n      \"name\": \"Serum Albumin\",\n      \"value\": 46,\n      \"unit\": \"g/L\",\n      \"range\": \"31 - 45 g/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"35 - 50\",\n        \"unit\": \"g/L\",\n        \"description\": \"Main protein produced by the liver, keeping fluid balance in vessels.\"\n      }\n    },\n    {\n      \"id\": \"r05\",\n      \"name\": \"ALT (SGPT)\",\n      \"value\": 41,\n      \"unit\": \"U/L\",\n      \"range\": \"0 - 45 U/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"10 - 40\",\n        \"unit\": \"U/L\",\n        \"description\": \"Alanine Aminotransferase, an enzyme found mostly in the liver.\"\n      }\n    },\n    {\n      \"id\": \"r06\",\n      \"name\": \"AST (SGOT)\",\n      \"value\": 27,\n      \"unit\": \"U/L\",\n      \"range\": \"5 - 34 U/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"10 - 40\",\n        \"unit\": \"U/L\",\n        \"description\": \"Aspartate Aminotransferase, an enzyme found in liver and muscle.\"\n      }\n    },\n    {\n      \"id\": \"r07\",\n      \"name\": \"Total Protein\",\n      \"value\": 81,\n      \"unit\": \"g/L\",\n      \"range\": \"6 - 8 g/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"6 - 8 g/L\",\n        \"unit\": \"g/L\",\n        \"description\": \"Measures the total amount of protein in your blood.\"\n      }\n    },\n    {\n      \"id\": \"r08\",\n      \"name\": \"White Blood Cell (WBC)\",\n      \"value\": 5.7,\n      \"unit\": \"10*9/L\",\n      \"range\": \"2.9 - 9.6 10*9/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"4.5 - 11.0\",\n        \"unit\": \"K/uL\",\n        \"description\": \"Total white blood cell count for immune function.\"\n      }\n    },\n    {\n      \"id\": \"r09\",\n      \"name\": \"Red Blood Cell (RBC)\",\n      \"value\": 5.47,\n      \"unit\": \"10*12/L\",\n      \"range\": \"4.20 - 5.80 10*12/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"4.5 - 5.9\",\n        \"unit\": \"M/uL\",\n        \"description\": \"Total red blood cell count carrying oxygen to tissue.\"\n      }\n    },\n    {\n      \"id\": \"r10\",\n      \"name\": \"Hemoglobin\",\n      \"value\": 166,\n      \"unit\": \"g/L\",\n      \"range\": \"125 - 170 g/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"120 - 175\",\n        \"unit\": \"g/L\",\n        \"description\": \"Oxygen-carrying protein in red blood cells.\"\n      }\n    },\n    {\n      \"id\": \"r11\",\n      \"name\": \"Hematocrit\",\n      \"value\": 0.48,\n      \"unit\": \"L/L\",\n      \"range\": \"0.390 - 0.510 L/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"0.36 - 0.50\",\n        \"unit\": \"L/L\",\n        \"description\": \"The proportion of blood made up of red blood cells.\"\n      }\n    },\n    {\n      \"id\": \"r12\",\n      \"name\": \"Mean Corpuscular Volume (MCV)\",\n      \"value\": 88,\n      \"unit\": \"fL\",\n      \"range\": \"81 - 100 fL\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"80 - 100\",\n        \"unit\": \"fL\",\n        \"description\": \"Average volume or size of red blood cells.\"\n      }\n    },\n    {\n      \"id\": \"r13\",\n      \"name\": \"Mean Corpuscular Hemoglobin (MCH)\",\n      \"value\": 30.3,\n      \"unit\": \"pg\",\n      \"range\": \"27.0 - 33.3 pg\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"27 - 33\",\n        \"unit\": \"pg\",\n        \"description\": \"Average amount of hemoglobin per red blood cell.\"\n      }\n    },\n    {\n      \"id\": \"r14\",\n      \"name\": \"Mean Corpuscular Hemoglobin Concentration (MCHC)\",\n      \"value\": 346,\n      \"unit\": \"g/L\",\n      \"range\": \"310 - 350 g/L\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"320 - 360\",\n        \"unit\": \"g/L\",\n        \"description\": \"Average concentration of hemoglobin inside red blood cells.\"\n      }\n    }\n  ]\n}",
+      "payload": [
+        {
+          "id": "r01",
+          "name": "HbA1c",
+          "value": 40,
+          "unit": "mmol/mol",
+          "range": "20 - 41 mmol/mol",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "20 - 41",
+            "unit": "mmol/mol",
+            "description": "Average blood glucose levels over the past 2-3 months."
+          },
+          "previous": "39 mmol/mol"
+        },
+        {
+          "id": "r02",
+          "name": "Creatinine",
+          "value": 100,
+          "unit": "umol/L",
+          "range": "64 - 104 umol/L",
+          "optimalValue": "80 umol/L",
+          "existingInsight": "Serum creatinine is 100 umol/L, within the normal laboratory range.",
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "44 - 106",
+            "unit": "umol/L",
+            "description": "A waste product from muscle breakdown, filtered by kidneys."
           }
         },
         {
-          "id": "r24",
-          "match": "none",
+          "id": "r03",
+          "name": "eGFR",
+          "value": 80,
+          "unit": "mL/min/1.73m2",
+          "range": ">= 60 mL/min/1.73m2",
+          "optimalValue": "60 mL/min/1.73m2",
+          "existingInsight": "Your eGFR of 80 is normal.",
+          "existingCustomRange": null,
           "dictionary": {
-            "biomarkerName": "Red blood cell distribut width",
-            "key": null,
-            "alias": [],
-            "normalRange": "",
-            "unit": "%",
-            "description": "",
-            "riskCategories": [],
-            "customRange": ""
-          },
-          "observation": {
-            "date": "2026-06-05",
-            "value": 11.8,
-            "unit": "%"
-          },
-          "printedRange": "10.5 - 16.0 %",
-          "historicalLogs": [
-            {
-              "date": "2026-06-05",
-              "value": 11.8,
-              "unit": "%"
-            }
-          ],
-          "trend": null,
-          "profile": {
-            "age": 43,
-            "gender": "male",
-            "ethnicity": "Chinese"
+            "normalRange": "over 90",
+            "unit": "mL/min/1.73m²",
+            "description": "Estimated Glomerular Filtration Rate, showing kidney health."
+          }
+        },
+        {
+          "id": "r04",
+          "name": "Serum Albumin",
+          "value": 46,
+          "unit": "g/L",
+          "range": "31 - 45 g/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "35 - 50",
+            "unit": "g/L",
+            "description": "Main protein produced by the liver, keeping fluid balance in vessels."
+          }
+        },
+        {
+          "id": "r05",
+          "name": "ALT (SGPT)",
+          "value": 41,
+          "unit": "U/L",
+          "range": "0 - 45 U/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "10 - 40",
+            "unit": "U/L",
+            "description": "Alanine Aminotransferase, an enzyme found mostly in the liver."
+          }
+        },
+        {
+          "id": "r06",
+          "name": "AST (SGOT)",
+          "value": 27,
+          "unit": "U/L",
+          "range": "5 - 34 U/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "10 - 40",
+            "unit": "U/L",
+            "description": "Aspartate Aminotransferase, an enzyme found in liver and muscle."
+          }
+        },
+        {
+          "id": "r07",
+          "name": "Total Protein",
+          "value": 81,
+          "unit": "g/L",
+          "range": "6 - 8 g/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "6 - 8 g/L",
+            "unit": "g/L",
+            "description": "Measures the total amount of protein in your blood."
+          }
+        },
+        {
+          "id": "r08",
+          "name": "White Blood Cell (WBC)",
+          "value": 5.7,
+          "unit": "10*9/L",
+          "range": "2.9 - 9.6 10*9/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "4.5 - 11.0",
+            "unit": "K/uL",
+            "description": "Total white blood cell count for immune function."
+          }
+        },
+        {
+          "id": "r09",
+          "name": "Red Blood Cell (RBC)",
+          "value": 5.47,
+          "unit": "10*12/L",
+          "range": "4.20 - 5.80 10*12/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "4.5 - 5.9",
+            "unit": "M/uL",
+            "description": "Total red blood cell count carrying oxygen to tissue."
+          }
+        },
+        {
+          "id": "r10",
+          "name": "Hemoglobin",
+          "value": 166,
+          "unit": "g/L",
+          "range": "125 - 170 g/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "120 - 175",
+            "unit": "g/L",
+            "description": "Oxygen-carrying protein in red blood cells."
+          }
+        },
+        {
+          "id": "r11",
+          "name": "Hematocrit",
+          "value": 0.48,
+          "unit": "L/L",
+          "range": "0.390 - 0.510 L/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "0.36 - 0.50",
+            "unit": "L/L",
+            "description": "The proportion of blood made up of red blood cells."
+          }
+        },
+        {
+          "id": "r12",
+          "name": "Mean Corpuscular Volume (MCV)",
+          "value": 88,
+          "unit": "fL",
+          "range": "81 - 100 fL",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "80 - 100",
+            "unit": "fL",
+            "description": "Average volume or size of red blood cells."
+          }
+        },
+        {
+          "id": "r13",
+          "name": "Mean Corpuscular Hemoglobin (MCH)",
+          "value": 30.3,
+          "unit": "pg",
+          "range": "27.0 - 33.3 pg",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "27 - 33",
+            "unit": "pg",
+            "description": "Average amount of hemoglobin per red blood cell."
+          }
+        },
+        {
+          "id": "r14",
+          "name": "Mean Corpuscular Hemoglobin Concentration (MCHC)",
+          "value": 346,
+          "unit": "g/L",
+          "range": "310 - 350 g/L",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "320 - 360",
+            "unit": "g/L",
+            "description": "Average concentration of hemoglobin inside red blood cells."
           }
         }
       ]
@@ -1421,30 +625,6 @@
     },
     {
       "id": "r02",
-      "printed": "Se prostate specific Ag level",
-      "match": "none",
-      "writeTarget": "pending",
-      "key": null,
-      "status": "Optimal"
-    },
-    {
-      "id": "r03",
-      "printed": "Serum sodium",
-      "match": "none",
-      "writeTarget": "pending",
-      "key": null,
-      "status": "Optimal"
-    },
-    {
-      "id": "r04",
-      "printed": "Serum potassium",
-      "match": "none",
-      "writeTarget": "pending",
-      "key": null,
-      "status": "Optimal"
-    },
-    {
-      "id": "r05",
       "printed": "Serum creatinine",
       "match": "alias",
       "writeTarget": "observation",
@@ -1452,7 +632,7 @@
       "status": "Optimal"
     },
     {
-      "id": "r06",
+      "id": "r03",
       "printed": "eGFRcreat (CKD-EPI)/1.73 m*2",
       "match": "alias",
       "writeTarget": "observation",
@@ -1460,7 +640,7 @@
       "status": "Mildly Decreased (CKD G2)"
     },
     {
-      "id": "r07",
+      "id": "r04",
       "printed": "Serum albumin",
       "match": "key",
       "writeTarget": "observation",
@@ -1468,7 +648,7 @@
       "status": "Optimal"
     },
     {
-      "id": "r08",
+      "id": "r05",
       "printed": "Serum ALT level",
       "match": "alias",
       "writeTarget": "observation",
@@ -1476,15 +656,7 @@
       "status": "Elevated"
     },
     {
-      "id": "r09",
-      "printed": "Serum alkaline phosphatase",
-      "match": "none",
-      "writeTarget": "pending",
-      "key": null,
-      "status": "Optimal"
-    },
-    {
-      "id": "r10",
+      "id": "r06",
       "printed": "AST serum level",
       "match": "alias",
       "writeTarget": "observation",
@@ -1492,15 +664,7 @@
       "status": "Optimal"
     },
     {
-      "id": "r11",
-      "printed": "Serum total bilirubin level",
-      "match": "none",
-      "writeTarget": "pending",
-      "key": null,
-      "status": "Optimal"
-    },
-    {
-      "id": "r12",
+      "id": "r07",
       "printed": "Serum total protein",
       "match": "alias",
       "writeTarget": "observation",
@@ -1508,39 +672,7 @@
       "status": "Elevated"
     },
     {
-      "id": "r13",
-      "printed": "Serum globulin",
-      "match": "none",
-      "writeTarget": "pending",
-      "key": null,
-      "status": "Optimal"
-    },
-    {
-      "id": "r14",
-      "printed": "Serum calcium",
-      "match": "none",
-      "writeTarget": "pending",
-      "key": null,
-      "status": "Optimal"
-    },
-    {
-      "id": "r15",
-      "printed": "Serum adjusted calcium conc",
-      "match": "none",
-      "writeTarget": "pending",
-      "key": null,
-      "status": "Optimal"
-    },
-    {
-      "id": "r16",
-      "printed": "Serum inorganic phosphate",
-      "match": "none",
-      "writeTarget": "pending",
-      "key": null,
-      "status": "Optimal"
-    },
-    {
-      "id": "r17",
+      "id": "r08",
       "printed": "Total white cell count",
       "match": "alias",
       "writeTarget": "observation",
@@ -1548,7 +680,7 @@
       "status": "Optimal"
     },
     {
-      "id": "r18",
+      "id": "r09",
       "printed": "Red blood cell (RBC) count",
       "match": "alias",
       "writeTarget": "observation",
@@ -1556,7 +688,7 @@
       "status": "Optimal"
     },
     {
-      "id": "r19",
+      "id": "r10",
       "printed": "Haemoglobin estimation",
       "match": "alias",
       "writeTarget": "observation",
@@ -1564,7 +696,7 @@
       "status": "Optimal"
     },
     {
-      "id": "r20",
+      "id": "r11",
       "printed": "Haematocrit",
       "match": "alias",
       "writeTarget": "observation",
@@ -1572,7 +704,7 @@
       "status": "Optimal"
     },
     {
-      "id": "r21",
+      "id": "r12",
       "printed": "Mean corpuscular volume (MCV)",
       "match": "alias",
       "writeTarget": "observation",
@@ -1580,7 +712,7 @@
       "status": "Optimal"
     },
     {
-      "id": "r22",
+      "id": "r13",
       "printed": "Mean corpusc. haemoglobin(MCH)",
       "match": "alias",
       "writeTarget": "observation",
@@ -1588,19 +720,11 @@
       "status": "Optimal"
     },
     {
-      "id": "r23",
+      "id": "r14",
       "printed": "Mean corpusc. Hb. conc. (MCHC)",
       "match": "alias",
       "writeTarget": "observation",
       "key": "mean_corpuscular_hemoglobin_concentration",
-      "status": "Optimal"
-    },
-    {
-      "id": "r24",
-      "printed": "Red blood cell distribut width",
-      "match": "none",
-      "writeTarget": "pending",
-      "key": null,
       "status": "Optimal"
     }
   ],
@@ -1628,6 +752,11 @@
       "notUsed": false,
       "customRangePopulation": "[All patients] Elevated (Diabetes): >= 48; Elevated: >= 39; Normal: >= 20; Elevated (Diabetes): >= 6.5; Elevated: >= 5.7",
       "printedRange": "20 - 41 mmol/mol",
+      "assignedRange": "20 - 41 mmol/mol",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
       "medicalInsight": "Your HbA1c is Elevated.",
       "historicalLogs": [
@@ -1647,111 +776,6 @@
     },
     {
       "id": "r02",
-      "printed": "Se prostate specific Ag level",
-      "match": "none",
-      "writeTarget": "pending",
-      "biomarkerName": "Se prostate specific Ag level",
-      "key": null,
-      "alias": [],
-      "normalRange": "",
-      "unit": "ug/L",
-      "description": "",
-      "riskCategories": [],
-      "notUsed": false,
-      "customRangePopulation": "",
-      "printedRange": "- 2.49 ug/L",
-      "customRangeOverlay": null,
-      "medicalInsight": "Your Se prostate specific Ag level is Optimal.",
-      "historicalLogs": [
-        {
-          "date": "2026-06-05",
-          "value": 1.41,
-          "unit": "ug/L"
-        }
-      ],
-      "currentEvaluationStatus": "Optimal",
-      "newCatalogDraft": {
-        "suggestedKey": "prostate_specific_antigen",
-        "name": "Se prostate specific Ag level",
-        "unit": "ug/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Se prostate specific Ag level",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r03",
-      "printed": "Serum sodium",
-      "match": "none",
-      "writeTarget": "pending",
-      "biomarkerName": "Serum sodium",
-      "key": null,
-      "alias": [],
-      "normalRange": "",
-      "unit": "mmol/L",
-      "description": "",
-      "riskCategories": [],
-      "notUsed": false,
-      "customRangePopulation": "",
-      "printedRange": "133 - 146 mmol/L",
-      "customRangeOverlay": null,
-      "medicalInsight": "Your Serum sodium is Optimal.",
-      "historicalLogs": [
-        {
-          "date": "2026-06-05",
-          "value": 143,
-          "unit": "mmol/L"
-        }
-      ],
-      "currentEvaluationStatus": "Optimal",
-      "newCatalogDraft": {
-        "suggestedKey": "serum_sodium",
-        "name": "Serum sodium",
-        "unit": "mmol/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum sodium",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r04",
-      "printed": "Serum potassium",
-      "match": "none",
-      "writeTarget": "pending",
-      "biomarkerName": "Serum potassium",
-      "key": null,
-      "alias": [],
-      "normalRange": "",
-      "unit": "mmol/L",
-      "description": "",
-      "riskCategories": [],
-      "notUsed": false,
-      "customRangePopulation": "",
-      "printedRange": "3.5 - 5.3 mmol/L",
-      "customRangeOverlay": null,
-      "medicalInsight": "Your Serum potassium is Optimal.",
-      "historicalLogs": [
-        {
-          "date": "2026-06-05",
-          "value": 4.3,
-          "unit": "mmol/L"
-        }
-      ],
-      "currentEvaluationStatus": "Optimal",
-      "newCatalogDraft": {
-        "suggestedKey": "serum_potassium",
-        "name": "Serum potassium",
-        "unit": "mmol/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum potassium",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r05",
       "printed": "Serum creatinine",
       "match": "alias",
       "writeTarget": "observation",
@@ -1772,8 +796,13 @@
       "notUsed": false,
       "customRangePopulation": "",
       "printedRange": "64 - 104 umol/L",
+      "assignedRange": "64 - 104 umol/L",
+      "optimalValue": "80 umol/L",
+      "existingInsight": "Serum creatinine is 100 umol/L, within the normal laboratory range.",
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
-      "medicalInsight": "Your Creatinine is Optimal.",
+      "medicalInsight": "Serum creatinine is 100 umol/L, within the normal laboratory range.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
@@ -1785,7 +814,7 @@
       "newCatalogDraft": null
     },
     {
-      "id": "r06",
+      "id": "r03",
       "printed": "eGFRcreat (CKD-EPI)/1.73 m*2",
       "match": "alias",
       "writeTarget": "observation",
@@ -1806,8 +835,13 @@
       "notUsed": false,
       "customRangePopulation": "[All patients] Decreased (CKD G3): < 60; Mildly Decreased (CKD G2): < 90; Optimal: >= 90",
       "printedRange": "- mL/min/1.73m2",
+      "assignedRange": ">= 60 mL/min/1.73m2",
+      "optimalValue": "60 mL/min/1.73m2",
+      "existingInsight": "Your eGFR of 80 is normal.",
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
-      "medicalInsight": "Your eGFR is Mildly Decreased (CKD G2).",
+      "medicalInsight": "Your eGFR of 80 is normal.",
       "historicalLogs": [
         {
           "date": "2026-06-05",
@@ -1819,7 +853,7 @@
       "newCatalogDraft": null
     },
     {
-      "id": "r07",
+      "id": "r04",
       "printed": "Serum albumin",
       "match": "key",
       "writeTarget": "observation",
@@ -1840,6 +874,11 @@
       "notUsed": false,
       "customRangePopulation": "",
       "printedRange": "31 - 45 g/L",
+      "assignedRange": "31 - 45 g/L",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
       "medicalInsight": "Your Serum Albumin is Optimal.",
       "historicalLogs": [
@@ -1853,7 +892,7 @@
       "newCatalogDraft": null
     },
     {
-      "id": "r08",
+      "id": "r05",
       "printed": "Serum ALT level",
       "match": "alias",
       "writeTarget": "observation",
@@ -1874,6 +913,11 @@
       "notUsed": false,
       "customRangePopulation": "",
       "printedRange": "0 - 45 U/L",
+      "assignedRange": "0 - 45 U/L",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
       "medicalInsight": "Your ALT (SGPT) is Elevated.",
       "historicalLogs": [
@@ -1887,42 +931,7 @@
       "newCatalogDraft": null
     },
     {
-      "id": "r09",
-      "printed": "Serum alkaline phosphatase",
-      "match": "none",
-      "writeTarget": "pending",
-      "biomarkerName": "Serum alkaline phosphatase",
-      "key": null,
-      "alias": [],
-      "normalRange": "",
-      "unit": "U/L",
-      "description": "",
-      "riskCategories": [],
-      "notUsed": false,
-      "customRangePopulation": "",
-      "printedRange": "30 - 130 U/L",
-      "customRangeOverlay": null,
-      "medicalInsight": "Your Serum alkaline phosphatase is Optimal.",
-      "historicalLogs": [
-        {
-          "date": "2026-06-05",
-          "value": 39,
-          "unit": "U/L"
-        }
-      ],
-      "currentEvaluationStatus": "Optimal",
-      "newCatalogDraft": {
-        "suggestedKey": "alkaline_phosphatase",
-        "name": "Serum alkaline phosphatase",
-        "unit": "U/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum alkaline phosphatase",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r10",
+      "id": "r06",
       "printed": "AST serum level",
       "match": "alias",
       "writeTarget": "observation",
@@ -1943,6 +952,11 @@
       "notUsed": false,
       "customRangePopulation": "",
       "printedRange": "5 - 34 U/L",
+      "assignedRange": "5 - 34 U/L",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
       "medicalInsight": "Your AST (SGOT) is Optimal.",
       "historicalLogs": [
@@ -1956,42 +970,7 @@
       "newCatalogDraft": null
     },
     {
-      "id": "r11",
-      "printed": "Serum total bilirubin level",
-      "match": "none",
-      "writeTarget": "pending",
-      "biomarkerName": "Serum total bilirubin level",
-      "key": null,
-      "alias": [],
-      "normalRange": "",
-      "unit": "umol/L",
-      "description": "",
-      "riskCategories": [],
-      "notUsed": false,
-      "customRangePopulation": "",
-      "printedRange": "- 21 umol/L",
-      "customRangeOverlay": null,
-      "medicalInsight": "Your Serum total bilirubin level is Optimal.",
-      "historicalLogs": [
-        {
-          "date": "2026-06-05",
-          "value": 16,
-          "unit": "umol/L"
-        }
-      ],
-      "currentEvaluationStatus": "Optimal",
-      "newCatalogDraft": {
-        "suggestedKey": "total_bilirubin",
-        "name": "Serum total bilirubin level",
-        "unit": "umol/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum total bilirubin level",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r12",
+      "id": "r07",
       "printed": "Serum total protein",
       "match": "alias",
       "writeTarget": "observation",
@@ -2002,7 +981,7 @@
         "serum_total_protein_g_l",
         "serum_total_protein"
       ],
-      "normalRange": "60 - 80",
+      "normalRange": "6 - 8 g/L",
       "unit": "g/L",
       "description": "Measures the total amount of protein in your blood.",
       "riskCategories": [
@@ -2012,6 +991,11 @@
       "notUsed": false,
       "customRangePopulation": "",
       "printedRange": "60 - 80 g/L",
+      "assignedRange": "6 - 8 g/L",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
       "medicalInsight": "Your Total Protein is Elevated.",
       "historicalLogs": [
@@ -2025,147 +1009,7 @@
       "newCatalogDraft": null
     },
     {
-      "id": "r13",
-      "printed": "Serum globulin",
-      "match": "none",
-      "writeTarget": "pending",
-      "biomarkerName": "Serum globulin",
-      "key": null,
-      "alias": [],
-      "normalRange": "",
-      "unit": "g/L",
-      "description": "",
-      "riskCategories": [],
-      "notUsed": false,
-      "customRangePopulation": "",
-      "printedRange": "22 - 38 g/L",
-      "customRangeOverlay": null,
-      "medicalInsight": "Your Serum globulin is Optimal.",
-      "historicalLogs": [
-        {
-          "date": "2026-06-05",
-          "value": 35,
-          "unit": "g/L"
-        }
-      ],
-      "currentEvaluationStatus": "Optimal",
-      "newCatalogDraft": {
-        "suggestedKey": "serum_globulin",
-        "name": "Serum globulin",
-        "unit": "g/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum globulin",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r14",
-      "printed": "Serum calcium",
-      "match": "none",
-      "writeTarget": "pending",
-      "biomarkerName": "Serum calcium",
-      "key": null,
-      "alias": [],
-      "normalRange": "",
-      "unit": "mmol/L",
-      "description": "",
-      "riskCategories": [],
-      "notUsed": false,
-      "customRangePopulation": "",
-      "printedRange": "- mmol/L",
-      "customRangeOverlay": null,
-      "medicalInsight": "Your Serum calcium is Optimal.",
-      "historicalLogs": [
-        {
-          "date": "2026-06-05",
-          "value": 2.47,
-          "unit": "mmol/L"
-        }
-      ],
-      "currentEvaluationStatus": "Optimal",
-      "newCatalogDraft": {
-        "suggestedKey": "serum_calcium",
-        "name": "Serum calcium",
-        "unit": "mmol/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum calcium",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r15",
-      "printed": "Serum adjusted calcium conc",
-      "match": "none",
-      "writeTarget": "pending",
-      "biomarkerName": "Serum adjusted calcium conc",
-      "key": null,
-      "alias": [],
-      "normalRange": "",
-      "unit": "mmol/L",
-      "description": "",
-      "riskCategories": [],
-      "notUsed": false,
-      "customRangePopulation": "",
-      "printedRange": "2.08 - 2.48 mmol/L",
-      "customRangeOverlay": null,
-      "medicalInsight": "Your Serum adjusted calcium conc is Optimal.",
-      "historicalLogs": [
-        {
-          "date": "2026-06-05",
-          "value": 2.37,
-          "unit": "mmol/L"
-        }
-      ],
-      "currentEvaluationStatus": "Optimal",
-      "newCatalogDraft": {
-        "suggestedKey": "serum_adjusted_calcium",
-        "name": "Serum adjusted calcium conc",
-        "unit": "mmol/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum adjusted calcium conc",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r16",
-      "printed": "Serum inorganic phosphate",
-      "match": "none",
-      "writeTarget": "pending",
-      "biomarkerName": "Serum inorganic phosphate",
-      "key": null,
-      "alias": [],
-      "normalRange": "",
-      "unit": "mmol/L",
-      "description": "",
-      "riskCategories": [],
-      "notUsed": false,
-      "customRangePopulation": "",
-      "printedRange": "0.80 - 1.50 mmol/L",
-      "customRangeOverlay": null,
-      "medicalInsight": "Your Serum inorganic phosphate is Optimal.",
-      "historicalLogs": [
-        {
-          "date": "2026-06-05",
-          "value": 1.12,
-          "unit": "mmol/L"
-        }
-      ],
-      "currentEvaluationStatus": "Optimal",
-      "newCatalogDraft": {
-        "suggestedKey": "serum_inorganic_phosphate",
-        "name": "Serum inorganic phosphate",
-        "unit": "mmol/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum inorganic phosphate",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r17",
+      "id": "r08",
       "printed": "Total white cell count",
       "match": "alias",
       "writeTarget": "observation",
@@ -2186,6 +1030,11 @@
       "notUsed": false,
       "customRangePopulation": "",
       "printedRange": "2.9 - 9.6 10*9/L",
+      "assignedRange": "2.9 - 9.6 10*9/L",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
       "medicalInsight": "Your White Blood Cell (WBC) is Optimal.",
       "historicalLogs": [
@@ -2199,7 +1048,7 @@
       "newCatalogDraft": null
     },
     {
-      "id": "r18",
+      "id": "r09",
       "printed": "Red blood cell (RBC) count",
       "match": "alias",
       "writeTarget": "observation",
@@ -2221,6 +1070,11 @@
       "notUsed": false,
       "customRangePopulation": "",
       "printedRange": "4.20 - 5.80 10*12/L",
+      "assignedRange": "4.20 - 5.80 10*12/L",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
       "medicalInsight": "Your Red Blood Cell (RBC) is Optimal.",
       "historicalLogs": [
@@ -2234,7 +1088,7 @@
       "newCatalogDraft": null
     },
     {
-      "id": "r19",
+      "id": "r10",
       "printed": "Haemoglobin estimation",
       "match": "alias",
       "writeTarget": "observation",
@@ -2263,6 +1117,11 @@
       "notUsed": false,
       "customRangePopulation": "",
       "printedRange": "125 - 170 g/L",
+      "assignedRange": "125 - 170 g/L",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
       "medicalInsight": "Your Hemoglobin is Optimal.",
       "historicalLogs": [
@@ -2276,7 +1135,7 @@
       "newCatalogDraft": null
     },
     {
-      "id": "r20",
+      "id": "r11",
       "printed": "Haematocrit",
       "match": "alias",
       "writeTarget": "observation",
@@ -2290,6 +1149,11 @@
       "notUsed": false,
       "customRangePopulation": "",
       "printedRange": "0.390 - 0.510 L/L",
+      "assignedRange": "0.390 - 0.510 L/L",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
       "medicalInsight": "Your Hematocrit is Optimal.",
       "historicalLogs": [
@@ -2303,7 +1167,7 @@
       "newCatalogDraft": null
     },
     {
-      "id": "r21",
+      "id": "r12",
       "printed": "Mean corpuscular volume (MCV)",
       "match": "alias",
       "writeTarget": "observation",
@@ -2324,6 +1188,11 @@
       "notUsed": false,
       "customRangePopulation": "",
       "printedRange": "81 - 100 fL",
+      "assignedRange": "81 - 100 fL",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
       "medicalInsight": "Your Mean Corpuscular Volume (MCV) is Optimal.",
       "historicalLogs": [
@@ -2337,7 +1206,7 @@
       "newCatalogDraft": null
     },
     {
-      "id": "r22",
+      "id": "r13",
       "printed": "Mean corpusc. haemoglobin(MCH)",
       "match": "alias",
       "writeTarget": "observation",
@@ -2360,6 +1229,11 @@
       "notUsed": false,
       "customRangePopulation": "",
       "printedRange": "27.0 - 33.3 pg",
+      "assignedRange": "27.0 - 33.3 pg",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
       "medicalInsight": "Your Mean Corpuscular Hemoglobin (MCH) is Optimal.",
       "historicalLogs": [
@@ -2373,7 +1247,7 @@
       "newCatalogDraft": null
     },
     {
-      "id": "r23",
+      "id": "r14",
       "printed": "Mean corpusc. Hb. conc. (MCHC)",
       "match": "alias",
       "writeTarget": "observation",
@@ -2396,6 +1270,11 @@
       "notUsed": false,
       "customRangePopulation": "",
       "printedRange": "310 - 350 g/L",
+      "assignedRange": "310 - 350 g/L",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
       "customRangeOverlay": null,
       "medicalInsight": "Your Mean Corpuscular Hemoglobin Concentration (MCHC) is Optimal.",
       "historicalLogs": [
@@ -2407,41 +1286,6 @@
       ],
       "currentEvaluationStatus": "Optimal",
       "newCatalogDraft": null
-    },
-    {
-      "id": "r24",
-      "printed": "Red blood cell distribut width",
-      "match": "none",
-      "writeTarget": "pending",
-      "biomarkerName": "Red blood cell distribut width",
-      "key": null,
-      "alias": [],
-      "normalRange": "",
-      "unit": "%",
-      "description": "",
-      "riskCategories": [],
-      "notUsed": false,
-      "customRangePopulation": "",
-      "printedRange": "10.5 - 16.0 %",
-      "customRangeOverlay": null,
-      "medicalInsight": "Your Red blood cell distribut width is Optimal.",
-      "historicalLogs": [
-        {
-          "date": "2026-06-05",
-          "value": 11.8,
-          "unit": "%"
-        }
-      ],
-      "currentEvaluationStatus": "Optimal",
-      "newCatalogDraft": {
-        "suggestedKey": "rdw",
-        "name": "Red blood cell distribut width",
-        "unit": "%",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Red blood cell distribut width",
-        "riskCategories": []
-      }
     }
   ],
   "filled": [
@@ -2453,468 +1297,373 @@
       "unit": "mmol/mol",
       "date": "2026-06-05",
       "printedRange": "20 - 41 mmol/mol",
+      "assignedRange": "20 - 41 mmol/mol",
+      "optimalValue": null,
+      "editReason": null,
       "match": "alias",
       "key": "hba1c",
       "writeTarget": "observation",
       "status": "Elevated",
       "medicalInsight": "Your HbA1c is Elevated.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2024-04-04",
+          "value": 39,
+          "unit": "mmol/mol"
+        },
+        {
+          "date": "2026-06-05",
+          "value": 40,
+          "unit": "mmol/mol"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
       "id": "r02",
-      "op": "add",
-      "printed": "Se prostate specific Ag level",
-      "value": 1.41,
-      "unit": "ug/L",
-      "date": "2026-06-05",
-      "printedRange": "- 2.49 ug/L",
-      "match": "none",
-      "key": null,
-      "writeTarget": "pending",
-      "status": "Optimal",
-      "medicalInsight": "Your Se prostate specific Ag level is Optimal.",
-      "customRangeOverlay": null,
-      "newCatalogDraft": {
-        "suggestedKey": "prostate_specific_antigen",
-        "name": "Se prostate specific Ag level",
-        "unit": "ug/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Se prostate specific Ag level",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r03",
-      "op": "add",
-      "printed": "Serum sodium",
-      "value": 143,
-      "unit": "mmol/L",
-      "date": "2026-06-05",
-      "printedRange": "133 - 146 mmol/L",
-      "match": "none",
-      "key": null,
-      "writeTarget": "pending",
-      "status": "Optimal",
-      "medicalInsight": "Your Serum sodium is Optimal.",
-      "customRangeOverlay": null,
-      "newCatalogDraft": {
-        "suggestedKey": "serum_sodium",
-        "name": "Serum sodium",
-        "unit": "mmol/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum sodium",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r04",
-      "op": "add",
-      "printed": "Serum potassium",
-      "value": 4.3,
-      "unit": "mmol/L",
-      "date": "2026-06-05",
-      "printedRange": "3.5 - 5.3 mmol/L",
-      "match": "none",
-      "key": null,
-      "writeTarget": "pending",
-      "status": "Optimal",
-      "medicalInsight": "Your Serum potassium is Optimal.",
-      "customRangeOverlay": null,
-      "newCatalogDraft": {
-        "suggestedKey": "serum_potassium",
-        "name": "Serum potassium",
-        "unit": "mmol/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum potassium",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r05",
       "op": "add",
       "printed": "Serum creatinine",
       "value": 100,
       "unit": "umol/L",
       "date": "2026-06-05",
       "printedRange": "64 - 104 umol/L",
+      "assignedRange": "64 - 104 umol/L",
+      "optimalValue": "80 umol/L",
+      "editReason": null,
       "match": "alias",
       "key": "creatinine",
       "writeTarget": "observation",
       "status": "Optimal",
-      "medicalInsight": "Your Creatinine is Optimal.",
+      "medicalInsight": "Serum creatinine is 100 umol/L, within the normal laboratory range.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 100,
+          "unit": "umol/L"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
-      "id": "r06",
+      "id": "r03",
       "op": "add",
       "printed": "eGFRcreat (CKD-EPI)/1.73 m*2",
       "value": 80,
       "unit": "mL/min/1.73m2",
       "date": "2026-06-05",
       "printedRange": "- mL/min/1.73m2",
+      "assignedRange": ">= 60 mL/min/1.73m2",
+      "optimalValue": "60 mL/min/1.73m2",
+      "editReason": null,
       "match": "alias",
       "key": "egfr",
       "writeTarget": "observation",
       "status": "Mildly Decreased (CKD G2)",
-      "medicalInsight": "Your eGFR is Mildly Decreased (CKD G2).",
+      "medicalInsight": "Your eGFR of 80 is normal.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 80,
+          "unit": "mL/min/1.73m2"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
-      "id": "r07",
+      "id": "r04",
       "op": "add",
       "printed": "Serum albumin",
       "value": 46,
       "unit": "g/L",
       "date": "2026-06-05",
       "printedRange": "31 - 45 g/L",
+      "assignedRange": "31 - 45 g/L",
+      "optimalValue": null,
+      "editReason": null,
       "match": "key",
       "key": "serum_albumin",
       "writeTarget": "observation",
       "status": "Optimal",
       "medicalInsight": "Your Serum Albumin is Optimal.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 46,
+          "unit": "g/L"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
-      "id": "r08",
+      "id": "r05",
       "op": "add",
       "printed": "Serum ALT level",
       "value": 41,
       "unit": "U/L",
       "date": "2026-06-05",
       "printedRange": "0 - 45 U/L",
+      "assignedRange": "0 - 45 U/L",
+      "optimalValue": null,
+      "editReason": null,
       "match": "alias",
       "key": "alt",
       "writeTarget": "observation",
       "status": "Elevated",
       "medicalInsight": "Your ALT (SGPT) is Elevated.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 41,
+          "unit": "U/L"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
-      "id": "r09",
-      "op": "add",
-      "printed": "Serum alkaline phosphatase",
-      "value": 39,
-      "unit": "U/L",
-      "date": "2026-06-05",
-      "printedRange": "30 - 130 U/L",
-      "match": "none",
-      "key": null,
-      "writeTarget": "pending",
-      "status": "Optimal",
-      "medicalInsight": "Your Serum alkaline phosphatase is Optimal.",
-      "customRangeOverlay": null,
-      "newCatalogDraft": {
-        "suggestedKey": "alkaline_phosphatase",
-        "name": "Serum alkaline phosphatase",
-        "unit": "U/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum alkaline phosphatase",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r10",
+      "id": "r06",
       "op": "add",
       "printed": "AST serum level",
       "value": 27,
       "unit": "U/L",
       "date": "2026-06-05",
       "printedRange": "5 - 34 U/L",
+      "assignedRange": "5 - 34 U/L",
+      "optimalValue": null,
+      "editReason": null,
       "match": "alias",
       "key": "ast",
       "writeTarget": "observation",
       "status": "Optimal",
       "medicalInsight": "Your AST (SGOT) is Optimal.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 27,
+          "unit": "U/L"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
-      "id": "r11",
-      "op": "add",
-      "printed": "Serum total bilirubin level",
-      "value": 16,
-      "unit": "umol/L",
-      "date": "2026-06-05",
-      "printedRange": "- 21 umol/L",
-      "match": "none",
-      "key": null,
-      "writeTarget": "pending",
-      "status": "Optimal",
-      "medicalInsight": "Your Serum total bilirubin level is Optimal.",
-      "customRangeOverlay": null,
-      "newCatalogDraft": {
-        "suggestedKey": "total_bilirubin",
-        "name": "Serum total bilirubin level",
-        "unit": "umol/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum total bilirubin level",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r12",
+      "id": "r07",
       "op": "add",
       "printed": "Serum total protein",
       "value": 81,
       "unit": "g/L",
       "date": "2026-06-05",
       "printedRange": "60 - 80 g/L",
+      "assignedRange": "6 - 8 g/L",
+      "optimalValue": null,
+      "editReason": null,
       "match": "alias",
       "key": "total_protein",
       "writeTarget": "observation",
       "status": "Elevated",
       "medicalInsight": "Your Total Protein is Elevated.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 81,
+          "unit": "g/L"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
-      "id": "r13",
-      "op": "add",
-      "printed": "Serum globulin",
-      "value": 35,
-      "unit": "g/L",
-      "date": "2026-06-05",
-      "printedRange": "22 - 38 g/L",
-      "match": "none",
-      "key": null,
-      "writeTarget": "pending",
-      "status": "Optimal",
-      "medicalInsight": "Your Serum globulin is Optimal.",
-      "customRangeOverlay": null,
-      "newCatalogDraft": {
-        "suggestedKey": "serum_globulin",
-        "name": "Serum globulin",
-        "unit": "g/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum globulin",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r14",
-      "op": "add",
-      "printed": "Serum calcium",
-      "value": 2.47,
-      "unit": "mmol/L",
-      "date": "2026-06-05",
-      "printedRange": "- mmol/L",
-      "match": "none",
-      "key": null,
-      "writeTarget": "pending",
-      "status": "Optimal",
-      "medicalInsight": "Your Serum calcium is Optimal.",
-      "customRangeOverlay": null,
-      "newCatalogDraft": {
-        "suggestedKey": "serum_calcium",
-        "name": "Serum calcium",
-        "unit": "mmol/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum calcium",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r15",
-      "op": "add",
-      "printed": "Serum adjusted calcium conc",
-      "value": 2.37,
-      "unit": "mmol/L",
-      "date": "2026-06-05",
-      "printedRange": "2.08 - 2.48 mmol/L",
-      "match": "none",
-      "key": null,
-      "writeTarget": "pending",
-      "status": "Optimal",
-      "medicalInsight": "Your Serum adjusted calcium conc is Optimal.",
-      "customRangeOverlay": null,
-      "newCatalogDraft": {
-        "suggestedKey": "serum_adjusted_calcium",
-        "name": "Serum adjusted calcium conc",
-        "unit": "mmol/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum adjusted calcium conc",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r16",
-      "op": "add",
-      "printed": "Serum inorganic phosphate",
-      "value": 1.12,
-      "unit": "mmol/L",
-      "date": "2026-06-05",
-      "printedRange": "0.80 - 1.50 mmol/L",
-      "match": "none",
-      "key": null,
-      "writeTarget": "pending",
-      "status": "Optimal",
-      "medicalInsight": "Your Serum inorganic phosphate is Optimal.",
-      "customRangeOverlay": null,
-      "newCatalogDraft": {
-        "suggestedKey": "serum_inorganic_phosphate",
-        "name": "Serum inorganic phosphate",
-        "unit": "mmol/L",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Serum inorganic phosphate",
-        "riskCategories": []
-      }
-    },
-    {
-      "id": "r17",
+      "id": "r08",
       "op": "add",
       "printed": "Total white cell count",
       "value": 5.7,
       "unit": "10*9/L",
       "date": "2026-06-05",
       "printedRange": "2.9 - 9.6 10*9/L",
+      "assignedRange": "2.9 - 9.6 10*9/L",
+      "optimalValue": null,
+      "editReason": null,
       "match": "alias",
       "key": "wbc",
       "writeTarget": "observation",
       "status": "Optimal",
       "medicalInsight": "Your White Blood Cell (WBC) is Optimal.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 5.7,
+          "unit": "10*9/L"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
-      "id": "r18",
+      "id": "r09",
       "op": "add",
       "printed": "Red blood cell (RBC) count",
       "value": 5.47,
       "unit": "10*12/L",
       "date": "2026-06-05",
       "printedRange": "4.20 - 5.80 10*12/L",
+      "assignedRange": "4.20 - 5.80 10*12/L",
+      "optimalValue": null,
+      "editReason": null,
       "match": "alias",
       "key": "rbc",
       "writeTarget": "observation",
       "status": "Optimal",
       "medicalInsight": "Your Red Blood Cell (RBC) is Optimal.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 5.47,
+          "unit": "10*12/L"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
-      "id": "r19",
+      "id": "r10",
       "op": "add",
       "printed": "Haemoglobin estimation",
       "value": 166,
       "unit": "g/L",
       "date": "2026-06-05",
       "printedRange": "125 - 170 g/L",
+      "assignedRange": "125 - 170 g/L",
+      "optimalValue": null,
+      "editReason": null,
       "match": "alias",
       "key": "hemoglobin",
       "writeTarget": "observation",
       "status": "Optimal",
       "medicalInsight": "Your Hemoglobin is Optimal.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 166,
+          "unit": "g/L"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
-      "id": "r20",
+      "id": "r11",
       "op": "add",
       "printed": "Haematocrit",
       "value": 0.48,
       "unit": "L/L",
       "date": "2026-06-05",
       "printedRange": "0.390 - 0.510 L/L",
+      "assignedRange": "0.390 - 0.510 L/L",
+      "optimalValue": null,
+      "editReason": null,
       "match": "alias",
       "key": "hematocrit",
       "writeTarget": "observation",
       "status": "Optimal",
       "medicalInsight": "Your Hematocrit is Optimal.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 0.48,
+          "unit": "L/L"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
-      "id": "r21",
+      "id": "r12",
       "op": "add",
       "printed": "Mean corpuscular volume (MCV)",
       "value": 88,
       "unit": "fL",
       "date": "2026-06-05",
       "printedRange": "81 - 100 fL",
+      "assignedRange": "81 - 100 fL",
+      "optimalValue": null,
+      "editReason": null,
       "match": "alias",
       "key": "mean_corpuscular_volume",
       "writeTarget": "observation",
       "status": "Optimal",
       "medicalInsight": "Your Mean Corpuscular Volume (MCV) is Optimal.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 88,
+          "unit": "fL"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
-      "id": "r22",
+      "id": "r13",
       "op": "add",
       "printed": "Mean corpusc. haemoglobin(MCH)",
       "value": 30.3,
       "unit": "pg",
       "date": "2026-06-05",
       "printedRange": "27.0 - 33.3 pg",
+      "assignedRange": "27.0 - 33.3 pg",
+      "optimalValue": null,
+      "editReason": null,
       "match": "alias",
       "key": "mean_corpuscular_hemoglobin",
       "writeTarget": "observation",
       "status": "Optimal",
       "medicalInsight": "Your Mean Corpuscular Hemoglobin (MCH) is Optimal.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 30.3,
+          "unit": "pg"
+        }
+      ],
       "newCatalogDraft": null
     },
     {
-      "id": "r23",
+      "id": "r14",
       "op": "add",
       "printed": "Mean corpusc. Hb. conc. (MCHC)",
       "value": 346,
       "unit": "g/L",
       "date": "2026-06-05",
       "printedRange": "310 - 350 g/L",
+      "assignedRange": "310 - 350 g/L",
+      "optimalValue": null,
+      "editReason": null,
       "match": "alias",
       "key": "mean_corpuscular_hemoglobin_concentration",
       "writeTarget": "observation",
       "status": "Optimal",
       "medicalInsight": "Your Mean Corpuscular Hemoglobin Concentration (MCHC) is Optimal.",
       "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 346,
+          "unit": "g/L"
+        }
+      ],
       "newCatalogDraft": null
-    },
-    {
-      "id": "r24",
-      "op": "add",
-      "printed": "Red blood cell distribut width",
-      "value": 11.8,
-      "unit": "%",
-      "date": "2026-06-05",
-      "printedRange": "10.5 - 16.0 %",
-      "match": "none",
-      "key": null,
-      "writeTarget": "pending",
-      "status": "Optimal",
-      "medicalInsight": "Your Red blood cell distribut width is Optimal.",
-      "customRangeOverlay": null,
-      "newCatalogDraft": {
-        "suggestedKey": "rdw",
-        "name": "Red blood cell distribut width",
-        "unit": "%",
-        "aliases": [],
-        "normalRange": "Varies",
-        "description": "Red blood cell distribut width",
-        "riskCategories": []
-      }
     }
   ],
   "score": {
     "pass": true,
     "fails": [],
     "known": 14,
-    "unknown": 10,
+    "unknown": 0,
     "turns": 0
   }
 }
