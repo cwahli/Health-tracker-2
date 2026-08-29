@@ -140,7 +140,7 @@ import {
   parseAndHealVisionScout,
   reconcileIngredientsToComponents,
 } from './server_vision_scout.js';
-import { buildVisualScoutPrompt } from './agents/scoutInstructions.js';
+import { buildVisualScoutPrompt, parseBracketedFoodItems } from './agents/scoutInstructions.js';
 import { isDishEstimateEnabled } from './server_food_flags.js';
 import { finalizeDishLedger } from './server_dish_finalize.js';
 import { matchBrandMenu } from './server_brand_match.js';
@@ -1306,6 +1306,33 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
           addDebugLog(`[Text Search Extraction] Message classified as conversational or non-food query. Skipping database matches.`);
         }
       }
+    }
+
+    const bracketItems = parseBracketedFoodItems(message || '');
+    if (bracketItems.length > 0) {
+      addDebugLog(`[Bracket Pre-Extracted] Found ${bracketItems.length} pre-extracted bracket item(s) in message: ${bracketItems.map(b => `"${b.originalName}" (${b.estimatedWeightGrams}g)`).join(', ')}`);
+      
+      bracketItems.forEach((bItem: any) => {
+        const bName = (bItem.originalName || '').toLowerCase().trim();
+        const matchingIdx = visionScoutItems.findIndex((it: any) => {
+          const itName = (it.originalName || it.keyword || '').toLowerCase().trim();
+          return itName && (itName.includes(bName) || bName.includes(itName));
+        });
+
+        if (matchingIdx !== -1) {
+          addDebugLog(`[Bracket Pre-Extracted] Overriding Scout item "${visionScoutItems[matchingIdx].originalName}" with bracket pre-extracted item "${bItem.originalName}" (${bItem.estimatedWeightGrams}g).`);
+          visionScoutItems[matchingIdx] = {
+            ...visionScoutItems[matchingIdx],
+            estimatedWeightGrams: bItem.estimatedWeightGrams,
+            source: 'bracket_pre_extracted',
+            isBracketPreExtracted: true
+          };
+        } else {
+          bItem.scoutIndex = visionScoutItems.length;
+          visionScoutItems.push(bItem);
+        }
+      });
+      visionScoutRanAndReturnedItems = visionScoutItems.length > 0;
     }
 
     // Strip parenthetical local-language notes for cleaner USDA/OFF matching

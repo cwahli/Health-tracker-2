@@ -518,5 +518,23 @@ describe("server_vision_scout", () => {
       expect(clustered[1].originalName).toBe("Raw Egg");
     });
   });
+
+  describe("bracketed content handling", () => {
+    it("should strip bracketed text from buildVisualScoutPrompt", async () => {
+      const { buildVisualScoutPrompt } = await import("./agents/scoutInstructions");
+      const prompt = buildVisualScoutPrompt("[Mr Oat Rolled Oats 70g] + identify all barcode with its text and weight", 1);
+      expect(prompt).not.toContain("Mr Oat Rolled Oats");
+      expect(prompt).toContain("+ identify all barcode with its text and weight");
+    });
+
+    it("should parse bracketed food items with name and weight", async () => {
+      const { parseBracketedFoodItems } = await import("./agents/scoutInstructions");
+      const items = parseBracketedFoodItems("[Mr Oat Rolled Oats 70g] + identify all barcode");
+      expect(items).toHaveLength(1);
+      expect(items[0].originalName).toBe("Mr Oat Rolled Oats");
+      expect(items[0].estimatedWeightGrams).toBe(70);
+      expect(items[0].source).toBe("bracket_pre_extracted");
+    });
+  });
 });
 
