@@ -7304,6 +7304,20 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       }
 
       let finalScoutItems = mergeScoutItems(visionScoutItems, rawParsed.scoutItems);
+      if (preCalculatedItems && Array.isArray(preCalculatedItems)) {
+        finalScoutItems = finalScoutItems.map((sItem: any) => {
+          const preCalc = preCalculatedItems.find((p: any) => p.scoutIndex === sItem.scoutIndex);
+          if (preCalc && preCalc.nutrients) {
+            return {
+              ...sItem,
+              nutrients: preCalc.nutrients,
+              preCalcNutrients: preCalc.nutrients,
+            };
+          }
+          return sItem;
+        });
+      }
+      
       if (parsedData && Array.isArray(parsedData.itemsBreakdown) && parsedData.itemsBreakdown.length > 0) {
         finalScoutItems = finalScoutItems.map((sItem: any, sIdx: number) => {
           const bItem = parsedData.itemsBreakdown.find((b: any) =>

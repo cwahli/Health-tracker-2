@@ -1599,14 +1599,17 @@ const resolveHistoricalImgSrc = (item: any, messageImages: string[], foodLogs: a
   
   if (foodLogs && foodLogs.length > 0) {
     if (item.dbId) {
-      const matched = foodLogs.find((f: any) => f.id === item.dbId || (f.itemsBreakdown || []).some((b: any) => b.dbId === item.dbId));
+      const matched = foodLogs.find((f: any) => 
+        f.id === item.dbId || 
+        ((f.itemsBreakdown || []).length === 1 && (f.itemsBreakdown || [])[0].dbId === item.dbId)
+      );
       if (matched && (matched.imageUrl || matched.imageUrls?.[0])) return resolveFoodImage(matched.imageUrl || matched.imageUrls?.[0], foodLogs) || '';
     }
     const nameToMatch = (item.originalName || item.keyword || item.name || '').toLowerCase();
     if (nameToMatch) {
       const matchedByName = foodLogs.find((f: any) => 
         (f.name || '').toLowerCase() === nameToMatch || 
-        (f.itemsBreakdown || []).some((b: any) => (b.canonicalDbName || b.name || '').toLowerCase() === nameToMatch)
+        ((f.itemsBreakdown || []).length === 1 && (f.itemsBreakdown || [])[0].canonicalDbName?.toLowerCase() === nameToMatch)
       );
       if (matchedByName && (matchedByName.imageUrl || matchedByName.imageUrls?.[0])) {
         return resolveFoodImage(matchedByName.imageUrl || matchedByName.imageUrls?.[0], foodLogs) || '';

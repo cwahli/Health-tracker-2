@@ -33,7 +33,8 @@ export const PackPortionRow: React.FC<PackPortionRowProps> = ({
     }
   }, [currentWeight, packGrams, portionAccepted]);
 
-  if (isDismissed || !packGrams || packGrams <= 0) {
+  // Hide the dropdown if packGrams and currentWeight are identical
+  if (isDismissed || !packGrams || packGrams <= 0 || packGrams === currentWeight) {
     return null;
   }
 

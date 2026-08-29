@@ -1966,6 +1966,14 @@ ${logsText}`);
       jobIdToDownload ||
       jobId;
 
+    // "Previous steps" for the debug export: every turn in this modal's own
+    // in-memory transcript that came BEFORE the turn being exported. This is
+    // the same `messages` state the chat UI itself renders, so it's already
+    // trustworthy and requires no new server round-trip or Firestore/Supabase read.
+    const msgIndexForHistory = messages.findIndex((m: any) => m.id === msg?.id);
+    const conversationHistory = (msgIndexForHistory >= 0 ? messages.slice(0, msgIndexForHistory) : [])
+      .map((m: any) => ({ role: m.role, content: String(m.content || '').slice(0, 1000) }));
+
     const job = JobStore.getJob(resolvedJobId);
     const clientConsoleLogs = window.__clientConsoleLogs || [];
     const networkErrors = window.__clientNetworkErrors || [];
@@ -2113,7 +2121,8 @@ ${logsText}`);
         ingestTrace: job?.result?.ingestTrace || msg?.data?.ingestTrace || msg?.data?.agentResult?.ingestTrace,
         report: job?.result?.report || msg?.data?.report || msg?.data?.agentResult?.report,
         stageLedger: job?.result?.stageLedger || msg?.data?.stageLedger,
-        historyLog: job?.result?.historyLog || msg?.data?.historyLog
+        historyLog: job?.result?.historyLog || msg?.data?.historyLog,
+        conversationHistory
       });
       const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
@@ -6399,14 +6408,43 @@ ${logsText}`);
                           type="button"
                           onClick={() => {
                             const applyTag = (prev: string, searchTerms: string, tagContent: string) => {
-                              if (!searchTerms) return prev + ` [${tagContent}] `;
-                              const idx = prev.toLowerCase().lastIndexOf(searchTerms.toLowerCase());
-                              if (idx !== -1) {
-                                const before = prev.substring(0, idx).trimEnd();
-                                const after = prev.substring(idx + searchTerms.length).trimStart();
-                                return (before ? before + ' ' : '') + `[${tagContent}] ` + after;
+                              const trimmedPrev = prev.trimEnd();
+                              if (!trimmedPrev) return `[${tagContent}] `;
+
+                              const words = trimmedPrev.split(/\s+/);
+                              const tagWords = tagContent.toLowerCase().split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(Boolean);
+                              
+                              let matchCount = 0;
+                              for (let i = 1; i <= Math.min(words.length, 6); i++) {
+                                const firstWordOfSuffix = words[words.length - i].toLowerCase();
+                                const cleanWord = firstWordOfSuffix.replace(/[^a-z0-9]/g, '');
+                                
+                                if (!cleanWord) {
+                                  matchCount = i;
+                                  continue;
+                                }
+                                
+                                const isMatch = tagWords.some(tw => {
+                                  if (cleanWord.length < 3) {
+                                    return tw === cleanWord || tw.startsWith(cleanWord);
+                                  }
+                                  return tw.includes(cleanWord) || cleanWord.includes(tw);
+                                });
+                                
+                                if (isMatch) {
+                                  matchCount = i;
+                                } else {
+                                  break;
+                                }
                               }
-                              return prev + ` [${tagContent}] `;
+                              
+                              if (matchCount > 0) {
+                                const beforeWords = words.slice(0, words.length - matchCount);
+                                const beforeStr = beforeWords.join(' ');
+                                return (beforeStr ? beforeStr + ' ' : '') + `[${tagContent}] `;
+                              }
+                              
+                              return prev + (prev.endsWith(' ') ? '' : ' ') + `[${tagContent}] `;
                             };
 
                             if (item._listType === 'brand') {

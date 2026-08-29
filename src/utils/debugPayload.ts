@@ -95,6 +95,9 @@ export type DebugReportInput = {
   /** Health Coach / medical analysis output (health-baseline-analyze route nests
    * its full structured result under this field — see serverJobs.ts persistSucceeded). */
   report?: any;
+  /** Prior conversation turns (role + content) that came before the turn being
+   * exported, so a reader can see what led up to this point ("previous steps"). */
+  conversationHistory?: { role: string; content: string }[];
 };
 
 /**
@@ -186,6 +189,24 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       lines.push('```');
     }
     lines.push('');
+  }
+
+  // Prior conversation turns, so "previous steps" leading up to this job are
+  // visible instead of only the current turn in isolation.
+  if (input.conversationHistory) {
+    lines.push(`## 📜 Conversation History (Previous Steps)`);
+    lines.push('');
+    if (input.conversationHistory.length > 0) {
+      for (const turn of input.conversationHistory) {
+        const roleLabel = turn.role === 'user' ? '👤 User' : turn.role === 'assistant' ? '🤖 Assistant' : turn.role;
+        const content = String(turn.content || '').slice(0, 1000);
+        lines.push(`**${roleLabel}:** ${content}`);
+        lines.push('');
+      }
+    } else {
+      lines.push('_This was the first message in the conversation — no previous steps._');
+      lines.push('');
+    }
   }
 
   // 1. Last User Action
@@ -441,12 +462,17 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   const logs = String(input.backendLogs || '').trim();
 
   // Extract "Agent Instructions & Prompts Dispatched" and "Errors & Warnings"
-  // summaries directly from the raw backend log text. This is deliberately
-  // text-based (not tied to a specific field a backend route must populate)
-  // so it works uniformly across every agent's log format without requiring
-  // per-route wiring.
+  // summaries directly from the raw backend log text, AND collapse those same
+  // blocks (plus large raw-LLM-response dumps that duplicate an
+  // already-parsed structured section like the Health Coach Report) out of
+  // the raw dump below, so identical content isn't shown twice in one export.
+  // This is deliberately text-based (not tied to a specific field a backend
+  // route must populate) so it works uniformly across every agent's log
+  // format without requiring per-route wiring.
+  let dedupedLogs = logs;
   if (logs) {
     const logLines = logs.split('\n');
+    const collapsedLineIndices = new Set<number>();
 
     const instructionBlocks: string[] = [];
     const instructionStartPattern = /(Dispatched System Instruction|Dispatched Prompt|System Instruction:|UnifiedLLM-Prompt|Instruction dispatched)/i;
@@ -459,12 +485,13 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
           j++;
         }
         instructionBlocks.push(block.join('\n').trim());
+        for (let k = i; k < j; k++) collapsedLineIndices.add(k);
       }
     }
     if (instructionBlocks.length > 0) {
       lines.push(`## 🧠 Agent Instructions & Prompts Dispatched`);
       lines.push('');
-      lines.push(`_Extracted from backend logs below — ${instructionBlocks.length} dispatch(es) found._`);
+      lines.push(`_Extracted from backend logs — ${instructionBlocks.length} dispatch(es) found. Shown here only; collapsed below to avoid duplication._`);
       lines.push('');
       for (const block of instructionBlocks.slice(0, 10)) {
         lines.push('```');
@@ -474,22 +501,56 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       }
     }
 
+    // Raw LLM response dumps (e.g. "Response received (N chars). Raw output:
+    // {...}") usually duplicate a structured section already shown above
+    // (like the Health Coach / Analysis Report). Collapse them too, keeping
+    // the one-line summary that announces them.
+    const responseStartPattern = /Response received \(\d+ chars\)\.\s*Raw output:/i;
+    for (let i = 0; i < logLines.length; i++) {
+      if (responseStartPattern.test(logLines[i]) && !collapsedLineIndices.has(i)) {
+        let j = i + 1;
+        while (j < logLines.length && !/^\[[A-Za-z]/.test(logLines[j])) {
+          collapsedLineIndices.add(j);
+          j++;
+        }
+      }
+    }
+
     const errorLines = logLines.filter((l) => /^\[error\]/i.test(l.trim()) || /\bError:\s/i.test(l));
+    lines.push(`## ⚠️ Errors & Warnings`);
+    lines.push('');
     if (errorLines.length > 0) {
-      lines.push(`## ⚠️ Errors & Warnings`);
-      lines.push('');
       for (const el of errorLines.slice(0, 40)) {
         lines.push(`- ${el.trim().slice(0, 500)}`);
       }
-      lines.push('');
+    } else {
+      lines.push('_No errors or warnings found in the backend logs captured for this job._');
+    }
+    lines.push('');
+
+    if (collapsedLineIndices.size > 0) {
+      const displayLines: string[] = [];
+      let lastWasMarker = false;
+      for (let i = 0; i < logLines.length; i++) {
+        if (collapsedLineIndices.has(i)) {
+          if (!lastWasMarker) {
+            displayLines.push('  [... full content omitted here — see the extracted section above to avoid showing it twice ...]');
+            lastWasMarker = true;
+          }
+          continue;
+        }
+        lastWasMarker = false;
+        displayLines.push(logLines[i]);
+      }
+      dedupedLogs = displayLines.join('\n');
     }
   }
 
   lines.push(`## 🖥️ Backend Execution Logs`);
   lines.push('');
-  if (logs) {
+  if (dedupedLogs) {
     lines.push('```');
-    lines.push(logs.slice(0, 180_000));
+    lines.push(dedupedLogs.slice(0, 180_000));
     lines.push('```');
   } else {
     lines.push('_No backend logs recorded in this export._');

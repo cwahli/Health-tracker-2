@@ -1,7 +1,7 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-28  
-**Status:** Health Coach Debug Logging & Extraction completed. Supabase-only Auth migration & Sign-up verified. Fill-template prototype C2 green (`prototype/biomarkers/`). Remaining C1–C7: `plan/BIOMARKER_FILL_TEMPLATE_CASES.md`.
+**Status:** UI text duplication, image matching, and "Calculating..." bugs resolved.
 
 - **Health Coach Debug Logging & Extraction (`server_routes_medical_gemini.ts`, `src/utils/debugPayload.ts`, `src/components/LogChat.tsx` - 2026-08-28):**
   - **Root Cause & Diagnosis:** The `/api/gemini/health-baseline-analyze` endpoint did not write events to the SSE log channel, leaving the "Backend Execution Logs" empty in the debug report. Additionally, instructions, prompts, errors, and warnings were not explicitly highlighted in the generated markdown debug report.
