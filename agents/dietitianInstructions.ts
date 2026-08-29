@@ -365,46 +365,43 @@ ${REQUIRED_OUTPUT_JSON_SCHEMA}`;
 
 const EDIT_OUTPUT_JSON_SCHEMA = `
 === FULLY COMPLIANT EDIT FEW-SHOT EXAMPLE ===
+User: "the iced tea is unsweetened, the beef and chicken are 100g each separately"
 {
-  "_internalReasoning": "The user corrected the chicken breast weight to 150g, removed the mayonnaise, and added a 50g boiled egg. I will issue the corresponding editCommands and formulate a supportive message.",
-  "verdict": {
-    "label": "Supports lean muscle tissue",
-    "level": "good"
-  },
-  "message": "I've updated your chicken to 150g, removed the mayo, and added the boiled egg. You got 42g of quality protein to support your lean tissue. Pairing these protein-dense items with your salad helps steady digestion. Enjoy a short 10-minute walk to support metabolic circulation.",
+  "_internalReasoning": "User wants unsweetened iced tea → update_modifier with modifier='unsweetened'. User wants the composite Beef and Chicken Steak split into two standalone items → remove_item the composite parent (preserving its dbId), then add_item each protein and each retained side individually.",
+  "verdict": { "label": "Supports lean muscle tissue", "level": "good" },
+  "message": "I've switched your iced tea to unsweetened and split the steak into 100g beef and 100g chicken. You got strong protein from both cuts supporting lean tissue repair. Keeping the sides unchanged maintains a balanced carb and sodium profile. Enjoy a gentle 15-minute post-meal walk to support digestion.",
   "editCommands": [
-    { "action": "update_weight", "itemName": "Chicken Breast", "targetDbId": null, "newWeightGrams": 150, "componentName": null, "modifier": null },
-    { "action": "remove_item", "itemName": "Mayonnaise", "targetDbId": null, "newWeightGrams": null, "componentName": null, "modifier": null },
-    { "action": "add_item", "itemName": "Boiled Egg", "targetDbId": null, "newWeightGrams": 50, "componentName": null, "modifier": null }
+    { "action": "update_modifier", "itemName": "Iced Tea", "targetDbId": null, "newWeightGrams": null, "componentName": null, "modifier": "unsweetened" },
+    { "action": "remove_item", "itemName": "Sizzling Steak with Wedges and Mixed Vegetables", "targetDbId": "composite_2", "newWeightGrams": null, "componentName": null, "modifier": null },
+    { "action": "add_item", "itemName": "Beef Steak", "targetDbId": null, "newWeightGrams": 100, "componentName": null, "modifier": null },
+    { "action": "add_item", "itemName": "Chicken Steak", "targetDbId": null, "newWeightGrams": 100, "componentName": null, "modifier": null },
+    { "action": "add_item", "itemName": "Black Pepper Sauce", "targetDbId": null, "newWeightGrams": 80, "componentName": null, "modifier": null },
+    { "action": "add_item", "itemName": "Potato Wedges", "targetDbId": null, "newWeightGrams": 100, "componentName": null, "modifier": null },
+    { "action": "add_item", "itemName": "Mixed Vegetables", "targetDbId": null, "newWeightGrams": 70, "componentName": null, "modifier": null }
   ],
-  "foodData": {
-    "date": "2026-08-03",
-    "name": "Adjusted Salad with Chicken and Egg"
-  }
+  "foodData": { "date": "2026-08-03", "name": "Beef Steak and Chicken Steak with Sides" }
 }
+CRITICAL RULES:
+- NEVER include "itemsBreakdown" in "foodData". foodData must only contain { date, name }.
+- Beverage sweetness ("unsweetened", "no sugar", "zero sugar"): ALWAYS use action "update_modifier". NEVER use "update_cooking_method".
+- "X and Y separately": remove_item the composite parent (using its targetDbId), then add_item each sub-component and all retained sides.
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 {
   "_internalReasoning": "string (Silently synthesize clinical evidence and plan response structure)",
-  "verdict": {
-    "label": "string (3-6 words max: positive outcome or pre-calculated metric overage)",
-    "level": "string ('good' | 'warning' | 'alert' | 'neutral')"
-  },
+  "verdict": { "label": "string (3-6 words max)", "level": "'good'|'warning'|'alert'|'neutral'" },
   "message": "string (35-70 words in 4 beats as specified above)",
   "editCommands": [
     {
-      "action": "string ('update_weight' | 'remove_item' | 'add_item' | 'update_modifier' | 'update_component_weight')",
-      "itemName": "string (Name of the item to update or remove)",
-      "targetDbId": "string | null",
-      "newWeightGrams": "number | null (For update_weight, add_item, or update_component_weight)",
-      "componentName": "string | null (For update_component_weight: the specific component inside a parent meal)",
-      "modifier": "string | null (For update_modifier: e.g. 'unsweetened', 'no oil', 'extra sauce')"
+      "action": "'update_weight'|'remove_item'|'add_item'|'update_modifier'|'update_component_weight'",
+      "itemName": "string",
+      "targetDbId": "string|null",
+      "newWeightGrams": "number|null",
+      "componentName": "string|null (for update_component_weight only)",
+      "modifier": "string|null (for update_modifier: e.g. 'unsweetened', 'no oil')"
     }
   ],
-  "foodData": {
-    "date": "string (YYYY-MM-DD)",
-    "name": "string (Meal title matching singular/plural form of breakdown items, or null to auto-generate)"
-  }
+  "foodData": { "date": "YYYY-MM-DD", "name": "string|null" }
 }
 `;
 

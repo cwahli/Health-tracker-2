@@ -5857,9 +5857,15 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       return res.json(responsePayload);
     }
 
-    if (originalModeIsModify && rawParsed.foodData && rawParsed.foodData.itemsBreakdown && rawParsed.foodData.itemsBreakdown.length > 0) {
-      addDebugLog(`[Mode Rewrite] AI fully regenerated foodData in MODIFY mode. Routing through NEW_LOG pipeline to compute full nutrients.`);
-      mode = "new_log";
+    {
+      const hasExplicitEditCommands = Array.isArray(rawParsed.editCommands) && rawParsed.editCommands.length > 0;
+      const hasLegacyEditCommands = Array.isArray(rawParsed.modificationCommand) && rawParsed.modificationCommand.length > 0;
+      if (originalModeIsModify && rawParsed.foodData?.itemsBreakdown?.length > 0 && !hasExplicitEditCommands && !hasLegacyEditCommands) {
+        addDebugLog(`[Mode Rewrite] AI fully regenerated foodData in MODIFY mode (no editCommands present). Routing through NEW_LOG pipeline to compute full nutrients.`);
+        mode = "new_log";
+      } else if (originalModeIsModify && rawParsed.foodData?.itemsBreakdown?.length > 0 && (hasExplicitEditCommands || hasLegacyEditCommands)) {
+        addDebugLog(`[Mode Rewrite] Skipped — editCommands present alongside foodData.itemsBreakdown. Staying in MODIFY path to process ${hasExplicitEditCommands ? rawParsed.editCommands.length : rawParsed.modificationCommand.length} command(s).`);
+      }
     }
 
     // CASE A: NEW FOOD LOGGING
