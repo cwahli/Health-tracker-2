@@ -9,7 +9,7 @@ import React, { useState, useRef, useEffect, Suspense } from 'react';
 
 import { ChatMessage, FoodLog, UserProfile, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
-import { X, Send, Image, Camera, MessageSquare, Sparkles, Plus, Terminal, ChevronDown, ChevronUp, Loader, MapPin, Trash2, Check, Table, RotateCcw, RefreshCw, AlertTriangle, ShieldAlert, Edit2, Maximize2, Minimize2, Flag, BrainCircuit, Download } from 'lucide-react';
+import { X, Send, Image, Camera, FolderOpen, MessageSquare, Sparkles, Plus, Terminal, ChevronDown, ChevronUp, Loader, MapPin, Trash2, Check, Table, RotateCcw, RefreshCw, AlertTriangle, ShieldAlert, Edit2, Maximize2, Minimize2, Flag, BrainCircuit, Download } from 'lucide-react';
 import { UniversalModal } from './UniversalModal';
 import { nutrientDefinitions } from '../utils/nutrition';
 import { biomarkerDefinitions, getBiomarkerStatus, isAsianEthnicity, getBiomarkerStatusLabel, isBiomarkerValueImprobable, getMergedBiomarkerDef, detectFlaggedTelemetryErrors, buildReviewBiomarkerContext, buildBiomarkerReviewPrefill, getMappedBiomarkerKey, isBiomarkerApproved, isCatalogBuiltIn, shouldStampExtractedDefPending } from '../utils/biomarkers';
@@ -1348,6 +1348,8 @@ ${logsText}`);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const collectionsInputRef = useRef<HTMLInputElement>(null);
+  const [isPhotoMenuOpen, setIsPhotoMenuOpen] = useState(false);
   const t = translations[profile?.language || 'en'] || translations.en;
 
   const isManualModeRef = useRef<boolean>(false);
@@ -6688,21 +6690,106 @@ ${logsText}`);
             </div>
           )}
           {!isSelectingMode && (
-            <div className="flex items-center gap-2">
-              <button
-                id="food-chat-photo-btn"
-                onClick={() => fileInputRef.current?.click()}
-                className="p-3 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-theme-text-secondary rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex-shrink-0"
-                title={t.uploadPhoto}
-              >
-                <Image className="w-5 h-5" />
-              </button>
+            <div className="flex items-center gap-2 relative">
+              <div className="relative flex-shrink-0">
+                <button
+                  id="food-chat-photo-btn"
+                  type="button"
+                  onClick={() => setIsPhotoMenuOpen(!isPhotoMenuOpen)}
+                  className="p-3 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-theme-text-secondary rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex-shrink-0"
+                  title="Upload photo or take picture (Photos, Collections, Camera)"
+                >
+                  <Image className="w-5 h-5" />
+                </button>
+
+                {isPhotoMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setIsPhotoMenuOpen(false)}
+                    />
+                    <div className="absolute bottom-full left-0 mb-2 z-50 w-64 bg-theme-bg-card border border-theme-border rounded-2xl shadow-xl p-2 animate-scale-up backdrop-blur-md">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-theme-text-secondary px-3 py-1.5 border-b border-theme-border/50 mb-1">
+                        Select Photo Source
+                      </div>
+                      
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsPhotoMenuOpen(false);
+                          fileInputRef.current?.click();
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-indigo-500/10 dark:hover:bg-indigo-500/20 rounded-xl transition-colors text-left group cursor-pointer"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500 shrink-0 group-hover:scale-105 transition-transform">
+                          <Image className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-theme-text">Photos</div>
+                          <div className="text-[11px] text-theme-text-secondary">Photo gallery & albums</div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsPhotoMenuOpen(false);
+                          collectionsInputRef.current?.click();
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20 rounded-xl transition-colors text-left group cursor-pointer"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0 group-hover:scale-105 transition-transform">
+                          <FolderOpen className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-theme-text">Collections</div>
+                          <div className="text-[11px] text-theme-text-secondary">Image collections & files</div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsPhotoMenuOpen(false);
+                          cameraInputRef.current?.click();
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 rounded-xl transition-colors text-left group cursor-pointer"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-500 shrink-0 group-hover:scale-105 transition-transform">
+                          <Camera className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-theme-text">Camera</div>
+                          <div className="text-[11px] text-theme-text-secondary">Take a new photo with camera</div>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
               <input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleImageSelect}
                 accept="image/*"
                 multiple
+                className="hidden"
+              />
+              <input
+                type="file"
+                ref={collectionsInputRef}
+                onChange={handleImageSelect}
+                accept="image/*,application/pdf"
+                multiple
+                className="hidden"
+              />
+              <input
+                type="file"
+                ref={cameraInputRef}
+                onChange={handleImageSelect}
+                accept="image/*"
+                capture="environment"
                 className="hidden"
               />
 
@@ -6715,14 +6802,6 @@ ${logsText}`);
               >
                 <Camera className="w-5 h-5" />
               </button>
-              <input
-                type="file"
-                ref={cameraInputRef}
-                onChange={handleImageSelect}
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-              />
 
               <input
                 id="food-chat-input"
@@ -6752,14 +6831,14 @@ ${logsText}`);
                   }
                 }}
                 disabled={isAnalyzing || isSubmitting || isSendingRef.current || isCompressing}
-                className={`px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs flex items-center gap-1.5 shrink-0 ${(isAnalyzing || isSubmitting || isSendingRef.current || isCompressing) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'}`}
+                className={`p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex items-center justify-center shrink-0 ${(isAnalyzing || isSubmitting || isSendingRef.current || isCompressing) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'}`}
+                title={isCompressing ? 'Compressing...' : (isAnalyzing || isSubmitting) ? 'Analyzing...' : 'Send'}
               >
                 {(isAnalyzing || isSubmitting || isCompressing) ? (
-                  <Loader className="w-4 h-4 animate-spin" />
+                  <Loader className="w-5 h-5 animate-spin" />
                 ) : (
-                  <Send className="w-4 h-4" />
+                  <Send className="w-5 h-5" />
                 )}
-                <span>{isCompressing ? 'Compressing...' : (isAnalyzing || isSubmitting) ? 'Analyzing...' : 'Analyze'}</span>
               </button>
             </div>
           )}

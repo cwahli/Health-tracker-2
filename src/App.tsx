@@ -3401,12 +3401,22 @@ export default function App() {
       unsubs.push(unsubscribeFb);
 
       if (!isSupabaseConfigured) {
-        clearTimeout(fallbackTimeout);
-        setIsAuthChecking(false);
-      } else {
+        // No Supabase source of truth exists in this build, so this is the only
+        // signal we get. Firebase-only mode still applies here.
         clearTimeout(fallbackTimeout);
         setIsAuthChecking(false);
       }
+      // When Supabase IS configured, do NOT force isAuthChecking to false here.
+      // The initial getSession() call above can race with Supabase's own
+      // session-restore-from-storage step and return an empty session before
+      // the real one loads, which was causing the auth screen to flash
+      // on-screen for a moment before flipping back to the logged-in view.
+      // The onAuthStateChange listener registered above always fires once on
+      // subscribe with the definitive state (either a session, which calls
+      // loadUserData and sets isAuthChecking false itself, or no session,
+      // which hits the "SIGNED_OUT || !session" branch and sets it false).
+      // The 10s fallbackTimeout above remains as a safety net in case that
+      // listener never fires for some reason.
     };
 
     initializeAuthAndData().catch(err => {
