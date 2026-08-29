@@ -19,6 +19,7 @@ import {
   applyCommercialSodiumFloor,
   checkAtwaterConsistency,
   synchronizeNarrativeText,
+  sanitizeVerdictLabel,
   evaluateNutrientWarnings,
   build31NutrientsMarkdownServer,
   enforceTitlePluralParity,
@@ -984,6 +985,8 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
       }
     }
     let scoutScratchpad: string | undefined;
+    let scoutInternalReasoning: string | null = null;
+    let rawScoutData: any = null;
     let scoutConfidenceRating = "High (>90%)";
     let scoutConfidenceComment = "";
     let scoutRecommendedMode: string | null = null;
@@ -1049,6 +1052,11 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
           req.body.portionChoices
         );
         visionScoutContentType = req.body.scoutContentType || 'visual';
+        if (req.body.diningEnvironment && req.body.diningEnvironment !== 'unknown') {
+          diningEnvironment = req.body.diningEnvironment;
+        } else if (priorScout?.[0]?.diningEnvironment && priorScout[0].diningEnvironment !== 'unknown') {
+          diningEnvironment = priorScout[0].diningEnvironment;
+        }
         visionScoutRanAndReturnedItems = true;
       } else {
         addDebugLog(`[PortionChoices] portionChoices provided but priorScout is empty; proceeding with standard pipeline.`);
@@ -1118,6 +1126,7 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
                       properties: {
                         dishName: { type: Type.STRING },
                         chainName: { type: Type.STRING, nullable: true },
+                        packageLabelText: { type: Type.STRING, nullable: true },
                         estimatedWeightGrams: { type: Type.NUMBER },
                         cookingMethod: { type: Type.STRING, enum: ["raw", "baked", "grilled", "boiled", "steamed", "deep_fried", "pan_fried", "stir_fried"] },
                         sourceImageIndex: { type: Type.INTEGER },
@@ -1132,6 +1141,7 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
                             type: Type.OBJECT,
                             properties: {
                               foodName: { type: Type.STRING },
+                              packageLabelText: { type: Type.STRING, nullable: true },
                               weightGrams: { type: Type.NUMBER },
                               packGrams: { type: Type.NUMBER, nullable: true },
                               sourceImageIndex: { type: Type.INTEGER, nullable: true },
@@ -1225,10 +1235,15 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
           throw new Error(`Vision Scout Failed: Couldn't reliably read this image, please try again or re-upload. (Details: ${raw})`);
         }
 
-        // Vision Scout _internalReasoning is removed per user request
+          scoutInternalReasoning = scoutResult.internalReasoning || scoutResult._internalReasoning || null;
+          rawScoutData = scoutResult.rawScoutJson || scoutResult.rawDishes || null;
+          if (scoutInternalReasoning) {
+            addDebugLog(`[Vision Scout Internal Reasoning] ${scoutInternalReasoning}`);
+          }
 
           visionScoutItems = (scoutResult.items || []).map((item: any) => ({
             ...item,
+            internalReasoning: scoutInternalReasoning,
             // Vision Scout's schema/prompt never asks the model to populate `source`, so
             // photographed dishes arrive with it undefined. Tag anything without a
             // transcribed printed nutrition label as 'visual' so the single-serve-photo
@@ -1314,22 +1329,71 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
       
       bracketItems.forEach((bItem: any) => {
         const bName = (bItem.originalName || '').toLowerCase().trim();
-        const matchingIdx = visionScoutItems.findIndex((it: any) => {
+        // Remove any scout items that match this bracket item (clean purge of OCR/label reference photos)
+        visionScoutItems = visionScoutItems.filter((it: any) => {
           const itName = (it.originalName || it.keyword || '').toLowerCase().trim();
-          return itName && (itName.includes(bName) || bName.includes(itName));
+          if (!itName) return true;
+          const match = itName === bName || itName.includes(bName) || bName.includes(itName);
+          if (match) {
+            addDebugLog(`[Bracket Pre-Extracted] Dropping Scout item "${it.originalName || it.keyword}" in favor of pre-extracted bracket item "${bItem.originalName}" (${bItem.estimatedWeightGrams}g).`);
+            return false;
+          }
+          return true;
         });
 
-        if (matchingIdx !== -1) {
-          addDebugLog(`[Bracket Pre-Extracted] Overriding Scout item "${visionScoutItems[matchingIdx].originalName}" with bracket pre-extracted item "${bItem.originalName}" (${bItem.estimatedWeightGrams}g).`);
-          visionScoutItems[matchingIdx] = {
-            ...visionScoutItems[matchingIdx],
-            estimatedWeightGrams: bItem.estimatedWeightGrams,
-            source: 'bracket_pre_extracted',
-            isBracketPreExtracted: true
-          };
-        } else {
-          bItem.scoutIndex = visionScoutItems.length;
-          visionScoutItems.push(bItem);
+        // Add clean bracket pre-extracted item with standard nutrient breakdown
+        const baseNuts = getFallbackCategoryProfile(bItem.originalName || bItem.keyword || '');
+        const factor = (bItem.estimatedWeightGrams || 100) / 100;
+        const bNuts = {
+          calories: Math.round((baseNuts.calories || 389) * factor),
+          protein: Math.round((baseNuts.protein || 12.43) * factor * 10) / 10,
+          carbohydrates: Math.round((baseNuts.carbohydrates || 67.0) * factor * 10) / 10,
+          totalFat: Math.round((baseNuts.totalFat || 6.86) * factor * 10) / 10,
+          saturatedFat: Math.round((baseNuts.saturatedFat || 0.57) * factor * 10) / 10,
+          transFat: 0,
+          totalFibre: Math.round((baseNuts.totalFibre || 10.43) * factor * 10) / 10,
+          sodium: Math.round((baseNuts.sodium || 4.29) * factor),
+          addedSugar: 0,
+          sugar: Math.round((baseNuts.sugar || 1.0) * factor * 10) / 10,
+          potassium: Math.round((baseNuts.potassium || 421) * factor),
+          calcium: Math.round((baseNuts.calcium || 54) * factor),
+          iron: Math.round((baseNuts.iron || 4.7) * factor * 10) / 10,
+          magnesium: Math.round((baseNuts.magnesium || 177) * factor),
+          vitaminD: 0,
+          omega3: 0.1
+        };
+        bItem.scoutIndex = visionScoutItems.length;
+        bItem.source = 'bracket_pre_extracted';
+        bItem.isBracketPreExtracted = true;
+        bItem.nutrients = bNuts;
+        bItem.truthNutrients = { ...bNuts };
+        bItem.nutrientBasisWeight = bItem.estimatedWeightGrams;
+        bItem.components = [{
+          name: bItem.originalName,
+          searchQuery: bItem.originalName,
+          weightGrams: bItem.estimatedWeightGrams,
+          estimatedWeightGrams: bItem.estimatedWeightGrams,
+          nutrients: bNuts,
+          calories: bNuts.calories,
+          protein: bNuts.protein,
+          carbohydrates: bNuts.carbohydrates,
+          carbs: bNuts.carbohydrates,
+          totalFat: bNuts.totalFat,
+          fat: bNuts.totalFat,
+          saturatedFat: bNuts.saturatedFat,
+          sodium: bNuts.sodium,
+          dbSource: 'estimated',
+          dbId: null,
+        }];
+        bItem.componentsDetailList = bItem.components;
+        bItem.compositeSiblings = bItem.components;
+        bItem.ingredients = [bItem.originalName];
+        bItem.visualIngredients = [bItem.originalName];
+        visionScoutItems.push(bItem);
+
+        const q = bItem.originalName || bItem.keyword;
+        if (q && !queriesToSearch.includes(q)) {
+          queriesToSearch.push(q);
         }
       });
       visionScoutRanAndReturnedItems = visionScoutItems.length > 0;
@@ -5712,10 +5776,13 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       const responsePayload = {
         mode: "evaluation",
         dietitianScratchpad: rawParsed._internalReasoning,
+        scoutInternalReasoning,
+        rawScout: rawScoutData,
         comparison: comparisonData,
         comparisonSet,
         scoutItems: mergeScoutItems(visionScoutItems, rawParsed.scoutItems),
         scoutContentType: visionScoutContentType,
+        diningEnvironment,
         agentPrompt: fullPromptSent,
         message: rawParsed.message,
         text: rawParsed.message,
@@ -5954,13 +6021,15 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
       const rawVerdict = rawParsed.verdict || rawFoodData.verdict;
       if (rawVerdict && typeof rawVerdict === 'object') {
+        const sanitizedLabel = sanitizeVerdictLabel(rawVerdict.label || 'Balanced Choice', rawVerdict.level, parsedData.nutrients);
         parsedData.verdict = {
-          label: String(rawVerdict.label || 'Balanced Choice'),
+          label: sanitizedLabel,
           level: String(rawVerdict.level || 'neutral')
         };
       } else if (rawFoodData.recommendation && typeof rawFoodData.recommendation === 'string' && rawFoodData.recommendation.trim().length > 0) {
+        const sanitizedLabel = sanitizeVerdictLabel(rawFoodData.recommendation, 'neutral', parsedData.nutrients);
         parsedData.verdict = {
-          label: String(rawFoodData.recommendation),
+          label: sanitizedLabel,
           level: 'neutral'
         };
       }
@@ -6489,13 +6558,16 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           const finalSatFat = parsedData.nutrients.saturatedFat || 0;
           const finalNa = parsedData.nutrients.sodium || 0;
           const finalCarbs = parsedData.nutrients.carbohydrates || 0;
-          const finalFiber = parsedData.nutrients.fiber || 0;
+          const finalFiber = parsedData.nutrients.totalFibre ?? parsedData.nutrients.fiber ?? 0;
 
           if (parsedData.message) {
             parsedData.message = synchronizeNarrativeText(parsedData.message, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
           }
           if (rawParsed && rawParsed.message) {
             rawParsed.message = synchronizeNarrativeText(rawParsed.message, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
+          }
+          if (rawParsed && rawParsed._internalReasoning) {
+            rawParsed._internalReasoning = synchronizeNarrativeText(rawParsed._internalReasoning, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
           }
           if (parsedData.benefits) {
             parsedData.benefits = synchronizeNarrativeText(parsedData.benefits, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
@@ -7124,6 +7196,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         const finalSatFat = parsedData.nutrients?.saturatedFat ?? grandSatFat;
         const finalNa = parsedData.nutrients?.sodium ?? grandNa;
         const finalCarbs = parsedData.nutrients?.carbohydrates ?? grandCarbs;
+        const finalFiber = parsedData.nutrients?.totalFibre ?? parsedData.nutrients?.fiber ?? 0;
 
         receiptTable += `| **🏆 GRAND MEAL TOTAL - ${grandWeight}g** | **${fVal(finalCal)}** | **${fVal(finalP, 'g')}** | **${fVal(finalSatFat, 'g')}** | **${fVal(finalNa, 'mg')}** |\n`;
 
@@ -7136,35 +7209,38 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         // Critical Guard: Only synchronize narrative text for single-item meals to prevent grand total overwriting multi-item stats
         if (parsedData.nutrients && parsedData.itemsBreakdown && (userSelectedMode === 'review' || userSelectedMode === 'edit' || !userSelectedMode)) {
           if (rawParsed.message) {
-            rawParsed.message = synchronizeNarrativeText(rawParsed.message, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+            rawParsed.message = synchronizeNarrativeText(rawParsed.message, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
+          }
+          if (rawParsed._internalReasoning) {
+            rawParsed._internalReasoning = synchronizeNarrativeText(rawParsed._internalReasoning, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
           }
           parsedData.message = rawParsed.message;
           if (rawParsed.foodData) {
             if (rawParsed.foodData.benefits) {
-              rawParsed.foodData.benefits = synchronizeNarrativeText(rawParsed.foodData.benefits, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+              rawParsed.foodData.benefits = synchronizeNarrativeText(rawParsed.foodData.benefits, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
             }
             if (rawParsed.foodData.risks) {
-              rawParsed.foodData.risks = synchronizeNarrativeText(rawParsed.foodData.risks, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+              rawParsed.foodData.risks = synchronizeNarrativeText(rawParsed.foodData.risks, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
             }
             if (rawParsed.foodData.healthImpact) {
-              rawParsed.foodData.healthImpact = synchronizeNarrativeText(rawParsed.foodData.healthImpact, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+              rawParsed.foodData.healthImpact = synchronizeNarrativeText(rawParsed.foodData.healthImpact, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
             }
             if (rawParsed.foodData.recommendation) {
-              rawParsed.foodData.recommendation = synchronizeNarrativeText(rawParsed.foodData.recommendation, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+              rawParsed.foodData.recommendation = synchronizeNarrativeText(rawParsed.foodData.recommendation, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
             }
           }
           if (parsedData) {
             if (parsedData.benefits) {
-              parsedData.benefits = synchronizeNarrativeText(parsedData.benefits, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+              parsedData.benefits = synchronizeNarrativeText(parsedData.benefits, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
             }
             if (parsedData.risks) {
-              parsedData.risks = synchronizeNarrativeText(parsedData.risks, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+              parsedData.risks = synchronizeNarrativeText(parsedData.risks, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
             }
             if (parsedData.healthImpact) {
-              parsedData.healthImpact = synchronizeNarrativeText(parsedData.healthImpact, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+              parsedData.healthImpact = synchronizeNarrativeText(parsedData.healthImpact, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
             }
             if (parsedData.recommendation) {
-              parsedData.recommendation = synchronizeNarrativeText(parsedData.recommendation, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs);
+              parsedData.recommendation = synchronizeNarrativeText(parsedData.recommendation, finalCal, finalP, finalFat, finalSatFat, finalNa, finalCarbs, finalFiber);
             }
           }
         }
@@ -7375,9 +7451,14 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       const responsePayload = {
         mode: "new_log",
         dietitianScratchpad: rawParsed._internalReasoning,
+        scoutInternalReasoning,
+        rawScout: rawScoutData,
+        scoutContentType: visionScoutContentType,
+        diningEnvironment,
         text: rawParsed.message || `I have analyzed the food: **${parsedData.name}** (${parsedData.quantity}).`,
         message: rawParsed.message || `I have analyzed the food: **${parsedData.name}** (${parsedData.quantity}).`,
         data: pendingFoodLog || parsedData,
+        pendingFoodLog: pendingFoodLog || parsedData,
         mealBuild,
         savable: true,
         agentPrompt: fullPromptSent,

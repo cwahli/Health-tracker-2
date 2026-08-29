@@ -47,4 +47,50 @@ describe('debugPayload', () => {
     expect(coldDebugR2Key('job_abc', 'user_1')).toBe('debug/user_1/job_abc.json');
     expect(COLD_DEBUG_LOG).toContain('ColdDebug');
   });
+
+  it('renders vision scout internal reasoning, bounding boxes, and sticker labels', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_scout_test',
+      status: 'succeeded',
+      message: 'Scout test',
+      scoutInternalReasoning: 'Observed 3 raw grocery ingredients with price stickers: Cumi, Ikan, and Telur.',
+      diningEnvironment: 'grocery_raw_items',
+      scoutContentType: 'raw_grocery',
+      scoutItems: [
+        {
+          originalName: 'Cumi Bangka',
+          estimatedWeightGrams: 200,
+          boundingBox2D: [120, 50, 450, 480],
+          sourceImageIndex: 0,
+          cookingMethod: 'raw',
+          packageLabelText: 'CUMI BANGKA - Berat 0.200',
+          components: [
+            {
+              name: 'Cumi Bangka',
+              weightGrams: 200,
+              packageLabelText: 'CUMI BANGKA - Berat 0.200',
+              sourceImageIndex: 0,
+              protein: 32,
+              carbohydrates: 0,
+              totalFat: 2.8,
+              sodium: 88,
+            },
+          ],
+        },
+      ],
+      rawScout: {
+        _internalReasoning: 'Observed 3 raw grocery ingredients',
+        dishes: [{ name: 'Cumi Bangka', estimatedWeightGrams: 200 }],
+      },
+    });
+
+    expect(md).toContain('Vision Scout Results (1 item(s) detected)');
+    expect(md).toContain('Scout Internal Reasoning:');
+    expect(md).toContain('Observed 3 raw grocery ingredients with price stickers');
+    expect(md).toContain('grocery_raw_items');
+    expect(md).toContain('[120,50,450,480]');
+    expect(md).toContain('CUMI BANGKA - Berat 0.200');
+    expect(md).toContain('Itemized Constituent Ingredients & Stickers');
+    expect(md).toContain('Raw Scout Structured JSON');
+  });
 });

@@ -71,6 +71,10 @@ export type DebugReportInput = {
   backendLogs?: string;
   pendingFoodLog?: any;
   scoutItems?: any[];
+  scoutInternalReasoning?: string;
+  rawScout?: any;
+  scoutContentType?: string;
+  diningEnvironment?: string;
   receiptTable?: any;
   error?: string;
   debugUrl?: string;
@@ -272,26 +276,115 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   }
 
   // 3. Vision Scout Phase
-  if (Array.isArray(input.scoutItems) && input.scoutItems.length > 0) {
-    lines.push(`## 🔍 Vision Scout Results (${input.scoutItems.length} items detected)`);
+  if ((Array.isArray(input.scoutItems) && input.scoutItems.length > 0) || input.rawScout || input.scoutInternalReasoning) {
+    const scoutCount = Array.isArray(input.scoutItems) ? input.scoutItems.length : (input.rawScout?.items?.length || 0);
+    lines.push(`## 🔍 Vision Scout Results (${scoutCount} item(s) detected)`);
     lines.push('');
-    lines.push(`| Item / Keyword | Estimated Weight | Confidence | Notes / Search Query |`);
-    lines.push(`|----------------|------------------|------------|----------------------|`);
-    for (const it of input.scoutItems.slice(0, 30)) {
-      const nm = String(it.originalName || it.keyword || it.name || 'item').replace(/\|/g, '/');
-      const w = it.estimatedWeightGrams ?? it.weightGrams ?? '?';
-      const conf = it.itemConfidence ? String(it.itemConfidence).replace(/\|/g, '/') : '—';
-      const componentQueries = Array.isArray(it.components)
-        ? it.components.map((c: any) => c && c.searchQuery).filter(Boolean)
-        : [];
-      const query = componentQueries.length > 0
-        ? componentQueries.join('; ').replace(/\|/g, '/')
-        : (Array.isArray(it.anomalyFlags) && it.anomalyFlags.length > 0
-            ? it.anomalyFlags.join('; ').replace(/\|/g, '/')
-            : '—');
-      lines.push(`| ${nm} | ${w}g | ${conf} | ${query} |`);
+
+    // Extract scout internal reasoning if not provided directly
+    let scoutReasoning = input.scoutInternalReasoning;
+    if (!scoutReasoning && input.backendLogs) {
+      const match = input.backendLogs.match(/\[Vision Scout Internal Reasoning\]\s*([^\n\r]+)/);
+      if (match) {
+        scoutReasoning = match[1].trim();
+      } else {
+        const jsonMatch = input.backendLogs.match(/"_internalReasoning":\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+        if (jsonMatch) {
+          try {
+            scoutReasoning = JSON.parse(`"${jsonMatch[1]}"`);
+          } catch {
+            scoutReasoning = jsonMatch[1];
+          }
+        }
+      }
     }
-    lines.push('');
+
+    if (scoutReasoning) {
+      lines.push(`> **Scout Internal Reasoning:** ${scoutReasoning}`);
+      lines.push('');
+    }
+
+    const envDetails: string[] = [];
+    if (input.diningEnvironment && input.diningEnvironment !== 'unknown') {
+      envDetails.push(`**Dining Environment:** \`${input.diningEnvironment}\``);
+    }
+    if (input.scoutContentType) {
+      envDetails.push(`**Content Type:** \`${input.scoutContentType}\``);
+    }
+    if (envDetails.length > 0) {
+      lines.push(envDetails.join(' | '));
+      lines.push('');
+    }
+
+    if (Array.isArray(input.scoutItems) && input.scoutItems.length > 0) {
+      lines.push(`| # | Dish / Item | Weight | Bounding Box | Img | Method | Label / Sticker OCR | Constituent Ingredients |`);
+      lines.push(`|---|-------------|--------|--------------|-----|--------|---------------------|-------------------------|`);
+      for (let idx = 0; idx < Math.min(input.scoutItems.length, 30); idx++) {
+        const it = input.scoutItems[idx];
+        const num = `[${idx + 1}]`;
+        const nm = String(it.originalName || it.keyword || it.name || 'item').replace(/\|/g, '/');
+        const w = `${it.estimatedWeightGrams ?? it.weightGrams ?? '?'}${it.packGrams ? ` (Pack: ${it.packGrams}g)` : 'g'}`;
+        const box = Array.isArray(it.boundingBox2D) ? `[${it.boundingBox2D.join(',')}]` : '—';
+        const img = `#${it.sourceImageIndex ?? 0}`;
+        const method = String(it.cookingMethod || '—').replace(/\|/g, '/');
+        const label = it.packageLabelText
+          ? String(it.packageLabelText).replace(/\|/g, '/')
+          : (it.rawNutritionLabel ? JSON.stringify(it.rawNutritionLabel).slice(0, 35).replace(/\|/g, '/') : '—');
+        
+        let compSummary = '—';
+        if (Array.isArray(it.components) && it.components.length > 0) {
+          compSummary = it.components.map((c: any) => {
+            const cn = c.name || c.searchQuery || 'ingredient';
+            const cw = c.weightGrams ?? c.estimatedWeightGrams ?? '?';
+            const clbl = c.packageLabelText ? ` ("${c.packageLabelText}")` : '';
+            return `${cn} (${cw}g${clbl})`;
+          }).join('; ').replace(/\|/g, '/');
+        } else if (Array.isArray(it.visualIngredients) && it.visualIngredients.length > 0) {
+          compSummary = it.visualIngredients.join(', ').replace(/\|/g, '/');
+        }
+        lines.push(`| ${num} | ${nm} | ${w} | ${box} | ${img} | ${method} | ${label} | ${compSummary} |`);
+      }
+      lines.push('');
+
+      // Sub-table: Itemized Constituent Ingredients & Stickers breakdown
+      const allComponents: any[] = [];
+      input.scoutItems.forEach((it) => {
+        if (Array.isArray(it.components) && it.components.length > 0) {
+          it.components.forEach((c: any) => {
+            allComponents.push({ dishName: it.originalName || it.name || it.keyword, ...c });
+          });
+        }
+      });
+
+      if (allComponents.length > 0) {
+        lines.push(`### 🥗 Itemized Constituent Ingredients & Stickers (${allComponents.length})`);
+        lines.push('');
+        lines.push(`| Parent Dish | Component / Food | Weight | Img # | Sticker Text / Label | Macros (P / C / F / Na) |`);
+        lines.push(`|-------------|------------------|--------|-------|----------------------|-------------------------|`);
+        for (const c of allComponents.slice(0, 50)) {
+          const pDish = String(c.dishName || '—').replace(/\|/g, '/');
+          const cName = String(c.name || c.searchQuery || 'ingredient').replace(/\|/g, '/');
+          const cw = `${c.weightGrams ?? c.estimatedWeightGrams ?? '?'}${c.packGrams ? ` (Pack: ${c.packGrams}g)` : 'g'}`;
+          const imgIdx = `#${c.sourceImageIndex ?? 0}`;
+          const sticker = c.packageLabelText ? `"${String(c.packageLabelText).replace(/\|/g, '/')}"` : (c.rawNutritionLabel ? 'Printed Label' : '—');
+          const p = c.protein ?? c.nutrients?.protein ?? '?';
+          const carbs = c.carbohydrates ?? c.carbs ?? c.nutrients?.carbohydrates ?? '?';
+          const f = c.fat ?? c.totalFat ?? c.nutrients?.totalFat ?? '?';
+          const na = c.sodium ?? c.nutrients?.sodium ?? '?';
+          const nuts = `P: ${p}g, C: ${carbs}g, F: ${f}g, Na: ${na}mg`;
+          lines.push(`| ${pDish} | ${cName} | ${cw} | ${imgIdx} | ${sticker} | ${nuts} |`);
+        }
+        lines.push('');
+      }
+    }
+
+    if (input.rawScout) {
+      lines.push(`### 📋 Raw Scout Structured JSON`);
+      lines.push('```json');
+      lines.push(JSON.stringify(input.rawScout, null, 2).slice(0, 25_000));
+      lines.push('```');
+      lines.push('');
+    }
   }
 
   // 4. Database Search & Entity Resolution
@@ -585,6 +678,15 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
     backendLogs: typeof logs === 'string' ? logs : String(logs || ''),
     pendingFoodLog: food,
     scoutItems: result.scoutItems || msg?.data?.scoutItems,
+    scoutInternalReasoning:
+      result.scoutInternalReasoning ||
+      result.scoutReasoning ||
+      food?.scoutInternalReasoning ||
+      msg?.data?.scoutInternalReasoning ||
+      msg?.data?.agentResult?.scoutInternalReasoning,
+    rawScout: result.rawScout || result.scoutResult || msg?.data?.rawScout || food?.rawScout,
+    scoutContentType: result.scoutContentType || result.visionScoutContentType || msg?.data?.scoutContentType,
+    diningEnvironment: result.diningEnvironment || food?.diningEnvironment || msg?.data?.diningEnvironment,
     receiptTable: food?.receiptTable || result.receiptTable,
     error: job?.error?.message || result.error,
     debugUrl: result.debugUrl || msg?.data?.debugUrl || job?.debugUrl,

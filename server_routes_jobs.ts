@@ -338,6 +338,10 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
         // never forwarded at all. Only use an actual pendingFoodLog now.
         pendingFoodLog: safePayload.result?.pendingFoodLog || null,
         scoutItems: safePayload.result?.scoutItems,
+        scoutInternalReasoning: safePayload.result?.scoutInternalReasoning || safePayload.result?.scoutReasoning || safePayload.result?.internalReasoning,
+        rawScout: safePayload.result?.rawScout || safePayload.result?.scoutResult,
+        scoutContentType: safePayload.result?.scoutContentType || safePayload.result?.visionScoutContentType,
+        diningEnvironment: safePayload.result?.diningEnvironment || safePayload.result?.pendingFoodLog?.diningEnvironment,
         receiptTable: safePayload.result?.receiptTable || safePayload.result?.pendingFoodLog?.receiptTable,
         error: safePayload.error,
         debugUrl: safePayload.debugUrl,

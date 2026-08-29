@@ -1,13 +1,10 @@
 export { scoutSystemInstruction } from '../server_vision_scout.js';
 
 export function buildVisualScoutPrompt(message: string, imageCount: number): string {
-  if (imageCount <= 0) {
-    return `Analyze the user's message: "${message}" and extract all dishes and constituent foods into the hierarchical schema with weights and nutrients.`;
-  }
-  // Strip bracket markers so "[Mr Oat Rolled Oats 70g]" reaches the scout as "Mr Oat Rolled Oats 70g"
-  // (Catalog-tagged foods already resolved via explicitFoodTags bypass the scout entirely)
-  const cleanMsg = (message || '').replace(/\[+([^\]]+)\]+/g, '$1').replace(/\s+/g, ' ').trim();
-  const isGeneric = !cleanMsg || /^(analyze\s*(this|the)?\s*(meal|food|photo|image)?[s.]*|log\s*meal|scan)$/i.test(cleanMsg);
+  const cleanMsg = (message || '').replace(/\[+[^\]]+\]+/g, '').replace(/\s+/g, ' ').trim();
+  const normalizedWords = cleanMsg.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?'"“”]/g, '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const genericTokens = new Set(['i', 'had', 'have', 'ate', 'eaten', 'and', 'with', 'all', 'the', 'food', 'foods', 'dish', 'dishes', 'item', 'items', 'in', 'picture', 'pictures', 'photo', 'photos', 'image', 'images', 'log', 'meal', 'scan', 'analyze', 'this', 'that', 'for', 'my']);
+  const isGeneric = !cleanMsg || normalizedWords.length === 0 || normalizedWords.every(w => genericTokens.has(w));
   const multiImageRule = imageCount > 1 
     ? " Audit every image independently and extract distinct food items seen across ALL images. Do not stop after analyzing a label."
     : "";
@@ -16,6 +13,46 @@ export function buildVisualScoutPrompt(message: string, imageCount: number): str
   if (isGeneric) {
     return `${baseInstruction} Extract all physical dishes and constituent foods into the hierarchical schema with weightGrams, packGrams, and nutrients.`;
   }
-  return `${baseInstruction} User note: "${cleanMsg}". If the user note explicitly mentions additional foods consumed (e.g. "I also had 70g of oats"), you MUST extract them as well, even if not visible in the images. Extract all physical dishes and constituent foods into the hierarchical schema with weightGrams, packGrams, and nutrients.`;
+  return `${baseInstruction} User note: "${cleanMsg}". If the user note explicitly mentions additional foods consumed, you MUST extract them as well, even if not visible in the images. Extract all physical dishes and constituent foods into the hierarchical schema with weightGrams, packGrams, and nutrients.`;
+}
+
+export function parseBracketedFoodItems(message: string): Array<{
+  originalName: string;
+  foodName: string;
+  keyword: string;
+  estimatedWeightGrams: number;
+  source: string;
+  isBracketPreExtracted: boolean;
+  dishName: string;
+  cookingMethod: string;
+  visualIngredients: any[];
+}> {
+  if (!message) return [];
+  const matches = message.matchAll(/\[+([^\]]+)\]+/g);
+  const items = [];
+  for (const m of matches) {
+    const raw = (m[1] || '').trim();
+    if (!raw) continue;
+    let name = raw;
+    let weight = 100;
+    const weightMatch = raw.match(/(?:^|\s+)(\d+(?:\.\d+)?)\s*(?:g|grams?|ml)?\s*$/i);
+    if (weightMatch) {
+      weight = parseFloat(weightMatch[1]);
+      name = raw.slice(0, weightMatch.index).trim();
+      if (!name) name = raw;
+    }
+    items.push({
+      originalName: name,
+      foodName: name,
+      keyword: name,
+      estimatedWeightGrams: weight,
+      source: 'bracket_pre_extracted',
+      isBracketPreExtracted: true,
+      dishName: name,
+      cookingMethod: 'raw',
+      visualIngredients: []
+    });
+  }
+  return items;
 }
 

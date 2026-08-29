@@ -398,7 +398,7 @@ export function applyPortionChoices(
         ? it.components
         : []);
 
-    if (subComps.length > 1) {
+    if (subComps.length >= 1) {
       let subCompsChanged = false;
       const updatedSubComps = subComps.map((comp: any, cIdx: number) => {
         if (!comp) return comp;
@@ -407,7 +407,7 @@ export function applyPortionChoices(
           choices[String(compIndex)] ??
           choices[compIndex as any] ??
           choices[`${si}-${cIdx + 1}`] ??
-          null;
+          (subComps.length === 1 && w != null ? Number(w) : null);
         if (compW != null && Number(compW) > 0) {
           subCompsChanged = true;
           const cWeightGrams = Math.round(Number(compW));

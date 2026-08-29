@@ -3766,12 +3766,12 @@ const resolveHistoricalImgSrc = (item: any, messageImages: string[], foodLogs: a
         let formattedText = '';
         if (rawText) {
           formattedText = formatMessageContent(rawText, msg);
-          if (!formattedText && typeof rawText === 'string' && !rawText.trim().startsWith('{')) {
+          if (!formattedText && typeof rawText === 'string' && !rawText.trim().startsWith('{') && !rawText.includes('_internalReasoning') && !rawText.includes('"label"')) {
             formattedText = rawText;
           }
         }
 
-        const fallbackText = formattedText || msg.data?.agentResult?.dietitianScratchpad || msg.data?.agentResult?.scoutScratchpad || '';
+        const fallbackText = formattedText || '';
 
         if (!fallbackText && activeScoutItems.length === 0) return null;
 

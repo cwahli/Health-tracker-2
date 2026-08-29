@@ -1024,6 +1024,39 @@ export default function BugSnapshotFab({
             (payload as any)?.backendLogs ||
             '';
 
+          const resolvedScoutInternalReasoning =
+            fullJobData?.result?.scoutInternalReasoning ||
+            fullJobData?.scoutInternalReasoning ||
+            activeJob.result?.scoutInternalReasoning ||
+            resolvedFoodLog?.scoutInternalReasoning ||
+            activeJob.messages?.slice().reverse().find((m: any) => m.data?.scoutInternalReasoning || m.scoutInternalReasoning)?.data?.scoutInternalReasoning ||
+            (payload as any)?.scoutInternalReasoning ||
+            null;
+
+          const resolvedRawScout =
+            fullJobData?.result?.rawScout ||
+            fullJobData?.rawScout ||
+            activeJob.result?.rawScout ||
+            resolvedFoodLog?.rawScout ||
+            activeJob.messages?.slice().reverse().find((m: any) => m.data?.rawScout || m.rawScout)?.data?.rawScout ||
+            (payload as any)?.rawScout ||
+            null;
+
+          const resolvedScoutContentType =
+            fullJobData?.result?.scoutContentType ||
+            fullJobData?.scoutContentType ||
+            activeJob.result?.scoutContentType ||
+            (payload as any)?.scoutContentType ||
+            null;
+
+          const resolvedDiningEnv =
+            fullJobData?.result?.diningEnvironment ||
+            fullJobData?.diningEnvironment ||
+            activeJob.result?.diningEnvironment ||
+            resolvedFoodLog?.diningEnvironment ||
+            (payload as any)?.diningEnvironment ||
+            null;
+
           debug_payload = stripHeavyImages({
             jobId: activeJob.id,
             kind: activeJob.kind,
@@ -1038,6 +1071,10 @@ export default function BugSnapshotFab({
             backendLogs: resolvedBackendLogs,
             pipelineErrors: fullJobData?.result?.pipelineErrors || activeJob.result?.pipelineErrors,
             scoutItems: resolvedScoutItems,
+            scoutInternalReasoning: resolvedScoutInternalReasoning,
+            rawScout: resolvedRawScout,
+            scoutContentType: resolvedScoutContentType,
+            diningEnvironment: resolvedDiningEnv,
             pendingFoodLog: resolvedFoodLog,
             receiptTable: resolvedReceipt,
             exportedAt: new Date().toISOString(),
@@ -1049,6 +1086,10 @@ export default function BugSnapshotFab({
             ...reportInput,
             pendingFoodLog: resolvedFoodLog || reportInput.pendingFoodLog,
             scoutItems: resolvedScoutItems.length > 0 ? resolvedScoutItems : reportInput.scoutItems,
+            scoutInternalReasoning: resolvedScoutInternalReasoning || reportInput.scoutInternalReasoning,
+            rawScout: resolvedRawScout || reportInput.rawScout,
+            scoutContentType: resolvedScoutContentType || reportInput.scoutContentType,
+            diningEnvironment: resolvedDiningEnv || reportInput.diningEnvironment,
             receiptTable: resolvedReceipt.length > 0 ? resolvedReceipt : reportInput.receiptTable,
             backendLogs: resolvedBackendLogs || reportInput.backendLogs,
           });

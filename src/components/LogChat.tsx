@@ -3084,7 +3084,7 @@ ${logsText}`);
             userId: auth.currentUser?.uid || 'anonymous',
             kind: family === 'D' ? 'food_compare' : 'food_log',
             mode: submissionMode,
-            text: ((userContent || textToSend || '').replace(/\[+.*?\]+/g, '').replace(/^[+\s,.-]+/, '').replace(/\s+/g, ' ').trim()),
+            text: ((userContent || textToSend || '').replace(/^[+\s,.-]+/, '').trim()),
             images: stagedImagesForSubmit,
             imageDates: tempDates.length > 0 ? tempDates : (extraOptions?.imageDates || job?.inputSnapshot?.imageDates || undefined),
             history: persistMessages,
@@ -3610,8 +3610,6 @@ ${logsText}`);
           if (resData.report?.globalSummary) messageText = resData.report.globalSummary;
           else if (resData.globalSummary) messageText = resData.globalSummary;
           else if (resData.explanation) messageText = resData.explanation;
-          else if (resData.report?._internalReasoning) messageText = resData.report._internalReasoning;
-          else if (resData._internalReasoning) messageText = resData._internalReasoning;
         }
 
         const assistantMsg: ChatMessage = {
@@ -4521,10 +4519,6 @@ ${logsText}`);
           messageText = resData.globalSummary;
         } else if (resData.explanation) {
           messageText = resData.explanation;
-        } else if (resData.report?._internalReasoning) {
-          messageText = resData.report._internalReasoning;
-        } else if (resData._internalReasoning) {
-          messageText = resData._internalReasoning;
         }
       }
 

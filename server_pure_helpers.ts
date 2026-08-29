@@ -1214,6 +1214,39 @@ export function applyNutrientRealityChecks(
   }
 }
 
+export function sanitizeVerdictLabel(rawLabel: string, level?: string, nutrients?: any): string {
+  let label = String(rawLabel || '').trim();
+  if (!label) return 'Supports sustained metabolic energy';
+
+  // Strip wrapping quotes and extra whitespace
+  label = label.replace(/^["']|["']$/g, '').trim();
+
+  // If label is describing a food/meal entity rather than a biological health outcome or metric overage, convert it
+  const isGenericMealDescriptor = /^(?:exceptional|solid|great|good|healthy|nutrient[- ]dense|carb[- ]heavy|high[- ]protein|low[- ]calorie|high[- ]fiber|rich|balanced)?\s*(?:high[- ]protein|low[- ]sodium|fiber[- ]rich|protein[- ]packed)?\s*(?:meal|dish|dinner|lunch|breakfast|snack|food|bowl|pot|soup|platter|choice)$/i.test(label) ||
+    /\b(?:high\s+protein\s+meal|exceptional\s+high\s+protein|protein\s+packed\s+meal|balanced\s+macro\s+meal|nutrient\s+dense\s+meal)\b/i.test(label);
+
+  if (isGenericMealDescriptor) {
+    if (nutrients?.protein && nutrients.protein >= 30) {
+      return 'Boosts lean muscle tissue';
+    }
+    if ((nutrients?.totalFibre || nutrients?.fiber) && (nutrients.totalFibre >= 8 || nutrients.fiber >= 8)) {
+      return 'Supports digestive health';
+    }
+    if (nutrients?.sodium && nutrients.sodium <= 500 && nutrients?.calories && nutrients.calories < 600) {
+      return 'Good for your heart';
+    }
+    return 'Supports sustained metabolic energy';
+  }
+
+  // Ensure word count is 3-6 words
+  const words = label.split(/\s+/);
+  if (words.length > 6) {
+    label = words.slice(0, 6).join(' ');
+  }
+
+  return label;
+}
+
 export function synchronizeNarrativeText(
   text: string,
   grandCal: number,
@@ -1235,23 +1268,25 @@ export function synchronizeNarrativeText(
   const naVal = Math.round(grandNa);
   const naFormatted = naVal.toLocaleString('en-US');
 
-  const safeAdj = `(?:(?!\\b(?:and|with|plus|or|including|protein|fat|calories|sugar|sodium|carbs|carbohydrates|carbohydrate|fiber|fibre)\\b)[a-zA-Z-]+\\s+){0,2}`;
+  const safeAdj = `(?:(?!\b(?:and|with|plus|or|including|protein|fat|calories|sugar|sodium|carbs|carbohydrates|carbohydrate|fiber|fibre)\b)[a-zA-Z-]+\\s+){0,2}`;
 
   // 1. Calories
   const calRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(${safeAdj}(?:calories|kcal))\\b`, 'gi');
   updated = updated.replace(calRe, (match, num, rest) => `${calVal} ${rest}`);
+  updated = updated.replace(/((?:calories|energy)\s*\(\s*)(?:[\d,]+(?:\.\d+)?)\s*(?:kcal|calories|g)?(\s*\))/gi, (match, p1, p2) => `${p1}${calVal} kcal${p2}`);
 
   // 2. Sodium
   const naRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(mg\\s*(?:of\\s+)?${safeAdj}sodium)\\b`, 'gi');
   updated = updated.replace(naRe, (match, num, rest) => `${naFormatted}${rest}`);
-  updated = updated.replace(/(sodium\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*mg[^)]*\))/gi, (match, p1, num, p3) => `${p1}${naFormatted}${p3}`);
+  updated = updated.replace(/(sodium\s*\(\s*)(?:[\d,]+(?:\.\d+)?)\s*mg(\s*\))/gi, (match, p1, p2) => `${p1}${naFormatted}mg${p2}`);
   updated = updated.replace(/(sodium\s*(?:[a-zA-Z-]+\s+){0,3}(?:to|is|at|under|below|around|of|:)\s*)([\d,]+(?:\.\d+)?)(\s*mg)/gi, (match, p1, num, p3) => `${p1}${naFormatted}${p3}`);
 
   // 3. Saturated Fat
   const satFatRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}saturated\\s*fat)\\b`, 'gi');
   updated = updated.replace(satFatRe, (match, num, rest) => `${satFatVal}${rest}`);
-  updated = updated.replace(/(saturated\s*fat\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*g[^)]*\))/gi, (match, p1, num, p3) => `${p1}${satFatVal}${p3}`);
+  updated = updated.replace(/(saturated\s*fat\s*\(\s*)(?:[\d,]+(?:\.\d+)?)\s*g(\s*\))/gi, (match, p1, p2) => `${p1}${satFatVal}g${p2}`);
   updated = updated.replace(/(saturated\s*fat\s*:\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => `${p1}${satFatVal}${p3}`);
+  updated = updated.replace(/(saturated\s*fat\s*(?:[a-zA-Z-]+\s+){0,3}(?:to|is|at|under|below|around|of|:)\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => `${p1}${satFatVal}${p3}`);
 
   // 4. Total Fat
   const fatRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}total\\s*fat)\\b`, 'gi');
@@ -1260,23 +1295,26 @@ export function synchronizeNarrativeText(
   // 5. Protein
   const pRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}protein)\\b`, 'gi');
   updated = updated.replace(pRe, (match, num, rest) => `${pVal}${rest}`);
-  updated = updated.replace(/(protein\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*g[^)]*\))/gi, (match, p1, num, p3) => `${p1}${pVal}${p3}`);
+  updated = updated.replace(/(protein\s*\(\s*)(?:[\d,]+(?:\.\d+)?)\s*g(\s*\))/gi, (match, p1, p2) => `${p1}${pVal}g${p2}`);
   updated = updated.replace(/(protein\s*:\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => `${p1}${pVal}${p3}`);
+  updated = updated.replace(/(protein\s*(?:[a-zA-Z-]+\s+){0,3}(?:to|is|at|under|below|around|of|:)\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => `${p1}${pVal}${p3}`);
 
   // 6. Carbohydrates
   if (grandCarbs !== undefined && grandCarbs > 0) {
     const carbVal = Math.round(grandCarbs * 10) / 10;
     const carbRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}(?:carbohydrates|carbs))\\b`, 'gi');
     updated = updated.replace(carbRe, (match, num, rest) => `${carbVal}${rest}`);
+    updated = updated.replace(/(carbohydrates\s*\(\s*)(?:[\d,]+(?:\.\d+)?)\s*g(\s*\))/gi, (match, p1, p2) => `${p1}${carbVal}g${p2}`);
+    updated = updated.replace(/(carbs\s*\(\s*)(?:[\d,]+(?:\.\d+)?)\s*g(\s*\))/gi, (match, p1, p2) => `${p1}${carbVal}g${p2}`);
   }
 
   // 7. Fiber
   if (grandFiber !== undefined && grandFiber >= 0) {
     const fiberVal = Math.round(grandFiber * 10) / 10;
-    const fiberRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}(?:fiber|fibre|dietary\\s*fiber))\\b`, 'gi');
+    const fiberRe = new RegExp(`\\b([\\d,]+(?:\\.\\d+)?)\\s*(g\\s*(?:of\\s+)?${safeAdj}(?:fiber|fibre|dietary\\s*fiber|dietary\\s*fibre))\\b`, 'gi');
     updated = updated.replace(fiberRe, (match, num, rest) => `${fiberVal}${rest}`);
-    updated = updated.replace(/(fiber\s*\([^)]*)([\d,]+(?:\.\d+)?)(\s*g[^)]*\))/gi, (match, p1, num, p3) => `${p1}${fiberVal}${p3}`);
-    updated = updated.replace(/(fiber\s*(?:[a-zA-Z-]+\s+){0,3}(?:to|is|at|under|below|around|of|:)\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => `${p1}${fiberVal}${p3}`);
+    updated = updated.replace(/((?:dietary\s*fiber|dietary\s*fibre|fiber|fibre)\s*\(\s*)(?:[\d,]+(?:\.\d+)?)\s*g(\s*\))/gi, (match, p1, p2) => `${p1}${fiberVal}g${p2}`);
+    updated = updated.replace(/((?:dietary\s*fiber|dietary\s*fibre|fiber|fibre)\s*(?:[a-zA-Z-]+\s+){0,3}(?:to|is|at|under|below|around|of|:)\s*)([\d,]+(?:\.\d+)?)(\s*g)/gi, (match, p1, num, p3) => `${p1}${fiberVal}${p3}`);
   }
 
   return updated;

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { rebalanceNutrientProfile, applyNutrientModifiers } from "./server_derivation";
+import { sanitizeVerdictLabel, synchronizeNarrativeText } from "./server_pure_helpers";
 
 describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
   const NUTRIENT_KEYS = [
@@ -181,6 +182,34 @@ describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
     expect(res.updatedNutrients.calories).toBe(194);
     expect(res.lockedKeys).toContain("sodium");
     expect(res.lockedKeys).toContain("totalFat");
+  });
+
+  it("sanitizes generic meal descriptions to health outcome verdict labels", () => {
+    // Banned generic meal descriptor
+    const label1 = sanitizeVerdictLabel("Exceptional High Protein Meal", "good", { protein: 94.5, totalFibre: 14.4 });
+    expect(label1).toBe("Boosts lean muscle tissue");
+
+    const label2 = sanitizeVerdictLabel("High Protein Dish", "good", { protein: 45 });
+    expect(label2).toBe("Boosts lean muscle tissue");
+
+    // Legitimate health outcome labels are preserved
+    const label3 = sanitizeVerdictLabel("Good for your heart", "good");
+    expect(label3).toBe("Good for your heart");
+
+    const label4 = sanitizeVerdictLabel("140% over sat fat limit", "alert");
+    expect(label4).toBe("140% over sat fat limit");
+  });
+
+  it("synchronizes narrative text with final nutrient ledger values including fiber and sodium", () => {
+    const rawReasoning = "The user logged a seafood soup pot with vegetables, mushrooms, and rolled oats (totaling 1102g). The meal is exceptionally high in lean protein (94.5g) and dietary fiber (8.1g) while remaining low in sodium (316mg) and saturated fat (3.2g). I will formulate a Mode B 4-beat response praising the protein and fiber asset, noting the modest caloric and sodium metrics, explaining digestive balance, and suggesting a gentle post-meal walk.";
+
+    // Final ledger totals
+    const synced = synchronizeNarrativeText(rawReasoning, 630, 94.5, 9.2, 3.7, 446, 52.4, 14.4);
+
+    expect(synced).toContain("lean protein (94.5g)");
+    expect(synced).toContain("dietary fiber (14.4g)");
+    expect(synced).toContain("sodium (446mg)");
+    expect(synced).toContain("saturated fat (3.7g)");
   });
 });
 

@@ -22,6 +22,7 @@ export const ScoutNutrientsSchema = z.object({
 }).passthrough();
 export const ScoutFoodSchema = z.object({
   foodName: z.string().nullable().optional(),
+  packageLabelText: z.string().nullable().optional(),
   weightGrams: z.number().finite().nonnegative().nullable().optional(),
   packGrams: z.number().finite().nonnegative().nullable().optional(),
   sourceImageIndex: z.number().nullable().optional(),
@@ -38,6 +39,7 @@ export const ScoutFoodSchema = z.object({
 export const ScoutDishSchema = z.object({
   dishName: z.string().nullable().optional(),
   chainName: z.string().nullable().optional(),
+  packageLabelText: z.string().nullable().optional(),
   estimatedWeightGrams: z.number().finite().nonnegative().nullable().optional(),
   cookingMethod: z.string().nullable().optional(),
   sourceImageIndex: z.number().nullable().optional(),
@@ -271,6 +273,9 @@ export interface VisionScoutResult {
   queriesToSearch: string[];
   visionScoutRanAndReturnedItems: boolean;
   diningEnvironment: string;
+  internalReasoning?: string | null;
+  rawDishes?: any[];
+  rawScoutJson?: any;
 }
 export function checkScoutSanity(parsedScout: any, addDebugLog: (msg: string) => void): { valid: boolean; reason?: string } {
   if (!parsedScout || typeof parsedScout !== "object") {
@@ -872,10 +877,25 @@ export function parseAndHealVisionScout(
   if (parsedScout) {
     let lowestConfidence = "High (>90%)";
     let globalComment = "";
+
+    // Extract bracketed items from userMessage to ensure reference images of bracket items don't leak into scout results
+    const bracketMatches = Array.from((userMessage || '').matchAll(/\[+([^\]]+)\]+/g)).map(m => m[1].trim()).filter(Boolean);
+    const bracketNames = bracketMatches.map(b => {
+      const wm = b.match(/(?:^|\s+)(\d+(?:\.\d+)?)\s*(?:g|grams?|ml)?\s*$/i);
+      return (wm ? b.slice(0, wm.index) : b).toLowerCase().trim();
+    }).filter(Boolean);
+
     // Ingest hierarchical dishes if returned by Scout
     if (Array.isArray(parsedScout.dishes) && parsedScout.dishes.length > 0) {
       if (!parsedScout.items) parsedScout.items = [];
       parsedScout.dishes.forEach((d: any) => {
+        const dName = String(d.dishName || '').toLowerCase().trim();
+        const isBracketRefDish = bracketNames.some(b => b && (dName === b || dName.includes(b) || b.includes(dName)));
+        if (isBracketRefDish) {
+          addDebugLog(`[Vision Scout Dish Exclusion] Skipping dish "${d.dishName}" matching bracketed reference item.`);
+          return;
+        }
+
         const dishFoods = Array.isArray(d.foods) ? d.foods : [];
         let sumP = 0, sumC = 0, sumSatFat = 0, sumAddedSugar = 0, sumFibre = 0, sumNa = 0;
         const components: any[] = [];
@@ -903,6 +923,8 @@ export function parseAndHealVisionScout(
             weightGrams: fw,
             estimatedWeightGrams: fw,
             packGrams: f.packGrams ?? null,
+            packageLabelText: f.packageLabelText ?? null,
+            sourceImageIndex: f.sourceImageIndex ?? (d.sourceImageIndex ?? 0),
             rawNutritionLabel: f.rawNutritionLabel ?? null,
             nutrients: fnuts,
             calories: fcal,
@@ -961,11 +983,13 @@ export function parseAndHealVisionScout(
         const compNames = components.map(c => c.name).filter(Boolean);
         let dishTitle = d.dishName || (compNames.length > 0 ? compNames.join(', ') : "Dish");
         const compPackGrams = components.length === 1 ? (components[0].packGrams ?? null) : (d.packGrams ?? null);
+        const compPackageLabel = components.length === 1 ? (components[0].packageLabelText ?? null) : (d.packageLabelText ?? null);
         const convertedItem: any = {
           keyword: dishTitle,
           originalName: dishTitle,
           name: dishTitle,
           chainName: d.chainName || null,
+          packageLabelText: compPackageLabel,
           estimatedWeightGrams: dishWeight,
           nutrientBasisWeight: dishWeight,
           packGrams: compPackGrams,
@@ -973,6 +997,7 @@ export function parseAndHealVisionScout(
           sourceImageIndex: d.sourceImageIndex ?? 0,
           boundingBox2D: d.boundingBox2D || [0, 0, 1000, 1000],
           isStandaloneCondimentPacket: d.isStandaloneCondimentPacket || false,
+          internalReasoning: parsedScout._internalReasoning || null,
           components: components.length > 0 ? components : undefined,
           componentsDetailList: components.length > 0 ? components : undefined,
           compositeSiblings: components.length > 0 ? components : undefined,
@@ -1005,6 +1030,17 @@ export function parseAndHealVisionScout(
       diningEnvironment = parsedScout.diningEnvironment;
     }
     if (Array.isArray(parsedScout.items)) {
+      if (bracketNames.length > 0) {
+        parsedScout.items = parsedScout.items.filter((it: any) => {
+          const itName = String(it?.originalName || it?.keyword || it?.name || '').toLowerCase().trim();
+          const isMatch = bracketNames.some(b => b && (itName === b || itName.includes(b) || b.includes(itName)));
+          if (isMatch) {
+            addDebugLog(`[Vision Scout Item Exclusion] Skipping scout item "${itName}" matching bracketed reference item.`);
+            return false;
+          }
+          return true;
+        });
+      }
       for (const it of parsedScout.items) {
         if (it.itemConfidence && it.itemConfidence.toLowerCase().includes("low")) {
           lowestConfidence = "Low (<50%)";
@@ -1581,6 +1617,9 @@ export function parseAndHealVisionScout(
     scoutRecommendedMode,
     queriesToSearch,
     visionScoutRanAndReturnedItems,
-    diningEnvironment
+    diningEnvironment,
+    internalReasoning: parsedScout?._internalReasoning || null,
+    rawDishes: parsedScout?.dishes || [],
+    rawScoutJson: parsedScout || null,
   };
 }

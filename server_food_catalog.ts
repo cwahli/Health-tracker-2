@@ -707,7 +707,8 @@ export function getFallbackCategoryProfile(query: string): Record<string, number
   else if (/\b(feta|cheddar|mozzarella|parmesan|cheese)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cheese };
   else if (/\b(butter)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.fat_spread };
   else if (/\b(milk|yogurt|yoghurt|greek|cream|dairy)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.dairy };
-  else if (/\b(granola|muesli|oats?|cereals?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cereal };
+  else if (/\b(oats?|oatmeal|porridge|rolled\s*oats?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cereal, sugar: 1.0, totalFibre: 10.0 };
+  else if (/\b(granola|muesli|cereals?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.cereal };
   else if (/\b(chickpeas?|hummus|lentils?|beans?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.legume };
   else if (/\b(rice|bread|baguettes?|pasta|potatoe?s?|noodles?|starch)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.starch };
   else if (/\b(sesame|almonds?|walnuts?|cashews?|pistachios?|peanuts?|pecans?|hazelnuts?|seeds?|nuts?)\b/.test(q)) base = { ...DEFAULT_CATEGORY_PROFILES.nuts_seeds };

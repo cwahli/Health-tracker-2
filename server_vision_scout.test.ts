@@ -520,13 +520,6 @@ describe("server_vision_scout", () => {
   });
 
   describe("bracketed content handling", () => {
-    it("should strip bracketed text from buildVisualScoutPrompt", async () => {
-      const { buildVisualScoutPrompt } = await import("./agents/scoutInstructions");
-      const prompt = buildVisualScoutPrompt("[Mr Oat Rolled Oats 70g] + identify all barcode with its text and weight", 1);
-      expect(prompt).not.toContain("Mr Oat Rolled Oats");
-      expect(prompt).toContain("+ identify all barcode with its text and weight");
-    });
-
     it("should parse bracketed food items with name and weight", async () => {
       const { parseBracketedFoodItems } = await import("./agents/scoutInstructions");
       const items = parseBracketedFoodItems("[Mr Oat Rolled Oats 70g] + identify all barcode");
@@ -534,6 +527,33 @@ describe("server_vision_scout", () => {
       expect(items[0].originalName).toBe("Mr Oat Rolled Oats");
       expect(items[0].estimatedWeightGrams).toBe(70);
       expect(items[0].source).toBe("bracket_pre_extracted");
+    });
+
+    it("should filter out scout dishes matching bracketed items in parseAndHealVisionScout", async () => {
+      const { parseAndHealVisionScout } = await import("./server_vision_scout");
+      const mockScoutOutput = {
+        dishes: [
+          {
+            dishName: "Seafood Soup Pot",
+            estimatedWeightGrams: 800,
+            cookingMethod: "boiled",
+            foods: [
+              { foodName: "Squid", weightGrams: 200, nutrients: { protein: 30, saturatedFat: 0.5, addedSugar: 0, totalFibre: 0, sodium: 80, carbohydrates: 0 } }
+            ]
+          },
+          {
+            dishName: "Mr Oat Rolled Oats",
+            estimatedWeightGrams: 70,
+            cookingMethod: "raw",
+            foods: [
+              { foodName: "Mr Oat Rolled Oats", weightGrams: 70, nutrients: { protein: 3, saturatedFat: 0.5, addedSugar: 0, totalFibre: 0, sodium: 0, carbohydrates: 21 } }
+            ]
+          }
+        ]
+      };
+      const result = parseAndHealVisionScout(mockScoutOutput, () => {}, false, "I had [Mr Oat Rolled Oats 70g] with all food in the picture");
+      expect(result.items.some((it: any) => it.originalName === "Mr Oat Rolled Oats")).toBe(false);
+      expect(result.items.some((it: any) => it.originalName === "Seafood Soup Pot")).toBe(true);
     });
   });
 });
