@@ -65,9 +65,10 @@ export const activeUserJobLocks = new Map<string, { jobId: string; timestamp: nu
 const USER_LOCK_MAX_AGE_MS = 5 * 60 * 1000; // safety valve: auto-clear if a job never reaches a terminal status
 
 export function releaseUserJobLock(userId: string, jobId: string) {
-  const lock = activeUserJobLocks.get(userId);
-  if (lock && lock.jobId === jobId) {
-    activeUserJobLocks.delete(userId);
+  for (const [key, lock] of activeUserJobLocks.entries()) {
+    if (lock.jobId === jobId) {
+      activeUserJobLocks.delete(key);
+    }
   }
 }
 
@@ -88,28 +89,32 @@ export async function checkOrRegisterIdempotentSubmission(payload: ServerJobPayl
   const rawText = (payload.text || '').trim().toLowerCase();
   const imgCount = (payload.images?.length || 0) + (payload.imageUrls?.length || 0);
   const modeKey = payload.userSelectedMode || payload.mode || 'review';
+  const kindKey = payload.kind || 'food_log';
 
   const isRetry = !!(payload as any).isRetry || payload.mode === 'retry';
 
-  // 0. In-flight lock (userId-scoped, content-independent): if this user already has an
-  // active job that hasn't reached a terminal status, block ANY new jobId for them until
-  // it finishes. A resubmission that reuses the SAME jobId (e.g. a portion-confirm resume)
-  // is allowed through since it's a continuation, not a duplicate.
-  const existingLock = activeUserJobLocks.get(userId);
+  // 0. In-flight lock (kind-scoped per user): scoped to userId + kind to prevent cross-feature blocking
+  // (e.g. a medical extraction starting while a food analysis is running).
+  const lockKey = `${userId}:${kindKey}`;
+  const existingLock = activeUserJobLocks.get(lockKey);
   if (existingLock && existingLock.jobId !== payload.jobId && !isRetry) {
     const lockedMemJob = inMemoryServerJobs.get(existingLock.jobId);
     const lockedStatus = lockedMemJob?.status;
     const lockIsStale = (Date.now() - existingLock.timestamp) > USER_LOCK_MAX_AGE_MS;
-    const lockedJobStillActive = lockedStatus === 'running' || lockedStatus === 'queued' || (!lockedMemJob && !lockIsStale);
-    if (lockedJobStillActive && !lockIsStale) {
-      console.log(`[ServerJobs Idempotency] Blocked duplicate submission for userId="${userId}" — job "${existingLock.jobId}" is still ${lockedStatus || 'in flight'}.`);
+    const lockedJobStillActive = lockedStatus === 'running' || lockedStatus === 'queued';
+
+    // Only treat as duplicate if it's within 15 seconds on the same kind/action (rapid UI double-click)
+    const isRapidDoubleClick = (Date.now() - existingLock.timestamp < 15000);
+
+    if (lockedJobStillActive && !lockIsStale && isRapidDoubleClick) {
+      console.log(`[ServerJobs Idempotency] Blocked rapid double-submit for userId="${userId}" kind="${kindKey}" — reusing in-flight jobId="${existingLock.jobId}".`);
       return { isDuplicate: true, jobId: existingLock.jobId, status: lockedStatus || 'running' };
     }
-    activeUserJobLocks.delete(userId);
+    activeUserJobLocks.delete(lockKey);
   }
 
   // Explicit idempotencyKey or content fingerprint key (12s window)
-  const key = payload.idempotencyKey || `${userId}:${rawText}:${imgCount}:${modeKey}:${Math.floor(Date.now() / 12000)}`;
+  const key = payload.idempotencyKey || `${userId}:${kindKey}:${rawText}:${imgCount}:${modeKey}:${Math.floor(Date.now() / 12000)}`;
 
   const existing = recentSubmissionsMap.get(key);
   if (existing && (Date.now() - existing.timestamp < 12000) && !isRetry) {
@@ -127,7 +132,7 @@ export async function checkOrRegisterIdempotentSubmission(payload: ServerJobPayl
     status: 'queued'
   });
 
-  activeUserJobLocks.set(userId, { jobId: payload.jobId, timestamp: Date.now() });
+  activeUserJobLocks.set(lockKey, { jobId: payload.jobId, timestamp: Date.now() });
 
   return { isDuplicate: false, jobId: payload.jobId };
 }
@@ -698,7 +703,16 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           }
           if (!pendingFoodLog.date || pendingFoodLog.date === 'undefined' || String(pendingFoodLog.date).trim() === '') {
             const mostRecentDate = extractMostRecentImageDate(payload.imageDates || (finalPayload as any)?.imageDates);
-            pendingFoodLog.date = mostRecentDate || new Date().toISOString().split('T')[0];
+            let fallbackDate = (payload as any)?.clientDate || '';
+            if (!fallbackDate) {
+              const tz = (payload as any)?.timezone || (payload as any)?.profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+              try {
+                fallbackDate = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+              } catch {
+                fallbackDate = new Date().toISOString().split('T')[0];
+              }
+            }
+            pendingFoodLog.date = mostRecentDate || fallbackDate;
           }
           // Replace base64 strings with public R2 URL or remove them
           if (pendingFoodLog.imageUrl && String(pendingFoodLog.imageUrl).startsWith('data:')) {

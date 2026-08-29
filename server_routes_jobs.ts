@@ -127,7 +127,7 @@ jobsRouter.get('/api/jobs/status', async (req, res) => {
 
     if (jobId) {
       const memJob = getInMemoryServerJob(String(jobId));
-      if (memJob && (memJob.status === 'running' || memJob.status === 'awaiting_user' || memJob.status === 'succeeded')) {
+      if (memJob) {
         return res.json({ jobs: [memJob] });
       }
     }
@@ -419,6 +419,72 @@ jobsRouter.get('/api/debug-logs/protected-refs', async (_req, res) => {
     return res.json({ refs: Array.from(refs) });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Failed to get protected refs' });
+  }
+});
+
+// READ-ONLY DIAGNOSTIC — inspects the per-user in-flight job lock plus in-memory and
+// Supabase job state for a given uid. Added to investigate a bug where jobs across
+// unrelated features (e.g. biomarker "Start" and food logging) appear to queue behind
+// each other and get stuck for several minutes. Defaults to the cwah uid so it can be
+// hit directly from a mobile browser with no params. Does not mutate any state.
+jobsRouter.get('/api/debug/job-lock-check', async (req, res) => {
+  try {
+    const uid = String(req.query.uid || 'hiJun2hTdDTk2igwerun2LKvwb42');
+
+    const {
+      activeUserJobLocks,
+      recentSubmissionsMap,
+      listInMemoryServerJobs,
+    } = await import('./serverJobs.js');
+
+    const lock = activeUserJobLocks.get(uid) || null;
+    const lockAgeMs = lock ? Date.now() - lock.timestamp : null;
+
+    const memJobs = listInMemoryServerJobs(uid).map((j: any) => ({
+      id: j.id,
+      kind: j.kind,
+      mode: j.mode,
+      status: j.status,
+      status_message: j.status_message,
+      progress_percent: j.progress_percent,
+      updated_at: j.updated_at,
+      ageMsSinceUpdate: j.updated_at ? Date.now() - new Date(j.updated_at).getTime() : null,
+    }));
+
+    const recentSubmissions: any[] = [];
+    for (const [key, entry] of recentSubmissionsMap.entries()) {
+      if (key.startsWith(uid + ':') || entry.jobId?.includes(uid)) {
+        recentSubmissions.push({ key, ...entry, ageMsSinceSubmit: Date.now() - entry.timestamp });
+      }
+    }
+
+    let supabaseJobs: any[] = [];
+    let supabaseError: string | null = null;
+    try {
+      const { supabaseAdmin, isSupabaseConfigured } = await import('./supabaseAdmin.js');
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabaseAdmin
+          .from('agent_jobs')
+          .select('id, kind, mode, status, status_message, progress_percent, updated_at')
+          .eq('user_id', uid)
+          .order('updated_at', { ascending: false })
+          .limit(10);
+        if (error) supabaseError = error.message;
+        supabaseJobs = data || [];
+      }
+    } catch (sbErr: any) {
+      supabaseError = sbErr?.message || String(sbErr);
+    }
+
+    res.json({
+      queriedUid: uid,
+      lock: lock ? { jobId: lock.jobId, ageMs: lockAgeMs, ageSeconds: Math.round((lockAgeMs || 0) / 1000) } : null,
+      inMemoryJobsForUser: memJobs,
+      recentSubmissionsForUser: recentSubmissions,
+      supabase: { rows: supabaseJobs, error: supabaseError },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || String(err), stack: err?.stack });
   }
 });
 

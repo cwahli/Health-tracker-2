@@ -14,6 +14,7 @@ import { ImageStore } from '../jobs/ImageStore';
 import { JobQueueRunner } from '../jobs/JobQueueRunner';
 import { ZoomableImage } from './ZoomableImage';
 import { normalizeMealImageUrl } from '../utils/foodImageSources';
+import { getCurrentDateInTimezone } from '../utils/dateUtils';
 
 interface AllAnalysesModalProps {
   isOpen: boolean;
@@ -251,15 +252,16 @@ export function AllAnalysesModal({
           }
         }
 
-        const foodName = pendingLog?.foodName || job.inputSnapshot?.text || 'Logged Meal';
+        const foodName = pendingLog?.name || pendingLog?.foodName || pendingLog?.mealName || job.inputSnapshot?.text || 'Logged Meal';
+        const fallbackDate = profile?.timezone ? getCurrentDateInTimezone(profile.timezone) : new Date().toISOString().split('T')[0];
         const newLog: FoodLog = {
           id: pendingLog?.id || `food_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          date: pendingLog?.date || new Date().toISOString().split('T')[0],
+          date: pendingLog?.date || fallbackDate,
           name: foodName,
           composition: pendingLog?.composition || '',
           weightGrams: pendingLog?.weightGrams || 0,
           quantity: pendingLog?.quantity || '1 serving',
-          description: pendingLog?.summary || job.result?.summary || '',
+          description: pendingLog?.summary || pendingLog?.description || job.result?.summary || '',
           nutrients: pendingLog?.nutrients || {},
           imageUrl: photoUrl || '',
           imageUrls: photoUrl ? [photoUrl] : [],

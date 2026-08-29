@@ -1733,12 +1733,6 @@ export default function FoodHistoryTab({
                         );
                       })()}
                       
-                      {/* Component summary for composite items */}
-                      {!isExpanded && Array.isArray(log.itemsBreakdown) && log.itemsBreakdown.length > 1 && (
-                        <div className="text-xs text-slate-500 font-medium text-left my-1 pl-1">
-                          Contains {log.itemsBreakdown.length} components
-                        </div>
-                      )}
 
                       {/* Calories Badge & Top Targets & Expand Indicator */}
                       <div className="flex flex-wrap items-center justify-between pt-1 gap-2">

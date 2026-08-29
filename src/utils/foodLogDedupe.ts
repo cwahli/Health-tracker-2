@@ -86,7 +86,12 @@ export function foodLogFingerprint(log: DedupableFoodLog): string {
     return `${nameKey}|${date}|c${calories}`;
   }
   const weight = Math.round(Number(log.weightGrams ?? (log as any).weight_grams ?? 0));
-  return `${nameKey}|${date}|w${weight}`;
+  if (weight > 0) {
+    return `${nameKey}|${date}|w${weight}`;
+  }
+  const desc = String((log as any).description || (log as any).summary || (log as any).composition || '').slice(0, 20).toLowerCase().trim();
+  const timeBucket = typeof log.updated_at === 'number' ? Math.floor(log.updated_at / (3 * 60 * 1000)) : (log.id ? String(log.id) : '0');
+  return `${nameKey}|${date}|t:${desc || timeBucket}`;
 }
 
 /**
@@ -167,14 +172,24 @@ function shouldSoftMerge(a: DedupableFoodLog, b: DedupableFoodLog): boolean {
   const db = toYYYYMMDD(b.date);
   if (da !== db) return false;
 
-  // Same durable photo URL on same day → almost certainly the same meal (sync retry)
   const imgA = isUsableImageUrl(a.imageUrl)
     ? a.imageUrl
     : (Array.isArray(a.imageUrls) && a.imageUrls.find(isUsableImageUrl));
   const imgB = isUsableImageUrl(b.imageUrl)
     ? b.imageUrl
     : (Array.isArray(b.imageUrls) && b.imageUrls.find(isUsableImageUrl));
+
+  // Same durable photo URL on same day → almost certainly the same meal (sync retry)
   if (imgA && imgB && String(imgA) === String(imgB)) return true;
+
+  // Differentiate distinct explicit IDs if they do not share the exact same photo URL
+  if (a.id && b.id && String(a.id) !== String(b.id)) {
+    const timeA = typeof a.updated_at === 'number' ? a.updated_at : 0;
+    const timeB = typeof b.updated_at === 'number' ? b.updated_at : 0;
+    if (timeA > 0 && timeB > 0 && Math.abs(timeA - timeB) > 3 * 60 * 1000) {
+      return false;
+    }
+  }
 
   const ca = parseFoodCalories(a);
   const cb = parseFoodCalories(b);
