@@ -1330,8 +1330,17 @@ export default function App() {
 
                   const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive);
                   const hasExistingAssistantMsg = nonLiveMsgs.some((m) => m.id === `msg_assistant_${job.id}`);
+                  // Edits (mode: 'modify') refine the SAME meal in place rather than logging
+                  // a new, separate food item. Without this, a text edit like "the tea was
+                  // unsweetened" created a second, easy-to-miss card further down the chat
+                  // while the original card the user was looking at silently kept showing
+                  // the pre-edit numbers. Only food jobs ever set mode:'modify' here —
+                  // medical/biomarker batches and fresh food-photo submissions (mode:'review')
+                  // are unaffected and keep appending as before, preserving the existing
+                  // multi-attempt ("Attempt N of 3") retry flow untouched.
+                  const isEditRefinement = !isMedicalJob && cleanResult.mode === 'modify' && hasExistingAssistantMsg;
                   const assistantMsg = {
-                    id: hasExistingAssistantMsg ? `msg_assistant_${job.id}_${Date.now()}` : `msg_assistant_${job.id}`,
+                    id: isEditRefinement ? `msg_assistant_${job.id}` : (hasExistingAssistantMsg ? `msg_assistant_${job.id}_${Date.now()}` : `msg_assistant_${job.id}`),
                     role: 'assistant',
                     content: messageText,
                     timestamp: new Date().toISOString(),
@@ -1351,7 +1360,9 @@ export default function App() {
                       agentResult,
                     },
                   };
-                  const updatedMessages = [...nonLiveMsgs, assistantMsg];
+                  const updatedMessages = isEditRefinement
+                    ? nonLiveMsgs.map((m) => (m.id === `msg_assistant_${job.id}` ? assistantMsg : m))
+                    : [...nonLiveMsgs, assistantMsg];
                   JobStore.updateJob(job.id, {
                     status: 'succeeded',
                     result: {
