@@ -328,6 +328,32 @@ class JobStoreImpl {
       }
     }
 
+    // Auto-heal / guard: If job ALREADY has succeeded/awaiting_user status, or has complete result data,
+    // do not downgrade status back to 'queued' or 'running' unless clientSubmitPending is explicitly true.
+    if ((patch.status === 'queued' || patch.status === 'running') && !patch.clientSubmitPending) {
+      if (job.status === 'succeeded' || job.status === 'awaiting_user') {
+        delete patch.status; // Prevent status downgrade on already completed job
+      } else {
+        const mergedJob = { ...job, ...patch };
+        const pendingLog =
+          mergedJob.result?.pendingFoodLog ||
+          mergedJob.result?.clean_result?.pendingFoodLog ||
+          mergedJob.result?.raw?.data ||
+          mergedJob.result?.data ||
+          mergedJob.result?.foodData ||
+          mergedJob.result?.mealBuild?.content ||
+          mergedJob.mealBuild?.content;
+        const hasResultData = !!(
+          (pendingLog && (pendingLog.name || pendingLog.foodName || (pendingLog.itemsBreakdown && pendingLog.itemsBreakdown.length > 0))) ||
+          (mergedJob.result?.scoutItems && mergedJob.result.scoutItems.length > 0) ||
+          (mergedJob.mealBuild?.items && mergedJob.mealBuild.items.length > 0)
+        );
+        if (hasResultData) {
+          patch.status = mergedJob.result?.needsPortionClarify ? 'awaiting_user' : 'succeeded';
+        }
+      }
+    }
+
     Object.assign(job, { ...patch, updatedAt: new Date().toISOString() });
     this.saveJobs();
     this.notify();

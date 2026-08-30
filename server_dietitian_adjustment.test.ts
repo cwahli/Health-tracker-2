@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { rebalanceNutrientProfile, applyNutrientModifiers } from "./server_derivation";
-import { sanitizeVerdictLabel, synchronizeNarrativeText } from "./server_pure_helpers";
+import { sanitizeVerdictLabel, synchronizeNarrativeText, synthesizeEditCommandsFromBreakdown } from "./server_pure_helpers";
 
 describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
   const NUTRIENT_KEYS = [
@@ -219,6 +219,101 @@ describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
     expect(synced).toContain("dietary fiber (14.4g)");
     expect(synced).toContain("sodium (446mg)");
     expect(synced).toContain("saturated fat (3.7g)");
+  });
+
+  it("synthesizes edit commands correctly when only a subset of scoutIndex items are edited", () => {
+    const activeMeal = {
+      itemsBreakdown: [
+        { name: "Crispy Fried Chicken", scoutIndex: 0, weightGrams: 200, dbId: "item_0" },
+        { name: "Sempol Ayam", scoutIndex: 1, weightGrams: 150, dbId: "item_1" },
+        { name: "Hemaviton C1000", scoutIndex: 2, weightGrams: 250, dbId: "item_2" },
+        { name: "Sizzling Steak and Potato Wedges", scoutIndex: 3, weightGrams: 400, dbId: "item_3" },
+        { name: "Crispy Giant Squid", scoutIndex: 4, weightGrams: 300, dbId: "item_4" },
+        { name: "Soft Serve Ice Cream Cone", scoutIndex: 5, weightGrams: 120, dbId: "item_5" }
+      ]
+    };
+
+    // Dietitian edited ONLY item at scoutIndex 3 (Sizzling Steak) into 2 sub-items
+    const dietitianItems = [
+      { canonicalDbName: "Beef Steak", scoutIndex: 3, weightGrams: 250 },
+      { canonicalDbName: "Potato Wedges", scoutIndex: 3, weightGrams: 150 }
+    ];
+
+    const commands = synthesizeEditCommandsFromBreakdown(activeMeal, dietitianItems, "I replaced the steak combo with beef steak and potato wedges");
+
+    // Only item 3 should be removed
+    const removals = commands.filter(c => c.action === "remove_item");
+    expect(removals.length).toBe(1);
+    expect(removals[0].targetDbId).toBe("item_3");
+
+    // Items 0, 1, 2, 4, 5 must NOT be removed
+    const removedNames = removals.map(r => r.itemName);
+    expect(removedNames).not.toContain("Crispy Fried Chicken");
+    expect(removedNames).not.toContain("Sempol Ayam");
+    expect(removedNames).not.toContain("Hemaviton C1000");
+
+    // Additions for Beef Steak and Potato Wedges
+    const additions = commands.filter(c => c.action === "add_item");
+    expect(additions.length).toBe(2);
+    expect(additions.map(a => a.itemName)).toEqual(["Beef Steak", "Potato Wedges"]);
+  });
+
+  it("synthesizes remove_item and add_item when replacing/splitting a composite dish in a full breakdown", () => {
+    const activeMeal = {
+      itemsBreakdown: [
+        { name: "Soft Serve Ice Cream Cone", scoutIndex: 0, weightGrams: 120, dbId: "item_0" },
+        { name: "Crispy Fried Chicken", scoutIndex: 1, weightGrams: 150, dbId: "item_1" },
+        { name: "Sizzling Steak and Potato Wedges", scoutIndex: 4, weightGrams: 200, dbId: "item_4" },
+        { name: "Sweet Iced Tea", scoutIndex: 5, weightGrams: 120, dbId: "item_5" }
+      ]
+    };
+
+    const dietitianItems = [
+      { canonicalDbName: "Soft Serve Ice Cream Cone", scoutIndex: 0, weightGrams: 120 },
+      { canonicalDbName: "Crispy Fried Chicken", scoutIndex: 1, weightGrams: 150 },
+      { canonicalDbName: "Sweet Iced Tea", scoutIndex: 5, weightGrams: 120 },
+      { canonicalDbName: "Beef Steak", weightGrams: 100 },
+      { canonicalDbName: "Chicken Steak", weightGrams: 100 }
+    ];
+
+    const commands = synthesizeEditCommandsFromBreakdown(
+      activeMeal,
+      dietitianItems,
+      "the beef and chicken is 100g of beef steak and 100g of chicken steak"
+    );
+
+    const removals = commands.filter(c => c.action === "remove_item");
+    expect(removals.length).toBe(1);
+    expect(removals[0].targetDbId).toBe("item_4");
+
+    const additions = commands.filter(c => c.action === "add_item");
+    expect(additions.length).toBe(2);
+    expect(additions.map(a => a.itemName)).toEqual(["Beef Steak", "Chicken Steak"]);
+  });
+
+  it("synthesizes update_modifier when user specifies unsweatened/unsweetened tea", () => {
+    const activeMeal = {
+      itemsBreakdown: [
+        { name: "Soft Serve Ice Cream Cone", scoutIndex: 0, weightGrams: 120, dbId: "item_0" },
+        { name: "Sweet Iced Tea", scoutIndex: 5, weightGrams: 120, dbId: "item_5" }
+      ]
+    };
+
+    const dietitianItems = [
+      { canonicalDbName: "Soft Serve Ice Cream Cone", scoutIndex: 0, weightGrams: 120 },
+      { canonicalDbName: "Sweet Iced Tea", scoutIndex: 5, weightGrams: 120 }
+    ];
+
+    const commands = synthesizeEditCommandsFromBreakdown(
+      activeMeal,
+      dietitianItems,
+      "the tea is unsweatened"
+    );
+
+    const modifiers = commands.filter(c => c.action === "update_modifier");
+    expect(modifiers.length).toBe(1);
+    expect(modifiers[0].itemName).toBe("Sweet Iced Tea");
+    expect(modifiers[0].modifier).toBe("unsweetened");
   });
 });
 

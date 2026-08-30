@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Loader2, Trash2, XCircle, CheckCircle2, AlertTriangle, Eye, Save, RotateCcw, Sliders, HelpCircle } from 'lucide-react';
-import { AgentJob } from '../jobs/types';
+import { AgentJob, JobStatus } from '../jobs/types';
 import { ImageStore } from '../jobs/ImageStore';
 import { JobStore } from '../jobs/JobStore';
 import { JobQueueRunner } from '../jobs/JobQueueRunner';
@@ -238,11 +238,33 @@ export default function TaskPlaceholderCard({
   }, [job.id, (job as any).photoUrl, job.result, job.messages]);
 
   const lastMsgContent = (job.messages && job.messages.length > 0) ? job.messages[job.messages.length - 1]?.content : '';
+  const pendingLog =
+    job.result?.pendingFoodLog ||
+    job.result?.raw?.data ||
+    job.result?.data ||
+    job.result?.foodData ||
+    job.result?.mealBuild?.content ||
+    job.mealBuild?.content ||
+    job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
+    job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
+
+  const hasResults = !!(
+    pendingLog?.name ||
+    pendingLog?.foodName ||
+    (pendingLog?.itemsBreakdown && pendingLog.itemsBreakdown.length > 0) ||
+    (job.result?.scoutItems && job.result.scoutItems.length > 0) ||
+    (job.mealBuild?.items && job.mealBuild.items.length > 0)
+  );
+
+  const effectiveStatus: AgentJob['status'] = (hasResults && (job.status === 'queued' || job.status === 'running'))
+    ? (job.result?.needsPortionClarify ? 'awaiting_user' : 'succeeded')
+    : job.status;
+
   const isFailedOrTimedOut =
-    job.status === 'failed' ||
-    job.status === 'cancelled' ||
-    job.status === 'cancel_requested' ||
-    (job.status !== 'succeeded' && (
+    effectiveStatus === 'failed' ||
+    effectiveStatus === 'cancelled' ||
+    effectiveStatus === 'cancel_requested' ||
+    (effectiveStatus !== 'succeeded' && (
       !!job.error ||
       (typeof job.statusMessage === 'string' && /(?:timed out|analysis failed|server error)/i.test(job.statusMessage) && !/analysis complete/i.test(job.statusMessage)) ||
       (typeof job.result?.message === 'string' && /(?:timed out|analysis failed)/i.test(job.result.message)) ||
@@ -251,13 +273,14 @@ export default function TaskPlaceholderCard({
     ));
 
   const getStatusLabel = () => {
-    if (job.status === 'succeeded' && Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) {
+    if (effectiveStatus === 'succeeded' && Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) {
       return 'AI advice pending';
     }
-    if (isFailedOrTimedOut && job.status !== 'running' && job.status !== 'processing' && job.status !== 'queued') {
+    if (isFailedOrTimedOut) {
       return 'Analysis failed';
     }
-    switch (job.status) {
+    const statusKey = effectiveStatus as JobStatus;
+    switch (statusKey) {
       case 'queued': {
         const queue = JobStore.getAllJobs().filter(j => j.status === 'queued' || j.status === 'running');
         const myIndex = queue.findIndex(j => j.id === job.id);
@@ -282,13 +305,14 @@ export default function TaskPlaceholderCard({
   };
 
   const getStatusColorClass = () => {
-    if (job.status === 'succeeded' && Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) {
+    if (effectiveStatus === 'succeeded' && Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) {
       return 'text-amber-600 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700';
     }
-    if (isFailedOrTimedOut && job.status !== 'running' && job.status !== 'processing' && job.status !== 'queued') {
+    if (isFailedOrTimedOut) {
       return 'text-rose-600 bg-rose-50 dark:bg-rose-950/40';
     }
-    switch (job.status) {
+    const statusKey = effectiveStatus as JobStatus;
+    switch (statusKey) {
       case 'queued':
         return 'text-slate-500 bg-slate-100 dark:bg-slate-900/60';
       case 'running':

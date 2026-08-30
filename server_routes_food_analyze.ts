@@ -20,6 +20,7 @@ import {
   checkAtwaterConsistency,
   synchronizeNarrativeText,
   sanitizeVerdictLabel,
+  synthesizeEditCommandsFromBreakdown,
   evaluateNutrientWarnings,
   build31NutrientsMarkdownServer,
   enforceTitlePluralParity,
@@ -5868,35 +5869,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         // raw scout item at each array position, giving wrong values for replaced items.
         if (activeMeal && Array.isArray(activeMeal.itemsBreakdown) && activeMeal.itemsBreakdown.length > 0) {
           const dietitianItems: any[] = rawParsed.foodData.itemsBreakdown;
-          const synthesized: any[] = [];
-
-          // Items in activeMeal that are absent from dietitian output → remove
-          (activeMeal.itemsBreakdown as any[]).forEach((oldIt: any) => {
-            const oldName = String(oldIt.canonicalDbName || oldIt.originalName || oldIt.name || '').toLowerCase().trim();
-            const stillExists = dietitianItems.some((newIt: any) => {
-              const newName = String(newIt.canonicalDbName || newIt.originalName || newIt.name || '').toLowerCase().trim();
-              return newName === oldName || oldName.includes(newName) || newName.includes(oldName);
-            });
-            if (!stillExists) {
-              synthesized.push({ action: 'remove_item', itemName: oldIt.name || oldIt.canonicalDbName, targetDbId: oldIt.dbId || null });
-            }
-          });
-
-          // Items in dietitian output: weight update if matched, add_item if new
-          dietitianItems.forEach((newIt: any) => {
-            const newName = String(newIt.canonicalDbName || newIt.originalName || newIt.name || '').toLowerCase().trim();
-            const matchedOld = (activeMeal.itemsBreakdown as any[]).find((oldIt: any) => {
-              const oldName = String(oldIt.canonicalDbName || oldIt.originalName || oldIt.name || '').toLowerCase().trim();
-              return newName === oldName || oldName.includes(newName) || newName.includes(oldName);
-            });
-            if (matchedOld) {
-              if (newIt.weightGrams && Number(newIt.weightGrams) !== Number(matchedOld.weightGrams)) {
-                synthesized.push({ action: 'update_weight', itemName: matchedOld.name || matchedOld.canonicalDbName, targetDbId: matchedOld.dbId || null, newWeightGrams: Number(newIt.weightGrams) });
-              }
-            } else if (newIt.weightGrams) {
-              synthesized.push({ action: 'add_item', itemName: newIt.canonicalDbName || newIt.name || 'Food Item', newWeightGrams: Number(newIt.weightGrams) });
-            }
-          });
+          const synthesized = synthesizeEditCommandsFromBreakdown(activeMeal, dietitianItems, message || '');
 
           if (synthesized.length > 0) {
             addDebugLog(`[Mode Rewrite] Model returned itemsBreakdown without editCommands — synthesized ${synthesized.length} editCommand(s) from diff. Staying in MODIFY path.`);
@@ -7604,92 +7577,78 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         });
       }
 
-      let commands = rawParsed.editCommands || rawParsed.modificationCommand;
+      let commands = rawParsed.editCommands || rawParsed.modificationCommand || rawParsed.data?.editCommands || rawParsed.data?.modificationCommand || rawParsed.agentResult?.modificationCommand;
       if (!commands || !Array.isArray(commands) || commands.length === 0) {
-        // Fallback: If Dietitian returned foodData.itemsBreakdown, synthesize commands comparing against activeMeal
-        if (rawParsed.foodData && Array.isArray(rawParsed.foodData.itemsBreakdown) && rawParsed.foodData.itemsBreakdown.length > 0) {
-          const dietitianItems = rawParsed.foodData.itemsBreakdown;
-          const synthesizedCommands: any[] = [];
-          
-          // Identify removed items
-          (activeMeal.itemsBreakdown || []).forEach((oldIt: any) => {
-            const oldName = String(oldIt.canonicalDbName || oldIt.originalName || oldIt.name || '').toLowerCase().trim();
-            const stillExists = dietitianItems.some((newIt: any) => {
-              const newName = String(newIt.canonicalDbName || newIt.originalName || newIt.name || '').toLowerCase().trim();
-              return newName === oldName || oldName.includes(newName) || newName.includes(oldName);
-            });
-            if (!stillExists) {
-              synthesizedCommands.push({
-                action: 'remove_item',
-                itemName: oldIt.name || oldIt.canonicalDbName,
-                targetDbId: oldIt.dbId || null
-              });
-            }
-          });
-
-          // Identify weight updates or added items
-          dietitianItems.forEach((newIt: any) => {
-            const newName = String(newIt.canonicalDbName || newIt.originalName || newIt.name || '').toLowerCase().trim();
-            const matchedOld = (activeMeal.itemsBreakdown || []).find((oldIt: any) => {
-              const oldName = String(oldIt.canonicalDbName || oldIt.originalName || oldIt.name || '').toLowerCase().trim();
-              return newName === oldName || oldName.includes(newName) || newName.includes(oldName);
-            });
-            if (matchedOld && newIt.weightGrams && Number(newIt.weightGrams) !== Number(matchedOld.weightGrams)) {
-              synthesizedCommands.push({
-                action: 'update_weight',
-                itemName: matchedOld.name || matchedOld.canonicalDbName,
-                targetDbId: matchedOld.dbId || null,
-                newWeightGrams: Number(newIt.weightGrams)
-              });
-            } else if (!matchedOld && newIt.weightGrams) {
-              synthesizedCommands.push({
-                action: 'add_item',
-                itemName: newIt.canonicalDbName || newIt.name || 'Food Item',
-                newWeightGrams: Number(newIt.weightGrams)
-              });
-            }
-          });
+        // Fallback: If Dietitian returned foodData.itemsBreakdown or itemsBreakdown in rawParsed or data, synthesize commands comparing against activeMeal
+        const dietitianItems = rawParsed.foodData?.itemsBreakdown || rawParsed.itemsBreakdown || rawParsed.data?.itemsBreakdown || rawParsed.data?.foodData?.itemsBreakdown || rawParsed.pendingFoodLog?.itemsBreakdown || rawParsed.scoutItems;
+        if (Array.isArray(dietitianItems) && dietitianItems.length > 0) {
+          const synthesizedCommands = synthesizeEditCommandsFromBreakdown(activeMeal, dietitianItems, message || '');
 
           if (synthesizedCommands.length > 0) {
-            addDebugLog(`[Modify Math] Synthesized ${synthesizedCommands.length} modification commands from foodData.itemsBreakdown.`);
+            addDebugLog(`[Modify Math] Synthesized ${synthesizedCommands.length} modification commands from breakdown.`);
             commands = synthesizedCommands;
           }
         }
       }
 
       if (!commands || !Array.isArray(commands) || commands.length === 0) {
-        addDebugLog(`[Modify Math Error] Modification command array was empty or null.`);
-        return res.json({
-          text: rawParsed.message || "I received a modify request but no modification instructions were provided.",
-          message: rawParsed.message || "I received a modify request but no modification instructions were provided.",
-          data: activeMeal,
-          apiCalls
-        });
+        addDebugLog(`[Modify Math Fallback] No explicit modification command array generated; building soft-edit fallback from activeMeal.`);
+        const activeItems = activeMeal.itemsBreakdown || activeMeal.items || [];
+        if (activeItems.length > 0) {
+          commands = activeItems.map((it: any, idx: number) => ({
+            scoutIndex: typeof it.scoutIndex === 'number' ? it.scoutIndex : idx,
+            foodName: it.name || it.foodName || 'Food item',
+            action: 'modify' as const,
+            originalGrams: Number(it.weightGrams) || 100,
+            newGrams: Number(it.weightGrams) || 100,
+            multiplier: 1.0,
+            reason: 'Maintained current weight'
+          }));
+        } else {
+          return res.json({
+            text: rawParsed.message || "I received a modify request but no active meal items were found to modify.",
+            message: rawParsed.message || "I received a modify request but no active meal items were found to modify.",
+            data: activeMeal,
+            apiCalls
+          });
+        }
       }
 
       const originalItems = activeMeal.itemsBreakdown || [];
       const originalTotalWeight = originalItems.reduce((acc: number, it: any) => acc + (Number(it.weightGrams) || 0), 0) || 1;
 
-      const standardItems: {[key: string]: {calories: number, saturatedFat: number, sodium: number}} = {
-        steak: { calories: 2.5, saturatedFat: 0.05, sodium: 1.8 },
-        beef: { calories: 2.5, saturatedFat: 0.05, sodium: 1.8 },
-        chicken: { calories: 1.65, saturatedFat: 0.01, sodium: 0.7 },
-        breast: { calories: 1.65, saturatedFat: 0.01, sodium: 0.7 },
-        pork: { calories: 2.4, saturatedFat: 0.03, sodium: 0.8 },
-        fish: { calories: 1.5, saturatedFat: 0.01, sodium: 0.8 },
-        salmon: { calories: 2.0, saturatedFat: 0.015, sodium: 0.5 },
-        rice: { calories: 1.3, saturatedFat: 0.0, sodium: 0.01 },
-        broccoli: { calories: 0.35, saturatedFat: 0.0, sodium: 0.3 },
-        egg: { calories: 1.5, saturatedFat: 0.03, sodium: 1.4 },
-        avocado: { calories: 1.6, saturatedFat: 0.02, sodium: 0.07 },
-        bread: { calories: 2.6, saturatedFat: 0.005, sodium: 4.8 },
-        butter: { calories: 7.1, saturatedFat: 5.1, sodium: 5.7 },
-        cheese: { calories: 4.0, saturatedFat: 1.8, sodium: 6.2 },
-        salad: { calories: 0.2, saturatedFat: 0.0, sodium: 0.1 },
-        tomato: { calories: 0.18, saturatedFat: 0.0, sodium: 0.05 },
-        oil: { calories: 8.8, saturatedFat: 1.4, sodium: 0.0 },
-        potato: { calories: 0.8, saturatedFat: 0.0, sodium: 0.05 },
-        pasta: { calories: 1.3, saturatedFat: 0.0, sodium: 0.01 }
+      const standardItems: {[key: string]: {calories: number, saturatedFat: number, sodium: number, protein?: number, totalFat?: number, carbohydrates?: number, addedSugar?: number}} = {
+        'beef steak': { calories: 2.1, saturatedFat: 0.035, sodium: 0.7, protein: 0.26, totalFat: 0.11, carbohydrates: 0, addedSugar: 0 },
+        'steak': { calories: 2.1, saturatedFat: 0.035, sodium: 0.7, protein: 0.26, totalFat: 0.11, carbohydrates: 0, addedSugar: 0 },
+        'beef': { calories: 2.1, saturatedFat: 0.035, sodium: 0.7, protein: 0.26, totalFat: 0.11, carbohydrates: 0, addedSugar: 0 },
+        'chicken steak': { calories: 1.8, saturatedFat: 0.015, sodium: 0.8, protein: 0.28, totalFat: 0.06, carbohydrates: 0, addedSugar: 0 },
+        'fried chicken': { calories: 2.45, saturatedFat: 0.03, sodium: 3.0, protein: 0.21, totalFat: 0.14, carbohydrates: 0.08, addedSugar: 0 },
+        'chicken': { calories: 1.65, saturatedFat: 0.01, sodium: 0.7, protein: 0.31, totalFat: 0.036, carbohydrates: 0, addedSugar: 0 },
+        'breast': { calories: 1.65, saturatedFat: 0.01, sodium: 0.7, protein: 0.31, totalFat: 0.036, carbohydrates: 0, addedSugar: 0 },
+        'pork': { calories: 2.4, saturatedFat: 0.03, sodium: 0.8, protein: 0.20, totalFat: 0.16, carbohydrates: 0, addedSugar: 0 },
+        'fish': { calories: 1.5, saturatedFat: 0.01, sodium: 0.8, protein: 0.20, totalFat: 0.05, carbohydrates: 0, addedSugar: 0 },
+        'salmon': { calories: 2.0, saturatedFat: 0.015, sodium: 0.5, protein: 0.22, totalFat: 0.12, carbohydrates: 0, addedSugar: 0 },
+        'rice': { calories: 1.3, saturatedFat: 0.0, sodium: 0.01, protein: 0.027, totalFat: 0.003, carbohydrates: 0.28, addedSugar: 0 },
+        'broccoli': { calories: 0.35, saturatedFat: 0.0, sodium: 0.3, protein: 0.028, totalFat: 0.004, carbohydrates: 0.07, addedSugar: 0 },
+        'egg': { calories: 1.5, saturatedFat: 0.03, sodium: 1.4, protein: 0.126, totalFat: 0.095, carbohydrates: 0.007, addedSugar: 0 },
+        'avocado': { calories: 1.6, saturatedFat: 0.02, sodium: 0.07, protein: 0.02, totalFat: 0.15, carbohydrates: 0.09, addedSugar: 0 },
+        'bread': { calories: 2.6, saturatedFat: 0.005, sodium: 4.8, protein: 0.09, totalFat: 0.03, carbohydrates: 0.49, addedSugar: 0.05 },
+        'butter': { calories: 7.1, saturatedFat: 5.1, sodium: 5.7, protein: 0.009, totalFat: 0.81, carbohydrates: 0.001, addedSugar: 0 },
+        'cheese': { calories: 4.0, saturatedFat: 1.8, sodium: 6.2, protein: 0.25, totalFat: 0.33, carbohydrates: 0.01, addedSugar: 0 },
+        'salad': { calories: 0.2, saturatedFat: 0.0, sodium: 0.1, protein: 0.01, totalFat: 0.002, carbohydrates: 0.03, addedSugar: 0 },
+        'tomato': { calories: 0.18, saturatedFat: 0.0, sodium: 0.05, protein: 0.009, totalFat: 0.002, carbohydrates: 0.039, addedSugar: 0 },
+        'oil': { calories: 8.8, saturatedFat: 1.4, sodium: 0.0, protein: 0, totalFat: 1.0, carbohydrates: 0, addedSugar: 0 },
+        'potato wedges': { calories: 1.3, saturatedFat: 0.004, sodium: 1.5, protein: 0.02, totalFat: 0.02, carbohydrates: 0.25, addedSugar: 0 },
+        'potato': { calories: 0.8, saturatedFat: 0.0, sodium: 0.05, protein: 0.02, totalFat: 0.001, carbohydrates: 0.17, addedSugar: 0 },
+        'pasta': { calories: 1.3, saturatedFat: 0.0, sodium: 0.01, protein: 0.05, totalFat: 0.01, carbohydrates: 0.25, addedSugar: 0 },
+        'mixed vegetables': { calories: 0.8, saturatedFat: 0.001, sodium: 0.3, protein: 0.03, totalFat: 0.005, carbohydrates: 0.15, addedSugar: 0 },
+        'vegetable': { calories: 0.5, saturatedFat: 0.001, sodium: 0.2, protein: 0.02, totalFat: 0.003, carbohydrates: 0.10, addedSugar: 0 },
+        'mayonnaise': { calories: 6.8, saturatedFat: 0.11, sodium: 6.0, protein: 0.01, totalFat: 0.75, carbohydrates: 0.01, addedSugar: 0 },
+        'iced tea': { calories: 0.28, saturatedFat: 0, sodium: 0.04, protein: 0, totalFat: 0, carbohydrates: 0.07, addedSugar: 0.06 },
+        'sweet tea': { calories: 0.36, saturatedFat: 0, sodium: 0.04, protein: 0, totalFat: 0, carbohydrates: 0.09, addedSugar: 0.08 },
+        'tea': { calories: 0.28, saturatedFat: 0, sodium: 0.04, protein: 0, totalFat: 0, carbohydrates: 0.07, addedSugar: 0.06 },
+        'otak-otak': { calories: 1.6, saturatedFat: 0.015, sodium: 3.5, protein: 0.11, totalFat: 0.04, carbohydrates: 0.18, addedSugar: 0 },
+        'otak otak': { calories: 1.6, saturatedFat: 0.015, sodium: 3.5, protein: 0.11, totalFat: 0.04, carbohydrates: 0.18, addedSugar: 0 }
       };
 
       const findItemIndex = (itemNameStr: string, targetDbId: string | null): number => {
@@ -7913,27 +7872,49 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             const item = activeMeal.itemsBreakdown[idx];
             const modifier = (cmd.modifier || '').toLowerCase();
             
-            if (modifier.includes('unsweetened') || modifier.includes('no sugar') || modifier.includes('zero sugar')) {
-              if (item.sugar) {
-                const sugarGrams = Number(item.sugar) || 0;
-                item.sugar = 0;
-                item.addedSugar = 0;
-                item.calories = Math.max(0, (Number(item.calories) || 0) - (sugarGrams * 4));
-                item.carbohydrates = Math.max(0, (Number(item.carbohydrates) || 0) - sugarGrams);
-                addDebugLog(`[Modify Math] update_modifier applied "unsweetened" to "${item.name}". Deducted ${sugarGrams}g sugar and ${sugarGrams * 4} calories.`);
+            if (modifier.includes('unsweetened') || modifier.includes('unsweatened') || modifier.includes('no sugar') || modifier.includes('zero sugar')) {
+              const sugarGrams = Number(item.sugar ?? item.nutrients?.sugar ?? item.nutrients?.addedSugar ?? item.addedSugar) || 0;
+              const calDeduction = sugarGrams > 0 ? sugarGrams * 4 : 25;
+              const carbDeduction = sugarGrams > 0 ? sugarGrams : 6.5;
+
+              item.sugar = 0;
+              item.addedSugar = 0;
+              item.calories = Math.max(0, (Number(item.calories ?? item.nutrients?.calories) || 0) - calDeduction);
+              item.carbohydrates = Math.max(0, (Number(item.carbohydrates ?? item.nutrients?.carbohydrates) || 0) - carbDeduction);
+              
+              if (item.nutrients) {
+                item.nutrients.sugar = 0;
+                item.nutrients.addedSugar = 0;
+                item.nutrients.calories = item.calories;
+                item.nutrients.carbohydrates = item.carbohydrates;
               }
+              addDebugLog(`[Modify Math] update_modifier applied "unsweetened" to "${item.name}". Deducted ${calDeduction} kcal and ${carbDeduction}g sugar/carbs.`);
             } else if (modifier.includes('no oil') || modifier.includes('no fat')) {
-               if (item.totalFat) {
-                 const fatGrams = Number(item.totalFat) || 0;
-                 item.totalFat = 0;
-                 item.saturatedFat = 0;
-                 item.calories = Math.max(0, (Number(item.calories) || 0) - (fatGrams * 9));
-                 addDebugLog(`[Modify Math] update_modifier applied "no oil" to "${item.name}". Deducted ${fatGrams}g fat and ${fatGrams * 9} calories.`);
-               }
+              const fatGrams = Number(item.totalFat ?? item.nutrients?.totalFat ?? item.fat) || 0;
+              const calDeduction = fatGrams > 0 ? fatGrams * 9 : 90;
+
+              item.totalFat = 0;
+              item.saturatedFat = 0;
+              item.calories = Math.max(0, (Number(item.calories ?? item.nutrients?.calories) || 0) - calDeduction);
+              if (item.nutrients) {
+                item.nutrients.totalFat = 0;
+                item.nutrients.saturatedFat = 0;
+                item.nutrients.calories = item.calories;
+              }
+              addDebugLog(`[Modify Math] update_modifier applied "no oil" to "${item.name}". Deducted ${calDeduction} kcal and ${fatGrams}g fat.`);
+            } else if (modifier.includes('no salt') || modifier.includes('unsalted')) {
+              item.sodium = 0;
+              if (item.nutrients) {
+                item.nutrients.sodium = 0;
+                item.nutrients.salt = 0;
+              }
+              addDebugLog(`[Modify Math] update_modifier applied "no salt" to "${item.name}". Set sodium to 0.`);
             }
+
             // Append the modifier to the name if not already there
+            const modLabel = modifier.charAt(0).toUpperCase() + modifier.slice(1);
             if (!item.name.toLowerCase().includes(modifier)) {
-              item.name = `${modifier.charAt(0).toUpperCase() + modifier.slice(1)} ${item.name}`;
+              item.name = `${modLabel} ${item.name}`;
             }
           }
         }
@@ -8046,6 +8027,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           let cFactor = 1.0;
           let fFactor = 0.01;
           let sFactor = 0.5;
+          let pFactor = 0.05;
+          let tfFactor = 0.04;
+          let cbFactor = 0.15;
+          let asFactor = 0.0;
  
           const lowerName = itemName.toLowerCase();
           for (const [key, factors] of Object.entries(standardItems)) {
@@ -8053,17 +8038,44 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               cFactor = factors.calories;
               fFactor = factors.saturatedFat;
               sFactor = factors.sodium;
+              pFactor = factors.protein ?? pFactor;
+              tfFactor = factors.totalFat ?? tfFactor;
+              cbFactor = factors.carbohydrates ?? cbFactor;
+              asFactor = factors.addedSugar ?? asFactor;
               break;
             }
           }
+
+          const fallbackImageIdx = typeof cmd.sourceImageIndex === 'number' ? cmd.sourceImageIndex : (activeMeal.itemsBreakdown?.[0]?.sourceImageIndex ?? 0);
+          const calcCalories = Number((newWeight * cFactor).toFixed(1));
+          const calcProtein = Number((newWeight * pFactor).toFixed(1));
+          const calcTotalFat = Number((newWeight * tfFactor).toFixed(1));
+          const calcSatFat = Number((newWeight * fFactor).toFixed(2));
+          const calcCarbs = Number((newWeight * cbFactor).toFixed(1));
+          const calcSodium = Number((newWeight * sFactor).toFixed(1));
+          const calcAddedSugar = Number((newWeight * asFactor).toFixed(1));
  
           const newItem = {
             name: itemName,
             canonicalDbName: itemName,
             weightGrams: newWeight,
-            calories: Number((newWeight * cFactor).toFixed(1)),
-            saturatedFat: Number((newWeight * fFactor).toFixed(2)),
-            sodium: Number((newWeight * sFactor).toFixed(1)),
+            calories: calcCalories,
+            protein: calcProtein,
+            totalFat: calcTotalFat,
+            saturatedFat: calcSatFat,
+            carbohydrates: calcCarbs,
+            sodium: calcSodium,
+            addedSugar: calcAddedSugar,
+            sourceImageIndex: fallbackImageIdx,
+            nutrients: {
+              calories: calcCalories,
+              protein: calcProtein,
+              totalFat: calcTotalFat,
+              saturatedFat: calcSatFat,
+              carbohydrates: calcCarbs,
+              sodium: calcSodium,
+              addedSugar: calcAddedSugar
+            },
             dbSource: "estimated",
             dbId: null
           };
@@ -8097,28 +8109,25 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       }
       activeMeal.composition = newItems.map((it: any) => it.name).join(", ");
       
-      const newCalories = newItems.reduce((acc: number, it: any) => acc + (Number(it.calories) || 0), 0);
-      const newSaturatedFat = newItems.reduce((acc: number, it: any) => acc + (Number(it.saturatedFat) || 0), 0);
-      const newSodium = newItems.reduce((acc: number, it: any) => acc + (Number(it.sodium) || 0), 0);
-
       if (!activeMeal.nutrients) activeMeal.nutrients = {};
-      activeMeal.nutrients.calories = Number(newCalories.toFixed(1));
-      activeMeal.nutrients.saturatedFat = Number(newSaturatedFat.toFixed(2));
-      activeMeal.nutrients.sodium = Number(newSodium.toFixed(1));
 
-      const nutrientKeys = [
-        "protein", "totalFat", "unsaturatedFat", "omega3", 
-        "carbohydrates", "addedSugar", "totalFibre", "solubleFibre", "potassium", 
-        "magnesium", "calcium", "iron", "zinc", "selenium", "iodine", "phosphorus", 
-        "vitaminD", "vitaminB12", "folate", "vitaminC", "vitaminE", "vitaminK", 
-        "vitaminA", "vitaminB6", "thiamine", "riboflavin", "niacin"
+      const allNutrientKeys = [
+        "calories", "protein", "totalFat", "saturatedFat", "transFat", "unsaturatedFat", 
+        "omega3", "carbohydrates", "sugar", "addedSugar", "totalFibre", "solubleFibre", 
+        "sodium", "potassium", "magnesium", "calcium", "iron", "zinc", "selenium", 
+        "iodine", "phosphorus", "vitaminD", "vitaminB12", "folate", "vitaminC", 
+        "vitaminE", "vitaminK", "vitaminA", "vitaminB6", "thiamine", "riboflavin", "niacin"
       ];
 
-      for (const key of nutrientKeys) {
-        if (activeMeal.nutrients[key] !== undefined) {
-          activeMeal.nutrients[key] = Number((activeMeal.nutrients[key] * mealWeightRatio).toFixed(2));
-        }
+      for (const key of allNutrientKeys) {
+        const sum = newItems.reduce((acc: number, it: any) => {
+          const val = it.nutrients?.[key] ?? it[key];
+          return acc + (Number(val) || 0);
+        }, 0);
+        const decimals = (key === 'saturatedFat' || key === 'transFat' || key === 'unsaturatedFat') ? 2 : 1;
+        activeMeal.nutrients[key] = Number(sum.toFixed(decimals));
       }
+      activeMeal.nutrients.salt = Number(((activeMeal.nutrients.sodium || 0) * 2.54 / 1000).toFixed(2));
 
       addDebugLog('[MealBuild] edit-path');
       const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({

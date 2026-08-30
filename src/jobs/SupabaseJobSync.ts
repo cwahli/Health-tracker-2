@@ -121,8 +121,12 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
         fetchAndPopulateR2Job(row.id);
       }
     } else {
+      let syncStatus = row.status;
+      if ((existing.status === 'succeeded' || existing.status === 'awaiting_user') && (row.status === 'queued' || row.status === 'running')) {
+        syncStatus = existing.status;
+      }
       const updatePayload: any = {
-        status: row.status,
+        status: syncStatus,
         progressPercent: row.progress_percent,
         statusMessage: row.status_message,
         serverSubmittedAt: existing.serverSubmittedAt || Date.now(),

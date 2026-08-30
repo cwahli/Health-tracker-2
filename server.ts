@@ -362,7 +362,7 @@ import { filterHistoryForUse, enrichReviewModificationCommands, sanitizeReviewRe
 import { generateDynamicInsight } from "./src/utils/biomarkerInsights";
 import { formatOptimalTargetValue } from "./src/utils/agentCalibration";
 import { NUTRIENT_KEYS } from "./src/utils/nutrients";
-import { extractBalancedJson, sanitizeMealWeight, findItemIndexInList, getUSDANutrientValue, extractUSDANutrientsPer100g, checkIfItemIsAlreadyPrepared, applyNutrientRealityChecks, applyCommercialSodiumFloor, checkAtwaterConsistency, synchronizeNarrativeText, evaluateNutrientWarnings, build31NutrientsMarkdownServer, enforceTitlePluralParity } from "./server_pure_helpers";
+import { extractBalancedJson, sanitizeMealWeight, findItemIndexInList, getUSDANutrientValue, extractUSDANutrientsPer100g, checkIfItemIsAlreadyPrepared, applyNutrientRealityChecks, applyCommercialSodiumFloor, checkAtwaterConsistency, synchronizeNarrativeText, evaluateNutrientWarnings, build31NutrientsMarkdownServer, enforceTitlePluralParity, sanitizeVerdictLabel } from "./server_pure_helpers";
 import { aggregateItemsNutrients, cleanNutrientNumber } from "./server_nutrient_aggregation";
 import { registerIssueBacklogRoutes } from './serverIssueBacklog.js';
 import { registerBugSnapshotRoutes } from './serverBugSnapshot.js';
@@ -923,9 +923,17 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[]): an
       });
     }
 
+    const rawV = g.verdict;
+    const sanitizedVerdict = rawV && typeof rawV === 'object' && rawV.label
+      ? {
+          label: sanitizeVerdictLabel(rawV.label, rawV.level, g.averageNutrients),
+          level: String(rawV.level || 'neutral')
+        }
+      : rawV;
+
     return {
       groupName: g.groupName,
-      verdict: g.verdict,
+      verdict: sanitizedVerdict,
       message: g.message,
       averageNutrients: g.averageNutrients || null,
       scoutItemIndices: Array.from(resolvedIndices),

@@ -3,6 +3,16 @@
 **Updated:** 2026-08-29  
 **Status:** Production Scout system instruction promoted with atomic sticker grounding & local name preservation; bracket tag prompt sanitization applied; Auth/sync hang timeouts resolved; tsc exit 0 and tests green.
 
+- **Edit Mode Command Synthesis & Modifier Adjustments (`server_pure_helpers.ts`, `server_routes_food_analyze.ts`, `server_dietitian_adjustment.test.ts` - 2026-08-29):**
+  - **Root Cause & Diagnosis:** When users requested edits like "the beef and chicken is 100g of beef steak and 100g of chicken steak" or "the tea is unsweetened", the Dietitian outputted modified `itemsBreakdown` without explicit `editCommands`. In `server_pure_helpers.ts`, `synthesizeEditCommandsFromBreakdown` required an exact `scoutIndex` match on untouched items, causing missing items (like composite dish `Sizzling Steak...`) to be preserved instead of removed when replaced or split. Additionally, modifier requests ("unsweetened", "no oil", "no salt") had no synthesis trigger, and nutrient recalculations at the end of modify mode didn't update all 32 nutrient fields.
+  - **Key Changes Applied:**
+    - Updated `synthesizeEditCommandsFromBreakdown` in `server_pure_helpers.ts` to detect composite dish replacements when `dietitianItems` contains a near-full or full meal breakdown, correctly emitting `remove_item` and `add_item` commands.
+    - Added modifier keyword synthesis ("unsweetened", "no oil", "no salt") in `synthesizeEditCommandsFromBreakdown` to target beverages and modified items.
+    - Updated `update_modifier` in `server_routes_food_analyze.ts` to deduct sugar, fat, and sodium values correctly from item nutrients.
+    - Re-summed all 32 macro- and micronutrients directly from `newItems` at the end of modify mode in `server_routes_food_analyze.ts`.
+    - Added comprehensive unit tests in `server_dietitian_adjustment.test.ts` for composite dish splitting and modifier synthesis.
+  - **Verification:** `npx tsc --noEmit` exit 0; all 9 tests in `server_dietitian_adjustment.test.ts` passed; `compile_applet` build succeeded.
+
 - **Edit Mode Persistence & Job Queue Stalling Resolution (`src/jobs/JobQueueRunner.ts`, `src/components/LogChat.tsx`, `src/App.tsx`, `server_routes_food_analyze.ts` - 2026-08-29):**
   - **Root Cause & Diagnosis:** (1) `JobQueueRunner.loop()` picked up jobs immediately when `status: 'queued'` was set on edit send, without waiting for the client's asynchronous network submission (`clientSubmitPending: true`) to complete. This caused `App.tsx`'s executor to poll `/api/jobs/status` before the server received Turn 2, reading the stale Turn 1 `succeeded` status and triggering a race where the runner submitted a duplicate Turn 1 retry that wiped out the edit. (2) `attemptCount` was not reset to 0 upon a new edit send in `LogChat.tsx`, causing `App.tsx` to interpret Turn 2 as a failed retry (`effectiveAttempt > 1`). (3) Assistant messages lacked unique timestamped IDs on multi-turn edits, causing duplicate key lookups. (4) In `server_routes_food_analyze.ts`, when the LLM returned `itemsBreakdown` without explicit `editCommands`, it had fallen back to `mode = "new_log"` instead of synthesizing diff commands against `activeMeal`.
   - **Key Changes Applied:**
