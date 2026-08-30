@@ -1152,21 +1152,21 @@ export default function App() {
 
                 if (serverJob.status === 'awaiting_user' || serverJob.status === 'succeeded' || serverJob.status === 'failed') {
                   if (serverJob.clean_result === undefined || (serverJob.clean_result && (serverJob.clean_result as any).is_r2)) {
-                     const cachedJob = JobStore.getJob(job.id);
-                     if (cachedJob && cachedJob.result && !cachedJob.result.is_r2) {
-                        serverJob.clean_result = cachedJob.result;
-                     } else {
-                        try {
-                           const fullRes = await fetch(`/api/jobs/status?jobId=${job.id}&userId=${auth.currentUser?.uid || 'anonymous'}&full=true`);
-                           if (fullRes.ok) {
-                              const contentType = fullRes.headers.get('content-type');
-                              if (contentType && contentType.includes('application/json')) {
-                                const fullData = await fullRes.json();
-                                serverJob = fullData.jobs?.[0] || serverJob;
-                              }
+                     // NOTE: Do NOT reuse any locally cached JobStore result here. The same
+                     // jobId is reused across edit turns, so a cached result from a PRIOR
+                     // turn could be mistaken for the current turn's result and silently
+                     // overwrite the fresh edit with stale data. Always fetch the
+                     // authoritative full result from the server for this poll cycle instead.
+                     try {
+                        const fullRes = await fetch(`/api/jobs/status?jobId=${job.id}&userId=${auth.currentUser?.uid || 'anonymous'}&full=true`);
+                        if (fullRes.ok) {
+                           const contentType = fullRes.headers.get('content-type');
+                           if (contentType && contentType.includes('application/json')) {
+                             const fullData = await fullRes.json();
+                             serverJob = fullData.jobs?.[0] || serverJob;
                            }
-                        } catch(e) {}
-                     }
+                        }
+                     } catch(e) {}
                   }
 
                   // Direct R2 fallback fetch from client if server failed/delayed transparent R2 fetching
