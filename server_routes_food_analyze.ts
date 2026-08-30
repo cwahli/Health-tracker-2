@@ -7744,6 +7744,36 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           commands = [];
       }
 
+      // De-duplicate identical modification commands. The dietitian LLM can emit the
+      // exact same command twice (e.g. two `update_modifier` entries with no other
+      // distinguishing fields) since the schema doesn't require commands to be unique.
+      // Executing the same command twice compounds its effect (e.g. deducting a
+      // beverage's added sugar twice), so keep only the first occurrence of each
+      // unique command.
+      {
+        const seenCommandKeys = new Set<string>();
+        const beforeDedupeCount = commands.length;
+        commands = commands.filter((c: any) => {
+          const key = JSON.stringify({
+            action: c?.action || null,
+            itemName: String(c?.itemName || '').toLowerCase().trim(),
+            targetDbId: c?.targetDbId || null,
+            componentName: String(c?.componentName || '').toLowerCase().trim(),
+            modifier: String(c?.modifier || '').toLowerCase().trim(),
+            newWeightGrams: c?.newWeightGrams ?? null,
+            newItemName: c?.newItemName || null,
+            replacementItemName: c?.replacementItemName || null,
+            newCookingMethod: c?.newCookingMethod || null,
+          });
+          if (seenCommandKeys.has(key)) return false;
+          seenCommandKeys.add(key);
+          return true;
+        });
+        if (commands.length !== beforeDedupeCount) {
+          addDebugLog(`[Modify Math] Discarded ${beforeDedupeCount - commands.length} duplicate modification command(s) before execution.`);
+        }
+      }
+
       const originalItems = activeMeal.itemsBreakdown || [];
       const originalTotalWeight = originalItems.reduce((acc: number, it: any) => acc + (Number(it.weightGrams) || 0), 0) || 1;
 
@@ -8351,6 +8381,37 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         activeMeal.nutrients[key] = Number(sum.toFixed(decimals));
       }
       activeMeal.nutrients.salt = Number(((activeMeal.nutrients.sodium || 0) * 2.54 / 1000).toFixed(2));
+
+      // Rebuild the "🧾 Nutrition calculation" receipt table so it reflects this edit.
+      // activeMeal.itemsBreakdown/nutrients are mutated above, but activeMeal.receiptTable
+      // is a separate pre-rendered markdown string generated once during the initial
+      // review pass — and FoodCard.tsx renders that cached string directly
+      // (msg.data.pendingFoodLog.receiptTable), not a live recompute from itemsBreakdown.
+      // Without regenerating it here, the modify path silently carried the pre-edit
+      // table forward untouched, so the UI kept showing pre-edit numbers verbatim even
+      // though activeMeal.nutrients above had already been corrected.
+      {
+        const fValEdit = (val: any, unit: string = ''): string => {
+          if (val === null || val === undefined) return `0${unit}`;
+          const num = typeof val === 'number' ? val : parseFloat(val);
+          if (isNaN(num) || Math.abs(num) < 0.05) return `0${unit}`;
+          const rounded = Math.round(num * 10) / 10;
+          return rounded === 0 ? `0${unit}` : `${rounded}${unit}`;
+        };
+        let editReceiptTable = "### 🧾 Nutrition calculation\n\n";
+        editReceiptTable += "| Item / Ingredient | Kcal | Protein | Sat Fat | Sodium |\n";
+        editReceiptTable += "|---|---|---|---|---|\n";
+        newItems.forEach((it: any) => {
+          const itCal = it.nutrients?.calories ?? it.calories;
+          const itP = it.nutrients?.protein ?? it.protein;
+          const itSatFat = it.nutrients?.saturatedFat ?? it.saturatedFat;
+          const itNa = it.nutrients?.sodium ?? it.sodium;
+          const itW = Number(it.weightGrams) || 0;
+          editReceiptTable += `| **Item Sub-Total - ${it.name || it.canonicalDbName || 'Item'} (${itW}g)** | **${fValEdit(itCal)}** | **${fValEdit(itP, 'g')}** | **${fValEdit(itSatFat, 'g')}** | **${fValEdit(itNa, 'mg')}** |\n`;
+        });
+        editReceiptTable += `| **🏆 GRAND MEAL TOTAL - ${newTotalWeight}g** | **${fValEdit(activeMeal.nutrients.calories)}** | **${fValEdit(activeMeal.nutrients.protein, 'g')}** | **${fValEdit(activeMeal.nutrients.saturatedFat, 'g')}** | **${fValEdit(activeMeal.nutrients.sodium, 'mg')}** |\n`;
+        activeMeal.receiptTable = editReceiptTable;
+      }
 
       addDebugLog('[MealBuild] edit-path');
       const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
