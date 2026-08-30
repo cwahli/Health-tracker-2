@@ -4667,7 +4667,7 @@ ${logsText}`);
 
       setMessages(prev => {
         const filteredPrev = prev.filter(m => !m.isLive);
-        if (isAgent('food') && resData.mode === 'modify' && (resData.data || (resData.scoutItems && resData.scoutItems.length > 0))) {
+        if (isAgent('food') && resData.mode === 'modify' && resData.editApplied !== false && (resData.data || (resData.scoutItems && resData.scoutItems.length > 0))) {
           let newPrev = [...filteredPrev];
           let wasMerged = false;
 
@@ -4726,10 +4726,17 @@ ${logsText}`);
                   content: resData.text || resData.message || m.content,
                   data: {
                     ...m.data,
+                    mode: resData.mode || 'modify',
+                    agentResult: m.data?.agentResult ? {
+                      ...m.data.agentResult,
+                      mode: resData.mode || 'modify'
+                    } : undefined,
                     scoutItems: prunedScoutItems,
                     pendingFoodLog: {
                       ...m.data?.pendingFoodLog,
-                      ...resData.data,
+                      ...(resData.data || {}),
+                      message: resData.text || resData.message || m.data?.pendingFoodLog?.message || '',
+                      dietitianUpdateSentence: resData.text || resData.message || m.data?.pendingFoodLog?.dietitianUpdateSentence || '',
                       imageUrls: (resData.data?.imageUrls && resData.data.imageUrls.length > 0)
                         ? resData.data.imageUrls
                         : (m.data?.pendingFoodLog?.imageUrls || m.imageUrls || []),

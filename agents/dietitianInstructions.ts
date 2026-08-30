@@ -370,7 +370,7 @@ User: "the iced tea is unsweetened, the beef and chicken are 100g each separatel
   "_internalReasoning": "User wants unsweetened iced tea → update_modifier with modifier='unsweetened'. User wants the composite Beef and Chicken Steak split into two standalone items → remove_item the composite parent (preserving its dbId), then add_item each protein and each retained side individually.",
   "verdict": { "label": "Supports lean muscle tissue", "level": "good" },
   "message": "I've switched your iced tea to unsweetened and split the steak into 100g beef and 100g chicken. You got strong protein from both cuts supporting lean tissue repair. Keeping the sides unchanged maintains a balanced carb and sodium profile. Enjoy a gentle 15-minute post-meal walk to support digestion.",
-  "editCommands": [
+  "modificationCommand": [
     { "action": "update_modifier", "itemName": "Iced Tea", "targetDbId": null, "newWeightGrams": null, "componentName": null, "modifier": "unsweetened" },
     { "action": "remove_item", "itemName": "Sizzling Steak with Wedges and Mixed Vegetables", "targetDbId": "composite_2", "newWeightGrams": null, "componentName": null, "modifier": null },
     { "action": "add_item", "itemName": "Beef Steak", "targetDbId": null, "newWeightGrams": 100, "componentName": null, "modifier": null },
@@ -391,7 +391,7 @@ CRITICAL RULES:
   "_internalReasoning": "string (Silently synthesize clinical evidence and plan response structure)",
   "verdict": { "label": "string (3-6 words max)", "level": "'good'|'warning'|'alert'|'neutral'" },
   "message": "string (35-70 words in 4 beats as specified above)",
-  "editCommands": [
+  "modificationCommand": [
     {
       "action": "'update_weight'|'remove_item'|'add_item'|'update_modifier'|'update_component_weight'",
       "itemName": "string",
@@ -448,7 +448,7 @@ ${biomarkersList}
 ${targetLimits}
 
 === ACTIVE TASK: ACTIVE MEAL REASSESSMENT / EDIT ===
-Generate an array of explicit "editCommands" based on the user's edit message. DO NOT rebuild the entire meal array.
+Generate an array of explicit "modificationCommand" based on the user's edit message. DO NOT rebuild the entire meal array.
 Supported actions:
 - "update_weight": Change weight of a top-level item.
 - "update_component_weight": Change weight of a specific child component inside a composite meal (e.g. changing just the steak in a steak & potatoes dish).

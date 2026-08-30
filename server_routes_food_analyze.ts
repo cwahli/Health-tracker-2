@@ -5323,10 +5323,11 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           items: {
             type: Type.OBJECT,
             properties: {
-              action: { type: Type.STRING, enum: ['update_weight', 'remove_item', 'add_item', 'rename_alias', 'update_cooking_method'] },
+              action: { type: Type.STRING, enum: ['update_weight', 'update_component_weight', 'remove_item', 'add_item', 'rename_alias', 'update_cooking_method'] },
               itemName: { type: Type.STRING },
               newWeightGrams: { type: Type.INTEGER },
               targetDbId: { type: Type.STRING, nullable: true },
+              componentName: { type: Type.STRING, nullable: true, description: "Required when action is 'update_component_weight'. The name of the specific ingredient/component inside the composite dish named by itemName (e.g. itemName='Sizzling Steak with Wedges', componentName='Beef Steak')." },
               newItemName: { type: Type.STRING, nullable: true },
               newCookingMethod: { type: Type.STRING, nullable: true }
             },
@@ -7594,6 +7595,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       if (!commands || !Array.isArray(commands) || commands.length === 0) {
         addDebugLog(`[Modify Math Fallback] No explicit modification command array generated; building soft-edit fallback from activeMeal.`);
         const activeItems = activeMeal.itemsBreakdown || activeMeal.items || [];
+        (req as any)._editWasNoOpFallback = true;
         if (activeItems.length > 0) {
           commands = activeItems.map((it: any, idx: number) => ({
             scoutIndex: typeof it.scoutIndex === 'number' ? it.scoutIndex : idx,
@@ -8139,10 +8141,13 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
       mealBuild.staleDietitianNarrative = true;
 
+      const editFailedSilently = !!(req as any)._editWasNoOpFallback;
+      const honestFallbackMessage = "I wasn't able to apply that edit — could you rephrase it? For example, name the specific item and its new weight (e.g. \"beef steak 100g\").";
       const responsePayload = {
         mode: "modify",
-        text: rawParsed.message || "I have recalculated your meal's metrics with precision based on your instructions.",
-        message: rawParsed.message || "I have recalculated your meal's metrics with precision based on your instructions.",
+        text: editFailedSilently ? honestFallbackMessage : (rawParsed.message || "I have recalculated your meal's metrics with precision based on your instructions."),
+        message: editFailedSilently ? honestFallbackMessage : (rawParsed.message || "I have recalculated your meal's metrics with precision based on your instructions."),
+        editApplied: !editFailedSilently,
         data: pendingFoodLog || activeMeal,
         mealBuild,
         savable: true,
