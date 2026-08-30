@@ -7667,6 +7667,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                (mealNameLower.includes(nLower) && (activeMeal.itemsBreakdown || []).every((it: any) => (it.name || "").toLowerCase() !== nLower));
       };
 
+      const __preEditItemsSnapshot = JSON.stringify((activeMeal.itemsBreakdown || []).map((it: any) => ({ n: (it.name || '').toLowerCase().trim(), w: Number(it.weightGrams) || 0 })));
+
       for (const cmd of commands) {
         const action = cmd.action;
         const itemName = cmd.itemName || "";
@@ -8089,6 +8091,14 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           if (!activeMeal.itemsBreakdown) activeMeal.itemsBreakdown = [];
           activeMeal.itemsBreakdown.push(newItem);
           addDebugLog(`[Modify Math] add_item: Added "${itemName}" with estimated weight ${newWeight}g.`);
+        }
+      }
+
+      if (!(req as any)._editWasNoOpFallback) {
+        const __postEditItemsSnapshot = JSON.stringify((activeMeal.itemsBreakdown || []).map((it: any) => ({ n: (it.name || '').toLowerCase().trim(), w: Number(it.weightGrams) || 0 })));
+        if (__postEditItemsSnapshot === __preEditItemsSnapshot) {
+          addDebugLog(`[Modify Math Warning] All ${commands.length} modification command(s) failed to change the meal (no matching item found or a required field was missing). Falling back to honest message.`);
+          (req as any)._editWasNoOpFallback = true;
         }
       }
 

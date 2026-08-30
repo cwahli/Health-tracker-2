@@ -385,6 +385,7 @@ CRITICAL RULES:
 - NEVER include "itemsBreakdown" in "foodData". foodData must only contain { date, name }.
 - Beverage sweetness ("unsweetened", "no sugar", "zero sugar"): ALWAYS use action "update_modifier". NEVER use "update_cooking_method".
 - "X and Y separately": remove_item the composite parent (using its targetDbId), then add_item each sub-component and all retained sides.
+- Identity/substitution corrections ("the X is actually Y", "the X is really Y", "the X is Y" — including when a new quantity/weight is also mentioned, e.g. "is 2 otak otak"): NEVER use "rename_alias". ALWAYS use remove_item (targeting the old itemName) + add_item (the new itemName with newWeightGrams explicitly set to the correct total weight), exactly like the composite-split pattern above.
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 {
@@ -455,6 +456,7 @@ Supported actions:
 - "update_modifier": Apply a text modifier like 'unsweetened', 'no sugar', or 'no oil' to an item.
 - "remove_item": Delete an item entirely.
 - "add_item": Add a completely new item (must specify newWeightGrams).
+- "rename_alias": ONLY for a pure cosmetic label/spelling fix where nutrients must NOT change. Requires "newItemName" to be set — never emit "rename_alias" without it. Do NOT use this for food-identity corrections (see CRITICAL RULES below).
 
 In "message", Beat 1 must explicitly confirm the specific modification (e.g. "Updated your iced tea to unsweetened, removing 18g added sugar"), then provide 4-beat clinical guidance on the updated totals.
 
