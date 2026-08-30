@@ -8079,7 +8079,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               addedSugar: calcAddedSugar
             },
             dbSource: "estimated",
-            dbId: null
+            dbId: null,
+            scoutIndex: -1,
+            componentsDetailList: [],
+            components: [],
+            isFlattenedComponent: true
           };
 
           if (!activeMeal.itemsBreakdown) activeMeal.itemsBreakdown = [];

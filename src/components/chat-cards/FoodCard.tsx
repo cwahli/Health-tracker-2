@@ -1639,8 +1639,8 @@ export const FoodCard: React.FC<AgentCardProps & {
     // Map each item in itemsBreakdown to a scout item format
     return itemsBreakdown.map((item: any, i: number) => {
       // Find the best matching scout item in activeScoutItems to preserve bounding box and image index
-      let matchingScout = (activeScoutItems || []).find((s: any) => scoutIndexAgrees(item, s));
-      if (!matchingScout) {
+      let matchingScout = item.isFlattenedComponent ? null : (activeScoutItems || []).find((s: any) => scoutIndexAgrees(item, s));
+      if (!matchingScout && !item.isFlattenedComponent) {
         matchingScout = (activeScoutItems || []).find((s: any) => {
           if (s.scoutIndex !== undefined && usedScoutIndices.has(s.scoutIndex)) return false;
           const sKey = (s.keyword || s.originalName || "").toLowerCase().trim();
