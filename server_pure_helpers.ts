@@ -138,38 +138,62 @@ export function findItemIndexInList(itemsBreakdown: any[], itemNameStr: string, 
     if (idx !== -1) return idx;
   }
 
+  // Strip leading articles/pronouns for clean comparison
+  const nameClean = nameLower.replace(/^(the|a|an|my|this|that|some)\s+/i, '').trim();
+
   // 2. Exact match by item name (case-insensitive)
-  const exactIdx = itemsBreakdown.findIndex((it: any) => it.name && it.name.trim().toLowerCase() === nameLower);
+  const exactIdx = itemsBreakdown.findIndex((it: any) => {
+    const itName = (it.name || "").trim().toLowerCase();
+    return itName === nameLower || itName === nameClean;
+  });
   if (exactIdx !== -1) return exactIdx;
 
   // 3. Exact match by canonical name if present
-  const canonicalIdx = itemsBreakdown.findIndex((it: any) => it.canonicalDbName && it.canonicalDbName.trim().toLowerCase() === nameLower);
+  const canonicalIdx = itemsBreakdown.findIndex((it: any) => {
+    const itCanon = (it.canonicalDbName || "").trim().toLowerCase();
+    return itCanon === nameLower || itCanon === nameClean;
+  });
   if (canonicalIdx !== -1) return canonicalIdx;
 
   // 4. Substring prefix/suffix match (e.g. startsWith or endsWith)
   const wordMatchIdx = itemsBreakdown.findIndex((it: any) => {
     const itName = (it.name || "").trim().toLowerCase();
-    return itName.startsWith(nameLower) || itName.endsWith(nameLower);
+    return itName.startsWith(nameLower) || itName.endsWith(nameLower) ||
+           (nameClean && (itName.startsWith(nameClean) || itName.endsWith(nameClean)));
   });
   if (wordMatchIdx !== -1) return wordMatchIdx;
 
-  // 5. Classic includes fallback (fuzzy substring, first match wins)
+  // 5. Whole-word token intersection match (prioritize highest whole-word match count)
+  const queryTokens = (nameClean || nameLower)
+    .split(/[\s,_\-]+/)
+    .map(w => w.trim().toLowerCase())
+    .filter(w => w.length > 1 && !['the', 'and', 'with', 'for', 'item', 'food'].includes(w));
+
+  if (queryTokens.length > 0) {
+    let bestIdx = -1;
+    let bestScore = 0;
+    itemsBreakdown.forEach((it: any, idx: number) => {
+      const itTokens = `${it.name || ''} ${it.canonicalDbName || ''}`
+        .toLowerCase()
+        .split(/[\s,_\-]+/)
+        .map(w => w.trim())
+        .filter(w => w.length > 0);
+
+      const matches = queryTokens.filter(qt => itTokens.includes(qt)).length;
+      if (matches > bestScore) {
+        bestScore = matches;
+        bestIdx = idx;
+      }
+    });
+    if (bestIdx !== -1 && bestScore > 0) return bestIdx;
+  }
+
+  // 6. Classic includes fallback (fuzzy substring)
   const includesIdx = itemsBreakdown.findIndex((it: any) => {
     const itName = (it.name || "").trim().toLowerCase();
-    return itName.includes(nameLower) || nameLower.includes(itName);
+    return (nameClean && itName.includes(nameClean)) || itName.includes(nameLower) || nameLower.includes(itName);
   });
   if (includesIdx !== -1) return includesIdx;
-
-  // 6. Word-by-word intersection match as ultimate fallback
-  const words = nameLower.split(/\s+/).filter(w => w.length > 2);
-  if (words.length > 0) {
-    const wordMatch = itemsBreakdown.findIndex((it: any) => {
-      const itName = (it.name || "").trim().toLowerCase();
-      const itCanon = (it.canonicalDbName || "").trim().toLowerCase();
-      return words.some(word => itName.includes(word) || itCanon.includes(word));
-    });
-    if (wordMatch !== -1) return wordMatch;
-  }
 
   return -1;
 }
@@ -1222,18 +1246,31 @@ export function sanitizeVerdictLabel(rawLabel: string, level?: string, nutrients
   label = label.replace(/^["']|["']$/g, '').trim();
 
   // If label is describing a food/meal entity rather than a biological health outcome or metric overage, convert it
-  const entityNounPattern = /\b(?:meal|dish|dinner|lunch|breakfast|snack|food|bowl|pot|soup|platter|choice|asset|option|selection|entry|item|spread|entree|plate|combo|source|portion|serving|treat|treats|drink|beverage|shake|smoothie|dessert|feast|side|sides|main|mains)\b/i;
-  const descriptorAdjPattern = /\b(?:exceptional|solid|great|good|healthy|nutrient|dense|rich|carb|heavy|high|lean|protein|low|calorie|fiber|sodium|packed|balanced|macro)\b/i;
-  const standaloneMealPattern = /\b(?:high\s+protein|lean\s+protein|protein\s+packed|protein\s+dense|protein\s+rich|nutrient\s+dense|nutrient\s+rich|low\s+calorie|high\s+fiber|fiber\s+rich|carb\s+heavy|low\s+sodium|balanced\s+macro|exceptional\s+high|exceptional\s+lean|high\s+fat|low\s+fat|high\s+carb|low\s+carb)\b/i;
+  const entityNounPattern = /\b(?:meal|dish|dinner|lunch|breakfast|snack|food|bowl|pot|soup|platter|choice|asset|option|selection|entry|item|spread|entree|plate|combo|source|portion|serving|treat|treats|drink|beverage|shake|smoothie|dessert|feast|side|sides|main|mains|recipe|cuisine|package|bite|bites)\b/i;
+  const descriptorAdjPattern = /\b(?:exceptional|solid|great|good|healthy|nutrient|dense|rich|carb|heavy|high|lean|protein|low|calorie|calories|fiber|fibre|sodium|packed|balanced|macro|macros|clean|pure|light|heavy|hearty|fat|sugar)\b/i;
+  const standaloneMealPattern = /\b(?:high\s+protein|lean\s+protein|protein\s+packed|protein\s+dense|protein\s+rich|nutrient\s+dense|nutrient\s+rich|low\s+calorie|high\s+calorie|high\s+fiber|fiber\s+rich|carb\s+heavy|low\s+sodium|high\s+sodium|balanced\s+macro|exceptional\s+high|exceptional\s+lean|high\s+fat|low\s+fat|high\s+carb|low\s+carb|low\s+sugar|high\s+sugar|sugar\s+free|fat\s+free)\b/i;
   const biologicalActionPattern = /\b(?:supports|boosts|maintains|promotes|aids|improves|enhances|helps|fuels|protects|regulates|good\s+for|healthy\s+for|sustains|optimizes)\b/i;
   const metricImpactPattern = /\b(?:\d+%|over|limit|target|excess|deficit)\b/i;
 
   const isGenericMealDescriptor =
-    (entityNounPattern.test(label) && descriptorAdjPattern.test(label)) ||
     entityNounPattern.test(label) ||
-    (standaloneMealPattern.test(label) && !biologicalActionPattern.test(label) && !metricImpactPattern.test(label));
+    (standaloneMealPattern.test(label) && !biologicalActionPattern.test(label) && !metricImpactPattern.test(label)) ||
+    (!biologicalActionPattern.test(label) && !metricImpactPattern.test(label));
 
   if (isGenericMealDescriptor) {
+    if (level === 'alert' || level === 'warning') {
+      if (nutrients?.saturatedFat && nutrients.saturatedFat >= 10) {
+        return 'Elevated saturated fat impact';
+      }
+      if (nutrients?.sodium && nutrients.sodium >= 1000) {
+        return 'Elevated sodium impact';
+      }
+      if (nutrients?.addedSugar && nutrients.addedSugar >= 20) {
+        return 'Elevated added sugar impact';
+      }
+      return 'Requires mindful portion balance';
+    }
+
     if (nutrients?.protein && nutrients.protein >= 30) {
       return 'Boosts lean muscle tissue';
     }
@@ -1242,6 +1279,9 @@ export function sanitizeVerdictLabel(rawLabel: string, level?: string, nutrients
     }
     if (nutrients?.sodium && nutrients.sodium <= 500 && nutrients?.calories && nutrients.calories < 600) {
       return 'Good for your heart';
+    }
+    if (nutrients?.saturatedFat && nutrients.saturatedFat <= 3 && nutrients?.calories && nutrients.calories < 500) {
+      return 'Good for cardiovascular health';
     }
     return 'Supports sustained metabolic energy';
   }
@@ -1319,10 +1359,7 @@ export function synthesizeEditCommandsFromBreakdown(activeMeal: any, dietitianIt
       // 2) The item's scoutIndex was explicitly targeted by Dietitian but oldIt was omitted/replaced
       const isTargetedScoutIndex = touchedScoutIndices.size > 0 && oldScoutIdx !== null && touchedScoutIndices.has(oldScoutIdx);
 
-      // 3) Dietitian provided a near-complete or full meal breakdown (>= activeItems.length - 1) omitting oldIt
-      const isFullReplacement = dietitianItems.length >= Math.max(1, activeItems.length - 1);
-
-      if (isTargetedScoutIndex || isExplicitRemoveInMsg || isFullReplacement) {
+      if (isTargetedScoutIndex || isExplicitRemoveInMsg) {
         synthesizedCommands.push({
           action: 'remove_item',
           itemName: oldIt.name || oldIt.canonicalDbName || oldName,
@@ -1355,13 +1392,31 @@ export function synthesizeEditCommandsFromBreakdown(activeMeal: any, dietitianIt
       });
     }
 
-    if (matchedOld && newIt.weightGrams && Number(newIt.weightGrams) !== Number(matchedOld.weightGrams)) {
-      synthesizedCommands.push({
-        action: 'update_weight',
-        itemName: matchedOld.name || matchedOld.canonicalDbName || newName,
-        targetDbId: matchedOld.dbId || null,
-        newWeightGrams: Number(newIt.weightGrams)
-      });
+    if (matchedOld) {
+      if (newIt.weightGrams && Number(newIt.weightGrams) !== Number(matchedOld.weightGrams)) {
+        synthesizedCommands.push({
+          action: 'update_weight',
+          itemName: matchedOld.name || matchedOld.canonicalDbName || newName,
+          targetDbId: matchedOld.dbId || null,
+          newWeightGrams: Number(newIt.weightGrams)
+        });
+      }
+      if (newIt.cookingMethod && matchedOld.cookingMethod && newIt.cookingMethod.toLowerCase() !== matchedOld.cookingMethod.toLowerCase()) {
+        synthesizedCommands.push({
+          action: 'update_cooking_method',
+          itemName: matchedOld.name || matchedOld.canonicalDbName || newName,
+          targetDbId: matchedOld.dbId || null,
+          newMethod: newIt.cookingMethod
+        });
+      }
+      if (newIt.canonicalDbName && newIt.canonicalDbName !== matchedOld.canonicalDbName && newIt.canonicalDbName !== matchedOld.name) {
+        synthesizedCommands.push({
+          action: 'rename_alias',
+          itemName: matchedOld.name || matchedOld.canonicalDbName,
+          targetDbId: matchedOld.dbId || null,
+          newItemName: newIt.canonicalDbName
+        });
+      }
     } else if (!matchedOld && newIt.weightGrams) {
       synthesizedCommands.push({
         action: 'add_item',

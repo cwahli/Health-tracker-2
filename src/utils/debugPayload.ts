@@ -573,7 +573,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       if (instructionStartPattern.test(logLines[i])) {
         const block: string[] = [logLines[i]];
         let j = i + 1;
-        while (j < logLines.length && !/^\[[A-Za-z]/.test(logLines[j]) && block.join('\n').length < 4000) {
+        while (j < logLines.length && !/^\[[A-Za-z]/.test(logLines[j])) {
           block.push(logLines[j]);
           j++;
         }
@@ -588,7 +588,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       lines.push('');
       for (const block of instructionBlocks.slice(0, 10)) {
         lines.push('```');
-        lines.push(block.slice(0, 4000));
+        lines.push(block);
         lines.push('```');
         lines.push('');
       }

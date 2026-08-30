@@ -303,6 +303,52 @@ const REQUIRED_OUTPUT_JSON_SCHEMA = `
 }
 `;
 
+export function sanitizeMealForPrompt(activeMeal: any) {
+  if (!activeMeal) return null;
+  const sanitized = { ...activeMeal };
+
+  if (sanitized.imageUrl && typeof sanitized.imageUrl === 'string' && sanitized.imageUrl.startsWith("data:image/")) {
+    sanitized.imageUrl = "[base64_image_data_truncated]";
+  }
+
+  // Strip redundant arrays and top-level math caches
+  delete sanitized.items;
+  delete sanitized.imageUrls;
+  delete sanitized.chatTranscript;
+  delete sanitized.receiptTable;
+  delete sanitized.nutrients;
+  delete sanitized.truthNutrients;
+  delete sanitized.verdict;
+  delete sanitized.healthImpact;
+  delete sanitized.benefits;
+  delete sanitized.risks;
+  delete sanitized.recommendation;
+  delete sanitized.lockedNutrientKeys;
+  delete sanitized.ingredientsList;
+  delete sanitized.diningEnvironment;
+  delete sanitized.debugUrl;
+  delete sanitized.composition;
+  delete sanitized.degradedStages;
+
+  // Recursively clean itemsBreakdown to remove nested math caches
+  if (sanitized.itemsBreakdown && Array.isArray(sanitized.itemsBreakdown)) {
+    sanitized.itemsBreakdown = sanitized.itemsBreakdown.map((item: any) => ({
+      scoutIndex: item.scoutIndex,
+      dbId: item.dbId,
+      canonicalDbName: item.canonicalDbName || item.name,
+      foodType: item.foodType,
+      weightGrams: item.weightGrams,
+      dbSource: item.dbSource,
+      cookingMethod: item.cookingMethod,
+      components: item.components && Array.isArray(item.components)
+        ? item.components.map((c: any) => ({ name: c.name, weightGrams: c.weightGrams }))
+        : undefined
+    }));
+  }
+
+  return sanitized;
+}
+
 export function buildFoodAnalyzeInstruction(context: {
   biomarkersNeedingImprovement?: any[];
   remainingAllowance?: any | null;
@@ -315,13 +361,7 @@ export function buildFoodAnalyzeInstruction(context: {
   const { biomarkersList, targetLimits } = formatPatientContext(context);
   const { activeMeal, forceModifyMode = false } = context;
 
-  let sanitizedActiveMeal = null;
-  if (activeMeal) {
-    sanitizedActiveMeal = { ...activeMeal };
-    if (sanitizedActiveMeal.imageUrl && sanitizedActiveMeal.imageUrl.startsWith("data:image/")) {
-      sanitizedActiveMeal.imageUrl = "[base64_image_data_truncated]";
-    }
-  }
+  const sanitizedActiveMeal = sanitizeMealForPrompt(activeMeal);
 
   const mealStr = sanitizedActiveMeal ? JSON.stringify(sanitizedActiveMeal, null, 2) : "None";
 
@@ -383,7 +423,7 @@ User: "the iced tea is unsweetened, the beef and chicken are 100g each separatel
 }
 CRITICAL RULES:
 - NEVER include "itemsBreakdown" in "foodData". foodData must only contain { date, name }.
-- Beverage sweetness ("unsweetened", "no sugar", "zero sugar"): ALWAYS use action "update_modifier". NEVER use "update_cooking_method".
+- Beverage sweetness ("unsweetened", "no sugar", "zero sugar"): ALWAYS use action "update_modifier" with "modifier": "unsweetened". NEVER use "update_cooking_method".
 - "X and Y separately": remove_item the composite parent (using its targetDbId), then add_item each sub-component and all retained sides.
 - Identity/substitution corrections ("the X is actually Y", "the X is really Y", "the X is Y" — including when a new quantity/weight is also mentioned, e.g. "is 2 otak otak"): NEVER use "rename_alias". ALWAYS use remove_item (targeting the old itemName) + add_item (the new itemName with newWeightGrams explicitly set to the correct total weight), exactly like the composite-split pattern above.
 
@@ -399,7 +439,7 @@ CRITICAL RULES:
       "targetDbId": "string|null",
       "newWeightGrams": "number|null",
       "componentName": "string|null (for update_component_weight only)",
-      "modifier": "string|null (for update_modifier: e.g. 'unsweetened', 'no oil')"
+      "modifier": "string (REQUIRED for update_modifier: e.g. 'unsweetened', 'no oil'. Omit or null for other actions)"
     }
   ],
   "foodData": { "date": "YYYY-MM-DD", "name": "string|null" }
@@ -414,28 +454,7 @@ export function buildModeAEditInstruction(context: {
   userProfile?: any;
 }): string {
   const { biomarkersList, targetLimits } = formatPatientContext(context);
-  let sanitizedActiveMeal = null;
-  if (context.activeMeal) {
-    sanitizedActiveMeal = { ...context.activeMeal };
-    if (sanitizedActiveMeal.imageUrl && sanitizedActiveMeal.imageUrl.startsWith("data:image/")) sanitizedActiveMeal.imageUrl = "[base64_image_data_truncated]";
-    if (sanitizedActiveMeal.imageUrls) sanitizedActiveMeal.imageUrls = [];
-    delete sanitizedActiveMeal.chatTranscript;
-    delete sanitizedActiveMeal.receiptTable;
-    delete sanitizedActiveMeal.nutrients;
-    delete sanitizedActiveMeal.verdict;
-    if (sanitizedActiveMeal.itemsBreakdown && Array.isArray(sanitizedActiveMeal.itemsBreakdown)) {
-      sanitizedActiveMeal.itemsBreakdown = sanitizedActiveMeal.itemsBreakdown.map((item: any) => ({
-        scoutIndex: item.scoutIndex,
-        dbId: item.dbId,
-        canonicalDbName: item.canonicalDbName || item.name,
-        foodType: item.foodType,
-        weightGrams: item.weightGrams,
-        dbSource: item.dbSource,
-        cookingMethod: item.cookingMethod,
-        components: item.components ? item.components.map((c: any) => ({ name: c.name, weightGrams: c.weightGrams })) : undefined
-      }));
-    }
-  }
+  const sanitizedActiveMeal = sanitizeMealForPrompt(context.activeMeal);
   const mealStr = sanitizedActiveMeal ? JSON.stringify(sanitizedActiveMeal, null, 2) : "None";
 
   return `CURRENT_ACTIVE_MEAL_STATE: ${mealStr}
@@ -448,17 +467,22 @@ ${biomarkersList}
 
 ${targetLimits}
 
-=== ACTIVE TASK: ACTIVE MEAL REASSESSMENT / EDIT ===
-Generate an array of explicit "modificationCommand" based on the user's edit message. DO NOT rebuild the entire meal array.
+=== ACTIVE TASK: ACTIVE MEAL INTERACTION (EDIT OR Q&A) ===
+Evaluate the user's message in the context of the active meal above:
+1. FOOD ALTERATION / EDIT: If the user requests any portion change, ingredient modification, ingredient addition/removal, or sweetness/oil/salt modifier, generate an array of explicit "modificationCommand". DO NOT rebuild the entire meal array.
+2. CONVERSATIONAL Q&A / ADVICE: If the user asks a question (e.g. why a nutrient is high, biomarker impact, general nutrition advice, meal suggestions) WITHOUT altering any food items or portions, output "modificationCommand": [] (an empty array). Provide your full, direct clinical explanation in "message".
+
 Supported actions:
 - "update_weight": Change weight of a top-level item.
 - "update_component_weight": Change weight of a specific child component inside a composite meal (e.g. changing just the steak in a steak & potatoes dish).
-- "update_modifier": Apply a text modifier like 'unsweetened', 'no sugar', or 'no oil' to an item.
+- "update_modifier": Apply modifier string in "modifier" field (e.g. 'unsweetened', 'no sugar', 'no oil').
 - "remove_item": Delete an item entirely.
 - "add_item": Add a completely new item (must specify newWeightGrams).
 - "rename_alias": ONLY for a pure cosmetic label/spelling fix where nutrients must NOT change. Requires "newItemName" to be set — never emit "rename_alias" without it. Do NOT use this for food-identity corrections (see CRITICAL RULES below).
 
-In "message", Beat 1 must explicitly confirm the specific modification (e.g. "Updated your iced tea to unsweetened, removing 18g added sugar"), then provide 4-beat clinical guidance on the updated totals.
+In "message":
+- For food edits: Beat 1 must explicitly confirm the specific modification (e.g. "Updated your iced tea to unsweetened, removing 18g added sugar"), then provide 4-beat clinical guidance on the updated totals.
+- For Q&A: Directly and conversationally answer the user's question with warm, practical clinical advice tailored to their biomarkers and this meal.
 
 ${EDIT_OUTPUT_JSON_SCHEMA}`;
 }

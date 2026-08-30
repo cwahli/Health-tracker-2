@@ -105,6 +105,18 @@ describe('server_pure_helpers', () => {
       expect(findItemIndexInList(items, "Delicious Sourdough", null)).toBe(1);
     });
 
+    it('matches tea against Iced Lemon Tea', () => {
+      const mealItems = [
+        { name: "Sizzling Steak with Wedges", canonicalDbName: "steak_dish", dbId: "comp_1" },
+        { name: "Iced Lemon Tea", canonicalDbName: "iced_lemon_tea", dbId: "bev_2" }
+      ];
+      expect(findItemIndexInList(mealItems, "tea", null)).toBe(1);
+      expect(findItemIndexInList(mealItems, "the tea", null)).toBe(1);
+      expect(findItemIndexInList(mealItems, "iced tea", null)).toBe(1);
+      expect(findItemIndexInList(mealItems, "lemon tea", null)).toBe(1);
+      expect(findItemIndexInList(mealItems, "steak", null)).toBe(0);
+    });
+
     it('returns -1 for completely unrecognized names', () => {
       expect(findItemIndexInList(items, "Peanut Butter", null)).toBe(-1);
     });

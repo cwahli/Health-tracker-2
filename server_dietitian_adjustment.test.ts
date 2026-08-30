@@ -201,12 +201,24 @@ describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
     const label2d = sanitizeVerdictLabel("Low Calorie Dinner", "good", { sodium: 300, calories: 450 });
     expect(label2d).toBe("Good for your heart");
 
+    const label2e = sanitizeVerdictLabel("High Protein Snack", "good", { protein: 35 });
+    expect(label2e).toBe("Boosts lean muscle tissue");
+
+    const label2f = sanitizeVerdictLabel("Balanced Choice", "neutral", { calories: 400 });
+    expect(label2f).toBe("Supports sustained metabolic energy");
+
+    const label2g = sanitizeVerdictLabel("High Fat Dinner", "alert", { saturatedFat: 15 });
+    expect(label2g).toBe("Elevated saturated fat impact");
+
     // Legitimate health outcome labels are preserved
     const label3 = sanitizeVerdictLabel("Good for your heart", "good");
     expect(label3).toBe("Good for your heart");
 
     const label4 = sanitizeVerdictLabel("140% over sat fat limit", "alert");
     expect(label4).toBe("140% over sat fat limit");
+
+    const label5 = sanitizeVerdictLabel("Supports digestive balance", "good");
+    expect(label5).toBe("Supports digestive balance");
   });
 
   it("synchronizes narrative text with final nutrient ledger values including fiber and sodium", () => {

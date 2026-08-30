@@ -52,11 +52,12 @@ export function attachHappyPathMealBuild(opts: {
   degradedStages?: string[];
 }): { mealBuild: MealBuild; pendingFoodLog: any } {
   const { parsedData, jobId, activeMeal, scoutItems, diningEnvironment, degradedStages } = opts;
+  const baseLog = activeMeal || parsedData;
   const base = migrateMealSchema(
     activeMeal?.mealBuild ||
-      fromPendingFoodLog(parsedData, {
+      fromPendingFoodLog(baseLog, {
         id: jobId || parsedData?.id || `meal_${Date.now()}`,
-        mode: 'new_log',
+        mode: activeMeal ? (activeMeal.mode || 'edit') : 'new_log',
       })
   );
   let meal = consolidateMeal(

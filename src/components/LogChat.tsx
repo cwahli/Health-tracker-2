@@ -1469,126 +1469,6 @@ ${logsText}`);
             console.warn('[LogChat] Failed to fetch full R2 result:', e);
           }
         }
-
-        const welcome = getWelcomeMessage();
-        
-        let userMsg: ChatMessage | undefined = job.messages?.find((m: any) => m.role === 'user');
-        if (!userMsg) {
-          userMsg = {
-            id: `msg_user_${activeJobId}`,
-            role: 'user',
-            content: job.inputSnapshot?.text || '',
-            timestamp: job.createdAt,
-            imageUrl: (job.inputSnapshot as any)?.hasImage ? 'loading' : undefined
-          };
-        }
-
-        const remotePhoto =
-          job.photoUrl ||
-          job.result?.photoUrl ||
-          job.result?.clean_result?.photoUrl ||
-          (job.result as any)?.data?.photoUrl ||
-          (job as any).clean_result?.photoUrl ||
-          (job as any).photo_url;
-
-        if ((job.inputSnapshot as any)?.hasImage || userMsg.imageUrl === 'loading' || userMsg.imageUrl === 'Image reference preserved' || remotePhoto) {
-          try {
-            const images = await ImageStore.getImages(activeJobId);
-            if (images && images.length > 0) {
-              userMsg.imageUrls = await Promise.all(images.map(img => typeof img === 'string' ? img : blobToDurableDataUrl(img as Blob)));
-              userMsg.imageUrl = userMsg.imageUrls[0];
-            } else if (remotePhotos && remotePhotos.length > 0) {
-              userMsg.imageUrl = remotePhotos[0];
-              userMsg.imageUrls = remotePhotos;
-            }
-          } catch (err) {
-            console.warn('Failed to load images from ImageStore for LogChat:', err);
-            if (remotePhotos && remotePhotos.length > 0) {
-              userMsg.imageUrl = remotePhotos[0];
-              userMsg.imageUrls = remotePhotos;
-            }
-          }
-        }
-
-        const foodLog = resolvePendingFoodLog(job);
-
-        try {
-          const imgs = await ImageStore.getImages(activeJobId);
-          if (foodLog && imgs?.length) {
-            foodLog.imageUrls = await Promise.all(imgs.map(img => typeof img === 'string' ? img : blobToDurableDataUrl(img as Blob)));
-            foodLog.imageUrl = foodLog.imageUrls[0];
-          } else if (foodLog && remotePhotos && remotePhotos.length > 0) {
-            foodLog.imageUrl = foodLog.imageUrl || remotePhotos[0];
-            foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : remotePhotos;
-          }
-        } catch (err) {
-          console.warn('Failed to load images from ImageStore for LogChat:', err);
-          if (foodLog && remotePhotos && remotePhotos.length > 0) {
-            foodLog.imageUrl = foodLog.imageUrl || remotePhotos[0];
-            foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : remotePhotos;
-          }
-        }
-
-        const raw = currentResult.raw || (currentResult as any)?.clean_result || currentResult || job.result?.raw || (job.result as any)?.clean_result || job.result || {};
-        const snapAgent = (job.inputSnapshot as any)?.agentType;
-        const reviewCmds = raw.modificationCommand || raw.agentResult?.modificationCommand;
-        const resolvedType = (type === 'food' || foodLog || raw.agentType === 'food' || raw.agentType === 'food_log' || raw.agentType === 'food_analyze' || raw.agentType === 'front_desk')
-          ? 'food'
-          : (raw.agentType || snapAgent || (Array.isArray(reviewCmds) && reviewCmds.length ? 'biomarker_review' : type));
-        const unitMap = collectCatalogUnitMap(profile);
-        const isReview = resolvedType === 'biomarker_review' || (type as string) === 'biomarker_review' || agentType === 'biomarker_review';
-        const cmds = isReview
-          ? enrichReviewModificationCommands(Array.isArray(reviewCmds) ? reviewCmds : [], biomarkerHistory || [], unitMap)
-          : reviewCmds;
-        const rawContent = raw.message || raw.text || raw.reply || raw.globalSummary || foodLog?.message || 'Analysis complete.';
-        const assistantMsg: ChatMessage = {
-          id: `msg_assistant_${activeJobId}`,
-          role: 'assistant',
-          content: isReview ? sanitizeReviewReply(rawContent, cmds, biomarkerHistory || [], unitMap) : rawContent,
-          timestamp: job.updatedAt || new Date().toISOString(),
-          isLive: false,
-          agentResult: raw,
-          agentType: resolvedType as any,
-          modificationCommand: cmds,
-          pendingFoodLog: foodLog,
-          data: {
-            pendingFoodLog: foodLog,
-            hasImage: !!(foodLog?.imageUrl || foodLog?.imageUrls?.length || (job.inputSnapshot as any)?.hasImage),
-            photoUrl: job.result?.photoUrl || raw.photoUrl,
-            debugUrl: job.result?.debugUrl || raw.debugUrl,
-            scoutItems: job.result?.scoutItems || raw.scoutItems || [],
-            scoutContentType: raw.scoutContentType,
-            mode: raw.mode || (job.inputSnapshot as any)?.mode || 'review',
-            comparison: raw.comparison,
-            agentResult: {
-              ...raw,
-              ...(raw.agentResult || {}),
-              modificationCommand: cmds,
-              proposal: raw.proposal || raw.agentResult?.proposal || null,
-              reply: raw.reply || raw.text,
-              scoutScratchpad: raw.agentResult?.scoutScratchpad || raw.scoutScratchpad || job.liveThoughts?.scout || '',
-              dietitianScratchpad: raw.agentResult?.dietitianScratchpad || raw.dietitianScratchpad || job.liveThoughts?.dietitian || '',
-              backendLogs: raw.agentResult?.backendLogs || raw.backendLogs || job.liveThoughts?.backendLogs || '',
-              globalLiveLogs: job.liveThoughts?.globalLiveLogs || '',
-              dbSearchLog: raw.agentResult?.dbSearchLog || job.liveThoughts?.dbSearchLog || ''
-            }
-          }
-        };
-        if (assistantMsg.pendingFoodLog) {
-          assistantMsg.pendingFoodLog.id = assistantMsg.pendingFoodLog.id || `food_${Date.now()}`;
-          assistantMsg.pendingFoodLog.chatTranscript = [
-            { role: userMsg.role, content: userMsg.content, timestamp: userMsg.timestamp },
-            { role: assistantMsg.role, content: assistantMsg.content, timestamp: assistantMsg.timestamp }
-          ];
-        }
-
-        const isDefaultWelcome = !userMsg.content && !userMsg.imageUrl && !userMsg.imageUrls?.length;
-        if (isDefaultWelcome) {
-          setMessages([assistantMsg], false);
-        } else {
-          setMessages([welcome, userMsg, assistantMsg], false);
-        }
-        return;
       }
 
       if (job.status === 'draft') {
@@ -1950,7 +1830,7 @@ ${logsText}`);
     return () => {
       unsubscribe();
     };
-  }, [jobId, isOpen, type, messages.length]);
+  }, [jobId, isOpen, type]);
 
   // Cleanly reset isAnalyzing and isSending when modal closes
   useEffect(() => {
@@ -2735,7 +2615,7 @@ ${logsText}`);
 
         const existingMsgs = (job?.messages && job.messages.length > 0)
           ? job.messages
-          : [getWelcomeMessage()];
+          : (messages.length > 0 ? messages.filter(m => !m.isLive) : [getWelcomeMessage()]);
 
         const lastScoutMsgForJob = [...existingMsgs].reverse().find(m => 
           (m.data?.scoutItems && m.data.scoutItems.length > 0) || 
@@ -3161,9 +3041,6 @@ ${logsText}`);
             isSendingRef.current = false;
             setIsSubmitting(false);
             setIsAnalyzing(false);
-
-            const keepOpen = !!(extraOptions?.goldenCaseId || (typeof overrideText === 'object' && overrideText?.goldenCaseId));
-            if (!keepOpen) onClose();
           });
         }).catch(err => {
           console.error('[LogChat] Error converting images:', err);
@@ -3350,7 +3227,7 @@ ${logsText}`);
 
         const existingMsgs = (job?.messages && job.messages.length > 0 && !isDifferentBiomarkerAction)
           ? job.messages
-          : [getWelcomeMessage()];
+          : (messages.length > 0 && !isDifferentBiomarkerAction ? messages.filter(m => !m.isLive) : [getWelcomeMessage()]);
         const updatedMessages = [...existingMsgs, userMsg];
 
         let updatedProfile = profile ? { ...profile } : null;
@@ -3434,7 +3311,6 @@ ${logsText}`);
         if (onJobEnqueued) {
           onJobEnqueued(currentJobId, 'medical');
         }
-        onClose();
       } catch (err: any) {
         console.error('Failed to enqueue medical job:', err);
         clearTimeout(failsafe);

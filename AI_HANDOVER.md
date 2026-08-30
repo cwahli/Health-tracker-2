@@ -1,7 +1,24 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-29  
-**Status:** Production Scout system instruction promoted with atomic sticker grounding & local name preservation; bracket tag prompt sanitization applied; Auth/sync hang timeouts resolved; tsc exit 0 and tests green.
+**Updated:** 2026-08-30  
+**Status:** Unified Active-Meal Edit & Q&A architecture implemented; brittle regex keyword gating removed; all text-only follow-ups in an active meal session route to the single-meal flow; Q&A leaves meal card untouched; 87/87 vitest test files passing; tsc exit 0; app compiled and dev server running.
+
+- **Unified Active-Meal Edit & Q&A Architecture (`plan/FOOD_CHAT_UNIFIED_EDIT_QA_SPEC.md`, `agents/dietitianInstructions.ts`, `server_routes_food_analyze.ts` - 2026-08-30):**
+  - **Root Cause & Diagnosis:** Follow-ups on active meals were subjected to brittle regex keyword filters trying to guess whether a phrase was an "edit" or "new log". This caused natural phrasing to either drop active meal context or misroute.
+  - **Key Changes Applied:**
+    - Documented architectural spec in `plan/FOOD_CHAT_UNIFIED_EDIT_QA_SPEC.md`.
+    - In `agents/dietitianInstructions.ts`, updated system prompt instructions so the model outputs `modificationCommand` on food alterations and `modificationCommand: []` for pure conversational Q&A and advice.
+    - In `server_routes_food_analyze.ts`, removed all brittle regex checks on message text; any text follow-up on an `activeMeal` without new photos routes directly into the single-meal flow.
+    - Configured zero-mutation handling: when `commands` is empty (Q&A), the assistant response is returned to chat with `editApplied: false`, leaving the meal card, items, and nutrients 100% untouched.
+  - **Verification:** `npx vitest run` (87/87 test files, 834/834 tests passing); `npx tsc --noEmit` exit 0; `compile_applet` build succeeded.
+
+- **Food Log Edit Intent Gate & Modifier Schema Restoration (`server_routes_food_analyze.ts` - 2026-08-30):**
+  - **Root Cause & Diagnosis:** (1) The Edit Gate regex in `server_routes_food_analyze.ts` was overly restrictive, failing to recognize natural language follow-up edits (e.g. "The tea is unsweetened", "no sugar", "without dressing", "actually 150g", "no oil"). (2) The Gemini Dietitian response schema (`foodAnalyzeSchema`) lacked `'update_modifier'` and `'replace_item'` in its action enum and omitted the `modifier` string property, preventing the model from outputting structured modifier commands. (3) `originalModeIsModify` and the mode router defaulted `mode` to `"new_log"` when `rawParsed.mode` was omitted, causing the modify execution pipeline to be bypassed.
+  - **Key Changes Applied:**
+    - Broadened `isExplicitModify` in `server_routes_food_analyze.ts` to automatically treat all text-only follow-ups when `activeMeal` exists (or any message containing modifier/edit keywords like `unsweetened`, `no sugar`, `zero sugar`, `without`, `no oil`, `no salt`, `actually`, `split`, etc.) as an edit session.
+    - Updated `foodAnalyzeSchema` in `server_routes_food_analyze.ts` to include `update_modifier` and `replace_item` in `action` enum and added the `modifier` and `replacementItemName` fields.
+    - Updated mode determination so `mode` is cleanly set to `"modify"` whenever `originalModeIsModify` is active or edit commands (`modificationCommand`/`editCommands`) are returned.
+  - **Verification:** 87/87 vitest test files (834/834 tests) passing, `npx tsc --noEmit` exit 0, `compile_applet` build succeeded.
 
 - **Edit Mode Command Synthesis & Modifier Adjustments (`server_pure_helpers.ts`, `server_routes_food_analyze.ts`, `server_dietitian_adjustment.test.ts` - 2026-08-29):**
   - **Root Cause & Diagnosis:** When users requested edits like "the beef and chicken is 100g of beef steak and 100g of chicken steak" or "the tea is unsweetened", the Dietitian outputted modified `itemsBreakdown` without explicit `editCommands`. In `server_pure_helpers.ts`, `synthesizeEditCommandsFromBreakdown` required an exact `scoutIndex` match on untouched items, causing missing items (like composite dish `Sizzling Steak...`) to be preserved instead of removed when replaced or split. Additionally, modifier requests ("unsweetened", "no oil", "no salt") had no synthesis trigger, and nutrient recalculations at the end of modify mode didn't update all 32 nutrient fields.

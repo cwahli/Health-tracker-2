@@ -945,16 +945,14 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
     // When the user has explicitly selected "Edit", treat any text-only follow-up as a modification
     // command regardless of wording, instead of relying solely on keyword matching.
     const userExplicitlySelectedEditMode = req.body.userSelectedMode === 'edit' || req.body.userSelectedMode === 'modify';
+    const hasNoNewImages = !imagePayloads || imagePayloads.length === 0;
 
     const isExplicitModify = !!(
       activeMeal &&
       (
+        hasNoNewImages ||
         isPureWeightModification ||
         userExplicitlySelectedEditMode ||
-        (
-          message &&
-          /\b(change|modify|update|remove|delete|correct|instead|replace|adjust|had|ate|only|portion|fraction|half|quarter|third|\d+\/\d+)\b/i.test(message)
-        ) ||
         weightRefineIntent.isRefine
       )
     );
@@ -977,26 +975,31 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
         ? activeMeal.itemsBreakdown
         : (Array.isArray(activeMeal.items) ? activeMeal.items : []);
       if (activeList.length > 0) {
-        visionScoutItems = activeList.map((it: any, idx: number) => ({
-          scoutIndex: it.scoutIndex !== undefined && it.scoutIndex !== null ? it.scoutIndex : idx,
-          originalName: it.originalName || it.canonicalDbName || it.name || "Food Item",
-          keyword: it.keyword || it.canonicalDbName || it.originalName || it.name,
-          estimatedWeightGrams: Number(it.weightGrams) || 100,
-          nutrientBasisWeight: Number(it.weightGrams) || 100,
-          nutrients: it.nutrients || it.truthNutrients || null,
-          cookingMethod: it.cookingMethod || 'raw',
-          ingredients: it.ingredients || (it.ingredientsList ? String(it.ingredientsList).split(',').map((s: string) => s.trim()) : []),
-          visualIngredients: it.visualIngredients || [],
-          rawNutritionLabel: it.rawNutritionLabel || null,
-          chainName: it.chainName || null,
-          dbSource: it.dbSource || 'estimated',
-          dbId: it.dbId || null,
-          boundingBox2D: it.boundingBox2D || null,
-          sourceImageIndex: it.sourceImageIndex ?? 0,
-          componentsDetailList: it.componentsDetailList || [],
-          components: it.components || [],
-          hasComponents: it.hasComponents || false,
-        }));
+        visionScoutItems = activeList.map((it: any, idx: number) => {
+          const sIdx = it.scoutIndex !== undefined && it.scoutIndex !== null ? it.scoutIndex : idx;
+          it.scoutIndex = sIdx; // Mutate the original activeMeal item to ensure it matches by scoutIndex during consolidation
+          return {
+            itemId: it.itemId || it.id || undefined,
+            scoutIndex: sIdx,
+            originalName: it.originalName || it.canonicalDbName || it.name || "Food Item",
+            keyword: it.keyword || it.canonicalDbName || it.originalName || it.name,
+            estimatedWeightGrams: Number(it.weightGrams) || 100,
+            nutrientBasisWeight: Number(it.weightGrams) || 100,
+            nutrients: it.nutrients || it.truthNutrients || null,
+            cookingMethod: it.cookingMethod || 'raw',
+            ingredients: it.ingredients || (it.ingredientsList ? String(it.ingredientsList).split(',').map((s: string) => s.trim()) : []),
+            visualIngredients: it.visualIngredients || [],
+            rawNutritionLabel: it.rawNutritionLabel || null,
+            chainName: it.chainName || null,
+            dbSource: it.dbSource || 'estimated',
+            dbId: it.dbId || null,
+            boundingBox2D: it.boundingBox2D || null,
+            sourceImageIndex: it.sourceImageIndex ?? 0,
+            componentsDetailList: it.componentsDetailList || [],
+            components: it.components || [],
+            hasComponents: it.hasComponents || false,
+          };
+        });
         visionScoutRanAndReturnedItems = true;
         addDebugLog(`[Edit Continuity] Inherited ${visionScoutItems.length} items from activeMeal into visionScoutItems for edit.`);
       }
@@ -5323,12 +5326,14 @@ function parseServingSizeGrams(ssVal: string, totalItemWeight: number): number {
           items: {
             type: Type.OBJECT,
             properties: {
-              action: { type: Type.STRING, enum: ['update_weight', 'update_component_weight', 'remove_item', 'add_item', 'rename_alias', 'update_cooking_method'] },
+              action: { type: Type.STRING, enum: ['update_weight', 'update_component_weight', 'update_modifier', 'remove_item', 'add_item', 'replace_item', 'rename_alias', 'update_cooking_method'] },
               itemName: { type: Type.STRING },
-              newWeightGrams: { type: Type.INTEGER },
+              newWeightGrams: { type: Type.INTEGER, nullable: true },
               targetDbId: { type: Type.STRING, nullable: true },
               componentName: { type: Type.STRING, nullable: true, description: "Required when action is 'update_component_weight'. The name of the specific ingredient/component inside the composite dish named by itemName (e.g. itemName='Sizzling Steak with Wedges', componentName='Beef Steak')." },
+              modifier: { type: Type.STRING, nullable: true, description: "Required when action is 'update_modifier'. The text modifier to apply (e.g. 'unsweetened', 'no sugar', 'no oil', 'no salt')." },
               newItemName: { type: Type.STRING, nullable: true },
+              replacementItemName: { type: Type.STRING, nullable: true },
               newCookingMethod: { type: Type.STRING, nullable: true }
             },
             required: ["action", "itemName"]
@@ -5739,12 +5744,20 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       }
     }
 
-    let mode = rawParsed.mode || "new_log";
+    const originalModeIsModify = !!(
+      isExplicitModify ||
+      userExplicitlySelectedEditMode ||
+      (activeMeal && (!imagePayloads || imagePayloads.length === 0))
+    );
+
+    let mode = rawParsed.mode || (originalModeIsModify ? "modify" : "new_log");
     if (userSelectedMode !== 'compare' && visionScoutItems && visionScoutItems.length <= 1 && mode === "evaluation") {
       addDebugLog(`[Mode Override] Overriding mode from 'evaluation' to 'new_log' because only 1 item was identified.`);
       mode = "new_log";
     }
-    const originalModeIsModify = (mode === "modify" || isExplicitModify || userExplicitlySelectedEditMode || (req.body.activeMeal !== undefined && (message.toLowerCase().includes("change") || message.toLowerCase().includes("modify") || message.toLowerCase().includes("update") || message.toLowerCase().includes("remove") || message.toLowerCase().includes("add") || message.toLowerCase().includes("correct") || message.toLowerCase().includes("only") || message.toLowerCase().includes("instead") || message.toLowerCase().includes("replace"))));
+    if (originalModeIsModify && mode !== "discussion" && mode !== "evaluation") {
+      mode = "modify";
+    }
 
     apiCalls = [
       ...(hasImage ? [{ type: 'gemini', label: 'Food nutrition agent - Visual Scout (gemini-3.5-flash-lite)' }] : []),
@@ -5862,6 +5875,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
     {
       const hasExplicitEditCommands = Array.isArray(rawParsed.editCommands) && rawParsed.editCommands.length > 0;
       const hasLegacyEditCommands = Array.isArray(rawParsed.modificationCommand) && rawParsed.modificationCommand.length > 0;
+      if (hasExplicitEditCommands || hasLegacyEditCommands) {
+        mode = "modify";
+      }
       if (originalModeIsModify && rawParsed.foodData?.itemsBreakdown?.length > 0 && !hasExplicitEditCommands && !hasLegacyEditCommands) {
         // Model returned itemsBreakdown without editCommands.
         // If we have an activeMeal to diff against, synthesize editCommands here and stay
@@ -7462,12 +7478,24 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           });
         }
 
+        addDebugLog('[MealBuild] modify-path');
+        const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
+          parsedData,
+          jobId: req.body.jobId,
+          activeMeal: req.body.activeMeal,
+          scoutItems: updatedScoutItems,
+          diningEnvironment,
+        });
+
         return res.json({
           mode: "modify",
           dietitianScratchpad: rawParsed._internalReasoning,
           text: rawParsed.message || `I have updated your meal to reflect the correction.`,
           message: rawParsed.message || `I have updated your meal to reflect the correction.`,
-          data: parsedData,
+          data: pendingFoodLog || parsedData,
+          pendingFoodLog: pendingFoodLog || parsedData,
+          mealBuild,
+          savable: true,
           agentPrompt: fullPromptSent,
           scoutItems: updatedScoutItems,
           apiCalls
@@ -7579,6 +7607,13 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       }
 
       let commands = rawParsed.editCommands || rawParsed.modificationCommand || rawParsed.data?.editCommands || rawParsed.data?.modificationCommand || rawParsed.agentResult?.modificationCommand;
+
+      const MAX_SANE_MODIFY_COMMANDS = 15;
+      if (Array.isArray(commands) && commands.length > MAX_SANE_MODIFY_COMMANDS) {
+        addDebugLog(`[Modify Math Warning] Dietitian returned ${commands.length} modification commands — far more than any real edit should ever need (likely a degenerate/truncated AI response). Discarding all of them and treating this as a failed edit rather than risk corrupting the meal.`);
+        commands = null;
+      }
+
       if (!commands || !Array.isArray(commands) || commands.length === 0) {
         // Fallback: If Dietitian returned foodData.itemsBreakdown or itemsBreakdown in rawParsed or data, synthesize commands comparing against activeMeal
         const dietitianItems = rawParsed.foodData?.itemsBreakdown || rawParsed.itemsBreakdown || rawParsed.data?.itemsBreakdown || rawParsed.data?.foodData?.itemsBreakdown || rawParsed.pendingFoodLog?.itemsBreakdown || rawParsed.scoutItems;
@@ -7592,28 +7627,107 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         }
       }
 
-      if (!commands || !Array.isArray(commands) || commands.length === 0) {
-        addDebugLog(`[Modify Math Fallback] No explicit modification command array generated; building soft-edit fallback from activeMeal.`);
+      // Natural Language Edit Intent Extraction fallback:
+      // If the LLM failed to emit edit commands (or emitted no-op commands), extract modifier/weight intent directly from user prompt
+      const userPromptText = String(message || req.body.text || '').toLowerCase();
+      const hasUnsweetenedIntent = /\b(unsweetened|unsweatened|no sugar|zero sugar|without sugar|sugar-free|sugar free|less sugar|diet)\b/i.test(userPromptText);
+      const hasNoOilIntent = /\b(no oil|oil free|oil-free|without oil|less oil|no fat|fat-free|fat free)\b/i.test(userPromptText);
+      const hasNoSaltIntent = /\b(no salt|salt free|salt-free|without salt|unsalted|less salt)\b/i.test(userPromptText);
+
+      if (hasUnsweetenedIntent || hasNoOilIntent || hasNoSaltIntent) {
         const activeItems = activeMeal.itemsBreakdown || activeMeal.items || [];
-        (req as any)._editWasNoOpFallback = true;
         if (activeItems.length > 0) {
-          commands = activeItems.map((it: any, idx: number) => ({
-            scoutIndex: typeof it.scoutIndex === 'number' ? it.scoutIndex : idx,
-            foodName: it.name || it.foodName || 'Food item',
-            action: 'modify' as const,
-            originalGrams: Number(it.weightGrams) || 100,
-            newGrams: Number(it.weightGrams) || 100,
-            multiplier: 1.0,
-            reason: 'Maintained current weight'
-          }));
-        } else {
-          return res.json({
-            text: rawParsed.message || "I received a modify request but no active meal items were found to modify.",
-            message: rawParsed.message || "I received a modify request but no active meal items were found to modify.",
-            data: activeMeal,
-            apiCalls
+          let matchedItem = activeItems.find((it: any) => {
+            const name = (it.name || '').toLowerCase();
+            return userPromptText.includes(name) || name.split(/\s+/).some((w: string) => w.length > 2 && userPromptText.includes(w));
           });
+          if (!matchedItem && hasUnsweetenedIntent) {
+            matchedItem = activeItems.find((it: any) => {
+              const name = (it.name || '').toLowerCase();
+              return /tea|coffee|latte|drink|boba|lemonade|juice|beverage|matcha|chai/i.test(name);
+            });
+          }
+          if (!matchedItem && activeItems.length === 1) {
+            matchedItem = activeItems[0];
+          }
+          if (matchedItem) {
+            const mod = hasUnsweetenedIntent ? 'unsweetened' : (hasNoOilIntent ? 'no oil' : 'no salt');
+            const modCmd = {
+              action: 'update_modifier',
+              itemName: matchedItem.name,
+              modifier: mod
+            };
+            if (!Array.isArray(commands) || commands.length === 0) {
+              commands = [modCmd];
+            } else {
+              // Ensure any existing update_modifier command has modifier filled in
+              commands.forEach((c: any) => {
+                if (c.action === 'update_modifier' && !c.modifier) {
+                  c.modifier = mod;
+                }
+              });
+              const hasModCmd = commands.some((c: any) => c.action === 'update_modifier');
+              if (!hasModCmd) {
+                commands.unshift(modCmd);
+              }
+            }
+          }
         }
+      }
+
+      let metadataWasChanged = false;
+      if (rawParsed.foodData?.date && rawParsed.foodData.date !== activeMeal.date) {
+        activeMeal.date = rawParsed.foodData.date;
+        metadataWasChanged = true;
+      }
+      if (rawParsed.foodData?.cookingMethod && rawParsed.foodData.cookingMethod !== activeMeal.cookingMethod) {
+        activeMeal.cookingMethod = rawParsed.foodData.cookingMethod;
+        metadataWasChanged = true;
+      }
+      if (rawParsed.foodData?.benefits && rawParsed.foodData.benefits !== activeMeal.benefits) {
+        activeMeal.benefits = rawParsed.foodData.benefits;
+        metadataWasChanged = true;
+      }
+      if (rawParsed.foodData?.risks && rawParsed.foodData.risks !== activeMeal.risks) {
+        activeMeal.risks = rawParsed.foodData.risks;
+        metadataWasChanged = true;
+      }
+      if (rawParsed.foodData?.healthImpact && rawParsed.foodData.healthImpact !== activeMeal.healthImpact) {
+        activeMeal.healthImpact = rawParsed.foodData.healthImpact;
+        metadataWasChanged = true;
+      }
+      if (rawParsed.foodData?.recommendation && rawParsed.foodData.recommendation !== activeMeal.recommendation) {
+        activeMeal.recommendation = rawParsed.foodData.recommendation;
+        metadataWasChanged = true;
+      }
+      if ((rawParsed.verdict || rawParsed.foodData?.verdict) && (rawParsed.verdict || rawParsed.foodData?.verdict) !== activeMeal.verdict) {
+        activeMeal.verdict = rawParsed.verdict || rawParsed.foodData?.verdict;
+        metadataWasChanged = true;
+      }
+      if (rawParsed.message && rawParsed.message !== activeMeal.message) {
+        activeMeal.message = rawParsed.message;
+      }
+      if (rawParsed.foodData?.name && rawParsed.foodData.name !== activeMeal.name && rawParsed.foodData.name !== 'Food Item') {
+        activeMeal.name = rawParsed.foodData.name;
+        metadataWasChanged = true;
+      }
+
+      if ((!commands || !Array.isArray(commands) || commands.length === 0) && !metadataWasChanged) {
+        addDebugLog(`[Modify Flow] No modification commands requested (Pure Q&A / Discussion). Preserving active meal without mutations.`);
+        return res.json({
+          mode: "modify",
+          text: rawParsed.message || "I've reviewed your question regarding this meal.",
+          message: rawParsed.message || "I've reviewed your question regarding this meal.",
+          editApplied: false,
+          data: activeMeal,
+          savable: true,
+          agentPrompt: fullPromptSent,
+          apiCalls
+        });
+      }
+      
+      if (!commands || !Array.isArray(commands) || commands.length === 0) {
+          commands = [];
       }
 
       const originalItems = activeMeal.itemsBreakdown || [];
@@ -7667,7 +7781,20 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                (mealNameLower.includes(nLower) && (activeMeal.itemsBreakdown || []).every((it: any) => (it.name || "").toLowerCase() !== nLower));
       };
 
-      const __preEditItemsSnapshot = JSON.stringify((activeMeal.itemsBreakdown || []).map((it: any) => ({ n: (it.name || '').toLowerCase().trim(), w: Number(it.weightGrams) || 0 })));
+      const serializeMealItemsSnapshot = (items: any[]) => JSON.stringify((items || []).map((it: any) => ({
+        n: (it.name || '').toLowerCase().trim(),
+        w: Number(it.weightGrams) || 0,
+        cal: Number(it.calories ?? it.nutrients?.calories) || 0,
+        sug: Number(it.sugar ?? it.nutrients?.sugar ?? it.addedSugar ?? it.nutrients?.addedSugar) || 0,
+        carb: Number(it.carbohydrates ?? it.nutrients?.carbohydrates) || 0,
+        fat: Number(it.totalFat ?? it.nutrients?.totalFat) || 0,
+        sat: Number(it.saturatedFat ?? it.nutrients?.saturatedFat) || 0,
+        sod: Number(it.sodium ?? it.nutrients?.sodium) || 0,
+        pro: Number(it.protein ?? it.nutrients?.protein) || 0,
+        mod: !!(it.isEdited || it.wasModified)
+      })).sort((a: any, b: any) => (a.n + '|' + a.w + '|' + a.cal + '|' + a.sug + '|' + a.carb).localeCompare(b.n + '|' + b.w + '|' + b.cal + '|' + b.sug + '|' + b.carb)));
+
+      const __preEditItemsSnapshot = serializeMealItemsSnapshot(activeMeal.itemsBreakdown);
 
       for (const cmd of commands) {
         const action = cmd.action;
@@ -7779,8 +7906,15 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                 item.saturatedFat = Number(((rec?.nutrients?.saturatedFat ?? foundation?.saturatedFat) || 0).toFixed(2));
                 item.sodium = Number(((rec?.nutrients?.sodium ?? foundation?.sodium) || 0).toFixed(1));
                 item.carbohydrates = Number(((rec?.nutrients?.carbohydrates ?? foundation?.carbohydrates) || 0).toFixed(1));
+                item.isEdited = true;
+                item.wasModified = true;
                 if (scoutEst != null) item.estimatedCalories = scoutEst;
               }
+              }
+
+              if (item) {
+                item.isEdited = true;
+                item.wasModified = true;
               }
 
               addDebugLog(`[Modify Math] update_weight of "${item.name}" (dbId: ${item.dbId}) from ${oldWeight}g to ${newWeight}g (ratio: ${R.toFixed(3)})`);
@@ -7807,6 +7941,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           if (idx !== -1) {
             const item = activeMeal.itemsBreakdown[idx];
             item.name = cmd.newItemName || item.name;
+            item.canonicalDbName = cmd.newItemName || item.canonicalDbName || item.name;
+            item.isEdited = true;
+            item.wasModified = true;
             // If it's the only item, or represents the whole meal, update the top-level name
             if (activeMeal.itemsBreakdown.length === 1 || isWholeMealMatch(itemName)) {
               activeMeal.name = item.name;
@@ -7844,6 +7981,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               item.calories = parseFloat(Math.max(0, (item.calories || 0) - oldAddedCalories + newAddedCalories).toFixed(1));
               item.saturatedFat = parseFloat(Math.max(0, (item.saturatedFat || 0) - oldAddedSatFat + newAddedSatFat).toFixed(2));
               item.cookingMethod = newMethod;
+              item.isEdited = true;
+              item.wasModified = true;
             }
 
             // Also adjust top-level activeMeal.nutrients directly
@@ -7874,24 +8013,72 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           const idx = findItemIndex(itemName, targetDbId);
           if (idx !== -1) {
             const item = activeMeal.itemsBreakdown[idx];
-            const modifier = (cmd.modifier || '').toLowerCase();
+            let modifier = (cmd.modifier || '').toLowerCase();
+            if (!modifier) {
+              const uMsg = String(message || req.body.text || '').toLowerCase();
+              if (/\b(unsweetened|unsweatened|no\s+sugar|zero\s+sugar|without\s+sugar|sugar-free|sugar\s+free|less\s+sugar|diet)\b/i.test(uMsg)) {
+                modifier = 'unsweetened';
+              } else if (/\b(no\s+oil|oil-free|oil\s+free|without\s+oil|less\s+oil|no\s+fat|fat-free|fat\s+free)\b/i.test(uMsg)) {
+                modifier = 'no oil';
+              } else if (/\b(no\s+salt|salt-free|salt\s+free|without\s+salt|unsalted|less\s+salt)\b/i.test(uMsg)) {
+                modifier = 'no salt';
+              }
+            }
             
-            if (modifier.includes('unsweetened') || modifier.includes('unsweatened') || modifier.includes('no sugar') || modifier.includes('zero sugar')) {
+            if (modifier.includes('unsweetened') || modifier.includes('unsweatened') || modifier.includes('no sugar') || modifier.includes('zero sugar') || modifier.includes('without sugar') || modifier.includes('sugar-free') || modifier.includes('sugar free')) {
               const sugarGrams = Number(item.sugar ?? item.nutrients?.sugar ?? item.nutrients?.addedSugar ?? item.addedSugar) || 0;
-              const calDeduction = sugarGrams > 0 ? sugarGrams * 4 : 25;
-              const carbDeduction = sugarGrams > 0 ? sugarGrams : 6.5;
+              const calDeduction = sugarGrams > 0 ? sugarGrams * 4 : (item.name?.toLowerCase()?.includes('tea') || item.name?.toLowerCase()?.includes('coffee') ? Math.max(0, (Number(item.calories ?? item.nutrients?.calories) || 0) - 5) : 25);
+              const carbDeduction = sugarGrams > 0 ? sugarGrams : (item.name?.toLowerCase()?.includes('tea') || item.name?.toLowerCase()?.includes('coffee') ? Number(item.carbohydrates ?? item.nutrients?.carbohydrates ?? 0) : 6.5);
 
               item.sugar = 0;
               item.addedSugar = 0;
               item.calories = Math.max(0, (Number(item.calories ?? item.nutrients?.calories) || 0) - calDeduction);
               item.carbohydrates = Math.max(0, (Number(item.carbohydrates ?? item.nutrients?.carbohydrates) || 0) - carbDeduction);
               
+              if (item.name?.toLowerCase()?.includes('tea') || item.name?.toLowerCase()?.includes('coffee')) {
+                item.calories = Math.min(item.calories || 0, 5);
+                item.carbohydrates = 0;
+              }
+
               if (item.nutrients) {
                 item.nutrients.sugar = 0;
                 item.nutrients.addedSugar = 0;
                 item.nutrients.calories = item.calories;
                 item.nutrients.carbohydrates = item.carbohydrates;
               }
+
+              // Also update child components if composite beverage/dish
+              if (Array.isArray(item.components)) {
+                item.components.forEach((c: any) => {
+                  c.sugar = 0;
+                  c.addedSugar = 0;
+                  c.calories = Math.max(0, (Number(c.calories) || 0) - calDeduction);
+                  c.carbohydrates = Math.max(0, (Number(c.carbohydrates) || 0) - carbDeduction);
+                  if (c.nutrients) {
+                    c.nutrients.sugar = 0;
+                    c.nutrients.addedSugar = 0;
+                    c.nutrients.calories = c.calories;
+                    c.nutrients.carbohydrates = c.carbohydrates;
+                  }
+                });
+              }
+              if (Array.isArray(item.componentsDetailList)) {
+                item.componentsDetailList.forEach((c: any) => {
+                  c.sugar = 0;
+                  c.addedSugar = 0;
+                  c.calories = Math.max(0, (Number(c.calories) || 0) - calDeduction);
+                  c.carbohydrates = Math.max(0, (Number(c.carbohydrates) || 0) - carbDeduction);
+                  if (c.nutrients) {
+                    c.nutrients.sugar = 0;
+                    c.nutrients.addedSugar = 0;
+                    c.nutrients.calories = c.calories;
+                    c.nutrients.carbohydrates = c.carbohydrates;
+                  }
+                });
+              }
+
+              item.isEdited = true;
+              item.wasModified = true;
               addDebugLog(`[Modify Math] update_modifier applied "unsweetened" to "${item.name}". Deducted ${calDeduction} kcal and ${carbDeduction}g sugar/carbs.`);
             } else if (modifier.includes('no oil') || modifier.includes('no fat')) {
               const fatGrams = Number(item.totalFat ?? item.nutrients?.totalFat ?? item.fat) || 0;
@@ -7905,6 +8092,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                 item.nutrients.saturatedFat = 0;
                 item.nutrients.calories = item.calories;
               }
+              item.isEdited = true;
+              item.wasModified = true;
               addDebugLog(`[Modify Math] update_modifier applied "no oil" to "${item.name}". Deducted ${calDeduction} kcal and ${fatGrams}g fat.`);
             } else if (modifier.includes('no salt') || modifier.includes('unsalted')) {
               item.sodium = 0;
@@ -7912,13 +8101,17 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                 item.nutrients.sodium = 0;
                 item.nutrients.salt = 0;
               }
+              item.isEdited = true;
+              item.wasModified = true;
               addDebugLog(`[Modify Math] update_modifier applied "no salt" to "${item.name}". Set sodium to 0.`);
             }
 
             // Append the modifier to the name if not already there
-            const modLabel = modifier.charAt(0).toUpperCase() + modifier.slice(1);
-            if (!item.name.toLowerCase().includes(modifier)) {
-              item.name = `${modLabel} ${item.name}`;
+            const isUnsweetened = modifier.includes('unsweet') || modifier.includes('unsweat') || modifier.includes('sugar');
+            const modLabel = isUnsweetened ? 'Unsweetened' : (modifier.charAt(0).toUpperCase() + modifier.slice(1));
+            const cleanName = item.name.replace(/^(sweetened|sweet)\s+/i, '');
+            if (!item.name.toLowerCase().includes('unsweetened') && !item.name.toLowerCase().includes('unsweatened')) {
+              item.name = `${modLabel} ${cleanName}`;
             }
           }
         }
@@ -8095,8 +8288,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       }
 
       if (!(req as any)._editWasNoOpFallback) {
-        const __postEditItemsSnapshot = JSON.stringify((activeMeal.itemsBreakdown || []).map((it: any) => ({ n: (it.name || '').toLowerCase().trim(), w: Number(it.weightGrams) || 0 })));
-        if (__postEditItemsSnapshot === __preEditItemsSnapshot) {
+        const __postEditItemsSnapshot = serializeMealItemsSnapshot(activeMeal.itemsBreakdown);
+        if (__postEditItemsSnapshot === __preEditItemsSnapshot && !metadataWasChanged) {
           addDebugLog(`[Modify Math Warning] All ${commands.length} modification command(s) failed to change the meal (no matching item found or a required field was missing). Falling back to honest message.`);
           (req as any)._editWasNoOpFallback = true;
         }
@@ -8157,10 +8350,16 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
       const editFailedSilently = !!(req as any)._editWasNoOpFallback;
       const honestFallbackMessage = "I wasn't able to apply that edit — could you rephrase it? For example, name the specific item and its new weight (e.g. \"beef steak 100g\").";
+      
+      // Preserve agent's message unconditionally if provided, never discarding the agent's work/output
+      const finalMessage = (rawParsed.message && typeof rawParsed.message === 'string' && rawParsed.message.trim().length > 0)
+        ? rawParsed.message
+        : (editFailedSilently ? honestFallbackMessage : "I have recalculated your meal's metrics with precision based on your instructions.");
+
       const responsePayload = {
         mode: "modify",
-        text: editFailedSilently ? honestFallbackMessage : (rawParsed.message || "I have recalculated your meal's metrics with precision based on your instructions."),
-        message: editFailedSilently ? honestFallbackMessage : (rawParsed.message || "I have recalculated your meal's metrics with precision based on your instructions."),
+        text: finalMessage,
+        message: finalMessage,
         editApplied: !editFailedSilently,
         data: pendingFoodLog || activeMeal,
         mealBuild,
