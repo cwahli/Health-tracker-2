@@ -484,8 +484,22 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
             }
             if (cleanResult.agentResult) delete cleanResult.agentResult.backendLogs;
             if (cleanResult.raw) delete cleanResult.raw;
-            
-            const dbCleanResult = { pendingFoodLog: cleanResult, photoUrl };
+
+            // Flatten to match the same shape serverJobs.ts already uses successfully:
+            // pendingFoodLog must be the actual meal object (itemsBreakdown/nutrients/name),
+            // not the whole response envelope, and mode/text/message must be preserved
+            // at the top level so a reload/reconnect fallback can tell a review from an edit.
+            const dbCleanResult: any = {
+               pendingFoodLog: cleanResult.pendingFoodLog || cleanResult.data || null,
+               photoUrl,
+               mode: cleanResult.mode || 'review',
+               text: cleanResult.text || '',
+               message: cleanResult.message || '',
+               editApplied: cleanResult.editApplied,
+               mealBuild: cleanResult.mealBuild || undefined,
+               scoutItems: cleanResult.scoutItems || undefined,
+               modificationCommand: cleanResult.modificationCommand || undefined,
+            };
             import('./src/utils/r2Storage.js').then(async ({ uploadJobResultToR2 }) => {
                let lightweightResult = dbCleanResult;
                try {
@@ -494,9 +508,9 @@ foodAnalyzeRouter.post("/api/gemini/food-analyze", async (req, res) => {
                      lightweightResult = {
                         is_r2: true,
                         r2_url: publicUrl,
-                        mode: 'review',
-                        text: cleanResult.text || '',
-                        message: cleanResult.message || 'Completed successfully',
+                        mode: dbCleanResult.mode,
+                        text: dbCleanResult.text || '',
+                        message: dbCleanResult.message || 'Completed successfully',
                      } as any;
                   }
                } catch (r2Err) {

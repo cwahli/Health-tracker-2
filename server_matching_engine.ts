@@ -260,7 +260,7 @@ export function classifyUniversalPhysicalFormV3(item: {
   }
 
   // 10. GRAINS / BREADS / BAKERY / SNACKS DETECTOR
-  const GRAIN_WORDS = ['rice', 'bread', 'noodle', 'noodles', 'ramen', 'pasta', 'spaghetti', 'tortilla', 'tortillas', 'bagel', 'bagels', 'porridge', 'oatmeal', 'pancake', 'pancakes', 'fries', 'chips', 'roll', 'rolls', 'bun', 'buns'];
+  const GRAIN_WORDS = ['rice', 'bread', 'noodle', 'noodles', 'ramen', 'pasta', 'spaghetti', 'tortilla', 'tortillas', 'bagel', 'bagels', 'porridge', 'oatmeal', 'oat', 'oats', 'pancake', 'pancakes', 'fries', 'chips', 'roll', 'rolls', 'bun', 'buns'];
   const matchedGrains = GRAIN_WORDS.filter(w => hasWord(w));
   if (matchedGrains.length > 0) {
     return {
@@ -461,6 +461,10 @@ export function evaluateUniversalCategoryDisparity(query: string, candidateName:
   // 3. Sauce/Condiment vs Bakery/Dessert Disparity
   if (qForm.primaryCategory === 'sauce_condiment' && cForm.primaryCategory === 'bakery_dessert') {
     return 2000;
+  }
+  // 4. Liquid Beverage vs Solid Grain/Bakery Disparity
+  if (qForm.primaryCategory === 'beverage' && cForm.primaryCategory === 'grain_bakery_snack') {
+    return 3000;
   }
 
   return 0;

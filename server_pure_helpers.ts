@@ -729,14 +729,10 @@ export function applySatFatAndAddedSugarFloor(
     dbSource === "kiosk" || 
     dbSource === "screen" || 
     dbSource === "menu" || 
-    dbSource === "brand_official" || dbSource === "usda" || dbSource === "matched_database_entry" || dbSource === "estimated" ||
-    dbSource === "usda" || 
-    dbSource === "matched_database_entry" || 
-    dbSource === "estimated" ||
-    dbSource === "usda" || 
-    dbSource === "matched_database_entry" || 
-    dbSource === "estimated" ||
-    (typeof dbSource === "string" && dbSource.startsWith("label") && dbSource !== "label_partial");
+    dbSource === "brand_official" || 
+    Boolean(ctx?.syntheticBase100g) ||
+    Boolean(ctx?.isDishEstimate) ||
+    (typeof dbSource === "string" && dbSource.startsWith("label"));
   if (isLabelOrScreenSource) return;
   if (!(itemNutrients.calories > 10)) return;
 
@@ -949,7 +945,7 @@ export function applyNutrientRealityChecks(
     dbSource === "kiosk" || 
     dbSource === "screen" || 
     dbSource === "menu" || 
-    dbSource === "brand_official" || dbSource === "usda" || dbSource === "matched_database_entry" || dbSource === "estimated" ||
+    dbSource === "brand_official" || 
     Boolean(ctx?.syntheticBase100g) ||
     Boolean(ctx?.isDishEstimate) ||
     (typeof dbSource === "string" && dbSource.startsWith("label"));
