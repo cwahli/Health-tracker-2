@@ -4,6 +4,7 @@ import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { sanitizeForFirestore } from '../utils/firestoreUtils';
 import { JobStore } from './JobStore';
 import { AgentJob } from './types';
+import { toPendingFoodLog } from '../mealBuild/adapters';
 
 const backendDeleteTried = new Set<string>();
 
@@ -33,9 +34,55 @@ async function fetchAndPopulateR2Job(jobId: string) {
           if (backendJob && backendJob.clean_result && !backendJob.clean_result.is_r2) {
             const existing = JobStore.getJob(jobId);
             const updatedResult = backendJob.clean_result;
+            const pendingFoodLog = updatedResult.pendingFoodLog || (updatedResult.mealBuild ? toPendingFoodLog(updatedResult.mealBuild) : null) || updatedResult.data;
+            const messageText = updatedResult.message || updatedResult.text || pendingFoodLog?.message || 'Analysis complete.';
+
+            let updatedMessages = existing?.messages;
+            if (existing?.messages && existing.messages.length > 0) {
+              const nonLive = existing.messages.filter((m: any) => !m.isLive);
+              const lastNonLive = nonLive[nonLive.length - 1];
+              const isNewTurn = lastNonLive && lastNonLive.role === 'user';
+              const assistantMsg = {
+                id: isNewTurn ? `msg_assistant_${jobId}_${Date.now()}` : `msg_assistant_${jobId}`,
+                role: 'assistant',
+                content: messageText,
+                timestamp: new Date().toISOString(),
+                isLive: false,
+                agentType: existing.kind === 'medical' ? 'agent1' : 'food',
+                pendingFoodLog: pendingFoodLog || undefined,
+                data: {
+                  jobId,
+                  pendingFoodLog: pendingFoodLog || undefined,
+                  photoUrl: backendJob.photo_url || updatedResult.photoUrl || existing.photoUrl,
+                  debugUrl: backendJob.debug_url || updatedResult.debugUrl || existing.debugUrl,
+                  scoutItems: updatedResult.scoutItems || [],
+                  mode: backendJob.mode || updatedResult.mode || 'review',
+                  agentResult: {
+                    backendLogs: updatedResult.backendLogs || '',
+                    globalLiveLogs: updatedResult.backendLogs || '',
+                    dietitianAnswer: messageText,
+                    scoutItems: updatedResult.scoutItems || [],
+                  },
+                },
+              };
+              if (isNewTurn) {
+                updatedMessages = [...nonLive, assistantMsg];
+              } else {
+                const lastAsstIdx = nonLive.map((m: any) => m.role).lastIndexOf('assistant');
+                if (lastAsstIdx !== -1) {
+                  nonLive[lastAsstIdx] = assistantMsg;
+                  updatedMessages = [...nonLive];
+                } else {
+                  updatedMessages = [...nonLive, assistantMsg];
+                }
+              }
+            }
+
             JobStore.updateJob(jobId, {
+              status: backendJob.status || 'succeeded',
               result: updatedResult,
               mealBuild: updatedResult.mealBuild || existing?.mealBuild,
+              messages: updatedMessages,
               photoUrl: updatedResult.photoUrl || existing?.photoUrl,
               debugUrl: updatedResult.debugUrl || existing?.debugUrl
             });
