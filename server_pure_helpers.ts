@@ -1437,8 +1437,8 @@ export function synthesizeEditCommandsFromBreakdown(activeMeal: any, dietitianIt
   });
   }
 
-  // Check for modifier commands in userMessage (e.g., "the tea is unsweetened", "no oil", "no salt")
-  if (/\b(unsweetened|unsweatened|no\s*sugar|zero\s*sugar|without\s*sugar|sugar\s*free)\b/i.test(uMsgLower)) {
+  // Check for modifier commands in userMessage (e.g., "the tea is unsweetened", "I had es teh tawar", "no oil", "no salt")
+  if (/\b(unsweetened|unsweatened|no\s*sugar|zero\s*sugar|without\s*sugar|sugar\s*free|tawar|tanpa\s*gula|bebas\s*gula|tidak\s*manis|tidak\s*pake\s*gula|tidak\s*pakai\s*gula|ga\s*pake\s*gula|gak\s*pake\s*gula|plain\s*tea)\b/i.test(uMsgLower)) {
     const teaItem = activeItems.find((it: any) => {
       const n = String(it.name || it.canonicalDbName || it.originalName || it.originalLocalName || it.keyword || '').toLowerCase();
       const type = String(it.foodType || '').toLowerCase();
@@ -1456,7 +1456,7 @@ export function synthesizeEditCommandsFromBreakdown(activeMeal: any, dietitianIt
         modifier: 'unsweetened'
       });
     }
-  } else if (/\b(no\s*oil|without\s*oil|oil\s*free|no\s*fat|without\s*fat|fat\s*free)\b/i.test(uMsgLower)) {
+  } else if (/\b(no\s*oil|without\s*oil|oil\s*free|no\s*fat|without\s*fat|fat\s*free|tanpa\s*minyak|bebas\s*minyak)\b/i.test(uMsgLower)) {
     const targetItem = activeItems.find((it: any) => {
       const n = String(it.name || it.canonicalDbName || it.originalName || it.keyword || '').toLowerCase();
       return uMsgLower.includes(n) || n.split(/\s+/).some((t: string) => t.length > 3 && uMsgLower.includes(t)) || activeItems.length === 1;
@@ -1469,7 +1469,7 @@ export function synthesizeEditCommandsFromBreakdown(activeMeal: any, dietitianIt
         modifier: 'no oil'
       });
     }
-  } else if (/\b(no\s*salt|without\s*salt|salt\s*free|unsalted)\b/i.test(uMsgLower)) {
+  } else if (/\b(no\s*salt|without\s*salt|salt\s*free|unsalted|tanpa\s*garam|bebas\s*garam)\b/i.test(uMsgLower)) {
     const targetItem = activeItems.find((it: any) => {
       const n = String(it.name || it.canonicalDbName || it.originalName || it.keyword || '').toLowerCase();
       return uMsgLower.includes(n) || n.split(/\s+/).some((t: string) => t.length > 3 && uMsgLower.includes(t)) || activeItems.length === 1;

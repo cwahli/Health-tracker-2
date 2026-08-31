@@ -302,6 +302,35 @@ describe('applyMealEdits', () => {
     expect(result.items[0].name).toMatch(/tawar|unsweetened/i);
     expect(result.changed).toBe(true);
   });
+
+  it('synthesizes unsweetened modifier from Indonesian userMessage "I had es teh tawar"', async () => {
+    const items = [
+      {
+        scoutIndex: 0,
+        name: 'Es Teh Manis',
+        originalName: 'Es Teh Manis',
+        canonicalDbName: 'Sweet Iced Tea',
+        weightGrams: 350,
+        foodType: 'beverage',
+        calories: 104,
+        protein: 0,
+        carbohydrates: 26,
+        totalFat: 0,
+        nutrients: { calories: 104, protein: 0, carbohydrates: 26, totalFat: 0, sugar: 26, addedSugar: 26, sodium: 5 },
+        sourceImageIndex: 0,
+      },
+    ];
+    const result = await applyMealEdits({
+      items,
+      userMessage: 'I had es teh tawar',
+      commands: [],
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].nutrients.addedSugar).toBe(0);
+    expect(result.items[0].nutrients.calories).toBe(0);
+    expect(result.items[0].name).toBe('Es Teh Tawar');
+    expect(result.changed).toBe(true);
+  });
 });
 
 describe('evidence job outer check (frozen example, class tests above)', () => {
