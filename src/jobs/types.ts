@@ -61,6 +61,8 @@ export interface AgentJob {
   serverSubmittedAt?: number; // ISO date string
   /** Client is already POSTing /api/jobs/submit — runner must not submit a second analyze. */
   clientSubmitPending?: boolean;
+  /** Epoch ms when the current edit/analyze turn started. Preview stays in processing until a later finishedAt. */
+  inFlightTurnAt?: number;
   lastProgressAt?: string;
   abortController?: AbortController;
   cancelReason?: string;

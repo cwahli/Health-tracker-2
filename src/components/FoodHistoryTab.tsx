@@ -430,9 +430,11 @@ export default function FoodHistoryTab({
   useEffect(() => {
     const unsubscribe = JobStore.subscribe(() => {
       setJobs(
-        JobStore.getAllJobs().filter(
-          j => j.kind === 'food_log' || j.kind === 'food_compare' || j.kind === 'food' || !j.kind
-        )
+        JobStore.getAllJobs()
+          .filter(
+            j => j.kind === 'food_log' || j.kind === 'food_compare' || j.kind === 'food' || !j.kind
+          )
+          .map(j => ({ ...j }))
       );
     });
     return () => {
@@ -459,7 +461,10 @@ export default function FoodHistoryTab({
 
   const combinedItems = React.useMemo(() => {
     const inFlightJobIds = new Set(
-      jobs.filter(j => ['queued', 'running', 'processing', 'awaiting_user', 'cancel_requested'].includes(j.status)).map(j => j.id)
+      jobs.filter(j =>
+        ['queued', 'running', 'processing', 'awaiting_user', 'cancel_requested'].includes(j.status) ||
+        (typeof j.inFlightTurnAt === 'number' && (!j.finishedAt || new Date(j.finishedAt).getTime() < j.inFlightTurnAt))
+      ).map(j => j.id)
     );
     const savedLogs = activeFoodLogs
       .filter(log => !inFlightJobIds.has(log.id))

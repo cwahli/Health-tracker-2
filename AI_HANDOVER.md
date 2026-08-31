@@ -1,7 +1,7 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-31  
-**Status:** F-8.1–F-8.9 shipped. Next on ROADMAP: **F-8.10** split `server_food_analyze_run.ts` (~3772) · **F-8.11** live evidence soak · **F-8.12** packaged facts when present · **F-8.13** real debug download vs sample. Also F-1…F-4, F-6, F-7 (Q-1 green).
+**Status:** Single-Path add/edit consolidation active; deleted dead `STANDARD_FOOD_FACTORS` table; one modal owns one meal document; 93/93 test suites (868/868 tests) passing green; dev server running cleanly on port 3000.
 
 - **Chat Live Loading State Card for Meal Edits & Analysis (`FoodCard.tsx`, 2026-08-31):**
   - **Root Cause & Diagnosis:** When a user submitted an edit to an existing meal (or started an analysis), `FoodCard.tsx` had a blanket `if (msg.isLive) return null;` check, and `LogChat.tsx` suppressed formatted text for food messages. Consequently, while the background job was running on the server, the active chat turn rendered no loading card or visual feedback in the message list, giving the appearance of an unresponsive UI.

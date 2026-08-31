@@ -101,6 +101,42 @@ export function isJobBlank(job: Partial<AgentJob> | undefined | null): boolean {
   return false;
 }
 
+export function isInFlightJobStatus(status: AgentJob['status'] | undefined): boolean {
+  return status === 'queued' || status === 'running' || status === 'processing';
+}
+
+export function mealSnapshotKey(result: any): string {
+  const log = result?.pendingFoodLog || result?.foodData || result?.data || result;
+  if (!log || typeof log !== 'object') return '';
+  const cal = Number(log.nutrients?.calories ?? log.calories ?? '');
+  const name = String(log.name || log.foodName || '').toLowerCase().trim();
+  const items = (log.itemsBreakdown || log.items || [])
+    .map((it: any) => `${String(it?.name || it?.canonicalDbName || '').toLowerCase().trim()}:${Number(it?.nutrients?.calories ?? it?.calories ?? 0)}`)
+    .join('|');
+  const msg = String(log.message || result?.message || result?.text || '').slice(0, 80);
+  return `${name}|${cal}|${items}|${msg}`;
+}
+
+/** True when a succeeded/awaiting_user row is from the previous turn of an in-flight edit. */
+export function isStalePriorTurn(
+  existing: Pick<AgentJob, 'status' | 'serverSubmittedAt' | 'clientSubmitPending' | 'inFlightTurnAt' | 'finishedAt'> | null | undefined,
+  incomingStatus: string,
+  incomingUpdatedAt?: string
+): boolean {
+  if (!existing) return false;
+  const turnInFlight =
+    typeof existing.inFlightTurnAt === 'number' &&
+    (!existing.finishedAt || new Date(existing.finishedAt).getTime() < existing.inFlightTurnAt);
+  const localInFlight = isInFlightJobStatus(existing.status) || !!existing.clientSubmitPending || turnInFlight;
+  if (!localInFlight) return false;
+  if (incomingStatus !== 'succeeded' && incomingStatus !== 'awaiting_user') return false;
+  const submittedAt = existing.inFlightTurnAt || existing.serverSubmittedAt || 0;
+  if (submittedAt <= 0) return false;
+  const rowUpdatedMs = incomingUpdatedAt ? new Date(incomingUpdatedAt).getTime() : 0;
+  if (!rowUpdatedMs) return true;
+  return rowUpdatedMs < submittedAt - 2500;
+}
+
 class JobStoreImpl {
   private jobs: Map<string, AgentJob> = new Map();
   private deletedJobIds: Set<string> = new Set();
@@ -328,29 +364,37 @@ class JobStoreImpl {
       }
     }
 
-    // Auto-heal / guard: If job ALREADY has succeeded/awaiting_user status, or has complete result data,
-    // do not downgrade status back to 'queued' or 'running' unless clientSubmitPending is explicitly true.
-    if ((patch.status === 'queued' || patch.status === 'running') && !patch.clientSubmitPending) {
+    // Stale poll/sync can report queued/running for a job that already finished.
+    // Block that downgrade, except when the client is starting a new turn (edit
+    // submit or retry). Do NOT force succeeded just because a prior-turn
+    // pendingFoodLog is still on the job — that is the edit-in-flight case, and
+    // forcing succeeded is what left the preview stuck on "Analysis completed".
+    const isExplicitNewTurn =
+      patch.clientSubmitPending === true ||
+      job.clientSubmitPending === true ||
+      (typeof patch.attemptCount === 'number' && patch.attemptCount > (job.attemptCount || 0)) ||
+      !!(patch.inputSnapshot?.text && patch.inputSnapshot.text !== job.inputSnapshot?.text);
+    if ((patch.status === 'queued' || patch.status === 'running' || patch.status === 'processing') && !isExplicitNewTurn) {
       if (job.status === 'succeeded' || job.status === 'awaiting_user') {
-        delete patch.status; // Prevent status downgrade on already completed job
-      } else {
-        const mergedJob = { ...job, ...patch };
-        const pendingLog =
-          mergedJob.result?.pendingFoodLog ||
-          mergedJob.result?.clean_result?.pendingFoodLog ||
-          mergedJob.result?.raw?.data ||
-          mergedJob.result?.data ||
-          mergedJob.result?.foodData ||
-          mergedJob.result?.mealBuild?.content ||
-          mergedJob.mealBuild?.content;
-        const hasResultData = !!(
-          (pendingLog && (pendingLog.name || pendingLog.foodName || (pendingLog.itemsBreakdown && pendingLog.itemsBreakdown.length > 0))) ||
-          (mergedJob.result?.scoutItems && mergedJob.result.scoutItems.length > 0) ||
-          (mergedJob.mealBuild?.items && mergedJob.mealBuild.items.length > 0)
-        );
-        if (hasResultData) {
-          patch.status = mergedJob.result?.needsPortionClarify ? 'awaiting_user' : 'succeeded';
-        }
+        delete patch.status;
+      }
+    }
+
+    // While an edit turn is in flight, ignore succeeded echoes of the SAME meal
+    // (the prior analysis). Clearing inFlightTurnAt here is what made the
+    // preview skip "Updating meal..." and stay on Analysis completed until
+    // the new numbers arrived.
+    if (job.inFlightTurnAt && (patch.status === 'succeeded' || patch.status === 'awaiting_user')) {
+      const incomingKey = mealSnapshotKey(patch.result);
+      const existingKey = mealSnapshotKey(job.result);
+      const isSamePriorMeal = !patch.result || (incomingKey !== '' && incomingKey === existingKey);
+      if (isSamePriorMeal) {
+        delete patch.status;
+        delete patch.result;
+        delete patch.messages;
+        delete patch.finishedAt;
+        delete patch.inFlightTurnAt;
+        delete patch.statusMessage;
       }
     }
 
@@ -358,8 +402,13 @@ class JobStoreImpl {
     this.saveJobs();
     this.notify();
 
-    // Auto-sync completed / ready jobs to cloud so they appear across all user devices
-    if (patch.status === 'succeeded' || patch.status === 'awaiting_user' || (job.status === 'succeeded' && patch.result)) {
+    // Do not push a succeeded snapshot to the cloud while an edit turn is still
+    // in flight — that overwrite is what made the server look "done" with the
+    // old 660 kcal meal and stopped the preview from showing processing.
+    const turnStillInFlight =
+      typeof job.inFlightTurnAt === 'number' &&
+      (!job.finishedAt || new Date(job.finishedAt).getTime() < job.inFlightTurnAt);
+    if (!turnStillInFlight && (patch.status === 'succeeded' || patch.status === 'awaiting_user' || (job.status === 'succeeded' && patch.result))) {
       upsertJobToSupabase(job).catch(() => {});
     }
   }

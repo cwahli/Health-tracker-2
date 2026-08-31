@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { JobStore, isJobBlank } from '../JobStore';
+import { JobStore, isJobBlank, isStalePriorTurn } from '../JobStore';
 import { ImageStore } from '../ImageStore';
 
 vi.mock('idb-keyval', () => {
@@ -101,5 +101,158 @@ describe('JobStore', () => {
       status: 'succeeded' as any,
       result: { biomarkers: { glucose: 95 } } as any
     })).toBe(false);
+  });
+
+  it('re-queues a succeeded meal for an edit turn and then allows running', () => {
+    JobStore.createJob({
+      id: 'edit1',
+      status: 'succeeded',
+      result: {
+        pendingFoodLog: {
+          name: 'Ikan Bakar Set with Cah Kangkung and Es Teh Manis',
+          nutrients: { calories: 695, protein: 43.7 },
+          itemsBreakdown: [
+            { name: 'Es Teh Manis', nutrients: { calories: 84 } },
+            { name: 'Cah Kangkung', nutrients: { calories: 142 } },
+            { name: 'Ikan Bakar Set with Rice and Sambal', nutrients: { calories: 469 } },
+          ],
+        },
+      },
+      inputSnapshot: { text: 'Analyze this meal photo.', imageRefs: [], mode: 'review' },
+    });
+
+    // 1. Client submit: queued + clientSubmitPending
+    JobStore.updateJob('edit1', {
+      status: 'queued',
+      mode: 'edit',
+      inputSnapshot: { text: 'the tea is unsweetened', imageRefs: [], mode: 'edit' },
+      clientSubmitPending: true,
+      serverSubmittedAt: Date.now(),
+      statusMessage: 'Updating meal...',
+    });
+    expect(JobStore.getJob('edit1')?.status).toBe('queued');
+
+    // 2. Submit finished: queued without clientSubmitPending. Prior-turn
+    // pendingFoodLog is still on the job — must NOT force succeeded.
+    JobStore.updateJob('edit1', {
+      status: 'queued',
+      clientSubmitPending: false,
+      statusMessage: 'Updating meal...',
+      serverSubmittedAt: Date.now(),
+    });
+    expect(JobStore.getJob('edit1')?.status).toBe('queued');
+
+    // 3. Queue runner picks it up
+    JobStore.updateJob('edit1', { status: 'running', statusMessage: 'Updating meal...' });
+    expect(JobStore.getJob('edit1')?.status).toBe('running');
+  });
+
+  it('does not let stale sync downgrade a finished job to queued', () => {
+    JobStore.createJob({
+      id: 'done1',
+      status: 'succeeded',
+      result: { pendingFoodLog: { name: 'Oatmeal', nutrients: { calories: 250 } } },
+      inputSnapshot: { text: 'oatmeal', imageRefs: [] },
+    });
+
+    JobStore.updateJob('done1', { status: 'queued', statusMessage: 'Analyzing on server...' });
+    expect(JobStore.getJob('done1')?.status).toBe('succeeded');
+  });
+
+  it('allows retry of a succeeded job when attemptCount increases', () => {
+    JobStore.createJob({
+      id: 'retry1',
+      status: 'succeeded',
+      attemptCount: 1,
+      result: { pendingFoodLog: { name: 'Soup', degradedStages: ['dietitian'] } },
+    });
+
+    JobStore.updateJob('retry1', {
+      status: 'queued',
+      attemptCount: 2,
+      clientSubmitPending: false,
+      statusMessage: 'Retrying AI advice (Attempt 2)...',
+    });
+    expect(JobStore.getJob('retry1')?.status).toBe('queued');
+  });
+
+  it('keeps Updating state when a succeeded echo still has the prior meal', () => {
+    const prior = { pendingFoodLog: { name: 'Meal', nutrients: { calories: 660 }, itemsBreakdown: [{ name: 'Sweet Iced Tea', nutrients: { calories: 104 } }] } };
+    JobStore.createJob({
+      id: 'turn-same',
+      status: 'succeeded',
+      result: prior,
+      finishedAt: new Date(Date.now() - 60_000).toISOString(),
+    });
+    JobStore.updateJob('turn-same', {
+      status: 'queued',
+      clientSubmitPending: true,
+      inFlightTurnAt: Date.now(),
+      finishedAt: undefined,
+      inputSnapshot: { text: 'the tea is unsweetened', imageRefs: [], mode: 'edit' },
+      mode: 'edit',
+    });
+    JobStore.updateJob('turn-same', {
+      status: 'succeeded',
+      result: { pendingFoodLog: { name: 'Meal', nutrients: { calories: 660 }, itemsBreakdown: [{ name: 'Sweet Iced Tea', nutrients: { calories: 104 } }] } },
+      messages: [{ role: 'assistant', content: 'old' }],
+      inFlightTurnAt: undefined,
+      finishedAt: new Date().toISOString(),
+    });
+    const job = JobStore.getJob('turn-same');
+    expect(job?.status).toBe('queued');
+    expect(job?.inFlightTurnAt).toBeGreaterThan(0);
+    expect(job?.result?.pendingFoodLog?.nutrients?.calories).toBe(660);
+
+    JobStore.updateJob('turn-same', {
+      status: 'succeeded',
+      result: { pendingFoodLog: { name: 'Grilled Fish and Water Spinach Meal', nutrients: { calories: 650 }, itemsBreakdown: [{ name: 'Unsweetened Iced Tea', nutrients: { calories: 0 } }] } },
+      inFlightTurnAt: undefined,
+      finishedAt: new Date().toISOString(),
+    });
+    const done = JobStore.getJob('turn-same');
+    expect(done?.status).toBe('succeeded');
+    expect(done?.inFlightTurnAt).toBeUndefined();
+    expect(done?.result?.pendingFoodLog?.nutrients?.calories).toBe(650);
+  });
+
+  it('keeps an in-flight edit turn even if a status-only succeeded echo arrives', () => {
+    JobStore.createJob({
+      id: 'turn1',
+      status: 'succeeded',
+      result: { pendingFoodLog: { name: 'Meal', nutrients: { calories: 660 } } },
+      finishedAt: new Date(Date.now() - 60_000).toISOString(),
+    });
+    JobStore.updateJob('turn1', {
+      status: 'queued',
+      clientSubmitPending: true,
+      inFlightTurnAt: Date.now(),
+      finishedAt: undefined,
+      inputSnapshot: { text: 'the tea is unsweetened', imageRefs: [], mode: 'edit' },
+    });
+    expect(JobStore.getJob('turn1')?.status).toBe('queued');
+    expect(JobStore.getJob('turn1')?.inFlightTurnAt).toBeGreaterThan(0);
+
+    JobStore.updateJob('turn1', { status: 'succeeded', statusMessage: 'Analysis complete' });
+    expect(JobStore.getJob('turn1')?.status).toBe('queued');
+    expect(JobStore.getJob('turn1')?.inFlightTurnAt).toBeGreaterThan(0);
+  });
+
+  it('detects stale prior-turn succeeded rows while an edit is in flight', () => {
+    const submittedAt = Date.now();
+    const existing = {
+      status: 'queued' as const,
+      serverSubmittedAt: submittedAt,
+      clientSubmitPending: false,
+    };
+    const oldStamp = new Date(submittedAt - 60_000).toISOString();
+    expect(isStalePriorTurn(existing, 'succeeded', oldStamp)).toBe(true);
+    expect(isStalePriorTurn(existing, 'queued', oldStamp)).toBe(false);
+
+    const freshStamp = new Date(submittedAt + 30_000).toISOString();
+    expect(isStalePriorTurn(existing, 'succeeded', freshStamp)).toBe(false);
+
+    const finished = { status: 'succeeded' as const, serverSubmittedAt: submittedAt, clientSubmitPending: false };
+    expect(isStalePriorTurn(finished, 'succeeded', oldStamp)).toBe(false);
   });
 });

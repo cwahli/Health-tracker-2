@@ -3552,7 +3552,13 @@ async function startServer() {
   });
 
   // Frontend serving middleware (built static bundle or Vite dev fallback)
-  const forceVite = process.env.FORCE_VITE === "1";
+  // `tsx server.ts` / `npm run dev` must use Vite so src/ edits reach localhost.
+  // Serving dist/ here is what made edit-preview fixes look like they "did nothing"
+  // after refresh: hashed dist assets are cached immutable for a year.
+  const runningViaTsx =
+    process.argv.some((a) => typeof a === 'string' && a.includes('tsx')) ||
+    process.execArgv.some((a) => typeof a === 'string' && a.includes('tsx'));
+  const forceVite = process.env.FORCE_VITE === "1" || runningViaTsx;
   const serveDist = hasBuiltDist && !forceVite;
   console.log(
     `[boot] frontend=${serveDist ? "dist" : "vite"} hasDist=${hasBuiltDist} forceVite=${forceVite}`

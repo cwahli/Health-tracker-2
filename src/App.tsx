@@ -12,7 +12,8 @@ const MedicalHistoryTab = lazyWithRetry(() => import('./components/MedicalHistor
 const TrendsTab = lazyWithRetry(() => import('./components/TrendsTab'));
 import ConflictResolutionModal from './components/ConflictResolutionModal';
 const LogChat = lazyWithRetry(() => import('./components/LogChat'));
-import { JobStore } from './jobs/JobStore';
+import { JobStore, isStalePriorTurn } from './jobs/JobStore';
+import { mergeFoodEditMessages, shouldMergeFoodEditTurn } from './jobs/mergeFoodEditMessages';
 import { JobQueueRunner } from './jobs/JobQueueRunner';
 import { initSupabaseJobSync, hydrateUserJobs, upsertJobToSupabase } from './jobs/SupabaseJobSync';
 import { ImageStore } from './jobs/ImageStore';
@@ -29,8 +30,13 @@ import { toPendingFoodLog } from './mealBuild/adapters';
 function extractPendingFoodLogFromCleanResult(cleanResult: any, photoUrl?: string): any {
   if (!cleanResult) return null;
   let log: any = null;
-  
-  if (cleanResult.mealBuild) {
+  const isEditResult = cleanResult.mode === 'modify' || cleanResult.mode === 'edit';
+
+  if (isEditResult && cleanResult.pendingFoodLog) {
+    log = cleanResult.pendingFoodLog;
+  } else if (isEditResult && cleanResult.foodData) {
+    log = cleanResult.foodData;
+  } else if (cleanResult.mealBuild) {
     log = toPendingFoodLog(cleanResult.mealBuild);
   } else if (cleanResult.pendingFoodLog) {
     log = cleanResult.pendingFoodLog;
@@ -1140,14 +1146,8 @@ export default function App() {
               }
 
               if (serverJob) {
-                const turnStartTime = job.serverSubmittedAt || pollStartTime;
-                const serverUpdatedMs = serverJob.updated_at ? new Date(serverJob.updated_at).getTime() : 0;
-                const isStalePriorTurn =
-                  (serverJob.status === 'succeeded' || serverJob.status === 'awaiting_user') &&
-                  serverUpdatedMs > 0 &&
-                  (serverUpdatedMs < turnStartTime - 2500);
-
-                if (isStalePriorTurn) {
+                const latestForPoll = JobStore.getJob(job.id) || job;
+                if (isStalePriorTurn(latestForPoll, serverJob.status, serverJob.updated_at)) {
                   console.log(`[JobQueueRunner] Ignoring stale prior-turn status (${serverJob.status}) for job ${job.id}, waiting for server...`);
                   await new Promise(r => setTimeout(r, 800));
                   continue;
@@ -1354,7 +1354,7 @@ export default function App() {
                     ? `msg_assistant_${job.id}_${Date.now()}`
                     : `msg_assistant_${job.id}`;
 
-                  const isEditRefinement = !isMedicalJob && (cleanResult.mode === 'modify' || serverJob.mode === 'modify' || job.mode === 'edit');
+                  const isEditRefinement = !isMedicalJob && (cleanResult.mode === 'modify' || serverJob.mode === 'modify' || job.mode === 'edit' || (latestJobState.inputSnapshot as any)?.mode === 'edit');
                   const assistantMsg = {
                     id: assistantMsgId,
                     role: 'assistant',
@@ -1377,16 +1377,24 @@ export default function App() {
                     },
                   };
                   let updatedMessages: any[];
-                  if (isNewTurnResponse) {
+                  if (shouldMergeFoodEditTurn({
+                    isMedicalJob,
+                    mode: latestJobState.mode || job.mode,
+                    inputMode: (latestJobState.inputSnapshot as any)?.mode,
+                    cleanMode: cleanResult.mode || serverJob.mode,
+                    messages: nonLiveMsgs,
+                  })) {
+                    updatedMessages = mergeFoodEditMessages(nonLiveMsgs, assistantMsg);
+                  } else if (isNewTurnResponse) {
                     updatedMessages = [...nonLiveMsgs, assistantMsg];
                   } else if (hasExistingAssistantMsg) {
-                    // Same-job assistant message: replace it directly
                     updatedMessages = nonLiveMsgs.map((m) => (m.id === `msg_assistant_${job.id}` ? assistantMsg : m));
                   } else {
                     updatedMessages = [...nonLiveMsgs, assistantMsg];
                   }
                   JobStore.updateJob(job.id, {
                     status: 'succeeded',
+                    inFlightTurnAt: undefined,
                     result: {
                       ...cleanResult,
                       pendingFoodLog,

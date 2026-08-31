@@ -39,6 +39,7 @@ import { pruneLocalStorageToFreeSpace, safeIdbSet } from '../utils/storageUtils'
 import { resolveFoodImage } from '../utils/imageResolver';
 
 import { JobStore } from '../jobs/JobStore';
+import { mergeFoodEditMessages, shouldMergeFoodEditTurn } from '../jobs/mergeFoodEditMessages';
 import { toPendingFoodLog } from '../mealBuild/adapters';
 import { executeFoodAgent } from '../jobs/FoodAgentExecutor';
 import { downloadJobDebugReport } from '../utils/logChatDebugDownload';
@@ -1588,7 +1589,7 @@ ${logsText}`);
             assistantClarifyMsg.data.scoutItems = assistantClarifyMsg.data.scoutItems?.length ? assistantClarifyMsg.data.scoutItems : scoutItems;
           }
           setMessages(baseMsgs, false);
-        } else if ((job.status === 'queued' || job.status === 'running') && lastMsg?.role === 'user') {
+        } else if ((job.status === 'queued' || job.status === 'running' || (typeof job.inFlightTurnAt === 'number' && (!job.finishedAt || new Date(job.finishedAt).getTime() < job.inFlightTurnAt))) && lastMsg?.role === 'user') {
           const liveMsg: ChatMessage = {
             id: `msg_live_${activeJobId}`,
             role: 'assistant',
@@ -1655,7 +1656,17 @@ ${logsText}`);
               }
             }
           };
-          setMessages([...baseMsgs, assistantMsg], false);
+          if (shouldMergeFoodEditTurn({
+            isMedicalJob: type === 'medical' || job.kind === 'medical',
+            mode: job.mode,
+            inputMode: (job.inputSnapshot as any)?.mode,
+            cleanMode: raw.mode,
+            messages: baseMsgs,
+          })) {
+            setMessages(mergeFoodEditMessages(baseMsgs, assistantMsg), false);
+          } else {
+            setMessages([...baseMsgs, assistantMsg], false);
+          }
         } else if (job.status === 'succeeded') {
           const latestFoodLog = resolvePendingFoodLog(job);
           const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
@@ -2675,6 +2686,7 @@ ${logsText}`);
         if (job) {
           JobStore.updateJob(currentJobId, {
             status: 'queued',
+            mode: submissionMode,
             inputSnapshot,
             messages: persistMessages,
             creditReserved: reserved,
@@ -2683,14 +2695,17 @@ ${logsText}`);
             requestId: currentReqId,
             attemptCount: 0,
             error: undefined,
-            serverSubmittedAt: undefined,
+            serverSubmittedAt: Date.now(),
+            inFlightTurnAt: Date.now(),
+            finishedAt: undefined,
             clientSubmitPending: true,
-            statusMessage: 'Uploading to server… Keep this tab open',
+            statusMessage: submissionMode === 'edit' ? 'Updating meal...' : 'Uploading to server… Keep this tab open',
           });
         } else {
           JobStore.createJob({
             id: currentJobId,
             kind: family === 'D' ? 'food_compare' : 'food_log',
+            mode: submissionMode,
             status: 'queued',
             inputSnapshot,
             messages: persistMessages,
@@ -2698,9 +2713,11 @@ ${logsText}`);
             creditSettled: false,
             lockedModeFamily: family,
             requestId: currentReqId,
-            serverSubmittedAt: undefined,
+            serverSubmittedAt: Date.now(),
+            inFlightTurnAt: Date.now(),
+            finishedAt: undefined,
             clientSubmitPending: true,
-            statusMessage: 'Uploading to server… Keep this tab open',
+            statusMessage: submissionMode === 'edit' ? 'Updating meal...' : 'Uploading to server… Keep this tab open',
           });
         }
 
@@ -2912,7 +2929,7 @@ ${logsText}`);
             console.log('[LogChat] Job successfully submitted to server:', data);
             JobStore.updateJob(currentJobId, {
               status: 'queued',
-              statusMessage: 'Analyzing on server...',
+              statusMessage: submissionMode === 'edit' ? 'Updating meal...' : 'Analyzing on server...',
               serverSubmittedAt: Date.now(),
               clientSubmitPending: false,
             });

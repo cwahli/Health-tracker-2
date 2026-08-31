@@ -2,9 +2,10 @@ import { auth, db } from '../firebase';
 import { doc, setDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { sanitizeForFirestore } from '../utils/firestoreUtils';
-import { JobStore } from './JobStore';
+import { JobStore, isStalePriorTurn, mealSnapshotKey } from './JobStore';
 import { AgentJob } from './types';
 import { toPendingFoodLog } from '../mealBuild/adapters';
+import { mergeFoodEditMessages, shouldMergeFoodEditTurn } from './mergeFoodEditMessages';
 
 const backendDeleteTried = new Set<string>();
 
@@ -65,7 +66,15 @@ async function fetchAndPopulateR2Job(jobId: string) {
                   },
                 },
               };
-              if (isNewTurn) {
+              if (shouldMergeFoodEditTurn({
+                isMedicalJob: existing.kind === 'medical',
+                mode: existing.mode || backendJob.mode,
+                inputMode: (existing.inputSnapshot as any)?.mode,
+                cleanMode: updatedResult.mode || backendJob.mode,
+                messages: nonLive,
+              })) {
+                updatedMessages = mergeFoodEditMessages(nonLive, assistantMsg);
+              } else if (isNewTurn) {
                 updatedMessages = [...nonLive, assistantMsg];
               } else {
                 const lastAsstIdx = nonLive.map((m: any) => m.role).lastIndexOf('assistant');
@@ -80,6 +89,7 @@ async function fetchAndPopulateR2Job(jobId: string) {
 
             JobStore.updateJob(jobId, {
               status: backendJob.status || 'succeeded',
+              inFlightTurnAt: backendJob.status === 'succeeded' ? undefined : existing?.inFlightTurnAt,
               result: updatedResult,
               mealBuild: updatedResult.mealBuild || existing?.mealBuild,
               messages: updatedMessages,
@@ -161,25 +171,22 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
         createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
         serverSubmittedAt: Date.now(),
       } as any);
-      
-      const existingSubmittedAt = existing.serverSubmittedAt || 0;
-      const rowUpdatedMs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
-      const isStalePriorTurn =
-        (row.status === 'succeeded' || row.status === 'awaiting_user') &&
-        existingSubmittedAt > 0 &&
-        rowUpdatedMs > 0 &&
-        (rowUpdatedMs < existingSubmittedAt - 2500);
-
-      if (isStalePriorTurn) {
-        console.log(`[SupabaseJobSync] Skipping stale prior-turn polled row for job ${row.id}`);
-        continue;
-      }
 
       if (cleanRes && cleanRes.is_r2) {
         fetchAndPopulateR2Job(row.id);
       }
+    } else {
+      if (isStalePriorTurn(existing, row.status, row.updated_at)) {
+        console.log(`[SupabaseJobSync] Skipping stale prior-turn polled row for job ${row.id}`);
+        continue;
+      }
+
+      // Preserve the current result while an edit is processing so the stale
+      // first-pass clean_result still sitting on the server row cannot clobber
+      // the local meal. Status is still allowed to move to queued/running so
+      // the preview can show the processing/edit state.
       const isEditInFlight =
-        (existing.status === 'succeeded' || existing.status === 'awaiting_user') &&
+        (existing.status === 'queued' || existing.status === 'running' || existing.status === 'processing' || existing.clientSubmitPending) &&
         (row.status === 'queued' || row.status === 'running');
       const updatePayload: any = {
         status: row.status,
@@ -230,11 +237,16 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
           },
         }];
       }
+      if ((row.status === 'succeeded' || row.status === 'awaiting_user' || row.status === 'failed') && existing.inFlightTurnAt) {
+        const incomingKey = mealSnapshotKey(cleanRes);
+        const existingKey = mealSnapshotKey(existing.result);
+        if (row.status === 'failed' || (incomingKey && incomingKey !== existingKey)) {
+          updatePayload.inFlightTurnAt = undefined;
+          updatePayload.finishedAt = new Date().toISOString();
+        }
+      }
       JobStore.updateJob(row.id, updatePayload);
 
-      // Fetch R2 result whenever the new clean_result is stored in R2 — regardless of
-      // whether the existing result is populated (covers edit-turn where prior turn
-      // already populated existing.result with non-R2 data).
       if (cleanRes && cleanRes.is_r2 && !isEditInFlight) {
         fetchAndPopulateR2Job(row.id);
       }
@@ -438,15 +450,7 @@ export function initSupabaseJobSync(userId?: string): () => void {
           }
 
           const existingJob = JobStore.getJob(row.id);
-          const existingSubmittedAt = existingJob?.serverSubmittedAt || 0;
-          const rowUpdatedMs = rowUpdatedAt ? new Date(rowUpdatedAt).getTime() : 0;
-          const isStalePriorTurn =
-            (row.status === 'succeeded' || row.status === 'awaiting_user') &&
-            existingSubmittedAt > 0 &&
-            rowUpdatedMs > 0 &&
-            (rowUpdatedMs < existingSubmittedAt - 2500);
-
-          if (isStalePriorTurn) {
+          if (isStalePriorTurn(existingJob, row.status, rowUpdatedAt)) {
             console.log(`[SupabaseJobSync] Skipping stale prior-turn realtime row for job ${row.id}`);
             return;
           }
@@ -454,8 +458,16 @@ export function initSupabaseJobSync(userId?: string): () => void {
           const updatedFields: Partial<AgentJob> = {
             status: row.status,
             progressPercent: row.progress_percent,
-            statusMessage: row.status_message,
+            statusMessage: row.status_message || (existingJob?.inFlightTurnAt && (row.status === 'queued' || row.status === 'running') ? 'Updating meal...' : undefined),
           };
+          if ((row.status === 'succeeded' || row.status === 'awaiting_user' || row.status === 'failed') && existingJob?.inFlightTurnAt) {
+            const incomingKey = mealSnapshotKey(cleanRes);
+            const existingKey = mealSnapshotKey(existingJob.result);
+            if (row.status === 'failed' || (incomingKey && incomingKey !== existingKey)) {
+              updatedFields.inFlightTurnAt = undefined;
+              updatedFields.finishedAt = new Date().toISOString();
+            }
+          }
 
           if (cleanRes) {
             updatedFields.result = {
@@ -538,7 +550,15 @@ export function initSupabaseJobSync(userId?: string): () => void {
                   },
                 },
               };
-              if (isNewTurn) {
+              if (shouldMergeFoodEditTurn({
+                isMedicalJob: existingJob.kind === 'medical',
+                mode: existingJob.mode || row.mode,
+                inputMode: (existingJob.inputSnapshot as any)?.mode,
+                cleanMode: cleanRes.mode || row.mode,
+                messages: nonLive,
+              })) {
+                updatedFields.messages = mergeFoodEditMessages(nonLive, assistantMsg);
+              } else if (isNewTurn) {
                 updatedFields.messages = [...nonLive, assistantMsg];
               } else {
                 const lastAsstIdx = nonLive.map((m: any) => m.role).lastIndexOf('assistant');
