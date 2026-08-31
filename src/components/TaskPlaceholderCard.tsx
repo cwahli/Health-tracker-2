@@ -271,7 +271,11 @@ export default function TaskPlaceholderCard({
       (typeof lastMsgContent === 'string' && /(?:timed out|analysis failed|server error)/i.test(lastMsgContent) && !job.result?.pendingFoodLog && !job.result?.modificationCommand && !job.result?.extractedData)
     ));
 
-  const isEditMode = job.inputSnapshot?.mode === 'edit' || (job as any).mode === 'edit' || (job as any).mode === 'modify';
+  const isEditMode =
+    job.inputSnapshot?.mode === 'edit' ||
+    (job as any).mode === 'edit' ||
+    (job as any).mode === 'modify' ||
+    (job.messages && job.messages.filter((m: any) => !m.isLive).length > 2);
 
   const getStatusLabel = () => {
     if (effectiveStatus === 'succeeded' && Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) {
@@ -457,7 +461,7 @@ export default function TaskPlaceholderCard({
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getStatusColorClass()}`}>
                 {getStatusLabel()}
               </span>
-              {job.status !== 'running' && job.status !== 'processing' && (
+              {!isEditMode && job.status !== 'running' && job.status !== 'processing' && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                   Attempt {job.attemptCount || 1} of {job.maxAttempts || 3}
                 </span>
@@ -607,7 +611,7 @@ export default function TaskPlaceholderCard({
                     })}
                   </div>
                 );
-              } else if (scoutItems && Array.isArray(scoutItems) && scoutItems.length > 1) {
+              } else if (job.status === 'succeeded' && scoutItems && Array.isArray(scoutItems) && scoutItems.length > 1) {
                 return (
                   <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
                     {scoutItems.map((item: any, idx: number) => {

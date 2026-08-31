@@ -162,6 +162,19 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
         serverSubmittedAt: Date.now(),
       } as any);
       
+      const existingSubmittedAt = existing.serverSubmittedAt || 0;
+      const rowUpdatedMs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
+      const isStalePriorTurn =
+        (row.status === 'succeeded' || row.status === 'awaiting_user') &&
+        existingSubmittedAt > 0 &&
+        rowUpdatedMs > 0 &&
+        (rowUpdatedMs < existingSubmittedAt - 2500);
+
+      if (isStalePriorTurn) {
+        console.log(`[SupabaseJobSync] Skipping stale prior-turn polled row for job ${row.id}`);
+        continue;
+      }
+
       if (cleanRes && cleanRes.is_r2) {
         fetchAndPopulateR2Job(row.id);
       }
@@ -425,6 +438,19 @@ export function initSupabaseJobSync(userId?: string): () => void {
           }
 
           const existingJob = JobStore.getJob(row.id);
+          const existingSubmittedAt = existingJob?.serverSubmittedAt || 0;
+          const rowUpdatedMs = rowUpdatedAt ? new Date(rowUpdatedAt).getTime() : 0;
+          const isStalePriorTurn =
+            (row.status === 'succeeded' || row.status === 'awaiting_user') &&
+            existingSubmittedAt > 0 &&
+            rowUpdatedMs > 0 &&
+            (rowUpdatedMs < existingSubmittedAt - 2500);
+
+          if (isStalePriorTurn) {
+            console.log(`[SupabaseJobSync] Skipping stale prior-turn realtime row for job ${row.id}`);
+            return;
+          }
+
           const updatedFields: Partial<AgentJob> = {
             status: row.status,
             progressPercent: row.progress_percent,

@@ -1140,6 +1140,19 @@ export default function App() {
               }
 
               if (serverJob) {
+                const turnStartTime = job.serverSubmittedAt || pollStartTime;
+                const serverUpdatedMs = serverJob.updated_at ? new Date(serverJob.updated_at).getTime() : 0;
+                const isStalePriorTurn =
+                  (serverJob.status === 'succeeded' || serverJob.status === 'awaiting_user') &&
+                  serverUpdatedMs > 0 &&
+                  (serverUpdatedMs < turnStartTime - 2500);
+
+                if (isStalePriorTurn) {
+                  console.log(`[JobQueueRunner] Ignoring stale prior-turn status (${serverJob.status}) for job ${job.id}, waiting for server...`);
+                  await new Promise(r => setTimeout(r, 800));
+                  continue;
+                }
+
                 let progressVal = serverJob.progress_percent || 5;
                 let statusMsg = serverJob.status_message || 'Analyzing on server...';
 

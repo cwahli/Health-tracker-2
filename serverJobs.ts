@@ -268,6 +268,9 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
     turn1Logs,
     accumulatedLogs: turn1Logs,
     photo_url: payload.photoUrl || existingMemJob?.photo_url || (imageUrls && imageUrls[0]) || null,
+    clean_result: null,
+    error: null,
+    debug_url: null,
     updated_at: new Date().toISOString()
   };
   inMemoryServerJobs.set(jobId, initialJobRecord);
