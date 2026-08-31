@@ -43,8 +43,8 @@ export function isJobBlank(job: Partial<AgentJob> | undefined | null): boolean {
     job.result?.foodData ||
     job.result?.mealBuild?.content ||
     job.mealBuild?.content ||
-    job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
-    job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
+    job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
+    job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
 
   const hasFoodData = !!(
     pendingLog?.foodName ||

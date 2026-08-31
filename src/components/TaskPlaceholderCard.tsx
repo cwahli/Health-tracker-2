@@ -196,8 +196,8 @@ export default function TaskPlaceholderCard({
     job.result?.mealBuild?.content ||
     job.mealBuild?.content ||
     job.result?.foodData ||
-          job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
-          job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
+          job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
+          job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
 
         // 2. Direct photoUrl or pendingFoodLog.imageUrl / imageUrls
         const directPhoto =
@@ -218,7 +218,7 @@ export default function TaskPlaceholderCard({
         }
 
         // 3. Check user messages for valid imageUrl
-        const userMsgWithImg = job.messages?.find(
+        const userMsgWithImg = job.messages?.slice().reverse().find(
           (m: any) => m.imageUrl && typeof m.imageUrl === 'string' && (m.imageUrl.startsWith('data:image/') || m.imageUrl.startsWith('http') || m.imageUrl.startsWith('blob:'))
         );
         if (userMsgWithImg?.imageUrl && active) {
@@ -246,8 +246,8 @@ export default function TaskPlaceholderCard({
     job.result?.foodData ||
     job.result?.mealBuild?.content ||
     job.mealBuild?.content ||
-    job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
-    job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
+    job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
+    job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
 
   const hasResults = !!(
     pendingLog?.name ||
@@ -344,8 +344,8 @@ export default function TaskPlaceholderCard({
     job.result?.raw?.data ||
     job.result?.data ||
     job.result?.foodData ||
-    job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
-    job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog ||
+    job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
+    job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog ||
     (job as any).clean_result?.pendingFoodLog ||
     (job as any).clean_result?.data;
 

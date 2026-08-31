@@ -1394,6 +1394,12 @@ export default function App() {
                     finishedAt: new Date().toISOString(),
                   });
 
+                  // Automatically save the edited food log back to the UI state and sync it
+                  if (isEditRefinement && pendingFoodLog) {
+                    console.log(`[JobQueueRunner] Auto-saving edited food log ${pendingFoodLog.id} from job ${job.id}`);
+                    handleSaveFoodLog(pendingFoodLog, job.id);
+                  }
+
                   // Save diagnostic logs to log history page
                   const reqId = serverJob.request_id || job.requestId || job.id;
                   const summary = pendingFoodLog?.name || messageText || 'Food Analysis';

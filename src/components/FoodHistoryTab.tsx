@@ -587,7 +587,7 @@ export default function FoodHistoryTab({
           return toYYYYMMDD((item.data as any)?.date);
         }
         const job = item.data as any;
-        const pending = job?.result?.pendingFoodLog || job?.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog;
+        const pending = job?.result?.pendingFoodLog || job?.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog;
         if (pending?.date) return toYYYYMMDD(pending.date);
         if (job?.createdAt) return toYYYYMMDD(job.createdAt);
         return '1970-01-01';
@@ -651,7 +651,7 @@ export default function FoodHistoryTab({
         const job = item.data;
         const text = job.inputSnapshot?.text || '';
         const status = job.status || '';
-        const pendingFoodLog = job.messages?.find(m => m.pendingFoodLog)?.pendingFoodLog || job.result?.pendingFoodLog || job.result?.data;
+        const pendingFoodLog = job.messages?.slice().reverse().find(m => m.pendingFoodLog)?.pendingFoodLog || job.result?.pendingFoodLog || job.result?.data;
         const mealName = pendingFoodLog?.name || '';
         return text.toLowerCase().includes(searchTerm.toLowerCase()) ||
                status.toLowerCase().includes(searchTerm.toLowerCase()) ||
