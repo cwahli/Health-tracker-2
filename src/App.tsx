@@ -1397,7 +1397,7 @@ export default function App() {
                   // Automatically save the edited food log back to the UI state and sync it
                   if (isEditRefinement && pendingFoodLog) {
                     console.log(`[JobQueueRunner] Auto-saving edited food log ${pendingFoodLog.id} from job ${job.id}`);
-                    handleSaveFoodLog(pendingFoodLog, job.id);
+                    window.dispatchEvent(new CustomEvent('food-log-auto-update', { detail: { log: pendingFoodLog } }));
                   }
 
                   // Save diagnostic logs to log history page
@@ -4307,6 +4307,14 @@ export default function App() {
     setFoodLogs(updatedFoods);
     await saveAndSync(profile, updatedFoods, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'foodLog', targetId: compressedFood.id });
   };
+
+  useEffect(() => {
+    const handleAutoUpdate = (e: any) => {
+      handleUpdateFoodLog(e.detail.log);
+    };
+    window.addEventListener('food-log-auto-update', handleAutoUpdate);
+    return () => window.removeEventListener('food-log-auto-update', handleAutoUpdate);
+  });
   const handleDeleteFoodLog = async (id: string) => {
     const existingLog = foodLogs.find(f => f.id === id);
     const existingUpdated = existingLog?.updated_at || 0;
