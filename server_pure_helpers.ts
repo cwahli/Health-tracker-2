@@ -1317,13 +1317,16 @@ export function itemsMatchByName(oldName: string, newName: string): boolean {
   return false;
 }
 
-export function synthesizeEditCommandsFromBreakdown(activeMeal: any, dietitianItems: any[], userMessage: string = ''): any[] {
-  if (!activeMeal || !Array.isArray(activeMeal.itemsBreakdown) || !Array.isArray(dietitianItems) || dietitianItems.length === 0) {
+export function synthesizeEditCommandsFromBreakdown(activeMeal: any, dietitianItems: any[] = [], userMessage: string = ''): any[] {
+  if (!activeMeal || !Array.isArray(activeMeal.itemsBreakdown) || (!dietitianItems?.length && !userMessage?.trim())) {
     return [];
   }
 
   const synthesizedCommands: any[] = [];
   const activeItems: any[] = activeMeal.itemsBreakdown || [];
+  const uMsgLower = (userMessage || '').toLowerCase().trim();
+
+  if (Array.isArray(dietitianItems) && dietitianItems.length > 0) {
 
   // Find set of scoutIndices present in dietitianItems
   const touchedScoutIndices = new Set(
@@ -1331,8 +1334,6 @@ export function synthesizeEditCommandsFromBreakdown(activeMeal: any, dietitianIt
       .map((it: any) => it.scoutIndex)
       .filter((idx: any) => idx !== undefined && idx !== null && typeof idx === 'number')
   );
-
-  const uMsgLower = userMessage.toLowerCase().trim();
 
   // Check which activeMeal items should be removed
   activeItems.forEach((oldIt: any) => {
@@ -1434,6 +1435,7 @@ export function synthesizeEditCommandsFromBreakdown(activeMeal: any, dietitianIt
       });
     }
   });
+  }
 
   // Check for modifier commands in userMessage (e.g., "the tea is unsweetened", "no oil", "no salt")
   if (/\b(unsweetened|unsweatened|no\s*sugar|zero\s*sugar|without\s*sugar|sugar\s*free)\b/i.test(uMsgLower)) {

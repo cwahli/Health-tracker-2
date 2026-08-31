@@ -273,6 +273,35 @@ describe('applyMealEdits', () => {
     expect(result.items[0].nutrients.addedSugar).toBe(0);
     expect(result.items[0].nutrients.calories).toBe(0);
   });
+
+  it('synthesizes unsweetened modifier from userMessage when commands are empty (e.g. Es Teh Manis)', async () => {
+    const items = [
+      {
+        scoutIndex: 0,
+        name: 'Es Teh Manis',
+        originalName: 'Sweet Iced Tea',
+        canonicalDbName: 'Sweet Iced Tea',
+        weightGrams: 350,
+        foodType: 'beverage',
+        calories: 104,
+        protein: 0,
+        carbohydrates: 26,
+        totalFat: 0,
+        nutrients: { calories: 104, protein: 0, carbohydrates: 26, totalFat: 0, sugar: 26, addedSugar: 26, sodium: 5 },
+        sourceImageIndex: 0,
+      },
+    ];
+    const result = await applyMealEdits({
+      items,
+      userMessage: 'the tea is unsweetened',
+      commands: [],
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].nutrients.addedSugar).toBe(0);
+    expect(result.items[0].nutrients.calories).toBe(0);
+    expect(result.items[0].name).toMatch(/tawar|unsweetened/i);
+    expect(result.changed).toBe(true);
+  });
 });
 
 describe('evidence job outer check (frozen example, class tests above)', () => {

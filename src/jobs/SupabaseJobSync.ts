@@ -32,15 +32,13 @@ async function fetchAndPopulateR2Job(jobId: string) {
           const backendJob = fetchedWrapper.jobs[0];
           if (backendJob && backendJob.clean_result && !backendJob.clean_result.is_r2) {
             const existing = JobStore.getJob(jobId);
-            if (existing && (!existing.result || (existing.result as any).is_r2)) {
-              const updatedResult = backendJob.clean_result;
-              JobStore.updateJob(jobId, {
-                result: updatedResult,
-                mealBuild: updatedResult.mealBuild || existing.mealBuild,
-                photoUrl: updatedResult.photoUrl || existing.photoUrl,
-                debugUrl: updatedResult.debugUrl || existing.debugUrl
-              });
-            }
+            const updatedResult = backendJob.clean_result;
+            JobStore.updateJob(jobId, {
+              result: updatedResult,
+              mealBuild: updatedResult.mealBuild || existing?.mealBuild,
+              photoUrl: updatedResult.photoUrl || existing?.photoUrl,
+              debugUrl: updatedResult.debugUrl || existing?.debugUrl
+            });
           }
         }
       }
@@ -350,16 +348,7 @@ export function initSupabaseJobSync(userId?: string): () => void {
           let cleanRes = row.clean_result;
           const existingJobForR2Check = JobStore.getJob(row.id);
 
-          // Only reuse the cached non-R2 result (skip R2 fetch) if the job status hasn't
-          // changed to 'succeeded' on this event — i.e. don't skip when this event is the
-          // completion of an edit turn (queued/running → succeeded), because in that case
-          // existingJobForR2Check.result contains the stale first-pass data, not the edit result.
-          const isCompletionEvent = row.status === 'succeeded' &&
-            existingJobForR2Check &&
-            (existingJobForR2Check.status === 'queued' || existingJobForR2Check.status === 'running');
-          if (!isCompletionEvent && cleanRes && typeof cleanRes === 'object' && cleanRes.is_r2 && existingJobForR2Check?.result && !existingJobForR2Check.result.is_r2) {
-             cleanRes = existingJobForR2Check.result;
-          } else if (cleanRes && typeof cleanRes === 'object' && cleanRes.is_r2 && cleanRes.r2_url) {
+          if (cleanRes && typeof cleanRes === 'object' && cleanRes.is_r2 && cleanRes.r2_url) {
             try {
               // Bypassing client-side CORS issues by fetching through our own backend proxy endpoint
               const baseUrl = typeof window !== 'undefined' ? '' : 'http://localhost:3000';

@@ -8,7 +8,7 @@
 
 import { finalizeDishLedger } from './server_dish_finalize.js';
 import { applyNutrientModifiers, computeCaloriesFromMacros } from './server_derivation.js';
-import { findItemIndexInList, formatMealReceiptTable } from './server_pure_helpers.js';
+import { findItemIndexInList, formatMealReceiptTable, synthesizeEditCommandsFromBreakdown } from './server_pure_helpers.js';
 import { NUTRIENT_KEYS } from './src/utils/nutrients.js';
 import { sumItemNutrients } from './server_meal_from_finalize.js';
 
@@ -370,8 +370,18 @@ export async function applyMealEdits(opts: {
   userMessage?: string;
 }): Promise<MealEditResult> {
   const notes: string[] = [];
+  const originalSnapshot = JSON.stringify(Array.isArray(opts.items) ? opts.items.map((i) => [i.name, i.weightGrams, i.calories ?? i.nutrients?.calories, i.nutrients?.addedSugar ?? 0]) : []);
   const original = Array.isArray(opts.items) ? opts.items.map((it) => ({ ...it, nutrients: { ...(it.nutrients || {}) } })) : [];
-  const commandsIn = Array.isArray(opts.commands) ? opts.commands : [];
+  let commandsIn = Array.isArray(opts.commands) ? opts.commands : [];
+
+  // Synthesize edit commands from natural language user message if model outputted empty commands
+  if (commandsIn.length === 0 && opts.userMessage) {
+    const synthesized = synthesizeEditCommandsFromBreakdown({ itemsBreakdown: original }, [], opts.userMessage);
+    if (synthesized && synthesized.length > 0) {
+      commandsIn = synthesized;
+      notes.push(`Synthesized ${synthesized.length} edit command(s) from user message`);
+    }
+  }
 
   if (commandsIn.length === 0) {
     const nutrients = sumItemNutrients(original);
@@ -394,7 +404,7 @@ export async function applyMealEdits(opts: {
   for (const raw of commands) {
     const action = normalizeAction(raw.action);
     const itemName = raw.itemName || '';
-    const idx = findItemIndexInList(items, itemName, raw.targetDbId || null);
+    let idx = findItemIndexInList(items, itemName, raw.targetDbId || null);
 
     if (action === 'set_weight') {
       if (idx < 0) { notes.push(`set_weight: no item "${itemName}"`); continue; }
@@ -415,6 +425,12 @@ export async function applyMealEdits(opts: {
       items[idx] = { ...item, count: newCount, pieceCount: newCount };
       notes.push(`set_count "${itemName}" ${oldCount ?? 'unset'} → ${newCount} (${item.weightGrams}g kept)`);
     } else if (action === 'set_modifier') {
+      if (idx < 0 && (itemName.toLowerCase().includes('tea') || itemName.toLowerCase().includes('drink') || itemName.toLowerCase().includes('beverage') || itemName.toLowerCase().includes('kopi') || itemName.toLowerCase().includes('coffee') || itemName.toLowerCase().includes('teh'))) {
+        idx = items.findIndex((it: any) => {
+          const names = itemNames(it);
+          return names.includes('tea') || names.includes('teh') || names.includes('coffee') || names.includes('kopi') || names.includes('drink') || names.includes('beverage') || it.foodType === 'beverage';
+        });
+      }
       if (idx < 0) { notes.push(`set_modifier: no item "${itemName}"`); continue; }
       const item = items[idx];
       const modifier = String(raw.modifier || raw.newItemName || 'unsweetened');
@@ -631,8 +647,7 @@ export async function applyMealEdits(opts: {
     items,
     nutrients,
     weightGrams,
-    changed: JSON.stringify(items.map((i) => [i.name, i.weightGrams, i.calories])) !==
-      JSON.stringify(original.map((i) => [i.name, i.weightGrams, i.calories])),
+    changed: JSON.stringify(items.map((i) => [i.name, i.weightGrams, i.calories ?? i.nutrients?.calories, i.nutrients?.addedSugar ?? 0])) !== originalSnapshot,
     qa: false,
     receiptTable: formatMealReceiptTable(items, nutrients, weightGrams),
     notes,
