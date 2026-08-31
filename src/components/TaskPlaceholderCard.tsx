@@ -20,26 +20,44 @@ interface TaskPlaceholderCardProps {
 }
 
 export default function TaskPlaceholderCard({
-  job,
+  job: jobProp,
   onView,
   onDelete,
   onCancel,
   onSave,
   profileLanguage = 'en'
 }: TaskPlaceholderCardProps) {
+  const [job, setJob] = useState<AgentJob>(jobProp);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [nowTs, setNowTs] = useState(() => Date.now());
+
+  useEffect(() => {
+    setJob(jobProp);
+  }, [jobProp]);
+
+  useEffect(() => {
+    const sync = () => {
+      const live = JobStore.getJob(jobProp.id);
+      if (live) setJob({ ...live });
+    };
+    sync();
+    const unsub = JobStore.subscribe(sync);
+    return () => {
+      unsub();
+    };
+  }, [jobProp.id]);
 
   // Tick once per second while this job is actively in-flight, so the
   // "elapsed" readout below stays live. Cleared automatically once the job
   // leaves an active state (effect re-runs and the old interval is cleared).
   useEffect(() => {
-    const isActive = job.status === 'running' || job.status === 'processing' || job.status === 'queued';
+    const isActive = job.status === 'running' || job.status === 'processing' || job.status === 'queued' ||
+      (typeof job.inFlightTurnAt === 'number' && (!job.finishedAt || new Date(job.finishedAt).getTime() < job.inFlightTurnAt));
     if (!isActive) return;
     const interval = setInterval(() => setNowTs(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [job.status]);
+  }, [job.status, job.inFlightTurnAt, job.finishedAt]);
 
   const elapsedSeconds = job.createdAt ? Math.max(0, Math.floor((nowTs - new Date(job.createdAt).getTime()) / 1000)) : null;
   const elapsedLabel = elapsedSeconds !== null
@@ -257,7 +275,13 @@ export default function TaskPlaceholderCard({
     (job.mealBuild?.items && job.mealBuild.items.length > 0)
   );
 
-  const effectiveStatus: AgentJob['status'] = job.status;
+  const turnInFlight =
+    typeof job.inFlightTurnAt === 'number' &&
+    (!job.finishedAt || new Date(job.finishedAt).getTime() < job.inFlightTurnAt);
+  const effectiveStatus: AgentJob['status'] =
+    turnInFlight && (job.status === 'succeeded' || job.status === 'awaiting_user')
+      ? 'running'
+      : job.status;
 
   const isFailedOrTimedOut =
     effectiveStatus === 'failed' ||
@@ -441,7 +465,7 @@ export default function TaskPlaceholderCard({
             </div>
           )}
           {/* Progress / Action Overlay */}
-          {(job.status === 'queued' || job.status === 'running' || job.status === 'processing') && (
+          {(effectiveStatus === 'queued' || effectiveStatus === 'running' || effectiveStatus === 'processing') && (
             <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[1px] flex items-center justify-center">
               <Loader2 className="w-5 h-5 text-white animate-spin" />
             </div>
@@ -461,12 +485,12 @@ export default function TaskPlaceholderCard({
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getStatusColorClass()}`}>
                 {getStatusLabel()}
               </span>
-              {!isEditMode && job.status !== 'running' && job.status !== 'processing' && (
+              {!isEditMode && effectiveStatus !== 'running' && effectiveStatus !== 'processing' && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                   Attempt {job.attemptCount || 1} of {job.maxAttempts || 3}
                 </span>
               )}
-              {(job.status === 'running' || job.status === 'queued' || job.status === 'processing') && job.progressPercent > 0 && (
+              {(effectiveStatus === 'running' || effectiveStatus === 'queued' || effectiveStatus === 'processing') && job.progressPercent > 0 && (
                 <span className="text-[10px] font-mono text-slate-400 font-bold">
                   {job.progressPercent}%
                 </span>
@@ -477,7 +501,7 @@ export default function TaskPlaceholderCard({
               {displayTitle}
             </h4>
 
-            {(job.status === 'running' || job.status === 'processing' || job.status === 'queued') && (
+            {(effectiveStatus === 'running' || effectiveStatus === 'processing' || effectiveStatus === 'queued') && (
               <div className="mt-1 space-y-1">
                 {job.statusMessage && !job.statusMessage.toLowerCase().includes('uploading to server') ? (
                   <p className="text-xs text-theme-text-secondary font-medium">
@@ -507,12 +531,12 @@ export default function TaskPlaceholderCard({
               </div>
             )}
             
-            {(job.status === 'running' || job.status === 'processing' || job.status === 'queued') && (
+            {(effectiveStatus === 'running' || effectiveStatus === 'processing' || effectiveStatus === 'queued') && (
               <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1.5">
                 <motion.div
-                  className={`h-full rounded-full ${job.status === 'queued' ? 'bg-indigo-400 animate-pulse' : 'bg-indigo-600'}`}
+                  className={`h-full rounded-full ${effectiveStatus === 'queued' ? 'bg-indigo-400 animate-pulse' : 'bg-indigo-600'}`}
                   initial={{ width: 0 }}
-                  animate={{ width: `${Math.max(job.progressPercent || 0, job.status === 'queued' ? 10 : 20)}%` }}
+                  animate={{ width: `${Math.max(job.progressPercent || 0, effectiveStatus === 'queued' ? 10 : 20)}%` }}
                   transition={{ duration: 0.3 }}
                 />
               </div>
@@ -544,7 +568,7 @@ export default function TaskPlaceholderCard({
               );
             })()}
 
-            {job.status === 'succeeded' && pendingFoodLog && (
+            {effectiveStatus === 'succeeded' && pendingFoodLog && (
               <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-theme-text-secondary">
                 <span>🔥 {pendingFoodLog.nutrients?.calories || 0} kcal</span>
                 <span>•</span>
@@ -611,7 +635,7 @@ export default function TaskPlaceholderCard({
                     })}
                   </div>
                 );
-              } else if (job.status === 'succeeded' && scoutItems && Array.isArray(scoutItems) && scoutItems.length > 1) {
+              } else if (effectiveStatus === 'succeeded' && scoutItems && Array.isArray(scoutItems) && scoutItems.length > 1) {
                 return (
                   <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
                     {scoutItems.map((item: any, idx: number) => {
@@ -662,12 +686,12 @@ export default function TaskPlaceholderCard({
                 className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
               >
                 <Eye className="w-3.5 h-3.5" />
-                {job.status === 'succeeded' && !isFailedOrTimedOut ? 'View Analysis' : 'View Status'}
+                {effectiveStatus === 'succeeded' && !isFailedOrTimedOut ? 'View Analysis' : 'View Status'}
               </button>
             )}
 
             {/* Save Log Button for Succeeded Jobs */}
-            {((job.status === 'succeeded' && !isFailedOrTimedOut) || job.result?.savable || job.result?.mealBuild?.savable || job.mealBuild?.savable) && !!pendingFoodLog && (
+            {effectiveStatus === 'succeeded' && !isFailedOrTimedOut && ((job.status === 'succeeded') || job.result?.savable || job.result?.mealBuild?.savable || job.mealBuild?.savable) && !!pendingFoodLog && (
               <button
                 type="button"
                 onClick={handleLocalSave}
