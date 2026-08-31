@@ -26,19 +26,8 @@ export function isComponentRow(item: any): boolean {
 /** Drop sauces/sides that belong under another FoodItem. */
 export function compositionTileItems(items: any[] | null | undefined): any[] {
   const list = Array.isArray(items) ? items.filter(Boolean) : [];
-  const nestedNames = new Set<string>();
-  for (const it of list) {
-    const comps = it.componentsDetailList || it.components || it.compositeSiblings || [];
-    if (!Array.isArray(comps)) continue;
-    for (const c of comps) {
-      const n = itemName(c);
-      if (n) nestedNames.add(n);
-    }
-  }
   return list.filter((it) => {
     if (isComponentRow(it)) return false;
-    const n = itemName(it);
-    if (n && nestedNames.has(n)) return false;
     return true;
   });
 }
