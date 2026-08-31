@@ -147,7 +147,7 @@ export function findItemIndexInList(itemsBreakdown: any[], itemNameStr: string, 
 
   // 2. Exact match by item name (case-insensitive)
   const exactIdx = itemsBreakdown.findIndex((it: any) => {
-    const itName = (it.name || "").trim().toLowerCase();
+    const itName = (it.name || it.originalName || "").trim().toLowerCase();
     return itName === nameLower || itName === nameClean;
   });
   if (exactIdx !== -1) return exactIdx;
@@ -161,7 +161,7 @@ export function findItemIndexInList(itemsBreakdown: any[], itemNameStr: string, 
 
   // 4. Substring prefix/suffix match (e.g. startsWith or endsWith)
   const wordMatchIdx = itemsBreakdown.findIndex((it: any) => {
-    const itName = (it.name || "").trim().toLowerCase();
+    const itName = (it.name || it.originalName || "").trim().toLowerCase();
     return itName.startsWith(nameLower) || itName.endsWith(nameLower) ||
            (nameClean && (itName.startsWith(nameClean) || itName.endsWith(nameClean)));
   });
@@ -177,7 +177,7 @@ export function findItemIndexInList(itemsBreakdown: any[], itemNameStr: string, 
     let bestIdx = -1;
     let bestScore = 0;
     itemsBreakdown.forEach((it: any, idx: number) => {
-      const itTokens = `${it.name || ''} ${it.canonicalDbName || ''}`
+      const itTokens = `${it.name || ''} ${it.canonicalDbName || ''} ${it.originalName || ''}`
         .toLowerCase()
         .split(/[\s,_\-]+/)
         .map(w => w.trim())
@@ -194,7 +194,7 @@ export function findItemIndexInList(itemsBreakdown: any[], itemNameStr: string, 
 
   // 6. Classic includes fallback (fuzzy substring)
   const includesIdx = itemsBreakdown.findIndex((it: any) => {
-    const itName = (it.name || "").trim().toLowerCase();
+    const itName = (it.name || it.originalName || "").trim().toLowerCase();
     return (nameClean && itName.includes(nameClean)) || itName.includes(nameLower) || nameLower.includes(itName);
   });
   if (includesIdx !== -1) return includesIdx;
