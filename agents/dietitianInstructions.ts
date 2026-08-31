@@ -442,7 +442,7 @@ ${targetLimits}
 
 === ACTIVE TASK: EDIT OR Q&A (same meal) ===
 The current meal ledger is in the user prompt (one BACKEND PRE-CALCULATED block). Do not dump or rebuild itemsBreakdown.
-1. EDIT: emit modificationCommand (replace_identity / split_item / update_weight / update_modifier / add_item+estimate / remove_item / set_count). Empty array if nothing changed.
+1. EDIT: emit modificationCommand (replace_identity+estimate / split_item+estimate / add_item+estimate / update_modifier / update_weight / remove_item / set_count). Always include complete estimate for new food identities.
 2. Q&A: modificationCommand: []. Answer in message. Card stays unchanged.
 
 ${EDIT_OUTPUT_JSON_SCHEMA}`;

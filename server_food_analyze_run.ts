@@ -2637,7 +2637,7 @@ export async function runFoodAnalyze(req: any, res: any) {
               estimate: {
                 type: Type.OBJECT,
                 nullable: true,
-                description: "Scout-shaped complete nutrient profile for add_item, replace_identity, or new split identities.",
+                description: "REQUIRED complete nutrient profile for replace_identity, add_item, or new split identities.",
                 properties: {
                   protein: { type: Type.NUMBER, nullable: true },
                   carbohydrates: { type: Type.NUMBER, nullable: true },
