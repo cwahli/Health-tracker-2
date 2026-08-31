@@ -54,6 +54,24 @@ if (!/evolution|fossilize|not a freeze|Evolution allowed/i.test(agents)) {
   fail('AGENTS.md must allow rulebook evolution (not rigid freeze)');
 } else ok('AGENTS.md: evolution-friendly L9');
 
+if (!/STALE_TURN/.test(agents)) {
+  fail('AGENTS.md must classify STALE_TURN (preview vs debug mismatch is job-session, not food-calc)');
+} else ok('AGENTS.md: STALE_TURN class');
+
+if (!/JobStore\.ts/.test(agents) || !/TaskPlaceholderCard/.test(agents) || !/JobSession\.contract\.test/.test(agents)) {
+  fail('AGENTS.md L1 must list job-lifecycle files and require JobSession.contract.test.ts when they change from food-calc');
+} else ok('AGENTS.md: job-lifecycle blast list');
+
+const templates = read('docs/agent/TEMPLATES.md');
+if (!/layer: food-calc \| job-session/.test(templates) || !/STALE_TURN/.test(templates)) {
+  fail('TEMPLATES.md IMPACT must include layer + STALE_TURN');
+} else ok('TEMPLATES.md: job-session IMPACT');
+
+const regressionMap = read('docs/agent/DOMAIN_REGRESSION_MAP.md');
+if (!/JobSession\.contract\.test/.test(regressionMap) || !/assert-dev-serves-vite/.test(regressionMap)) {
+  fail('DOMAIN_REGRESSION_MAP.md must name JobSession.contract.test.ts and assert-dev-serves-vite.mjs');
+} else ok('DOMAIN_REGRESSION_MAP.md: job-session row');
+
 // Rulebooks not pure freeze language only
 const food = read('docs/agent/domains/food-calc.md');
 if (!/Evolution|deliberately|default/i.test(food)) {

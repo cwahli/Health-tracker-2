@@ -64,6 +64,9 @@ Dietitian never invents kcal. Finalize always Atwaters unlocked items.
 | Same meal vs new | Modal session | Mode Rewrite, review-pill `new_log` on an existing document |
 | Edit vs Q&A | `modificationCommand` empty or not | Keyword regex, `itemsBreakdown` rebuild |
 | Save or not | `evaluateMealGate` | Log grep |
+| **What the preview shows** | Current job turn (`currentTurn` + `status`; `result` null while running) | Infer in-flight from `pendingFoodLog` / snapshot keys / `effectiveStatus`; four competing “current meals” |
+
+Session IDs **F-9.1–F-9.5** (guardrails, contract tests, inspector, `current_turn`, one writer): [ROADMAP.md](./ROADMAP.md) Track F. Not a calorie change. Do not mix with F-8.10.
 
 | Module | Role | Size band |
 |---|---|---|
@@ -75,7 +78,7 @@ Dietitian never invents kcal. Finalize always Atwaters unlocked items.
 | `server_vision_scout.ts` | Identify + fry-fat split; no persisted kcal | slim toward ~800 |
 | `server_nutrient_aggregation.ts` | Off the hot path | do not call after finalize |
 
-Detail, leftover F-8 IDs (**F-8.10–F-8.13**), and debug shape: [FOOD_SINGLE_PATH.md](./FOOD_SINGLE_PATH.md).
+Detail, leftover F-8 IDs (**F-8.10–F-8.13**), and debug shape: [FOOD_SINGLE_PATH.md](./FOOD_SINGLE_PATH.md). Job-session leftover IDs (**F-9.1–F-9.5**): [ROADMAP.md](./ROADMAP.md) Track F — Gemini implements from a Grok pack; Grok reviews and owns `App.tsx` / `LogChat.tsx` call sites.
 
 ---
 

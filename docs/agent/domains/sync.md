@@ -78,7 +78,9 @@ Plus per-item `sync_state` including `'delete'` where used.
 
 **Laws:**
 
-- Job id stable across devices; no second job for same client request without guard (see duplicate job guards).  
+- Job id stable across devices; no second job for same client request without guard (see duplicate job guards).
+- **Current turn (F-9):** `currentTurn` / `agent_jobs.current_turn` is the session. Incoming row with `current_turn < local` is ignored. A running turn has `clean_result` **null**. Preview is `status` of the current turn — not `effectiveStatus`, not `mealSnapshotKey`. Do not add sibling in-flight flags. Device B: higher `current_turn` wins; recency still applies; server absence is not delete.
+- **Clone on read:** React must not hold the live `Map` value (`useJob` clones). Mutate-in-place is a silent paint bug (`STALE_TURN`).
 - Completing on device A must not create a **duplicate food log** on device B (identity + dedupe).  
 - Image URLs must survive sanitize/proxy paths (B11 / B11d family asserts).  
 - **In-memory job precedence:** `/api/jobs/status` and `/api/jobs/debug` must check `inMemoryServerJobs` first and gracefully handle DB query failures without throwing HTTP 500/404.

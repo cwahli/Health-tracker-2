@@ -9,11 +9,22 @@
 
 | Pack | Role |
 |------|------|
+| **[F9_PR1_GEMINI.md](./F9_PR1_GEMINI.md)** | **Gemini now.** F-9.1/9.2 session contract. Paste **§A only**. |
+| [F9_PR2_GEMINI.md](./F9_PR2_GEMINI.md) | After PR1 COMPLETE. Inspector + cloned `useJob`. |
+| [F9_PR3_GEMINI.md](./F9_PR3_GEMINI.md) | After PR1. `current_turn`. Skip LogChat if FIND fails. |
+| [F9_PR4_GEMINI.md](./F9_PR4_GEMINI.md) | After PR3. `JobStore.apply`. **Do not edit App.tsx / LogChat.tsx.** |
 | [BUG_CONTINUE_GEMINI.md](./BUG_CONTINUE_GEMINI.md) | Notes only. Law is **`AGENTS.md` L15**. |
-| [Q64_GEMINI_COMBINED_QUEUE_UI.md](./Q64_GEMINI_COMBINED_QUEUE_UI.md) | **Gemini G2** Q-6.4 tape actions. Paste §A. Preview board + Replay log on food `#n`. Not Promote/D1/`snapSurface`. |
+| [Q64_GEMINI_COMBINED_QUEUE_UI.md](./Q64_GEMINI_COMBINED_QUEUE_UI.md) | Gemini G2 Q-6.4. Do **not** mix with F-9. |
 | [M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md](./M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md) | Food catalog curator — separate track |
 | [M22_MEAL_BUILD_TRUE_COMPLETE.md](./M22_MEAL_BUILD_TRUE_COMPLETE.md) | Prior product pack |
 | **Archived** | M23 Free Tier Reliability, M31 Biomarker Lifecycle |
+
+## F-9 — how to run Gemini (job session)
+
+1. Paste **only section A** from `F9_PR1_GEMINI.md`. Do not ask Gemini to “investigate and propose first.”
+2. After COMPLETE (named vitest + `assert-f9-pr1.mjs` exit 0), Grok reviews, then paste §A of PR2, then PR3, then PR4.
+3. Do **not** mix F-8.10 or Q-6.4 into F-9.
+4. `npm run build` is not how localhost picks up React. Dev must log `[boot] frontend=vite`.
 
 **Plans**
 

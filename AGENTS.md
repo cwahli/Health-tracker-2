@@ -1,6 +1,6 @@
 # AGENTS.md — Always-on rules (keep short)
 
-**Updated:** 2026-08-21  
+**Updated:** 2026-08-31  
 
 **Token rule:** Read **this file first**. Load domain rulebooks (`docs/agent/**`) **only when the table below says so**. (Investigating application source code, debug logs, and relevant functions is always permitted and encouraged; do not dump unneeded rulebook docs).
 
@@ -38,6 +38,7 @@ AGENTS + docs/agent = how we work without breaking each other (stable process)
 | Food-calc | `docs/agent/domains/food-calc.md` |
 | Biomarkers | `docs/agent/domains/biomarkers.md` |
 | Multi-device sync | `docs/agent/domains/sync.md` |
+| Job session / preview vs debug mismatch (`STALE_TURN`) | `docs/agent/domains/sync.md` + `plan/ROADMAP.md` F-9 |
 | Which tests to run | `docs/agent/DOMAIN_REGRESSION_MAP.md` |
 | IMPACT / SELF-CHECK / GATE paste | `docs/agent/TEMPLATES.md` |
 | Active Studio pack name | `studio/ACTIVE_STATUS.md` |
@@ -52,6 +53,8 @@ AGENTS + docs/agent = how we work without breaking each other (stable process)
 ### L1 — Blast radius (anti-random-deletion)
 Touch **only** files required for the task. No drive-by refactors, renames, or “cleanup.”  
 Do not remove branches, error handlers, fallbacks, or **mode-tagged / gate-used logs** unless listed in scope.
+
+Job-lifecycle files are **out of blast radius** for food-calc / verdict / modifier PRs unless IMPACT names them **and** `src/jobs/__tests__/JobSession.contract.test.ts` is in the same commit: `src/jobs/JobStore.ts`, `src/jobs/SupabaseJobSync.ts`, `src/jobs/JobQueueRunner.ts`, `src/App.tsx` poller, `src/components/LogChat.tsx` submit / `loadJobMessages`, `src/components/TaskPlaceholderCard.tsx`, `src/components/FoodHistoryTab.tsx` job combine. Example of FAIL: `8742686` (verdict labels + deleted in-place edit merge).
 
 ### L2 — Contracts
 No breaking signature/API/prop changes without updating **all** call sites in the same task. Prefer optional params + defaults.
@@ -95,6 +98,7 @@ When addressing tasks, bug fixes, or feature plans, agents execute end-to-end in
    - **Key Changes Applied:** (2–4 high-level architectural bullets; no code blocks or diffs)
    - **Verification:** (Pass/Fail status for build, `tsc`, tests, and gates)
    *(Pasting raw code blocks, file contents, or diffs in chat is strictly prohibited).*
+5. **Serve mode + wrong-layer stop.** On localhost, prove Vite (`index.html` → `/src/main.tsx`) before UI patches; hashed `/assets/index-*.js` is `dist/` (immutable cache). `npm run build` is not how you pick up a React edit. If the debug file already has the new numbers and the card does not, class is `STALE_TURN` — list writers of that card. Three patches that do not change the screenshot → writer timeline, not a fourth force-save.
 
 ### L12 — Strict Prompt Line-Budget & Anti-Bloat Rule
 - **Strict Copy Length & Line Ceiling**: When updating agent instructions (system prompts in `server_vision_scout.ts`, dietitian instructions, biomarker agents), the total copy length/word count must by default remain equal to or less than before. Content MUST be consolidated instead of adding more (net-zero line/word growth). Adding more content than existing requires explicit human approval first.
@@ -114,7 +118,7 @@ This law does **not** waive protected-doc confirmation (§3) unless the pack lis
 When asked to fix bugs (one ticket or a whole registry):
 
 1. **Split into independent jobs.** A 7-row table is several jobs, not one meal-green search. Run them in the **same turn** when files do not collide. Do not stop after job 1 and ask the human to continue.
-2. **Work item = class, not meal `all_green`.** Classify first: `FALSE_FRIEND` · `DISH_DROP` · `OPENING_WRONG` · `SILENT_REPAIR` · `CALL_BUDGET` · `INFRA_LATENCY`. One class per job. Other reds on that meal are out of session.
+2. **Work item = class, not meal `all_green`.** Classify first: `FALSE_FRIEND` · `DISH_DROP` · `OPENING_WRONG` · `SILENT_REPAIR` · `CALL_BUDGET` · `INFRA_LATENCY` · `STALE_TURN`. One class per job. Other reds on that meal are out of session. `STALE_TURN` = preview/chat shows a previous job turn while a new one is running (debug already has the new numbers). Not food-calc.
 3. **Inner loop = named vitest, never `/loop`.** Forbidden as the way you work:
    - `POST /api/golden/cases/:id/loop`
    - Replaying the same meal until `all_green`

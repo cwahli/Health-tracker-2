@@ -2,8 +2,12 @@
 
 | File | Status | Topic |
 |------|:------:|-------|
+| **[F9_PR1_GEMINI.md](./F9_PR1_GEMINI.md)** | **Gemini now** | F-9 job session PR1: `jobPreview` + contract tests. Paste §A. |
+| [F9_PR2_GEMINI.md](./F9_PR2_GEMINI.md) | After PR1 | Session log + cloned `useJob` |
+| [F9_PR3_GEMINI.md](./F9_PR3_GEMINI.md) | After PR1 | `current_turn` |
+| [F9_PR4_GEMINI.md](./F9_PR4_GEMINI.md) | After PR3 | `JobStore.apply` (not App/LogChat) |
 | **[BUG_CONTINUE_GEMINI.md](./BUG_CONTINUE_GEMINI.md)** | **Queue notes** | L15: one phrase drains that card. Do not paste this file. |
-| **[Q64_GEMINI_COMBINED_QUEUE_UI.md](./Q64_GEMINI_COMBINED_QUEUE_UI.md)** | **Gemini G2 (Q-6.4)** | Tape actions: preview board, Replay log, bar, capture-pack slots. Not Promote/D1. |
+| **[Q64_GEMINI_COMBINED_QUEUE_UI.md](./Q64_GEMINI_COMBINED_QUEUE_UI.md)** | **Gemini G2 (Q-6.4)** | Tape actions: preview board, Replay log, bar, capture-pack slots. Not Promote/D1. Do not mix with F-9. |
 | **[M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md](./M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md)** | **ACTIVE (biomarkers)** | **Plan §13 remaining work, P0→P8 until master gate 0** |
 | **[M23_FULL_FREE_TIER_RELIABILITY.md](./M23_FULL_FREE_TIER_RELIABILITY.md)** | Separate track | **Full free-tier program M23→M28 continuous until master gate 0** |
 | [M23_FIRESTORE_WRITE_KILL_SWITCH.md](./M23_FIRESTORE_WRITE_KILL_SWITCH.md) | Nested | Phase M23 detail only |

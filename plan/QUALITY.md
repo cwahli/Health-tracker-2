@@ -94,6 +94,14 @@ Weiskopf & Weng / Kahn DQ from lifecycle §1, plus the auto-bugs from §9 and to
 
 A live job may trip several classes. **Only one class is in scope per session.** Other reds are listed “out of session.”
 
+### 1.3 Job session (not a golden)
+
+| Class id | Law | Inner test (no Gemini) | Honest residual |
+|---|---|---|---|
+| `STALE_TURN` | Preview/chat shows the **current** job turn | `JobSession.contract.test.ts`: edit submit → label `/Updating meal/` while prior meal still on the job → same-meal succeeded echo ignored → new snapshot → “Analysis completed”; one food card | If debug already has the new numbers and the card does not, do not patch food-calc |
+
+Execute IDs: [ROADMAP.md](./ROADMAP.md) F-9. Gemini implements from `studio/F9_PR*_GEMINI.md`. Grok reviews.
+
 ---
 
 ## 2. What already landed (do not rebuild)

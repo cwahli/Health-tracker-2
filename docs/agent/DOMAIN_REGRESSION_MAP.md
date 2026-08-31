@@ -103,7 +103,8 @@ Goldens live in `tests/Golden_biomarker/` (not `Golden_meal/`). Group by **class
 | `SyncService.ts` / firestore sanitize / storage keys | `npx vitest run src/utils/firestoreUtils.test.ts src/utils/storageUtils.test.ts` |
 | Food log dedupe | `npx vitest run src/utils/foodLogDedupe.test.ts` |
 | Image sync / R2 / backlog B11 | `node scripts/assert-backlog-b11-image-sync.mjs` · `assert-b11d-b13-b8c.mjs` if relevant |
-| Jobs / Supabase job sync | `npx vitest run src/jobs/__tests__/JobStore.test.ts` · `node scripts/assert-server-async-jobs.mjs` / unified-modal job asserts |
+| Jobs / Supabase job sync | `npx vitest run src/jobs/__tests__/JobStore.test.ts src/jobs/__tests__/mergeFoodEditMessages.test.ts` |
+| Job session / preview / edit-in-flight (`STALE_TURN`) | `npx vitest run src/jobs/__tests__/JobStore.test.ts src/jobs/__tests__/mergeFoodEditMessages.test.ts src/jobs/__tests__/JobSession.contract.test.ts` · `node scripts/assert-dev-serves-vite.mjs` |
 | Login / identity | `node scripts/assert-login-identity-delta.mjs` |
 
 **Sync smoke:**

@@ -1,8 +1,9 @@
 # AI Handover & Session Progress Board
 
 **Updated:** 2026-08-31  
-**Status:** Single-Path add/edit consolidation active; deleted dead `STANDARD_FOOD_FACTORS` table; one modal owns one meal document; 93/93 test suites (868/868 tests) passing green; dev server running cleanly on port 3000.
+**Status:** F-9 Grok-owned work is **ready for Gemini**. Paste `studio/F9_PR1_GEMINI.md` **section A** only. Grok reviews after each PR. Do not mix with F-8.10.
 
+- **F-9 handoff to Gemini (2026-08-31):** Grok landed laws (`AGENTS.md` L1/L11/L14 `STALE_TURN`, IMPACT layer, regression-map row, sync.md current-turn, `assert-dev-serves-vite.mjs`, `assert-agent-governance` checks) and four packs: `studio/F9_PR1_GEMINI.md` … `F9_PR4_GEMINI.md`. **Human:** paste PR1 §A to Gemini. **Grok next:** review PR1 diff; do **not** implement `jobPreview.ts`. After PR4, Grok owns `App.tsx` / leftover `LogChat.tsx` emitters.
 - **Chat Live Loading State Card for Meal Edits & Analysis (`FoodCard.tsx`, 2026-08-31):**
   - **Root Cause & Diagnosis:** When a user submitted an edit to an existing meal (or started an analysis), `FoodCard.tsx` had a blanket `if (msg.isLive) return null;` check, and `LogChat.tsx` suppressed formatted text for food messages. Consequently, while the background job was running on the server, the active chat turn rendered no loading card or visual feedback in the message list, giving the appearance of an unresponsive UI.
   - **Key Changes Applied:** Replaced the empty null return in `FoodCard.tsx` with a responsive `LiveFoodLoadingCard` state featuring animated progress indicator, mode-specific headings ("Updating Meal Analysis", "Analyzing Meal", "Comparing Meals"), live status messages, server background badges, and integrated live thought streaming via `AgentThoughtBox`.

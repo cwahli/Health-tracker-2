@@ -160,6 +160,26 @@ Q-1 (`assert-budgets.mjs`) is **green**. F-6 / F-7 are unblocked. They do **not*
 
 Execute **one class** per session. Inner = named vitest. Outer = one frozen example, not meal-green.
 
+### F-9 — Job session (one current turn)
+
+**Architecture:** [FOOD.md](./FOOD.md) Process · `docs/agent/domains/sync.md` jobs  
+**Class:** `STALE_TURN` (preview/chat shows a previous turn while a new one is running)  
+**Not:** food-calc, F-8.10 split, meal-green. Do **not** mix with F-8.10 in the same PR (`App.tsx` / `LogChat.tsx` collision = `8742686`).
+
+F-8 made calories have one owner. F-9 makes “what is on the preview” have one owner: `job.currentTurn` + `status` + `result` (null while not terminal). Flags (`inFlightTurnAt`, `mealSnapshotKey`, `effectiveStatus`) are bandages and die in F-9.4.
+
+**Who (budget):** Gemini implements bulk from a Grok pack. Grok authors the pack, reviews the push, and owns `App.tsx` / `LogChat.tsx` call sites (same as Q-4). Grok does **not** write the tests/migration/new modules.
+
+| ID | Still to do | Done when | Do not | Who |
+|---|---|---|---|---|
+| **F-9.1** | Guardrails | Regression-map row + serve-vite assert; food-calc PR that touches job files without an F-9 test fails a gate; `tsx` never serves `dist/` | Add flags; `npm run build` as sync | Grok: AGENTS/IMPACT wording (protected, confirm first). Gemini: assert + map row |
+| **F-9.2** | Session contract tests | Vitest: submit edit → label `/Updating meal/` → same-meal succeeded echo ignored → new snapshot → “Analysis completed”; one food card | Store-only tests | Gemini (new files). Grok: helper signatures in pack + review |
+| **F-9.3** | Inspector + cloned `useJob` | 20-event session log on the card + debug download; all preview surfaces clone on notify | New modal; log into `clean_result` | Gemini. Grok reviews paint |
+| **F-9.4** | `current_turn` is the session | Column + increment on submit; stale turn dropped; running ⇒ `clean_result` null (await upsert); flags deleted once F-9.2 stays green | Infer turn from calories; keep flags **and** turns | Gemini: migration/server/store. Grok: LogChat/App FIND if unique-match fails |
+| **F-9.5** | One writer | `JobStore.apply(event)` only mutator; UI does not `updateJob` status | Second merge path; god-file rewrite | Gemini: store + sync/runner. **Grok:** App + LogChat emitters |
+
+Packs: `studio/F9_PR1_GEMINI.md` … `F9_PR4`. ≤6 IDs. Protocol: Grok pack → Gemini implement → Grok review.
+
 ---
 
 ## Track R — Reliability (core done; start only on trigger)
@@ -232,8 +252,8 @@ Do **not** open Q-4 or a Dictionary/FoodCard/App.tsx breakup until Q-1 is red on
 
 | | **Gemini** (large context, FIND/REPLACE, Studio) | **Grok** (this workspace) |
 |---|---|---|
-| Prefer | Q-1 assert body from a spec; B8.2; B8.3; Q-3 implement+wire; R-9 defer; F-6 moves into **existing** cards; F-7 net-zero prompt; Q-5 delete residue | Audit / catalog ids; B8.1 factors; primitive **APIs**; Q-4; any split of `App.tsx` `LogChat.tsx` `Header.tsx` `BiomarkerDictionaryModal.tsx` `AgentResultTable.tsx`; R-8 measure; review Gemini push vs catalog |
-| Do not ask | “Refactor FoodCard / Dictionary / App”; invent `BiomarkerDataGrid`; add L15 prose; restore a third Auto-Fix | Parallel rewrite of the same god file Gemini is in |
+| Prefer | Q-1 assert body from a spec; B8.2; B8.3; Q-3 implement+wire; R-9 defer; F-6 moves into **existing** cards; F-7 net-zero prompt; Q-5 delete residue; **F-9.1–9.4 bulk** (assert, `jobPreview`, contract tests, `sessionLog`, migration, `serverJobs` turn increment) from a Grok pack | Audit / catalog ids; B8.1 factors; primitive **APIs**; Q-4; any split of `App.tsx` `LogChat.tsx` `Header.tsx` `BiomarkerDictionaryModal.tsx` `AgentResultTable.tsx`; R-8 measure; review Gemini push vs catalog; **F-9 packs + review**; **F-9.5 App/LogChat emitters**; AGENTS.md F-9 law wording |
+| Do not ask | “Refactor FoodCard / Dictionary / App”; invent `BiomarkerDataGrid`; add L15 prose; restore a third Auto-Fix; **F-9 rewrite JobStore / invent a new inFlight flag / `npm run build` to sync localhost** | Parallel rewrite of the same god file Gemini is in; implement F-9 tests/migration while a pack exists |
 
 Packs stay ≤6 IDs. One class per pack. Grok authors the pack; Gemini (or Grok) implements; Grok reviews the push (line counts + catalog). Local ship is allowed after COMPLETE.
 

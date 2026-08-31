@@ -10,6 +10,7 @@ Do not invent a free-form STATUS that skips gates.
 ```text
 IMPACT
 class: S | M | L | X
+layer: food-calc | job-session | ui-paint | serve-mode | other
 goal: <one sentence>
 files: [list that will change]
 paths: [e.g. Mode A | Mode D | Edit | agent1…agent5 | food sync | bio sync | N/A + reason]
@@ -22,6 +23,8 @@ plan:
   - …
   - …
 ```
+
+If the debug file already has the new numbers and the card does not: **class `STALE_TURN`**, **layer job-session**. Prove Vite vs `dist/` (`index.html` → `/src/main.tsx` vs hashed `/assets/index-*.js`) before patching. Do not touch job-lifecycle files from a food-calc IMPACT unless those files are listed **and** `JobSession.contract.test.ts` is in the same commit.
 
 If IMPACT reveals larger scope than the user asked: **stop and report** — do not silently expand.
 
