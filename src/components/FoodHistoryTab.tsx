@@ -1817,7 +1817,7 @@ export default function FoodHistoryTab({
                           return (
                             <div className="flex items-center gap-3 overflow-x-auto py-1 scrollbar-none flex-nowrap max-w-full text-left">
                               {sortedActiveNutrients.map(({ rawKey, key, lookupKey, nutrientDef, allowance, consumedBefore, inMeal, inMealVal }) => {
-                                if (isNaN(inMealVal) || inMealVal <= 0 || Number(inMealVal.toFixed(2)) <= 0) {
+                                if (isNaN(inMealVal)) {
                                   return null;
                                 }
 
