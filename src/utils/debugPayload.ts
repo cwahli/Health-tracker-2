@@ -629,7 +629,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       const seenInstr = new Set<string>();
       let shown = 0;
       for (const block of instructionBlocks) {
-        const key = block.slice(0, 240);
+        const key = block.trim();
         if (seenInstr.has(key)) continue;
         seenInstr.add(key);
         lines.push('```');
@@ -637,7 +637,7 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         lines.push('```');
         lines.push('');
         shown += 1;
-        if (shown >= 8) break;
+        if (shown >= 16) break;
       }
     }
 
