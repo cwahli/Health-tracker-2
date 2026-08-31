@@ -6760,12 +6760,8 @@ export default function App() {
         selectedModelId={selectedModelId}
         onChangeModelId={setSelectedModelId}
         onJobEnqueued={(id, kind) => {
-          const currentJob = id ? JobStore.getJob(id) : null;
-          const isMultiTurn = currentJob && currentJob.messages && currentJob.messages.filter((m: any) => !m.isLive).length > 1;
-          if (!isMultiTurn) {
-            setActiveJobId(null);
-            setActiveTab('food');
-          }
+          setActiveJobId(null);
+          setActiveTab('food');
         }}
         onClose={async () => {
           try {

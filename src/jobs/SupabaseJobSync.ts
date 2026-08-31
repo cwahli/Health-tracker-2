@@ -165,36 +165,23 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
       if (cleanRes && cleanRes.is_r2) {
         fetchAndPopulateR2Job(row.id);
       }
-    } else {
-      let syncStatus = row.status;
-      // Guard: if the job was previously succeeded/awaiting_user and the server now reports
-      // queued/running, this is an edit-turn in-flight transient state. Lock the displayed
-      // status to prevent a downgrade, and — critically — preserve the existing result so
-      // we don't overwrite job.result with the stale first-pass clean_result that the
-      // server still has while the edit is being processed.
-      const isEditInFlightTransient =
+      const isEditInFlight =
         (existing.status === 'succeeded' || existing.status === 'awaiting_user') &&
         (row.status === 'queued' || row.status === 'running');
-      if (isEditInFlightTransient) {
-        syncStatus = existing.status;
-      }
       const updatePayload: any = {
-        status: syncStatus,
+        status: row.status,
         progressPercent: row.progress_percent,
-        statusMessage: row.status_message,
+        statusMessage: row.status_message || (isEditInFlight ? 'Updating meal...' : undefined),
         serverSubmittedAt: existing.serverSubmittedAt || Date.now(),
         error: row.status === 'failed'
           ? { class: 'permanent', message: row.status_message || cleanRes?.message || existing.error?.message || 'Analysis failed on server' }
           : row.status === 'succeeded'
             ? undefined
             : existing.error,
-        // When we detected an edit-in-flight transient, preserve the existing result entirely
-        // to avoid clobbering it with the stale first-pass data still in the DB row.
-        // For normal updates (server reached succeeded or cleanRes is fresh inline data), apply cleanRes.
-        result: isEditInFlightTransient
+        result: isEditInFlight
           ? existing.result
-          : ((cleanRes && !cleanRes.is_r2) ? cleanRes : (existing.result || cleanRes)),
-        mealBuild: isEditInFlightTransient
+          : ((cleanRes && !cleanRes.is_r2) ? cleanRes : existing.result),
+        mealBuild: isEditInFlight
           ? existing.mealBuild
           : (cleanRes?.mealBuild || existing.mealBuild),
         photoUrl: photoUrl || row.photo_url || cleanRes?.photoUrl || existing.photoUrl,
@@ -235,7 +222,7 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
       // Fetch R2 result whenever the new clean_result is stored in R2 — regardless of
       // whether the existing result is populated (covers edit-turn where prior turn
       // already populated existing.result with non-R2 data).
-      if (cleanRes && cleanRes.is_r2 && !isEditInFlightTransient) {
+      if (cleanRes && cleanRes.is_r2 && !isEditInFlight) {
         fetchAndPopulateR2Job(row.id);
       }
     }
@@ -492,6 +479,50 @@ export function initSupabaseJobSync(userId?: string): () => void {
                   },
                 },
               ];
+            }
+          }
+
+          if (row.status === 'succeeded' && cleanRes && !cleanRes.is_r2) {
+            const pendingFoodLog = cleanRes.pendingFoodLog || (cleanRes.mealBuild ? toPendingFoodLog(cleanRes.mealBuild) : null) || cleanRes.data;
+            const messageText = cleanRes.message || cleanRes.text || pendingFoodLog?.message || 'Analysis complete.';
+            if (existingJob?.messages && existingJob.messages.length > 0) {
+              const nonLive = existingJob.messages.filter((m: any) => !m.isLive);
+              const lastNonLive = nonLive[nonLive.length - 1];
+              const isNewTurn = lastNonLive && lastNonLive.role === 'user';
+              const assistantMsg = {
+                id: isNewTurn ? `msg_assistant_${row.id}_${Date.now()}` : `msg_assistant_${row.id}`,
+                role: 'assistant',
+                content: messageText,
+                timestamp: new Date().toISOString(),
+                isLive: false,
+                agentType: existingJob.kind === 'medical' ? 'agent1' : 'food',
+                pendingFoodLog: pendingFoodLog || undefined,
+                data: {
+                  jobId: row.id,
+                  pendingFoodLog: pendingFoodLog || undefined,
+                  photoUrl: row.photo_url || cleanRes.photoUrl || existingJob.photoUrl,
+                  debugUrl: row.debug_url || cleanRes.debugUrl || existingJob.debugUrl,
+                  scoutItems: cleanRes.scoutItems || [],
+                  mode: row.mode || cleanRes.mode || 'review',
+                  agentResult: {
+                    backendLogs: cleanRes.backendLogs || '',
+                    globalLiveLogs: cleanRes.backendLogs || '',
+                    dietitianAnswer: messageText,
+                    scoutItems: cleanRes.scoutItems || [],
+                  },
+                },
+              };
+              if (isNewTurn) {
+                updatedFields.messages = [...nonLive, assistantMsg];
+              } else {
+                const lastAsstIdx = nonLive.map((m: any) => m.role).lastIndexOf('assistant');
+                if (lastAsstIdx !== -1) {
+                  nonLive[lastAsstIdx] = assistantMsg;
+                  updatedFields.messages = [...nonLive];
+                } else {
+                  updatedFields.messages = [...nonLive, assistantMsg];
+                }
+              }
             }
           }
 
