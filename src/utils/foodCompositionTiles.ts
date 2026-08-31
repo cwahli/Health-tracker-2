@@ -88,7 +88,7 @@ export function mapDisplayedScoutItems(
       usedScoutIndices.add(matchingScout.scoutIndex);
     }
 
-    const updatedName = item.canonicalDbName || item.name || item.originalLocalName;
+    const updatedName = item.canonicalDbName || item.name || item.originalName || item.originalLocalName;
     const sourceImageIndex =
       typeof item.sourceImageIndex === 'number'
         ? item.sourceImageIndex

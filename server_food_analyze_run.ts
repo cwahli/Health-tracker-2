@@ -2635,7 +2635,7 @@ export async function runFoodAnalyze(req: any, res: any) {
         verdict: {
           type: Type.OBJECT,
           properties: {
-            label: { type: Type.STRING, description: "Strictly concise (3-6 words) metric-backed clinical status label, e.g., 'Within Daily Calorie Target', 'High Saturated Fat Warning', or 'Solid Low-Sodium Choice'. Do NOT use vague filler or generic phrases." },
+            label: { type: Type.STRING, description: "Strictly concise (3-6 words) biological health benefit or metric impact label, e.g., 'Within Daily Calorie Target', 'Elevated Saturated Fat Impact', or 'Supports Lean Muscle Growth'. STRICTLY BANNED: Food or meal entity descriptions (e.g., NEVER output 'Exceptional High Protein Meal', 'Exceptional lean protein asset', 'High Protein Dish', 'Nutrient Dense Meal', 'Low Calorie Dinner', 'Healthy Choice')." },
             level: { type: Type.STRING, description: "'good' | 'warning' | 'alert' | 'neutral'" }
           },
           required: ["label", "level"]

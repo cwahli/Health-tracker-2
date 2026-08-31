@@ -1265,7 +1265,7 @@ MODE D: EVALUATION / COMPARISON
   * Output the specific groups in comparison.groups. 
   * CRITICAL SYNTAX: Each element inside the comparison.groups array MUST be a complete JSON object enclosed in curly braces '{' and '}'. Never output bare keys or skip curly braces. The first property of each group object inside the curly braces MUST be "groupName".
   * For each group object, provide groupName, verdict, message, averageNutrients, and scoutItemIndices. OMIT the comparisonTable entirely.
-  * The 'verdict' and 'message' fields MUST EXACTLY MATCH the formatting rules of Mode A. 'verdict' specifies a 3-6 word label and a level ('good', 'warning', 'alert', 'neutral'). 'message' must be a highly instructional 4-beat advice (Value -> Impact -> Symptom -> Next Action) applying numeric values for targets and limits.
+  * The 'verdict' and 'message' fields MUST EXACTLY MATCH the formatting rules of Mode A. 'verdict' specifies a 3-6 word label and a level ('good', 'warning', 'alert', 'neutral'). The verdict label MUST state the biological health benefit/outcome or metric impact, and NEVER describe the food/meal entity (e.g. NEVER output 'Exceptional High Protein Meal', 'Exceptional lean protein asset', 'High Protein Dish', 'Nutrient Dense Meal', 'Low Calorie Dinner', 'Healthy Choice'). 'message' must be a highly instructional 4-beat advice (Value -> Impact -> Symptom -> Next Action) applying numeric values for targets and limits.
   * For Mode D, omit the root-level 'verdict' and 'message' fields, as they are now handled per-group.
   * Inside each group, add an "itemClinicalThreats" array. Each entry MUST be an object {"scoutIndices": [<numbers>], "threat": "<short label>"} covering every scout item in that group. You MUST group indices that share the EXACT same threat label together into the array to save space. For Tier 1 and 2, this might be "None" or a minor warning. For Tier 3, it must explicitly name the threat (e.g., "Excessive Sodium").
   * CRITICAL NAMING RULE: NEVER use the word "Index" or "Option X" in your 'groupName', 'message', or 'recommendation' text fields. You must seamlessly weave the actual food names (e.g., "Happy Tos", "Mr. Bread") into your prose. The "Index" number is ONLY for the 'scoutItemIndices' and 'scoutIndex' JSON structure fields.
@@ -1294,7 +1294,7 @@ JSON SCHEMA STRICT REQUIREMENT:
   "_internalReasoning": "string",
   "mode": "new_log | discussion | modify | evaluation | origin",
   "verdict": {
-    "label": "Bad for cholesterol | High Saturated Fat | High Sodium | Healthy Choice | Moderate Saturated Fat",
+    "label": "Bad for Cholesterol | Elevated Saturated Fat Impact | Elevated Sodium Impact | Supports Heart Health | Within Calorie Target",
     "level": "good | warning | alert | neutral"
   },
   "message": "A highly personalized conversational response detailing the clinical rationale. Focus on actionable guidance and avoid repeating raw macro numbers.",
@@ -1311,7 +1311,7 @@ JSON SCHEMA STRICT REQUIREMENT:
     "date": "YYYY-MM-DD",
     "name": "Literal food name",
     "verdict": {
-      "label": "Bad for cholesterol | High Saturated Fat | High Sodium | Healthy Choice | Moderate Saturated Fat",
+      "label": "Bad for Cholesterol | Elevated Saturated Fat Impact | Elevated Sodium Impact | Supports Heart Health | Within Calorie Target",
       "level": "good | warning | alert | neutral"
     },
     "itemsBreakdown": [
