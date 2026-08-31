@@ -2637,15 +2637,25 @@ export async function runFoodAnalyze(req: any, res: any) {
               estimate: {
                 type: Type.OBJECT,
                 nullable: true,
-                description: "Scout-shaped P/C/F for add_item, replace_identity, or new split identities. No calories.",
+                description: "Scout-shaped complete nutrient profile for add_item, replace_identity, or new split identities.",
                 properties: {
                   protein: { type: Type.NUMBER, nullable: true },
                   carbohydrates: { type: Type.NUMBER, nullable: true },
                   totalFat: { type: Type.NUMBER, nullable: true },
                   saturatedFat: { type: Type.NUMBER, nullable: true },
-                  sodium: { type: Type.NUMBER, nullable: true },
+                  transFat: { type: Type.NUMBER, nullable: true },
+                  sugar: { type: Type.NUMBER, nullable: true },
+                  totalSugar: { type: Type.NUMBER, nullable: true },
                   addedSugar: { type: Type.NUMBER, nullable: true },
                   totalFibre: { type: Type.NUMBER, nullable: true },
+                  solubleFibre: { type: Type.NUMBER, nullable: true },
+                  sodium: { type: Type.NUMBER, nullable: true },
+                  potassium: { type: Type.NUMBER, nullable: true },
+                  calcium: { type: Type.NUMBER, nullable: true },
+                  iron: { type: Type.NUMBER, nullable: true },
+                  magnesium: { type: Type.NUMBER, nullable: true },
+                  vitaminD: { type: Type.NUMBER, nullable: true },
+                  omega3: { type: Type.NUMBER, nullable: true },
                   cookingMethod: { type: Type.STRING, nullable: true },
                   foodType: { type: Type.STRING, nullable: true }
                 }
@@ -3666,7 +3676,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               ...sItem,
               originalName: newName,
               keyword: newName,
-              estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams
+              estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams,
+              components: bItem.components || sItem.components,
+              componentsDetailList: bItem.componentsDetailList || sItem.componentsDetailList,
+              nutrients: bItem.nutrients || sItem.nutrients,
             };
           }
           return sItem;

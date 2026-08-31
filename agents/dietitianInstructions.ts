@@ -405,23 +405,20 @@ ${REQUIRED_OUTPUT_JSON_SCHEMA}`;
 
 const EDIT_OUTPUT_JSON_SCHEMA = `
 === EDIT / Q&A FEW-SHOT ===
-User: "the iced tea is unsweetened, the beef and chicken are 100g each separately"
+User: "the beverage is raw coconut juice, and iced tea is unsweetened"
 {
-  "_internalReasoning": "Unsweetened tea → set_modifier. Steak split → split_item with estimates for new identities. Unmentioned sides stay at saved grams. Sauce stays a component.",
-  "verdict": { "label": "Supports lean muscle tissue", "level": "good" },
-  "message": "I've switched your iced tea to unsweetened and split the steak into 100g beef and 100g chicken. You got strong protein from both cuts. Sides stay as logged. Enjoy a gentle 15-minute walk.",
+  "_internalReasoning": "Raw coconut juice clarification → replace_identity with complete estimate. Unsweetened tea → set_modifier.",
+  "verdict": { "label": "Supports hydration and vitality", "level": "good" },
+  "message": "I've updated your drink to raw coconut juice and switched tea to unsweetened. You get natural electrolytes and hydration.",
   "modificationCommand": [
-    { "action": "update_modifier", "itemName": "Iced Tea", "newItemName": "Unsweetened Iced Tea", "modifier": "unsweetened" },
-    { "action": "split_item", "itemName": "Sizzling Steak with Wedges", "into": [
-      { "name": "Beef Steak", "grams": 100, "estimate": { "protein": 27, "carbohydrates": 0, "totalFat": 8, "saturatedFat": 3, "sodium": 70, "cookingMethod": "grilled", "foodType": "protein" } },
-      { "name": "Chicken Steak", "grams": 100, "estimate": { "protein": 28, "carbohydrates": 0, "totalFat": 4, "saturatedFat": 1, "sodium": 65, "cookingMethod": "grilled", "foodType": "protein" } }
-    ]}
+    { "action": "replace_identity", "itemName": "Sweetened Drink", "newItemName": "Raw Coconut Juice", "newWeightGrams": 300, "estimate": { "protein": 2.1, "carbohydrates": 12, "totalFat": 0.6, "saturatedFat": 0, "totalSugar": 9, "addedSugar": 0, "totalFibre": 3, "sodium": 75, "potassium": 750, "calcium": 60, "iron": 0.9, "magnesium": 75, "vitaminD": 0, "cookingMethod": "raw", "foodType": "beverage" } },
+    { "action": "update_modifier", "itemName": "Iced Tea", "newItemName": "Unsweetened Iced Tea", "modifier": "unsweetened" }
   ],
-  "foodData": { "date": "2026-08-03", "name": "Beef Steak and Chicken Steak with Sides" }
+  "foodData": { "date": "2026-08-03", "name": "Raw Coconut Juice and Unsweetened Iced Tea" }
 }
 RULES:
 - Q&A / advice only → modificationCommand: [] (empty). Do not rebuild itemsBreakdown.
-- "X is Y" → replace_identity with required complete estimate {protein,carbohydrates,totalFat,saturatedFat,sodium,addedSugar,totalFibre}. Copy photo/weight.
+- "X is Y" → replace_identity with REQUIRED complete estimate {protein,carbohydrates,totalFat,saturatedFat,totalSugar,addedSugar,totalFibre,sodium,potassium,calcium,iron,magnesium,vitaminD,omega3}.
 - Split foods → split_item + estimate on each new identity. Keep unmentioned sides at saved grams. Sauce stays a component.
 - add_item (no photo) → required estimate {protein,carbohydrates,totalFat,...}. Never invent kcal.
 - Unsweetened / no sugar → update_modifier modifier="unsweetened". Never update_cooking_method.
