@@ -720,7 +720,8 @@ export default function FoodHistoryTab({
     let remotePayload: any = null;
     if (log.debugUrl && (log.debugUrl.startsWith('http://') || log.debugUrl.startsWith('https://') || log.debugUrl.startsWith('debug/'))) {
       try {
-        const r2Url = log.debugUrl.startsWith('http') ? log.debugUrl : `https://pub-d17eecca64f82625d29dc38b14f46c14.r2.dev/${log.debugUrl}`;
+        const rawDebug = log.debugUrl.replace('pub-d17eecca64f82625d29dc38b14f46c14.r2.dev', 'pub-2ae421ce82904986ae87c8bc27552cff.r2.dev');
+        const r2Url = rawDebug.startsWith('http') ? rawDebug : `https://pub-2ae421ce82904986ae87c8bc27552cff.r2.dev/${rawDebug.replace(/^\/+/, '')}`;
         let r2Res = await fetch(`/api/r2/log-proxy?url=${encodeURIComponent(r2Url)}`);
         if (!r2Res.ok) {
           r2Res = await fetch(r2Url);

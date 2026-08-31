@@ -121,7 +121,27 @@ export function consolidateMeal(
         return; // Skip deleted (zombie)
       }
       
-      const prevItem = existingItems.get(key);
+      let prevItem = existingItems.get(key);
+      let matchedKey = key;
+      if (!prevItem && patchItem.scoutIndex != null) {
+        // Fallback: if patch has scoutIndex, find base item by scoutIndex (e.g. base had itemId, patch only has scoutIndex)
+        for (const [k, it] of existingItems.entries()) {
+          if (it.scoutIndex === patchItem.scoutIndex) {
+            prevItem = it;
+            matchedKey = k;
+            break;
+          }
+        }
+      } else if (!prevItem && patchItem.name) {
+        // Fallback: match by name
+        for (const [k, it] of existingItems.entries()) {
+          if (it.name && it.name.toLowerCase().trim() === patchItem.name.toLowerCase().trim()) {
+            prevItem = it;
+            matchedKey = k;
+            break;
+          }
+        }
+      }
       const mergedItem = mergeFoodItem(prevItem, patchItem);
       
       // Structural/weight change detection
@@ -132,7 +152,7 @@ export function consolidateMeal(
       }
       
       newItems.push(mergedItem);
-      existingItems.delete(key);
+      existingItems.delete(matchedKey);
     });
     
     // Bring over untouched items

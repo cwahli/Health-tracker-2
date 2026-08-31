@@ -1,7 +1,4 @@
-/**
- * B9 / B14 — Strip heavy images from debug payloads and build a human markdown report.
- * Pure helpers (browser + Node safe).
- */
+import { evaluateMealGate, MealGateResult } from '../mealBuild/mealGate.js';
 
 /** Recursively strip base64 / huge data-URLs; keep short https photo URLs. */
 export function stripHeavyImages(value: any): any {
@@ -96,6 +93,7 @@ export type DebugReportInput = {
   historyLog?: any[];
   version?: number;
   ingestTrace?: any;
+  gate?: any;
   /** Health Coach / medical analysis output (health-baseline-analyze route nests
    * its full structured result under this field — see serverJobs.ts persistSucceeded). */
   report?: any;
@@ -111,6 +109,7 @@ export type DebugReportInput = {
 export function buildDebugMarkdownReport(input: DebugReportInput): string {
   const lines: string[] = [];
   const at = input.exportedAt || new Date().toISOString();
+  let computedGate: MealGateResult | null = null;
   lines.push(`# Health Tracker — End-to-End Diagnostic Report`);
   lines.push('');
   lines.push(`- **Exported:** ${at}`);
@@ -138,8 +137,49 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       lines.push(`- **Photo:** ${input.photoUrl}`);
     }
   }
-  if (input.error) lines.push(`- **Error:** ${input.error}`);
-  lines.push('');
+  // Gate / Errors Section
+  if (input.pendingFoodLog || input.receiptTable) {
+    const food = input.pendingFoodLog || {};
+    const items = Array.isArray(food.itemsBreakdown) ? food.itemsBreakdown : (Array.isArray(input.receiptTable) ? input.receiptTable : []);
+    const gateRes = computedGate = evaluateMealGate({
+      mealId: food.id || input.jobId,
+      name: food.name,
+      weightGrams: food.weightGrams,
+      calories: food.nutrients?.calories ?? food.calories,
+      protein: food.nutrients?.protein ?? food.protein,
+      carbohydrates: food.nutrients?.carbohydrates ?? food.carbohydrates,
+      totalFat: food.nutrients?.totalFat ?? food.totalFat,
+      items: items.map((it: any) => ({
+        name: it.originalName || it.canonicalDbName || it.name || it.item || 'Item',
+        weightGrams: it.weightGrams ?? it.estimatedWeightGrams ?? (typeof it.weight === 'string' ? parseFloat(it.weight) : it.weight),
+        calories: it.nutrients?.calories ?? it.calories ?? (typeof it.kcal === 'number' ? it.kcal : (typeof it.calories === 'string' ? parseFloat(it.calories) : null)),
+        protein: it.nutrients?.protein ?? it.protein ?? (typeof it.protein === 'string' ? parseFloat(it.protein) : null),
+        carbohydrates: it.nutrients?.carbohydrates ?? it.carbohydrates ?? (typeof it.carbs === 'string' ? parseFloat(it.carbs) : null),
+        totalFat: it.nutrients?.totalFat ?? it.totalFat ?? (typeof it.fat === 'string' ? parseFloat(it.fat) : null),
+        sourceImageIndex: it.sourceImageIndex,
+        lockedNutrientKeys: it.lockedNutrientKeys,
+        dbSource: it.dbSource || it.source,
+      })),
+      mealHasImages: Boolean(input.photoUrl || (input.photoUrls && input.photoUrls.length > 0)),
+      imageCount: input.photoUrls?.length || (input.photoUrl ? 1 : 0),
+      narrative: input.message,
+    });
+
+    lines.push(`## ⚖️ Gate & Trial-Balance Evaluation`);
+    lines.push('');
+    lines.push(`- **Result:** \`${gateRes.summary}\``);
+    lines.push(`- **Savable:** \`${gateRes.savable}\``);
+    lines.push(`- **Calculated Ledger Totals:** ${gateRes.calculatedTotals.weightGrams}g | ${gateRes.calculatedTotals.calories} kcal | ${gateRes.calculatedTotals.protein}g protein | ${gateRes.calculatedTotals.carbohydrates}g carbs | ${gateRes.calculatedTotals.totalFat}g fat`);
+    if (gateRes.failures.length > 0) {
+      lines.push('');
+      lines.push(`| Gate Failure Code | Item | Description |`);
+      lines.push(`|-------------------|------|-------------|`);
+      for (const f of gateRes.failures) {
+        lines.push(`| \`${f.code}\` | ${f.itemName || '—'} | ${f.message.replace(/\|/g, '/')} |`);
+      }
+    }
+    lines.push('');
+  }
 
   // Biomarker Ingest Trace (if medical job / ingest trace present)
   if (input.ingestTrace && typeof input.ingestTrace === 'object') {
@@ -586,38 +626,73 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       lines.push('');
       lines.push(`_Extracted from backend logs — ${instructionBlocks.length} dispatch(es) found. Shown here only; collapsed below to avoid duplication._`);
       lines.push('');
-      for (const block of instructionBlocks.slice(0, 10)) {
+      const seenInstr = new Set<string>();
+      let shown = 0;
+      for (const block of instructionBlocks) {
+        const key = block.slice(0, 240);
+        if (seenInstr.has(key)) continue;
+        seenInstr.add(key);
         lines.push('```');
         lines.push(block);
         lines.push('```');
         lines.push('');
+        shown += 1;
+        if (shown >= 8) break;
       }
     }
 
-    // Raw LLM response dumps (e.g. "Response received (N chars). Raw output:
-    // {...}") usually duplicate a structured section already shown above
-    // (like the Health Coach / Analysis Report). Collapse them too, keeping
-    // the one-line summary that announces them.
+    // Agent replies: show each unique reply once, then collapse logger-echo copies.
+    const replyBlocks: string[] = [];
     const responseStartPattern = /Response received \(\d+ chars\)\.\s*Raw output:/i;
     for (let i = 0; i < logLines.length; i++) {
-      if (responseStartPattern.test(logLines[i]) && !collapsedLineIndices.has(i)) {
+      if (responseStartPattern.test(logLines[i])) {
+        const block: string[] = [logLines[i]];
         let j = i + 1;
         while (j < logLines.length && !/^\[[A-Za-z]/.test(logLines[j])) {
-          collapsedLineIndices.add(j);
+          block.push(logLines[j]);
           j++;
         }
+        replyBlocks.push(block.join('\n').trim());
+        for (let k = i; k < j; k++) collapsedLineIndices.add(k);
+      }
+    }
+    if (replyBlocks.length > 0) {
+      lines.push(`## 🤖 Agent Replies`);
+      lines.push('');
+      lines.push(`_One reply per dispatch. Duplicates collapsed._`);
+      lines.push('');
+      const seenReply = new Set<string>();
+      let shownReplies = 0;
+      for (const block of replyBlocks) {
+        const key = block.slice(0, 240);
+        if (seenReply.has(key)) continue;
+        seenReply.add(key);
+        lines.push('```');
+        lines.push(block);
+        lines.push('```');
+        lines.push('');
+        shownReplies += 1;
+        if (shownReplies >= 8) break;
       }
     }
 
     const errorLines = logLines.filter((l) => /^\[error\]/i.test(l.trim()) || /\bError:\s/i.test(l));
     lines.push(`## ⚠️ Errors & Warnings`);
     lines.push('');
-    if (errorLines.length > 0) {
+    const gateFailures = (Array.isArray(input.gate?.failures) && input.gate.failures.length > 0)
+      ? input.gate.failures
+      : (computedGate?.failures || []);
+    if (gateFailures.length > 0) {
+      lines.push(`Gate: \`${input.gate?.summary || computedGate?.summary || 'GATE: FAIL'}\` (see Gate & Trial-Balance Evaluation).`);
+      for (const f of gateFailures.slice(0, 20)) {
+        lines.push(`- \`${f.code}\` ${f.itemName ? `(${f.itemName}) ` : ''}${f.message}`);
+      }
+    } else if (errorLines.length > 0) {
       for (const el of errorLines.slice(0, 40)) {
         lines.push(`- ${el.trim().slice(0, 500)}`);
       }
     } else {
-      lines.push('_No errors or warnings found in the backend logs captured for this job._');
+      lines.push('_No thrown exceptions. Trial-balance is in Gate & Trial-Balance Evaluation (not a log grep)._');
     }
     lines.push('');
 
@@ -703,6 +778,7 @@ export function debugReportFromJobMsg(job: any, msg: any): DebugReportInput {
     stageLedger: result.stageLedger,
     historyLog: result.historyLog,
     ingestTrace: result.ingestTrace || msg?.data?.ingestTrace || msg?.data?.agentResult?.ingestTrace || job?.clean_result?.ingestTrace,
+    gate: result.gate || msg?.data?.gate,
     report: result.report || msg?.data?.report || msg?.data?.agentResult?.report || job?.clean_result?.report
   };
 }

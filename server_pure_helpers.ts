@@ -132,9 +132,13 @@ export function findItemIndexInList(itemsBreakdown: any[], itemNameStr: string, 
   const cleanDbId = targetDbId ? String(targetDbId).replace(/[^\x20-\x7E]/g, '').trim() : null;
   if (!nameLower && !cleanDbId) return -1;
 
-  // 1. Exact match by dbId
+  // 1. Exact match by dbId / id / itemId
   if (cleanDbId) {
-    const idx = itemsBreakdown.findIndex((it: any) => it.dbId && String(it.dbId) === cleanDbId);
+    const idx = itemsBreakdown.findIndex((it: any) =>
+      (it.dbId && String(it.dbId) === cleanDbId) ||
+      (it.id && String(it.id) === cleanDbId) ||
+      (it.itemId && String(it.itemId) === cleanDbId)
+    );
     if (idx !== -1) return idx;
   }
 
@@ -722,6 +726,8 @@ export function applySatFatAndAddedSugarFloor(
     componentCount?: number;
     physicalForm?: string | null;
     chainName?: string | null;
+    syntheticBase100g?: any;
+    isDishEstimate?: boolean;
   }
 ): void {
   if (!itemNutrients || typeof itemNutrients !== 'object') return;
@@ -1355,7 +1361,14 @@ export function synthesizeEditCommandsFromBreakdown(activeMeal: any, dietitianIt
       // 2) The item's scoutIndex was explicitly targeted by Dietitian but oldIt was omitted/replaced
       const isTargetedScoutIndex = touchedScoutIndices.size > 0 && oldScoutIdx !== null && touchedScoutIndices.has(oldScoutIdx);
 
-      if (isTargetedScoutIndex || isExplicitRemoveInMsg) {
+      // 3) Dietitian provided a breakdown with newly added replacement/split items and omitted oldIt
+      const hasNewlyAddedItems = dietitianItems.some((newIt: any) => {
+        const newScoutIdx = newIt.scoutIndex;
+        return (newScoutIdx === undefined || newScoutIdx === null) && !activeItems.some(a => itemsMatchByName(a.name || a.canonicalDbName, newIt.canonicalDbName || newIt.name));
+      });
+      const isFullReplacement = hasNewlyAddedItems && dietitianItems.length >= Math.max(1, activeItems.length - 1);
+
+      if (isTargetedScoutIndex || isExplicitRemoveInMsg || isFullReplacement) {
         synthesizedCommands.push({
           action: 'remove_item',
           itemName: oldIt.name || oldIt.canonicalDbName || oldName,
@@ -1425,39 +1438,44 @@ export function synthesizeEditCommandsFromBreakdown(activeMeal: any, dietitianIt
   // Check for modifier commands in userMessage (e.g., "the tea is unsweetened", "no oil", "no salt")
   if (/\b(unsweetened|unsweatened|no\s*sugar|zero\s*sugar|without\s*sugar|sugar\s*free)\b/i.test(uMsgLower)) {
     const teaItem = activeItems.find((it: any) => {
-      const n = String(it.name || it.canonicalDbName || '').toLowerCase();
-      return (n.includes('tea') || n.includes('beverage') || n.includes('drink') || n.includes('coffee') || n.includes('juice')) && !n.includes('unsweetened');
+      const n = String(it.name || it.canonicalDbName || it.originalName || it.originalLocalName || it.keyword || '').toLowerCase();
+      const type = String(it.foodType || '').toLowerCase();
+      const hasTeaWord = n.includes('tea') || n.includes('teh') || n.includes('beverage') || n.includes('drink') || n.includes('coffee') || n.includes('kopi') || n.includes('juice') || n.includes('latte') || type === 'beverage' || type === 'drink' || (Array.isArray(it.components) && it.components.some((c: any) => {
+        const cn = String(c.name || c.keyword || c.searchQuery || '').toLowerCase();
+        return cn.includes('tea') || cn.includes('teh') || cn.includes('coffee') || cn.includes('drink') || cn.includes('beverage');
+      }));
+      return hasTeaWord && !n.includes('unsweetened') && !n.includes('tawar');
     });
-    if (teaItem && !synthesizedCommands.some(c => c.action === 'update_modifier' && c.itemName === (teaItem.name || teaItem.canonicalDbName))) {
+    if (teaItem && !synthesizedCommands.some(c => c.action === 'update_modifier' && (c.itemName === teaItem.name || c.itemName === teaItem.canonicalDbName || c.itemName === teaItem.originalName))) {
       synthesizedCommands.push({
         action: 'update_modifier',
-        itemName: teaItem.name || teaItem.canonicalDbName,
+        itemName: teaItem.name || teaItem.canonicalDbName || teaItem.originalName,
         targetDbId: teaItem.dbId || null,
         modifier: 'unsweetened'
       });
     }
   } else if (/\b(no\s*oil|without\s*oil|oil\s*free|no\s*fat|without\s*fat|fat\s*free)\b/i.test(uMsgLower)) {
     const targetItem = activeItems.find((it: any) => {
-      const n = String(it.name || it.canonicalDbName || '').toLowerCase();
-      return uMsgLower.includes(n) || activeItems.length === 1;
+      const n = String(it.name || it.canonicalDbName || it.originalName || it.keyword || '').toLowerCase();
+      return uMsgLower.includes(n) || n.split(/\s+/).some((t: string) => t.length > 3 && uMsgLower.includes(t)) || activeItems.length === 1;
     }) || activeItems[0];
     if (targetItem && !synthesizedCommands.some(c => c.action === 'update_modifier')) {
       synthesizedCommands.push({
         action: 'update_modifier',
-        itemName: targetItem.name || targetItem.canonicalDbName,
+        itemName: targetItem.name || targetItem.canonicalDbName || targetItem.originalName,
         targetDbId: targetItem.dbId || null,
         modifier: 'no oil'
       });
     }
   } else if (/\b(no\s*salt|without\s*salt|salt\s*free|unsalted)\b/i.test(uMsgLower)) {
     const targetItem = activeItems.find((it: any) => {
-      const n = String(it.name || it.canonicalDbName || '').toLowerCase();
-      return uMsgLower.includes(n) || activeItems.length === 1;
+      const n = String(it.name || it.canonicalDbName || it.originalName || it.keyword || '').toLowerCase();
+      return uMsgLower.includes(n) || n.split(/\s+/).some((t: string) => t.length > 3 && uMsgLower.includes(t)) || activeItems.length === 1;
     }) || activeItems[0];
     if (targetItem && !synthesizedCommands.some(c => c.action === 'update_modifier')) {
       synthesizedCommands.push({
         action: 'update_modifier',
-        itemName: targetItem.name || targetItem.canonicalDbName,
+        itemName: targetItem.name || targetItem.canonicalDbName || targetItem.originalName,
         targetDbId: targetItem.dbId || null,
         modifier: 'no salt'
       });
@@ -1898,4 +1916,65 @@ export function isLabelPanelItem(item: any): boolean {
          orig.includes("back of package") || 
          orig.includes("printed_packaging_label") ||
          orig === "label";
+}
+
+export function formatMealReceiptTable(items: any[], totalNutrients: any, totalWeightGrams?: number): string {
+  const fVal = (val: any, unit: string = ''): string => {
+    if (val === null || val === undefined) return `0${unit}`;
+    const num = typeof val === 'number' ? val : parseFloat(val);
+    if (isNaN(num) || Math.abs(num) < 0.05) return `0${unit}`;
+    const rounded = Math.round(num * 10) / 10;
+    return rounded === 0 ? `0${unit}` : `${rounded}${unit}`;
+  };
+
+  let table = "### 🧾 Nutrition calculation\n\n";
+  table += "| Item / Ingredient | Kcal | Protein | Sat Fat | Sodium |\n";
+  table += "|---|---|---|---|---|\n";
+
+  const totalW = totalWeightGrams ?? items.reduce((sum: number, it: any) => sum + (Number(it.weightGrams) || 0), 0);
+
+  items.forEach((it: any, idx: number) => {
+    const itCal = it.nutrients?.calories ?? it.calories ?? 0;
+    const itP = it.nutrients?.protein ?? it.protein ?? 0;
+    const itSatFat = it.nutrients?.saturatedFat ?? it.saturatedFat ?? 0;
+    const itNa = it.nutrients?.sodium ?? it.sodium ?? 0;
+    const itW = Number(it.weightGrams) || 0;
+    const itemName = it.name || it.canonicalDbName || it.originalName || 'Item';
+
+    const compList = (Array.isArray(it.componentsDetailList) && it.componentsDetailList.length > 0)
+      ? it.componentsDetailList
+      : (Array.isArray(it.components) && it.components.length > 0 ? it.components : null);
+
+    // 1. Dish title row
+    const subNames = compList && compList.length > 1 ? ` (${compList.map((c: any) => c.name || c.keyword || '').filter(Boolean).join(', ')})` : '';
+    table += `| **${idx + 1}. ${itemName} - ${itW}g${subNames}** | - | - | - | - |\n`;
+
+    // 2. Constituent rows
+    if (compList && compList.length > 0) {
+      compList.forEach((c: any) => {
+        const cName = c.name || c.searchQuery || c.keyword || 'Ingredient';
+        const cW = Number(c.weightGrams) || Math.round(itW / compList.length);
+        const cCal = c.calories ?? c.nutrients?.calories ?? (compList.length === 1 ? itCal : 0);
+        const cP = c.protein ?? c.nutrients?.protein ?? (compList.length === 1 ? itP : 0);
+        const cSatFat = c.saturatedFat ?? c.nutrients?.saturatedFat ?? (compList.length === 1 ? itSatFat : 0);
+        const cNa = c.sodium ?? c.nutrients?.sodium ?? (compList.length === 1 ? itNa : 0);
+        table += `| ${cName} - ${cW}g | ${fVal(cCal)} | ${fVal(cP, 'g')} | ${fVal(cSatFat, 'g')} | ${fVal(cNa, 'mg')} |\n`;
+      });
+    } else {
+      const labelRef = it.dbSource === 'label' ? `Printed Packaging Label (${itemName})` : itemName;
+      table += `| ${labelRef} - ${itW}g | ${fVal(itCal)} | ${fVal(itP, 'g')} | ${fVal(itSatFat, 'g')} | ${fVal(itNa, 'mg')} |\n`;
+    }
+
+    // 3. Item Sub-Total row
+    table += `| **Item Sub-Total - ${itW}g** | **${fVal(itCal)}** | **${fVal(itP, 'g')}** | **${fVal(itSatFat, 'g')}** | **${fVal(itNa, 'mg')}** |\n`;
+  });
+
+  // Grand Total row
+  const grandCal = totalNutrients?.calories ?? 0;
+  const grandP = totalNutrients?.protein ?? 0;
+  const grandSatFat = totalNutrients?.saturatedFat ?? 0;
+  const grandNa = totalNutrients?.sodium ?? 0;
+  table += `| **🏆 GRAND MEAL TOTAL - ${totalW}g** | **${fVal(grandCal)}** | **${fVal(grandP, 'g')}** | **${fVal(grandSatFat, 'g')}** | **${fVal(grandNa, 'mg')}** |\n`;
+
+  return table;
 }

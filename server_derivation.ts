@@ -193,13 +193,30 @@ export function applyNutrientModifiers(
   const lockedKeys: string[] = [];
   const msg = (options.message || '').toLowerCase();
   const name = (options.name || '').toLowerCase();
-  const isBeverage = options.foodType === 'beverage' ||
+  // Exclude water plants (water spinach, watercress, watermelon, kangkung) and non-beverage categories
+  const isWaterPlant = /\bwater\s*(spinach|cress|chestnut|melon|apple|lily)\b/i.test(name) || /\b(kangkung|kangkong)\b/i.test(name);
+  const isNonBeverageCategory = Boolean(
+    options.foodType &&
+    /^(vegetable|produce|salad|protein|meat|poultry|seafood|fish|grain|carb|side)$/i.test(String(options.foodType).trim())
+  );
+
+  const isBeverage = !isNonBeverageCategory && !isWaterPlant && (
+    options.foodType === 'beverage' ||
     options.physicalForm === 'LIQUID_BEVERAGE' ||
-    /\b(tea|coffee|drink|beverage|juice|soda|latte|lemonade|teh|water|chai|matcha|smoothie|kombucha)\b/i.test(name);
+    /\b(tea|coffee|drink|beverage|juice|soda|latte|lemonade|teh|chai|matcha|smoothie|kombucha)\b/i.test(name) ||
+    (/\bwater\b/i.test(name) && !/\b(spinach|cress|chestnut|melon|apple|lily)\b/i.test(name))
+  );
+
+  // If user explicitly named a beverage (e.g. "tea", "coffee"), ensure the item matches that beverage
+  const mentionedTea = /\b(tea|teh)\b/i.test(msg);
+  const mentionedCoffee = /\b(coffee|kopi)\b/i.test(msg);
+  const isTeaItem = /\b(tea|teh|chai|matcha)\b/i.test(name);
+  const isCoffeeItem = /\b(coffee|kopi|espresso|latte|cappuccino)\b/i.test(name);
+  const beverageMatchesIntent = (!mentionedTea && !mentionedCoffee) || (mentionedTea && isTeaItem) || (mentionedCoffee && isCoffeeItem);
 
   // 1. Zero-Sugar / Unsweetened Modifier
   const isZeroSugar = /\b(unsweetened|unsweatened|no sugar|sugar free|zero sugar|without sugar|tanpa gula|tawar|diet|zero calorie)\b/i.test(msg);
-  if (isZeroSugar && isBeverage) {
+  if (isZeroSugar && isBeverage && beverageMatchesIntent) {
     n.sugar = 0;
     n.addedSugar = 0;
     n.carbohydrates = 0;

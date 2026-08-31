@@ -397,53 +397,34 @@ ${biomarkersList}
 
 ${targetLimits}
 
-=== ACTIVE TASK: NEW FOOD LOGGING ===
-DEFAULT TO CONSUMPTION: Process the identified food logs and visual scout items as a consumed meal. Provide constructive, warm clinical analysis on today's target fit.
+=== ACTIVE TASK: NARRATE ===
+The server already finalized calories. Do not rebuild itemsBreakdown. Narrate the ledger (verdict + message). Optional correctedNutrients only when culinary reality disagrees.
 
 ${REQUIRED_OUTPUT_JSON_SCHEMA}`;
 }
 
 const EDIT_OUTPUT_JSON_SCHEMA = `
-=== FULLY COMPLIANT EDIT FEW-SHOT EXAMPLE ===
+=== EDIT / Q&A FEW-SHOT ===
 User: "the iced tea is unsweetened, the beef and chicken are 100g each separately"
 {
-  "_internalReasoning": "User wants unsweetened iced tea → update_modifier with modifier='unsweetened'. User wants the composite Beef and Chicken Steak split into two standalone items → remove_item the composite parent (preserving its dbId), then add_item each protein and each retained side individually.",
+  "_internalReasoning": "Unsweetened tea → set_modifier. Steak split → split_item with estimates for new identities. Unmentioned sides stay at saved grams. Sauce stays a component.",
   "verdict": { "label": "Supports lean muscle tissue", "level": "good" },
-  "message": "I've switched your iced tea to unsweetened and split the steak into 100g beef and 100g chicken. You got strong protein from both cuts supporting lean tissue repair. Keeping the sides unchanged maintains a balanced carb and sodium profile. Enjoy a gentle 15-minute post-meal walk to support digestion.",
+  "message": "I've switched your iced tea to unsweetened and split the steak into 100g beef and 100g chicken. You got strong protein from both cuts. Sides stay as logged. Enjoy a gentle 15-minute walk.",
   "modificationCommand": [
-    { "action": "update_modifier", "itemName": "Iced Tea", "targetDbId": null, "newWeightGrams": null, "componentName": null, "modifier": "unsweetened" },
-    { "action": "remove_item", "itemName": "Sizzling Steak with Wedges and Mixed Vegetables", "targetDbId": "composite_2", "newWeightGrams": null, "componentName": null, "modifier": null },
-    { "action": "add_item", "itemName": "Beef Steak", "targetDbId": null, "newWeightGrams": 100, "componentName": null, "modifier": null },
-    { "action": "add_item", "itemName": "Chicken Steak", "targetDbId": null, "newWeightGrams": 100, "componentName": null, "modifier": null },
-    { "action": "add_item", "itemName": "Black Pepper Sauce", "targetDbId": null, "newWeightGrams": 80, "componentName": null, "modifier": null },
-    { "action": "add_item", "itemName": "Potato Wedges", "targetDbId": null, "newWeightGrams": 100, "componentName": null, "modifier": null },
-    { "action": "add_item", "itemName": "Mixed Vegetables", "targetDbId": null, "newWeightGrams": 70, "componentName": null, "modifier": null }
+    { "action": "update_modifier", "itemName": "Iced Tea", "newItemName": "Unsweetened Iced Tea", "modifier": "unsweetened" },
+    { "action": "split_item", "itemName": "Sizzling Steak with Wedges", "into": [
+      { "name": "Beef Steak", "grams": 100, "estimate": { "protein": 27, "carbohydrates": 0, "totalFat": 8, "saturatedFat": 3, "sodium": 70, "cookingMethod": "grilled", "foodType": "protein" } },
+      { "name": "Chicken Steak", "grams": 100, "estimate": { "protein": 28, "carbohydrates": 0, "totalFat": 4, "saturatedFat": 1, "sodium": 65, "cookingMethod": "grilled", "foodType": "protein" } }
+    ]}
   ],
   "foodData": { "date": "2026-08-03", "name": "Beef Steak and Chicken Steak with Sides" }
 }
-CRITICAL RULES:
-- NEVER include "itemsBreakdown" in "foodData". foodData must only contain { date, name }.
-- Beverage sweetness ("unsweetened", "no sugar", "zero sugar"): ALWAYS use action "update_modifier" with "modifier": "unsweetened". NEVER use "update_cooking_method".
-- "X and Y separately": remove_item the composite parent (using its targetDbId), then add_item each sub-component and all retained sides.
-- Identity/substitution corrections ("the X is actually Y", "the X is really Y", "the X is Y" — including when a new quantity/weight is also mentioned, e.g. "is 2 otak otak"): NEVER use "rename_alias". ALWAYS use remove_item (targeting the old itemName) + add_item (the new itemName with newWeightGrams explicitly set to the correct total weight), exactly like the composite-split pattern above.
-
-=== REQUIRED OUTPUT JSON SCHEMA ===
-{
-  "_internalReasoning": "string (Silently synthesize clinical evidence and plan response structure)",
-  "verdict": { "label": "string (3-6 words max)", "level": "'good'|'warning'|'alert'|'neutral'" },
-  "message": "string (35-70 words in 4 beats as specified above)",
-  "modificationCommand": [
-    {
-      "action": "'update_weight'|'remove_item'|'add_item'|'update_modifier'|'update_component_weight'",
-      "itemName": "string",
-      "targetDbId": "string|null",
-      "newWeightGrams": "number|null",
-      "componentName": "string|null (for update_component_weight only)",
-      "modifier": "string (REQUIRED for update_modifier: e.g. 'unsweetened', 'no oil'. Omit or null for other actions)"
-    }
-  ],
-  "foodData": { "date": "YYYY-MM-DD", "name": "string|null" }
-}
+RULES:
+- Q&A / advice only → modificationCommand: [] (empty). Do not rebuild itemsBreakdown.
+- "X is Y" → replace_identity + estimate (P/C/F, no kcal). Copy photo/weight. Never remove+add.
+- Split named foods → split_item + estimate on each new identity. Keep unmentioned components at saved grams. Sauce stays a component.
+- add_item (no photo) → required estimate {protein,carbohydrates,totalFat,...}. Never invent kcal.
+- Unsweetened / no sugar → update_modifier modifier="unsweetened". Never update_cooking_method.
 `;
 
 export function buildModeAEditInstruction(context: {
@@ -454,12 +435,7 @@ export function buildModeAEditInstruction(context: {
   userProfile?: any;
 }): string {
   const { biomarkersList, targetLimits } = formatPatientContext(context);
-  const sanitizedActiveMeal = sanitizeMealForPrompt(context.activeMeal);
-  const mealStr = sanitizedActiveMeal ? JSON.stringify(sanitizedActiveMeal, null, 2) : "None";
-
-  return `CURRENT_ACTIVE_MEAL_STATE: ${mealStr}
-
-${DIETITIAN_CORE_DIRECTIVES}
+  return `${DIETITIAN_CORE_DIRECTIVES}
 
 === PATIENT CONTEXT PAYLOAD ===
 CRITICAL PATIENT BIOMARKER WARNINGS & NUTRITIONAL DIRECTIVES:
@@ -467,22 +443,10 @@ ${biomarkersList}
 
 ${targetLimits}
 
-=== ACTIVE TASK: ACTIVE MEAL INTERACTION (EDIT OR Q&A) ===
-Evaluate the user's message in the context of the active meal above:
-1. FOOD ALTERATION / EDIT: If the user requests any portion change, ingredient modification, ingredient addition/removal, or sweetness/oil/salt modifier, generate an array of explicit "modificationCommand". DO NOT rebuild the entire meal array.
-2. CONVERSATIONAL Q&A / ADVICE: If the user asks a question (e.g. why a nutrient is high, biomarker impact, general nutrition advice, meal suggestions) WITHOUT altering any food items or portions, output "modificationCommand": [] (an empty array). Provide your full, direct clinical explanation in "message".
-
-Supported actions:
-- "update_weight": Change weight of a top-level item.
-- "update_component_weight": Change weight of a specific child component inside a composite meal (e.g. changing just the steak in a steak & potatoes dish).
-- "update_modifier": Apply modifier string in "modifier" field (e.g. 'unsweetened', 'no sugar', 'no oil').
-- "remove_item": Delete an item entirely.
-- "add_item": Add a completely new item (must specify newWeightGrams).
-- "rename_alias": ONLY for a pure cosmetic label/spelling fix where nutrients must NOT change. Requires "newItemName" to be set — never emit "rename_alias" without it. Do NOT use this for food-identity corrections (see CRITICAL RULES below).
-
-In "message":
-- For food edits: Beat 1 must explicitly confirm the specific modification (e.g. "Updated your iced tea to unsweetened, removing 18g added sugar"), then provide 4-beat clinical guidance on the updated totals.
-- For Q&A: Directly and conversationally answer the user's question with warm, practical clinical advice tailored to their biomarkers and this meal.
+=== ACTIVE TASK: EDIT OR Q&A (same meal) ===
+The current meal ledger is in the user prompt (one BACKEND PRE-CALCULATED block). Do not dump or rebuild itemsBreakdown.
+1. EDIT: emit modificationCommand (replace_identity / split_item / update_weight / update_modifier / add_item+estimate / remove_item / set_count). Empty array if nothing changed.
+2. Q&A: modificationCommand: []. Answer in message. Card stays unchanged.
 
 ${EDIT_OUTPUT_JSON_SCHEMA}`;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matchBrandMenu } from "./server_brand_match";
+import { matchBrandMenu, isPackagedBindItem, inferChainNameFromPackageLabel } from "./server_brand_match";
 
 describe("server_brand_match", () => {
   it("matches known brand item from local database", async () => {
@@ -18,5 +18,22 @@ describe("server_brand_match", () => {
     const result = await matchBrandMenu(null, null, null);
     expect(result.matched).toBe(false);
     expect(result.status).toBe("MISS");
+  });
+});
+
+describe("packaged bind F-8.7", () => {
+  it("canned drink with chainName and no printed label still binds (not CuratorSkipped)", () => {
+    const drink = {
+      originalName: "Acme Citrus Vitamin Drink",
+      chainName: "Acme",
+      estimatedWeightGrams: 330,
+    };
+    expect(isPackagedBindItem(drink)).toBe(true);
+    expect(isPackagedBindItem({ originalName: "steamed rice" })).toBe(false);
+  });
+
+  it("infers chainName from can OCR without inventing micronutrients", () => {
+    expect(inferChainNameFromPackageLabel("Acme Citrus | Vitamin Drink 330ml")).toBe("Acme Citrus");
+    expect(inferChainNameFromPackageLabel("x")).toBeNull();
   });
 });

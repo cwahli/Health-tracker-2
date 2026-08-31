@@ -9,7 +9,7 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { PositionedTooltip } from '../ui/PositionedTooltip';
 import { AgentCardProps } from './types';
-import { Plus, Check, ChevronDown, ChevronUp, Sparkles, Search, X, Trash2, Eye, Camera, Copy, Flag, Download, Loader2 } from 'lucide-react';
+import { Plus, Check, ChevronDown, ChevronUp, Sparkles, Search, X, Trash2, Eye, Camera, Copy, Flag, Download, Loader2, AlertTriangle } from 'lucide-react';
 import { UniversalModal } from '../UniversalModal';
 import { flagIssueToServer, guessChainKey, ISSUE_TYPE_LABELS, IssueType } from '../../utils/issueBacklog';
 import { getAgentRequestLogs } from '../../utils/agentLogsTracker';
@@ -20,6 +20,7 @@ import { namesReferToSameFood } from '../../../server_scout_reconcile';
 import { extractMostRecentImageDate, getCurrentDateInTimezone } from '../../utils/dateUtils';
 import { normalizeMealImageUrl } from '../../utils/foodImageSources';
 import { scaleMealPortion, scaleSingleDishPortion } from '../../utils/portionUtils';
+import { mapDisplayedScoutItems, resolveTileImageIndex } from '../../utils/foodCompositionTiles';
 function foodCardName(item: any): string {
   return item?.canonicalDbName || item?.name || item?.originalName || item?.keyword || '';
 }
@@ -1631,79 +1632,7 @@ export const FoodCard: React.FC<AgentCardProps & {
 
   const displayedScoutItems = React.useMemo(() => {
     const itemsBreakdown = msg.data?.pendingFoodLog?.itemsBreakdown || msg.data?.data?.itemsBreakdown || msg.data?.itemsBreakdown || msg.data?.agentResult?.data?.itemsBreakdown;
-    if (!itemsBreakdown || itemsBreakdown.length === 0) {
-      return activeScoutItems;
-    }
-    
-    const usedScoutIndices = new Set();
-    // Map each item in itemsBreakdown to a scout item format
-    return itemsBreakdown.map((item: any, i: number) => {
-      // Find the best matching scout item in activeScoutItems to preserve bounding box and image index
-      let matchingScout = item.isFlattenedComponent ? null : (activeScoutItems || []).find((s: any) => scoutIndexAgrees(item, s));
-      if (!matchingScout && !item.isFlattenedComponent) {
-        matchingScout = (activeScoutItems || []).find((s: any) => {
-          if (s.scoutIndex !== undefined && usedScoutIndices.has(s.scoutIndex)) return false;
-          const sKey = (s.keyword || s.originalName || "").toLowerCase().trim();
-          const sName = (s.originalName || s.keyword || "").toLowerCase().trim();
-          const itemName = (item.canonicalDbName || item.name || "").toLowerCase().trim();
-          if (itemName.includes(sKey) || sKey.includes(itemName) || itemName.includes(sName) || sName.includes(itemName) || (itemName.split(/\s+/)[0] && itemName.split(/\s+/)[0] === sKey.split(/\s+/)[0])) return true;
-          const itemTokens = itemName.split(/[^a-z0-9]+/).filter((t: string) => t.length >= 3);
-          const sTokens = `${sKey} ${sName}`.split(/[^a-z0-9]+/).filter((t: string) => t.length >= 3);
-          return itemTokens.some((t: string) => sTokens.includes(t));
-        });
-      }
-      if (!matchingScout && itemsBreakdown.length === (activeScoutItems || []).length) {
-        const candidate = (activeScoutItems || [])[i];
-        if (candidate && !usedScoutIndices.has(candidate.scoutIndex)) {
-          matchingScout = candidate;
-        }
-      }
-      
-      if (matchingScout && matchingScout.scoutIndex !== undefined) {
-        usedScoutIndices.add(matchingScout.scoutIndex);
-      }
-      
-      const updatedName = item.canonicalDbName || item.name || item.originalLocalName;
-
-      return {
-        scoutIndex: matchingScout ? matchingScout.scoutIndex : (item.scoutIndex !== undefined ? item.scoutIndex : i),
-        keyword: updatedName || matchingScout?.keyword || "item",
-        originalName: updatedName || matchingScout?.originalName || "item",
-        chainName: matchingScout?.chainName || item.chainName || item.brand || matchingScout?.brand || null,
-        brand: matchingScout?.brand || item.brand || item.chainName || matchingScout?.chainName || null,
-        scoutOriginalName: matchingScout?.originalName || null,
-        labelProductName: matchingScout?.labelProductName || item.labelProductName || null,
-        estimatedWeightGrams: item.weightGrams || item.estimatedWeightGrams || matchingScout?.estimatedWeightGrams,
-        weightGrams: item.weightGrams || item.estimatedWeightGrams,
-        portionRatio: item.portionRatio || matchingScout?.portionRatio || 1.0,
-        portionDescription: item.portionDescription || matchingScout?.portionDescription,
-        packGrams: item.packGrams || matchingScout?.packGrams,
-        boundingBox2D: item.boundingBox2D || (matchingScout ? matchingScout.boundingBox2D : null),
-        sourceImageIndex: typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : (matchingScout ? matchingScout.sourceImageIndex : null),
-        itemConfidence: matchingScout ? matchingScout.itemConfidence : "High (>90%)",
-        anomalyFlags: matchingScout ? matchingScout.anomalyFlags : [],
-        cookingMethod: item.cookingMethod || (matchingScout ? matchingScout.cookingMethod : null),
-        rawNutritionLabel: matchingScout?.rawNutritionLabel || item.rawNutritionLabel,
-        ingredientsList: matchingScout?.ingredientsList || item.ingredientsList,
-        visualIngredients: matchingScout?.visualIngredients || item.visualIngredients,
-        nutritionFacts: item.nutritionFacts || item.nutrients || matchingScout?.nutritionFacts,
-        nutrients: item.nutrients || item.nutritionFacts || matchingScout?.nutrients,
-        syntheticBase100g: item.syntheticBase100g || matchingScout?.syntheticBase100g || null,
-        baseNutrients100g: item.baseNutrients100g || matchingScout?.baseNutrients100g || null,
-        isDishEstimate: Boolean(item.isDishEstimate || matchingScout?.isDishEstimate || item.dbSource === 'estimated'),
-        source: matchingScout?.source || item.source,
-        dbSource: item.dbSource || ((item.componentsDetailList?.length || item.components?.length) ? 'composite' : matchingScout?.dbSource) || null,
-        dbId: item.dbId || matchingScout?.dbId || null,
-        isRealTruth: item.dbSource !== 'composite' && (item.isRealTruth || item.dbSource === 'brand_official' || item.dbSource === 'label' || item.dbSource === 'label_partial'),
-        labelNutrientsPerServing: item.labelNutrientsPerServing || item.syntheticBase100g || item.primaryBase100g || item.nutrients || matchingScout?.labelNutrientsPerServing || null,
-        primaryBase100g: item.primaryBase100g || item.syntheticBase100g || item.labelNutrientsPerServing || null,
-        primaryBaseMatchName: item.primaryBaseMatchName || item.canonicalDbName || null,
-        componentsDetailList: (Array.isArray(item.componentsDetailList) && item.componentsDetailList.length > 0) ? item.componentsDetailList : ((Array.isArray(item.components) && item.components.length > 0) ? item.components : (item.componentsDetail || matchingScout?.componentsDetailList || matchingScout?.components || [])),
-        components: (Array.isArray(item.components) && item.components.length > 0) ? item.components : ((Array.isArray(item.componentsDetailList) && item.componentsDetailList.length > 0) ? item.componentsDetailList : (item.componentsDetail || matchingScout?.components || matchingScout?.componentsDetailList || null)),
-        compositeSiblings: item.compositeSiblings || matchingScout?.compositeSiblings || item.componentsDetailList || matchingScout?.componentsDetailList || null,
-        nutrientSourceMap: item.nutrientSourceMap || matchingScout?.nutrientSourceMap || null
-      };
-    });
+    return mapDisplayedScoutItems(itemsBreakdown, activeScoutItems);
   }, [activeScoutItems, msg.data, portionLogVersion]);
 
   const isAlreadyLogged = React.useMemo(() => {
@@ -2263,12 +2192,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                : "flex flex-wrap items-start justify-start gap-3 pt-2 pb-2 w-full font-sans"
                            }>
                              {activeScoutItems.map((item: any, i: number) => {
-                               const allSameIdx = activeScoutItems.every((s: any) => typeof s.sourceImageIndex !== 'number' || s.sourceImageIndex === (activeScoutItems[0]?.sourceImageIndex || 0));
-                               const allSameBox = activeScoutItems.every((s: any) => JSON.stringify(s.boundingBox2D || null) === JSON.stringify(activeScoutItems[0]?.boundingBox2D || null));
-                               const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
-                               const imgIdx = (messageImages.length > 1 && allSameIdx && allSameBox && i < messageImages.length)
-                                 ? i
-                                 : (rawIdx >= 0 && rawIdx < messageImages.length ? rawIdx : 0);
+                               const imgIdx = resolveTileImageIndex(item, messageImages.length);
                                const resolvedImgSrc = resolveHistoricalImgSrc(item, messageImages, foodLogs || [], imgIdx);
                                const itemWidthClass = activeScoutItems.length > 4
                                  ? 'w-[90px] sm:w-[105px] shrink-0'
@@ -3230,12 +3154,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                      </div>
                                    );
                                  }
-                                 const allSameIdx = displayedScoutItems.every((s: any) => typeof s.sourceImageIndex !== 'number' || s.sourceImageIndex === (displayedScoutItems[0]?.sourceImageIndex || 0));
-                                 const allSameBox = displayedScoutItems.every((s: any) => JSON.stringify(s.boundingBox2D || null) === JSON.stringify(displayedScoutItems[0]?.boundingBox2D || null));
-                                 const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
-                                 const imgIdx = (messageImages.length > 1 && allSameIdx && allSameBox && i < messageImages.length)
-                                   ? i
-                                   : (rawIdx >= 0 && rawIdx < messageImages.length ? rawIdx : 0);
+                                 const imgIdx = resolveTileImageIndex(item, messageImages.length);
                                  const resolvedImgSrc = resolveHistoricalImgSrc(item, messageImages, foodLogs || [], imgIdx);
                                  const isSlider = !displayAsMenu && displayedScoutItems.length > 4;
                                  const itemWidthClass = isSlider 
@@ -3686,17 +3605,40 @@ export const FoodCard: React.FC<AgentCardProps & {
                       )}
 
                       {/* Log Action Button — hidden when portion clarification is pending user confirmation */}
-                      {!(msg.data?.portionClarify || msg.data?.needsPortionClarify || (msg as any).portionClarify || (msg as any).needsPortionClarify) && (
-                        isAlreadyLogged ? (
-                          <div className="w-full py-2 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 animation-fade-in font-sans">
-                            <Check className="w-4 h-4" />
-                            Saved to History
-                          </div>
-                        ) : (
+                      {!(msg.data?.portionClarify || msg.data?.needsPortionClarify || (msg as any).portionClarify || (msg as any).needsPortionClarify) && (() => {
+                        const gate = msg.data?.gate || msg.data?.agentResult?.gate || msg.data?.pendingFoodLog?.gate || (msg as any).gate;
+                        const isSavable = gate ? gate.savable !== false : (
+                          msg.data?.savable !== false &&
+                          msg.data?.agentResult?.savable !== false &&
+                          msg.data?.pendingFoodLog?.savable !== false &&
+                          (msg as any).savable !== false
+                        );
+                        if (isAlreadyLogged) {
+                          return (
+                            <div className="w-full py-2 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 animation-fade-in font-sans">
+                              <Check className="w-4 h-4" />
+                              Saved to History
+                            </div>
+                          );
+                        }
+                        if (!isSavable) {
+                          return (
+                            <div className="w-full py-2.5 px-3 bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50 rounded-xl text-xs flex flex-col gap-1 animation-fade-in font-sans">
+                              <div className="flex items-center gap-1.5 font-bold">
+                                <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                                <span>Cannot Log Meal — Validation Failed</span>
+                              </div>
+                              <span className="text-[11px] text-rose-600 dark:text-rose-400 font-normal">
+                                {gate?.summary || (Array.isArray(gate?.failures) && gate.failures[0]?.message) || 'Nutrient validation failed. Meal contains missing or contradictory values.'}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return (
                           <button
                             type="button"
                             onClick={() => {
-                              if (isLoggingRef.current) return;
+                              if (isLoggingRef.current || !isSavable) return;
                               const logTarget = msg.data?.pendingFoodLog || msg.pendingFoodLog || effectiveFoodLog;
                               if (logTarget && onLogFood) {
                                 isLoggingRef.current = true;
@@ -3747,8 +3689,8 @@ export const FoodCard: React.FC<AgentCardProps & {
                             <Plus className="w-4 h-4" />
                             {t.logThisFood}
                           </button>
-                        )
-                      )}
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -3788,8 +3730,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                 </div>
                 <div className="flex overflow-x-auto flex-nowrap sm:flex-wrap items-start justify-start gap-3 pt-2 pb-3 w-full font-sans scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
                   {displayedScoutItems.map((item: any, i: number) => {
-                    const rawIdx = typeof item.sourceImageIndex === 'number' ? item.sourceImageIndex : 0;
-                    const imgIdx = (messageImages.length > 0 && rawIdx >= 0 && rawIdx < messageImages.length) ? rawIdx : 0;
+                    const imgIdx = resolveTileImageIndex(item, messageImages.length);
                     const resolvedImgSrc = resolveHistoricalImgSrc(item, messageImages, foodLogs || [], imgIdx);
                     return (
                       <div key={i} className="flex flex-col items-center gap-1 shrink-0 relative group w-[110px] sm:w-[130px]">

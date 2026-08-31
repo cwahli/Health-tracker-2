@@ -37,6 +37,7 @@ describe('debugPayload', () => {
     expect(md).toMatch(/# Health Tracker — (End-to-End Diagnostic|Analysis) Report/);
     expect(md).toContain('job_1');
     expect(md).toContain('Co-op beef + yogurt');
+    expect(md).toMatch(/Gate & Trial-Balance Evaluation/);
     expect(md).toMatch(/Calories/);
     expect(md).toContain('[Vision Scout] ok');
     expect(md).toMatch(/Backend (Execution )?Logs/i);
@@ -92,5 +93,86 @@ describe('debugPayload', () => {
     expect(md).toContain('CUMI BANGKA - Berat 0.200');
     expect(md).toContain('Itemized Constituent Ingredients & Stickers');
     expect(md).toContain('Raw Scout Structured JSON');
+  });
+
+  it('gate failures are the Errors section — not a "no errors found" grep', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_gate',
+      status: 'succeeded',
+      message: 'Looks fine.',
+      backendLogs: '[Vision Scout] ok',
+      pendingFoodLog: {
+        name: 'Pan-Seared Tempeh Bowl',
+        nutrients: { calories: 0, protein: 22, carbohydrates: 5, totalFat: 8 },
+        itemsBreakdown: [{
+          originalName: 'Pan-Seared Tempeh',
+          weightGrams: 150,
+          calories: 0,
+          protein: 22,
+          carbohydrates: 5,
+          totalFat: 8,
+        }],
+      },
+    });
+    expect(md).toMatch(/ZERO_KCAL_WITH_MACROS/);
+    expect(md).toMatch(/GATE: FAIL/);
+    expect(md).not.toMatch(/No errors found/i);
+    expect(md).not.toMatch(/No errors or warnings found in the backend logs/i);
+  });
+
+  it('does not paste the same system instruction twice', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_dup',
+      backendLogs: [
+        'Dispatched System Instruction',
+        'YOU ARE THE DIETITIAN UNIQUE_TOKEN_XYZ',
+        '[Budget] Finalized ledger',
+        'Dispatched System Instruction',
+        'YOU ARE THE DIETITIAN UNIQUE_TOKEN_XYZ',
+      ].join('\n'),
+    });
+    const matches = md.match(/UNIQUE_TOKEN_XYZ/g) || [];
+    expect(matches.length).toBe(1);
+  });
+
+  it('shows scout schema once per dispatch and keeps a second distinct dispatch', () => {
+    const scoutSchema = '"responseSchema": { "type": "OBJECT", "properties": { "items": {} } } SCOUT_SCHEMA_TOKEN';
+    const dietitianInstr = 'YOU ARE THE DIETITIAN DIETITIAN_DISPATCH_TOKEN';
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_f85',
+      backendLogs: [
+        'Dispatched System Instruction',
+        scoutSchema,
+        '[Vision Scout] ok',
+        'Dispatched System Instruction',
+        scoutSchema,
+        '[Budget] Finalized ledger 1',
+        'Dispatched System Instruction',
+        dietitianInstr,
+        '[Budget] Finalized ledger 2',
+      ].join('\n'),
+    });
+    expect((md.match(/SCOUT_SCHEMA_TOKEN/g) || []).length).toBe(1);
+    expect(md).toContain('DIETITIAN_DISPATCH_TOKEN');
+    expect((md.match(/Finalized ledger/g) || []).length).toBe(2);
+  });
+
+  it('shows each agent reply once and keeps a second distinct reply', () => {
+    const md = buildDebugMarkdownReport({
+      jobId: 'job_replies',
+      backendLogs: [
+        'Response received (12 chars). Raw output:',
+        '{"ok":true,"token":"SCOUT_REPLY_TOKEN"}',
+        '[Vision Scout] ok',
+        'Response received (12 chars). Raw output:',
+        '{"ok":true,"token":"SCOUT_REPLY_TOKEN"}',
+        '[Budget] ledger',
+        'Response received (20 chars). Raw output:',
+        '{"ok":true,"token":"DIETITIAN_REPLY_TOKEN"}',
+      ].join('\n'),
+    });
+    expect(md).toMatch(/Agent Replies/);
+    expect((md.match(/SCOUT_REPLY_TOKEN/g) || []).length).toBe(1);
+    expect(md).toContain('DIETITIAN_REPLY_TOKEN');
   });
 });

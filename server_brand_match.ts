@@ -24,6 +24,22 @@ export interface BrandMatchResult {
   valuesAtBasis?: Record<string, number>;
 }
 
+/** Packaged/OCR items bind via finalize brand/OCR rungs — not generic USDA curator skip. */
+export function isPackagedBindItem(it: any): boolean {
+  if (!it) return false;
+  const label = it.rawNutritionLabel;
+  const hasPrinted = Boolean(
+    label && typeof label === 'object' && (label.calories || label.energy || label.kcal)
+  );
+  return Boolean(it.chainName || it.barcode || it.packageLabelText || hasPrinted);
+}
+
+export function inferChainNameFromPackageLabel(packageLabelText?: string | null): string | null {
+  const brandGuess = String(packageLabelText || '').split(/[-–|,]/)[0].trim();
+  if (brandGuess.length >= 3 && brandGuess.length < 40) return brandGuess;
+  return null;
+}
+
 export async function matchBrandMenu(
   chainName?: string | null,
   originalName?: string | null,

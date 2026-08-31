@@ -7,6 +7,7 @@ import {
   calculateDerivedNutrients,
   rebalanceNutrientProfile,
   decomposeSaucedEntree,
+  applyNutrientModifiers,
 } from "./server_derivation";
 
 describe("server_derivation", () => {
@@ -140,6 +141,47 @@ describe("server_derivation", () => {
       expect(result.netSolidWeightGrams).toBe(180);
       expect(result.netSauceWeightGrams).toBe(0);
       expect(result.boundedProtein).toBe(36);
+    });
+  });
+
+  describe("applyNutrientModifiers", () => {
+    it("zeros sugar, carbs, and calories for sweet tea when user says unsweetened", () => {
+      const teaNutrients = { calories: 84, protein: 0, totalFat: 0, carbohydrates: 21, sugar: 20, addedSugar: 20, sodium: 5 };
+      const res = applyNutrientModifiers(teaNutrients, {
+        message: "the tea is unsweatened",
+        foodType: "beverage",
+        name: "Sweet Iced Tea",
+      });
+      expect(res.updatedNutrients.calories).toBe(0);
+      expect(res.updatedNutrients.carbohydrates).toBe(0);
+      expect(res.updatedNutrients.sugar).toBe(0);
+      expect(res.updatedNutrients.addedSugar).toBe(0);
+      expect(res.lockedKeys).toContain("calories");
+      expect(res.lockedKeys).toContain("sugar");
+    });
+
+    it("does NOT modify Water Spinach or vegetables when user says the tea is unsweetened", () => {
+      const spinachNutrients = { calories: 43, protein: 3, totalFat: 0.8, carbohydrates: 6, sugar: 1, addedSugar: 0, sodium: 350 };
+      const res = applyNutrientModifiers(spinachNutrients, {
+        message: "the tea is unsweatened",
+        foodType: "vegetable",
+        name: "Water Spinach",
+      });
+      expect(res.updatedNutrients.calories).toBe(43);
+      expect(res.updatedNutrients.carbohydrates).toBe(6);
+      expect(res.updatedNutrients.sugar).toBe(1);
+      expect(res.lockedKeys.length).toBe(0);
+    });
+
+    it("does NOT treat watercress or watermelon as beverages", () => {
+      const cressNutrients = { calories: 25, protein: 2, totalFat: 0.2, carbohydrates: 4, sugar: 2, addedSugar: 0, sodium: 40 };
+      const res = applyNutrientModifiers(cressNutrients, {
+        message: "unsweetened please",
+        name: "Watercress Salad",
+      });
+      expect(res.updatedNutrients.calories).toBe(25);
+      expect(res.updatedNutrients.carbohydrates).toBe(4);
+      expect(res.lockedKeys.length).toBe(0);
     });
   });
 });

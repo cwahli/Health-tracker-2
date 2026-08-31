@@ -77,4 +77,30 @@ describe('consolidateMeal', () => {
     const result = consolidateMeal(initial, { items: [{ itemId: 'w1', weightGrams: 150 }] }, 'user_edit');
     expect(result.staleDietitianNarrative).toBe(true);
   });
+
+  it('matches base item by scoutIndex when patch lacks itemId, preventing duplication', () => {
+    const initial: MealBuild = {
+      id: '6', schemaVersion: 1, version: 1, mode: 'new_log',
+      items: [
+        { itemId: 'item_uuid_1', scoutIndex: 0, name: 'Es Teh Manis', weightGrams: 300 },
+        { itemId: 'item_uuid_2', scoutIndex: 1, name: 'Cah Kangkung', weightGrams: 150 }
+      ],
+      nutrients: {}
+    };
+
+    // Patch comes with scoutIndex but no itemId (e.g. preCalculatedItems)
+    const patch = {
+      items: [
+        { scoutIndex: 0, name: 'Es Teh Manis', weightGrams: 300, estimatedCalories: 0 },
+        { scoutIndex: 1, name: 'Cah Kangkung', weightGrams: 150, estimatedCalories: 106 }
+      ]
+    };
+
+    const result = consolidateMeal(initial, patch, 'calculation');
+    expect(result.items.length).toBe(2);
+    expect(result.items[0].scoutIndex).toBe(0);
+    expect(result.items[0].estimatedCalories).toBe(0);
+    expect(result.items[1].scoutIndex).toBe(1);
+  });
 });
+

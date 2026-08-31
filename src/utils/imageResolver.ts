@@ -1,4 +1,5 @@
 import { FoodLog } from '../types';
+import { normalizeMealImageUrl } from './foodImageSources';
 /**
  * Resolves a potentially referenced image string.
  * Supports data:image/ URIs, HTTP URLs, and ref:ID cross-references.
@@ -7,24 +8,32 @@ import { FoodLog } from '../types';
 export function resolveFoodImage(img: string | undefined | null, foodLogs: FoodLog[], parentLog?: FoodLog): string | undefined {
   const targetImg = img || (parentLog?.imageUrls && parentLog.imageUrls.length > 0 ? parentLog.imageUrls[0] : undefined);
   if (!targetImg || targetImg === '[image_removed_for_snapshot]') return undefined;
-  if (typeof targetImg !== 'string' || !targetImg.startsWith('ref:')) return targetImg;
   
-  const primaryId = targetImg.replace('ref:', '');
-  const primaryLog = foodLogs.find(f => f.id === primaryId);
-  if (primaryLog) {
-    const baseImg = primaryLog.imageUrl || primaryLog.imageUrls?.[0];
-    if (baseImg) {
-      if (typeof baseImg === 'string' && !baseImg.startsWith('ref:')) {
-        return baseImg;
-      } else if (typeof baseImg === 'string') {
-        const nextId = baseImg.replace('ref:', '');
-        const nextLog = foodLogs.find(f => f.id === nextId);
-        const nextImg = nextLog?.imageUrl || nextLog?.imageUrls?.[0];
-        if (typeof nextImg === 'string' && !nextImg.startsWith('ref:')) {
-          return nextImg;
+  let result: string | undefined = undefined;
+  if (typeof targetImg !== 'string' || !targetImg.startsWith('ref:')) {
+    result = targetImg;
+  } else {
+    const primaryId = targetImg.replace('ref:', '');
+    const primaryLog = foodLogs.find(f => f.id === primaryId);
+    if (primaryLog) {
+      const baseImg = primaryLog.imageUrl || primaryLog.imageUrls?.[0];
+      if (baseImg) {
+        if (typeof baseImg === 'string' && !baseImg.startsWith('ref:')) {
+          result = baseImg;
+        } else if (typeof baseImg === 'string') {
+          const nextId = baseImg.replace('ref:', '');
+          const nextLog = foodLogs.find(f => f.id === nextId);
+          const nextImg = nextLog?.imageUrl || nextLog?.imageUrls?.[0];
+          if (typeof nextImg === 'string' && !nextImg.startsWith('ref:')) {
+            result = nextImg;
+          }
         }
       }
     }
+  }
+
+  if (result) {
+    return normalizeMealImageUrl(result) || result;
   }
   return undefined;
 }

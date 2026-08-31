@@ -1,7 +1,9 @@
 import { NUTRIENT_KEYS } from "./src/utils/nutrients";
-import { aggregateItemsNutrients, AggregatedNutrientsResult } from "./server_nutrient_aggregation";
+import { AggregatedNutrientsResult } from "./server_nutrient_aggregation";
 import { checkIfItemIsAlreadyPrepared, applyNutrientRealityChecks, sanitizeMealWeight, sanitizeString } from "./server_pure_helpers";
 import { calculateUniversalAddedNutrients } from "./server_food_db";
+import { finalizeDishLedger } from "./server_dish_finalize";
+import { sumItemNutrients } from "./server_meal_from_finalize";
 
 const LIQUID_KEYWORDS = new Set([
   'juice', 'tea', 'coffee', 'water', 'soda', 'milk', 'drink', 'beverage',
@@ -375,25 +377,51 @@ export async function compileMealState(
     }
   }
 
-  // --- Step 3: Perform 100% Deterministic 31-Nutrient Calculation ---
-  const dbMatchMap = new Map<string, any>();
-  const databaseMatchesArray: any[] = [];
-  const totalWeightGrams = currentItems.reduce((acc, it) => acc + (it.weightGrams || 100), 0);
-
-  const grandTotals = aggregateItemsNutrients(
-    currentItems,
-    totalWeightGrams,
-    dbMatchMap,
-    databaseMatchesArray,
-    addDebugLog
-  );
-
-  // Ensure all output items retain durable itemIds
-  const finalizedItems: MealItem[] = currentItems.map((it, idx) => ({
-    ...it,
-    itemId: mintItemId(it.itemId, idx),
-    weightGrams: sanitizeMealWeight(it.weightGrams, 100)
-  }));
+  // --- Step 3: Same calorie owner as Mode A/Edit (finalizeDishLedger) ---
+  const finalizedItems: MealItem[] = [];
+  for (let idx = 0; idx < currentItems.length; idx++) {
+    const it = currentItems[idx];
+    const grams = sanitizeMealWeight(it.weightGrams, 100);
+    let nutrients = it.nutrients ? { ...it.nutrients } : undefined;
+    if (!nutrients && it.primaryBase100g) {
+      nutrients = {};
+      const R = grams / 100;
+      for (const [k, v] of Object.entries(it.primaryBase100g)) {
+        if (typeof v === 'number' && Number.isFinite(v)) {
+          nutrients[k] = k === 'calories' || k === 'sodium' || k === 'potassium' || k === 'calcium' || k === 'magnesium'
+            ? Math.round(v * R)
+            : Math.round(v * R * 10) / 10;
+        }
+      }
+    }
+    const ledger = await finalizeDishLedger({
+      item: {
+        originalName: it.canonicalDbName || it.name || it.originalName || 'Item',
+        keyword: it.keyword || it.name,
+        estimatedWeightGrams: grams,
+        nutrientBasisWeight: it.primaryBase100g ? 100 : grams,
+        nutrients,
+        cookingMethod: it.cookingMethod,
+        components: it.components,
+      },
+      consumedWeight: grams,
+      nutrientBasisWeight: it.primaryBase100g ? 100 : grams,
+    });
+    finalizedItems.push({
+      ...it,
+      itemId: mintItemId(it.itemId, idx),
+      weightGrams: grams,
+      nutrients: ledger.nutrients as Record<string, number>,
+      dbSource: ledger.dbSource || it.dbSource,
+      dbId: ledger.dbId ?? it.dbId,
+    });
+    addDebugLog(`[MealCompiler] finalize idx=${idx} "${it.canonicalDbName}" kcal=${ledger.nutrients.calories} source=${ledger.dbSource}`);
+  }
+  const summed = sumItemNutrients(finalizedItems);
+  const grandTotals: AggregatedNutrientsResult = {
+    nutrients: summed,
+    itemsBreakdown: finalizedItems,
+  };
 
   // --- Step 4: Evaluate Code-Driven Danger Warning Badges ---
   const dangerBadges: string[] = [];
@@ -437,7 +465,7 @@ export async function compileMealState(
     "| Item | Weight | Calories | Macros | Sodium |",
     "|---|---|---|---|---|",
     ...receiptRows,
-    `| **GRAND TOTAL** | **${totalWeightGrams}g** | **${Math.round(grandTotals.nutrients.calories)} kcal** | **${Math.round(grandTotals.nutrients.protein)}g P / ${Math.round(grandTotals.nutrients.totalFat)}g F** | **${Math.round(grandTotals.nutrients.sodium)}mg Na** |`
+    `| **GRAND TOTAL** | **${Math.round(finalizedItems.reduce((a, it) => a + (it.weightGrams || 0), 0))}g** | **${Math.round(grandTotals.nutrients.calories)} kcal** | **${Math.round(grandTotals.nutrients.protein)}g P / ${Math.round(grandTotals.nutrients.totalFat)}g F** | **${Math.round(grandTotals.nutrients.sodium)}mg Na** |`
   ].join("\n");
 
   const compiledState: MealState = {

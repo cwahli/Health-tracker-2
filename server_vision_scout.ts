@@ -663,7 +663,8 @@ export function clusterSpatialCompositeDishes(
             const cSat = Number(c.saturatedFat ?? cNuts.saturatedFat ?? 0);
             const cCarbs = Number(c.carbohydrates ?? c.carbs ?? cNuts.carbohydrates ?? 0);
             const cNa = Number(c.sodium ?? cNuts.sodium ?? 0);
-            const cCals = Number(c.calories ?? cNuts.calories ?? Math.round(4 * cProt + 4 * cCarbs + 9 * cFat));
+            const rawCals = c.calories ?? cNuts.calories;
+            const cCals = rawCals != null && Number.isFinite(Number(rawCals)) ? Number(rawCals) : undefined;
             compositeComponents.push({
               name: cName,
               searchQuery: c.searchQuery || cName,
@@ -674,7 +675,7 @@ export function clusterSpatialCompositeDishes(
               suggestedFdcId: c.suggestedFdcId || null,
               rawNutritionLabel: c.rawNutritionLabel || it.rawNutritionLabel || undefined,
               nutrients: c.nutrients || undefined,
-              calories: cCals,
+              ...(cCals != null ? { calories: cCals } : {}),
               protein: cProt,
               totalFat: cFat,
               fat: cFat,
@@ -693,7 +694,8 @@ export function clusterSpatialCompositeDishes(
           const itSat = Number(it.saturatedFat ?? itNuts.saturatedFat ?? 0);
           const itCarbs = Number(it.carbohydrates ?? it.carbs ?? itNuts.carbohydrates ?? 0);
           const itNa = Number(it.sodium ?? itNuts.sodium ?? 0);
-          const itCals = Number(it.calories ?? itNuts.calories ?? Math.round(4 * itProt + 4 * itCarbs + 9 * itFat));
+          const rawItCals = it.calories ?? itNuts.calories;
+          const itCals = rawItCals != null && Number.isFinite(Number(rawItCals)) ? Number(rawItCals) : undefined;
           compositeComponents.push({
             name: cName,
             searchQuery: cName,
@@ -704,7 +706,7 @@ export function clusterSpatialCompositeDishes(
             suggestedFdcId: null,
             rawNutritionLabel: it.rawNutritionLabel || undefined,
             nutrients: it.nutrients || undefined,
-            calories: itCals,
+            ...(itCals != null ? { calories: itCals } : {}),
             protein: itProt,
             totalFat: itFat,
             fat: itFat,
@@ -911,7 +913,7 @@ export function parseAndHealVisionScout(
           const fas = Number(fnuts.addedSugar) || 0;
           const ffib = Number(fnuts.totalFibre) || 0;
           const fna = Number(fnuts.sodium) || 0;
-          const fcal = Math.round(4 * fp + 4 * fc + 9 * (ffat > 0 ? ffat : fsat));
+          const visualCal = fnuts.calories != null && Number.isFinite(Number(fnuts.calories)) ? Number(fnuts.calories) : undefined;
           sumP += fp;
           sumC += fc;
           sumSatFat += fsat;
@@ -928,7 +930,7 @@ export function parseAndHealVisionScout(
             sourceImageIndex: f.sourceImageIndex ?? (d.sourceImageIndex ?? 0),
             rawNutritionLabel: f.rawNutritionLabel ?? null,
             nutrients: fnuts,
-            calories: fcal,
+            ...(visualCal != null ? { calories: visualCal } : {}),
             protein: fp,
             totalFat: ffat,
             fat: ffat,
@@ -945,7 +947,8 @@ export function parseAndHealVisionScout(
         let satFat = Math.max(sumSatFat, Number(dNuts.saturatedFat) || 0);
         if (totalFat < satFat) totalFat = satFat;
 
-        // Reconcile dish-level fat back to ingredients (cooking oil / deep-frying absorption)
+        // Reconcile dish-level fat back to ingredients (cooking oil / deep-frying absorption).
+        // Do not Atwater here — finalizeDishLedger is the persisted kcal writer.
         const sumCompFat = components.reduce((acc, c) => acc + c.totalFat, 0);
         if (totalFat > sumCompFat && components.length > 0) {
           const diffFat = totalFat - sumCompFat;
@@ -955,14 +958,12 @@ export function parseAndHealVisionScout(
             const fatShare = diffFat * weightShare;
             c.totalFat = Math.round((c.totalFat + fatShare) * 10) / 10;
             c.fat = c.totalFat;
-            c.calories = Math.round(4 * c.protein + 4 * c.carbohydrates + 9 * c.totalFat);
           });
         }
 
         const totalSugar = Number(dNuts.totalSugar) || sumAddedSugar;
-        const totalCalories = Math.round(4 * sumP + 4 * sumC + 9 * totalFat);
-        const convertedNutrients = {
-          calories: totalCalories, protein: Math.round(sumP * 10) / 10, carbohydrates: Math.round(sumC * 10) / 10,
+        const convertedNutrients: Record<string, number> = {
+          protein: Math.round(sumP * 10) / 10, carbohydrates: Math.round(sumC * 10) / 10,
           totalFat: Math.round(totalFat * 10) / 10, saturatedFat: Math.round(satFat * 10) / 10, transFat: 0,
           sugar: Math.round(totalSugar * 10) / 10, addedSugar: Math.round(sumAddedSugar * 10) / 10,
           totalFibre: Math.round(sumFibre * 10) / 10, sodium: Math.round(sumNa),
@@ -970,6 +971,10 @@ export function parseAndHealVisionScout(
           calcium: Number(dNuts.calcium) || 0, iron: Number(dNuts.iron) || 0,
           magnesium: Number(dNuts.magnesium) || 0, vitaminD: Number(dNuts.vitaminD) || 0,
         };
+        const visualDishCal = Number(dNuts.calories);
+        if (Number.isFinite(visualDishCal) && visualDishCal > 0) {
+          convertedNutrients.calories = visualDishCal;
+        }
         let dishWeight = d.estimatedWeightGrams || (components.reduce((acc, c) => acc + (c.weightGrams || 0), 0) || 250);
         let dishRawLabel: any = null;
         if (components.length === 1 && components[0].weightGrams > 0) {

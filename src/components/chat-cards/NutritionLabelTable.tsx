@@ -1116,7 +1116,9 @@ export function NutritionLabelTable({
 
                                 if (portionVal !== undefined && portionVal !== null && !isNaN(Number(portionVal))) {
                                   finalPortionNum = Number(portionVal);
-                                  if (base100gVal !== undefined && base100gVal !== null && !isNaN(Number(base100gVal))) {
+                                  if (finalPortionNum === 0) {
+                                    final100gNum = 0;
+                                  } else if (base100gVal !== undefined && base100gVal !== null && !isNaN(Number(base100gVal))) {
                                     final100gNum = Number(base100gVal);
                                   } else if (weightToDisplay > 0) {
                                     final100gNum = (finalPortionNum / weightToDisplay) * 100;
@@ -1279,9 +1281,17 @@ export function NutritionLabelTable({
                 })()}
 
                 {(() => {
-                  const ingList = String(item.ingredientsList || '').trim();
+                  let ingList = String(item.ingredientsList || '').trim();
                   if (!ingList) return null;
+                  const isUnsweetenedDish = /unsweetened|unsweatened|tawar/i.test(String(item.name || item.originalName || ''));
+                  if (isUnsweetenedDish) {
+                    ingList = ingList
+                      .replace(/es\s+teh\s+manis/gi, 'Es Teh Tawar')
+                      .replace(/sweet\s+iced?\s+tea/gi, 'Unsweetened Iced Tea')
+                      .replace(/^sweet\s+/i, 'Unsweetened ');
+                  }
                   const isRedundant = 
+                    ingList.toLowerCase() === String(item.name || '').trim().toLowerCase() ||
                     ingList.toLowerCase() === String(item.originalName || '').trim().toLowerCase() || 
                     ingList.toLowerCase() === String(item.keyword || '').trim().toLowerCase();
                   if (isRedundant) return null;
@@ -1289,7 +1299,7 @@ export function NutritionLabelTable({
                   return (
                     <div className="mt-2.5 p-2 bg-slate-100/60 dark:bg-slate-800/40 rounded-lg text-[9.5px] leading-normal border border-slate-200/40 dark:border-slate-700/30 text-left">
                       <span className="font-bold text-theme-text-secondary uppercase tracking-wider block mb-1 text-[8.5px]">{t.ingredientsLabel}</span>
-                      <span className="text-theme-neutral font-normal">{item.ingredientsList}</span>
+                      <span className="text-theme-neutral font-normal">{ingList}</span>
                     </div>
                   );
                 })()}

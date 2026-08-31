@@ -1,7 +1,108 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-30  
-**Status:** Unified Active-Meal Edit & Q&A architecture implemented; brittle regex keyword gating removed; all text-only follow-ups in an active meal session route to the single-meal flow; Q&A leaves meal card untouched; 87/87 vitest test files passing; tsc exit 0; app compiled and dev server running.
+**Updated:** 2026-08-31  
+**Status:** F-8.1–F-8.9 shipped. Next on ROADMAP: **F-8.10** split `server_food_analyze_run.ts` (~3772) · **F-8.11** live evidence soak · **F-8.12** packaged facts when present · **F-8.13** real debug download vs sample. Also F-1…F-4, F-6, F-7 (Q-1 green).
+
+- **Thin HTTP food adapter (`server_routes_food_analyze.ts` 3973→221, 2026-08-31):**
+  - **Root Cause & Diagnosis:** The analyze route was still a 4k host mixing Express mounts with the Scout→Finalize pipeline, so the next calorie fork would hide in HTTP.
+  - **Key Changes Applied:** Moved the pipeline to `server_food_analyze_run.ts`. Route file only mounts preview, front-desk, and `runFoodAnalyze`. Catalog ceiling 700 / 3800.
+  - **Verification:** tsc 0; source asserts; `assert-budgets` PASS.
+
+- **F-8 remaining forks (compiler, adapter dead branch, debug replies, LogChat ceiling, 2026-08-31):**
+  - **Root Cause & Diagnosis:** Mode D compiler still called `aggregateItemsNutrients`; new_log still had a dead edit-merge that copied old totals; debug collapsed replies without showing them; LogChat 6962 > 6810.
+  - **Key Changes Applied:** `compileMealState` finalizes each item then `sumItemNutrients`. Deleted unused new_log identity-merge. Debug markdown extracts unique agent replies once. Extracted `downloadJobDebugReport` so LogChat is 6786.
+  - **Verification:** tsc 0; 87 named tests PASS; `assert-budgets.mjs` all PASS.
+
+- **Evidence-job `applyMealEdits` repair (`server_meal_edit.ts`, 2026-08-31):**
+  - **Root Cause & Diagnosis:** `set_count` treated missing count as 1 and doubled the already-weighed otak; leftover wedges/veg were sibling FoodItems; `isSauce` matched the whole 250g “steak with sauce” blob so the 50g condiment never appeared.
+  - **Key Changes Applied:** `set_count` only writes `count` (no gram scale). Split leftover sides/sauce tagged `role: component` and nested on the host. Combined “entree with sauce” remainder after claimed meat grams becomes the named condiment (protein capped). Durable class tests use tempeh/seitan/gravy; outer evidence fixture asserts 1635g / 85g otak / 50g sauce.
+  - **Residual:** Adapter shrink, Mode D aggregator sibling, LogChat ceiling, live Gemini replay still not done.
+
+- **F-8.5–F-8.8 tiles / bind / heal / debug (`FoodCard.tsx`, `server_vision_scout.ts`, `server_brand_match.ts`, `debugPayload.ts`, 2026-08-30):**
+  - **Root Cause & Diagnosis:** Composition mapped flattened sauce/sides as tiles and round-robined image 0 across photos; heal Atwater competed with finalize; packaged drinks could sit in CuratorSkipped without a brand attempt residual.
+  - **Key Changes Applied:** Extracted `foodCompositionTiles` (filter components, no round-robin). Packaged bind helper + `bindStatus` MISS. Heal keeps fry-fat split, does not write kcal. Debug Errors section uses computed gate; instruction schema once per dispatch.
+  - **Verification:** named vitest + `tsc` (see session COMPLETE).
+  - **Residual:** Adapter still ~4k. Live Gemini replay of evidence job not done.
+
+- **F-8.9 calorie host deleted (`server_routes_food_analyze.ts`, 2026-08-30):**
+  - **Root Cause & Diagnosis:** The live path already used finalize + `applyMealEdits`, but ~2,600 lines of First-Principles / aggregate / receipt-as-math / Modify Math remained behind a flag. Dual writers are the same defect class as the 0-kcal edit log.
+  - **Key Changes Applied:** Deleted those hosts. Create maps from `finalizeDishLedger` only; edit always `applyMealEdits`. Domain `food-calc.md` + FOOD.md Process now say one writer per fact. Catalog ceiling `server_routes_food_analyze.ts` 4200.
+  - **Verification:** `tsc --noEmit` 0; 101 named F-8/food tests PASS including source assert that First-Principles / `aggregateItemsNutrients(` are absent. File 8946 → 4109 lines.
+  - **Residual:** Adapter still ~4k (prompt assembly, scout, DB). Target 400–700 later. F-8.5/6/8 open. `assert-budgets` still fails pre-existing LogChat ceiling.
+
+- **F-8 single-path add/edit continuation (Gemini F-8.1 + Grok F-8.2/3/4, 2026-08-30):**
+  - **Root Cause & Diagnosis:** Gemini’s gate was real, but `server_routes_food_analyze.ts` still ran First-Principles, `aggregateItemsNutrients`, and the receipt calculator on every dish-estimate meal; edit `add_item` still inherited 0 kcal; review+images isolated `activeMeal` into a second “new meal.”
+  - **Key Changes Applied:**
+    - Kept `evaluateMealGate` (F-8.1); fixed `src/mealBuild/mealGate.ts` re-export; Errors section is the gate, not a log grep.
+    - Create path maps `preCalculatedItems` from `finalizeDishLedger` (`server_meal_from_finalize.ts`) and skips the duplicate calorie books.
+    - Edit path uses `applyMealEdits` (`server_meal_edit.ts`): empty commands = Q&A; `replace_identity` / `split_item` / `add_item` require scout-shaped `estimate` then finalize; unmentioned sides keep saved grams; sauce stays a component.
+    - One modal = one document: `hasActiveMealDocument` never isolates or Mode-Rewrites to `new_log`; extra photos merge; dietitian edit few-shot no longer remove+add 80/100/70.
+  - **Verification:** `npx tsc --noEmit` exit 0; 169 named food-calc/F-8 tests PASS. `assert-budgets.mjs` still fails pre-existing `LogChat.tsx` ceiling (untouched).
+  - **Residual:** Legacy First-Principles + 547-line receipt still in the file for `FOOD_DISH_ESTIMATE=0`. F-8.6 composition tiles and F-8.8 heal persisted-kcal not done. Protected `food-calc.md` not edited.
+
+- **Component Promotion, 33-Nutrient Catalog Integration & Narrative Sync (`server_routes_food_analyze.ts`, `tests/edit_mode_continuity.test.ts` — 2026-08-30):**
+  - **Root Cause & Diagnosis:**
+    1. **Destructive Composite Splits:** `remove_item` + `add_item` completely destroyed composite child components (`Potato Wedges`, `Mixed Vegetables`, `Beef Steak`), discarding their authentic database profiles, all 25 micronutrients, and individual image crops.
+
+- **Component Promotion, 33-Nutrient Catalog Integration & Narrative Sync (`server_routes_food_analyze.ts`, `tests/edit_mode_continuity.test.ts` — 2026-08-30):**
+  - **Root Cause & Diagnosis:**
+    1. **Destructive Composite Splits:** `remove_item` + `add_item` completely destroyed composite child components (`Potato Wedges`, `Mixed Vegetables`, `Beef Steak`), discarding their authentic database profiles, all 25 micronutrients, and individual image crops.
+    2. **Crude Dictionary Multipliers:** `add_item` evaluated an unsorted 20-word dictionary (`standardItems`), causing `'chicken steak'` to collide with generic `'steak'` (beef), and assigning 0 to all micronutrients.
+    3. **Missing Negative Beverage Modifiers:** `"Unsweetened Iced Tea"` matched `'iced tea'` (sweetened), erroneously receiving 35.8 kcal and 7.7g added sugar.
+    4. **Narrative vs. Ledger Discrepancy:** The Dietitian's message cited 42.5g protein while the backend calculated 54.6g due to generation timing before math execution.
+  - **Key Changes Applied:**
+    - In [`server_routes_food_analyze.ts`](file:///Users/chiwah/src/Health-tracker/server_routes_food_analyze.ts), implemented `removedComponentsPool` and Component Promotion so `add_item` inherits full database profiles, micronutrients, and `boundingBox2D` image crops from existing/removed components.
+    - Routed new items in `add_item` through `getFallbackCategoryProfile` to supply comprehensive 33-nutrient profiles, and sorted `standardItems` keys by length descending (e.g. `'chicken steak'` before `'steak'`).
+    - Added automatic zeroing of sugar, carbs, and calories for negative beverage modifiers (`unsweetened`, `no sugar`, `tawar`) at `add_item` creation time.
+    - Integrated `synchronizeNarrativeText` on `finalMessage` in edit mode to ensure clinical narrative metrics 100% match authoritative ledger totals.
+  - **Verification:** `tsc --noEmit` exit 0 (0 errors); 87/87 vitest test files (824/824 tests) 100% green; dev server daemon active on port 3000.
+
+- **Canonical Receipt Table, Water Plant Protection & Semantic Deduplication Structural Fixes (`server_derivation.ts`, `server_pure_helpers.ts`, `server_routes_food_analyze.ts` — 2026-08-30):**
+  - **Root Cause & Diagnosis:**
+    1. **Missing Receipt Constituents in Edit Mode:** The edit path previously used a handwritten subtotal-only loop, omitting constituent breakdown rows (`componentsDetailList` / `components`) and only printing `Item Sub-Total`.
+    2. **Water Plant Beverage False-Positive:** `\bwater\b` in the beverage regex caused "Water Spinach" (Cah Kangkung), "Watercress", etc. to be classified as beverages and zeroed out when the user said "the tea is unsweetened".
+    3. **Duplicate Modifier Compounding:** The command deduplicator included `newItemName`, so if the LLM output commands with differing/null `newItemName`, the deduplication let them through, executing `update_modifier` multiple times on the same item.
+  - **Key Changes Applied:**
+    - Exported canonical `formatMealReceiptTable` from [`server_pure_helpers.ts`](file:///Users/chiwah/src/Health-tracker/server_pure_helpers.ts) and used it in [`server_routes_food_analyze.ts`](file:///Users/chiwah/src/Health-tracker/server_routes_food_analyze.ts) to guarantee constituent breakdown rows are always rendered consistently across all modes.
+    - In [`server_derivation.ts`](file:///Users/chiwah/src/Health-tracker/server_derivation.ts), structurally excluded water plants (`water spinach`, `watercress`, `watermelon`, `kangkung`) and non-beverage categories, and required beverage intent matching so tea modifiers only touch tea.
+    - In [`server_routes_food_analyze.ts`](file:///Users/chiwah/src/Health-tracker/server_routes_food_analyze.ts), implemented semantic command deduplication ignoring cosmetic `newItemName` and added an execution-level idempotency guard (`appliedModifierKeys`) to prevent multiple deductions on the same item.
+  - **Verification:** `tsc --noEmit` exit 0 (0 errors); 87/87 vitest test files (823/823 tests) 100% green; dev server daemon running on port 3000.
+
+- **Prompt Rule Removal, Baseline Per-100g Zeroing & False Stale Warning Fixes (`agents/dietitianInstructions.ts`, `server_routes_food_analyze.ts`, `src/components/chat-cards/NutritionLabelTable.tsx` — 2026-08-30):**
+  - **Root Cause & Diagnosis:**
+    1. The rule `"NEVER include itemsBreakdown in foodData"` restricted the LLM from cleanly returning item breakdowns, while the `update_modifier` schema omitted `newItemName`, leaving the LLM unable to declare the new item name.
+    2. The per-100g baseline (`primaryBase100g` / `syntheticBase100g`) was not zeroed when modifiers zeroed portion calories/carbs, producing mathematical contradictions in the table (100g had 27 kcal, but 300g had 0 kcal).
+    3. `staleDietitianNarrative` was hardcoded to `true` in `server_routes_food_analyze.ts`, falsely displaying *"coaching may reflect a previous portion"* even though fresh advice was generated.
+    4. `item.ingredientsList` retained the pre-edit `"Sweet Iced Tea"` string under an unsweetened title.
+  - **Key Changes Applied:**
+    - In `agents/dietitianInstructions.ts`, removed the rule forbidding `itemsBreakdown` in `foodData`, allowing the model to return updated breakdowns naturally, and added `newItemName` to `modificationCommand` schema.
+    - In `server_routes_food_analyze.ts`, updated `update_modifier` to accept `cmd.newItemName`, zero out per-100g baselines (`primaryBase100g`, `syntheticBase100g`, `baseNutrients100g`), update `ingredientsList`, and only set `staleDietitianNarrative = true` when Dietitian coaching was skipped.
+    - In `src/components/chat-cards/NutritionLabelTable.tsx`, ensured `final100gNum` is 0 whenever portion nutrients are 0, and translated contradictory sweet ingredient strings to unsweetened.
+  - **Verification:** `tsc --noEmit` exit 0 (0 errors); vitest targeted suites 75/75 passing; `test:food` 64/64 passing; dev server restarted on port 3000.
+
+- **Modifier Name Propagation, Meal Consolidate Deduplication & R2 Timeout Fixes (`server_routes_food_analyze.ts`, `server_pure_helpers.ts`, `src/mealBuild/consolidate.ts`, `src/utils/imageResolver.ts` — 2026-08-30):**
+  - **Root Cause & Diagnosis:**
+    1. **Stale Beverage Names:** While `update_modifier` and the Nutrient Modifier Matrix correctly zeroed the sugar and calories for unsweetened tea, the item's name fields (`originalName`, `canonicalDbName`, `keyword`, and constituent `components` like "Sweet Iced Tea") were not updated. Consequently, the receipt table and UI card header kept displaying "Es Teh Manis" (Indonesian for "Sweet Iced Tea") and "(Sweet Iced Tea)" with 0 kcal.
+    2. **Language Gating:** In `synthesizeEditCommandsFromBreakdown` and `server_routes_food_analyze.ts`, beverage detection checked only English keywords (`tea`, `coffee`, `juice`), failing on Indonesian dishes like "Es Teh Manis" and causing the modify pipeline to fall through to `new_log`.
+    3. **Item Duplication (6 items in itemsSummary):** In `src/mealBuild/consolidate.ts`, base items indexed by `itemId` failed to match patch items that only carried `scoutIndex` (e.g. from `preCalculatedItems`), causing patch items to be appended while base items were preserved as untouched zombies.
+    4. **R2 Image Timeouts:** The browser attempted to directly fetch historical meal images from a decommissioned public bucket domain (`pub-d17eecca...r2.dev`) instead of passing through the same-origin proxy `/photos/{key}`.
+    5. **Stale Server Process:** The server on port 3000 had been running continuously since the previous day without automatic reload, executing outdated backend code in memory.
+  - **Key Changes Applied:**
+    - Added `applyModifierToName` to `server_routes_food_analyze.ts` and `server_pure_helpers.ts`: dynamically translates "Es Teh Manis" -> "Es Teh Tawar", "Sweet Iced Tea" -> "Unsweetened Iced Tea", and propagates updated names across `name`, `canonicalDbName`, `originalName`, `keyword`, `components`, and `visualIngredients`.
+    - Broadened beverage matching in `synthesizeEditCommandsFromBreakdown` and intent extractors to recognize Indonesian terms (`teh`, `kopi`), `foodType: "beverage"`, and constituent child components.
+    - Updated `src/mealBuild/consolidate.ts` to fall back to matching by `scoutIndex` and `name` when `patchItem.itemId` is missing, preventing duplicate item creation.
+    - Wrapped resolved food image URLs in `src/utils/imageResolver.ts` with `normalizeMealImageUrl` to route all R2 images through the local `/photos/{key}` proxy.
+    - Added `syntheticBase100g` and `isDishEstimate` to `ctx` type definition in `server_pure_helpers.ts` to achieve 0 `tsc` errors.
+    - Cleanly restarted the Node server process on port 3000 running the latest compiled code.
+  - **Verification:** `npx tsc --noEmit` exit 0; 87/87 vitest test files (819/819 tests) green; `npm run test:food` 64/64 green; dev server running on port 3000.
+
+- **Edit-Not-Reflected-in-UI Fix (`src/App.tsx` — 2026-08-30):**
+  - **Root Cause & Diagnosis:** Edit turns submit as a *new* job ID. App.tsx's `isEditRefinement` check only looked for `msg_assistant_${job.id}` — always `false` for a new job — so the edit result was appended as a second card while the original card kept showing stale nutrients. The streaming path (LogChat.tsx L4544) correctly merged the edit in-place, but the polling path (App.tsx L1341) overwrote LogChat's state with `job.messages` containing the unedited prior assistant message.
+  - **Key Changes Applied:**
+    - Added `priorFoodMsgIdx` scan in App.tsx polling success handler: searches `nonLiveMsgs` for the last assistant message with a `pendingFoodLog` (from any prior turn).
+    - When found, merges edit data into that prior message in-place (matching LogChat's L4611 streaming merge pattern), and strips `pendingFoodLog` from subsequent messages to prevent duplicate cards.
+    - `isEditRefinement` now triggers on either same-job or prior-turn food message presence.
+  - **Verification:** `tsc --noEmit` exit 0 (2 pre-existing `server_pure_helpers.ts` errors unchanged); `ModeDAndEdit.test.ts` 2/2 ✓; `JobStore.test.ts` 6/6 ✓.
 
 - **Unified Active-Meal Edit & Q&A Architecture (`plan/FOOD_CHAT_UNIFIED_EDIT_QA_SPEC.md`, `agents/dietitianInstructions.ts`, `server_routes_food_analyze.ts` - 2026-08-30):**
   - **Root Cause & Diagnosis:** Follow-ups on active meals were subjected to brittle regex keyword filters trying to guess whether a phrase was an "edit" or "new log". This caused natural phrasing to either drop active meal context or misroute.

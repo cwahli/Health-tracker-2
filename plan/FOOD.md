@@ -8,7 +8,74 @@ Not a “lifecycle” in the biomarker sense: a meal is one-shot (scout → reso
 - **Part A** — identity / curator / catalog (was `FOOD_RESOLVER_CURATOR_AND_1PASS_CATALOG_PLAN.md`)
 - **Part B** — durable meal document (was `MEAL_BUILD_DURABLE_STATE.md`)
 
-Remaining execute IDs **F-1…F-4** (identity) and **F-6 / F-7** (`FoodCard` ceiling + scout prompt gate) are on `ROADMAP.md`. F-6/F-7 start after **Q-1**. Do **not** rebuild the curator (M30 stays).
+Remaining execute IDs on [ROADMAP.md](./ROADMAP.md): **F-1…F-4** (identity/catalog), **F-6 / F-7** (FoodCard ceiling + scout prompt; Q-1 is green so these are unblocked), **F-8.10–F-8.13** (pipeline split, evidence soak, packaged facts, debug download). Do **not** rebuild the curator (M30 stays).
+
+---
+
+## Process (binding — how a modal works)
+
+One open food modal owns **one** document. That is true for **review (log a meal)** and **compare**.
+
+```text
+Open modal
+  → empty slot (draft job). No meal yet.
+
+First submit in this modal
+  → CREATE that document (never a second one)
+  → photos? Vision Scout. text-only? Dietitian fills the same scout-shaped estimate
+  → finalizeDishLedger (calories, OCR/brand, Atwater)
+  → Dietitian NARRATE only (verdict + message). Does not rebuild items.
+
+Later submits in the SAME modal
+  → same meal id / same comparison id
+  → no new meal card, even if the user attaches more photos (those MERGE as added dishes)
+  → Dietitian either:
+       modificationCommand[] empty  → Q&A, card unchanged
+       modificationCommand          → patch this meal, then finalize dirty rows
+```
+
+| | Review modal | Compare modal |
+|---|---|---|
+| First submit | 1 Meal | 1 ComparisonSet |
+| Later submit | edit or Q&A on that meal | edit or Q&A on that set |
+| New document | **open a new modal** | **open a new modal** |
+
+Edit vs Q&A is the dietitian’s `modificationCommand` (empty = Q&A). Not a keyword regex, not a second “new_log”.
+
+**Where numbers come from**
+
+| Event | Identity / P/C/F | Calories |
+|---|---|---|
+| First submit with photos | Scout | Finalize |
+| First submit text-only, or **add/replace a food on edit** (no new photo of that food) | **Dietitian emits scout-shaped `estimate`** (name, grams, P, C, F, sat fat, sodium, cookingMethod) | Finalize |
+| Split / scale of food already on the meal | Saved row (scale). Dietitian may add `estimate` when a **new identity** is named (beef vs chicken) | Finalize |
+| Q&A | — | Unchanged |
+
+Dietitian never invents kcal. Finalize always Atwaters unlocked items.
+
+**User prompt** is almost all server-built (profile, time, one ledger, scout/meal lines). The human line is often empty or one sentence. Same skeleton for create and edit; do not paste the ledger twice.
+
+**One writer per fact (reliability).** Dual calorie books are a known defect class (leftover path + reused flag). The analyze HTTP file is an **adapter**, not a second calculator. When a new path is 100% of traffic, the old host is **deleted** — not wrapped.
+
+| Fact | Owner | Not allowed |
+|---|---|---|
+| Identity / P/C/F | Scout, or dietitian `estimate` if no photo | Generic profiles in the route |
+| Calories | `finalizeDishLedger` only | First-Principles, `aggregateItemsNutrients` after finalize, receipt-as-math, inherit `cal=0` |
+| Same meal vs new | Modal session | Mode Rewrite, review-pill `new_log` on an existing document |
+| Edit vs Q&A | `modificationCommand` empty or not | Keyword regex, `itemsBreakdown` rebuild |
+| Save or not | `evaluateMealGate` | Log grep |
+
+| Module | Role | Size band |
+|---|---|---|
+| `server_routes_food_analyze.ts` | HTTP adapter: mount routes, return JSON | keep ≤700; never a second kcal writer |
+| `server_food_analyze_run.ts` | Pipeline: scout → finalize → dietitian → gate | medium owner; not a second kcal writer |
+| `server_dish_finalize.ts` | Calories | keep ~400–600 |
+| `server_meal_edit.ts` | Commands | keep ~400–600 |
+| `server_meal_gate.ts` | Save/refuse | keep ~200–300 |
+| `server_vision_scout.ts` | Identify + fry-fat split; no persisted kcal | slim toward ~800 |
+| `server_nutrient_aggregation.ts` | Off the hot path | do not call after finalize |
+
+Detail, leftover F-8 IDs (**F-8.10–F-8.13**), and debug shape: [FOOD_SINGLE_PATH.md](./FOOD_SINGLE_PATH.md).
 
 ---
 

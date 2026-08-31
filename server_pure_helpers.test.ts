@@ -13,7 +13,8 @@ import {
   applyNutrientRealityChecks,
   backfillSolubleFibre,
   applySatFatAndAddedSugarFloor,
-  backfillSparseMicronutrients
+  backfillSparseMicronutrients,
+  formatMealReceiptTable,
 } from './server_pure_helpers';
 
 describe('server_pure_helpers', () => {
@@ -549,5 +550,41 @@ import { isLabelPanelItem } from "./server_pure_helpers.js";
 describe("isLabelPanelItem", () => {
   it("rejects items containing fillet as a label", () => {
     expect(isLabelPanelItem({ name: "Quorn Sweet Chilli Mini Fillets Nutrition Facts Label" })).toBe(false);
+  });
+
+  describe("formatMealReceiptTable", () => {
+    it("renders constituent rows for composite items alongside sub-totals and grand total", () => {
+      const items = [
+        {
+          name: "Es Teh Tawar",
+          weightGrams: 300,
+          nutrients: { calories: 0, protein: 0, saturatedFat: 0, sodium: 5 },
+        },
+        {
+          name: "Ikan Bakar Set with Rice and Sambal",
+          weightGrams: 400,
+          nutrients: { calories: 478, protein: 40.2, saturatedFat: 2.9, sodium: 760 },
+          componentsDetailList: [
+            { name: "Grilled Fish", weightGrams: 180, calories: 221, protein: 35, saturatedFat: 2.5, sodium: 450 },
+            { name: "White Rice", weightGrams: 150, calories: 210, protein: 3.8, saturatedFat: 0.1, sodium: 5 },
+            { name: "Sambal", weightGrams: 40, calories: 34, protein: 1, saturatedFat: 0.3, sodium: 300 },
+            { name: "Raw Cabbage", weightGrams: 30, calories: 13, protein: 0.4, saturatedFat: 0, sodium: 5 },
+          ],
+        },
+      ];
+      const grandTotals = { calories: 478, protein: 40.2, saturatedFat: 2.9, sodium: 765 };
+      const table = formatMealReceiptTable(items, grandTotals, 700);
+
+      expect(table).toContain("### 🧾 Nutrition calculation");
+      expect(table).toContain("1. Es Teh Tawar - 300g");
+      expect(table).toContain("Item Sub-Total - 300g");
+      expect(table).toContain("2. Ikan Bakar Set with Rice and Sambal - 400g");
+      expect(table).toContain("Grilled Fish - 180g");
+      expect(table).toContain("White Rice - 150g");
+      expect(table).toContain("Sambal - 40g");
+      expect(table).toContain("Raw Cabbage - 30g");
+      expect(table).toContain("Item Sub-Total - 400g");
+      expect(table).toContain("🏆 GRAND MEAL TOTAL - 700g");
+    });
   });
 });

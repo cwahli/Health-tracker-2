@@ -18,6 +18,7 @@ import {
   decomposeSaucedEntree,
 } from './server_derivation';
 import { backfillSparseMicronutrients } from './server_pure_helpers';
+import { deduceSugarBreakdown } from './server_sugar_engine';
 
 export interface FinalizeInput {
   item: any;
@@ -54,6 +55,8 @@ export interface DishLedger {
   dishClass: 'atomic' | 'composed';
   dbSource: 'label' | 'brand_official' | 'usda' | 'estimated';
   dbId: string | null;
+  /** Brand-rung residual: HIT / MULTI / MISS / SKIPPED. Honest MISS does not invent micronutrients. */
+  bindStatus?: 'HIT' | 'MULTI' | 'MISS' | 'SKIPPED' | null;
   atwaterFlag: { deviationPct: number; flagged: boolean } | null;
   usdaQueries: string[];
   components?: any[];
@@ -166,6 +169,7 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
   let dbSource: 'label' | 'brand_official' | 'usda' | 'estimated' = 'estimated';
   let dbId: string | null = null;
   let brandLock: FinalizeInput['storedBrandLock'] = input.storedBrandLock || null;
+  let bindStatus: DishLedger['bindStatus'] = null;
   const usdaQueries: string[] = [];
 
   // 1. Check OCR label truth
@@ -189,6 +193,7 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
     if (brandLock) {
       // Re-rating an already-stored brand lock (Portion edit or D8)
       dbSource = 'brand_official';
+      bindStatus = 'HIT';
       dbId = brandLock.id;
       for (const [k, v] of Object.entries(brandLock.valuesAtBasis)) {
         if (brandLock.basisType === 'per_100g') {
@@ -207,6 +212,9 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
       let brandMatch: BrandMatchResult = { matched: false, status: 'MISS' };
       if (shouldAttemptBrandMatch) {
         brandMatch = await matchBrandMenu(chainName, originalName, keyword);
+        bindStatus = brandMatch.status;
+      } else {
+        bindStatus = 'SKIPPED';
       }
 
       if (brandMatch.matched && brandMatch.hit) {
@@ -466,6 +474,26 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
     }
   }
 
+  // 8. Sugar and Added Sugar Breakdown
+  if (!lockedNutrientKeys.includes('addedSugar')) {
+    const rawSugar = Number(nutrients.sugar ?? nutrients.totalSugar ?? 0);
+    const componentNames = [
+      ingredients.join(', '),
+      ...(Array.isArray(item.components) ? item.components.map((c: any) => (typeof c === 'string' ? c : c.searchQuery || c.name || '')) : []),
+      ...(Array.isArray(componentsDetailList) ? componentsDetailList.map((c: any) => c.name || c.searchQuery || '') : []),
+    ].filter(Boolean).join(', ');
+    const sugarResult = deduceSugarBreakdown({
+      totalSugar: rawSugar,
+      addedSugarPrinted: lockedNutrientKeys.includes('addedSugar') ? Number(nutrients.addedSugar) : null,
+      carbohydrates: nutrients.carbohydrates,
+      totalFibre: nutrients.totalFibre,
+      ingredientsList: componentNames || item.ingredientsList,
+      foodName: originalName || keyword,
+    });
+    nutrients.sugar = sugarResult.sugar;
+    nutrients.addedSugar = sugarResult.addedSugar;
+  }
+
   const finalIngredientsList = ingredients.length > 0 ? ingredients.join(', ') : (item.ingredientsList || (componentsDetailList ? componentsDetailList.map((c: any) => c.name).join(', ') : null));
 
   return {
@@ -483,6 +511,7 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
     dishClass,
     dbSource,
     dbId,
+    bindStatus,
     atwaterFlag,
     usdaQueries,
     components: componentsDetailList || item.components || undefined,

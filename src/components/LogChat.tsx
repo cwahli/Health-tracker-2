@@ -41,6 +41,7 @@ import { resolveFoodImage } from '../utils/imageResolver';
 import { JobStore } from '../jobs/JobStore';
 import { toPendingFoodLog } from '../mealBuild/adapters';
 import { executeFoodAgent } from '../jobs/FoodAgentExecutor';
+import { downloadJobDebugReport } from '../utils/logChatDebugDownload';
 
 function isValidFoodLog(log: any): boolean {
   if (!log || typeof log !== 'object' || Array.isArray(log)) return false;
@@ -1841,192 +1842,15 @@ ${logsText}`);
   }, [isOpen]);
 
   const handleDownloadDebug = async (jobIdToDownload: string, msg: any, format: 'json' | 'markdown' = 'markdown') => {
-    const resolvedJobId =
-      msg?.data?.jobId ||
-      (msg?.id?.startsWith('msg_assistant_job_') ? msg.id.replace('msg_assistant_job_', 'job_') : '') ||
-      (msg?.id?.startsWith('msg_assistant_') && !msg.id.includes('fail') && !msg.id.includes('clarify') && !/^\d+$/.test(msg.id.replace('msg_assistant_', '')) ? msg.id.replace('msg_assistant_', '') : '') ||
-      (msg?.pendingFoodLog?.jobId || msg?.data?.pendingFoodLog?.jobId) ||
-      jobIdToDownload ||
-      jobId;
-
-    // "Previous steps" for the debug export: every turn in this modal's own
-    // in-memory transcript that came BEFORE the turn being exported. This is
-    // the same `messages` state the chat UI itself renders, so it's already
-    // trustworthy and requires no new server round-trip or Firestore/Supabase read.
-    const msgIndexForHistory = messages.findIndex((m: any) => m.id === msg?.id);
-    const conversationHistory = (msgIndexForHistory >= 0 ? messages.slice(0, msgIndexForHistory) : [])
-      .map((m: any) => ({ role: m.role, content: String(m.content || '').slice(0, 1000) }));
-
-    const job = JobStore.getJob(resolvedJobId);
-    const clientConsoleLogs = window.__clientConsoleLogs || [];
-    const networkErrors = window.__clientNetworkErrors || [];
-    const lastUserAction = window.__lastUserAction || (inputText ? { action: 'chat_submit', prompt: inputText, timestamp: new Date().toISOString() } : undefined);
-
-    // FIX: do not fall back to `job?.result` which is the entire job result object
-    // for non-food (medical/biomarker) jobs.
-    const pendingFoodLog = msg?.data?.pendingFoodLog || msg?.pendingFoodLog || job?.result?.pendingFoodLog;
-    const scoutItems = msg?.data?.scoutItems || msg?.data?.agentResult?.scoutItems || job?.result?.scoutItems;
-    const receiptTable = msg?.data?.pendingFoodLog?.receiptTable || msg?.data?.receiptTable || job?.result?.receiptTable || job?.result?.pendingFoodLog?.receiptTable;
-
-    const extractLogString = (val: any): string => {
-      if (!val) return '';
-      if (typeof val === 'string') return val.trim();
-      if (Array.isArray(val)) {
-        return val.map((l: any) => typeof l === 'string' ? l : (l.message ? (l.timestamp ? `[${l.timestamp}] ${l.message}` : l.message) : JSON.stringify(l))).join('\n').trim();
-      }
-      return '';
-    };
-
-    let initialBackendLogs =
-      extractLogString(msg?.data?.agentResult?.backendLogs) ||
-      extractLogString(msg?.data?.agentResult?.globalLiveLogs) ||
-      extractLogString(msg?.data?.backendLogs) ||
-      extractLogString(msg?.agentResult?.backendLogs) ||
-      extractLogString(pendingFoodLog?.backendLogs) ||
-      extractLogString(pendingFoodLog?.rawLogs) ||
-      extractLogString(job?.result?.backendLogs) ||
-      extractLogString((job as any)?.clean_result?.backendLogs) ||
-      extractLogString(job?.liveThoughts?.backendLogs) ||
-      extractLogString(job?.liveThoughts?.globalLiveLogs) ||
-      extractLogString((job as any)?.accumulatedLogs) ||
-      globalLiveLogsRef.current ||
-      '';
-
-    const localPayload = {
-      jobId: resolvedJobId,
-      status: job?.status,
-      result: {
-        ...(job?.result || {}),
-        lastUserAction,
-        clientConsoleLogs,
-        networkErrors,
-      },
-      messages: job?.messages,
-      liveThoughts: job?.liveThoughts,
-      backendLogs: initialBackendLogs,
-      exportedAt: new Date().toISOString(),
-      source: 'client-fallback',
-    };
-
-    // 1) Try server proxy (auth-friendly)
-    try {
-      const uid = auth.currentUser?.uid || 'anonymous';
-      const fmtParam = format === 'markdown' ? '&format=markdown' : '';
-      const res = await fetch(`/api/jobs/debug?jobId=${encodeURIComponent(resolvedJobId)}&userId=${encodeURIComponent(uid)}${fmtParam}`);
-      if (res.ok) {
-        const contentType = res.headers.get('content-type') || '';
-        const text = await res.text();
-        if (
-          !contentType.includes('text/html') &&
-          !text.trim().startsWith('<!doctype') &&
-          !text.trim().startsWith('<html') &&
-          !text.includes('Cookie check') &&
-          !text.includes('No server execution trace found')
-        ) {
-          const blob = new Blob([text], { type: format === 'markdown' ? 'text/markdown;charset=utf-8' : 'application/json' });
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `debug-${resolvedJobId}.${format === 'markdown' ? 'md' : 'json'}`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn('Proxy download failed, trying local fallback:', e);
-    }
-
-    // 2) Local fallback using buildDebugMarkdownReport or JSON
-    let finalBackendLogs = localPayload.backendLogs;
-    if (finalBackendLogs && (finalBackendLogs.startsWith('[Logs stored in R2') || finalBackendLogs.includes('.r2.dev/logs/'))) {
-      const urlMatch = finalBackendLogs.match(/(https?:\/\/[^\s\]"]+\.r2\.dev\/logs\/[^\s\]"]+)/i) ||
-                       finalBackendLogs.match(/\[Logs stored in R2:\s*(https?:\/\/[^\s\]]+)\]/i);
-      if (urlMatch) {
-        const r2Url = urlMatch[1] || urlMatch[0];
-        try {
-          let r2Res = await fetch(`/api/r2/log-proxy?url=${encodeURIComponent(r2Url)}`);
-          if (!r2Res.ok) {
-            r2Res = await fetch(r2Url);
-          }
-          if (r2Res.ok) {
-            const fetchedText = await r2Res.text();
-            if (fetchedText && fetchedText.trim() && !fetchedText.startsWith('[Logs stored in R2')) {
-              finalBackendLogs = fetchedText;
-            }
-          }
-        } catch (e) {
-          console.warn('[LogChat] Failed fetching R2 logs for debug download:', e);
-        }
-      }
-    }
-
-    if (!finalBackendLogs || finalBackendLogs.startsWith('[Logs stored in R2') || finalBackendLogs.length < 50) {
-      try {
-        const storedLogs = getAgentRequestLogs();
-        const matchedReq = storedLogs.find(r =>
-          r.id === resolvedJobId ||
-          r.id === `server-job-${resolvedJobId}` ||
-          (msg?.data?.requestId && r.id === msg.data.requestId) ||
-          (msg?.id && r.id === msg.id) ||
-          (pendingFoodLog?.id && r.id === pendingFoodLog.id)
-        );
-        if (matchedReq && matchedReq.logs && matchedReq.logs.length > 0) {
-          finalBackendLogs = matchedReq.logs.map(l => typeof l === 'string' ? l : (l.timestamp ? `[${l.timestamp}] ${l.message}` : (l.message || JSON.stringify(l)))).join('\n');
-        }
-      } catch (e) {
-        console.warn('[LogChat] Failed loading stored logs from tracker:', e);
-      }
-    }
-
-    if (format === 'markdown') {
-      const { buildDebugMarkdownReport } = await import('../utils/debugPayload');
-      const mdContent = buildDebugMarkdownReport({
-        jobId: resolvedJobId,
-        status: job?.status,
-        mode: job?.result?.mode,
-        agentType: job?.result?.agentType || msg?.data?.agentResult?.agentType || msg?.data?.agentType,
-        message: job?.result?.message || msg?.content,
-        backendLogs: finalBackendLogs,
-        pendingFoodLog,
-        scoutItems,
-        receiptTable,
-        error: job?.error?.message,
-        lastUserAction: lastUserAction || job?.result?.lastUserAction || (typeof window !== 'undefined' ? window.__lastUserAction : undefined),
-        userActionBreadcrumbs: (typeof window !== 'undefined' ? window.__userActionBreadcrumbs : undefined) || job?.result?.userActionBreadcrumbs || [],
-        clientConsoleLogs: clientConsoleLogs || job?.result?.clientConsoleLogs || (typeof window !== 'undefined' ? window.__clientConsoleLogs : undefined) || [],
-        networkErrors: networkErrors || job?.result?.networkErrors || (typeof window !== 'undefined' ? window.__clientNetworkErrors : undefined) || [],
-        usdaSearchResults: job?.result?.usdaSearchResults,
-        brandSearchResults: job?.result?.brandSearchResults,
-        comprehensiveNutrients: job?.result?.comprehensiveNutrients || pendingFoodLog?.nutrients,
-        ingestTrace: job?.result?.ingestTrace || msg?.data?.ingestTrace || msg?.data?.agentResult?.ingestTrace,
-        report: job?.result?.report || msg?.data?.report || msg?.data?.agentResult?.report,
-        stageLedger: job?.result?.stageLedger || msg?.data?.stageLedger,
-        historyLog: job?.result?.historyLog || msg?.data?.historyLog,
-        conversationHistory
-      });
-      const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `debug-${resolvedJobId}.md`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } else {
-      const blob = new Blob([JSON.stringify({ ...localPayload, backendLogs: finalBackendLogs }, null, 2)], { type: 'application/json' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `debug-${resolvedJobId}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    }
+    await downloadJobDebugReport({
+      jobIdToDownload,
+      msg,
+      format,
+      fallbackJobId: jobId,
+      messages,
+      inputText,
+      globalLiveLogs: globalLiveLogsRef.current,
+    });
   };
 
   const [globalLiveLogs, setGlobalLiveLogs] = useState<string>('');

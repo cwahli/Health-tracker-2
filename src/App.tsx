@@ -1338,9 +1338,24 @@ export default function App() {
                   // medical/biomarker batches and fresh food-photo submissions (mode:'review')
                   // are unaffected and keep appending as before, preserving the existing
                   // multi-attempt ("Attempt N of 3") retry flow untouched.
-                  const isEditRefinement = !isMedicalJob && cleanResult.mode === 'modify' && hasExistingAssistantMsg;
+                  //
+                  // EDIT-TURN FIX: Edit turns are always a NEW job, so hasExistingAssistantMsg
+                  // (which checks for `msg_assistant_${job.id}`) is always false for mode:modify.
+                  // We also look for any prior assistant food message with a pendingFoodLog and
+                  // merge the edit into it in-place, matching LogChat's streaming merge logic.
+                  const priorFoodMsgIdx = !isMedicalJob && cleanResult.mode === 'modify'
+                    ? (() => {
+                        const arr = nonLiveMsgs;
+                        for (let i = arr.length - 1; i >= 0; i--) {
+                          const m = arr[i] as any;
+                          if (m.role === 'assistant' && (m.data?.pendingFoodLog || m.pendingFoodLog)) return i;
+                        }
+                        return -1;
+                      })()
+                    : -1;
+                  const isEditRefinement = !isMedicalJob && cleanResult.mode === 'modify' && (hasExistingAssistantMsg || priorFoodMsgIdx >= 0);
                   const assistantMsg = {
-                    id: isEditRefinement ? `msg_assistant_${job.id}` : (hasExistingAssistantMsg ? `msg_assistant_${job.id}_${Date.now()}` : `msg_assistant_${job.id}`),
+                    id: hasExistingAssistantMsg ? `msg_assistant_${job.id}` : `msg_assistant_${job.id}`,
                     role: 'assistant',
                     content: messageText,
                     timestamp: new Date().toISOString(),
@@ -1360,9 +1375,47 @@ export default function App() {
                       agentResult,
                     },
                   };
-                  const updatedMessages = isEditRefinement
-                    ? nonLiveMsgs.map((m) => (m.id === `msg_assistant_${job.id}` ? assistantMsg : m))
-                    : [...nonLiveMsgs, assistantMsg];
+                  let updatedMessages: any[];
+                  if (hasExistingAssistantMsg) {
+                    // Same-job assistant message: replace it directly (original behavior)
+                    updatedMessages = nonLiveMsgs.map((m) => (m.id === `msg_assistant_${job.id}` ? assistantMsg : m));
+                  } else if (priorFoodMsgIdx >= 0) {
+                    // Prior-turn food message: merge edit data into it in-place so the
+                    // original card updates rather than a second card appearing below it.
+                    const priorMsg = nonLiveMsgs[priorFoodMsgIdx] as any;
+                    const mergedMsg = {
+                      ...priorMsg,
+                      content: messageText || priorMsg.content,
+                      data: {
+                        ...priorMsg.data,
+                        mode: 'modify',
+                        scoutItems: (cleanResult.scoutItems && cleanResult.scoutItems.length > 0) ? cleanResult.scoutItems : priorMsg.data?.scoutItems,
+                        pendingFoodLog: {
+                          ...(priorMsg.data?.pendingFoodLog || priorMsg.pendingFoodLog || {}),
+                          ...(pendingFoodLog || {}),
+                          message: messageText || pendingFoodLog?.message || priorMsg.data?.pendingFoodLog?.message || '',
+                          imageUrls: (pendingFoodLog?.imageUrls && pendingFoodLog.imageUrls.length > 0)
+                            ? pendingFoodLog.imageUrls
+                            : (priorMsg.data?.pendingFoodLog?.imageUrls || priorMsg.pendingFoodLog?.imageUrls || []),
+                          imageUrl: pendingFoodLog?.imageUrl || priorMsg.data?.pendingFoodLog?.imageUrl || priorMsg.pendingFoodLog?.imageUrl || undefined,
+                        },
+                        agentResult,
+                      },
+                      pendingFoodLog: {
+                        ...(priorMsg.pendingFoodLog || {}),
+                        ...(pendingFoodLog || {}),
+                      },
+                    };
+                    updatedMessages = [
+                      ...nonLiveMsgs.slice(0, priorFoodMsgIdx),
+                      mergedMsg,
+                      // Keep any messages after the prior food msg (e.g. user's edit request)
+                      // but strip them to text-only so there is no duplicate food card.
+                      ...nonLiveMsgs.slice(priorFoodMsgIdx + 1).map((m: any) => ({ ...m, pendingFoodLog: undefined, data: m.data ? { ...m.data, pendingFoodLog: undefined } : undefined })),
+                    ];
+                  } else {
+                    updatedMessages = [...nonLiveMsgs, assistantMsg];
+                  }
                   JobStore.updateJob(job.id, {
                     status: 'succeeded',
                     result: {

@@ -15,22 +15,24 @@ If you intentionally change pipeline/modes/fields: get confirmation for protecte
 ## 1. Pipeline (Dish-Level Inverted Pipeline — default)
 
 ```text
-Vision Scout (dish-level portion estimate + direct carbohydrates + printed OCR label + ingredients)
-  → Finalize Engine (3-Rung Truth Hierarchy: OCR → Brand Menu → Scout Estimate + USDA Atomics)
-  → Single Scaler Math (R = W_consumed / W_basis)
-  → Pure TS Derivation (Bottom-Up Calories = 4P + 4C + 9F, Unsat Fat, Salt, Carbs) & Atwater Check
-  → Dietitian Clinical Audit & Pure TS Macro Rebalancing (active review; clinical corrections rebalanced deterministically)
+Vision Scout (P/C/F, weight, crops, printed OCR text — does not persist kcal)
+  → Finalize Engine (OCR → Brand Menu → Scout estimate; R = W_consumed / W_basis; Atwater kcal)
+  → Dietitian: NARRATE on create, or modificationCommand / [] on later submit
+  → Gate (evaluateMealGate) — refuse 0-kcal-with-macros, sum mismatch, side mutation
 ```
 
 | Role | Rule |
 |------|------|
-| Scout | Identifies whole dishes, assigns realistic gram weight & direct physical macros (P, C, F) per dish, transcribes printed labels verbatim, emits plain ingredients |
+| Scout | Identifies whole dishes, assigns realistic gram weight & direct physical macros (P, C, F) per dish, transcribes printed labels verbatim, emits plain ingredients. **Does not own calories.** |
 | `rawNutritionLabel` | **Printed label only** — never invented |
 | Truth Hierarchy | Rung 1 (OCR) → Rung 2 (Brand Menu) → Rung 3 (Scout Estimate + USDA Atomics) |
 | Scaler | **Single scaler across entire system:** $R = \text{consumedWeight} / \text{nutrientBasisWeight}$. Never double-scale or clamp brand lock basis |
-| Derivations | `server_derivation.ts` computes bottom-up Calories ($4\text{P} + 4\text{C} + 9\text{F}$), unsaturated fat, and salt mathematically |
-| Dietitian | Audits server finalize ledger against culinary reality; emits `correctedNutrients` with clinical notes; pure TS rebalances dependent metrics |
-| Modes | Same finalize math (`finalizeDishLedger`) for **Mode A, Mode D, and Edit** |
+| Calories | **`finalizeDishLedger` is the only writer.** Forbidden on the hot path after finalize: First-Principles Injection, `aggregateItemsNutrients`, receipt-as-calculator, Modify Math inherit. |
+| Dietitian | Create: narrate the ledger (`correctedNutrients` optional). Edit: `modificationCommand` or `[]` (Q&A). Never rebuild `itemsBreakdown`. New identities need scout-shaped `estimate` (P/C/F, no kcal). |
+| Edit | `applyMealEdits` then finalize dirty rows. Same meal id in the same modal. |
+| Gate | `evaluateMealGate` — unsavable on fail. Not a log grep. |
+| Modes | Same finalize math for **Mode A, Mode D, and Edit** |
+| HTTP adapter | `server_routes_food_analyze.ts` orders stages and returns JSON. It is not a second calculator. When the new path is 100%, the old host is **deleted**. |
 
 ---
 
@@ -51,9 +53,9 @@ To guarantee that Vision Scout and Dietitian agents reliably emit core fields (e
 3. **Explicit `propertyOrdering`:**
    - Place critical estimation fields (`estimatedWeightGrams`, `ingredients`, `nutrients`) early in `propertyOrdering` before bulky fields like bounding boxes or label OCR strings.
 
-4. **Aggregator Baseline Resolution (`server_nutrient_aggregation.ts`):**
-   - Must resolve `labelData = item.labelNutrientsPerServing || item.syntheticBase100g`.
-   - Never allow dish estimates with synthetic baselines to evaluate `labelData` to null.
+4. **Aggregator is off the hot path:**
+   - `aggregateItemsNutrients` must **not** run after `finalizeDishLedger` on create/edit.
+   - If a leftover call site still exists for a non-estimate experiment, it must not write a second kcal book onto a finalized meal.
 
 5. **Reality-Check Immunity for Dish Estimates & Brand Truth:**
    - `applyNutrientRealityChecks` must skip heuristic category rewrites when `syntheticBase100g`, `isDishEstimate`, or `dbSource === "brand_official"` is present.
@@ -226,7 +228,9 @@ Meal trial balance (golden detector — does not solve):
 | Catalog / DB / resolver | `server_food_*.ts` |
 | Pure helpers | `server_pure_helpers.ts`, aggregation/basis modules |
 | Client jobs | `src/jobs/FoodAgentExecutor.ts`, modal/job tests |
-| God files | Thin patches only in `server.ts` / large UI — no end-to-end rewrite |
+| Calories / edit / gate | `server_dish_finalize.ts`, `server_meal_edit.ts`, `server_meal_gate.ts` |
+| HTTP adapter | `server_routes_food_analyze.ts` — stage order only; no second kcal writer |
+| God files | Thin patches only in `server.ts` / large UI — no end-to-end rewrite. Delete leftover calorie hosts; do not wrap them. |
 
 ---
 

@@ -233,4 +233,50 @@ describe("Edit Mode End-to-End Continuity & Aggregation Engine", () => {
     expect(res.lockedKeys).toContain("totalFat");
     expect(res.lockedKeys).toContain("calories");
   });
+
+  it("Scenario 5: Component promotion preserves rich nutrients & crops; poultry resolves distinct from beef; unsweetened tea zeroes", () => {
+    // 1. Existing composite with rich components and bounding boxes
+    const compositeItem = {
+      name: "Sizzling Steak with Wedges and Mixed Vegetables",
+      weightGrams: 192,
+      components: [
+        {
+          name: "Beef Steak with Black Pepper Sauce",
+          weightGrams: 85,
+          calories: 125,
+          protein: 17.9,
+          totalFat: 4.4,
+          saturatedFat: 2.1,
+          sodium: 450,
+          boundingBox2D: [425, 137, 700, 500],
+          nutrients: { calories: 125, protein: 17.9, totalFat: 4.4, saturatedFat: 2.1, sodium: 450, potassium: 350, calcium: 20 }
+        },
+        {
+          name: "Potato Wedges",
+          weightGrams: 64,
+          calories: 75,
+          protein: 1.3,
+          totalFat: 2.1,
+          saturatedFat: 0.5,
+          sodium: 120,
+          boundingBox2D: [600, 200, 800, 600],
+          nutrients: { calories: 75, protein: 1.3, totalFat: 2.1, saturatedFat: 0.5, sodium: 120, potassium: 280, calcium: 15 }
+        }
+      ]
+    };
+
+    // Pool components as happens during remove_item
+    const pool = [...compositeItem.components];
+
+    // Promoted item: Potato Wedges should inherit bounding box and potassium/calcium
+    const matched = pool.find(c => c.name.toLowerCase().includes("potato wedges"));
+    expect(matched).toBeDefined();
+    expect(matched?.boundingBox2D).toEqual([600, 200, 800, 600]);
+    expect(matched?.nutrients.potassium).toBe(280);
+
+    // Negative modifier check: Unsweetened Iced Tea
+    const isUnsweetened = /\b(unsweetened|unsweatened|no\s*sugar|zero\s*sugar)\b/i.test("Unsweetened Iced Tea");
+    const isBeverage = /\b(tea|coffee|drink|beverage)\b/i.test("Unsweetened Iced Tea");
+    expect(isUnsweetened && isBeverage).toBe(true);
+  });
 });

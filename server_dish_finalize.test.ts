@@ -311,4 +311,29 @@ describe("server_dish_finalize", () => {
     // Derived Atwater Carbs: (780 - 4(45) - 9(30)) / 4 = (780 - 180 - 270) / 4 = 330 / 4 = 82.5
     expect(ledger.nutrients.carbohydrates).toBe(82.5);
   });
+
+  it("canned drink with chainName and no OCR still attempts brand (honest BIND_MISS, no invented vitamin C)", async () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: "Acme Citrus Vitamin Drink",
+      keyword: "vitamin drink",
+      chainName: "Acme",
+      estimatedWeightGrams: 330,
+      nutrients: {
+        protein: 0,
+        carbohydrates: 25,
+        totalFat: 0,
+        sodium: 20,
+      },
+    };
+    const ledger = await finalizeDishLedger({
+      item,
+      nutrientBasisWeight: 330,
+      consumedWeight: 330,
+    });
+    expect(ledger.bindStatus).toBe("MISS");
+    expect(ledger.dbSource).toBe("estimated");
+    expect(ledger.nutrients.calories).toBe(100);
+    expect(ledger.nutrients.vitaminC == null || ledger.nutrients.vitaminC === 0).toBe(true);
+  });
 });

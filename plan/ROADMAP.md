@@ -139,11 +139,26 @@ M21/M22 meal document and M30 curator stay. F-5 TypeError `.calories` is **done*
 | **F-2** | Catalog-first as default | Analyze gaps hit catalog before live USDA; USDA still allowed for research | Ban USDA |
 | **F-3** | Golden meals still red in production | One class playbook per session (picnic / lassi / ham…). Fixture tests in `golden_meals.test.ts` are **not** this item | `POST /loop` until all-green |
 | **F-4** | Alias hit rate / duplicate active rows | Measured hit rate; dups gated, not silently merged | Silent merge |
-| **F-6** | `FoodCard.tsx` ceiling | Line count ≤ today’s 3813 unless the pack lists it **and** is net-zero; new portion/receipt UI goes in `PortionClarifyCard` / `NutritionLabelTable` / `ComprehensiveNutrientsTable` | New food table / +100 lines “enhance” |
+| **F-6** | `FoodCard.tsx` ceiling | Catalog 4200; file ~4037. Done when net-zero toward ~3800 or pack lists growth. New portion/receipt UI stays in `PortionClarifyCard` / `NutritionLabelTable` / `ComprehensiveNutrientsTable` | New food table / +100 lines “enhance” |
 | **F-7** | Scout prompt budget as a gate | `server_vision_scout.ts` net-zero (L12 enforced by `assert-budgets.mjs`, not English) | Prompt-only unit math |
 
-Execute **one class** per session. Inner = vitest (`server_fdc_resolve` / scout merge). Outer = one golden example.  
-F-6 / F-7 start **after** Q-1. They do **not** rebuild the curator (M30 stays).
+Q-1 (`assert-budgets.mjs`) is **green**. F-6 / F-7 are unblocked. They do **not** rebuild the curator (M30 stays).
+
+### F-8 — Single-path add/edit (calorie host must die)
+
+**Architecture:** [FOOD_SINGLE_PATH.md](./FOOD_SINGLE_PATH.md) · [FOOD.md](./FOOD.md) Process  
+**Laws:** `docs/agent/domains/food-calc.md`
+
+**Shipped (2026-08-30…31):** F-8.1–F-8.9 (gate, finalize map, edit executor, debug, tiles, packaged bind, heal slim, host deleted, thin HTTP adapter, compiler uses finalize, evidence-job TS fixture 1635 g).
+
+| ID | Still to do | Done when | Do not |
+|---|---|---|---|
+| **F-8.10** | Goldilocks-split the pipeline owner | `server_food_analyze_run.ts` (~3772, ceiling 3800) split into 400–600 owners (scout dispatch, DB search, prompt assembly). Delete leftover `STANDARD_FOOD_FACTORS` mock table if unused. HTTP adapter stays ≤700 | 40-line shards; a second kcal writer |
+| **F-8.11** | Evidence soak (outer) | One live Gemini replay of `job_1788115766430_v2z5q9hpz` (or same 6-photo class): one meal id, 7–8 FoodItem tiles, no inherit `cal=0`, narrative = table. Inner check already exists (`server_meal_edit.test.ts` 1635 g) | `POST /loop` until meal-green |
+| **F-8.12** | Packaged catalog residual | Hemaviton-class drink: vitamin C / labelled kcal from **brand or printed OCR** when those facts exist. Bind-attempt + `BIND_MISS` is already honest | Invent 1000 mg vitamin C |
+| **F-8.13** | Debug download vs sample | A real job download matches [after-F-8 sample](./samples/debug-job_1788115766430_v2z5q9hpz.after-f8.md): instruction + reply once per dispatch, Errors = gate, no logger-echo | Hash-only prompts; hide schema |
+
+Execute **one class** per session. Inner = named vitest. Outer = one frozen example, not meal-green.
 
 ---
 

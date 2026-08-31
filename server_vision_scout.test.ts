@@ -118,6 +118,32 @@ describe("server_vision_scout", () => {
       expect(result.visionScoutRanAndReturnedItems).toBe(true);
     });
 
+    it("splits fry-fat onto components without writing Atwater kcal (finalize owns persisted calories)", () => {
+      const mockOutput = {
+        dishes: [
+          {
+            dishName: "Crispy Tofu Plate",
+            estimatedWeightGrams: 250,
+            cookingMethod: "deep_fried",
+            dishNutrients: { protein: 20, carbohydrates: 30, totalFat: 28, saturatedFat: 5 },
+            foods: [
+              { foodName: "Crispy Tofu", weightGrams: 150, nutrients: { protein: 18, carbohydrates: 8, totalFat: 8 } },
+              { foodName: "Seasoned Fries", weightGrams: 100, nutrients: { protein: 2, carbohydrates: 22, totalFat: 2.5 } },
+            ],
+          },
+        ],
+      };
+      const result = parseAndHealVisionScout(mockOutput, () => {});
+      expect(result.items).toHaveLength(1);
+      const dish = result.items[0];
+      const comps = dish.components || dish.componentsDetailList || [];
+      expect(comps.length).toBe(2);
+      const sumFat = comps.reduce((acc: number, c: any) => acc + Number(c.totalFat || 0), 0);
+      expect(sumFat).toBeCloseTo(28, 0);
+      expect(dish.nutrients.calories == null || dish.nutrients.calories === undefined).toBe(true);
+      expect(comps.every((c: any) => c.calories == null)).toBe(true);
+    });
+
     it("applies the fat overflow correction to raw nutrition label", () => {
       const mockOutput = {
         items: [
