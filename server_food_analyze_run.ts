@@ -3655,11 +3655,37 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           activeMeal.name = rawParsed.foodData.name;
         }
 
+        // Sync scoutItems (used by the "Meal composition" chips/gallery in the UI)
+        // with any name changes applied to itemsBreakdown by this edit. Without this,
+        // renames from set_modifier/replace_identity (e.g. "Es Teh Manis" -> "Unsweetened
+        // Iced Tea") update the nutrition ledger but the chip label stays on the old name
+        // forever, because the chips read scoutItems.originalName/keyword, not itemsBreakdown.
+        const baseScoutItemsForEdit = (activeMeal.scoutItems && activeMeal.scoutItems.length > 0)
+          ? activeMeal.scoutItems
+          : (visionScoutItems || []);
+        const syncedScoutItemsForEdit = baseScoutItemsForEdit.map((sItem: any) => {
+          const bItem = result.items.find((b: any) =>
+            b.scoutIndex !== undefined && b.scoutIndex !== null && b.scoutIndex === sItem.scoutIndex
+          );
+          if (bItem && (bItem.canonicalDbName || bItem.name)) {
+            const newName = bItem.canonicalDbName || bItem.name;
+            return {
+              ...sItem,
+              originalName: newName,
+              keyword: newName,
+              estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams
+            };
+          }
+          return sItem;
+        });
+        activeMeal.scoutItems = syncedScoutItemsForEdit;
+
         addDebugLog('[MealBuild] edit-path (finalize executor)');
         const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
           parsedData: activeMeal,
           jobId: req.body.jobId,
           activeMeal: req.body.activeMeal,
+          scoutItems: syncedScoutItemsForEdit,
           diningEnvironment: activeMeal?.diningEnvironment,
         });
         mealBuild.staleDietitianNarrative = false;
@@ -3708,7 +3734,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           gate,
           editApplied: result.changed,
           agentPrompt: fullPromptSent,
-          scoutItems: activeMeal.scoutItems || visionScoutItems,
+          scoutItems: syncedScoutItemsForEdit,
           apiCalls
         });
       }
