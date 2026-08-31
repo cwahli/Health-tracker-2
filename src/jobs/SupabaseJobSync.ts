@@ -122,7 +122,15 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
       }
     } else {
       let syncStatus = row.status;
-      if ((existing.status === 'succeeded' || existing.status === 'awaiting_user') && (row.status === 'queued' || row.status === 'running')) {
+      // Guard: if the job was previously succeeded/awaiting_user and the server now reports
+      // queued/running, this is an edit-turn in-flight transient state. Lock the displayed
+      // status to prevent a downgrade, and — critically — preserve the existing result so
+      // we don't overwrite job.result with the stale first-pass clean_result that the
+      // server still has while the edit is being processed.
+      const isEditInFlightTransient =
+        (existing.status === 'succeeded' || existing.status === 'awaiting_user') &&
+        (row.status === 'queued' || row.status === 'running');
+      if (isEditInFlightTransient) {
         syncStatus = existing.status;
       }
       const updatePayload: any = {
@@ -135,8 +143,15 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
           : row.status === 'succeeded'
             ? undefined
             : existing.error,
-        result: (cleanRes && !cleanRes.is_r2) ? cleanRes : (existing.result || cleanRes),
-        mealBuild: cleanRes?.mealBuild || existing.mealBuild,
+        // When we detected an edit-in-flight transient, preserve the existing result entirely
+        // to avoid clobbering it with the stale first-pass data still in the DB row.
+        // For normal updates (server reached succeeded or cleanRes is fresh inline data), apply cleanRes.
+        result: isEditInFlightTransient
+          ? existing.result
+          : ((cleanRes && !cleanRes.is_r2) ? cleanRes : (existing.result || cleanRes)),
+        mealBuild: isEditInFlightTransient
+          ? existing.mealBuild
+          : (cleanRes?.mealBuild || existing.mealBuild),
         photoUrl: photoUrl || row.photo_url || cleanRes?.photoUrl || existing.photoUrl,
         debugUrl: debugUrl || row.debug_url || cleanRes?.debugUrl || existing.debugUrl
       };
@@ -171,8 +186,11 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
         }];
       }
       JobStore.updateJob(row.id, updatePayload);
-      
-      if (cleanRes && cleanRes.is_r2 && (!existing.result || existing.result.is_r2)) {
+
+      // Fetch R2 result whenever the new clean_result is stored in R2 — regardless of
+      // whether the existing result is populated (covers edit-turn where prior turn
+      // already populated existing.result with non-R2 data).
+      if (cleanRes && cleanRes.is_r2 && !isEditInFlightTransient) {
         fetchAndPopulateR2Job(row.id);
       }
     }
@@ -332,7 +350,14 @@ export function initSupabaseJobSync(userId?: string): () => void {
           let cleanRes = row.clean_result;
           const existingJobForR2Check = JobStore.getJob(row.id);
 
-          if (cleanRes && typeof cleanRes === 'object' && cleanRes.is_r2 && existingJobForR2Check?.result && !existingJobForR2Check.result.is_r2) {
+          // Only reuse the cached non-R2 result (skip R2 fetch) if the job status hasn't
+          // changed to 'succeeded' on this event — i.e. don't skip when this event is the
+          // completion of an edit turn (queued/running → succeeded), because in that case
+          // existingJobForR2Check.result contains the stale first-pass data, not the edit result.
+          const isCompletionEvent = row.status === 'succeeded' &&
+            existingJobForR2Check &&
+            (existingJobForR2Check.status === 'queued' || existingJobForR2Check.status === 'running');
+          if (!isCompletionEvent && cleanRes && typeof cleanRes === 'object' && cleanRes.is_r2 && existingJobForR2Check?.result && !existingJobForR2Check.result.is_r2) {
              cleanRes = existingJobForR2Check.result;
           } else if (cleanRes && typeof cleanRes === 'object' && cleanRes.is_r2 && cleanRes.r2_url) {
             try {
