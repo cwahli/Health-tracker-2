@@ -3613,7 +3613,22 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       }
 
       {
-        const editCommands = rawParsed.editCommands || rawParsed.modificationCommand || rawParsed.data?.editCommands || rawParsed.data?.modificationCommand || [];
+        let editCommands = rawParsed.editCommands || rawParsed.modificationCommand || rawParsed.data?.editCommands || rawParsed.data?.modificationCommand || [];
+        if (Array.isArray(editCommands) && Array.isArray(rawParsed.foodData?.itemsBreakdown)) {
+          editCommands = editCommands.map((cmd: any) => {
+            if ((cmd.action === 'replace_identity' || cmd.action === 'add_item' || cmd.action === 'replace_item') && !cmd.estimate) {
+              const targetName = String(cmd.newItemName || cmd.replacementItemName || cmd.itemName || '').trim().toLowerCase();
+              const match = rawParsed.foodData.itemsBreakdown.find((b: any) => {
+                const bName = String(b.canonicalDbName || b.name || '').trim().toLowerCase();
+                return (bName && bName === targetName) || (b.scoutIndex != null && b.scoutIndex === cmd.scoutIndex);
+              });
+              if (match && match.correctedNutrients) {
+                return { ...cmd, estimate: { ...match.correctedNutrients, foodType: match.foodType, cookingMethod: match.cookingMethod } };
+              }
+            }
+            return cmd;
+          });
+        }
         const result = await applyMealEdits({
           items: Array.isArray(activeMeal.itemsBreakdown) ? activeMeal.itemsBreakdown : [],
           commands: Array.isArray(editCommands) ? editCommands : [],

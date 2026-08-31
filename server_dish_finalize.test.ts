@@ -366,4 +366,49 @@ describe("server_dish_finalize", () => {
     expect(ledger.nutrients.carbohydrates).toBe(50);
     expect(ledger.nutrients.sodium).toBe(30);
   });
+
+  it("preserves Scout nutrient estimates (e.g. addedSugar, potassium) when omitted on printed OCR label", async () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: "Yakult Rasa Stroberi Pack",
+      keyword: "probiotic drink",
+      estimatedWeightGrams: 325,
+      nutrients: {
+        protein: 5.0,
+        saturatedFat: 0.0,
+        addedSugar: 50.0,
+        totalFibre: 0.0,
+        sodium: 50,
+        carbohydrates: 55.0,
+        potassium: 100,
+        calcium: 50,
+      },
+      rawNutritionLabel: {
+        servingSize: "65 ml",
+        calories: "50",
+        protein: "1g",
+        totalFat: "0g",
+        totalCarbohydrate: "11g",
+        sodium: "10mg",
+        basisType: "per_serving",
+      },
+    };
+
+    const ledger = await finalizeDishLedger({
+      item,
+      nutrientBasisWeight: 325,
+      consumedWeight: 325,
+    });
+
+    expect(ledger.dbSource).toBe("label");
+    // Locked from OCR (scaled 5x):
+    expect(ledger.nutrients.calories).toBe(250);
+    expect(ledger.nutrients.protein).toBe(5);
+    expect(ledger.nutrients.carbohydrates).toBe(55);
+    expect(ledger.nutrients.sodium).toBe(50);
+    // Unlocked from Scout (preserved and never dropped):
+    expect(ledger.nutrients.addedSugar).toBe(50);
+    expect(ledger.nutrients.potassium).toBe(100);
+    expect(ledger.nutrients.calcium).toBe(50);
+  });
 });

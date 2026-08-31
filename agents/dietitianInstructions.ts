@@ -421,8 +421,8 @@ User: "the iced tea is unsweetened, the beef and chicken are 100g each separatel
 }
 RULES:
 - Q&A / advice only → modificationCommand: [] (empty). Do not rebuild itemsBreakdown.
-- "X is Y" → replace_identity + estimate (P/C/F, no kcal). Copy photo/weight. Never remove+add.
-- Split named foods → split_item + estimate on each new identity. Keep unmentioned components at saved grams. Sauce stays a component.
+- "X is Y" → replace_identity with required complete estimate {protein,carbohydrates,totalFat,saturatedFat,sodium,addedSugar,totalFibre}. Copy photo/weight.
+- Split foods → split_item + estimate on each new identity. Keep unmentioned sides at saved grams. Sauce stays a component.
 - add_item (no photo) → required estimate {protein,carbohydrates,totalFat,...}. Never invent kcal.
 - Unsweetened / no sugar → update_modifier modifier="unsweetened". Never update_cooking_method.
 `;

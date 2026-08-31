@@ -8,7 +8,7 @@
 
 import { finalizeDishLedger } from './server_dish_finalize.js';
 import { applyNutrientModifiers, computeCaloriesFromMacros } from './server_derivation.js';
-import { findItemIndexInList, formatMealReceiptTable, synthesizeEditCommandsFromBreakdown } from './server_pure_helpers.js';
+import { findItemIndexInList, formatMealReceiptTable, synthesizeEditCommandsFromBreakdown, itemsMatchByName } from './server_pure_helpers.js';
 import { NUTRIENT_KEYS } from './src/utils/nutrients.js';
 import { sumItemNutrients } from './server_meal_from_finalize.js';
 
@@ -119,7 +119,20 @@ export function scaleItemNutrients(item: any, ratio: number, newWeight?: number)
 }
 
 function estimateToScoutItem(name: string, grams: number, estimate: ScoutEstimate | null | undefined, media: any): any {
-  const e = estimate || {};
+  const e: any = estimate || {};
+  const n: Record<string, any> = {};
+  const ALL_KEYS = [
+    'calories', 'protein', 'totalFat', 'saturatedFat', 'transFat', 'unsaturatedFat',
+    'carbohydrates', 'sugar', 'totalSugar', 'addedSugar', 'totalFibre', 'solubleFibre',
+    'sodium', 'potassium', 'magnesium', 'calcium', 'iron', 'zinc', 'selenium', 'iodine',
+    'phosphorus', 'vitaminD', 'vitaminB12', 'folate', 'vitaminC', 'vitaminE', 'vitaminK',
+    'vitaminA', 'vitaminB6', 'thiamine', 'riboflavin', 'niacin', 'omega3'
+  ];
+  for (const k of ALL_KEYS) {
+    if (e[k] !== undefined && e[k] !== null && Number.isFinite(Number(e[k]))) {
+      n[k] = Number(e[k]);
+    }
+  }
   return {
     originalName: name,
     keyword: name,
@@ -129,16 +142,7 @@ function estimateToScoutItem(name: string, grams: number, estimate: ScoutEstimat
     foodType: e.foodType || null,
     boundingBox2D: media?.boundingBox2D ?? null,
     sourceImageIndex: media?.sourceImageIndex ?? null,
-    nutrients: {
-      protein: e.protein ?? null,
-      carbohydrates: e.carbohydrates ?? null,
-      totalFat: e.totalFat ?? null,
-      saturatedFat: e.saturatedFat ?? null,
-      sodium: e.sodium ?? null,
-      addedSugar: e.addedSugar ?? null,
-      totalFibre: e.totalFibre ?? null,
-      sugar: e.sugar ?? null,
-    },
+    nutrients: n,
   };
 }
 
@@ -523,10 +527,18 @@ export async function applyMealEdits(opts: {
         sourceImageIndex: typeof prev.sourceImageIndex === 'number' ? prev.sourceImageIndex : (raw.sourceImageIndex ?? null),
       };
       const next = await finalizeFromEstimate(newName, grams, raw.estimate, media, prev.scoutIndex ?? nextScoutIndex(items));
-      next.components = prev.components;
-      next.componentsDetailList = prev.componentsDetailList;
-      next.compositeSiblings = prev.compositeSiblings;
-      next.hasComponents = prev.hasComponents;
+      const isSameDishFamily = itemsMatchByName(prev.name || prev.originalName || '', newName);
+      if (isSameDishFamily) {
+        next.components = prev.components;
+        next.componentsDetailList = prev.componentsDetailList;
+        next.compositeSiblings = prev.compositeSiblings;
+        next.hasComponents = prev.hasComponents;
+      } else {
+        next.components = [{ name: newName, weightGrams: grams, calories: next.calories, protein: next.protein, totalFat: next.totalFat, carbohydrates: next.carbohydrates, sodium: next.sodium }];
+        next.componentsDetailList = next.components;
+        next.compositeSiblings = [];
+        next.hasComponents = false;
+      }
       if (prev.count != null || prev.pieceCount != null) {
         next.count = prev.count ?? prev.pieceCount;
         next.pieceCount = prev.pieceCount ?? prev.count;

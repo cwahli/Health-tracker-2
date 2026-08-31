@@ -975,6 +975,15 @@ export function parseAndHealVisionScout(
           potassium: Number(dNuts.potassium) || 0, omega3: Number(dNuts.omega3) || 0,
           calcium: Number(dNuts.calcium) || 0, iron: Number(dNuts.iron) || 0,
           magnesium: Number(dNuts.magnesium) || 0, vitaminD: Number(dNuts.vitaminD) || 0,
+          zinc: Number(dNuts.zinc) || 0, selenium: Number(dNuts.selenium) || 0,
+          iodine: Number(dNuts.iodine) || 0, phosphorus: Number(dNuts.phosphorus) || 0,
+          vitaminA: Number(dNuts.vitaminA) || 0, vitaminC: Number(dNuts.vitaminC) || 0,
+          vitaminE: Number(dNuts.vitaminE) || 0, vitaminK: Number(dNuts.vitaminK) || 0,
+          vitaminB12: Number(dNuts.vitaminB12) || 0, folate: Number(dNuts.folate) || 0,
+          vitaminB6: Number(dNuts.vitaminB6) || 0, thiamine: Number(dNuts.thiamine) || 0,
+          riboflavin: Number(dNuts.riboflavin) || 0, niacin: Number(dNuts.niacin) || 0,
+          solubleFibre: Number(dNuts.solubleFibre) || 0,
+          unsaturatedFat: Number(dNuts.unsaturatedFat) || 0,
         };
         const visualDishCal = Number(dNuts.calories);
         if (Number.isFinite(visualDishCal) && visualDishCal > 0) {

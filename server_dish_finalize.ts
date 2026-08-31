@@ -261,10 +261,11 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
     : R;
 
   const SCOUT_KEYS = [
-    'calories', 'protein', 'totalFat', 'saturatedFat', 'transFat',
-    'addedSugar', 'totalSugar', 'sugar', 'totalFibre', 'sodium',
-    'carbohydrates', 'potassium', 'omega3', 'calcium', 'iron',
-    'magnesium', 'vitaminD'
+    'calories', 'protein', 'totalFat', 'saturatedFat', 'transFat', 'unsaturatedFat',
+    'carbohydrates', 'sugar', 'totalSugar', 'addedSugar', 'totalFibre', 'solubleFibre',
+    'sodium', 'potassium', 'magnesium', 'calcium', 'iron', 'zinc', 'selenium', 'iodine',
+    'phosphorus', 'vitaminD', 'vitaminB12', 'folate', 'vitaminC', 'vitaminE', 'vitaminK',
+    'vitaminA', 'vitaminB6', 'thiamine', 'riboflavin', 'niacin', 'omega3'
   ];
 
   for (const k of SCOUT_KEYS) {
@@ -288,11 +289,21 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
   const hasValidMacros = (nutrients.protein != null || nutrients.carbohydrates != null || nutrients.totalFat != null);
   if (!hasValidMacros && (nutrients.calories == null || !(nutrients.calories > 0))) {
     const hay = `${originalName} ${keyword || ''}`.toLowerCase();
+    const isCoconutWater = /\b(coconut\s*water|coconut\s*juice|air\s*kelapa|kelapa\s*muda|raw\s*coconut)\b/i.test(hay) && !/\b(milk|santan|curry|cream)\b/i.test(hay);
     const isDrink = /\b(drink|juice|tea|coffee|soda|water|beverage|iced|smoothie|es\b)/i.test(hay);
     const isNoodleRice = /\b(noodle|noodles|rice|pasta|mie|bihun|kwetiau|spaghetti)\b/i.test(hay);
     const isMeatDumpling = /\b(dumpling|dumplings|siomay|dim sum|wonton|chicken|beef|pork|fish|meat)\b/i.test(hay);
 
-    if (isDrink) {
+    if (isCoconutWater) {
+      nutrients.carbohydrates = Math.round(consumedWeight * 0.04 * 10) / 10;
+      nutrients.sugar = Math.round(consumedWeight * 0.03 * 10) / 10;
+      nutrients.addedSugar = 0;
+      nutrients.protein = Math.round(consumedWeight * 0.007 * 10) / 10;
+      nutrients.totalFat = Math.round(consumedWeight * 0.002 * 10) / 10;
+      nutrients.saturatedFat = 0;
+      nutrients.potassium = Math.round(consumedWeight * 2.5);
+      nutrients.sodium = Math.round(consumedWeight * 0.25);
+    } else if (isDrink) {
       nutrients.carbohydrates = Math.round(consumedWeight * 0.11 * 10) / 10;
       nutrients.sugar = Math.round(consumedWeight * 0.10 * 10) / 10;
       nutrients.protein = 0;
@@ -487,7 +498,11 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
 
   // 8. Sugar and Added Sugar Breakdown
   if (!lockedNutrientKeys.includes('addedSugar')) {
-    const rawSugar = Number(nutrients.sugar ?? nutrients.totalSugar ?? 0);
+    const candidateAdded = nutrients.addedSugar != null && !isNaN(Number(nutrients.addedSugar)) && Number(nutrients.addedSugar) > 0 ? Number(nutrients.addedSugar) : null;
+    let rawSugar = Number(nutrients.sugar ?? nutrients.totalSugar ?? 0);
+    if (candidateAdded != null && candidateAdded > rawSugar) {
+      rawSugar = candidateAdded;
+    }
     const componentNames = [
       ingredients.join(', '),
       ...(Array.isArray(item.components) ? item.components.map((c: any) => (typeof c === 'string' ? c : c.searchQuery || c.name || '')) : []),
@@ -495,7 +510,7 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
     ].filter(Boolean).join(', ');
     const sugarResult = deduceSugarBreakdown({
       totalSugar: rawSugar,
-      addedSugarPrinted: lockedNutrientKeys.includes('addedSugar') ? Number(nutrients.addedSugar) : null,
+      addedSugarPrinted: candidateAdded,
       carbohydrates: nutrients.carbohydrates,
       totalFibre: nutrients.totalFibre,
       ingredientsList: componentNames || item.ingredientsList,

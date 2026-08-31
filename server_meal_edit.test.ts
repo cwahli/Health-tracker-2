@@ -438,4 +438,46 @@ describe('evidence job outer check (frozen example, class tests above)', () => {
     expect(tea.componentsDetailList[0].nutrients.calories).toBe(0);
     expect(tea.componentsDetailList[0].nutrients.sugar).toBe(0);
   });
+
+  it('resets constituent components when replace_identity changes the dish to a distinct new identity', async () => {
+    const items = [
+      {
+        scoutIndex: 2,
+        name: 'Takeaway Drink in Plastic Bag',
+        canonicalDbName: 'Takeaway Drink in Plastic Bag',
+        weightGrams: 300,
+        calories: 120,
+        protein: 0,
+        foodType: 'beverage',
+        nutrients: { calories: 120, protein: 0, totalFat: 0, carbohydrates: 30, sugar: 25, addedSugar: 25, sodium: 10 },
+        components: [
+          { name: 'Sweetened Beverage in Plastic Bag', weightGrams: 300, calories: 120, protein: 0, carbohydrates: 30 }
+        ],
+        componentsDetailList: [
+          { name: 'Sweetened Beverage in Plastic Bag', weightGrams: 300, calories: 120, protein: 0, carbohydrates: 30 }
+        ],
+      },
+    ];
+
+    const result = await applyMealEdits({
+      items,
+      commands: [
+        {
+          action: 'replace_identity',
+          itemName: 'Takeaway Drink in Plastic Bag',
+          newItemName: 'Raw Coconut Juice',
+          newWeightGrams: 300,
+        }
+      ]
+    });
+
+    const juice = result.items[0];
+    expect(juice.name).toBe('Raw Coconut Juice');
+    // Coconut water is ~50-60 kcal for 300g, 0g added sugar
+    expect(juice.calories).toBeLessThan(70);
+    expect(juice.nutrients.addedSugar).toBe(0);
+    // Subcomponents should NOT retain old "Sweetened Beverage in Plastic Bag"
+    expect(juice.components[0].name).toBe('Raw Coconut Juice');
+    expect(juice.componentsDetailList[0].name).toBe('Raw Coconut Juice');
+  });
 });
