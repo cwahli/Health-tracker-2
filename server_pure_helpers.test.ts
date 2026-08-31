@@ -545,7 +545,7 @@ describe('server_pure_helpers', () => {
   });
 });
 
-import { isLabelPanelItem } from "./server_pure_helpers.js";
+import { isLabelPanelItem, sanitizeVerdictLabel } from "./server_pure_helpers.js";
 
 describe("isLabelPanelItem", () => {
   it("rejects items containing fillet as a label", () => {
@@ -585,6 +585,32 @@ describe("isLabelPanelItem", () => {
       expect(table).toContain("Raw Cabbage - 30g");
       expect(table).toContain("Item Sub-Total - 400g");
       expect(table).toContain("🏆 GRAND MEAL TOTAL - 700g");
+    });
+  });
+
+  describe("sanitizeVerdictLabel & checkAtwaterConsistency", () => {
+    it("assigns appropriate mindful sugar verdicts on high added sugar meals", () => {
+      const verdict = sanitizeVerdictLabel("High Sugar Snack", "neutral", { addedSugar: 25, carbohydrates: 60 });
+      expect(verdict).toBe("Requires mindful sugar balance");
+    });
+
+    it("assigns high simple carbohydrate load verdict when sugar is high", () => {
+      const verdict = sanitizeVerdictLabel("Sweet Treat", "neutral", { sugar: 45, carbohydrates: 50 });
+      expect(verdict).toBe("High simple carbohydrate load");
+    });
+
+    it("elevates calories when stated calories is lower than carbohydrate energy alone", () => {
+      const nutrients: Record<string, number> = {
+        calories: 50,
+        protein: 4.5,
+        carbohydrates: 50,
+        totalFat: 0,
+      };
+      checkAtwaterConsistency("Yakult Rasa Stroberi", nutrients);
+      // 4.5 * 4 + 50 * 4 = 18 + 200 = 218 kcal
+      expect(nutrients.calories).toBe(218);
+      expect(nutrients.carbohydrates).toBe(50);
+      expect(nutrients.protein).toBe(4.5);
     });
   });
 });

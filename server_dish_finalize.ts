@@ -85,8 +85,19 @@ export function parseOcrLabel(rawLabel: any, targetWeight: number, defaultR: num
   if (rawLabel.servingGrams && Number(rawLabel.servingGrams) > 0) {
     ocrServingGrams = Number(rawLabel.servingGrams);
   } else if (rawLabel.servingSize) {
-    const match = String(rawLabel.servingSize).match(/([\d.]+)\s*g/i);
-    if (match) ocrServingGrams = parseFloat(match[1]);
+    const match = String(rawLabel.servingSize).match(/([\d.]+)\s*(?:g|grams?|ml|mL|milliliters?|fl\s*oz)?/i);
+    if (match && match[1]) {
+      const parsedNum = parseFloat(match[1]);
+      if (Number.isFinite(parsedNum) && parsedNum > 0) {
+        if (/fl\s*oz/i.test(String(rawLabel.servingSize))) {
+          ocrServingGrams = Math.round(parsedNum * 29.57);
+        } else {
+          ocrServingGrams = parsedNum;
+        }
+      }
+    }
+  } else if (rawLabel.servingsPerContainer && Number(rawLabel.servingsPerContainer) > 1 && targetWeight > 50) {
+    ocrServingGrams = Math.round(targetWeight / Number(rawLabel.servingsPerContainer));
   }
   const ocrScale = isPer100g
     ? (targetWeight / 100)

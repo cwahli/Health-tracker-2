@@ -543,6 +543,38 @@ describe("server_vision_scout", () => {
       expect(clustered[0].originalName).toBe("Uncooked Plate Ingredients");
       expect(clustered[1].originalName).toBe("Raw Egg");
     });
+
+    it("consolidates duplicate scout items with identical names from the same image even with default boxes", () => {
+      const items = [
+        {
+          originalName: "Almond Glazed Donut",
+          keyword: "donut",
+          estimatedWeightGrams: 80,
+          boundingBox2D: [100, 100, 400, 400],
+          sourceImageIndex: 0,
+        },
+        {
+          originalName: "Yakult Rasa Stroberi",
+          keyword: "probiotic drink",
+          estimatedWeightGrams: 65,
+          boundingBox2D: [0, 0, 1000, 1000],
+          sourceImageIndex: 0,
+        },
+        {
+          originalName: "Yakult Rasa Stroberi",
+          keyword: "probiotic drink",
+          estimatedWeightGrams: 65,
+          boundingBox2D: [0, 0, 1000, 1000],
+          sourceImageIndex: 0,
+        },
+      ];
+
+      const clustered = clusterSpatialCompositeDishes(items, () => {});
+      expect(clustered).toHaveLength(2);
+      expect(clustered[0].originalName).toBe("Almond Glazed Donut");
+      expect(clustered[1].originalName).toBe("Yakult Rasa Stroberi");
+      expect(clustered[1].estimatedWeightGrams).toBe(130);
+    });
   });
 
   describe("bracketed content handling", () => {

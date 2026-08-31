@@ -323,7 +323,6 @@ describe("server_dish_finalize", () => {
         protein: 0,
         carbohydrates: 25,
         totalFat: 0,
-        sodium: 20,
       },
     };
     const ledger = await finalizeDishLedger({
@@ -335,5 +334,36 @@ describe("server_dish_finalize", () => {
     expect(ledger.dbSource).toBe("estimated");
     expect(ledger.nutrients.calories).toBe(100);
     expect(ledger.nutrients.vitaminC == null || ledger.nutrients.vitaminC === 0).toBe(true);
+  });
+
+  it("scales OCR label correctly when serving size is given in ml (e.g. 65 ml per serving, 325g consumed)", async () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: "Yakult Rasa Stroberi",
+      keyword: "probiotic drink",
+      estimatedWeightGrams: 325,
+      rawNutritionLabel: {
+        servingSize: "65 ml",
+        calories: "50",
+        protein: "0.9g",
+        totalFat: "0g",
+        carbohydrates: "10g",
+        sodium: "6mg",
+        basisType: "per_serving",
+      },
+    };
+
+    const ledger = await finalizeDishLedger({
+      item,
+      nutrientBasisWeight: 325,
+      consumedWeight: 325,
+    });
+
+    expect(ledger.dbSource).toBe("label");
+    // Scale = 325 / 65 = 5.0
+    expect(ledger.nutrients.calories).toBe(250);
+    expect(ledger.nutrients.protein).toBe(4.5);
+    expect(ledger.nutrients.carbohydrates).toBe(50);
+    expect(ledger.nutrients.sodium).toBe(30);
   });
 });

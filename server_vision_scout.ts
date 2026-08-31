@@ -609,13 +609,29 @@ export function clusterSpatialCompositeDishes(
     for (let j = i + 1; j < items.length; j++) {
       if (clusteredIndices.has(j)) continue;
       const other = items[j];
-      // Skip clustering if either item is from spreadsheet or has default bounding box
-      if (primary.source === 'spreadsheet' || other.source === 'spreadsheet' || primary.isSpreadsheet || other.isSpreadsheet || isDefaultBox(boxA)) {
+      // Skip clustering if either item is from spreadsheet
+      if (primary.source === 'spreadsheet' || other.source === 'spreadsheet' || primary.isSpreadsheet || other.isSpreadsheet) {
         continue;
       }
       // Same source image check
       const sameImg = (primary.sourceImageIndex ?? 0) === (other.sourceImageIndex ?? 0);
       if (!sameImg) continue;
+
+      const nameA = String(primary.originalName || primary.keyword || '').toLowerCase();
+      const nameB = String(other.originalName || other.keyword || '').toLowerCase();
+      const cleanKeyA = nameA.replace(/[^a-z0-9\s]/g, '').trim();
+      const cleanKeyB = nameB.replace(/[^a-z0-9\s]/g, '').trim();
+      const isExactSameFood = cleanKeyA.length > 0 && cleanKeyA === cleanKeyB;
+
+      // Consolidate identical duplicate item observations from the same image regardless of bounding box defaults
+      if (isExactSameFood) {
+        coLocatedIndices.push(j);
+        continue;
+      }
+
+      if (isDefaultBox(boxA)) {
+        continue;
+      }
       // Avoid clustering two distinct packaged commercial items that both have distinct printed nutrition labels
       if (hasDistinctNutrientLabel(primary) && hasDistinctNutrientLabel(other)) {
         continue;
@@ -623,21 +639,10 @@ export function clusterSpatialCompositeDishes(
       const boxB = getBBox(other);
       if (isDefaultBox(boxB)) continue;
 
-      // Do NOT cluster if items are distinct standalone plated foods (e.g. egg, bread roll, separate side)
-      // or already full composite dishes from separate plates/bowls unless there is true heavy containment/inclusion.
-      const nameA = String(primary.originalName || primary.keyword || '').toLowerCase();
-      const nameB = String(other.originalName || other.keyword || '').toLowerCase();
-      const cleanKeyA = nameA.replace(/[^a-z0-9\s]/g, '').trim();
-      const cleanKeyB = nameB.replace(/[^a-z0-9\s]/g, '').trim();
-      const isExactSameFood = cleanKeyA.length > 0 && cleanKeyA === cleanKeyB;
-
       const { overlap, iou } = getOverlapRatio(boxA, boxB);
       // High spatial co-location inside the exact same container / bowl / plate
-      // Only merge if:
-      // 1) It's the exact same food item/ingredient, OR
-      // 2) True high containment/overlap (overlap >= 0.70 or IoU >= 0.55) AND neither item is a distinct side dish/separate entity with its own structured components
       const hasSeparateComponents = (primary.components?.length > 1 && other.components?.length > 1);
-      if (!hasSeparateComponents && (isExactSameFood ? (overlap >= 0.35 || iou >= 0.25) : (overlap >= 0.70 || iou >= 0.55))) {
+      if (!hasSeparateComponents && (overlap >= 0.70 || iou >= 0.55)) {
         coLocatedIndices.push(j);
       }
     }

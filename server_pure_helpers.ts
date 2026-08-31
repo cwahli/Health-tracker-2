@@ -583,12 +583,20 @@ export function checkAtwaterConsistency(
   const derivedCalories = protein * 4 + carbs * 4 + fat * 9;
   if (derivedCalories <= 0) return; // no macros to check against stated calories
 
-  // Specific high-fat pure fat / dairy fat floor: if fat * 9 is substantially larger than statedCalories
-  // (e.g. butter/ghee/oil where fat dominates), calories cannot physically be lower than fat * 9.
+  // Specific macro floors: calories cannot physically be lower than energy from fat or carbohydrates alone.
   const minFatCalories = Math.round(fat * 9);
   if (minFatCalories > statedCalories && fat >= 5 && (fat * 9) / Math.max(1, derivedCalories) > 0.80) {
     if (addDebugLog) {
       addDebugLog(`[Atwater Fat Floor] "${itemName}": stated ${statedCalories} kcal is physically below energy from fat alone (${fat}g * 9 = ${minFatCalories} kcal). Adjusting calories to ${minFatCalories} kcal.`);
+    }
+    itemNutrients.calories = Math.round(derivedCalories);
+    return;
+  }
+
+  const minCarbCalories = Math.round(carbs * 4);
+  if (minCarbCalories > statedCalories * 1.35 && carbs >= 15) {
+    if (addDebugLog) {
+      addDebugLog(`[Atwater Carb Floor] "${itemName}": stated ${statedCalories} kcal is physically below energy from carbohydrates alone (${carbs}g * 4 = ${minCarbCalories} kcal). Adjusting calories to ${Math.round(derivedCalories)} kcal.`);
     }
     itemNutrients.calories = Math.round(derivedCalories);
     return;
@@ -1282,8 +1290,11 @@ export function sanitizeVerdictLabel(rawLabel: string, level?: string, nutrients
     if (nutrients?.sodium && nutrients.sodium <= 500 && nutrients?.calories && nutrients.calories < 600) {
       return 'Good for your heart';
     }
-    if (nutrients?.saturatedFat && nutrients.saturatedFat <= 3 && nutrients?.calories && nutrients.calories < 500) {
-      return 'Good for cardiovascular health';
+    if (nutrients?.addedSugar && nutrients.addedSugar >= 20) {
+      return 'Requires mindful sugar balance';
+    }
+    if (nutrients?.sugar && nutrients.sugar >= 35) {
+      return 'High simple carbohydrate load';
     }
     return 'Supports sustained metabolic energy';
   }
