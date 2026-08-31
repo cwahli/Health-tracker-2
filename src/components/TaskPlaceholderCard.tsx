@@ -8,6 +8,7 @@ import { JobQueueRunner } from '../jobs/JobQueueRunner';
 import { FoodLog } from '../types';
 import { humanizeJobFailure } from '../utils/jobFailure';
 import { isJobSafeToLeave } from '../jobs/jobUploadState';
+import { toPendingFoodLog } from '../mealBuild/adapters';
 
 interface TaskPlaceholderCardProps {
   job: AgentJob;
@@ -256,9 +257,7 @@ export default function TaskPlaceholderCard({
     (job.mealBuild?.items && job.mealBuild.items.length > 0)
   );
 
-  const effectiveStatus: AgentJob['status'] = (hasResults && (job.status === 'queued' || job.status === 'running'))
-    ? (job.result?.needsPortionClarify ? 'awaiting_user' : 'succeeded')
-    : job.status;
+  const effectiveStatus: AgentJob['status'] = job.status;
 
   const isFailedOrTimedOut =
     effectiveStatus === 'failed' ||
@@ -272,6 +271,8 @@ export default function TaskPlaceholderCard({
       (typeof lastMsgContent === 'string' && /(?:timed out|analysis failed|server error)/i.test(lastMsgContent) && !job.result?.pendingFoodLog && !job.result?.modificationCommand && !job.result?.extractedData)
     ));
 
+  const isEditMode = job.inputSnapshot?.mode === 'edit' || (job as any).mode === 'edit' || (job as any).mode === 'modify';
+
   const getStatusLabel = () => {
     if (effectiveStatus === 'succeeded' && Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) {
       return 'AI advice pending';
@@ -282,6 +283,7 @@ export default function TaskPlaceholderCard({
     const statusKey = effectiveStatus as JobStatus;
     switch (statusKey) {
       case 'queued': {
+        if (isEditMode) return 'Updating meal • Queued';
         const queue = JobStore.getAllJobs().filter(j => j.status === 'queued' || j.status === 'running');
         const myIndex = queue.findIndex(j => j.id === job.id);
         const ahead = myIndex > 0 ? myIndex : 0;
@@ -289,7 +291,7 @@ export default function TaskPlaceholderCard({
       }
       case 'running':
       case 'processing':
-        return `Attempt ${job.attemptCount || 1} of ${job.maxAttempts || 3}`;
+        return isEditMode ? 'Updating meal...' : `Attempt ${job.attemptCount || 1} of ${job.maxAttempts || 3}`;
       case 'failed':
         return 'Analysis failed';
       case 'cancelled':
@@ -334,37 +336,41 @@ export default function TaskPlaceholderCard({
 
   const pendingFoodLog =
     job.result?.pendingFoodLog ||
+    (job.result?.mealBuild ? toPendingFoodLog(job.result.mealBuild) : null) ||
     job.result?.clean_result?.pendingFoodLog ||
+    (job.result?.clean_result?.mealBuild ? toPendingFoodLog(job.result.clean_result.mealBuild) : null) ||
     job.result?.clean_result?.data ||
-    job.result?.clean_result?.mealBuild ||
+    (job.mealBuild ? toPendingFoodLog(job.mealBuild) : null) ||
     job.result?.raw?.data ||
     job.result?.data ||
     job.result?.foodData ||
-    job.result?.mealBuild ||
-    job.mealBuild ||
     job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
     job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog ||
     (job as any).clean_result?.pendingFoodLog ||
     (job as any).clean_result?.data;
 
   const extractMealName = (): string | null => {
+    if (job.result?.clean_result?.foodData?.name && job.result.clean_result.foodData.name !== 'Meal') return job.result.clean_result.foodData.name;
+    if (job.result?.foodData?.name && job.result.foodData.name !== 'Meal') return job.result.foodData.name;
+    if (job.result?.mealBuild?.content?.name && job.result.mealBuild.content.name !== 'Meal') return job.result.mealBuild.content.name;
+    if (job.result?.clean_result?.mealBuild?.content?.name && job.result.clean_result.mealBuild.content.name !== 'Meal') return job.result.clean_result.mealBuild.content.name;
     if (pendingFoodLog?.name && pendingFoodLog.name !== 'Meal') return pendingFoodLog.name;
     if (pendingFoodLog?.title && pendingFoodLog.title !== 'Meal') return pendingFoodLog.title;
     if (pendingFoodLog?.content?.name && pendingFoodLog.content.name !== 'Meal') return pendingFoodLog.content.name;
-    
-    if (job.result?.mealBuild?.content?.name && job.result.mealBuild.content.name !== 'Meal') return job.result.mealBuild.content.name;
     if (job.mealBuild?.content?.name && job.mealBuild.content.name !== 'Meal') return job.mealBuild.content.name;
-    if (job.result?.clean_result?.mealBuild?.content?.name && job.result.clean_result.mealBuild.content.name !== 'Meal') return job.result.clean_result.mealBuild.content.name;
     if (job.result?.data?.name && job.result.data.name !== 'Meal') return job.result.data.name;
 
     const items =
+      job.result?.itemsBreakdown ||
+      job.result?.clean_result?.itemsBreakdown ||
+      job.result?.foodData?.itemsBreakdown ||
+      job.result?.mealBuild?.items ||
+      job.result?.clean_result?.mealBuild?.items ||
       pendingFoodLog?.itemsBreakdown ||
       pendingFoodLog?.items ||
-      job.result?.itemsBreakdown ||
       job.result?.items ||
       job.result?.scoutItems ||
       job.result?.clean_result?.scoutItems ||
-      job.result?.mealBuild?.items ||
       job.mealBuild?.items ||
       (job as any).scoutItems ||
       (job as any).clean_result?.scoutItems;
@@ -497,12 +503,12 @@ export default function TaskPlaceholderCard({
               </div>
             )}
             
-            {(job.status === 'running' || job.status === 'processing') && (
-              <div className="w-full bg-slate-100 dark:bg-slate-800 h-1 rounded-full overflow-hidden mt-1.5">
+            {(job.status === 'running' || job.status === 'processing' || job.status === 'queued') && (
+              <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1.5">
                 <motion.div
-                  className="bg-indigo-600 h-full rounded-full"
+                  className={`h-full rounded-full ${job.status === 'queued' ? 'bg-indigo-400 animate-pulse' : 'bg-indigo-600'}`}
                   initial={{ width: 0 }}
-                  animate={{ width: `${job.progressPercent || 20}%` }}
+                  animate={{ width: `${Math.max(job.progressPercent || 0, job.status === 'queued' ? 10 : 20)}%` }}
                   transition={{ duration: 0.3 }}
                 />
               </div>
@@ -559,7 +565,19 @@ export default function TaskPlaceholderCard({
             {/* Comparison Options Summary Row with Calories */}
             {(() => {
               const compGroups = job.result?.comparisonSet?.optionMeals || job.result?.comparison?.options || job.result?.comparison?.groups || job.result?.clean_result?.comparison?.groups || (job as any).clean_result?.comparison?.groups;
-              const scoutItems = job.result?.foodData?.itemsBreakdown || job.result?.items || job.result?.meal?.items || job.result?.scoutItems || job.result?.clean_result?.scoutItems || (job as any).scoutItems;
+              const scoutItems =
+                job.result?.itemsBreakdown ||
+                job.result?.clean_result?.itemsBreakdown ||
+                job.result?.foodData?.itemsBreakdown ||
+                job.result?.mealBuild?.items ||
+                job.result?.clean_result?.mealBuild?.items ||
+                pendingFoodLog?.itemsBreakdown ||
+                pendingFoodLog?.items ||
+                job.result?.items ||
+                job.result?.meal?.items ||
+                job.result?.scoutItems ||
+                job.result?.clean_result?.scoutItems ||
+                (job as any).scoutItems;
 
               if (compGroups && Array.isArray(compGroups) && compGroups.length > 0) {
                 return (
@@ -598,19 +616,19 @@ export default function TaskPlaceholderCard({
                       const directCal = item.nutrients?.calories ?? item.calories ?? item.estimatedCalories ?? item.rawNutritionLabel?.calories ?? item.preCalcNutrients?.calories;
                       if (directCal != null) {
                         const parsed = parseFloat(String(directCal).replace(/[^\d.]/g, ''));
-                        if (!isNaN(parsed) && parsed > 0) numericCals = parsed;
+                        if (!isNaN(parsed)) numericCals = parsed;
                       }
                       if (isNaN(numericCals) && item.nutrients) {
                         const p = Number(item.nutrients.protein) || 0;
                         const c = Number(item.nutrients.carbohydrates ?? item.nutrients.carbs) || 0;
                         const f = Number(item.nutrients.totalFat ?? item.nutrients.fat) || 0;
                         const macroSum = Math.round(4 * p + 4 * c + 9 * f);
-                        if (macroSum > 0) numericCals = macroSum;
+                        if (macroSum >= 0) numericCals = macroSum;
                       }
                       return (
                         <span key={idx} className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-900/50 text-[11px] font-semibold flex items-center gap-1">
                           <span>{name}:</span>
-                          <span className="font-bold text-indigo-800 dark:text-indigo-200">{!isNaN(numericCals) && numericCals > 0 ? `${Math.round(numericCals)} kcal` : 'Calculating...'}</span>
+                          <span className="font-bold text-indigo-800 dark:text-indigo-200">{!isNaN(numericCals) && numericCals >= 0 ? `${Math.round(numericCals)} kcal` : 'Calculating...'}</span>
                         </span>
                       );
                     })}

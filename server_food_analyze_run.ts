@@ -2872,7 +2872,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         rawParsed = await asyncParseLLMJSON(cleanJson);
         rawParsed = validateOrFallback(RouteAgentSchema, rawParsed, cleanJson, "RouteAgent", { 
           _internalReasoning: "",
-          verdict: { label: "Meal Logged", level: "neutral" },
+          verdict: { label: "Supports sustained metabolic energy", level: "neutral" },
           message: "I have analyzed your food log.",
           foodData: { date: new Date().toISOString().split('T')[0], name: "Meal", itemsBreakdown: [] }
         });
@@ -3024,7 +3024,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: `Scaled portion to ${targetWeight}g.` });
       textOutput = JSON.stringify({
         _internalReasoning: `[Refine] scale-only: Scaled meal directly to ${targetWeight}g`,
-        verdict: { label: "Meal Logged", level: "neutral" },
+        verdict: { label: "Supports portion control balance", level: "neutral" },
         message: `Updated meal portion to ${targetWeight}g.`,
         mode: "modify",
         modificationCommand: [
@@ -3297,7 +3297,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
 
       const rawVerdict = rawParsed.verdict || rawFoodData.verdict;
       if (rawVerdict && typeof rawVerdict === 'object') {
-        const sanitizedLabel = sanitizeVerdictLabel(rawVerdict.label || 'Balanced Choice', rawVerdict.level, parsedData.nutrients);
+        const sanitizedLabel = sanitizeVerdictLabel(rawVerdict.label || 'Supports sustained metabolic energy', rawVerdict.level, parsedData.nutrients);
         parsedData.verdict = {
           label: sanitizedLabel,
           level: String(rawVerdict.level || 'neutral')
@@ -3679,6 +3679,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           return sItem;
         });
         activeMeal.scoutItems = syncedScoutItemsForEdit;
+        addDebugLog(`[ScoutSync] edit-path renamed scoutItems -> ${JSON.stringify(syncedScoutItemsForEdit.map((s: any) => s.originalName))}`);
 
         addDebugLog('[MealBuild] edit-path (finalize executor)');
         const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({

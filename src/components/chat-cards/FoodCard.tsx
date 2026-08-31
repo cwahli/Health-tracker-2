@@ -1576,7 +1576,68 @@ export const FoodCard: React.FC<AgentCardProps & {
   const isLoggingRef = React.useRef(false);
 
   if (msg.isLive) {
-    return null;
+    const targetJobId =
+      msg.data?.jobId ||
+      (msg.id?.startsWith('msg_live_') ? msg.id.replace('msg_live_', '') : '') ||
+      (msg.id?.startsWith('msg_assistant_job_') ? msg.id.replace('msg_assistant_job_', 'job_') : '') ||
+      (msg.pendingFoodLog?.jobId || msg.data?.pendingFoodLog?.jobId);
+    const activeJob = targetJobId ? JobStore.getJob(targetJobId) : undefined;
+    const isEditMode =
+      msg.data?.userSelectedMode === 'edit' ||
+      (activeJob?.inputSnapshot as any)?.mode === 'edit' ||
+      (activeJob as any)?.mode === 'edit' ||
+      msg.agentType === 'modify';
+    const isCompareMode =
+      msg.data?.userSelectedMode === 'compare' ||
+      msg.agentType === 'food_compare' ||
+      (activeJob?.inputSnapshot as any)?.mode === 'compare';
+
+    const statusMsg =
+      activeJob?.statusMessage ||
+      msg.content ||
+      (isEditMode
+        ? 'Updating meal composition and calculating new nutrition...'
+        : isCompareMode
+        ? 'Comparing meal compositions...'
+        : 'Analyzing meal ingredients and estimating nutrition...');
+
+    const progressVal = activeJob?.progressPercent || 25;
+
+    return (
+      <div className="w-full bg-slate-50/90 dark:bg-slate-900/60 border border-indigo-150 dark:border-indigo-900/50 rounded-2xl p-4 shadow-sm space-y-3 animation-fade-in">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center justify-center flex-shrink-0">
+              <Loader2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 animate-spin" />
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                {isEditMode ? 'Updating Meal Analysis' : isCompareMode ? 'Comparing Meals' : 'Analyzing Meal'}
+              </h4>
+              <p className="text-[11px] text-theme-text-secondary truncate mt-0.5">
+                {statusMsg}
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/60 flex-shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
+            <span>{isEditMode ? 'Refining' : 'Processing'}</span>
+          </span>
+        </div>
+
+        <div className="w-full bg-slate-200/60 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full bg-indigo-600 transition-all duration-300 animate-pulse"
+            style={{ width: `${Math.max(progressVal, 20)}%` }}
+          />
+        </div>
+
+        <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 pt-0.5">
+          <span>Processing on server</span>
+          <span>Keep tab open</span>
+        </div>
+      </div>
+    );
   }
 
   const comparisonData = msg.data?.comparison || msg.data?.agentResult?.comparison || msg.agentResult?.comparison;

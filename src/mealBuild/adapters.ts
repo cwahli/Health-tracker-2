@@ -64,6 +64,7 @@ export function toPendingFoodLog(meal: MealBuild): any {
     savable: meal.savable,
     degradedStages: meal.degradedStages,
     date: meal.date,
+    scoutItems: meal.scoutSnapshot || [],
   };
 }
 

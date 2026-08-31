@@ -440,6 +440,57 @@ export async function applyMealEdits(opts: {
       item.canonicalDbName = newName;
       item.originalName = newName;
       item.keyword = newName;
+
+      // Propagate the modifier changes to nested components/ingredients list so the formatted
+      // receipt table renders the corrected nutrient values instead of stale sweetened values.
+      if (Array.isArray(item.componentsDetailList)) {
+        item.componentsDetailList = item.componentsDetailList.map((c: any) => {
+          const cRes = { ...c };
+          const cModRes = applyNutrientModifiers({ ...(c.nutrients || {}) }, {
+            message: modifier,
+            foodType: c.foodType,
+            name: c.name || c.canonicalDbName || '',
+          });
+          cRes.nutrients = cModRes.updatedNutrients;
+          cRes.calories = cRes.nutrients.calories;
+          cRes.protein = cRes.nutrients.protein;
+          cRes.totalFat = cRes.nutrients.totalFat;
+          cRes.carbohydrates = cRes.nutrients.carbohydrates;
+          cRes.sodium = cRes.nutrients.sodium;
+          cRes.addedSugar = cRes.nutrients.addedSugar;
+          cRes.sugar = cRes.nutrients.sugar;
+          cRes.name = applyModifierToItemName(c.name || '', modifier);
+          cRes.canonicalDbName = cRes.name;
+          cRes.originalName = cRes.name;
+          cRes.keyword = cRes.name;
+          return cRes;
+        });
+      }
+      if (Array.isArray(item.components)) {
+        item.components = item.components.map((c: any) => {
+          if (typeof c !== 'object' || !c) return c;
+          const cRes = { ...c };
+          const cModRes = applyNutrientModifiers({ ...(c.nutrients || {}) }, {
+            message: modifier,
+            foodType: c.foodType,
+            name: c.name || c.canonicalDbName || '',
+          });
+          cRes.nutrients = cModRes.updatedNutrients;
+          cRes.calories = cRes.nutrients.calories;
+          cRes.protein = cRes.nutrients.protein;
+          cRes.totalFat = cRes.nutrients.totalFat;
+          cRes.carbohydrates = cRes.nutrients.carbohydrates;
+          cRes.sodium = cRes.nutrients.sodium;
+          cRes.addedSugar = cRes.nutrients.addedSugar;
+          cRes.sugar = cRes.nutrients.sugar;
+          cRes.name = applyModifierToItemName(c.name || '', modifier);
+          cRes.canonicalDbName = cRes.name;
+          cRes.originalName = cRes.name;
+          cRes.keyword = cRes.name;
+          return cRes;
+        });
+      }
+
       items[idx] = item;
       notes.push(`set_modifier "${itemName}" → ${newName}`);
     } else if (action === 'remove_item') {

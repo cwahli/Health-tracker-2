@@ -22,6 +22,7 @@ import { MealPortionController } from './chat-cards/MealPortionController';
 import { scaleMealPortion, scaleSingleDishPortion } from '../utils/portionUtils';
 import { PhysicalFormBadge } from './PhysicalFormBadge';
 import { JobStore, isJobBlank } from '../jobs/JobStore';
+import { toPendingFoodLog } from '../mealBuild/adapters';
 import TaskPlaceholderCard from './TaskPlaceholderCard';
 import { CroppedFoodImage, isValidBoundingBox, getFoodImageUrl, resolveHistoricalImgSrc } from './chat-cards/FoodCard';
 import { ZoomableImage } from './ZoomableImage';
@@ -457,7 +458,12 @@ export default function FoodHistoryTab({
   }, [foodLogs, activeFoodLogs, onReplaceFoodLogs]);
 
   const combinedItems = React.useMemo(() => {
-    const savedLogs = activeFoodLogs.map(log => {
+    const inFlightJobIds = new Set(
+      jobs.filter(j => ['queued', 'running', 'processing', 'awaiting_user', 'cancel_requested'].includes(j.status)).map(j => j.id)
+    );
+    const savedLogs = activeFoodLogs
+      .filter(log => !inFlightJobIds.has(log.id))
+      .map(log => {
       let dateIso = new Date().toISOString();
       if (log.id && typeof log.id === 'string' && log.id.startsWith('food_')) {
         const ts = parseInt(log.id.split('_')[1]);
@@ -503,12 +509,17 @@ export default function FoodHistoryTab({
 
         if (job.status !== 'succeeded') return true;
         const pendingFoodLog =
-          job.result?.pendingFoodLog ||
           job.result?.clean_result?.pendingFoodLog ||
+          job.result?.pendingFoodLog ||
+          (job.result?.clean_result?.mealBuild ? toPendingFoodLog(job.result.clean_result.mealBuild) : null) ||
+          (job.result?.mealBuild ? toPendingFoodLog(job.result.mealBuild) : null) ||
+          job.result?.clean_result?.data ||
+          (job.mealBuild ? toPendingFoodLog(job.mealBuild) : null) ||
           job.result?.raw?.data ||
           job.result?.data ||
-          job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
-          job.messages?.find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
+          job.result?.foodData ||
+          job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
+          job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
 
         if (!pendingFoodLog) return false;
         return !activeFoodLogs.some(f => {
@@ -551,12 +562,19 @@ export default function FoodHistoryTab({
           deduped.push(item);
         }
       } else {
-        // Hide job cards that soft-match an already shown saved meal
         const job = item.data as any;
+        const isInFlight = ['queued', 'running', 'processing', 'awaiting_user', 'cancel_requested'].includes(job.status);
+        if (isInFlight) {
+          // Always display in-flight job cards to show live analysis or modification progress
+          deduped.push(item);
+          return;
+        }
+        // Hide job cards that soft-match an already shown saved meal
         const pending =
-          job.messages?.find((m: any) => m.pendingFoodLog)?.pendingFoodLog ||
+          job.result?.clean_result?.pendingFoodLog ||
           job.result?.pendingFoodLog ||
-          job.result?.data;
+          job.result?.data ||
+          job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog)?.pendingFoodLog;
         const jobFp = pending ? foodLogFingerprint(pending as any) : '';
         if (jobFp && seen.has(jobFp)) return;
         deduped.push(item);
@@ -1254,7 +1272,7 @@ export default function FoodHistoryTab({
               const job = item.data;
               return (
                 <TaskPlaceholderCard
-                  key={job.id}
+                  key={`job_${job.id}`}
                   job={job}
                   onView={(id) => {
                     if (onViewJob) onViewJob(id);
@@ -1304,7 +1322,7 @@ export default function FoodHistoryTab({
             
             return (
               <div
-                key={log.id}
+                key={`log_${log.id}`}
                 id={`food-log-item-${log.id}`}
                 onClick={() => {
                   if (!isEditing && !isExpanded) {

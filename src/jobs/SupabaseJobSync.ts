@@ -104,7 +104,7 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
         progressPercent: row.progress_percent || 0,
         statusMessage: row.status_message || '',
         error: row.status === 'failed' ? { class: 'permanent', message: row.status_message || cleanRes?.message || 'Analysis failed on server' } : undefined,
-        messages: initialMessages,
+        messages: cleanRes?.messages || initialMessages,
         result: cleanRes,
         mealBuild: cleanRes?.mealBuild,
         photoUrl: photoUrl || row.photo_url || cleanRes?.photoUrl,
@@ -473,6 +473,18 @@ export async function upsertJobToSupabase(
       finalCleanResult = {
         ...(finalCleanResult || {}),
         mealBuild: undefined,
+      };
+    }
+
+    if (job.messages && job.messages.length > 0) {
+      finalCleanResult = {
+        ...(finalCleanResult || {}),
+        messages: job.messages.map((m: any) => {
+          const stripped = { ...m };
+          delete stripped.imageUrl;
+          delete stripped.imageUrls;
+          return stripped;
+        })
       };
     }
 

@@ -3,6 +3,21 @@
 **Updated:** 2026-08-31  
 **Status:** F-8.1–F-8.9 shipped. Next on ROADMAP: **F-8.10** split `server_food_analyze_run.ts` (~3772) · **F-8.11** live evidence soak · **F-8.12** packaged facts when present · **F-8.13** real debug download vs sample. Also F-1…F-4, F-6, F-7 (Q-1 green).
 
+- **Chat Live Loading State Card for Meal Edits & Analysis (`FoodCard.tsx`, 2026-08-31):**
+  - **Root Cause & Diagnosis:** When a user submitted an edit to an existing meal (or started an analysis), `FoodCard.tsx` had a blanket `if (msg.isLive) return null;` check, and `LogChat.tsx` suppressed formatted text for food messages. Consequently, while the background job was running on the server, the active chat turn rendered no loading card or visual feedback in the message list, giving the appearance of an unresponsive UI.
+  - **Key Changes Applied:** Replaced the empty null return in `FoodCard.tsx` with a responsive `LiveFoodLoadingCard` state featuring animated progress indicator, mode-specific headings ("Updating Meal Analysis", "Analyzing Meal", "Comparing Meals"), live status messages, server background badges, and integrated live thought streaming via `AgentThoughtBox`.
+  - **Verification:** `tsc --noEmit` exit 0 (0 errors); `lint_applet` passed; `compile_applet` succeeded; 11/11 tests in `server_meal_edit.test.ts` passing.
+
+- **Nested Component Modifier Propagation Fix (`server_meal_edit.ts`, 2026-08-31):**
+  - **Root Cause & Diagnosis:** When a modifier like `set_modifier` was applied to an item (e.g. changing sweet tea to unsweetened, zeroing out outer item calories), the nested components (`components` / `componentsDetailList` arrays) remained completely stale. Consequently, the receipt table builder (`formatMealReceiptTable`) read the stale nested constituent rows, keeping the sweetened name and 104 Kcal visible in the calculated UI breakdowns.
+  - **Key Changes Applied:** Updated the `set_modifier` block in `server_meal_edit.ts` to recursively apply modifier renaming and nutrient zeroing (`applyNutrientModifiers` / `applyModifierToItemName`) across all items inside `components` and `componentsDetailList` arrays.
+  - **Verification:** Added a robust unit test verifying propagation; all 11/11 tests in `server_meal_edit.test.ts` pass; `npm run test:food` 70/70 tests pass; linter and compilation pass with EXIT 0.
+
+- **Job Lifecycle & Pending Food Log / Stale Closure Fixes (`src/App.tsx`, 2026-08-31):**
+  - **Root Cause & Diagnosis:** `extractPendingFoodLogFromCleanResult` did not prioritize `mealBuild` over legacy `foodData`, and `JobQueueRunner.setExecutor` polling completion/error branches read stale closure `job.messages` / `job.mealBuild` instead of live `JobStore.getJob(job.id)`.
+  - **Key Changes Applied:** Prioritized `cleanResult.mealBuild` via `toPendingFoodLog` in `extractPendingFoodLogFromCleanResult`. Updated all polling completion, error, and timeout branches in `JobQueueRunner.setExecutor` to read `JobStore.getJob(job.id)` to prevent overwriting dynamic turns or state updates.
+  - **Verification:** `tsc --noEmit` exit 0; 93/93 vitest test files (865/865 tests) 100% green; `compile_applet` passed.
+
 - **Thin HTTP food adapter (`server_routes_food_analyze.ts` 3973→221, 2026-08-31):**
   - **Root Cause & Diagnosis:** The analyze route was still a 4k host mixing Express mounts with the Scout→Finalize pipeline, so the next calorie fork would hide in HTTP.
   - **Key Changes Applied:** Moved the pipeline to `server_food_analyze_run.ts`. Route file only mounts preview, front-desk, and `runFoodAnalyze`. Catalog ceiling 700 / 3800.

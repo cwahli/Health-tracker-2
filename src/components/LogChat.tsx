@@ -1609,6 +1609,79 @@ ${logsText}`);
             }
           };
           setMessages([...baseMsgs, liveMsg], false);
+        } else if (job.status === 'succeeded' && lastMsg?.role === 'user') {
+          const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
+          const latestFoodLog = resolvePendingFoodLog(job);
+          const rawContent = raw.message || raw.reply || raw.text || raw.globalSummary || 'Analysis complete.';
+          const snapAgent = (job.inputSnapshot as any)?.agentType;
+          const reviewCmds = raw.modificationCommand || raw.agentResult?.modificationCommand;
+          const isFoodJob = type === 'food' || job.kind === 'food_log' || job.kind === 'food' || (job as any).kind === 'food_compare' || !!(raw.pendingFoodLog || (job.result as any)?.pendingFoodLog || latestFoodLog);
+          const resolvedType = isFoodJob ? 'food' : (raw.agentType || snapAgent || (Array.isArray(reviewCmds) && reviewCmds.length ? 'biomarker_review' : type));
+          const unitMap = collectCatalogUnitMap(profile);
+          const isReview = !isFoodJob && (resolvedType === 'biomarker_review' || (type as string) === 'biomarker_review' || agentType === 'biomarker_review');
+          const cmds = isReview
+            ? enrichReviewModificationCommands(Array.isArray(reviewCmds) ? reviewCmds : [], biomarkerHistory || [], unitMap)
+            : reviewCmds;
+          const assistantMsg: ChatMessage = {
+            id: `msg_assistant_${activeJobId}_${baseMsgs.length}`,
+            role: 'assistant',
+            content: isReview ? sanitizeReviewReply(rawContent, cmds, biomarkerHistory || [], unitMap) : rawContent,
+            timestamp: job.updatedAt || new Date().toISOString(),
+            agentResult: raw,
+            agentType: resolvedType as any,
+            modificationCommand: cmds,
+            pendingFoodLog: latestFoodLog,
+            data: {
+              jobId: activeJobId,
+              pendingFoodLog: latestFoodLog,
+              hasImage: !!(latestFoodLog?.imageUrl || latestFoodLog?.imageUrls?.length || (job.inputSnapshot as any)?.hasImage),
+              photoUrl: job.photoUrl || raw.photoUrl || latestFoodLog?.imageUrl,
+              debugUrl: job.debugUrl || raw.debugUrl,
+              scoutItems: job.result?.scoutItems || raw.scoutItems || [],
+              scoutContentType: raw.scoutContentType,
+              mode: raw.mode || (job.inputSnapshot as any)?.mode || 'review',
+              comparison: raw.comparison,
+              agentResult: {
+                ...raw,
+                ...(raw.agentResult || {}),
+                modificationCommand: cmds,
+                proposal: raw.proposal || raw.agentResult?.proposal || null,
+                reply: raw.reply || raw.text,
+                scoutScratchpad: raw.agentResult?.scoutScratchpad || raw.scoutScratchpad || job.liveThoughts?.scout || '',
+                dietitianScratchpad: raw.agentResult?.dietitianScratchpad || raw.dietitianScratchpad || job.liveThoughts?.dietitian || '',
+                backendLogs: raw.agentResult?.backendLogs || raw.backendLogs || job.liveThoughts?.backendLogs || '',
+                globalLiveLogs: raw.agentResult?.globalLiveLogs || raw.globalLiveLogs || job.liveThoughts?.globalLiveLogs || '',
+                dbSearchLog: raw.agentResult?.dbSearchLog || raw.dbSearchLog || job.liveThoughts?.dbSearchLog || ''
+              }
+            }
+          };
+          setMessages([...baseMsgs, assistantMsg], false);
+        } else if (job.status === 'succeeded') {
+          const latestFoodLog = resolvePendingFoodLog(job);
+          const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
+          const lastAssistantIdx = baseMsgs.map((m: any) => m.role).lastIndexOf('assistant');
+          if (lastAssistantIdx !== -1 && latestFoodLog) {
+            const rawContent = raw.message || raw.reply || raw.text || raw.globalSummary;
+            baseMsgs[lastAssistantIdx] = {
+              ...baseMsgs[lastAssistantIdx],
+              content: rawContent || baseMsgs[lastAssistantIdx].content,
+              agentResult: raw.agentResult ? { ...baseMsgs[lastAssistantIdx].agentResult, ...raw.agentResult } : (raw || baseMsgs[lastAssistantIdx].agentResult),
+              pendingFoodLog: latestFoodLog,
+              data: {
+                ...baseMsgs[lastAssistantIdx].data,
+                pendingFoodLog: latestFoodLog,
+                photoUrl: job.photoUrl || raw.photoUrl || latestFoodLog?.imageUrl || baseMsgs[lastAssistantIdx].data?.photoUrl,
+                debugUrl: job.debugUrl || raw.debugUrl || baseMsgs[lastAssistantIdx].data?.debugUrl,
+                scoutItems: job.result?.scoutItems || raw.scoutItems || baseMsgs[lastAssistantIdx].data?.scoutItems || [],
+                agentResult: {
+                  ...(baseMsgs[lastAssistantIdx].data?.agentResult || {}),
+                  ...raw,
+                  ...(raw.agentResult || {})
+                }
+              }
+            };
+          }
+          setMessages(baseMsgs, false);
         } else {
           setMessages(baseMsgs, false);
         }
@@ -1677,9 +1750,10 @@ ${logsText}`);
           const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
           const snapAgent2 = (job.inputSnapshot as any)?.agentType;
           const reviewCmds2 = raw.modificationCommand || raw.agentResult?.modificationCommand;
-          const resolvedType2 = raw.agentType || snapAgent2 || (Array.isArray(reviewCmds2) && reviewCmds2.length ? 'biomarker_review' : type);
+          const isFoodJob = type === 'food' || job.kind === 'food_log' || job.kind === 'food' || (job as any).kind === 'food_compare' || !!(raw.pendingFoodLog || (job.result as any)?.pendingFoodLog || foodLog);
+          const resolvedType2 = isFoodJob ? 'food' : (raw.agentType || snapAgent2 || (Array.isArray(reviewCmds2) && reviewCmds2.length ? 'biomarker_review' : type));
           const unitMap2 = collectCatalogUnitMap(profile);
-          const isReview2 = resolvedType2 === 'biomarker_review' || (type as string) === 'biomarker_review' || agentType === 'biomarker_review';
+          const isReview2 = !isFoodJob && (resolvedType2 === 'biomarker_review' || (type as string) === 'biomarker_review' || agentType === 'biomarker_review');
           const cmds2 = isReview2
             ? enrichReviewModificationCommands(Array.isArray(reviewCmds2) ? reviewCmds2 : [], biomarkerHistory || [], unitMap2)
             : reviewCmds2;
@@ -5860,15 +5934,16 @@ ${logsText}`);
 
                   {/* Render extracted Pending Food Log info */}
                   {(() => {
-                    const hasReviewFixes = !!(
+                    const isFoodMsg = msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'front_desk' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.portionClarify || msg.data?.needsPortionClarify);
+                    const hasReviewFixes = !isFoodMsg && !!(
                       (Array.isArray(msg.modificationCommand) && msg.modificationCommand.length) ||
                       (Array.isArray(msg.data?.agentResult?.modificationCommand) && msg.data.agentResult.modificationCommand.length) ||
                       msg.data?.agentResult?.proposal
                     );
-                    const hasFoodContent = !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.agentResult?.mealBuild || msg.data?.agentResult?.clean_result || msg.agentResult?.scoutItems?.length);
+                    const hasFoodContent = isFoodMsg || !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.agentResult?.mealBuild || msg.data?.agentResult?.clean_result || msg.agentResult?.scoutItems?.length);
                     const rawRenderer = msg.id?.startsWith('welcome_')
                       ? 'welcome'
-                      : (hasReviewFixes ? 'biomarker_review' : ((msg.agentType === 'agent1_step1' || String(msg.agentType).startsWith('agent1_step') || msg.agentType === 'medical_extract' || msg.agentType === 'medical') ? 'agent1' : msg.agentType));
+                      : (isFoodMsg ? 'food' : (hasReviewFixes ? 'biomarker_review' : ((msg.agentType === 'agent1_step1' || String(msg.agentType).startsWith('agent1_step') || msg.agentType === 'medical_extract' || msg.agentType === 'medical') ? 'agent1' : msg.agentType)));
                     const rendererType = (rawRenderer && agentCardRegistry[rawRenderer])
                       ? rawRenderer
                       : (hasFoodContent ? 'food' : rawRenderer);

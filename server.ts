@@ -951,7 +951,7 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[]): an
       console.log(`[Comparison Resolve] unassigned indices: ${unassignedIdxs.join(', ')}`);
       resolvedGroups.push({
         groupName: "Unassigned items",
-        verdict: { label: "Uncategorized", level: "neutral" },
+        verdict: { label: "Supports nutritional evaluation", level: "neutral" },
         message: "These items were detected but not placed into a comparison group by the AI.",
         averageNutrients: null,
         scoutItemIndices: unassignedIdxs,
@@ -979,7 +979,7 @@ export function resolveComparisonGroups(rawGroups: any[], scoutItems: any[]): an
         const itemName = sItem.name || sItem.originalName || sItem.keyword || `Option ${idx + 1}`;
         unbundledGroups.push({
           groupName: existingGroup?.groupName && resolvedGroups.length > 1 ? existingGroup.groupName : itemName,
-          verdict: existingGroup?.verdict || { label: "Evaluated Option", level: "neutral" },
+          verdict: existingGroup?.verdict || { label: "Supports nutritional evaluation", level: "neutral" },
           message: existingGroup?.message || `Nutritional evaluation for ${itemName}.`,
           averageNutrients: sItem.preCalcNutrients || null,
           scoutItemIndices: [idx],

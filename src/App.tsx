@@ -30,12 +30,12 @@ function extractPendingFoodLogFromCleanResult(cleanResult: any, photoUrl?: strin
   if (!cleanResult) return null;
   let log: any = null;
   
-  if (cleanResult.pendingFoodLog) {
+  if (cleanResult.mealBuild) {
+    log = toPendingFoodLog(cleanResult.mealBuild);
+  } else if (cleanResult.pendingFoodLog) {
     log = cleanResult.pendingFoodLog;
   } else if (cleanResult.foodData) {
     log = cleanResult.foodData;
-  } else if (cleanResult.mealBuild) {
-    log = toPendingFoodLog(cleanResult.mealBuild);
   } else if (cleanResult.data && typeof cleanResult.data === 'object' && (cleanResult.data.itemsBreakdown || cleanResult.data.name || cleanResult.data.nutrients)) {
     log = cleanResult.data;
   } else {
@@ -1229,7 +1229,8 @@ export default function App() {
 
                   // B6c — short status strip while full clarify question stays in the assistant bubble
                   const portionStatusMsg = 'Waiting for portion choice';
-                  const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive && m.id !== `msg_assistant_clarify_${job.id}`);
+                  const latestJobState = JobStore.getJob(job.id) || job;
+                  const nonLiveMsgs = (latestJobState.messages || job.messages || []).filter((m) => !m.isLive && m.id !== `msg_assistant_clarify_${job.id}`);
                     const clarifiedScoutList = (Array.isArray(cleanResult.scoutItems) && cleanResult.scoutItems.length > 0)
                       ? cleanResult.scoutItems
                       : (Array.isArray(cleanResult.portionClarify?.scoutItems) ? cleanResult.portionClarify.scoutItems : []);
@@ -1278,13 +1279,16 @@ export default function App() {
                     'Analysis complete.';
                   const snapAgentType = (job.inputSnapshot as any)?.agentType;
                   const isMedicalJob = job.kind === 'medical';
-                  const isReviewJob = snapAgentType === 'biomarker_review' || cleanResult.agentType === 'biomarker_review';
-                  const reviewCmds = (cleanResult.modificationCommand || cleanResult.agentResult?.modificationCommand)
-                    ? enrichReviewModificationCommands(
-                        cleanResult.modificationCommand || cleanResult.agentResult?.modificationCommand || [],
-                        (job.inputSnapshot as any)?.biomarkerHistory || [],
-                        collectCatalogUnitMap(profileRef.current)
-                      )
+                  const isReviewJob = isMedicalJob && (snapAgentType === 'biomarker_review' || cleanResult.agentType === 'biomarker_review');
+                  const rawCmds = cleanResult.modificationCommand || cleanResult.agentResult?.modificationCommand;
+                  const reviewCmds = rawCmds
+                    ? (isReviewJob
+                        ? enrichReviewModificationCommands(
+                            Array.isArray(rawCmds) ? rawCmds : [],
+                            (job.inputSnapshot as any)?.biomarkerHistory || [],
+                            collectCatalogUnitMap(profileRef.current)
+                          )
+                        : (Array.isArray(rawCmds) ? rawCmds : null))
                     : null;
                   const agentResult = {
                     scoutScratchpad: cleanResult.dietitianScratchpad ? undefined : cleanResult.scoutScratchpad,
@@ -1328,34 +1332,18 @@ export default function App() {
                     ? ((rawAgentType === 'agent1_step1' || rawAgentType === 'medical' || rawAgentType === 'medical_extract' || String(rawAgentType).startsWith('agent1_step')) ? 'agent1' : rawAgentType)
                     : 'food';
 
-                  const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive);
-                  const hasExistingAssistantMsg = nonLiveMsgs.some((m) => m.id === `msg_assistant_${job.id}`);
-                  // Edits (mode: 'modify') refine the SAME meal in place rather than logging
-                  // a new, separate food item. Without this, a text edit like "the tea was
-                  // unsweetened" created a second, easy-to-miss card further down the chat
-                  // while the original card the user was looking at silently kept showing
-                  // the pre-edit numbers. Only food jobs ever set mode:'modify' here —
-                  // medical/biomarker batches and fresh food-photo submissions (mode:'review')
-                  // are unaffected and keep appending as before, preserving the existing
-                  // multi-attempt ("Attempt N of 3") retry flow untouched.
-                  //
-                  // EDIT-TURN FIX: Edit turns are always a NEW job, so hasExistingAssistantMsg
-                  // (which checks for `msg_assistant_${job.id}`) is always false for mode:modify.
-                  // We also look for any prior assistant food message with a pendingFoodLog and
-                  // merge the edit into it in-place, matching LogChat's streaming merge logic.
-                  const priorFoodMsgIdx = !isMedicalJob && cleanResult.mode === 'modify'
-                    ? (() => {
-                        const arr = nonLiveMsgs;
-                        for (let i = arr.length - 1; i >= 0; i--) {
-                          const m = arr[i] as any;
-                          if (m.role === 'assistant' && (m.data?.pendingFoodLog || m.pendingFoodLog)) return i;
-                        }
-                        return -1;
-                      })()
-                    : -1;
-                  const isEditRefinement = !isMedicalJob && cleanResult.mode === 'modify' && (hasExistingAssistantMsg || priorFoodMsgIdx >= 0);
+                  const latestJobState = JobStore.getJob(job.id) || job;
+                  const nonLiveMsgs = (latestJobState.messages || job.messages || []).filter((m) => !m.isLive);
+                  const lastNonLiveMsg = nonLiveMsgs[nonLiveMsgs.length - 1];
+                  const isNewTurnResponse = lastNonLiveMsg && lastNonLiveMsg.role === 'user';
+                  const hasExistingAssistantMsg = !isNewTurnResponse && nonLiveMsgs.some((m) => m.id === `msg_assistant_${job.id}`);
+                  const assistantMsgId = isNewTurnResponse
+                    ? `msg_assistant_${job.id}_${Date.now()}`
+                    : `msg_assistant_${job.id}`;
+
+                  const isEditRefinement = !isMedicalJob && (cleanResult.mode === 'modify' || serverJob.mode === 'modify' || job.mode === 'edit');
                   const assistantMsg = {
-                    id: hasExistingAssistantMsg ? `msg_assistant_${job.id}` : `msg_assistant_${job.id}`,
+                    id: assistantMsgId,
                     role: 'assistant',
                     content: messageText,
                     timestamp: new Date().toISOString(),
@@ -1376,43 +1364,11 @@ export default function App() {
                     },
                   };
                   let updatedMessages: any[];
-                  if (hasExistingAssistantMsg) {
-                    // Same-job assistant message: replace it directly (original behavior)
+                  if (isNewTurnResponse) {
+                    updatedMessages = [...nonLiveMsgs, assistantMsg];
+                  } else if (hasExistingAssistantMsg) {
+                    // Same-job assistant message: replace it directly
                     updatedMessages = nonLiveMsgs.map((m) => (m.id === `msg_assistant_${job.id}` ? assistantMsg : m));
-                  } else if (priorFoodMsgIdx >= 0) {
-                    // Prior-turn food message: merge edit data into it in-place so the
-                    // original card updates rather than a second card appearing below it.
-                    const priorMsg = nonLiveMsgs[priorFoodMsgIdx] as any;
-                    const mergedMsg = {
-                      ...priorMsg,
-                      content: messageText || priorMsg.content,
-                      data: {
-                        ...priorMsg.data,
-                        mode: 'modify',
-                        scoutItems: (cleanResult.scoutItems && cleanResult.scoutItems.length > 0) ? cleanResult.scoutItems : priorMsg.data?.scoutItems,
-                        pendingFoodLog: {
-                          ...(priorMsg.data?.pendingFoodLog || priorMsg.pendingFoodLog || {}),
-                          ...(pendingFoodLog || {}),
-                          message: messageText || pendingFoodLog?.message || priorMsg.data?.pendingFoodLog?.message || '',
-                          imageUrls: (pendingFoodLog?.imageUrls && pendingFoodLog.imageUrls.length > 0)
-                            ? pendingFoodLog.imageUrls
-                            : (priorMsg.data?.pendingFoodLog?.imageUrls || priorMsg.pendingFoodLog?.imageUrls || []),
-                          imageUrl: pendingFoodLog?.imageUrl || priorMsg.data?.pendingFoodLog?.imageUrl || priorMsg.pendingFoodLog?.imageUrl || undefined,
-                        },
-                        agentResult,
-                      },
-                      pendingFoodLog: {
-                        ...(priorMsg.pendingFoodLog || {}),
-                        ...(pendingFoodLog || {}),
-                      },
-                    };
-                    updatedMessages = [
-                      ...nonLiveMsgs.slice(0, priorFoodMsgIdx),
-                      mergedMsg,
-                      // Keep any messages after the prior food msg (e.g. user's edit request)
-                      // but strip them to text-only so there is no duplicate food card.
-                      ...nonLiveMsgs.slice(priorFoodMsgIdx + 1).map((m: any) => ({ ...m, pendingFoodLog: undefined, data: m.data ? { ...m.data, pendingFoodLog: undefined } : undefined })),
-                    ];
                   } else {
                     updatedMessages = [...nonLiveMsgs, assistantMsg];
                   }
@@ -1432,7 +1388,7 @@ export default function App() {
                       extractedData: cleanResult.extractedData,
                     },
                     messages: updatedMessages,
-                    mealBuild: cleanResult.mealBuild || job.mealBuild,
+                    mealBuild: cleanResult.mealBuild || latestJobState.mealBuild || job.mealBuild,
                     progressPercent: 100,
                     statusMessage: 'Analysis complete',
                     finishedAt: new Date().toISOString(),
@@ -1491,7 +1447,8 @@ export default function App() {
 
                   // Keep a non-live assistant bubble + full logs so the run doesn't "vanish"
                   const pendingFoodLog = extractPendingFoodLogFromCleanResult(cleanResult, serverJob.photo_url);
-                  const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive);
+                  const latestJobState = JobStore.getJob(job.id) || job;
+                  const nonLiveMsgs = (latestJobState.messages || job.messages || []).filter((m) => !m.isLive);
                   const failAssistant = {
                     id: `msg_assistant_fail_${job.id}`,
                     role: 'assistant',
@@ -1555,9 +1512,15 @@ export default function App() {
                 const cleanResult = lateJob.clean_result || {};
                 const pendingFoodLog = extractPendingFoodLogFromCleanResult(cleanResult, lateJob?.photo_url);
                 const messageText = cleanResult.message || cleanResult.text || pendingFoodLog?.message || 'Analysis complete.';
-                const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive);
+                const latestJobState = JobStore.getJob(job.id) || job;
+                const nonLiveMsgs = (latestJobState.messages || job.messages || []).filter((m) => !m.isLive);
+                const lastNonLiveMsg = nonLiveMsgs[nonLiveMsgs.length - 1];
+                const isNewTurnResponse = lastNonLiveMsg && lastNonLiveMsg.role === 'user';
+                const assistantMsgId = isNewTurnResponse
+                  ? `msg_assistant_${job.id}_${Date.now()}`
+                  : `msg_assistant_${job.id}`;
                 const assistantMsg = {
-                  id: `msg_assistant_${job.id}`,
+                  id: assistantMsgId,
                   role: 'assistant',
                   content: messageText,
                   timestamp: new Date().toISOString(),
@@ -1580,6 +1543,7 @@ export default function App() {
                   status: 'succeeded',
                   result: { ...cleanResult, pendingFoodLog },
                   messages: [...nonLiveMsgs, assistantMsg],
+                  mealBuild: cleanResult.mealBuild || latestJobState.mealBuild || job.mealBuild,
                   progressPercent: 100,
                   statusMessage: 'Analysis complete (recovered after poll window)',
                   finishedAt: new Date().toISOString(),
@@ -1611,7 +1575,8 @@ export default function App() {
                   summary: `Failed: ${job.kind || 'Food Log'}`,
                   logs: logsList,
                 });
-                const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive);
+                const latestJobState = JobStore.getJob(job.id) || job;
+                const nonLiveMsgs = (latestJobState.messages || job.messages || []).filter((m) => !m.isLive);
                 JobStore.updateJob(job.id, {
                   status: 'failed',
                   statusMessage: failMsg,
@@ -1654,7 +1619,8 @@ export default function App() {
                   : [{ timestamp: new Date().toISOString(), message: `[error] ${timeoutMsg}` }],
               });
 
-              const nonLiveMsgs = (job.messages || []).filter((m) => !m.isLive);
+              const latestTimeoutJobState = JobStore.getJob(job.id) || job;
+              const nonLiveMsgsTimeout = (latestTimeoutJobState.messages || job.messages || []).filter((m) => !m.isLive);
               JobStore.updateJob(job.id, {
                 status: 'failed',
                 statusMessage: timeoutMsg,
@@ -1665,7 +1631,7 @@ export default function App() {
                   message: timeoutMsg,
                 },
                 messages: [
-                  ...nonLiveMsgs,
+                  ...nonLiveMsgsTimeout,
                   {
                     id: `msg_assistant_timeout_${job.id}`,
                     role: 'assistant',
@@ -6780,7 +6746,7 @@ export default function App() {
         selectedModelId={selectedModelId}
         onChangeModelId={setSelectedModelId}
         onJobEnqueued={(id, kind) => {
-          setActiveJobId(id);
+          setActiveJobId(null);
           setActiveTab('food');
         }}
         onClose={async () => {

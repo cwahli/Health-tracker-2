@@ -327,4 +327,57 @@ describe('evidence job outer check (frozen example, class tests above)', () => {
     expect(tiles.length).toBeLessThanOrEqual(8);
     expect(tiles.some((t) => /wedges|sauce|vegetable/i.test(t.name || t.originalName || ''))).toBe(false);
   });
+
+  it('set_modifier propagates modified name and nutrients to nested components/componentsDetailList', async () => {
+    const items = [
+      {
+        scoutIndex: 0,
+        name: 'Es Teh Manis',
+        canonicalDbName: 'Es Teh Manis',
+        weightGrams: 350,
+        calories: 104,
+        protein: 0,
+        foodType: 'beverage',
+        nutrients: { calories: 104, protein: 0, totalFat: 0, carbohydrates: 26, sugar: 25, addedSugar: 25, sodium: 10 },
+        components: [
+          {
+            name: 'Sweet Iced Tea',
+            weightGrams: 350,
+            calories: 104,
+            nutrients: { calories: 104, protein: 0, totalFat: 0, carbohydrates: 26, sugar: 25, addedSugar: 25, sodium: 10 }
+          }
+        ],
+        componentsDetailList: [
+          {
+            name: 'Sweet Iced Tea',
+            weightGrams: 350,
+            calories: 104,
+            nutrients: { calories: 104, protein: 0, totalFat: 0, carbohydrates: 26, sugar: 25, addedSugar: 25, sodium: 10 }
+          }
+        ]
+      }
+    ];
+
+    const result = await applyMealEdits({
+      items,
+      commands: [
+        { action: 'set_modifier', itemName: 'Es Teh Manis', modifier: 'unsweetened', newItemName: 'Es Teh Tawar' }
+      ]
+    });
+
+    const tea = result.items[0];
+    expect(tea.name).toBe('Es Teh Tawar');
+    expect(tea.nutrients.calories).toBe(0);
+    expect(tea.nutrients.sugar).toBe(0);
+
+    // Verify propagation to components
+    expect(tea.components[0].name).toBe('Unsweetened Iced Tea');
+    expect(tea.components[0].nutrients.calories).toBe(0);
+    expect(tea.components[0].nutrients.sugar).toBe(0);
+
+    // Verify propagation to componentsDetailList
+    expect(tea.componentsDetailList[0].name).toBe('Unsweetened Iced Tea');
+    expect(tea.componentsDetailList[0].nutrients.calories).toBe(0);
+    expect(tea.componentsDetailList[0].nutrients.sugar).toBe(0);
+  });
 });
