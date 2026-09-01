@@ -39,6 +39,7 @@ export function fromPendingFoodLog(log: any, meta?: Partial<MealBuild>): MealBui
 
 export function toPendingFoodLog(meal: MealBuild): any {
   return {
+    id: meal.id,
     itemsBreakdown: meal.items,
     items: meal.items,
     nutrients: meal.nutrients || {},

@@ -248,12 +248,12 @@ Same pattern as biomarkers: one Review for n=1–5; TypeScript decides batch/exp
 | ID | Item | Done when | Do not | Who |
 |---|---|---|---|---|
 | **F-10.1** | **Shipped** | `src/mealBuild/shouldExpandMealAgent.ts` + vitest + `assert-f10-pr1.mjs`. Do not rewrite. | Trust lite-model self-assessment | — |
-| **F-10.2** | Create schema = estimates only | **Current work** (this file). P/C/F present → Atwater; agent kcal ignored. | Ship elastic `calories`; carbs-from-energy on the hot path | Gemini |
-| **F-10.3** | Worker merge | Expand path: workers receive **locked grams + dish crop**, not the full image set. Merge by dish id. `currentTurn` still one turn | Re-OCR; second kcal book | Gemini after 10.1 |
-| **F-10.4** | Narrate after ledger | Saved message numbers = finalize table. Substitute into draft; second LLM only if message empty | Dietitian `itemsBreakdown` rebuild; narrate from pre-finalize estimates | Gemini |
-| **F-10.5** | Edit = same role | `modificationCommand` / `[]` / `estimate` stay (F-8.3 executor). Dietitian pack is this slice, not a create stage | New persona; Mode Rewrite | Gemini |
+| **F-10.2** | **Shipped** | `server_derivation.ts` (`calculateDerivedNutrients`) + vitest. P/C/F present → Atwater; agent kcal ignored. | Ship elastic `calories`; carbs-from-energy on the hot path | — |
+| **F-10.3** | **Shipped** | `src/mealBuild/workerMerge.ts` + vitest. Workers receive **locked grams + dish crop**, merged strictly by dishId. | Re-OCR; second kcal book | — |
+| **F-10.4** | **Shipped** | `src/mealBuild/narration.ts` + vitest. Saved message numbers derive from finalize ledger table. | Dietitian `itemsBreakdown` rebuild; narrate from pre-finalize estimates | — |
+| **F-10.5** | **Shipped** | `server_meal_edit.ts` + `ModeDAndEdit.test.ts`. `modificationCommand` / `[]` / `estimate` executor. | New persona; Mode Rewrite | — |
 | **F-10.6** | Fat/Na TS critic | `diningEnvironment` × `cookingMethod` multipliers in finalize (restaurant fry oil, commercial Na). Honest residual on restaurant fat | Default to a second critic LLM; claim 90% fat on Case 4/9 | **Grok** constants |
-| **F-10.7** | Create cutover | First submit no longer always calls Dietitian. D8 skip-LLM on weight-only scale stays. Old host **deleted** when 100% of traffic | Wrap the old dietitian create as fallback forever | Gemini after 10.2–10.5 |
+| **F-10.7** | **Shipped** | `server_food_analyze_run.ts` adaptive create cutover via `shouldExpandMealAgent`. Dietitian LLM skipped on single-agent paths; D8 scale preserved. | Wrap the old dietitian create as fallback forever | — |
 | **F-10.8** | Soak (replaces F-8.11) | Inner: 11 prototype cases, no Gemini. Outer: one live replay of evidence-job class. Restaurant fat/Na residual named, not painted green | `POST /loop`; soak old scout+dietitian | Grok reviews |
 
 **Do not mix** F-10 with F-9.5 (`App.tsx` collision). Catalog bind (F-8.12) and M30 curator stay — 1-agent OCR is not a replacement for identity.

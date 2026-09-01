@@ -411,4 +411,56 @@ describe("server_dish_finalize", () => {
     expect(ledger.nutrients.potassium).toBe(100);
     expect(ledger.nutrients.calcium).toBe(50);
   });
+
+  it("parses Indonesian % AKG labels and preserves exact 0g total and saturated fat", async () => {
+    const item = {
+      scoutIndex: 0,
+      originalName: "Yakult Minuman Probiotik",
+      keyword: "yakult",
+      estimatedWeightGrams: 65,
+      nutrientBasisWeight: 65,
+      nutrients: {
+        calories: 50,
+        protein: 1.0,
+        totalFat: 0.0,
+        saturatedFat: 0.0,
+        carbohydrates: 11.0,
+        sodium: 10,
+        sugar: 10.0,
+      },
+      rawNutritionLabel: {
+        servingSize: "65 ml",
+        energiTotal: "50 kkal",
+        protein: "1 g",
+        lemakTotal: "0 g",
+        lemakJenuh: "0 g",
+        karbohidratTotal: "11 g",
+        gula: "10 g",
+        natrium: "10 mg",
+        vitaminD: "8% AKG",
+        kalsium: "2% AKG",
+        basisType: "per_serving",
+      },
+    };
+
+    const ledger = await finalizeDishLedger({
+      item,
+      nutrientBasisWeight: 65,
+      consumedWeight: 65,
+    });
+
+    expect(ledger.dbSource).toBe("label");
+    expect(ledger.nutrients.calories).toBe(50);
+    expect(ledger.nutrients.totalFat).toBe(0);
+    expect(ledger.nutrients.saturatedFat).toBe(0);
+    expect(ledger.nutrients.protein).toBe(1);
+    expect(ledger.nutrients.carbohydrates).toBe(11);
+    expect(ledger.nutrients.sugar).toBe(10);
+    expect(ledger.nutrients.sodium).toBe(10);
+    // % AKG conversions:
+    // Vitamin D: 8% of 15 mcg = 1.2 mcg
+    expect(ledger.nutrients.vitaminD).toBe(1.2);
+    // Kalsium: 2% of 1100 mg = 22 mg
+    expect(ledger.nutrients.calcium).toBe(22);
+  });
 });

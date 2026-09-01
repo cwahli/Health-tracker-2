@@ -98,6 +98,8 @@ import {
 import { toPendingFoodLog, fromEvaluationComparison } from './src/mealBuild/adapters.js';
 import { projectDietitianInput } from './src/mealBuild/projectors.js';
 import { beginStage, endStage, formatDietitianProjectionBlock } from './src/mealBuild/stageLifecycle.js';
+import { shouldExpandMealAgent } from './src/mealBuild/shouldExpandMealAgent.js';
+import { reconcileMessageWithLedger } from './src/mealBuild/narration.js';
 import {
   detectWeightRefineIntent,
   shouldSkipScoutForWeightRefine,
@@ -876,6 +878,7 @@ export async function runFoodAnalyze(req: any, res: any) {
                         chainName: { type: Type.STRING, nullable: true },
                         packageLabelText: { type: Type.STRING, nullable: true },
                         estimatedWeightGrams: { type: Type.NUMBER },
+                        packGrams: { type: Type.NUMBER, nullable: true },
                         cookingMethod: { type: Type.STRING, enum: ["raw", "baked", "grilled", "boiled", "steamed", "deep_fried", "pan_fried", "stir_fried"] },
                         sourceImageIndex: { type: Type.INTEGER },
                         boundingBox2D: {
@@ -2466,14 +2469,14 @@ export async function runFoodAnalyze(req: any, res: any) {
               targetDbId: { type: Type.STRING, nullable: true },
               componentName: { type: Type.STRING, nullable: true, description: "Required when action is 'update_component_weight'. The name of the specific ingredient/component inside the composite dish named by itemName (e.g. itemName='Sizzling Steak with Wedges', componentName='Beef Steak')." },
               modifier: { type: Type.STRING, nullable: true, description: "Required when action is 'update_modifier'. The text modifier to apply (e.g. 'unsweetened', 'no sugar', 'no oil', 'no salt')." },
-              newItemName: { type: Type.STRING, nullable: true },
+              newItemName: { type: Type.STRING, nullable: true, description: "Required when action changes item identity/name (replace_identity, replace_item). When provided, you MUST also provide 'estimate' with complete nutrients." },
               replacementItemName: { type: Type.STRING, nullable: true },
               newCookingMethod: { type: Type.STRING, nullable: true },
               count: { type: Type.INTEGER, nullable: true },
               estimate: {
                 type: Type.OBJECT,
                 nullable: true,
-                description: "REQUIRED complete nutrient profile for replace_identity, add_item, or new split identities.",
+                description: "REQUIRED whenever item name/identity changes (replace_identity, replace_item), or for added/split items (add_item, split_item). You must provide the full nutrient profile for the renamed item. NOT required if only weight, portion, or count changes.",
                 properties: {
                   protein: { type: Type.NUMBER, nullable: true },
                   carbohydrates: { type: Type.NUMBER, nullable: true },
@@ -2832,6 +2835,26 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       (!Array.isArray(activeMeal.itemsBreakdown) || activeMeal.itemsBreakdown.length <= 1) &&
       !/\b(only|remove|delete|without|except|no|instead|replace|add|plus|with|not|didn't|did\s+not)\b/i.test(message || '')
     );
+    const isCreateSession = !isModifySession && !hasActiveMealDocument && userSelectedMode !== 'compare' && userSelectedMode !== 'discussion';
+    const hasBarcode = Boolean(visionScoutItems?.some((it: any) => it.barcode || /^\d{6,}$/.test(it.keyword || '')));
+    const hasReceipt = Boolean(
+      visionScoutContentType === 'menu_or_poster' ||
+      visionScoutContentType === 'receipt' ||
+      rawScoutData?.receiptTable ||
+      visionScoutItems?.some((it: any) => it.source === 'receipt')
+    );
+    const canSkipDietitianForCreate = Boolean(
+      isCreateSession &&
+      visionScoutRanAndReturnedItems &&
+      Array.isArray(preCalculatedItems) &&
+      preCalculatedItems.length > 0 &&
+      !shouldExpandMealAgent({
+        dishCount: visionScoutItems.length,
+        imageCount: imagePayloads?.length || 0,
+        hasReceipt,
+        hasBarcode,
+      })
+    );
     if (canSkipDietitianForPureScale && weightRefineIntent.isRefine && weightRefineIntent.weightGrams) {
       const targetWeight = weightRefineIntent.weightGrams;
       addDebugLog(`[Refine] skip-dietitian: Scaled label-locked meal directly to ${targetWeight}g without LLM call.`);
@@ -2848,6 +2871,80 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             newWeightGrams: targetWeight
           }
         ]
+      });
+      rawParsed = JSON.parse(textOutput);
+    } else if (canSkipDietitianForCreate) {
+      addDebugLog(`[MealAgent] Adaptive single-agent create: skipping Dietitian LLM for ${visionScoutItems.length} dish(es).`);
+      sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
+
+      const mealName = rawScoutData?.mealName || rawScoutData?.name || (visionScoutItems.length === 1 ? (visionScoutItems[0].originalName || visionScoutItems[0].keyword) : 'Balanced Meal');
+      
+      const totalGrams = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.estimatedWeightGrams) || 0), 0);
+      const totalCals = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.calories) || 0), 0);
+      const totalP = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.protein) || 0), 0);
+      const totalC = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.carbohydrates) || 0), 0);
+      const totalF = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.totalFat) || 0), 0);
+      const totalSugar = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.sugar || it.nutrients?.addedSugar) || 0), 0);
+      const totalSatFat = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.saturatedFat) || 0), 0);
+
+      let scoutVerdict = rawScoutData?.verdict;
+      if (!scoutVerdict || typeof scoutVerdict !== 'object' || !scoutVerdict.label) {
+        if (totalSugar >= 30) {
+          scoutVerdict = { label: 'High Glycemic Impact (Elevated Sugar)', level: 'warning' };
+        } else if (totalSatFat >= 15) {
+          scoutVerdict = { label: 'Elevated Saturated Fat Impact', level: 'warning' };
+        } else if (totalP >= 25) {
+          scoutVerdict = { label: 'Supports Lean Muscle Growth', level: 'good' };
+        } else if (/probiotic|fermented|yogurt|kefir|yakult/i.test(mealName)) {
+          scoutVerdict = { label: 'Supports Gut Microbiome Balance', level: totalSugar >= 25 ? 'neutral' : 'good' };
+        } else {
+          scoutVerdict = { label: 'Supports Sustained Metabolic Energy', level: 'neutral' };
+        }
+      }
+
+      let rawAdvice = rawScoutData?.clinicalAdvice || rawScoutData?.message;
+      if (!rawAdvice || String(rawAdvice).trim().length === 0) {
+        if (/probiotic|yakult|kefir|yogurt/i.test(mealName)) {
+          rawAdvice = `Provides probiotic cultures for digestive health. Notice the sugar content (${Math.round(totalSugar)}g total sugars); pair with dietary fiber or a whole-food meal to buffer glycemic response.`;
+        } else if (totalP >= 20) {
+          rawAdvice = `Solid protein intake (${Math.round(totalP)}g) supporting muscle repair and satiety. Balanced macronutrient profile.`;
+        } else if (totalSugar >= 30) {
+          rawAdvice = `High in fast-digesting carbohydrates and sugars (${Math.round(totalSugar)}g). Consider balancing with protein and healthy fats to stabilize postprandial glucose.`;
+        } else {
+          rawAdvice = `Logged ${mealName} with balanced macronutrients supporting steady metabolic energy.`;
+        }
+      }
+
+      const formattedMsg = reconcileMessageWithLedger(rawAdvice, {
+        mealName,
+        weightGrams: totalGrams,
+        calories: Math.round(totalCals),
+        protein: Math.round(totalP * 10) / 10,
+        carbohydrates: Math.round(totalC * 10) / 10,
+        totalFat: Math.round(totalF * 10) / 10,
+      });
+
+      textOutput = JSON.stringify({
+        _internalReasoning: scoutInternalReasoning || '[MealAgent] Single-agent create path',
+        mode: 'new_log',
+        message: formattedMsg,
+        verdict: scoutVerdict,
+        foodData: {
+          name: mealName,
+          weightGrams: String(totalGrams),
+          cookingMethod: scoutCookingMethod || 'Unknown cooking method',
+          scoutConfidenceRating: scoutConfidenceRating || 'High (>90%)',
+          scoutConfidenceComment: scoutConfidenceComment || '',
+          diningEnvironment: diningEnvironment || 'unknown',
+          itemsBreakdown: preCalculatedItems.map((p: any) => ({
+            canonicalDbName: p.keyword || p.originalName,
+            originalName: p.originalName,
+            weightGrams: String(p.estimatedWeightGrams),
+            dbSource: p.dbSource || 'estimated',
+            dbId: p.dbId || null,
+            foodType: p.foodType || 'composed',
+          }))
+        }
       });
       rawParsed = JSON.parse(textOutput);
     } else {
@@ -2925,7 +3022,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
     apiCalls = [
       ...(hasImage ? [{ type: 'gemini', label: 'Food nutrition agent - Visual Scout (gemini-3.5-flash-lite)' }] : []),
       ...(queriesToSearch && queriesToSearch.length > 0 ? [{ type: 'usda', label: `Food nutrition agent - USDA (${queriesToSearch.length})` }] : []),
-      { type: 'gemini', label: `Food nutrition agent - Dietitian (${(typeof engine === 'object' ? engine?.name || engine?.model : engine) || 'gemini-3.5-flash-lite'})` }
+      ...((canSkipDietitianForCreate || canSkipDietitianForPureScale) ? [] : [{ type: 'gemini', label: `Food nutrition agent - Dietitian (${(typeof engine === 'object' ? engine?.name || engine?.model : engine) || 'gemini-3.5-flash-lite'})` }])
     ];
     // CASE F: food origin lookup mode
     // CASE B: discussion mode
@@ -3419,10 +3516,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         activeMeal.serving_grams = result.weightGrams;
         activeMeal.receiptTable = result.receiptTable;
         activeMeal.composition = result.items.map((it: any) => it.name).join(', ');
-        if (result.items.length === 1) {
-          activeMeal.name = result.items[0].name || activeMeal.name;
-        } else if (rawParsed.foodData?.name) {
+        if (rawParsed.foodData?.name) {
           activeMeal.name = rawParsed.foodData.name;
+        } else if (result.items.length === 1 && (!req.body.activeMeal?.itemsBreakdown || req.body.activeMeal.itemsBreakdown.length <= 1)) {
+          activeMeal.name = result.items[0].name || activeMeal.name;
         }
         // Sync scoutItems (used by the "Meal composition" chips/gallery in the UI)
         // with any name changes applied to itemsBreakdown by this edit. Without this,
@@ -3432,23 +3529,40 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         const baseScoutItemsForEdit = (activeMeal.scoutItems && activeMeal.scoutItems.length > 0)
           ? activeMeal.scoutItems
           : (visionScoutItems || []);
-        const syncedScoutItemsForEdit = baseScoutItemsForEdit.map((sItem: any) => {
-          const bItem = result.items.find((b: any) =>
-            b.scoutIndex !== undefined && b.scoutIndex !== null && b.scoutIndex === sItem.scoutIndex
+        const syncedScoutItemsForEdit = result.items.map((bItem: any) => {
+          const sItem = baseScoutItemsForEdit.find((s: any) =>
+            (bItem.scoutIndex !== undefined && bItem.scoutIndex !== null && s.scoutIndex === bItem.scoutIndex) ||
+            (s.originalName && (s.originalName === bItem.name || s.originalName === bItem.canonicalDbName)) ||
+            (s.keyword && (s.keyword === bItem.name || s.keyword === bItem.canonicalDbName))
           );
-          if (bItem && (bItem.canonicalDbName || bItem.name)) {
-            const newName = bItem.canonicalDbName || bItem.name;
+          const newName = bItem.canonicalDbName || bItem.name || sItem?.originalName || 'Item';
+          if (sItem) {
             return {
               ...sItem,
               originalName: newName,
               keyword: newName,
               estimatedWeightGrams: bItem.weightGrams || sItem.estimatedWeightGrams,
+              packGrams: bItem.packGrams ?? sItem.packGrams ?? null,
               components: bItem.components || sItem.components,
               componentsDetailList: bItem.componentsDetailList || sItem.componentsDetailList,
               nutrients: bItem.nutrients || sItem.nutrients,
+              sourceImageIndex: bItem.sourceImageIndex ?? sItem.sourceImageIndex,
+              boundingBox2D: bItem.boundingBox2D ?? sItem.boundingBox2D,
             };
           }
-          return sItem;
+          return {
+            scoutIndex: bItem.scoutIndex,
+            originalName: newName,
+            keyword: newName,
+            estimatedWeightGrams: bItem.weightGrams || 100,
+            packGrams: bItem.packGrams ?? null,
+            components: bItem.components || [],
+            componentsDetailList: bItem.componentsDetailList || [],
+            nutrients: bItem.nutrients || {},
+            sourceImageIndex: bItem.sourceImageIndex ?? null,
+            boundingBox2D: bItem.boundingBox2D ?? null,
+            cookingMethod: bItem.cookingMethod || 'raw',
+          };
         });
         activeMeal.scoutItems = syncedScoutItemsForEdit;
         addDebugLog(`[ScoutSync] edit-path renamed scoutItems -> ${JSON.stringify(syncedScoutItemsForEdit.map((s: any) => s.originalName))}`);
@@ -3529,6 +3643,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       const payloadData = toPendingFoodLog(degradedMeal);
       const successPayload = {
         data: payloadData,
+        pendingFoodLog: payloadData,
         mealBuild: degradedMeal,
         degradedStages: degradedMeal.degradedStages,
         message: "Nutrients logged based on core databases, but AI clinical advice is currently unavailable.",

@@ -418,10 +418,11 @@ User: "the beverage is raw coconut juice, and iced tea is unsweetened"
 }
 RULES:
 - Q&A / advice only → modificationCommand: [] (empty). Do not rebuild itemsBreakdown.
-- "X is Y" → replace_identity with REQUIRED complete estimate {protein,carbohydrates,totalFat,saturatedFat,totalSugar,addedSugar,totalFibre,sodium,potassium,calcium,iron,magnesium,vitaminD,omega3}.
+- NAME CHANGE ("X is Y" / replace_identity) → REQUIRED complete estimate {protein,carbohydrates,totalFat,saturatedFat,totalSugar,addedSugar,totalFibre,sodium,potassium,calcium,iron,magnesium,vitaminD,omega3}. Never omit estimate when name changes.
+- WEIGHT / COUNT ONLY → update_weight / set_count (do NOT provide estimate; backend rescales nutrients).
 - Split foods → split_item + estimate on each new identity. Keep unmentioned sides at saved grams. Sauce stays a component.
 - add_item (no photo) → required estimate {protein,carbohydrates,totalFat,...}. Never invent kcal.
-- Unsweetened / no sugar → update_modifier modifier="unsweetened". Never update_cooking_method.
+- Unsweetened / no sugar → update_modifier modifier="unsweetened". If user specifies a different item/drink name (e.g. "es jeruk is unsweetened"), use replace_identity with complete estimate.
 `;
 
 export function buildModeAEditInstruction(context: {
@@ -442,7 +443,7 @@ ${targetLimits}
 
 === ACTIVE TASK: EDIT OR Q&A (same meal) ===
 The current meal ledger is in the user prompt (one BACKEND PRE-CALCULATED block). Do not dump or rebuild itemsBreakdown.
-1. EDIT: emit modificationCommand (replace_identity+estimate / split_item+estimate / add_item+estimate / update_modifier / update_weight / remove_item / set_count). Always include complete estimate for new food identities.
+1. EDIT: emit modificationCommand (replace_identity+estimate / split_item+estimate / add_item+estimate / update_modifier / update_weight / remove_item / set_count). Whenever item name changes, you MUST provide full estimate.
 2. Q&A: modificationCommand: []. Answer in message. Card stays unchanged.
 
 ${EDIT_OUTPUT_JSON_SCHEMA}`;

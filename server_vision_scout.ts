@@ -41,6 +41,7 @@ export const ScoutDishSchema = z.object({
   chainName: z.string().nullable().optional(),
   packageLabelText: z.string().nullable().optional(),
   estimatedWeightGrams: z.number().finite().nonnegative().nullable().optional(),
+  packGrams: z.number().finite().nonnegative().nullable().optional(),
   cookingMethod: z.string().nullable().optional(),
   sourceImageIndex: z.number().nullable().optional(),
   boundingBox2D: z.array(z.number()).nullable().optional(),
@@ -151,17 +152,23 @@ export const VisionScoutSchema = z.object({
   items: z.array(ScoutItemSchema).nullable().optional(),
   contentType: z.string().nullable().optional(),
   diningEnvironment: z.string().nullable().optional(),
+  verdict: z.object({
+    label: z.string(),
+    level: z.string(),
+  }).nullable().optional(),
+  clinicalAdvice: z.string().nullable().optional(),
+  message: z.string().nullable().optional(),
 }).passthrough();
-export const scoutSystemInstruction = `System Instruction:
-- HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'. DO NOT group distinct separate grocery packages or unmixed raw ingredients into a single 'dish'. Each separate barcode package MUST be its own distinct 'dish'.
-- QUANTITY: When the user note or image states a repeated count of the SAME food (e.g. "I had 2 otak otak", two identical items visible), represent it as ONE 'dish' with 'foods' containing that many entries (or a single food with weightGrams already multiplied) — do NOT create multiple separate top-level 'dishes' entries for repeated units of the same food.
+export const scoutSystemInstruction = `- HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'. DO NOT duplicate identical dishes shown across cooking prep, multi-angles, or sliced/whole views. DO NOT group separate packages into a single dish. Each barcode package MUST be its own distinct 'dish'.
+- QUANTITY & MULTIPACKS: Output 'weightGrams' (consumed serving) and 'packGrams' (container total). For unopened grocery multi-packs (e.g. '5 x 65ml', 'pack of 6') without explicit user notes stating all N units were consumed, set 'weightGrams' to a single unit/serving size (e.g. 65g) and 'packGrams' to the container total (e.g. 325g).
 - GROCERY/SCALE STICKERS: Treat supermarket stickers as atomic: pair printed text with printed weight (e.g. 'Berat 0.252' -> 252g). Output text in 'packageLabelText'. Never transpose weights between packages.
 - LOCAL NAMES: Preserve the verbatim printed name from stickers, packaging, or menus in local language as foodName (e.g. 'Ikan Cendro', 'Cumi Bangka'). Do not genericise when specific local name is readable.
 - INGESTION: Extract ALL visible food items/packages from ALL provided images into dishes[]. 'contentType' is post-extraction metadata and must not restrict extraction.
-- WEIGHTS & PACKAGES: Output 'weightGrams' (consumed) and 'packGrams' (container total).
-- DIRECT OCR: Transcribe nutrition labels into 'rawNutritionLabel' for packaged items with labels.
+- DIRECT OCR: Transcribe nutrition labels into 'rawNutritionLabel' for packaged items with labels. Preserve exact 0 values when printed as 0g / 0mg.
+- % AKG / % DV: If nutrition labels state % AKG (Angka Kecukupan Gizi) or % DV for micronutrients (e.g. Vitamin D 8% AKG, Kalsium 2% AKG), preserve the % in rawNutritionLabel.
 - BRANDS & CONDIMENTS: Set 'chainName' for brands. Set 'isStandaloneCondimentPacket' for packets <=30g.
 - COOKING FATS: Include cooking oils/fats in 'dishNutrients.totalFat' based on 'cookingMethod'.
+- CLINICAL VERDICT & ADVICE: Provide a concise biological verdict ('label' with 3-6 words, 'level': 'good' | 'warning' | 'alert' | 'neutral') evaluating metabolic impact, macronutrient balance, and actionable clinical advice in 'clinicalAdvice'.
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:
@@ -169,11 +176,17 @@ Output exactly ONE JSON object matching this schema:
   "_internalReasoning": "string (<15 words)",
   "contentType": "visual | menu_or_poster | label | text",
   "diningEnvironment": "home_cooked | casual_restaurant | fast_food_chain | fine_dining | airline | unknown",
+  "verdict": {
+    "label": "Supports Gut Health with Added Sugar",
+    "level": "neutral"
+  },
+  "clinicalAdvice": "Personalized clinical guidance regarding glycemic, protein, and micronutrient balance.",
   "dishes": [
     {
       "dishName": "Vegetable and Beef Hotpot",
       "chainName": null,
       "estimatedWeightGrams": 650,
+      "packGrams": 650,
       "cookingMethod": "raw | baked | grilled | boiled | steamed | deep_fried | pan_fried | stir_fried",
       "boundingBox2D": [300, 200, 850, 900],
       "sourceImageIndex": 1,
@@ -1334,17 +1347,17 @@ export function parseAndHealVisionScout(
           } else if (rawC === null && expectedCalories > 0) {
               newItem.rawNutritionLabel.calories = Math.round(expectedCalories);
               healAnomaly(newItem, "calories");
-          } else if (knownMacrosCount >= 2 && rawC !== null && rawC > 0) {
-              if (correctedFat === 0) {
+          } else if (knownMacrosCount === 2 && rawC !== null && rawC > 0) {
+              if (missingFat) {
                   newItem.rawNutritionLabel.totalFat = safeMath((rawC - (carbs * 4) - (protein * 4)) / 9);
-                  if (newItem.rawNutritionLabel.fat === 0) { newItem.rawNutritionLabel.fat = newItem.rawNutritionLabel.totalFat; }
+                  if (newItem.rawNutritionLabel.fat === undefined) { newItem.rawNutritionLabel.fat = newItem.rawNutritionLabel.totalFat; }
                   healAnomaly(newItem, "fat");
-              } else if (carbs === 0) {
+              } else if (missingCarbs) {
                   newItem.rawNutritionLabel.totalCarbohydrate = safeMath((rawC - (correctedFat * 9) - (protein * 4)) / 4);
-                  if (newItem.rawNutritionLabel.carbohydrates === 0) { newItem.rawNutritionLabel.carbohydrates = newItem.rawNutritionLabel.totalCarbohydrate; }
+                  if (newItem.rawNutritionLabel.carbohydrates === undefined) { newItem.rawNutritionLabel.carbohydrates = newItem.rawNutritionLabel.totalCarbohydrate; }
                   healAnomaly(newItem, "carbohydrates");
                   healAnomaly(newItem, "carbs");
-              } else if (protein === 0) {
+              } else if (missingProtein) {
                   newItem.rawNutritionLabel.protein = safeMath((rawC - (correctedFat * 9) - (carbs * 4)) / 4);
                   healAnomaly(newItem, "protein");
               }

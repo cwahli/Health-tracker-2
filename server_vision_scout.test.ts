@@ -173,8 +173,8 @@ describe("server_vision_scout", () => {
             rawNutritionLabel: {
               calories: 60,
               protein: "5g",
-              totalFat: "4g",
-              totalCarbohydrate: "0g" // 0g carbohydrates, expected = (4*9) + (5*4) = 56. Discrepancy <= 20%
+              totalFat: "4g"
+              // totalCarbohydrate omitted (missing) -> (60 - 36 - 20) / 4 = 1g
             }
           }
         ]
@@ -184,6 +184,27 @@ describe("server_vision_scout", () => {
       // Discrepancy is Math.abs(56 - 60)/56 = 7.1% (<= 20%).
       // Carbs should heal to: (60 - 36 - 20) / 4 = 1g.
       expect(result.items[0].rawNutritionLabel.totalCarbohydrate).toBe(1);
+    });
+
+    it("preserves explicitly declared 0g totalFat on label without injecting non-zero fat", () => {
+      const mockOutput = {
+        items: [
+          {
+            keyword: "yakult",
+            originalName: "Yakult Probiotic Drink",
+            rawNutritionLabel: {
+              calories: 50,
+              protein: "1g",
+              totalFat: "0g",
+              totalCarbohydrate: "11g"
+            }
+          }
+        ]
+      };
+
+      const result = parseAndHealVisionScout(mockOutput, () => {});
+      // All 3 macros present (fat: 0g, protein: 1g, carbs: 11g). Total fat must remain 0.
+      expect(result.items[0].rawNutritionLabel.totalFat).toBe("0g");
     });
 
     it("explodes list formatted items with commas into multiple items if not bearing printed macros", () => {

@@ -103,7 +103,7 @@ export function parseOcrLabel(rawLabel: any, targetWeight: number, defaultR: num
     ? (targetWeight / 100)
     : ((ocrServingGrams && ocrServingGrams > 0) ? (targetWeight / ocrServingGrams) : defaultR);
       
-  const rawCalStr = rawLabel.calories ?? rawLabel.energy ?? rawLabel.kcal ?? rawLabel.energyKcal;
+  const rawCalStr = rawLabel.calories ?? rawLabel.energy ?? rawLabel.kcal ?? rawLabel.energyKcal ?? rawLabel.energiTotal ?? rawLabel.energi ?? rawLabel.kalori;
   const ocrCal = typeof rawCalStr === 'number'
     ? rawCalStr
     : (rawCalStr ? parseFloat(String(rawCalStr).replace(/[^0-9.]/g, '')) : NaN);
@@ -112,23 +112,53 @@ export function parseOcrLabel(rawLabel: any, targetWeight: number, defaultR: num
     lockedKeys.push('calories');
   }
 
+  const DAILY_VALUE_REFERENCE: Record<string, { value: number; unit: 'mg' | 'mcg' | 'g' }> = {
+    vitaminD: { value: 15, unit: 'mcg' }, // 15 mcg (600 IU) BPOM/FDA
+    calcium: { value: 1100, unit: 'mg' }, // 1100 mg BPOM reference
+    iron: { value: 18, unit: 'mg' },
+    potassium: { value: 4700, unit: 'mg' },
+    magnesium: { value: 400, unit: 'mg' },
+    zinc: { value: 11, unit: 'mg' },
+    vitaminA: { value: 900, unit: 'mcg' },
+    vitaminC: { value: 90, unit: 'mg' },
+    vitaminE: { value: 15, unit: 'mg' },
+    vitaminK: { value: 120, unit: 'mcg' },
+    vitaminB6: { value: 1.7, unit: 'mg' },
+    vitaminB12: { value: 2.4, unit: 'mcg' },
+    folate: { value: 400, unit: 'mcg' },
+    thiamine: { value: 1.2, unit: 'mg' },
+    riboflavin: { value: 1.3, unit: 'mg' },
+    niacin: { value: 16, unit: 'mg' },
+    phosphorus: { value: 700, unit: 'mg' },
+    iodine: { value: 150, unit: 'mcg' },
+    selenium: { value: 55, unit: 'mcg' },
+    sodium: { value: 2000, unit: 'mg' },
+  };
+
   const OCR_FIELD_ALIASES: Record<string, string[]> = {
-    protein: ['protein', 'proteins'],
-    totalFat: ['totalFat', 'fat', 'total_fat', 'lipids'],
-    saturatedFat: ['saturatedFat', 'satFat', 'saturated_fat', 'sat_fat'],
-    transFat: ['transFat', 'trans_fat'],
-    carbohydrates: ['carbohydrates', 'totalCarbohydrate', 'totalCarbohydrates', 'carbohydrate', 'carbs', 'totalCarb', 'total_carbohydrate'],
-    sugar: ['sugar', 'sugars', 'totalSugar', 'totalSugars', 'total_sugar'],
-    addedSugar: ['addedSugar', 'addedSugars', 'added_sugar', 'includesAddedSugars'],
-    sodium: ['sodium', 'na'],
-    salt: ['salt'],
-    totalFibre: ['totalFibre', 'totalFiber', 'fiber', 'fibre', 'dietaryFiber', 'dietary_fiber'],
+    protein: ['protein', 'proteins', 'protein_total', 'proteinTotal'],
+    totalFat: ['totalFat', 'fat', 'total_fat', 'lipids', 'lemakTotal', 'lemak_total', 'lemak'],
+    saturatedFat: ['saturatedFat', 'satFat', 'saturated_fat', 'sat_fat', 'lemakJenuh', 'lemak_jenuh'],
+    transFat: ['transFat', 'trans_fat', 'lemakTrans', 'lemak_trans'],
+    carbohydrates: ['carbohydrates', 'totalCarbohydrate', 'totalCarbohydrates', 'carbohydrate', 'carbs', 'totalCarb', 'total_carbohydrate', 'karbohidratTotal', 'karbohidrat_total', 'karbohidrat'],
+    sugar: ['sugar', 'sugars', 'totalSugar', 'totalSugars', 'total_sugar', 'gula', 'gulaTotal', 'gula_total'],
+    addedSugar: ['addedSugar', 'addedSugars', 'added_sugar', 'includesAddedSugars', 'sukrosa'],
+    sodium: ['sodium', 'na', 'natrium'],
+    salt: ['salt', 'garam'],
+    totalFibre: ['totalFibre', 'totalFiber', 'fiber', 'fibre', 'dietaryFiber', 'dietary_fiber', 'seratPangan', 'serat_pangan', 'serat'],
     solubleFibre: ['solubleFibre', 'solubleFiber'],
-    potassium: ['potassium', 'k'],
-    calcium: ['calcium', 'ca'],
-    iron: ['iron', 'fe'],
+    potassium: ['potassium', 'k', 'kalium'],
+    calcium: ['calcium', 'ca', 'kalsium'],
+    iron: ['iron', 'fe', 'zatBesi', 'zat_besi'],
     magnesium: ['magnesium', 'mg'],
-    vitaminD: ['vitaminD', 'vitD', 'vitamin_d'],
+    vitaminD: ['vitaminD', 'vitD', 'vitamin_d', 'vit_d'],
+    vitaminA: ['vitaminA', 'vitA', 'vitamin_a', 'vit_a'],
+    vitaminC: ['vitaminC', 'vitC', 'vitamin_c', 'vit_c'],
+    vitaminE: ['vitaminE', 'vitE', 'vitamin_e', 'vit_e'],
+    vitaminB12: ['vitaminB12', 'vitB12', 'vitamin_b12', 'vit_b12'],
+    folate: ['folate', 'folicAcid', 'folic_acid', 'asamFolat', 'asam_folat'],
+    zinc: ['zinc', 'zn', 'seng'],
+    iodine: ['iodine', 'yodium'],
     omega3: ['omega3', 'omega_3'],
   };
 
@@ -141,11 +171,16 @@ export function parseOcrLabel(rawLabel: any, targetWeight: number, defaultR: num
       }
     }
     if (rawVal !== undefined && rawVal !== null) {
-      const v = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal).replace(/[^0-9.]/g, ''));
-      if (Number.isFinite(v)) {
-        ocrNutrients[normKey] = (normKey === 'sodium' || normKey === 'potassium' || normKey === 'calcium' || normKey === 'magnesium')
-          ? Math.round(v * ocrScale)
-          : Math.round(v * ocrScale * 10) / 10;
+      const isPercent = typeof rawVal === 'string' && /%|\bakg\b|\bdv\b/i.test(rawVal);
+      const parsedNum = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal).replace(/[^0-9.]/g, ''));
+      if (Number.isFinite(parsedNum)) {
+        let metricValue = parsedNum;
+        if (isPercent && DAILY_VALUE_REFERENCE[normKey]) {
+          metricValue = (parsedNum / 100) * DAILY_VALUE_REFERENCE[normKey].value;
+        }
+        ocrNutrients[normKey] = (normKey === 'sodium' || normKey === 'potassium' || normKey === 'calcium' || normKey === 'magnesium' || normKey === 'phosphorus')
+          ? Math.round(metricValue * ocrScale)
+          : Math.round(metricValue * ocrScale * 10) / 10;
         lockedKeys.push(normKey);
       }
     }
@@ -185,7 +220,11 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
 
   // 1. Check OCR label truth
   const rawLabel = item.rawNutritionLabel || item.nutritionFacts;
-  const hasOcr = rawLabel && (typeof rawLabel === 'object') && (rawLabel.calories != null || rawLabel.energy != null || rawLabel.kcal != null);
+  const hasOcr = rawLabel && (typeof rawLabel === 'object') && (
+    rawLabel.calories != null || rawLabel.energy != null || rawLabel.kcal != null ||
+    rawLabel.energiTotal != null || rawLabel.energi != null || rawLabel.kalori != null ||
+    rawLabel.energyKcal != null
+  );
 
   if (hasOcr || input.storedOcrLock) {
     dbSource = 'label';

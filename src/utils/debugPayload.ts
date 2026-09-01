@@ -353,12 +353,12 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       if (match) {
         scoutReasoning = match[1].trim();
       } else {
-        const jsonMatch = input.backendLogs.match(/"_internalReasoning":\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
-        if (jsonMatch) {
+        const scoutResponseMatch = input.backendLogs.match(/\[backend\]\s*\[UnifiedLLM-Response:scout\][\s\S]*?"_internalReasoning":\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+        if (scoutResponseMatch) {
           try {
-            scoutReasoning = JSON.parse(`"${jsonMatch[1]}"`);
+            scoutReasoning = JSON.parse(`"${scoutResponseMatch[1]}"`);
           } catch {
-            scoutReasoning = jsonMatch[1];
+            scoutReasoning = scoutResponseMatch[1];
           }
         }
       }
@@ -644,19 +644,27 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
         }
         instructionBlocks.push(block.join('\n').trim());
         for (let k = i; k < j; k++) collapsedLineIndices.add(k);
+        i = j - 1;
       }
     }
     if (instructionBlocks.length > 0) {
       lines.push(`## 🧠 Agent Instructions & Prompts Dispatched`);
       lines.push('');
-      lines.push(`_Extracted from backend logs — ${instructionBlocks.length} dispatch(es) found. Shown here only; collapsed below to avoid duplication._`);
-      lines.push('');
       const seenInstr = new Set<string>();
-      let shown = 0;
+      const uniqueBlocks: string[] = [];
       for (const block of instructionBlocks) {
-        const key = block.trim();
-        if (seenInstr.has(key)) continue;
-        seenInstr.add(key);
+        const normalizedKey = block
+          .replace(/^\[backend\]\s*\[UnifiedLLM-Prompt:[^\]]+\]\s*/i, '')
+          .replace(/^System Instruction:\s*/i, '')
+          .trim();
+        if (seenInstr.has(normalizedKey)) continue;
+        seenInstr.add(normalizedKey);
+        uniqueBlocks.push(block);
+      }
+      lines.push(`_Extracted from backend logs — ${uniqueBlocks.length} dispatch(es) found. Shown here only; collapsed below to avoid duplication._`);
+      lines.push('');
+      let shown = 0;
+      for (const block of uniqueBlocks) {
         lines.push('```');
         lines.push(block);
         lines.push('```');

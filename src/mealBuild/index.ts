@@ -8,3 +8,5 @@ export * from './reflection';
 export * from './stageLifecycle';
 export * from './coldDebug';
 export * from './shouldExpandMealAgent';
+export * from './workerMerge';
+export * from './narration';

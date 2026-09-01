@@ -82,6 +82,35 @@ describe("server_derivation", () => {
       expect(result.salt).toBe(1.02);
     });
 
+    it("ignores agent-emitted calories when protein, carbs, and fat are present (F-10.2 Atwater law)", () => {
+      // Agent emitted 999 kcal, but physical macros are 20g P, 30g C, 10g F -> 4*20 + 4*30 + 9*10 = 290 kcal
+      const result = calculateDerivedNutrients({
+        calories: 999,
+        protein: 20,
+        carbohydrates: 30,
+        totalFat: 10,
+        saturatedFat: 3,
+        transFat: 0,
+        sodium: 500,
+      });
+      expect(result.calories).toBe(290);
+      expect(result.carbohydrates).toBe(30);
+      expect(result.unsaturatedFat).toBe(7);
+      expect(result.salt).toBe(1.27);
+    });
+
+    it("handles zero carbs explicitly without triggering energy fallback", () => {
+      // 30g P, 0g C, 10g F -> 4*30 + 4*0 + 9*10 = 210 kcal
+      const result = calculateDerivedNutrients({
+        calories: 999,
+        protein: 30,
+        carbohydrates: 0,
+        totalFat: 10,
+      });
+      expect(result.calories).toBe(210);
+      expect(result.carbohydrates).toBe(0);
+    });
+
     it("derives carbohydrates if omitted or null", () => {
       const result = calculateDerivedNutrients({
         calories: 500,
