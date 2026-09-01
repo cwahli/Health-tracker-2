@@ -11,7 +11,8 @@ describe('DISH_DROP: local food mapping', () => {
             { foodName: 'Telur Goreng', weightGrams: 50 },
             { foodName: 'Ikan Bakar', weightGrams: 150 },
             { foodName: 'Cumi Saus Padang', weightGrams: 100 },
-            { foodName: 'Ayam Goreng', weightGrams: 100 }
+            { foodName: 'Ayam Goreng', weightGrams: 100 },
+            { foodName: 'Mr Oat Rolled Oats', weightGrams: 40 }
           ]
         }
       ]
@@ -24,5 +25,6 @@ describe('DISH_DROP: local food mapping', () => {
     expect(components[1].searchQuery).toContain('fish');
     expect(components[2].searchQuery).toContain('squid');
     expect(components[3].searchQuery).toContain('chicken');
+    expect(components[4].searchQuery).toContain('rolled oats');
   });
 });

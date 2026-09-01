@@ -949,6 +949,7 @@ export function parseAndHealVisionScout(
             let s = String(fn).toLowerCase();
             s = s.replace(/\bbaby pak choy\b/ig, 'bok choy');
             s = s.replace(/\bpak choy\b/ig, 'bok choy');
+            s = s.replace(/\bmr\s*oat\s*(rolled\s*oats)?\b/ig, 'rolled oats');
             
             if (/tlr|telur/i.test(s)) searchQ = 'egg';
             else if (/ikan/i.test(s)) searchQ = 'fish';
@@ -958,6 +959,7 @@ export function parseAndHealVisionScout(
             else if (/babi/i.test(s)) searchQ = 'pork';
             else if (/udang/i.test(s)) searchQ = 'shrimp';
             else if (/bebek/i.test(s)) searchQ = 'duck';
+            else if (/mr\s*oat/i.test(s)) searchQ = 'rolled oats';
             else searchQ = s;
           }
           
@@ -979,7 +981,7 @@ export function parseAndHealVisionScout(
             carbohydrates: fc,
             carbs: fc,
             sodium: fna,
-            dbSource: 'estimated',
+            dbSource: (f.rawNutritionLabel && Object.keys(f.rawNutritionLabel).some(k => !['servingSize', 'weight', 'servingsPerContainer', 'confidence'].includes(k) && Number(f.rawNutritionLabel[k]) > 0)) ? 'brand_official' : 'estimated',
             dbId: null,
           });
         });
@@ -1029,7 +1031,12 @@ export function parseAndHealVisionScout(
         let dishRawLabel: any = null;
         if (components.length === 1 && components[0].weightGrams > 0) {
           const comp = components[0];
-          dishRawLabel = comp.rawNutritionLabel ?? null;
+          const hasLabel = comp.rawNutritionLabel && typeof comp.rawNutritionLabel === 'object' && Object.keys(comp.rawNutritionLabel).some((k: string) => {
+            if (k === 'servingSize' || k === 'weight' || k === 'servingsPerContainer') return false;
+            const v = comp.rawNutritionLabel[k];
+            return v !== undefined && v !== null && v !== '' && v !== '-' && v !== '--';
+          });
+          dishRawLabel = hasLabel ? comp.rawNutritionLabel : null;
           const isWaterCooked = /boiled|steamed|poached/i.test(d.cookingMethod || '');
           const isDryStaple = /oat|rice|pasta|noodle|grain|cereal|porridge|quinoa|lentil|bean/i.test(comp.name || d.dishName || '');
           if (comp.rawNutritionLabel || (isWaterCooked && isDryStaple && dishWeight > comp.weightGrams * 1.5)) {
@@ -1630,6 +1637,20 @@ export function parseAndHealVisionScout(
         scoutIndex: idx
       }));
       for (const item of visionScoutItems) {
+        if (item.rawNutritionLabel && typeof item.rawNutritionLabel === 'object') {
+          const hasRealData = Object.keys(item.rawNutritionLabel).some((k: string) => {
+            if (k === 'servingSize' || k === 'weight' || k === 'servingsPerContainer') return false;
+            const v = item.rawNutritionLabel[k];
+            return v !== undefined && v !== null && v !== '' && v !== '-' && v !== '--';
+          });
+          if (!hasRealData) {
+            item.rawNutritionLabel = null;
+          }
+        }
+        if (!item.rawNutritionLabel && (item.source === 'brand_official' || item.dbSource === 'brand_official')) {
+          item.source = 'estimated';
+          item.dbSource = 'estimated';
+        }
         // Enforce Label-to-Component reconciliation for dressings/sauces/condiments detected via OCR or vision
         reconcileIngredientsToComponents(item, addDebugLog);
         // Issue #6: Persistent Web Search Override on Generic Items.
