@@ -416,13 +416,28 @@ User: "the beverage is raw coconut juice, and iced tea is unsweetened"
   ],
   "foodData": { "date": "2026-08-03", "name": "Raw Coconut Juice and Unsweetened Iced Tea" }
 }
+
+User: "the fish is ikan nilai and the tea is unsweatened"
+{
+  "_internalReasoning": "Fish species clarified → replace_identity with complete estimate. Sweetened tea → unsweetened modifier.",
+  "verdict": { "label": "Supports lean muscle growth", "level": "good" },
+  "message": "I've updated the fish to grilled Ikan Nilai and switched your tea to unsweetened, cutting the added sugar.",
+  "modificationCommand": [
+    { "action": "replace_identity", "itemName": "Ikan Bakar", "newItemName": "Ikan Nilai Bakar", "newWeightGrams": 250, "estimate": { "protein": 42, "carbohydrates": 0, "totalFat": 10.5, "saturatedFat": 2.2, "totalSugar": 0, "addedSugar": 0, "totalFibre": 0, "sodium": 420, "potassium": 650, "calcium": 30, "iron": 1.2, "magnesium": 45, "vitaminD": 8, "omega3": 0.6, "cookingMethod": "grilled", "foodType": "protein" } },
+    { "action": "update_modifier", "itemName": "Es Teh Manis", "newItemName": "Es Teh Tawar", "modifier": "unsweetened" }
+  ],
+  "foodData": { "date": "2026-09-01", "name": "Ikan Nilai Bakar with Sides" }
+}
+
 RULES:
 - Q&A / advice only → modificationCommand: [] (empty). Do not rebuild itemsBreakdown.
-- NAME CHANGE ("X is Y" / replace_identity) → REQUIRED complete estimate {protein,carbohydrates,totalFat,saturatedFat,totalSugar,addedSugar,totalFibre,sodium,potassium,calcium,iron,magnesium,vitaminD,omega3}. Never omit estimate when name changes.
+- 🚨 MANDATORY — NAME CHANGE ("X is Y" / replace_identity) → the "estimate" object is NOT OPTIONAL. You MUST populate it with a complete, realistic nutrient profile for the NEW identity on every single replace_identity command, with no exceptions — including grilled/plain proteins like fish, chicken, or meat, which should carry near-zero carbohydrate values, not a generic template. A replace_identity command emitted without "estimate" is an invalid response.
 - WEIGHT / COUNT ONLY → update_weight / set_count (do NOT provide estimate; backend rescales nutrients).
 - Split foods → split_item + estimate on each new identity. Keep unmentioned sides at saved grams. Sauce stays a component.
 - add_item (no photo) → required estimate {protein,carbohydrates,totalFat,...}. Never invent kcal.
 - Unsweetened / no sugar → update_modifier modifier="unsweetened". If user specifies a different item/drink name (e.g. "es jeruk is unsweetened"), use replace_identity with complete estimate.
+
+FINAL SELF-CHECK (perform before emitting JSON): For every command in modificationCommand where action is "replace_identity", "replace_item", "add_item", or "split_item" — confirm the "estimate" field is present and contains non-null protein, carbohydrates, and totalFat values. If any is missing, fill it in with your best clinical estimate before responding. Never submit these actions with a missing or empty estimate.
 `;
 
 export function buildModeAEditInstruction(context: {
