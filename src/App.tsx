@@ -5,7 +5,7 @@ import { UserProfile, FoodLog, BiomarkerLog, HealthAction, DailyBenefit, Recomme
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import AuthScreen from './components/AuthScreen';
-import HomeTab from './components/HomeTab';
+const HomeTab = lazyWithRetry(() => import('./components/HomeTab'));
 const InsightsTab = lazyWithRetry(() => import('./components/InsightsTab'));
 const FoodHistoryTab = lazyWithRetry(() => import('./components/FoodHistoryTab'));
 const MedicalHistoryTab = lazyWithRetry(() => import('./components/MedicalHistoryTab'));
