@@ -1,0 +1,2 @@
+ALTER TABLE public.agent_jobs
+  ADD COLUMN IF NOT EXISTS current_turn INT NOT NULL DEFAULT 1;

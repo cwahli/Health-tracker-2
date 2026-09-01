@@ -12,7 +12,8 @@ export function useJob(jobId: string | null) {
     }
 
     const update = () => {
-      setJob(JobStore.getJob(jobId));
+      const live = JobStore.getJob(jobId);
+      setJob(live ? { ...live } : undefined);
     };
 
     update();

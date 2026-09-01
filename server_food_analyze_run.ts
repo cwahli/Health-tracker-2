@@ -115,7 +115,6 @@ import {
 } from './server_food_db.js';
 import { decidePrepAddition } from './server_prep_policy.js';
 import { NUTRIENT_KEYS } from './src/utils/nutrients.js';
-
 import {
   isKnownDatabaseBrand,
   isKnownDatabaseBrandSync,
@@ -176,13 +175,9 @@ import {
   resolveComparisonGroups,
   retrieveFoodImages,
 } from './server.js';
-
-
 function extractFoodSearchQueriesFromText(message: string): string[] {
   if (!message || typeof message !== 'string') return [];
-  
   let msg = message.trim().toLowerCase();
-
   // Non-food / greeting check
   const nonFoodPatterns = [
     /^(start|let's start|hello|hi|hey|greetings|help|test|yes|no|ok|okay|clear|reset|menu|why|explain|question|info|please)$/i,
@@ -190,14 +185,11 @@ function extractFoodSearchQueriesFromText(message: string): string[] {
   ];
   const isNonFood = nonFoodPatterns.some(p => p.test(msg)) && !/\b(eat|ate|eating|had|cooked|fried|grilled|recipe|meal|food|snack|breakfast|lunch|dinner|portion|slice|glass|cup|gram|grams|calorie|calories|nutrient|nutrients)\b/i.test(msg);
   if (isNonFood) return [];
-
   // Remove portion/weight amounts & units: e.g. "200g", "150 grams", "2 oz", "1 serving", "3 pcs", "2 slices", "1/2 cup"
   msg = msg.replace(/\b\d+(\.\d+)?\s*(g|grams|oz|lbs|kg|servings|serving|pcs|piece|pieces|slice|slices|cup|cups|glass|glasses|tbsp|tsp|bowl|bowls|plate|plates)?\b/gi, ' ');
   msg = msg.replace(/\b(\d+\/\d+)\s*(g|grams|oz|lbs|kg|servings|serving|pcs|piece|pieces|slice|slices|cup|cups|glass|glasses|tbsp|tsp|bowl|bowls|plate|plates)?\b/gi, ' ');
-
   // Remove punctuation (including apostrophes, commas, quotes, hyphens, colons, brackets)
   msg = msg.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?'"“”\[\]]/g, ' ');
-
   // List of conversational stop words/phrases to remove
   const stopWords = new Set([
     'it', 'its', 'is', 's', 'that', 'thats', 'this', 'these', 'those', 'there', 'theres', 'they', 'theyre', 'them',
@@ -211,16 +203,13 @@ function extractFoodSearchQueriesFromText(message: string): string[] {
     'correction', 'corrections', 'actually', 'instead', 'change', 'modify', 'update', 'correct', 'replace',
     'rather', 'than', 'think', 'believe', 'cooked', 'made', 'make'
   ]);
-
   // Split into candidate food phrases using conjunctions / separators ("and", ",", "+", ";", "with", "to", "instead of")
   const rawSegments = msg.split(/\b(?:and|with|to|instead of|\+|;|,)\b/gi);
   const queries: string[] = [];
-
   for (const seg of rawSegments) {
     const words = seg.trim().split(/\s+/).filter(w => w.length > 0);
     // Filter out stop words
     const foodWords = words.filter(w => !stopWords.has(w) && w.length > 1);
-    
     if (foodWords.length > 0) {
       const foodPhrase = foodWords.join(' ').trim();
       if (foodPhrase.length >= 2 && !/^\d+$/.test(foodPhrase)) {
@@ -230,10 +219,8 @@ function extractFoodSearchQueriesFromText(message: string): string[] {
       }
     }
   }
-
   return queries;
 }
-
 export async function runFoodAnalyze(req: any, res: any) {
   if (!req.headers['x-session-id'] || !req.headers['x-session-id'].toString().startsWith('server-job-')) {
     return res.status(403).json({ error: 'This SSE path is deprecated and strictly reserved for internal loopback execution.' });
@@ -242,8 +229,6 @@ export async function runFoodAnalyze(req: any, res: any) {
   let hasSentHeaders = false;
   const sessionId = logSessionStorage.getStore() || "global";
   const initialLogCount = (sessionDebugLogs[sessionId] || globalDebugLogs).length;
-
-
   if (isStream) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -252,10 +237,8 @@ export async function runFoodAnalyze(req: any, res: any) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.flushHeaders();
     hasSentHeaders = true;
-
     const originalJson = res.json.bind(res);
     const originalStatus = res.status.bind(res);
-
     res.status = (code: number) => {
       // If headers already sent, ignore status code changes
       if (!res.headersSent) {
@@ -263,13 +246,11 @@ export async function runFoodAnalyze(req: any, res: any) {
       }
       return res;
     };
-
     res.json = (body: any) => {
       const sessionId = logSessionStorage.getStore() || "global";
       const logsToUse = sessionDebugLogs[sessionId] || globalDebugLogs;
       body.agentResult = body.agentResult || {};
       body.agentResult.backendLogs = logsToUse.slice(initialLogCount).map((l: any) => `[${l.timestamp}] ${l.message}`).join('\n');
-      
       const jobId = req.body.jobId;
       const photoUrl = req.body.photoUrl;
       if (jobId) {
@@ -283,7 +264,6 @@ export async function runFoodAnalyze(req: any, res: any) {
             }
             if (cleanResult.agentResult) delete cleanResult.agentResult.backendLogs;
             if (cleanResult.raw) delete cleanResult.raw;
-
             // Flatten to match the same shape serverJobs.ts already uses successfully:
             // pendingFoodLog must be the actual meal object (itemsBreakdown/nutrients/name),
             // not the whole response envelope, and mode/text/message must be preserved
@@ -315,7 +295,6 @@ export async function runFoodAnalyze(req: any, res: any) {
                } catch (r2Err) {
                   console.error('[Background Worker] Failed to save cleanResult to R2:', r2Err);
                }
-
                return supabaseAdmin.from('agent_jobs').update({
                   status: 'succeeded',
                   progress_percent: 100,
@@ -338,7 +317,6 @@ export async function runFoodAnalyze(req: any, res: any) {
       return res;
     };
   }
-
   const sendStreamEvent = (data: any) => {
     if (isStream && hasSentHeaders) {
       try {
@@ -349,7 +327,6 @@ export async function runFoodAnalyze(req: any, res: any) {
       }
     }
   };
-
   await streamDebugLogStorage.run((_msg: string) => {
     // sendLog() below already broadcasts its own tagged event directly — every message
     // it passes to addDebugLog() is prefixed "[<logType>] ...", so skip re-forwarding
@@ -368,25 +345,21 @@ export async function runFoodAnalyze(req: any, res: any) {
   try {
     const { message, image, images, imageDates, history, userProfile, engine, biomarkersNeedingImprovement, remainingAllowance, userId, activeMeal, customSystemInstruction, customVariableData, foodLogs, userSelectedMode } = req.body;
     const activeComparison = req.body.activeComparison;
-
     const sendLog = (logType: string, stage: 'scout' | 'db_search' | 'dietitian' | 'food_resolver', messageText: string, extra?: any) => {
       addDebugLog(`[${logType}] ${messageText}`);
       sendStreamEvent({ type: 'log', logType, stage, message: messageText, timestamp: Date.now(), ...extra });
     };
     sendLog('status', 'scout', 'Starting food analysis...');
-
     // 1. Intercept prompt & read current active state from Request Body (passed from client)
     if (activeMeal) {
       addDebugLog(`[Client State] Received active meal: ${activeMeal.name}`);
     } else {
       addDebugLog(`[Client State] No active meal received.`);
     }
-
     // Check if key is mock
     if (!getGeminiApiKey()) {
       // If the user's message is a modify request, let's execute modify command offline!
       const isModifyRequest = message.toLowerCase().includes("change") || message.toLowerCase().includes("modify") || message.toLowerCase().includes("update") || message.toLowerCase().includes("remove") || message.toLowerCase().includes("add") || message.toLowerCase().includes("gram");
-      
       if (isModifyRequest && activeMeal) {
         // Let's create an offline mock command
         let mockCommand: any = null;
@@ -401,9 +374,7 @@ export async function runFoodAnalyze(req: any, res: any) {
           const grams = match ? Number(match[1]) : 120;
           mockCommand = { action: "add_item", itemName: "Extra Topping", newWeightGrams: grams };
         }
-
         const originalTotalWeight = (activeMeal.itemsBreakdown || []).reduce((acc: number, it: any) => acc + (Number(it.weightGrams) || 0), 0) || 1;
-        
         if (mockCommand) {
           if (mockCommand.action === "update_weight") {
             const item = activeMeal.itemsBreakdown?.find((it: any) => it.name.toLowerCase().includes(mockCommand.itemName.toLowerCase()));
@@ -497,10 +468,8 @@ export async function runFoodAnalyze(req: any, res: any) {
             });
           }
         }
-
         const newTotalWeight = (activeMeal.itemsBreakdown || []).reduce((acc: number, it: any) => acc + (Number(it.weightGrams) || 0), 0);
         const mealWeightRatio = newTotalWeight / originalTotalWeight;
-
         const newItems = activeMeal.itemsBreakdown || [];
         activeMeal.weightGrams = newTotalWeight;
         if (newItems.length === 1) {
@@ -514,30 +483,24 @@ export async function runFoodAnalyze(req: any, res: any) {
           });
         }
         activeMeal.composition = newItems.map((it: any) => it.name).join(", ");
-        
         const newCalories = (activeMeal.itemsBreakdown || []).reduce((acc: number, it: any) => acc + (Number(it.calories) || 0), 0);
         const newSaturatedFat = (activeMeal.itemsBreakdown || []).reduce((acc: number, it: any) => acc + (Number(it.saturatedFat) || 0), 0);
         const newSodium = (activeMeal.itemsBreakdown || []).reduce((acc: number, it: any) => acc + (Number(it.sodium) || 0), 0);
-
         if (!activeMeal.nutrients) activeMeal.nutrients = {};
         activeMeal.nutrients.calories = Number(newCalories.toFixed(1));
         activeMeal.nutrients.saturatedFat = Number(newSaturatedFat.toFixed(2));
         activeMeal.nutrients.sodium = Number(newSodium.toFixed(1));
-
         for (const key of Object.keys(activeMeal.nutrients)) {
           if (key !== "calories" && key !== "saturatedFat" && key !== "sodium") {
             activeMeal.nutrients[key] = Number(((activeMeal.nutrients[key] || 0) * mealWeightRatio).toFixed(2));
           }
         }
-
         // We removed offline mock write to user_meals to avoid permission issues
-
         return res.json({
           text: `[Simulated Offline Mod] Modifying active meal: **${activeMeal.name}** to new weights/items. Recalculated all 30 sub-nutrients mathematically offline to save tokens and ensure precision.`,
           data: activeMeal
         });
       }
-
       const isDiscussionRequest = message.toLowerCase().includes("why") || message.toLowerCase().includes("explain") || message.toLowerCase().includes("question");
       if (isDiscussionRequest) {
         return res.json({
@@ -545,13 +508,11 @@ export async function runFoodAnalyze(req: any, res: any) {
           data: null
         });
       }
-
       return res.json({
         error: "The food log agent is not available. Please enter the food details manually.",
         agentNotAvailable: true
       });
     }
-
     let imagePayloads = null;
     if (images && Array.isArray(images) && images.length > 0) {
       imagePayloads = images.map((imgStr: string) => {
@@ -564,9 +525,7 @@ export async function runFoodAnalyze(req: any, res: any) {
       const base64Data = image.split(",")[1];
       imagePayloads = [{ mimeType, data: base64Data }];
     }
-
     addDebugLog(`[Image Payload] Received ${imagePayloads ? imagePayloads.length : 0} image(s). Approx sizes (KB): ${imagePayloads ? imagePayloads.map(p => Math.round((p.data.length * 0.75) / 1024) + 'KB').join(', ') : 'none'}.`);
-
     const analysisNutrientKeys = [
         "calories", "protein", "totalFat", "saturatedFat", "transFat", "unsaturatedFat", "omega3", 
       "carbohydrates", "addedSugar", "totalFibre", "solubleFibre", "sodium", "potassium", 
@@ -574,7 +533,6 @@ export async function runFoodAnalyze(req: any, res: any) {
       "vitaminD", "vitaminB12", "folate", "vitaminC", "vitaminE", "vitaminK", 
       "vitaminA", "vitaminB6", "thiamine", "riboflavin", "niacin"
     ];
-
     // Helper functions for nutritional data lookup
     const formatUSDANutrients = (nutrients: any[]): string => {
       if (!nutrients || !Array.isArray(nutrients)) return "No nutrients available";
@@ -589,7 +547,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           const unit = exactMatch.unitName || (exactMatch.nutrient && exactMatch.nutrient.unitName) || "";
           return `${val}${unit}`;
         }
-
         // Fallback with precise keyword validation to avoid false fatty acid matches on "fat"
         const nut = nutrients.find(n => {
           const name = (n.nutrientName || (n.nutrient && n.nutrient.name) || "").toLowerCase();
@@ -619,7 +576,6 @@ export async function runFoodAnalyze(req: any, res: any) {
       if (sodium) mapped.push(`Sodium: ${sodium}`);
       return mapped.join(", ");
     };
-
     const formatOFFNutrients = (nutriments: any): string => {
       if (!nutriments) return "No nutrients available";
       const mapped: string[] = [];
@@ -628,7 +584,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         const num = Number(val);
         return isNaN(num) ? val : Math.round(num * 100) / 100;
       };
-      
       const kcal = nutriments["energy-kcal_100g"] !== undefined 
         ? formatVal(nutriments["energy-kcal_100g"]) 
         : (nutriments["energy_100g"] !== undefined ? formatVal(Math.round(nutriments["energy_100g"] / 4.184)) : null);
@@ -636,7 +591,6 @@ export async function runFoodAnalyze(req: any, res: any) {
       const fat = formatVal(nutriments["fat_100g"]);
       const satFat = formatVal(nutriments["saturated-fat_100g"]);
       const sodium = formatVal(nutriments["sodium_100g"]);
-      
       if (kcal !== null) mapped.push(`Calories: ${kcal}kcal`);
       if (protein !== null) mapped.push(`Protein: ${protein}g`);
       if (fat !== null) mapped.push(`Fat: ${fat}g`);
@@ -644,40 +598,33 @@ export async function runFoodAnalyze(req: any, res: any) {
       if (sodium !== null) mapped.push(`Sodium: ${Math.round(Number(sodium) * 1000)}mg`);
       return mapped.join(", ");
     };
-
     const extractOFFNutrientsPer100g = (product: any): Record<string, number> => {
       const profile: Record<string, number> = {};
       const n = product.nutriments;
       if (!n) return profile;
-      
       if (n["energy-kcal_100g"] !== undefined) {
         profile["calories"] = Number(n["energy-kcal_100g"]) || 0;
       } else if (n["energy_100g"] !== undefined) {
         profile["calories"] = Math.round(Number(n["energy_100g"]) / 4.184) || 0;
       }
-      
       const setNum = (key: string, field: string, scale: number = 1) => {
         if (n[field] !== undefined) {
           profile[key] = (Number(n[field]) || 0) * scale;
         }
       };
-
       setNum("protein", "proteins_100g");
       setNum("totalFat", "fat_100g");
       setNum("saturatedFat", "saturated-fat_100g");
       setNum("transFat", "trans-fat_100g");
-      
       if (profile["totalFat"] !== undefined) {
         profile["unsaturatedFat"] = Math.max(0, profile["totalFat"] - (profile["saturatedFat"] || 0) - (profile["transFat"] || 0));
       }
-      
       setNum("omega3", "omega-3_100g");
       setNum("carbohydrates", "carbohydrates_100g");
       setNum("sugar", "sugars_100g");
       setNum("addedSugar", "added_sugars_100g");
       setNum("totalFibre", "fiber_100g");
       setNum("solubleFibre", "soluble-fiber_100g");
-      
       setNum("sodium", "sodium_100g", 1000);
       setNum("potassium", "potassium_100g", 1000);
       setNum("magnesium", "magnesium_100g", 1000);
@@ -698,10 +645,8 @@ export async function runFoodAnalyze(req: any, res: any) {
       setNum("thiamine", "thiamine_100g", 1000);
       setNum("riboflavin", "riboflavin_100g", 1000);
       setNum("niacin", "niacin_100g", 1000);
-
       return profile;
     };
-
     // B5 — Detect weight/portion refine on prior scout (skip Vision Scout + DB when safe).
     // Path A: text-only refine. Path B: images still attached but printed label locks exist.
     const priorScoutForRefine = Array.isArray(req.body.activeScoutItems) ? req.body.activeScoutItems : [];
@@ -715,7 +660,6 @@ export async function runFoodAnalyze(req: any, res: any) {
     const weightRefineIntent = refineDecision.intent.isRefine
       ? refineDecision.intent
       : detectWeightRefineIntent(message);
-
     // Pure weight modification: only true if there is an explicit numerical gram weight for the whole meal
     const isPureWeightModification = !!(
       (refineDecision.skip && weightRefineIntent.isRefine && weightRefineIntent.kind === 'absolute_grams' && typeof weightRefineIntent.weightGrams === 'number' && weightRefineIntent.weightGrams > 0 && !weightRefineIntent.targetHint) ||
@@ -731,7 +675,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         !/\b(only|remove|delete|without|except|no|instead|replace|add|plus|with|not|didn't|did\s+not)\b/i.test(message)
       )
     );
-
     // Frontend sends the user's explicit mode selection (review | compare | edit) from the pill toggle.
     // When the user has explicitly selected "Edit", treat any text-only follow-up as a modification
     // command regardless of wording, instead of relying solely on keyword matching.
@@ -745,17 +688,13 @@ export async function runFoodAnalyze(req: any, res: any) {
         (Array.isArray(activeMeal.items) && activeMeal.items.length > 0)
       )
     );
-
     // One modal = one document. If this modal already has a meal, every later
     // submit (text, extra photos, refine) is edit/merge — never a second new_log.
     const isExplicitModify = !!hasActiveMealDocument;
-
     addDebugLog(`[Edit Gate] userSelectedMode="${req.body.userSelectedMode || 'undefined'}" | userExplicitlySelectedEditMode=${userExplicitlySelectedEditMode} | activeMeal=${!!activeMeal} | hasImages=${!!(imagePayloads && imagePayloads.length > 0)} | message="${(message || '').substring(0, 50)}" | isExplicitModify=${isExplicitModify} | refineSkip=${refineDecision.skip} reason=${refineDecision.reason}`);
-
     const isWeightModification = isPureWeightModification || refineDecision.skip;
     const compareOnly = req.body.compareOnly === true;
     const compareItems = Array.isArray(req.body.compareItems) ? req.body.compareItems : [];
-
     let databaseMatches = "";
     const databaseMatchesArray: any[] = [];
     const quarantinedIdsSet = new Set<string>();
@@ -809,7 +748,6 @@ export async function runFoodAnalyze(req: any, res: any) {
     const dbMatchMap = new Map<string, any>();
     const queriesToSearch: string[] = [];
     const scoutOriginalQueries: string[] = [];
-
     if (compareOnly) {
       addDebugLog(`[Shortcut] Compare mode detected. Skipping Vision Scout and DB Search.`);
       if (compareItems && compareItems.length > 0) {
@@ -841,7 +779,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         : ((Array.isArray(req.body.scoutItems) && req.body.scoutItems.length > 0)
           ? req.body.scoutItems
           : (Array.isArray(activeMeal?.scoutItems) && activeMeal.scoutItems.length > 0 ? activeMeal.scoutItems : []));
-      
       if (priorScout.length === 0 && Array.isArray(history) && history.length > 0) {
         // Fallback: search history messages for scoutItems or portionClarify items
         const clarifyMsg = [...history].reverse().find((m: any) => 
@@ -857,7 +794,6 @@ export async function runFoodAnalyze(req: any, res: any) {
             clarifyMsg.data.agentResult?.scoutItems || [];
         }
       }
-
       if (priorScout.length > 0) {
         addDebugLog(`[Shortcut] skipScout or portionChoices is true. Inheriting ${priorScout.length} scout items from previous run.`);
         visionScoutItems = applyPortionChoices(
@@ -874,7 +810,6 @@ export async function runFoodAnalyze(req: any, res: any) {
       } else {
         addDebugLog(`[PortionChoices] portionChoices provided but priorScout is empty; proceeding with standard pipeline.`);
       }
-
       // Task 3: Restore pre-resolved DB candidates from turn-1 portionClarify payload.
       // This prevents the DB search from re-running from scratch and avoids cross-match bugs.
       const priorCandidates = Array.isArray(req.body.resolvedDbCandidates) ? req.body.resolvedDbCandidates : [];
@@ -898,7 +833,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         let scoutAttempts = 0;
         const maxScoutAttempts = 3;
         let lastScoutErr: any = null;
-
         while (scoutAttempts < maxScoutAttempts) {
           scoutAttempts++;
           try {
@@ -915,6 +849,7 @@ export async function runFoodAnalyze(req: any, res: any) {
               promptText: scoutPromptText,
               imagePayloads,
               responseMimeType: "application/json",
+              maxOutputTokens: 8192,
               temperature: 0.1,
               skipThinking: true,
               logStagePrefix: 'scout',
@@ -1017,7 +952,6 @@ export async function runFoodAnalyze(req: any, res: any) {
                 required: ["contentType", "diningEnvironment", "dishes"],
               }
             });
-
             // Yield to the event loop before heavy synchronous parsing
             await new Promise(resolve => setImmediate(resolve));
             scoutResult = parseAndHealVisionScout(scoutOutput, addDebugLog, userSelectedMode === 'compare', message);
@@ -1031,7 +965,6 @@ export async function runFoodAnalyze(req: any, res: any) {
             }
           }
         }
-
         if (!scoutResult) {
           addDebugLog(`[Vision Scout Failed Permanently] Both attempts failed. Last error: ${lastScoutErr?.message}`);
           const raw = String(lastScoutErr?.message || '');
@@ -1047,13 +980,11 @@ export async function runFoodAnalyze(req: any, res: any) {
           }
           throw new Error(`Vision Scout Failed: Couldn't reliably read this image, please try again or re-upload. (Details: ${raw})`);
         }
-
           scoutInternalReasoning = scoutResult.internalReasoning || scoutResult._internalReasoning || null;
           rawScoutData = scoutResult.rawScoutJson || scoutResult.rawDishes || null;
           if (scoutInternalReasoning) {
             addDebugLog(`[Vision Scout Internal Reasoning] ${scoutInternalReasoning}`);
           }
-
           visionScoutItems = (scoutResult.items || []).map((item: any) => ({
             ...item,
             internalReasoning: scoutInternalReasoning,
@@ -1072,7 +1003,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           diningEnvironment = (scoutResult.diningEnvironment && scoutResult.diningEnvironment !== 'unknown')
             ? scoutResult.diningEnvironment
             : (activeMeal?.diningEnvironment || "unknown");
-          
           if (req.body.userSelectedMode === 'review' && !hasActiveMealDocument) {
             scoutRecommendedMode = "new_log";
             addDebugLog(`[Mode Override] User explicitly selected 'review' mode via UI pill. Forcing mode to 'new_log'.`);
@@ -1088,19 +1018,16 @@ export async function runFoodAnalyze(req: any, res: any) {
           queriesToSearch.push(...scoutResult.queriesToSearch);
           scoutOriginalQueries.push(...scoutResult.queriesToSearch);
           visionScoutRanAndReturnedItems = scoutResult.visionScoutRanAndReturnedItems;
-
           const scoutItemsSummary = visionScoutItems.map((it: any) => ({
             name: it.originalName || it.keyword,
             keyword: it.keyword,
             weight: it.estimatedWeightGrams
           }));
           const scoutItemsSummaryStr = scoutItemsSummary.map((i: any) => `${i.name} (~${i.weight}g)`).join(', ');
-
           sendLog('scout_answer', 'scout', `Scout identified ${visionScoutItems.length} item(s): ${scoutItemsSummaryStr}`, {
             items: scoutItemsSummary
           });
           sendStreamEvent({ type: 'status', stage: 'scout', status: 'completed', message: 'Vision Scout completed.' });
-
           addDebugLog(`[Vision Scout] Exploded high density rows into ${visionScoutItems.length} individual item(s) to process:`);
           if (hasActiveMealDocument && Array.isArray(activeMeal.itemsBreakdown) && activeMeal.itemsBreakdown.length > 0) {
             const existing = activeMeal.itemsBreakdown.map((it: any, idx: number) => ({
@@ -1164,11 +1091,9 @@ export async function runFoodAnalyze(req: any, res: any) {
         }
       }
     }
-
     const bracketItems = parseBracketedFoodItems(message || '');
     if (bracketItems.length > 0) {
       addDebugLog(`[Bracket Pre-Extracted] Found ${bracketItems.length} pre-extracted bracket item(s) in message: ${bracketItems.map(b => `"${b.originalName}" (${b.estimatedWeightGrams}g)`).join(', ')}`);
-      
       bracketItems.forEach((bItem: any) => {
         const bName = (bItem.originalName || '').toLowerCase().trim();
         // Remove any scout items that match this bracket item (clean purge of OCR/label reference photos)
@@ -1182,7 +1107,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           }
           return true;
         });
-
         // Add clean bracket pre-extracted item with standard nutrient breakdown
         const baseNuts = getFallbackCategoryProfile(bItem.originalName || bItem.keyword || '');
         const factor = (bItem.estimatedWeightGrams || 100) / 100;
@@ -1232,7 +1156,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         bItem.ingredients = [bItem.originalName];
         bItem.visualIngredients = [bItem.originalName];
         visionScoutItems.push(bItem);
-
         const q = bItem.originalName || bItem.keyword;
         if (q && !queriesToSearch.includes(q)) {
           queriesToSearch.push(q);
@@ -1240,7 +1163,6 @@ export async function runFoodAnalyze(req: any, res: any) {
       });
       visionScoutRanAndReturnedItems = visionScoutItems.length > 0;
     }
-
     // Strip parenthetical local-language notes for cleaner USDA/OFF matching
     // e.g. "raw beef slices (daging empal and blade)" → "raw beef slices"
     const loosenQuery = (query: string): string => {
@@ -1264,7 +1186,6 @@ export async function runFoodAnalyze(req: any, res: any) {
       q = q.replace(/\s+/g, ' ').trim();
       return q;
     };
-
     const cleanQuery = (raw: string) => {
       let clean = raw.replace(/\s*\(.*?\)\s*/g, '').trim().toLowerCase();
       clean = clean.replace(/\b(soda|can|bottle|pack|tub|slice|cubes|pieces|portion|raw|cooked|boiled|baked|grilled|steamed)\b/g, '').replace(/\s+/g, ' ').trim();
@@ -1284,37 +1205,30 @@ export async function runFoodAnalyze(req: any, res: any) {
         "kentang": "potato",
         "wortel": "carrot"
       };
-
       for (const [indo, eng] of Object.entries(indonesianToEnglish)) {
         const regex = new RegExp(`\\b${indo}\\b`, 'g');
         if (regex.test(clean)) {
           clean = clean.replace(regex, eng);
         }
       }
-      
       // Automatically prepend "raw" to meats to prevent fetching salted/cooked versions, unless it's a known chain or already specified
       const meats = ["beef", "chicken", "pork", "fish", "steak", "lamb", "mutton", "veal", "salmon", "tuna", "cod", "shrimp", "prawn", "duck"];
       const preparedModifiers = ["raw", "cooked", "fried", "roasted", "grilled", "baked", "boiled", "smoked", "cured", "canned"];
       const chainModifiers = ["mcdonald", "kfc", "burger king", "subway", "brand"];
-      
       const isMeat = meats.some(m => clean.includes(m));
       const hasPreparation = preparedModifiers.some(p => clean.includes(p));
       const isChain = chainModifiers.some(c => clean.includes(c));
-
       if (isMeat && !hasPreparation && !isChain) {
         clean = "raw " + clean;
       }
-
       return clean;
     };
-
     const hasImage = imagePayloads && imagePayloads.length > 0;
     // Only treat this as a "big menu browse" for search-skipping purposes when the scout
     // actually recommends evaluation/browsing mode. A menu-board photo taken to log one
     // specific consumed dish (scoutRecommendedMode === "new_log") should still get real
     // nutrition search for that item, even though the source photo is a menu_or_poster.
     const isMenuScale = (visionScoutContentType === "menu_or_poster" || visionScoutContentType === "text") && scoutRecommendedMode !== "new_log";
-
     if (Array.isArray(req.body.explicitFoodTags) && req.body.explicitFoodTags.length > 0) {
       req.body.explicitFoodTags.forEach((tag: any, idx: number) => {
         const existing = visionScoutItems.find((vi: any) => vi.dbId === tag.dbId || vi.keyword === tag.name);
@@ -1332,10 +1246,8 @@ export async function runFoodAnalyze(req: any, res: any) {
       });
       addDebugLog(`[Explicit Food Tags] Injected ${req.body.explicitFoodTags.length} catalog tags directly into vision items.`);
     }
-
     // Clean and consolidate queries first
     const uniqueQueries = buildFoodSearchQuerySet(visionScoutItems || []);
-
     const chainPatterns: [string, RegExp][] = [
       ['sainsbury', /\bsainsbury\b/i],
       ['yolk', /\byolk\b/i],
@@ -1351,12 +1263,10 @@ export async function runFoodAnalyze(req: any, res: any) {
       ['quaker', /\bquaker\b/i],
       ['jack_daniels', /jack\s*daniel/i],
     ];
-
     const detectChainKeyFromText = (str: string): string | undefined => {
       const s = String(str || '').toLowerCase();
       const matched = chainPatterns.find(([, rx]) => rx.test(s));
       if (matched) return matched[0];
-      
       // Dynamic database brand match
       if (isKnownDatabaseBrandSync(s)) {
         const words = s.split(/[^a-z0-9]+/);
@@ -1368,11 +1278,9 @@ export async function runFoodAnalyze(req: any, res: any) {
       }
       return undefined;
     };
-
     const detectedChainKey =
       visionScoutItems?.map((it: any) => it.originalName || it.keyword || it.name).map(detectChainKeyFromText).find(Boolean) ||
       uniqueQueries.map(detectChainKeyFromText).find(Boolean);
-
     let registeredChainSources: any[] = [];
     if (detectedChainKey) {
       registeredChainSources = await lookupChainMenuSources(detectedChainKey, 'GB');
@@ -1383,7 +1291,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         addDebugLog(`[ChainSource] No official source for "${detectedChainKey}". Preferring component/USDA path over web_search absolute injection.`);
       }
     }
-
     const isEvaluationScale = visionScoutItems.length >= 15;
     const packagedBindItems = (visionScoutItems || []).filter((it: any) => isPackagedBindItem(it));
     if (isDishEstimateEnabled(req)) {
@@ -1402,11 +1309,9 @@ export async function runFoodAnalyze(req: any, res: any) {
         addDebugLog('[CuratorSkipped] Dish estimate pipeline active, skipping hot-path database search and resolver curator.');
       }
     }
-
     const shouldRunDbSearch = !isDishEstimateEnabled(req) && !isWeightModification && !isMenuScale && !isEvaluationScale &&
       databaseMatchesArray.length === 0 && // skip if already restored from turn-1 resolvedDbCandidates
       (visionScoutRanAndReturnedItems || (!hasImage && uniqueQueries.length > 0));
-
     // Task 1 cont.: DB search runs HERE — before portionClarify check — so candidates are
     // available to embed in the awaiting_user pause payload for carry-forward to turn 2.
     if (shouldRunDbSearch && uniqueQueries.length > 0) {
@@ -1414,29 +1319,24 @@ export async function runFoodAnalyze(req: any, res: any) {
       if (typeof (res as any).flush === 'function') (res as any).flush();
       sendLog('db_search', 'db_search', `Querying USDA & OpenFoodFacts databases for: [${uniqueQueries.join(', ')}]`);
       addDebugLog(`[Database Search] Performing USDA & OFF searches for queries: ${JSON.stringify(uniqueQueries)}`);
-
       const searchPromises = uniqueQueries.map(async (q) => {
         try {
           const cleaned = cleanQuery(q);
           const isBarcode = /^\d{6,}$/.test(cleaned);
-          
           let dataTypes = 'Foundation,SR Legacy,Survey (FNDDS)';
           const isDbBrand = await isKnownDatabaseBrand(cleaned);
           if (isBarcode || visionScoutContentType === 'text' || cleaned.toLowerCase().includes('brand') || isDbBrand) {
             dataTypes = 'Foundation,SR Legacy,Survey (FNDDS),Branded';
           }
-          
           const isGeneric = /^(mayo|mayonnaise|granola|tortilla|salad greens|mixed salad leaves|lettuce|tomato|onion|cucumber|bread|wrap|egg|boiled egg|salt|pepper|oil|butter|sugar|chicken|beef|pork|fish|tuna|salmon|rice|pasta|cheese)$/i.test(cleaned);
           if (isGeneric && !isDbBrand && !isBarcode) {
             dataTypes = 'Foundation,SR Legacy,Survey (FNDDS)'; // Override and lock to generics
             addDebugLog(`[BrandGuard] Using generic USDA types for "${cleaned}" (not a brand — skip branded/OFF catalog)`);
           }
-          
           let offP = Promise.resolve([]);
           if (isBarcode || dataTypes.includes('Branded')) {
             offP = searchOpenFoodFacts(cleaned, 3);
           }
-          
           // BrandGuard: a generic token (e.g. plain "mayonnaise") should not be allowed to
           // match a specific restaurant's branded catalog item (e.g. "Pot of Chimi Mayo")
           // unless that chain was actually detected for this meal. Previously this guard
@@ -1446,14 +1346,12 @@ export async function runFoodAnalyze(req: any, res: any) {
           const brandP = (isGeneric && !isDbBrand && !isBarcode && !detectedChainKey)
             ? Promise.resolve([])
             : searchBrandMenuItems(cleaned, detectedChainKey);
-
           let [usda, off, brandHits] = await Promise.all([
             searchUSDA(cleaned, 3, dataTypes),
             offP,
             brandP,
           ]);
           const web: any[] = [];
-
           // If zero results found in main database search, retry with loosened query
           if (usda.length === 0 && off.length === 0 && brandHits.length === 0) {
             const loosened = loosenQuery(cleaned);
@@ -1466,13 +1364,11 @@ export async function runFoodAnalyze(req: any, res: any) {
               const fallbackBrandP = (isGeneric && !isDbBrand && !isBarcode && !detectedChainKey)
                 ? Promise.resolve([])
                 : searchBrandMenuItems(loosened, detectedChainKey);
-
               const [fallUSDA, fallOFF, fallBrand] = await Promise.all([
                 searchUSDA(loosened, 3, dataTypes),
                 fallbackOffP,
                 fallbackBrandP
               ]);
-
               if (fallUSDA.length > 0 || fallOFF.length > 0 || fallBrand.length > 0) {
                 addDebugLog(`[Database Search Fallback] Succeeded for "${loosened}". USDA: ${fallUSDA.length}, OFF: ${fallOFF.length}, Brand: ${fallBrand.length}`);
                 usda = fallUSDA;
@@ -1481,14 +1377,12 @@ export async function runFoodAnalyze(req: any, res: any) {
               }
             }
           }
-
           return { query: q, usda, off, brandHits, web };
         } catch (err) {
           return { query: q, usda: [], off: [], brandHits: [], web: [] };
         }
       });
       const searchResultsList = await Promise.all(searchPromises);
-
       // Ensure explicit food tags from internal catalog are present in databaseMatchesArray
       if (Array.isArray(req.body.explicitFoodTags) && req.body.explicitFoodTags.length > 0) {
         for (const tag of req.body.explicitFoodTags) {
@@ -1507,7 +1401,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           }
         }
       }
-
       const list: string[] = [];
       const seenBrandTargets = new Set<string>();
       for (const resItem of searchResultsList) {
@@ -1545,7 +1438,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         resItem.usda.forEach((food: any) => {
           const fdcIdStr = String(food.fdcId);
           dbMatchMap.set(fdcIdStr, extractUSDANutrientsPer100g(food));
-
           const parsedNutrients = extractUSDANutrientsPer100g(food);
           const caloriesStr = String(parsedNutrients.calories);
           databaseMatchesArray.push({
@@ -1564,14 +1456,12 @@ export async function runFoodAnalyze(req: any, res: any) {
             totalFibre: parsedNutrients.totalFibre,
             nutrients: parsedNutrients
           });
-
           list.push(`- [USDA] ID: ${fdcIdStr} | Name: ${food.description} | Nutrients (per 100g): ${formatUSDANutrients(food.foodNutrients)}`);
         });
         resItem.off.forEach((product: any) => {
           const idStr = String(product.barcode || product.id || product.code || "");
           if (idStr) {
             dbMatchMap.set(idStr, extractOFFNutrientsPer100g(product));
-
             const parsedNutrients = extractOFFNutrientsPer100g(product);
             const caloriesStr = String(parsedNutrients.calories);
             databaseMatchesArray.push({
@@ -1590,7 +1480,6 @@ export async function runFoodAnalyze(req: any, res: any) {
               totalFibre: parsedNutrients.totalFibre,
               nutrients: parsedNutrients
             });
-
             list.push(`- [OpenFoodFacts] Barcode: ${idStr} | Name: ${product.product_name} (${product.brands || 'No Brand'}) | Nutrients (per 100g): ${formatOFFNutrients(product.nutriments)}`);
           }
         });
@@ -1611,14 +1500,12 @@ export async function runFoodAnalyze(req: any, res: any) {
               const webFat = webItem.fat != null ? Number(webItem.fat) : null;
               const webSatFat = webItem.saturatedFat != null ? Number(webItem.saturatedFat) : null;
               const webCals = Number(webItem.calories || 0);
-
               // NUTRITION BASIS FIX (Aug 2026): live web/brand search results report calories for
               // the WHOLE named dish as sold (e.g. "YOLK Chicken Sandwich: 783 kcal" = one whole
               // sandwich), NOT per 100g. Tag as basisType 'total' so downstream scaling does not
               // re-multiply by weight/100 a second time. Reuses the existing 'basisType' convention
               // already used elsewhere in this file (see the printed-label truthMatch object).
               const nutritionBasisType = isBrandResult ? 'total' : 'per_100g';
-
               const dbEntry = {
                 id: webId,
                 source: isBrandResult ? 'brand_official' : (webItem.source || "web_search"),
@@ -1637,9 +1524,7 @@ export async function runFoodAnalyze(req: any, res: any) {
                 brandPriority: isBrandResult,
                 basisType: nutritionBasisType
               };
-
               databaseMatchesArray.push(dbEntry);
-
               dbMatchMap.set(webId, {
                 servingSizeGrams: 100,
                 basisType: nutritionBasisType,
@@ -1656,7 +1541,6 @@ export async function runFoodAnalyze(req: any, res: any) {
                 totalFibre: webFibre,
                 solubleFibre: 0
               });
-
               list.push(`- [WebSearch${isBrandResult ? ' (Brand Priority)' : ''}] Query: ${resItem.query} | Name: ${webItem.name || resItem.query} | Calories: ${webCals} | P: ${webProt}g | C: ${webCarbs}g | F: ${webFat}g | Provider: ${webItem.source || 'web_search'}`);
             } else if (webItem) {
               addDebugLog(`[WebSearch] Discarded unusable hit for "${resItem.query}" (calories=${webItem.calories ?? 'n/a'}).`);
@@ -1671,11 +1555,9 @@ export async function runFoodAnalyze(req: any, res: any) {
       }
       sendLog('db_search_complete', 'db_search', `Found ${databaseMatchesArray.length} database match(es) across USDA & OpenFoodFacts.`);
       sendStreamEvent({ type: 'status', stage: 'db_search', status: 'completed', message: 'Database search completed.' });
-
       // Run Food Resolver Agent only for query gaps that do NOT hit the internal catalog or dish cache
       // and that are NOT covered by a complete printed packaging label (token save + avoid bad USDA).
       const gapsForResolver: Array<{ query: string; candidates: Array<{ id: string; name: string; source: string }> }> = [];
-
       const labelCompleteQueries = new Set<string>();
       const scoutHasCompletePrintedLabel = (item: any): boolean => {
         const raw = item?.rawNutritionLabel;
@@ -1705,12 +1587,10 @@ export async function runFoodAnalyze(req: any, res: any) {
           }
         }
       }
-
       const internalHits = await Promise.all(searchResultsList.map(async (resItem) => {
         const hit = await resolveInternalFood(resItem.query);
         return { resItem, hit };
       }));
-
       for (const { resItem, hit } of internalHits) {
         if (hit) {
           const virtualId = hit.food_id || `internal_${hit.food_key}`;
@@ -1733,13 +1613,11 @@ export async function runFoodAnalyze(req: any, res: any) {
           addDebugLog(`[Internal Catalog Hit] Resolved "${resItem.query}" from internal catalog without Food Resolver agent gap.`);
           continue;
         }
-
         const qNorm = String(resItem.query || '').toLowerCase().trim();
         if (qNorm && labelCompleteQueries.has(qNorm)) {
           addDebugLog(`[Food Resolver Skip] Complete printed label covers "${resItem.query}" — skipping LLM resolver for this gap.`);
           continue;
         }
-
         const compositeParentDishQueries = new Set<string>();
         for (const s of visionScoutItems || []) {
           if (Array.isArray(s.components) && s.components.length >= 2) {
@@ -1752,7 +1630,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           addDebugLog(`[Food Resolver Skip] Composite multi-component parent dish "${resItem.query}" is resolved via its sub-components — skipping monolithic LLM resolver gap.`);
           continue;
         }
-
         const candidates: Array<{ id: string; name: string; source: string }> = [];
         resItem.brandHits?.forEach((item: any) => {
           candidates.push({ id: String(item.id), name: `${item.chainName || ''} ${item.name || item.dish_name || ''}`.trim(), source: "brand_official" });
@@ -1782,24 +1659,20 @@ export async function runFoodAnalyze(req: any, res: any) {
             });
             continue; // Skip adding to gapsForResolver!
         }
-
         // For MULTI_MATCH or MISS, pass the survivors (or top N if none) to the Curator
         const candidatesToAdd = survivors.length > 0 ? survivors.map(s => s.candidate) : resItem.usda;
         candidatesToAdd.forEach((food: any) => {
           candidates.push({ id: String(food.fdcId), name: food.description || "", source: "usda" });
         });
-        
         resItem.off.forEach((product: any) => {
           const idStr = String(product.barcode || product.id || product.code || "");
           if (idStr) {
             candidates.push({ id: idStr, name: product.product_name || "", source: "off" });
           }
         });
-
         const cleanGapQuery = sanitizeDishTitle(resItem.query);
         const gapKey = normalizeFoodKey(cleanGapQuery);
         const isDuplicateGap = gapsForResolver.some(g => normalizeFoodKey(sanitizeDishTitle(g.query)) === gapKey);
-
         if (!isDuplicateGap && cleanGapQuery) {
           gapsForResolver.push({
             query: cleanGapQuery,
@@ -1807,7 +1680,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           });
         }
       }
-
       if (visionScoutItems && visionScoutItems.length > 0) {
         for (const scoutItem of visionScoutItems) {
           const dishName = scoutItem.originalName || scoutItem.keyword || scoutItem.name;
@@ -1836,7 +1708,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           }
         }
       }
-
       if (gapsForResolver.length > 0) {
         sendLog('status', 'food_resolver', `Dispatched Food Resolver agent for ${gapsForResolver.length} gap items.`);
         const callLLMFn = async (prompt: string, sysInst: string) => {
@@ -1863,7 +1734,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           }
           return null;
         };
-
         const fetchNutrientsForFdcId = async (fdcId: string): Promise<Record<string, number> | null> => {
           if (dbMatchMap.has(fdcId)) {
             return dbMatchMap.get(fdcId) || null;
@@ -1886,7 +1756,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           searchUSDA,
           fetchFoodDetailsForFdcId
         );
-
         // For each resolved item, add it to databaseMatchesArray & dbMatchMap
         resolvedGaps.forEach(rg => {
           if (Array.isArray(rg.quarantinedIds)) {
@@ -1911,7 +1780,6 @@ export async function runFoodAnalyze(req: any, res: any) {
               return;
             }
             dbMatchMap.set(virtualId, rg.nutrientsPer100g);
-            
             const caloriesStr = String(rg.nutrientsPer100g.calories || 0);
             databaseMatchesArray.push({
               id: virtualId,
@@ -1931,7 +1799,6 @@ export async function runFoodAnalyze(req: any, res: any) {
             addDebugLog(`[Food Resolver Integration] Injected resolved nutrients for "${rg.query}" into databaseMatchesArray: ${JSON.stringify(rg.nutrientsPer100g)}`);
           }
         });
-
         // Trigger self-cleaning pass on brand database during Food Resolver review
         try {
           const { supabaseAdmin } = await import('./supabaseAdmin.js');
@@ -1944,7 +1811,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         } catch (cleanErr: any) {
           addDebugLog(`[Food Resolver Self-Clean] Background cleaning notice: ${cleanErr?.message || cleanErr}`);
         }
-
         // Record deferred gaps & category fallbacks for queries that couldn't be resolved from candidates
         const resolvedQuerySet = new Set(resolvedGaps.filter(rg => rg.nutrientsPer100g).map(rg => normalizeFoodKey(rg.query)));
         uniqueQueries.forEach(query => {
@@ -2003,7 +1869,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         });
       }
     }
-
     // Enrich scout items & sub-components with resolved brand / database matches before portion clarification
     if (Array.isArray(visionScoutItems) && Array.isArray(databaseMatchesArray) && databaseMatchesArray.length > 0) {
       visionScoutItems.forEach((item: any) => {
@@ -2051,7 +1916,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         }
       });
     }
-
     // Task 2: portionClarify check — now placed AFTER DB search and Resolver so ALL candidates are available.
     // B1 — Pause before nutrient calculation when multi-serve pack portion is ambiguous.
     // Resume path: skipScout + activeScoutItems + portionChoices + resolvedDbCandidates (no second scout/DB).
@@ -2064,7 +1928,6 @@ export async function runFoodAnalyze(req: any, res: any) {
       visionScoutRanAndReturnedItems
         ? buildPortionClarifyPayload(visionScoutItems)
         : null;
-
     if (portionClarify) {
       addDebugLog(
         `[PortionClarify] Pausing for user input on: ${portionClarify.items.map((i) => i.name).join('; ')}`
@@ -2081,7 +1944,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           c.source === 'internal_catalog';
       }).slice(0, 60);
       addDebugLog(`[PortionClarify] Embedding ${resolvedDbCandidates.length} pre-resolved DB candidates for turn-2 carry-forward.`);
-      
       sendStreamEvent({
         type: 'status',
         stage: 'portion_clarify',
@@ -2128,7 +1990,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         },
       });
     }
-
     // Brand Environment Locking logic
     const globalBrands = ["mcdonald", "burger king", "wendy", "kfc", "denny", "starbucks", "subway", "taco bell", "domino", "pizza hut", "chipotle", "panera", "dunkin", "sonic", "popeyes", "arby", "dairy queen", "panda express"];
     let dominantBrand = "";
@@ -2140,7 +2001,6 @@ export async function runFoodAnalyze(req: any, res: any) {
          break;
       }
     }
-
     // Verified Scout FDC hint pre-fetch: for components where Vision Scout supplied a
     // suggestedFdcId (only expected for well-known, unambiguous staple foods), do a
     // direct single-ID USDA lookup and validate it with the same relevance check used
@@ -2161,13 +2021,11 @@ export async function runFoodAnalyze(req: any, res: any) {
           }
         });
       });
-
       if (hintFetchTasks.length > 0) {
         const hintResults = await Promise.all(hintFetchTasks.map(async (task) => {
           const food = await fetchUSDAFoodById(task.fdcId);
           return { task, food };
         }));
-
         hintResults.forEach(({ task, food }) => {
           if (!food || !food.description) {
             addDebugLog(`[ScoutFdcHint] id=${task.fdcId} for query "${task.query}" did not resolve — falling through to normal search.`);
@@ -2201,7 +2059,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         });
       }
     }
-
     { // F-8.9 always finalize (old aggregation host deleted)
       const ledgers = await Promise.all(
         visionScoutItems.map(async (vItem: any, vIdx: number) => {
@@ -2266,13 +2123,11 @@ export async function runFoodAnalyze(req: any, res: any) {
           hasComponents: Boolean(l.hasComponents || comps.length > 1),
         };
       });
-
       if (isModifySession && preCalculatedItems && preCalculatedItems.length > 0) {
         preCalculatedItems.forEach((pItem: any) => {
           const subComponents: any[] = (pItem.componentsDetailList && pItem.componentsDetailList.length > 0)
             ? pItem.componentsDetailList
             : (pItem.components && pItem.components.length > 0 ? pItem.components : []);
-
           if (subComponents.length > 1) {
             // Composite dish: try the modifier against each individual sub-ingredient
             // (e.g. "the tea was unsweetened" must target the "Sweet Iced Tea" component,
@@ -2298,7 +2153,6 @@ export async function runFoodAnalyze(req: any, res: any) {
                 addDebugLog(`[Nutrient Modifier Matrix] Applied modifiers to sub-component "${sub.name}" inside "${pItem.originalName}": locked keys [${modRes.lockedKeys.join(', ')}]`);
               }
             });
-
             if (anySubComponentChanged && pItem.nutrients) {
               // Re-sum parent dish totals from the (possibly modified) sub-components so
               // the dish-level total reflects the edited ingredient instead of staying frozen.
@@ -2306,7 +2160,6 @@ export async function runFoodAnalyze(req: any, res: any) {
               const sumCarbs = subComponents.reduce((acc, c) => acc + (Number(c.carbohydrates ?? c.carbs) || 0), 0);
               const sumSugar = subComponents.reduce((acc, c) => acc + (Number(c.sugar ?? c.nutrients?.sugar) || 0), 0);
               const sumAddedSugar = subComponents.reduce((acc, c) => acc + (Number(c.addedSugar ?? c.nutrients?.addedSugar) || 0), 0);
-
               pItem.nutrients.calories = Math.round(sumCal);
               pItem.nutrients.carbohydrates = Math.round(sumCarbs * 10) / 10;
               pItem.nutrients.sugar = Math.round(sumSugar * 10) / 10;
@@ -2332,7 +2185,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         });
       }
     }
-
     let preCalculatedCtx = "";
     if (preCalculatedItems.length > 0) {
       const mealTotals = preCalculatedItems.reduce((acc: any, it: any) => {
@@ -2343,7 +2195,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         acc.weightGrams = (acc.weightGrams || 0) + (Number(it.estimatedWeightGrams) || 0);
         return acc;
       }, { weightGrams: 0 });
-
       preCalculatedCtx = "=== BACKEND PRE-CALCULATED AUTHORITATIVE MEAL TOTALS (33-Nutrient Ledger) ===\n" +
         `Total Weight: ${Math.round(mealTotals.weightGrams || 0)}g | Calories: ${Math.round(mealTotals.calories || 0)} kcal | Protein: ${Math.round((mealTotals.protein || 0) * 10) / 10}g | Total Fat: ${Math.round((mealTotals.totalFat || 0) * 10) / 10}g (Sat Fat: ${Math.round((mealTotals.saturatedFat || 0) * 10) / 10}g, Trans Fat: ${Math.round((mealTotals.transFat || 0) * 10) / 10}g) | Carbs: ${Math.round((mealTotals.carbohydrates || 0) * 10) / 10}g (Fiber: ${Math.round(((mealTotals.totalFibre ?? mealTotals.fiber) || 0) * 10) / 10}g, Sugar: ${Math.round((mealTotals.sugar || 0) * 10) / 10}g, Added Sugar: ${Math.round((mealTotals.addedSugar || 0) * 10) / 10}g) | Sodium: ${Math.round(mealTotals.sodium || 0)}mg | Potassium: ${Math.round(mealTotals.potassium || 0)}mg | Calcium: ${Math.round(mealTotals.calcium || 0)}mg | Iron: ${Math.round((mealTotals.iron || 0) * 10) / 10}mg | Cholesterol: ${Math.round(mealTotals.cholesterol || 0)}mg\n\n` +
         "=== BACKEND PRE-CALCULATED ITEM NUTRIENTS (Authoritative Item Breakdown) ===\n" +
@@ -2367,7 +2218,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           return itemStr;
         }).join("\n") + "\n\n";
     }
-
     let userCtx = "";
     if (userProfile) {
       userCtx = `\nUSER DIETARY PROFILE & DEMOGRAPHICS:\n` +
@@ -2377,7 +2227,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         `- Height: ${userProfile.height || 'Unknown'} cm\n` +
         `- Ethnicity: ${userProfile.ethnicity || 'Unknown'}\n`;
     }
-
     const userTimezone = req.body.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
     let localDateStr;
     try {
@@ -2394,7 +2243,6 @@ export async function runFoodAnalyze(req: any, res: any) {
     } else {
       timeCtx += `CRITICAL INSTRUCTION: You MUST use "${localDateStr}" in the "date" field of "foodData" unless the user explicitly provides a different date in the chat.\n`;
     }
-
     let imageCtx = "";
     if (imagePayloads && imagePayloads.length > 0) {
       if (imagePayloads.length > 1) {
@@ -2407,7 +2255,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         imageCtx += `\n[CRITICAL DATE OVERRIDE: The uploaded image was taken on ${primaryImageDate}. You MUST use this exact date or its nearest YYYY-MM-DD representation as the "date" field in "foodData", completely overriding the CURRENT TIME CONTEXT, unless the user explicitly asks otherwise.]\n`;
       }
     }
-
     let historyContext = "";
     if (history && Array.isArray(history) && history.length > 0) {
       const cleanHistory: any[] = [];
@@ -2423,7 +2270,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           cleanHistory.slice(-10).map((h: any) => `${h.role.toUpperCase()}: ${h.content}`).join("\n") + "\n\n";
       }
     }
-
     let pastMealsCtx = "";
     if (foodLogs && Array.isArray(foodLogs) && foodLogs.length > 0) {
       try {
@@ -2447,7 +2293,6 @@ export async function runFoodAnalyze(req: any, res: any) {
           pastMealsCtx = "PATIENT'S RECENT LOGGED MEALS HISTORY (from client state):\n" +
             recent.map((m, idx) => `- Meal ${idx + 1}: "${m.name}" on ${m.date}`).join("\n") + "\n\n";
           addDebugLog(`[Client Context] Successfully loaded ${pastMeals.length} past meal(s) from client payload, included recent ${recent.length} meals in prompt context.`);
-
           // Rolling average of DAILY TOTALS, counting only days with 2+ meals
           // logged (a single snack logged alone would otherwise skew the
           // "daily average" misleadingly low).
@@ -2506,7 +2351,6 @@ export async function runFoodAnalyze(req: any, res: any) {
     } else if (hasActiveMealDocument) {
       addDebugLog(`[Single-Path] Same modal — keeping meal ${activeMeal?.id || '(unnamed)'} for edit/Q&A/photo-merge.`);
     }
-
     if (visionScoutItems && visionScoutItems.length > 0) {
       visionScoutItems = visionScoutItems.filter((item: any) => {
         const rawName = (item.keyword || item.originalName || item.name || "").trim().toLowerCase();
@@ -2517,7 +2361,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         keyword: item.keyword || item.originalName || item.name || "Food Item"
       }));
     }
-
     if (effectiveActiveMeal) {
       effectiveActiveMeal = JSON.parse(JSON.stringify(effectiveActiveMeal));
       if (effectiveActiveMeal.itemsBreakdown && Array.isArray(effectiveActiveMeal.itemsBreakdown)) {
@@ -2543,11 +2386,9 @@ export async function runFoodAnalyze(req: any, res: any) {
           }));
       }
     }
-
     let systemInstruction = "";
     const activeMealState = activeMeal || req.body.activeMealState || null;
     const activeComparisonState = activeComparison || req.body.activeComparisonState || null;
-
     if (userSelectedMode === 'review' || userSelectedMode === 'edit') {
       if (isExplicitModify || effectiveActiveMeal !== null) {
         systemInstruction = buildModeAEditInstruction({ biomarkersNeedingImprovement, remainingAllowance, activeMeal: effectiveActiveMeal, foodLogs, userProfile });
@@ -2571,7 +2412,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         userProfile
       });
     }
-
     // Suppress Scout payload during text-only edits to conserve tokens
     let visionScoutCtx = "";
     const isPureTextEdit = (isExplicitModify || effectiveActiveMeal !== null || activeComparisonState !== null) && (!imagePayloads || imagePayloads.length === 0);
@@ -2588,7 +2428,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         let scaledNutrientsStr = facts ? ` | NutritionFacts: ${JSON.stringify(facts)}` : "";
         return `- Index: ${displayIndex} | Scout Item: "${item.keyword}" | Weight: ${item.estimatedWeightGrams}g | Observed/Local Context: "${item.originalName}"${scaledNutrientsStr}`;
       }).join('\n');
-
       visionScoutCtx = `\n=== VISUAL FOOD SCOUT IDENTIFIED ITEMS ===\n${itemsList}\n` +
         `Content Type: ${visionScoutContentType} (${visionScoutItems.length} items identified)\n` +
         `Visual Scout Confidence Rating: ${scoutConfidenceRating}\n` +
@@ -2596,7 +2435,6 @@ export async function runFoodAnalyze(req: any, res: any) {
         `Identified Cooking Method & Preparation/Seasonings: ${scoutCookingMethod}\n` +
         (userSelectedMode === 'review' ? `diningEnvironment: ${diningEnvironment}\n` : "");
     }
-
     let databaseMatchesCtx = "";
     if (preCalculatedCtx) {
       databaseMatchesCtx += preCalculatedCtx;
@@ -2604,8 +2442,6 @@ export async function runFoodAnalyze(req: any, res: any) {
     if (databaseMatches) {
       databaseMatchesCtx += `\n=== VERIFIED DATABASE MATCHES ===\n${databaseMatches}\n`;
     }
-
-
     const foodAnalyzeSchema = {
       type: Type.OBJECT,
       properties: {
@@ -2802,7 +2638,6 @@ export async function runFoodAnalyze(req: any, res: any) {
       propertyOrdering: ["_internalReasoning", "verdict", "message", "modificationCommand", "foodData", "comparison"],
       required: ["_internalReasoning", "verdict", "message"]
     };
-
     let biomarkersCtx = "";
     if (biomarkersNeedingImprovement && biomarkersNeedingImprovement.length > 0) {
       biomarkersCtx = `\nCRITICAL PATIENT BIOMARKER WARNINGS:\n` +
@@ -2820,7 +2655,6 @@ export async function runFoodAnalyze(req: any, res: any) {
     const modeDPromptSuffix = (userSelectedMode === 'compare') 
       ? `\n\nIf MODE D (evaluation/comparison) applies: reference every item ONLY by its Index number from the Scout list above inside "scoutItemIndices". Every Index must be assigned to at least one group — including duplicate-named items, which are still separate indices. You are allowed to map the same Scout Index to multiple groups if a physical shelf contains items belonging to both categories. Do not restate names, bounding boxes, or database IDs.`
       : ``;
-
     let promptText = (customVariableData 
       ? `${customVariableData}\n${biomarkersCtx}\n${visionScoutCtx}\n${databaseMatchesCtx}\nCurrent User Input: "${message}"`
       : `${historyContext}${pastMealsCtx}Analyze this current food request.
@@ -2831,7 +2665,6 @@ ${imageCtx}
 ${visionScoutCtx}
 ${databaseMatchesCtx}
 Current User Input: "${message}"`) + modeDPromptSuffix;
-
     fullPromptSent = `System Instruction:\n${finalSystemInstruction}\n\n${promptText}`;
     addDebugLog(`[Dietitian Coach] Sending nutrition analysis request to Gemini...`);
     async function callAndParseFoodAnalysis(callArgs: any): Promise<{ textOutput: string; rawParsed: any }> {
@@ -2850,7 +2683,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       const textOutput = await callUnifiedLLM(callArgs);
       let cleanJson = extractBalancedJson(textOutput);
       const extractedScratchpad = textOutput.replace(cleanJson, "").replace(/```(?:json)?/gi, "").trim();
-
       // Sanitize pathological weightGrams values like "350.000000...000" → "350"
       // These are generated by the LLM and inflate JSON size causing truncation errors
       cleanJson = cleanJson.replace(/"(\d+)\.0{10,}(\d*)"/g, (_, int, tail) => `"${int}${tail ? '.' + tail.replace(/0+$/, '') : ''}"`);
@@ -2860,13 +2692,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         const combinedFrac = (midPart + endPart).replace(/0+$/, '');
         return combinedFrac ? `${intPart}.${combinedFrac}` : intPart;
       });
-
       // Sanitize runaway/repeating string values in fields like foodType
       cleanJson = cleanJson.replace(/"foodType"\s*:\s*"([^"]{80,})"/g, (_, val) => {
         const firstToken = val.split(/[\s,]+/)[0] || 'protein';
         return `"foodType": "${firstToken}"`;
       });
-
       let rawParsed;
       try {
         rawParsed = await asyncParseLLMJSON(cleanJson);
@@ -2876,7 +2706,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           message: "I have analyzed your food log.",
           foodData: { date: new Date().toISOString().split('T')[0], name: "Meal", itemsBreakdown: [] }
         });
-        
         if (!rawParsed._internalReasoning && extractedScratchpad) {
           rawParsed._internalReasoning = extractedScratchpad;
         }
@@ -2884,10 +2713,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         addDebugLog(`[JSON Parse Error] JSON parse failed: ${parseErr.message}. Attempting robust truncation repair...`);
         try {
           let repaired = cleanJson.trim();
-          
           // 1. Remove trailing comma followed by a half-written key
           repaired = repaired.replace(/,\s*"[^"]*"?\s*$/, "");
-          
           // 2. Handle unescaped double quotes inside an unclosed string
           let quoteCount = 0;
           for (let idx = 0; idx < repaired.length; idx++) {
@@ -2898,19 +2725,16 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           if (quoteCount % 2 !== 0) {
             repaired += '"';
           }
-
           // 3. Remove trailing comma or colon
           if (repaired.endsWith(",")) {
             repaired = repaired.slice(0, -1).trim();
           } else if (repaired.endsWith(":")) {
             repaired += "null";
           }
-
           // 4. Count open braces and brackets outside strings
           let openBraces = 0;
           let openBrackets = 0;
           let insideStr = false;
-          
           for (let i = 0; i < repaired.length; i++) {
             const char = repaired[i];
             if (char === '"' && (i === 0 || repaired[i - 1] !== '\\')) {
@@ -2923,9 +2747,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               else if (char === ']') openBrackets--;
             }
           }
-
           repaired += ']'.repeat(Math.max(0, openBrackets)) + '}'.repeat(Math.max(0, openBraces));
-          
           rawParsed = JSON.parse(repaired);
           if (!rawParsed._internalReasoning && extractedScratchpad) {
             rawParsed._internalReasoning = extractedScratchpad;
@@ -2938,7 +2760,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       }
       return { textOutput, rawParsed };
     }
-
     // Pre-dietitian density check: ensure beverage and composite items are rescaled prior to Dietitian prompt payload
     if (Array.isArray(preCalculatedItems)) {
       preCalculatedItems.forEach((it: any) => {
@@ -2967,7 +2788,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         });
       }
     }
-
     addDebugLog('[MealBuild] projector dietitian');
     let dietitianTempMeal = buildSavableMealFromParsed(preCalculatedItems || [], activeMeal, aggregatedNutrients, null);
     const lifeStart = beginStage(dietitianTempMeal, 'dietitian', { actor: 'server' });
@@ -2977,12 +2797,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       addDebugLog('[MealBuild] stage dietitian started');
     }
     const dietitianProjection = projectDietitianInput(dietitianTempMeal, userProfile);
-
     const precalcBlock = formatDietitianProjectionBlock(dietitianProjection);
     addDebugLog('[MealBuild] projector dietitian applied');
     promptText = `${promptText}\n\n${precalcBlock}`;
     fullPromptSent = `${fullPromptSent}\n\n${precalcBlock}`;
-
     const llmCallArgs = {
       modelId: (typeof engine === 'object' ? engine?.name || engine?.model : engine) || "gemini-3.5-flash-lite", // Updating to flash-lite as recommended
       systemInstruction: finalSystemInstruction,
@@ -2998,13 +2816,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       // separate native-thinking output stream, which combined with responseSchema
       // was suspected of causing the model to batch output instead of streaming it.
     };
-
     sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'started', message: 'Analyzing nutrition payload...' });
     sendLog('dietitian_instruction', 'dietitian', `Dietitian System Instruction & Patient Biomarkers payload dispatched (model: ${engine || 'gemini-3.5-flash-lite'}).`);
-
     let textOutput: string = "";
     let rawParsed: any;
-    
     const canSkipDietitianForPureScale = Boolean(
       isPureWeightModification &&
       activeMeal &&
@@ -3017,7 +2832,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       (!Array.isArray(activeMeal.itemsBreakdown) || activeMeal.itemsBreakdown.length <= 1) &&
       !/\b(only|remove|delete|without|except|no|instead|replace|add|plus|with|not|didn't|did\s+not)\b/i.test(message || '')
     );
-
     if (canSkipDietitianForPureScale && weightRefineIntent.isRefine && weightRefineIntent.weightGrams) {
       const targetWeight = weightRefineIntent.weightGrams;
       addDebugLog(`[Refine] skip-dietitian: Scaled label-locked meal directly to ${targetWeight}g without LLM call.`);
@@ -3040,7 +2854,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       let dietitianAttempts = 0;
       const maxDietitianAttempts = 3;
       let lastDietitianErr: any = null;
-
       while (dietitianAttempts < maxDietitianAttempts) {
         dietitianAttempts++;
         try {
@@ -3057,7 +2870,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         } catch (err: any) {
           lastDietitianErr = err;
           const isAbort = err.name === 'AbortError' || (err.message && err.message.toLowerCase().includes('abort'));
-          
           if (isAbort) {
             addDebugLog(`[Dietitian] Fatal error (Timeout) detected. Throwing immediately without retry.`);
             throw err;
@@ -3065,23 +2877,17 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           addDebugLog(`[Dietitian Attempt ${dietitianAttempts} Failed] Error: ${err.message}`);
         }
       }
-      
       if (!textOutput) {
         addDebugLog(`[Dietitian Failed Permanently] All attempts failed. Last error: ${lastDietitianErr?.message}`);
         throw lastDietitianErr;
       }
     }
-
-
     addDebugLog(`[Dietitian Coach] Received response from Gemini. Length: ${textOutput.length} chars.`);
-
     if (rawParsed._internalReasoning) {
       addDebugLog(`[Dietitian Internal Reasoning]\n${rawParsed._internalReasoning}`);
     }
-
     const dietitianScratchpad = rawParsed?._internalReasoning || "";
     sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Dietitian evaluation completed.' });
-
     if (rawParsed && typeof rawParsed === 'object') {
       if (isExplicitModify) {
         rawParsed.mode = 'modify';
@@ -3103,13 +2909,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         rawParsed.foodData = { ...existingFd, itemsBreakdown: breakdown };
       }
     }
-
     const originalModeIsModify = !!(
       isExplicitModify ||
       userExplicitlySelectedEditMode ||
       (activeMeal && (!imagePayloads || imagePayloads.length === 0))
     );
-
     let mode = rawParsed.mode || (originalModeIsModify ? "modify" : "new_log");
     if (userSelectedMode !== 'compare' && visionScoutItems && visionScoutItems.length <= 1 && mode === "evaluation") {
       addDebugLog(`[Mode Override] Overriding mode from 'evaluation' to 'new_log' because only 1 item was identified.`);
@@ -3118,16 +2922,12 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
     if (originalModeIsModify && mode !== "discussion" && mode !== "evaluation") {
       mode = "modify";
     }
-
     apiCalls = [
       ...(hasImage ? [{ type: 'gemini', label: 'Food nutrition agent - Visual Scout (gemini-3.5-flash-lite)' }] : []),
       ...(queriesToSearch && queriesToSearch.length > 0 ? [{ type: 'usda', label: `Food nutrition agent - USDA (${queriesToSearch.length})` }] : []),
       { type: 'gemini', label: `Food nutrition agent - Dietitian (${(typeof engine === 'object' ? engine?.name || engine?.model : engine) || 'gemini-3.5-flash-lite'})` }
     ];
-
     // CASE F: food origin lookup mode
-
-
     // CASE B: discussion mode
     if (mode === "discussion") {
       addDebugLog(`[Mode Routing] DISCUSSION mode triggered (0 database operations).`);
@@ -3141,7 +2941,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         apiCalls
       });
     }
-
     // CASE D: evaluation mode
     if (mode === "evaluation") {
       addDebugLog(`[Mode Routing] EVALUATION mode triggered.`);
@@ -3165,12 +2964,10 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       addDebugLog(`[Comparison Resolve] ${visionScoutItems.length} scout item(s) -> ${resolvedGroups.length} group(s), covering ${resolvedGroups.reduce((sum: number, g: any) => sum + (g.items?.length || 0), 0)} item(s).`);
       comparisonData.groups = applyServerAverageNutrients(resolvedGroups, preCalcByScoutIndex);
       comparisonData.isMenuScale = isMenuScale;
-      
       addDebugLog('[MealBuild] mode=D stream');
       const comparisonSet = fromEvaluationComparison(comparisonData, visionScoutItems, {
         id: req.body.jobId || `cmp_${Date.now()}`,
       });
-
       const responsePayload = {
         mode: "evaluation",
         dietitianScratchpad: rawParsed._internalReasoning,
@@ -3186,11 +2983,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         text: rawParsed.message,
         apiCalls
       };
-
-
       return res.json(responsePayload);
     }
-
     {
       const hasExplicitEditCommands = Array.isArray(rawParsed.editCommands) && rawParsed.editCommands.length > 0;
       const hasLegacyEditCommands = Array.isArray(rawParsed.modificationCommand) && rawParsed.modificationCommand.length > 0;
@@ -3206,17 +3000,14 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         }
       }
     }
-
     // CASE A: NEW FOOD LOGGING
     if (mode === "new_log") {
       const rawFoodData = rawParsed.foodData || {};
-
       if (!rawFoodData.itemsBreakdown || rawFoodData.itemsBreakdown.length === 0) {
         // Build itemsBreakdown from Vision Scout output + best DB match per item
         if (visionScoutItems && visionScoutItems.length > 0) {
                     rawFoodData.itemsBreakdown = visionScoutItems.map((item: any) => {
             const bestMatch = pickQueryScopedMatch(item.keyword || item.originalName || '', databaseMatchesArray, [], quarantinedIdsSet);
-            
             // nutritionFacts is a general-purpose estimate field, never evidence of a
             // real printed label — do not let it set dbSource:'label'. Only item.source
             // === 'label' (scout OCR) or a brand_official match may do that.
@@ -3237,7 +3028,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
                 solubleFibre: Number(item.nutritionFacts.solubleFibrePer100g) || 0
               };
             }
-            
             return {
               canonicalDbName: item.keyword,
               weightGrams: String(sanitizeMealWeight(item.estimatedWeightGrams, 100)),
@@ -3251,7 +3041,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           addDebugLog(`[Fallback] Built itemsBreakdown from Vision Scout output (LLM truncated)`);
         }
       }
-
       const parsedData: any = {};
       const sanitizeString = (val: any, fallback: string) => {
         if (val === null || val === undefined || String(val).toLowerCase() === "undefined" || String(val).trim() === "") {
@@ -3259,7 +3048,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         }
         return String(val);
       };
-
       parsedData.name = sanitizeString(rawFoodData.name, "Meal Log");
       // Enforce singular/plural parity between the composite title and each item's own
       // canonicalDbName in itemsBreakdown (the LLM is only asked to do this via prompt
@@ -3279,7 +3067,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         }
       }
       parsedData.composition = sanitizeString(rawFoodData.composition, "Unspecified ingredients");
-      
       const itemsWeightSum = Array.isArray(rawFoodData.itemsBreakdown)
         ? rawFoodData.itemsBreakdown.reduce((sum: number, it: any) => sum + (Number(it.weightGrams) || 0), 0)
         : 0;
@@ -3294,7 +3081,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       parsedData.healthImpact = sanitizeString(rawFoodData.healthImpact, "");
       parsedData.recommendation = sanitizeString(rawFoodData.recommendation, "");
       parsedData.message = sanitizeString(rawParsed.message || rawFoodData.message || "", "");
-
       const rawVerdict = rawParsed.verdict || rawFoodData.verdict;
       if (rawVerdict && typeof rawVerdict === 'object') {
         const sanitizedLabel = sanitizeVerdictLabel(rawVerdict.label || 'Supports sustained metabolic energy', rawVerdict.level, parsedData.nutrients);
@@ -3318,7 +3104,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         diningEnvironment = activeMeal.diningEnvironment;
       }
       parsedData.diningEnvironment = diningEnvironment;
-
       const useFinalizeDirectMap = Array.isArray(preCalculatedItems) && preCalculatedItems.length > 0;
       if (useFinalizeDirectMap) {
         addDebugLog('[Single-Path] Meal items = finalizeDishLedger.');
@@ -3342,23 +3127,19 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         if (!Array.isArray(parsedData.itemsBreakdown)) parsedData.itemsBreakdown = [];
         if (!parsedData.nutrients) parsedData.nutrients = {};
       }
-
       // Ensure composition is always derived from the final itemsBreakdown names & visual ingredient breakdown
       if (parsedData.itemsBreakdown && Array.isArray(parsedData.itemsBreakdown)) {
         parsedData.composition = parsedData.itemsBreakdown.map((it: any) => {
           let ingStr = "";
           const nameLower = String(it.canonicalDbName || it.name || "").toLowerCase();
           const isLabelItem = it.dbSource === 'label' || it.source === 'label' || String(it.dbId).startsWith('printed_packaging_label');
-          
           if (isLabelItem) {
             it.visualIngredients = [];
           }
-
           let visList = isLabelItem ? [] : (it.visualIngredients || []);
           if (!isLabelItem && (!Array.isArray(visList) || visList.length === 0) && it.components && Array.isArray(it.components)) {
             visList = it.components.map((c: any) => typeof c === 'string' ? c : c.name || c.searchQuery || c.keyword).filter(Boolean);
           }
-          
           if (Array.isArray(visList) && visList.length > 0) {
             // Filter out sauces, dressings, glazes, condiments per Round 2 Addendum
             const lexicons = ["sauce", "mayonnaise", "dressing", "glaze", "gravy", "ketchup", "mustard", "vinaigrette", "mayo"];
@@ -3366,7 +3147,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               const vLower = String(vis || "").toLowerCase();
               return !lexicons.some(lex => vLower.includes(lex));
             });
-
             // Filter out ingredients that are already in the name to prevent redundancy
             const remainingVis = visList.filter((vis: any) => {
               const vLower = String(vis).toLowerCase();
@@ -3378,16 +3158,13 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
               if (vLower === "beef" && nameLower.includes("beef steak")) return false;
               return true;
             });
-            
             if (remainingVis.length > 0) {
               ingStr = ` (${remainingVis.join(", ")})`;
             }
           }
-          
           return `${it.canonicalDbName || it.name}${ingStr}`;
         }).join(", ");
       }
-
       if (!parsedData.imageUrl) {
         if (req.body.photoUrl && typeof req.body.photoUrl === 'string' && req.body.photoUrl.trim() && req.body.photoUrl !== "[base64_image_data_truncated]") {
           parsedData.imageUrl = req.body.photoUrl;
@@ -3407,7 +3184,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           parsedData.imageUrl = req.body.activeMeal.photoUrl;
         }
       }
-
       if (!parsedData.imageUrls || parsedData.imageUrls.length === 0 || parsedData.imageUrls[0] === "[base64_image_data_truncated]") {
         if (Array.isArray(req.body.imageUrls) && req.body.imageUrls.length > 0 && req.body.imageUrls[0] !== "[base64_image_data_truncated]") {
           parsedData.imageUrls = req.body.imageUrls;
@@ -3419,24 +3195,19 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           parsedData.imageUrls = req.body.activeMeal.imageUrls;
         }
       }
-
       if (originalModeIsModify) {
         parsedData.id = req.body.activeMeal?.id;
         if (!parsedData.imageUrl) parsedData.imageUrl = req.body.activeMeal?.imageUrl || req.body.activeMeal?.imageUrls?.[0];
         if (!parsedData.imageUrls || (parsedData.imageUrls.length > 0 && parsedData.imageUrls[0] === "[base64_image_data_truncated]")) parsedData.imageUrls = req.body.activeMeal?.imageUrls;
-        
         let baseScoutItems = (visionScoutItems && visionScoutItems.length > 0)
           ? visionScoutItems
           : (req.body.activeMeal?.scoutItems || []);
-          
         let updatedScoutItems = mergeScoutItems(baseScoutItems, rawParsed.scoutItems);
         if (parsedData && Array.isArray(parsedData.itemsBreakdown) && parsedData.itemsBreakdown.length > 0) {
           const currentScoutIndices = new Set(parsedData.itemsBreakdown.map((b: any) => b.scoutIndex).filter((i: any) => i !== undefined && i !== null));
-          
           if (currentScoutIndices.size > 0) {
             updatedScoutItems = updatedScoutItems.filter((sItem: any) => currentScoutIndices.has(sItem.scoutIndex));
           }
-
           updatedScoutItems = updatedScoutItems.map((sItem: any, sIdx: number) => {
             const bItem = parsedData.itemsBreakdown.find((b: any) =>
               b.scoutIndex !== undefined && b.scoutIndex !== null && b.scoutIndex === sItem.scoutIndex
@@ -3453,7 +3224,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             return sItem;
           });
         }
-
         addDebugLog('[MealBuild] modify-path');
         const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
           parsedData,
@@ -3462,7 +3232,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           scoutItems: updatedScoutItems,
           diningEnvironment,
         });
-
         const finalMeal = pendingFoodLog || parsedData;
         const gate = evaluateMealGate({
           mealId: finalMeal?.id || req.body.jobId,
@@ -3487,7 +3256,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           imageCount: (imagePayloads && imagePayloads.length > 0) ? imagePayloads.length : (req.body.photoUrl ? 1 : 0),
           narrative: rawParsed.message,
         });
-
         return res.json({
           mode: "modify",
           dietitianScratchpad: rawParsed._internalReasoning,
@@ -3503,7 +3271,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           apiCalls
         });
       }
-
       const isResumedFromImageTurn = !!(
         req.body.portionChoices ||
         req.body.skipScout ||
@@ -3512,7 +3279,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         (Array.isArray(visionScoutItems) && visionScoutItems.length > 0) ||
         (Array.isArray(history) && history.some((m: any) => m.data?.photoUrl || m.photoUrl || m.data?.hasImage || m.data?.pendingFoodLog?.imageUrl || m.data?.pendingFoodLog?.imageUrls?.length))
       );
-
       if (!hasImage && !isResumedFromImageTurn && !parsedData.imageUrl && parsedData.name) {
         try {
           // Remove weight/quantity numbers & units for cleaner search query
@@ -3528,7 +3294,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           addDebugLog(`[Text Search Image Lookup Error] ${imgErr?.message || imgErr}`);
         }
       }
-
       let finalScoutItems = mergeScoutItems(visionScoutItems, rawParsed.scoutItems);
       if (preCalculatedItems && Array.isArray(preCalculatedItems)) {
         finalScoutItems = finalScoutItems.map((sItem: any) => {
@@ -3543,7 +3308,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           return sItem;
         });
       }
-      
       if (parsedData && Array.isArray(parsedData.itemsBreakdown) && parsedData.itemsBreakdown.length > 0) {
         finalScoutItems = finalScoutItems.map((sItem: any, sIdx: number) => {
           const bItem = parsedData.itemsBreakdown.find((b: any) =>
@@ -3561,7 +3325,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           return sItem;
         });
       }
-
       addDebugLog('[MealBuild] happy-path');
       const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
         parsedData,
@@ -3570,7 +3333,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         scoutItems: finalScoutItems,
         diningEnvironment,
       });
-
       const finalMeal = pendingFoodLog || parsedData;
       const gate = evaluateMealGate({
         mealId: finalMeal?.id || req.body.jobId,
@@ -3595,7 +3357,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         imageCount: (imagePayloads && imagePayloads.length > 0) ? imagePayloads.length : (req.body.photoUrl ? 1 : 0),
         narrative: rawParsed.message,
       });
-
       const responsePayload = {
         mode: "new_log",
         dietitianScratchpad: rawParsed._internalReasoning,
@@ -3614,15 +3375,11 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         scoutItems: finalScoutItems,
         apiCalls
       };
-
-
       return res.json(responsePayload);
     }
-
     // CASE C: modification commands mode (Math-only fallbacks)
     if (mode === "modify") {
       addDebugLog(`[Mode Routing] MODIFY mode triggered (Math Fallback).`);
-      
       let activeMeal = req.body.activeMeal;
       if (!activeMeal) {
         addDebugLog(`[Modify Math Error] No active meal exists in Firestore to modify.`);
@@ -3633,7 +3390,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           apiCalls
         });
       }
-
       {
         let editCommands = rawParsed.editCommands || rawParsed.modificationCommand || rawParsed.data?.editCommands || rawParsed.data?.modificationCommand || [];
         if (Array.isArray(editCommands) && Array.isArray(rawParsed.foodData?.itemsBreakdown)) {
@@ -3657,7 +3413,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           userMessage: message || '',
         });
         for (const note of result.notes) addDebugLog(`[Single-Path Edit] ${note}`);
-
         activeMeal.itemsBreakdown = result.items;
         activeMeal.nutrients = result.nutrients;
         activeMeal.weightGrams = result.weightGrams;
@@ -3669,7 +3424,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         } else if (rawParsed.foodData?.name) {
           activeMeal.name = rawParsed.foodData.name;
         }
-
         // Sync scoutItems (used by the "Meal composition" chips/gallery in the UI)
         // with any name changes applied to itemsBreakdown by this edit. Without this,
         // renames from set_modifier/replace_identity (e.g. "Es Teh Manis" -> "Unsweetened
@@ -3698,7 +3452,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         });
         activeMeal.scoutItems = syncedScoutItemsForEdit;
         addDebugLog(`[ScoutSync] edit-path renamed scoutItems -> ${JSON.stringify(syncedScoutItemsForEdit.map((s: any) => s.originalName))}`);
-
         addDebugLog('[MealBuild] edit-path (finalize executor)');
         const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
           parsedData: activeMeal,
@@ -3708,11 +3461,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           diningEnvironment: activeMeal?.diningEnvironment,
         });
         mealBuild.staleDietitianNarrative = false;
-
         const finalMessage = result.qa
           ? (rawParsed.message || 'Here is the detail on this meal.')
           : (rawParsed.message || 'I have updated your meal.');
-
         const finalMeal = pendingFoodLog || activeMeal;
         const gate = evaluateMealGate({
           mealId: finalMeal?.id || req.body.jobId,
@@ -3740,7 +3491,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           previousMeal: req.body.activeMeal,
           commands: Array.isArray(editCommands) ? editCommands : [],
         });
-
         return res.json({
           mode: "modify",
           dietitianScratchpad: rawParsed._internalReasoning,
@@ -3760,11 +3510,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
     }
   } catch (error: any) {
     console.error("[Food Analyze Error]:", error);
-    
     // Dietitian Degrade logic (Phase 1)
     if (preCalculatedItems && preCalculatedItems.length > 0 && preCalculatedItems.some((p: any) => (p.nutrients && p.nutrients.calories != null) || (p.primaryBase100g && p.primaryBase100g.calories !== undefined))) {
       addDebugLog(`[Dietitian Degrade] Dietitian failed permanently, but pre-calculated math exists. Salvaging meal build.`);
-      
       const salvagedAggregatedNutrients: Record<string, number> = {};
       NUTRIENT_KEYS.forEach(k => salvagedAggregatedNutrients[k] = 0);
       if (preCalculatedItems && Array.isArray(preCalculatedItems)) {
@@ -3776,11 +3524,9 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           }
         });
       }
-
       const salvagedMeal = buildSavableMealFromParsed(preCalculatedItems, req.body.activeMeal, salvagedAggregatedNutrients, null);
       const degradedMeal = markDietitianDegraded(salvagedMeal, error.message);
       const payloadData = toPendingFoodLog(degradedMeal);
-      
       const successPayload = {
         data: payloadData,
         mealBuild: degradedMeal,
@@ -3789,10 +3535,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         agentPrompt: fullPromptSent,
         apiCalls
       };
-
       return res.json(successPayload);
     }
-
     const errorPayload: any = {
       error: `Failed to process your request (Error: ${error.message || 'Connection timed out'}). Please try again with a different model from the top-left dropdown.`,
       agentNotAvailable: true
@@ -3801,7 +3545,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       errorPayload.scoutItems = visionScoutItems;
       errorPayload.scoutContentType = visionScoutContentType;
     }
-    
     if (isStream && hasSentHeaders) {
       try {
         res.write(`data: ${JSON.stringify(errorPayload)}\n\n`);

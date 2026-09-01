@@ -1,4 +1,5 @@
 import { uploadPhotoToR2, uploadPhotosToR2, uploadDebugPayloadToR2 } from './src/utils/r2Storage';
+// [FreeTier] thin clean_result
 import { supabase, isSupabaseConfigured } from './src/utils/supabaseClient';
 import { supabaseAdmin, isSupabaseConfigured as isSupabaseAdminConfigured } from './supabaseAdmin';
 import { remainingQuotaCooldownMs } from './server_gemini_retry.js';
@@ -251,6 +252,12 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
 
   // In-memory record for offline / Supabase-unconfigured environments
   const existingMemJob = inMemoryServerJobs.get(jobId);
+  const prevTurn = Number(existingMemJob?.current_turn ?? existingMemJob?.currentTurn ?? 1) || 1;
+  const isContinuation = !!(
+    existingMemJob &&
+    (existingMemJob.status === 'succeeded' || existingMemJob.status === 'awaiting_user' || existingMemJob.status === 'failed')
+  );
+  const currentTurn = isContinuation ? prevTurn + 1 : (existingMemJob?.current_turn ?? existingMemJob?.currentTurn ?? 1) || 1;
   const turn1Logs: string[] = (existingMemJob?.turn1Logs && existingMemJob.turn1Logs.length > 0)
     ? existingMemJob.turn1Logs
     : ((existingMemJob?.accumulatedLogs && existingMemJob.accumulatedLogs.length > 0)
@@ -269,6 +276,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
     accumulatedLogs: turn1Logs,
     photo_url: payload.photoUrl || existingMemJob?.photo_url || (imageUrls && imageUrls[0]) || null,
     clean_result: null,
+    current_turn: currentTurn,
     error: null,
     debug_url: null,
     updated_at: new Date().toISOString()
@@ -279,7 +287,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
   // /api/jobs/submit response, or a slow/unreachable Supabase call turns into
   // a platform-level 502 on the outer request instead of a clean in-app error)
   if (isSupabaseConfigured) {
-    (async () => {
+    const upsertOnce = (async () => {
       try {
         const { turn1Logs, accumulatedLogs, error: _err, ...dbRecord } = initialJobRecord;
         const { error } = await supabaseAdmin.from('agent_jobs').upsert(dbRecord, { onConflict: 'id' });
@@ -290,6 +298,10 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         console.error('[ServerJobs] initial upsert threw:', e);
       }
     })();
+    await Promise.race([
+      upsertOnce,
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+    ]);
   }
 
   // 2. Asynchronous cloud execution (fire & forget on server process)

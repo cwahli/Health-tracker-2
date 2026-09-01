@@ -1,4 +1,7 @@
 import { AgentJob } from './types';
+import { recordSessionEvent } from './sessionLog';
+import { JobEvent, eventToPatch } from './jobEvents';
+import { mergeFoodEditMessages, shouldMergeFoodEditTurn } from './mergeFoodEditMessages';
 import { ImageStore } from './ImageStore';
 import { MealBuild } from '../mealBuild/types';
 import { rebaseUserEdit } from '../mealBuild/consolidate';
@@ -345,7 +348,55 @@ class JobStoreImpl {
     return job;
   }
 
+  
+  apply(event: JobEvent) {
+    let writer = 'JobStore.apply';
+    switch (event.type) {
+      case 'SubmitStarted': writer = 'LogChat.submit'; break;
+      case 'ServerStatus': writer = 'JobQueueRunner'; break;
+      case 'AnalyzeFinished': writer = 'JobQueueRunner'; break;
+      case 'AnalyzeFailed': writer = 'JobQueueRunner'; break;
+      case 'PollerPayload': writer = 'poller'; break;
+      case 'RealtimeRow': writer = 'realtime'; break;
+    }
+    const patch = eventToPatch(event);
+    
+    const job = this.jobs.get(event.id);
+    if (job && patch.messages && patch.messages.length === 1 && (event.type === 'AnalyzeFinished' || event.type === 'PollerPayload' || event.type === 'RealtimeRow')) {
+      const isNewTurn = !!job.inFlightTurnAt;
+      const nonLive = (job.messages || []).filter((m: any) => !m.isLive);
+      const assistantMsg = patch.messages[0];
+      
+      if (shouldMergeFoodEditTurn({
+        isMedicalJob: job.kind === 'medical',
+        mode: job.mode || patch.mode,
+        inputMode: (job.inputSnapshot as any)?.mode,
+        cleanMode: patch.result?.mode || job.mode,
+        messages: nonLive,
+      })) {
+        patch.messages = mergeFoodEditMessages(nonLive, assistantMsg);
+      } else if (isNewTurn) {
+        patch.messages = [...nonLive, assistantMsg];
+      } else {
+        const lastAsstIdx = nonLive.map((m: any) => m.role).lastIndexOf('assistant');
+        if (lastAsstIdx !== -1) {
+          nonLive[lastAsstIdx] = assistantMsg;
+          patch.messages = [...nonLive];
+        } else {
+          patch.messages = [...nonLive, assistantMsg];
+        }
+      }
+    }
+    
+    this.commit(event.id, patch, writer);
+  }
+
   updateJob(id: string, patch: Partial<AgentJob>) {
+    this.commit(id, patch, 'JobStore.apply');
+  }
+
+  private commit(id: string, patch: Partial<AgentJob>, writer: string) {
+
     if (this.deletedJobIds.has(id)) {
       if (this.jobs.has(id)) {
         this.jobs.delete(id);
@@ -356,6 +407,18 @@ class JobStoreImpl {
     }
     const job = this.jobs.get(id);
     if (!job) return;
+
+    const incomingTurn = (patch as any).currentTurn ?? (patch as any).current_turn;
+    if (typeof incomingTurn === 'number' && typeof job.currentTurn === 'number' && incomingTurn < job.currentTurn) {
+      delete patch.status;
+      delete patch.result;
+      delete patch.messages;
+      delete patch.finishedAt;
+      delete patch.statusMessage;
+      delete patch.inFlightTurnAt;
+      delete patch.currentTurn;
+      delete (patch as any).current_turn;
+    }
 
     if (patch.status === 'queued') {
       const queuedCount = this.getQueue().length;
@@ -399,6 +462,13 @@ class JobStoreImpl {
     }
 
     Object.assign(job, { ...patch, updatedAt: new Date().toISOString() });
+
+    recordSessionEvent(id, {
+      writer: writer as any,
+      status: job.status,
+      action: job.status === 'succeeded' ? 'completed' : 'accepted',
+    });
+
     this.saveJobs();
     this.notify();
 

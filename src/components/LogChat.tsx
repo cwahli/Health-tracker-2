@@ -6,7 +6,6 @@ import { AgentThoughtBox } from './chat-cards/FoodCard';
 import { trackApiCall, setActiveQueryId, generateQueryId } from '../utils/apiTracker';
 import { saveAgentRequestLog, getAgentRequestLogs } from '../utils/agentLogsTracker';
 import React, { useState, useRef, useEffect, Suspense } from 'react';
-
 import { ChatMessage, FoodLog, UserProfile, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
 import { X, Send, Image, Camera, FolderOpen, MessageSquare, Sparkles, Plus, Terminal, ChevronDown, ChevronUp, Loader, MapPin, Trash2, Check, Table, RotateCcw, RefreshCw, AlertTriangle, ShieldAlert, Edit2, Maximize2, Minimize2, Flag, BrainCircuit, Download } from 'lucide-react';
@@ -34,16 +33,12 @@ import { collection, query, where, getDocs, setDoc, doc, deleteDoc, getDoc, limi
 import { sanitizeForFirestore, checkQuotaFlag } from '../utils/firestoreUtils';
 import { get as idbGet } from 'idb-keyval';
 import { pruneLocalStorageToFreeSpace, safeIdbSet } from '../utils/storageUtils';
-
-
 import { resolveFoodImage } from '../utils/imageResolver';
-
 import { JobStore } from '../jobs/JobStore';
 import { mergeFoodEditMessages, shouldMergeFoodEditTurn } from '../jobs/mergeFoodEditMessages';
 import { toPendingFoodLog } from '../mealBuild/adapters';
 import { executeFoodAgent } from '../jobs/FoodAgentExecutor';
 import { downloadJobDebugReport } from '../utils/logChatDebugDownload';
-
 function isValidFoodLog(log: any): boolean {
   if (!log || typeof log !== 'object' || Array.isArray(log)) return false;
   return !!(
@@ -55,11 +50,9 @@ function isValidFoodLog(log: any): boolean {
     (log.nutrients && typeof log.nutrients === 'object' && Object.keys(log.nutrients).length > 0)
   );
 }
-
 function resolvePendingFoodLog(job: any): any {
   if (!job) return null;
   const rawResult = job.result?.clean_result || job.result?.raw?.data || job.result?.data || job.result || (job as any).clean_result || {};
-  
   const candidates = [
     job.result?.pendingFoodLog,
     job.result?.clean_result?.pendingFoodLog,
@@ -74,11 +67,9 @@ function resolvePendingFoodLog(job: any): any {
     job.messages?.slice().reverse().find((m: any) => m.pendingFoodLog || m.data?.pendingFoodLog)?.pendingFoodLog,
     job.messages?.slice().reverse().find((m: any) => m.data?.pendingFoodLog)?.data?.pendingFoodLog
   ];
-
   for (const cand of candidates) {
     if (isValidFoodLog(cand)) return cand;
   }
-
   const items = rawResult.itemsBreakdown || rawResult.items || rawResult.scoutItems || job.result?.scoutItems || [];
   if (items.length > 0 || rawResult.name || rawResult.title || job.result?.name) {
     return {
@@ -96,7 +87,6 @@ function resolvePendingFoodLog(job: any): any {
       photoUrl: rawResult.photoUrl || job.result?.photoUrl || job.photoUrl
     };
   }
-
   return null;
 }
 import { humanizeJobFailure } from '../utils/jobFailure';
@@ -105,14 +95,12 @@ import { reserveCredits } from '../jobs/credits';
 import { JobQueueRunner } from '../jobs/JobQueueRunner';
 import { recordBreadcrumb, clearBreadcrumbs } from '../utils/breadcrumbTracker';
 import { consumeGoldenAnalyzeToken, GOLDEN_NEW_ANALYZE_EVENT } from '../utils/goldenIngestClient';
-
 import { PRIMARY_NUTRIENTS, formatNutrientDisplayValue } from '../utils/nutrients';
 import { AgentType, AGENT_REGISTRY, getAgentRolloutStatus } from '../utils/agentConfig';
 import { getAvailableCredits, deductAgentCredits } from '../utils/creditManager';
 import { getAdminSettings } from '../utils/userManagement';
 const isValidValue = (v: unknown): boolean =>
   v !== null && v !== undefined && v !== '' && v !== 'N/A' && v !== 'null';
-
 const formatNutrientValue = (value: unknown, unit: string): string => {
   if (!isValidValue(value)) return '—';
   return formatNutrientDisplayValue(value, unit);
@@ -123,7 +111,6 @@ interface BiomarkerEntry {
   value: number;
   unit: string;
 }
-
 export function safeJSONStringify(obj: any): string {
   const seen = new WeakSet();
   return JSON.stringify(obj, (key, value) => {
@@ -136,15 +123,11 @@ export function safeJSONStringify(obj: any): string {
     return value;
   });
 }
-
 type FoodAgentExecutorInput = any;
-
 async function* executeMedicalAgent(input: any): AsyncGenerator<any, void, unknown> {}
-
 function parseJsonOffline(jsonText: string): BiomarkerEntry[] {
   const entries: BiomarkerEntry[] = [];
   if (!jsonText) return entries;
-  
   try {
     const cleanedText = jsonText.replace(/```(?:json)?/gi, '').trim();
     const parsed = JSON.parse(cleanedText);
@@ -171,14 +154,11 @@ function parseJsonOffline(jsonText: string): BiomarkerEntry[] {
   } catch (e) {
     console.warn("parseJsonOffline: standard parser failed, falling back to regex", e);
   }
-
   if (entries.length > 0) {
     return entries;
   }
-
   const lines = jsonText.split(/\r?\n|\\n/);
   let currentEntry: Partial<BiomarkerEntry> = {};
-  
   for (let line of lines) {
     line = line.trim();
     if (line.startsWith('-') || line.startsWith('biomarker:')) {
@@ -187,42 +167,34 @@ function parseJsonOffline(jsonText: string): BiomarkerEntry[] {
       }
       currentEntry = {};
     }
-    
     const biomarkerMatch = line.match(/(?:-\s+)?biomarker:\s*(.*)/i);
     if (biomarkerMatch) {
       currentEntry.biomarker = biomarkerMatch[1].replace(/['"]/g, '').trim();
       continue;
     }
-    
     const dateMatch = line.match(/date:\s*([\d-]+)/i);
     if (dateMatch) {
       currentEntry.date = dateMatch[1].trim();
       continue;
     }
-    
     const valueMatch = line.match(/value:\s*([\d.]+)/i);
     if (valueMatch) {
       currentEntry.value = parseFloat(valueMatch[1]);
       continue;
     }
-    
     const unitMatch = line.match(/unit:\s*(.*)/i);
     if (unitMatch) {
       currentEntry.unit = unitMatch[1].replace(/['"]/g, '').trim();
       continue;
     }
   }
-  
   if (currentEntry.biomarker) {
     entries.push(currentEntry as BiomarkerEntry);
   }
-  
   return entries;
 }
-
 function getOfflineCategorization(name: string) {
   const lowerName = name.toLowerCase();
-  
   if (lowerName.includes('alt') || lowerName.includes('ast') || lowerName.includes('alp') || lowerName.includes('bilirubin') || lowerName.includes('liver') || lowerName.includes('ggt')) {
     return {
       riskCategories: ['Liver & hepatitis stress'],
@@ -230,7 +202,6 @@ function getOfflineCategorization(name: string) {
       potentialMedicalConditions: ['Fatty Liver', 'Hepatitis Stress']
     };
   }
-  
   if (lowerName.includes('creatinine') || lowerName.includes('egfr') || lowerName.includes('urea') || lowerName.includes('kidney') || lowerName.includes('bun') || lowerName.includes('uric acid')) {
     return {
       riskCategories: ['Kidney & hydration'],
@@ -238,7 +209,6 @@ function getOfflineCategorization(name: string) {
       potentialMedicalConditions: ['Chronic Kidney Disease', 'Hydration Issues']
     };
   }
-  
   if (lowerName.includes('glucose') || lowerName.includes('hba1c') || lowerName.includes('insulin') || lowerName.includes('cholesterol') || lowerName.includes('ldl') || lowerName.includes('hdl') || lowerName.includes('triglycerides') || lowerName.includes('tg') || lowerName.includes('sugar') || lowerName.includes('metabolic')) {
     return {
       riskCategories: ['Metabolic & glycemic', 'Cardiovascular'],
@@ -246,7 +216,6 @@ function getOfflineCategorization(name: string) {
       potentialMedicalConditions: ['Diabetes Risk', 'Insulin Resistance', 'Cardiovascular Risk']
     };
   }
-  
   if (lowerName.includes('hemoglobin') || lowerName.includes('hgb') || lowerName.includes('wbc') || lowerName.includes('rbc') || lowerName.includes('platelet') || lowerName.includes('plt') || lowerName.includes('hematocrit') || lowerName.includes('mcv') || lowerName.includes('mch') || lowerName.includes('anemia') || lowerName.includes('iron') || lowerName.includes('ferritin')) {
     return {
       riskCategories: ['Hematology'],
@@ -254,7 +223,6 @@ function getOfflineCategorization(name: string) {
       potentialMedicalConditions: ['Anemia', 'Hematology Disbalance']
     };
   }
-  
   if (lowerName.includes('weight') || lowerName.includes('height') || lowerName.includes('bmi') || lowerName.includes('bp') || lowerName.includes('blood pressure') || lowerName.includes('heart rate') || lowerName.includes('pulse')) {
     return {
       riskCategories: ['Cardiovascular'],
@@ -262,14 +230,12 @@ function getOfflineCategorization(name: string) {
       potentialMedicalConditions: ['Hypertension', 'Obesity']
     };
   }
-  
   return {
     riskCategories: ['General Health'],
     standardMedicalGrouping: 'Other',
     potentialMedicalConditions: ['General Imbalance']
   };
 }
-
 function performOfflineDataAssembly(jsonText: string, bucketMapping: any) {
   const entries = parseJsonOffline(jsonText);
   const bucketsMap: Record<string, any> = {
@@ -280,7 +246,6 @@ function performOfflineDataAssembly(jsonText: string, bucketMapping: any) {
     'Biometrics': [],
     'Other': []
   };
-  
   const biomarkerHistory: Record<string, { value: number; date: string; unit: string }[]> = {};
   for (const entry of entries) {
     if (!entry.biomarker) continue;
@@ -293,14 +258,11 @@ function performOfflineDataAssembly(jsonText: string, bucketMapping: any) {
       unit: entry.unit
     });
   }
-  
   for (const [name, history] of Object.entries(biomarkerHistory)) {
     const mapping = bucketMapping[name] || getOfflineCategorization(name);
     const grouping = mapping.standardMedicalGrouping || 'Other';
-    
     const sortedHistory = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const latest = sortedHistory[0];
-    
     const bObj = {
       name,
       riskCategories: mapping.riskCategories || [],
@@ -314,7 +276,6 @@ function performOfflineDataAssembly(jsonText: string, bucketMapping: any) {
         else if (lower.includes('alt')) refRange = '7 - 56 ' + h.unit;
         else if (lower.includes('ast')) refRange = '10 - 40 ' + h.unit;
         else if (lower.includes('creatinine')) refRange = '0.6 - 1.2 ' + h.unit;
-        
         return {
           date: h.date,
           value: h.value,
@@ -323,32 +284,27 @@ function performOfflineDataAssembly(jsonText: string, bucketMapping: any) {
         };
       })
     };
-    
     if (bucketsMap[grouping]) {
       bucketsMap[grouping].push(bObj);
     } else {
       bucketsMap['Other'].push(bObj);
     }
   }
-  
   const buckets = Object.entries(bucketsMap)
     .filter(([_, list]) => list.length > 0)
     .map(([systemName, biomarkers]) => ({
       systemName,
       biomarkers
     }));
-    
   return {
     text: "Data successfully processed and categorized offline.",
     entriesCount: entries.length,
     buckets
   };
 }
-
 function extractBiomarkerKeysFromJson(jsonStr: string): string[] {
   if (!jsonStr) return [];
   const keys: string[] = [];
-
   try {
     const cleanedText = jsonStr.replace(/```(?:json)?/gi, '').trim();
     const parsed = JSON.parse(cleanedText);
@@ -368,11 +324,9 @@ function extractBiomarkerKeysFromJson(jsonStr: string): string[] {
   } catch (e) {
     console.warn("extractBiomarkerKeysFromJson: standard parser failed, falling back to regex", e);
   }
-
   if (keys.length > 0) {
     return Array.from(new Set(keys)).filter(Boolean);
   }
-
   const lines = jsonStr.split(/\r?\n|\\n/);
   lines.forEach(line => {
     const trimmed = line.trim();
@@ -391,7 +345,6 @@ function extractBiomarkerKeysFromJson(jsonStr: string): string[] {
   });
   return Array.from(new Set(keys)).filter(Boolean);
 }
-
 function extractBiomarkerKeysFromPrioritizedConditions(prioritizedConditions: any[]): string[] {
   if (!Array.isArray(prioritizedConditions)) return [];
   const keys: string[] = [];
@@ -415,20 +368,16 @@ function extractBiomarkerKeysFromPrioritizedConditions(prioritizedConditions: an
   });
   return Array.from(new Set(keys)).filter(Boolean);
 }
-
 function detectBiomarkersInText(text: string): string[] {
   if (!text) return [];
   const found = new Set<string>();
   const lowerText = text.toLowerCase();
-  
   biomarkerDefinitions.forEach(def => {
     const keyLower = def.key.toLowerCase().replace(/_/g, ' ');
     const nameLower = def.name.toLowerCase();
-    
     // Check key (as a word boundary if short, otherwise substring)
     const cleanKey = def.key.toLowerCase();
     const isShortKey = cleanKey.length <= 4;
-    
     let isKeyInText = false;
     if (isShortKey) {
       const words = lowerText.split(/[^a-zA-Z0-9]/);
@@ -436,17 +385,13 @@ function detectBiomarkersInText(text: string): string[] {
     } else {
       isKeyInText = lowerText.includes(cleanKey);
     }
-    
     const isNameInText = lowerText.includes(nameLower);
-    
     if (isNameInText || isKeyInText) {
       found.add(def.name);
     }
   });
-  
   return Array.from(found);
 }
-
 interface LogChatProps {
   key?: string;
   type: AgentType;
@@ -494,7 +439,6 @@ interface LogChatProps {
   onDataReviewBatchChange?: (idx: number | string) => void;
   onJobEnqueued?: (jobId: string, kind: 'food' | 'medical') => void;
 }
-
 const getSessionId = (): string => {
   if (typeof window === 'undefined') return 'global';
   let id = sessionStorage.getItem('app_session_id');
@@ -504,7 +448,6 @@ const getSessionId = (): string => {
   }
   return id;
 };
-
 export default function LogChat({ 
   type, 
   jobId,
@@ -547,7 +490,6 @@ export default function LogChat({
   const activeAgentKey = (type === 'medical' && agentType) ? (agentType as AgentType) : (type as AgentType);
   const activeAgentConfig = AGENT_REGISTRY[activeAgentKey] || AGENT_REGISTRY[type as AgentType];
   const isUnified = ['food', 'medical', 'food_idea', 'daily_recommendation'].includes(type) && getAgentRolloutStatus(type as AgentType) === 'unified';
-
   const isAgent = (targetType: AgentType | string) => {
     if (agentType === targetType) return true;
     if (['medical', 'food', 'food_idea', 'daily_recommendation'].includes(targetType)) {
@@ -556,11 +498,8 @@ export default function LogChat({
     if (isUnified) return activeAgentConfig?.id === targetType;
     return type === targetType;
   };
-
   const isSendingRef = useRef(false);
   const lastSendClickTimeRef = useRef<number>(0);
-
-
   const [showDataUsed, setShowDataUsed] = useState(false);
   const [showFullScreenConv, setShowFullScreenConv] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(true);
@@ -578,14 +517,11 @@ export default function LogChat({
     const saved = parseInt(localStorage.getItem('agent_num_batches') || '50', 10);
     return (isNaN(saved) || saved < 10) ? 50 : saved;
   });
-
   const [showFullScreenDebugLogs, setShowFullScreenDebugLogs] = useState(false);
   const [debugLogs, setDebugLogs] = useState<{ timestamp: string, message: string }[]>([]);
   const [isDebugSendingLogs, setIsDebugSendingLogs] = useState(false);
   const [debugLogsSendStatus, setDebugLogsSendStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
   const [liveThoughts, setLiveThoughts] = useState<{scout?: string, dietitian?: string, dbSearchLog?: string, activeStage?: string, backendLogs?: string, globalLiveLogs?: string}>({});
-
   const safeParseResponse = async (res: Response, fallback: any = {}) => {
     try {
       const contentType = res.headers.get("content-type");
@@ -607,7 +543,6 @@ export default function LogChat({
       return fallback;
     }
   };
-
   const fetchDebugLogs = async () => {
     try {
       const sessionId = getSessionId();
@@ -626,7 +561,6 @@ export default function LogChat({
       /* ignore background fetch errors */
     }
   };
-
   const handleClearDebugLogs = async () => {
     try {
       const sessionId = getSessionId();
@@ -644,14 +578,12 @@ export default function LogChat({
       console.error("Error clearing debug logs:", err);
     }
   };
-
   const handleSendDebugLogsToAdmin = async () => {
     setIsDebugSendingLogs(true);
     setDebugLogsSendStatus('idle');
     try {
       const logsText = debugLogs.map(l => `[${l.timestamp}] ${l.message}`).join('\\n');
       const sessionId = getSessionId();
-      
       const res = await fetch('/api/gemini/send-logs', {
         method: 'POST',
         headers: {
@@ -660,7 +592,6 @@ export default function LogChat({
         },
         body: JSON.stringify({ logsText })
       });
-      
       if (res.ok) {
         try {
           const res2 = await fetch('/api/gemini/debug-logs', {
@@ -683,9 +614,7 @@ export default function LogChat({
         setDebugLogsSendStatus('error');
         const subject = encodeURIComponent(`Healthy App Debug Logs - Session ${sessionId}`);
         const body = encodeURIComponent(`Hello Admin,
-
 Here is the compiled log history for session ${sessionId}:
-
 ${logsText}`);
         window.open(`mailto:cwah.liu@gmail.com?subject=${subject}&body=${body}`, '_blank');
       }
@@ -696,7 +625,6 @@ ${logsText}`);
       setIsDebugSendingLogs(false);
     }
   };
-
   useEffect(() => {
     let interval: any;
     if (showFullScreenDebugLogs) {
@@ -710,14 +638,12 @@ ${logsText}`);
   useEffect(() => {
     localStorage.setItem('agent_num_batches', String(numberOfBatches));
   }, [numberOfBatches]);
-
   const handleSendLogToAdmin = async () => {
     setIsSendingLogs(true);
     setLogsSendStatus('idle');
     try {
       const logsText = messages.map(m => `[${m.role.toUpperCase()}]\n${m.content}`).join('\n\n---\n\n');
       const sessionId = auth.currentUser?.uid || 'anonymous';
-      
       const res = await fetch('/api/gemini/send-logs', {
         method: 'POST',
         headers: {
@@ -726,16 +652,12 @@ ${logsText}`);
         },
         body: JSON.stringify({ logsText })
       });
-      
       if (res.ok) {
         setLogsSendStatus('success');
-        
         // Native mailto link fallback
         const subject = encodeURIComponent(`Healthy App Food Chat Logs - User ${sessionId}`);
         const body = encodeURIComponent(`Hello Admin,
-
 Here is the compiled food log history for user ${sessionId}:
-
 ${logsText}`);
         window.open(`mailto:cwah.liu@gmail.com?subject=${subject}&body=${body}`, '_blank');
       } else {
@@ -749,22 +671,17 @@ ${logsText}`);
       setTimeout(() => setLogsSendStatus('idle'), 4000);
     }
   };
-
   const activeFoodLogs = React.useMemo(() => (foodLogs || []).filter(f => f.sync_state !== 'delete'), [foodLogs]);
   const activeHistory = (biomarkerHistory || []).filter(h => h.sync_state !== 'delete');
   const userIdentifier = profile?.email?.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'guest';
-
   const payloadStorageKey = agentType ? `last_sent_payload_${userIdentifier}_${type}_${agentType}_${dataReviewBatchIdx ?? 'none'}` : `last_sent_payload_${userIdentifier}_${type}`;
   const chatStorageKey = agentType ? `chat_messages_${userIdentifier}_${type}_${agentType}_${dataReviewBatchIdx ?? 'none'}` : `chat_messages_${userIdentifier}_${type}`;
-
   const [lastSentPayload, setLastSentPayload] = useState<any>(null);
   const [messages, setMessagesInternal] = useState<ChatMessage[]>([]);
   const [flagMsg, setFlagMsg] = useState<ChatMessage | null>(null);
   const [userSelectedMode, setUserSelectedMode] = useState<"review" | "compare" | "edit">("review");
-
   const hasUnsavedChangesRef = useRef<boolean>(false);
   const activeAnalysisIdRef = useRef<string | null>(null);
-
   const setMessages = (
     update: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]),
     markAsUnsaved = true
@@ -780,7 +697,6 @@ ${logsText}`);
       return newVal;
     });
   };
-  
   // Synchronized Multi-select Search Mode States for Bottom Action Bar
   const [isSelectingMode, setIsSelectingMode] = useState<boolean>(false);
   const [selectingMsgId, setSelectingMsgId] = useState<string | null>(null);
@@ -793,7 +709,6 @@ ${logsText}`);
   });
   const [conversationsList, setConversationsList] = useState<any[]>([]);
   const [isLoadingConversations, setIsLoadingConversations] = useState<boolean>(false);
-
   const getWelcomeMessage = () => {
     return {
       id: `welcome_${type}_${agentType || 'default'}_${Date.now()}`,
@@ -804,10 +719,8 @@ ${logsText}`);
       timestamp: new Date().toISOString()
     };
   };
-
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pendingSaveRef = useRef<(() => void) | null>(null);
-
   const debouncedSaveConversation = (id: string, msgs: ChatMessage[], payload: any) => {
     if (!hasUnsavedChangesRef.current) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -822,7 +735,6 @@ ${logsText}`);
       }
     }, 800);
   };
-
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
@@ -834,7 +746,6 @@ ${logsText}`);
       }
     };
   }, []);
-
   const compressLargeImagesInObject = async (obj: any): Promise<any> => {
     if (obj === null || obj === undefined) return obj;
     if (typeof obj === 'string') {
@@ -869,7 +780,6 @@ ${logsText}`);
     }
     return obj;
   };
-
   const saveConversationToFirestore = async (id: string, msgs: ChatMessage[], payload: any) => {
     const userId = auth.currentUser?.uid;
     if (!userId) {
@@ -896,7 +806,6 @@ ${logsText}`);
       }
       return;
     }
-
     // Always preserve full, complete messages with images in IndexedDB to prevent image loss on reload
     try {
       await safeIdbSet(`${chatStorageKey}_${userId}_${id}`, msgs);
@@ -906,7 +815,6 @@ ${logsText}`);
     } catch (e) {
       console.warn("Failed to save to IndexedDB:", e);
     }
-
     const isManualSyncOnly = localStorage.getItem('auto_sync_disabled') === 'true';
     if (isManualSyncOnly || checkQuotaFlag() || isFirestoreQuotaExceeded) {
       try {
@@ -917,7 +825,6 @@ ${logsText}`);
            if (copy.imageUrl) delete copy.imageUrl;
            return copy;
         });
-        
         try {
           localStorage.setItem(`${chatStorageKey}_${userId}_${id}`, JSON.stringify(strippedMsgs));
           if (payload) localStorage.setItem(`${payloadStorageKey}_${userId}_${id}`, JSON.stringify(payload));
@@ -930,12 +837,10 @@ ${logsText}`);
             // Silently bypass as IndexedDB holds the primary full copy
           }
         }
-        
         // Also update the local list so the sidebar is completely in sync and beautiful
         const title = msgs.length > 1 
           ? (msgs[1].role === 'user' ? msgs[1].content.slice(0, 30) + '...' : `Session - ${new Date(msgs[0].timestamp).toLocaleDateString()}`)
           : `Session - ${new Date().toLocaleDateString()}`;
-        
         setConversationsList(prev => {
           const existingIdx = prev.findIndex(c => c.id === id);
           const updatedItem = {
@@ -962,7 +867,6 @@ ${logsText}`);
       }
       return;
     }
-
     // M23 free-tier kill-switch: chat is device-local only (IDB).
     // Cross-device chat is out of scope until a dedicated non-Firestore design.
     console.log('[FreeTier] chat cloud write disabled');
@@ -980,7 +884,6 @@ ${logsText}`);
     }
     return;
   };
-
   const migrateMessages = (msgs: any[]) => msgs.map(msg => {
     const newMsg = { ...msg };
     if (!newMsg.data) {
@@ -995,13 +898,11 @@ ${logsText}`);
     }
     return newMsg;
   });
-
   const loadConversationsFromFirestore = async () => {
     const userId = auth.currentUser?.uid;
     if (!userId) {
       let savedMsgs = null;
       let savedPayload = null;
-
       try {
         // Try IndexedDB first (retains full images and detail payload)
         const idbSaved = await idbGet(`${chatStorageKey}_guest_${activeConversationId}`);
@@ -1012,7 +913,6 @@ ${logsText}`);
       } catch (e) {
         console.warn("Failed to load guest chat from IndexedDB:", e);
       }
-
       if (!savedMsgs) {
         const saved = sessionStorage.getItem(chatStorageKey) || localStorage.getItem(chatStorageKey);
         if (saved) {
@@ -1023,7 +923,6 @@ ${logsText}`);
           } catch {}
         }
       }
-
       if (savedMsgs) {
         setMessages(migrateMessages(savedMsgs), false);
         setLastSentPayload(savedPayload);
@@ -1034,22 +933,18 @@ ${logsText}`);
       }
       return;
     }
-
     setIsLoadingConversations(true);
     try {
       // M23 free-tier kill-switch: chat list is loaded from local index only
       const indexKey = `chat_index_${userId}_${type || 'medical'}_${agentType || 'none'}`;
       const localListStr = localStorage.getItem(indexKey);
       let list: any[] = localListStr ? JSON.parse(localListStr) : [];
-      
       list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
       const cappedList = list.slice(0, 30);
       setConversationsList(cappedList);
-
       if (cappedList.length > 0) {
         const match = cappedList.find(c => c.id === activeConversationId) || cappedList[0];
         setActiveConversationId(match.id);
-        
         let localSaved = null;
         let localPayload = null;
         try {
@@ -1061,7 +956,6 @@ ${logsText}`);
         } catch (e) {
           console.warn("Failed to load from IndexedDB:", e);
         }
-
         if (!localSaved) {
           const lsSaved = localStorage.getItem(`${chatStorageKey}_${userId}_${match.id}`);
           if (lsSaved) {
@@ -1074,7 +968,6 @@ ${logsText}`);
             } catch {}
           }
         }
-
         if (localSaved) {
           try {
             setMessages(migrateMessages(localSaved), false);
@@ -1108,7 +1001,6 @@ ${logsText}`);
       setIsLoadingConversations(false);
     }
   };
-
   const handleNewSession = async () => {
     if (type === 'food') setUserSelectedMode('review');
     const newId = `session_${Date.now()}`;
@@ -1128,17 +1020,14 @@ ${logsText}`);
       ...prev
     ]);
   };
-
   const handleDeleteSession = async (sessId: string) => {
     const userId = auth.currentUser?.uid;
     if (!userId) return;
-
     try {
       trackApiCall('firebase_delete', `Firestore Delete - Remove Chat Session (${sessId}) (permanently deletes specified chat history from Cloud Database)`);
       await Promise.resolve();
       const updatedList = conversationsList.filter(c => c.id !== sessId);
       setConversationsList(updatedList);
-      
       if (sessId === activeConversationId) {
         if (updatedList.length > 0) {
           const nextSess = updatedList[0];
@@ -1153,13 +1042,11 @@ ${logsText}`);
       console.error("Error deleting session:", err);
     }
   };
-
   const handleSwitchSession = async (sessId: string) => {
     if (type === 'food') setUserSelectedMode('review');
     const found = conversationsList.find(c => c.id === sessId);
     if (found) {
       setActiveConversationId(sessId);
-      
       const userId = auth.currentUser?.uid || 'guest';
       let fullMessages = null;
       let fullPayload = null;
@@ -1178,7 +1065,6 @@ ${logsText}`);
       } catch (e) {
         console.warn("Failed to load full session from IndexedDB:", e);
       }
-
       if (fullMessages) {
         setMessages(migrateMessages(fullMessages), false);
         setLastSentPayload(fullPayload || null);
@@ -1188,7 +1074,6 @@ ${logsText}`);
       }
     }
   };
-
   useEffect(() => {
     const userId = auth.currentUser?.uid || 'guest';
     if (conversationsList && conversationsList.length > 0) {
@@ -1207,14 +1092,12 @@ ${logsText}`);
       });
     }
   }, [conversationsList, type, agentType]);
-
   useEffect(() => {
     if (activeConversationId) {
       const key = `active_session_id_${type || 'medical'}_${agentType || 'none'}`;
       localStorage.setItem(key, activeConversationId);
     }
   }, [activeConversationId, type, agentType]);
-
   useEffect(() => {
     if (isOpen) {
       const qid = generateQueryId();
@@ -1230,19 +1113,16 @@ ${logsText}`);
       }
     }
   }, [auth.currentUser?.uid, type, agentType, isOpen, jobId]);
-
   useEffect(() => {
     if (isOpen && currentBatch === 1) {
       activeAnalysisIdRef.current = null;
     }
   }, [isOpen, currentBatch]);
-
   useEffect(() => {
     if (isOpen && messages.length === 0 && !jobId) {
       setMessages([getWelcomeMessage()], false);
     }
   }, [isOpen, messages.length, jobId]);
-
   useEffect(() => {
     if (activeConversationId && messages && messages.length > 1) {
       // Do not save to Firestore while the AI is actively streaming to prevent quota exhaustion
@@ -1250,14 +1130,11 @@ ${logsText}`);
       debouncedSaveConversation(activeConversationId, messages, lastSentPayload);
     }
   }, [messages, lastSentPayload, activeConversationId]);
-
   const [inputText, setInputText] = useState('');
-
   const [explicitFoodTags, setExplicitFoodTags] = useState<any[]>([]);
   const [catalogMatches, setCatalogMatches] = useState<any[]>([]);
   const [activeSearchTerms, setActiveSearchTerms] = useState<string>('');
   const [tagPortionPreFill, setTagPortionPreFill] = useState<number>(100);
-
   useEffect(() => {
     if (type !== 'food' || inputText.trim().length < 3) {
       setCatalogMatches([]);
@@ -1272,7 +1149,6 @@ ${logsText}`);
       } else {
         setTagPortionPreFill(100);
       }
-
       // Strip out anything inside brackets to avoid searching for already tagged items
       const strippedInput = inputText.replace(/\[.*?\]/g, '').trim();
       if (strippedInput.length < 3) {
@@ -1282,7 +1158,6 @@ ${logsText}`);
       }
       const words = strippedInput.split(/\s+/);
       const searchTerms = words.slice(Math.max(words.length - 4, 0)).join(' ');
-      
       try {
         const res = await fetch(`/api/food/search?q=${encodeURIComponent(searchTerms)}`);
         if (res.ok) {
@@ -1301,26 +1176,21 @@ ${logsText}`);
     }, 400);
     return () => clearTimeout(timer);
   }, [inputText, type]);
-
   const [budget, setBudget] = useState(() => localStorage.getItem('food_budget') || '');
   const [currency, setCurrency] = useState(() => localStorage.getItem('food_currency') || 'GBP');
   const [maxDistance, setMaxDistance] = useState(() => {
     const saved = localStorage.getItem('food_max_distance');
     return saved ? parseFloat(saved) : 3;
   });
-
   useEffect(() => {
     localStorage.setItem('food_budget', budget);
   }, [budget]);
-
   useEffect(() => {
     localStorage.setItem('food_currency', currency);
   }, [currency]);
-
   useEffect(() => {
     localStorage.setItem('food_max_distance', String(maxDistance));
   }, [maxDistance]);
-
   useEffect(() => {
     const savedCurrency = localStorage.getItem('food_currency');
     if (!savedCurrency) {
@@ -1335,7 +1205,6 @@ ${logsText}`);
       }
     }
   }, []);
-
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [selectedImagesForAnalysis, setSelectedImagesForAnalysis] = useState<string[]>([]);
   const [imageDates, setImageDates] = useState<string[]>([]);
@@ -1354,14 +1223,11 @@ ${logsText}`);
   const collectionsInputRef = useRef<HTMLInputElement>(null);
   const [isPhotoMenuOpen, setIsPhotoMenuOpen] = useState(false);
   const t = translations[profile?.language || 'en'] || translations.en;
-
   const isManualModeRef = useRef<boolean>(false);
-
   const hasReviewedOrAddedFoodLog = React.useMemo(() => {
     if (type !== 'food' || !Array.isArray(messages)) return false;
     return !!([...messages].reverse().find(m => m?.data?.pendingFoodLog || m?.data?.options));
   }, [messages, type]);
-
   // Lock mode based on job's lockedModeFamily
   useEffect(() => {
     let targetJobId = jobId;
@@ -1375,7 +1241,6 @@ ${logsText}`);
           !j.viewed &&
           (j.result?.pendingFoodLog || j.result?.data?.pendingFoodLog || j.result?.clean_result?.pendingFoodLog || j.result?.items || j.result?.clean_result?.items)
         ).sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
-
         if (pendingFoodJobs.length > 0) {
           targetJobId = pendingFoodJobs[0].id;
         }
@@ -1391,11 +1256,9 @@ ${logsText}`);
       }
     }
   }, [jobId, isOpen, type, messages.length]);
-
   // Load messages from background job if jobId is set, or auto-bind to latest unlogged food job if opened on another device
   useEffect(() => {
     if ((type !== 'food' && type !== 'medical') || !isOpen) return;
-
     let targetJobId = jobId;
     if (!targetJobId && type === 'food') {
       const isLocalSessionEmpty = messages.length <= 1 || (messages.length === 1 && messages[0].id?.startsWith('welcome_'));
@@ -1407,16 +1270,13 @@ ${logsText}`);
           !j.viewed &&
           (j.result?.pendingFoodLog || j.result?.data?.pendingFoodLog || j.result?.clean_result?.pendingFoodLog || j.result?.items || j.result?.clean_result?.items)
         ).sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
-
         if (pendingFoodJobs.length > 0) {
           targetJobId = pendingFoodJobs[0].id;
         }
       }
     }
-
     if (!targetJobId) return;
     const activeJobId = targetJobId;
-
     const loadJobMessages = async () => {
       let job = JobStore.getJob(activeJobId);
       if (!job) {
@@ -1424,14 +1284,12 @@ ${logsText}`);
         isSendingRef.current = false;
         return;
       }
-
       if (job.status === 'succeeded' || job.status === 'failed' || job.status === 'awaiting_user' || job.status === 'draft') {
         setIsAnalyzing(false);
         isSendingRef.current = false;
       } else if (job.status === 'running' || job.status === 'queued') {
         setIsAnalyzing(true);
       }
-
       const remotePhoto =
         job.photoUrl ||
         job.result?.photoUrl ||
@@ -1440,7 +1298,6 @@ ${logsText}`);
         (job as any).clean_result?.photoUrl ||
         (job as any).photo_url;
       const remotePhotos = job.result?.imageUrls || job.result?.photoUrls || job.result?.clean_result?.imageUrls || job.result?.clean_result?.photoUrls || (job as any).clean_result?.imageUrls || (job as any).clean_result?.photoUrls || (remotePhoto ? [remotePhoto] : []);
-
       if (job.status === 'succeeded' && type === 'food') {
         let currentResult = job.result?.clean_result || job.result || (job as any).clean_result || {};
         if (currentResult.is_r2 || (job as any).clean_result?.is_r2 || !resolvePendingFoodLog(job)) {
@@ -1472,12 +1329,10 @@ ${logsText}`);
           }
         }
       }
-
       if (job.status === 'draft') {
         setMessages([getWelcomeMessage()], false);
         return;
       }
-
       if (job.messages && job.messages.length > 0) {
         const baseMsgs = migrateMessages(job.messages).map((m: any) => {
           if (m.role === 'user' && typeof m.content === 'string' && m.content.trim().startsWith('{')) {
@@ -1509,7 +1364,6 @@ ${logsText}`);
           }
           return m;
         });
-
         const remotePhoto = job.photoUrl || job.result?.photoUrl || (job.result as any)?.clean_result?.photoUrl;
         const remotePhotos = job.result?.imageUrls || job.result?.photoUrls || job.result?.clean_result?.imageUrls || job.result?.clean_result?.photoUrls || (job as any).clean_result?.imageUrls || (job as any).clean_result?.photoUrls || (remotePhoto ? [remotePhoto] : []);
         try {
@@ -1517,7 +1371,6 @@ ${logsText}`);
           const realUrls = (realImages && realImages.length > 0)
             ? await Promise.all(realImages.map((img: any) => typeof img === 'string' ? img : blobToDurableDataUrl(img as Blob)))
             : remotePhotos;
-
           if (realUrls.length > 0) {
             baseMsgs.forEach((m: any) => {
               if (!m.imageUrl || m.imageUrl === 'Image reference preserved' || m.imageUrl === 'loading' || m.imageUrl.startsWith('/_/upload/')) {
@@ -1547,7 +1400,6 @@ ${logsText}`);
         } catch (err) {
           console.warn('[loadJobMessages] Failed to restore images from ImageStore for job', activeJobId, err);
         }
-
         const lastMsg = baseMsgs[baseMsgs.length - 1];
         if (job.status === 'awaiting_user') {
           const rawResult = job.result?.clean_result || job.result || (job as any).clean_result || {};
@@ -1705,7 +1557,6 @@ ${logsText}`);
           timestamp: job.createdAt,
           imageUrl: (job.inputSnapshot as any)?.hasImage ? 'loading' : undefined
         };
-
         if ((job.inputSnapshot as any)?.hasImage || remotePhoto) {
           try {
             const images = await ImageStore.getImages(activeJobId);
@@ -1724,10 +1575,8 @@ ${logsText}`);
             }
           }
         }
-
         if (job.status === 'succeeded' && (job.result?.data || job.result?.pendingFoodLog || job.result?.mealBuild || job.mealBuild || job.result?.foodData || type === 'medical' || resolvePendingFoodLog(job))) {
           const foodLog = resolvePendingFoodLog(job);
-
           try {
             if (foodLog && (!foodLog.imageUrls || foodLog.imageUrls.length === 0 || foodLog.imageUrls.some((u: string) => u.startsWith('blob:')))) {
               const imgs = await ImageStore.getImages(activeJobId);
@@ -1757,7 +1606,6 @@ ${logsText}`);
               foodLog.imageUrls = foodLog.imageUrls?.length ? foodLog.imageUrls : remotePhotos;
             }
           }
-
           const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
           const snapAgent2 = (job.inputSnapshot as any)?.agentType;
           const reviewCmds2 = raw.modificationCommand || raw.agentResult?.modificationCommand;
@@ -1801,15 +1649,12 @@ ${logsText}`);
           };
           if (assistantMsg.pendingFoodLog) {
             assistantMsg.pendingFoodLog.id = assistantMsg.pendingFoodLog.id || `food_${Date.now()}`;
-            
             const r2PhotoUrl = assistantMsg.pendingFoodLog.imageUrl;
             const r2PhotoUrls = assistantMsg.pendingFoodLog.imageUrls;
-
             if (userMsg) {
               userMsg.imageUrl = r2PhotoUrl;
               userMsg.imageUrls = r2PhotoUrls;
             }
-
             assistantMsg.pendingFoodLog.chatTranscript = [
               { 
                 role: userMsg.role, 
@@ -1828,7 +1673,6 @@ ${logsText}`);
               }
             ];
           }
-
           const isDefaultWelcome = !userMsg.content && !userMsg.imageUrl && !userMsg.imageUrls?.length;
           if (isDefaultWelcome) {
             setMessages([assistantMsg], false);
@@ -1907,9 +1751,7 @@ ${logsText}`);
         }
       }
     };
-
     loadJobMessages();
-
     const unsubscribe = JobStore.subscribe(() => {
       loadJobMessages();
     });
@@ -1917,7 +1759,6 @@ ${logsText}`);
       unsubscribe();
     };
   }, [jobId, isOpen, type]);
-
   // Cleanly reset isAnalyzing and isSending when modal closes
   useEffect(() => {
     if (!isOpen) {
@@ -1925,7 +1766,6 @@ ${logsText}`);
       isSendingRef.current = false;
     }
   }, [isOpen]);
-
   const handleDownloadDebug = async (jobIdToDownload: string, msg: any, format: 'json' | 'markdown' = 'markdown') => {
     await downloadJobDebugReport({
       jobIdToDownload,
@@ -1937,10 +1777,8 @@ ${logsText}`);
       globalLiveLogs: globalLiveLogsRef.current,
     });
   };
-
   const [globalLiveLogs, setGlobalLiveLogs] = useState<string>('');
   const globalLiveLogsRef = useRef<string>('');
-
   useEffect(() => {
     let eventSource: EventSource | null = null;
     try {
@@ -1969,16 +1807,13 @@ ${logsText}`);
         } catch (e) {}
       };
     } catch (err) {}
-
     return () => {
       if (eventSource) {
         try { eventSource.close(); } catch (e) {}
       }
     };
   }, []);
-
   const ANALYZING_STEPS = ["Gathering your recent history..."];
-
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (isAnalyzing) {
@@ -1997,7 +1832,6 @@ ${logsText}`);
       if (interval) clearInterval(interval);
     };
   }, [isAnalyzing, type]);
-
   const [loggedMessageIds, setLoggedMessageIds] = useState<string[]>(() => {
     try {
       const uid = auth.currentUser?.uid || 'guest';
@@ -2007,7 +1841,6 @@ ${logsText}`);
       return [];
     }
   });
-
   useEffect(() => {
     try {
       const uid = auth.currentUser?.uid || 'guest';
@@ -2020,11 +1853,9 @@ ${logsText}`);
   const liveThoughtRef = useRef<HTMLDivElement>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
   const initialOpenScrollDoneRef = useRef<boolean>(false);
-
   const lastFoodMsg = React.useMemo(() => {
     return [...messages].reverse().find(m => m.role === 'assistant' && m.agentType === 'food');
   }, [messages]);
-
   const scrollToLastFoodMessage = (smooth = false) => {
     const container = chatWindowRef.current;
     const target = document.getElementById("last-food-message");
@@ -2041,7 +1872,6 @@ ${logsText}`);
       });
     }
   };
-
   useEffect(() => {
     if (!isOpen) {
       initialOpenScrollDoneRef.current = false;
@@ -2053,7 +1883,6 @@ ${logsText}`);
       return () => clearTimeout(timer);
     }
   }, [isOpen, activeAgentKey, messages]);
-
   useEffect(() => {
     if (!isAnalyzing && isAgent('food')) {
       const timer = setTimeout(() => {
@@ -2062,7 +1891,6 @@ ${logsText}`);
       return () => clearTimeout(timer);
     }
   }, [isAnalyzing, activeAgentKey]);
-
   const handleDeleteMessagePair = (messageId: string) => {
     setMessages(prev => {
       const idx = prev.findIndex(m => m.id === messageId);
@@ -2085,7 +1913,6 @@ ${logsText}`);
       return newMsgs;
     });
   };
-
   useEffect(() => {
     if (isOpen) {
       const saved = sessionStorage.getItem(chatStorageKey);
@@ -2098,13 +1925,10 @@ ${logsText}`);
           }
         } catch (e) {}
       }
-
       // Removed session start time resetting
-
       // Removed forced welcome message append and hiding of past discussion
     }
   }, [isOpen, type, chatStorageKey]);
-
   useEffect(() => {
     // Eagerly fetch user location only when food idea chat is active
     if (type !== 'food_idea' || !isOpen) return;
@@ -2113,7 +1937,6 @@ ${logsText}`);
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         setUserLocation({ lat, lng });
-        
         const isIndo = lat >= -11 && lat <= 6 && lng >= 95 && lng <= 141;
         const savedCurrency = localStorage.getItem('food_currency');
         if (!savedCurrency && isIndo) {
@@ -2125,10 +1948,8 @@ ${logsText}`);
       });
     }
   }, [isOpen, type]);
-
   const outOfRangeBiomarkers = React.useMemo(() => {
     const list: { key: string; name: string; value: any; status: string; normalRange: string; unit: string }[] = [];
-    
     // Aggregate all unique biomarker keys from both the local snapshot and the active history
     const allKeys = new Set<string>();
     Object.keys(biomarkers || {}).forEach(k => allKeys.add(k));
@@ -2140,24 +1961,19 @@ ${logsText}`);
       const customDef = profile?.customBiomarkers?.[key];
       if (!def && !customDef) return;
       if (!isBiomarkerApproved(key, profile, activeHistory)) return;
-      
       let val = biomarkers?.[key];
       const historyLogs = activeHistory ? activeHistory.filter(h => h.biomarkers && h.biomarkers[key] !== undefined) : [];
       if (historyLogs.length > 0) {
         const sortedLogs = [...historyLogs].sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)));
         val = sortedLogs[0].biomarkers[key];
       }
-      
       const normalRange = customDef?.normalRange || def?.normalRange || '';
       const unit = customDef?.unit || def?.unit || '';
       const name = customDef?.name || def?.name || key;
-      
       const status = getBiomarkerStatus(key, val, normalRange, customDef || def, profile);
       const isImprobable = isBiomarkerValueImprobable(key, val, normalRange);
-
       const statusLabel = getBiomarkerStatusLabel(key, status, customDef, val, profile).toLowerCase();
       const isOptimallyLabeled = statusLabel.includes('optimal') || statusLabel === 'normal' || statusLabel === 'remission / healthy';
-
       if (status === 'flagged' || isImprobable) return;
       if ((status === 'high' || status === 'low' || status === 'critical') && !isOptimallyLabeled) {
         list.push({
@@ -2172,11 +1988,9 @@ ${logsText}`);
     });
     return list;
   }, [biomarkers, profile?.ethnicity, activeHistory]);
-
   const remainingAllowance = React.useMemo(() => {
     const todayStr = getCurrentDateInTimezone(profile?.timezone);
     const todaysFoods = activeFoodLogs ? activeFoodLogs.filter(f => f.date === todayStr) : [];
-
     const todaysTotals = todaysFoods.reduce((acc, curr) => {
       if (curr.nutrients) {
         Object.keys(curr.nutrients).forEach(k => {
@@ -2186,7 +2000,6 @@ ${logsText}`);
       }
       return acc;
     }, {} as { [key: string]: number });
-
     const parseTarget = (val: any, fallback: number) => {
       if (val === null || val === undefined) return fallback;
       const cleanStr = String(val).replace(/,/g, '');
@@ -2195,7 +2008,6 @@ ${logsText}`);
       const parsed = parseFloat(matches[0]);
       return isNaN(parsed) ? fallback : parsed;
     };
-
     const activeTargets = {
       calories: Number(todaysTotals.calories || 0),
       caloriesTarget: report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.calories, 1700) : 1800,
@@ -2216,11 +2028,9 @@ ${logsText}`);
       unsaturatedFat: Number(todaysTotals.unsaturatedFat || 0),
       unsaturatedFatTarget: report && report.dailyNutrientTargets ? parseTarget(report.dailyNutrientTargets.unsaturatedFat, 40) : 40,
     };
-
     const rollingDaysStr = localStorage.getItem('foodTracker_rollingDays');
     const rollingDays = rollingDaysStr ? parseInt(rollingDaysStr, 10) : 7;
     const showAverageInBar = localStorage.getItem('foodTracker_showAverageInBar') === 'true';
-
     const getAverageIntake = (key: string, numDays: number) => {
       let totalIntake = 0;
       for (let d = 0; d < numDays; d++) {
@@ -2232,7 +2042,6 @@ ${logsText}`);
         const m = String(targetDate.getMonth() + 1).padStart(2, '0');
         const day = String(targetDate.getDate()).padStart(2, '0');
         const dStr = `${y}-${m}-${day}`;
-
         const dayFoods = activeFoodLogs ? activeFoodLogs.filter(f => f.date === dStr) : [];
         const dayTotal = dayFoods.reduce((acc, curr) => {
           return acc + (Number(curr.nutrients?.[key as keyof typeof curr.nutrients]) || 0);
@@ -2241,7 +2050,6 @@ ${logsText}`);
       }
       return totalIntake / numDays;
     };
-    
     const averages = {
       calories: getAverageIntake('calories', rollingDays),
       saturatedFat: getAverageIntake('saturatedFat', rollingDays),
@@ -2253,7 +2061,6 @@ ${logsText}`);
       potassium: getAverageIntake('potassium', rollingDays),
       unsaturatedFat: getAverageIntake('unsaturatedFat', rollingDays),
     };
-
     return {
       calories: Math.max(0, activeTargets.caloriesTarget - activeTargets.calories),
       saturatedFat: Math.max(0, activeTargets.satFatTarget - activeTargets.satFat),
@@ -2280,7 +2087,6 @@ ${logsText}`);
       rollingDays,
     };
   }, [foodLogs, report, profile?.timezone]);
-
   useEffect(() => {
     if (!isAnalyzing && messages.length > 1) {
       const lastMsg = messages[messages.length - 1];
@@ -2297,13 +2103,11 @@ ${logsText}`);
       (liveThoughtRef.current || messagesEndRef.current)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [isAnalyzing, messages, liveThoughts]);
-
   const matchingPreviousLogs = React.useMemo(() => {
     if (type !== 'food' || !activeFoodLogs || inputText.trim().length < 3) return [];
     const query = inputText.toLowerCase().trim();
     const uniqueMatches: FoodLog[] = [];
     const seenNames = new Set<string>();
-    
     const reversedLogs = [...activeFoodLogs].reverse();
     for (const log of reversedLogs) {
       if (log.name && log.name.toLowerCase().includes(query)) {
@@ -2315,29 +2119,21 @@ ${logsText}`);
     }
     return uniqueMatches;
   }, [type, activeFoodLogs, inputText]);
-
-
-
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     // Pre-warm auth session token to prevent unauthenticated fallbacks on slow connections
     auth.currentUser?.getIdToken(true).catch(() => {});
-
     const inputEl = e.target;
     const fileList = inputEl.files ? Array.from(inputEl.files) : [];
-    
     if (fileList.length > 0) {
       const validFiles = fileList.filter((file: any) => {
         const isDng = file.name.toLowerCase().endsWith('.dng') || file.type.includes('dng') || file.type === 'image/x-adobe-dng';
         return !isDng;
       });
-
       const dngCount = fileList.length - validFiles.length;
       if (dngCount > 0) {
         alert("DNG (RAW) files are not supported by web browsers. Please select standard images like JPEG, PNG, or WEBP.");
       }
-
       if (validFiles.length === 0) return;
-
       setIsCompressing(true);
       setCompressionProgress({ current: 0, total: validFiles.length, percent: 0 });
       try {
@@ -2376,25 +2172,20 @@ ${logsText}`);
       inputEl.value = '';
     }
   };
-
   const handleSend = async (overrideText?: string | { text?: string; imageUrls?: string[]; compareOnly?: boolean; compareItems?: string[]; sourceMsgId?: string; skipScout?: boolean; activeScoutItems?: any; scoutContentType?: any; overrideMode?: string; userSelectedMode?: string; } | any, extraImages?: any[], extraOptions?: any) => {
     // Pre-warm auth session token to prevent unauthenticated fallbacks on slow connections
     auth.currentUser?.getIdToken(true).catch(() => {});
-
     if (isCompressing) {
       console.log('[handleSend] Blocked — image compression in progress.');
       return;
     }
-
     let textToSend = typeof overrideText === 'string' ? overrideText : (overrideText?.text || inputText);
     const overrideImagesInner = typeof overrideText === 'object' && overrideText?.imageUrls ? overrideText.imageUrls : (extraImages || []);
     const finalImages = overrideImagesInner.length > 0 ? overrideImagesInner : selectedImages;
     const tempDates = overrideImagesInner.length > 0 ? (extraOptions?.imageDates || []) : [...imageDates];
-
     if (!textToSend && finalImages.length > 0) {
       textToSend = isAgent('food') ? 'Analyze this meal photo.' : (isAgent('medical') ? 'Please review my health records / lab report.' : 'Analyze attached photo.');
     }
-
     if (!textToSend && finalImages.length === 0) {
       if (autoSendMessage) {
         textToSend = autoSendMessage;
@@ -2404,12 +2195,10 @@ ${logsText}`);
         textToSend = 'Please review my full set of biomarker data and log history.';
       }
     }
-
     if (!textToSend && finalImages.length === 0) {
       console.log('[handleSend] Blocked — both text and images are empty.');
       return;
     }
-
     const now = Date.now();
     if (now - lastSendClickTimeRef.current < 1000) {
       console.log('[handleSend] Blocked — debounced duplicate click within 1000ms.');
@@ -2454,20 +2243,17 @@ ${logsText}`);
         return;
       }
     }
-
     const existingJobForReq = jobId ? JobStore.getJob(jobId) : null;
     const currentReqId = (extraOptions as any)?.requestId || (extraOptions?.inPlaceMsgId && existingJobForReq?.requestId) || generateQueryId();
     setActiveQueryId(currentReqId);
     setActiveReqId(currentReqId);
     setLiveThoughts({});
-    
     const compareOnly = typeof overrideText === 'object' && overrideText?.compareOnly;
     const compareItems = typeof overrideText === 'object' && overrideText?.compareItems;
     const sourceMsgId = typeof overrideText === 'object' && overrideText?.sourceMsgId;
     const skipScout = typeof overrideText === 'object' && overrideText?.skipScout;
     const activeScoutItemsFallback = typeof overrideText === 'object' && overrideText?.activeScoutItems;
     const scoutContentTypeFallback = typeof overrideText === 'object' && overrideText?.scoutContentType;
-
     const overrideModeRaw = typeof overrideText === 'object' && (overrideText?.overrideMode || overrideText?.userSelectedMode);
     let mappedMode: "review" | "compare" | "edit" = userSelectedMode;
     if (overrideModeRaw) {
@@ -2479,15 +2265,12 @@ ${logsText}`);
         mappedMode = 'review';
       }
     }
-
     if (isAgent('food')) {
       try {
         setUserSelectedMode(mappedMode);
         isManualModeRef.current = true;
-
         const currentJobId = jobId || `job_legacy_${Date.now()}`;
         const job = JobStore.getJob(currentJobId);
-
         // Family Lock: preserve existing family if present, else derive from mappedMode
         let family: 'A' | 'D' = 'A';
         if (job?.lockedModeFamily === 'D') {
@@ -2499,7 +2282,6 @@ ${logsText}`);
         } else {
           family = 'A';
         }
-
         // Submission mode:
         // Auto-promote to 'edit' when the job already has a result AND the user hasn't
         // explicitly chosen 'review' (new scan intent) or 'compare'.
@@ -2516,16 +2298,13 @@ ${logsText}`);
         } else if (!hasPriorResult) {
           submissionMode = mappedMode === 'compare' ? 'compare' : 'review';
         }
-
         // Stage images
         if (finalImages.length > 0) {
           await ImageStore.putImages(currentJobId, finalImages);
         }
-
         const existingMsgs = (job?.messages && job.messages.length > 0)
           ? job.messages
           : (messages.length > 0 ? messages.filter(m => !m.isLive) : [getWelcomeMessage()]);
-
         const lastScoutMsgForJob = [...existingMsgs].reverse().find(m => 
           (m.data?.scoutItems && m.data.scoutItems.length > 0) || 
           (m.data?.agentResult?.scoutItems && m.data.agentResult.scoutItems.length > 0)
@@ -2539,7 +2318,6 @@ ${logsText}`);
           lastScoutMsgForJob?.data?.agentResult?.scoutItems || 
           jobScoutItems ||
           activeScoutItemsFallback || []);
-
         let userContent = textToSend;
         if (extraOptions?.portionChoices && typeof extraOptions.portionChoices === 'object') {
           try {
@@ -2565,15 +2343,12 @@ ${logsText}`);
             userContent = `Portion Selection: ${textToSend}`;
           }
         }
-
-
         let strippedText = userContent || '';
         explicitFoodTags.forEach(t => {
           const escaped = (t.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           strippedText = strippedText.replace(new RegExp(`\\[+${escaped}(?:\\s+${t.weightGrams}g)?\\]+`, 'gi'), '').replace(/\s+/g, ' ').trim();
         });
         const hasAdditionalText = strippedText.replace(/\[+.*?\]+/g, '').replace(/^[+\s,.-]+/, '').trim().length > 0;
-        
         if (!hasAdditionalText && finalImages.length === 0 && explicitFoodTags.length === 1 && explicitFoodTags[0].source === 'previous_meal') {
           handleDuplicateFoodLog(explicitFoodTags[0].originalLog);
           setInputText('');
@@ -2584,7 +2359,6 @@ ${logsText}`);
           setIsAnalyzing(false);
           return;
         }
-
         const inputSnapshot = {
           text: userContent,
           imageRefs: [],
@@ -2598,7 +2372,6 @@ ${logsText}`);
           goldenCaseId: extraOptions?.goldenCaseId || (typeof overrideText === 'object' ? overrideText?.goldenCaseId : undefined),
           explicitFoodTags: explicitFoodTags.length > 0 ? explicitFoodTags : undefined,
         };
-
         // Use a durable base64 data URL instead of a throwaway blob: URL, so the
         // preview image survives JobStore/localStorage persistence + rehydration
         // (blob: URLs become invalid after reload and render as a broken image).
@@ -2619,7 +2392,6 @@ ${logsText}`);
             userMsgImageUrl = userMsgImageUrls[0];
           }
         }
-
         const userMsg: ChatMessage = {
           id: `msg_user_${Date.now()}`,
           role: 'user',
@@ -2628,9 +2400,7 @@ ${logsText}`);
           imageUrl: userMsgImageUrl,
           imageUrls: userMsgImageUrls
         };
-
         const updatedMessages = [...existingMsgs, userMsg];
-
         // Strip big base64 strings and nested circular references from messages stored in JobStore to prevent localStorage bloat/failure
         const persistMessages = updatedMessages.map(m => {
           let cleaned = { ...m };
@@ -2665,7 +2435,6 @@ ${logsText}`);
           }
           return cleaned;
         });
-
         let updatedProfile = profile ? { ...profile } : null;
         let reserved = 0;
         if (profile) {
@@ -2682,7 +2451,6 @@ ${logsText}`);
             });
           }
         }
-
         if (job) {
           JobStore.updateJob(currentJobId, {
             status: 'queued',
@@ -2697,6 +2465,7 @@ ${logsText}`);
             error: undefined,
             serverSubmittedAt: Date.now(),
             inFlightTurnAt: Date.now(),
+            currentTurn: (job.currentTurn || 1) + 1,
             finishedAt: undefined,
             clientSubmitPending: true,
             statusMessage: submissionMode === 'edit' ? 'Updating meal...' : 'Uploading to server… Keep this tab open',
@@ -2715,12 +2484,12 @@ ${logsText}`);
             requestId: currentReqId,
             serverSubmittedAt: Date.now(),
             inFlightTurnAt: Date.now(),
+            currentTurn: 1,
             finishedAt: undefined,
             clientSubmitPending: true,
             statusMessage: submissionMode === 'edit' ? 'Updating meal...' : 'Uploading to server… Keep this tab open',
           });
         }
-
         // Keep modal open, append messages to local React state
         let liveContent = 'Analyzing your meal in the background...';
         if (extraOptions?.portionChoices && typeof extraOptions.portionChoices === 'object') {
@@ -2743,7 +2512,6 @@ ${logsText}`);
             liveContent = 'Adjusting portion sizes...';
           }
         }
-
         const liveMsg: ChatMessage = {
           id: `msg_live_${currentJobId}`,
           role: 'assistant',
@@ -2791,13 +2559,11 @@ ${logsText}`);
         } else {
           setMessages([...existingMsgs, userMsg, liveMsg], false);
         }
-
         // Clear input compose dock
         setInputText('');
         setSelectedImages([]);
         setSelectedImagesForAnalysis([]);
         setImageDates([]);
-
         // Send images and submit job to server background execution
         const getImagesAsBase64 = async (imagesList: any[]): Promise<string[]> => {
           return Promise.all(
@@ -2818,7 +2584,6 @@ ${logsText}`);
             })
           );
         };
-
         const fetchSubmitWithRetry = async (url: string, payload: any, maxRetries = 4, delayMs = 600) => {
           let lastErr: any = null;
           for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -2850,7 +2615,6 @@ ${logsText}`);
           }
           throw lastErr || new Error('Network request failed');
         };
-
         const lastFoodLogForJob = job?.result?.pendingFoodLog || 
           job?.result?.data || 
           [...existingMsgs].reverse().find(m => m.data?.pendingFoodLog || m.pendingFoodLog)?.data?.pendingFoodLog || 
@@ -2874,7 +2638,6 @@ ${logsText}`);
             prunedMealForJob = lastFoodLogForJob;
           }
         }
-
         getImagesAsBase64(finalImages).then((stagedImagesForSubmit) => {
           recordBreadcrumb('submit_meal_job', 'chat_compose_dock', {
             jobId: currentJobId,
@@ -2882,7 +2645,6 @@ ${logsText}`);
             imageCount: stagedImagesForSubmit.length,
             submissionMode
           });
-
           const submitPayload = {
             jobId: currentJobId,
             idempotencyKey: `idemp_${auth.currentUser?.uid || 'anon'}_${currentJobId}_${currentReqId}`,
@@ -2915,7 +2677,6 @@ ${logsText}`);
             lastUserAction: window.__lastUserAction || { action: 'chat_submit', prompt: userContent || textToSend, timestamp: new Date().toISOString() },
             explicitFoodTags: explicitFoodTags.length > 0 ? explicitFoodTags : undefined
           };
-
           fetchSubmitWithRetry('/api/jobs/submit', submitPayload)
           .then(async (res) => {
             if (!res.ok) {
@@ -2950,7 +2711,6 @@ ${logsText}`);
             if (onJobEnqueued) {
               onJobEnqueued(currentJobId, 'food');
             }
-
             // Release the double-tap guard now that the job is queued
             clearTimeout(failsafe);
             isSendingRef.current = false;
@@ -2968,7 +2728,6 @@ ${logsText}`);
           setIsAnalyzing(false);
           isSendingRef.current = false;
         });
-
       } catch (err: any) {
         console.error('Failed to enqueue food job:', err);
         clearTimeout(failsafe);
@@ -2986,7 +2745,6 @@ ${logsText}`);
       }
       return;
     }
-
     if (isAgent('medical')) {
       try {
         // B2 FIX: Guard against duplicate job creation (e.g. when both autoSend and manual button fire)
@@ -3007,10 +2765,8 @@ ${logsText}`);
           onClose();
           return;
         }
-
         const currentJobId = jobId || `job_medical_${Date.now()}`;
         const job = JobStore.getJob(currentJobId);
-
         // B3 FIX: A job/chat thread can be reused across genuinely different biomarker
         // agent actions (e.g. a single biomarker_review chat followed by a bulk
         // agent1_step1 lab-report paste in the same open modal). When the agentType or
@@ -3021,14 +2777,12 @@ ${logsText}`);
           (previousInputSnapshot?.agentType || 'agent1_step1') !== activeType ||
           (previousInputSnapshot?.reviewBiomarkerKey || undefined) !== (reviewBiomarkerKey || undefined)
         );
-
         const mapMsg = [...messages].reverse().find(m => m.data?.agentResult?.bucketMapping || m.data?.bucketMapping);
         const bucketMappingStr = mapMsg
           ? (typeof (mapMsg.agentResult?.bucketMapping || mapMsg.bucketMapping) === 'string'
             ? (mapMsg.agentResult?.bucketMapping || mapMsg.bucketMapping)
             : JSON.stringify(mapMsg.agentResult?.bucketMapping || mapMsg.bucketMapping))
           : undefined;
-
         let effectiveBatchKeys: string[] = [];
         if (typeof textToSend === 'string' && textToSend.includes(':')) {
           const parts = textToSend.split(':');
@@ -3081,7 +2835,6 @@ ${logsText}`);
             effectiveBatchKeys = batchRes[dataReviewBatchIdx as number] || [];
           }
         }
-
         const stagedBatchBiomarkers = effectiveBatchKeys.length > 0
           ? effectiveBatchKeys.map(k => {
               const customDef = profile?.customBiomarkers?.[k];
@@ -3110,7 +2863,6 @@ ${logsText}`);
               };
             })
           : undefined;
-
         const inputSnapshot = {
           text: textToSend,
           imageRefs: [],
@@ -3132,19 +2884,16 @@ ${logsText}`);
           dataReviewBatchIdx,
           batchSize
         };
-
         const userMsg: ChatMessage = {
           id: `msg_user_${Date.now()}`,
           role: 'user',
           content: textToSend,
           timestamp: new Date().toISOString()
         };
-
         const existingMsgs = (job?.messages && job.messages.length > 0 && !isDifferentBiomarkerAction)
           ? job.messages
           : (messages.length > 0 && !isDifferentBiomarkerAction ? messages.filter(m => !m.isLive) : [getWelcomeMessage()]);
         const updatedMessages = [...existingMsgs, userMsg];
-
         let updatedProfile = profile ? { ...profile } : null;
         let reserved = 0;
         if (profile) {
@@ -3155,7 +2904,6 @@ ${logsText}`);
             await onSaveProfile(updatedProfile);
           }
         }
-
         if (job) {
           JobStore.updateJob(currentJobId, {
             status: 'queued',
@@ -3198,7 +2946,6 @@ ${logsText}`);
             statusMessage: 'Uploading to server… Keep this tab open',
           });
         }
-
         // Keep modal open, append messages to local React state
         const liveMsg: ChatMessage = {
           id: `msg_live_${currentJobId}`,
@@ -3217,10 +2964,8 @@ ${logsText}`);
           }
         };
         setMessages([...existingMsgs, userMsg, liveMsg], false);
-
         // Clear input compose dock
         setInputText('');
-
         // Wake queue runner & notify parent
         JobQueueRunner.wake();
         if (onJobEnqueued) {
@@ -3243,7 +2988,6 @@ ${logsText}`);
       }
       return;
     }
-
     if (!textToSend && finalImages.length === 0) {
       if (autoSendMessage) {
         textToSend = autoSendMessage;
@@ -3253,9 +2997,7 @@ ${logsText}`);
         textToSend = 'Please review my full set of biomarker data and log history.';
       }
     }
-
     if (!textToSend && finalImages.length === 0) return;
-
     // Eagerly wait for geolocation if doing food ideas and it's not resolved yet
     let loc = userLocation;
     if (isAgent('food_idea') && !loc) {
@@ -3272,7 +3014,6 @@ ${logsText}`);
         }
       }
     }
-
     const userMsg: ChatMessage = {
       id: `msg_${Date.now()}`,
       role: 'user',
@@ -3284,7 +3025,6 @@ ${logsText}`);
         userSelectedMode: mappedMode
       }
     };
-
     const isFood = isAgent('food');
     const liveMsg: ChatMessage = {
       id: `msg_live_${Date.now()}`,
@@ -3302,7 +3042,6 @@ ${logsText}`);
         }
       }
     };
-
     setMessages(prev => [...prev, userMsg, liveMsg]);
     if (typeof overrideText !== 'string') {
       setInputText('');
@@ -3326,7 +3065,6 @@ ${logsText}`);
     requestAnimationFrame(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     });
-
     try {
       if (isAgent('food')) {
         const executorInput: FoodAgentExecutorInput = {
@@ -3346,10 +3084,8 @@ ${logsText}`);
           remainingAllowance,
           messages,
         };
-
         let resData: any = null;
         let lastCheckpoint: any = null;
-
         for await (const event of executeFoodAgent(executorInput)) {
           if (event.type === 'checkpoint' && event.checkpoint) {
              lastCheckpoint = event.checkpoint;
@@ -3403,7 +3139,6 @@ ${logsText}`);
              throw err;
           }
         }
-
         // Handle `done` event payload identical to existing implementation
         let messageText = resData.message || resData.text || resData.reply || '';
         if (messageText === 'null' || messageText === '""') messageText = '';
@@ -3412,7 +3147,6 @@ ${logsText}`);
           else if (resData.globalSummary) messageText = resData.globalSummary;
           else if (resData.explanation) messageText = resData.explanation;
         }
-
         const assistantMsg: ChatMessage = {
           id: `msg_${Date.now() + 1}`,
           role: 'assistant',
@@ -3421,12 +3155,10 @@ ${logsText}`);
           agentResult: resData,
           agentType: 'food'
         };
-
         const isPortionClarifyResult = resData.needsPortionClarify || !!resData.portionClarify || resData.mode === 'portion_clarify';
         const clarifiedScoutItems = (Array.isArray(resData.scoutItems) && resData.scoutItems.length > 0)
           ? resData.scoutItems
           : (Array.isArray(resData.portionClarify?.scoutItems) ? resData.portionClarify.scoutItems : (resData.scoutItems || []));
-
         assistantMsg.data = {
           hasImage: finalImages.length > 0,
           scoutItems: clarifiedScoutItems,
@@ -3446,7 +3178,6 @@ ${logsText}`);
             globalLiveLogs: globalLiveLogsRef.current || undefined
           }
         };
-
         if (isPortionClarifyResult) {
           const effectiveJobId = jobId || executorInput.jobId;
           assistantMsg.id = `msg_assistant_clarify_${effectiveJobId}`;
@@ -3459,7 +3190,6 @@ ${logsText}`);
             });
           }
         }
-
         if (resData.data) {
           const lastFoodLog = [...messages].reverse().find(m => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
           const currentTranscript = [...messages, userMsg, liveMsg].map(m => ({
@@ -3489,12 +3219,10 @@ ${logsText}`);
           assistantMsg.data.mode = 'origin';
           assistantMsg.data.origins = resData.origins || [];
         }
-
         const migratedAssistantMsg = migrateMessages([assistantMsg])[0];
         setMessages(prev => [...prev.filter(m => !m.isLive), migratedAssistantMsg]);
         return; // Early return on success!
       }
-
       let endpoint = '';
       if (isAgent('food')) endpoint = '/api/gemini/food-analyze';
       else if (isAgent('food_idea')) endpoint = '/api/gemini/food-idea';
@@ -3502,7 +3230,6 @@ ${logsText}`);
       else if (isAgent('health_baseline')) endpoint = '/api/gemini/health-baseline-analyze';
       else if (isAgent('front_desk')) endpoint = '/api/gemini/front-desk';
       else endpoint = '/api/gemini/medical-analyze';
-
       const lightProfile = profile ? { ...profile } as any : null;
       if (lightProfile) {
         delete lightProfile.fontSizeTitle;
@@ -3534,11 +3261,9 @@ ${logsText}`);
           delete lightProfile.customBiomarkers;
         }
       }
-
       const revIdx = [...messages].reverse().findIndex(m => m.id?.startsWith('welcome_'));
       const lastWelcomeIndex = revIdx >= 0 ? messages.length - 1 - revIdx : -1;
       const activeSessionIdx = lastWelcomeIndex >= 0 ? lastWelcomeIndex : 0;
-      
       const bodyData: any = {
         userId: auth.currentUser?.uid || undefined,
         message: userMsg.content,
@@ -3567,13 +3292,10 @@ ${logsText}`);
         biomarkerKey: reviewBiomarkerKey,
         batchSize: numberOfBatches || 50
       };
-      
       // Clean up undefined fields
       Object.keys(bodyData).forEach(key => {
         if (bodyData[key] === undefined) delete bodyData[key];
       });
-
-
       if (isAgent('front_desk') || isAgent('biomarker_review') || agentType === 'biomarker_review') {
         bodyData.profile = bodyData.userProfile;
         bodyData.biomarkers = biomarkers;
@@ -3598,7 +3320,6 @@ ${logsText}`);
          bodyData.compareOnly = true;
          bodyData.compareItems = compareItems;
       }
-
       if (isAgent('food')) {
         const lastFoodLog = [...messages].reverse().find(m => m.data?.pendingFoodLog)?.data?.pendingFoodLog;
         if (lastFoodLog) {
@@ -3618,7 +3339,6 @@ ${logsText}`);
         }
         bodyData.userSelectedMode = mappedMode;
         isManualModeRef.current = true;
-        
         // Pass the active scout items to the backend so the Dietitian can resolve warnings
         const lastScoutMsg = [...messages].reverse().find(m => m.data?.scoutItems && m.data.scoutItems.length > 0);
         if (lastScoutMsg) {
@@ -3628,7 +3348,6 @@ ${logsText}`);
         }
         if (skipScout) bodyData.skipScout = true;
         if (scoutContentTypeFallback) bodyData.scoutContentType = scoutContentTypeFallback;
-        
         // Send a larger recent window (not just -5) so the server can compute a
         // 10-day rolling average of days with 2+ meals logged. This is still
         // purely local/client-loaded data — no new Firestore reads.
@@ -3664,10 +3383,8 @@ ${logsText}`);
         const currentYear = now.getFullYear();
         const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
         const monthPrefix = `${currentYear}-${currentMonth}`;
-
         // Filter food logs for this month
         const thisMonthFoodLogs = (activeFoodLogs || []).filter(f => f.date && f.date.startsWith(monthPrefix));
-
         // Group by day
         const dailyNutrientIntake: { [date: string]: { [nutrient: string]: number } } = {};
         thisMonthFoodLogs.forEach(log => {
@@ -3690,7 +3407,6 @@ ${logsText}`);
           dailyNutrientIntake[d].carbohydrates += Number(nut.carbohydrates || 0);
           dailyNutrientIntake[d].totalFat += Number(nut.totalFat || 0);
         });
-
         const emailSuffix = profile?.email ? `_${profile.email.toLowerCase().trim()}` : '_guest';
         const stepsHistoryStr = localStorage.getItem(`googleStepsHistory${emailSuffix}`);
         let stepsHistory: { date: string, value: number }[] = [];
@@ -3700,7 +3416,6 @@ ${logsText}`);
           } catch (e) {}
         }
         const thisMonthSteps = stepsHistory.filter(h => h.date && h.date.startsWith(monthPrefix));
-
         bodyData.foodLogs = (activeFoodLogs || []).map(f => ({ name: f.name, date: f.date, nutrients: f.nutrients }));
         bodyData.biomarkers = biomarkers;
         bodyData.report = report;
@@ -3728,7 +3443,6 @@ ${logsText}`);
           }
           return `${b.name} is ${getBiomarkerStatusLabel(b.key, b.status, profile?.customBiomarkers?.[b.key], b.value, profile).toUpperCase()} (${b.value} ${b.unit}, normal range: ${b.normalRange})`;
         });
-        
         // Fetch real places from Overpass API (client-side bypasses container blocks)
         if (loc) {
           try {
@@ -3776,7 +3490,6 @@ ${logsText}`);
               // New user-typed text queries must ALWAYS start fresh at Step 1
               currentStep = 'agent1_step1';
             }
-            
             // Also find and attach extractedData and bucketMapping if available
             const jsonMsg = [...messages].reverse().find(m => m.data?.agentResult?.extractedData || m.extractedData);
             if (jsonMsg) {
@@ -3784,7 +3497,6 @@ ${logsText}`);
             } else if (extractedData && extractedData.length > 0) {
               bodyData.extractedData = extractedData;
             }
-            
             if (lastProcessedIndex !== null && lastProcessedIndex !== undefined) {
               bodyData.lastProcessedIndex = lastProcessedIndex;
             } else if (remainingText) {
@@ -3796,12 +3508,10 @@ ${logsText}`);
             if (estimatedTotalMarkers !== null) {
               bodyData.estimatedTotalMarkers = estimatedTotalMarkers;
             }
-            
             const allUserText = messages.filter(m => m.role === 'user').map(m => m.content).join('\n\n');
             if (allUserText) {
               bodyData.originalReportText = allUserText;
             }
-            
             const mapMsg = [...messages].reverse().find(m => m.data?.agentResult?.bucketMapping || m.data?.bucketMapping);
             if (mapMsg) {
               bodyData.bucketMapping = typeof (mapMsg.agentResult?.bucketMapping || mapMsg.bucketMapping) === 'string'
@@ -3817,7 +3527,6 @@ ${logsText}`);
           bodyData.biomarkers = biomarkers || {};
           bodyData.actions = actions || [];
           bodyData.agentDiagnosticSummary = profile?.agentDiagnosticSummary || '';
-
           if (currentStep === 'data_review' || currentStep === 'agent1') {
             let batchKeys: string[] = [];
             if (typeof textToSend === 'string' && textToSend.includes(':')) {
@@ -3889,29 +3598,23 @@ ${logsText}`);
                 batchKeys = Array.from(allKnownKeys);
               }
             }
-
             const flaggedErrorsMap = new Map(flaggedList.map(f => [f.key, f]));
-
             bodyData.batchBiomarkers = batchKeys.map(k => {
               const customDef = profile?.customBiomarkers?.[k];
               const stdDef = biomarkerDefinitions.find(d => d.key === k || (Array.isArray(d.aliases) && d.aliases.some((a: string) => a.toLowerCase() === k.toLowerCase())));
               const merged = getMergedBiomarkerDef(k, stdDef, customDef);
-
               const historyEntries: { date: string; value: any }[] = [];
               (biomarkerHistory || []).forEach((h: any) => {
                 if (h.biomarkers && h.biomarkers[k] !== undefined && h.biomarkers[k] !== null && h.biomarkers[k] !== '') {
                   historyEntries.push({ date: h.date || 'unknown', value: h.biomarkers[k] });
                 }
               });
-
               const rawVal = biomarkers?.[k] !== undefined && biomarkers?.[k] !== null && biomarkers?.[k] !== ''
                 ? biomarkers[k]
                 : (historyEntries[0]?.value ?? '');
               const val = rawVal !== '' && rawVal !== undefined && rawVal !== null ? rawVal : 'Baseline / Unrecorded';
               const unit = merged.unit || (k.endsWith('_score') || k.endsWith('_risk') || k.endsWith('_index') ? 'score' : (k === 'steps' ? 'steps' : 'standard'));
-
               const flaggedItem = flaggedErrorsMap.get(k);
-
               return {
                 key: k,
                 name: merged.name || k,
@@ -3931,7 +3634,6 @@ ${logsText}`);
           }
         }
       }
-
       const storageKey = isAgent('food') ? 'food' : (isAgent('food_idea') ? 'food_idea' : (agentType || 'agent1'));
       const customSystemInstruction = localStorage.getItem(`custom_system_instruction_${storageKey}`);
       const customVariableData = localStorage.getItem(`custom_variable_data_${storageKey}`);
@@ -3941,7 +3643,6 @@ ${logsText}`);
       if (customVariableData) {
         bodyData.customVariableData = customVariableData;
       }
-
       // Save display-friendly payload for debug mode
       const displayPayload = { ...bodyData };
       if (displayPayload.image && typeof displayPayload.image === 'string') {
@@ -3951,12 +3652,10 @@ ${logsText}`);
         displayPayload.images = displayPayload.images.map((img: any) => typeof img === 'string' ? img.substring(0, 100) + "... [truncated base64]" : img);
       }
       setLastSentPayload(displayPayload);
-
       let fetchEndpoint = endpoint;
       if (endpoint === '/api/gemini/food-analyze' || endpoint === '/api/gemini/health-baseline-analyze' || endpoint === '/api/gemini/medical-analyze') {
         fetchEndpoint += '?stream=true';
       }
-
       const response = await fetch(fetchEndpoint, {
         method: 'POST',
         headers: { 
@@ -3965,7 +3664,6 @@ ${logsText}`);
         },
         body: JSON.stringify(bodyData)
       });
-
       if (!response.ok) {
         const rawText = await response.text().catch(() => '');
         const looksLikeTimeout = response.status === 504 || response.status === 502 || response.status === 503 || rawText.trim().toLowerCase().startsWith('<!doctype') || rawText.trim().toLowerCase().startsWith('<html');
@@ -3973,7 +3671,6 @@ ${logsText}`);
           ? "This analysis took too long and the server timed out. Please try again — if it keeps happening, it may need a longer server timeout setting."
           : `Request failed (${response.status}). Please try again.\n${rawText ? 'Details: ' + rawText.substring(0, 500) : ''}`);
       }
-
       const contentType = response.headers.get("content-type");
       console.log("[Client SSE] Fetch complete. Status:", response.status, "Content-Type:", contentType);
       console.log("[Client SSE] Response body present:", !!response.body);
@@ -3982,7 +3679,6 @@ ${logsText}`);
         response.headers.forEach((val, key) => { headersObj[key] = val; });
         console.log("[Client SSE] Response headers list:", JSON.stringify(headersObj, null, 2));
       } catch (e) {}
-
       let resData: any = {};
       let backendLogsFull = "";
       if (contentType && contentType.includes("text/event-stream")) {
@@ -4002,13 +3698,11 @@ ${logsText}`);
         const scratchpadFullByStage: Record<string, string> = { scout: "", dietitian: "" };
         let dbSearchLogFull = "";
         let lineBuffer = "";
-
         // --- NEW BATCHING LOGIC START ---
         let pendingPatch = false;
         let accumulatedAgentResult: any = {};
         let accumulatedThoughts: {scout?: string, dietitian?: string, dbSearchLog?: string, activeStage?: string, backendLogs?: string} = {};
         let animationFrameId: number | null = null;
-
         const flushPatches = () => {
           if (!pendingPatch) { animationFrameId = null; return; }
           // pendingPatch/animationFrameId are reset unconditionally via finally below —
@@ -4034,7 +3728,6 @@ ${logsText}`);
                });
                accumulatedThoughts = {};
             }
-            
             if (Object.keys(accumulatedAgentResult).length > 0) {
                const resultPatch = { ...accumulatedAgentResult };
                setMessages(prev => {
@@ -4043,13 +3736,11 @@ ${logsText}`);
                   if (lastMsg && lastMsg.role === "assistant" && lastMsg.isLive) {
                      const updatedData = lastMsg.data ? { ...lastMsg.data } : {};
                      const updatedAgentResult = updatedData.agentResult ? { ...updatedData.agentResult } : {};
-                     
                      // Every value in resultPatch is already the full current value — always
                      // replace, never append (see where accumulatedAgentResult is populated below).
                      for (const key in resultPatch) {
                         updatedAgentResult[key] = resultPatch[key];
                      }
-                     
                      return [
                         ...newMsgs.slice(0, newMsgs.length - 1),
                         { ...lastMsg, data: { ...updatedData, agentResult: updatedAgentResult } }
@@ -4068,7 +3759,6 @@ ${logsText}`);
             animationFrameId = null;
           }
         };
-
         const scheduleFlush = () => {
           pendingPatch = true;
           if (animationFrameId === null) {
@@ -4076,13 +3766,10 @@ ${logsText}`);
           }
         };
         // --- NEW BATCHING LOGIC END ---
-
         const extractScratchpadText = (accumulated: string) => {
           const match = accumulated.match(/["']_internalReasoning["']\s*:\s*"/i);
           if (!match || match.index === undefined) return "";
-          
           const startQuoteIndex = match.index + match[0].length - 1;
-          
           let text = "";
           let escaped = false;
           for (let i = startQuoteIndex + 1; i < accumulated.length; i++) {
@@ -4106,16 +3793,12 @@ ${logsText}`);
           }
           return text;
         };
-
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           const chunkStr = decoder.decode(value, { stream: true });
-          
           scheduleFlush();
-
           lineBuffer += chunkStr;
-
           // Process only complete SSE events (delimited by \n\n or \r\n\r\n) from the accumulated buffer
           while (true) {
             let separatorIdx = lineBuffer.indexOf("\n\n");
@@ -4126,7 +3809,6 @@ ${logsText}`);
               separatorLen = 4;
             }
             if (separatorIdx === -1) break;
-            
             const ev = lineBuffer.substring(0, separatorIdx).trim(); // trim whitespace just in case
             lineBuffer = lineBuffer.substring(separatorIdx + separatorLen);
             if (ev.startsWith("data: ")) {
@@ -4144,7 +3826,6 @@ ${logsText}`);
                     backendLogsFull = (backendLogsFull ? backendLogsFull + '\n' : '') + taggedLine;
                     accumulatedThoughts.backendLogs = backendLogsFull;
                     accumulatedAgentResult.backendLogs = backendLogsFull;
-                    
                     // Commit live state IMMEDIATELY on every log chunk
                     setLiveThoughts((prev) => ({
                       ...prev,
@@ -4152,20 +3833,17 @@ ${logsText}`);
                     }));
                   }
                   const isDbLog = data.logType?.startsWith('db_') || logMsg.includes('[Database Search]') || logMsg.includes('[USDA]') || logMsg.includes('[OpenFoodFacts]');
-                  
                   if (logMsg && isDbLog) {
                     dbSearchLogFull = (dbSearchLogFull ? dbSearchLogFull + "\n" : "") + logMsg;
                     accumulatedAgentResult.dbSearchLog = dbSearchLogFull;
                     accumulatedThoughts.dbSearchLog = dbSearchLogFull;
                   }
-
                   const logStage = data.stage || (data.logType?.startsWith('db_') ? 'db_search' : undefined);
                   if (logStage && logStage !== 'scout') {
                     accumulatedAgentResult.activeStage = logStage;
                     accumulatedAgentResult.stageStatus = 'active';
                     accumulatedThoughts.activeStage = logStage;
                   }
-
                   if (data.logType === 'scout_instruction') accumulatedAgentResult.scoutInstruction = data.message;
                   if (data.logType === 'scout_answer') {
                     accumulatedAgentResult.scoutAnswer = data.message;
@@ -4178,7 +3856,6 @@ ${logsText}`);
                 } else if (data.chunk || data.thought || data.type === 'stream') {
                   const stage: string = data.stage === 'scout' ? 'scout' : 'dietitian';
                   const chunkText = data.chunk || data.thought || '';
-                  
                   if (data.thought) {
                     scratchpadFullByStage[stage as 'scout' | 'dietitian'] += chunkText;
                     accumulatedThoughts[stage as 'scout' | 'dietitian'] = scratchpadFullByStage[stage as 'scout' | 'dietitian'];
@@ -4201,9 +3878,7 @@ ${logsText}`);
             }
           }
         }
-        
         flushPatches(); // Ensure anything pending is flushed
-        
         // Flush any remaining complete event left in the buffer after the stream closes
         if (lineBuffer.startsWith("data: ")) {
           try {
@@ -4226,7 +3901,6 @@ ${logsText}`);
           throw new Error(`Server returned a non-JSON response (${response.status}): ${rawText.substring(0, 150)}`);
         }
       }
-
       // Save captured agent debug logs. Prefer fetching the full, untruncated log
       // entries from the server (sessionDebugLogs/globalDebugLogs) over the locally
       // accumulated `backendLogsFull`, which is built from the live SSE stream and
@@ -4238,7 +3912,6 @@ ${logsText}`);
           selectedImages.length > 0 ? `[${selectedImages.length} Image(s)]` : null,
           textToSend ? (textToSend.length > 50 ? textToSend.substring(0, 50) + '...' : textToSend) : null
         ].filter(Boolean).join(' ') || 'Empty Request';
-
         if (isAgent('health_baseline') || endpoint.includes('health-baseline-analyze')) {
           let biomarkerCount = 0;
           if (bodyData.biomarkerHistory && Array.isArray(bodyData.biomarkerHistory)) {
@@ -4255,7 +3928,6 @@ ${logsText}`);
             biomarkerCount = Object.keys(profile.customBiomarkers).length;
           }
           if (!biomarkerCount) biomarkerCount = 20;
-
           const rawReport = resData?.report || resData || {};
           const topTargetsArr = Array.isArray(rawReport.topNutrientTargets) ? rawReport.topNutrientTargets : 
                                 (Array.isArray(rawReport.nutrientTargets) ? rawReport.nutrientTargets : null);
@@ -4271,7 +3943,6 @@ ${logsText}`);
           if (!targetsCount) targetsCount = 4;
           summary = `${targetsCount} top targets - ${biomarkerCount}b`;
         }
-
         let fullLogs: { timestamp: string; message: string }[] | null = null;
         try {
           const debugLogsRes = await fetch(`/api/gemini/debug-logs?sessionId=${currentReqId}`);
@@ -4291,14 +3962,12 @@ ${logsText}`);
           logs: fullLogs || (backendLogsFull ? backendLogsFull.split('\n').map(line => ({ timestamp: new Date().toISOString(), message: line })) : [{ timestamp: new Date().toISOString(), message: `[health_coach] Completed Health Coach analysis (${summary})` }])
         });
       }
-
       if (resData.error) {
         const err: any = new Error(resData.error);
         if (resData.scoutItems) err.scoutItems = resData.scoutItems;
         if (resData.scoutContentType) err.scoutContentType = resData.scoutContentType;
         throw err;
       }
-
       // Deduct agent credits upon successful response
       if (profile) {
         const updatedProfile = deductAgentCredits(profile, selectedModelId);
@@ -4306,11 +3975,9 @@ ${logsText}`);
           await onSaveProfile(updatedProfile);
         }
       }
-
       if (bodyData.batchBiomarkers && !resData.batchBiomarkers) {
         resData.batchBiomarkers = bodyData.batchBiomarkers;
       }
-
       let messageText = resData.message || resData.text || resData.reply || '';
       if (messageText === 'null' || messageText === '""') messageText = '';
       if (!messageText || (typeof messageText === 'string' && messageText.trim().startsWith('{'))) {
@@ -4322,14 +3989,12 @@ ${logsText}`);
           messageText = resData.explanation;
         }
       }
-
       if (resData.updatedProfile && onSaveProfile) {
         onSaveProfile(resData.updatedProfile);
       }
       if (resData.newBiomarkerLogs && resData.newBiomarkerLogs.length > 0 && onAddBiomarkerLogs) {
         onAddBiomarkerLogs(resData.newBiomarkerLogs);
       }
-
       const assistantMsg: ChatMessage = {
         id: `msg_${Date.now() + 1}`,
         role: 'assistant',
@@ -4337,7 +4002,6 @@ ${logsText}`);
         timestamp: new Date().toISOString(),
         agentResult: resData,
       };
-      
       if (isAgent('food_idea')) {
         assistantMsg.agentType = 'food_idea';
         if (resData.ideas && resData.ideas.length > 0) {
@@ -4405,11 +4069,9 @@ ${logsText}`);
           // Legacy fallback
           assistantMsg.pendingBiomarkers = resData.biomarkers;
           assistantMsg.pendingDate = resData.date;
-          
           // Merge custom biomarker definitions into profile if any
           let mergedProfile = { ...resData.profile };
           let defsWithApproval: { [key: string]: any } = {};
-
           if (resData.customBiomarkerDefs && Object.keys(resData.customBiomarkerDefs).length > 0) {
             Object.entries(resData.customBiomarkerDefs).forEach(([k, v]: [string, any]) => {
               const mapped = getMappedBiomarkerKey(k) || k;
@@ -4422,7 +4084,6 @@ ${logsText}`);
               }
             });
           }
-
           if (resData.unmappedTests && Array.isArray(resData.unmappedTests)) {
             resData.unmappedTests.forEach((test: any) => {
               if (!test) return;
@@ -4443,7 +4104,6 @@ ${logsText}`);
               }
             });
           }
-
           if (Object.keys(defsWithApproval).length > 0) {
             mergedProfile.customBiomarkers = {
               ...(profile?.customBiomarkers || {}),
@@ -4453,15 +4113,12 @@ ${logsText}`);
           assistantMsg.pendingProfile = mergedProfile;
         }
       }
-
       const migratedAssistantMsg = migrateMessages([assistantMsg])[0];
-
       setMessages(prev => {
         const filteredPrev = prev.filter(m => !m.isLive);
         if (isAgent('food') && resData.mode === 'modify' && resData.editApplied !== false && (resData.data || (resData.scoutItems && resData.scoutItems.length > 0))) {
           let newPrev = [...filteredPrev];
           let wasMerged = false;
-
           if (resData.data) {
             // Check if this food was already saved to database history
             const targetMsg = [...filteredPrev].reverse().find(m => m.data?.pendingFoodLog);
@@ -4481,11 +4138,9 @@ ${logsText}`);
                 } as FoodLog);
               }
             }
-
             newPrev = [...newPrev].reverse().map(m => {
               if (!wasMerged && m.data?.pendingFoodLog) {
                 wasMerged = true;
-
                 // If this update removed an item, prune the matching entry from
                 // scoutItems too — the "Meal composition" gallery/chips read from
                 // scoutItems (not itemsBreakdown), so without this they keep
@@ -4508,7 +4163,6 @@ ${logsText}`);
                     prunedScoutItems = (prunedScoutItems || m.data.scoutItems).filter((s: any) => !removedScoutIndices.has(s.scoutIndex));
                   }
                 }
-
                 return {
                   ...m,
                   // Update the message text in place so the new clinical assessment
@@ -4539,7 +4193,6 @@ ${logsText}`);
               return m;
             }).reverse();
           }
-
           if (resData.scoutItems && resData.scoutItems.length > 0) {
             // A correction was resolved for a previously flagged item (text correction
             // or new photo). MODE C intentionally returns foodData=null when no full
@@ -4555,14 +4208,12 @@ ${logsText}`);
               return m;
             }).reverse();
           }
-
           // If we successfully merged the update into the existing meal card, do NOT
           // also append a second assistant message — that previously caused the
           // dietitian's response text and "Meal composition" list to render twice.
           if (wasMerged) {
             return newPrev;
           }
-
           // Clear the pending food log from the new assistant message so it doesn't render a duplicate card
           if (migratedAssistantMsg.data) {
             migratedAssistantMsg.data.pendingFoodLog = null;
@@ -4575,7 +4226,6 @@ ${logsText}`);
       console.error(err);
       const isTimeout = err.message?.includes("timed out") || err.message?.includes("150s") || err.message?.includes("timeout") || err.message?.includes("took too long") || err.message?.toLowerCase()?.includes("abort");
       const isQuota = err.message?.includes("429") || err.message?.includes("quota") || err.message?.toUpperCase()?.includes("RESOURCE_EXHAUSTED");
-      
       let displayErr = err.message || "An error occurred during processing.";
       if (err.message && err.message.toLowerCase().includes("failed to fetch")) {
         displayErr = "Network error: Failed to reach the server. Please check your internet connection or verify that the server is running. (Original error: " + err.message + ")";
@@ -4587,7 +4237,6 @@ ${logsText}`);
       } else if (isQuota) {
         displayErr = "The AI agent hit a rate limit (quota exceeded). Please wait a few moments or switch to a different model from the top-left model selector.";
       }
-
       if (isAgent('food')) {
         const errMsg: any = {
           id: `msg_err_${Date.now()}`,
@@ -4631,9 +4280,7 @@ ${logsText}`);
       setActiveReqId(null);
     }
   };
-
   const lastAutoSendKeyRef = useRef<string | null>(null);
-
   useEffect(() => {
     if (isOpen && autoSendMessage && (isAgent('medical') || isAgent('daily_recommendation'))) {
       if (agentType === 'agent1' || agentType === 'agent2' || agentType === 'agent3' || agentType === 'agent4' || agentType === 'agent5' || agentType === 'agent7') {
@@ -4643,7 +4290,6 @@ ${logsText}`);
         setInputText(autoSendMessage);
         return;
       }
-
       const currentSendKey = `${agentType || 'med'}_${reviewBiomarkerKey || ''}_${autoSendMessage}`;
       if (lastAutoSendKeyRef.current !== currentSendKey) {
         lastAutoSendKeyRef.current = currentSendKey;
@@ -4654,7 +4300,6 @@ ${logsText}`);
       }
     }
   }, [isOpen, autoSendMessage, type, agentType, reviewBiomarkerKey]);
-
   useEffect(() => {
     if (type !== 'food') return;
     const onGolden = (ev: Event) => {
@@ -4670,7 +4315,6 @@ ${logsText}`);
     window.addEventListener(GOLDEN_NEW_ANALYZE_EVENT, onGolden as EventListener);
     return () => window.removeEventListener(GOLDEN_NEW_ANALYZE_EVENT, onGolden as EventListener);
   }, [type]);
-
   const handleContinueExtractionChunk = async (msg: any) => {
     setIsAnalyzing(true);
     // Scroll immediately so the user can watch the agent's live thought process
@@ -4678,16 +4322,13 @@ ${logsText}`);
     requestAnimationFrame(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     });
-
     setGlobalLiveLogs('');
     globalLiveLogsRef.current = '';
     setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, isLive: true } : m)));
-
     try {
       const msgIndex = messages.findIndex(m => m.id === msg.id);
       const allUserText = messages.slice(0, msgIndex).filter(m => m.role === 'user').map(m => m.content).join('\n\n');
       const nextBatch = (msg.data?.agentResult?.currentBatch || 1) + 1;
-
       const lightProfile = profile ? { ...profile } as any : null;
       if (lightProfile) {
         delete lightProfile.fontSizeTitle;
@@ -4703,7 +4344,6 @@ ${logsText}`);
         delete lightProfile.deletedBiomarkerLogIds;
         delete lightProfile.deletedFoodLogIds;
       }
-
       const bodyData: any = {
         agentType: 'agent1_step1',
         message: `continue. CRITICAL: Do NOT map a test to an existing key if it is not a perfect match. Do not use surrogate markers. If a test does not have a perfect match in the EXISTING DATABASE KEYS, you MUST extract it as a new biomarker with a lowercase snake_case key (e.g., 'pulse_rate'). Do not generate empty or null entries for tests that are not present in the text.`,
@@ -4719,11 +4359,9 @@ ${logsText}`);
         biomarkerKey: reviewBiomarkerKey,
         batchSize: numberOfBatches || 50
       };
-
       trackApiCall('gemini', `Medical Analyze - ${agentType}`);
       const currentReqId = generateQueryId();
       setActiveQueryId(currentReqId);
-
       const response = await fetch('/api/gemini/medical-analyze', {
         method: 'POST',
         headers: { 
@@ -4732,7 +4370,6 @@ ${logsText}`);
         },
         body: JSON.stringify(bodyData)
       });
-
       try {
         const logsRes = await fetch(`/api/gemini/debug-logs?sessionId=${currentReqId}`);
         if (logsRes.ok) {
@@ -4749,12 +4386,10 @@ ${logsText}`);
       } catch (e) {
         console.warn("Could not save agent request logs", e);
       }
-
       if (!response.ok) {
         const errText = await response.text();
         throw new Error(`Server returned ${response.status}: ${errText}`);
       }
-
       const contentType = response.headers.get("content-type"); let resData: any = {}; if (contentType && contentType.includes("text/event-stream")) { const reader = response.body?.getReader(); if (!reader) throw new Error("No stream reader available"); const decoder = new TextDecoder(); let accumulatedText = ""; let accumulatedByStage: { scout: string, dietitian: string } = { scout: "", dietitian: "" }; while (true) { const { done, value } = await reader.read(); if (done) break; const chunkStr = decoder.decode(value, { stream: true }); const events = chunkStr.split("\n\n"); for (const ev of events) { if (ev.startsWith("data: ")) { try { const data = JSON.parse(ev.slice(6)); if (data.chunk) { accumulatedText += data.chunk; const stage: string = data.stage === 'scout' ? 'scout' : 'dietitian'; accumulatedByStage[stage as keyof typeof accumulatedByStage] += data.chunk; const scoutMatch = accumulatedByStage.scout.match(/"(?:scratchpad|_internalReasoning)"\s*:\s*"([^]*?)("|$)/); const dietMatch = accumulatedByStage.dietitian.match(/"(?:scratchpad|_internalReasoning)"\s*:\s*"([^]*?)("|$)/); setMessages(prev => { const newMsgs = [...prev]; const lastMsg = newMsgs[newMsgs.length - 1]; if (lastMsg && lastMsg.role === "assistant" && lastMsg.isLive) { const updatedData = lastMsg.data ? { ...lastMsg.data } : {}; const updatedAgentResult = updatedData.agentResult ? { ...updatedData.agentResult } : {}; let hasChanges = false; if (scoutMatch) { updatedAgentResult.scoutScratchpad = scoutMatch[1].replace(/\\n/g, "\n").replace(/\\\"/g, "\""); hasChanges = true; } if (dietMatch) { updatedAgentResult.dietitianScratchpad = dietMatch[1].replace(/\\n/g, "\n").replace(/\\\"/g, "\""); hasChanges = true; } if (hasChanges) { return [ ...newMsgs.slice(0, newMsgs.length - 1), { ...lastMsg, data: { ...updatedData, agentResult: updatedAgentResult } } ]; } } return prev; }); } else if (data.final) { resData = data.result; } } catch (e) {} } } } } else {
         const responseContentType = response.headers.get("content-type");
         if (responseContentType && responseContentType.includes("application/json")) {
@@ -4764,7 +4399,6 @@ ${logsText}`);
           throw new Error(`Server returned a non-JSON response (${response.status}): ${rawText.substring(0, 150)}`);
         }
       }
-
       try {
         fetch(`/api/gemini/debug-logs?sessionId=${currentReqId}`).then(async (logsRes) => {
           if (logsRes.ok) { 
@@ -4780,7 +4414,6 @@ ${logsText}`);
           }
         }).catch(e => console.warn("Could not save agent request logs", e));
       } catch (e) {}
-
       setMessages(prev => prev.map(m => {
         if (m.id === msg.id) {
           // Parse old YAML entries
@@ -4805,7 +4438,6 @@ ${logsText}`);
               console.warn("Failed to parse old JSON/YAML", e);
             }
           }
-
           // Parse new JSON entries
           const newJsonStr = resData.extractedData || '';
           let newEntries: any[] = [];
@@ -4828,7 +4460,6 @@ ${logsText}`);
               console.warn("Failed to parse new YAML", e);
             }
           }
-
           // Merge entries and deduplicate
           let combinedEntries = [...oldEntries];
           newEntries.forEach((newE: any) => {
@@ -4836,7 +4467,6 @@ ${logsText}`);
             const newKey = String(newE.biomarker || newE.name || '').trim().toLowerCase();
             const newDate = String(newE.date || '').trim();
             const newVal = String(newE.numeric_value !== undefined && newE.numeric_value !== null ? newE.numeric_value : (newE.qualitative_value || newE.value || '')).trim();
-            
             const isDuplicate = oldEntries.some((oldE: any) => {
               if (!oldE || typeof oldE !== 'object') return false;
               const oldKey = String(oldE.biomarker || oldE.name || '').trim().toLowerCase();
@@ -4844,12 +4474,10 @@ ${logsText}`);
               const oldVal = String(oldE.numeric_value !== undefined && oldE.numeric_value !== null ? oldE.numeric_value : (oldE.qualitative_value || oldE.value || '')).trim();
               return oldKey === newKey && oldDate === newDate && oldVal === newVal;
             });
-            
             if (!isDuplicate) {
               combinedEntries.push(newE);
             }
           });
-
           // Convert combined back to JSON
           let combinedJsonStr = resData.extractedData || oldJsonStr;
           if (combinedEntries.length > 0) {
@@ -4859,12 +4487,10 @@ ${logsText}`);
               console.warn("Failed to stringify combined entries", e);
             }
           }
-          
           let combinedUnmappedTests = [
             ...(Array.isArray(m.data?.agentResult?.unmappedTests) ? m.data.agentResult.unmappedTests : []),
             ...(Array.isArray(resData.unmappedTests) ? resData.unmappedTests : [])
           ];
-          
           // Deduplicate unmapped tests by raw_name
           const uniqueUnmapped = new Map();
           combinedUnmappedTests.forEach(test => {
@@ -4873,7 +4499,6 @@ ${logsText}`);
             }
           });
           combinedUnmappedTests = Array.from(uniqueUnmapped.values());
-
           const updatedMsg = {
             ...m,
             content: resData.text || m.content,
@@ -4916,7 +4541,6 @@ ${logsText}`);
       setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, isLive: false } : m)));
     }
   };
-
   const handleAgent1Step = async (step: 'agent1_step2' | 'agent1_step3', msg: any) => {
     setIsAnalyzing(true);
     // Scroll immediately so the user can watch the agent's live thought process
@@ -4924,7 +4548,6 @@ ${logsText}`);
     requestAnimationFrame(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     });
-
     try {
       const lightProfile = profile ? { ...profile } as any : null;
       if (lightProfile) {
@@ -4941,7 +4564,6 @@ ${logsText}`);
         delete lightProfile.deletedBiomarkerLogIds;
         delete lightProfile.deletedFoodLogIds;
       }
-
       const bodyData: any = {
         agentType: step,
         extractedData: msg.data?.agentResult?.extractedData || msg.extractedData,
@@ -4951,7 +4573,6 @@ ${logsText}`);
         userProfile: lightProfile,
         biomarkerKey: reviewBiomarkerKey
       };
-
       // To grab yaml and mapping correctly from previous messages
       if (!bodyData.extractedData) {
          const jsonMsg = [...messages].reverse().find(m => m.data?.agentResult?.extractedData || m.extractedData);
@@ -4961,20 +4582,16 @@ ${logsText}`);
          const mapMsg = [...messages].reverse().find(m => m.data?.agentResult?.bucketMapping || m.data?.bucketMapping);
          bodyData.bucketMapping = JSON.stringify(mapMsg?.agentResult?.bucketMapping || mapMsg?.bucketMapping);
       }
-
       let prevTotalMarkers = msg.data?.agentResult?.estimatedTotalMarkers;
       if (prevTotalMarkers === undefined) {
          const oldMsg = [...messages].reverse().find(m => m.data?.agentResult?.estimatedTotalMarkers !== undefined);
          prevTotalMarkers = oldMsg?.agentResult?.estimatedTotalMarkers;
       }
-
       const displayPayload = { ...bodyData };
       setLastSentPayload(displayPayload);
-
       trackApiCall('gemini', `Medical Analyze - ${agentType}`);
       const currentReqId = generateQueryId();
       setActiveQueryId(currentReqId);
-
       const response = await fetch('/api/gemini/medical-analyze', {
         method: 'POST',
         headers: { 
@@ -4983,7 +4600,6 @@ ${logsText}`);
         },
         body: JSON.stringify(bodyData)
       });
-
       try {
         const logsRes = await fetch(`/api/gemini/debug-logs?sessionId=${currentReqId}`);
         if (logsRes.ok) {
@@ -5000,12 +4616,10 @@ ${logsText}`);
       } catch (e) {
         console.warn("Could not save agent request logs", e);
       }
-
       if (!response.ok) {
         const errText = await response.text();
         throw new Error(`Server returned ${response.status}: ${errText}`);
       }
-
       const contentType = response.headers.get("content-type"); let resData: any = {}; if (contentType && contentType.includes("text/event-stream")) { const reader = response.body?.getReader(); if (!reader) throw new Error("No stream reader available"); const decoder = new TextDecoder(); let accumulatedText = ""; let accumulatedByStage: { scout: string, dietitian: string } = { scout: "", dietitian: "" }; while (true) { const { done, value } = await reader.read(); if (done) break; const chunkStr = decoder.decode(value, { stream: true }); const events = chunkStr.split("\n\n"); for (const ev of events) { if (ev.startsWith("data: ")) { try { const data = JSON.parse(ev.slice(6)); if (data.chunk) { accumulatedText += data.chunk; const stage: string = data.stage === 'scout' ? 'scout' : 'dietitian'; accumulatedByStage[stage as keyof typeof accumulatedByStage] += data.chunk; const scoutMatch = accumulatedByStage.scout.match(/"(?:scratchpad|_internalReasoning)"\s*:\s*"([^]*?)("|$)/); const dietMatch = accumulatedByStage.dietitian.match(/"(?:scratchpad|_internalReasoning)"\s*:\s*"([^]*?)("|$)/); setMessages(prev => { const newMsgs = [...prev]; const lastMsg = newMsgs[newMsgs.length - 1]; if (lastMsg && lastMsg.role === "assistant" && lastMsg.isLive) { const updatedData = lastMsg.data ? { ...lastMsg.data } : {}; const updatedAgentResult = updatedData.agentResult ? { ...updatedData.agentResult } : {}; let hasChanges = false; if (scoutMatch) { updatedAgentResult.scoutScratchpad = scoutMatch[1].replace(/\\n/g, "\n").replace(/\\\"/g, "\""); hasChanges = true; } if (dietMatch) { updatedAgentResult.dietitianScratchpad = dietMatch[1].replace(/\\n/g, "\n").replace(/\\\"/g, "\""); hasChanges = true; } if (hasChanges) { return [ ...newMsgs.slice(0, newMsgs.length - 1), { ...lastMsg, data: { ...updatedData, agentResult: updatedAgentResult } } ]; } } return prev; }); } else if (data.final) { resData = data.result; } } catch (e) {} } } } } else {
         const responseContentType = response.headers.get("content-type");
         if (responseContentType && responseContentType.includes("application/json")) {
@@ -5015,7 +4629,6 @@ ${logsText}`);
           throw new Error(`Server returned a non-JSON response (${response.status}): ${rawText.substring(0, 150)}`);
         }
       }
-      
       try {
         fetch(`/api/gemini/debug-logs?sessionId=${currentReqId}`).then(async (logsRes) => {
           if (logsRes.ok) { 
@@ -5031,7 +4644,6 @@ ${logsText}`);
           }
         }).catch(e => console.warn("Could not save agent request logs", e));
       } catch (e) {}
-
       const assistantMsg: ChatMessage & { agentTypeStep?: string } = {
         id: `msg_agent1_${step}_${Date.now()}`,
         role: 'assistant',
@@ -5046,7 +4658,6 @@ ${logsText}`);
         },
         agentTypeStep: step
       };
-
       const migratedAssistantMsg = migrateMessages([assistantMsg])[0];
       setMessages(prev => [...prev, migratedAssistantMsg]);
     } catch (err: any) {
@@ -5067,15 +4678,12 @@ ${logsText}`);
       setIsAnalyzing(false);
     }
   };
-
   const handleDuplicateFoodLog = (log: FoodLog) => {
     if (!onLogFood) return;
     const todayDate = getCurrentDateInTimezone(profile?.timezone);
-    
     // Save image reference to the primary log to avoid duplicating raw Base64 data in the database
     let resolvedImageUrl = log.imageUrl;
     let resolvedImageUrls = log.imageUrls;
-
     if (log.imageUrl) {
       const primaryId = (typeof log.imageUrl === 'string' && log.imageUrl.startsWith('ref:')) ? log.imageUrl.replace('ref:', '') : log.id;
       resolvedImageUrl = `ref:${primaryId}`;
@@ -5085,7 +4693,6 @@ ${logsText}`);
       const primaryId = (typeof firstImg === 'string' && firstImg.startsWith('ref:')) ? firstImg.replace('ref:', '') : log.id;
       resolvedImageUrls = [`ref:${primaryId}`];
     }
-
     const duplicatedLog: FoodLog = {
       ...log,
       id: `food_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -5105,9 +4712,7 @@ ${logsText}`);
       }
     ]);
   };
-
   if (!isOpen) return null;
-
   return (
       <div className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex flex-col justify-end sm:justify-center animation-fade-in font-sans ${isFullscreen ? 'p-0' : 'p-0 sm:p-4'}`}>
         <div 
@@ -5120,7 +4725,6 @@ ${logsText}`);
               : 'max-w-md h-[90vh] sm:h-[80vh] rounded-t-3xl sm:rounded-3xl border border-theme-border/80'
           }`}
         >
-        
         {/* Modal Header */}
         <div className="bg-slate-50 dark:bg-slate-900/60 border-b border-theme-border/80 px-4 py-3 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
@@ -5141,9 +4745,7 @@ ${logsText}`);
               </button>
             </div>
           </div>
-          
           <div className="flex items-center gap-1">
-
             <button
               onClick={() => setShowFullScreenDebugLogs(true)}
               className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-indigo-500 hover:text-indigo-600 dark:text-indigo-400 transition-colors"
@@ -5160,7 +4762,6 @@ ${logsText}`);
             </button>
           </div>
         </div>
-
         {/* Expandable Model Selector Dropdown */}
         {isEngineSelectorOpen && (
           <div className="px-4 py-2.5 bg-indigo-50/50 dark:bg-indigo-950/25 border-b border-indigo-100 dark:border-indigo-950/40 animation-slide-down">
@@ -5174,7 +4775,6 @@ ${logsText}`);
             />
           </div>
         )}
-
         {isAgent('medical') && (activeAgentKey === 'data_review' || activeAgentKey === 'agent1') && (
           <div className="px-4 py-2 bg-indigo-50/20 dark:bg-indigo-950/10 border-b border-theme-border/80 flex items-center justify-between text-xs shrink-0">
             <span className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">Items per batch:</span>
@@ -5192,35 +4792,26 @@ ${logsText}`);
             </div>
           </div>
         )}
-
-
-
         {/* Chat Message Window */}
         <div ref={chatWindowRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-slate-900/20">
-          
           {/* Batch Calibration Card for data_review inside Chat Message Window */}
           {activeAgentKey === 'data_review' && dataReviewSharedState && (() => {
             const sharedBatches = dataReviewSharedState.batches || [];
             if (sharedBatches.length === 0) return null;
-
             const allBatchEntries = [
               ...sharedBatches.map((keys: string[], idx: number) => ({ keys, idx: idx as string | number, isCustom: false })),
               ...(dataReviewSharedState.customDataReviewBatchKeys?.length > 0 ? [{ keys: dataReviewSharedState.customDataReviewBatchKeys, idx: "custom" as string | number, isCustom: true }] : [])
             ];
-
             const safeCurrentIdx = allBatchEntries.findIndex(e => String(e.idx) === String(dataReviewBatchIdx));
             const currentIdx = safeCurrentIdx !== -1 ? safeCurrentIdx : 0;
             const currentEntry = allBatchEntries[currentIdx];
             if (!currentEntry) return null;
-
             const bIdx = currentEntry.idx;
             const batchKeys = currentEntry.keys;
             const isCustom = currentEntry.isCustom;
-
             const isApproved = dataReviewSharedState.approvedBatches?.[bIdx];
             const isCalibrating = dataReviewSharedState.isAnalyzingBatch?.[bIdx];
             const result = dataReviewSharedState.batchAnalysisResults?.[bIdx];
-
             // Check for missing units
             const missingUnitBiomarkers = batchKeys.map((k: string) => {
               const customDef = profile?.customBiomarkers?.[k];
@@ -5233,9 +4824,7 @@ ${logsText}`);
                 mappedKey: getMappedBiomarkerKey(k)
               };
             }).filter((bm: any) => bm.isMissing);
-
             const hasMissingUnits = missingUnitBiomarkers.length > 0;
-
             const totalItems = allBatchEntries.reduce((acc: number, entry: any) => acc + entry.keys.length, 0);
             let accumulatedBefore = 0;
             for (let i = 0; i < currentIdx; i++) {
@@ -5243,7 +4832,6 @@ ${logsText}`);
             }
             const startItemNumber = accumulatedBefore + 1;
             const endItemNumber = accumulatedBefore + batchKeys.length;
-
             return (
               <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md space-y-4 mb-4 font-sans text-left">
                 <BatchNavigator
@@ -5286,14 +4874,12 @@ ${logsText}`);
                         </span>
                       )}
                     </div>
-
                     {/* Pre-calibration Batch List */}
                     {!result && (
                       <div className="space-y-3">
                         <div className="text-[11px] text-slate-500 leading-normal font-medium bg-slate-50 dark:bg-slate-900/30 p-2.5 rounded-xl border border-theme-border/50">
                           The following raw biomarker records are grouped in this calibration batch. Please ensure all units are defined before starting.
                         </div>
-
                         {/* Pre-calibration Table */}
                         <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden text-[11px]">
                           <table className="w-full text-left border-collapse">
@@ -5310,7 +4896,6 @@ ${logsText}`);
                                 const isMissing = (!customDef && !stdDef) || (customDef && !customDef.unit) || (stdDef && !stdDef.unit);
                                 const mappedKey = getMappedBiomarkerKey(k);
                                 const name = customDef?.name || stdDef?.name || k;
-
                                 return (
                                   <tr key={k} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/10">
                                     <td className="p-2">
@@ -5344,7 +4929,6 @@ ${logsText}`);
                             </tbody>
                           </table>
                         </div>
-
                         {hasMissingUnits ? (
                           <div className="p-3 bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-900/10 rounded-xl flex gap-2 text-amber-800 dark:text-amber-400">
                             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
@@ -5379,7 +4963,6 @@ ${logsText}`);
                         )}
                       </div>
                     )}
-
                     {/* Calibrated / Result View */}
                     {result && (
                       <div className="space-y-3">
@@ -5394,7 +4977,6 @@ ${logsText}`);
               </div>
             );
           })()}
-
           {/* Data used by agent inline block */}
           {(isAgent('food') || isAgent('food_idea') || isAgent('medical')) && (
             <div className="bg-slate-50 dark:bg-slate-900/55 rounded-xl px-4 py-2.5 mb-4 border border-theme-border/20">
@@ -5410,7 +4992,6 @@ ${logsText}`);
                   {showDataUsed ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </div>
               </button>
-              
               {showDataUsed && (
                 <div className="mt-2.5 pt-2.5 border-t border-slate-200/50 dark:border-slate-800/50 space-y-3.5 text-theme-text-secondary font-sans leading-normal">
                   <div className="flex gap-2.5">
@@ -5434,7 +5015,6 @@ ${logsText}`);
                           targetAgent = lastMsgWithStep?.agentType || agentType || 'agent1';
                           targetPrompt = lastMsgWithStep?.agentResult?.agentPrompt || null;
                         }
-                        
                         setActiveInstructionAgentType(targetAgent);
                         setActiveInstructionPrompt(targetPrompt);
                       }}
@@ -5462,7 +5042,6 @@ ${logsText}`);
                       <span className="font-bold text-slate-700 dark:text-slate-200">{profile?.weight || 'Unknown'} kg • {profile?.height || 'Unknown'} cm (BMI: {profile?.weight && profile?.height ? (Number(profile.weight) / Math.pow(Number(profile.height) / 100, 2)).toFixed(1) : 'Unknown'})</span>
                     </div>
                   </div>
-
                   {(agentType === 'biomarker_review' || reviewBiomarkerKey) && (
                     <div className="bg-indigo-50/70 dark:bg-indigo-950/40 p-3 rounded-xl border border-indigo-200/60 dark:border-indigo-800/40 text-xs space-y-1.5 font-sans mt-2">
                       <div className="font-bold text-indigo-950 dark:text-indigo-200 flex items-center justify-between">
@@ -5497,7 +5076,6 @@ ${logsText}`);
                       ) : null}
                     </div>
                   )}
-                  
                   {isAgent('medical') && dataReviewBatchIdx !== null && (
                     <div className="mt-2.5">
                       <div className="bg-slate-100/50 dark:bg-slate-950/20 p-2 rounded-xl border border-slate-150 dark:border-slate-800/30 font-size-xs">
@@ -5512,7 +5090,6 @@ ${logsText}`);
                       </div>
                     </div>
                   )}
-
                   {isAgent('food_idea') && (
                     <>
                       <div className="grid grid-cols-2 gap-2.5">
@@ -5542,7 +5119,6 @@ ${logsText}`);
                           </select>
                         </div>
                       </div>
-
                       <div className="grid grid-cols-2 gap-2.5">
                         <div className="bg-slate-100/50 dark:bg-slate-950/20 p-2 rounded-xl border border-slate-150 dark:border-slate-800/30 font-size-xs">
                           <span className="text-slate-400 dark:text-slate-500 font-bold block font-size-xs uppercase tracking-wider mb-0.5">Max Distance</span>
@@ -5567,7 +5143,6 @@ ${logsText}`);
                           </span>
                         </div>
                       </div>
-                      
                       <div className="bg-slate-100/50 dark:bg-slate-950/20 p-2 rounded-xl border border-slate-150 dark:border-slate-800/30 font-size-xs">
                         <span className="text-slate-400 dark:text-slate-500 font-bold block font-size-xs uppercase tracking-wider mb-0.5">Last 20 Meals</span>
                         <span className="font-bold text-slate-700 dark:text-slate-200 max-h-20 overflow-y-auto block whitespace-pre-wrap">
@@ -5576,7 +5151,6 @@ ${logsText}`);
                       </div>
                     </>
                   )}
-
                   {agentType && (
                     <div className="space-y-2">
                       <div className="bg-slate-100/50 dark:bg-slate-950/20 p-2 rounded-xl border border-slate-150 dark:border-slate-800/30 font-size-xs">
@@ -5611,7 +5185,6 @@ ${logsText}`);
                       </div>
                     </div>
                   )}
-
                   {/* Warning Biomarkers */}
                   {(isAgent('food') || isAgent('food_idea')) && (
                     <div>
@@ -5632,7 +5205,6 @@ ${logsText}`);
                       )}
                     </div>
                   )}
-
                   {/* Remaining Daily Allowances */}
                   {(isAgent('food') || isAgent('food_idea')) && (
                     <div>
@@ -5651,7 +5223,6 @@ ${logsText}`);
                             <div>7d Avg: <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">{Math.round(remainingAllowance.averages?.calories || 0)}</span></div>
                           </div>
                         </div>
-
                         {/* Sat. Fat Card */}
                         <div className="text-center bg-slate-100/60 dark:bg-slate-950/30 border border-slate-150 dark:border-slate-800/40 p-2.5 rounded-xl flex flex-col justify-between">
                           <div>
@@ -5665,7 +5236,6 @@ ${logsText}`);
                             <div>7d Avg: <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">{(remainingAllowance.averages?.saturatedFat || 0).toFixed(1)}</span></div>
                           </div>
                         </div>
-
                         {/* Sodium Card */}
                         <div className="text-center bg-slate-100/60 dark:bg-slate-950/30 border border-slate-150 dark:border-slate-800/40 p-2.5 rounded-xl flex flex-col justify-between">
                           <div>
@@ -5682,7 +5252,6 @@ ${logsText}`);
                       </div>
                     </div>
                   )}
-
                   {/* Conversation Log History */}
                   <div className="border border-theme-border rounded-xl bg-slate-100/50 dark:bg-slate-950/20 p-3 mt-3 space-y-2 text-left">
                     <div className="flex items-center justify-between">
@@ -5710,7 +5279,6 @@ ${logsText}`);
                     >
                       <span>🔍 View Log</span>
                     </button>
-
                     {showFullScreenConv && (
                       <Suspense fallback={null}>
                         <FullScreenLogViewer
@@ -5754,14 +5322,12 @@ ${logsText}`);
               )}
             </div>
           )}
-
           {(() => {
             const revIdx = [...messages].reverse().findIndex(m => m.id?.startsWith('welcome_'));
             const lastWelcomeIndex = revIdx >= 0 ? messages.length - 1 - revIdx : -1;
             const sessionStartIdx = lastWelcomeIndex >= 0 ? lastWelcomeIndex : 0;
             const pastCount = sessionStartIdx;
             const hasPastMessages = pastCount > 0;
-
             return (
               <>
                 {(hasPastMessages || messages.length > 1) && (
@@ -5795,15 +5361,12 @@ ${logsText}`);
                     )}
                   </div>
                 )}
-
                 {messages.map((msg, idx) => {
                   const isPast = idx < sessionStartIdx;
                   if (isPast && !showPastDiscussion) return null;
-
                   const isLastFoodMsg = lastFoodMsg && msg.id === lastFoodMsg.id;
                   const isAss = msg.role === 'assistant';
                   if (isAss) {
-
                   return (
                 <div
                   key={msg.id ? `${msg.id}_${idx}` : idx}
@@ -5832,7 +5395,6 @@ ${logsText}`);
                       </button>
                     </div>
                   )}
-
                   {/* No switcher */}
                   <div className="w-full leading-relaxed font-size-body text-slate-850 dark:text-slate-100 font-medium break-words overflow-x-hidden bg-transparent border-none shadow-none">
                     <div className="animation-fade-in">
@@ -5847,7 +5409,6 @@ ${logsText}`);
                           </div>
                         ) : null
                       )}
-                      
                       {(() => {
                         const isFoodMsg = msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'front_desk' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.portionClarify || msg.data?.needsPortionClarify);
                         if (isFoodMsg || msg.agentType === 'biomarker_review' || msg.modificationCommand?.length || msg.data?.agentResult?.modificationCommand?.length) return null;
@@ -5855,7 +5416,6 @@ ${logsText}`);
                         if (!formatted || !formatted.trim()) return null;
                         return <p className="whitespace-pre-line break-words">{formatted}</p>;
                       })()}
-
                       {(() => {
                         if (msg.id?.startsWith('welcome_')) return null;
                         const isLatestAssistant = !messages.slice(idx + 1).some(m => m.role === 'assistant');
@@ -5867,7 +5427,6 @@ ${logsText}`);
                           jobId;
                         const debugUrl = msg.data?.debugUrl || (targetJobId ? JobStore.getJob(targetJobId)?.result?.debugUrl : undefined) || (jobId ? JobStore.getJob(jobId)?.result?.debugUrl : undefined);
                         const isErrorMsg = msg.isError || msg.agentUnavailable || /Failed to process your request|Analysis failed|Vision Scout Failed|Gemini unavailable|rate limit|quota exceeded|quota \(\d+\)|503|429|Service Unavailable|Error:/i.test(msg.content || '');
-
                         if ((!debugUrl && !targetJobId && !isErrorMsg) || (!isLatestAssistant && isErrorMsg)) return null;
                         return (
                           <div className="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-800 flex flex-wrap items-center gap-2">
@@ -5938,17 +5497,13 @@ ${logsText}`);
                           </div>
                         );
                       })()}
-
                     </div>
                   </div>
-
                     {msg.agentUnavailable && msg.data?.scoutItems && msg.data.scoutItems.length > 0 && (
                       <div className="mt-3 mb-2">
                         <NutritionLabelTable activeScoutItems={msg.data.scoutItems} isSaved={loggedMessageIds.includes(msg.id)} />
                       </div>
                     )}
-
-
                   {/* Render extracted Pending Food Log info */}
                   {(() => {
                     const isFoodMsg = msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'front_desk' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.portionClarify || msg.data?.needsPortionClarify);
@@ -5969,7 +5524,6 @@ ${logsText}`);
                     return (
                       <>
                         <div ref={msg.isLive ? liveThoughtRef : undefined}>
-
                           <AgentThoughtBox
                             globalLiveLogs={(msg.agentType === 'agent1' || msg.agentType === 'medical_extract') ? undefined : (msg.isLive ? (globalLiveLogs || liveThoughts.globalLiveLogs || liveThoughts.backendLogs || (jobId ? JobStore.getJob(jobId)?.liveThoughts?.globalLiveLogs || JobStore.getJob(jobId)?.liveThoughts?.backendLogs : undefined)) : (msg.data?.agentResult?.globalLiveLogs || msg.data?.agentResult?.backendLogs || (jobId ? JobStore.getJob(jobId)?.liveThoughts?.globalLiveLogs || JobStore.getJob(jobId)?.liveThoughts?.backendLogs || JobStore.getJob(jobId)?.result?.backendLogs : undefined)))}
                             scoutScratchpad={msg.isLive ? (liveThoughts.scout || msg.data?.agentResult?.scoutScratchpad) : msg.data?.agentResult?.scoutScratchpad}
@@ -6150,17 +5704,13 @@ ${logsText}`);
             pushed off-screen while the answer is still growing. */}
         <div aria-hidden="true" className="min-h-[45vh]" />
       </div>
-
         {/* Input Dock */}
         <div className="bg-theme-bg-card border-t border-theme-border/80 p-3 flex flex-col gap-2 shrink-0 relative">
-          
-          
           {(() => {
             const combinedMatches = [
               ...catalogMatches.map(m => ({ ...m, _listType: 'brand' })),
               ...matchingPreviousLogs.map(m => ({ ...m, _listType: 'previous_meal' }))
             ].filter(m => !explicitFoodTags.some(tag => tag.dbId === (m._listType === 'brand' ? m.food_id : m.id)));
-            
             if (combinedMatches.length === 0) return null;
             return (
               <div className="absolute bottom-full left-0 right-0 mb-2 mx-3 bg-white dark:bg-slate-800 border border-theme-border/80 rounded-2xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto z-50 animate-fade-in font-sans">
@@ -6217,44 +5767,36 @@ ${logsText}`);
                             const applyTag = (prev: string, searchTerms: string, tagContent: string) => {
                               const trimmedPrev = prev.trimEnd();
                               if (!trimmedPrev) return `[${tagContent}] `;
-
                               const words = trimmedPrev.split(/\s+/);
                               const tagWords = tagContent.toLowerCase().split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(Boolean);
-                              
                               let matchCount = 0;
                               for (let i = 1; i <= Math.min(words.length, 6); i++) {
                                 const firstWordOfSuffix = words[words.length - i].toLowerCase();
                                 const cleanWord = firstWordOfSuffix.replace(/[^a-z0-9]/g, '');
-                                
                                 if (!cleanWord) {
                                   matchCount = i;
                                   continue;
                                 }
-                                
                                 const isMatch = tagWords.some(tw => {
                                   if (cleanWord.length < 3) {
                                     return tw === cleanWord || tw.startsWith(cleanWord);
                                   }
                                   return tw.includes(cleanWord) || cleanWord.includes(tw);
                                 });
-                                
                                 if (isMatch) {
                                   matchCount = i;
                                 } else {
                                   break;
                                 }
                               }
-                              
                               if (matchCount > 0) {
                                   const beforeWords = words.slice(0, words.length - matchCount);
                                   const beforeStr = beforeWords.join(' ').replace(/\[+\s*$/, '').trim();
                                   return (beforeStr ? beforeStr + ' ' : '') + `[${tagContent}] `;
                                 }
-                                
                                 const cleanedPrev = prev.replace(/\[+\s*$/, '').trim();
                                 return (cleanedPrev ? cleanedPrev + ' ' : '') + `[${tagContent}] `;
                             };
-
                             if (item._listType === 'brand') {
                               const w = (document.getElementById(`tag-portion-${item.food_id}`) as HTMLInputElement)?.value || tagPortionPreFill;
                               setExplicitFoodTags(prev => [...prev, { dbId: item.food_id, name: item.dish_name, weightGrams: Number(w), source: 'catalog_tag' }]);
@@ -6286,7 +5828,6 @@ ${logsText}`);
               </span>
             </div>
           )}
-
           {selectedImages.length > 0 && (
             <div className="flex gap-2 overflow-x-auto py-1 max-w-full">
               {selectedImages.map((imgSrc, idx) => (
@@ -6303,7 +5844,6 @@ ${logsText}`);
               ))}
             </div>
           )}
-
           {/* Quick Action Prompts */}
           {!isAgent('food') && (
             messages.length <= 1 || 
@@ -6429,7 +5969,6 @@ ${logsText}`);
                       </span>
                     )}
                   </button>
-
                   <button
                     type="button"
                     onClick={() => {
@@ -6454,7 +5993,6 @@ ${logsText}`);
                       </span>
                     )}
                   </button>
-
                   <button
                     type="button"
                     onClick={() => {
@@ -6507,7 +6045,6 @@ ${logsText}`);
                 >
                   <Image className="w-5 h-5" />
                 </button>
-
                 {isPhotoMenuOpen && (
                   <>
                     <div
@@ -6518,7 +6055,6 @@ ${logsText}`);
                       <div className="text-[11px] font-bold uppercase tracking-wider text-theme-text-secondary px-3 py-1.5 border-b border-theme-border/50 mb-1">
                         Select Photo Source
                       </div>
-                      
                       <button
                         type="button"
                         onClick={() => {
@@ -6535,7 +6071,6 @@ ${logsText}`);
                           <div className="text-[11px] text-theme-text-secondary">Photo gallery & albums</div>
                         </div>
                       </button>
-
                       <button
                         type="button"
                         onClick={() => {
@@ -6552,7 +6087,6 @@ ${logsText}`);
                           <div className="text-[11px] text-theme-text-secondary">Image collections & files</div>
                         </div>
                       </button>
-
                       <button
                         type="button"
                         onClick={() => {
@@ -6573,7 +6107,6 @@ ${logsText}`);
                   </>
                 )}
               </div>
-
               <input
                 type="file"
                 ref={fileInputRef}
@@ -6598,7 +6131,6 @@ ${logsText}`);
                 capture="environment"
                 className="hidden"
               />
-
               <button
                 id="food-chat-camera-btn"
                 type="button"
@@ -6608,7 +6140,6 @@ ${logsText}`);
               >
                 <Camera className="w-5 h-5" />
               </button>
-
               <input
                 id="food-chat-input"
                 type="text"
@@ -6625,7 +6156,6 @@ ${logsText}`);
                 placeholder={t.chatPlaceholder}
                 className="flex-1 min-w-0 bg-slate-50 dark:bg-slate-800/60 border border-theme-border/50 rounded-xl px-3.5 py-3 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
               />
-
               <button
                 id="food-chat-send-btn"
                 type="button"
@@ -6649,14 +6179,11 @@ ${logsText}`);
             </div>
           )}
         </div>
-
       </div>
-
       {/* Full View Consolidated Log Modal */}
       {activeModalTableRows && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 animation-fade-in">
           <div className="bg-theme-bg-card border border-theme-border rounded-3xl shadow-2xl w-full max-w-5xl h-[80vh] flex flex-col overflow-hidden animate-scale-up">
-            
             {/* Modal Header */}
             <div className="bg-slate-50 dark:bg-slate-900/60 border-b border-theme-border/80 px-6 py-4 flex items-center justify-between shrink-0 font-sans">
               <div className="flex items-center gap-3">
@@ -6682,7 +6209,6 @@ ${logsText}`);
                 <X className="w-5 h-5" />
               </button>
             </div>
-
             {/* Modal Body */}
             <div className="flex-1 overflow-auto p-6 bg-slate-50/35 dark:bg-slate-950/20 font-sans">
               <div className="overflow-x-auto rounded-2xl border border-theme-border bg-white dark:bg-slate-950 shadow-sm">
@@ -6732,7 +6258,6 @@ ${logsText}`);
                 </table>
               </div>
             </div>
-
             {/* Modal Footer */}
             <div className="bg-slate-50 dark:bg-slate-900/40 border-t border-theme-border/80 px-6 py-4 flex items-center justify-between shrink-0 font-sans">
               <span className="text-xs text-theme-text-secondary">
@@ -6746,16 +6271,13 @@ ${logsText}`);
                 Close View
               </button>
             </div>
-
           </div>
         </div>
       )}
-
       {/* Full Screen JSON Viewer */}
       {fullScreenJson && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[120] flex items-center justify-center p-4 animation-fade-in">
           <div className="bg-theme-bg-card border border-theme-border rounded-3xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden animate-scale-up">
-            
             {/* Modal Header */}
             <div className="bg-slate-50 dark:bg-slate-900/60 border-b border-theme-border/80 px-6 py-4 flex items-center justify-between shrink-0 font-sans">
               <div className="flex items-center gap-3">
@@ -6779,7 +6301,6 @@ ${logsText}`);
                 <X className="w-5 h-5" />
               </button>
             </div>
-
             {/* Modal Body */}
             <div className="flex-1 overflow-auto p-6 bg-slate-50/35 dark:bg-slate-950/20 font-sans">
               <div className="rounded-2xl border border-theme-border bg-white dark:bg-slate-950 shadow-sm p-4 overflow-auto">
@@ -6788,7 +6309,6 @@ ${logsText}`);
                 </pre>
               </div>
             </div>
-
             {/* Modal Footer */}
             <div className="bg-slate-50 dark:bg-slate-900/40 border-t border-theme-border/80 px-6 py-4 flex items-center justify-between shrink-0 font-sans">
               <span className="text-xs text-theme-text-secondary">
@@ -6802,11 +6322,9 @@ ${logsText}`);
                 Close
               </button>
             </div>
-
           </div>
         </div>
       )}
-
       <FullScreenInstructionViewer
         isOpen={activeInstructionAgentType !== null}
         onClose={() => {
@@ -6868,11 +6386,8 @@ ${logsText}`);
     </div>
   );
 }
-
   // B5
   // skipScout = true
   // skipScout: skipScout === true
-  
 /* PortionClarifyCard portionChoices: choices skipScout: true */
-
 /* handleDownloadDebugReport Download full report.md report- */

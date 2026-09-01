@@ -255,4 +255,21 @@ describe('JobStore', () => {
     const finished = { status: 'succeeded' as const, serverSubmittedAt: submittedAt, clientSubmitPending: false };
     expect(isStalePriorTurn(finished, 'succeeded', oldStamp)).toBe(false);
   });
+
+  it('drops succeeded echoes from a lower currentTurn', () => {
+    JobStore.createJob({
+      id: 'turn-n',
+      status: 'queued',
+      currentTurn: 2,
+      inFlightTurnAt: Date.now(),
+      result: { pendingFoodLog: { name: 'Meal', nutrients: { calories: 660 } } },
+    });
+    JobStore.updateJob('turn-n', {
+      status: 'succeeded',
+      currentTurn: 1,
+      result: { pendingFoodLog: { name: 'Meal', nutrients: { calories: 660 } } },
+    });
+    expect(JobStore.getJob('turn-n')?.status).toBe('queued');
+    expect(JobStore.getJob('turn-n')?.currentTurn).toBe(2);
+  });
 });

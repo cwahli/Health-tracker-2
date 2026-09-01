@@ -91,7 +91,7 @@ class JobQueueRunnerImpl {
 
   private async runJob(job: AgentJob) {
     const controller = new AbortController();
-    JobStore.updateJob(job.id, {
+    JobStore.apply({ id: job.id, type: 'ServerStatus',
       status: 'running',
       startedAt: new Date().toISOString(),
       abortController: controller,
@@ -114,7 +114,7 @@ class JobQueueRunnerImpl {
         return;
       }
 
-      JobStore.updateJob(job.id, {
+      JobStore.apply({ id: job.id, type: 'AnalyzeFinished',
         status: 'succeeded',
         error: undefined,
         finishedAt: new Date().toISOString(),
@@ -178,7 +178,7 @@ class JobQueueRunnerImpl {
         } : undefined;
 
         if (cleanResult) {
-          JobStore.updateJob(job.id, {
+          JobStore.apply({ id: job.id, type: 'AnalyzeFinished',
             result: cleanResult,
           });
         }
@@ -189,9 +189,10 @@ class JobQueueRunnerImpl {
       }
     } catch (error: any) {
       if (error.message === 'AbortError') {
-        JobStore.updateJob(job.id, {
+        JobStore.apply({ id: job.id, type: 'AnalyzeFailed',
           status: 'cancelled',
           finishedAt: new Date().toISOString(),
+          error: undefined,
         });
       } else {
         const AGENT_DELAYED_RETRY = false; // flag default off to avoid stacked 60s/300s retries
@@ -203,7 +204,7 @@ class JobQueueRunnerImpl {
           const delaySeconds = 3;
           const retryTime = new Date(Date.now() + delaySeconds * 1000);
 
-          JobStore.updateJob(job.id, {
+          JobStore.apply({ id: job.id, type: 'ServerStatus',
             status: 'queued',
             attemptByStep: {
               ...(job.attemptByStep || {}),
@@ -213,7 +214,7 @@ class JobQueueRunnerImpl {
             statusMessage: `Rate limit / transient error (${error.message || 'Retrying'}). Auto-retrying in ${delaySeconds}s (attempt ${currentAttempts + 1}/3)...`,
           });
         } else {
-          JobStore.updateJob(job.id, {
+          JobStore.apply({ id: job.id, type: 'AnalyzeFailed',
             status: 'failed',
             finishedAt: new Date().toISOString(),
             error: {
@@ -240,7 +241,7 @@ class JobQueueRunnerImpl {
       }
     } finally {
       // Clear the abort controller to prevent memory leaks
-      JobStore.updateJob(job.id, { abortController: undefined });
+      JobStore.apply({ type: 'ServerStatus', id: job.id, abortController: undefined } as any);
     }
   }
 

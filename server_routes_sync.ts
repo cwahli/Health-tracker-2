@@ -5,6 +5,7 @@ import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import { verifyFirebaseIdToken } from './server_auth.js';
 import { supabaseAdmin } from './supabaseAdmin.js';
 import { uploadPhotoToR2 } from './src/utils/r2Storage.js';
+import { uploadBase64ToR2 } from './server_routes_r2.js';
 
 export const syncRouter = Router();
 

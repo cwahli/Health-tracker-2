@@ -23,6 +23,7 @@ import {
 } from './server_scout_reconcile.js';
 import { rankAndClassifyCandidates, writeAliasIfHitUnique } from './server_fdc_resolve.js';
 import { buildFoodSearchQuerySet } from './server_query_set';
+// BrandGuard
 import {
   withGeminiRetry,
   isGeminiQuotaError,

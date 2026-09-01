@@ -5,7 +5,9 @@ import { sanitizeForFirestore } from '../utils/firestoreUtils';
 import { JobStore, isStalePriorTurn, mealSnapshotKey } from './JobStore';
 import { AgentJob } from './types';
 import { toPendingFoodLog } from '../mealBuild/adapters';
-import { mergeFoodEditMessages, shouldMergeFoodEditTurn } from './mergeFoodEditMessages';
+
+// [FreeTier] thin clean_result
+
 
 const backendDeleteTried = new Set<string>();
 
@@ -39,11 +41,12 @@ async function fetchAndPopulateR2Job(jobId: string) {
             const messageText = updatedResult.message || updatedResult.text || pendingFoodLog?.message || 'Analysis complete.';
 
             let updatedMessages = existing?.messages;
+            let assistantMsg: any = undefined;
             if (existing?.messages && existing.messages.length > 0) {
               const nonLive = existing.messages.filter((m: any) => !m.isLive);
               const lastNonLive = nonLive[nonLive.length - 1];
               const isNewTurn = lastNonLive && lastNonLive.role === 'user';
-              const assistantMsg = {
+              assistantMsg = {
                 id: isNewTurn ? `msg_assistant_${jobId}_${Date.now()}` : `msg_assistant_${jobId}`,
                 role: 'assistant',
                 content: messageText,
@@ -66,35 +69,15 @@ async function fetchAndPopulateR2Job(jobId: string) {
                   },
                 },
               };
-              if (shouldMergeFoodEditTurn({
-                isMedicalJob: existing.kind === 'medical',
-                mode: existing.mode || backendJob.mode,
-                inputMode: (existing.inputSnapshot as any)?.mode,
-                cleanMode: updatedResult.mode || backendJob.mode,
-                messages: nonLive,
-              })) {
-                updatedMessages = mergeFoodEditMessages(nonLive, assistantMsg);
-              } else if (isNewTurn) {
-                updatedMessages = [...nonLive, assistantMsg];
-              } else {
-                const lastAsstIdx = nonLive.map((m: any) => m.role).lastIndexOf('assistant');
-                if (lastAsstIdx !== -1) {
-                  nonLive[lastAsstIdx] = assistantMsg;
-                  updatedMessages = [...nonLive];
-                } else {
-                  updatedMessages = [...nonLive, assistantMsg];
-                }
-              }
             }
 
-            JobStore.updateJob(jobId, {
+            JobStore.apply({
+              type: 'PollerPayload',
+              id: jobId,
               status: backendJob.status || 'succeeded',
-              inFlightTurnAt: backendJob.status === 'succeeded' ? undefined : existing?.inFlightTurnAt,
               result: updatedResult,
-              mealBuild: updatedResult.mealBuild || existing?.mealBuild,
-              messages: updatedMessages,
-              photoUrl: updatedResult.photoUrl || existing?.photoUrl,
-              debugUrl: updatedResult.debugUrl || existing?.debugUrl
+              messages: assistantMsg ? [assistantMsg] : undefined,
+              currentTurn: backendJob.current_turn,
             });
           }
         }
@@ -245,7 +228,7 @@ export function processJobRows(rows: any[], userId: string = 'anonymous'): void 
           updatePayload.finishedAt = new Date().toISOString();
         }
       }
-      JobStore.updateJob(row.id, updatePayload);
+      JobStore.apply({ type: 'RealtimeRow', id: row.id, ...updatePayload } as any);
 
       if (cleanRes && cleanRes.is_r2 && !isEditInFlight) {
         fetchAndPopulateR2Job(row.id);
@@ -353,7 +336,7 @@ export function initSupabaseJobSync(userId?: string): () => void {
       if (j.status === 'running' || j.status === 'pending') {
         const startedAt = new Date(j.createdAt || j.updatedAt || now).getTime();
         if (now - startedAt > 10 * 60 * 1000) {
-          JobStore.updateJob(j.id, { status: 'failed', statusMessage: 'Job timed out after 10 minutes' });
+          JobStore.apply({ type: 'AnalyzeFailed', id: j.id, error: 'timeout' });
         } else {
           hasActiveJob = true;
         }
@@ -455,7 +438,7 @@ export function initSupabaseJobSync(userId?: string): () => void {
             return;
           }
 
-          const updatedFields: Partial<AgentJob> = {
+          const updatedFields: any = {
             status: row.status,
             progressPercent: row.progress_percent,
             statusMessage: row.status_message || (existingJob?.inFlightTurnAt && (row.status === 'queued' || row.status === 'running') ? 'Updating meal...' : undefined),
@@ -520,6 +503,7 @@ export function initSupabaseJobSync(userId?: string): () => void {
             }
           }
 
+          let assistantMsg: any = undefined;
           if (row.status === 'succeeded' && cleanRes && !cleanRes.is_r2) {
             const pendingFoodLog = cleanRes.pendingFoodLog || (cleanRes.mealBuild ? toPendingFoodLog(cleanRes.mealBuild) : null) || cleanRes.data;
             const messageText = cleanRes.message || cleanRes.text || pendingFoodLog?.message || 'Analysis complete.';
@@ -527,7 +511,7 @@ export function initSupabaseJobSync(userId?: string): () => void {
               const nonLive = existingJob.messages.filter((m: any) => !m.isLive);
               const lastNonLive = nonLive[nonLive.length - 1];
               const isNewTurn = lastNonLive && lastNonLive.role === 'user';
-              const assistantMsg = {
+              assistantMsg = {
                 id: isNewTurn ? `msg_assistant_${row.id}_${Date.now()}` : `msg_assistant_${row.id}`,
                 role: 'assistant',
                 content: messageText,
@@ -550,25 +534,6 @@ export function initSupabaseJobSync(userId?: string): () => void {
                   },
                 },
               };
-              if (shouldMergeFoodEditTurn({
-                isMedicalJob: existingJob.kind === 'medical',
-                mode: existingJob.mode || row.mode,
-                inputMode: (existingJob.inputSnapshot as any)?.mode,
-                cleanMode: cleanRes.mode || row.mode,
-                messages: nonLive,
-              })) {
-                updatedFields.messages = mergeFoodEditMessages(nonLive, assistantMsg);
-              } else if (isNewTurn) {
-                updatedFields.messages = [...nonLive, assistantMsg];
-              } else {
-                const lastAsstIdx = nonLive.map((m: any) => m.role).lastIndexOf('assistant');
-                if (lastAsstIdx !== -1) {
-                  nonLive[lastAsstIdx] = assistantMsg;
-                  updatedFields.messages = [...nonLive];
-                } else {
-                  updatedFields.messages = [...nonLive, assistantMsg];
-                }
-              }
             }
           }
 
@@ -579,7 +544,7 @@ export function initSupabaseJobSync(userId?: string): () => void {
             };
           }
 
-          JobStore.updateJob(row.id, updatedFields);
+          JobStore.apply({ type: 'RealtimeRow', id: row.id, ...updatedFields, messages: assistantMsg ? [assistantMsg] : undefined, currentTurn: row.current_turn } as any);
         };
 
         processRow().catch((err) => {

@@ -63,6 +63,8 @@ export interface AgentJob {
   clientSubmitPending?: boolean;
   /** Epoch ms when the current edit/analyze turn started. Preview stays in processing until a later finishedAt. */
   inFlightTurnAt?: number;
+  /** Session turn. Increments on every submit. Incoming rows with a smaller turn are ignored. */
+  currentTurn?: number;
   lastProgressAt?: string;
   abortController?: AbortController;
   cancelReason?: string;

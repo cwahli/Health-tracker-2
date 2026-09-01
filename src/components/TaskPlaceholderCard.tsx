@@ -4,6 +4,9 @@ import { Loader2, Trash2, XCircle, CheckCircle2, AlertTriangle, Eye, Save, Rotat
 import { AgentJob, JobStatus } from '../jobs/types';
 import { ImageStore } from '../jobs/ImageStore';
 import { JobStore } from '../jobs/JobStore';
+import { previewStatus, previewStatusLabel, isEditJob, isTurnInFlight } from '../jobs/jobPreview';
+import { useJob } from '../hooks/useJob';
+import { getSessionLog, formatSessionLog } from '../jobs/sessionLog';
 import { JobQueueRunner } from '../jobs/JobQueueRunner';
 import { FoodLog } from '../types';
 import { humanizeJobFailure } from '../utils/jobFailure';
@@ -27,33 +30,17 @@ export default function TaskPlaceholderCard({
   onSave,
   profileLanguage = 'en'
 }: TaskPlaceholderCardProps) {
-  const [job, setJob] = useState<AgentJob>(jobProp);
+  const live = useJob(jobProp.id).job;
+  const job = live || jobProp;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [nowTs, setNowTs] = useState(() => Date.now());
-
-  useEffect(() => {
-    setJob(jobProp);
-  }, [jobProp]);
-
-  useEffect(() => {
-    const sync = () => {
-      const live = JobStore.getJob(jobProp.id);
-      if (live) setJob({ ...live });
-    };
-    sync();
-    const unsub = JobStore.subscribe(sync);
-    return () => {
-      unsub();
-    };
-  }, [jobProp.id]);
 
   // Tick once per second while this job is actively in-flight, so the
   // "elapsed" readout below stays live. Cleared automatically once the job
   // leaves an active state (effect re-runs and the old interval is cleared).
   useEffect(() => {
-    const isActive = job.status === 'running' || job.status === 'processing' || job.status === 'queued' ||
-      (typeof job.inFlightTurnAt === 'number' && (!job.finishedAt || new Date(job.finishedAt).getTime() < job.inFlightTurnAt));
+    const isActive = isTurnInFlight(job);
     if (!isActive) return;
     const interval = setInterval(() => setNowTs(Date.now()), 1000);
     return () => clearInterval(interval);
@@ -275,13 +262,8 @@ export default function TaskPlaceholderCard({
     (job.mealBuild?.items && job.mealBuild.items.length > 0)
   );
 
-  const turnInFlight =
-    typeof job.inFlightTurnAt === 'number' &&
-    (!job.finishedAt || new Date(job.finishedAt).getTime() < job.inFlightTurnAt);
-  const effectiveStatus: AgentJob['status'] =
-    turnInFlight && (job.status === 'succeeded' || job.status === 'awaiting_user')
-      ? 'running'
-      : job.status;
+  const turnInFlight = isTurnInFlight(job);
+  const effectiveStatus: AgentJob['status'] = previewStatus(job);
 
   const isFailedOrTimedOut =
     effectiveStatus === 'failed' ||
@@ -295,43 +277,13 @@ export default function TaskPlaceholderCard({
       (typeof lastMsgContent === 'string' && /(?:timed out|analysis failed|server error)/i.test(lastMsgContent) && !job.result?.pendingFoodLog && !job.result?.modificationCommand && !job.result?.extractedData)
     ));
 
-  const isEditMode =
-    job.inputSnapshot?.mode === 'edit' ||
-    (job as any).mode === 'edit' ||
-    (job as any).mode === 'modify' ||
-    (job.messages && job.messages.filter((m: any) => !m.isLive).length > 2);
+  const isEditMode = isEditJob(job);
 
   const getStatusLabel = () => {
-    if (effectiveStatus === 'succeeded' && Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) {
-      return 'AI advice pending';
-    }
-    if (isFailedOrTimedOut) {
-      return 'Analysis failed';
-    }
-    const statusKey = effectiveStatus as JobStatus;
-    switch (statusKey) {
-      case 'queued': {
-        if (isEditMode) return 'Updating meal • Queued';
-        const queue = JobStore.getAllJobs().filter(j => j.status === 'queued' || j.status === 'running');
-        const myIndex = queue.findIndex(j => j.id === job.id);
-        const ahead = myIndex > 0 ? myIndex : 0;
-        return ahead > 0 ? `Waiting — ${ahead} ahead` : 'Uploaded • Queued on server';
-      }
-      case 'running':
-      case 'processing':
-        return isEditMode ? 'Updating meal...' : `Attempt ${job.attemptCount || 1} of ${job.maxAttempts || 3}`;
-      case 'failed':
-        return 'Analysis failed';
-      case 'cancelled':
-      case 'cancel_requested':
-        return 'Analysis cancelled';
-      case 'awaiting_user':
-        return 'Action required';
-      case 'succeeded':
-        return 'Analysis completed';
-      default:
-        return 'Processing...';
-    }
+    const queue = JobStore.getAllJobs().filter(j => j.status === 'queued' || j.status === 'running');
+    const myIndex = queue.findIndex(j => j.id === job.id);
+    const ahead = myIndex > 0 ? myIndex : 0;
+    return previewStatusLabel(job, { queuedAhead: ahead, lastMsgContent });
   };
 
   const getStatusColorClass = () => {
@@ -497,9 +449,21 @@ export default function TaskPlaceholderCard({
               )}
             </div>
 
+            {import.meta.env.DEV && getSessionLog(job.id).length > 0 && (
+              <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap text-[10px] text-slate-500" title={formatSessionLog(job.id)}>
+                {formatSessionLog(job.id)}
+              </pre>
+            )}
+
             <h4 className="text-sm font-bold text-theme-text-primary truncate">
               {displayTitle}
             </h4>
+
+            {import.meta.env.DEV && getSessionLog(job.id).length > 0 && (
+              <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap text-[10px] text-slate-500" title={formatSessionLog(job.id)}>
+                {formatSessionLog(job.id)}
+              </pre>
+            )}
 
             {(effectiveStatus === 'running' || effectiveStatus === 'processing' || effectiveStatus === 'queued') && (
               <div className="mt-1 space-y-1">
