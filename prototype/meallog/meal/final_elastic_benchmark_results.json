@@ -1,0 +1,354 @@
+[
+  {
+    "caseId": 1,
+    "caseName": "01: YOLK Chicken Sandwich & Roasted Sides",
+    "agentsUsed": 2,
+    "status": "DELEGATE",
+    "executionTimeMs": 6630,
+    "gt": {
+      "caseName": "01: YOLK Chicken Sandwich & Roasted Sides",
+      "weightGrams": 600,
+      "calories": 950,
+      "protein": 49,
+      "carbohydrates": 92,
+      "totalFat": 42,
+      "sodium": 1250
+    },
+    "pred": {
+      "weight": 670,
+      "cal": 755,
+      "p": 44.7,
+      "c": 84,
+      "f": 27.7,
+      "na": 1120
+    },
+    "acc": {
+      "weight": 88.33333333333333,
+      "cal": 79.47368421052632,
+      "p": 91.22448979591837,
+      "c": 91.30434782608697,
+      "f": 65.95238095238095,
+      "na": 89.60000000000001
+    }
+  },
+  {
+    "caseId": 2,
+    "caseName": "02: Lidl Chicken Bites & Chocolate Muffin",
+    "agentsUsed": 1,
+    "status": "COMPLETE",
+    "executionTimeMs": 2483,
+    "gt": {
+      "caseName": "02: Lidl Chicken Bites & Chocolate Muffin",
+      "weightGrams": 195,
+      "calories": 557,
+      "protein": 21.7,
+      "carbohydrates": 58,
+      "totalFat": 26.5,
+      "sodium": 628
+    },
+    "pred": {
+      "weight": 195,
+      "cal": 594,
+      "p": 21.7,
+      "c": 60.98,
+      "f": 29.5,
+      "na": 728
+    },
+    "acc": {
+      "weight": 100,
+      "cal": 93.35727109515261,
+      "p": 100,
+      "c": 94.86206896551724,
+      "f": 88.67924528301887,
+      "na": 84.07643312101911
+    }
+  },
+  {
+    "caseId": 3,
+    "caseName": "03: Salmon Sushi Roll, Shrimp Pasta Salad & Baguette",
+    "agentsUsed": 2,
+    "status": "DELEGATE",
+    "executionTimeMs": 6564,
+    "gt": {
+      "caseName": "03: Salmon Sushi Roll, Shrimp Pasta Salad & Baguette",
+      "weightGrams": 650,
+      "calories": 1000,
+      "protein": 55.5,
+      "carbohydrates": 134,
+      "totalFat": 25,
+      "sodium": 1350
+    },
+    "pred": {
+      "weight": 560,
+      "cal": 785,
+      "p": 33,
+      "c": 113.7,
+      "f": 21.1,
+      "na": 1490
+    },
+    "acc": {
+      "weight": 86.15384615384616,
+      "cal": 78.5,
+      "p": 59.45945945945945,
+      "c": 84.85074626865672,
+      "f": 84.4,
+      "na": 89.62962962962962
+    }
+  },
+  {
+    "caseId": 4,
+    "caseName": "04: Berry Parfait, Pastries & Cobb Salad",
+    "agentsUsed": 2,
+    "status": "DELEGATE",
+    "executionTimeMs": 7143,
+    "gt": {
+      "caseName": "04: Berry Parfait, Pastries & Cobb Salad",
+      "weightGrams": 1000,
+      "calories": 1630,
+      "protein": 75,
+      "carbohydrates": 148,
+      "totalFat": 80,
+      "sodium": 1450
+    },
+    "pred": {
+      "weight": 910,
+      "cal": 1310,
+      "p": 60.2,
+      "c": 121.7,
+      "f": 65.9,
+      "na": 1015
+    },
+    "acc": {
+      "weight": 91,
+      "cal": 80.3680981595092,
+      "p": 80.26666666666667,
+      "c": 82.22972972972973,
+      "f": 82.37500000000001,
+      "na": 70
+    }
+  },
+  {
+    "caseId": 5,
+    "caseName": "05: Airline Breakfast Tray",
+    "agentsUsed": 1,
+    "status": "COMPLETE",
+    "executionTimeMs": 5777,
+    "gt": {
+      "caseName": "05: Airline Breakfast Tray",
+      "weightGrams": 640,
+      "calories": 838,
+      "protein": 23,
+      "carbohydrates": 104,
+      "totalFat": 37,
+      "sodium": 520
+    },
+    "pred": {
+      "weight": 710,
+      "cal": 1125,
+      "p": 28,
+      "c": 135,
+      "f": 51.5,
+      "na": 1115
+    },
+    "acc": {
+      "weight": 89.0625,
+      "cal": 65.75178997613365,
+      "p": 78.26086956521739,
+      "c": 70.1923076923077,
+      "f": 60.810810810810814,
+      "na": 0
+    }
+  },
+  {
+    "caseId": 6,
+    "caseName": "06: Mie Gacoan Noodles & Siomay",
+    "agentsUsed": 1,
+    "status": "COMPLETE",
+    "executionTimeMs": 5059,
+    "gt": {
+      "caseName": "06: Mie Gacoan Noodles & Siomay",
+      "weightGrams": 570,
+      "calories": 780,
+      "protein": 27,
+      "carbohydrates": 111,
+      "totalFat": 25,
+      "sodium": 1250
+    },
+    "pred": {
+      "weight": 690,
+      "cal": 950,
+      "p": 27,
+      "c": 140,
+      "f": 31.5,
+      "na": 1385
+    },
+    "acc": {
+      "weight": 78.94736842105263,
+      "cal": 78.2051282051282,
+      "p": 100,
+      "c": 73.87387387387388,
+      "f": 74,
+      "na": 89.2
+    }
+  },
+  {
+    "caseId": 7,
+    "caseName": "07: Fruit Plate & Greek Yogurt Oats Mug",
+    "agentsUsed": 2,
+    "status": "DELEGATE",
+    "executionTimeMs": 5195,
+    "gt": {
+      "caseName": "07: Fruit Plate & Greek Yogurt Oats Mug",
+      "weightGrams": 550,
+      "calories": 442,
+      "protein": 14.2,
+      "carbohydrates": 89,
+      "totalFat": 5.3,
+      "sodium": 65
+    },
+    "pred": {
+      "weight": 650,
+      "cal": 507,
+      "p": 21,
+      "c": 98.6,
+      "f": 4.8999999999999995,
+      "na": 77
+    },
+    "acc": {
+      "weight": 81.81818181818181,
+      "cal": 85.29411764705883,
+      "p": 52.112676056338024,
+      "c": 89.21348314606742,
+      "f": 92.45283018867923,
+      "na": 81.53846153846153
+    }
+  },
+  {
+    "caseId": 8,
+    "caseName": "08: Sunrise Rolled Oats Porridge",
+    "agentsUsed": 1,
+    "status": "COMPLETE",
+    "executionTimeMs": 2487,
+    "gt": {
+      "caseName": "08: Sunrise Rolled Oats Porridge",
+      "weightGrams": 220,
+      "calories": 212,
+      "protein": 5,
+      "carbohydrates": 35,
+      "totalFat": 5.8,
+      "sodium": 0
+    },
+    "pred": {
+      "weight": 260,
+      "cal": 240,
+      "p": 6,
+      "c": 42,
+      "f": 7,
+      "na": 0
+    },
+    "acc": {
+      "weight": 81.81818181818181,
+      "cal": 86.79245283018868,
+      "p": 80,
+      "c": 80,
+      "f": 79.3103448275862,
+      "na": 100
+    }
+  },
+  {
+    "caseId": 9,
+    "caseName": "09: Sizzling Steak & Fish and Chips",
+    "agentsUsed": 2,
+    "status": "DELEGATE",
+    "executionTimeMs": 8572,
+    "gt": {
+      "caseName": "09: Sizzling Steak & Fish and Chips",
+      "weightGrams": 1135,
+      "calories": 1340,
+      "protein": 78,
+      "carbohydrates": 102,
+      "totalFat": 67,
+      "sodium": 1850
+    },
+    "pred": {
+      "weight": 1100,
+      "cal": 1420,
+      "p": 75.5,
+      "c": 134,
+      "f": 63,
+      "na": 1690
+    },
+    "acc": {
+      "weight": 96.91629955947137,
+      "cal": 94.02985074626866,
+      "p": 96.7948717948718,
+      "c": 68.62745098039215,
+      "f": 94.02985074626866,
+      "na": 91.35135135135135
+    }
+  },
+  {
+    "caseId": 10,
+    "caseName": "10: Indonesian Beef Hotpot",
+    "agentsUsed": 2,
+    "status": "DELEGATE",
+    "executionTimeMs": 10517,
+    "gt": {
+      "caseName": "10: Indonesian Beef Hotpot",
+      "weightGrams": 825,
+      "calories": 616,
+      "protein": 65.2,
+      "carbohydrates": 45.9,
+      "totalFat": 23.5,
+      "sodium": 380
+    },
+    "pred": {
+      "weight": 1076,
+      "cal": 740.8000000000001,
+      "p": 78.59999999999998,
+      "c": 35.5,
+      "f": 33.300000000000004,
+      "na": 326.8
+    },
+    "acc": {
+      "weight": 69.57575757575758,
+      "cal": 79.74025974025973,
+      "p": 79.44785276073623,
+      "c": 77.34204793028323,
+      "f": 58.29787234042551,
+      "na": 86.00000000000001
+    }
+  },
+  {
+    "caseId": 11,
+    "caseName": "11: Seafood & Vegetable Hotpot with Oats",
+    "agentsUsed": 2,
+    "status": "DELEGATE",
+    "executionTimeMs": 9924,
+    "gt": {
+      "caseName": "11: Seafood & Vegetable Hotpot with Oats",
+      "weightGrams": 892,
+      "calories": 822,
+      "protein": 95.1,
+      "carbohydrates": 69,
+      "totalFat": 20.8,
+      "sodium": 473
+    },
+    "pred": {
+      "weight": 942,
+      "cal": 817.46,
+      "p": 97.50000000000001,
+      "c": 66.27,
+      "f": 21.549999999999997,
+      "na": 572
+    },
+    "acc": {
+      "weight": 94.39461883408072,
+      "cal": 99.44768856447689,
+      "p": 97.4763406940063,
+      "c": 96.04347826086956,
+      "f": 96.39423076923079,
+      "na": 79.06976744186046
+    }
+  }
+]
