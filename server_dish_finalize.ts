@@ -329,9 +329,9 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
   if (!hasValidMacros && (nutrients.calories == null || !(nutrients.calories > 0))) {
     const hay = `${originalName} ${keyword || ''}`.toLowerCase();
     const isCoconutWater = /\b(coconut\s*water|coconut\s*juice|air\s*kelapa|kelapa\s*muda|raw\s*coconut)\b/i.test(hay) && !/\b(milk|santan|curry|cream)\b/i.test(hay);
-    const isDrink = /\b(drink|juice|tea|coffee|soda|water|beverage|iced|smoothie|es\b)/i.test(hay);
-    const isNoodleRice = /\b(noodle|noodles|rice|pasta|mie|bihun|kwetiau|spaghetti)\b/i.test(hay);
-    const isMeatDumpling = /\b(dumpling|dumplings|siomay|dim sum|wonton|chicken|beef|pork|fish|meat)\b/i.test(hay);
+    const isDrink = /\b(drink|juice|tea|coffee|soda|water|beverage|iced|smoothie|es\b|teh|kopi|minuman)\b/i.test(hay);
+    const isNoodleRice = /\b(noodle|noodles|rice|pasta|mie|bihun|kwetiau|spaghetti|nasi|bakmi)\b/i.test(hay);
+    const isMeatDumpling = /\b(dumpling|dumplings|siomay|dim sum|wonton|chicken|beef|pork|fish|meat|ikan|ayam|sapi|kambing|domba|babi|udang|daging|telur)\b/i.test(hay);
 
     if (isCoconutWater) {
       nutrients.carbohydrates = Math.round(consumedWeight * 0.04 * 10) / 10;
