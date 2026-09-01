@@ -51,6 +51,7 @@ export interface ServerJobPayload {
   networkErrors?: string[];
   userActionBreadcrumbs?: any[];
   lastUserAction?: any;
+  sessionEvents?: any[];
 }
 
 export const inMemoryServerJobs = new Map<string, any>();
@@ -276,11 +277,20 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
     accumulatedLogs: turn1Logs,
     photo_url: payload.photoUrl || existingMemJob?.photo_url || (imageUrls && imageUrls[0]) || null,
     clean_result: null,
+    sessionEvents: payload.sessionEvents || existingMemJob?.sessionEvents || [],
+    clientConsoleLogs: payload.clientConsoleLogs || existingMemJob?.clientConsoleLogs || [],
+    networkErrors: payload.networkErrors || existingMemJob?.networkErrors || [],
+    userActionBreadcrumbs: payload.userActionBreadcrumbs || existingMemJob?.userActionBreadcrumbs || [],
+    lastUserAction: payload.lastUserAction || existingMemJob?.lastUserAction || null,
     current_turn: currentTurn,
     error: null,
     debug_url: null,
     updated_at: new Date().toISOString()
   };
+  initialJobRecord.sessionEvents = [
+    ...(initialJobRecord.sessionEvents || []),
+    { ts: Date.now(), writer: 'serverJobs.start' as any, status: 'running', action: 'job_started' }
+  ];
   inMemoryServerJobs.set(jobId, initialJobRecord);
 
   // 1. Initial status write to Supabase (fire-and-forget: must never block the
@@ -290,7 +300,20 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
   if (isSupabaseConfigured) {
     const upsertOnce = (async () => {
       try {
-        const { turn1Logs, accumulatedLogs, error: _err, ...dbRecord } = initialJobRecord;
+        const dbRecord = {
+          id: initialJobRecord.id,
+          user_id: initialJobRecord.user_id,
+          kind: initialJobRecord.kind,
+          mode: initialJobRecord.mode,
+          status: initialJobRecord.status,
+          progress_percent: initialJobRecord.progress_percent,
+          status_message: initialJobRecord.status_message,
+          photo_url: initialJobRecord.photo_url,
+          clean_result: initialJobRecord.clean_result,
+          current_turn: initialJobRecord.current_turn,
+          debug_url: initialJobRecord.debug_url,
+          updated_at: initialJobRecord.updated_at
+        };
         const { error } = await supabaseAdmin.from('agent_jobs').upsert(dbRecord, { onConflict: 'id' });
         if (error) {
           console.error('[ServerJobs] initial upsert failed:', error);
@@ -333,6 +356,10 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         memJob.status_message = message;
         memJob.photo_url = photoUrl || null;
         memJob.updated_at = new Date().toISOString();
+        memJob.sessionEvents = [
+          ...(memJob.sessionEvents || []),
+          { ts: Date.now(), writer: 'serverJobs.progress' as any, status: 'running', action: `progress_${progress}%` }
+        ];
       }
       const now = Date.now();
       if (now - lastProgressUpdate > progressThrottleMs) {
@@ -806,6 +833,8 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
           // whitelist, so it was silently dropped here even though the backend
           // generated it correctly — the client always saw an empty report.
           report: finalPayload?.report || undefined,
+          sessionEvents: payload.sessionEvents || existingMemJob?.sessionEvents || [],
+          clientConsoleLogs: payload.clientConsoleLogs || [],
           networkErrors: payload.networkErrors || [],
           userActionBreadcrumbs: payload.userActionBreadcrumbs || [],
           // M-FIX1: Medical/biomarker agents (agent1_step1 and friends) return these
@@ -916,10 +945,11 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
             backendLogsUrl: logsUrl || undefined,
             backendLogs: rawLogsText,
             completedAt: new Date().toISOString(),
+            sessionEvents: cleanResult.sessionEvents,
             lastUserAction: cleanResult.lastUserAction,
-            clientConsoleLogs: payload.clientConsoleLogs,
-            networkErrors: payload.networkErrors,
-            userActionBreadcrumbs: payload.userActionBreadcrumbs
+            clientConsoleLogs: cleanResult.clientConsoleLogs,
+            networkErrors: cleanResult.networkErrors,
+            userActionBreadcrumbs: cleanResult.userActionBreadcrumbs
           });
           if (debugUrl) {
             cleanResult.debugUrl = debugUrl;
@@ -933,12 +963,22 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
 
         const memJob = inMemoryServerJobs.get(jobId);
         if (memJob) {
+          memJob.sessionEvents = [
+            ...(memJob.sessionEvents || cleanResult.sessionEvents || []),
+            { ts: Date.now(), writer: 'serverJobs.complete' as any, status: 'succeeded', action: 'job_completed' }
+          ];
+          cleanResult.sessionEvents = memJob.sessionEvents;
           memJob.status = 'succeeded';
           memJob.progress_percent = 100;
           memJob.status_message = 'Analysis complete';
           memJob.photo_url = photoUrl || null;
           memJob.debug_url = cleanResult.debugUrl || null;
           memJob.clean_result = cleanResult;
+          memJob.sessionEvents = cleanResult.sessionEvents;
+          memJob.clientConsoleLogs = cleanResult.clientConsoleLogs;
+          memJob.networkErrors = cleanResult.networkErrors;
+          memJob.userActionBreadcrumbs = cleanResult.userActionBreadcrumbs;
+          memJob.lastUserAction = cleanResult.lastUserAction;
           // Persist this turn's accumulated debug logs so a follow-up message on the same
           // jobId (e.g. a text correction) carries the full history forward instead of
           // starting from scratch. Previously this was only ever done on the
@@ -963,6 +1003,11 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
                 mode: cleanResult.mode || 'review',
                 text: cleanResult.text || '',
                 message: cleanResult.message || 'Analysis complete',
+                sessionEvents: cleanResult.sessionEvents,
+                lastUserAction: cleanResult.lastUserAction,
+                clientConsoleLogs: cleanResult.clientConsoleLogs,
+                networkErrors: cleanResult.networkErrors,
+                userActionBreadcrumbs: cleanResult.userActionBreadcrumbs,
               };
             }
           } catch (r2Err) {

@@ -3,6 +3,7 @@
  */
 import { JobStore } from '../jobs/JobStore';
 import { auth } from '../firebase';
+import { getSessionLog } from '../jobs/sessionLog';
 import { getAgentRequestLogs } from './agentLogsTracker';
 import { buildDebugMarkdownReport } from './debugPayload';
 
@@ -96,8 +97,23 @@ export async function downloadJobDebugReport(args: {
 
   try {
     const uid = auth.currentUser?.uid || 'anonymous';
-    const fmtParam = format === 'markdown' ? '&format=markdown' : '';
-    const res = await fetch(`/api/jobs/debug?jobId=${encodeURIComponent(resolvedJobId)}&userId=${encodeURIComponent(uid)}${fmtParam}`);
+    const clientSessionEvents = getSessionLog(resolvedJobId).length > 0
+      ? getSessionLog(resolvedJobId)
+      : (job?.sessionEvents || []);
+    const res = await fetch('/api/jobs/debug', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId: resolvedJobId,
+        userId: uid,
+        format,
+        clientSessionEvents,
+        clientConsoleLogs,
+        networkErrors,
+        userActionBreadcrumbs: w.__userActionBreadcrumbs || [],
+        lastUserAction,
+      }),
+    });
     if (res.ok) {
       const contentType = res.headers.get('content-type') || '';
       const text = await res.text();
@@ -171,7 +187,9 @@ export async function downloadJobDebugReport(args: {
       receiptTable,
       error: job?.error?.message,
       lastUserAction: lastUserAction || job?.result?.lastUserAction || w.__lastUserAction,
-      sessionEvents: job?.sessionEvents || job?.result?.sessionEvents,
+      sessionEvents: getSessionLog(resolvedJobId).length > 0
+        ? getSessionLog(resolvedJobId)
+        : (job?.sessionEvents || job?.result?.sessionEvents),
       userActionBreadcrumbs: w.__userActionBreadcrumbs || job?.result?.userActionBreadcrumbs || [],
       clientConsoleLogs: clientConsoleLogs || job?.result?.clientConsoleLogs || w.__clientConsoleLogs || [],
       networkErrors: networkErrors || job?.result?.networkErrors || w.__clientNetworkErrors || [],

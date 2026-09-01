@@ -234,11 +234,19 @@ jobsRouter.get('/api/jobs/status', async (req, res) => {
   }
 });
 
-jobsRouter.get('/api/jobs/debug', async (req, res) => {
+jobsRouter.all('/api/jobs/debug', async (req, res) => {
   try {
-    const { jobId, userId } = req.query;
+    const jobId = req.body?.jobId || req.query.jobId;
+    const userId = req.body?.userId || req.query.userId;
+    const format = req.body?.format || req.query.format;
+    const clientSessionEvents = Array.isArray(req.body?.clientSessionEvents) ? req.body.clientSessionEvents : [];
+    const clientConsoleLogs = Array.isArray(req.body?.clientConsoleLogs) ? req.body.clientConsoleLogs : [];
+    const networkErrors = Array.isArray(req.body?.networkErrors) ? req.body.networkErrors : [];
+    const userActionBreadcrumbs = Array.isArray(req.body?.userActionBreadcrumbs) ? req.body.userActionBreadcrumbs : [];
+    const lastUserAction = req.body?.lastUserAction;
+
     if (!jobId) {
-      return res.status(400).json({ error: 'jobId query parameter is required' });
+      return res.status(400).json({ error: 'jobId parameter is required' });
     }
 
     const cleanJobId = String(jobId).trim();
@@ -290,7 +298,7 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
 
     if (!debugPayload) {
       if (!job) {
-        if (req.query.format === 'markdown' || req.query.format === 'md') {
+        if (format === 'markdown' || format === 'md') {
           res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
           res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.md"`);
           return res.send(`# Diagnostic Log: ${cleanJobId}\n\n- **Status**: Local/Offline entry\n- **Details**: No server execution trace found in remote storage for ID \`${cleanJobId}\`.\n- **Generated At**: ${new Date().toISOString()}\n`);
@@ -307,6 +315,11 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
         photoUrl: job.photo_url,
         debugUrl: job.debug_url,
         result: job.clean_result,
+        sessionEvents: job.clean_result?.sessionEvents || (job as any).sessionEvents,
+        lastUserAction: job.clean_result?.lastUserAction || (job as any).lastUserAction,
+        userActionBreadcrumbs: job.clean_result?.userActionBreadcrumbs || (job as any).userActionBreadcrumbs,
+        clientConsoleLogs: job.clean_result?.clientConsoleLogs || (job as any).clientConsoleLogs,
+        networkErrors: job.clean_result?.networkErrors || (job as any).networkErrors,
         backendLogsUrl: job.clean_result?.backendLogsUrl || undefined,
         backendLogs: job.clean_result?.backendLogs || accumulated || '',
         createdAt: job.created_at,
@@ -330,10 +343,44 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
       debugPayload.backendLogs = job.accumulatedLogs.join('\n');
     }
 
+    // Merge server session events with client session events
+    const serverSessionEvents = Array.isArray(debugPayload.sessionEvents)
+      ? debugPayload.sessionEvents
+      : (Array.isArray(debugPayload.result?.sessionEvents) ? debugPayload.result.sessionEvents : []);
+    const rawMergedEvents = [...serverSessionEvents, ...clientSessionEvents];
+    const seenEventKeys = new Set<string>();
+    const uniqueSessionEvents: any[] = [];
+    rawMergedEvents.sort((a, b) => (new Date(a.ts || 0).getTime()) - (new Date(b.ts || 0).getTime()));
+    for (const ev of rawMergedEvents) {
+      const key = `${ev.ts}_${ev.writer}_${ev.action}_${ev.status}`;
+      if (!seenEventKeys.has(key)) {
+        seenEventKeys.add(key);
+        uniqueSessionEvents.push(ev);
+      }
+    }
+
+    // Merge console logs, network errors, breadcrumbs
+    const serverConsoleLogs = Array.isArray(debugPayload.clientConsoleLogs)
+      ? debugPayload.clientConsoleLogs
+      : (Array.isArray(debugPayload.result?.clientConsoleLogs) ? debugPayload.result.clientConsoleLogs : []);
+    const mergedConsoleLogs = Array.from(new Set([...serverConsoleLogs, ...clientConsoleLogs]));
+
+    const serverNetworkErrors = Array.isArray(debugPayload.networkErrors)
+      ? debugPayload.networkErrors
+      : (Array.isArray(debugPayload.result?.networkErrors) ? debugPayload.result.networkErrors : []);
+    const mergedNetworkErrors = Array.from(new Set([...serverNetworkErrors, ...networkErrors]));
+
+    const serverBreadcrumbs = Array.isArray(debugPayload.userActionBreadcrumbs)
+      ? debugPayload.userActionBreadcrumbs
+      : (Array.isArray(debugPayload.result?.userActionBreadcrumbs) ? debugPayload.result.userActionBreadcrumbs : []);
+    const mergedBreadcrumbs = [...serverBreadcrumbs, ...userActionBreadcrumbs];
+
+    const effectiveLastUserAction = lastUserAction || debugPayload.lastUserAction || debugPayload.result?.lastUserAction;
+
     const { stripHeavyImages, buildDebugMarkdownReport } = await import('./src/utils/debugPayload.js');
     const safePayload = stripHeavyImages(debugPayload);
 
-    if (req.query.format === 'markdown' || req.query.format === 'md') {
+    if (format === 'markdown' || format === 'md') {
       const mdReport = buildDebugMarkdownReport({
         jobId: cleanJobId,
         status: safePayload.status,
@@ -341,12 +388,6 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
         agentType: safePayload.result?.agentType || safePayload.inputSnapshot?.agentType,
         message: safePayload.result?.message || safePayload.result?.text,
         backendLogs: safePayload.backendLogs,
-        // FIX: previously fell back to the entire `safePayload.result` object when
-        // there was no pendingFoodLog. For medical/biomarker jobs that has no
-        // pendingFoodLog at all, so this was injecting the whole job result into
-        // the food-only "Nutrition Calculation" section (producing the empty
-        // "Meal Name: —" block) while the real ingestTrace/report data below was
-        // never forwarded at all. Only use an actual pendingFoodLog now.
         pendingFoodLog: safePayload.result?.pendingFoodLog || null,
         scoutItems: safePayload.result?.scoutItems,
         scoutInternalReasoning: safePayload.result?.scoutInternalReasoning || safePayload.result?.scoutReasoning || safePayload.result?.internalReasoning,
@@ -357,11 +398,11 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
         error: safePayload.error,
         debugUrl: safePayload.debugUrl,
         photoUrl: safePayload.photoUrl,
-        lastUserAction: safePayload.result?.lastUserAction || safePayload.lastUserAction,
-        sessionEvents: safePayload.result?.sessionEvents || safePayload.sessionEvents,
-        userActionBreadcrumbs: safePayload.result?.userActionBreadcrumbs || safePayload.userActionBreadcrumbs,
-        clientConsoleLogs: safePayload.result?.clientConsoleLogs || safePayload.clientConsoleLogs,
-        networkErrors: safePayload.result?.networkErrors || safePayload.networkErrors,
+        lastUserAction: effectiveLastUserAction,
+        sessionEvents: uniqueSessionEvents,
+        userActionBreadcrumbs: mergedBreadcrumbs,
+        clientConsoleLogs: mergedConsoleLogs,
+        networkErrors: mergedNetworkErrors,
         usdaSearchResults: safePayload.result?.usdaSearchResults,
         brandSearchResults: safePayload.result?.brandSearchResults,
         comprehensiveNutrients: safePayload.result?.comprehensiveNutrients || safePayload.result?.pendingFoodLog?.nutrients,
@@ -377,7 +418,14 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="debug-${cleanJobId}.json"`);
-    return res.json(safePayload);
+    return res.json({
+      ...safePayload,
+      sessionEvents: uniqueSessionEvents,
+      clientConsoleLogs: mergedConsoleLogs,
+      networkErrors: mergedNetworkErrors,
+      userActionBreadcrumbs: mergedBreadcrumbs,
+      lastUserAction: effectiveLastUserAction
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to fetch debug payload' });
   }

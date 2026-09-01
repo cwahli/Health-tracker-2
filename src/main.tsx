@@ -59,13 +59,15 @@ window.addEventListener('unhandledrejection', (e) => {
 });
 const origError = console.error;
 const origWarn = console.warn;
+const origLog = console.log;
+const origInfo = console.info;
 
 console.error = (...args: any[]) => {
   try {
     const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
     if (window.__clientConsoleLogs) {
       window.__clientConsoleLogs.push(`[ERROR ${new Date().toISOString()}] ${msg}`);
-      if (window.__clientConsoleLogs.length > 100) window.__clientConsoleLogs.shift();
+      if (window.__clientConsoleLogs.length > 200) window.__clientConsoleLogs.shift();
     }
   } catch (_) {}
   origError.apply(console, args);
@@ -76,10 +78,32 @@ console.warn = (...args: any[]) => {
     const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
     if (window.__clientConsoleLogs) {
       window.__clientConsoleLogs.push(`[WARN ${new Date().toISOString()}] ${msg}`);
-      if (window.__clientConsoleLogs.length > 100) window.__clientConsoleLogs.shift();
+      if (window.__clientConsoleLogs.length > 200) window.__clientConsoleLogs.shift();
     }
   } catch (_) {}
   origWarn.apply(console, args);
+};
+
+console.log = (...args: any[]) => {
+  try {
+    const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    if (window.__clientConsoleLogs) {
+      window.__clientConsoleLogs.push(`[LOG ${new Date().toISOString()}] ${msg}`);
+      if (window.__clientConsoleLogs.length > 200) window.__clientConsoleLogs.shift();
+    }
+  } catch (_) {}
+  origLog.apply(console, args);
+};
+
+console.info = (...args: any[]) => {
+  try {
+    const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    if (window.__clientConsoleLogs) {
+      window.__clientConsoleLogs.push(`[INFO ${new Date().toISOString()}] ${msg}`);
+      if (window.__clientConsoleLogs.length > 200) window.__clientConsoleLogs.shift();
+    }
+  } catch (_) {}
+  origInfo.apply(console, args);
 };
 
 window.addEventListener('unhandledrejection', (event) => {

@@ -342,6 +342,11 @@ class JobStoreImpl {
       ...params,
       id: params.id,
     };
+    job.sessionEvents = recordSessionEvent(job.id, {
+      writer: 'JobStore.apply' as any,
+      status: job.status,
+      action: 'createJob',
+    });
     this.jobs.set(job.id, job);
     this.saveJobs();
     this.notify();
@@ -388,14 +393,14 @@ class JobStoreImpl {
       }
     }
     
-    this.commit(event.id, patch, writer);
+    this.commit(event.id, patch, writer, event.type);
   }
 
   updateJob(id: string, patch: Partial<AgentJob>) {
-    this.commit(id, patch, 'JobStore.apply');
+    this.commit(id, patch, 'JobStore.apply', 'updateJob');
   }
 
-  private commit(id: string, patch: Partial<AgentJob>, writer: string) {
+  private commit(id: string, patch: Partial<AgentJob>, writer: string, eventType?: string) {
 
     if (this.deletedJobIds.has(id)) {
       if (this.jobs.has(id)) {
@@ -463,10 +468,14 @@ class JobStoreImpl {
 
     Object.assign(job, { ...patch, updatedAt: new Date().toISOString() });
 
+    const eventAction = eventType
+      ? `${eventType}`
+      : (job.status === 'succeeded' ? 'completed' : 'accepted');
+
     job.sessionEvents = recordSessionEvent(id, {
       writer: writer as any,
       status: job.status,
-      action: job.status === 'succeeded' ? 'completed' : 'accepted',
+      action: eventAction,
     });
 
     this.saveJobs();

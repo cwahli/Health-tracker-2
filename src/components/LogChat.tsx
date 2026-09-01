@@ -39,6 +39,7 @@ import { mergeFoodEditMessages, shouldMergeFoodEditTurn } from '../jobs/mergeFoo
 import { toPendingFoodLog } from '../mealBuild/adapters';
 import { executeFoodAgent } from '../jobs/FoodAgentExecutor';
 import { downloadJobDebugReport } from '../utils/logChatDebugDownload';
+import { getSessionLog } from '../jobs/sessionLog';
 function isValidFoodLog(log: any): boolean {
   if (!log || typeof log !== 'object' || Array.isArray(log)) return false;
   return !!(
@@ -2675,6 +2676,7 @@ ${logsText}`);
             networkErrors: window.__clientNetworkErrors || [],
             userActionBreadcrumbs: window.__userActionBreadcrumbs || [],
             lastUserAction: window.__lastUserAction || { action: 'chat_submit', prompt: userContent || textToSend, timestamp: new Date().toISOString() },
+            sessionEvents: getSessionLog(currentJobId).length > 0 ? getSessionLog(currentJobId) : (job?.sessionEvents || undefined),
             explicitFoodTags: explicitFoodTags.length > 0 ? explicitFoodTags : undefined
           };
           fetchSubmitWithRetry('/api/jobs/submit', submitPayload)

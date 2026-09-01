@@ -6,7 +6,7 @@ export type SessionWriter =
   | 'r2'
   | 'JobStore.apply';
 
-export type SessionAction = 'accepted' | 'ignored_stale_turn' | 'ignored_same_snapshot' | 'completed';
+export type SessionAction = 'accepted' | 'ignored_stale_turn' | 'ignored_same_snapshot' | 'completed' | (string & {});
 
 export interface SessionEvent {
   ts: number;

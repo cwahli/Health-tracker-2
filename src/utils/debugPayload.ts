@@ -701,7 +701,12 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       }
     }
 
-    const errorLines = logLines.filter((l) => /^\[error\]/i.test(l.trim()) || /\bError:\s/i.test(l));
+    const errorLines = logLines.filter((l) =>
+      /^\[(error|warn|warning)\]/i.test(l.trim()) ||
+      /^Backend (Error|Warning)/i.test(l.trim()) ||
+      /\b(Error|Exception|Warning):\s/i.test(l) ||
+      /"level":\s*"(warning|error)"/i.test(l)
+    );
     lines.push(`## ⚠️ Errors & Warnings`);
     lines.push('');
     const gateFailures = (Array.isArray(input.gate?.failures) && input.gate.failures.length > 0)
@@ -712,12 +717,15 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
       for (const f of gateFailures.slice(0, 20)) {
         lines.push(`- \`${f.code}\` ${f.itemName ? `(${f.itemName}) ` : ''}${f.message}`);
       }
-    } else if (errorLines.length > 0) {
+    }
+    if (errorLines.length > 0) {
+      if (gateFailures.length > 0) lines.push('');
+      lines.push(`### Runtime Log Errors & Warnings (${errorLines.length})`);
       for (const el of errorLines.slice(0, 40)) {
         lines.push(`- ${el.trim().slice(0, 500)}`);
       }
-    } else {
-      lines.push('_No thrown exceptions. Trial-balance is in Gate & Trial-Balance Evaluation (not a log grep)._');
+    } else if (gateFailures.length === 0) {
+      lines.push('_No thrown exceptions or log errors/warnings captured._');
     }
     lines.push('');
 
