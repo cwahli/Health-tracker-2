@@ -286,6 +286,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
   // 1. Initial status write to Supabase (fire-and-forget: must never block the
   // /api/jobs/submit response, or a slow/unreachable Supabase call turns into
   // a platform-level 502 on the outer request instead of a clean in-app error)
+  let initialUpsertError: string | null = null;
   if (isSupabaseConfigured) {
     const upsertOnce = (async () => {
       try {
@@ -293,9 +294,11 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
         const { error } = await supabaseAdmin.from('agent_jobs').upsert(dbRecord, { onConflict: 'id' });
         if (error) {
           console.error('[ServerJobs] initial upsert failed:', error);
+          initialUpsertError = `[ServerJobs] initial upsert failed: ${error.message || JSON.stringify(error)}`;
         }
       } catch (e: any) {
         console.error('[ServerJobs] initial upsert threw:', e);
+        initialUpsertError = `[ServerJobs] initial upsert threw: ${e?.message || String(e)}`;
       }
     })();
     await Promise.race([
@@ -311,6 +314,9 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
     let accumulatedLogs: string[] = turn1Logs.length > 0
       ? [...turn1Logs, '\n--- USER CONTINUATION (TURN 2) ---\n']
       : [];
+    if (initialUpsertError) {
+      accumulatedLogs.push(`[error] ${initialUpsertError}`);
+    }
     let photoUrl = imageUrls[0] || payload.photoUrl || existingMemJob?.photo_url || '';
     let photoUrls: string[] = imageUrls || [];
     let currentProgress = 5;
