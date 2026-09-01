@@ -2469,26 +2469,25 @@ export async function runFoodAnalyze(req: any, res: any) {
               targetDbId: { type: Type.STRING, nullable: true },
               componentName: { type: Type.STRING, nullable: true, description: "Required when action is 'update_component_weight'. The name of the specific ingredient/component inside the composite dish named by itemName (e.g. itemName='Sizzling Steak with Wedges', componentName='Beef Steak')." },
               modifier: { type: Type.STRING, nullable: true, description: "Required when action is 'update_modifier'. The text modifier to apply (e.g. 'unsweetened', 'no sugar', 'no oil', 'no salt')." },
-              newItemName: { type: Type.STRING, nullable: true, description: "Required when action changes item identity/name (replace_identity, replace_item). When provided, you MUST also provide 'estimate' with complete nutrients." },
+              newItemName: { type: Type.STRING, nullable: true, description: "Required when action changes item identity/name (replace_identity, replace_item)." },
               replacementItemName: { type: Type.STRING, nullable: true },
               newCookingMethod: { type: Type.STRING, nullable: true },
               count: { type: Type.INTEGER, nullable: true },
               estimate: {
                 type: Type.OBJECT,
-                nullable: true,
-                description: "REQUIRED whenever item name/identity changes (replace_identity, replace_item), or for added/split items (add_item, split_item). You must provide the full nutrient profile for the renamed item. NOT required if only weight, portion, or count changes.",
+                description: "The nutrient profile for itemName at its current or new weight. For replace_identity, replace_item, add_item, and split_item this MUST reflect the NEW identity's real nutrient composition (e.g. near-zero carbohydrates for a plain grilled fish/meat). For all other actions, echo the item's existing known values from the provided ledger context — do not invent implausible numbers.",
                 properties: {
-                  protein: { type: Type.NUMBER, nullable: true },
-                  carbohydrates: { type: Type.NUMBER, nullable: true },
-                  totalFat: { type: Type.NUMBER, nullable: true },
-                  saturatedFat: { type: Type.NUMBER, nullable: true },
+                  protein: { type: Type.NUMBER, description: "Grams of protein. Use 0 only if genuinely protein-free." },
+                  carbohydrates: { type: Type.NUMBER, description: "Grams of carbohydrates. Use 0 for plain unbreaded meat/fish/poultry." },
+                  totalFat: { type: Type.NUMBER },
+                  saturatedFat: { type: Type.NUMBER },
+                  sodium: { type: Type.NUMBER },
                   transFat: { type: Type.NUMBER, nullable: true },
                   sugar: { type: Type.NUMBER, nullable: true },
                   totalSugar: { type: Type.NUMBER, nullable: true },
                   addedSugar: { type: Type.NUMBER, nullable: true },
                   totalFibre: { type: Type.NUMBER, nullable: true },
                   solubleFibre: { type: Type.NUMBER, nullable: true },
-                  sodium: { type: Type.NUMBER, nullable: true },
                   potassium: { type: Type.NUMBER, nullable: true },
                   calcium: { type: Type.NUMBER, nullable: true },
                   iron: { type: Type.NUMBER, nullable: true },
@@ -2497,7 +2496,8 @@ export async function runFoodAnalyze(req: any, res: any) {
                   omega3: { type: Type.NUMBER, nullable: true },
                   cookingMethod: { type: Type.STRING, nullable: true },
                   foodType: { type: Type.STRING, nullable: true }
-                }
+                },
+                required: ["protein", "carbohydrates", "totalFat", "saturatedFat", "sodium"]
               },
               into: {
                 type: Type.ARRAY,
@@ -2510,33 +2510,34 @@ export async function runFoodAnalyze(req: any, res: any) {
                     role: { type: Type.STRING, nullable: true },
                     estimate: {
                       type: Type.OBJECT,
-                      nullable: true,
+                      description: "Nutrient profile for this split-off portion. Must reflect its real composition.",
                       properties: {
-                        protein: { type: Type.NUMBER, nullable: true },
-                        carbohydrates: { type: Type.NUMBER, nullable: true },
-                        totalFat: { type: Type.NUMBER, nullable: true },
-                        saturatedFat: { type: Type.NUMBER, nullable: true },
+                        protein: { type: Type.NUMBER },
+                        carbohydrates: { type: Type.NUMBER },
+                        totalFat: { type: Type.NUMBER },
+                        saturatedFat: { type: Type.NUMBER },
+                        sodium: { type: Type.NUMBER },
                         transFat: { type: Type.NUMBER, nullable: true },
                         sugar: { type: Type.NUMBER, nullable: true },
                         totalSugar: { type: Type.NUMBER, nullable: true },
                         addedSugar: { type: Type.NUMBER, nullable: true },
                         totalFibre: { type: Type.NUMBER, nullable: true },
                         solubleFibre: { type: Type.NUMBER, nullable: true },
-                        sodium: { type: Type.NUMBER, nullable: true },
                         potassium: { type: Type.NUMBER, nullable: true },
                         calcium: { type: Type.NUMBER, nullable: true },
                         iron: { type: Type.NUMBER, nullable: true },
                         magnesium: { type: Type.NUMBER, nullable: true },
                         vitaminD: { type: Type.NUMBER, nullable: true },
                         omega3: { type: Type.NUMBER, nullable: true }
-                      }
+                      },
+                      required: ["protein", "carbohydrates", "totalFat", "saturatedFat", "sodium"]
                     }
                   },
-                  required: ["name"]
+                  required: ["name", "estimate"]
                 }
               }
             },
-            required: ["action", "itemName"]
+            required: ["action", "itemName", "estimate"]
           },
           nullable: true
         },
