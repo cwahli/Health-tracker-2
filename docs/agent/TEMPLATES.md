@@ -1,7 +1,8 @@
 # Output templates (IMPACT · SELF-CHECK · GATE)
 
-Paste these before declaring COMPLETE on **L/X** work (and any multi-path change).  
-Do not invent a free-form STATUS that skips gates.
+Paste these before declaring COMPLETE on **L/X** **code** work.  
+Skip IMPACT entirely for questions, prototype reviews, and doc-only edits.  
+Do not invent a free-form STATUS that skips gates. Do not `npm test`.
 
 ---
 

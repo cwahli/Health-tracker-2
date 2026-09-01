@@ -2,7 +2,7 @@
 
 **Pillar:** 4 — Quality. **Start work from:** [ROADMAP.md](./ROADMAP.md).
 
-A **test method**, not a product lifecycle. Class-first goldens (not meal-green). Was `BIOMARKER_INGEST_AND_GOLDENS_PLAN.md` — full text kept. Food uses the same method (`FALSE_FRIEND`, `DISH_DROP`, `OPENING_WRONG`, `SILENT_REPAIR`).
+A **test method**, not a product lifecycle. **Do not load this whole file for F-10.** Inner loop = named vitest (`QUALITY.md` §1.4). Class-first goldens (not meal-green). Food classes: `FALSE_FRIEND`, `DISH_DROP`, `OPENING_WRONG`, `SILENT_REPAIR`, **`ALWAYS_SECOND_AGENT`**. Inner tests for the expand gate do **not** call Gemini.
 
 Ingest architecture stays in `BIOMARKER_LIFECYCLE.md` Part B. Wave order stays in `ROADMAP.md`.
 
@@ -100,7 +100,42 @@ A live job may trip several classes. **Only one class is in scope per session.**
 |---|---|---|---|
 | `STALE_TURN` | Preview/chat shows the **current** job turn | `JobSession.contract.test.ts`: edit submit → label `/Updating meal/` while prior meal still on the job → same-meal succeeded echo ignored → new snapshot → “Analysis completed”; one food card | If debug already has the new numbers and the card does not, do not patch food-calc |
 
-Execute IDs: [ROADMAP.md](./ROADMAP.md) F-9. Gemini implements from `studio/F9_PR*_GEMINI.md`. Grok reviews.
+Execute IDs: [ROADMAP.md](./ROADMAP.md) F-9 leftover is F-9.5 only (Grok). F-10 is Current work on that file.
+
+### 1.4 What to run (every edit is not `npm test`)
+
+`npm test` is **~97 files**. That is a soak, not the inner loop. COMPLETE is `tsc` + the **matching** [DOMAIN_REGRESSION_MAP.md](../docs/agent/DOMAIN_REGRESSION_MAP.md) row(s) for files you touched. Do **not** run biomarker + food + sync + budgets because the ROADMAP “Always-run” block used to list them.
+
+| You touched… | Run | Do not |
+|---|---|---|
+| One food-calc file | That row’s named vitest | `npm test`; Track B asserts; M23–M28 |
+| Job session / preview | `JobSession.contract.test.ts` + `assert-f9-pr1` / `assert-dev-serves-vite` if those files | Food goldens; `golden:inbox` |
+| Biomarker ingest | Track B named tests + `assert-biomarker-lifecycle-m31.mjs` | Food-calc smoke |
+| Docs / plan only | nothing (or `assert-agent-governance.mjs` if AGENTS/docs/agent changed) | Full vitest |
+| Prompt budget / god-file size | `assert-budgets.mjs` | Replay G1 |
+
+**Ghost gates — do not recreate, do not cite:** `assert-budget-reconcile.mjs`, `assert-label-truth-locks.mjs`, `assert-false-hard-lock.mjs`, `assert-receipt-dup-rows.mjs`, `assert-food-calc-exact.mjs`, `assert-food-calc-final.mjs`, `assert-backlog-b1-portion-clarify.mjs`, `assert-food-log-identity.mjs`, `assert-unified-modal-*.mjs`, `assert-biomarker-flow.mjs`. They are **not in `scripts/`**. Named vitest files that exist (`server_derivation.test.ts`, …) replace them.
+
+**Landed asserts, run only if you touch that landed code:** `assert-meal-build-m21*.mjs` / `m22`, `assert-free-tier-m23`…`m28` (use `assert-free-tier-complete.mjs` if any), `assert-g1-golden.mjs` (folds into Q-7), `assert-food-curator-m30.mjs`.
+
+**Duplicates (Q-7):** G1 picnic is asserted in `golden_meals.test.ts` **and** `golden_g1.test.ts` **and** `goldenReplay.test.ts`. Keep Layer B in `golden_meals.test.ts`. Fold or delete the other two as inner COMPLETE. `goldenLoop.test.ts` stays — it is the **stop** guard (L14), not a meal-green runner.
+
+### 1.5 Golden meals after F-10 (no scout → dietitian pass)
+
+Official set is still G1–G7 photos + `expected.json` (identity, never-match, brand/label **math**). That Layer B is class tests, not “replay Analyze until green.”
+
+What changes:
+
+| Keep | Stop / retarget |
+|---|---|
+| G1–G7 folders, photos, Instruction.md, resolveLocks, neverMatch | `scout.json` as a frozen **Scout-then-Dietitian** tape |
+| `golden_meals.test.ts` Layer B (catalog locks, query-set, scale math) | `POST /loop` / `golden:loop` as COMPLETE |
+| Promote → official G* after a **class** test is green | Inbox as a second queue (`golden_inbox.test.ts` is excluded from `npm test` on purpose; do not add it back) |
+| Frozen **Meal Agent** JSON for outer soak: dishes/foods/P/C/F, **no kcal** | Expected kcal as an agent field; dietitian `itemsBreakdown`; “Scouted only” / “Dietitian Reality Check” as remaining |
+
+Tape scoreboard still parses live jobs. After F-10 cutover, journey steps are Meal Agent → finalize → substitute. Auto-spot must not treat a missing Dietitian stage as a fail.
+
+Execute: [ROADMAP.md](./ROADMAP.md) **Q-7** (hygiene) + **F-10.2** (schema) + **F-10.8** (soak uses Meal Agent fixtures).
 
 ---
 
@@ -445,7 +480,7 @@ Audit (living): line counts, duplicate labels, second math path, eager imports. 
 ## 14. Unified bug queue (snap · auto · golden)
 
 Execute: `ROADMAP.md` **Q-6**.  
-Mocks: `studio/mockups/bug-queue-dashboard.html` (queue shell) · `studio/mockups/bug-queue-combined.html` (one list) · `studio/mockups/bug-queue-combined-flow.html` (snap → review → iteration, consolidated).  
+Mocks (archived): `archive/studio/retired-2026-09/mockups/` — queue shell + combined flow. Live `BugSnapshotFab` / `BugTrackerModal` are the feature.  
 Not a fifth pillar. Same QUALITY loop: class → playbook → vitest → honest residual. Inner work is **not** `POST /loop`.
 
 ### 14.1 One work item
@@ -614,7 +649,7 @@ Biomarker `#n`: no tape, no catalog, no Promote-to-G-meal. Promote (when relevan
 
 **Build (do not start until this section is confirmed)**
 
-**Template:** implement against `studio/mockups/bug-queue-combined-flow.html` (snap → review → iteration, use case `#10`) and `studio/mockups/bug-queue-combined.html` (queue shell). The mock is layout, not an inventory. **Live `BugSnapshotFab`, `GoldenInboxPanel`, and `BugTrackerModal` are the feature checklist.**
+**Template:** live `BugSnapshotFab`, `GoldenInboxPanel`, and `BugTrackerModal` are the feature checklist. Archived layout mockups: `archive/studio/retired-2026-09/mockups/`.
 
 **Anti-drop audit (mandatory while building, every surface):**
 

@@ -57,9 +57,15 @@
 
 ---
 
-## 4. Multi-Agent Strategy Proposal: Dual-Agent Architecture
+## 4. Product decision (2026-09-01) — not a critic LLM
 
-To push overall accuracy above **90-95% across all 31 nutrients** for complex commercial and restaurant dishes, we propose adding a specialized **Commercial Cooking & Density Critic Agent** to complement the primary **Scout Vision Agent**.
+Production target is **F-10** on `plan/ROADMAP.md`: one Meal Agent; TypeScript expands; `finalizeDishLedger` owns kcal; restaurant fat/Na is a **TS** `diningEnvironment` × `cookingMethod` critic first. A Commercial Cooking Critic LLM is **parked** until that TS path fails a named soak.
+
+The diagram below is the **parked** proposal from the prototype run. Do not implement it as the default create path (that would recreate `ALWAYS_SECOND_AGENT`).
+
+### Parked: Dual-Agent Architecture (critic LLM)
+
+To push overall accuracy above **90-95% across all 31 nutrients** for complex commercial and restaurant dishes, a later soak *may* add a specialized **Commercial Cooking & Density Critic Agent**. Not the default.
 
 ```
                    +---------------------------------------+
@@ -105,6 +111,7 @@ To push overall accuracy above **90-95% across all 31 nutrients** for complex co
 
 ## 5. Conclusion & Next Steps
 
-* The prototype successfully delivers full single-agent meal extraction, health verdicts, severity levels, and 31 micro/macronutrients without relying on separate dietitian steps.
+* The prototype successfully delivers full single-agent meal extraction, health verdicts, severity levels, and 31 micro/macronutrients without relying on a systematic Dietitian create pass.
 * Standardized home-cooked and packaged meals hit **90%–100% accuracy**.
-* Implementing the **Commercial Cooking Critic (Agent 2)** will solve the remaining fat and sodium estimation gaps in complex restaurant meals, guaranteeing **>90% benchmark performance across all meal types**.
+* Remaining restaurant fat/Na gaps are **F-10.6** (TS multipliers), not a guaranteed critic LLM. Do not claim >90% across all meal types until that soak is honest.
+* Production execute IDs: `plan/ROADMAP.md` **F-10**. Strip LLM `calories` from elastic schema before wiring.

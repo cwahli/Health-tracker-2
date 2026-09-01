@@ -41,8 +41,8 @@ const tracker = read('src/components/ApiCallTrackerModal.tsx');
 const syncUtils = read('src/utils/syncUtils.ts');
 const plan = read('plan/RELIABILITY.md') || read('plan/RELIABILITY_FREE_TIER_PLAN.md');
 const pack =
-  read('studio/M23_FIRESTORE_WRITE_KILL_SWITCH.md') ||
-  read('archive/studio/completed-2026-08/M23_FIRESTORE_WRITE_KILL_SWITCH.md');
+  read('archive/studio/completed-2026-08/M23_FIRESTORE_WRITE_KILL_SWITCH.md') ||
+  read('archive/studio/retired-2026-09/M23_FIRESTORE_WRITE_KILL_SWITCH.md');
 
 // 1) Docs present
 console.log('1) Pack + plan present');

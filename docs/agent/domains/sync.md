@@ -3,7 +3,7 @@
 **Load when:** delete/reappear, duplicates across devices, Firebase/Firestore, Supabase rows, R2 photos/debug, job realtime, merge, tombstones, backup/restore, login pull.  
 **Class:** almost always **L or X**. Prefer IMPACT + no silent contract changes.
 
-**Architecture:** `plan/HYBRID_SUPABASE_CLOUDFLARE_R2.md`  
+**Architecture:** `plan/RELIABILITY.md`  
 **WIP status:** `AI_HANDOVER.md`  
 **Core code:** `src/utils/syncUtils.ts`, `SyncService.ts`, `firestoreUtils.ts`, `jobs/SupabaseJobSync.ts`, `jobs/JobStore.ts`, `utils/r2Storage.ts`, profile tombstone fields on `UserProfile`.
 

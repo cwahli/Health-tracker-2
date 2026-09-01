@@ -1,215 +1,121 @@
 # AGENTS.md — Always-on rules (keep short)
 
-**Updated:** 2026-08-31  
+**Updated:** 2026-09-01
 
-**Token rule:** Read **this file first**. Load domain rulebooks (`docs/agent/**`) **only when the table below says so**. (Investigating application source code, debug logs, and relevant functions is always permitted and encouraged; do not dump unneeded rulebook docs).
+**Token rule:** Read **this file first**. Load domain files **only** from the table in §1. Do not open `plan/FOOD.md` Part A/B, `plan/QUALITY.md`, or old `AI_HANDOVER` history unless that table says so.
 
 ---
 
-## 0. Document roles (where context lives)
+## 0. Do this every session (stops Gemini stalls)
 
-| Doc family | Role | Agents may freely update? |
-|------------|------|---------------------------|
-| **`AI_HANDOVER.md`** | **WIP board:** status so far, what’s in progress, next focus, multi-agent handoff notes | **Yes** — preferred place for session progress |
-| **`plan/`** | **Architecture & planned design** (modal, food-calc, hybrid storage, bugs…) | Only when design actually changes; keep architecture durable |
-| **`AGENTS.md` + `docs/agent/**`** | **Process laws + domain rulebooks + regression map** | **No — protected** (see §3) |
-| **`studio/`** | One active Studio pack | Yes when authoring packs |
-| **`archive/`** | Completed packs | Move on COMPLETE; do not re-upload as current |
+1. **Read is free.** Never ask the human to approve, confirm, or say `continue` in order to **read** a file, log, photo, or doc — including this file and `docs/agent/**`. If a read truncates, immediately request the rest in the **same turn**.
+2. **A question is not implement.** “How accurate is OCR?” / “review the prototype” = **answer**. Do not edit files, add tests, or run vitest unless the user asked to implement.
+3. **Tests only if you changed application code** (`src/`, `server.ts`, `server_*.ts`, `agents/`, `supabase/`). Docs, reviews, and prototype-log reads: **run nothing**. Never `npm test` (~97 files). Named row from `docs/agent/DOMAIN_REGRESSION_MAP.md` only.
+4. **Do not edit** `AGENTS.md` or `docs/agent/**` unless the human asked for a process change. Confirmation in §3 is for **edits**, not reads.
+5. **Follow `plan/ROADMAP.md`.** There is no `studio/` pack folder. “Work on the roadmap” = **Current work**, then the next open ID. Do not invent a pack file. Do not mix F-9.5 (`App.tsx`) with F-10.
 
 ```text
-plan/          = what we designed / still intend (architecture)
-AI_HANDOVER.md = where we are now (status, WIP, handoff)
-AGENTS + docs/agent = how we work without breaking each other (stable process)
+plan/ROADMAP.md  = remaining work (the only execute file)
+AI_HANDOVER.md   = short WIP board (update freely)
+AGENTS + docs/agent = process (protected to EDIT)
 ```
 
-**Multi-agent context** goes in **`AI_HANDOVER.md`** (short “Session notes” / WIP rows), **not** by rewriting laws mid-flight.
-
-- **Zero-Code-Change Exemption (Token-Saving Law):** Run tests, `tsc`, and regression gates **ONLY when application source code is modified** (`src/`, `server.ts`, `server_*.ts`, `agents/`, `supabase/`). For doc updates, explanations, question answers, folder mirroring/sync ops, or file reviews where NO application code changed, **STRICTLY SKIP running test suites and gate verification runs** to eliminate token and context waste.
+**GitHub:** Commit/push allowed after COMPLETE (`tsc` + named gates). AI Studio remains a valid ship path, not the only one.
 
 ---
 
-## 1. Load map (do not open everything)
+## 1. Load map
 
-| Task involves… | Read |
-|----------------|------|
-| Status / WIP / handoff | `AI_HANDOVER.md` |
-| Architecture / planned design | matching file under `plan/` |
-| Writing a Studio pack | `docs/agent/PACKS.md` |
-| Food-calc | `docs/agent/domains/food-calc.md` |
-| Biomarkers | `docs/agent/domains/biomarkers.md` |
-| Multi-device sync | `docs/agent/domains/sync.md` |
-| Job session / preview vs debug mismatch (`STALE_TURN`) | `docs/agent/domains/sync.md` + `plan/ROADMAP.md` F-9 |
-| Which tests to run | `docs/agent/DOMAIN_REGRESSION_MAP.md` |
-| IMPACT / SELF-CHECK / GATE paste | `docs/agent/TEMPLATES.md` |
-| Active Studio pack name | `studio/ACTIVE_STATUS.md` |
-| User says **work bug** / **next bug** / **work 11** | **L15**. Not a bare “continue” or “work”. |
+| Task | Read (stop there) |
+|------|-------------------|
+| Status | `AI_HANDOVER.md` (**header only**) |
+| What to build | `plan/ROADMAP.md` matching ID |
+| Food create / F-10 | `plan/FOOD.md` **Process** (stop at the module table) + `docs/agent/domains/food-calc.md` §1–1d |
+| Food identity / catalog | `plan/FOOD.md` Part A + `FALSE_FRIEND` playbook — **not** F-1/F-2 USDA |
+| Job session / preview vs debug (`STALE_TURN`) | `docs/agent/domains/sync.md` jobs + ROADMAP F-9.5 |
+| Biomarkers | `docs/agent/domains/biomarkers.md` + ROADMAP Track B |
+| Which tests | `docs/agent/DOMAIN_REGRESSION_MAP.md` **matching row** |
+| What to implement | `plan/ROADMAP.md` **Current work** |
+| `work bug` / `next bug` / `work 11` | **L15** below. Not a bare `continue`. |
 
-**Default loop:** board (`AI_HANDOVER`) → domain rulebook if needed → implement → domain gates → COMPLETE format → update board.
+Do **not** load: `plan/archive/**`, `archive/**`, root `ROADMAP.md` (stub), `plan/QUALITY.md` except §1.4, `FOOD_SINGLE_PATH.md` unless F-8.10/12/13. There is no `studio/`.
 
 ---
 
-## 2. Coding Laws (every session)
+## 2. Coding laws
 
-### L1 — Blast radius (anti-random-deletion)
-Touch **only** files required for the task. No drive-by refactors, renames, or “cleanup.”  
-Do not remove branches, error handlers, fallbacks, or **mode-tagged / gate-used logs** unless listed in scope.
-
-Job-lifecycle files are **out of blast radius** for food-calc / verdict / modifier PRs unless IMPACT names them **and** `src/jobs/__tests__/JobSession.contract.test.ts` is in the same commit: `src/jobs/JobStore.ts`, `src/jobs/SupabaseJobSync.ts`, `src/jobs/JobQueueRunner.ts`, `src/App.tsx` poller, `src/components/LogChat.tsx` submit / `loadJobMessages`, `src/components/TaskPlaceholderCard.tsx`, `src/components/FoodHistoryTab.tsx` job combine. Example of FAIL: `8742686` (verdict labels + deleted in-place edit merge).
+### L1 — Blast radius
+Touch only files the task needs. Job-lifecycle files are **out of blast radius** for food-calc unless IMPACT names them **and** `src/jobs/__tests__/JobSession.contract.test.ts` is in the same commit: `src/jobs/JobStore.ts`, `src/jobs/SupabaseJobSync.ts`, `src/jobs/JobQueueRunner.ts`, `src/App.tsx` poller, `src/components/LogChat.tsx` submit / `loadJobMessages`, `src/components/TaskPlaceholderCard.tsx`, `src/components/FoodHistoryTab.tsx` job combine. FAIL example: `8742686`.
 
 ### L2 — Contracts
-No breaking signature/API/prop changes without updating **all** call sites in the same task. Prefer optional params + defaults.
+No breaking signatures without every call site in the same task.
 
-### L3 — Full autonomous execution
-Perform comprehensive deep investigation across all relevant files and execute durable solutions without pausing mid-investigation. 
+### L3 — Finish the turn
+Investigate and implement without pausing for “continue?”. Pagination of a file is not a pause — read the rest yourself.
 
-### L4 — Full implementation
-No placeholders or stub delivery. Import without **correct-path call site** = FAIL.
+### L4 — No stubs
+Import without a correct-path call site = FAIL.
 
 ### L5 — Sibling paths
-One path fixed ≠ feature done. Shared helper + all call sites, **or** explicit known-broken in `AI_HANDOVER.md`.
+One path fixed ≠ done. Shared helper + all call sites, or known-broken in `AI_HANDOVER.md`.
 
-### L6 — Data field preservation
-Do not drop existing merge/construct fields unless scoped + consumers audited.
+### L6 — Preserve fields
+Do not drop merge/construct fields unless scoped.
 
-### L7 — Detect AND repair
-Detection-only is incomplete when repair is in scope.  
-Repair = fix the **class** (ranker refuse, restore a dropped dish, stop a silent scale).  
-It does **not** mean paint a meal green (catalog `includes()`, alias, `expected.json`, `POST /loop`). See L14.
+### L7 — Detect and repair the **class**
+Not paint a meal green (`includes()`, alias, `expected.json`, `POST /loop`). See L14.
 
-### L8 — Prefer extract over god-file rewrites
-Hot pure logic → small modules + tests; thin call sites in `server.ts` / `App.tsx`.
+### L8 — Extract, don’t rewrite god files
+No drive-by split of `App.tsx` / `LogChat.tsx` / `server_food_analyze_run.ts`.
 
-### L9 — Domain rulebooks: guide, don’t fossilize
-If the task hits food-calc / biomarkers / sync: **read** that domain file.
+### L9 — Rulebooks guide, don’t fossilize
+Product evolution is allowed. If the pipeline changes, update the domain file **in the same change** as the code. Do not invent a silent second pipeline.
 
-- Default: follow invariants (they prevent the regressions we already paid for).  
-- **Product evolution is allowed:** if the app intentionally changes a pipeline, key scheme, or store role, update the rulebook **with confirmation** (§3) **in the same change**, and update tests/gates.  
-- Do **not** invent a silent alternate pipeline “just for this bug.”  
-- Do **not** treat rulebooks as a ban on new features — only as a checklist against accidental breakage.
+### L11 — Code changes only
+When you **changed application code**: named vitest + `tsc`. Default model for any live Gemini call: `gemini-3.5-flash-lite`. `npm run build` is not how localhost picks up React (Vite, not `dist/`). If debug already has the new numbers and the card does not: class `STALE_TURN`, not food-calc.
 
-### L11 — Autonomous Continuous Execution Protocol
-When addressing tasks, bug fixes, or feature plans, agents execute end-to-end in a single continuous turn:
-1. **Autonomous Deep Investigation**: Perform thorough multi-file inspection across all relevant files without pausing mid-turn.
-2. **Durable Implementation**: Apply pure TypeScript middleware / code modifications directly (anti-patch guarantee). Never use stubs or placeholders.
-3. **Automated Verification**: Run tests, type checks (`tsc`), and regression gates to verify zero cascade breakages. Any live AI tests, mock evaluations, or script runs MUST use the `gemini-3.5-flash-lite` model by default.
-4. **Mandatory Executive Response Format (Zero Code Dumps)**:
-   All completion responses MUST strictly adhere to this format:
-   - **Root Cause & Diagnosis:** (1–2 concise sentences)
-   - **Key Changes Applied:** (2–4 high-level architectural bullets; no code blocks or diffs)
-   - **Verification:** (Pass/Fail status for build, `tsc`, tests, and gates)
-   *(Pasting raw code blocks, file contents, or diffs in chat is strictly prohibited).*
-5. **Serve mode + wrong-layer stop.** On localhost, prove Vite (`index.html` → `/src/main.tsx`) before UI patches; hashed `/assets/index-*.js` is `dist/` (immutable cache). `npm run build` is not how you pick up a React edit. If the debug file already has the new numbers and the card does not, class is `STALE_TURN` — list writers of that card. Three patches that do not change the screenshot → writer timeline, not a fourth force-save.
+### L12 — Prompt net-zero
+Agent instruction edits stay net-zero lines. Math lives in TypeScript, not English. Schema: agent emits estimates; TS derives calories / unsaturated fat / salt.
 
-### L12 — Strict Prompt Line-Budget & Anti-Bloat Rule
-- **Strict Copy Length & Line Ceiling**: When updating agent instructions (system prompts in `server_vision_scout.ts`, dietitian instructions, biomarker agents), the total copy length/word count must by default remain equal to or less than before. Content MUST be consolidated instead of adding more (net-zero line/word growth). Adding more content than existing requires explicit human approval first.
-- **Default Test & Runtime Model**: Any test, benchmark, or prototype call should be executed using the `gemini-3.5-flash-lite` model by default.
-- **No Prompt-Based Code**: Business logic, math, unit conversions, brand overrides, and data sanitization MUST live in pure TypeScript middleware, NEVER in English prompt instructions. Prompts are strictly for classification and schema extraction under 200 words.
+### L13 — Roadmap IDs
+After an ID’s named gate is green, start the next open non-Grok ID on `plan/ROADMAP.md` in the same turn. Do not ask the human to say continue. COMPLETE needs that ID’s named gate exit 0.
 
-### L13 — Multipass Epic Continuation (Anti Early-Stop)
-When executing multi-phase plans (e.g. `studio/M*.md` or `plan/*.md`):
-- After each phase's tests pass, the agent **must immediately start the next phase in the same continuous stream**.
-- Ending a turn with only “ready for Phase N when you say continue” (or similar) while checklist IDs remain = **FAIL**. Pack/phase **continue** is L13, not L15.
-- On context pressure: write `AI_HANDOVER.md` multipass checkpoint + RESUME line, then continue from checkpoint without re-auditing the whole repo.
-- L10 COMPLETE requires the named master gate to exit code 0.
+### L14 — No meal-green loops
+Work item = class (`FALSE_FRIEND`, `DISH_DROP`, `STALE_TURN`, `ALWAYS_SECOND_AGENT`, …). Inner loop = named vitest. Forbidden: `POST /loop`, replay until `all_green`, catalog paint. Two burned hypotheses → STOP that job.
 
-This law does **not** waive protected-doc confirmation (§3) unless the pack lists those files as in-scope.
+### L15 — Bug queue (only these phrases)
+Triggers: `work bug` · `next bug` · `work 11` / `work #11` · Hand off that starts with `AGENTS.md L15`.  
+Not L15: `continue`, `work`, pack phases.  
+Live: `GET /api/bugs/next` (or `?mode=next` / `?n=11`). Drain **automatic** tape fails on `continue.active_line`. Named vitest for the class. `POST /attempts`. Do not `POST /loop` or paint `expected.json`. Detail: `plan/QUALITY.md` §14 if you are actually on a bug card.
 
-### L14 — Multi-job OK, retry-loops forbidden
-When asked to fix bugs (one ticket or a whole registry):
-
-1. **Split into independent jobs.** A 7-row table is several jobs, not one meal-green search. Run them in the **same turn** when files do not collide. Do not stop after job 1 and ask the human to continue.
-2. **Work item = class, not meal `all_green`.** Classify first: `FALSE_FRIEND` · `DISH_DROP` · `OPENING_WRONG` · `SILENT_REPAIR` · `CALL_BUDGET` · `INFRA_LATENCY` · `STALE_TURN`. One class per job. Other reds on that meal are out of session. `STALE_TURN` = preview/chat shows a previous job turn while a new one is running (debug already has the new numbers). Not food-calc.
-3. **Inner loop = named vitest, never `/loop`.** Forbidden as the way you work:
-   - `POST /api/golden/cases/:id/loop`
-   - Replaying the same meal until `all_green`
-   - Adding another `includes()` / hard-pass and retrying
-   - Grepping a ghost (e.g. a Chat Router that is not on the food path) past one failed hypothesis
-4. **Hypothesis budget.** Each job: `class` + hypothesis + predicted test + one allowed file. Predicted test does not flip → hypothesis **burned**. Two burns → **STOP that job** (`blocked_human`) and start the next independent job. Do not invent a third cheat.
-5. **Forbidden unless the class names them:** `server_food_db.ts`, `food_aliases`, golden `expected.json`, dietitian prompt bloat. Exact `expectFdcId` is **not** the reward.
-6. **Honest residual is done.** `MISS` / cannot resolve / needs human is a valid terminal. Do not bind a false friend to paint green. Do not steal a sibling component’s row. A **meal trial-balance miss** (backend/dietitian correction, narrative ≠ table) stays red and classifies `SILENT_REPAIR` / `DISH_DROP` — do not “repair” the books to green.
-7. **Durable test:** the inner test must fail on a *new* food of the same class (query-scoped pool, not “G8 sugar”). If the test only mentions one FDC, it is a patch.
-8. **Parallel is required, retry-loop is not.** Different classes / different files = do them now. Same-file collision = serialize those two only. Human only at `blocked_human`.
-
-This law **overrides L11 / L13** when they would mean “keep `/loop`-ing or grepping until the meal is green.” Continuous execution = the next **job**, not the next **replay**.
-
-### L15 — Bug queue (all agents)
-
-**Triggers (only these):** `work bug` (current in-progress card) · `next bug` (the following card) · `work 11` / `work #11` (that number) · a **Hand off** paste that starts with `AGENTS.md L15`.
-
-**Not L15:** a bare **continue** or **work** (pack phase / L13 / current task). The JSON field `continue` on `/api/bugs/next` is the ticket object, not a user phrase.
-
-1. **Live ticket** (`http://127.0.0.1:3000` then `localhost:3000`):  
-   - `work bug` → `GET /api/bugs/next` (in-progress remaining, else first ready)  
-   - `next bug` → `GET /api/bugs/next?mode=next` (skips the current card)  
-   - `work 11` / `work #11` → `GET /api/bugs/next?n=11`  
-   **No live API** (GitHub-only Claude): the **Hand off** clipboard is the ticket. Do not invent remaining from git.
-2. `continue.stop` → quote `continue.say`, **one** summary. Auto checks green → **human to do** (visual/UI only). Do not Promote from chat.
-3. Else **drain failing automatic tape checks**. Work **only** `continue.active_line` (one class, one file). After `POST /attempts`, `GET /api/bugs/next` (tape re-score). If `stop=false`, immediately work the new `active_line`. Do not wait for the human. Visual/UI remaining is human — skip it.
-4. Named vitest must fail on a **new** food of that class (not this meal’s FDC list). Claimed `result=pass` does **not** paint remaining; remaining comes from the tape.
-5. End every line: `POST /api/bugs/<tag_id>/attempts` `{ line: <active_line exactly>, hyp, file, test, result, burned, note }`. `burned=false` only if that test flipped. Two misses park that line. 409 paint/weak_test/paint_fdc/wrong_file does not advance.
-6. One trigger = this card’s **auto** fails. Stop when auto checks are green or blocked (`stop=true`). Then human reviews screenshots / a11y / copy.
-7. **Do not:** `POST /loop` · `PATCH remaining` to `[]` / `queue=done` · `CANONICAL_BASE_FOODS` `includes()` for this meal · `food_aliases` / `expected.json` paint · invent files · retry **DO NOT RETRY** · mark the card done from chat · ask the human to say continue between auto lines.
-
-L15 **overrides L11** for those trigger phrases: drain automatic tape checks, not “green this meal from chat.” Pack **continue** stays L13. L14 class/test/catalog-paint rules still apply.
-
-### L10 — COMPLETE
-All of: IMPACT (L/X) · SELF-CHECK · (if code changed: `tsc` · domain regression map commands · pack assert if any; skip if doc/ops only) · paths verified or known-broken noted.
-
-**Forbidden until then:** “all done” / “fully verified” / “nothing left.”  
-**Auto FAIL:** import without call site · silent half-fix · detect without repair · simulated tool output / fake edit completion · dropped fields · gate weakened · drive-by scope · early-stop mid multipass epic while checklist IDs remain (L13) · `POST /loop` or meal-replay as the inner work method (L14) · claiming Fixed after a catalog/`includes()` paint.
+### L10 — COMPLETE (code only)
+`tsc` + matching regression-map commands + the ROADMAP ID’s named assert if any. Skip all of that when no application code changed. Forbidden until then: “all done” / “fully verified.”
 
 ---
 
-## 3. Protected docs (confirmation + before/after required)
+## 3. Protected docs (**edit** confirmation, never read)
 
-These files define how **all** agents work. Random edits dilute process and break multi-agent coordination.
+**Protected to edit:** `AGENTS.md`, `docs/agent/**`, and `scripts/assert-*.mjs` **when changing what “pass” means**.
 
-**Protected set:**
-
-- `AGENTS.md`
-- `docs/agent/**` (rulebooks, PACKS, DOMAIN_REGRESSION_MAP, TEMPLATES, README)
-- Gate scripts that encode pack acceptance (`scripts/assert-*.mjs`) **when changing acceptance meaning** (not when only adding a new assert file for a pack)
-
-### Rules
-
-1. **Do not edit protected docs** as part of an unrelated feature/bugfix.  
-2. If a protected edit is needed (evolution, correction, new domain):  
-   - **Stop and ask the human for confirmation** first, **or** only do it when a Studio pack explicitly lists that file as in-scope.  
-   - Show a **concise summary of changes** when asking for confirmation (do NOT show full code unless it is a change to agent system instructions in prompt/modal).  
-   - State **why** (product change / missing invariant / token fix).  
-3. Prefer recording ephemeral status in **`AI_HANDOVER.md`**, not by rewriting laws.  
-4. When product evolution changes an invariant: update domain rulebook + tests **together** so process stays honest — never leave stale laws that contradict code.
+- **Read** them whenever the load map says so. No confirmation.
+- **Edit** only if the human confirmed a before→after, or ROADMAP Current work names the file. Unrelated bugfixes must not touch them.
+- Prefer `AI_HANDOVER.md` for status.
 
 ---
 
-## 5. Change classes
+## 4. Change classes
 
-| Class | Examples | Process |
-|-------|----------|---------|
-| **S** | Copy, CSS | light |
-| **M** | One helper + tests | unit tests |
-| **L** | Multi-mode food, biomarker pipeline | domain doc + regression map + IMPACT |
-| **X** | Sync/tombstones, identity, protected docs | confirmation + IMPACT + second look |
+| Class | Process |
+|-------|---------|
+| **S** | Copy/CSS; no IMPACT paste |
+| **M** | Helper + named unit test |
+| **L** | Food/biomarker pipeline; IMPACT + domain doc if invariants change |
+| **X** | Sync/tombstones/protected **edits**; confirmation + IMPACT |
 
----
-
-## 6. Studio packs (summary)
-
-1. One active pack under `studio/`.  
-2. ≤6 acceptance IDs by default; FIND→REPLACE / small swaps; machine gate exit 0.  
-   **Multipass exception (L13):** packs marked PRE-APPROVED / MULTIPASS AUTONOMOUS may exceed 6 IDs when closed by one master gate — see `docs/agent/PACKS.md`.  
-3. **Commit/push allowed** from this workspace after COMPLETE (`tsc` + named gates). AI Studio remains a valid ship path, not the only one.  
-4. After true COMPLETE: archive pack; update `AI_HANDOVER.md`.
+Questions and prototype reviews are not L/X.
 
 ---
 
-## 7. Bug & Diagnostic Investigations
-When investigating user bug logs, errors, or diagnostic reports, deep multi-file inspection and reading the provided diagnostic markdown file is expected and encouraged.
-Spec: `plan/BUG_TRACKING_COMPREHENSIVE_PLAN.md`.  
-**Queue work** (`work bug` / `next bug` / `work 11` / Hand off) follows **L15**.
+## 5. AI Studio
 
----
-
-## 8. Keep this file short
-
-If always-on content grows past ~one screen of laws + index, **move detail out** (with §3 confirmation) — do not dilute context with pack templates or full domain tables here.
+Read `plan/ROADMAP.md`. Execute **Current work**, then the next open ID. Named gates on that ID only. Update `AI_HANDOVER.md` **Now** when an ID finishes. F-9.5 (`App.tsx`) is Grok-only — do not mix.

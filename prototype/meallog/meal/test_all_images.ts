@@ -302,7 +302,7 @@ async function runTestCase(tc: TestCase) {
 
   console.log(`\nDishes & Bounding Boxes Extracted:`);
   meal.dishes.forEach((d, idx) => {
-    const bboxStr = d.boundingBox ? ` [bbox: ${JSON.stringify(d.boundingBox)}]` : " [no bbox]";
+    const bboxStr = d.boundingBox2D ? ` [bbox: ${JSON.stringify(d.boundingBox2D)}]` : " [no bbox]";
     console.log(`  [${idx + 1}] ${d.dishName} (${d.estimatedWeightGrams}g, ${d.cookingMethod})${bboxStr} -> ${d.calories} kcal, ${d.protein}g P, ${d.carbohydrates}g C, ${d.totalFat}g F, ${d.sodium}mg Na`);
     d.foods.forEach((f) => {
       console.log(`      * ${f.foodName}: ${f.estimatedWeightGrams}g (P:${f.protein}g, C:${f.carbohydrates}g, SatF:${f.saturatedFat}g, Na:${f.sodium}mg)`);

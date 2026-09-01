@@ -2,7 +2,7 @@
 
 **Pillar:** 1 — Biomarkers. **Start work from:** [ROADMAP.md](./ROADMAP.md).  
 **Laws:** `docs/agent/domains/biomarkers.md`  
-**Studio:** `studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md`
+**Execute:** [ROADMAP.md](./ROADMAP.md) Track B.
 
 This file is the **architecture**. Two parts, nothing dropped:
 
@@ -27,7 +27,9 @@ Execute order, PRs, and class-first rules live in `ROADMAP.md` + `QUALITY.md`.
 
 ## 0. Why this exists
 
-Food is one-shot (scout → catalog → dietitian). Biomarkers are a **living catalog + dated observations** over months. The current app treats them like “another chat agent team”: 10+ personas write one bag (`customBiomarkers` + unitless log numbers). Result: ghosts, dups, invented keys, deletes that bounce, unit change that rewrites the number, Home/coach steered by dirty values.
+Food create is one-shot (Meal Agent → catalog bind → finalize; TypeScript expands when the meal is complex — F-10). Biomarkers are a **living catalog + dated observations** over months. The current app still treats them like “another chat agent team”: 10+ personas write one bag (`customBiomarkers` + unitless log numbers). Result: ghosts, dups, invented keys, deletes that bounce, unit change that rewrites the number, Home/coach steered by dirty values.
+
+**Same agent pattern as food F-10:** typical chat is one Review / fill-template dispatch. TypeScript owns identity, convert, status, and batch size. Expand to Parser chunks / named specialists only when n≥20 or the ingest door says leftovers. Prototype: `prototype/biomarkers/` (C2/C3 green; C1–C7 gate before modal wiring).
 
 This plan is the clean slate: **layers, roles, dispatcher, goldens** — reviewed against lab-informatics practice.
 
@@ -161,13 +163,16 @@ Internal **ids stay** (`agent1`, `data_review`, …) until a storage migration. 
 
 ### 4.3 Dispatcher
 
+Same expand law as food F-10: **TypeScript decides**, not the model.
+
 ```text
 scope = selected or flagged keys
 
 n = 1–5:
-  one Review (or Add) session
+  one Review (or Add / fill-template) session
   composed slices — NOT concatenated specialist novels
   optional silent Calibrator on that key if overlay required (see §5)
+  user does not say continue; runner packs leftover turns from OUTPUT_TOKEN_BUDGET
 
 n = 10–50 (one report):
   Lab Parser (chunks) → identity code → Pending leftovers
@@ -177,6 +182,8 @@ n = 10–50 (one report):
 n ≥ 20–100 dictionary hygiene:
   exactly one specialist pack per run
 ```
+
+Do **not** run Lab Parser + Review + Calibrator on a C1-sized send. Fill-template execute list: `plan/BIOMARKER_FILL_TEMPLATE_CASES.md`.
 
 ### 4.4 Instruction law
 
@@ -341,7 +348,7 @@ Status key: **landed** = in Desktop tree · **partial** = code exists, product g
 | `docs/agent/domains/biomarkers.md` | Laws + current write map (protected) |
 | `docs/agent/DOMAIN_REGRESSION_MAP.md` | Which tests |
 | `AI_HANDOVER.md` | WIP / which slice is active |
-| `studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md` | **AI Studio pack** — paste §A; implements §13 P0–P8 |
+| [ROADMAP.md](./ROADMAP.md) Track B | Remaining execute IDs (no studio pack) |
 | `plan/BIOMARKER_INGEST_ROUTER_PLAN.md` | Front door: classifier / leftover Parser / failure modes |
 | `plan/BIOMARKER_INGEST_AND_GOLDENS_PLAN.md` | **Build** — class-first goldens (UX lifecycle ≠ test taxonomy) + ingest router. Does not replace §13. |
 | `plan/BIOMARKER_IMPLEMENTATION_ROADMAP.md` | **Order of work** — Waves 0–7 + PR cut. |
@@ -462,7 +469,7 @@ Until then, new health-planning agents stay blocked on dirty telemetry.
 **Pillar:** 1 — Biomarkers. Map: `plan/README.md`. Execute: `BIOMARKER_IMPLEMENTATION_ROADMAP.md`.
 
 **Status:** Design from 2026-08-16 review. Not started.  
-**Parent:** `plan/BIOMARKER_LIFECYCLE_PLAN.md` (layers, roles, laws). This file does **not** replace that plan. It specifies the missing front door: how raw user input becomes observations, and what Lab Parser / Review actually see.  
+**Parent:** this file Part A (layers, roles, laws). Part B specifies the missing front door: how raw user input becomes observations, and what Lab Parser / Review actually see.  
 **Build plan (class-first goldens + slices, debug):** `plan/BIOMARKER_INGEST_AND_GOLDENS_PLAN.md`  
 **Rulebook:** `docs/agent/domains/biomarkers.md`  
 **Do not implement this as one PR.** Implement via the build plan I0–I9, not §9 here alone.

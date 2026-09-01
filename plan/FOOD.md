@@ -1,14 +1,16 @@
 # Food — pipeline and meal document
 
 **Pillar:** 2 — Food. **Start work from:** [ROADMAP.md](./ROADMAP.md).  
-**Laws:** `docs/agent/domains/food-calc.md`
+**Laws:** `docs/agent/domains/food-calc.md`  
 
-Not a “lifecycle” in the biomarker sense: a meal is one-shot (scout → resolve → catalog → durable meal). Two parts, nothing dropped:
+**Coding:** read **Process** (this file through the module table). Stop. Execute IDs are on [ROADMAP.md](./ROADMAP.md). Part A/B below are catalog + durable-meal history — load only for F-3/F-4 identity, not for F-10.
+
+Not a “lifecycle” in the biomarker sense: a meal is one-shot (Meal Agent → resolve/bind → finalize → durable meal; TypeScript expands the agent when the meal is complex). Two parts, nothing dropped:
 
 - **Part A** — identity / curator / catalog (was `FOOD_RESOLVER_CURATOR_AND_1PASS_CATALOG_PLAN.md`)
 - **Part B** — durable meal document (was `MEAL_BUILD_DURABLE_STATE.md`)
 
-Remaining execute IDs on [ROADMAP.md](./ROADMAP.md): **F-1…F-4** (identity/catalog), **F-6 / F-7** (FoodCard ceiling + scout prompt; Q-1 is green so these are unblocked), **F-8.10–F-8.13** (pipeline split, evidence soak, packaged facts, debug download). Do **not** rebuild the curator (M30 stays).
+Remaining execute IDs on [ROADMAP.md](./ROADMAP.md): **F-10** (adaptive Meal Agent — one role, expand when TypeScript says so), **F-8.10–F-8.13** (split / packaged facts / debug; soak is F-10.8, not the old always-dietitian path), **F-9.5** (job session leftover), **F-3 / F-4 / F-6** (identity + FoodCard). Do **not** rebuild the curator (M30 stays). Do **not** reopen F-1/F-2 USDA.
 
 ---
 
@@ -16,20 +18,26 @@ Remaining execute IDs on [ROADMAP.md](./ROADMAP.md): **F-1…F-4** (identity/cat
 
 One open food modal owns **one** document. That is true for **review (log a meal)** and **compare**.
 
+**Agent model (F-10):** One **Meal Agent** role. Typical meals finish in **one** dispatch. TypeScript expands to parallel workers when the meal is complex. There is **not** a systematic Scout-then-Dietitian pair on every create. Same pattern as biomarkers (one Review for n=1–5; specialists only when the dispatcher expands). Evidence: `prototype/meallog/meal/` (1-agent vs always-two, elastic COMPLETE/DELEGATE).
+
 ```text
 Open modal
   → empty slot (draft job). No meal yet.
 
 First submit in this modal
   → CREATE that document (never a second one)
-  → photos? Vision Scout. text-only? Dietitian fills the same scout-shaped estimate
-  → finalizeDishLedger (calories, OCR/brand, Atwater)
-  → Dietitian NARRATE only (verdict + message). Does not rebuild items.
+  → Meal Agent (photos and/or text) emits dishes / foods / P/C/F / OCR / draft verdict+message
+       TS expand gate (dish count, image count, receipt/barcode) — the model does not pick COMPLETE/DELEGATE
+         no  → one dispatch
+         yes → lead solves anchors + locked OCR grams; workers finish remaining dishes (locked grams, no re-OCR)
+  → finalizeDishLedger (calories, OCR/brand, Atwater; optional TS fat/Na from diningEnvironment × cookingMethod)
+  → substitute ledger numbers into the draft message (no second LLM unless the message is empty)
+  → evaluateMealGate
 
 Later submits in the SAME modal
   → same meal id / same comparison id
   → no new meal card, even if the user attaches more photos (those MERGE as added dishes)
-  → Dietitian either:
+  → same Meal Agent:
        modificationCommand[] empty  → Q&A, card unchanged
        modificationCommand          → patch this meal, then finalize dirty rows
 ```
@@ -40,18 +48,29 @@ Later submits in the SAME modal
 | Later submit | edit or Q&A on that meal | edit or Q&A on that set |
 | New document | **open a new modal** | **open a new modal** |
 
-Edit vs Q&A is the dietitian’s `modificationCommand` (empty = Q&A). Not a keyword regex, not a second “new_log”.
+Edit vs Q&A is the Meal Agent’s `modificationCommand` (empty = Q&A). Not a keyword regex, not a second “new_log”. The Dietitian instruction pack is this role’s **edit / Q&A / optional narrate** slice — not a required create stage. Internal ids may stay until a dedicated rename.
 
 **Where numbers come from**
 
-| Event | Identity / P/C/F | Calories |
+The agent estimates what vision/text can support. TypeScript **derives** anything that is a function of those estimates. Calories are the main case, not the only one.
+
+| Event | Agent emits | TypeScript derives |
 |---|---|---|
-| First submit with photos | Scout | Finalize |
-| First submit text-only, or **add/replace a food on edit** (no new photo of that food) | **Dietitian emits scout-shaped `estimate`** (name, grams, P, C, F, sat fat, sodium, cookingMethod) | Finalize |
-| Split / scale of food already on the meal | Saved row (scale). Dietitian may add `estimate` when a **new identity** is named (beef vs chicken) | Finalize |
+| First submit (photos and/or text) | Identity, grams, P, C, **total** fat, sat fat, added sugar, fibre, sodium; OCR **text**; draft verdict | kcal, unsaturated fat, salt; brand/OCR printed-kcal **lock** |
+| **add/replace a food on edit** (no new photo) | Same `estimate` object (no kcal) | Same |
+| Split / scale of food already on the meal | Saved row (scale). `estimate` only when a **new identity** is named | Re-derive on dirty rows |
 | Q&A | — | Unchanged |
 
-Dietitian never invents kcal. Finalize always Atwaters unlocked items.
+| Field | Owner | Must not |
+|---|---|---|
+| protein, carbohydrates, totalFat, saturatedFat, addedSugar, totalFibre, sodium | Meal Agent (or printed label / brand lock) | Back-solve **carbs from kcal** (phantom-carb class) |
+| transFat | Agent if printed; else TS `0` | Invent industrial trans |
+| **calories** | `finalizeDishLedger` Atwater `4P+4C+9F`, **unless** OCR/brand printed kcal is a hard lock | Agent `calories` in schema; elastic prototype kcal |
+| unsaturatedFat | TS `totalFat − sat − trans` | Agent emit |
+| salt | TS `(sodium_mg × 2.54) / 1000` | Agent emit |
+| dish/meal micros | Agent, directional | Treat as 90% core |
+
+The Meal Agent never invents kcal, unsaturated fat, or salt. Elastic prototype schema that emits `calories` is a **bug to strip** before production.
 
 **User prompt** is almost all server-built (profile, time, one ledger, scout/meal lines). The human line is often empty or one sentence. Same skeleton for create and edit; do not paste the ledger twice.
 
@@ -59,26 +78,27 @@ Dietitian never invents kcal. Finalize always Atwaters unlocked items.
 
 | Fact | Owner | Not allowed |
 |---|---|---|
-| Identity / P/C/F | Scout, or dietitian `estimate` if no photo | Generic profiles in the route |
-| Calories | `finalizeDishLedger` only | First-Principles, `aggregateItemsNutrients` after finalize, receipt-as-math, inherit `cal=0` |
+| Identity / P/C/F | Meal Agent (create or `estimate` if no photo of that food) | Generic profiles in the route |
+| Calories / unsaturated / salt | `finalizeDishLedger` (+ `rebalanceNutrientProfile`) | LLM `calories`/`unsaturatedFat`/`salt` on create schema; First-Principles; `aggregateItemsNutrients` after finalize; receipt-as-math; inherit `cal=0`; carbs-from-kcal |
+| Expand vs one dispatch | TypeScript gate (`shouldExpandMealAgent`) | Model `COMPLETE`/`DELEGATE`; systematic Dietitian pass on every create |
 | Same meal vs new | Modal session | Mode Rewrite, review-pill `new_log` on an existing document |
 | Edit vs Q&A | `modificationCommand` empty or not | Keyword regex, `itemsBreakdown` rebuild |
 | Save or not | `evaluateMealGate` | Log grep |
 | **What the preview shows** | Current job turn (`currentTurn` + `status`; `result` null while running) | Infer in-flight from `pendingFoodLog` / snapshot keys / `effectiveStatus`; four competing “current meals” |
 
-Session IDs **F-9.1–F-9.5** (guardrails, contract tests, inspector, `current_turn`, one writer): [ROADMAP.md](./ROADMAP.md) Track F. Not a calorie change. Do not mix with F-8.10.
+Session leftover **F-9.5** (App poller emitters): [ROADMAP.md](./ROADMAP.md) Track F. Adaptive agent **F-10**. Do not mix F-10 with F-9.5 in one PR. Workers still publish through `currentTurn`.
 
 | Module | Role | Size band |
 |---|---|---|
 | `server_routes_food_analyze.ts` | HTTP adapter: mount routes, return JSON | keep ≤700; never a second kcal writer |
-| `server_food_analyze_run.ts` | Pipeline: scout → finalize → dietitian → gate | medium owner; not a second kcal writer |
-| `server_dish_finalize.ts` | Calories | keep ~400–600 |
+| `server_food_analyze_run.ts` | Pipeline: Meal Agent → (optional workers) → finalize → number-substitute → gate | medium owner; not a second kcal writer |
+| `server_dish_finalize.ts` | Calories (+ optional TS fat/Na critic) | keep ~400–600 |
 | `server_meal_edit.ts` | Commands | keep ~400–600 |
 | `server_meal_gate.ts` | Save/refuse | keep ~200–300 |
-| `server_vision_scout.ts` | Identify + fry-fat split; no persisted kcal | slim toward ~800 |
+| `server_vision_scout.ts` | Meal Agent create dispatch (identity + P/C/F + OCR; no persisted kcal) | slim toward ~800 |
 | `server_nutrient_aggregation.ts` | Off the hot path | do not call after finalize |
 
-Detail, leftover F-8 IDs (**F-8.10–F-8.13**), and debug shape: [FOOD_SINGLE_PATH.md](./FOOD_SINGLE_PATH.md). Job-session leftover IDs (**F-9.1–F-9.5**): [ROADMAP.md](./ROADMAP.md) Track F — Gemini implements from a Grok pack; Grok reviews and owns `App.tsx` / `LogChat.tsx` call sites.
+Detail, leftover F-8 IDs (**F-8.10–F-8.13**), F-10 execute IDs, and debug shape: [FOOD_SINGLE_PATH.md](./FOOD_SINGLE_PATH.md) + [ROADMAP.md](./ROADMAP.md) Track F. F-9.5 App/LogChat emitters stay Grok-owned.
 
 ---
 
@@ -132,10 +152,12 @@ Transition food identity resolution from an expensive, noisy, low-curation pipel
 [User image + text]
         │
         ▼
-[Vision Scout]
+[Meal Agent — create dispatch]
   - items + components (clinical searchQuery, mass% preferred)
   - originalName / chainName / rawNutritionLabel (printed only)
-  - soft estimatedCalories per item (ignored if brand/OCR kcal)
+  - P/C/F per food; no persisted kcal
+  - TS expand → workers on remaining dishes with locked OCR grams
+  - soft estimatedCalories per item (ignored if brand/OCR kcal; finalize owns kcal)
         │
         ▼
 [Query set builder]  ← NEW pure helper
@@ -871,7 +893,7 @@ P5 checkbox above means “suite exists,” not “all goldens green.”
 **Pillar:** 2 — Food. Map: `plan/README.md`.
 
 **Status:** Architecture (durable). Live WIP → `AI_HANDOVER.md`.  
-**Studio pack:** `studio/M21_MEAL_BUILD_DURABLE_STATE.md`  
+**Execute leftover:** [ROADMAP.md](./ROADMAP.md) F-8 / F-10. M21 pack is archived.  
 **Updated:** 2026-08-09 (OCC, masks, stageKey, limits, migrate, history/debug, **deletions, stale narrative, 409 rebase, R2 TTL, chaos resilience matrix §12**)  
 **Goal:** One durable meal document that agents fill over time; fail-local; multi-device; full Mode A / D / Edit data coverage; append-only audit without log bloat; **survive messy real-world use cases**.
 
@@ -1698,4 +1720,4 @@ It does **not** mean every meal is perfect nutrition science offline without use
 - Nutrients: `src/utils/nutrients.ts`  
 - Debug: `src/utils/debugPayload.ts`  
 - Board: `AI_HANDOVER.md`  
-- Pack: `studio/M21_MEAL_BUILD_DURABLE_STATE.md`
+- Execute: [ROADMAP.md](./ROADMAP.md) (no studio pack)

@@ -1,19 +1,68 @@
 # Roadmap — start here
 
-**This is the only execute file.** Four architecture files sit beside it. Do not add a sixth plan.
+**This is the only execute file.** There is no `studio/` pack folder. Four architecture files sit beside this one. Do not add a fifth.
 
 | File | What it is |
 |---|---|
-| **This file** | What is left, in order |
-| [BIOMARKER_LIFECYCLE.md](./BIOMARKER_LIFECYCLE.md) | Pillar 1 architecture (product model + ingest router) |
-| [FOOD.md](./FOOD.md) | Pillar 2 — pipeline + meal document (not a lifecycle) |
+| **This file** | What is left, in order — AI Studio works **this file** |
+| [BIOMARKER_LIFECYCLE.md](./BIOMARKER_LIFECYCLE.md) | Pillar 1 architecture |
+| [FOOD.md](./FOOD.md) | Pillar 2 — Process (stop at the module table) |
 | [RELIABILITY.md](./RELIABILITY.md) | Pillar 3 — infra / quotas |
-| [QUALITY.md](./QUALITY.md) | Pillar 4 — how we test (class-first) |
+| [QUALITY.md](./QUALITY.md) | Pillar 4 — how we test (§1.4 only unless Q-6/Q-7) |
 
 Laws: `docs/agent/domains/{biomarkers,food-calc,sync}.md`  
-WIP: `AI_HANDOVER.md` · Studio: `studio/` · Completed/abandoned: `archive/`
+WIP: `AI_HANDOVER.md` (header only) · Completed: `archive/` · `plan/archive/`
 
-**As of `main` @ `3cf21ff` (2026-09-01).** F-8.1–F-8.9 (calorie single-path) and F-9 PR1–PR4 bulk (job session) are in tree. This file is **remaining work**, not history. Do not reopen USDA/curator or Q-1.
+**As of 2026-09-01.** F-8.1–F-8.9 and F-9 PR1–PR4 bulk are in tree. F-10.1 expand gate is in tree. Production create still Scout→Dietitian. Do not reopen USDA/curator or Q-1.
+
+---
+
+## AI Studio — how to run (PRE-APPROVED)
+
+The human will say **work on the roadmap**. That means:
+
+1. Read **this file** from the top through **Current work**, then the F-10 table.
+2. Implement the **first open ID** that is not marked Grok-only.
+3. Named gates for that ID (below). Never `npm test`. Never ask to confirm a **read**. If a file truncates, read the rest in the same turn.
+4. When that ID’s gates are green, **immediately** start the next open non-Grok ID in this file. Do not wait for “continue.”
+5. Stop when you hit a Grok-only row, `blocked_human`, or context pressure (then write one line on `AI_HANDOVER.md` **Now** table: which ID finished).
+
+Do **not** open `archive/`, `plan/archive/`, `FOOD.md` Part A/B, or old F-9 packs.
+
+---
+
+## Current work — F-10.2 (do this now)
+
+**Already done:** `src/mealBuild/shouldExpandMealAgent.ts` + vitest + `scripts/assert-f10-pr1.mjs`. Do not rewrite.
+
+**Do:**
+
+1. `server_derivation.ts` `calculateDerivedNutrients`: when protein, carbohydrates, and totalFat are all numbers, **calories = `computeCaloriesFromMacros`** (ignore `base.calories`). `deriveCarbohydratesFromEnergy` only when carbohydrates is missing. Printed-kcal lock stays in `finalizeDishLedger`, not this helper.
+2. Append to `server_derivation.test.ts`:
+
+```ts
+it('ignores agent calories when P/C/F are present (F-10.2)', () => {
+  const out = calculateDerivedNutrients({
+    calories: 9999, protein: 25, carbohydrates: 50, totalFat: 20,
+    saturatedFat: 5, transFat: 0, sodium: 400,
+  });
+  expect(out.calories).toBe(480);
+  expect(out.unsaturatedFat).toBe(15);
+  expect(out.salt).toBeCloseTo(1.02, 2);
+});
+```
+
+**Do not:** `App.tsx` / `LogChat.tsx` / `JobStore.ts` · skip Dietitian in `server_food_analyze_run.ts` (that is F-10.7) · `npm test` · `npm run build` · edit `AGENTS.md` · leave `patch_*.mjs` at repo root · LLM `calories` on scout schema.
+
+**Gates (this ID only):**
+
+```bash
+npx tsc --noEmit
+npx vitest run src/mealBuild/__tests__/shouldExpandMealAgent.test.ts server_derivation.test.ts
+node scripts/assert-f10-pr1.mjs
+```
+
+Then start **F-10.3** (same file, F-10 table). Skip **F-10.6** and **F-9.5** (Grok).
 
 ```text
                     ┌─────────────────────┐
@@ -41,15 +90,18 @@ Locked converts never change: `1.293` / `1.411` / `3.362` / `79.56` / `13.68`.
 
 | If you are… | Do |
 |---|---|
-| **Default (session leftover)** | **F-9.5:** `App.tsx` poller still `JobStore.updateJob` (Grok). Then stop. Do not add flags. |
-| Food calories / debug file | **F-8.10–F-8.13** (split analyze owner, evidence soak, packaged bind residual, debug vs sample) |
+| **AI Studio / Gemini (default)** | **Current work** above, then the next open F-10 ID. This file only. |
+| **Grok leftover** | **F-9.5:** `App.tsx` poller still `JobStore.updateJob`. Do not mix with F-10. |
+| Tests feel huge / every edit runs everything | **Q-7:** named map rows only. Do not `npm test`. Do not recreate missing asserts. |
+| Food create architecture | **F-10** (one Meal Agent + TS expand). Not a Dietitian critic. |
+| Food calories / debug file | **F-8.10, F-8.12, F-8.13** (split, packaged bind, debug). Soak is **F-10.8**, not a replay of always-dietitian. |
 | Food identity still wrong | One **class** playbook (`FALSE_FRIEND` first). **Not** F-1/F-2 USDA. M30 curator stays. |
-| Biomarkers | **B0** Apply smoke, then B2 leftover hygiene, then real G-B2 |
+| Biomarkers | **B0** Apply smoke, then B2 leftover hygiene, then real G-B2. Chat UX = fill-template (one agent + TS batch), not 10 personas. |
 | Site is slow | **R-8** measure (Q-1 is already green). Then R-9 defer. Not FoodCard/App splits first |
 | Quota / egress spike | **R-1** measure, then only the matching R-id |
 
-Do **not** start: USDA/FDC workstream, curator rebuild, B7.4/B7.5, Track R D1, god-file rewrite to look done, more NHS aliases before G-B2 lexer + G-B4 green.  
-Do **not** add a sixth plan file.
+Do **not** start: USDA/FDC workstream, curator rebuild, B7.4/B7.5, Track R D1, god-file rewrite to look done, more NHS aliases before G-B2 lexer + G-B4 green, a Commercial Cooking Critic LLM, production wiring of fill-template before C1–C7 green.  
+Do **not** add a sixth plan file. F-10 lives here + [FOOD.md](./FOOD.md) Process.
 
 ---
 
@@ -111,6 +163,8 @@ B7.4 / B7.5 / B7.6 above. Helpers for 7.1–7.3, 7.7, 7.8 already exist — do n
 
 **Out of Track B:** food pipeline, rename agent ids, delete instruction packs, fuzzy auto-approve, `approve_all`, vision required, new health-planning agents until B0 + `USE_SURFACE_LEAK` are green.
 
+**Same agent pattern as F-10:** typical chat is **one** Review / fill-template dispatch. TypeScript owns identity, `convertViaTable`, status labels, and batch size. Expand to Parser chunks / specialists only when n≥20 or `sourceKind` is table/image leftovers (`BIOMARKER_LIFECYCLE.md` §4.3). Do not add Lab Parser + Review + Calibrator on a C1-sized send. Fill-template remaining work: [BIOMARKER_FILL_TEMPLATE_CASES.md](./BIOMARKER_FILL_TEMPLATE_CASES.md) (C1–C7 green **before** modal wiring).
+
 ### B8 — One math path, one door (platform continuity)
 
 Does **not** replace B0–B7. Same pillar, same `convertViaTable` law. Trigger: second conversion table + restored Auto-Fix landed after B0.4. Method: `QUALITY.md` §7.
@@ -124,9 +178,9 @@ Does **not** replace B0–B7. Same pillar, same `convertViaTable` law. Trigger: 
 
 ---
 
-## Track F — Food identity quality
+## Track F — Food identity quality + create agent
 
-**Architecture:** `FOOD.md` (do **not** rebuild curator — M30 assert is green)  
+**Architecture:** `FOOD.md` Process (Meal Agent + TS expand) + Part A catalog (do **not** rebuild curator — M30 assert is green)  
 **Method:** `QUALITY.md` + `FALSE_FRIEND` / `DISH_DROP` / `OPENING_WRONG` / `SILENT_REPAIR`  
 **Laws:** `docs/agent/domains/food-calc.md`
 
@@ -153,10 +207,10 @@ Q-1 (`assert-budgets.mjs`) is **green**. They do **not** rebuild the curator (M3
 
 | ID | Still to do | Done when | Do not |
 |---|---|---|---|
-| **F-8.10** | Goldilocks-split the pipeline owner | `server_food_analyze_run.ts` (~3772, ceiling 3800) split into 400–600 owners (scout dispatch, DB search, prompt assembly). Delete leftover `STANDARD_FOOD_FACTORS` mock table if unused. HTTP adapter stays ≤700 | 40-line shards; a second kcal writer |
-| **F-8.11** | Evidence soak (outer) | One live Gemini replay of `job_1788115766430_v2z5q9hpz` (or same 6-photo class): one meal id, 7–8 FoodItem tiles, no inherit `cal=0`, narrative = table. Inner check already exists (`server_meal_edit.test.ts` 1635 g) | `POST /loop` until meal-green |
-| **F-8.12** | Packaged catalog residual | Hemaviton-class drink: vitamin C / labelled kcal from **brand or printed OCR** when those facts exist. Bind-attempt + `BIND_MISS` is already honest | Invent 1000 mg vitamin C |
-| **F-8.13** | Debug download vs sample | A real job download matches [after-F-8 sample](./samples/debug-job_1788115766430_v2z5q9hpz.after-f8.md): instruction + reply once per dispatch, Errors = gate, no logger-echo | Hash-only prompts; hide schema |
+| **F-8.10** | Goldilocks-split the pipeline owner | `server_food_analyze_run.ts` (~3560, ceiling 3800) split into 400–600 owners (**Meal Agent dispatch**, optional workers, DB search, prompt assembly). Delete leftover `STANDARD_FOOD_FACTORS` mock table if unused. HTTP adapter stays ≤700. Do this **with** F-10, not as a scout-vs-dietitian file split | 40-line shards; a second kcal writer |
+| **F-8.11** | **Superseded by F-10.8** | Do not soak the old always-dietitian create path. Evidence job still required on the F-10 pipeline | Replay scout+dietitian as “done” |
+| **F-8.12** | Packaged catalog residual | Hemaviton-class drink: vitamin C / labelled kcal from **brand or printed OCR** when those facts exist. Bind-attempt + `BIND_MISS` is already honest. F-10 does not replace catalog bind | Invent 1000 mg vitamin C |
+| **F-8.13** | Debug download vs sample | A real job download: instruction + reply **once per dispatch that ran** (lead, each worker, edit). Errors = gate, no logger-echo. Shorter because create is one role | Hash-only prompts; hide schema |
 
 Execute **one class** per session. Inner = named vitest. Outer = one frozen example, not meal-green.
 
@@ -179,6 +233,30 @@ F-8 made calories have one owner. F-9 makes “what is on the preview” have on
 | **F-9.5** | **Partial** | `App.tsx` poller (~15 `updateJob` sites) still writes status/result. LogChat submit still `updateJob` (not `SubmitStarted`). Wrapper `updateJob` → `commit` is OK until those call sites move | God-file rewrite; second merge path | **Grok** |
 
 Gemini leftover from PR4 (do not treat as architecture): one-shot `patch_*.mjs` / `fix_*.mjs` at repo root — **deleted in this review**. Do not restore.
+
+### F-10 — Adaptive Meal Agent (one role, expand when TS says so)
+
+**Architecture:** [FOOD.md](./FOOD.md) Process · `docs/agent/domains/food-calc.md`  
+**Class:** `ALWAYS_SECOND_AGENT` (create always ran Scout then Dietitian)  
+**Evidence:** `prototype/meallog/meal/` (`compare_1_vs_2_agent.ts`, `run_all_11_elastic_benchmark.ts`, `BENCHMARK_PERFORMANCE_SUMMARY.md`)  
+**Not:** USDA, curator rebuild, F-9.5, a Commercial Cooking Critic LLM, LLM-emitted calories.
+
+Production today still **always** dispatches Vision Scout then Dietitian on create (`server_food_analyze_run.ts`). Prototype 1-agent (scout does identity + P/C/F + verdict; TS Atwater) matched or beat the hierarchical 2-agent path on the 11-case set. Elastic COMPLETE/DELEGATE showed simple packaged meals finishing in ~2.5s with one call; complex hotpots needed extra capacity. **Do not copy the prototype blindly:** the model picked DELEGATE poorly (airline tray COMPLETE’d and Na accuracy went to 0%), and the elastic schema emitted `calories` (F-8 forbidden).
+
+Same pattern as biomarkers: one Review for n=1–5; TypeScript decides batch/expand; specialists only when the dispatcher expands.
+
+| ID | Item | Done when | Do not | Who |
+|---|---|---|---|---|
+| **F-10.1** | **Shipped** | `src/mealBuild/shouldExpandMealAgent.ts` + vitest + `assert-f10-pr1.mjs`. Do not rewrite. | Trust lite-model self-assessment | — |
+| **F-10.2** | Create schema = estimates only | **Current work** (this file). P/C/F present → Atwater; agent kcal ignored. | Ship elastic `calories`; carbs-from-energy on the hot path | Gemini |
+| **F-10.3** | Worker merge | Expand path: workers receive **locked grams + dish crop**, not the full image set. Merge by dish id. `currentTurn` still one turn | Re-OCR; second kcal book | Gemini after 10.1 |
+| **F-10.4** | Narrate after ledger | Saved message numbers = finalize table. Substitute into draft; second LLM only if message empty | Dietitian `itemsBreakdown` rebuild; narrate from pre-finalize estimates | Gemini |
+| **F-10.5** | Edit = same role | `modificationCommand` / `[]` / `estimate` stay (F-8.3 executor). Dietitian pack is this slice, not a create stage | New persona; Mode Rewrite | Gemini |
+| **F-10.6** | Fat/Na TS critic | `diningEnvironment` × `cookingMethod` multipliers in finalize (restaurant fry oil, commercial Na). Honest residual on restaurant fat | Default to a second critic LLM; claim 90% fat on Case 4/9 | **Grok** constants |
+| **F-10.7** | Create cutover | First submit no longer always calls Dietitian. D8 skip-LLM on weight-only scale stays. Old host **deleted** when 100% of traffic | Wrap the old dietitian create as fallback forever | Gemini after 10.2–10.5 |
+| **F-10.8** | Soak (replaces F-8.11) | Inner: 11 prototype cases, no Gemini. Outer: one live replay of evidence-job class. Restaurant fat/Na residual named, not painted green | `POST /loop`; soak old scout+dietitian | Grok reviews |
+
+**Do not mix** F-10 with F-9.5 (`App.tsx` collision). Catalog bind (F-8.12) and M30 curator stay — 1-agent OCR is not a replacement for identity.
 
 ---
 
@@ -222,6 +300,7 @@ Rules unchanged: work item = class · inner = vitest · outer = one example · h
 | **Q-4** `AgentResultTable` thin | Grid behavior only; agent YAML / apply / localStorage missing-keys **out**. Call sites pass data. Grok-owned |
 | **Q-5** Delete one-shot patch scripts | Root `patch_*.ts` / `fix-*.ts` residue gone after the last class they served. F-9 `patch_*.mjs` already removed |
 | **Q-6** Unified bug queue | Snap + auto + golden tape are **one `#n`**. Inbox is not a second list. Named bug first; extra tape reds = series remaining (or sibling `#n`). Promote (photos + class test) → official `G*` / G-B fail-safe. No `/loop`. See `QUALITY.md` §14–14.4 |
+| **Q-7** Test + golden hygiene | COMPLETE = `tsc` + matching regression-map rows, not `npm test`. Ghost `assert-*.mjs` citations gone. G1 asserted once (`golden_meals.test.ts`). Frozen create fixture is Meal Agent JSON (no kcal), not scout→dietitian `scout.json`. Inbox / `golden:loop` not on every food PR. See `QUALITY.md` §1.4–1.5 |
 
 Session replay: **abandoned**.  
 Golden-execution Q work is usually **inside** B2/B4/B6 or F-3.  
@@ -232,44 +311,46 @@ File-collision rule: B0 and R-9 both touch `App.tsx` → serialize those two onl
 Same reward change as class-first goldens (`QUALITY.md` §0): green means the **class** is closed, not “the page still works.”
 
 ```text
-Q-1 + Q-2 + Q-3              ← landed (do not redo)
-F-9.5 App poller emitters    ← Grok leftover (serialize vs B0/R-9)
-F-8.10–8.13                  ← calorie host split / soak / debug
-B8.0 human Auto-Fix choice
-B8.1 one convert table       ← if the gate ever goes red (currently green)
-R-8 measure → R-9 defer      ← Grok numbers, Gemini FIND/REPLACE
-B8.2 / B8.3 one door         ← Gemini
-F-6 FoodCard toward ~3800    ← Gemini from a Grok pack; net-zero
-Q-4 / R-10 / R-4 god files   ← Grok only
-Q-5 remaining patch_*.ts     ← Gemini last
+Q-1 + Q-2 + Q-3              ← landed
+F-10.2 then 10.3–10.5, 10.7  ← Gemini from this file (Current work)
+F-9.5 App poller             ← Grok (serialize vs B0/R-9)
+F-10.6 fat/Na TS             ← Grok constants
+F-8.10 + F-8.12 + F-8.13     ← with F-10, not old dietitian
+F-10.8 soak                  ← after 10.7
+B0 / fill-template C1–C7     ← Track B
 ```
 
-Do **not** open Q-4 or a Dictionary/FoodCard/App.tsx breakup unless Q-1 is red on that file **and** the pack names a catalog id.
+Do **not** open Q-4 or a Dictionary/FoodCard/`App.tsx` breakup unless Q-1 is red on that file.
 
-### Who does which (Gemini vs Grok)
+### Who does which
 
-| | **Gemini** (large context, FIND/REPLACE, Studio) | **Grok** (this workspace) |
+| | **Gemini** (AI Studio — this ROADMAP) | **Grok** |
 |---|---|---|
-| Prefer | Q-1 assert body from a spec; B8.2; B8.3; Q-3 implement+wire; R-9 defer; F-6 moves into **existing** cards; F-7 net-zero prompt; Q-5 delete residue; **F-9.1–9.4 bulk** (assert, `jobPreview`, contract tests, `sessionLog`, migration, `serverJobs` turn increment) from a Grok pack | Audit / catalog ids; B8.1 factors; primitive **APIs**; Q-4; any split of `App.tsx` `LogChat.tsx` `Header.tsx` `BiomarkerDictionaryModal.tsx` `AgentResultTable.tsx`; R-8 measure; review Gemini push vs catalog; **F-9 packs + review**; **F-9.5 App/LogChat emitters**; AGENTS.md F-9 law wording |
-| Do not ask | “Refactor FoodCard / Dictionary / App”; invent `BiomarkerDataGrid`; add L15 prose; restore a third Auto-Fix; **F-9 rewrite JobStore / invent a new inFlight flag / `npm run build` to sync localhost** | Parallel rewrite of the same god file Gemini is in; implement F-9 tests/migration while a pack exists |
-
-Packs stay ≤6 IDs. One class per pack. Grok authors the pack; Gemini (or Grok) implements; Grok reviews the push (line counts + catalog). Local ship is allowed after COMPLETE.
+| Prefer | F-10.2–10.5, 10.7; B8.2/8.3; R-9 FIND/REPLACE; F-6 net-zero in existing cards | F-9.5 `App.tsx`; F-10.6 constants; Q-4; any split of `App.tsx` / `LogChat.tsx` / `Header.tsx` |
+| Do not | `App.tsx` poller; `npm test`; critic LLM; USDA; invent a pack file | Mix F-10 into an open F-9.5 edit |
 
 ---
 
-## Always-run gates
+## Gates (named rows, not a pile)
+
+**Every COMPLETE:** `npx tsc --noEmit` + the [DOMAIN_REGRESSION_MAP.md](../docs/agent/DOMAIN_REGRESSION_MAP.md) row(s) for files you touched. That is the whole default. See `QUALITY.md` §1.4.
+
+**Soak** (`npm test`) is optional and slow (~97 files). Do not make it the inner loop. `tests/golden_inbox.test.ts` stays excluded.
+
+Track-specific (only if that track’s files changed):
 
 ```bash
-npx tsc --noEmit
 # Track B
 node scripts/assert-biomarker-lifecycle-m31.mjs
 node scripts/assert-biomarker-ingest.mjs
 npx vitest run src/utils/biomarkerLifecycle.test.ts src/utils/biomarkerIdentity.test.ts src/utils/biomarkerSanitize.test.ts tests/golden_biomarker.test.ts
-# Track F (when touching resolver)
+# Track F curator
 node scripts/assert-food-curator-m30.mjs
-# Track R (when touching sync)
+# Track R sync
 node scripts/assert-free-tier-complete.mjs
 npx vitest run src/utils/syncUtils.regression.test.ts
-# Track Q platform (UI / convert / scout pack)
+# Track Q platform (prompt / god-file size)
 node scripts/assert-budgets.mjs
 ```
+
+Do **not** invent missing `scripts/assert-*.mjs` names from old map rows (Q-7).

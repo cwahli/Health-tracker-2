@@ -13,4 +13,4 @@
 
 `archive/` = completed or abandoned sources (text already merged into the five files above).
 
-Platform / speed / kit work is **not** a sixth file. IDs live on [ROADMAP.md](./ROADMAP.md). Method: [QUALITY.md](./QUALITY.md) §13. Client speed: [RELIABILITY.md](./RELIABILITY.md) R-8+. `FOOD_SINGLE_PATH.md` is Food Part C leftover IDs (F-8.10–F-8.13), not a fifth pillar. Job-session leftover is **F-9.5** only (App poller emitters). F-1/F-2 USDA items are **parked**.
+There is **no** `studio/` folder. IDs live on [ROADMAP.md](./ROADMAP.md). AI Studio works that file’s **Current work**. Method: [QUALITY.md](./QUALITY.md) §1.4. `FOOD_SINGLE_PATH.md` is leftover F-8.10/12/13. F-9.5 is App poller only. F-1/F-2 USDA **parked**. Root `ROADMAP.md` is a stub.

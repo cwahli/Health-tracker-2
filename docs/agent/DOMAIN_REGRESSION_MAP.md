@@ -1,9 +1,12 @@
 # Domain regression map
 
 **Rule:** After changing files in a row, run that row’s commands. Exit 0 required for COMPLETE.  
-**Do not** only run 1 happy-path test the agent invented unless the map has no entry (then add a test).
+**Do not** only run 1 happy-path test the agent invented unless the map has no entry (then add a test).  
+**Do not** run `npm test` (~97 files) as the inner loop. Soak is optional. See `plan/QUALITY.md` §1.4.
 
-Prefer **named** suites. Expand later when full audits land.
+Prefer **named** suites that **exist**. Do not recreate missing `scripts/assert-*.mjs` names.
+
+Ghost (not in `scripts/`, do not cite): `assert-budget-reconcile`, `assert-label-truth-locks`, `assert-false-hard-lock`, `assert-receipt-dup-rows`, `assert-food-calc-exact`, `assert-food-calc-final`, `assert-backlog-b1-portion-clarify`, `assert-food-log-identity`, `assert-unified-modal-*`, `assert-biomarker-flow`.
 
 ---
 
@@ -23,24 +26,21 @@ If you touch a hot path and **no** row fits: add a unit/fixture test in the same
 | If you touch… | Run |
 |---------------|-----|
 | `server_dish_finalize.ts` / `server_brand_match.ts` / `server_derivation.ts` / `server_dish_classify.ts` | `npx vitest run server_derivation.test.ts server_dish_classify.test.ts server_brand_match.test.ts server_dish_finalize.test.ts` |
-| `server_budget_reconcile.ts` / budget / reconcile | `npx vitest run server_budget_reconcile.test.ts` · `node scripts/assert-budget-reconcile.mjs` |
-| `server_vision_scout.ts` / mergeScoutItems | `npx vitest run server_vision_scout.test.ts` (must include soft kcal + components preserve cases) |
-| Label truth / locks / hard-lock | `node scripts/assert-label-truth-locks.mjs` · `node scripts/assert-false-hard-lock.mjs` |
-| Receipt / dup rows | `node scripts/assert-receipt-dup-rows.mjs` |
+| `server_budget_reconcile.ts` / budget / reconcile | `npx vitest run server_budget_reconcile.test.ts` |
+| `server_vision_scout.ts` / mergeScoutItems | `npx vitest run server_vision_scout.test.ts` (components preserve; no agent kcal) |
+| F-10 expand gate / Meal Agent create | `npx vitest run src/mealBuild/__tests__/shouldExpandMealAgent.test.ts server_derivation.test.ts` · `node scripts/assert-f10-pr1.mjs`. Not prototype log runners |
 | Food catalog / DB / resolver | `npx vitest run server_food_catalog.test.ts server_food_db.test.ts server_food_resolver.test.ts` |
-| Golden meals (`tests/Golden_meal/**`) | `npx vitest run tests/golden_meals.test.ts` |
-| Golden inbox (failing meal replay) | `npm run golden:inbox` · ingest: `node scripts/golden-from-debug.mjs <debug.md>` |
-| Golden scoreboard parser | `npx vitest run src/utils/goldenScoreboard.test.ts` |
+| Golden meals (`tests/Golden_meal/**`) | `npx vitest run tests/golden_meals.test.ts` only. Not `golden_g1.test.ts` and not `golden:inbox` on every edit (Q-7) |
+| Golden scoreboard / tape parser | `npx vitest run src/utils/goldenScoreboard.test.ts` when you touch scoreboard/journey |
 | Nutrient aggregation / basis / prep | `npx vitest run server_nutrient_aggregation.test.ts server_nutrient_basis.test.ts server_prep_policy.test.ts` |
-| Portion clarify / refine / weight | `npx vitest run server_portion_clarify.test.ts` · `node scripts/assert-backlog-b1-portion-clarify.mjs` |
-| Food log identity / history | `node scripts/assert-food-log-identity.mjs` · `npx vitest run src/utils/foodLogDedupe.test.ts` |
-| Broad food-calc pack | `node scripts/assert-food-calc-exact.mjs` and/or `assert-food-calc-final.mjs` |
-| Mode A / D / Edit executor / modal jobs | `npx vitest run src/jobs/__tests__/ModeDAndEdit.test.ts FoodAgentExecutor.test.ts` · `node scripts/assert-unified-modal-*.mjs` as relevant |
-| `server.ts` food finalize paths | At minimum: finalize/derivation + vision merge + portion clarify + one mode assert |
+| Portion clarify / refine / weight | `npx vitest run server_portion_clarify.test.ts` |
+| Food log identity / history | `npx vitest run src/utils/foodLogDedupe.test.ts` |
+| Mode A / D / Edit executor / modal jobs | `npx vitest run src/jobs/__tests__/ModeDAndEdit.test.ts src/jobs/__tests__/FoodAgentExecutor.test.ts` |
+| `server.ts` food finalize paths | finalize/derivation + vision merge + portion clarify |
 
 **Invariant reminder:** Mode A PASS ≠ Mode D/Edit PASS. See `domains/food-calc.md`.
 
-**Food-calc smoke (any food math PR):**
+**Food-calc smoke (only when the PR actually changes finalize / scout merge / mode math — not every food file):**
 
 ```bash
 npx vitest run server_derivation.test.ts server_dish_classify.test.ts server_brand_match.test.ts server_dish_finalize.test.ts server_vision_scout.test.ts server_portion_clarify.test.ts src/jobs/__tests__/ModeDAndEdit.test.ts
@@ -59,21 +59,21 @@ npx vitest run server_derivation.test.ts server_dish_classify.test.ts server_bra
 
 | If you touch… | Run |
 |---------------|-----|
-| Biomarker flow / review / apply | `node scripts/assert-biomarker-flow.mjs` |
+| Biomarker flow / review / apply | `node scripts/assert-biomarker-lifecycle-m31.mjs` + `npx vitest run src/utils/biomarkerLifecycle.test.ts` |
 | Key identity / aliases / merged def / approval | `npx vitest run src/utils/biomarkerIdentity.test.ts` |
 | Sanitize / data clean | `npx vitest run src/utils/biomarkerSanitize.test.ts src/utils/dataSanitize.test.ts` |
 | Dictionary / combine / tombstones on profile | Identity + sync regression suites; see `domains/biomarkers.md` write map |
-| Agent registry (`agentConfig`, medical agents) | `assert-biomarker-flow.mjs` if review path touched; write map in domain doc |
+| Ingest lexer / door | `node scripts/assert-biomarker-ingest.mjs` |
 | Medical executor / history filter | Prefer `filterLogsByTombstone` / `deletedBiomarkerLogIds` semantics |
 
 **Biomarker smoke:**
 
 ```bash
-npx vitest run src/utils/biomarkerIdentity.test.ts src/utils/biomarkerSanitize.test.ts src/utils/dataSanitize.test.ts
-node scripts/assert-biomarker-flow.mjs
+npx vitest run src/utils/biomarkerIdentity.test.ts src/utils/biomarkerSanitize.test.ts src/utils/dataSanitize.test.ts src/utils/biomarkerLifecycle.test.ts
+node scripts/assert-biomarker-lifecycle-m31.mjs
 ```
 
-**Still TODO:** plan `BIOMARKER_LIFECYCLE_PLAN.md` §13 (Studio pack `studio/M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md`). Do not add more “approved = has 5 fields” inferrers.
+**Still TODO:** [ROADMAP.md](../../plan/ROADMAP.md) Track B remaining rows + fill-template C1–C7. Do not add more “approved = has 5 fields” inferrers. Do not run Parser+Review+Calibrator on a 1–5 key chat.
 
 **M31 remaining-work gate:**
 
@@ -82,8 +82,8 @@ node scripts/assert-biomarker-lifecycle-m31.mjs
 npx vitest run src/utils/biomarkerLifecycle.test.ts src/utils/biomarkerIdentity.test.ts src/utils/biomarkerSanitize.test.ts src/utils/dataSanitize.test.ts src/utils/syncUtils.regression.test.ts
 ```
 
-**Design:** `plan/BIOMARKER_LIFECYCLE_PLAN.md` · **Laws:** `domains/biomarkers.md` (2026-08-14 consolidation).  
-**Ingest build:** `plan/BIOMARKER_INGEST_AND_GOLDENS_PLAN.md`. **Order:** `plan/BIOMARKER_IMPLEMENTATION_ROADMAP.md`. After Wave 1 (I0) those files exist; until then run the M31 gate only. When touching extract / matcher / leftover Parser:
+**Design:** `plan/BIOMARKER_LIFECYCLE.md` · **Laws:** `domains/biomarkers.md`.  
+**Order:** `plan/ROADMAP.md` Track B. When touching extract / matcher / leftover Parser:
 
 ```bash
 node scripts/assert-biomarker-lifecycle-m31.mjs

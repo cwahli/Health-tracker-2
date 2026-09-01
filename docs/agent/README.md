@@ -5,12 +5,12 @@
 
 | File | When to read |
 |------|----------------|
-| [PACKS.md](./PACKS.md) | Authoring / shipping AI Studio packs |
+| [PACKS.md](./PACKS.md) | Retired — execute `plan/ROADMAP.md` |
 | [TEMPLATES.md](./TEMPLATES.md) | IMPACT, SELF-CHECK, GATE LOG paste format |
 | [DOMAIN_REGRESSION_MAP.md](./DOMAIN_REGRESSION_MAP.md) | Which tests/gates after a change |
 | [domains/food-calc.md](./domains/food-calc.md) | Nutrition pipeline, modes A/D/Edit |
 | [domains/biomarkers.md](./domains/biomarkers.md) | Catalog / pending / overlay / logs; named agents; write map |
-| [plan/BIOMARKER_LIFECYCLE_PLAN.md](../../plan/BIOMARKER_LIFECYCLE_PLAN.md) | Biomarker architecture (slices 0–4) |
+| [plan/BIOMARKER_LIFECYCLE.md](../../plan/BIOMARKER_LIFECYCLE.md) | Biomarker architecture |
 | [domains/sync.md](./domains/sync.md) | Firebase / Supabase / R2 multi-device |
 
 ## Document roles

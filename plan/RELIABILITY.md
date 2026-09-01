@@ -149,25 +149,9 @@ Local IDB              → chat transcripts, offline cache, in-flight jobs
 
 ---
 
-## 8. Studio ship path
+## 8. Ship path
 
-### Preferred: one continuous master pack
-
-```text
-plan/RELIABILITY_FREE_TIER_PLAN.md
-  → studio/M23_FULL_FREE_TIER_RELIABILITY.md   ← upload THIS for full program
-  → Studio iterates M23→M28 until:
-       node scripts/assert-free-tier-complete.mjs  exit 0
-  → tsc + sync vitest
-  → AI Studio commit/push
-  → archive + AI_HANDOVER update
-```
-
-### Optional: single-phase only
-
-```text
-studio/M23_FIRESTORE_WRITE_KILL_SWITCH.md  → m23 gate only (not full program)
-```
+Core M23–M28 is **done** (`assert-free-tier-complete.mjs`). Remaining R-ids are on [ROADMAP.md](./ROADMAP.md) Track R (trigger only). No studio pack.
 
 Local agents may commit/push after COMPLETE (`tsc` + named gates).
 

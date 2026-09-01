@@ -1,20 +1,30 @@
 # Golden meals
 
 These seven folders are the product contract. A change that moves their
-identity, forbidden matches, or locked numbers does not ship.
+identity, forbidden matches, or locked **scale** numbers does not ship.
 
 Photos + `Instruction.md` are what the user actually does.
 `expected.json` is what the test suite asserts.
 
+There is **no** Scout → Dietitian pass anymore (F-10). Create is one Meal Agent
+role; TypeScript derives calories / unsaturated fat / salt. Do not add
+`calories` to agent fixtures. Do not replay `scout.json` through a dietitian.
+
+Inner COMPLETE for these folders is **only** `npx vitest run tests/golden_meals.test.ts`.
+Not `golden_g1.test.ts`, not `npm run golden:inbox`, not `npm test` (Q-7).
+
 ## Two layers
 
-| Layer | What it is | Runs in CI today |
+| Layer | What it is | Runs on edit |
 |---|---|---|
-| **A — Meal** | Photos, prompt, passes (identify / edit / portion / compare) | Fixture check only. Live Analyze is later. |
+| **A — Meal** | Photos, prompt, passes (identify / edit / portion / compare) | Fixture check only. Live Analyze is F-10.8 soak, one example. |
 | **B — Resolve + math** | Query → canonical ID, never-match IDs, brand/label/refine math | `npx vitest run tests/golden_meals.test.ts` |
 
 Layer B is how curator / USDA-not-found bugs become tests. A photo golden
 that only checks “4 dishes found” would go green on Powerade berries.
+
+Frozen outer soak (when needed): Meal Agent JSON (dishes/foods/P/C/F, **no kcal**),
+not a scout+dietitian dump. `scout.json` in G1 / inbox is legacy until Q-7.
 
 ## The set
 

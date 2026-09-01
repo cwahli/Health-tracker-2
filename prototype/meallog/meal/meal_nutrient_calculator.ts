@@ -93,6 +93,7 @@ export interface ProcessedDish {
   chainName?: string | null;
   estimatedWeightGrams: number;
   cookingMethod: string;
+  boundingBox2D?: number[];
   foods: ProcessedFoodItem[];
   calories: number;
   protein: number;
@@ -240,6 +241,7 @@ export function calculateCompleteMeal(scoutOutput: ScoutMealResponse): Processed
       chainName: dish.chainName || null,
       estimatedWeightGrams: dish.estimatedWeightGrams || 0,
       cookingMethod: dish.cookingMethod || "unknown",
+      boundingBox2D: dish.boundingBox2D,
       foods: processedFoods,
       calories: dishCalories,
       protein: round1(dishProtein),

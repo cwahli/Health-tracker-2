@@ -2,11 +2,12 @@
 
 **Load when:** dictionary, extract/review, calibration, combine/dedupe, biomarker logs, MedicalHistory, ranges, Home/coach intake.
 
-**Architecture (design):** `plan/BIOMARKER_LIFECYCLE_PLAN.md`  
-**Ingest router:** `plan/BIOMARKER_INGEST_ROUTER_PLAN.md` — source classifier, leftover-only Parser, flagged-only Review.  
-**Build + goldens:** `plan/BIOMARKER_INGEST_AND_GOLDENS_PLAN.md` — class-first (not meal-green); ingest router I0–I9.  
-**Roadmap:** `plan/BIOMARKER_IMPLEMENTATION_ROADMAP.md` — Waves 0–7. Do not invent a third pipeline.  
+**Architecture (design):** `plan/BIOMARKER_LIFECYCLE.md` (product model + ingest router)  
+**Chat UX (one agent):** `plan/BIOMARKER_FILL_TEMPLATE_CASES.md` · `prototype/biomarkers/` — C1–C7 green before modal wiring.  
+**Execute:** `plan/ROADMAP.md` Track B. Do not invent a third pipeline.  
 **WIP:** `AI_HANDOVER.md` · **Gates:** `DOMAIN_REGRESSION_MAP.md` → Biomarkers.
+
+**Agent pattern (same as food F-10):** n=1–5 = one Review / fill-template. TypeScript owns identity, `convertViaTable`, status labels, and batch size. Specialists only when the dispatcher expands (n≥20 or table/image leftovers).
 
 **How to use:** Laws so dictionary / agents / logs / sync do not drift.  
 **Evolution:** new agents, key migrations, store splits — IMPACT + tests + this file if invariants change (`AGENTS.md` §3 before→after).
@@ -30,8 +31,9 @@
 
 ```text
 Sources (labs / photos / text)
-  → Lab Parser (raw observations only)
-  → identity (catalog key + aliases)     miss → Pending (this user)
+  → TS door (table / image leftovers / free text)
+  → n=1–5 chat: one Review / fill-template (back-office identity + convert + status; agent writes insight)
+  → n=10–50 report: Lab Parser (chunks, leftovers only) → identity → Pending
   → clean (relabel XOR convert; dates; flags)
   → Dictionary approve (human) if new key
   → overlay (Range Calibrator) if rangeVariesBy + overlay stale

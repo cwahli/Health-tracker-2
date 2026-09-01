@@ -5,8 +5,8 @@
 **Parent architecture:** [FOOD.md](./FOOD.md) Part B (durable meal) §5 stages + §10 debug channels.  
 **Evidence job:** `job_1788115766430_v2z5q9hpz` (2026-08-30) + screenshot of 11 composition tiles.
 
-**Status:** F-8.1–F-8.9 shipped. **Still to do:** F-8.10 (split `server_food_analyze_run.ts`), F-8.11 (live evidence soak), F-8.12 (packaged facts when present), F-8.13 (real debug download vs sample).  
-**Date:** 2026-08-31  
+**Status:** F-8.1–F-8.9 shipped. **Still to do:** F-8.10 (split `server_food_analyze_run.ts` as Meal Agent owners), F-8.12 (packaged facts), F-8.13 (debug download). **F-8.11 soak superseded by F-10.8.** Create is no longer Scout-then-Dietitian — see [FOOD.md](./FOOD.md) Process and ROADMAP **F-10**.  
+**Date:** 2026-09-01  
 **Class:** L (food-calc pipeline + debug). Not an X unless `docs/agent/**` is edited.
 
 This document is **Part C** of the food architecture. It does not rebuild the curator (M30 stays). It does not replace Part A identity work (F-1…F-4). It collapses **duplicate calorie pipelines** and makes the debug file a 1:1 picture of the remaining process.
@@ -18,7 +18,7 @@ This document is **Part C** of the food architecture. It does not rebuild the cu
 Add and edit already *have* a designed path:
 
 ```text
-Scout → Finalize (OCR → brand → scout, one scaler, Atwater) → Dietitian audit
+Meal Agent (P/C/F + OCR; TS expand if complex) → Finalize (OCR → brand → estimate, one scaler, Atwater) → number-substitute into draft verdict
 ```
 
 What runs instead is that path, then **five more copies** of the same numbers, then a **second** edit executor that does not call finalize.
@@ -64,12 +64,12 @@ Non-goals:
 
 | # | Decision | Why |
 |---|---|---|
-| D1 | Scout keeps P/C/F, weights, crops, OCR **text**. It does not own calories. | Scout schema does not emit kcal. Atwater lives in finalize. |
+| D1 | Meal Agent emits estimates only (P, C, total fat, sat fat, fibre, Na, added sugar, weights, crops, OCR **text**). TypeScript derives calories, unsaturated fat, and salt. | Create schema has no `calories` / `unsaturatedFat` / `salt` in `required[]`. Atwater + `rebalanceNutrientProfile` live in finalize. Elastic prototype `calories` fields are stripped before production. Never back-solve carbs from kcal. |
 | D2 | `parseAndHealVisionScout` flattens dishes and splits extra fry-fat onto components. It does **not** Atwater. | Oil split is unique accuracy. Second Atwater is duplicate math. |
 | D3 | First-Principles Injection is **deleted**. | It only copies finalize onto a dietitian-rebuilt list. Remove the rebuild, remove the copy. |
 | D4 | `aggregateItemsNutrients` is **not** called after dish-estimate finalize. Sugar-split + prep-XOR move **into** finalize. | Two calculators produced this job’s inherit `cal=0`. |
 | D5 | Receipt is a **view** of the ledger, not a seventh calculator. | This job re-summed 253 then logged it again. |
-| D6 | First-submit dietitian **narrates** the finalized meal. Edit dietitian emits `modificationCommand` only (or `[]` for Q&A). Never `itemsBreakdown`. | Dual schema made T2 look like a new meal. |
+| D6 | First submit: Meal Agent emits a **draft** verdict/message; TypeScript substitutes finalize numbers. No second Dietitian create pass. Edit: same role emits `modificationCommand` only (or `[]` for Q&A). Never `itemsBreakdown`. | Dual schema made T2 look like a new meal. Systematic Dietitian-on-create is F-10’s `ALWAYS_SECOND_AGENT`. |
 | D7 | Edit executor is TS. `add_item` / `replace_identity` **require** a scout-shaped `estimate` (P/C/F…) when scout did not see that identity. Then finalize. | Live `add_item` had only a name+grams, so inherit `cal=0` or a generic profile. |
 | D12 | Follow-up in the same modal never `new_log`, including extra photos (merge dishes). Compare uses the same rule on the ComparisonSet. | T1 `review` pill forces `new_log`; new images isolate `activeMeal`. |
 | D13 | Server user prompt = original log skeleton (profile, time, scout/meal lines, **one** pre-calc ledger, current input). Human text may be empty. | Today PRE-CALCULATED + SERVER BASELINE + meal JSON are the same 7 items three times. |
@@ -104,20 +104,20 @@ Canonical copy lives in [FOOD.md](./FOOD.md) **Process**. Here is the execute ve
 
 ```text
 Open review or compare modal
-    first submit  → CREATE (scout if photos, else dietitian estimate) → finalize → narrate
-    later submit  → dietitian commands or []
+    first submit  → CREATE (Meal Agent; TS expand if complex) → finalize → substitute numbers into draft message
+    later submit  → same agent commands or []
                       []        → Q&A (no finalize)
                       commands  → patch + finalize dirty rows (same id)
-    extra photos  → scout NEW images only, MERGE dishes into the same document
+    extra photos  → Meal Agent on NEW images only, MERGE dishes into the same document
 ```
 
 ### Create (first submit only)
 
-Scout if there are images. If the first message is text-only, the dietitian emits the **same estimate object scout would have** (below). Finalize then narrate. Dietitian task name: **NARRATE**, not “NEW FOOD LOGGING rebuild”.
+One Meal Agent dispatch (photos and/or text) emits the estimate object below plus a draft verdict/message. TypeScript may spawn workers for remaining dishes. Finalize then **substitutes** ledger numbers into the message. Task name is not “NEW FOOD LOGGING rebuild” and is not a required second Dietitian call.
 
 ### Later submit: edit vs Q&A
 
-Same dietitian schema. `modificationCommand: []` → answer only. Non-empty → executor.
+Same agent schema. `modificationCommand: []` → answer only. Non-empty → executor.
 
 ```text
 replace_identity  itemId newName  estimate?  keep weight, photo, box

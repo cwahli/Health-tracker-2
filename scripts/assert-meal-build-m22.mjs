@@ -73,7 +73,9 @@ const card = exists('src/components/TaskPlaceholderCard.tsx') ? read('src/compon
 console.log('\n1) M22 required files');
 [
   'plan/MEAL_BUILD_DURABLE_STATE.md',
-  exists('studio/M22_MEAL_BUILD_TRUE_COMPLETE.md') ? 'studio/M22_MEAL_BUILD_TRUE_COMPLETE.md' : 'archive/M22_MEAL_BUILD_TRUE_COMPLETE.md',
+  exists('archive/studio/retired-2026-09/M22_MEAL_BUILD_TRUE_COMPLETE.md')
+    ? 'archive/studio/retired-2026-09/M22_MEAL_BUILD_TRUE_COMPLETE.md'
+    : 'archive/M22_MEAL_BUILD_TRUE_COMPLETE.md',
   'scripts/assert-meal-build-m22.mjs',
   'src/mealBuild/__tests__/m22_completion.test.ts',
   'src/mealBuild/stageLifecycle.ts',

@@ -291,7 +291,7 @@ async function runComparison() {
       const parsed2 = JSON.parse(res2.text || "{}");
       const meal2 = calculateMealNutrients(parsed2.dishes || []);
       agent2Totals = {
-        weight: meal2.totals.totalWeightGrams,
+        weight: meal2.totalMealWeightGrams,
         calories: meal2.totals.calories,
         protein: meal2.totals.protein,
         carbs: meal2.totals.carbohydrates,

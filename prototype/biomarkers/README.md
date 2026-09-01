@@ -9,6 +9,8 @@ Hits: back-office locks dictionary slots and computes **sanitized** status; the 
 Misses: pending `newCatalogDraft`.  
 Turns: TypeScript packs rows from an **output-token budget** (`OUTPUT_TOKEN_BUDGET` in `template.ts`). Hits are cheap so more fit in one turn than new-key drafts. The model does not pick batch size.
 
+This is the biomarker instance of food **F-10**: one agent role; TypeScript expands. Product wiring waits on C1–C7 (`plan/BIOMARKER_FILL_TEMPLATE_CASES.md`).
+
 ```bash
 ./node_modules/.bin/tsx prototype/biomarkers/runner.ts --only C2 --dry-run
 ./node_modules/.bin/tsx prototype/biomarkers/runner.ts --only C2

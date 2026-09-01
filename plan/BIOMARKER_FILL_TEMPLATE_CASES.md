@@ -10,7 +10,7 @@
 > **All 7 prototype test cases (C1, C2, C3, C4, C5, C6, C7) MUST be completely passed and green in the prototype harness before ANY production implementation or modal wiring begins.**  
 > Once all 7 cases are green, this entire suite will become the permanent automated baseline regression gate (`scripts/assert-biomarker-cases.mjs`) to safeguard the production pipeline against regressions.
 
-This is the execute list for the **one chat modal** fill. It is not a sixth pillar; Track B architecture stays in `BIOMARKER_LIFECYCLE.md`.
+This is the execute list for the **one chat modal** fill. It is not a sixth pillar; Track B architecture stays in `BIOMARKER_LIFECYCLE.md`. Same agent pattern as food **F-10**: one role; TypeScript expands (batch/continuation); specialists are not a systematic second pass. Production wiring into `LogChat` is still forbidden until C1–C7 are green.
 
 ---
 

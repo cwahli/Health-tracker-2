@@ -1,11 +1,21 @@
 # Domain rulebook: Food-calc
 
 **Load when:** calories, scout, budget, reconcile, receipt, portion, catalog/resolver, Mode A/D/Edit food analyze.  
-**Do not load** for pure biomarker UI or unrelated CSS.
+**F-10:** read **§1–1d only**. Do not load the rest of this file, and do not load `plan/FOOD.md` Part A/B.  
+**Do not load** for pure biomarker UI, questions about prototype logs, or unrelated CSS.
 
-**Plans (architecture):** `plan/FOOD_CALC_HYBRID_AND_INTERNAL_DB_PLAN.md`  
+**Plans (architecture):** `plan/FOOD.md` Process + `plan/FOOD_SINGLE_PATH.md` · execute `plan/ROADMAP.md` Track F  
 **WIP status:** `AI_HANDOVER.md`  
 **Gates:** `docs/agent/DOMAIN_REGRESSION_MAP.md` → Food-calc section.
+
+### Before → after (2026-09-01, F-10)
+
+| Before | After |
+|---|---|
+| Create always: Vision Scout → finalize → Dietitian NARRATE | One **Meal Agent** role; TypeScript expands to workers when complex |
+| Dietitian is a required create stage | Dietitian pack = edit / Q&A / optional empty-message narrate. Not a systematic second pass |
+| Model may emit kcal (elastic prototype) | `finalizeDishLedger` only. Schema has no `calories` |
+| Expand = model COMPLETE/DELEGATE | `shouldExpandMealAgent` in TypeScript (dish/image/receipt/barcode) |
 
 **How to use this book:** Default path that stops regressions. **Not a freeze** on product change.  
 If you intentionally change pipeline/modes/fields: get confirmation for protected-doc edit (`AGENTS.md` §3), show before→after, update this file + tests in the same task. Do not invent a silent side pipeline for one bug.
@@ -15,21 +25,25 @@ If you intentionally change pipeline/modes/fields: get confirmation for protecte
 ## 1. Pipeline (Dish-Level Inverted Pipeline — default)
 
 ```text
-Vision Scout (P/C/F, weight, crops, printed OCR text — does not persist kcal)
-  → Finalize Engine (OCR → Brand Menu → Scout estimate; R = W_consumed / W_basis; Atwater kcal)
-  → Dietitian: NARRATE on create, or modificationCommand / [] on later submit
+Meal Agent (P/C/F, weight, crops, printed OCR text, draft verdict — does not persist kcal)
+  → optional workers (TS expand gate; locked OCR grams; dish crop only)
+  → Finalize Engine (OCR → Brand Menu → estimate; R = W_consumed / W_basis; Atwater kcal;
+                     optional TS fat/Na from diningEnvironment × cookingMethod)
+  → substitute ledger numbers into draft message (second LLM only if message empty)
   → Gate (evaluateMealGate) — refuse 0-kcal-with-macros, sum mismatch, side mutation
+Edit later: same Meal Agent emits modificationCommand or [] → applyMealEdits → finalize dirty rows
 ```
 
 | Role | Rule |
 |------|------|
-| Scout | Identifies whole dishes, assigns realistic gram weight & direct physical macros (P, C, F) per dish, transcribes printed labels verbatim, emits plain ingredients. **Does not own calories.** |
+| Meal Agent | Identifies whole dishes, assigns realistic gram weight & direct physical macros (P, C, F) per dish, transcribes printed labels verbatim, emits plain ingredients and a draft verdict/message. **Does not own calories.** Create is one dispatch unless TS expands. |
+| Expand | TypeScript `shouldExpandMealAgent` (dish count, image count, receipt/barcode). Model does **not** pick COMPLETE/DELEGATE. Workers get locked grams + crop, not a second full-meal vision pass. |
 | `rawNutritionLabel` | **Printed label only** — never invented |
-| Truth Hierarchy | Rung 1 (OCR) → Rung 2 (Brand Menu) → Rung 3 (Scout Estimate + USDA Atomics) |
+| Truth Hierarchy | Rung 1 (OCR) → Rung 2 (Brand Menu) → Rung 3 (Meal Agent estimate + USDA Atomics as last-resort gap filler) |
 | Scaler | **Single scaler across entire system:** $R = \text{consumedWeight} / \text{nutrientBasisWeight}$. Never double-scale or clamp brand lock basis |
-| Calories | **`finalizeDishLedger` is the only writer.** Forbidden on the hot path after finalize: First-Principles Injection, `aggregateItemsNutrients`, receipt-as-calculator, Modify Math inherit. |
-| Dietitian | Create: narrate the ledger (`correctedNutrients` optional). Edit: `modificationCommand` or `[]` (Q&A). Never rebuild `itemsBreakdown`. New identities need scout-shaped `estimate` (P/C/F, no kcal). |
-| Edit | `applyMealEdits` then finalize dirty rows. Same meal id in the same modal. |
+| Calories | **`finalizeDishLedger` is the only writer.** Forbidden: LLM `calories` on agent schema, First-Principles Injection, `aggregateItemsNutrients` after finalize, receipt-as-calculator, Modify Math inherit. |
+| Edit / Q&A | Same role: `modificationCommand` or `[]` (Q&A). Never rebuild `itemsBreakdown`. New identities need scout-shaped `estimate` (P/C/F, no kcal). Dietitian instruction pack is this slice, not a required create stage. |
+| Edit apply | `applyMealEdits` then finalize dirty rows. Same meal id in the same modal. |
 | Gate | `evaluateMealGate` — unsavable on fail. Not a log grep. |
 | Modes | Same finalize math for **Mode A, Mode D, and Edit** |
 | HTTP adapter | `server_routes_food_analyze.ts` orders stages and returns JSON. It is not a second calculator. When the new path is 100%, the old host is **deleted**. |
@@ -38,17 +52,17 @@ Vision Scout (P/C/F, weight, crops, printed OCR text — does not persist kcal)
 
 ## 1b. LLM Structured Output & Schema Invariants (Grammar Enforcement)
 
-To guarantee that Vision Scout and Dietitian agents reliably emit core fields (e.g., `nutrients`, `ingredients`):
+To guarantee that the Meal Agent reliably emits core fields (e.g., `nutrients`, `ingredients`):
 
 1. **Multi-Level `required` Arrays in `responseSchema`:**
    - In Gemini Structured Outputs (`responseMimeType: "application/json"`), defining a field in `properties` is only *permissive*.
    - To make it mandatory, the field MUST be included in the enclosing object's `required` list at **every level**:
      - Level 1 (`items.required`): `["keyword", "originalName", "estimatedWeightGrams", "nutrients", "ingredients", "boundingBox2D", "sourceImageIndex"]`
-     - Level 2 (`nutrients.required`): `["calories", "protein", "totalFat", "carbohydrates", "sodium", "saturatedFat"]`
+     - Level 2 (`nutrients.required`): `["protein", "totalFat", "carbohydrates", "sodium", "saturatedFat"]` — **not** `calories`
    - *Failure to add to `required` causes lite models (`gemini-3.5-flash-lite`) to drop nested objects.*
 
 2. **Concrete Numeric Values in Prompt Schema Templates:**
-   - System instruction schema examples must use concrete numbers (e.g. `"calories": 480, "protein": 22`) instead of type string placeholders (`"calories": "number"`). Lite models pattern-match directly on the template.
+   - System instruction schema examples must use concrete numbers (e.g. `"protein": 22, "totalFat": 18`) instead of type string placeholders (`"protein": "number"`). Lite models pattern-match directly on the template. Do **not** put `"calories": 480` in the create schema.
 
 3. **Explicit `propertyOrdering`:**
    - Place critical estimation fields (`estimatedWeightGrams`, `ingredients`, `nutrients`) early in `propertyOrdering` before bulky fields like bounding boxes or label OCR strings.
@@ -64,29 +78,39 @@ To guarantee that Vision Scout and Dietitian agents reliably emit core fields (e
 
 ## 1c. Nutrient Precision Hierarchy (31 Nutrients)
 
+**Emit vs derive (F-10).** The Meal Agent does **not** fill every nutrient. Required schema = estimates only. TypeScript fills identities of those estimates.
+
+| | Agent emits (estimate or OCR text) | TypeScript derives |
+|---|---|---|
+| Always | protein, carbohydrates, totalFat, saturatedFat, addedSugar, totalFibre, sodium | **calories** `4P+4C+9F` (unless printed-kcal hard lock), **unsaturatedFat** `totalFat−sat−trans`, **salt** `(Na_mg×2.54)/1000` |
+| If visible | transFat (else TS `0`), `rawNutritionLabel` strings | Printed kcal/Na/P/C/F become **locks**, not Atwater |
+| Directional | dish micros, meal summary micros | Rollup sums only |
+
+**Forbidden:** agent `calories` / `unsaturatedFat` / `salt` in create `required[]`. **Forbidden:** back-solve carbohydrates from calories — that is the phantom-carb class (old top-down scout). `deriveCarbohydratesFromEnergy` is leftover for missing-C repair only, not the hot path.
+
 ### 1. Core Nutrients (High Precision ~90–100%)
 *Reason: Narrow safety windows, non-negotiable physiological floors, and hard upper limits where estimation errors cause acute metabolic disruption, cardiovascular risk, or rapid dietary drift within 24–48 hours.*
-- **Calories**
-- **Protein**
-- **Saturated Fat**
-- **Trans Fat**
-- **Added Sugar**
-- **Total Fibre**
-- **Sodium**
-- **Carbohydrates** [Derived mathematically: $(\text{Calories} - (4 \times \text{Protein}) - (9 \times \text{Total Fat})) / 4$ if omitted or unprovided]
+- **Calories** (derived, or printed lock)
+- **Protein** (agent)
+- **Saturated Fat** (agent)
+- **Trans Fat** (printed or 0)
+- **Added Sugar** (agent)
+- **Total Fibre** (agent)
+- **Sodium** (agent)
+- **Carbohydrates** (agent — **not** derived from kcal)
 
 ### 2. Key Nutrients (Moderate Precision ~70%)
 *Reason: Wide biological buffers and flexible metabolic ranges where day-to-day fluctuations are regulated by homeostatic reserves; medium-term weekly averages matter far more than single-meal precision.*
-- **Total Fat**
-- **Total Sugar**
+- **Total Fat** (agent)
+- **Total Sugar** (agent, dish)
 - **Potassium**
 - **Omega-3**
 - **Calcium**
 - **Iron**
 - **Magnesium**
 - **Vitamin D**
-- **Unsaturated Fat** [Derived: $\text{Total Fat} - (\text{Saturated Fat} + \text{Trans Fat})$]
-- **Salt** [Derived: $(\text{Sodium in mg} \times 2.54) / 1000$]
+- **Unsaturated Fat** (derived)
+- **Salt** (derived)
 
 ### 3. Extended Nutrients (Directional Precision <50%)
 *Reason: Deep internal storage pools (liver, bone, adipose tissue) that buffer deficiencies over weeks to years, or ubiquitous dietary abundance where day-to-day tracking errors carry negligible clinical risk.*
@@ -108,22 +132,14 @@ To guarantee that Vision Scout and Dietitian agents reliably emit core fields (e
 
 ---
 
-## 1d. Dietitian Final Nutrient Audit & Clinical Corrections
+## 1d. Restaurant fat / sodium (TS first, not a second agent)
 
-The Dietitian coach serves as the final clinical auditor on all nutrient estimates before meal presentation:
+Create does **not** run a Dietitian audit LLM. Hidden commercial fat and sodium are a known 1-agent residual (`prototype/meallog/meal/BENCHMARK_PERFORMANCE_SUMMARY.md` Cases 1, 4, 5, 6, 9). Default fix is **TypeScript** in finalize (F-10.6):
 
-1. **Final Sanity Audit:**
-   - The Dietitian inspects the backend finalize ledger against the meal image context, dining environment, and culinary preparation realism.
-   - If the Dietitian identifies an implausible or underestimated figure (e.g. oil absorption was underestimated on deep-fried elements, sodium was under-calculated for fast food, or uncaptured cooking fats), the Dietitian has the authority to emit corrected values (`correctedNutrients`).
-
-2. **Mandatory Audit & Clinical Note:**
-   - Every adjustment made by the Dietitian MUST be accompanied by an explicit clinical note explaining *why* the value was modified (e.g., `"Adjusted fat +6g (+54 kcal) to account for deep-fried wonton oil absorption"`, `"Adjusted sodium to 850mg based on fast-food seasoning prior"`).
-
-3. **Single-Ledger Parity Guarantee:**
-   - When the Dietitian issues a correction, the modified values immediately become the authoritative numbers for both the Dietitian narrative and the saved meal breakdown table, ensuring 1:1 parity with full audit transparency.
-
-4. **Pure TS Macro Rebalancing:**
-   - Whenever the Dietitian mutates one or more macros or calories, pure TypeScript middleware (`rebalanceNutrientProfile`) deterministically recomputes dependent metrics ($\text{Calories} = 4\text{P} + 4\text{C} + 9\text{F}$, $\text{Unsaturated Fat}$, $\text{Salt}$) and clamps values to physical density bounds, ensuring 100% thermodynamic consistency.
+1. **TS critic:** `diningEnvironment` × `cookingMethod` multipliers (e.g. deep-fried restaurant oil absorption, commercial seasoning Na). Applied after Atwater on unlocked items. Honest residual if still under 90% — do not paint goldens.
+2. **No default critic LLM.** A Commercial Cooking Critic agent is parked until TS multipliers fail a named soak.
+3. **Edit corrections:** On a later submit the Meal Agent may emit `correctedNutrients` with a clinical note. Then `rebalanceNutrientProfile` recomputes kcal = 4P+4C+9F. Create path does not.
+4. **Parity:** Saved table and message numbers both come from the finalize ledger after TS critic / edit rebalance.
 
 ---
 
@@ -150,7 +166,7 @@ The Dietitian coach serves as the final clinical auditor on all nutrient estimat
 | Multi-turn Portion | Turn 1 carries forward `resolvedDbCandidates` to Turn 2 (`skipScout=true`) to bypass redundant DB re-scans |
 | Log Stitching | Preserve `turn1Logs` across portion pauses; stitch Turn 1 + Turn 2 logs for complete R2 debug trace |
 | UI Portion Card | Map `needsPortionClarify` & `portionClarify` into `msg.data` so portion selection card renders immediately |
-| Stale Narrative | Weight/portion change without dietitian re-run sets `staleDietitianNarrative=true` (D8 / edit scale) |
+| Stale Narrative | Weight/portion change without a new message-substitute sets `staleDietitianNarrative=true` (D8 / edit scale). D8 still skips the LLM on label-lock scale. |
 | Invariant | Detect **and REPAIR the class** (not log-only FAIL). Do **not** “repair” by scaling/aliasing to hide imbalance (L14) |
 | Match priority | Real USDA/OFF/catalog **beats** `category_fallback` |
 | Fail-open | Agent error → top form-safe candidate, not mass category dump |
