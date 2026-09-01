@@ -9,10 +9,10 @@
 
 | Pack | Role |
 |------|------|
-| **[F9_PR1_GEMINI.md](./F9_PR1_GEMINI.md)** | **Gemini now.** F-9.1/9.2 session contract. Paste **§A only**. |
-| [F9_PR2_GEMINI.md](./F9_PR2_GEMINI.md) | After PR1 COMPLETE. Inspector + cloned `useJob`. |
-| [F9_PR3_GEMINI.md](./F9_PR3_GEMINI.md) | After PR1. `current_turn`. Skip LogChat if FIND fails. |
-| [F9_PR4_GEMINI.md](./F9_PR4_GEMINI.md) | After PR3. `JobStore.apply`. **Do not edit App.tsx / LogChat.tsx.** |
+| [F9_PR1_GEMINI.md](./F9_PR1_GEMINI.md) | **Shipped.** Do not re-paste. |
+| [F9_PR2_GEMINI.md](./F9_PR2_GEMINI.md) | **Shipped.** |
+| [F9_PR3_GEMINI.md](./F9_PR3_GEMINI.md) | **Shipped** (`currentTurn` + LogChat increment). |
+| [F9_PR4_GEMINI.md](./F9_PR4_GEMINI.md) | **Partial.** apply() on store/sync/runner. **Grok leftover:** App.tsx poller `updateJob`. |
 | [BUG_CONTINUE_GEMINI.md](./BUG_CONTINUE_GEMINI.md) | Notes only. Law is **`AGENTS.md` L15**. |
 | [Q64_GEMINI_COMBINED_QUEUE_UI.md](./Q64_GEMINI_COMBINED_QUEUE_UI.md) | Gemini G2 Q-6.4. Do **not** mix with F-9. |
 | [M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md](./M30_FOOD_RESOLVER_CURATOR_MULTIPASS.md) | Food catalog curator — separate track |

@@ -459,12 +459,6 @@ export default function TaskPlaceholderCard({
               {displayTitle}
             </h4>
 
-            {import.meta.env.DEV && getSessionLog(job.id).length > 0 && (
-              <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap text-[10px] text-slate-500" title={formatSessionLog(job.id)}>
-                {formatSessionLog(job.id)}
-              </pre>
-            )}
-
             {(effectiveStatus === 'running' || effectiveStatus === 'processing' || effectiveStatus === 'queued') && (
               <div className="mt-1 space-y-1">
                 {job.statusMessage && !job.statusMessage.toLowerCase().includes('uploading to server') ? (

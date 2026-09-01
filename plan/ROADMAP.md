@@ -13,8 +13,7 @@
 Laws: `docs/agent/domains/{biomarkers,food-calc,sync}.md`  
 WIP: `AI_HANDOVER.md` · Studio: `studio/` · Completed/abandoned: `archive/`
 
-**As of GitHub `cwahli/Health-tracker-2` `main` @ `1c4f7f6` (2026-08-16).**  
-`AI_HANDOVER.md` on that commit overclaims (“all tracks done”, 551 tests). This file is the remaining-work board.
+**As of `main` @ `3cf21ff` (2026-09-01).** F-8.1–F-8.9 (calorie single-path) and F-9 PR1–PR4 bulk (job session) are in tree. This file is **remaining work**, not history. Do not reopen USDA/curator or Q-1.
 
 ```text
                     ┌─────────────────────┐
@@ -42,15 +41,15 @@ Locked converts never change: `1.293` / `1.411` / `3.362` / `79.56` / `13.68`.
 
 | If you are… | Do |
 |---|---|
-| **Default (correctness)** | **B0** (human Apply), then **B2 leftover hygiene**, then **real G-B2** |
-| Site is slow / UI keeps duplicating | **Q-1 budget gate**, then **B8.1** (one convert table), then **R-9** (defer mount). Do **not** start FoodCard / App.tsx / Dictionary splits first |
-| Food identity still wrong | **Track F** one class (`FALSE_FRIEND` first) |
-| Quota / egress spike | **Track R** R-1 measure, then only the matching R-id |
-| Golden is JSON-only / does not execute | **Track Q** — make that one example run the helper |
+| **Default (session leftover)** | **F-9.5:** `App.tsx` poller still `JobStore.updateJob` (Grok). Then stop. Do not add flags. |
+| Food calories / debug file | **F-8.10–F-8.13** (split analyze owner, evidence soak, packaged bind residual, debug vs sample) |
+| Food identity still wrong | One **class** playbook (`FALSE_FRIEND` first). **Not** F-1/F-2 USDA. M30 curator stays. |
+| Biomarkers | **B0** Apply smoke, then B2 leftover hygiene, then real G-B2 |
+| Site is slow | **R-8** measure (Q-1 is already green). Then R-9 defer. Not FoodCard/App splits first |
+| Quota / egress spike | **R-1** measure, then only the matching R-id |
 
-Do **not** start B7.4 Pending-store, B7.5 Calibrator, Track R D1, a curator rebuild, or a god-file rewrite to make another track look done.  
-Do **not** add more NHS aliases until G-B2 runs the lexer and G-B4 stays green.  
-Do **not** add a sixth plan file — platform / speed / kit IDs live here under **Q / R / B8 / F-6**.
+Do **not** start: USDA/FDC workstream, curator rebuild, B7.4/B7.5, Track R D1, god-file rewrite to look done, more NHS aliases before G-B2 lexer + G-B4 green.  
+Do **not** add a sixth plan file.
 
 ---
 
@@ -131,18 +130,19 @@ Does **not** replace B0–B7. Same pillar, same `convertViaTable` law. Trigger: 
 **Method:** `QUALITY.md` + `FALSE_FRIEND` / `DISH_DROP` / `OPENING_WRONG` / `SILENT_REPAIR`  
 **Laws:** `docs/agent/domains/food-calc.md`
 
-M21/M22 meal document and M30 curator stay. F-5 TypeError `.calories` is **done**.
+M21/M22 meal document and M30 curator stay. F-5 TypeError `.calories` is **done**.  
+Live USDA/FDC is a **last-resort gap filler** on Analyze, not a workstream. Do not open F-1/F-2.
 
-| ID | Still to do | Done when | Do not |
+| ID | Status | Done when / parked why | Do not |
 |---|---|---|---|
-| **F-1** | Self-heal KPI | Same query no longer needs curator / live USDA after one good resolve | Rebuild curator |
-| **F-2** | Catalog-first as default | Analyze gaps hit catalog before live USDA; USDA still allowed for research | Ban USDA |
-| **F-3** | Golden meals still red in production | One class playbook per session (picnic / lassi / ham…). Fixture tests in `golden_meals.test.ts` are **not** this item | `POST /loop` until all-green |
-| **F-4** | Alias hit rate / duplicate active rows | Measured hit rate; dups gated, not silently merged | Silent merge |
-| **F-6** | `FoodCard.tsx` ceiling | Catalog 4200; file ~4037. Done when net-zero toward ~3800 or pack lists growth. New portion/receipt UI stays in `PortionClarifyCard` / `NutritionLabelTable` / `ComprehensiveNutrientsTable` | New food table / +100 lines “enhance” |
-| **F-7** | Scout prompt budget as a gate | `server_vision_scout.ts` net-zero (L12 enforced by `assert-budgets.mjs`, not English) | Prompt-only unit math |
+| **F-1** | **Parked** | Self-heal KPI unmeasured. Reopen only as a named soak (same query, no curator) during identity-class work | Rebuild curator; “fix USDA” |
+| **F-2** | **Parked** | Catalog/M30 is the identity path. USDA still allowed as last resort / research | Ban USDA; make Analyze USDA-first |
+| **F-3** | Open | One class playbook per session (picnic / lassi / ham…). Fixture tests in `golden_meals.test.ts` are **not** this item | `POST /loop` until all-green |
+| **F-4** | Open | Measured alias hit rate; dups gated, not silently merged | Silent merge |
+| **F-6** | Open | `FoodCard.tsx` ~4121 / catalog 4200. Net-zero toward ~3800 or pack lists growth. New portion/receipt UI stays in existing cards | New food table / +100 lines “enhance” |
+| **F-7** | **Gate green** | `assert-budgets.mjs` PROMPT_BUDGET/scout. Keep net-zero on prompt edits (L12) | Prompt-only unit math |
 
-Q-1 (`assert-budgets.mjs`) is **green**. F-6 / F-7 are unblocked. They do **not** rebuild the curator (M30 stays).
+Q-1 (`assert-budgets.mjs`) is **green**. They do **not** rebuild the curator (M30 stays).
 
 ### F-8 — Single-path add/edit (calorie host must die)
 
@@ -166,19 +166,19 @@ Execute **one class** per session. Inner = named vitest. Outer = one frozen exam
 **Class:** `STALE_TURN` (preview/chat shows a previous turn while a new one is running)  
 **Not:** food-calc, F-8.10 split, meal-green. Do **not** mix with F-8.10 in the same PR (`App.tsx` / `LogChat.tsx` collision = `8742686`).
 
-F-8 made calories have one owner. F-9 makes “what is on the preview” have one owner: `job.currentTurn` + `status` + `result` (null while not terminal). Flags (`inFlightTurnAt`, `mealSnapshotKey`, `effectiveStatus`) are bandages and die in F-9.4.
+F-8 made calories have one owner. F-9 makes “what is on the preview” have one owner: `job.currentTurn` + `status` + `result` (null while not terminal). Flags (`inFlightTurnAt`, `mealSnapshotKey`) remain as fallback until F-9.5 finishes — do not add siblings.
 
-**Who (budget):** Gemini implements bulk from a Grok pack. Grok authors the pack, reviews the push, and owns `App.tsx` / `LogChat.tsx` call sites (same as Q-4). Grok does **not** write the tests/migration/new modules.
+**Shipped in tree (2026-09-01, `3cf21ff`):** F-9.1 laws/vite assert · F-9.2 `jobPreview` + `JobSession.contract.test.ts` (4/4) · F-9.3 `sessionLog` + cloned `useJob` on the card · F-9.4 `current_turn` column/increment/await upsert/LogChat increment · F-9.5 `JobStore.apply` + sync/runner. Named vitest 26/26 + `assert-f9-pr1` + `assert-dev-serves-vite` green.
 
-| ID | Still to do | Done when | Do not | Who |
+| ID | Status | Still to do | Do not | Who |
 |---|---|---|---|---|
-| **F-9.1** | Guardrails | Regression-map row + serve-vite assert; food-calc PR that touches job files without an F-9 test fails a gate; `tsx` never serves `dist/` | Add flags; `npm run build` as sync | Grok: AGENTS/IMPACT wording (protected, confirm first). Gemini: assert + map row |
-| **F-9.2** | Session contract tests | Vitest: submit edit → label `/Updating meal/` → same-meal succeeded echo ignored → new snapshot → “Analysis completed”; one food card | Store-only tests | Gemini (new files). Grok: helper signatures in pack + review |
-| **F-9.3** | Inspector + cloned `useJob` | 20-event session log on the card + debug download; all preview surfaces clone on notify | New modal; log into `clean_result` | Gemini. Grok reviews paint |
-| **F-9.4** | `current_turn` is the session | Column + increment on submit; stale turn dropped; running ⇒ `clean_result` null (await upsert); flags deleted once F-9.2 stays green | Infer turn from calories; keep flags **and** turns | Gemini: migration/server/store. Grok: LogChat/App FIND if unique-match fails |
-| **F-9.5** | One writer | `JobStore.apply(event)` only mutator; UI does not `updateJob` status | Second merge path; god-file rewrite | Gemini: store + sync/runner. **Grok:** App + LogChat emitters |
+| **F-9.1** | **Shipped** | — | Add flags; `npm run build` as sync | — |
+| **F-9.2** | **Shipped** | — | Store-only tests | — |
+| **F-9.3** | **Shipped** (residual) | Session section on **debug download**; log `ignored_stale_turn` (today every commit is `accepted`/`completed`) | New modal | Optional later |
+| **F-9.4** | **Shipped** (residual) | Delete `inFlightTurnAt` / `mealSnapshotKey` only after F-9.5; App poller does not send `currentTurn` | Infer turn from calories | Grok with 9.5 |
+| **F-9.5** | **Partial** | `App.tsx` poller (~15 `updateJob` sites) still writes status/result. LogChat submit still `updateJob` (not `SubmitStarted`). Wrapper `updateJob` → `commit` is OK until those call sites move | God-file rewrite; second merge path | **Grok** |
 
-Packs: `studio/F9_PR1_GEMINI.md` … `F9_PR4`. ≤6 IDs. Protocol: Grok pack → Gemini implement → Grok review.
+Gemini leftover from PR4 (do not treat as architecture): one-shot `patch_*.mjs` / `fix_*.mjs` at repo root — **deleted in this review**. Do not restore.
 
 ---
 
@@ -213,40 +213,38 @@ R-8–R-11 are **client speed**, not a free-tier redo. Do not re-migrate images 
 
 Rules unchanged: work item = class · inner = vitest · outer = one example · honest residual · firewall.
 
+**Landed — do not redo:** Q-1 (`assert-budgets.mjs` PASS) · Q-2 (`CATALOG.json` primitives) · Q-3 (`AppModal` + `FilterPills` + tests; Audit uses FilterPills) · QUALITY.md header already “Waves 0–7” · `scripts/golden-from-medical-debug.mjs` exists.
+
 | Still to do | Done when |
 |---|---|
 | Make G-B2/5/6/7/9 **execute** the helper they name | Tests call `lexTable` / door classifier / completeness path; fixture-label-only tests are not enough |
-| Medical capture script | `golden-from-medical-debug.mjs` exists (never food’s `golden-from-debug.mjs`) |
 | Inbox by class | Biomarkers tab lists examples grouped by class, not a single G-B1 card |
-| Stale header in `QUALITY.md` | File no longer says “not started as code” |
-| **Q-1** Budget gate | `scripts/assert-budgets.mjs` exit 0; fails on god-file net growth, a second convert table, a second Auto-Fix surface, or scout prompt growth. Wired into later packs the way free-tier is | 
-| **Q-2** Component catalog | `src/components/CATALOG.json` lists the allowed primitive ids (`AppModal`, `DataGrid`, `FilterPills`, `ConfirmBar`, `NutritionLabelTable`, `ComprehensiveNutrientsTable`, `PortionClarifyCard`, `convertViaTable`, `lazyWithRetry`). A new `*Modal.tsx` / `*Card.tsx` / `*Table.tsx` without a catalog id fails Q-1 |
-| **Q-3** First kit extract | `AppModal` + `FilterPills` exist under `src/components/ui/`, each ≤300 lines, each with a vitest; Home + Audit pills call `FilterPills`; no third pill bar |
 | **Q-4** `AgentResultTable` thin | Grid behavior only; agent YAML / apply / localStorage missing-keys **out**. Call sites pass data. Grok-owned |
-| **Q-5** Delete one-shot patch scripts | `scripts/patch-*.ts` / `fix-*.ts` residue gone after the last class they served |
-| **Q-6** Unified bug queue | Snap + auto + golden tape are **one `#n`**. Inbox is not a second list. Named bug first; extra tape reds = series remaining (or sibling `#n`). Promote (photos + class test) → official `G*` / G-B fail-safe. No `/loop`. See `QUALITY.md` §14–14.4. Mocks: `studio/mockups/bug-queue-combined-flow.html` | 
+| **Q-5** Delete one-shot patch scripts | Root `patch_*.ts` / `fix-*.ts` residue gone after the last class they served. F-9 `patch_*.mjs` already removed |
+| **Q-6** Unified bug queue | Snap + auto + golden tape are **one `#n`**. Inbox is not a second list. Named bug first; extra tape reds = series remaining (or sibling `#n`). Promote (photos + class test) → official `G*` / G-B fail-safe. No `/loop`. See `QUALITY.md` §14–14.4 |
 
 Session replay: **abandoned**.  
 Golden-execution Q work is usually **inside** B2/B4/B6 or F-3.  
-**Q-1 is the first platform pack.** It does not cancel B0. File-collision rule: B0 and R-9 both touch `App.tsx` → serialize those two only.
+File-collision rule: B0 and R-9 both touch `App.tsx` → serialize those two only. F-9.5 also touches `App.tsx` — serialize with B0/R-9.
 
 ### Platform program order (not a fifth pillar)
 
 Same reward change as class-first goldens (`QUALITY.md` §0): green means the **class** is closed, not “the page still works.”
 
 ```text
-Q-1 budget + Q-2 catalog     ← stop the bleeding (Grok writes, Gemini may fill the assert)
+Q-1 + Q-2 + Q-3              ← landed (do not redo)
+F-9.5 App poller emitters    ← Grok leftover (serialize vs B0/R-9)
+F-8.10–8.13                  ← calorie host split / soak / debug
 B8.0 human Auto-Fix choice
-B8.1 one convert table       ← first repair the new gate fails (Grok)
-Q-3 AppModal + FilterPills   ← Grok API, Gemini implement + wire
+B8.1 one convert table       ← if the gate ever goes red (currently green)
 R-8 measure → R-9 defer      ← Grok numbers, Gemini FIND/REPLACE
 B8.2 / B8.3 one door         ← Gemini
-F-6 / F-7 FoodCard + scout   ← Gemini from a Grok pack; net-zero
-Q-4 / R-10 / R-4 god files   ← Grok only (Studio/Gemini weak here)
-Q-5 patch-script cleanup     ← Gemini last
+F-6 FoodCard toward ~3800    ← Gemini from a Grok pack; net-zero
+Q-4 / R-10 / R-4 god files   ← Grok only
+Q-5 remaining patch_*.ts     ← Gemini last
 ```
 
-Do **not** open Q-4 or a Dictionary/FoodCard/App.tsx breakup until Q-1 is red on that file **and** the pack names a catalog id.
+Do **not** open Q-4 or a Dictionary/FoodCard/App.tsx breakup unless Q-1 is red on that file **and** the pack names a catalog id.
 
 ### Who does which (Gemini vs Grok)
 

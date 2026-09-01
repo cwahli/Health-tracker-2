@@ -2,10 +2,10 @@
 
 | File | Status | Topic |
 |------|:------:|-------|
-| **[F9_PR1_GEMINI.md](./F9_PR1_GEMINI.md)** | **Gemini now** | F-9 job session PR1: `jobPreview` + contract tests. Paste §A. |
-| [F9_PR2_GEMINI.md](./F9_PR2_GEMINI.md) | After PR1 | Session log + cloned `useJob` |
-| [F9_PR3_GEMINI.md](./F9_PR3_GEMINI.md) | After PR1 | `current_turn` |
-| [F9_PR4_GEMINI.md](./F9_PR4_GEMINI.md) | After PR3 | `JobStore.apply` (not App/LogChat) |
+| [F9_PR1_GEMINI.md](./F9_PR1_GEMINI.md) | **Shipped** | F-9.1/9.2 contract tests. Do not re-paste. |
+| [F9_PR2_GEMINI.md](./F9_PR2_GEMINI.md) | **Shipped** | Session log + cloned `useJob` |
+| [F9_PR3_GEMINI.md](./F9_PR3_GEMINI.md) | **Shipped** | `current_turn` |
+| [F9_PR4_GEMINI.md](./F9_PR4_GEMINI.md) | **Partial** | `JobStore.apply`. Grok leftover: App.tsx poller |
 | **[BUG_CONTINUE_GEMINI.md](./BUG_CONTINUE_GEMINI.md)** | **Queue notes** | L15: one phrase drains that card. Do not paste this file. |
 | **[Q64_GEMINI_COMBINED_QUEUE_UI.md](./Q64_GEMINI_COMBINED_QUEUE_UI.md)** | **Gemini G2 (Q-6.4)** | Tape actions: preview board, Replay log, bar, capture-pack slots. Not Promote/D1. Do not mix with F-9. |
 | **[M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md](./M31_BIOMARKER_LIFECYCLE_REMAINING_MULTIPASS.md)** | **ACTIVE (biomarkers)** | **Plan §13 remaining work, P0→P8 until master gate 0** |

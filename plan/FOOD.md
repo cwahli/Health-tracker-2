@@ -845,19 +845,22 @@ When phases land (protected-doc confirmation per `AGENTS.md`):
 
 ---
 
-## 23. Remaining work (honest — 2026-08-16)
+## 23. Remaining work (honest — 2026-09-01)
 
-Architecture / M30 assert is **green**. Pipeline pieces above are **not** to be rebuilt. What is still open was in archived `CURATOR_USDA_SELF_HEALING_PLAN.md` plus golden soak:
+Architecture / M30 assert is **green**. F-8.1–F-8.9 calorie single-path is **green**. Pipeline pieces above are **not** to be rebuilt. Live USDA/FDC on Analyze is a **last-resort gap filler**, not a remaining workstream.
 
-| ID | Item | Class | Do not |
-|---|---|---|---|
-| F-1 | Self-heal KPI unproven: same query still hitting curator / live USDA | `FALSE_FRIEND` / alias soak | Rebuild curator |
-| F-2 | Live USDA still on Analyze gap path; catalog-first not default for every bind | identity | Ban USDA for research; keep as last resort |
-| F-3 | Golden meals still red (picnic, lassi, ham merge, etc.) | class playbooks (pillar 4) | `POST /loop` until all-green |
-| F-4 | Alias hit rate / near-duplicate active pairs (metrics §19) | catalog hygiene | Silent merge without gate |
-| F-5 | TypeError on `.calories` | **Done** — abandoned as a work item | Re-apply `fix_food_analyze_typeerror.md` |
+Execute leftover IDs on [ROADMAP.md](./ROADMAP.md) Track F only:
 
-**Execute:** one **class** at a time (`FALSE_FRIEND`, `DISH_DROP`, `OPENING_WRONG`, `SILENT_REPAIR`). Inner = vitest. Outer = one golden example. See `plan/README.md` §4.
+| ID | Status | Do not |
+|---|---|---|
+| F-1 / F-2 | **Parked.** Do not start a USDA or catalog-first project. Reopen only as a named identity-class soak | Rebuild curator; ban USDA |
+| F-3 / F-4 | Open class playbooks / alias hygiene | `POST /loop`; silent merge |
+| F-5 | **Done** | Re-apply `fix_food_analyze_typeerror.md` |
+| F-8.10–F-8.13 | Open (split analyze owner, soak, packaged bind, debug vs sample) | Second kcal writer |
+| F-9.1–F-9.4 | **Shipped** (flag-delete residual with F-9.5) | New inFlight flags |
+| F-9.5 | Partial — App.tsx poller still `updateJob` | God-file rewrite |
+
+**Execute:** one **class** at a time (`FALSE_FRIEND`, `DISH_DROP`, `OPENING_WRONG`, `SILENT_REPAIR`, `STALE_TURN`). Inner = vitest. Outer = one golden example.
 
 P5 checkbox above means “suite exists,” not “all goldens green.”
 

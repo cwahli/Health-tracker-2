@@ -1,16 +1,9 @@
 # AI Handover & Session Progress Board
 
-**Updated:** 2026-08-31  
-**Status:** F-9 Job Session Architecture (PR1–PR4) completed & verified.
+**Updated:** 2026-09-01  
+**Status:** F-9 bulk is in tree and gates green. **Not complete:** App.tsx poller still `updateJob` (F-9.5 Grok leftover). F-1/F-2 USDA items **parked** on ROADMAP. Do not mix with F-8.10.
 
-- **F-9 Job Session Architecture (PR1–PR4, 2026-08-31):**
-  - **Root Cause & Diagnosis:** In-flight edit turns and background job updates could experience stale echoes or uncoordinated status transitions in the UI state tree ("STALE_TURN" bug class).
-  - **Key Changes Applied:**
-    1. **PR1 (`jobPreview.ts`):** Standardized status helpers (`isTurnInFlight`, `previewStatus`, `previewStatusLabel`) and validated turn state transitions via `JobSession.contract.test.ts`.
-    2. **PR2 (`sessionLog.ts` & `useJob.ts`):** Added session event ring buffer (`sessionLog.ts`), reactive state cloning in `useJob.ts`, and integrated `useJob` into `TaskPlaceholderCard.tsx`.
-    3. **PR3 (`currentTurn`):** Added `current_turn` tracking & guard in `JobStore.ts` and `serverJobs.ts` to ignore lower-turn incoming rows and await DB upsert before background analysis.
-    4. **PR4 (`JobStore.apply`):** Implemented event-driven state transitions (`JobStore.apply`), updated `SupabaseJobSync.ts` and `JobQueueRunner.ts` to consume `JobStore.apply`, and added `sessionLog.test.ts` / `JobQueueRunner.test.ts`.
-  - **Verification:** `tsc --noEmit` exit 0; `compile_applet` build succeeded; 51/51 tests in `JobSession.contract.test.ts`, `sessionLog.test.ts`, `JobStore.test.ts`, `JobQueueRunner.test.ts`, and `syncUtils.regression.test.ts` passed; master reliability gates (`assert-free-tier-complete`, `assert-biomarker-lifecycle-m31`, `assert-food-curator-m30`, `assert-agent-governance`, `assert-budgets`) all green.
+- **F-9 review (2026-09-01):** PR1–PR4 bulk is correct enough: `jobPreview` + contract tests, cloned `useJob`, `current_turn` + await upsert, `JobStore.apply` on sync/runner. `tsc` 0; `assert-f9-pr1` + `assert-dev-serves-vite` PASS; 26 named job tests PASS. Residuals: App.tsx never sends `currentTurn`; LogChat submit still `updateJob` not `SubmitStarted`; flags (`inFlightTurnAt`) kept on purpose; session log does not record `ignored_stale_turn`; debug download has no Session section. Gemini also committed one-shot `patch_*.mjs` / `fix_*.mjs` — deleted. ROADMAP consolidated (F-1/F-2 parked, Q-1/Q-2/Q-3 landed).
 
 - **Job Event Union & Queue Runner Event Mapping Fix (`src/jobs/JobQueueRunner.ts`, `src/jobs/SupabaseJobSync.ts`, `src/jobs/jobEvents.ts`, 2026-08-31):**
   - **Root Cause & Diagnosis:** `JobQueueRunner.ts` was issuing `JobStore.apply({ type: 'AnalyzeFinished', ... })` for running and queued states, causing event type mismatch with `jobEvents.ts` schema and type errors during status transition handling.
