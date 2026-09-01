@@ -411,7 +411,7 @@ User: "the beverage is raw coconut juice, and iced tea is unsweetened"
   "verdict": { "label": "Supports hydration and vitality", "level": "good" },
   "message": "I've updated your drink to raw coconut juice and switched tea to unsweetened. You get natural electrolytes and hydration.",
   "modificationCommand": [
-    { "action": "replace_identity", "itemName": "Sweetened Drink", "newItemName": "Raw Coconut Juice", "newWeightGrams": 300, "estimate": { "protein": 2.1, "carbohydrates": 12, "totalFat": 0.6, "saturatedFat": 0, "totalSugar": 9, "addedSugar": 0, "totalFibre": 3, "sodium": 75, "potassium": 750, "calcium": 60, "iron": 0.9, "magnesium": 75, "vitaminD": 0, "cookingMethod": "raw", "foodType": "beverage" } },
+    { "action": "replace_identity", "itemName": "Sweetened Drink", "newItemName": "Raw Coconut Juice", "newWeightGrams": 300, "estimate": { "protein": 2.1, "carbohydrates": 12, "totalFat": 0.6, "saturatedFat": 0, "totalSugar": 9, "addedSugar": 0, "totalFibre": 3, "sodium": 75, "cookingMethod": "raw", "foodType": "beverage" } },
     { "action": "update_modifier", "itemName": "Iced Tea", "newItemName": "Unsweetened Iced Tea", "modifier": "unsweetened" }
   ],
   "foodData": { "date": "2026-08-03", "name": "Raw Coconut Juice and Unsweetened Iced Tea" }
@@ -423,10 +423,10 @@ User: "the fish is ikan nilai and the tea is unsweatened"
   "verdict": { "label": "Supports lean muscle growth", "level": "good" },
   "message": "I've updated the fish to grilled Ikan Nilai and switched your tea to unsweetened, cutting the added sugar.",
   "modificationCommand": [
-    { "action": "replace_identity", "itemName": "Ikan Bakar", "newItemName": "Ikan Nilai Bakar", "newWeightGrams": 250, "estimate": { "protein": 42, "carbohydrates": 0, "totalFat": 10.5, "saturatedFat": 2.2, "totalSugar": 0, "addedSugar": 0, "totalFibre": 0, "sodium": 420, "potassium": 650, "calcium": 30, "iron": 1.2, "magnesium": 45, "vitaminD": 8, "omega3": 0.6, "cookingMethod": "grilled", "foodType": "protein" } },
+    { "action": "replace_identity", "itemName": "Ikan Bakar", "newItemName": "Ikan Nilai Bakar", "newWeightGrams": 250, "estimate": { "protein": 42, "carbohydrates": 0, "totalFat": 10.5, "saturatedFat": 2.2, "totalSugar": 0, "addedSugar": 0, "totalFibre": 0, "sodium": 420, "cookingMethod": "grilled", "foodType": "protein" } },
     { "action": "update_modifier", "itemName": "Es Teh Manis", "newItemName": "Es Teh Tawar", "modifier": "unsweetened" }
   ],
-  "foodData": { "date": "2026-09-01", "name": "Ikan Nilai Bakar with Sides" }
+  "foodData": { "date": "2026-09-01", "name": "Ikan Nilai Bakar, Nasi Putih, Cah Kangkung, and Es Teh Tawar" }
 }
 
 RULES:
@@ -436,6 +436,8 @@ RULES:
 - Split foods → split_item + estimate on each new identity. Keep unmentioned sides at saved grams. Sauce stays a component.
 - add_item (no photo) → required estimate {protein,carbohydrates,totalFat,...}. Never invent kcal.
 - Unsweetened / no sugar → update_modifier modifier="unsweetened". If user specifies a different item/drink name (e.g. "es jeruk is unsweetened"), use replace_identity with complete estimate.
+- MEAL TITLE PRESERVATION → For multi-item meals, keep the full multi-item title in foodData.name, updating only the specific item names changed (e.g., replacing "Ikan Bakar" with "Ikan Nilai Bakar"). Do NOT truncate a multi-item meal title into a single dish name (like "Ikan Nilai Bakar Meal") unless the user explicitly requested to rename the entire meal.
+- LOCAL DISH NAME PRESERVATION → When listing items in foodData.itemsBreakdown or referencing them, preserve the verbatim local dish names from the provided meal ledger (e.g. "Nasi Putih", "Cah Kangkung", "Martabak Telur") for any item that was NOT explicitly renamed or replaced by the user. Do not translate unedited local dish names into English.
 
 FINAL SELF-CHECK (perform before emitting JSON): For every command in modificationCommand where action is "replace_identity", "replace_item", "add_item", or "split_item" — confirm the "estimate" field is present and contains non-null protein, carbohydrates, and totalFat values. If any is missing, fill it in with your best clinical estimate before responding. Never submit these actions with a missing or empty estimate.
 `;

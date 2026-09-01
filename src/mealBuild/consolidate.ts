@@ -69,11 +69,15 @@ export function migrateMealSchema(json: any): MealBuild {
     schemaVersion: 1,
     version: json.version || 1,
     mode: json.mode || 'new_log',
-    items: Array.isArray(json.items) ? json.items.map((i: any, index: number) => ({
+    items: Array.isArray(json.items) && json.items.length > 0 ? json.items.map((i: any, index: number) => ({
       ...i,
       scoutIndex: i.scoutIndex ?? index,
       itemId: i.itemId || generateId()
-    })) : [],
+    })) : (Array.isArray(json.itemsBreakdown) ? json.itemsBreakdown.map((i: any, index: number) => ({
+      ...i,
+      scoutIndex: i.scoutIndex ?? index,
+      itemId: i.itemId || generateId()
+    })) : []),
     nutrients: json.nutrients || {},
   };
   return migrated;

@@ -14,6 +14,7 @@ import {
   computeCaloriesFromMacros,
   computeUnsaturatedFat,
   computeSaltFromSodium,
+  computeSolubleFibre,
   deriveCarbohydratesFromEnergy,
   decomposeSaucedEntree,
 } from './server_derivation';
@@ -412,9 +413,12 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
     }
   }
 
-  // 5. Derive Unsaturated Fat and Salt
+  // 5. Derive Unsaturated Fat, Salt, and Soluble Fibre
   nutrients.unsaturatedFat = computeUnsaturatedFat(nutrients.totalFat, nutrients.saturatedFat, nutrients.transFat);
   nutrients.salt = computeSaltFromSodium(nutrients.sodium);
+  if (!lockedNutrientKeys.includes('solubleFibre') && (nutrients.solubleFibre == null || Number(nutrients.solubleFibre) === 0) && nutrients.totalFibre) {
+    nutrients.solubleFibre = computeSolubleFibre(nutrients.totalFibre, originalName);
+  }
 
   // 6. Complete Micronutrient Backfill for Sparse Composite Estimates
   backfillSparseMicronutrients(originalName, consumedWeight, nutrients, dbSource, originalName);
@@ -442,6 +446,8 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
       const cCarbsRaw = Number(c.carbohydrates ?? c.carbs ?? cNuts.carbohydrates ?? 0);
       const cNaRaw = Number(c.sodium ?? cNuts.sodium ?? 0);
       const cCalsRaw = Number(c.calories ?? cNuts.calories ?? Math.round(4 * cProtRaw + 4 * cCarbsRaw + 9 * cFatRaw));
+      const cFibRaw = Number(c.totalFibre ?? c.fiber ?? cNuts.totalFibre ?? cNuts.fiber ?? 0);
+      const cSolRaw = Number(c.solubleFibre ?? cNuts.solubleFibre ?? 0);
 
       let cProt = Math.round(cProtRaw * cR * 10) / 10;
       let cFat = Math.round(cFatRaw * cR * 10) / 10;
@@ -449,6 +455,8 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
       let cCarbs = Math.round(cCarbsRaw * cR * 10) / 10;
       let cNa = Math.round(cNaRaw * cR);
       let cCals = Math.round(cCalsRaw * cR);
+      let cFib = Math.round(cFibRaw * cR * 10) / 10;
+      let cSol = cSolRaw > 0 ? Math.round(cSolRaw * cR * 10) / 10 : computeSolubleFibre(cFib, cName);
       let childDbSource = c.dbSource || 'estimated';
 
       const childRawLabel = c.rawNutritionLabel;
@@ -461,6 +469,8 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
         if (ocrNutrients.saturatedFat != null) cSat = ocrNutrients.saturatedFat;
         if (ocrNutrients.carbohydrates != null) cCarbs = ocrNutrients.carbohydrates;
         if (ocrNutrients.sodium != null) cNa = ocrNutrients.sodium;
+        if (ocrNutrients.totalFibre != null) cFib = ocrNutrients.totalFibre;
+        if (ocrNutrients.solubleFibre != null) cSol = ocrNutrients.solubleFibre;
         childDbSource = 'label';
         Object.assign(cNuts, ocrNutrients);
       }
@@ -472,6 +482,8 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
         saturatedFat: Math.round((cSatRaw / cBasisWeight) * 100 * 10) / 10,
         carbohydrates: Math.round((cCarbsRaw / cBasisWeight) * 100 * 10) / 10,
         sodium: Math.round((cNaRaw / cBasisWeight) * 100),
+        totalFibre: Math.round((cFibRaw / cBasisWeight) * 100 * 10) / 10,
+        solubleFibre: Math.round(((cSolRaw > 0 ? cSolRaw : computeSolubleFibre(cFibRaw, cName)) / cBasisWeight) * 100 * 10) / 10,
       } : null;
 
       return {
@@ -489,6 +501,8 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
         carbohydrates: cCarbs,
         carbs: cCarbs,
         sodium: cNa,
+        totalFibre: cFib,
+        solubleFibre: cSol,
         nutrients: {
           ...cNuts,
           calories: cCals,
@@ -496,7 +510,9 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
           totalFat: cFat,
           saturatedFat: cSat,
           carbohydrates: cCarbs,
-          sodium: cNa
+          sodium: cNa,
+          totalFibre: cFib,
+          solubleFibre: cSol,
         },
         dbSource: childDbSource,
         dbId: c.dbId || null,

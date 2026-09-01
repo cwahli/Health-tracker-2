@@ -24,9 +24,15 @@ export function mergeFoodEditMessages(nonLiveMsgs: any[], assistantMsg: any): an
   const priorMsg = nonLiveMsgs[priorIdx];
   const pendingFoodLog = assistantMsg?.pendingFoodLog || assistantMsg?.data?.pendingFoodLog;
   const messageText = assistantMsg?.content;
+  
+  const originalContent = priorMsg.content || '';
+  const appendedContent = messageText 
+    ? `${originalContent}\n\n---\n**Update:**\n${messageText}`
+    : originalContent;
+
   const mergedMsg = {
     ...priorMsg,
-    content: messageText || priorMsg.content,
+    content: appendedContent,
     data: {
       ...priorMsg.data,
       ...(assistantMsg?.data || {}),

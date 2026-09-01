@@ -1767,7 +1767,7 @@ export function backfillSparseMicronutrients(
   const MICRO_KEYS = [
     'magnesium', 'zinc', 'selenium', 'iodine', 'phosphorus', 'potassium', 'calcium', 'iron',
     'vitaminA', 'vitaminC', 'vitaminD', 'vitaminE', 'vitaminK', 'vitaminB12', 'vitaminB6',
-    'folate', 'thiamine', 'riboflavin', 'niacin'
+    'folate', 'thiamine', 'riboflavin', 'niacin', 'solubleFibre', 'omega3'
   ];
   const zeroKeys = MICRO_KEYS.filter(k => !itemNutrients[k] || itemNutrients[k] === 0);
   // Only intervene when MOST of the micronutrient list is zero — a single genuine zero

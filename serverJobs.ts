@@ -335,7 +335,7 @@ export async function submitServerJob(payload: ServerJobPayload): Promise<void> 
     let lastProgressUpdate = 0;
     const progressThrottleMs = 5000;
     let accumulatedLogs: string[] = turn1Logs.length > 0
-      ? [...turn1Logs, '\n--- USER CONTINUATION (TURN 2) ---\n']
+      ? [...turn1Logs, `\n--- USER CONTINUATION (TURN ${currentTurn}) ---\n`]
       : [];
     if (initialUpsertError) {
       accumulatedLogs.push(`[error] ${initialUpsertError}`);

@@ -2,6 +2,29 @@ import { describe, it, expect } from "vitest";
 import { parseAndHealVisionScout, mergeScoutItems, canMergeScoutLabelIntoFood, resolvePackageAndContextItems, reconcileIngredientsToComponents, clusterSpatialCompositeDishes } from "./server_vision_scout";
 
 describe("server_vision_scout", () => {
+  describe("DISH_DROP via genericEnglishName", () => {
+    it("DISH_DROP: should map a local food component to a generic english searchQuery", () => {
+      const llmOutput = {
+        dishes: [
+          {
+            dishName: "Seafood Pot",
+            foods: [
+              {
+                foodName: "Ikan Cendro",
+                genericEnglishName: "needlefish"
+              }
+            ]
+          }
+        ]
+      };
+      const result = parseAndHealVisionScout(llmOutput, () => {});
+      expect(result.items.length).toBe(1);
+      const dish = result.items[0];
+      expect(dish.components.length).toBe(1);
+      expect(dish.components[0].searchQuery).toBe("needlefish");
+    });
+  });
+
   describe("mergeScoutItems", () => {
     it("should return visionItems if llmItems are empty", () => {
       const visionItems = [{ name: "item1", scoutIndex: 0 }];

@@ -17,6 +17,7 @@ export function buildFoodSearchQuerySet(scoutItems: any[]): string[] {
       if (it.queriesToSearch && Array.isArray(it.queriesToSearch)) {
         rawQueries.push(...it.queriesToSearch);
       }
+      if (it.genericEnglishName) rawQueries.push(it.genericEnglishName);
       if (it.originalName) rawQueries.push(it.originalName);
       if (it.keyword && it.keyword !== it.originalName) rawQueries.push(it.keyword);
     }

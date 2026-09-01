@@ -5,6 +5,7 @@
  * - Bottom-Up Calories (kcal) = Math.round((4 * Protein) + (4 * Carbohydrates) + (9 * TotalFat))
  * - Unsaturated Fat (g) = Math.max(0, TotalFat - (SaturatedFat + TransFat))
  * - Salt (g) = (Sodium in mg * 2.54) / 1000
+ * - Soluble Fibre (g) = Derived from Total Dietary Fibre based on food category / matrix
  * - Carbohydrates from energy fallback (g) = Math.max(0, (Calories - (4 * Protein) - (9 * TotalFat)) / 4) [Fallback only when C is missing]
  * - rebalanceNutrientProfile: Ensures 100% thermodynamic consistency and physical density clamping
  */
@@ -38,6 +39,34 @@ export function computeSaltFromSodium(sodiumMg?: number | null): number {
   return Math.round(rawSalt * 100) / 100;
 }
 
+export function computeSolubleFibre(
+  totalFibre?: number | null,
+  foodNameOrCategory?: string | null
+): number {
+  const tf = totalFibre ?? 0;
+  if (!Number.isFinite(tf) || tf <= 0) return 0;
+
+  const hay = (foodNameOrCategory || '').toLowerCase();
+
+  // 1. Pure animal products, fats/oils, and non-plant beverages (0 soluble fiber)
+  if (
+    /\b(meats?|beef|pork|chickens?|poultry|turkeys?|fish(es)?|salmons?|tunas?|seafood|eggs?|oils?|butters?|lard|fats?)\b/i.test(hay) &&
+    !/\b(breaded|fried\s+rice|salad|with|curry|veg|stew|patty|burger|murtabak|martabak|nasi|mie)\b/i.test(hay)
+  ) {
+    return 0;
+  }
+
+  // 2. High-soluble fiber foods (~35-45% of total fiber): oats, barley, legumes/beans/lentils, citrus, apples, berries, chia, psyllium, avocado
+  if (
+    /\b(oat|oats|oatmeal|barley|bean|beans|lentil|lentils|chickpea|chickpeas|pea|peas|legume|hummus|citrus|orange|lemon|lime|grapefruit|jeruk|apple|berries|berry|strawberry|blueberry|raspberry|blackberry|chia|flax|psyllium|avocado)\b/i.test(hay)
+  ) {
+    return Math.max(0, Math.round(tf * 0.38 * 10) / 10);
+  }
+
+  // 3. Moderate soluble fiber foods (~25-30% of total fiber): cooked vegetables, potatoes, roots, rice, wheat, noodles, bakery, general mixed dishes
+  return Math.max(0, Math.round(tf * 0.28 * 10) / 10);
+}
+
 export function deriveCarbohydratesFromEnergy(
   calories?: number | null,
   protein?: number | null,
@@ -58,6 +87,9 @@ export interface BaseNutrientInputs {
   transFat?: number | null;
   sodium?: number | null;
   carbohydrates?: number | null;
+  totalFibre?: number | null;
+  solubleFibre?: number | null;
+  foodName?: string | null;
 }
 
 export interface DerivedNutrientOutputs {
@@ -65,6 +97,7 @@ export interface DerivedNutrientOutputs {
   unsaturatedFat: number;
   salt: number;
   carbohydrates: number;
+  solubleFibre: number;
 }
 
 export function calculateDerivedNutrients(base: BaseNutrientInputs): DerivedNutrientOutputs {
@@ -72,33 +105,38 @@ export function calculateDerivedNutrients(base: BaseNutrientInputs): DerivedNutr
   const tf = base.totalFat ?? 0;
   const unsaturatedFat = computeUnsaturatedFat(base.totalFat, base.saturatedFat, base.transFat);
   const salt = computeSaltFromSodium(base.sodium);
+  const solubleFibre = (base.solubleFibre !== undefined && base.solubleFibre !== null && Number(base.solubleFibre) > 0)
+    ? Math.round(Number(base.solubleFibre) * 10) / 10
+    : computeSolubleFibre(base.totalFibre, base.foodName);
 
   // Carbohydrates: use emitted value if present, else derive from energy equation
-  const carbohydrates = base.carbohydrates !== undefined && base.carbohydrates !== null
+  const carbohydrates = typeof base.carbohydrates === 'number'
     ? Math.round(base.carbohydrates * 10) / 10
     : deriveCarbohydratesFromEnergy(base.calories, p, tf);
 
-  // Calories: if explicit carbs given, calculate bottom-up; else retain or compute
-  const calories = (base.calories !== undefined && base.calories !== null && !(base.carbohydrates !== undefined && base.carbohydrates !== null))
-    ? Math.round(base.calories)
-    : computeCaloriesFromMacros(p, carbohydrates, tf);
+  // Calories: if P/C/F are all numbers, calculate bottom-up; else retain or compute
+  const calories = (typeof base.protein === 'number' && typeof base.carbohydrates === 'number' && typeof base.totalFat === 'number')
+    ? computeCaloriesFromMacros(p, carbohydrates, tf)
+    : (typeof base.calories === 'number' ? Math.round(base.calories) : computeCaloriesFromMacros(p, carbohydrates, tf));
 
   return {
     calories,
     unsaturatedFat,
     salt,
     carbohydrates,
+    solubleFibre,
   };
 }
 
 /**
  * Rebalances a nutrient profile dictionary post-mutation (e.g. from Dietitian corrections),
  * ensuring complete thermodynamic consistency between macros and calories, deriving
- * unsaturated fat and salt, and enforcing physical density bounds.
+ * unsaturated fat, salt, soluble fiber, and enforcing physical density bounds.
  */
 export function rebalanceNutrientProfile(
   nutrients: Record<string, any>,
-  weightGrams?: number | null
+  weightGrams?: number | null,
+  foodName?: string | null
 ): Record<string, any> {
   const result = { ...nutrients };
   const p = result.protein !== null && result.protein !== undefined ? Number(result.protein) : null;
@@ -108,6 +146,7 @@ export function rebalanceNutrientProfile(
   const tr = result.transFat !== null && result.transFat !== undefined ? Number(result.transFat) : null;
   const na = result.sodium !== null && result.sodium !== undefined ? Number(result.sodium) : null;
   const cal = result.calories !== null && result.calories !== undefined ? Number(result.calories) : null;
+  const fib = result.totalFibre !== null && result.totalFibre !== undefined ? Number(result.totalFibre) : null;
 
   // Physical density clamping if weight is known
   if (weightGrams && weightGrams > 0) {
@@ -129,6 +168,9 @@ export function rebalanceNutrientProfile(
   // Derive dependent metrics
   result.unsaturatedFat = computeUnsaturatedFat(tf, sf, tr);
   result.salt = computeSaltFromSodium(na);
+  if (fib !== null && fib > 0 && (result.solubleFibre == null || Number(result.solubleFibre) === 0)) {
+    result.solubleFibre = computeSolubleFibre(fib, foodName || result.name || result.originalName);
+  }
 
   return result;
 }

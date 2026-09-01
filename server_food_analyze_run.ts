@@ -938,14 +938,8 @@ export async function runFoodAnalyze(req: any, res: any) {
                             saturatedFat: { type: Type.NUMBER },
                             totalFat: { type: Type.NUMBER },
                             totalSugar: { type: Type.NUMBER },
-                            potassium: { type: Type.NUMBER },
-                            omega3: { type: Type.NUMBER },
-                            calcium: { type: Type.NUMBER },
-                            iron: { type: Type.NUMBER },
-                            magnesium: { type: Type.NUMBER },
-                            vitaminD: { type: Type.NUMBER },
                           },
-                          required: ["saturatedFat", "totalFat", "totalSugar", "potassium", "omega3", "calcium", "iron", "magnesium", "vitaminD"],
+                          required: ["saturatedFat", "totalFat", "totalSugar"],
                         },
                       },
                       required: ["dishName", "estimatedWeightGrams", "cookingMethod", "boundingBox2D", "foods", "dishNutrients"],
@@ -1893,12 +1887,12 @@ export async function runFoodAnalyze(req: any, res: any) {
                 cQuery.includes(matchChain) ||
                 (c.brand && String(c.brand).toLowerCase().includes(matchChain))
               );
-              if (isBrandMatch && !queryHasBrand) {
+              if (isBrandMatch && Boolean(matchChain) && !queryHasBrand) {
                 c.dbSource = (match.source && match.source !== 'brand_official') ? match.source : 'category_fallback';
                 c.chainName = null;
                 c.brand = null;
               } else {
-                c.dbSource = queryHasBrand ? (match.source || 'brand_official') : (match.source || 'usda');
+                c.dbSource = (match.source || match.dbSource) || (isBrandMatch ? 'brand_official' : 'usda');
                 c.primaryBaseMatchName = match.name || c.primaryBaseMatchName;
                 if (queryHasBrand) {
                   c.chainName = match.chainName || c.chainName;
@@ -1906,13 +1900,15 @@ export async function runFoodAnalyze(req: any, res: any) {
                 }
               }
               if (match.rawNutritionLabel) {
-                // Only ever propagate a GENUINE label/OCR object here (Vision-Scout-sourced,
-                // or a verified brand_official printed serving). Do NOT synthesize a
-                // rawNutritionLabel-shaped object from ordinary USDA/canonical/estimated
-                // nutrient data — doing so previously caused fresh produce and generic
-                // USDA-matched ingredients to be mislabeled "(Package Label Truth)" /
-                // "Nutrition Facts (OCR Label)" downstream (see FIX_FALSE_PACKAGE_LABEL_TRUTH_BADGE.md).
                 c.rawNutritionLabel = match.rawNutritionLabel;
+              }
+            } else {
+              if (c.packageLabelText) {
+                c.dbSource = 'brand_official';
+              } else if (item.components.length === 1 && (item.dbSource === 'brand_official' || item.chainName)) {
+                c.dbSource = 'brand_official';
+              } else {
+                c.dbSource = 'estimated';
               }
             }
           });
@@ -2110,7 +2106,8 @@ export async function runFoodAnalyze(req: any, res: any) {
           nutrients: l.nutrients,
           nutrients100g: {},
           lockedNutrientKeys: l.lockedNutrientKeys,
-          rawNutritionLabel: l.dbSource === 'label' ? l.nutrients : null,
+          rawNutritionLabel: (l.dbSource === 'label' ? l.nutrients : vItem.rawNutritionLabel) || null,
+          labelNutrientsPerServing: l.brandLock ? l.brandLock.valuesAtBasis : (vItem.labelNutrientsPerServing || null),
           brandLock: l.brandLock,
           dbSource: l.dbSource,
           dbId: l.dbId,
@@ -2487,13 +2484,6 @@ export async function runFoodAnalyze(req: any, res: any) {
                   totalSugar: { type: Type.NUMBER, nullable: true },
                   addedSugar: { type: Type.NUMBER, nullable: true },
                   totalFibre: { type: Type.NUMBER, nullable: true },
-                  solubleFibre: { type: Type.NUMBER, nullable: true },
-                  potassium: { type: Type.NUMBER, nullable: true },
-                  calcium: { type: Type.NUMBER, nullable: true },
-                  iron: { type: Type.NUMBER, nullable: true },
-                  magnesium: { type: Type.NUMBER, nullable: true },
-                  vitaminD: { type: Type.NUMBER, nullable: true },
-                  omega3: { type: Type.NUMBER, nullable: true },
                   cookingMethod: { type: Type.STRING, nullable: true },
                   foodType: { type: Type.STRING, nullable: true }
                 },
@@ -2522,13 +2512,6 @@ export async function runFoodAnalyze(req: any, res: any) {
                         totalSugar: { type: Type.NUMBER, nullable: true },
                         addedSugar: { type: Type.NUMBER, nullable: true },
                         totalFibre: { type: Type.NUMBER, nullable: true },
-                        solubleFibre: { type: Type.NUMBER, nullable: true },
-                        potassium: { type: Type.NUMBER, nullable: true },
-                        calcium: { type: Type.NUMBER, nullable: true },
-                        iron: { type: Type.NUMBER, nullable: true },
-                        magnesium: { type: Type.NUMBER, nullable: true },
-                        vitaminD: { type: Type.NUMBER, nullable: true },
-                        omega3: { type: Type.NUMBER, nullable: true }
                       },
                       required: ["protein", "carbohydrates", "totalFat", "saturatedFat", "sodium"]
                     }
@@ -2626,7 +2609,6 @@ export async function runFoodAnalyze(req: any, res: any) {
                       sodium: { type: Type.NUMBER, nullable: true },
                       carbohydrates: { type: Type.NUMBER, nullable: true },
                       addedSugar: { type: Type.NUMBER, nullable: true },
-                      potassium: { type: Type.NUMBER, nullable: true },
                       totalFibre: { type: Type.NUMBER, nullable: true }
                     },
                     nullable: true
@@ -2944,6 +2926,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
             dbSource: p.dbSource || 'estimated',
             dbId: p.dbId || null,
             foodType: p.foodType || 'composed',
+            rawNutritionLabel: p.rawNutritionLabel || null,
+            labelNutrientsPerServing: p.labelNutrientsPerServing || null,
           }))
         }
       });
@@ -3517,9 +3501,25 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         activeMeal.serving_grams = result.weightGrams;
         activeMeal.receiptTable = result.receiptTable;
         activeMeal.composition = result.items.map((it: any) => it.name).join(', ');
-        if (rawParsed.foodData?.name) {
-          activeMeal.name = rawParsed.foodData.name;
-        } else if (result.items.length === 1 && (!req.body.activeMeal?.itemsBreakdown || req.body.activeMeal.itemsBreakdown.length <= 1)) {
+        const formatMultiItemMealTitle = (items: any[]): string => {
+          if (!items || items.length === 0) return 'Meal';
+          const names = items.map((it: any) => it.name || it.canonicalDbName || 'Item').filter(Boolean);
+          if (names.length === 1) return names[0];
+          if (names.length === 2) return `${names[0]} and ${names[1]}`;
+          return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+        };
+
+        const incomingTitle = rawParsed.foodData?.name;
+        if (result.items.length > 1) {
+          const isMultiItemTitle = incomingTitle && (incomingTitle.includes(',') || /\b(and|with)\b/i.test(incomingTitle));
+          if (incomingTitle && isMultiItemTitle) {
+            activeMeal.name = incomingTitle;
+          } else {
+            activeMeal.name = formatMultiItemMealTitle(result.items);
+          }
+        } else if (incomingTitle) {
+          activeMeal.name = incomingTitle;
+        } else if (result.items.length === 1) {
           activeMeal.name = result.items[0].name || activeMeal.name;
         }
         // Sync scoutItems (used by the "Meal composition" chips/gallery in the UI)
@@ -3567,6 +3567,14 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         });
         activeMeal.scoutItems = syncedScoutItemsForEdit;
         addDebugLog(`[ScoutSync] edit-path renamed scoutItems -> ${JSON.stringify(syncedScoutItemsForEdit.map((s: any) => s.originalName))}`);
+        
+        const finalMessage = result.qa
+          ? (rawParsed.message || 'Here is the detail on this meal.')
+          : (rawParsed.message || 'I have updated your meal.');
+          
+        activeMeal.message = finalMessage;
+        activeMeal.healthImpact = finalMessage;
+
         addDebugLog('[MealBuild] edit-path (finalize executor)');
         const { mealBuild, pendingFoodLog } = attachHappyPathMealBuild({
           parsedData: activeMeal,
@@ -3576,9 +3584,6 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
           diningEnvironment: activeMeal?.diningEnvironment,
         });
         mealBuild.staleDietitianNarrative = false;
-        const finalMessage = result.qa
-          ? (rawParsed.message || 'Here is the detail on this meal.')
-          : (rawParsed.message || 'I have updated your meal.');
         const finalMeal = pendingFoodLog || activeMeal;
         const gate = evaluateMealGate({
           mealId: finalMeal?.id || req.body.jobId,

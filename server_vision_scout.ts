@@ -2,6 +2,7 @@ import { z } from "zod";
 import { extractBalancedJson } from "./server_pure_helpers";
 import { parseLabelCalories } from "./server_budget_reconcile";
 import { isStandaloneCondimentPacket, reconcileContainerVolumeBudget } from "./server_dish_classify";
+import { computeSolubleFibre } from "./server_derivation";
 export const ScoutNutrientsSchema = z.object({
   calories: z.number().nullable().optional(),
   protein: z.number().nullable().optional(),
@@ -22,6 +23,7 @@ export const ScoutNutrientsSchema = z.object({
 }).passthrough();
 export const ScoutFoodSchema = z.object({
   foodName: z.string().nullable().optional(),
+  genericEnglishName: z.string().nullable().optional(),
   packageLabelText: z.string().nullable().optional(),
   weightGrams: z.number().finite().nonnegative().nullable().optional(),
   packGrams: z.number().finite().nonnegative().nullable().optional(),
@@ -38,6 +40,7 @@ export const ScoutFoodSchema = z.object({
 }).passthrough();
 export const ScoutDishSchema = z.object({
   dishName: z.string().nullable().optional(),
+  genericEnglishName: z.string().nullable().optional(),
   chainName: z.string().nullable().optional(),
   packageLabelText: z.string().nullable().optional(),
   estimatedWeightGrams: z.number().finite().nonnegative().nullable().optional(),
@@ -75,6 +78,7 @@ export const ScoutItemComponentSchema = z.object({
 });
 export const ScoutItemSchema = z.object({
   originalName: z.string().nullable().optional(),
+  genericEnglishName: z.string().nullable().optional(),
   keyword: z.string().nullable().optional(),
   itemConfidence: z.string().nullable().optional(),
   weightGrams: z.number().finite().nonnegative().nullable().optional(),
@@ -162,7 +166,7 @@ export const VisionScoutSchema = z.object({
 export const scoutSystemInstruction = `- HIERARCHY: Group distinct physical plated items, separate cooking pots/bowls, drinks, or companion sides into separate 'dishes', and constituent ingredients into 'foods'. DO NOT duplicate identical dishes shown across cooking prep, multi-angles, or sliced/whole views. DO NOT group separate packages into a single dish. Each barcode package MUST be its own distinct 'dish'.
 - QUANTITY & MULTIPACKS: Output 'weightGrams' (consumed serving) and 'packGrams' (container total). For unopened grocery multi-packs (e.g. '5 x 65ml', 'pack of 6') without explicit user notes stating all N units were consumed, set 'weightGrams' to a single unit/serving size (e.g. 65g) and 'packGrams' to the container total (e.g. 325g).
 - GROCERY/SCALE STICKERS: Treat supermarket stickers as atomic: pair printed text with printed weight (e.g. 'Berat 0.252' -> 252g). Output text in 'packageLabelText'. Never transpose weights between packages.
-- LOCAL NAMES: Preserve the verbatim printed name from stickers, packaging, or menus in local language as foodName (e.g. 'Ikan Cendro', 'Cumi Bangka'). Do not genericise when specific local name is readable.
+- LOCAL NAMES: Preserve the verbatim printed name from stickers, packaging, or menus in local language as foodName (e.g. 'Ikan Cendro', 'Cumi Bangka'). Do not genericise when specific local name is readable. ALWAYS provide the generic English translation of the ingredient in 'genericEnglishName' (e.g. 'needlefish', 'squid').
 - INGESTION: Extract ALL visible food items/packages from ALL provided images into dishes[]. 'contentType' is post-extraction metadata and must not restrict extraction.
 - DIRECT OCR: Transcribe nutrition labels into 'rawNutritionLabel' for packaged items with labels. Preserve exact 0 values when printed as 0g / 0mg.
 - % AKG / % DV: If nutrition labels state % AKG (Angka Kecukupan Gizi) or % DV for micronutrients (e.g. Vitamin D 8% AKG, Kalsium 2% AKG), preserve the % in rawNutritionLabel.
@@ -184,6 +188,7 @@ Output exactly ONE JSON object matching this schema:
   "dishes": [
     {
       "dishName": "Vegetable and Beef Hotpot",
+      "genericEnglishName": "beef and vegetable stew",
       "chainName": null,
       "estimatedWeightGrams": 650,
       "packGrams": 650,
@@ -194,6 +199,7 @@ Output exactly ONE JSON object matching this schema:
       "foods": [
         {
           "foodName": "Beef Blade",
+          "genericEnglishName": "beef",
           "packageLabelText": "BEEF BLADE - Berat 0.110",
           "weightGrams": 110,
           "packGrams": 110,
@@ -938,9 +944,26 @@ export function parseAndHealVisionScout(
           sumAddedSugar += fas;
           sumFibre += ffib;
           sumNa += fna;
+          let searchQ = (f.genericEnglishName || fn).trim();
+          if (!f.genericEnglishName) {
+            let s = String(fn).toLowerCase();
+            s = s.replace(/\bbaby pak choy\b/ig, 'bok choy');
+            s = s.replace(/\bpak choy\b/ig, 'bok choy');
+            
+            if (/tlr|telur/i.test(s)) searchQ = 'egg';
+            else if (/ikan/i.test(s)) searchQ = 'fish';
+            else if (/cumi/i.test(s)) searchQ = 'squid';
+            else if (/ayam/i.test(s)) searchQ = 'chicken';
+            else if (/sapi|daging/i.test(s)) searchQ = 'beef';
+            else if (/babi/i.test(s)) searchQ = 'pork';
+            else if (/udang/i.test(s)) searchQ = 'shrimp';
+            else if (/bebek/i.test(s)) searchQ = 'duck';
+            else searchQ = s;
+          }
+          
           components.push({
             name: fn,
-            searchQuery: fn,
+            searchQuery: searchQ,
             weightGrams: fw,
             estimatedWeightGrams: fw,
             packGrams: f.packGrams ?? null,
@@ -995,7 +1018,7 @@ export function parseAndHealVisionScout(
           vitaminB12: Number(dNuts.vitaminB12) || 0, folate: Number(dNuts.folate) || 0,
           vitaminB6: Number(dNuts.vitaminB6) || 0, thiamine: Number(dNuts.thiamine) || 0,
           riboflavin: Number(dNuts.riboflavin) || 0, niacin: Number(dNuts.niacin) || 0,
-          solubleFibre: Number(dNuts.solubleFibre) || 0,
+          solubleFibre: Number(dNuts.solubleFibre) || computeSolubleFibre(Number(sumFibre) || 0, d.dishName),
           unsaturatedFat: Number(dNuts.unsaturatedFat) || 0,
         };
         const visualDishCal = Number(dNuts.calories);
@@ -1021,6 +1044,7 @@ export function parseAndHealVisionScout(
           keyword: dishTitle,
           originalName: dishTitle,
           name: dishTitle,
+          genericEnglishName: d.genericEnglishName || null,
           chainName: d.chainName || null,
           packageLabelText: compPackageLabel,
           estimatedWeightGrams: dishWeight,

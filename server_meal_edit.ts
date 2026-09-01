@@ -7,7 +7,7 @@
  */
 
 import { finalizeDishLedger } from './server_dish_finalize.js';
-import { applyNutrientModifiers, computeCaloriesFromMacros } from './server_derivation.js';
+import { applyNutrientModifiers, computeCaloriesFromMacros, computeSolubleFibre } from './server_derivation.js';
 import { findItemIndexInList, formatMealReceiptTable, synthesizeEditCommandsFromBreakdown, itemsMatchByName } from './server_pure_helpers.js';
 import { NUTRIENT_KEYS } from './src/utils/nutrients.js';
 import { sumItemNutrients } from './server_meal_from_finalize.js';
@@ -101,6 +101,9 @@ export function scaleItemNutrients(item: any, ratio: number, newWeight?: number)
   const locked = Array.isArray(item.lockedNutrientKeys) ? item.lockedNutrientKeys : [];
   if (!locked.includes('calories')) {
     base.calories = computeCaloriesFromMacros(base.protein, base.carbohydrates, base.totalFat);
+  }
+  if (!locked.includes('solubleFibre') && (base.solubleFibre == null || base.solubleFibre === 0) && base.totalFibre) {
+    base.solubleFibre = computeSolubleFibre(base.totalFibre, item.name || item.originalName);
   }
   next.nutrients = base;
   next.calories = base.calories ?? 0;
@@ -292,19 +295,24 @@ export function coalesceLegacyCommands(commands: MealEditCommand[], items: any[]
   const others = commands.filter((c) => c.action !== 'remove_item' && c.action !== 'add_item');
 
   if (removes.length === 1 && adds.length === 1) {
-    const parentIdx = findItemIndexInList(items, removes[0].itemName || '', removes[0].targetDbId || null);
-    if (parentIdx !== -1) {
-      return [
-        ...others,
-        {
-          action: 'replace_identity',
-          itemName: removes[0].itemName,
-          targetDbId: removes[0].targetDbId,
-          newItemName: adds[0].itemName || adds[0].newItemName,
-          newWeightGrams: adds[0].newWeightGrams,
-          estimate: adds[0].estimate,
-        },
-      ];
+    const isExplicitReplace = /\b(instead|replace|change|swap|substitute|switch)\b/i.test(userMessage);
+    const isExplicitAdd = /\b(add|plus|also|include)\b/i.test(userMessage);
+    
+    if (isExplicitReplace || !isExplicitAdd) {
+      const parentIdx = findItemIndexInList(items, removes[0].itemName || '', removes[0].targetDbId || null);
+      if (parentIdx !== -1) {
+        return [
+          ...others,
+          {
+            action: 'replace_identity',
+            itemName: removes[0].itemName,
+            targetDbId: removes[0].targetDbId,
+            newItemName: adds[0].itemName || adds[0].newItemName,
+            newWeightGrams: adds[0].newWeightGrams,
+            estimate: adds[0].estimate,
+          },
+        ];
+      }
     }
   }
 

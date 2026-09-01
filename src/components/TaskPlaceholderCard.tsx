@@ -45,7 +45,8 @@ export default function TaskPlaceholderCard({
     return () => clearInterval(interval);
   }, [job.status, job.inFlightTurnAt, job.finishedAt]);
 
-  const elapsedSeconds = job.createdAt ? Math.max(0, Math.floor((nowTs - new Date(job.createdAt).getTime()) / 1000)) : null;
+  const startTs = job.inFlightTurnAt ?? (job.createdAt ? new Date(job.createdAt).getTime() : null);
+  const elapsedSeconds = startTs ? Math.max(0, Math.floor((nowTs - startTs) / 1000)) : null;
   const elapsedLabel = elapsedSeconds !== null
     ? `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, '0')}`
     : null;

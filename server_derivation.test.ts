@@ -3,6 +3,7 @@ import {
   computeCaloriesFromMacros,
   computeUnsaturatedFat,
   computeSaltFromSodium,
+  computeSolubleFibre,
   deriveCarbohydratesFromEnergy,
   calculateDerivedNutrients,
   rebalanceNutrientProfile,
@@ -54,6 +55,38 @@ describe("server_derivation", () => {
     });
   });
 
+  describe("computeSolubleFibre", () => {
+    it("returns 0 for zero or negative total fiber", () => {
+      expect(computeSolubleFibre(0)).toBe(0);
+      expect(computeSolubleFibre(null)).toBe(0);
+      expect(computeSolubleFibre(-5)).toBe(0);
+    });
+
+    it("returns 0 for pure animal products", () => {
+      expect(computeSolubleFibre(2, "Grilled Chicken Breast")).toBe(0);
+      expect(computeSolubleFibre(3, "Salmon Fillet")).toBe(0);
+      expect(computeSolubleFibre(1, "Scrambled Eggs")).toBe(0);
+    });
+
+    it("derives high soluble fiber (~38%) for oats, legumes, apples, berries, chia", () => {
+      // 10g fiber in oatmeal -> 3.8g soluble fiber
+      expect(computeSolubleFibre(10, "Rolled Oats Oatmeal")).toBe(3.8);
+      // 8g fiber in black beans -> 3.0g soluble fiber
+      expect(computeSolubleFibre(8, "Black Beans")).toBe(3.0);
+      // 4g fiber in fresh apple -> 1.5g soluble fiber
+      expect(computeSolubleFibre(4, "Fuji Apple")).toBe(1.5);
+    });
+
+    it("derives standard botanical soluble fiber (~28%) for cooked vegetables and mixed dishes", () => {
+      // French fries (3.8g fiber) -> 1.1g soluble fiber
+      expect(computeSolubleFibre(3.8, "French Fries")).toBe(1.1);
+      // Water spinach (3.0g fiber) -> 0.8g soluble fiber
+      expect(computeSolubleFibre(3.0, "Tumis Kangkung Water Spinach")).toBe(0.8);
+      // Brownie (2.0g fiber) -> 0.6g soluble fiber
+      expect(computeSolubleFibre(2.0, "Chocolate Brownie")).toBe(0.6);
+    });
+  });
+
   describe("deriveCarbohydratesFromEnergy", () => {
     it("derives carbs using (kcal - 4P - 9F) / 4", () => {
       // 500 kcal, 25g P (100 kcal), 20g F (180 kcal) -> 220 kcal carbs -> 55g carbs
@@ -75,11 +108,13 @@ describe("server_derivation", () => {
         transFat: 0,
         sodium: 400,
         carbohydrates: 50,
+        totalFibre: 5,
       });
       expect(result.calories).toBe(480);
       expect(result.carbohydrates).toBe(50);
       expect(result.unsaturatedFat).toBe(15);
       expect(result.salt).toBe(1.02);
+      expect(result.solubleFibre).toBe(1.4);
     });
 
     it("ignores agent-emitted calories when protein, carbs, and fat are present (F-10.2 Atwater law)", () => {
@@ -124,6 +159,16 @@ describe("server_derivation", () => {
       expect(result.carbohydrates).toBe(55);
       expect(result.unsaturatedFat).toBe(15);
       expect(result.salt).toBe(1.02);
+    });
+
+    it('ignores agent calories when P/C/F are present (F-10.2)', () => {
+      const out = calculateDerivedNutrients({
+        calories: 9999, protein: 25, carbohydrates: 50, totalFat: 20,
+        saturatedFat: 5, transFat: 0, sodium: 400,
+      });
+      expect(out.calories).toBe(480);
+      expect(out.unsaturatedFat).toBe(15);
+      expect(out.salt).toBeCloseTo(1.02, 2);
     });
   });
 

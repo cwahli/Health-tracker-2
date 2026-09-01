@@ -2455,6 +2455,7 @@ ${logsText}`);
         if (job) {
           JobStore.updateJob(currentJobId, {
             status: 'queued',
+            progressPercent: 0,
             mode: submissionMode,
             inputSnapshot,
             messages: persistMessages,
