@@ -27,6 +27,36 @@ import { AVAILABLE_LLMS } from './utils/llm';
 import { PRIMARY_NUTRIENTS, isCoreNutrient, isAdditionalNutrient } from './utils/nutrients';
 import { getLocalFallbackReport } from './utils/fallbackReport';
 import { toPendingFoodLog } from './mealBuild/adapters';
+
+// Mobile/background tabs throttle or fully suspend plain setTimeout timers, so a job-status
+// poll loop using a flat `setTimeout(ms)` can silently stall for minutes after the tab is
+// backgrounded (screen lock, app switch) even though the server finished the job seconds in.
+// This resolves early the moment the tab regains visibility, in addition to the normal delay,
+// so polling catches up immediately on foreground instead of waiting for the next throttled tick.
+function visibilityAwareSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisible);
+      }
+      resolve();
+    };
+    const onVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        finish();
+      }
+    };
+    const timeoutId = setTimeout(finish, ms);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisible);
+    }
+  });
+}
+
 function extractPendingFoodLogFromCleanResult(cleanResult: any, photoUrl?: string): any {
   if (!cleanResult) return null;
   let log: any = null;
@@ -1510,7 +1540,7 @@ export default function App() {
                 }
               }
 
-              await new Promise(resolve => setTimeout(resolve, 2000));
+              await visibilityAwareSleep(2000);
             }
 
             if (!done) {
@@ -4029,10 +4059,14 @@ export default function App() {
 
 
       }
-      // Sync active / ready inbox jobs so other devices get latest drafts
+      // Sync active / ready inbox jobs so other devices get latest drafts.
+      // Run in small concurrency-capped batches (not all at once) to avoid flooding
+      // /api/jobs/upsert with a burst of simultaneous requests during manual sync.
       const activeJobs = JobStore.getAllJobs().filter(j => j.status === 'succeeded' || j.status === 'awaiting_user');
-      for (const aj of activeJobs) {
-        upsertJobToSupabase(aj, uid).catch(() => {});
+      const jobUpsertChunkSize = 5;
+      for (let i = 0; i < activeJobs.length; i += jobUpsertChunkSize) {
+        const chunk = activeJobs.slice(i, i + jobUpsertChunkSize);
+        await Promise.all(chunk.map(aj => upsertJobToSupabase(aj, uid).catch(() => {})));
       }
 
       // Artificially enforce a minimum rotation time of 800ms so the user gets clear visual confirmation
