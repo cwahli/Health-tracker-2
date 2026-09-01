@@ -68,6 +68,10 @@ export interface AgentJob {
   lastProgressAt?: string;
   abortController?: AbortController;
   cancelReason?: string;
+  /** Session-scoped JobStore.apply/JobQueueRunner event trail for this job
+   * (client-recorded). Persisted alongside job.result so it survives into
+   * the server-side debug export. */
+  sessionEvents?: Array<{ ts: number; writer: string; turn?: number; status?: string; resultKey?: string; action: string }>;
 }
 
 /* 'awaiting_user' */

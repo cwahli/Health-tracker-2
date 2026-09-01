@@ -775,6 +775,7 @@ export default function FoodHistoryTab({
       status: remotePayload?.status || job?.status || 'saved',
       mode: remotePayload?.mode || job?.result?.mode || 'food_log',
       message: remotePayload?.message || remotePayload?.result?.message || log.healthImpact || log.benefits,
+      sessionEvents: job?.sessionEvents || remotePayload?.result?.sessionEvents,
       backendLogs,
       pendingFoodLog: remotePayload?.result?.pendingFoodLog || remotePayload?.pendingFoodLog || log,
       scoutItems: remotePayload?.result?.scoutItems || (log as any).scoutItems || (log as any).items,

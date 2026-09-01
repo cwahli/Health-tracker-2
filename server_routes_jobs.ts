@@ -358,6 +358,7 @@ jobsRouter.get('/api/jobs/debug', async (req, res) => {
         debugUrl: safePayload.debugUrl,
         photoUrl: safePayload.photoUrl,
         lastUserAction: safePayload.result?.lastUserAction || safePayload.lastUserAction,
+        sessionEvents: safePayload.result?.sessionEvents || safePayload.sessionEvents,
         userActionBreadcrumbs: safePayload.result?.userActionBreadcrumbs || safePayload.userActionBreadcrumbs,
         clientConsoleLogs: safePayload.result?.clientConsoleLogs || safePayload.clientConsoleLogs,
         networkErrors: safePayload.result?.networkErrors || safePayload.networkErrors,

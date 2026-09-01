@@ -463,7 +463,7 @@ class JobStoreImpl {
 
     Object.assign(job, { ...patch, updatedAt: new Date().toISOString() });
 
-    recordSessionEvent(id, {
+    job.sessionEvents = recordSessionEvent(id, {
       writer: writer as any,
       status: job.status,
       action: job.status === 'succeeded' ? 'completed' : 'accepted',

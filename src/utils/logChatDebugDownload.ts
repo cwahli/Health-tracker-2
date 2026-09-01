@@ -171,6 +171,7 @@ export async function downloadJobDebugReport(args: {
       receiptTable,
       error: job?.error?.message,
       lastUserAction: lastUserAction || job?.result?.lastUserAction || w.__lastUserAction,
+      sessionEvents: job?.sessionEvents || job?.result?.sessionEvents,
       userActionBreadcrumbs: w.__userActionBreadcrumbs || job?.result?.userActionBreadcrumbs || [],
       clientConsoleLogs: clientConsoleLogs || job?.result?.clientConsoleLogs || w.__clientConsoleLogs || [],
       networkErrors: networkErrors || job?.result?.networkErrors || w.__clientNetworkErrors || [],

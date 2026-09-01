@@ -572,6 +572,12 @@ export async function upsertJobToSupabase(
   const effectiveUserId = (userId && userId !== 'anonymous') ? userId : (auth.currentUser?.uid || 'anonymous');
   try {
     let finalCleanResult = cleanResult || job.result || null;
+    if (job.sessionEvents && job.sessionEvents.length > 0) {
+      finalCleanResult = {
+        ...(finalCleanResult || {}),
+        sessionEvents: job.sessionEvents,
+      };
+    }
     if (job.mealBuild) {
       finalCleanResult = {
         ...(finalCleanResult || {}),

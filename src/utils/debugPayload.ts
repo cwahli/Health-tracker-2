@@ -101,6 +101,11 @@ export type DebugReportInput = {
   /** Prior conversation turns (role + content) that came before the turn being
    * exported, so a reader can see what led up to this point ("previous steps"). */
   conversationHistory?: { role: string; content: string }[];
+  /** Job session event trail (JobStore.apply / JobQueueRunner), forwarded
+   * from the client-recorded job.sessionEvents so it survives into
+   * server-generated exports. Falls back to the in-process sessionLog map
+   * for client-only callers running in the same tab that recorded them. */
+  sessionEvents?: any[];
 };
 
 /**
@@ -296,7 +301,9 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
   // appears here so cwah can still see it when diagnosing a stuck/odd job.
   lines.push(`## ⚙️ Job Session Event Trail`);
   lines.push('');
-  const sessionEvents = input.jobId ? getSessionLog(input.jobId) : [];
+  const sessionEvents = (input.sessionEvents && input.sessionEvents.length > 0)
+    ? input.sessionEvents
+    : (input.jobId ? getSessionLog(input.jobId) : []);
   if (sessionEvents.length > 0) {
     lines.push('```');
     sessionEvents.forEach((e) => {
