@@ -1,4 +1,5 @@
 import { evaluateMealGate, MealGateResult } from '../mealBuild/mealGate.js';
+import { getSessionLog } from '../jobs/sessionLog.js';
 
 /** Recursively strip base64 / huge data-URLs; keep short https photo URLs. */
 export function stripHeavyImages(value: any): any {
@@ -287,6 +288,23 @@ export function buildDebugMarkdownReport(input: DebugReportInput): string {
     }
   } else {
     lines.push(`_No user UI interaction breadcrumbs captured prior to submission._`);
+  }
+  lines.push('');
+
+  // 1c. Job Session Event Trail (internal JobStore/JobQueueRunner state transitions).
+  // This used to leak into the loading card UI (TaskPlaceholderCard); it now only
+  // appears here so cwah can still see it when diagnosing a stuck/odd job.
+  lines.push(`## ⚙️ Job Session Event Trail`);
+  lines.push('');
+  const sessionEvents = input.jobId ? getSessionLog(input.jobId) : [];
+  if (sessionEvents.length > 0) {
+    lines.push('```');
+    sessionEvents.forEach((e) => {
+      lines.push(`${new Date(e.ts).toISOString()} ${e.writer} ${e.action}${e.status ? ' ' + e.status : ''}${e.resultKey ? ' ' + e.resultKey : ''}`.trim());
+    });
+    lines.push('```');
+  } else {
+    lines.push(`_No job session event trail captured for this job._`);
   }
   lines.push('');
 

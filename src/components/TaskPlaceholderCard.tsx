@@ -6,7 +6,6 @@ import { ImageStore } from '../jobs/ImageStore';
 import { JobStore } from '../jobs/JobStore';
 import { previewStatus, previewStatusLabel, isEditJob, isTurnInFlight } from '../jobs/jobPreview';
 import { useJob } from '../hooks/useJob';
-import { getSessionLog, formatSessionLog } from '../jobs/sessionLog';
 import { JobQueueRunner } from '../jobs/JobQueueRunner';
 import { FoodLog } from '../types';
 import { humanizeJobFailure } from '../utils/jobFailure';
@@ -448,12 +447,6 @@ export default function TaskPlaceholderCard({
                 </span>
               )}
             </div>
-
-            {import.meta.env.DEV && getSessionLog(job.id).length > 0 && (
-              <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap text-[10px] text-slate-500" title={formatSessionLog(job.id)}>
-                {formatSessionLog(job.id)}
-              </pre>
-            )}
 
             <h4 className="text-sm font-bold text-theme-text-primary truncate">
               {displayTitle}

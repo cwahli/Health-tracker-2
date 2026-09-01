@@ -1959,7 +1959,15 @@ export function formatMealReceiptTable(items: any[], totalNutrients: any, totalW
       : (Array.isArray(it.components) && it.components.length > 0 ? it.components : null);
 
     // 1. Dish title row
-    const subNames = compList && compList.length > 1 ? ` (${compList.map((c: any) => c.name || c.keyword || '').filter(Boolean).join(', ')})` : '';
+    // Only append constituent names the title doesn't already spell out — composite dishes
+    // built by Spatial Clustering (server_vision_scout.ts) already fold ingredient names into
+    // itemName, so re-listing them here duplicated the same text twice in the row header.
+    const subNames = (() => {
+      if (!compList || compList.length <= 1) return '';
+      const compNames = compList.map((c: any) => c.name || c.keyword || '').filter(Boolean);
+      const missingNames = compNames.filter((n: string) => !itemName.toLowerCase().includes(n.toLowerCase()));
+      return missingNames.length > 0 ? ` (${missingNames.join(', ')})` : '';
+    })();
     table += `| **${idx + 1}. ${itemName} - ${itW}g${subNames}** | - | - | - | - |\n`;
 
     // 2. Constituent rows
