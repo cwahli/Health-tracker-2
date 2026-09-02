@@ -613,16 +613,24 @@ export async function upsertJobToSupabase(
     
     // 1. Push through backend server endpoint
     let serverUpsertSuccess = false;
+    const diag4Start = Date.now();
+    console.log(`[DIAG4] upsertJobToSupabase: calling /api/jobs/upsert for job ${job.id}`);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       const res = await fetch('/api/jobs/upsert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(auth.currentUser ? { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` } : {}) },
         body: JSON.stringify({ payload }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+      console.log(`[DIAG4] upsertJobToSupabase: /api/jobs/upsert for job ${job.id} responded ${res.status} in ${Date.now() - diag4Start}ms`);
       if (res.ok) {
         serverUpsertSuccess = true;
       }
     } catch (backendErr: any) {
+      console.debug(`[DIAG4] upsertJobToSupabase: /api/jobs/upsert for job ${job.id} failed/timed out after ${Date.now() - diag4Start}ms:`, backendErr?.message || backendErr);
       console.debug('[SupabaseJobSync] Backend /api/jobs/upsert not reachable, using direct cloud sync:', backendErr?.message || backendErr);
     }
 

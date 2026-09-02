@@ -9,17 +9,22 @@ export const jobsRouter = Router();
  * Express router for /api/jobs/* operations
  */
 jobsRouter.post('/api/jobs/upsert', async (req, res) => {
+  const diag4Start = Date.now();
   try {
     const authData = await verifyFirebaseIdToken(req);
-    console.log('[FreeTier] requireAuth supabase-push');
+    console.log('[FreeTier] requireAuth jobs-upsert');
 
     const { payload } = req.body;
     if (!payload || !payload.id || !payload.user_id) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    
+    const payloadSize = JSON.stringify(payload).length;
+    console.log(`[DIAG4] /api/jobs/upsert starting for job ${payload.id}, payload size ${payloadSize} bytes`);
+
     const { error } = await supabaseAdmin.from('agent_jobs').upsert(payload, { onConflict: 'id' });
-    
+
+    console.log(`[DIAG4] /api/jobs/upsert supabaseAdmin.upsert finished for job ${payload.id} in ${Date.now() - diag4Start}ms`);
+
     if (error) {
       console.error('Failed to upsert job to Supabase via server:', error);
       return res.status(500).json({ error: error.message });
@@ -27,7 +32,7 @@ jobsRouter.post('/api/jobs/upsert', async (req, res) => {
     
     res.json({ success: true });
   } catch (err) {
-    console.error('Failed to upsert job:', err);
+    console.error(`[DIAG4] /api/jobs/upsert failed after ${Date.now() - diag4Start}ms:`, err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
