@@ -45,36 +45,45 @@ function isPreviewFailed(job: AgentJob, lastMsgContent?: string): boolean {
 
 export function previewStatusLabel(
   job: AgentJob,
-  opts?: { queuedAhead?: number; lastMsgContent?: string }
+  opts?: { queuedAhead?: number; lastMsgContent?: string; dict?: Record<string, string> }
 ): string {
+  const d = opts?.dict;
   const effectiveStatus = previewStatus(job);
   const edit = isEditJob(job);
   if (effectiveStatus === 'succeeded' && Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) {
-    return 'AI advice pending';
+    return d?.statusAiAdvicePending || 'AI advice pending';
   }
   if (isPreviewFailed(job, opts?.lastMsgContent)) {
-    return 'Analysis failed';
+    return d?.statusAnalysisFailed || d?.analysisFailed || 'Analysis failed';
   }
   const statusKey = effectiveStatus as JobStatus;
   switch (statusKey) {
     case 'queued': {
-      if (edit) return 'Updating meal • Queued';
+      if (edit) return d?.statusUpdatingMealQueued || 'Updating meal • Queued';
       const ahead = opts?.queuedAhead ?? 0;
-      return ahead > 0 ? `Waiting — ${ahead} ahead` : 'Uploaded • Queued on server';
+      if (ahead > 0) {
+        return d?.statusWaitingAhead
+          ? d.statusWaitingAhead.replace('{count}', String(ahead))
+          : `Waiting — ${ahead} ahead`;
+      }
+      return d?.statusUploadedQueued || 'Uploaded • Queued on server';
     }
     case 'running':
     case 'processing':
-      return edit ? 'Updating meal...' : `Attempt ${job.attemptCount || 1} of ${job.maxAttempts || 3}`;
+      if (edit) return d?.updatingMeal || 'Updating meal...';
+      return d?.attemptOf
+        ? d.attemptOf.replace('{current}', String(job.attemptCount || 1)).replace('{max}', String(job.maxAttempts || 3))
+        : `Attempt ${job.attemptCount || 1} of ${job.maxAttempts || 3}`;
     case 'failed':
-      return 'Analysis failed';
+      return d?.statusAnalysisFailed || d?.analysisFailed || 'Analysis failed';
     case 'cancelled':
     case 'cancel_requested':
-      return 'Analysis cancelled';
+      return d?.statusAnalysisCancelled || 'Analysis cancelled';
     case 'awaiting_user':
-      return 'Action required';
+      return d?.statusActionRequired || 'Action required';
     case 'succeeded':
-      return 'Analysis completed';
+      return d?.statusAnalysisCompleted || 'Analysis completed';
     default:
-      return 'Processing...';
+      return d?.statusProcessing || 'Processing...';
   }
 }

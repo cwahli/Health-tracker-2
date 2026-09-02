@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { translations } from '../../utils/translations';
 
 interface PackPortionRowProps {
   foodName: string;
@@ -9,6 +10,7 @@ interface PackPortionRowProps {
   onConfirmPortion?: () => void;
   portionAccepted?: boolean;
   darkTheme?: boolean;
+  language?: string;
 }
 
 export const PackPortionRow: React.FC<PackPortionRowProps> = ({
@@ -20,7 +22,9 @@ export const PackPortionRow: React.FC<PackPortionRowProps> = ({
   onConfirmPortion,
   portionAccepted = false,
   darkTheme = false,
+  language = 'en',
 }) => {
+  const t = translations[language || 'en'] || translations.en;
   const [isAccepted, setIsAccepted] = useState(portionAccepted);
   const [isDismissed, setIsDismissed] = useState(false);
   const [isCustomOpen, setIsCustomOpen] = useState(false);
@@ -77,7 +81,7 @@ export const PackPortionRow: React.FC<PackPortionRowProps> = ({
         <span className="px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] border border-indigo-200 dark:border-indigo-800">
           [{packGrams}g]
         </span>
-        <span className="text-slate-500 dark:text-slate-400 font-normal">then portion</span>
+        <span className="text-slate-500 dark:text-slate-400 font-normal">{t.thenPortion || 'then portion'}</span>
 
         {isCustomOpen ? (
           <div className="inline-flex items-center gap-1">
@@ -135,7 +139,7 @@ export const PackPortionRow: React.FC<PackPortionRowProps> = ({
                 {opt.label}
               </option>
             ))}
-            <option value="custom">Custom...</option>
+            <option value="custom">{t.customEllipsis || 'Custom...'}</option>
           </select>
         )}
       </div>
@@ -143,7 +147,7 @@ export const PackPortionRow: React.FC<PackPortionRowProps> = ({
       <div className="flex items-center gap-1.5">
         {isAccepted ? (
           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700/60 px-2 py-0.5 rounded-md transition-all">
-            ✓ Accepted
+            ✓ {t.acceptedBadge || 'Accepted'}
           </span>
         ) : (
           <button
@@ -151,7 +155,7 @@ export const PackPortionRow: React.FC<PackPortionRowProps> = ({
             onClick={handleAccept}
             className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all cursor-pointer"
           >
-            Accept
+            {t.acceptPortion || 'Accept'}
           </button>
         )}
       </div>

@@ -855,6 +855,7 @@ export function NutritionLabelTable({
                     currentWeight={resolvedWeight || 100}
                     dishWeight={activeTab === 0 ? dishTotalWeight : undefined}
                     portionAccepted={Boolean(rootItem.portionAccepted || item.portionAccepted)}
+                    language={language}
                     onConfirmPortion={() => {
                       rootItem.portionAccepted = true;
                       item.portionAccepted = true;
@@ -890,10 +891,11 @@ export function NutritionLabelTable({
                   <div className="flex flex-wrap items-center justify-between gap-2 p-2 mb-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 text-xs font-sans">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-semibold text-slate-800 dark:text-slate-100">{activeTitle}</span>
-                      <span className="text-slate-500 dark:text-slate-400 font-normal">portion:</span>
+                      <span className="text-slate-500 dark:text-slate-400 font-normal">{t.weightLabel}:</span>
                       <PortionDropdown
                         baseWeight={activeTab > 0 ? (resolveComponentWeightGrams(subComps[activeTab - 1], staticDishTotalWeight, subComps.length) || 100) : (staticDishTotalWeight || 100)}
                         currentWeight={resolvedWeight || 100}
+                        language={language}
                         onScale={(ratio) => {
                           const baseW = activeTab > 0 ? (resolveComponentWeightGrams(subComps[activeTab - 1], staticDishTotalWeight, subComps.length) || 100) : (staticDishTotalWeight || 100);
                           const newWeight = Math.round(baseW * ratio);
@@ -994,7 +996,7 @@ export function NutritionLabelTable({
                           <thead>
                             <tr className="bg-slate-100/50 dark:bg-slate-800/50">
                               <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50">
-                                Nutrient
+                                {t.nutrientLabel}
                               </th>
                               <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50">
                                 {(() => {
@@ -1019,7 +1021,7 @@ export function NutritionLabelTable({
                                 })()}
                               </th>
                               <th className="py-1.5 px-2 font-bold text-theme-text-secondary border-b border-theme-border/50 whitespace-nowrap">
-                                Total{resolvedWeight ? ` (${resolvedWeight}${isVolume ? 'ml' : 'g'})` : ''}
+                                {t.totalLabel}{resolvedWeight ? ` (${resolvedWeight}${isVolume ? 'ml' : 'g'})` : ''}
                               </th>
                             </tr>
                           </thead>
@@ -1182,8 +1184,8 @@ export function NutritionLabelTable({
                                 (isFromRawLabel || sourceKey === 'brand_label_data' || (item.dbSource === 'brand_official' && inLockedKeys))
                               );
                               const verifiedTooltipText = (sourceKey === 'brand_label_data' || item.dbSource === 'brand_official')
-                                ? 'Verified from brand label data'
-                                : 'Verified from printed label';
+                                ? (t.verifiedFromBrandData || 'Verified from brand label data')
+                                : (t.verifiedFromPrintedLabel || 'Verified from printed label');
 
                               const isSodium = k.toLowerCase().includes('sodium') || k.toLowerCase().includes('salt');
 
@@ -1198,7 +1200,7 @@ export function NutritionLabelTable({
                                             trigger={
                                               <div
                                                 className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 cursor-pointer transition-colors"
-                                                aria-label="Verified from brand label"
+                                                aria-label={t.verifiedFromBrandLabel || "Verified from brand label"}
                                               >
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-emerald-500">
                                                   <polyline points="20 6 9 17 4 12"></polyline>
@@ -1264,7 +1266,7 @@ export function NutritionLabelTable({
                             onClick={() => toggleShowEstimated(i)}
                             className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer inline-flex items-center gap-1 py-1 px-2.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
                           >
-                            <span>{isEstimatedExpanded ? "Show less" : "Show more"}</span>
+                            <span>{isEstimatedExpanded ? t.viewLess : t.viewMore}</span>
                             <svg
                               className={`w-3.5 h-3.5 transition-transform ${isEstimatedExpanded ? 'rotate-180' : ''}`}
                               fill="none"
@@ -1316,7 +1318,7 @@ export function NutritionLabelTable({
                         </span>
                         <span className="text-[10px] font-medium leading-tight opacity-90 mt-0.5">
                           {isUnclear 
-                            ? `Low confidence or anomalies detected (${cleanAnomalyFlags.join(', ') || 'unclear detail'}).` 
+                            ? (t.lowConfidenceAnomalies ? t.lowConfidenceAnomalies.replace('{flags}', cleanAnomalyFlags.join(', ') || (t.unclearDetail || 'unclear detail')) : `Low confidence or anomalies detected (${cleanAnomalyFlags.join(', ') || 'unclear detail'}).`) 
                             : t.providePortionSize}
                         </span>
                       </div>
@@ -1326,7 +1328,7 @@ export function NutritionLabelTable({
                         onClick={() => { document.getElementById('food-chat-input')?.focus(); }} 
                         className="flex-1 text-[10px] font-bold bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 py-1.5 px-3 rounded-md shadow-sm hover:bg-amber-50 dark:hover:bg-amber-900/40 active:scale-95 transition-all text-center"
                       >
-                        Edit Item
+                        {t.editItem}
                       </button>
                       <button 
                         onClick={() => { 
@@ -1338,14 +1340,14 @@ export function NutritionLabelTable({
                         }} 
                         className="flex-1 text-[10px] font-bold bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 py-1.5 px-3 rounded-md shadow-sm hover:bg-amber-50 dark:hover:bg-amber-900/40 active:scale-95 transition-all text-center"
                       >
-                        This is correct
+                        {t.thisIsCorrect}
                       </button>
                     </div>
                   </div>
                 )}
                 {item._preservedAnomalyFlags && item._preservedAnomalyFlags.length > 0 && (
                   <div className="mt-2 text-[10px] text-theme-text-secondary font-sans px-1">
-                    t.noteAnomaly
+                    {t.noteAnomaly}{item._preservedAnomalyFlags.join(', ')}
                   </div>
                 )}
               </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { translations } from '../../utils/translations';
 
 interface PortionDropdownProps {
   baseWeight: number;
@@ -6,6 +7,7 @@ interface PortionDropdownProps {
   onScale: (ratio: number) => void;
   className?: string;
   darkTheme?: boolean;
+  language?: string;
 }
 
 const PRESET_RATIOS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0];
@@ -16,7 +18,9 @@ export const PortionDropdown: React.FC<PortionDropdownProps> = ({
   onScale,
   className = '',
   darkTheme = false,
+  language = 'en',
 }) => {
+  const t = translations[language || 'en'] || translations.en;
   const safeBaseWeight = baseWeight > 0 ? baseWeight : 100;
   const safeCurrentWeight = currentWeight > 0 ? currentWeight : safeBaseWeight;
 
@@ -129,7 +133,9 @@ export const PortionDropdown: React.FC<PortionDropdownProps> = ({
           );
         })}
         <option value="custom">
-          {matchedRatio === undefined ? `Custom (${safeCurrentWeight}g)` : 'Custom (g)...'}
+          {matchedRatio === undefined
+            ? (t.customWithWeight ? t.customWithWeight.replace('{weight}', String(safeCurrentWeight)) : `Custom (${safeCurrentWeight}g)`)
+            : (t.customGramsEllipsis || 'Custom (g)...')}
         </option>
       </select>
     </div>

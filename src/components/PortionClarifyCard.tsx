@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { translations } from '../utils/translations';
 
 export type PortionOption = { id: string; label: string; weightGrams: number };
 export type PortionClarifyItem = {
@@ -18,12 +19,14 @@ type Props = {
   portionClarify: PortionClarifyPayload;
   onConfirm: (choices: Record<string, number>) => void;
   disabled?: boolean;
+  language?: string;
 };
 
 /**
  * B1 — Ask how much of a multi-serve pack the user ate before dietitian runs.
  */
-export function PortionClarifyCard({ portionClarify, onConfirm, disabled }: Props) {
+export function PortionClarifyCard({ portionClarify, onConfirm, disabled, language = 'en' }: Props) {
+  const t = translations[language || 'en'] || translations.en;
   const items = portionClarify?.items || [];
   const [selected, setSelected] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {};
@@ -102,7 +105,7 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled }: Prop
                     : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
                 }`}
               >
-                Custom (g)
+                {t.customGrams || 'Custom (g)'}
               </button>
             </div>
             {customOpen[key] && (
@@ -111,7 +114,7 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled }: Prop
                   type="number"
                   min={1}
                   max={2000}
-                  placeholder="grams"
+                  placeholder={t.gramsPlaceholder || 'grams'}
                   value={customVal[key] || ''}
                   onChange={(e) => {
                     setCustomVal((p) => ({ ...p, [key]: e.target.value }));
@@ -135,7 +138,7 @@ export function PortionClarifyCard({ portionClarify, onConfirm, disabled }: Prop
         onClick={() => onConfirm(selected)}
         className="w-full sm:w-auto px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold cursor-pointer shadow-md"
       >
-        Continue with these portions
+        {t.continueWithThesePortions || 'Continue with these portions'}
       </button>
     </div>
   );

@@ -1443,7 +1443,7 @@ ${logsText}`);
           const portionClarify =
             rawResult.portionClarify ||
             (job.result as any)?.data?.portionClarify;
-          const promptMsg = portionClarify?.promptMessage || job.statusMessage || 'Please confirm portion size';
+          const promptMsg = portionClarify?.promptMessage || job.statusMessage || t.pleaseConfirmPortionSize || 'Please confirm portion size';
           const scoutItems =
             (Array.isArray(rawResult.scoutItems) && rawResult.scoutItems.length > 0)
               ? rawResult.scoutItems
@@ -1482,7 +1482,7 @@ ${logsText}`);
           const liveMsg: ChatMessage = {
             id: `msg_live_${activeJobId}`,
             role: 'assistant',
-            content: job.statusMessage || (type === 'medical' ? 'Analyzing medical data in the background...' : 'Analyzing your meal in the background...'),
+            content: job.statusMessage || (type === 'medical' ? (t.analyzingMedicalBackground || 'Analyzing medical data in the background...') : (t.analyzingMealBackground || 'Analyzing your meal in the background...')),
             timestamp: job.updatedAt || new Date().toISOString(),
             isLive: true,
             agentType: type as any,
@@ -1721,7 +1721,7 @@ ${logsText}`);
           const portionClarify =
             rawResult.portionClarify ||
             (job.result as any)?.data?.portionClarify;
-          const promptMsg = portionClarify?.promptMessage || job.statusMessage || 'Please confirm portion size';
+          const promptMsg = portionClarify?.promptMessage || job.statusMessage || t.pleaseConfirmPortionSize || 'Please confirm portion size';
           const scoutItems =
             rawResult.scoutItems ||
             [];
@@ -1751,7 +1751,7 @@ ${logsText}`);
           const assistantMsg: ChatMessage = {
             id: `msg_assistant_${activeJobId}`,
             role: 'assistant',
-            content: `⚠️ **Analysis failed**\n\n${humanizeJobFailure(job.error?.message)}`,
+            content: `⚠️ **${t.analysisFailed || 'Analysis failed'}**\n\n${humanizeJobFailure(job.error?.message)}`,
             timestamp: job.updatedAt || new Date().toISOString(),
             isError: true
           };
@@ -1760,7 +1760,7 @@ ${logsText}`);
           const assistantMsg: ChatMessage = {
             id: `msg_assistant_${activeJobId}`,
             role: 'assistant',
-            content: `⚠️ **Analysis cancelled**\n\nThe user cancelled this analysis request.`,
+            content: `⚠️ **${t.analysisCancelled || 'Analysis cancelled'}**\n\n${t.analysisCancelledDetail || 'The user cancelled this analysis request.'}`,
             timestamp: job.updatedAt || new Date().toISOString()
           };
           setMessages([welcome, userMsg, assistantMsg], false);
@@ -1768,7 +1768,7 @@ ${logsText}`);
           const liveMsg: ChatMessage = {
             id: `msg_live_${activeJobId}`,
             role: 'assistant',
-            content: job.statusMessage || (type === 'medical' ? 'Analyzing medical data in the background...' : 'Analyzing your meal in the background...'),
+            content: job.statusMessage || (type === 'medical' ? (t.analyzingMedicalBackground || 'Analyzing medical data in the background...') : (t.analyzingMealBackground || 'Analyzing your meal in the background...')),
             timestamp: job.updatedAt || new Date().toISOString(),
             isLive: true,
             agentType: type as any,
@@ -2268,7 +2268,12 @@ ${logsText}`);
         const errorMsg: ChatMessage = {
           id: `msg_err_${Date.now()}`,
           role: 'assistant',
-          content: `⚠️ **Credit Quota Exceeded**\n\nYou have insufficient AI Agent credits to make this request!\n\n* **Required**: \`${cost}\` credits (for model \`${selectedModelId}\`)\n* **Available**: \`${creditInfo.total}\` credits (Daily quota: \`${creditInfo.daily}\`)\n* **Reset Time**: Resets in **${creditInfo.nextResetStr}**.\n\n*Admins can grant additional credits with duration in the User Management tab under Admin Settings.*`,
+          content: `⚠️ **${t.creditQuotaExceededTitle || 'Credit Quota Exceeded'}**\n\n${(t.creditQuotaExceededBody || "You have insufficient AI Agent credits to make this request!\n\n* **Required**: `{cost}` credits (for model `{selectedModelId}`)\n* **Available**: `{total}` credits (Daily quota: `{daily}`)\n* **Reset Time**: Resets in **{nextResetStr}**.\n\n*Admins can grant additional credits with duration in the User Management tab under Admin Settings.*")
+            .replace('{cost}', String(cost))
+            .replace('{selectedModelId}', selectedModelId)
+            .replace('{total}', String(creditInfo.total))
+            .replace('{daily}', String(creditInfo.daily))
+            .replace('{nextResetStr}', creditInfo.nextResetStr)}`,
           timestamp: new Date().toISOString(),
           isError: true
         };
@@ -2529,7 +2534,7 @@ ${logsText}`);
           });
         }
         // Keep modal open, append messages to local React state
-        let liveContent = 'Analyzing your meal in the background...';
+        let liveContent = t.analyzingMealBackground || 'Analyzing your meal in the background...';
         if (extraOptions?.portionChoices && typeof extraOptions.portionChoices === 'object') {
           const choices = extraOptions.portionChoices;
           const items = extraOptions.scoutItems || scoutItemsForJob || [];
@@ -2788,7 +2793,7 @@ ${logsText}`);
         const errorMsg: ChatMessage = {
           id: `msg_err_${Date.now()}`,
           role: 'assistant',
-          content: `⚠️ **Submission Failed**\n\n${err.message || 'An unexpected error occurred while queueing your request.'}`,
+          content: `⚠️ **${t.submissionFailedTitle || 'Submission Failed'}**\n\n${err.message || t.unexpectedQueueError || 'An unexpected error occurred while queueing your request.'}`,
           timestamp: new Date().toISOString(),
           isError: true
         };
@@ -3031,7 +3036,7 @@ ${logsText}`);
         const errorMsg: ChatMessage = {
           id: `msg_err_${Date.now()}`,
           role: 'assistant',
-          content: `⚠️ **Submission Failed**\n\n${err.message || 'An unexpected error occurred while queueing your request.'}`,
+          content: `⚠️ **${t.submissionFailedTitle || 'Submission Failed'}**\n\n${err.message || t.unexpectedQueueError || 'An unexpected error occurred while queueing your request.'}`,
           timestamp: new Date().toISOString(),
           isError: true
         };
@@ -4315,14 +4320,14 @@ ${logsText}`);
       const isQuota = err.message?.includes("429") || err.message?.includes("quota") || err.message?.toUpperCase()?.includes("RESOURCE_EXHAUSTED");
       let displayErr = err.message || "An error occurred during processing.";
       if (err.message && err.message.toLowerCase().includes("failed to fetch")) {
-        displayErr = "Network error: Failed to reach the server. Please check your internet connection or verify that the server is running. (Original error: " + err.message + ")";
+        displayErr = (t.networkErrorReachServer || "Network error: Failed to reach the server. Please check your internet connection or verify that the server is running. (Original error: {error})").replace('{error}', err.message);
       } else if (err.message && err.message.toLowerCase() === "network error") {
-        displayErr = "Network error: The browser failed to complete the request (CORS, offline, or server abruptly closed the connection).";
+        displayErr = t.networkErrorBrowser || "Network error: The browser failed to complete the request (CORS, offline, or server abruptly closed the connection).";
       }
       if (isTimeout) {
-        displayErr = `The analysis timed out after 150 seconds. The selected model (${selectedModelId}) may be taking too long. Please retry your request or switch to a different model from the top-left model selector.`;
+        displayErr = (t.analysisTimedOut || `The analysis timed out after 150 seconds. The selected model ({model}) may be taking too long. Please retry your request or switch to a different model from the top-left model selector.`).replace('{model}', selectedModelId);
       } else if (isQuota) {
-        displayErr = "The AI agent hit a rate limit (quota exceeded). Please wait a few moments or switch to a different model from the top-left model selector.";
+        displayErr = t.rateLimitExceeded || "The AI agent hit a rate limit (quota exceeded). Please wait a few moments or switch to a different model from the top-left model selector.";
       }
       const errorReqId = currentReqId || `err_${Date.now()}`;
       const effectiveAgentType = agentType || type || 'front_desk';
@@ -5070,12 +5075,12 @@ ${logsText}`);
                               {(isCalibrating || isAnalyzing) ? (
                                 <>
                                   <Loader className="w-3.5 h-3.5 animate-spin" />
-                                  <span>Calibrating with Agent...</span>
+                                  <span>{t.calibratingWithAgent}</span>
                                 </>
                               ) : (
                                 <>
                                   <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                                  <span>Calibrate with Agent</span>
+                                  <span>{t.calibrateWithAgent}</span>
                                 </>
                               )}
                             </button>
@@ -5321,52 +5326,52 @@ ${logsText}`);
                           ))}
                         </div>
                       ) : (
-                        <span className="text-slate-450 dark:text-slate-500 italic font-size-xs">All active biomarkers are within normal reference ranges.</span>
+                        <span className="text-slate-450 dark:text-slate-500 italic font-size-xs">{t.allActiveBiomarkersNormal || 'All active biomarkers are within normal reference ranges.'}</span>
                       )}
                     </div>
                   )}
                   {/* Remaining Daily Allowances */}
                   {(isAgent('food') || isAgent('food_idea')) && (
                     <div>
-                      <span className="text-slate-400 dark:text-slate-500 font-bold block font-size-xs uppercase tracking-wider mb-2">Nutrient Targets & 7-Day Rolling Status</span>
+                      <span className="text-slate-400 dark:text-slate-500 font-bold block font-size-xs uppercase tracking-wider mb-2">{t.nutrientTargetsRollingStatus || 'Nutrient Targets & 7-Day Rolling Status'}</span>
                       <div className="grid grid-cols-3 gap-2">
                         {/* Calories Card */}
                         <div className="text-center bg-slate-100/60 dark:bg-slate-950/30 border border-slate-150 dark:border-slate-800/40 p-2.5 rounded-xl flex flex-col justify-between">
                           <div>
-                            <span className="text-slate-400 font-size-xs block uppercase font-bold tracking-wider mb-1">Calories</span>
+                            <span className="text-slate-400 font-size-xs block uppercase font-bold tracking-wider mb-1">{t.caloriesLabel || 'Calories'}</span>
                             <span className="font-mono text-sm font-bold text-slate-800 dark:text-slate-200 block">
-                              {remainingAllowance.calories} <span className="text-[10px] text-slate-400 font-normal">kcal left</span>
+                              {remainingAllowance.calories} <span className="text-[10px] text-slate-400 font-normal">{t.kcalLeft || 'kcal left'}</span>
                             </span>
                           </div>
                           <div className="mt-2 pt-1.5 border-t border-slate-200/50 dark:border-slate-800/50 text-[10px] space-y-0.5 text-slate-500 dark:text-slate-400">
-                            <div>Today: <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{remainingAllowance.caloriesLogged || 0}/{remainingAllowance.caloriesTarget}</span></div>
-                            <div>7d Avg: <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">{Math.round(remainingAllowance.averages?.calories || 0)}</span></div>
+                            <div>{t.todayColon || 'Today:'} <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{remainingAllowance.caloriesLogged || 0}/{remainingAllowance.caloriesTarget}</span></div>
+                            <div>{t.sevenDayAvg || '7d Avg:'} <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">{Math.round(remainingAllowance.averages?.calories || 0)}</span></div>
                           </div>
                         </div>
                         {/* Sat. Fat Card */}
                         <div className="text-center bg-slate-100/60 dark:bg-slate-950/30 border border-slate-150 dark:border-slate-800/40 p-2.5 rounded-xl flex flex-col justify-between">
                           <div>
-                            <span className="text-slate-400 font-size-xs block uppercase font-bold tracking-wider mb-1">Sat. Fat</span>
+                            <span className="text-slate-400 font-size-xs block uppercase font-bold tracking-wider mb-1">{t.satFatLabel || 'Sat Fat'}</span>
                             <span className={`font-mono text-sm font-bold block ${remainingAllowance.saturatedFat === 0 ? 'text-rose-500' : 'text-slate-800 dark:text-slate-200'}`}>
-                              {remainingAllowance.saturatedFat.toFixed(1)} <span className="text-[10px] text-slate-400 font-normal font-sans">g left</span>
+                              {remainingAllowance.saturatedFat.toFixed(1)} <span className="text-[10px] text-slate-400 font-normal font-sans">{t.gLeft || 'g left'}</span>
                             </span>
                           </div>
                           <div className="mt-2 pt-1.5 border-t border-slate-200/50 dark:border-slate-800/50 text-[10px] space-y-0.5 text-slate-500 dark:text-slate-400">
-                            <div>Today: <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{(remainingAllowance.saturatedFatLogged || 0).toFixed(1)}/{remainingAllowance.saturatedFatTarget}</span></div>
-                            <div>7d Avg: <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">{(remainingAllowance.averages?.saturatedFat || 0).toFixed(1)}</span></div>
+                            <div>{t.todayColon || 'Today:'} <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{(remainingAllowance.saturatedFatLogged || 0).toFixed(1)}/{remainingAllowance.saturatedFatTarget}</span></div>
+                            <div>{t.sevenDayAvg || '7d Avg:'} <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">{(remainingAllowance.averages?.saturatedFat || 0).toFixed(1)}</span></div>
                           </div>
                         </div>
                         {/* Sodium Card */}
                         <div className="text-center bg-slate-100/60 dark:bg-slate-950/30 border border-slate-150 dark:border-slate-800/40 p-2.5 rounded-xl flex flex-col justify-between">
                           <div>
-                            <span className="text-slate-400 font-size-xs block uppercase font-bold tracking-wider mb-1">Sodium</span>
+                            <span className="text-slate-400 font-size-xs block uppercase font-bold tracking-wider mb-1">{t.sodiumLabel || 'Sodium'}</span>
                             <span className={`font-mono text-sm font-bold block ${remainingAllowance.sodium === 0 ? 'text-rose-500' : 'text-slate-800 dark:text-slate-200'}`}>
-                              {remainingAllowance.sodium} <span className="text-[10px] text-slate-400 font-normal">mg left</span>
+                              {remainingAllowance.sodium} <span className="text-[10px] text-slate-400 font-normal">{t.mgLeft || 'mg left'}</span>
                             </span>
                           </div>
                           <div className="mt-2 pt-1.5 border-t border-slate-200/50 dark:border-slate-800/50 text-[10px] space-y-0.5 text-slate-500 dark:text-slate-400">
-                            <div>Today: <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{remainingAllowance.sodiumLogged || 0}/{remainingAllowance.sodiumTarget}</span></div>
-                            <div>7d Avg: <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">{Math.round(remainingAllowance.averages?.sodium || 0)}</span></div>
+                            <div>{t.todayColon || 'Today:'} <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{remainingAllowance.sodiumLogged || 0}/{remainingAllowance.sodiumTarget}</span></div>
+                            <div>{t.sevenDayAvg || '7d Avg:'} <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">{Math.round(remainingAllowance.averages?.sodium || 0)}</span></div>
                           </div>
                         </div>
                       </div>
@@ -5461,7 +5466,7 @@ ${logsText}`);
                         >
                           <MessageSquare className="w-3.5 h-3.5" />
                           <span>
-                            {showPastDiscussion ? "Hide past discussion" : `View past discussion (${pastCount})`}
+                            {showPastDiscussion ? (t.hidePastDiscussion || "Hide past discussion") : (t.viewPastDiscussion ? t.viewPastDiscussion.replace('{count}', String(pastCount)) : `View past discussion (${pastCount})`)}
                           </span>
                         </button>
                         {showPastDiscussion && (
@@ -5472,7 +5477,7 @@ ${logsText}`);
                               setShowPastDiscussion(false);
                             }}
                             className="p-1.5 rounded-xl bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-slate-800/40 hover:bg-rose-100 dark:hover:bg-rose-900/30 text-rose-500 hover:text-rose-600 transition-colors"
-                            title="Clear past discussion history"
+                            title={t.clearPastDiscussion || "Clear past discussion history"}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -5508,7 +5513,7 @@ ${logsText}`);
                           type="button"
                           onClick={() => setFlagMsg(msg)}
                           className="p-1 text-slate-300 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                          title="Flag issue with this response"
+                          title={t.flagIssueWithThisResponse || "Flag issue with this response"}
                         >
                           <Flag className="w-3.5 h-3.5" />
                         </button>
@@ -5517,7 +5522,7 @@ ${logsText}`);
                         type="button"
                         onClick={() => handleDeleteMessagePair(msg.id)}
                         className="p-1 text-slate-300 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                        title="Delete conversation step"
+                        title={t.deleteConversationStep || "Delete conversation step"}
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -5589,10 +5594,10 @@ ${logsText}`);
                                   }
                                 }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all cursor-pointer"
-                                title={`Retry analysis with ${AVAILABLE_LLMS.find(m => m.id === selectedModelId)?.name || selectedModelId}`}
+                                title={t.retryAnalysisWith ? t.retryAnalysisWith.replace('{model}', AVAILABLE_LLMS.find(m => m.id === selectedModelId)?.name || selectedModelId) : `Retry analysis with ${AVAILABLE_LLMS.find(m => m.id === selectedModelId)?.name || selectedModelId}`}
                               >
                                 <RotateCcw className="w-3.5 h-3.5" />
-                                <span>Retry ({AVAILABLE_LLMS.find(m => m.id === selectedModelId)?.name || selectedModelId})</span>
+                                <span>{t.retry || 'Retry'} ({AVAILABLE_LLMS.find(m => m.id === selectedModelId)?.name || selectedModelId})</span>
                               </button>
                             )}
                             {isErrorMsg && (
@@ -5600,10 +5605,10 @@ ${logsText}`);
                                 type="button"
                                 onClick={() => setIsEngineSelectorOpen(prev => !prev)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/40 transition-all cursor-pointer"
-                                title="Change model / agent to retry"
+                                title={t.changeModelToRetry || "Change model / agent to retry"}
                               >
                                 <Sparkles className="w-3.5 h-3.5" />
-                                <span>Switch Agent</span>
+                                <span>{t.switchAgent}</span>
                                 <ChevronDown className="w-3 h-3" />
                               </button>
                             )}
@@ -5638,7 +5643,7 @@ ${logsText}`);
                   </div>
                     {msg.agentUnavailable && msg.data?.scoutItems && msg.data.scoutItems.length > 0 && (
                       <div className="mt-3 mb-2">
-                        <NutritionLabelTable activeScoutItems={msg.data.scoutItems} isSaved={loggedMessageIds.includes(msg.id)} />
+                        <NutritionLabelTable activeScoutItems={msg.data.scoutItems} isSaved={loggedMessageIds.includes(msg.id)} language={profile?.language || "en"} />
                       </div>
                     )}
                   {/* Render extracted Pending Food Log info */}
@@ -5730,6 +5735,7 @@ ${logsText}`);
                         {msg.data?.portionClarify && (
                           <PortionClarifyCard
                             portionClarify={msg.data.portionClarify}
+                            language={profile?.language || "en"}
                             onConfirm={(choices: any) => {
                               if (typeof handleSend === 'function') {
                                 // Pass the scout item(s) straight from this message with full fallback,
@@ -5800,7 +5806,7 @@ ${logsText}`);
                         type="button"
                         onClick={() => handleDeleteMessagePair(msg.id)}
                         className="absolute right-2 top-2 p-1 text-indigo-200 hover:text-white hover:bg-white/10 rounded-lg transition-colors z-20 cursor-pointer opacity-0 group-hover:opacity-100"
-                        title="Delete conversation step"
+                        title={t.deleteConversationStep}
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -5856,8 +5862,8 @@ ${logsText}`);
             return (
               <div className="absolute bottom-full left-0 right-0 mb-2 mx-3 bg-white dark:bg-slate-800 border border-theme-border/80 rounded-2xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto z-50 animate-fade-in font-sans">
                 <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-center">
-                  <span className="text-[11px] font-bold text-theme-text-secondary">Matches</span>
-                  <span className="text-[9px] text-slate-400">Click Add to inline</span>
+                  <span className="text-[11px] font-bold text-theme-text-secondary">{t.matches || "Matches"}</span>
+                  <span className="text-[9px] text-slate-400">{t.clickAddToInline || "Click Add to inline"}</span>
                 </div>
                 <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
                   {combinedMatches.map((item, idx) => (
@@ -5884,7 +5890,7 @@ ${logsText}`);
                           <div className="text-[10px] text-theme-text-secondary truncate mt-0.5">
                             {item._listType === 'brand' ? item.chain_name : (
                               <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider inline-block mr-1">
-                                Previous Meal
+                                {t.previousMeal || "Previous Meal"}
                               </span>
                             )}
                           </div>
@@ -5952,7 +5958,7 @@ ${logsText}`);
                           className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          Add
+                          {t.addInline || "Add"}
                         </button>
                       </div>
                     </div>
@@ -5965,7 +5971,10 @@ ${logsText}`);
             <div className="flex items-center gap-2 p-2 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900 rounded-xl">
               <Loader className="w-3.5 h-3.5 text-indigo-600 animate-spin" />
               <span className="text-[11px] text-indigo-700 dark:text-indigo-400 font-bold">
-                Compressing image {compressionProgress.current} of {compressionProgress.total} ({compressionProgress.percent}%) ...
+                {(t.compressingImageProgress || "Compressing image {current} of {total} ({percent}%) ...")
+                  .replace('{current}', String(compressionProgress.current))
+                  .replace('{total}', String(compressionProgress.total))
+                  .replace('{percent}', String(compressionProgress.percent))}
               </span>
             </div>
           )}
@@ -5999,21 +6008,21 @@ ${logsText}`);
                     onClick={() => onOpenAgentFromFrontDesk?.('medical')}
                     className="whitespace-nowrap px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
                   >
-                    <span>➕ Add medical data</span>
+                    <span>➕ {t.addMedicalData || 'Add medical data'}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => onOpenAgentFromFrontDesk?.('health_baseline')}
                     className="whitespace-nowrap px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-theme-neutral text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
-                    <span>🎯 Health planning</span>
+                    <span>🎯 {t.healthPlanning || 'Health planning'}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => onOpenAgentFromFrontDesk?.('agent7')}
                     className="whitespace-nowrap px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-theme-neutral text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
-                    <span>💡 Medical insights</span>
+                    <span>💡 {t.medicalInsightsAction || 'Medical insights'}</span>
                   </button>
                 </>
               ) : (
@@ -6029,7 +6038,7 @@ ${logsText}`);
                       className="w-full py-2.5 px-4 bg-gradient-to-r from-indigo-600 via-indigo-650 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-60 mb-2"
                     >
                       <BrainCircuit className="w-4 h-4 text-amber-300 animate-pulse" />
-                      <span>{isAnalyzing ? 'AI Diagnostic Analysis in Progress...' : '🔬 Run AI Diagnostic Analysis Now'}</span>
+                      <span>{isAnalyzing ? (t.diagnosticAnalysisInProgress || 'AI Diagnostic Analysis in Progress...') : (t.runAiDiagnosticNow || '🔬 Run AI Diagnostic Analysis Now')}</span>
                     </button>
                   ) : null
                 ) : (
@@ -6042,7 +6051,7 @@ ${logsText}`);
                       }}
                       className="whitespace-nowrap px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
                     >
-                      <span>🚀 {autoSendMessage ? (autoSendMessage.toLowerCase().includes('calibrate') ? 'Start Calibration' : 'Start Review') : "Let's start"}</span>
+                      <span>🚀 {autoSendMessage ? (autoSendMessage.toLowerCase().includes('calibrate') ? (t.startCalibration || 'Start Calibration') : (t.startReview || 'Start Review')) : (t.letsStart || "Let's start")}</span>
                     </button>
                   )
                 )
@@ -6060,7 +6069,7 @@ ${logsText}`);
                       setSelectedItemKeys([]);
                     }}
                     className="p-3 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-theme-text-secondary rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex-shrink-0 cursor-pointer"
-                    title="Reset Selection"
+                    title={t.resetSelection || "Reset Selection"}
                   >
                     <RotateCcw className="w-5 h-5" />
                   </button>
@@ -6082,7 +6091,7 @@ ${logsText}`);
                         : 'bg-indigo-600 hover:bg-indigo-700 text-white active:scale-95'
                     }`}
                   >
-                    <span>🔍 Image Search</span>
+                    <span>🔍 {t.imageSearch || 'Image Search'}</span>
                     {selectedItemKeys.length > 0 && (
                       <span className="px-1.5 py-0.5 bg-white/20 text-[9.5px] rounded-full">
                         {selectedItemKeys.length}
@@ -6106,7 +6115,7 @@ ${logsText}`);
                         : 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95'
                     }`}
                   >
-                    <span>🖼️ Show Menu Image</span>
+                    <span>🖼️ {t.showMenuImage || 'Show Menu Image'}</span>
                     {selectedItemKeys.length > 0 && (
                       <span className="px-1.5 py-0.5 bg-white/20 text-[9.5px] rounded-full">
                         {selectedItemKeys.length}
@@ -6130,7 +6139,7 @@ ${logsText}`);
                         : 'bg-amber-600 hover:bg-amber-700 text-white active:scale-95'
                     }`}
                   >
-                    <span>⚖️ Compare Food</span>
+                    <span>⚖️ {t.compareFood || 'Compare Food'}</span>
                     {selectedItemKeys.length > 0 && (
                       <span className="px-1.5 py-0.5 bg-white/20 text-[9.5px] rounded-full">
                         {selectedItemKeys.length}
@@ -6147,7 +6156,7 @@ ${logsText}`);
                   setSelectedItemKeys([]);
                 }}
                 className="p-3 bg-rose-50 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-650 dark:text-rose-450 rounded-xl transition-all cursor-pointer flex-shrink-0"
-                title="Cancel Selection"
+                title={t.cancelSelection || "Cancel Selection"}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -6161,7 +6170,7 @@ ${logsText}`);
                   type="button"
                   onClick={() => setIsPhotoMenuOpen(!isPhotoMenuOpen)}
                   className="p-3 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-theme-text-secondary rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex-shrink-0"
-                  title="Upload photo or take picture (Photos, Collections, Camera)"
+                  title={t.uploadPhotoOrTakePicture || "Upload photo or take picture (Photos, Collections, Camera)"}
                 >
                   <Image className="w-5 h-5" />
                 </button>
@@ -6173,7 +6182,7 @@ ${logsText}`);
                     />
                     <div className="absolute bottom-full left-0 mb-2 z-50 w-64 bg-theme-bg-card border border-theme-border rounded-2xl shadow-xl p-2 animate-scale-up backdrop-blur-md">
                       <div className="text-[11px] font-bold uppercase tracking-wider text-theme-text-secondary px-3 py-1.5 border-b border-theme-border/50 mb-1">
-                        Select Photo Source
+                        {t.selectPhotoSource || "Select Photo Source"}
                       </div>
                       <button
                         type="button"
@@ -6187,8 +6196,8 @@ ${logsText}`);
                           <Image className="w-4 h-4" />
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-theme-text">Photos</div>
-                          <div className="text-[11px] text-theme-text-secondary">Photo gallery & albums</div>
+                          <div className="text-sm font-semibold text-theme-text">{t.photos || "Photos"}</div>
+                          <div className="text-[11px] text-theme-text-secondary">{t.photoGalleryAlbums || "Photo gallery & albums"}</div>
                         </div>
                       </button>
                       <button
@@ -6203,8 +6212,8 @@ ${logsText}`);
                           <FolderOpen className="w-4 h-4" />
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-theme-text">Collections</div>
-                          <div className="text-[11px] text-theme-text-secondary">Image collections & files</div>
+                          <div className="text-sm font-semibold text-theme-text">{t.collections || "Collections"}</div>
+                          <div className="text-[11px] text-theme-text-secondary">{t.imageCollectionsFiles || "Image collections & files"}</div>
                         </div>
                       </button>
                       <button
@@ -6219,8 +6228,8 @@ ${logsText}`);
                           <Camera className="w-4 h-4" />
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-theme-text">Camera</div>
-                          <div className="text-[11px] text-theme-text-secondary">Take a new photo with camera</div>
+                          <div className="text-sm font-semibold text-theme-text">{t.camera || "Camera"}</div>
+                          <div className="text-[11px] text-theme-text-secondary">{t.takeNewPhotoWithCamera || "Take a new photo with camera"}</div>
                         </div>
                       </button>
                     </div>
@@ -6256,7 +6265,7 @@ ${logsText}`);
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
                 className="p-3 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-theme-text-secondary rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex-shrink-0"
-                title="Take photo from phone camera"
+                title={t.takePhotoFromPhoneCamera || "Take photo from phone camera"}
               >
                 <Camera className="w-5 h-5" />
               </button>
@@ -6288,7 +6297,7 @@ ${logsText}`);
                 }}
                 disabled={isAnalyzing || isSubmitting || isSendingRef.current || isCompressing}
                 className={`p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex items-center justify-center shrink-0 ${(isAnalyzing || isSubmitting || isSendingRef.current || isCompressing) ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'}`}
-                title={isCompressing ? 'Compressing...' : (isAnalyzing || isSubmitting) ? 'Analyzing...' : 'Send'}
+                title={isCompressing ? (t.compressingPhoto || 'Compressing photo') : (isAnalyzing || isSubmitting) ? (t.analyzingEllipsis || 'Analyzing...') : (t.send || 'Send')}
               >
                 {(isAnalyzing || isSubmitting || isCompressing) ? (
                   <Loader className="w-5 h-5 animate-spin" />
@@ -6316,8 +6325,8 @@ ${logsText}`);
                   </h3>
                   <p className="text-xs text-theme-text-secondary">
                     {activeModalTitle.includes('Reference')
-                      ? 'Demographically adjusted reference ranges and risk analysis based on age, gender, and ethnicity'
-                      : 'Unified view of system-by-system health indicators and 2-year longitudinal insights'}
+                      ? (t.demographicallyAdjustedRanges || 'Demographically adjusted reference ranges and risk analysis based on age, gender, and ethnicity')
+                      : (t.unifiedViewHealthIndicators || 'Unified view of system-by-system health indicators and 2-year longitudinal insights')}
                   </p>
                 </div>
               </div>
@@ -6337,13 +6346,13 @@ ${logsText}`);
                   <thead className="bg-slate-50 dark:bg-slate-900/90 font-bold text-theme-text-secondary sticky top-0 backdrop-blur-sm">
                     <tr>
                       <th className="px-4 py-3 w-[200px]">
-                        {activeModalTitle.includes('Reference') ? 'Calibration Domain' : 'System'}
+                        {activeModalTitle.includes('Reference') ? (t.calibrationDomain || 'Calibration Domain') : (t.systemHeader || 'System')}
                       </th>
-                      <th className="px-4 py-3 w-[180px]">Biomarker</th>
-                      <th className="px-4 py-3 w-[120px] text-center">Result</th>
-                      <th className="px-4 py-3 w-[100px] text-center">Status</th>
+                      <th className="px-4 py-3 w-[180px]">{t.biomarkerHeader || 'Biomarker'}</th>
+                      <th className="px-4 py-3 w-[120px] text-center">{t.resultHeader || 'Result'}</th>
+                      <th className="px-4 py-3 w-[100px] text-center">{t.statusHeader || 'Status'}</th>
                       <th className="px-4 py-3 min-w-[600px]">
-                        {activeModalTitle.includes('Reference') ? 'Profile Calibrated Ranges & Diagnostic Explanations' : '2-Year Trend / Insight (Twice as Wide)'}
+                        {activeModalTitle.includes('Reference') ? (t.profileCalibratedRangesExpl || 'Profile Calibrated Ranges & Diagnostic Explanations') : (t.twoYearTrendInsight || '2-Year Trend / Insight (Twice as Wide)')}
                       </th>
                     </tr>
                   </thead>
@@ -6487,7 +6496,7 @@ ${logsText}`);
         <UniversalModal
           isOpen={!!flagMsg}
           onClose={() => setFlagMsg(null)}
-          title={`Flag issue with ${activeAgentKey} response`}
+          title={(t.flagIssueWithAgentResponse || 'Flag issue with {agent} response').replace('{agent}', activeAgentKey)}
           flagContext={{
             context: activeAgentKey || 'log_chat',
             initialCategory: (activeAgentKey === 'data_review' || activeAgentKey === 'medical') ? 'biomarker' : (activeAgentKey === 'food' ? 'foodcart' : 'Other'),

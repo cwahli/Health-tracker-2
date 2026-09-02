@@ -1,5 +1,6 @@
 import React from 'react';
 import { PortionDropdown } from './PortionDropdown';
+import { translations } from '../../utils/translations';
 
 interface MealPortionControllerProps {
   displayedScoutItems: any[];
@@ -9,6 +10,7 @@ interface MealPortionControllerProps {
   onScaleSingleDish: (dishIdx: number, ratio: number) => void;
   onAcceptPortion: () => void;
   isSaved?: boolean;
+  language?: string;
 }
 
 export function MealPortionController({
@@ -19,7 +21,9 @@ export function MealPortionController({
   onScaleSingleDish,
   onAcceptPortion,
   isSaved = false,
+  language = 'en',
 }: MealPortionControllerProps) {
+  const t = translations[language || 'en'] || translations.en;
   // Helper to compute unscaled base weight (1.0 ratio weight) for each item
   const getItemBaseWeight = (item: any): number => {
     const currentW = Number(item.weightGrams) || Number(item.estimatedWeightGrams) || 0;
@@ -47,22 +51,22 @@ export function MealPortionController({
           <span className="text-base mt-0.5">⚖️</span>
           <div>
             <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5 flex-wrap">
-              <span>Total Meal Portion:</span>
+              <span>{t.totalMealPortion || 'Total Meal Portion:'}</span>
               <span className="text-indigo-400 font-extrabold bg-indigo-950/80 border border-indigo-700/60 px-2 py-0.5 rounded text-[11px]">
                 {currentAppliedWeight > 0
-                  ? `${currentAppliedWeight}g${hasMultipleDishes ? ` across ${displayedScoutItems.length} dishes` : ''}`
+                  ? `${currentAppliedWeight}g${hasMultipleDishes ? (t.acrossNDishes ? t.acrossNDishes.replace('{count}', String(displayedScoutItems.length)) : ` across ${displayedScoutItems.length} dishes`) : ''}`
                   : '0g'}
               </span>
               {portionAccepted && (
                 <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-800/60 px-1.5 py-0.5 rounded">
-                  ✓ Accepted
+                  ✓ {t.acceptedBadge || 'Accepted'}
                 </span>
               )}
             </div>
             <p className="text-[11px] text-slate-300 mt-0.5 leading-tight">
               {hasMultipleDishes
-                ? `Scale all ${displayedScoutItems.length} dishes together, or adjust each dish individually below:`
-                : 'Visual portion estimation applied. Adjust quantity or accept:'}
+                ? (t.scaleAllDishesTogether ? t.scaleAllDishesTogether.replace('{count}', String(displayedScoutItems.length)) : `Scale all ${displayedScoutItems.length} dishes together, or adjust each dish individually below:`)
+                : (t.visualPortionEstimation || 'Visual portion estimation applied. Adjust quantity or accept:')}
             </p>
           </div>
         </div>
@@ -74,6 +78,7 @@ export function MealPortionController({
             currentWeight={currentAppliedWeight}
             onScale={onScalePortion}
             darkTheme={true}
+            language={language}
           />
 
           {!portionAccepted && (
@@ -82,7 +87,7 @@ export function MealPortionController({
               onClick={onAcceptPortion}
               className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-all cursor-pointer flex items-center justify-center"
             >
-              ✓ Accept
+              ✓ {t.acceptPortion || 'Accept'}
             </button>
           )}
         </div>
@@ -92,8 +97,8 @@ export function MealPortionController({
       {hasMultipleDishes && (
         <div className="mt-3 pt-2.5 border-t border-slate-700/70 flex flex-col gap-2">
           <div className="flex items-center justify-between text-[11px]">
-            <span className="font-bold text-slate-200">🍽️ Dish Portion Sizing (Individual):</span>
-            <span className="text-[10px] text-slate-400">Scale each dish independently</span>
+            <span className="font-bold text-slate-200">🍽️ {t.dishPortionSizing || 'Dish Portion Sizing (Individual):'}</span>
+            <span className="text-[10px] text-slate-400">{t.scaleEachDishIndependently || 'Scale each dish independently'}</span>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -118,12 +123,13 @@ export function MealPortionController({
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">Portion:</span>
+                    <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">{t.weightLabel}:</span>
                     <PortionDropdown
                       baseWeight={dishBaseWeight}
                       currentWeight={dishWeight}
                       onScale={(ratio) => onScaleSingleDish(dIdx, ratio)}
                       darkTheme={true}
+                      language={language}
                     />
                   </div>
                 </div>

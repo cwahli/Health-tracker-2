@@ -11,6 +11,7 @@ import { FoodLog } from '../types';
 import { humanizeJobFailure } from '../utils/jobFailure';
 import { isJobSafeToLeave } from '../jobs/jobUploadState';
 import { toPendingFoodLog } from '../mealBuild/adapters';
+import { translations } from '../utils/translations';
 
 interface TaskPlaceholderCardProps {
   job: AgentJob;
@@ -29,6 +30,7 @@ export default function TaskPlaceholderCard({
   onSave,
   profileLanguage = 'en'
 }: TaskPlaceholderCardProps) {
+  const t = translations[profileLanguage || 'en'] || translations.en;
   const live = useJob(jobProp.id).job;
   const job = live || jobProp;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -283,7 +285,7 @@ export default function TaskPlaceholderCard({
     const queue = JobStore.getAllJobs().filter(j => j.status === 'queued' || j.status === 'running');
     const myIndex = queue.findIndex(j => j.id === job.id);
     const ahead = myIndex > 0 ? myIndex : 0;
-    return previewStatusLabel(job, { queuedAhead: ahead, lastMsgContent });
+    return previewStatusLabel(job, { queuedAhead: ahead, lastMsgContent, dict: t });
   };
 
   const getStatusColorClass = () => {
@@ -380,21 +382,21 @@ export default function TaskPlaceholderCard({
   const displayTitle =
     job.status === 'awaiting_user'
       ? (detectedName
-          ? `${detectedName} — Portion Selection Needed`
+          ? (t.portionSelectionNeeded ? t.portionSelectionNeeded.replace('{name}', detectedName) : `${detectedName} — Portion Selection Needed`)
           : job.result?.portionClarify?.promptMessage ||
             job.result?.clean_result?.portionClarify?.promptMessage ||
             (job as any).clean_result?.portionClarify?.promptMessage ||
-            'Portion Choice Needed')
+            (t.portionChoiceNeeded || 'Portion Choice Needed'))
       : (detectedName ||
         (rawInputText && rawInputText !== 'Analyze this meal photo.'
           ? rawInputText
           : job.kind === 'food_compare'
-          ? 'Meal Comparison Request'
+          ? (t.mealComparisonRequest || 'Meal Comparison Request')
           : job.kind === 'medical'
-          ? 'Medical Data Request'
+          ? (t.medicalDataRequest || 'Medical Data Request')
           : job.kind === 'front_desk'
-          ? 'Health Preparation Chat'
-          : (job.status === 'succeeded' ? 'Meal Analysis Complete' : job.status === 'failed' ? 'Analysis failed' : 'Analyzing Meal Photo...')));
+          ? (t.healthPreparationChat || 'Health Preparation Chat')
+          : (job.status === 'succeeded' ? (t.mealAnalysisComplete || 'Meal Analysis Complete') : job.status === 'failed' ? (t.analysisFailed || 'Analysis failed') : (t.analyzingMealPhoto || 'Analyzing Meal Photo...')));
 
   return (
     <div className={`bg-theme-bg-card border rounded-3xl py-4 pl-0 pr-4 shadow-sm mx-0 mb-4 w-full transition-all hover:shadow-md overflow-hidden ${
@@ -408,14 +410,14 @@ export default function TaskPlaceholderCard({
           {imageUrl ? (
             <img
               src={imageUrl}
-              alt="Meal Preview"
+              alt={t.mealPreview || "Meal Preview"}
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
               onError={() => setImageUrl(null)}
             />
           ) : (
             <div className="p-2 text-slate-400 font-mono text-[10px] text-center uppercase">
-              No Image
+              {t.noImage || 'No Image'}
             </div>
           )}
           {/* Progress / Action Overlay */}
@@ -427,7 +429,7 @@ export default function TaskPlaceholderCard({
           {job.status === 'awaiting_user' && (
             <div className="absolute inset-0 bg-purple-950/40 backdrop-blur-[1px] flex flex-col items-center justify-center p-1 text-center">
               <Sliders className="w-5 h-5 text-purple-200 animate-bounce mb-0.5" />
-              <span className="text-[9px] font-bold text-white leading-tight">Pick Portion</span>
+              <span className="text-[9px] font-bold text-white leading-tight">{t.pickPortion || 'Pick Portion'}</span>
             </div>
           )}
         </div>
@@ -441,7 +443,7 @@ export default function TaskPlaceholderCard({
               </span>
               {!isEditMode && effectiveStatus !== 'running' && effectiveStatus !== 'processing' && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                  Attempt {job.attemptCount || 1} of {job.maxAttempts || 3}
+                  {(t.attemptOf || 'Attempt {current} of {max}').replace('{current}', String(job.attemptCount || 1)).replace('{max}', String(job.maxAttempts || 3))}
                 </span>
               )}
               {(effectiveStatus === 'running' || effectiveStatus === 'queued' || effectiveStatus === 'processing') && job.progressPercent > 0 && (
@@ -463,23 +465,25 @@ export default function TaskPlaceholderCard({
                   </p>
                 ) : !job.statusMessage ? (
                   <p className="text-xs text-theme-text-secondary font-medium">
-                    {job.kind === 'medical' ? 'Analyzing medical data...' : job.kind === 'front_desk' ? 'Chatting...' : 'Analyzing your meal...'}
+                    {job.kind === 'medical' ? (t.analyzingMedicalData || 'Analyzing medical data...') : job.kind === 'front_desk' ? (t.chattingEllipsis || 'Chatting...') : (t.analyzingYourMeal || 'Analyzing your meal...')}
                   </p>
                 ) : null}
                 {isJobSafeToLeave(job) ? (
                   <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/60">
                     <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-                    <span>Uploaded to server • Safe to close browser & check back later</span>
+                    <span>{t.uploadedSafeToClose || 'Uploaded to server • Safe to close browser & check back later'}</span>
                   </div>
                 ) : (
                   <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${elapsedIsLong ? 'text-red-800 dark:text-red-200 bg-red-50 dark:bg-red-950/40 border-red-200/60 dark:border-red-800/60' : 'text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border-amber-200/60 dark:border-amber-800/60'}`}>
                     <AlertTriangle className={`w-3 h-3 flex-shrink-0 ${elapsedIsLong ? 'text-red-500' : 'text-amber-500'}`} />
-                    <span>Uploading to server… Keep this tab open</span>
+                    <span>{t.uploadingKeepTabOpen || 'Uploading to server… Keep this tab open'}</span>
                   </div>
                 )}
                 {elapsedLabel && (
                   <div className={`text-[10px] font-mono ${elapsedIsLong ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
-                    {elapsedIsLong ? `Stuck for ${elapsedLabel} — this is longer than normal` : `${elapsedLabel} elapsed`}
+                    {elapsedIsLong
+                      ? (t.stuckFor ? t.stuckFor.replace('{time}', elapsedLabel) : `Stuck for ${elapsedLabel} — this is longer than normal`)
+                      : (t.elapsedTime ? t.elapsedTime.replace('{time}', elapsedLabel) : `${elapsedLabel} elapsed`)}
                   </div>
                 )}
               </div>
@@ -498,7 +502,7 @@ export default function TaskPlaceholderCard({
 
             {job.status === 'awaiting_user' && (
               <p className="text-xs text-purple-700 dark:text-purple-300 font-medium mt-1">
-                👉 Please confirm portion size to finish logging your meal.
+                👉 {t.confirmPortionToFinish || 'Please confirm portion size to finish logging your meal.'}
               </p>
             )}
 
@@ -516,7 +520,9 @@ export default function TaskPlaceholderCard({
                     ⚠️ {failureReason}
                   </p>
                   <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                    Attempt {job.attemptCount || 1} of {job.maxAttempts || 3} failed • Tap "Retry" to try again
+                    {(t.attemptFailedTapRetry || 'Attempt {n} of {m} failed • Tap "Retry" to try again')
+                      .replace('{n}', String(job.attemptCount || 1))
+                      .replace('{m}', String(job.maxAttempts || 3))}
                   </p>
                 </div>
               );
@@ -526,7 +532,7 @@ export default function TaskPlaceholderCard({
               <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-theme-text-secondary">
                 <span>🔥 {pendingFoodLog.nutrients?.calories || 0} kcal</span>
                 <span>•</span>
-                <span>💪 {pendingFoodLog.nutrients?.protein || 0}g protein</span>
+                <span>💪 {(t.proteinGrams || '{n}g protein').replace('{n}', String(pendingFoodLog.nutrients?.protein || 0))}</span>
                 {pendingFoodLog.recommendation && (
                   <>
                     <span>•</span>
@@ -540,7 +546,7 @@ export default function TaskPlaceholderCard({
 
             {(job.result?.mealBuild?.staleDietitianNarrative || (job as any).mealBuild?.staleDietitianNarrative) && (
               <div className="text-amber-700 dark:text-amber-400 text-xs mt-1 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 rounded border border-amber-200 dark:border-amber-800">
-                Macros updated — coaching may reflect a previous portion. Use Retry Advice to refresh.
+                {t.macrosUpdatedRetryAdvice || 'Macros updated — coaching may reflect a previous portion. Use Retry Advice to refresh.'}
               </div>
             )}
 
@@ -565,7 +571,8 @@ export default function TaskPlaceholderCard({
                 return (
                   <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
                     {compGroups.map((opt: any, idx: number) => {
-                      const name = opt.groupName || opt.content?.name || opt.name || opt.title || `Option ${idx + 1}`;
+                      const defaultOpt = t.optionN ? t.optionN.replace('{n}', String(idx + 1)) : `Option ${idx + 1}`;
+                      const name = opt.groupName || opt.content?.name || opt.name || opt.title || defaultOpt;
                       let numericCals = NaN;
                       const directCal = opt.averageNutrients?.calories ?? opt.nutrients?.calories ?? opt.calories ?? opt.totalCalories;
                       if (directCal != null) {
@@ -583,7 +590,7 @@ export default function TaskPlaceholderCard({
                       return (
                         <span key={idx} className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-900/50 text-[11px] font-semibold flex items-center gap-1">
                           <span>{name}:</span>
-                          <span className="font-bold text-indigo-800 dark:text-indigo-200">{!isNaN(numericCals) && numericCals > 0 ? `${Math.round(numericCals)} kcal` : 'Calculating...'}</span>
+                          <span className="font-bold text-indigo-800 dark:text-indigo-200">{!isNaN(numericCals) && numericCals > 0 ? `${Math.round(numericCals)} kcal` : (t.calculating || 'Calculating...')}</span>
                         </span>
                       );
                     })}
@@ -593,7 +600,8 @@ export default function TaskPlaceholderCard({
                 return (
                   <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
                     {scoutItems.map((item: any, idx: number) => {
-                      const name = item.canonicalDbName || item.originalName || item.name || item.keyword || `Option ${idx + 1}`;
+                      const defaultOpt = t.optionN ? t.optionN.replace('{n}', String(idx + 1)) : `Option ${idx + 1}`;
+                      const name = item.canonicalDbName || item.originalName || item.name || item.keyword || defaultOpt;
                       let numericCals = NaN;
                       const directCal = item.nutrients?.calories ?? item.calories ?? item.estimatedCalories ?? item.rawNutritionLabel?.calories ?? item.preCalcNutrients?.calories;
                       if (directCal != null) {
@@ -610,7 +618,7 @@ export default function TaskPlaceholderCard({
                       return (
                         <span key={idx} className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-lg border border-indigo-100 dark:border-indigo-900/50 text-[11px] font-semibold flex items-center gap-1">
                           <span>{name}:</span>
-                          <span className="font-bold text-indigo-800 dark:text-indigo-200">{!isNaN(numericCals) && numericCals >= 0 ? `${Math.round(numericCals)} kcal` : 'Calculating...'}</span>
+                          <span className="font-bold text-indigo-800 dark:text-indigo-200">{!isNaN(numericCals) && numericCals >= 0 ? `${Math.round(numericCals)} kcal` : (t.calculating || 'Calculating...')}</span>
                         </span>
                       );
                     })}
@@ -631,7 +639,7 @@ export default function TaskPlaceholderCard({
                 className="px-3.5 py-1.5 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer animate-pulse"
               >
                 <Sliders className="w-3.5 h-3.5" />
-                Select Portion
+                {t.selectPortion || 'Select Portion'}
               </button>
             ) : (
               <button
@@ -640,7 +648,7 @@ export default function TaskPlaceholderCard({
                 className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
               >
                 <Eye className="w-3.5 h-3.5" />
-                {effectiveStatus === 'succeeded' && !isFailedOrTimedOut ? 'View Analysis' : 'View Status'}
+                {effectiveStatus === 'succeeded' && !isFailedOrTimedOut ? (t.viewAnalysis || 'View Analysis') : (t.viewStatus || 'View Status')}
               </button>
             )}
 
@@ -657,7 +665,7 @@ export default function TaskPlaceholderCard({
                 ) : (
                   <Save className="w-3.5 h-3.5" />
                 )}
-                {isSaving ? 'Saving...' : 'Save Log'}
+                {isSaving ? (t.savingEllipsis || 'Saving...') : (t.saveLog || 'Save Log')}
               </button>
             )}
 
@@ -674,7 +682,9 @@ export default function TaskPlaceholderCard({
                     retryNotBefore: undefined,
                     error: undefined,
                     clientSubmitPending: false,
-                    statusMessage: isDegraded ? `Retrying AI advice (Attempt ${nextAttempt})...` : `Retrying analysis (Attempt ${nextAttempt})...`,
+                    statusMessage: isDegraded
+                      ? (t.retryingAiAdvice ? t.retryingAiAdvice.replace('{n}', String(nextAttempt)) : `Retrying AI advice (Attempt ${nextAttempt})...`)
+                      : (t.retryingAnalysisAttempt ? t.retryingAnalysisAttempt.replace('{n}', String(nextAttempt)) : `Retrying analysis (Attempt ${nextAttempt})...`),
                     resumeStage: isDegraded ? 'dietitian' : undefined
                   });
                   JobQueueRunner.wake();
@@ -686,7 +696,7 @@ export default function TaskPlaceholderCard({
                 }`}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                {(Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) ? 'Retry Advice' : 'Retry'}
+                {(Array.isArray(job.result?.degradedStages) && job.result.degradedStages.includes('dietitian')) ? (t.retryAdvice || 'Retry Advice') : (t.retry || 'Retry')}
               </button>
             )}
 
@@ -695,7 +705,7 @@ export default function TaskPlaceholderCard({
               type="button"
               onClick={() => onDelete(job.id)}
               className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-full transition-all cursor-pointer"
-              title="Delete task"
+              title={t.deleteTask || "Delete task"}
             >
               <Trash2 className="w-4 h-4" />
             </button>

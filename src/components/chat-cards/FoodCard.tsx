@@ -224,7 +224,8 @@ function build31NutrientsMarkdownClient(nutrients: Record<string, any>): string 
   ].join("\n");
 }
 
-export const ScratchpadMarkdownViewer: React.FC<{ content: any; className?: string; showCopyButton?: boolean; nutrients?: Record<string, any>; msg?: any; pendingFoodLog?: any }> = ({ content, className = '', showCopyButton = false, nutrients, msg, pendingFoodLog }) => {
+export const ScratchpadMarkdownViewer: React.FC<{ content: any; className?: string; showCopyButton?: boolean; nutrients?: Record<string, any>; msg?: any; pendingFoodLog?: any; language?: string }> = ({ content, className = '', showCopyButton = false, nutrients, msg, pendingFoodLog, language = 'en' }) => {
+  const t = translations[language || 'en'] || translations.en;
   const [isCopied, setIsCopied] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const strContent = typeof content === 'string' ? content : (content && typeof content === 'object' ? (content.text || content.message || JSON.stringify(content)) : String(content || ''));
@@ -473,8 +474,8 @@ export const ScratchpadMarkdownViewer: React.FC<{ content: any; className?: stri
             type="button"
             onClick={handleCopyTable}
             className="inline-flex items-center justify-center p-1.5 text-[10px] font-medium rounded-md border border-indigo-200/40 dark:border-indigo-800/40 bg-white/80 dark:bg-slate-900/80 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
-            aria-label="Copy table for sharing"
-            title={isCopied ? "Copied!" : "Copy table"}
+            aria-label={t.copyTableForSharing}
+            title={isCopied ? t.copiedTable : t.copyTable}
           >
             {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
@@ -483,8 +484,8 @@ export const ScratchpadMarkdownViewer: React.FC<{ content: any; className?: stri
             onClick={handleDownloadTableAndLogs}
             disabled={isDownloading}
             className="inline-flex items-center justify-center p-1.5 text-[10px] font-medium rounded-md border border-indigo-200/40 dark:border-indigo-800/40 bg-white/80 dark:bg-slate-900/80 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer disabled:opacity-50"
-            aria-label="Download table and log history"
-            title="Download .md file with table and log history"
+            aria-label={t.downloadTableAndHistory}
+            title={t.downloadTableAndHistory}
           >
             {isDownloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
           </button>
@@ -541,7 +542,7 @@ export const ScratchpadMarkdownViewer: React.FC<{ content: any; className?: stri
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  title="View source on USDA FoodData Central"
+                  title={t.viewSourceUsda || "View source on USDA FoodData Central"}
                   className="inline-flex items-center ml-1 text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200 transition-colors align-middle"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -1116,7 +1117,7 @@ export const AgentThoughtBox = ({
             {!hasScratchpad && isLive ? (
               <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 py-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-                <span>Starting analysis...</span>
+                <span>{t.startingAnalysis}</span>
               </div>
             ) : backendLogs && !globalLiveLogs ? (
               <LiveBackendStreamViewer logs={backendLogs} />
@@ -1432,10 +1433,11 @@ interface GroupItemsContainerProps {
   groupKey: string;
   isExpanded: boolean;
   onToggle: () => void;
+  language?: string;
 }
 
-const GroupItemsContainer: React.FC<GroupItemsContainerProps> = ({ children, groupKey, isExpanded, onToggle }) => {
-  const t = translations.en;
+const GroupItemsContainer: React.FC<GroupItemsContainerProps> = ({ children, groupKey, isExpanded, onToggle, language = 'en' }) => {
+  const t = translations[language || 'en'] || translations.en;
   const contentRef = React.useRef<HTMLDivElement>(null);
   const [shouldShowButton, setShouldShowButton] = React.useState(false);
 
@@ -1573,6 +1575,7 @@ export const FoodCard: React.FC<AgentCardProps & {
     setInputText, fileInputRef
   } = props;
 
+  const language = props.language || profile?.language || 'en';
   const isLoggingRef = React.useRef(false);
 
   if (msg.isLive) {
@@ -1596,10 +1599,10 @@ export const FoodCard: React.FC<AgentCardProps & {
       activeJob?.statusMessage ||
       msg.content ||
       (isEditMode
-        ? 'Updating meal composition and calculating new nutrition...'
+        ? (t.updatingMealComposition || 'Updating meal composition and calculating new nutrition...')
         : isCompareMode
-        ? 'Comparing meal compositions...'
-        : 'Analyzing meal ingredients and estimating nutrition...');
+        ? (t.comparingMealCompositions || 'Comparing meal compositions...')
+        : (t.analyzingMealIngredients || 'Analyzing meal ingredients and estimating nutrition...'));
 
     const progressVal = activeJob?.progressPercent || 25;
 
@@ -1633,8 +1636,8 @@ export const FoodCard: React.FC<AgentCardProps & {
         </div>
 
         <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 pt-0.5">
-          <span>Processing on server</span>
-          <span>Keep tab open</span>
+          <span>{t.processingOnServer}</span>
+          <span>{t.keepTabOpen}</span>
         </div>
       </div>
     );
@@ -2223,7 +2226,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                              className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center gap-1.5"
                            >
                              <ChevronUp className="w-3 h-3" />
-                             Scroll to top
+                             {t.scrollToTop || "Scroll to top"}
                            </button>
                          </div>
                       )}
@@ -2244,7 +2247,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                            <div className="flex items-center justify-between mb-2">
                              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                               Identified Ingredients
+                               {t.identifiedIngredients || "Identified Ingredients"}
                              </div>
                            </div>
                            <div className={
@@ -2296,7 +2299,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                            setReviewsOpen(true);
                                          }}
                                          className="absolute -top-1.5 -right-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-sm z-10 cursor-pointer hover:scale-110 transition-transform"
-                                         title="Show low confidence identification panel"
+                                         title={t.showLowConfidencePanel || "Show low confidence identification panel"}
                                        >
                                          <span className="text-[10px] font-bold">!</span>
                                        </div>
@@ -2321,7 +2324,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                <button 
                                  onClick={() => setReviewsOpen(false)}
                                  className="absolute top-1.5 right-1.5 text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 p-0.5 rounded-full hover:bg-amber-100/50 dark:hover:bg-amber-900/30 transition-colors"
-                                 title="Close panel"
+                                 title={t.closePanel || "Close panel"}
                                >
                                  <X className="w-3.5 h-3.5" />
                                </button>
@@ -2342,7 +2345,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                    onClick={() => { document.getElementById('food-chat-input')?.focus(); }} 
                                    className="flex-1 text-[10px] font-bold bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 py-1.5 px-3 rounded-md shadow-sm hover:bg-amber-50 dark:hover:bg-amber-900/40 active:scale-95 transition-all text-center"
                                  >
-                                   Edit Item
+                                   {t.editItem}
                                  </button>
                                  <button 
                                    onClick={() => { 
@@ -2351,7 +2354,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                    }} 
                                    className="flex-1 text-[10px] font-bold bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 py-1.5 px-3 rounded-md shadow-sm hover:bg-amber-50 dark:hover:bg-amber-900/40 active:scale-95 transition-all text-center"
                                  >
-                                   This is correct
+                                   {t.thisIsCorrect}
                                  </button>
                                </div>
                              </div>
@@ -2679,7 +2682,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                        <>
                                          {/* Label area with Search selector trigger next to it */}
                                          <div className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between w-full font-sans">
-                                           <span>{isSelectingMode ? "Choose food to compare" : "Foods in this group"} ({group.items?.length || 0})</span>
+                                           <span>{isSelectingMode ? (t.chooseFoodToCompare || "Choose food to compare") : (t.foodsInThisGroup || "Foods in this group")} ({group.items?.length || 0})</span>
                                            <div className="flex items-center gap-1.5">
 
                                              {hasTranslations && (
@@ -2689,9 +2692,9 @@ export const FoodCard: React.FC<AgentCardProps & {
                                                  className={`p-1 hover:bg-slate-100 dark:hover:bg-slate-850 rounded-md transition-all cursor-pointer ${
                                                    showTranslations[groupKey] ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40' : 'text-slate-400'
                                                  }`}
-                                                 title="Toggle Language"
+                                                 title={t.toggleLanguage || "Toggle Language"}
                                                >
-                                                 <span className="text-[10px] font-bold leading-none block px-0.5 py-[1px]">{showTranslations[groupKey] ? "English" : "Local"}</span>
+                                                 <span className="text-[10px] font-bold leading-none block px-0.5 py-[1px]">{showTranslations[groupKey] ? (t.englishName || "English") : (t.localName || "Local")}</span>
                                                </button>
                                              )}
 
@@ -2714,7 +2717,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                                className={`p-1 hover:bg-slate-100 dark:hover:bg-slate-850 rounded-md transition-all cursor-pointer ${
                                                  isSelectingMode ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40' : 'text-slate-400'
                                                }`}
-                                               title={isSelectingMode ? "Exit selection mode" : "Multi-select items for search or comparison"}
+                                               title={isSelectingMode ? (t.exitSelectionMode || "Exit selection mode") : (t.multiSelectItems || "Multi-select items for search or comparison")}
                                              >
                                                {isSelectingMode ? <X className="w-3.5 h-3.5 stroke-[2.5px]" /> : <Search className="w-3.5 h-3.5 stroke-[2.5px]" />}
                                              </button>
@@ -2722,7 +2725,8 @@ export const FoodCard: React.FC<AgentCardProps & {
                                          </div>
                                          {/* Collapsible container using the GroupItemsContainer */}
                                          <GroupItemsContainer
-                                           groupKey={groupKey}
+                                            groupKey={groupKey}
+                                            language={language}
                                            isExpanded={!!groupExpanded[groupKey]}
                                            onToggle={() => setGroupExpanded(prev => ({ ...prev, [groupKey]: !prev[groupKey] }))}
                                          >
@@ -2730,7 +2734,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                             <div className="w-full flex flex-col gap-4">
                                               {(() => {
                                                 const categorizedItems = (group.items || []).reduce((acc: any, item: any, itemIdx: number) => {
-                                                  let category = "Uncategorized";
+                                                  let category = t.uncategorized || "Uncategorized";
                                                   let rawName = item.name || "";
                                                   const match = rawName.match(/^\[(.*?)\]\s*(.*)$/);
                                                   if (match) {
@@ -2743,7 +2747,7 @@ export const FoodCard: React.FC<AgentCardProps & {
 
                                                 return Object.entries(categorizedItems).map(([category, itemsArr]: [string, {item: any, itemIdx: number}[]], catIdx) => (
                                                   <div key={catIdx} className="w-full flex flex-col gap-2">
-                                                    {category !== "Uncategorized" && (
+                                                    {category !== (t.uncategorized || "Uncategorized") && (
                                                       <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide border-b border-theme-border/50 pb-1 mt-1">
                                                         {category}
                                                       </div>
@@ -2881,7 +2885,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                                                     <button 
                                                                       onClick={(e) => { e.stopPropagation(); setPreviewState({ groupIdx: idx, itemIdx: itemIdx, resolvedImgSrc }); }}
                                                                       className="absolute -top-1.5 -right-1.5 p-1 bg-slate-900/80 text-white rounded-full transition-colors z-10 shadow-sm"
-                                                                      title="View original photo"
+                                                                      title={t.viewOriginalPhoto || "View original photo"}
                                                                     >
                                                                       <Eye className="w-3 h-3" />
                                                                     </button>
@@ -2931,7 +2935,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                                                     <Search className="w-5 h-5 text-slate-300 dark:text-slate-600" />
                                                                     <span className="text-[11px] font-semibold text-theme-text-secondary">{t.noImagesFound}</span>
                                                                     <span className="text-[9.5px] text-slate-400 max-w-[200px]">
-                                                                      No web images could be retrieved for "{itemDisplayName}".
+                                                                      {(t.noWebImagesFor || 'No web images could be retrieved for "{name}".').replace('{name}', itemDisplayName)}
                                                                     </span>
                                                                   </div>
                                                                 )}
@@ -2990,8 +2994,8 @@ export const FoodCard: React.FC<AgentCardProps & {
                                       <Check className="w-3.5 h-3.5" />
                                       <span>
                                         {(isAlreadyLogged || (loggedMessageIds && loggedMessageIds.includes(`${msg.id}-opt-${idx}`)))
-                                          ? t.savedToLog || 'Logged'
-                                          : 'Log Option'}
+                                          ? (t.savedToLog || 'Logged')
+                                          : (t.logOption || 'Log Option')}
                                       </span>
                                     </button>
                                   </div>
@@ -3111,6 +3115,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                         pendingFoodLog={msg.data.pendingFoodLog}
                         msg={msg}
                         profile={profile}
+                        language={language}
                       />
                       {(() => {
                         const sentence = (msg.data?.pendingFoodLog.dietitianUpdateSentence || '').trim();
@@ -3139,7 +3144,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                              className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center gap-1.5"
                            >
                              <ChevronUp className="w-3 h-3" />
-                             Scroll to top
+                             {t.scrollToTop || "Scroll to top"}
                            </button>
                          </div>
                       )}
@@ -3150,7 +3155,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                         if (!displayImgs || displayImgs.length === 0) return null;
                         return (
                           <div className="overflow-hidden border-y sm:border border-slate-100 dark:border-slate-700/50 shadow-sm mb-3 w-[calc(100%+2rem)] -mx-4 sm:mx-0 sm:w-full sm:rounded-2xl">
-                            <ImageSlider images={displayImgs} altText={msg.data?.pendingFoodLog?.name || "Pending meal"} />
+                            <ImageSlider images={displayImgs} altText={msg.data?.pendingFoodLog?.name || (t.pendingMeal || "Pending meal")} />
                           </div>
                         );
                       })()}
@@ -3169,7 +3174,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                             <div className="flex items-center justify-between mb-3 border-b border-theme-border/50 pb-2 font-sans">
                               <div className="flex items-center gap-2">
                                 <span className="text-[10.5px] font-bold text-indigo-500 dark:text-indigo-400">
-                                  🔍 Meal composition
+                                  🔍 {t.mealComposition || "Meal composition"}
                                 </span>
                                 {displayedScoutItems.some((i: any) => i.originalName && i.originalName.toLowerCase() !== (i.keyword || "").toLowerCase()) && (
                                  <button
@@ -3178,9 +3183,9 @@ export const FoodCard: React.FC<AgentCardProps & {
                                    className={`p-0.5 hover:bg-slate-100 dark:hover:bg-slate-850 rounded-md transition-all cursor-pointer ${
                                      showTranslations.scout ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40' : 'text-slate-400'
                                    }`}
-                                   title="Toggle Language"
+                                   title={t.toggleLanguage || "Toggle Language"}
                                  >
-                                   <span className="text-[9px] font-bold leading-none block px-0.5 py-[1px]">{showTranslations.scout ? "English" : "Local"}</span>
+                                   <span className="text-[9px] font-bold leading-none block px-0.5 py-[1px]">{showTranslations.scout ? (t.englishName || "English") : (t.localName || "Local")}</span>
                                  </button>
                                 )}
                               </div>
@@ -3190,7 +3195,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                    ? 'bg-rose-50 text-rose-600 border border-rose-200/50 dark:bg-rose-950/20 dark:text-rose-400'
                                    : 'bg-amber-50 text-amber-600 border border-amber-200/50 dark:bg-amber-950/20 dark:text-amber-400'
                                }`}>
-                                 Confidence: {msg.data.pendingFoodLog.scoutConfidenceRating}
+                                 {(t.confidenceLabel || "Confidence: {rating}").replace("{rating}", msg.data.pendingFoodLog.scoutConfidenceRating)}
                                </span>
                              )}
                            </div>
@@ -3263,7 +3268,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                              setReviewsOpen(true);
                                            }}
                                            className="absolute -top-1.5 -right-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-sm z-10 cursor-pointer hover:scale-110 transition-transform"
-                                           title="Show low confidence identification panel"
+                                           title={t.showLowConfidencePanel || "Show low confidence identification panel"}
                                          >
                                            <span className="text-[10px] font-bold">!</span>
                                          </div>
@@ -3289,7 +3294,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                      {/* Confidence badge below the name — full detail now lives in Items in Review */}
                                      {(item.itemConfidence?.toLowerCase().includes('low') || item.itemConfidence?.toLowerCase().includes('medium')) && (
                                        <span className="text-[8px] text-center leading-tight text-amber-600 dark:text-amber-500 w-full font-sans">
-                                         Confidence: {(item.itemConfidence || '').split('(')[0].trim()}
+                                         {(t.confidenceLabel || "Confidence: {rating}").replace('{rating}', (item.itemConfidence || '').split('(')[0].trim())}
                                        </span>
                                      )}
                                    </div>
@@ -3309,6 +3314,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                     onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))}
                                     onScalePortion={(ratio) => handleScaleSingleDish(openLabelIdx, ratio)}
                                     currentPortionRatio={displayedScoutItems[openLabelIdx]?.portionRatio || 1.0}
+                                    language={language}
                                   />
                                 </div>
                              )}
@@ -3319,7 +3325,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                  <button 
                                    onClick={() => setReviewsOpen(false)}
                                    className="absolute top-1.5 right-1.5 text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 p-0.5 rounded-full hover:bg-amber-100/50 dark:hover:bg-amber-900/30 transition-colors"
-                                   title="Close panel"
+                                   title={t.closePanel || "Close panel"}
                                  >
                                    <X className="w-3.5 h-3.5" />
                                  </button>
@@ -3346,7 +3352,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                      }} 
                                      className="flex-1 text-[10px] font-bold bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 py-1.5 px-3 rounded-md shadow-sm hover:bg-amber-50 dark:hover:bg-amber-900/40 active:scale-95 transition-all text-center"
                                    >
-                                     Edit Item
+                                     {t.editItem}
                                    </button>
                                    <button 
                                      onClick={() => { 
@@ -3358,7 +3364,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                      }} 
                                      className="flex-1 text-[10px] font-bold bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 py-1.5 px-3 rounded-md shadow-sm hover:bg-amber-50 dark:hover:bg-amber-900/40 active:scale-95 transition-all text-center"
                                    >
-                                     This is correct
+                                     {t.thisIsCorrect}
                                    </button>
                                  </div>
                                </div>
@@ -3478,7 +3484,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                       </div>
                       {msg.data?.pendingFoodLog?.receiptTable && (
                         <div className="mt-3 pt-3 border-t border-theme-border/50 overflow-hidden w-full max-w-full">
-                           <ScratchpadMarkdownViewer content={msg.data.pendingFoodLog.receiptTable} nutrients={msg.data.pendingFoodLog.nutrients} className="!bg-transparent !p-0 !border-0" showCopyButton={true} msg={msg} pendingFoodLog={msg.data.pendingFoodLog} />
+                           <ScratchpadMarkdownViewer content={msg.data.pendingFoodLog.receiptTable} nutrients={msg.data.pendingFoodLog.nutrients} className="!bg-transparent !p-0 !border-0" showCopyButton={true} msg={msg} pendingFoodLog={msg.data.pendingFoodLog} language={language} />
                         </div>
                       )}
 
@@ -3493,7 +3499,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                             className="w-full flex items-center justify-between text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors py-1.5 cursor-pointer font-sans"
                           >
                             <span className="flex items-center gap-1.5">
-                              📊 Components & Nutrient Details
+                              📊 {t.componentsAndNutrientDetails || "Components & Nutrient Details"}
                             </span>
                             {expandedTables[msg.id] ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                           </button>
@@ -3505,7 +3511,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                 <div className="border border-theme-border/80 rounded-xl overflow-hidden bg-theme-bg-card shadow-sm">
                                   <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border-b border-theme-border flex items-center justify-between">
                                     <span className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider font-sans">
-                                      📊 Component Contribution
+                                      📊 {t.componentContribution || "Component Contribution"}
                                     </span>
                                     {displayedScoutItems.some((i: any) => i.originalName && i.originalName.toLowerCase() !== (i.keyword || "").toLowerCase()) && (
                                       <button
@@ -3514,9 +3520,9 @@ export const FoodCard: React.FC<AgentCardProps & {
                                         className={`p-0.5 hover:bg-slate-100 dark:hover:bg-slate-850 rounded-md transition-all cursor-pointer ${
                                           showTranslations.scout ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40' : 'text-slate-400'
                                         }`}
-                                        title="Toggle Language"
+                                        title={t.toggleLanguage || "Toggle Language"}
                                       >
-                                        <span className="text-[9px] font-bold leading-none block px-1 py-0.5">{showTranslations.scout ? "English" : "Local"}</span>
+                                        <span className="text-[9px] font-bold leading-none block px-1 py-0.5">{showTranslations.scout ? (t.englishName || "English") : (t.localName || "Local")}</span>
                                       </button>
                                     )}
                                   </div>
@@ -3536,7 +3542,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                           const displayName = (() => {
                                             const isEnglish = showTranslations.scout;
                                             if (isEnglish) {
-                                              return item.canonicalDbName || item.name || "Unknown Item";
+                                              return item.canonicalDbName || item.name || (t.unknownItem || "Unknown Item");
                                             }
                                             // Local mode
                                             if (item.originalLocalName) return item.originalLocalName;
@@ -3555,7 +3561,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                               );
                                             });
                                             if (match) return match.originalName || match.keyword;
-                                            return item.canonicalDbName || item.name || "Unknown Item";
+                                            return item.canonicalDbName || item.name || (t.unknownItem || "Unknown Item");
                                           })();
 
                                           return (
@@ -3604,7 +3610,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                                    <span className="font-semibold">{formatNutrientValue(item.weightGrams, 'g')}</span>
                                                    {item.packGrams ? (
                                                      <span className="text-[9px] font-sans text-indigo-500 dark:text-indigo-400 font-semibold">
-                                                       {item.portionDescription || `${Math.round(((item.weightGrams || 0) / item.packGrams) * 100)}% of ${item.packGrams}g`}
+                                                       {item.portionDescription || (t.percentOfPack ? t.percentOfPack.replace('{pct}', String(Math.round(((item.weightGrams || 0) / item.packGrams) * 100))).replace('{grams}', String(item.packGrams)) : `${Math.round(((item.weightGrams || 0) / item.packGrams) * 100)}% of ${item.packGrams}g`)}
                                                      </span>
                                                    ) : (
                                                      (item.portionRatio !== undefined && item.portionRatio !== 1) ? (
@@ -3634,7 +3640,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                                                             <line x1="12" y1="8" x2="12.01" y2="8"></line>
                                                           </svg>
                                                         }
-                                                        content={item.saltConversionNote || `Converted printed salt (${item.rawNutritionLabel?.salt}) to sodium. Formula: 1g salt = 400mg sodium.`}
+                                                        content={item.saltConversionNote || (t.saltConversionTooltip ? t.saltConversionTooltip.replace('{salt}', item.rawNutritionLabel?.salt || '') : `Converting printed salt (${item.rawNutritionLabel?.salt}) to sodium. Formula: 1g salt = 400mg sodium.`)}
                                                         contentClassName="bg-slate-800 text-white text-[10px] font-sans"
                                                       />
                                                     </div>
@@ -3678,7 +3684,7 @@ export const FoodCard: React.FC<AgentCardProps & {
                           return (
                             <div className="w-full py-2 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 animation-fade-in font-sans">
                               <Check className="w-4 h-4" />
-                              Saved to History
+                              {t.savedToHistory || "Saved to History"}
                             </div>
                           );
                         }
@@ -3687,10 +3693,10 @@ export const FoodCard: React.FC<AgentCardProps & {
                             <div className="w-full py-2.5 px-3 bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50 rounded-xl text-xs flex flex-col gap-1 animation-fade-in font-sans">
                               <div className="flex items-center gap-1.5 font-bold">
                                 <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
-                                <span>Cannot Log Meal — Validation Failed</span>
+                                <span>{t.cannotLogMealValidationFailed || "Cannot Log Meal — Validation Failed"}</span>
                               </div>
                               <span className="text-[11px] text-rose-600 dark:text-rose-400 font-normal">
-                                {gate?.summary || (Array.isArray(gate?.failures) && gate.failures[0]?.message) || 'Nutrient validation failed. Meal contains missing or contradictory values.'}
+                                {gate?.summary || (Array.isArray(gate?.failures) && gate.failures[0]?.message) || (t.nutrientValidationFailedDefault || 'Nutrient validation failed. Meal contains missing or contradictory values.')}
                               </span>
                             </div>
                           );
@@ -3788,7 +3794,7 @@ export const FoodCard: React.FC<AgentCardProps & {
               <div className="mb-3 border-b border-theme-border/50 pb-3 font-sans text-left">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10.5px] font-bold text-indigo-500 dark:text-indigo-400">
-                    🔍 Meal composition ({displayedScoutItems.length} items identified)
+                    🔍 {(t.mealCompositionItemsIdentified || "Meal composition ({count} items identified)").replace("{count}", String(displayedScoutItems.length))}
                   </span>
                 </div>
                 <div className="flex overflow-x-auto flex-nowrap sm:flex-wrap items-start justify-start gap-3 pt-2 pb-3 w-full font-sans scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
@@ -3854,7 +3860,8 @@ export const FoodCard: React.FC<AgentCardProps & {
                       onConfirmItem={(idx) => setConfirmedScoutIndices(prev => new Set(prev).add(idx))}
                       onScalePortion={(ratio) => handleScaleSingleDish(openLabelIdx, ratio)}
                       currentPortionRatio={displayedScoutItems[openLabelIdx]?.portionRatio || 1.0}
-                    />
+                                    language={language}
+                                  />
                   </div>
                 )}
               </div>
@@ -3878,11 +3885,14 @@ function FoodResultFlagButton({
   pendingFoodLog,
   msg,
   profile,
+  language = 'en',
 }: {
   pendingFoodLog: any;
   msg: any;
   profile?: any;
+  language?: string;
 }) {
+  const t = translations[language || 'en'] || translations.en;
   const [open, setOpen] = React.useState(false);
   const [issueType, setIssueType] = React.useState<IssueType>('incorrect_answer');
   const [note, setNote] = React.useState('');
@@ -4098,13 +4108,13 @@ function FoodResultFlagButton({
           className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full border border-amber-400/80 text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100"
         >
           <Flag className="w-3 h-3" />
-          {flaggedId ? 'Flag another' : 'Flag issue'}
+          {flaggedId ? (t.flagAnother || 'Flag another') : (t.flagIssue || 'Flag issue')}
         </button>
       </div>
       <UniversalModal
         isOpen={open}
         onClose={() => setOpen(false)}
-        title="Flag food analysis issue"
+        title={t.flagFoodAnalysisIssue || "Flag food analysis issue"}
         onFlagSuccess={(id) => setFlaggedId(id)}
         flagContext={{
           context: 'food_analyze',

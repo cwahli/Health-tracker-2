@@ -26,7 +26,8 @@ export const FoodEvaluationComparisonCard: React.FC<FoodEvaluationComparisonCard
         {(msg.agentResult.comparisonSet?.optionMeals || msg.agentResult.comparison?.options) && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
             {(msg.agentResult.comparisonSet?.optionMeals || msg.agentResult.comparison?.options).map((opt: any, i: number) => {
-              const name = opt.content?.name || opt.name || opt.title || `Option ${i + 1}`;
+              const defaultOpt = t.optionN ? t.optionN.replace('{n}', String(i + 1)) : `Option ${i + 1}`;
+              const name = opt.content?.name || opt.name || opt.title || defaultOpt;
               const protein = Number(opt.nutrients?.protein ?? opt.protein) || 0;
               const carbs = Number(opt.nutrients?.carbohydrates ?? opt.nutrients?.carbs ?? opt.carbohydrates ?? opt.carbs) || 0;
               const fat = Number(opt.nutrients?.totalFat ?? opt.nutrients?.fat ?? opt.totalFat ?? opt.fat) || 0;
@@ -89,7 +90,7 @@ export const FoodEvaluationComparisonCard: React.FC<FoodEvaluationComparisonCard
                         }`}
                       >
                         <Check className="w-3 h-3 stroke-[2.5px]" />
-                        <span>{isLogged ? (t.savedToLog || 'Logged') : 'Log Option'}</span>
+                        <span>{isLogged ? t.savedToLog : (t.logOption || 'Log Option')}</span>
                       </button>
                     </div>
                   )}
@@ -104,7 +105,7 @@ export const FoodEvaluationComparisonCard: React.FC<FoodEvaluationComparisonCard
           <div className="border border-theme-border rounded-xl overflow-hidden bg-slate-50/30 dark:bg-slate-900/10 mt-2">
             <div className="px-3 py-1.5 bg-slate-100/70 dark:bg-slate-800/60 border-b border-theme-border">
               <span className="text-[10px] font-bold text-theme-text-secondary uppercase tracking-wider">
-                📊 Side-by-Side Comparison Matrix
+                {t.comparisonMatrix}
               </span>
             </div>
             {(msg.agentResult.comparison.comparisonTable || msg.agentResult.comparison.comparisonTableJson) ? (
