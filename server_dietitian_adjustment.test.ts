@@ -218,6 +218,9 @@ describe("Dietitian Clinical Adjustment & Weight Calibration", () => {
     expect(label4).toBe("140% over sat fat limit");
 
     const label5 = sanitizeVerdictLabel("Supports digestive balance", "good");
+    const idKept = sanitizeVerdictLabel("Menunjang energi metabolik berkelanjutan", "neutral", {}, "id");
+    expect(idKept).toBe("Menunjang energi metabolik berkelanjutan");
+
     expect(label5).toBe("Supports digestive balance");
   });
 

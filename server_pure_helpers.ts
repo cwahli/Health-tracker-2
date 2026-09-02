@@ -1,3 +1,4 @@
+import { normalizeLocale, t } from './src/utils/i18n.js';
 // Pure, side-effect-free helpers extracted from server.ts so they can be unit
 // tested without importing server.ts (which starts a live HTTP server and
 // initializes Firebase Admin as soon as the module loads).
@@ -1248,9 +1249,11 @@ export function applyNutrientRealityChecks(
   }
 }
 
-export function sanitizeVerdictLabel(rawLabel: string, level?: string, nutrients?: any): string {
+export function sanitizeVerdictLabel(rawLabel: string, level?: string, nutrients?: any, lang?: unknown): string {
+  const locale = normalizeLocale(lang);
   let label = String(rawLabel || '').trim();
-  if (!label) return 'Supports sustained metabolic energy';
+  if (!label) return t(locale, 'verdictSupportsMetabolicEnergy');
+  if (locale !== 'en') return label;
 
   // Strip wrapping quotes and extra whitespace
   label = label.replace(/^["']|["']$/g, '').trim();

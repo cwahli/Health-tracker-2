@@ -3303,7 +3303,6 @@ ${logsText}`);
         delete lightProfile.fontSizeDescription;
         delete lightProfile.photoUrl;
         delete lightProfile.timezone;
-        delete lightProfile.language;
         delete lightProfile.deletedBiomarkerLogIds;
         delete lightProfile.deletedFoodLogIds;
         delete lightProfile.deletedCustomBiomarkerKeys;
@@ -4465,7 +4464,6 @@ ${logsText}`);
         delete lightProfile.fontSizeDescription;
         delete lightProfile.photoUrl;
         delete lightProfile.timezone;
-        delete lightProfile.language;
         delete lightProfile.deletedBiomarkerLogIds;
         delete lightProfile.deletedFoodLogIds;
       }
@@ -4685,7 +4683,6 @@ ${logsText}`);
         delete lightProfile.fontSizeDescription;
         delete lightProfile.photoUrl;
         delete lightProfile.timezone;
-        delete lightProfile.language;
         delete lightProfile.deletedBiomarkerLogIds;
         delete lightProfile.deletedFoodLogIds;
       }

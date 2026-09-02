@@ -396,7 +396,7 @@ export default function TaskPlaceholderCard({
           ? (t.medicalDataRequest || 'Medical Data Request')
           : job.kind === 'front_desk'
           ? (t.healthPreparationChat || 'Health Preparation Chat')
-          : (job.status === 'succeeded' ? (t.mealAnalysisComplete || 'Meal Analysis Complete') : job.status === 'failed' ? (t.analysisFailed || 'Analysis failed') : (t.analyzingMealPhoto || 'Analyzing Meal Photo...')));
+          : job.status === 'succeeded' ? (t.mealAnalysisComplete || 'Meal Analysis Complete') : job.status === 'failed' ? (t.analysisFailed || 'Analysis failed') : (t.analyzingMealPhoto || 'Analyzing Meal Photo...')));
 
   return (
     <div className={`bg-theme-bg-card border rounded-3xl py-4 pl-0 pr-4 shadow-sm mx-0 mb-4 w-full transition-all hover:shadow-md overflow-hidden ${

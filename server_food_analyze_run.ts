@@ -152,7 +152,7 @@ import { buildMealFromFinalizeLedgers } from './server_meal_from_finalize.js';
 import { applyMealEdits, applyModifierToItemName } from './server_meal_edit.js';
 import { matchBrandMenu, isPackagedBindItem, inferChainNameFromPackageLabel } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
-import { withScoutLanguage } from './src/utils/i18n.js';
+import { withScoutLanguage, t } from './src/utils/i18n.js';
 import {
   addDebugLog,
   logSessionStorage,
@@ -2864,7 +2864,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       addDebugLog(`[MealAgent] Adaptive single-agent create: skipping Dietitian LLM for ${visionScoutItems.length} dish(es).`);
       sendStreamEvent({ type: 'status', stage: 'dietitian', status: 'completed', message: 'Meal analysis finalized.' });
 
-      const mealName = rawScoutData?.mealName || rawScoutData?.name || (visionScoutItems.length === 1 ? (visionScoutItems[0].originalName || visionScoutItems[0].keyword) : 'Balanced Meal');
+      const mealName = rawScoutData?.mealName || rawScoutData?.name || (visionScoutItems.length === 1 ? (visionScoutItems[0].originalName || visionScoutItems[0].keyword) : t(userProfile?.language, 'balancedMealFallbackName'));
       
       const totalGrams = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.estimatedWeightGrams) || 0), 0);
       const totalCals = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.calories) || 0), 0);
@@ -2878,28 +2878,28 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       let scoutVerdict = rawScoutData?.verdict;
       if (!scoutVerdict || typeof scoutVerdict !== 'object' || !scoutVerdict.label) {
         if (totalSugar >= 30) {
-          scoutVerdict = { label: 'High Glycemic Impact (Elevated Sugar)', level: 'warning' };
+          scoutVerdict = { label: t(userProfile?.language, 'verdictHighGlycemicSugar'), level: 'warning' };
         } else if (totalSatFat >= 15) {
-          scoutVerdict = { label: 'Elevated Saturated Fat Impact', level: 'warning' };
+          scoutVerdict = { label: t(userProfile?.language, 'verdictElevatedSatFat'), level: 'warning' };
         } else if (totalP >= 25) {
-          scoutVerdict = { label: 'Supports Lean Muscle Growth', level: 'good' };
+          scoutVerdict = { label: t(userProfile?.language, 'verdictLeanMuscle'), level: 'good' };
         } else if (/probiotic|fermented|yogurt|kefir|yakult/i.test(mealName)) {
-          scoutVerdict = { label: 'Supports Gut Microbiome Balance', level: totalSugar >= 25 ? 'neutral' : 'good' };
+          scoutVerdict = { label: t(userProfile?.language, 'verdictGutMicrobiome'), level: totalSugar >= 25 ? 'neutral' : 'good' };
         } else {
-          scoutVerdict = { label: 'Supports Sustained Metabolic Energy', level: 'neutral' };
+          scoutVerdict = { label: t(userProfile?.language, 'verdictSupportsMetabolicEnergy'), level: 'neutral' };
         }
       }
 
       let rawAdvice = rawScoutData?.clinicalAdvice || rawScoutData?.message;
       if (!rawAdvice || String(rawAdvice).trim().length === 0) {
         if (/probiotic|yakult|kefir|yogurt/i.test(mealName)) {
-          rawAdvice = `Provides probiotic cultures for digestive health. Notice the sugar content (${Math.round(totalSugar)}g total sugars); pair with dietary fiber or a whole-food meal to buffer glycemic response.`;
+          rawAdvice = t(userProfile?.language, 'adviceProbioticSugar').replace('{grams}', String(Math.round(totalSugar)));
         } else if (totalP >= 20) {
-          rawAdvice = `Solid protein intake (${Math.round(totalP)}g) supporting muscle repair and satiety. Balanced macronutrient profile.`;
+          rawAdvice = t(userProfile?.language, 'adviceSolidProtein').replace('{grams}', String(Math.round(totalP)));
         } else if (totalSugar >= 30) {
-          rawAdvice = `High in fast-digesting carbohydrates and sugars (${Math.round(totalSugar)}g). Consider balancing with protein and healthy fats to stabilize postprandial glucose.`;
+          rawAdvice = t(userProfile?.language, 'adviceHighSugar').replace('{grams}', String(Math.round(totalSugar)));
         } else {
-          rawAdvice = `Logged ${mealName} with balanced macronutrients supporting steady metabolic energy.`;
+          rawAdvice = t(userProfile?.language, 'adviceLoggedBalanced').replace('{name}', String(mealName));
         }
       }
 
@@ -3170,13 +3170,13 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       parsedData.message = sanitizeString(rawParsed.message || rawFoodData.message || "", "");
       const rawVerdict = rawParsed.verdict || rawFoodData.verdict;
       if (rawVerdict && typeof rawVerdict === 'object') {
-        const sanitizedLabel = sanitizeVerdictLabel(rawVerdict.label || 'Supports sustained metabolic energy', rawVerdict.level, parsedData.nutrients);
+        const sanitizedLabel = sanitizeVerdictLabel(rawVerdict.label || t(userProfile?.language, 'verdictSupportsMetabolicEnergy'), rawVerdict.level, parsedData.nutrients, userProfile?.language);
         parsedData.verdict = {
           label: sanitizedLabel,
           level: String(rawVerdict.level || 'neutral')
         };
       } else if (rawFoodData.recommendation && typeof rawFoodData.recommendation === 'string' && rawFoodData.recommendation.trim().length > 0) {
-        const sanitizedLabel = sanitizeVerdictLabel(rawFoodData.recommendation, 'neutral', parsedData.nutrients);
+        const sanitizedLabel = sanitizeVerdictLabel(rawFoodData.recommendation, 'neutral', parsedData.nutrients, userProfile?.language);
         parsedData.verdict = {
           label: sanitizedLabel,
           level: 'neutral'
