@@ -601,11 +601,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             redirectTo: window.location.origin
           }
         });
+        
         if (error) throw error;
-        if (data?.url) {
-          window.location.href = data.url;
-          return;
-        }
       } catch (sEx: any) {
         console.warn(`Supabase ${provider} OAuth error:`, sEx);
         setErrorMsg(sEx.message || `Failed to sign in with ${provider}`);
