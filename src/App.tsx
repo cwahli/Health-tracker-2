@@ -6461,7 +6461,7 @@ export default function App() {
                   }`}
                 >
                   <Activity className="w-3.5 h-3.5 stroke-[2.5]" />
-                  Biomarker
+                  {(translations[profile.language] || translations.en).biomarkerTab || 'Biomarker'}
                 </button>
                 <button
                   onClick={() => setHealthSubTab('insight')}
@@ -6472,7 +6472,7 @@ export default function App() {
                   }`}
                 >
                   <Sparkles className="w-3.5 h-3.5 stroke-[2.5]" />
-                  Insight
+                  {(translations[profile.language] || translations.en).insightTab || 'Insight'}
                 </button>
               </div>
             </div>
@@ -6667,6 +6667,7 @@ export default function App() {
       {/* Floating Action Sheet overlay for Quick Actions */}
       <FloatingActionSheet
         isOpen={isFloatingOpen}
+        language={profile.language}
         onClose={() => setIsFloatingOpen(false)}
         onLogMeal={() => {
           const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

@@ -1375,7 +1375,7 @@ export default function Header({
                 })()}
               </div>
               <span className="text-[10px] text-slate-400 capitalize font-medium mt-0.5 block tracking-wide">
-                {activeTab === 'home' ? t.home : activeTab === 'insights' ? t.insights : activeTab === 'food' ? t.foodHistory : activeTab === 'medical' ? t.medicalHistory : activeTab === 'trends' ? t.trends : activeTab}
+                {activeTab === 'home' ? t.home : activeTab === 'health' ? t.health : activeTab === 'insights' ? t.insights : activeTab === 'food' ? t.foodHistory : activeTab === 'medical' ? t.medicalHistory : activeTab === 'trends' ? t.trends : activeTab}
               </span>
             </div>
           </div>

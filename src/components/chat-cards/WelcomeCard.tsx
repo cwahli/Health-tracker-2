@@ -30,7 +30,7 @@ export const WelcomeCard: React.FC<WelcomeCardProps> = (props) => {
           disabled={isAnalyzing}
           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md flex items-center gap-1.5"
         >
-          Surprise Me
+          {t.surpriseMe}
         </button>
       )}
       {isDailyRec && (
@@ -40,7 +40,7 @@ export const WelcomeCard: React.FC<WelcomeCardProps> = (props) => {
           disabled={isAnalyzing}
           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md flex items-center gap-1.5"
         >
-          What's up today?
+          {t.whatsUpToday}
         </button>
       )}
       {/* Handled consistently at bottom action row instead of inline welcoming stream */}

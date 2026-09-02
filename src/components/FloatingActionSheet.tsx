@@ -1,4 +1,5 @@
 import React from 'react';
+import { translations } from '../utils/translations';
 import { AnimatePresence, motion } from 'motion/react';
 
 interface FloatingActionSheetProps {
@@ -7,6 +8,7 @@ interface FloatingActionSheetProps {
   onLogMeal: () => void;
   onCompareMeal: () => void;
   onHealthInfo: () => void;
+  language?: string;
 }
 
 export default function FloatingActionSheet({
@@ -15,7 +17,9 @@ export default function FloatingActionSheet({
   onLogMeal,
   onCompareMeal,
   onHealthInfo,
+  language,
 }: FloatingActionSheetProps) {
+  const t = translations[language || 'en'] || translations.en;
   return (
     <AnimatePresence>
       {isOpen && (
@@ -46,7 +50,7 @@ export default function FloatingActionSheet({
                 }}
                 className="flex items-center justify-center py-3.5 px-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all shadow-lg shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap"
               >
-                Log Meal
+                {t.logMeal || "Log Meal"}
               </button>
 
               {/* Compare Meal */}
@@ -57,7 +61,7 @@ export default function FloatingActionSheet({
                 }}
                 className="flex items-center justify-center py-3.5 px-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all shadow-lg shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap"
               >
-                Compare
+                {t.compareShort || "Compare"}
               </button>
 
               {/* Health Info */}
@@ -68,7 +72,7 @@ export default function FloatingActionSheet({
                 }}
                 className="flex items-center justify-center py-3.5 px-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all shadow-lg shadow-emerald-600/20 hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap"
               >
-                Health Info
+                {t.healthInfo || "Health Info"}
               </button>
             </div>
           </motion.div>

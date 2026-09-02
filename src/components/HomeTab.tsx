@@ -1148,25 +1148,25 @@ export default function HomeTab({
                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 animate-pulse" />
                 <span>
                   {flaggedTelemetryErrors.length > 0
-                    ? "Biomarker Telemetry & Scaling Errors Detected"
+                    ? t.telemetryErrorsDetected
                     : flaggedBiomarkers.length === 1
-                    ? "1 Biomarker Flagged for Review"
-                    : `${flaggedBiomarkers.length} Biomarkers Flagged for Review`}
+                    ? t.biomarkerFlaggedReviewOne
+                    : t.biomarkerFlaggedReviewMany.replace('{count}', String(flaggedBiomarkers.length))}
                 </span>
               </div>
               <span className="text-[10px] font-mono px-2 py-0.5 bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-full font-bold shrink-0">
-                {allFlaggedKeys.length} Issue{allFlaggedKeys.length > 1 ? 's' : ''}
+                {allFlaggedKeys.length > 1 ? t.issuesCount.replace('{count}', String(allFlaggedKeys.length)) : t.issueCountOne}
               </span>
             </div>
 
             <p className="text-xs text-amber-900/90 dark:text-amber-200/90 leading-relaxed">
               {flaggedTelemetryErrors.length > 0 ? (
                 <>
-                  Historical biomarker logs contain scaling shifts, unit notation errors, or improbable values (e.g. Hematocrit recorded as <code className="bg-amber-100 dark:bg-amber-950/60 px-1 py-0.5 rounded font-mono text-amber-900 dark:text-amber-300">48 vs 0.48 / 3</code>, or Lymphocyte count <code className="bg-amber-100 dark:bg-amber-950/60 px-1 py-0.5 rounded font-mono text-amber-900 dark:text-amber-300">11.8</code>). To avoid instructing a patient on skewed telemetry, please resolve these issues using the <strong>Biomarker Review Agent</strong> before triggering health planning agents.
+                  {t.telemetryBannerBody}
                 </>
               ) : (
                 <>
-                  Potentially improbable value or unit mix-up detected for <strong className="font-semibold underline">{flaggedBiomarkers.map(b => b.def.name).join(', ')}</strong>. Please inspect or update your entry log.
+                  {t.flaggedValueMixupBody} <strong className="font-semibold underline">{flaggedBiomarkers.map(b => b.def.name).join(', ')}</strong>
                 </>
               )}
             </p>
@@ -1226,7 +1226,7 @@ export default function HomeTab({
                 className="px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-slate-700 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700/60 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5"
               >
                 <Edit2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                <span>Manage & Edit All Issues ({allFlaggedKeys.length})</span>
+                <span>{t.manageEditAllIssues.replace('{count}', String(allFlaggedKeys.length))}</span>
               </button>
             </div>
           </div>
@@ -1249,7 +1249,7 @@ export default function HomeTab({
             onClick={() => setIsDailyRecommendationChatOpen(true)}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer whitespace-nowrap"
           >
-            What's up today?
+            {t.whatsUpToday}
           </button>
         </div>
       </div>
@@ -2377,7 +2377,7 @@ export default function HomeTab({
             googleSteps={googleSteps}
             selectedModelId={selectedModelId}
             onChangeModelId={onChangeModelId}
-            autoSendMessage="What's up today?"
+            autoSendMessage={t.whatsUpTodayAction}
           />
         )}
       </React.Suspense>
