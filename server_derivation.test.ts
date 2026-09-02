@@ -261,3 +261,12 @@ describe("server_derivation", () => {
 });
 
 
+it('ignores agent calories when P/C/F are present (F-10.2)', () => {
+  const out = calculateDerivedNutrients({
+    calories: 9999, protein: 25, carbohydrates: 50, totalFat: 20,
+    saturatedFat: 5, transFat: 0, sodium: 400,
+  });
+  expect(out.calories).toBe(480);
+  expect(out.unsaturatedFat).toBe(15);
+  expect(out.salt).toBeCloseTo(1.02, 2);
+});

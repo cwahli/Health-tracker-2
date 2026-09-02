@@ -3512,7 +3512,7 @@ ${logsText}`);
           bodyData.lastProcessedIndex = lastMsg.lastProcessedIndex;
         }
         if (agentType) {
-          let currentStep = 'agent1_step1';
+          let currentStep = 'medical_analyze';
           if (agentType === 'agent1') {
             if (dataReviewBatchIdx !== null && dataReviewBatchIdx !== undefined) {
               currentStep = 'agent1';

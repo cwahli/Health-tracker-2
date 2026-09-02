@@ -1,18 +1,8 @@
-# C4 live analysis
+/** Compact Fill-Template instruction. Clinically accurate review against assigned reference ranges with log extraction. */
 
-- Model: `gemini-3.5-flash-lite`
-- Dry: true
-- Insight batch: 20 · draft batch: 12 → 0 agent turns
-- Flow: hits lock dictionary; agent writes medicalInsight only. Misses get pending drafts.
-- Template: `prototype/biomarkers/TEMPLATE.md`
-- Env file: (none)
-- Score: **PASS** (4 known / 0 unknown)
-
-## System instruction (verbatim)
-
-```
-You are an expert clinical laboratory AI reviewing a patient's biomarker panel.
-Patient Profile: 43-year-old Chinese male, Unit Preference: SI.
+export function fillTemplateInstruction(patientProfile = "43-year-old Chinese male, Unit Preference: SI"): string {
+  return `You are an expert clinical laboratory AI reviewing a patient's biomarker panel.
+Patient Profile: ${patientProfile}.
 
 For each biomarker:
 - id: matching id
@@ -24,40 +14,5 @@ For each biomarker:
 - DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.
 - UNCATALOGED (MISS): If not in dictionary, output match="none", writeTarget="pending", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }. NOTE: normalRange MUST follow the same bracketed profile format with clinical names, e.g., "[Western Standard] High: >1.4; Optimal: 0.5-1.4; Low: <0.5".
 
-JSON { "rows": [...] }.
-```
-
-## User send (once)
-
-```
-I'm a 43 year old Chinese male, 178 cm, 78 kg. Here are my results: HbA1c 5.7, LDL 130, eGFR 80, ALT 41.
-HbA1c  5.7 
-LDL  130 
-eGFR  80 mL/min/1.73m2
-ALT  41 U/L
-```
-
-## Back-office identity
-
-| id | printed | match | writeTarget | key |
-|---|---|---|---|---|
-| r01 | HbA1c | key | observation | hba1c |
-| r02 | LDL | key | observation | ldl |
-| r03 | eGFR | key | observation | egfr |
-| r04 | ALT | key | observation | alt |
-
-## Scored template vs expected
-
-| id | printed | match | writeTarget | status | key | draft | fail |
-|---|---|---|---|---|---|---|---|
-| r01 | HbA1c | key | observation | — | hba1c | — | — |
-| r02 | LDL | key | observation | — | ldl | — | — |
-| r03 | eGFR | key | observation | — | egfr | — | — |
-| r04 | ALT | key | observation | — | alt | — | — |
-
-## Contract checks
-
-- Model **must not emit status**: verified (pure TS classifier assigns it).
-- Model **must not alter dictionary**: verified (hits lock catalog definition).
-- Medical insight **must be personalised**: verified by `scoreBiomarkersCase`.
-- Contract: `TEMPLATE.md` + `template.ts`.
+JSON { "rows": [...] }.`;
+}
