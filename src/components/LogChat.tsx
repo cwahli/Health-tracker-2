@@ -1348,7 +1348,7 @@ ${logsText}`);
               }
             } catch {}
           }
-          if (m.role === 'assistant' && (m.agentType === 'food' || m.agentType === 'food_log' || m.agentType === 'food_analyze' || m.agentType === 'front_desk' || type === 'food' || m.pendingFoodLog || m.data?.pendingFoodLog)) {
+          if (m.role === 'assistant' && (m.agentType === 'food' || m.agentType === 'food_log' || m.agentType === 'food_analyze' || type === 'food' || m.pendingFoodLog || m.data?.pendingFoodLog)) {
             const foodLog = m.pendingFoodLog || m.data?.pendingFoodLog || resolvePendingFoodLog(job);
             if (foodLog) {
               return {
@@ -5440,8 +5440,8 @@ ${logsText}`);
                         ) : null
                       )}
                       {(() => {
-                        const isFoodMsg = msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'front_desk' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.portionClarify || msg.data?.needsPortionClarify);
-                        if (isFoodMsg || msg.agentType === 'biomarker_review' || msg.modificationCommand?.length || msg.data?.agentResult?.modificationCommand?.length) return null;
+                        const isFoodMsg = msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.portionClarify || msg.data?.needsPortionClarify);
+                        if (isFoodMsg || msg.agentType === 'biomarker_review' || msg.agentType === 'front_desk' || msg.modificationCommand?.length || msg.data?.agentResult?.modificationCommand?.length) return null;
                         const formatted = formatMessageContent(msg.content, msg);
                         if (!formatted || !formatted.trim()) return null;
                         return <p className="whitespace-pre-line break-words">{formatted}</p>;
@@ -5536,7 +5536,7 @@ ${logsText}`);
                     )}
                   {/* Render extracted Pending Food Log info */}
                   {(() => {
-                    const isFoodMsg = msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'front_desk' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.portionClarify || msg.data?.needsPortionClarify);
+                    const isFoodMsg = msg.agentType === 'food' || msg.agentType === 'food_log' || msg.agentType === 'food_analyze' || msg.agentType === 'food_compare' || msg.agentType === 'new_log' || msg.agentType === 'modify' || msg.agentType === 'review' || !!(msg.pendingFoodLog || msg.data?.pendingFoodLog || msg.data?.scoutItems?.length || msg.data?.portionClarify || msg.data?.needsPortionClarify);
                     const hasReviewFixes = !isFoodMsg && !!(
                       (Array.isArray(msg.modificationCommand) && msg.modificationCommand.length) ||
                       (Array.isArray(msg.data?.agentResult?.modificationCommand) && msg.data.agentResult.modificationCommand.length) ||
@@ -5614,6 +5614,7 @@ ${logsText}`);
                           fileInputRef={fileInputRef}
                           onDeleteMessage={(id) => setMessages(prev => prev.filter(m => m.id !== id))}
                           onLogMedical={onLogMedical}
+                          onOpenAgentFromFrontDesk={onOpenAgentFromFrontDesk}
                           isAnalyzing={isAnalyzing}
                           agentType={agentType}
                           autoSendMessage={autoSendMessage}
@@ -5885,15 +5886,8 @@ ${logsText}`);
                 <>
                   <button
                     type="button"
-                    onClick={() => handleSend('What should I do?')}
-                    className="whitespace-nowrap px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-                  >
-                    <span>🧭 What should I do?</span>
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => onOpenAgentFromFrontDesk?.('medical')}
-                    className="whitespace-nowrap px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-theme-neutral text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer"
+                    className="whitespace-nowrap px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
                   >
                     <span>➕ Add medical data</span>
                   </button>

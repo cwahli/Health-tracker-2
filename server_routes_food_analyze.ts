@@ -114,100 +114,140 @@ foodAnalyzeRouter.get("/api/gemini/instruction-preview", async (req, res) => {
 
 // Gemini Food Analyze Endpoint
 
-// Health Preparation Agent
+import { callReceptionistAgent } from './src/server/receptionist/index.js';
+import { runBiomarkerPipeline } from './src/server/biomarkers/pipeline.js';
+
+// Health Preparation & Receptionist Agent
 foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
   try {
-    const { message, profile, biomarkers, foodLogs, biomarkerHistory, engine } = req.body;
+    const { message, profile, biomarkers, foodLogs, biomarkerHistory, history, engine, image, images } = req.body;
     
     let targetModel = typeof engine === 'object' ? engine?.name || engine?.model || "gemini-3.5-flash-lite" : (engine || "gemini-3.5-flash-lite");
-  
-
-    const cleanedHistory = (biomarkerHistory || []).slice().reverse().map((item: any) => {
-      if (!item) return item;
-      const clean = { ...item };
-      if (typeof clean.note === 'string') {
-        clean.note = Array.from(new Set(clean.note.split(/[;|\n]/).map((s: string) => s.trim()).filter(Boolean))).join('; ');
-      }
-      if (typeof clean.summary === 'string') {
-        clean.summary = Array.from(new Set(clean.summary.split(/[;|\n]/).map((s: string) => s.trim()).filter(Boolean))).join('; ');
-      }
-      return clean;
-    });
-
-    const prompt = `
-You are the Health Preparation Agent. Your job is to answer the user's questions regarding their health data, and guide them on what they should do next.
-You have access to their profile, biomarkers, and food logs.
-
-<USER_DATA>
-Profile: ${JSON.stringify(profile, null, 2)}
-Biomarkers: ${JSON.stringify(biomarkers, null, 2)}
-Food Logs (Last 5): ${JSON.stringify(foodLogs ? foodLogs.slice(0, 5) : [], null, 2)}
-Recent Biomarker History (most recent first, up to 40 entries): ${JSON.stringify(cleanedHistory, null, 2)}
-</USER_DATA>
-
-If the user asks "What should I do?", analyze their data and see what is missing (e.g. missing age, weight, or missing biomarkers, or no food logs logged).
-Advise them on which of the 5 specialized agents to use:
-- Add Health Data
-- Review Biomarkers
-- Clinical Review
-- Health Planning
-- Medical Insights
-
-If the user gives you information to update their profile (like their weight, height, age, blood type), you MUST include a JSON block in your response to update the profile.
-Format for updating profile and adding biomarker logs:
-\`\`\`json
-{
-  "updatedProfile": {
-    "weight": 70,
-    "height": 175,
-    "age": 30
-  },
-  "newBiomarkerLogs": [
-    { "biomarker": "HbA1c", "value": 5.5, "unit": "%", "date": "2023-10-10" }
-  ]
-}
-\`\`\`
-Any fields you specify in the JSON will be merged into their profile. 
-
-Answer the user's message directly and concisely.
-
-User Message: ${message}
-`;
-
-    addDebugLog(`[FrontDesk] Dispatching prompt to model: "${targetModel}".`);
-    addDebugLog(`[FrontDesk-Prompt] User Prompt:\n${prompt}`);
-
+    
     const ai = getGeminiClient();
-    const response = await withGeminiRetry(() => ai.models.generateContent({
-      model: targetModel,
-      contents: prompt,
-      config: {
-        temperature: 0.2,
-        maxOutputTokens: 1024,
-        httpOptions: { timeout: 60000 }
-      }
+
+    // Map profile to UserProfileSnapshot
+    const existingUserProfile = profile ? {
+      name: profile.name || null,
+      age: profile.age ? Number(profile.age) : null,
+      gender: profile.gender || null,
+      ethnicity: profile.ethnicity || null,
+      bloodType: profile.bloodType || null,
+      heightCm: profile.height ? Number(profile.height) : null,
+      weightKg: profile.weight ? Number(profile.weight) : null,
+      activityLevel: profile.activityLevel || null,
+      medicalHistory: Array.isArray(profile.medicalHistory) ? profile.medicalHistory : (profile.medicalConditions ? [profile.medicalConditions] : null),
+      dietaryPreferences: Array.isArray(profile.dietaryRestrictions) ? profile.dietaryRestrictions : null,
+      targetWeightKg: profile.targetWeight ? Number(profile.targetWeight) : null,
+    } : null;
+
+    // Convert history into ChatMessage[]
+    const chatHistory = (history || []).map((h: any) => ({
+      role: h.role === 'user' ? 'user' : 'assistant',
+      content: typeof h.content === 'string' ? h.content : (h.message || JSON.stringify(h.content || ''))
     }));
 
-    const reply = response.text || "";
-    addDebugLog(`[FrontDesk-Response] ${reply}`);
-    
-    // Parse updatedProfile if any
-    let updatedProfile = null;
-    let newBiomarkerLogs = null;
-    const jsonMatch = reply.match(/\`\`\`json\s*({[\s\S]*?})\s*```/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[1]);
-        if (parsed.newBiomarkerLogs) {
-          newBiomarkerLogs = parsed.newBiomarkerLogs;
-        }
-        if (parsed.updatedProfile) {
-          updatedProfile = { ...profile, ...parsed.updatedProfile };
-        }
-      } catch(e) {}
+    const receptionistPayload = {
+      currentUserMessage: message || "",
+      chatHistory,
+      existingUserProfile,
+      existingMemory: null,
+      existingActivitiesAndTasks: null,
+    };
+
+    addDebugLog(`[FrontDesk] Dispatching receptionist prompt to model: "${targetModel}".`);
+
+    const { output: recOutput } = await withGeminiRetry(() => 
+      callReceptionistAgent(ai, receptionistPayload, targetModel)
+    );
+
+    addDebugLog(`[FrontDesk-Response] Output status: ${recOutput.status}, intent: ${recOutput.intent}, targetAgent: ${recOutput.targetAgent}`);
+
+    let updatedProfile = recOutput.updatedProfile ? { ...profile, ...recOutput.updatedProfile } : null;
+    let newBiomarkerLogs = recOutput.newBiomarkerLogs || null;
+    let filledRows: any[] = [];
+
+    // Check if images or complex medical report were submitted
+    let base64Images: string[] = [];
+    if (images && Array.isArray(images) && images.length > 0) {
+      base64Images = images;
+    } else if (image) {
+      base64Images = [image];
     }
 
-    res.json({ agentPrompt: prompt, text: reply.replace(/\`\`\`json[\s\S]*?\`\`\`/g, '').trim(), updatedProfile, newBiomarkerLogs, type: 'front_desk' });
+    if (base64Images.length > 0 || (recOutput.targetAgent === 'medical' && recOutput.status === 'ready_for_handoff')) {
+      try {
+        const formattedHistory: Record<string, any[]> = {};
+        for (const h of (biomarkerHistory || [])) {
+          if (h.biomarkers) {
+            Object.keys(h.biomarkers).forEach(k => {
+              if (!formattedHistory[k]) formattedHistory[k] = [];
+              formattedHistory[k].push({ date: h.date, value: h.biomarkers[k] });
+            });
+          }
+        }
+
+        const medicalProfile = {
+          age: profile?.age || 40,
+          gender: profile?.gender || 'unknown',
+          ethnicity: profile?.ethnicity || 'unknown',
+          unitPreference: profile?.unitPreference || 'SI'
+        };
+
+        filledRows = await runBiomarkerPipeline(
+          ai,
+          message || "",
+          base64Images,
+          formattedHistory,
+          medicalProfile as any
+        );
+
+        if (filledRows && filledRows.length > 0) {
+          const autoLogs = filledRows
+            .filter((r: any) => r.key && r.value !== undefined && r.value !== null)
+            .map((r: any) => ({
+              biomarker: r.key,
+              value: Number(r.value),
+              unit: r.unit || '',
+              date: r.date || new Date().toISOString().split('T')[0]
+            }));
+          if (autoLogs.length > 0) {
+            newBiomarkerLogs = [...(newBiomarkerLogs || []), ...autoLogs];
+          }
+        }
+      } catch (pipeErr) {
+        console.warn("[FrontDesk] Biomarker pipeline execution warning:", pipeErr);
+      }
+    }
+
+    // Default today's date if newBiomarkerLogs entries missing date
+    if (newBiomarkerLogs && Array.isArray(newBiomarkerLogs)) {
+      const today = new Date().toISOString().split('T')[0];
+      newBiomarkerLogs = newBiomarkerLogs.map((item: any) => ({
+        ...item,
+        date: item.date || today
+      }));
+    }
+
+    res.json({
+      agentType: 'front_desk',
+      text: recOutput.userResponse,
+      userResponse: recOutput.userResponse,
+      intent: recOutput.intent,
+      targetAgent: recOutput.targetAgent,
+      status: recOutput.status,
+      missingFields: recOutput.missingFields,
+      collectedData: recOutput.collectedData,
+      memory: recOutput.memory,
+      isDisambiguationRequired: recOutput.isDisambiguationRequired,
+      disambiguationContext: recOutput.disambiguationContext,
+      uiForm: recOutput.uiForm,
+      handoffPayload: recOutput.handoffPayload,
+      updatedProfile,
+      newBiomarkerLogs,
+      filledRows,
+      type: 'front_desk'
+    });
   } catch (err: any) {
     console.error("Front Desk Error:", err);
     res.status(500).json({ error: err.message });

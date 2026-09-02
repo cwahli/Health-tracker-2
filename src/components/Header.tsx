@@ -1561,20 +1561,6 @@ export default function Header({
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  type="button"
-                  id="profile-modal-top-signout-btn"
-                  onClick={() => {
-                    setIsEditing(false);
-                    clearGoogleToken();
-                    onSignOut();
-                  }}
-                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/40 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer flex items-center gap-1"
-                  title="Sign Out of your account"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>{t.signOut || 'Sign Out'}</span>
-                </button>
-                <button
                   id="profile-save-btn"
                   onClick={handleSave}
                   className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
@@ -1875,6 +1861,24 @@ export default function Header({
                     {hideSensitive ? <EyeOff className="w-4.5 h-4.5 text-rose-500 flex-shrink-0" /> : <Eye className="w-4.5 h-4.5 text-slate-400 flex-shrink-0" />}
                   </button>
                 </div>
+              </div>
+
+              {/* Account Sign Out Action */}
+              <div className="border-t border-slate-100 dark:border-slate-800/85 pt-4 mt-2">
+                <button
+                  type="button"
+                  id="profile-modal-bottom-signout-btn"
+                  onClick={() => {
+                    setIsEditing(false);
+                    clearGoogleToken();
+                    onSignOut();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/40 rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                  title="Sign Out of your account"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>{t.signOut || 'Sign Out'}</span>
+                </button>
               </div>
             </div>
           </div>

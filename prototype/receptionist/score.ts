@@ -335,6 +335,7 @@ export function scoreCoachOutput(output: any, payload?: any): CaseScoreResult {
   );
 
   return {
+    caseId: payload?.caseId || "coach",
     passed: allPassed,
     score,
     checks,

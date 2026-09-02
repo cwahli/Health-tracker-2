@@ -4,6 +4,8 @@ export * from './FoodCard';
 export * from './BiomarkerCard';
 export * from './WelcomeCard';
 export * from './HealthBaselineCard';
+export * from './BiomarkerReviewCard';
+export * from './ReceptionistCard';
 
 import { FoodIdeaCard } from './FoodIdeaCard';
 import { FoodCard } from './FoodCard';
@@ -11,9 +13,8 @@ import { BiomarkerCard } from './BiomarkerCard';
 import { WelcomeCard } from './WelcomeCard';
 import { HealthBaselineCard } from './HealthBaselineCard';
 import { BiomarkerReviewCard } from './BiomarkerReviewCard';
+import { ReceptionistCard } from './ReceptionistCard';
 import { AgentType } from '../../utils/agentConfig';
-
-export * from './BiomarkerReviewCard';
 
 export const agentCardRegistry: Record<string, React.FC<any>> = {
   health_baseline: HealthBaselineCard,
@@ -22,7 +23,7 @@ export const agentCardRegistry: Record<string, React.FC<any>> = {
   food_log: FoodCard,
   food_analyze: FoodCard,
   food_compare: FoodCard,
-  front_desk: FoodCard,
+  front_desk: ReceptionistCard,
   new_log: FoodCard,
   modify: FoodCard,
   review: FoodCard,
