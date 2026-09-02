@@ -56,13 +56,14 @@ export function initNetworkDiagnosticInterceptor() {
     } catch (err: any) {
       const duration = Date.now() - start;
       const errMsg = err?.message || String(err);
-      const logMsg = `[${new Date().toISOString()}] [NET DROP ${method}] ${cleanUrl} (${duration}ms) - ${errMsg}`;
+      const isAbort = err?.name === 'AbortError' || errMsg.toLowerCase().includes('abort');
+      const logMsg = `[${new Date().toISOString()}] [${isAbort ? 'NET ABORT' : 'NET DROP'} ${method}] ${cleanUrl} (${duration}ms) - ${errMsg}`;
 
       window.__clientNetworkErrors = window.__clientNetworkErrors || [];
       window.__clientNetworkErrors.push(logMsg);
       if (window.__clientNetworkErrors.length > 50) window.__clientNetworkErrors.shift();
 
-      recordBreadcrumb('network_drop', cleanUrl, { error: errMsg, duration, method });
+      recordBreadcrumb(isAbort ? 'network_abort' : 'network_drop', cleanUrl, { error: errMsg, duration, method });
       throw err;
     }
   };

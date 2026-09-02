@@ -3,6 +3,8 @@ import { UserProfile } from '../types';
 import { translations } from '../utils/translations';
 import { Activity, Mail, AlertCircle, RefreshCw, KeyRound, CheckCircle } from 'lucide-react';
 import { supabase, isSupabaseConfigured, getAuthRedirectTo, cleanupAuthUrlParams } from '../utils/supabaseClient';
+import { auth } from '../firebase';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 interface AuthScreenProps {
   onLogin: (profile: UserProfile) => void;
@@ -64,6 +66,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             } else if (error) {
               console.warn('[Auth] verifyOtp error:', error);
             }
+          }).catch(err => {
+            console.warn('[Auth] verifyOtp catch:', err?.message || err);
           });
         } else if (code) {
           supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
@@ -80,6 +84,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             } else if (error) {
               console.warn('[Auth] exchangeCode error:', error);
             }
+          }).catch(err => {
+            console.warn('[Auth] exchangeCode catch:', err?.message || err);
           });
         }
       }
@@ -96,6 +102,8 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             emailVerified: true
           } as any);
         }
+      }).catch(err => {
+        console.warn('[Auth] getSession catch:', err?.message || err);
       });
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -591,6 +599,39 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setErrorMsg('');
     setStatus('sending');
 
+    if (provider === 'Google') {
+      try {
+        const providerObj = new GoogleAuthProvider();
+        providerObj.setCustomParameters({ prompt: 'select_account' });
+        const result = await signInWithPopup(auth, providerObj);
+        if (result?.user) {
+          const u = result.user;
+          const userProfile: UserProfile = {
+            nickname: u.displayName || u.email?.split('@')[0] || 'Google User',
+            photoUrl: u.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120',
+            email: u.email || 'google.user@healthcockpit.com',
+            age: 28,
+            ethnicity: 'Caucasian',
+            weight: 74,
+            height: 178,
+            gender: 'Male',
+            language,
+            userType: 'Standard'
+          };
+          onLogin(userProfile);
+          setStatus('idle');
+          return;
+        }
+      } catch (fbErr: any) {
+        // If popup was blocked or closed by user, or popup not supported
+        console.warn('Firebase Google popup auth error:', fbErr);
+        if (fbErr?.code === 'auth/popup-closed-by-user') {
+          setStatus('idle');
+          return;
+        }
+      }
+    }
+
     if (isSupabaseConfigured) {
       try {
         const providerMap: Record<string, string> = { Google: 'google', X: 'twitter', Facebook: 'facebook' };
@@ -603,6 +644,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         });
         
         if (error) throw error;
+        return;
       } catch (sEx: any) {
         console.warn(`Supabase ${provider} OAuth error:`, sEx);
         setErrorMsg(sEx.message || `Failed to sign in with ${provider}`);

@@ -238,7 +238,7 @@ export async function runFoodAnalyze(req: any, res: any) {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.flushHeaders();
+    if (typeof (res as any).flushHeaders === 'function') (res as any).flushHeaders();
     hasSentHeaders = true;
     const originalJson = res.json.bind(res);
     const originalStatus = res.status.bind(res);

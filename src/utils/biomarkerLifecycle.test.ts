@@ -315,6 +315,7 @@ describe('resolveAgentDestination', () => {
     expect(resolveAgentDestination('agent5')).toBe('data_review');
     expect(resolveAgentDestination('medical_extract')).toBe('agent1');
     expect(resolveAgentDestination('biomarker_review')).toBe('biomarker_review');
+    expect(resolveAgentDestination('health_coach')).toBe('health_baseline');
   });
 
   it('routes data_accuracy to comparison modal payload', () => {

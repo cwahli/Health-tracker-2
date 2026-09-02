@@ -689,7 +689,7 @@ export default function App() {
 
   useEffect(() => {
     if (profile?.email) {
-      loadLocalSnapshots(profile.email).then(s => setSnapshots(s));
+      loadLocalSnapshots(profile.email).then(s => setSnapshots(s)).catch(() => {});
     }
   }, [profile?.email]);
 
@@ -1856,6 +1856,7 @@ export default function App() {
     }
   });
   const [prefillMessage, setPrefillMessage] = useState<string | null>(null);
+  const [activeHandoffPayload, setActiveHandoffPayload] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEditingFoodLog, setIsEditingFoodLog] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
@@ -6687,10 +6688,21 @@ export default function App() {
       {/* Slide-over interactive dialogs */}
       
       {(() => {
-        const handleOpenAgentFromFrontDesk = (agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'medical' | null) => {
+        const handleOpenAgentFromFrontDesk = (
+          agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'medical' | null,
+          options?: { prefillMessage?: string; autoSendMessage?: string; handoffPayload?: any; updatedProfile?: any }
+        ) => {
           setIsFrontDeskOpen(false);
-          setActiveAgentType(resolveAgentDestination(agentType) as any);
-          setPrefillMessage(null);
+          const target = resolveAgentDestination(agentType) as any;
+          setActiveAgentType(target);
+          if (options?.updatedProfile) {
+            const nextProf = { ...profile, ...options.updatedProfile };
+            setProfile(nextProf);
+            saveAndSync(nextProf, foodLogs, biomarkers, biomarkerHistory, actions, dailyBenefits, report, { type: 'profile' });
+          }
+          const msgToSend = options?.autoSendMessage || options?.prefillMessage || null;
+          setPrefillMessage(msgToSend);
+          setActiveHandoffPayload(options?.handoffPayload || null);
           setActiveDataReviewBatchIdx(null);
           setActiveDataReviewBatchKeys([]);
           setActiveDataReviewRemainingText('');
@@ -6833,12 +6845,14 @@ export default function App() {
           setIsMedicalChatOpen(false);
           setActiveAgentType(null);
           setPrefillMessage(null);
+          setActiveHandoffPayload(null);
           setActiveDataReviewBatchIdx(null);
           setActiveJobId(null);
           setActiveTab('health');
           setHealthSubTab('biomarker');
         }}
         autoSendMessage={prefillMessage}
+        handoffPayload={activeHandoffPayload}
         onLogMedical={handleLogMedical}
         biomarkers={biomarkers}
         biomarkerHistory={biomarkerHistory}

@@ -296,11 +296,20 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
             <button
               type="button"
               onClick={() => {
-                if (handoffPayload.targetAgent === 'medical' || handoffPayload.targetAgent === 'biomarker_review') {
-                  onOpenAgentFromFrontDesk?.('medical');
-                } else {
-                  onOpenAgentFromFrontDesk?.('health_baseline');
-                }
+                const isMed = handoffPayload.targetAgent === 'medical' || handoffPayload.targetAgent === 'biomarker_review';
+                const targetAgent = isMed ? 'medical' : 'health_baseline';
+                const summary = handoffPayload.summaryForAgent || handoffPayload.userContextSummary || '';
+                const insights = Array.isArray(handoffPayload.actionableInsights) ? handoffPayload.actionableInsights : [];
+                const prompt = summary 
+                  ? `${summary}${insights.length > 0 ? '\n\nKey Insights:\n' + insights.map((i: string) => `• ${i}`).join('\n') : ''}`
+                  : (insights.length > 0 ? insights.map((i: string) => `• ${i}`).join('\n') : 'Please create my personalized health plan based on my profile.');
+                
+                onOpenAgentFromFrontDesk?.(targetAgent, {
+                  handoffPayload,
+                  prefillMessage: prompt,
+                  autoSendMessage: prompt,
+                  updatedProfile: handoffPayload.collectedData || updatedProfile
+                });
               }}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
             >

@@ -3740,6 +3740,8 @@ export const FoodCard: React.FC<AgentCardProps & {
                                     if (msg.pendingFoodLog) msg.pendingFoodLog.id = savedId;
                                     (msg as any).loggedFoodId = savedId;
                                   }
+                                }).catch(err => {
+                                  console.warn('[FoodCard] onLogFood catch:', err?.message || err);
                                 }).finally(() => {
                                   isLoggingRef.current = false;
                                 });

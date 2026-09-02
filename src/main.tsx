@@ -31,14 +31,21 @@ const isBenignError = (message?: string): boolean => {
     msg.includes('resizeobserver loop') ||
     msg.includes('aborterror') ||
     msg.includes('the user aborted a request') ||
-    msg.includes('the operation was aborted')
+    msg.includes('the operation was aborted') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('load failed') ||
+    msg.includes('network error') ||
+    msg.includes('networkerror')
   );
 };
 
 window.addEventListener('error', (e) => {
   try {
     const rawMsg = e.message || e.error?.message || '';
-    if (isBenignError(rawMsg)) return;
+    if (isBenignError(rawMsg)) {
+      e.preventDefault();
+      return;
+    }
     fetch('/api/client-error', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -49,7 +56,10 @@ window.addEventListener('error', (e) => {
 window.addEventListener('unhandledrejection', (e) => {
   try {
     const rawMsg = e.reason?.message || String(e.reason) || '';
-    if (isBenignError(rawMsg)) return;
+    if (isBenignError(rawMsg)) {
+      e.preventDefault();
+      return;
+    }
     fetch('/api/client-error', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

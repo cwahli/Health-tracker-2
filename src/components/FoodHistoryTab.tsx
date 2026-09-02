@@ -153,6 +153,8 @@ export default function FoodHistoryTab({
           chatTranscript: Array.isArray(detail.chat_transcript) ? detail.chat_transcript : undefined,
         }
       }));
+    }).catch(err => {
+      console.warn('[FoodHistoryTab] fetchFoodLogDetail catch:', err?.message || err);
     });
     return () => { cancelled = true; };
   }, [expandedLogId]);

@@ -1235,6 +1235,7 @@ export const RETIRED_AGENT_REDIRECT: Record<string, string> = {
   agent2: 'data_review',
   agent3: 'data_review',
   agent5: 'data_review',
+  health_coach: 'health_baseline',
 };
 
 export interface AgentDestinationRoute {
