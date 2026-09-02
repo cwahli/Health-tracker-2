@@ -4028,6 +4028,7 @@ ${logsText}`);
           logs: fullLogs || (backendLogsFull ? backendLogsFull.split('\n').map(line => ({ timestamp: new Date().toISOString(), message: line })) : [{ timestamp: new Date().toISOString(), message: `[health_coach] Completed Health Coach analysis (${summary})` }])
         });
       }
+      console.log('[DIAG2] resData parsed', { keys: Object.keys(resData || {}), status: resData?.status, hasError: !!resData?.error });
       if (resData.error) {
         const err: any = new Error(resData.error);
         if (resData.scoutItems) err.scoutItems = resData.scoutItems;
@@ -4038,7 +4039,9 @@ ${logsText}`);
       if (profile) {
         const updatedProfile = deductAgentCredits(profile, selectedModelId);
         if (onSaveProfile) {
+          console.log('[DIAG2] Before onSaveProfile (credit deduction)');
           await onSaveProfile(updatedProfile);
+          console.log('[DIAG2] After onSaveProfile (credit deduction)');
         }
       }
       if (bodyData.batchBiomarkers && !resData.batchBiomarkers) {
@@ -4296,6 +4299,7 @@ ${logsText}`);
         }
         return finalArray;
       });
+      console.log('[DIAG2] setMessages call completed (isLive placeholder should be cleared)');
 
       if (isAgent('front_desk') && (resData.status === 'ready_for_handoff' || resData.handoffPayload)) {
         const handoff = resData.handoffPayload || {};
@@ -4400,6 +4404,7 @@ ${logsText}`);
         ]);
       }
     } finally {
+      console.log('[DIAG2] finally block reached - isAnalyzing about to be reset');
       clearTimeout(failsafe);
       isSendingRef.current = false;
       setIsSubmitting(false);
