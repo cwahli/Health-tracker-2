@@ -3251,7 +3251,7 @@ export default function App() {
       setSyncState(s => (s === 'syncing' ? 'local' : s));
     }
   };
-  const loadUserData = async (uid: string, email: string, displayName?: string, photoURL?: string) => {
+  const loadUserData = async (uid: string, email: string, displayName?: string, photoURL?: string, chosenLanguage?: string) => {
     const newEmail = email.toLowerCase().trim();
     if (!newEmail) {
       setIsAuthChecking(false);
@@ -3347,6 +3347,17 @@ export default function App() {
       if (!loadedProfile.topNutrientsToMonitor) {
         loadedProfile.topNutrientsToMonitor = PRIMARY_NUTRIENTS;
       }
+    }
+    if (chosenLanguage && loadedProfile) {
+      loadedProfile.language = chosenLanguage;
+    } else if (loadedProfile && (!loadedProfile.language || loadedProfile.language === 'en')) {
+      const preferred = localStorage.getItem('preferred_language') as any;
+      if (preferred && ['en', 'fr', 'zh', 'id'].includes(preferred)) {
+        loadedProfile.language = preferred;
+      }
+    }
+    if (loadedProfile?.language) {
+      localStorage.setItem('preferred_language', loadedProfile.language);
     }
     if (loadedProfile.nickname && loadedProfile.nickname !== 'Healthy User' && loadedProfile.nickname !== 'User') {
       localStorage.setItem(`signup_nickname_${newEmail}`, loadedProfile.nickname);
@@ -4177,6 +4188,9 @@ export default function App() {
 
   // Sync Check on Login / Fetch user record if existing on server
   const handleLogin = async (loggedProfile: UserProfile) => {
+    if (loggedProfile.language) {
+      localStorage.setItem('preferred_language', loggedProfile.language);
+    }
     setProfile(loggedProfile);
     if (loggedProfile.email) {
       localStorage.setItem('last_active_email', loggedProfile.email.toLowerCase().trim());
@@ -4189,7 +4203,8 @@ export default function App() {
         loggedProfile.uid || 'user',
         loggedProfile.email,
         loggedProfile.nickname,
-        loggedProfile.photoUrl
+        loggedProfile.photoUrl,
+        loggedProfile.language
       );
     }
   };

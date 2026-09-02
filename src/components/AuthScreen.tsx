@@ -33,7 +33,10 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const [nickname, setNickname] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [status, setStatus] = useState<'idle' | 'sending' | 'pending_verification'>('idle');
-  const [language, setLanguage] = useState<'en' | 'fr' | 'zh' | 'id'>('en');
+  const [language, setLanguage] = useState<'en' | 'fr' | 'zh' | 'id'>(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('preferred_language') as any : null;
+    return ['en', 'fr', 'zh', 'id'].includes(saved) ? saved : 'en';
+  });
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [selectedDemoType, setSelectedDemoType] = useState<'empty' | 'average' | 'complex'>('average');
@@ -694,7 +697,11 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         <div className="flex justify-end mb-4">
           <select
             value={language}
-            onChange={(e) => setLanguage(e.target.value as any)}
+            onChange={(e) => {
+              const next = e.target.value as any;
+              setLanguage(next);
+              localStorage.setItem('preferred_language', next);
+            }}
             className="text-xs font-bold bg-slate-50 dark:bg-slate-800 text-slate-500 rounded-full px-3 py-1.5 focus:outline-none"
           >
             <option value="en">English</option>
@@ -711,9 +718,9 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               <Mail className="w-6 h-6 animate-bounce" />
             </div>
             <div className="space-y-2">
-              <h3 className="font-semibold text-slate-900 dark:text-slate-200">Check your inbox</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-slate-200">{t.checkInbox}</h3>
               <p className="text-xs text-theme-text-secondary max-w-xs leading-relaxed">
-                We've sent a verification link to your email. Please verify to continue.
+                {t.verificationLinkSent}
               </p>
             </div>
             <button
@@ -721,7 +728,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               onClick={handleCheckVerification}
               className="w-full mt-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-md active:scale-[0.98] transition-all"
             >
-              I have verified my email
+              {t.emailVerifiedButton}
             </button>
 
             <button
@@ -731,7 +738,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               className="w-full py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-semibold active:scale-[0.98] transition-all flex items-center justify-center gap-1"
             >
               <Mail className="w-3.5 h-3.5" />
-              Resend Verification Link
+              {t.resendVerificationLink}
             </button>
 
             {successMsg && (
@@ -784,7 +791,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               }}
               className="w-full mt-2 py-2.5 border border-theme-border hover:bg-slate-50 dark:hover:bg-slate-800 text-theme-neutral rounded-xl text-xs font-semibold active:scale-[0.98] transition-all flex items-center justify-center gap-1"
             >
-              🔓 Bypass Verification (Sandbox Mode)
+              {t.bypassVerification}
             </button>
             <button
               onClick={async () => {
@@ -797,7 +804,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               }}
               className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 mt-2"
             >
-              Sign out / Try another account
+              {t.signOutTryAnother}
             </button>
           </div>
         ) : (
@@ -818,9 +825,9 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                   className="w-full p-3 rounded-xl border border-slate-200/60 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
                 >
                   {[
-                    { id: 'empty', title: '1. Initial Start (Empty)' },
-                    { id: 'average', title: '2. Average Person (Standard)' },
-                    { id: 'complex', title: '3. 50-yo with Chronic Issues' }
+                    { id: 'empty', title: t.demoEmpty },
+                    { id: 'average', title: t.demoAverage },
+                    { id: 'complex', title: t.demoComplex }
                   ].map((profileOpt) => (
                     <option key={profileOpt.id} value={profileOpt.id}>{profileOpt.title}</option>
                   ))}
@@ -833,14 +840,14 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                 onClick={handleDemoLogin}
                 className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-100 dark:shadow-none transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:scale-[1.01]"
               >
-                <span>🚀 Launch Demo Account</span>
+                <span>{t.launchDemo}</span>
               </button>
             </div>
 
             <div className="relative flex items-center justify-center my-4">
               <div className="border-t border-theme-border w-full"></div>
               <span className="absolute bg-theme-bg-card px-3 text-[10px] uppercase font-bold tracking-widest text-slate-400">
-                or use email
+                {t.orUseEmail}
               </span>
             </div>
 
@@ -861,14 +868,14 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-theme-text-secondary">Password</label>
+                  <label className="block text-xs font-semibold text-theme-text-secondary">{t.passwordLabel}</label>
                   {!isSignUp && (
                     <button
                       type="button"
                       onClick={handleForgotPassword}
                       className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:underline"
                     >
-                      Forgot password?
+                      {t.forgotPassword}
                     </button>
                   )}
                 </div>
@@ -876,7 +883,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                   id="auth-password-input"
                   type="password"
                   required
-                  placeholder="Enter your password"
+                  placeholder={t.enterPassword}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-slate-50 dark:bg-slate-800/60 border border-theme-border/50 rounded-xl px-3.5 py-3 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
@@ -908,7 +915,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               {status === 'sending' ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
               ) : (
-                isSignUp ? 'Sign Up' : 'Continue with Email'
+                isSignUp ? t.signUp : t.continueWithEmail
               )}
             </button>
 
@@ -934,14 +941,14 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                 onClick={() => setIsSignUp(!isSignUp)}
                 className="text-xs text-theme-text-secondary hover:text-indigo-600 transition-colors"
               >
-                {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                {isSignUp ? t.alreadyHaveAccount : t.dontHaveAccount}
               </button>
             </div>
 
             {/* Divider lines */}
             <div className="relative my-4 flex items-center justify-center">
               <div className="border-t border-theme-border/60 w-full" />
-              <span className="absolute bg-theme-bg-card px-3 text-[10px] font-mono tracking-widest text-slate-400 uppercase">OR</span>
+              <span className="absolute bg-theme-bg-card px-3 text-[10px] font-mono tracking-widest text-slate-400 uppercase">{t.orDivider}</span>
             </div>
 
             {/* Social Oauth Triggers */}

@@ -1004,10 +1004,10 @@ export default function HomeTab({
             </div>
             <div className="space-y-1">
               <h2 id="empty-state-title" className="text-xl font-extrabold tracking-tight text-theme-text">
-                Welcome to Your Health Portal
+                {t.welcomeHealthPortal}
               </h2>
               <p className="text-xs text-theme-text-secondary max-w-sm mx-auto leading-relaxed">
-                Loading your profile and calibrating health metrics...
+                {t.welcomeLoadingDesc}
               </p>
             </div>
           </div>
@@ -1018,10 +1018,10 @@ export default function HomeTab({
             </div>
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-theme-text">
-                Loading Profile...
+                {t.loadingProfile}
               </h3>
               <p className="text-xs text-theme-text-secondary leading-normal max-w-xs mx-auto">
-                Please wait a moment while your daily targets, biomarker records, and health profile are retrieved.
+                {t.loadingProfileDesc}
               </p>
             </div>
             <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
@@ -1040,10 +1040,10 @@ export default function HomeTab({
           </div>
           <div className="space-y-1">
             <h2 id="empty-state-title" className="text-xl font-extrabold tracking-tight text-theme-text">
-              Welcome to Your Health Portal
+              {t.welcomeHealthPortal}
             </h2>
             <p className="text-xs text-theme-text-secondary max-w-sm mx-auto leading-relaxed">
-              Your dashboard is ready! Log some records to calibrate your metabolic targets, nutrition recommendations, and biomarker risk assessments.
+              {t.dashboardReadyDesc}
             </p>
           </div>
         </div>
@@ -1057,10 +1057,10 @@ export default function HomeTab({
               </div>
               <div className="space-y-1">
                 <h3 className="text-sm font-bold text-theme-text">
-                  Complete Your Profile
+                  {t.completeYourProfile}
                 </h3>
                 <p className="text-xs text-theme-text-secondary leading-normal">
-                  Add details like age, weight, height, ethnicity, and gender. This calibrates our medical and AI engines to calculate custom daily targets specifically for you.
+                  {t.completeProfileDesc}
                 </p>
               </div>
             </div>
@@ -1071,7 +1071,7 @@ export default function HomeTab({
               }}
               className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
             >
-              Configure Profile
+              {t.configureProfile}
             </button>
           </div>
 
@@ -1083,10 +1083,10 @@ export default function HomeTab({
               </div>
               <div className="space-y-1">
                 <h3 className="text-sm font-bold text-theme-text">
-                  Log a Food or Meal
+                  {t.logFoodOrMeal}
                 </h3>
                 <p className="text-xs text-theme-text-secondary leading-normal">
-                  Type what you ate or speak naturally to get an automatic clinical breakdown, nutrient calculations, and personalized health recommendations.
+                  {t.logFoodOrMealDesc}
                 </p>
               </div>
             </div>
@@ -1102,7 +1102,7 @@ export default function HomeTab({
               }}
               className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
             >
-              Add Your First Food Log
+              {t.addFirstFoodLog}
             </button>
           </div>
 
@@ -1239,10 +1239,10 @@ export default function HomeTab({
           <div className="space-y-1">
             <h3 className="text-sm font-bold text-theme-text flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-indigo-500" />
-              Daily Recommendation
+              {t.dailyRecommendation}
             </h3>
             <p className="text-xs text-theme-text-secondary">
-              Get personalized insights on your progress and today's goals.
+              {t.dailyRecommendationDesc}
             </p>
           </div>
           <button
@@ -1259,7 +1259,7 @@ export default function HomeTab({
         <div className="flex justify-between items-center pb-2 border-b border-theme-border/50">
           <h3 className="font-bold text-theme-text text-sm flex items-center gap-2">
             <Heart className="w-4 h-4 text-indigo-600" />
-            Top Targets
+            {t.topTargets}
           </h3>
           <span className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
             <Calendar className="w-3 h-3" /> {todayStr}
@@ -1387,7 +1387,7 @@ export default function HomeTab({
           <div className="space-y-1">
             <div className="flex justify-between text-xs font-semibold">
               <span className="text-theme-neutral flex items-center gap-1">
-                <span>Steps</span>
+                <span>{t.stepsLabel}</span>
                 {googleStepsAverage !== null && (
                   <span className="text-[10px] text-slate-400 font-normal">
                     (7d avg: {googleStepsAverage.toLocaleString()})
@@ -1418,10 +1418,10 @@ export default function HomeTab({
             <div className="flex justify-between items-center pb-2 border-b border-theme-border/50">
               <h3 className="font-bold text-theme-text text-sm flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-indigo-600" />
-                Weekly Targets
+                {t.weeklyTargets}
               </h3>
               <span className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
-                7-day rolling
+                {t.rolling7Day}
               </span>
             </div>
 
@@ -1496,7 +1496,7 @@ export default function HomeTab({
                 onClick={() => setShowAllTargets(!showAllTargets)}
                 className="flex items-center gap-1 text-xs text-slate-400 hover:text-indigo-600 font-semibold cursor-pointer"
               >
-                <span>{showAllTargets ? 'Show Less Targets' : 'Expand Less Important Targets'}</span>
+                <span>{showAllTargets ? t.showLessTargets : t.expandTargets}</span>
                 {showAllTargets ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
               
@@ -1505,7 +1505,7 @@ export default function HomeTab({
                 className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-semibold cursor-pointer"
               >
                 <Settings className="w-3.5 h-3.5" />
-                <span>Settings</span>
+                <span>{t.settings}</span>
               </button>
             </div>
 
@@ -1563,7 +1563,7 @@ export default function HomeTab({
                 <div className="mt-4 space-y-4 animation-slide-down">
                   {coreTargets.length > 0 && (
                     <div>
-                      <h4 className="text-[10px] font-bold text-theme-neutral mb-1 border-b border-theme-border/50 pb-1">Core Nutrients</h4>
+                      <h4 className="text-[10px] font-bold text-theme-neutral mb-1 border-b border-theme-border/50 pb-1">{t.coreNutrients}</h4>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         {coreTargets.map(renderTarget)}
                       </div>
@@ -1571,7 +1571,7 @@ export default function HomeTab({
                   )}
                   {additionalTargets.length > 0 && (
                     <div>
-                      <h4 className="text-[10px] font-bold text-theme-neutral mb-1 border-b border-theme-border/50 pb-1">Additional Nutrients</h4>
+                      <h4 className="text-[10px] font-bold text-theme-neutral mb-1 border-b border-theme-border/50 pb-1">{t.additionalNutrients}</h4>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         {additionalTargets.map(renderTarget)}
                       </div>
@@ -1592,7 +1592,7 @@ export default function HomeTab({
             <div className="flex justify-between items-center pb-2 border-b border-theme-border/50">
               <h3 className="font-bold text-theme-text text-sm flex items-center gap-2">
                 <Settings className="w-4 h-4 text-indigo-600" />
-                Target Budget Settings
+                {t.targetBudgetSettings}
               </h3>
               <button
                 onClick={() => setIsSettingsModalOpen(false)}
@@ -1604,7 +1604,7 @@ export default function HomeTab({
 
             {/* Explanation card */}
             <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-500/10 rounded-2xl text-xs text-indigo-950 dark:text-indigo-200/90 leading-relaxed space-y-2">
-              <span className="font-bold block text-indigo-900 dark:text-indigo-300">How Rolling Budget Works</span>
+              <span className="font-bold block text-indigo-900 dark:text-indigo-300">{t.howRollingBudgetWorks}</span>
               {(() => {
                 const calBD = getRollingBreakdown('calories', baseCaloriesTarget);
                 const proBD = getRollingBreakdown('protein', baseProteinTarget);
@@ -1720,7 +1720,7 @@ export default function HomeTab({
                   onClick={() => setIsTargetsExpanded(!isTargetsExpanded)}
                   className="flex items-center justify-between w-full text-xs font-bold text-theme-text cursor-pointer"
                 >
-                  <span>Edit Nutrient Targets</span>
+                  <span>{t.editNutrientTargets}</span>
                   <ChevronDown className={`w-4 h-4 transition-transform ${isTargetsExpanded ? 'rotate-180' : ''}`} />
                 </button>
                                 {isTargetsExpanded && (
@@ -1791,7 +1791,7 @@ export default function HomeTab({
                 onClick={() => setIsSettingsModalOpen(false)}
                 className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl text-xs transition-colors cursor-pointer"
               >
-                Save Settings
+                {t.saveSettings}
               </button>
             </div>
           </div>
@@ -1803,13 +1803,13 @@ export default function HomeTab({
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-theme-text flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-indigo-500" />
-            Food Ideas
+            {t.foodIdeas}
           </h3>
           <button
             onClick={() => setIsFoodIdeaChatOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900 rounded-lg text-xs font-bold transition-colors cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5" /> Ask Agent
+            <Sparkles className="w-3.5 h-3.5" /> {t.askAgent}
           </button>
         </div>
 
@@ -1866,7 +1866,7 @@ export default function HomeTab({
                       }}
                       className="text-rose-600 hover:text-rose-700 font-bold mt-2 block w-full text-center py-2 bg-rose-50 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 rounded-lg transition-colors cursor-pointer text-xs"
                     >
-                      Remove Idea
+                      {t.removeIdea}
                     </button>
                   </div>
                 )}
@@ -1883,7 +1883,7 @@ export default function HomeTab({
         <div className="flex justify-between items-center pb-2 border-b border-theme-border/50">
           <h3 className="font-bold text-theme-text text-sm flex items-center gap-2 font-display">
             <Heart className="w-4.5 h-4.5 text-indigo-600" />
-            Health status to improve
+            {t.healthStatusToImprove}
           </h3>
           {problematicBiomarkers.length > 0 && (
             <button
@@ -1900,7 +1900,7 @@ export default function HomeTab({
               className="text-xs font-bold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-1.5 transition-colors bg-slate-100 dark:bg-slate-800/50 px-2.5 py-1.5 rounded-lg"
             >
               <Copy className="w-3.5 h-3.5" />
-              Copy All
+              {t.copyAll}
             </button>
           )}
         </div>
@@ -2094,7 +2094,7 @@ export default function HomeTab({
             </div>
           ) : (
             <div className="p-4 rounded-2xl border border-dashed border-theme-border text-center">
-              <p className="text-xs text-slate-400 font-medium">All recorded biomarkers are within normal range! 🎉</p>
+              <p className="text-xs text-slate-400 font-medium">{t.allBiomarkersNormal}</p>
             </div>
           )}
         </div>
@@ -2104,20 +2104,20 @@ export default function HomeTab({
       {distinctDaysOfData >= 7 && (
         <div id="compliance-card" className="grid grid-cols-2 gap-4">
           <div className="border-r border-theme-border/50 pr-2 flex flex-col justify-between">
-            <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">7-Day Compliance</span>
+            <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">{t.compliance7Day}</span>
             <div className="flex items-baseline gap-1 mt-1">
               <span id="score-7d-text" className="text-3xl font-black font-sans text-indigo-600">{complianceScore7Day}%</span>
-              <span className="text-xs text-slate-400 font-medium">on target</span>
+              <span className="text-xs text-slate-400 font-medium">{t.onTarget}</span>
             </div>
             <p className="text-[10px] text-theme-text-secondary mt-2 leading-tight">
               {complianceScore7Day >= 80 ? 'Excellent cardiovascular protection benefits.' : 'Steady effort will lower vascular risk markers.'}
             </p>
           </div>
           <div className="pl-1 flex flex-col justify-between">
-            <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">30-Day Compliance</span>
+            <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">{t.compliance30Day}</span>
             <div className="flex items-baseline gap-1 mt-1">
               <span id="score-30d-text" className="text-3xl font-black font-sans text-indigo-700">{complianceScore30Day}%</span>
-              <span className="text-xs text-slate-400 font-medium">overall</span>
+              <span className="text-xs text-slate-400 font-medium">{t.overall}</span>
             </div>
             <p className="text-[10px] text-theme-text-secondary mt-2 leading-tight">
               Consistency reduces future atherosclerosis risks significantly.
@@ -2130,22 +2130,22 @@ export default function HomeTab({
       <div id="actions-checklist-section" className="space-y-4">
         <div>
           <h3 className="font-bold text-theme-text text-sm flex items-center justify-between">
-            <span>Clinical Action Recommendations</span>
+            <span>{t.clinicalActionRecommendations}</span>
             {actions.length > 0 && (
               <span className="text-[10px] font-semibold text-theme-text-secondary bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
-                {actions.filter(a => a.completed).length}/{actions.length} Completed
+                {actions.filter(a => a.completed).length}/{actions.length} {t.completed}
               </span>
             )}
           </h3>
           <p className="text-xs text-theme-text-secondary mt-1 font-medium">
-            Discuss these priorities with your general practitioner (GP).
+            {t.clinicalActionDesc}
           </p>
         </div>
 
         <div className="space-y-3">
           {actions.length === 0 ? (
             <div className="p-4 rounded-2xl border border-dashed border-theme-border text-center text-xs text-slate-400">
-              No active clinical recommendations. Run the Health Planning Agent to generate custom diagnostic tasks.
+              {t.noActiveClinicalRecommendations}
             </div>
           ) : (
             visibleActions.map((act) => {
@@ -2268,7 +2268,7 @@ export default function HomeTab({
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white transition-all shadow-xs cursor-pointer ml-auto"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          <span>Add your results</span>
+                          <span>{t.addYourResults}</span>
                         </button>
                       </div>
                     </div>
@@ -2299,7 +2299,7 @@ export default function HomeTab({
             {t.dailyBenefits}
           </h3>
           <p className="text-xs text-theme-text-secondary mt-1 font-medium">
-            Consistently executing these behaviors halts arterial plaque progression.
+            {t.dailyBenefitsDesc}
           </p>
         </div>
 

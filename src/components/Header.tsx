@@ -1375,7 +1375,7 @@ export default function Header({
                 })()}
               </div>
               <span className="text-[10px] text-slate-400 capitalize font-medium mt-0.5 block tracking-wide">
-                {activeTab === 'home' ? 'Home' : activeTab === 'insights' ? 'Health insights' : activeTab === 'food' ? 'Food & Nutrition Logs' : activeTab === 'medical' ? 'Medical History' : activeTab === 'trends' ? 'Health Trends' : activeTab}
+                {activeTab === 'home' ? t.home : activeTab === 'insights' ? t.insights : activeTab === 'food' ? t.foodHistory : activeTab === 'medical' ? t.medicalHistory : activeTab === 'trends' ? t.trends : activeTab}
               </span>
             </div>
           </div>
@@ -1556,8 +1556,8 @@ export default function Header({
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
               <div>
-                <h2 className="text-lg font-bold text-theme-text">Edit Profile</h2>
-                <p className="text-xs text-slate-450 dark:text-slate-400">Update your health indicators and settings</p>
+                <h2 className="text-lg font-bold text-theme-text">{t.editProfile}</h2>
+                <p className="text-xs text-slate-450 dark:text-slate-400">{t.editProfileDesc}</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -1591,7 +1591,7 @@ export default function Header({
             </div>
             <div className="flex-1 text-left min-w-0">
               <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Upload photo</span>
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.uploadPhoto}</span>
                 <button
                   type="button"
                   id="edit-theme-link"
@@ -1601,7 +1601,7 @@ export default function Header({
                   }}
                   className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                 >
-                  edit theme
+                  {t.editTheme}
                 </button>
               </div>
               <input
@@ -1648,7 +1648,7 @@ export default function Header({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Coins className="w-4 h-4 text-indigo-500" />
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">AI Agent Credits</span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{t.agentCredits}</span>
                   </div>
                   <span className="text-[10px] bg-indigo-100/80 dark:bg-indigo-950/65 text-indigo-700 dark:text-indigo-450 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                     {creditInfo.userType} Account
@@ -1657,21 +1657,21 @@ export default function Header({
 
                 <div className="grid grid-cols-2 gap-3 text-center">
                   <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/85 rounded-xl p-2">
-                    <span className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Available</span>
+                    <span className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{t.availableCredits}</span>
                     <span className="text-lg font-black text-slate-800 dark:text-slate-100">{creditInfo.total}</span>
-                    <span className="block text-[8px] text-slate-500">Credits left</span>
+                    <span className="block text-[8px] text-slate-500">{t.creditsLeft}</span>
                   </div>
                   <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/85 rounded-xl p-2">
-                    <span className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Daily Quota</span>
+                    <span className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{t.dailyQuota}</span>
                     <span className="text-lg font-black text-slate-800 dark:text-slate-100">{creditInfo.daily}</span>
-                    <span className="block text-[8px] text-slate-500">resets in {creditInfo.nextResetStr}</span>
+                    <span className="block text-[8px] text-slate-500">{t.resetsIn} {creditInfo.nextResetStr}</span>
                   </div>
                 </div>
 
                 {/* Granted Credits / Duration info */}
                 {creditInfo.grantedDetails.length > 0 && (
                   <div className="bg-white/80 dark:bg-slate-900/60 border border-slate-100/50 dark:border-slate-800/45 rounded-xl p-2.5 space-y-1.5 text-left">
-                    <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">Granted Credits (active)</span>
+                    <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t.grantedCredits}</span>
                     {creditInfo.grantedDetails.map((gc, idx) => (
                       <div key={idx} className="flex justify-between items-center text-[10px] text-slate-650 dark:text-slate-350">
                         <span className="font-semibold text-indigo-600 dark:text-indigo-400">+{gc.amount} credits</span>
@@ -1739,13 +1739,13 @@ export default function Header({
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Blood Type</label>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t.bloodType}</label>
               <select
                 value={bloodType}
                 onChange={(e) => setBloodType(e.target.value)}
                 className="w-full text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
               >
-                <option value="">Unknown</option>
+                <option value="">{t.unknown}</option>
                 <option value="A+">A+</option>
                 <option value="A-">A-</option>
                 <option value="B+">B+</option>
@@ -1757,20 +1757,20 @@ export default function Header({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Gender</label>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t.gender}</label>
               <select
                 value={gender}
                 onChange={(e) => setGender(e.target.value)}
                 className="w-full text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
               >
-                <option value="Unknown">Unknown</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
+                <option value="Unknown">{t.unknown}</option>
+                <option value="Male">{t.male}</option>
+                <option value="Female">{t.female}</option>
+                <option value="Other">{t.otherGender}</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Unit Preference</label>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t.unitPreference}</label>
               <select
                 value={unitPreference}
                 onChange={(e) => setUnitPreference(e.target.value)}
@@ -1781,7 +1781,7 @@ export default function Header({
               </select>
             </div>
             <div className="col-span-2">
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Timezone</label>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t.timezoneLabel}</label>
               <select
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
@@ -1793,7 +1793,7 @@ export default function Header({
               </select>
             </div>
             <div className="col-span-2 bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/80 rounded-xl px-3 py-2 mt-1 text-left">
-              <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Account Email</span>
+              <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.accountEmail}</span>
               <span className="text-xs font-mono text-slate-650 dark:text-slate-300 break-all">{profile.email}</span>
             </div>
 
@@ -1830,15 +1830,19 @@ export default function Header({
 
             {/* Preferences & Session */}
             <div className="col-span-2 border-t border-slate-100 dark:border-slate-800/85 mt-2 pt-3 text-left">
-              <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4">Preferences & Session</span>
+              <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-4">{t.preferencesAndSession}</span>
               <div className="grid grid-cols-2 gap-3 mb-4">
                 {/* Language Selection */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Language</label>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t.languageLabel}</label>
                   <select
                     id="lang-selector"
                     value={profile.language}
-                    onChange={(e) => setProfile({ ...profile, language: e.target.value as any })}
+                    onChange={(e) => {
+                      const newLang = e.target.value as any;
+                      localStorage.setItem('preferred_language', newLang);
+                      setProfile({ ...profile, language: newLang });
+                    }}
                     className="w-full text-sm font-sans bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                   >
                     <option value="en">English (EN)</option>
@@ -1850,7 +1854,7 @@ export default function Header({
 
                 {/* Privacy mode toggle */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Privacy Mode</label>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">{t.privacyMode}</label>
                   <button
                     type="button"
                     id="toggle-sensitive-btn"
@@ -1874,10 +1878,10 @@ export default function Header({
                     onSignOut();
                   }}
                   className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/40 rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer"
-                  title="Sign Out of your account"
+                  title={t.signOut}
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>{t.signOut || 'Sign Out'}</span>
+                  <span>{t.signOut}</span>
                 </button>
               </div>
             </div>

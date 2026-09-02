@@ -15,7 +15,7 @@ export default function BottomNav({ activeTab, setActiveTab, language, onPlusCli
 
   const leftTabs = [
     { id: 'home', icon: Home, label: t.home },
-    { id: 'health', icon: Activity, label: t.health || 'Health' },
+    { id: 'health', icon: Activity, label: t.health },
   ] as const;
 
   const rightTabs = [
@@ -65,7 +65,7 @@ export default function BottomNav({ activeTab, setActiveTab, language, onPlusCli
             className={`w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-xl hover:bg-indigo-700 hover:scale-105 active:scale-95 transition-all focus:outline-none focus:ring-4 focus:ring-indigo-500/20 z-50 ${
               isFloatingOpen ? 'rotate-45 bg-rose-600 hover:bg-rose-700' : ''
             }`}
-            title="Open quick actions"
+            title={t.openQuickActions}
           >
             <Plus className="w-7 h-7 stroke-[2.5px]" />
           </button>

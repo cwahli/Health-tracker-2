@@ -1343,45 +1343,45 @@ export default function InsightsTab({
   const steps = [
     {
       id: 'add_health_data',
-      title: 'Add your health data',
+      title: t.stepAddHealthDataTitle,
       agentType: null,
-      description: 'Allows the clinical multi-agent team to calibrate reference ranges and interventions to your precise physiology.',
-      valueProposition: 'Demographics and core biomarkers checklist calibration.'
+      description: t.stepAddHealthDataDesc,
+      valueProposition: t.stepAddHealthDataValue
     },
     {
       id: 'agent1',
-      title: 'Lab Parser',
+      title: t.stepLabParserTitle,
       agentType: 'agent1',
-      description: 'Parses raw medical reports, lab PDF uploads, or text logs into standardized clinical biomarkers.',
-      valueProposition: 'Extracts and standardizes raw lab reports into your physiological database.'
+      description: t.stepLabParserDesc,
+      valueProposition: t.stepLabParserValue
     },
     {
       id: 'data_review',
-      title: 'Range Calibrator',
+      title: t.stepRangeCalibratorTitle,
       agentType: 'data_review',
-      description: 'Personalizes reference ranges for this profile. Does not change logged numbers.',
-      valueProposition: 'Provides interactive review of your biomarkers with custom reference range adjustments.'
+      description: t.stepRangeCalibratorDesc,
+      valueProposition: t.stepRangeCalibratorValue
     },
     {
       id: 'health_baseline',
-      title: 'Health Coach',
+      title: t.healthCoach,
       agentType: 'health_baseline',
-      description: 'Translates diagnostic risk into strict, mathematically projected dietary and movement targets.',
-      valueProposition: 'Generates precision physical and nutritional modifiers targeted to mitigate risk trajectories.'
+      description: t.stepHealthCoachDesc,
+      valueProposition: t.stepHealthCoachValue
     },
     {
       id: 'agent4',
-      title: 'Test Planner',
+      title: t.stepTestPlannerTitle,
       agentType: 'agent4',
-      description: 'Audits diagnostic data accuracy, evaluates external test factors, and identifies short & long-term testing gaps.',
-      valueProposition: 'Ensures diagnostic picture accuracy, evaluates retest timing, and identifies short & long-term health risk testing gaps.'
+      description: t.stepTestPlannerDesc,
+      valueProposition: t.stepTestPlannerValue
     },
     {
       id: 'agent7',
-      title: 'Literature',
+      title: t.stepLiteratureTitle,
       agentType: 'agent7',
-      description: 'Scans PubMed and clinical trials to bring recent scientific debate and consensus on your specific health context.',
-      valueProposition: 'Synthesizes clinical trial consensus and research evidence specific to your biomarkers.'
+      description: t.stepLiteratureDesc,
+      valueProposition: t.stepLiteratureValue
     }
   ];
 
@@ -1451,23 +1451,23 @@ export default function InsightsTab({
 
   const getStepSummaryText = (index: number, status: 'Not ready' | 'To do' | 'To review' | 'Done') => {
     if (index === 0) {
-      if (status === 'Done') return 'Demographics complete';
-      return `${criticalMissing.length} demographics missing`;
+      if (status === 'Done') return t.demographicsComplete;
+      return `${criticalMissing.length} ${t.demographicsMissing}`;
     }
 
     const step = steps[index];
     if (step.id === 'agent1') {
       const total = markerKeys.length;
-      if (total === 0) return 'No biomarkers logged';
+      if (total === 0) return t.noBiomarkersLogged;
       const approvedCount = batches.filter((_, bIdx) => approvedAgent1Batches[bIdx]).length;
-      return `${approvedCount} of ${batches.length} batches standardized`;
+      return `${approvedCount} ${t.of} ${batches.length} ${t.batchesStandardized}`;
     }
 
     if (step.id === 'data_review') {
       const total = markerKeys.length;
-      if (total === 0) return 'No biomarkers logged';
+      if (total === 0) return t.noBiomarkersLogged;
       const approvedCount = batches.filter((_, bIdx) => approvedBatches[bIdx]).length;
-      return `${approvedCount} of ${batches.length} batches reviewed`;
+      return `${approvedCount} ${t.of} ${batches.length} ${t.batchesReviewed}`;
     }
 
     const latestAnalysis = (profile.agentAnalyses || [])
@@ -1475,8 +1475,8 @@ export default function InsightsTab({
       .sort((a, b) => toYYYYMMDD(b.date).localeCompare(toYYYYMMDD(a.date)))[0];
 
     if (!latestAnalysis) {
-      if (status === 'Not ready') return 'Waiting for previous steps';
-      return 'Unlocked & awaiting analysis';
+      if (status === 'Not ready') return t.waitingForPreviousSteps;
+      return t.unlockedAwaitingAnalysis;
     }
 
     const recWord = status === 'Done' ? 'applied' : 'need review';
@@ -1497,7 +1497,7 @@ export default function InsightsTab({
       case 'agent7':
         return `PubMed & clinical literature insights integrated, ${recWord}`;
       default:
-        return 'Analysis results ready';
+        return t.analysisResultsReady;
     }
   };
 
@@ -1578,11 +1578,11 @@ export default function InsightsTab({
         <div className="space-y-3 relative overflow-hidden">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/20 px-2 py-0.5 rounded-full">Prevention Draft</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/20 px-2 py-0.5 rounded-full">{t.preventionDraft}</span>
           </div>
-          <h2 className="text-xl font-extrabold tracking-tight font-display text-theme-text leading-tight">Interactive Target Review</h2>
+          <h2 className="text-xl font-extrabold tracking-tight font-display text-theme-text leading-tight">{t.interactiveTargetReview}</h2>
           <p className="text-xs text-theme-text-secondary leading-relaxed">
-            Our preventative algorithms generated customized clinical guidelines tailored specifically to your biochemistry. Please review and approve these targets to sync them directly to your dashboard.
+            {t.interactiveTargetReviewDesc}
           </p>
         </div>
 
@@ -1590,12 +1590,12 @@ export default function InsightsTab({
         <div className="space-y-4">
           <div className="flex items-center gap-2 border-b border-theme-border/50 pb-3">
             <Database className="w-4 h-4 text-indigo-600" />
-            <h3 className="text-sm font-bold text-theme-text font-display">1. Source Clinical Data Analyzed</h3>
+            <h3 className="text-sm font-bold text-theme-text font-display">{t.sourceClinicalDataAnalyzed}</h3>
           </div>
           
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="p-3 bg-theme-bg rounded-2xl border border-theme-border/20">
-              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">User Profile</span>
+              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t.userProfile}</span>
               <span className="font-semibold block">{profile.age}yo, {profile.ethnicity || 'Unknown Ethnicity'}</span>
               <span className="text-[10px] text-slate-500 mt-0.5 block">{profile.weight} kg | {profile.height} cm</span>
               {(profile.gender || profile.bloodType) && (
@@ -1606,22 +1606,22 @@ export default function InsightsTab({
             </div>
 
             <div className="p-3 bg-theme-bg rounded-2xl border border-theme-border/20">
-              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Nutrition Inputs</span>
+              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t.nutritionInputs}</span>
               <span className="font-semibold block">{foodLogs.length} logged entries</span>
-              <span className="text-[10px] text-slate-500 mt-0.5 block">Recent eating patterns</span>
+              <span className="text-[10px] text-slate-500 mt-0.5 block">{t.recentEatingPatterns}</span>
             </div>
           </div>
 
           <div className="p-4 bg-theme-bg rounded-2xl border border-theme-border/20 space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Checked Biomarker Values</span>
-              <span className="text-[10px] text-slate-400">{Object.keys(biomarkers).length} logged</span>
+              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t.checkedBiomarkerValues}</span>
+              <span className="text-[10px] text-slate-400">{Object.keys(biomarkers).length} {t.logged}</span>
             </div>
             
             {Object.keys(biomarkers).length > 0 ? (
               <details className="group">
                 <summary className="text-[11px] font-bold text-indigo-600 cursor-pointer list-none flex items-center gap-1">
-                  <span>View All Used Biomarkers</span>
+                  <span>{t.viewAllUsedBiomarkers}</span>
                   <span className="transition-transform group-open:rotate-180">▼</span>
                 </summary>
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 text-center text-[11px]">
@@ -1651,28 +1651,28 @@ export default function InsightsTab({
         <div className="space-y-4">
           <div className="flex items-center gap-2 border-b border-theme-border/50 pb-3">
             <Activity className="w-4 h-4 text-indigo-600" />
-            <h3 className="text-sm font-bold text-theme-text font-display">2. Proposed Nutrient Recommendations</h3>
+            <h3 className="text-sm font-bold text-theme-text font-display">{t.proposedNutrientRecs}</h3>
           </div>
 
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-xs py-2 px-3 bg-theme-bg rounded-xl">
-              <span className="font-semibold text-slate-700 dark:text-slate-350">Calories</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-350">{t.caloriesLabel}</span>
               <span className="font-mono font-bold text-theme-text">{draftReport.dailyNutrientTargets.calories || '1,800 kcal'}</span>
             </div>
             <div className="flex items-center justify-between text-xs py-2 px-3 bg-theme-bg rounded-xl">
-              <span className="font-semibold text-slate-700 dark:text-slate-350">Saturated Fat</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-350">{t.saturatedFat}</span>
               <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{draftReport.dailyNutrientTargets.saturatedFat || 'under 15 g'}</span>
             </div>
             <div className="flex items-center justify-between text-xs py-2 px-3 bg-theme-bg rounded-xl">
-              <span className="font-semibold text-slate-700 dark:text-slate-350">Sodium</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-350">{t.sodiumLabel}</span>
               <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{draftReport.dailyNutrientTargets.sodium || 'under 1,200 mg'}</span>
             </div>
             <div className="flex items-center justify-between text-xs py-2 px-3 bg-theme-bg rounded-xl">
-              <span className="font-semibold text-slate-700 dark:text-slate-350">Protein</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-350">{t.protein}</span>
               <span className="font-mono font-bold text-theme-text">{draftReport.dailyNutrientTargets.protein || '90-100 g'}</span>
             </div>
             <div className="flex items-center justify-between text-xs py-2 px-3 bg-theme-bg rounded-xl">
-              <span className="font-semibold text-slate-700 dark:text-slate-350">Soluble Fibre</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-350">{t.solubleFibre}</span>
               <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{draftReport.dailyNutrientTargets.solubleFibre || '10-15 g'}</span>
             </div>
           </div>
@@ -1682,7 +1682,7 @@ export default function InsightsTab({
         <div className="space-y-4">
           <div className="flex items-center gap-2 border-b border-theme-border/50 pb-3">
             <Heart className="w-4 h-4 text-rose-500" />
-            <h3 className="text-sm font-bold text-theme-text font-display">3. Preventative Action Checklist</h3>
+            <h3 className="text-sm font-bold text-theme-text font-display">{t.preventativeActionChecklist}</h3>
           </div>
 
           <div className="space-y-3.5">
@@ -1699,7 +1699,7 @@ export default function InsightsTab({
             <div className="border-t border-theme-border/40 my-3 pt-3" />
 
             <div className="space-y-2">
-              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Recommended Habit Modifiers</span>
+              <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t.recommendedHabitModifiers}</span>
               {draftReport.dailyBenefits.slice(0, 3).map((ben, idx) => (
                 <div key={idx} className="flex items-center gap-2 text-xs">
                   <CheckCircle className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
@@ -1714,17 +1714,17 @@ export default function InsightsTab({
         <div className="space-y-4">
           <div className="flex items-center gap-2 border-b border-theme-border/50 pb-3">
             <TrendingDown className="w-4 h-4 text-rose-500" />
-            <h3 className="text-sm font-bold text-theme-text font-display">4. 10-Year Clinical Forecast</h3>
+            <h3 className="text-sm font-bold text-theme-text font-display">{t.clinicalForecast10Year}</h3>
           </div>
 
           <div className="space-y-3 text-xs leading-relaxed">
             <div className="p-3 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100/40 rounded-2xl">
-              <span className="text-[9px] uppercase font-bold tracking-wider text-rose-600 block mb-1">If Habits Do Not Change:</span>
+              <span className="text-[9px] uppercase font-bold tracking-wider text-rose-600 block mb-1">{t.ifHabitsDoNotChange}</span>
               <p className="text-rose-700 dark:text-rose-300 font-medium">{draftReport.healthRiskForecast.year10}</p>
             </div>
 
             <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100/40 rounded-2xl">
-              <span className="text-[9px] uppercase font-bold tracking-wider text-emerald-600 block mb-1">With Optimized Targets Applied:</span>
+              <span className="text-[9px] uppercase font-bold tracking-wider text-emerald-600 block mb-1">{t.withOptimizedTargets}</span>
               <p className="text-emerald-700 dark:text-emerald-300 font-semibold">{draftReport.healthRiskForecast.optimized10}</p>
             </div>
           </div>
@@ -1734,7 +1734,7 @@ export default function InsightsTab({
         <div className="border border-theme-border rounded-2xl p-3 flex items-center gap-2">
           <input 
             type="text" 
-            placeholder="Refine this recommendation..." 
+            placeholder={t.refineRecommendationPlaceholder} 
             className="flex-1 bg-transparent text-sm text-slate-800 dark:text-slate-200 focus:outline-none"
             value={refinementText}
             onChange={(e) => setRefinementText(e.target.value)}
@@ -1757,7 +1757,7 @@ export default function InsightsTab({
             className="py-3 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 rounded-2xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
           >
             <X className="w-3.5 h-3.5" />
-            Reject Draft
+            {t.rejectDraft}
           </button>
 
           <button
@@ -1768,12 +1768,12 @@ export default function InsightsTab({
             {isApplying ? (
               <>
                 <Loader className="w-3.5 h-3.5 animate-spin" />
-                Applying...
+                {t.applying}
               </>
             ) : (
               <>
                 <Check className="w-3.5 h-3.5" />
-                Accept & Apply
+                {t.acceptAndApply}
               </>
             )}
           </button>
@@ -1792,8 +1792,8 @@ export default function InsightsTab({
       {/* Global Progress Indicator */}
       <div className="space-y-2.5">
         <div className="flex items-center justify-between text-xs font-mono font-bold text-slate-500">
-          <span className="text-indigo-600 dark:text-indigo-400">CLINICAL PIPELINE PROGRESS</span>
-          <span>{completedCount} of {steps.length} Steps Completed</span>
+          <span className="text-indigo-600 dark:text-indigo-400">{t.clinicalPipelineProgress}</span>
+          <span>{completedCount} {t.of} {steps.length} {t.stepsCompleted}</span>
         </div>
         <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-200/20">
           <div 
@@ -1812,15 +1812,15 @@ export default function InsightsTab({
               <Stethoscope className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Health Preparation Agent</h3>
-              <p className="text-xs text-slate-500">Ask a question or find out what to do next</p>
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">{t.healthPrepAgent}</h3>
+              <p className="text-xs text-slate-500">{t.askHealthPrepDesc}</p>
             </div>
           </div>
           <button
             onClick={onOpenFrontDesk}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all"
           >
-            Ask Health Prep
+            {t.askHealthPrep}
           </button>
         </div>
       )}
@@ -1829,7 +1829,7 @@ export default function InsightsTab({
         <div className="flex items-center gap-2 pb-3 border-b border-theme-border/50">
           <Sparkles className="w-5 h-5 text-indigo-600" />
           <h3 className="font-bold text-theme-text text-sm flex items-center gap-2">
-            Clinical Multi-Agent Pipeline
+            {t.clinicalMultiAgentPipeline}
           </h3>
         </div>
 
@@ -1892,7 +1892,7 @@ export default function InsightsTab({
                         ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border border-indigo-200/20'
                         : 'bg-slate-50 dark:bg-slate-900 text-slate-450 border border-slate-200/10'
                     }`}>
-                      {status === 'Not ready' ? 'Pending' : status}
+                      {status === 'Not ready' ? t.stepPending : status === 'Done' ? t.stepDone : status === 'To review' ? t.stepToReview : t.stepToDo}
                     </span>
                     {activeStepIndex === index ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200" />}
                   </div>
@@ -1909,7 +1909,7 @@ export default function InsightsTab({
 
                     {/* Value Proposition Box */}
                     <div className="p-3 bg-indigo-50/20 dark:bg-indigo-950/10 rounded-2xl border border-indigo-100/30 dark:border-indigo-900/10">
-                      <span className="block text-[8px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">CLINICAL VALUE PROPOSITION</span>
+                      <span className="block text-[8px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">{t.clinicalValueProposition}</span>
                       <p className="text-[11px] text-theme-text leading-relaxed font-medium">
                         {step.valueProposition}
                       </p>
@@ -1941,7 +1941,7 @@ export default function InsightsTab({
                               {/* what's done so far Checklist */}
                               <div className="space-y-3">
                                 <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                                  what's done so far
+                                  {t.whatsDoneSoFar}
                                 </span>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                   {checklistItems.map((item, idx) => {
@@ -1963,7 +1963,7 @@ export default function InsightsTab({
                                             </span>
                                             {item.type === 'biomarker_category' && (
                                               <span className="text-[9px] font-mono text-slate-400">
-                                                {item.presentCount} added
+                                                {item.presentCount} {t.added}
                                               </span>
                                             )}
                                           </div>
@@ -1985,7 +1985,7 @@ export default function InsightsTab({
                                 <div className="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-500/10 rounded-2xl p-3 flex gap-2">
                                   <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
                                   <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-normal font-medium">
-                                    You are missing critical indicators: <strong>{criticalMissing.map(m => m.name).join(', ')}</strong>. You can still generate, but the analysis will use generalized defaults.
+                                    {t.missingCriticalIndicators} <strong>{criticalMissing.map(m => m.name).join(', ')}</strong>. {t.missingIndicatorsNote}
                                   </p>
                                 </div>
                               )}
@@ -2021,7 +2021,7 @@ export default function InsightsTab({
                                         <div className="flex items-center gap-2">
                                           <span className={`w-2 h-2 rounded-full ${hasMore ? 'bg-indigo-500 animate-pulse' : 'bg-emerald-500'}`} />
                                           <h5 className="text-xs font-bold text-theme-text">
-                                            {hasMore ? 'Extraction In Progress' : isApproved ? 'Extracted Data Approved' : 'Extracted Data Pending Approval'}
+                                            {hasMore ? t.extractionInProgress : isApproved ? t.extractedDataApproved : t.extractedDataPendingApproval}
                                           </h5>
                                         </div>
                                         
@@ -2092,7 +2092,7 @@ export default function InsightsTab({
                                                 : 'bg-emerald-600 hover:bg-emerald-700'
                                           }`}
                                         >
-                                          {hasMore ? 'Continue Extraction' : isApproved ? 'View Table' : 'Review & Approve'}
+                                          {hasMore ? t.continueExtraction : isApproved ? t.viewTable : t.reviewAndApprove}
                                         </button>
                                       </div>
                                     </div>
@@ -2108,7 +2108,7 @@ export default function InsightsTab({
                             onClick={() => onOpenMedicalChat()}
                             className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center mt-2 cursor-pointer"
                           >
-                            Add health data
+                            {t.addHealthData}
                           </button>
                         )}
                       </div>
@@ -2117,14 +2117,14 @@ export default function InsightsTab({
                       <div className="space-y-4">
                         {batches.length === 0 ? (
                           <div className="p-4 text-center bg-slate-50 dark:bg-slate-900 rounded-2xl border border-theme-border text-slate-500 text-xs">
-                            No biomarkers available. Please add some health data first in Step 1.
+                            {t.noBiomarkersAvailableDesc}
                           </div>
                         ) : (
                           <div className="space-y-4 text-left font-sans">
                             <div className="p-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-150 dark:border-slate-850 flex gap-2">
                               <Sparkles className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" />
                               <div className="space-y-1">
-                                <span className="block text-xs font-bold text-indigo-600 dark:text-indigo-400">WHAT TO EXPECT & CLINICAL VALUE</span>
+                                <span className="block text-xs font-bold text-indigo-600 dark:text-indigo-400">{t.whatToExpectAndValue}</span>
                                 <p className="text-[11px] text-theme-text-secondary leading-normal">
                                   {step.description}
                                 </p>
@@ -2152,7 +2152,7 @@ export default function InsightsTab({
                                 className="py-2.5 px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/10 transition-all"
                               >
                                 <Sparkles className="w-3.5 h-3.5" />
-                                <span>Review Batch</span>
+                                <span>{t.reviewBatch}</span>
                               </button>
 
                               <button
@@ -2163,7 +2163,7 @@ export default function InsightsTab({
                                 className="py-2.5 px-3 bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
                                 title="Reset all batch progress"
                               >
-                                Reset Progress
+                                {t.resetProgress}
                               </button>
 
                               <button
@@ -2174,7 +2174,7 @@ export default function InsightsTab({
                                 className="py-2.5 px-3 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/20 dark:hover:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/10 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
                                 title="Create a custom subset to calibrate"
                               >
-                                Create Custom Batch
+                                {t.createCustomBatch}
                               </button>
                             </div>
                           </div>
@@ -2187,7 +2187,7 @@ export default function InsightsTab({
                           <div className="p-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-150 dark:border-slate-850 flex gap-2">
                             <Sparkles className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" />
                             <div className="space-y-1">
-                              <span className="block text-xs font-bold text-indigo-600 dark:text-indigo-400">WHAT TO EXPECT & CLINICAL VALUE</span>
+                              <span className="block text-xs font-bold text-indigo-600 dark:text-indigo-400">{t.whatToExpectAndValue}</span>
                               <p className="text-[11px] text-theme-text-secondary leading-normal">
                                 This module will analyze your {step.title.toLowerCase()} when unlocked.
                               </p>
@@ -2208,7 +2208,7 @@ export default function InsightsTab({
                               className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/10 flex items-center justify-center gap-1.5 cursor-pointer"
                             >
                               <Sparkles className="w-3.5 h-3.5" />
-                              {step.agentType === 'agent4' ? 'Review with your health planning agent' : `Start ${step.title}`}
+                              {step.agentType === 'agent4' ? t.reviewWithPlanningAgent : `${t.start} ${step.title}`}
                             </button>
                           </div>
                         )}
@@ -2220,7 +2220,7 @@ export default function InsightsTab({
                               className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
                             >
                               <Send className="w-3.5 h-3.5 text-slate-400" />
-                              Chat with agent
+                              {t.chatWithAgent}
                             </button>
                             {step.agentType && renderAgentHistory(step.agentType)}
                           </div>
@@ -2233,11 +2233,11 @@ export default function InsightsTab({
                               <div className="flex items-center justify-between">
                                 {status === 'Done' ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[8px] font-bold bg-emerald-100/80 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
-                                    <Check className="w-2.5 h-2.5" /> Accepted
+                                    <Check className="w-2.5 h-2.5" /> {t.accepted}
                                   </span>
                                 ) : (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[8px] font-bold bg-indigo-100/50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
-                                    Agent Finding Proposal
+                                    {t.agentFindingProposal}
                                   </span>
                                 )}
                                 <span className="text-[9px] text-slate-400 font-mono">
@@ -2289,7 +2289,7 @@ export default function InsightsTab({
                                     className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-theme-text-secondary rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                   >
                                     <Archive className="w-3.5 h-3.5" />
-                                    Archive
+                                    {t.archive}
                                   </button>
                                   <button
                                     onClick={() => {
@@ -2307,7 +2307,7 @@ export default function InsightsTab({
                                     className="py-2.5 px-3 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                   >
                                     <Send className="w-3.5 h-3.5 text-slate-400" />
-                                    Review
+                                    {t.review}
                                   </button>
                                   {calibratingAgentType === step.agentType ? (
                                     <button
@@ -2316,7 +2316,7 @@ export default function InsightsTab({
                                       className="py-2.5 px-3 bg-indigo-400 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-not-allowed opacity-75"
                                     >
                                       <Loader className="w-3.5 h-3.5 animate-spin" />
-                                      Approving...
+                                      {t.approving}
                                     </button>
                                   ) : isApproved ? (
                                     <button
@@ -2324,7 +2324,7 @@ export default function InsightsTab({
                                       className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-600/10"
                                     >
                                       <Check className="w-3.5 h-3.5" />
-                                      Approved
+                                      {t.approved}
                                     </button>
                                   ) : (
                                     <button
@@ -2332,7 +2332,7 @@ export default function InsightsTab({
                                       className="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/10"
                                     >
                                       <Check className="w-3.5 h-3.5" />
-                                      Approve
+                                      {t.approve}
                                     </button>
                                   )}
                                 </div>
@@ -2407,7 +2407,7 @@ export default function InsightsTab({
             <div className="flex items-center justify-between px-6 py-5 border-b border-theme-border bg-slate-50/50 dark:bg-slate-950/20">
               <div>
                 <h3 className="text-sm font-bold text-theme-text font-display">
-                  Batch {fullscreenBatchIndex + 1} Full-Screen Calibrated Reference Table
+                  Batch {fullscreenBatchIndex + 1} {t.batchFullscreenTitle}
                 </h3>
                 <p className="text-[10px] text-slate-450 mt-1">
                   Showing detailed physiological calibrations, ranges, and clinical insights for Batch {fullscreenBatchIndex + 1}.
@@ -2444,7 +2444,7 @@ export default function InsightsTab({
                 onClick={() => setFullscreenBatchIndex(null)}
                 className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
               >
-                Close Fullscreen
+                {t.closeFullscreen}
               </button>
             </div>
           </div>
@@ -2457,7 +2457,7 @@ export default function InsightsTab({
             <div className="flex items-center justify-between px-6 py-5 border-b border-theme-border bg-slate-50/50 dark:bg-slate-950/20">
               <div>
                 <h3 className="text-sm font-bold text-theme-text font-display">
-                  Extracted Clinical Biomarkers Review & Calibration
+                  {t.extractedBiomarkersReviewTitle}
                 </h3>
                 <p className="text-[10px] text-slate-450 mt-1">
                   Review all extracted biomarkers, standardized names, units, and values before applying to your health profile.
@@ -2492,7 +2492,7 @@ export default function InsightsTab({
                 onClick={() => setFullscreenExtractionAnalysis(null)}
                 className="px-4 py-2 bg-slate-150 dark:bg-slate-800 text-theme-text rounded-xl text-xs font-bold transition-all cursor-pointer"
               >
-                Close
+                {t.close}
               </button>
               <button
                 type="button"
@@ -2504,7 +2504,7 @@ export default function InsightsTab({
                 className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-1.5"
               >
                 <Check className="w-4 h-4" />
-                {isApplying ? 'Applying...' : 'Approve & Apply to Profile'}
+                {isApplying ? t.applying : t.approveAndApplyToProfile}
               </button>
             </div>
           </div>
@@ -2518,11 +2518,11 @@ export default function InsightsTab({
             <div className="px-5 py-4 border-b border-theme-border bg-slate-50 dark:bg-slate-900/60">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <h3 className="text-sm font-bold text-theme-text">Test Custom Batch</h3>
+                  <h3 className="text-sm font-bold text-theme-text">{t.testCustomBatch}</h3>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[10px] text-slate-500">Pick any biomarker to test data cleaning</span>
+                    <span className="text-[10px] text-slate-500">{t.pickBiomarkerTestDesc}</span>
                     <span className="text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.25 rounded-md">
-                      {customBatchKeys.length} selected
+                      {customBatchKeys.length} {t.selected}
                     </span>
                   </div>
                 </div>
@@ -2534,7 +2534,7 @@ export default function InsightsTab({
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search biomarkers..."
+                  placeholder={t.searchBiomarkersPlaceholder}
                   value={customBatchSearch}
                   onChange={e => setCustomBatchSearch(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-950 border border-theme-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -2543,7 +2543,7 @@ export default function InsightsTab({
 
               {/* Group By Selector */}
               <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-150 dark:border-slate-800">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Group By:</span>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{t.groupBy}</span>
                 <select
                   value={batchGroupType}
                   onChange={(e) => setBatchGroupType(e.target.value as any)}
@@ -2560,7 +2560,7 @@ export default function InsightsTab({
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                    <span>Biomarkers in this Custom Batch ({customBatchKeys.length}):</span>
+                    <span>{t.biomarkersInCustomBatch} ({customBatchKeys.length}):</span>
                   </span>
                   {customBatchKeys.length > 0 && (
                     <button
@@ -2572,7 +2572,7 @@ export default function InsightsTab({
                       }}
                       className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer shrink-0"
                     >
-                      Clear all
+                      {t.clearAll}
                     </button>
                   )}
                 </div>
@@ -2626,7 +2626,7 @@ export default function InsightsTab({
               {(() => {
                 const filtered = markerKeys.filter(k => k.toLowerCase().includes(customBatchSearch.toLowerCase()));
                 if (filtered.length === 0) {
-                  return <p className="text-xs text-slate-500 text-center py-4">No biomarkers available.</p>;
+                  return <p className="text-xs text-slate-500 text-center py-4">{t.noBiomarkersAvailable}</p>;
                 }
 
                 // Compute groups
@@ -2728,7 +2728,7 @@ export default function InsightsTab({
                                       {val} {def.unit || ''}
                                     </span>
                                   ) : (
-                                    <span className="text-[10px] text-slate-400 italic">No value</span>
+                                    <span className="text-[10px] text-slate-400 italic">{t.noValue}</span>
                                   )}
                                 </div>
                               </div>
@@ -2752,7 +2752,7 @@ export default function InsightsTab({
                 }} 
                 className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors"
               >
-                Clear
+                {t.clear}
               </button>
               <button 
                 type="button" 
@@ -2769,7 +2769,7 @@ export default function InsightsTab({
                 className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/10 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                Done & Calibrate ({customBatchKeys.length})
+                {t.doneAndCalibrate} ({customBatchKeys.length})
               </button>
             </div>
           </div>
@@ -2782,8 +2782,8 @@ export default function InsightsTab({
             <div className="p-4 border-b border-theme-border bg-slate-50/50 dark:bg-slate-900/50">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">Custom Data Review Batch</h3>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Select specific biomarkers to calibrate together in Data Review</p>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">{t.customDataReviewBatch}</h3>
+                  <p className="text-[10px] text-slate-500 mt-0.5">{t.selectBiomarkersCalibrateDesc}</p>
                 </div>
                 <button onClick={() => setShowCustomDataReviewBatchModal(false)} className="text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full p-1 transition-colors">
                   <X className="w-5 h-5" />
@@ -2793,14 +2793,14 @@ export default function InsightsTab({
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search biomarkers..."
+                  placeholder={t.searchBiomarkersPlaceholder}
                   value={customDataReviewBatchSearch}
                   onChange={e => setCustomDataReviewBatchSearch(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-950 border border-theme-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
               <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-150 dark:border-slate-800">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Group By:</span>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{t.groupBy}</span>
                 <select
                   value={batchGroupType}
                   onChange={(e) => setBatchGroupType(e.target.value as any)}
@@ -2817,7 +2817,7 @@ export default function InsightsTab({
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                    <span>Biomarkers in this Custom Batch ({customDataReviewBatchKeys.length}):</span>
+                    <span>{t.biomarkersInCustomBatch} ({customDataReviewBatchKeys.length}):</span>
                   </span>
                   {customDataReviewBatchKeys.length > 0 && (
                     <button
@@ -2828,7 +2828,7 @@ export default function InsightsTab({
                       }}
                       className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer shrink-0"
                     >
-                      Clear all
+                      {t.clearAll}
                     </button>
                   )}
                 </div>
@@ -2889,7 +2889,7 @@ export default function InsightsTab({
               {(() => {
                 const filtered = markerKeys.filter(k => k.toLowerCase().includes(customDataReviewBatchSearch.toLowerCase()));
                 if (filtered.length === 0) {
-                  return <p className="text-xs text-slate-500 text-center py-4">No biomarkers available.</p>;
+                  return <p className="text-xs text-slate-500 text-center py-4">{t.noBiomarkersAvailable}</p>;
                 }
                 const groups: Record<string, string[]> = {};
                 filtered.forEach(key => {
@@ -2937,7 +2937,7 @@ export default function InsightsTab({
                           </span>
                           {selectedInGroup.length > 0 && (
                             <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded-full font-bold">
-                              {selectedInGroup.length} selected
+                              {selectedInGroup.length} {t.selected}
                             </span>
                           )}
                         </div>
@@ -2983,7 +2983,7 @@ export default function InsightsTab({
                                       {val} {def.unit || ''}
                                     </span>
                                   ) : (
-                                    <span className="text-[10px] text-slate-400 italic">No value</span>
+                                    <span className="text-[10px] text-slate-400 italic">{t.noValue}</span>
                                   )}
                                 </div>
                               </div>
@@ -2999,14 +2999,14 @@ export default function InsightsTab({
             
             <div className="p-4 border-t border-theme-border bg-slate-50 dark:bg-slate-900/60 flex justify-end gap-2">
               <button 
-                type="button"
+                type="button" 
                 onClick={() => {
                   setCustomDataReviewBatchKeys([]);
                   localStorage.removeItem(`datareview_custom_batch_keys_${userIdentifier}`);
-                }}
+                }} 
                 className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors"
               >
-                Clear
+                {t.clear}
               </button>
               <button 
                 type="button" 
@@ -3019,11 +3019,11 @@ export default function InsightsTab({
                       prefillMessage: `Please calibrate and review reference ranges, units, and categories for these ${customDataReviewBatchKeys.length} selected biomarkers:\n${customDataReviewBatchKeys.join(', ')}`
                     });
                   }
-                }}
+                }} 
                 className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/10 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                Done & Calibrate ({customDataReviewBatchKeys.length})
+                {t.doneAndCalibrate} ({customDataReviewBatchKeys.length})
               </button>
             </div>
           </div>
