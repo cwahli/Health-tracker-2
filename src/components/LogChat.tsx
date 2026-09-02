@@ -1143,7 +1143,7 @@ ${logsText}`);
     }
   }, [isOpen, messages.length, jobId]);
   useEffect(() => {
-    if (activeConversationId && messages && messages.length > 1) {
+    if (activeConversationId && messages && messages.length >= 1) {
       // Do not save to Firestore while the AI is actively streaming to prevent quota exhaustion
       if (messages.some(m => m.isLive)) return;
       debouncedSaveConversation(activeConversationId, messages, lastSentPayload);
@@ -4112,7 +4112,7 @@ ${logsText}`);
             // review tables key off the normalized type ('agent1'), so saving the raw
             // step type silently hid the review table for every biomarker agent whose
             // raw type differs from its normalized/display type.
-            activeAnalysisIdRef.current = await onAgentAnalysisSaved(assistantMsg.agentType || agentType, resData, activeAnalysisIdRef.current || undefined);
+            activeAnalysisIdRef.current = await onAgentAnalysisSaved(assistantMsg.agentType || activeAgentKey || agentType, resData, activeAnalysisIdRef.current || undefined);
           }
         } else {
           assistantMsg.mode = resData.mode;
@@ -4872,6 +4872,33 @@ ${logsText}`);
             </div>
           </div>
           <div className="flex items-center gap-1">
+            {messages.length > 1 && (
+              <button
+                onClick={async () => {
+                  const welcome = getWelcomeMessage();
+                  setMessages([welcome], true);
+                  setLastSentPayload(null);
+                  sessionStorage.removeItem(chatStorageKey);
+                  sessionStorage.removeItem(payloadStorageKey);
+                  localStorage.removeItem(chatStorageKey);
+                  localStorage.removeItem(payloadStorageKey);
+                  if (activeConversationId) {
+                    const userId = auth.currentUser?.uid;
+                    if (userId) {
+                      await safeIdbSet(`${chatStorageKey}_${userId}_${activeConversationId}`, [welcome]);
+                      await safeIdbSet(`${payloadStorageKey}_${userId}_${activeConversationId}`, null);
+                    } else {
+                      await safeIdbSet(`${chatStorageKey}_guest_${activeConversationId}`, [welcome]);
+                      await safeIdbSet(`${payloadStorageKey}_guest_${activeConversationId}`, null);
+                    }
+                  }
+                }}
+                className="p-1.5 rounded-full hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-500 hover:text-rose-600 transition-colors cursor-pointer"
+                title={t.clearAll || "Clear all"}
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            )}
             <button
               onClick={() => setShowFullScreenDebugLogs(true)}
               className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-indigo-500 hover:text-indigo-600 dark:text-indigo-400 transition-colors"
@@ -5432,11 +5459,24 @@ ${logsText}`);
                           onSendToAdmin={handleSendLogToAdmin}
                           isSendingLogs={isSendingLogs}
                           logsSendStatus={logsSendStatus}
-                          onClearLogs={() => {
-                            setMessages(prev => prev.length > 0 ? [prev[0]] : []);
+                          onClearLogs={async () => {
+                            const welcome = getWelcomeMessage();
+                            setMessages([welcome], true);
                             setLastSentPayload(null);
                             sessionStorage.removeItem(payloadStorageKey);
                             sessionStorage.removeItem(chatStorageKey);
+                            localStorage.removeItem(chatStorageKey);
+                            localStorage.removeItem(payloadStorageKey);
+                            if (activeConversationId) {
+                              const userId = auth.currentUser?.uid;
+                              if (userId) {
+                                await safeIdbSet(`${chatStorageKey}_${userId}_${activeConversationId}`, [welcome]);
+                                await safeIdbSet(`${payloadStorageKey}_${userId}_${activeConversationId}`, null);
+                              } else {
+                                await safeIdbSet(`${chatStorageKey}_guest_${activeConversationId}`, [welcome]);
+                                await safeIdbSet(`${payloadStorageKey}_guest_${activeConversationId}`, null);
+                              }
+                            }
                             setShowFullScreenConv(false);
                           }}
                           eventsCount={messages.length}
