@@ -1,0 +1,127 @@
+{
+  "id": "C2",
+  "title": "New User General Wellness & Vitality Multi-Turn Onboarding",
+  "description": "Multi-turn onboarding for a first-time user seeking general health, energy, and sleep improvements. Turn 1 captures the broad wellness intent and requests demographic and health focus details. Turn 2 captures demographics (28yo female from Singapore, 162cm, 54kg) and primary goals (afternoon energy crashes, sleep depth, micronutrient vitality), consolidates memory, and triggers handoff to the Health Coach to generate a comprehensive Health Baseline Report.",
+  "systemInstruction": [
+    "You are the Receptionist and Onboarding AI Specialist for an advanced Health & Biomarker Tracker application.",
+    "Your role is to welcome users, understand goals, manage memory, identify required data for downstream agents (e.g., Health Coach), collect missing information, and prepare handoff payloads."
+  ],
+  "userPayload": {
+    "promptText": [
+      "<user_message>",
+      "i just want to be healthy",
+      "</user_message>"
+    ],
+    "jsonPayload": {
+      "currentUserMessage": "i just want to be healthy",
+      "chatHistory": [
+        {
+          "role": "user",
+          "content": "i just want to be healthy"
+        }
+      ],
+      "existingUserProfile": null,
+      "existingMemory": null,
+      "existingActivitiesAndTasks": null
+    }
+  },
+  "expectedOutput": {
+    "intent": "general_wellness",
+    "targetAgent": "health_coach",
+    "status": "needs_info",
+    "expectedMissingFields": [
+      "age",
+      "gender",
+      "primary_focus_areas",
+      "activity_level",
+      "medical_history"
+    ],
+    "mustIncludeInResponse": [
+      "health",
+      "focus"
+    ],
+    "memoryValidation": {
+      "goalSummaryIncludes": [
+        "healthy",
+        "wellness",
+        "health"
+      ],
+      "stateEquals": "onboarding_gather_info",
+      "pendingItemsInclude": [
+        "age",
+        "gender"
+      ]
+    },
+    "handoffValidation": {
+      "hasPayload": false
+    }
+  },
+  "turns": [
+    {
+      "turnIndex": 1,
+      "userMessage": "i just want to be healthy",
+      "expectedOutput": {
+        "intent": "general_wellness",
+        "targetAgent": "health_coach",
+        "status": "needs_info",
+        "expectsUiForm": true,
+        "expectedMissingFields": [
+          "age",
+          "gender",
+          "activity_level"
+        ],
+        "mustIncludeInResponse": [
+          "health",
+          "focus"
+        ],
+        "memoryValidation": {
+          "goalSummaryIncludes": [
+            "healthy",
+            "wellness",
+            "health"
+          ],
+          "stateEquals": "onboarding_gather_info",
+          "pendingItemsInclude": [
+            "age",
+            "gender"
+          ]
+        },
+        "handoffValidation": {
+          "hasPayload": false
+        }
+      }
+    },
+    {
+      "turnIndex": 2,
+      "userMessage": "I'm a 28-year-old woman from Singapore, 162cm tall and 54kg. I work a desk job with light activity. I mainly struggle with afternoon energy crashes and poor sleep quality, and I want to improve my daily vitality and nutrition. No medical conditions.",
+      "expectedOutput": {
+        "intent": "general_wellness",
+        "targetAgent": "health_coach",
+        "status": "ready_for_handoff",
+        "expectedMissingFields": [],
+        "mustIncludeInResponse": [
+          "coach",
+          "plan"
+        ],
+        "memoryValidation": {
+          "goalSummaryIncludes": [
+            "energy",
+            "sleep"
+          ],
+          "stateEquals": "ready_for_handoff",
+          "userProfileSnapshotCheck": {
+            "age": 28,
+            "gender": "female",
+            "ethnicity": "Singapore",
+            "heightCm": 162,
+            "weightKg": 54
+          }
+        },
+        "handoffValidation": {
+          "targetAgent": "health_coach",
+          "hasPayload": true
+        }
+      }
+    }
+  ]
+}

@@ -115,6 +115,7 @@ export interface FillRow {
   key: string | null;
   writeTarget: WriteTarget;
   medicalInsight?: string;
+  status?: string;
   customRangeOverlay?: string | null;
   logs?: LogPoint[];
   newCatalogDraft: NewCatalogDraft | null;

@@ -1,0 +1,170 @@
+{
+  "id": "C1",
+  "title": "New User Weight Loss Multi-Turn Onboarding (18yo Female, 40kg)",
+  "description": "Multi-turn onboarding for an 18-year-old female from Indonesia weighing 40kg (155cm) with no medical conditions who asks to lose weight. Receptionist gathers required demographic and biometric data across turns, consolidates memory, and passes the context to the Health Coach to evaluate appropriate nutritional guidance and metabolic targets for a low-bodyweight user.",
+  "systemInstruction": [
+    "You are the Receptionist and Onboarding AI Specialist for an advanced Health & Biomarker Tracker application.",
+    "Your role is to welcome users, understand goals, manage memory, identify required data for downstream agents (e.g., Health Coach), collect missing information, and prepare handoff payloads."
+  ],
+  "userPayload": {
+    "promptText": [
+      "<user_message>",
+      "I want to loose weight",
+      "</user_message>"
+    ],
+    "jsonPayload": {
+      "currentUserMessage": "I want to loose weight",
+      "chatHistory": [
+        {
+          "role": "user",
+          "content": "I want to loose weight"
+        }
+      ],
+      "existingUserProfile": null,
+      "existingMemory": null,
+      "existingActivitiesAndTasks": null
+    }
+  },
+  "expectedOutput": {
+    "intent": "weight_loss",
+    "targetAgent": "health_coach",
+    "status": "needs_info",
+    "expectedMissingFields": [
+      "gender",
+      "age",
+      "height",
+      "weight",
+      "medical_history"
+    ],
+    "mustIncludeInResponse": [
+      "calorie",
+      "weight",
+      "height",
+      "age"
+    ],
+    "memoryValidation": {
+      "goalSummaryIncludes": [
+        "weight",
+        "lose",
+        "loss"
+      ],
+      "stateEquals": "onboarding_gather_info",
+      "pendingItemsInclude": [
+        "gender",
+        "age",
+        "height",
+        "weight"
+      ]
+    },
+    "handoffValidation": {
+      "hasPayload": false
+    }
+  },
+  "turns": [
+    {
+      "turnIndex": 1,
+      "userMessage": "I want to loose weight",
+      "expectedOutput": {
+        "intent": "weight_loss",
+        "targetAgent": "health_coach",
+        "status": "needs_info",
+        "expectsUiForm": true,
+        "expectedMissingFields": [
+          "gender",
+          "age",
+          "height",
+          "weight",
+          "medical_history"
+        ],
+        "mustIncludeInResponse": [
+          "weight",
+          "details"
+        ],
+        "memoryValidation": {
+          "goalSummaryIncludes": [
+            "weight",
+            "lose",
+            "loss"
+          ],
+          "stateEquals": "onboarding_gather_info",
+          "pendingItemsInclude": [
+            "gender",
+            "age",
+            "height",
+            "weight"
+          ]
+        },
+        "handoffValidation": {
+          "hasPayload": false
+        }
+      }
+    },
+    {
+      "turnIndex": 2,
+      "userMessage": "I'm an 18-year-old woman from Indonesia, 135cm tall. No medical conditions.",
+      "expectedOutput": {
+        "intent": "weight_loss",
+        "targetAgent": "health_coach",
+        "status": "needs_info",
+        "expectedMissingFields": [
+          "weight"
+        ],
+        "mustIncludeInResponse": [
+          "weight"
+        ],
+        "memoryValidation": {
+          "goalSummaryIncludes": [
+            "weight",
+            "lose"
+          ],
+          "stateEquals": "onboarding_gather_info",
+          "pendingItemsInclude": [
+            "weight"
+          ],
+          "userProfileSnapshotCheck": {
+            "age": 18,
+            "gender": "female",
+            "ethnicity": "Indonesian",
+            "heightCm": 135
+          }
+        },
+        "handoffValidation": {
+          "hasPayload": false
+        }
+      }
+    },
+    {
+      "turnIndex": 3,
+      "userMessage": "My current weight is 40kg and I want to lose weight. I have a student lifestyle with light daily walking.",
+      "expectedOutput": {
+        "intent": "weight_loss",
+        "targetAgent": "health_coach",
+        "status": "ready_for_handoff",
+        "expectedMissingFields": [],
+        "mustIncludeInResponse": [
+          "coach",
+          "health"
+        ],
+        "memoryValidation": {
+          "goalSummaryIncludes": [
+            "weight",
+            "40"
+          ],
+          "stateEquals": "ready_for_handoff",
+          "pendingItemsInclude": [],
+          "userProfileSnapshotCheck": {
+            "age": 18,
+            "gender": "female",
+            "ethnicity": "Indonesian",
+            "heightCm": 135,
+            "weightKg": 40
+          }
+        },
+        "handoffValidation": {
+          "targetAgent": "health_coach",
+          "hasPayload": true
+        }
+      }
+    }
+  ]
+}

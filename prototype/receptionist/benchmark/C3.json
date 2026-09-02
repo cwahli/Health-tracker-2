@@ -1,0 +1,166 @@
+{
+  "id": "C3",
+  "title": "Existing User Multi-Turn Data Ingestion & Complexity Triage",
+  "description": "Multi-turn flow for an existing user (Alex, 42M, 178cm, 82kg with mild hypertension). In Turn 1, the user provides a simple profile update (weight down to 80.5kg) and logs simple biomarkers (BP 124/80 mmHg, RHR 66 bpm), which the Receptionist captures inline into memory without spawning heavy external agents. In Turn 2, the user submits a complex multi-panel lab report (Lipids, Liver, Renal, Glycemic, hs-CRP) requesting range calibration, causing the Receptionist to recognize the complexity and hand off to the specialized Add Health Data / Lab Parser Agent (medical).",
+  "systemInstruction": [
+    "You are the Receptionist and Onboarding AI Specialist for an advanced Health & Biomarker Tracker application.",
+    "Your role is to welcome users, understand goals, manage memory, perform simple inline profile/biomarker updates, and route complex multi-panel lab data to specialized agents (e.g. medical / Lab Parser)."
+  ],
+  "userPayload": {
+    "promptText": [
+      "<user_message>",
+      "Hi! I weighed in at 80.5kg this morning. Also my blood pressure was 124/80 mmHg and resting heart rate was 66 bpm.",
+      "</user_message>"
+    ],
+    "jsonPayload": {
+      "currentUserMessage": "Hi! I weighed in at 80.5kg this morning. Also my blood pressure was 124/80 mmHg and resting heart rate was 66 bpm.",
+      "chatHistory": [
+        {
+          "role": "user",
+          "content": "Hi! I weighed in at 80.5kg this morning. Also my blood pressure was 124/80 mmHg and resting heart rate was 66 bpm."
+        }
+      ],
+      "existingUserProfile": {
+        "name": "Alex",
+        "age": 42,
+        "gender": "male",
+        "heightCm": 178,
+        "weightKg": 82,
+        "activityLevel": "moderately_active",
+        "medicalHistory": [
+          "mild hypertension"
+        ],
+        "dietaryPreferences": [
+          "mediterranean-leaning"
+        ],
+        "targetWeightKg": 78
+      },
+      "existingMemory": {
+        "goalSummary": "Maintain cardiovascular wellness, gradual fat loss to 78kg.",
+        "userProfileSnapshot": {
+          "name": "Alex",
+          "age": 42,
+          "gender": "male",
+          "heightCm": 178,
+          "weightKg": 82,
+          "activityLevel": "moderately_active",
+          "medicalHistory": [
+            "mild hypertension"
+          ],
+          "dietaryPreferences": [
+            "mediterranean-leaning"
+          ],
+          "targetWeightKg": 78
+        },
+        "preferencesAndConstraints": {
+          "bloodPressureMonitoring": "weekly",
+          "dietaryPreference": "mediterranean-leaning"
+        },
+        "conversationState": "ongoing_support",
+        "pendingItems": [],
+        "keyInsights": [
+          "User maintains consistent weekly strength workouts but has sporadic nutrition logging."
+        ]
+      },
+      "existingActivitiesAndTasks": [
+        {
+          "id": "task_bio_01",
+          "category": "biomarkers",
+          "title": "Annual Comprehensive Metabolic & Lipid Panel",
+          "status": "overdue",
+          "lastCompleted": "2025-06-10",
+          "details": "Last blood panel was over 14 months ago; lipid and fasting glucose check recommended."
+        }
+      ]
+    }
+  },
+  "expectedOutput": {
+    "intent": "profile_update",
+    "targetAgent": "general_receptionist",
+    "status": "needs_info",
+    "expectedMissingFields": [],
+    "mustIncludeInResponse": [
+      "80.5",
+      "124/80",
+      "66"
+    ],
+    "memoryValidation": {
+      "goalSummaryIncludes": [
+        "cardiovascular",
+        "weight"
+      ],
+      "stateEquals": "ongoing_support",
+      "userProfileSnapshotCheck": {
+        "name": "Alex",
+        "age": 42,
+        "gender": "male",
+        "weightKg": 80.5
+      }
+    },
+    "handoffValidation": {
+      "hasPayload": false
+    }
+  },
+  "turns": [
+    {
+      "turnIndex": 1,
+      "userMessage": "Hi! I weighed in at 80.5kg this morning. Also my blood pressure was 124/80 mmHg and resting heart rate was 66 bpm.",
+      "expectedOutput": {
+        "intent": "profile_update",
+        "targetAgent": "general_receptionist",
+        "status": "needs_info",
+        "expectedMissingFields": [],
+        "mustIncludeInResponse": [
+          "80.5",
+          "124/80",
+          "66"
+        ],
+        "memoryValidation": {
+          "goalSummaryIncludes": [
+            "cardiovascular",
+            "weight"
+          ],
+          "stateEquals": "ongoing_support",
+          "userProfileSnapshotCheck": {
+            "name": "Alex",
+            "age": 42,
+            "gender": "male",
+            "weightKg": 80.5
+          }
+        },
+        "handoffValidation": {
+          "hasPayload": false
+        }
+      }
+    },
+    {
+      "turnIndex": 2,
+      "userMessage": "I also just got my full lab report from Quest Diagnostics: Total Cholesterol 228 mg/dL, Triglycerides 175 mg/dL, HDL 42 mg/dL, LDL 151 mg/dL, Fasting Glucose 94 mg/dL, HbA1c 5.6%, ALT 38 U/L, AST 29 U/L, eGFR 95 mL/min/1.73m2, Creatinine 0.95 mg/dL, High-Sensitivity CRP 1.8 mg/L. Can you parse, categorize, and calibrate all of these against my cardiovascular reference ranges?",
+      "expectedOutput": {
+        "intent": "biomarker_review",
+        "targetAgent": "medical",
+        "status": "ready_for_handoff",
+        "expectedMissingFields": [],
+        "mustIncludeInResponse": [
+          "lab",
+          "specialist"
+        ],
+        "memoryValidation": {
+          "goalSummaryIncludes": [
+            "cardiovascular",
+            "lipid"
+          ],
+          "stateEquals": "ready_for_handoff",
+          "userProfileSnapshotCheck": {
+            "name": "Alex",
+            "weightKg": 80.5
+          }
+        },
+        "handoffValidation": {
+          "targetAgent": "medical",
+          "hasPayload": true
+        }
+      }
+    }
+  ]
+}
