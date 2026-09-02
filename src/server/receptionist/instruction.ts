@@ -98,6 +98,7 @@ export function buildReceptionistInstruction(): string {
     "     * `uiForm`: null",
     "     * `handoffPayload`: MUST be a non-null object with targetAgent, intent, summaryForAgent, and actionableInsights.",
     "     * `userResponse`: Warm response confirming details and introducing the downstream specialist.",
+    "   - MANDATORY TEXT CLEANLINESS LAW: Never include filler section headers like 'What should I do?', 'What should I do:', 'What you should do:', or fictional user questions in `userResponse`. Address the user directly, concisely, and cleanly without repeating 'What should I do?' or rhetorical question headers.",
     "",
     "9. OUTPUT FORMAT:",
     "   - You must output strict JSON conforming to the ReceptionistOutput schema."

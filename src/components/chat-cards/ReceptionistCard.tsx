@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { AgentCardProps } from './types';
+import { cleanWhatShouldIDoHeader } from '../../utils/formatUtils';
 import { 
   Sparkles, 
   UserCheck, 
@@ -69,7 +69,7 @@ export const ReceptionistCard: React.FC<AgentCardProps> = ({
   };
 
   const isHandoffReady = status === 'ready_for_handoff' || !!handoffPayload;
-  const rawText = msg.content || agentResult.text || agentResult.userResponse || '';
+  let rawText = cleanWhatShouldIDoHeader(msg.content || agentResult.text || agentResult.userResponse || '');
 
   return (
     <div className="w-full flex flex-col gap-3 text-slate-800 dark:text-slate-100">

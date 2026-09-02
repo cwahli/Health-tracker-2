@@ -1,4 +1,17 @@
+export function cleanWhatShouldIDoHeader(text: string): string {
+  if (!text || typeof text !== 'string') return text || '';
+  return text
+    .replace(/(?:^|\n)\s*(?:#+\s*)?(?:\*\*)?\s*What\s+(?:should\s+(?:I|you)\s+do|to\s+do\s+next)\??:?\s*(?:\*\*)?\s*(?=\n|$)/gi, '\n\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function formatMessageContent(content: any, msg?: any): string {
+  const rawFormatted = internalFormatMessageContent(content, msg);
+  return cleanWhatShouldIDoHeader(rawFormatted);
+}
+
+function internalFormatMessageContent(content: any, msg?: any): string {
   if (!content && msg?.data?.agentResult) {
     const res = msg.data.agentResult;
     if (typeof res.text === 'string' && res.text.trim()) return res.text;

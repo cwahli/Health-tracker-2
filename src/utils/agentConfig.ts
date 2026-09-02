@@ -130,7 +130,7 @@ export const AGENT_REGISTRY: Record<AgentType, AgentConfig> = {
     displayName: 'Front Desk',
     description: 'Answers general questions and routes users. Does not log labs.',
     capabilities: ['general_qa', 'routing', 'profile_update', 'biomarker_logging'],
-    welcomeMessage: 'Hello! I am your Health Preparation Agent. How can I help you today? You can ask me about your health data, or I can help you log new medical results.',
+    welcomeMessage: 'Hello! I am your Health Preparation Agent. How can I help you today? You can ask me about your health data, or I can help you update your profile. I can also direct you to one of our specialized agents.',
     rolloutStatus: 'unified',
   },
   biomarker_review: {

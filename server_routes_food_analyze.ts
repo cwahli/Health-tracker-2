@@ -229,10 +229,17 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
       }));
     }
 
+    const cleanUserResponse = typeof recOutput.userResponse === 'string'
+      ? recOutput.userResponse
+          .replace(/(?:^|\n)\s*(?:#+\s*)?(?:\*\*)?\s*What\s+(?:should\s+(?:I|you)\s+do|to\s+do\s+next)\??:?\s*(?:\*\*)?\s*(?=\n|$)/gi, '\n\n')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim()
+      : recOutput.userResponse;
+
     res.json({
       agentType: 'front_desk',
-      text: recOutput.userResponse,
-      userResponse: recOutput.userResponse,
+      text: cleanUserResponse,
+      userResponse: cleanUserResponse,
       intent: recOutput.intent,
       targetAgent: recOutput.targetAgent,
       status: recOutput.status,

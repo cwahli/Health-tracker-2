@@ -347,6 +347,14 @@ export async function callReceptionistAgent(
     };
   }
 
+  // Strip rhetorical / filler "What should I do?" headers from userResponse
+  if (output.userResponse && typeof output.userResponse === 'string') {
+    output.userResponse = output.userResponse
+      .replace(/(?:^|\n)\s*(?:#+\s*)?(?:\*\*)?\s*What\s+(?:should\s+(?:I|you)\s+do|to\s+do\s+next)\??:?\s*(?:\*\*)?\s*(?=\n|$)/gi, '\n\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
   // Preserve any known existing demographic fields if model omitted them
   if (payload.existingUserProfile && output.memory?.userProfileSnapshot) {
     const existing = payload.existingUserProfile;
