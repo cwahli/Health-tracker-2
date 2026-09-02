@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, FoodLog, HealthAction, DailyBenefit, RecommendationReport, BiomarkerLog, ChatMessage, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
+import { displayStatusLabel, displayCategoryLabel, displayNutrientName, interpolate } from '../utils/i18n';
 import { CheckCircle2, Circle, AlertCircle, AlertTriangle, ShieldAlert, Wrench, ArrowRight, Heart, ChevronDown, ChevronUp, Calendar, MapPin, Search, Sparkles, Trash2, Clock, Settings, X, TrendingUp, Activity, Copy, FlaskConical, Plus, BrainCircuit, Loader, Loader2, CheckSquare, Square, Edit2, Save, Check, Zap } from 'lucide-react';
 import { parseActionDetails, getDynamicTimeTag, sortActionsByDueDate } from '../utils/actionUtils';
 import { getBiomarkerStatus, getBiomarkerColor, getBiomarkerStatusLabel, biomarkerDefinitions, isAsianEthnicity, getBiomarkerMetadata, detectFlaggedTelemetryErrors, buildBiomarkerReviewPrefill, isBiomarkerApproved, isBiomarkerValueImprobable, diagnoseTelemetryIssue, getMappedBiomarkerKey, getIdealBmiTarget } from '../utils/biomarkers';
@@ -835,17 +836,17 @@ export default function HomeTab({
   const distinctDaysOfData = new Set(activeFoodLogs.map(l => l.date)).size;
 
   const missingProfilePoints: string[] = [];
-  if (profile.age === undefined || profile.age === null || String(profile.age).trim() === '') missingProfilePoints.push('Age');
-  if (profile.ethnicity === undefined || profile.ethnicity === null || String(profile.ethnicity).trim() === '' || String(profile.ethnicity).toLowerCase() === 'unknown') missingProfilePoints.push('Ethnicity');
-  if (profile.weight === undefined || profile.weight === null || String(profile.weight).trim() === '') missingProfilePoints.push('Weight');
-  if (profile.height === undefined || profile.height === null || String(profile.height).trim() === '') missingProfilePoints.push('Height');
+  if (profile.age === undefined || profile.age === null || String(profile.age).trim() === '') missingProfilePoints.push(t.age);
+  if (profile.ethnicity === undefined || profile.ethnicity === null || String(profile.ethnicity).trim() === '' || String(profile.ethnicity).toLowerCase() === 'unknown') missingProfilePoints.push(t.ethnicity);
+  if (profile.weight === undefined || profile.weight === null || String(profile.weight).trim() === '') missingProfilePoints.push(t.weight);
+  if (profile.height === undefined || profile.height === null || String(profile.height).trim() === '') missingProfilePoints.push(t.height);
 
   const getMissingDataStatus = () => {
-    const basicInfoMissing = ['Age', 'Ethnicity', 'Weight', 'Height'].filter(f => missingProfilePoints.includes(f));
+    const basicInfoMissing = [t.age, t.ethnicity, t.weight, t.height].filter(f => missingProfilePoints.includes(f));
     const missing = [];
-    if (basicInfoMissing.length > 0) missing.push('basic profile info (Age, Height, etc)');
-    if (activeFoodLogs.length === 0) missing.push('some food logs');
-    if (Object.keys(biomarkers).length === 0) missing.push('medical biomarkers');
+    if (basicInfoMissing.length > 0) missing.push(t.basicProfileInfoHint);
+    if (activeFoodLogs.length === 0) missing.push(t.someFoodLogsHint);
+    if (Object.keys(biomarkers).length === 0) missing.push(t.medicalBiomarkersHint);
     return missing;
   };
 
@@ -855,7 +856,7 @@ export default function HomeTab({
     }
     const missing = getMissingDataStatus();
     if (missing.length > 0) {
-      return `To get your personalized health recommendations, please add ${missing.join(', ')}.`;
+      return interpolate(t.getPersonalizedRecs, { missing: missing.join(', ') });
     }
     return "You have provided enough information. Please go to Insights and run a health analysis!";
   };
@@ -1281,7 +1282,7 @@ export default function HomeTab({
             const unit = parseUnit(reportTargetRaw, fallbackUnits[key] || 'g');
 
             const nutDef = nutrientDefinitions.find(n => n.key === key);
-            const label = nutDef?.labels?.en || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            const label = displayNutrientName(profile.language, key) || nutDef?.labels?.en || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
 
             const isLimit = ['calories', 'saturatedFat', 'sodium', 'addedSugar', 'totalFat', 'transFat', 'cholesterol'].includes(key);
             const isOver = isLimit && adjustedTarget > 0 && actual > adjustedTarget;
@@ -1301,19 +1302,19 @@ export default function HomeTab({
                       
                       if (isAvgOver) {
                         textColor = isLimit ? "text-rose-600 dark:text-rose-500 font-bold" : "text-emerald-600 dark:text-emerald-500 font-bold";
-                        overText = ` - ${pctAbove.toFixed(0)}% over`;
+                        overText = interpolate(t.avgPercentOverSuffix, { pct: pctAbove.toFixed(0) });
                       }
                       
                       return (
                         <span className={`text-[10px] ${textColor}`}>
-                          - {formatValue(avg)}{unit} avg{overText}
+                          - {interpolate(t.avgAmount, { value: formatValue(avg), unit })}{overText}
                         </span>
                       );
                     })()}
                   </span>
                   {isOver ? (
                     <span className="text-rose-500 font-bold font-mono">
-                      {formatValue(actual - adjustedTarget)}{unit} over {adjustedTarget}{unit} daily
+                      {interpolate(t.overDailyAmount, { amount: formatValue(actual - adjustedTarget), unit, target: adjustedTarget })}
                     </span>
                   ) : isMet ? (
                     <span className="text-emerald-500 font-bold font-mono">
@@ -1354,7 +1355,7 @@ export default function HomeTab({
                            <div 
                              className="absolute top-0 bottom-0 bg-rose-500/30 z-10 border-r-[3px] border-rose-600 shadow-sm"
                              style={{ left: 0, width: `${pctOverage}%` }}
-                             title={`${rollingDays}-day average: ${formatValue(avg)}${unit} (${pctOverage.toFixed(0)}% over)`}
+                             title={interpolate(t.nDayAverageOver, { days: rollingDays, value: formatValue(avg), unit, pct: pctOverage.toFixed(0) })}
                            />
                          );
                        } else {
@@ -1362,7 +1363,7 @@ export default function HomeTab({
                            <div 
                              className="absolute top-0 bottom-0 bg-emerald-500/30 z-10 border-r-[3px] border-emerald-600 shadow-sm"
                              style={{ left: 0, width: `${pctOverage}%` }}
-                             title={`${rollingDays}-day average: ${formatValue(avg)}${unit} (${pctOverage.toFixed(0)}% over)`}
+                             title={interpolate(t.nDayAverageOver, { days: rollingDays, value: formatValue(avg), unit, pct: pctOverage.toFixed(0) })}
                            />
                          );
                        }
@@ -1372,7 +1373,7 @@ export default function HomeTab({
                          <div 
                            className="absolute top-0 bottom-0 w-[3px] bg-amber-400 z-10 shadow-sm"
                            style={{ left: `${pct}%` }}
-                           title={`${rollingDays}-day average: ${formatValue(avg)}${unit}`}
+                           title={interpolate(t.nDayAverage, { days: rollingDays, value: formatValue(avg), unit })}
                          />
                        );
                      }
@@ -1390,12 +1391,12 @@ export default function HomeTab({
                 <span>{t.stepsLabel}</span>
                 {googleStepsAverage !== null && (
                   <span className="text-[10px] text-slate-400 font-normal">
-                    (7d avg: {googleStepsAverage.toLocaleString()})
+                    {interpolate(t.sevenDayAvgParen, { n: googleStepsAverage.toLocaleString() })}
                   </span>
                 )}
               </span>
               <span className={`font-mono ${currentStepsValue >= (parseTarget(report?.dailyNutrientTargets?.steps, 3000)) ? 'text-emerald-500 font-bold' : 'text-slate-500'}`}>
-                {currentStepsValue} / {parseTarget(report?.dailyNutrientTargets?.steps, 3000)} steps
+                {interpolate(t.stepsProgress, { actual: currentStepsValue, target: parseTarget(report?.dailyNutrientTargets?.steps, 3000) })}
               </span>
             </div>
             <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -1406,7 +1407,7 @@ export default function HomeTab({
             </div>
             {currentStepsValue === 0 && lastActiveDaySteps && (
               <p className="text-[10px] text-slate-400 italic">
-                Today: 0 steps. Last active day: {lastActiveDaySteps.toLocaleString()} steps ({lastActiveDayTimestamp})
+                {interpolate(t.todayZeroStepsLastActive, { n: lastActiveDaySteps.toLocaleString(), when: lastActiveDayTimestamp })}
               </p>
             )}
           </div>
@@ -1435,7 +1436,7 @@ export default function HomeTab({
                 const unit = parseUnit(reportTargetRaw, fallbackUnits[key] || 'mg');
 
                 const nutDef = nutrientDefinitions.find(n => n.key === key);
-                const label = nutDef?.labels?.en || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                const label = displayNutrientName(profile.language, key) || nutDef?.labels?.en || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
 
                 const isLimit = ['addedSugar', 'saturatedFat', 'sodium', 'totalFat', 'transFat', 'cholesterol'].includes(key);
                 const isOver = isLimit && weeklyTarget > 0 && actual7dRaw > weeklyTarget;
@@ -1449,15 +1450,15 @@ export default function HomeTab({
                       <span className="text-theme-neutral">{label}</span>
                       {isOver ? (
                         <span className="text-rose-500 font-bold font-mono">
-                          {formatValue(actual7dRaw - weeklyTarget)}{unit} over {weeklyTarget}{unit} / wk
+                          {interpolate(t.overWeeklyAmount, { amount: formatValue(actual7dRaw - weeklyTarget), unit, target: weeklyTarget })}
                         </span>
                       ) : isMet ? (
                         <span className="text-emerald-500 font-bold font-mono">
-                          {actual7d} / {weeklyTarget}{unit} / wk
+                          {actual7d} / {weeklyTarget}{unit} {t.perWeek}
                         </span>
                       ) : (
                         <span className="text-slate-500 font-mono">
-                          {actual7d} / {weeklyTarget}{unit} / wk
+                          {actual7d} / {weeklyTarget}{unit} {t.perWeek}
                         </span>
                       )}
                     </div>
@@ -1768,7 +1769,7 @@ export default function HomeTab({
                 <div className="flex justify-between text-xs font-bold text-theme-text">
                   <span>{t.displayViewTimeframe}</span>
                   <span className="text-indigo-650 dark:text-indigo-400 font-mono">
-                    {viewTimeframe === '1' ? 'Today' : `Last ${viewTimeframe} Days`}
+                    {viewTimeframe === '1' ? t.viewTimeframeToday : interpolate(t.lastNDaysShort, { days: viewTimeframe })}
                   </span>
                 </div>
                 <select
@@ -1781,7 +1782,7 @@ export default function HomeTab({
                   <option value="14">{t.lastNDays.replace('{days}', '14')}</option>
                   <option value="30">{t.lastNDays.replace('{days}', '30')}</option>
                 </select>
-                <p className="text-[9px] text-slate-400">Average daily intake across the selected timeframe compared to your adjusted budget.</p>
+                <p className="text-[9px] text-slate-400">{t.averageDailyIntakeHint}</p>
               </div>
             </div>
 
@@ -1895,7 +1896,7 @@ export default function HomeTab({
                   return `${b.def.name}: ${b.value} ${b.def.unit || ''} (${rating})\n${insight}`.trim();
                 }).join('\n\n');
                 navigator.clipboard.writeText(textToCopy);
-                alert('Copied to clipboard!');
+                alert(t.copiedToClipboard);
               }}
               className="text-xs font-bold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-1.5 transition-colors bg-slate-100 dark:bg-slate-800/50 px-2.5 py-1.5 rounded-lg"
             >
@@ -1937,18 +1938,18 @@ export default function HomeTab({
                           <summary className="cursor-pointer flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1 list-none select-none hover:text-slate-800 dark:hover:text-slate-300 transition-colors" style={{ listStyle: 'none' }}>
                             <div className="flex items-center gap-1.5">
                               <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                              <span>{category}</span>
+                              <span>{displayCategoryLabel(profile.language, category)}</span>
                             </div>
                             <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-open:-rotate-180 transition-transform shrink-0" />
                           </summary>
                           <div className="mt-3 p-4 bg-theme-bg-card rounded-xl border border-theme-border/50 space-y-3 normal-case font-normal text-xs">
                             <div>
-                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Analysis</span>
+                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">{t.analysisHeading}</span>
                               <p className="text-sm text-theme-neutral leading-relaxed">{baselineCat.targetTrajectory || baselineCat.analysis}</p>
                             </div>
                             {baselineCat.nutrientTargets && baselineCat.nutrientTargets.length > 0 && (
                               <div>
-                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Nutrient Targets</span>
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">{t.nutrientTargets}</span>
                                 <ul className="list-disc list-inside text-sm text-theme-neutral space-y-1">
                                   {baselineCat.nutrientTargets.map((nt: any, idx: number) => (
                                     <li key={idx}><strong>{nt.nutrientKey}</strong>: {nt.targetValue} <span className="text-xs text-slate-500 block ml-4">{nt.rationale}</span></li>
@@ -1958,7 +1959,7 @@ export default function HomeTab({
                             )}
                             {baselineCat.dailyActivities && baselineCat.dailyActivities.length > 0 && (
                               <div>
-                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Daily Activities</span>
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">{t.dailyActivities}</span>
                                 <ul className="list-disc list-inside text-sm text-theme-neutral space-y-1">
                                   {baselineCat.dailyActivities.map((da: any, idx: number) => (
                                     <li key={idx}><strong>{da.activity}</strong>{da.target ? `: ${da.target}` : ''}</li>
@@ -1969,7 +1970,7 @@ export default function HomeTab({
                           </div>
                         </details>
                       ) : (
-                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1 border-b border-theme-border pb-2">{category}</h4>
+                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1 border-b border-theme-border pb-2">{displayCategoryLabel(profile.language, category)}</h4>
                       )}
 
                       <div className="space-y-4">
@@ -2009,7 +2010,7 @@ export default function HomeTab({
                                           {hideSensitive ? '***' : b.value}
                                         </span>
                                         <span className={`font-size-subtitle-small font-bold uppercase tracking-tight ${colorClass}`}>
-                                          {statusLabel}
+                                          {displayStatusLabel(profile.language, statusLabel)}
                                         </span>
                                       </div>
                                     </button>
@@ -2031,7 +2032,7 @@ export default function HomeTab({
                                           <span className="font-size-xs font-mono text-slate-400">({expandedInChunk.def.unit})</span>
                                         </div>
                                         <p className="font-size-body-small text-theme-text-secondary mt-0.5 font-medium">
-                                          Normal range: {expandedInChunk.def.normalRange}
+                                          {t.normalRangeLabel} {expandedInChunk.def.normalRange}
                                         </p>
                                         {(() => {
                                           const customOpt = profile.customBiomarkers?.[expandedInChunk.key]?.optimalValue;
@@ -2040,7 +2041,7 @@ export default function HomeTab({
                                           if (optVal && optVal.trim() && optVal.trim() !== expandedInChunk.def.normalRange) {
                                             return (
                                               <p className="font-size-body-small text-emerald-600 dark:text-emerald-400 mt-0.5 font-bold flex items-center gap-1">
-                                                <span>🎯 Optimal target:</span>
+                                                <span>{t.optimalTargetLabel}</span>
                                                 <span>{optVal}</span>
                                               </p>
                                             );
@@ -2173,7 +2174,7 @@ export default function HomeTab({
                       type="button"
                       onClick={(e) => { e.stopPropagation(); toggleAction(act.id); }}
                       className="flex-shrink-0 mt-0.5 text-slate-400 dark:text-slate-500 hover:scale-110 transition-transform cursor-pointer"
-                      title={act.completed ? "Mark as incomplete" : "Mark as completed"}
+                      title={act.completed ? t.markAsIncomplete : t.markAsCompleted}
                     >
                       {act.completed ? (
                         <CheckCircle2 className="w-5 h-5 text-indigo-600 fill-indigo-600/10" />
@@ -2193,7 +2194,7 @@ export default function HomeTab({
                         <button 
                           type="button"
                           className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded transition-colors flex-shrink-0"
-                          aria-label={isExpanded ? "Collapse details" : "Expand details"}
+                          aria-label={isExpanded ? t.collapseDetails : t.expandDetails}
                         >
                           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
@@ -2543,12 +2544,13 @@ export default function HomeTab({
                 {/* Left: Filter Tabs */}
                 <FilterPills<'all' | 'auto_fix' | 'ai_review'>
                   items={[
-                    { id: 'all', label: 'All', activeColorClass: 'bg-amber-500 text-white shadow-xs' },
-                    { id: 'auto_fix', label: 'Auto-Fixable', activeColorClass: 'bg-emerald-600 text-white shadow-xs' },
-                    { id: 'ai_review', label: 'Needs AI Review', activeColorClass: 'bg-indigo-600 text-white shadow-xs' },
+                    { id: 'all', label: t.categoryAll, activeColorClass: 'bg-amber-500 text-white shadow-xs' },
+                    { id: 'auto_fix', label: t.autoFixable, activeColorClass: 'bg-emerald-600 text-white shadow-xs' },
+                    { id: 'ai_review', label: t.needsAiReview, activeColorClass: 'bg-indigo-600 text-white shadow-xs' },
                   ]}
                   activeId={telemetryFilterTab}
                   onChange={setTelemetryFilterTab}
+                  ariaLabel={t.filterOptions}
                 />
 
                 {/* Right: Master Checkbox & Selection Stats */}

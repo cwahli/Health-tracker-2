@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { UserProfile, DbInteraction, QuotaData, FoodLog } from '../types';
 import { translations } from '../utils/translations';
+import { ETHNICITY_SELECT_OPTIONS, interpolate } from '../utils/i18n';
 import { getAvailableCredits } from '../utils/creditManager';
 import { NutrientPieChart } from './NutrientPieChart';
 import {
@@ -1285,7 +1286,7 @@ export default function Header({
           >
             <img 
               src={profile.photoUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120"} 
-              alt="User profile" 
+              alt={t.userProfileAlt} 
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
             />
@@ -1312,7 +1313,7 @@ export default function Header({
                 {(() => {
                   const info = getAvailableCredits(profile);
                   return (
-                    <span className="text-[9px] bg-indigo-50 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 border border-indigo-100/30 dark:border-indigo-900/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5" title={`${info.total} agent credits left`}>
+                    <span className="text-[9px] bg-indigo-50 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 border border-indigo-100/30 dark:border-indigo-900/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5" title={interpolate(t.agentCreditsLeftTitle, { n: info.total })}>
                       <Coins className="w-2.5 h-2.5" />
                       {info.total}
                     </span>
@@ -1389,9 +1390,9 @@ export default function Header({
               setShowDbInteractionsOverlay(true);
             }}
             className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 cursor-pointer hover:underline hover:text-indigo-600 transition-colors"
-            title="Click to open Settings & Cloud Sync Control Panel"
+            title={t.syncClickToOpen}
           >
-            Sync: {lastSyncTime || 'Ready'}
+            {t.syncLabelPrefix} {lastSyncTime || t.syncReady}
           </span>
 
           {isAdmin && (
@@ -1420,7 +1421,7 @@ export default function Header({
                     ? 'text-amber-500 hover:bg-amber-500/10' 
                     : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
-                title="Click to manually synchronize data with cloud database"
+                title={t.clickToManuallySync}
               >
                 {syncState === 'syncing' && (
                   <RefreshCw className="w-5 h-5 text-amber-500 animate-spin" />
@@ -1430,7 +1431,7 @@ export default function Header({
                 )}
                 {syncState === 'local' && (
                   checkQuotaFlag() ? (
-                    <span title="Firestore Quota Exceeded - Offline Mode Only">
+                    <span title={t.firestoreQuotaExceeded}>
                       <CloudLightning className="w-5 h-5 text-amber-500 animate-pulse" />
                     </span>
                   ) : (
@@ -1584,7 +1585,7 @@ export default function Header({
             <div className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-indigo-500/25 flex-shrink-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
               <img 
                 src={profile.photoUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120"} 
-                alt="User profile" 
+                alt={t.userProfileAlt} 
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
               />
@@ -1701,14 +1702,9 @@ export default function Header({
                 onChange={(e) => setEthnicity(e.target.value)}
                 className="w-full text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl px-3 py-2 text-slate-850 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
               >
-                <option value="Unknown">Unknown</option>
-                <option value="Chinese">Chinese / East Asian</option>
-                <option value="Caucasian">Caucasian</option>
-                <option value="South Asian">South Asian</option>
-                <option value="African American">African American / Black</option>
-                <option value="Hispanic">Hispanic / Latino</option>
-                <option value="Southeast Asian">Southeast Asian</option>
-                <option value="Other">Mixed / Other</option>
+                {ETHNICITY_SELECT_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{t[opt.labelKey]}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -1776,8 +1772,8 @@ export default function Header({
                 onChange={(e) => setUnitPreference(e.target.value)}
                 className="w-full text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
               >
-                <option value="SI">SI Units (International)</option>
-                <option value="US">US Units</option>
+                <option value="SI">{t.unitSiInternational}</option>
+                <option value="US">{t.unitUs}</option>
               </select>
             </div>
             <div className="col-span-2">

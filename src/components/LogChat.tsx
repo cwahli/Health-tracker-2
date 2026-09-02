@@ -8,6 +8,7 @@ import { saveAgentRequestLog, getAgentRequestLogs } from '../utils/agentLogsTrac
 import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { ChatMessage, FoodLog, UserProfile, FoodIdea } from '../types';
 import { translations } from '../utils/translations';
+import { displayStatusLabel } from '../utils/i18n';
 import { X, Send, Image, Camera, FolderOpen, MessageSquare, Sparkles, Plus, Terminal, ChevronDown, ChevronUp, Loader, MapPin, Trash2, Check, Table, RotateCcw, RefreshCw, AlertTriangle, ShieldAlert, Edit2, Maximize2, Minimize2, Flag, BrainCircuit, Download } from 'lucide-react';
 import { UniversalModal } from './UniversalModal';
 import { nutrientDefinitions } from '../utils/nutrition';
@@ -5317,7 +5318,7 @@ ${logsText}`);
                             <div key={b.key} className="flex items-center justify-between font-size-xs font-mono bg-rose-50/50 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-950/30 px-2 py-1 rounded-lg">
                               <span className="font-sans font-bold text-theme-neutral">{b.name}</span>
                               <span className="text-rose-600 dark:text-rose-450 font-black">
-                                {b.value} {b.unit} ({getBiomarkerStatusLabel(b.key, b.status, profile?.customBiomarkers?.[b.key], b.value, profile).toUpperCase()})
+                                {b.value} {b.unit} ({displayStatusLabel(profile?.language, getBiomarkerStatusLabel(b.key, b.status, profile?.customBiomarkers?.[b.key], b.value, profile))})
                               </span>
                             </div>
                           ))}

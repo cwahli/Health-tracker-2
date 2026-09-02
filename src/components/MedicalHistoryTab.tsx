@@ -2,6 +2,7 @@ import { toYYYYMMDD, formatToDDMMYYYY } from "../utils/dateUtils";
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { UserProfile, BiomarkerLog, ChatMessage, FoodLog } from '../types';
 import { translations } from '../utils/translations';
+import { displayStatusLabel, displayCategoryLabel } from '../utils/i18n';
 import { ShieldAlert, ClipboardList, Trash2, ChevronDown, ChevronUp, LineChart as LineChartIcon, BrainCircuit, AlertCircle, Clock, CheckCircle2, EyeOff } from 'lucide-react';
 import { standardizeUnit, reverseStandardizeUnit, formatNormalRange } from '../utils/unitConversion';
 import { getBiomarkerRangeSourceInfo } from '../utils/biomarkerLifecycle';
@@ -976,12 +977,12 @@ export default function MedicalHistoryTab({
                 className="flex items-center justify-between p-3.5 bg-slate-50/50 dark:bg-slate-900/60 hover:bg-slate-100/60 dark:hover:bg-slate-850/40 cursor-pointer select-none transition-colors border-b border-theme-border/30"
               >
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-200 capitalize">
-  {cat === 'Biomarkers to Review' ? t.biomarkersToReview : cat} ({markers.length})
+  {displayCategoryLabel(profile.language, cat)} ({markers.length})
 </span>
 
                 <div className="flex items-center gap-2">
                   <span className={`${riskInfo.bg} ${riskInfo.text} text-[10px] font-bold px-2.5 py-0.5 rounded-full lowercase [font-variant:small-caps] tracking-wider`}>
-                    {riskInfo.label}
+                    {displayStatusLabel(profile.language, riskInfo.label)}
                   </span>
                   <span className="text-slate-400">
                     {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1159,7 +1160,7 @@ export default function MedicalHistoryTab({
                                 </span>
                                 {hasVal && (
                                   <span className={`text-[9px] font-bold uppercase tracking-wider ${isEmptyVal ? 'text-rose-600 dark:text-rose-400' : colorClass}`}>
-                                    {isEmptyVal ? t.toBeDeleted : statusLabel}
+                                    {isEmptyVal ? t.toBeDeleted : displayStatusLabel(profile.language, statusLabel)}
                                   </span>
                                 )}
                               </div>

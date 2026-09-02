@@ -5,6 +5,11 @@ import {
   SUPPORTED_LOCALES,
   agentOutputLanguageBlock,
   dictionaryFor,
+  displayCategoryLabel,
+  displayEthnicityOption,
+  displayNutrientName,
+  displayStatusLabel,
+  interpolate,
   normalizeLocale,
   t,
   withAgentLanguage,
@@ -67,5 +72,45 @@ describe('agentOutputLanguageBlock', () => {
     const out = withAgentLanguage('You are the dietitian.', 'id');
     expect(out.startsWith('=== USER OUTPUT LANGUAGE ===')).toBe(true);
     expect(out).toContain('You are the dietitian.');
+  });
+});
+
+describe('display chrome helpers', () => {
+  it('translates flagged and optimal status badges in Indonesian', () => {
+    expect(displayStatusLabel('id', 'FLAGGED (Please Review Log)')).toBe(translations.id.statusFlaggedReviewLog);
+    expect(displayStatusLabel('id', 'optimal')).toBe(translations.id.statusOptimal);
+    expect(displayStatusLabel('id', 'LOW')).toBe(translations.id.low);
+    expect(displayStatusLabel('id', 'Good')).toBe(translations.id.statusGood);
+    expect(displayStatusLabel('id', 'Bad')).toBe(translations.id.statusBad);
+  });
+
+  it('leaves custom lab bracket names untranslated', () => {
+    expect(displayStatusLabel('id', 'Elevated (Diabetes)')).toBe('Elevated (Diabetes)');
+  });
+
+  it('translates health category headings and keeps unknown groups', () => {
+    expect(displayCategoryLabel('id', 'Cardiovascular')).toBe(translations.id.riskCardiovascular);
+    expect(displayCategoryLabel('id', 'Hematology')).toBe(translations.id.riskHematology);
+    expect(displayCategoryLabel('id', 'Screenings & Wellness')).toBe(translations.id.riskScreeningsWellness);
+    expect(displayCategoryLabel('id', 'Made Up Group')).toBe('Made Up Group');
+  });
+
+  it('translates ethnicity option labels but keeps stored values', () => {
+    expect(displayEthnicityOption('id', 'Chinese')).toBe(translations.id.ethnicityChineseEastAsian);
+    expect(displayEthnicityOption('id', 'Unknown')).toBe(translations.id.unknown);
+  });
+
+  it('uses Indonesian nutrient chrome names including Sat Fat short form', () => {
+    expect(displayNutrientName('id', 'calories')).toBe('Kalori');
+    expect(displayNutrientName('id', 'saturatedFat', { short: true })).toBe(translations.id.satFatLabel);
+    expect(displayNutrientName('id', 'solubleFibre')).toBe('Serat Larut');
+    expect(displayNutrientName('id', 'protein')).toBe('Protein');
+    expect(displayNutrientName('id', 'sodium')).toBe('Natrium');
+    expect(displayNutrientName('id', 'carbohydrates')).toBe('Karbohidrat');
+  });
+
+  it('interpolates chart chrome placeholders', () => {
+    expect(interpolate(translations.id.overWeeklyAmount, { amount: '4', unit: 'g', target: '20' })).toContain('4');
+    expect(interpolate(translations.en.stepsProgress, { actual: 1000, target: 3000 })).toBe('1000 / 3000 steps');
   });
 });

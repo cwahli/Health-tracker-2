@@ -2,6 +2,7 @@ import { trackApiCall } from '../utils/apiTracker';
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile, FoodLog, NutrientBreakdown, RecommendationReport } from '../types';
 import { translations } from '../utils/translations';
+import { displayNutrientName } from '../utils/i18n';
 import { Edit2, Trash2, Calendar, Search, ChevronDown, ChevronUp, Image as ImageIcon, Save, Check, Plus, Loader, X, Camera, Download } from 'lucide-react';
 import { nutrientDefinitions, getNutrientColor } from '../utils/nutrition';
 import { formatNutrientDisplayValue } from '../utils/nutrients';
@@ -1826,12 +1827,8 @@ export default function FoodHistoryTab({
 
                                 const unit = nutrientDef ? nutrientDef.unit : 'g';
                                 const labelColor = getNutrientColor(lookupKey);
-                                const displayName = nutrientDef 
-                                  ? (nutrientDef.labels.en === 'Calories' 
-                                      ? 'Calories' 
-                                      : (nutrientDef.labels.en === 'Saturated Fat' 
-                                          ? 'Sat Fat' 
-                                          : nutrientDef.labels.en)) 
+                                const displayName = nutrientDef
+                                  ? displayNutrientName(profile.language, lookupKey || key, { short: true })
                                   : key.replace(/([A-Z])/g, ' $1').trim();
 
                                 return (

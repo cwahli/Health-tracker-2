@@ -2,6 +2,7 @@ import { toYYYYMMDD } from "../utils/dateUtils";
 import React, { useState, useEffect } from 'react';
 import { UserProfile, FoodLog, RecommendationReport } from '../types';
 import { translations } from '../utils/translations';
+import { displayCategoryLabel, displayEthnicityOption, interpolate } from '../utils/i18n';
 import { 
   Brain, Sparkles, AlertCircle, TrendingDown, BookOpen, Clock, Heart, 
   CheckCircle, HelpCircle, Loader, ShieldCheck, Database, Check, X, ArrowRight, Activity, Send, ChevronDown, ChevronUp, Trash2, Lock, Archive, Search, Stethoscope
@@ -1318,26 +1319,26 @@ export default function InsightsTab({
   };
 
   const missingProfilePoints: string[] = [];
-  if (profile.age === undefined || profile.age === null || String(profile.age).trim() === '') missingProfilePoints.push('Age');
-  if (profile.ethnicity === undefined || profile.ethnicity === null || String(profile.ethnicity).trim() === '' || String(profile.ethnicity).toLowerCase() === 'unknown') missingProfilePoints.push('Ethnicity');
-  if (profile.weight === undefined || profile.weight === null || String(profile.weight).trim() === '') missingProfilePoints.push('Weight');
-  if (profile.height === undefined || profile.height === null || String(profile.height).trim() === '') missingProfilePoints.push('Height');
+  if (profile.age === undefined || profile.age === null || String(profile.age).trim() === '') missingProfilePoints.push(t.age);
+  if (profile.ethnicity === undefined || profile.ethnicity === null || String(profile.ethnicity).trim() === '' || String(profile.ethnicity).toLowerCase() === 'unknown') missingProfilePoints.push(t.ethnicity);
+  if (profile.weight === undefined || profile.weight === null || String(profile.weight).trim() === '') missingProfilePoints.push(t.weight);
+  if (profile.height === undefined || profile.height === null || String(profile.height).trim() === '') missingProfilePoints.push(t.height);
 
   const hasProfileInfo = missingProfilePoints.length === 0;
 
   // Verify missing data points above the button
    // Determine if basic demographics are present
   const criticalMissing = [
-    { name: 'Age', present: !!profile?.age },
-    { name: 'Ethnicity', present: !!profile?.ethnicity && String(profile.ethnicity).toLowerCase() !== 'unknown' },
-    { name: 'Weight', present: !!profile?.weight },
-    { name: 'Height', present: !!profile?.height }
+    { name: t.age, present: !!profile?.age },
+    { name: t.ethnicity, present: !!profile?.ethnicity && String(profile.ethnicity).toLowerCase() !== 'unknown' },
+    { name: t.weight, present: !!profile?.weight },
+    { name: t.height, present: !!profile?.height }
   ].filter(p => !p.present);
 
   const getMissingNote = () => {
     if (criticalMissing.length === 0) return "";
     const missingNames = criticalMissing.map(p => p.name).join(", ");
-    return `For best health recommendations, please add the following data: ${missingNames}.`;
+    return interpolate(t.pleaseAddProfileFields, { names: missingNames });
   };
 
   const steps = [
@@ -1596,18 +1597,18 @@ export default function InsightsTab({
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="p-3 bg-theme-bg rounded-2xl border border-theme-border/20">
               <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t.userProfile}</span>
-              <span className="font-semibold block">{profile.age}yo, {profile.ethnicity || 'Unknown Ethnicity'}</span>
+              <span className="font-semibold block">{profile.age}{t.yearsOldAbbrev}, {displayEthnicityOption(profile.language, profile.ethnicity) || t.unknownEthnicity}</span>
               <span className="text-[10px] text-slate-500 mt-0.5 block">{profile.weight} kg | {profile.height} cm</span>
               {(profile.gender || profile.bloodType) && (
                 <span className="text-[10px] text-slate-500 block">
-                  {profile.gender ? profile.gender : ''} {profile.gender && profile.bloodType ? '|' : ''} {profile.bloodType ? `Blood: ${profile.bloodType}` : ''}
+                  {profile.gender ? (profile.gender === 'Male' ? t.male : profile.gender === 'Female' ? t.female : profile.gender === 'Other' ? t.otherGender : profile.gender) : ''} {profile.gender && profile.bloodType ? '|' : ''} {profile.bloodType ? interpolate(t.bloodTypeValue, { type: profile.bloodType }) : ''}
                 </span>
               )}
             </div>
 
             <div className="p-3 bg-theme-bg rounded-2xl border border-theme-border/20">
               <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t.nutritionInputs}</span>
-              <span className="font-semibold block">{foodLogs.length} logged entries</span>
+              <span className="font-semibold block">{interpolate(t.loggedEntriesCount, { n: foodLogs.length })}</span>
               <span className="text-[10px] text-slate-500 mt-0.5 block">{t.recentEatingPatterns}</span>
             </div>
           </div>
@@ -1920,10 +1921,10 @@ export default function InsightsTab({
                       <div className="space-y-4">
                         {(() => {
                           const checklistItems = [
-                            { name: 'Age', present: !!profile?.age, presentCount: 0, type: 'demographic' },
-                            { name: 'Ethnicity', present: !!profile?.ethnicity && String(profile.ethnicity).toLowerCase() !== 'unknown', presentCount: 0, type: 'demographic' },
-                            { name: 'Weight', present: !!profile?.weight, presentCount: 0, type: 'demographic' },
-                            { name: 'Height', present: !!profile?.height, presentCount: 0, type: 'demographic' },
+                            { name: t.age, present: !!profile?.age, presentCount: 0, type: 'demographic' },
+                            { name: t.ethnicity, present: !!profile?.ethnicity && String(profile.ethnicity).toLowerCase() !== 'unknown', presentCount: 0, type: 'demographic' },
+                            { name: t.weight, present: !!profile?.weight, presentCount: 0, type: 'demographic' },
+                            { name: t.height, present: !!profile?.height, presentCount: 0, type: 'demographic' },
                             ...Object.entries(groupedBiomarkers).map(([category, items]) => {
                               const typedItems = items as Array<{ key: string; name: string; present: boolean }>;
                               const presentCount = typedItems.filter(item => item.present).length;
@@ -1959,7 +1960,7 @@ export default function InsightsTab({
                                           <Activity className={`w-3.5 h-3.5 ${hasAtLeastOne ? 'text-emerald-500' : 'text-slate-400'}`} />
                                           <div className="flex flex-col">
                                             <span className={`text-[11px] font-bold ${hasAtLeastOne ? 'text-theme-text' : 'text-theme-text-secondary'}`}>
-                                              {item.name}
+                                              {item.type === 'biomarker_category' ? displayCategoryLabel(profile.language, item.name) : item.name}
                                             </span>
                                             {item.type === 'biomarker_category' && (
                                               <span className="text-[9px] font-mono text-slate-400">
@@ -2382,7 +2383,7 @@ export default function InsightsTab({
                     rel="noreferrer"
                     className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline block pt-1.5 font-mono"
                   >
-                    PubMed &rarr;
+                    {t.pubmedLink}
                   </a>
                 </div>
               ))}
@@ -2676,7 +2677,7 @@ export default function InsightsTab({
                         className="flex items-center justify-between p-3 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 cursor-pointer select-none transition-colors border-b border-theme-border"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-theme-neutral">{groupName}</span>
+                          <span className="text-xs font-bold text-theme-neutral">{displayCategoryLabel(profile.language, groupName)}</span>
                           <span className="text-[10px] bg-slate-200/60 dark:bg-slate-800 text-theme-text-secondary px-1.5 py-0.5 rounded-full font-bold">
                             {keysInGroup.length}
                           </span>
@@ -2935,7 +2936,7 @@ export default function InsightsTab({
                         className="flex items-center justify-between p-3 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 cursor-pointer select-none transition-colors border-b border-theme-border"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-theme-neutral">{groupName}</span>
+                          <span className="text-xs font-bold text-theme-neutral">{displayCategoryLabel(profile.language, groupName)}</span>
                           <span className="text-[10px] bg-slate-200/60 dark:bg-slate-800 text-theme-text-secondary px-1.5 py-0.5 rounded-full font-bold">
                             {keysInGroup.length}
                           </span>

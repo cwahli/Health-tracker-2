@@ -1,4 +1,5 @@
 import { translations, type TranslationKey } from './translations';
+import { nutrientDefinitions } from './nutrition';
 
 export const SUPPORTED_LOCALES = ['en', 'id', 'fr', 'zh'] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
@@ -82,3 +83,124 @@ export function withScoutLanguage(instruction: string, lang: unknown): string {
   return `${block}\n\n${instruction}`;
 }
 
+
+
+export function interpolate(template: string, vars: Record<string, string | number>): string {
+  let out = template;
+  for (const [k, v] of Object.entries(vars)) {
+    out = out.split(`{${k}}`).join(String(v));
+  }
+  return out;
+}
+
+const STATUS_LABEL_KEYS: Record<string, TranslationKey> = {
+  'flagged (please review log)': 'statusFlaggedReviewLog',
+  'flagged (please review log).': 'statusFlaggedReviewLog',
+  'flagged': 'statusFlaggedReviewLog',
+  'low': 'low',
+  'optimal': 'statusOptimal',
+  'normal': 'normal',
+  'high': 'high',
+  'elevated': 'statusElevated',
+  'critical': 'critical',
+  'very low': 'statusVeryLow',
+  'very high': 'statusVeryHigh',
+  'underweight': 'statusUnderweight',
+  'overweight': 'statusOverweight',
+  'obese': 'statusObese',
+  'at risk': 'statusAtRisk',
+  'healthy': 'statusHealthy',
+  'good': 'statusGood',
+  'bad': 'statusBad',
+  'no data': 'noData',
+  'unknown': 'unknown',
+  'on target': 'statusOnTarget',
+  'no target': 'statusNoTarget',
+  'target': 'target',
+  '<10% over': 'statusLt10Over',
+  '>10% over': 'statusGt10Over',
+  '<10% under': 'statusLt10Under',
+  '>10% under': 'statusGt10Under',
+};
+
+/** Translate a known English status/badge for display. Custom lab bracket names pass through. */
+export function displayStatusLabel(lang: unknown, englishLabel: string | null | undefined): string {
+  if (englishLabel === undefined || englishLabel === null) return '';
+  const raw = String(englishLabel).trim();
+  if (!raw) return '';
+  const lower = raw.toLowerCase();
+  if (lower.includes('flagged') && lower.includes('review')) {
+    return t(lang, 'statusFlaggedReviewLog');
+  }
+  const key = STATUS_LABEL_KEYS[lower];
+  if (key) return t(lang, key);
+  return raw;
+}
+
+const CATEGORY_LABEL_KEYS: Record<string, TranslationKey> = {
+  Cardiovascular: 'riskCardiovascular',
+  Metabolic: 'riskMetabolic',
+  Liver: 'riskLiver',
+  Kidney: 'riskKidney',
+  Hematology: 'riskHematology',
+  Immunological: 'riskImmunological',
+  Endocrine: 'riskEndocrine',
+  'Screenings & Wellness': 'riskScreeningsWellness',
+  Hepatic: 'groupingHepatic',
+  Renal: 'groupingRenal',
+  Biometrics: 'groupingBiometrics',
+  Other: 'groupingOther',
+  'Screenings & Assessments': 'groupingScreeningsAssessments',
+  Uncategorized: 'uncategorized',
+  'General Health': 'generalHealth',
+  all: 'categoryAll',
+  All: 'categoryAll',
+  'Biomarkers to Review': 'biomarkersToReview',
+  'Unknown Range': 'unknown',
+  metabolic: 'riskMetabolic',
+  hepatic: 'groupingHepatic',
+  renal: 'groupingRenal',
+  hematology: 'riskHematology',
+  biometrics: 'groupingBiometrics',
+  other: 'groupingOther',
+};
+
+/** Translate Health-tab group headings. Internal category values stay English. */
+export function displayCategoryLabel(lang: unknown, category: string | null | undefined): string {
+  if (!category) return '';
+  const key = CATEGORY_LABEL_KEYS[category] || CATEGORY_LABEL_KEYS[category.trim()];
+  if (key) return t(lang, key);
+  return category;
+}
+
+export const ETHNICITY_SELECT_OPTIONS: { value: string; labelKey: TranslationKey }[] = [
+  { value: 'Unknown', labelKey: 'unknown' },
+  { value: 'Chinese', labelKey: 'ethnicityChineseEastAsian' },
+  { value: 'Caucasian', labelKey: 'ethnicityCaucasian' },
+  { value: 'South Asian', labelKey: 'ethnicitySouthAsian' },
+  { value: 'African American', labelKey: 'ethnicityAfricanAmericanBlack' },
+  { value: 'Hispanic', labelKey: 'ethnicityHispanicLatino' },
+  { value: 'Southeast Asian', labelKey: 'ethnicitySoutheastAsian' },
+  { value: 'Other', labelKey: 'ethnicityMixedOther' },
+];
+
+export function displayEthnicityOption(lang: unknown, storedValue: string | null | undefined): string {
+  if (!storedValue) return t(lang, 'unknown');
+  const match = ETHNICITY_SELECT_OPTIONS.find((o) => o.value === storedValue);
+  if (match) return t(lang, match.labelKey);
+  if (String(storedValue).toLowerCase() === 'unknown') return t(lang, 'unknown');
+  return storedValue;
+}
+
+/** Nutrient chrome labels. Codes stay English; short form is for dense chips (Sat Fat). */
+export function displayNutrientName(lang: unknown, nutrientKey: string, opts?: { short?: boolean }): string {
+  const locale = normalizeLocale(lang);
+  if (opts?.short) {
+    if (nutrientKey === 'calories') return t(locale, 'caloriesLabel');
+    if (nutrientKey === 'saturatedFat') return t(locale, 'satFatLabel');
+    if (nutrientKey === 'sodium') return t(locale, 'sodiumLabel');
+  }
+  const nut = nutrientDefinitions.find((n) => n.key === nutrientKey);
+  if (nut) return nut.labels[locale] || nut.labels.en;
+  return nutrientKey.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+}

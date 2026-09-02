@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { UserProfile, FoodLog, BiomarkerLog, RecommendationReport, NutrientBreakdown } from '../types';
 import { nutrientDefinitions } from '../utils/nutrition';
 import { translations } from '../utils/translations';
+import { displayStatusLabel } from '../utils/i18n';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { TrendingUp, BarChart2, Calendar, EyeOff, Copy, Check } from 'lucide-react';
 import { toYYYYMMDD, formatTimelineDate } from '../utils/dateUtils';
@@ -416,7 +417,7 @@ export default function TrendsTab({
     const targetStr = report?.dailyNutrientTargets?.[nut.key as any];
     const bounds = parseTargetBounds(targetStr, nut.key);
     const status = evaluateNutrientStatus(value, bounds);
-    return { name: nut.labels[profile.language] || nut.labels.en, value: value.toFixed(1), unit: nut.unit, target: targetStr || 'No target', bounds, statusText: status.text, color: status.color, key: nut.key };
+    return { name: nut.labels[profile.language] || nut.labels.en, value: value.toFixed(1), unit: nut.unit, target: targetStr || t.statusNoTarget, bounds, statusText: displayStatusLabel(profile.language, status.text), color: status.color, key: nut.key };
   }) : [];
   const biomarkerDots = summaryData ? summaryData.allBioKeys.map(key => {
     const value = summaryData.bioAverages[key] || 0;
@@ -428,11 +429,11 @@ export default function TrendsTab({
     else if (bStatus === 'critical') { color = 'bg-rose-500'; text = 'Critical'; }
     
     // Override text with precise dictionary label if available
-    text = getBiomarkerStatusLabel(key, text, profile?.customBiomarkers?.[key], value, profile);
+    text = displayStatusLabel(profile.language, getBiomarkerStatusLabel(key, text, profile?.customBiomarkers?.[key], value, profile));
 
 
     let label = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-    let targetText = 'No target';
+    let targetText = t.statusNoTarget;
     let unit = '';
     
     if (key === 'bmi') {
@@ -441,7 +442,7 @@ export default function TrendsTab({
       label = 'BMI';
       unit = 'kg/m²';
     } else if (key === 'steps') {
-      label = 'Steps';
+      label = t.stepsLabel;
       unit = '';
       const stepsStr = report?.dailyNutrientTargets?.steps;
       if (stepsStr) {
