@@ -1049,6 +1049,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
               <div className="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
                 {/* FILTER PILLS */}
                 <FilterPills<'all' | 'auto_proposals' | 'agent_review'>
+                  language={profile?.language}
                   items={[
                     {
                       id: 'all',
@@ -1339,6 +1340,7 @@ export const BiomarkerAuditModal: React.FC<BiomarkerAuditModalProps> = ({
               <div className="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
                 {/* FILTER PILLS */}
                 <FilterPills<'all' | 'catalog' | 'custom_calibrate' | 'categorise'>
+                  language={profile?.language}
                   items={[
                     {
                       id: 'all',

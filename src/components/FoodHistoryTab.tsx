@@ -2234,6 +2234,7 @@ export default function FoodHistoryTab({
           src={zoomState.src}
           boundingBox={zoomState.boundingBox}
           foodName={zoomState.foodName}
+          language={profile.language}
           onClose={() => setZoomState(null)}
           hasNext={zoomState.currentIdx < zoomState.items.length - 1}
           hasPrev={zoomState.currentIdx > 0}

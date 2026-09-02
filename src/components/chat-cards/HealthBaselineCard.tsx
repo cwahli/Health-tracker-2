@@ -6,6 +6,7 @@ import { CheckCircle, XCircle, Activity, Target, Calendar, Check, Trash2, Chevro
 import { AgentThoughtBox, getNutrientColor } from './FoodCard';
 import { isCoreNutrient, isAdditionalNutrient } from '../../utils/nutrients';
 import { translations } from '../../utils/translations';
+import { displayStatusLabel, interpolate } from '../../utils/i18n';
 
 export const HealthBaselineCard: React.FC<AgentCardProps> = ({
   language, msg,
@@ -265,7 +266,8 @@ export const HealthBaselineCard: React.FC<AgentCardProps> = ({
                           {category.categoryName}
                         </h4>
                         <div className="text-xs font-medium text-slate-500 capitalize">
-                          {category.level}t.riskStr                        </div>
+                          {displayStatusLabel(language, category.level)}{t.riskStr}
+                        </div>
                       </div>
                     </div>
                     {!isHandled && (
@@ -340,7 +342,7 @@ export const HealthBaselineCard: React.FC<AgentCardProps> = ({
                 onClick={() => scrollToCard(Math.max(0, currentCardIndex - 1))}
                 disabled={currentCardIndex === 0}
                 className="p-1.5 rounded-xl border border-theme-border bg-theme-bg-card text-theme-text-secondary disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center shadow-sm"
-                aria-label="Previous category"
+                aria-label={t.previousCategory}
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -357,7 +359,7 @@ export const HealthBaselineCard: React.FC<AgentCardProps> = ({
                           ? 'w-4 bg-indigo-600 dark:bg-indigo-500' 
                           : 'bg-slate-300 dark:bg-slate-700 hover:bg-slate-400'
                       }`}
-                      aria-label={`Go to category ${idx + 1}`}
+                      aria-label={interpolate(t.goToCategoryN, { n: idx + 1 })}
                     />
                   ))}
                 </div>
@@ -371,7 +373,7 @@ export const HealthBaselineCard: React.FC<AgentCardProps> = ({
                 onClick={() => scrollToCard(Math.min(riskCategories.length - 1, currentCardIndex + 1))}
                 disabled={currentCardIndex === riskCategories.length - 1}
                 className="p-1.5 rounded-xl border border-theme-border bg-theme-bg-card text-theme-text-secondary disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center shadow-sm"
-                aria-label="Next category"
+                aria-label={t.nextCategory}
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -483,7 +485,7 @@ export const HealthBaselineCard: React.FC<AgentCardProps> = ({
               <button
                 onClick={handleDismiss}
                 className="w-full sm:w-auto p-3 flex items-center justify-center text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 border border-transparent hover:border-red-100 dark:hover:border-red-500/20 rounded-2xl transition-all active:scale-[0.98]"
-                title="Delete / Dismiss"
+                title={t.deleteDismiss}
               >
                 <Trash2 className="w-5 h-5" />
                 <span className="ml-2 sm:hidden font-bold text-sm">{t.deleteAnalysis}</span>

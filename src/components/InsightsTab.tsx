@@ -1480,7 +1480,7 @@ export default function InsightsTab({
       return t.unlockedAwaitingAnalysis;
     }
 
-    const recWord = status === 'Done' ? 'applied' : 'need review';
+    const recWord = status === 'Done' ? t.recWordApplied : t.recWordNeedReview;
     switch (step.agentType) {
       case 'agent1': {
         let count = 0;
@@ -1489,14 +1489,14 @@ export default function InsightsTab({
         } else if (Array.isArray(latestAnalysis.result)) {
           count = latestAnalysis.result.length;
         }
-        return `${count || 5} biomarkers extracted, ${recWord}`;
+        return interpolate(t.biomarkersExtractedStatus, { count: count || 5, recWord });
       }
       case 'health_baseline':
-        return `Precision diet and exercise recommendations generated, ${recWord}`;
+        return interpolate(t.precisionDietGenerated, { recWord });
       case 'agent4':
-        return `10-year trajectories projected, ${recWord}`;
+        return interpolate(t.tenYearTrajectoriesProjected, { recWord });
       case 'agent7':
-        return `PubMed & clinical literature insights integrated, ${recWord}`;
+        return interpolate(t.pubmedInsightsIntegrated, { recWord });
       default:
         return t.analysisResultsReady;
     }
@@ -2029,26 +2029,26 @@ export default function InsightsTab({
                                         <p className="text-[11px] text-theme-text-secondary leading-relaxed">
                                           {hasMore ? (
                                             estimatedTotal 
-                                              ? `Batch ${currentBatch} active. Extracted ${extractedCount} of ~${estimatedTotal} estimated biomarkers so far.`
-                                              : `Batch ${currentBatch} active. Extracted ${extractedCount} biomarkers. Click below to continue.`
+                                              ? interpolate(t.batchActiveExtractedOf, { batch: currentBatch, count: extractedCount, estimated: estimatedTotal })
+                                              : interpolate(t.batchActiveExtractedContinue, { batch: currentBatch, count: extractedCount })
                                           ) : isApproved ? (
-                                            `Extraction approved! ${extractedCount} biomarkers are applied to your profile and clinical pipeline.`
+                                            interpolate(t.extractionApprovedApplied, { count: extractedCount })
                                           ) : (
-                                            `Extraction complete! Successfully extracted ${extractedCount} biomarkers. Review and apply them to calibrate your pipeline.`
+                                            interpolate(t.extractionCompleteReview, { count: extractedCount })
                                           )}
                                         </p>
 
                                         <div className="flex flex-wrap gap-2 pt-1">
                                           <span className="bg-slate-100/80 dark:bg-slate-800/80 text-theme-text-secondary px-2 py-0.5 rounded-full text-[9px] font-medium border border-slate-200/30 whitespace-nowrap">
-                                            Batch {currentBatch}
+                                            {interpolate(t.batchNumberLabel, { n: currentBatch })}
                                           </span>
                                           {estimatedTotal && (
                                             <span className="bg-slate-100/80 dark:bg-slate-800/80 text-theme-text-secondary px-2 py-0.5 rounded-full text-[9px] font-medium border border-slate-200/30 whitespace-nowrap">
-                                              ~{estimatedTotal} estimated markers
+                                              {interpolate(t.estimatedMarkersCount, { n: estimatedTotal })}
                                             </span>
                                           )}
                                           <span className="bg-slate-100/80 dark:bg-slate-800/80 text-theme-text-secondary px-2 py-0.5 rounded-full text-[9px] font-medium border border-slate-200/30 whitespace-nowrap">
-                                            {extractedCount} extracted
+                                            {interpolate(t.extractedCountChip, { n: extractedCount })}
                                           </span>
                                         </div>
 
@@ -2461,7 +2461,7 @@ export default function InsightsTab({
                   {t.extractedBiomarkersReviewTitle}
                 </h3>
                 <p className="text-[10px] text-slate-450 mt-1">
-                  Review all extracted biomarkers, standardized names, units, and values before applying to your health profile.
+                  {t.reviewAllExtractedBiomarkers}
                 </p>
               </div>
               <button

@@ -3043,6 +3043,7 @@ export const FoodCard: React.FC<AgentCardProps & {
         const itemDisplayName = showTranslations[groupKey] ? (item.keyword || item.name) : (item.originalName || item.name);
         return (
           <ZoomableImage 
+            language={language}
             src={resolvedImgSrc} 
             boundingBox={bb}
             onClose={() => setPreviewState(null)}
@@ -3065,6 +3066,7 @@ export const FoodCard: React.FC<AgentCardProps & {
         const bb = item.boundingBox2D || item.boundingBox || null;
         return (
           <ZoomableImage 
+            language={language}
             src={resolvedImgSrc} 
             boundingBox={bb}
             onClose={() => setScoutPreviewIdx(null)}
@@ -3078,6 +3080,7 @@ export const FoodCard: React.FC<AgentCardProps & {
       })()}
       {externalPreviewImg && (
         <ZoomableImage 
+          language={language}
           src={externalPreviewImg.url} 
           boundingBox={undefined}
           onClose={() => setExternalPreviewImg(null)}
@@ -3093,6 +3096,7 @@ export const FoodCard: React.FC<AgentCardProps & {
         
         return (
           <ZoomableImage
+            language={language}
             src={validResults[currentValidIdx].imageUrl}
             onClose={() => setSearchPreview(null)}
             foodName={validResults[currentValidIdx].title}

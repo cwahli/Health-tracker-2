@@ -3,6 +3,8 @@ import React, { useRef, useEffect, useState } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { nextPhotoFallbackUrl, normalizeMealImageUrl } from '../utils/foodImageSources';
 import { Loader, AlertCircle } from 'lucide-react';
+import { translations } from '../utils/translations';
+import { interpolate } from '../utils/i18n';
 
 interface ZoomableImageProps {
   src: string;
@@ -14,6 +16,7 @@ interface ZoomableImageProps {
   hasNext?: boolean;
   hasPrev?: boolean;
   sourceUrl?: string;
+  language?: string;
 }
 
 export const ZoomableImage: React.FC<ZoomableImageProps> = ({ 
@@ -25,8 +28,10 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
   onPrev,
   hasNext,
   hasPrev,
-  sourceUrl
+  sourceUrl,
+  language,
 }) => {
+  const t = translations[language || 'en'] || translations.en;
   const targetRef = useRef<HTMLDivElement>(null);
   const isFirstRef = useRef(true);
   const [highlight, setHighlight] = useState(true);
@@ -79,7 +84,7 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
               e.stopPropagation();
               window.open('https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(foodName), '_blank', 'noopener,noreferrer');
             }}
-            title="Search Google Images"
+            title={t.searchGoogleImages}
           >
             <span>{foodName}</span>
             <span className="opacity-50 text-[10px]">↗</span>
@@ -89,7 +94,7 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
         {imgStatus === 'loading' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-[9998] text-slate-300">
             <Loader className="w-8 h-8 animate-spin text-indigo-400" />
-            <span className="text-xs font-mono tracking-wider opacity-80">Loading photo preview...</span>
+            <span className="text-xs font-mono tracking-wider opacity-80">{t.loadingPhotoPreview}</span>
           </div>
         )}
 
@@ -97,9 +102,9 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
           <div className="flex flex-col items-center justify-center gap-3 p-6 max-w-sm rounded-2xl bg-slate-900/90 border border-slate-800 text-center text-slate-200 z-[9998] shadow-2xl">
             <AlertCircle className="w-10 h-10 text-amber-400" />
             <div className="space-y-1">
-              <h4 className="font-bold text-sm">Image Preview Unavailable</h4>
+              <h4 className="font-bold text-sm">{t.imagePreviewUnavailable}</h4>
               <p className="text-xs text-slate-400">
-                {foodName ? `Photo for "${foodName}" could not be retrieved.` : 'The requested photo preview could not be loaded.'}
+                {foodName ? interpolate(t.photoCouldNotBeRetrieved, { name: foodName }) : t.photoPreviewCouldNotLoad}
               </p>
             </div>
             {foodName && (
@@ -108,7 +113,7 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
                 onClick={() => window.open('https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(foodName), '_blank', 'noopener,noreferrer')}
                 className="mt-2 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors cursor-pointer"
               >
-                Search "{foodName}" Images
+                {interpolate(t.searchNameImages, { name: foodName })}
               </button>
             )}
           </div>
@@ -126,7 +131,7 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
                     <div className="relative inline-block max-w-[95vw] max-h-[85vh]">
                       <img 
                         src={currentSrc} 
-                        alt={foodName || "Full screen preview"} 
+                        alt={foodName || t.fullScreenPreviewAlt} 
                         className={`max-w-[95vw] max-h-[85vh] rounded-xl object-contain shadow-2xl transition-opacity duration-300 ${imgStatus === 'loading' ? 'opacity-0' : 'opacity-100'} ${sourceUrl ? 'cursor-pointer hover:opacity-90' : ''}`}
                         referrerPolicy="no-referrer"
                         onLoad={() => setImgStatus('success')}
@@ -157,7 +162,7 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
                     <button 
                       onClick={(e) => { e.stopPropagation(); onPrev(); }}
                       className="absolute left-6 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center bg-slate-900/80 hover:bg-slate-800 text-white rounded-full font-bold shadow-2xl border border-slate-700/60 cursor-pointer transition-all active:scale-95 z-[10000] text-xl"
-                      aria-label="Previous item"
+                      aria-label={t.previousItem}
                     >
                       ‹
                     </button>
@@ -167,7 +172,7 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
                     <button 
                       onClick={(e) => { e.stopPropagation(); onNext(); }}
                       className="absolute right-6 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center bg-slate-900/80 hover:bg-slate-800 text-white rounded-full font-bold shadow-2xl border border-slate-700/60 cursor-pointer transition-all active:scale-95 z-[10000] text-xl"
-                      aria-label="Next item"
+                      aria-label={t.nextItem}
                     >
                       ›
                     </button>
@@ -176,7 +181,7 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
                     onClick={onClose}
                     className="absolute bottom-8 left-1/2 -translate-x-1/2 px-8 py-3 bg-slate-900/90 hover:bg-slate-800 text-white rounded-full font-bold text-sm border border-slate-700 shadow-xl transition-all cursor-pointer z-[10000]"
                   >
-                    Close Preview
+                    {t.closePreview}
                   </button>
                 </>
               );

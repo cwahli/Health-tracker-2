@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, ReactNode } from 'react';
+import { t } from '../../utils/i18n';
 
 export interface AppModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export interface AppModalProps {
   headerClassName?: string;
   footerClassName?: string;
   ariaLabel?: string;
+  language?: string;
   testId?: string;
 }
 
@@ -35,6 +37,7 @@ export function AppModal({
   headerClassName = '',
   footerClassName = '',
   ariaLabel,
+  language,
   testId = 'app-modal',
 }: AppModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
@@ -84,7 +87,7 @@ export function AppModal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={ariaLabel || (typeof title === 'string' ? title : 'Modal Dialog')}
+      aria-label={ariaLabel || (typeof title === 'string' ? title : t(language, 'modalDialog'))}
       data-testid={testId}
       onClick={handleBackdropClick}
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-150"
@@ -115,7 +118,7 @@ export function AppModal({
                 type="button"
                 data-testid={`${testId}-close-btn`}
                 onClick={onClose}
-                aria-label="Close dialog"
+                aria-label={t(language, 'closeDialog')}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ml-auto cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               >
                 <svg

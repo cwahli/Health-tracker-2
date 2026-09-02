@@ -1461,6 +1461,7 @@ export default function Header({
       <NutritionDataBrowserModal
         isOpen={showNutritionDataBrowser}
         onClose={() => setShowNutritionDataBrowser(false)}
+        language={profile.language}
       />
       <BugTrackerModal
         isOpen={showBugTracker}
@@ -4543,6 +4544,7 @@ export default function Header({
       <NutritionDataBrowserModal
         isOpen={showNutritionDataBrowser}
         onClose={() => setShowNutritionDataBrowser(false)}
+        language={profile.language}
       />
 
       <BugTrackerModal

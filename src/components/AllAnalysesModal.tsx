@@ -594,6 +594,7 @@ export function AllAnalysesModal({
         <ZoomableImage
           src={previewImage.src}
           foodName={previewImage.foodName}
+          language={profile.language}
           onClose={() => setPreviewImage(null)}
         />
       )}

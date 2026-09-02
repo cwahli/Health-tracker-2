@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../../utils/i18n';
 
 export interface FilterPillItem<T extends string = string> {
   id: T;
@@ -19,6 +20,7 @@ export interface FilterPillsProps<T extends string = string> {
   pillClassName?: string;
   size?: 'xs' | 'sm' | 'md';
   ariaLabel?: string;
+  language?: string;
 }
 
 export function FilterPills<T extends string = string>({
@@ -29,8 +31,10 @@ export function FilterPills<T extends string = string>({
   containerClassName = '',
   pillClassName = '',
   size = 'sm',
-  ariaLabel = 'Filter options',
+  ariaLabel,
+  language,
 }: FilterPillsProps<T>) {
+  const resolvedAriaLabel = ariaLabel || t(language, 'filterOptions');
   const sizeClasses = {
     xs: 'px-2.5 py-1 text-[11px]',
     sm: 'px-3 py-1.5 text-xs',
@@ -40,7 +44,7 @@ export function FilterPills<T extends string = string>({
   return (
     <div
       role="tablist"
-      aria-label={ariaLabel}
+      aria-label={resolvedAriaLabel}
       className={`flex items-center gap-1 p-1 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs ${containerClassName}`}
     >
       {items.map((item) => {

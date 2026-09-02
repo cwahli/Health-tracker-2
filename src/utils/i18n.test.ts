@@ -113,4 +113,14 @@ describe('display chrome helpers', () => {
     expect(interpolate(translations.id.overWeeklyAmount, { amount: '4', unit: 'g', target: '20' })).toContain('4');
     expect(interpolate(translations.en.stepsProgress, { actual: 1000, target: 3000 })).toBe('1000 / 3000 steps');
   });
+
+  it('interpolates insights extraction blurbs in Indonesian', () => {
+    expect(interpolate(translations.id.biomarkersExtractedStatus, { count: 7, recWord: translations.id.recWordNeedReview })).toContain('7');
+    expect(interpolate(translations.id.extractionApprovedApplied, { count: 12 })).toContain('12');
+  });
+
+  it('translates BMI normal-weight and medium risk chrome', () => {
+    expect(displayStatusLabel('id', 'Normal weight')).toBe(translations.id.bmiNormalWeight);
+    expect(displayStatusLabel('id', 'medium')).toBe(translations.id.statusMedium);
+  });
 });

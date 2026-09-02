@@ -100,6 +100,8 @@ const STATUS_LABEL_KEYS: Record<string, TranslationKey> = {
   'low': 'low',
   'optimal': 'statusOptimal',
   'normal': 'normal',
+  'normal weight': 'bmiNormalWeight',
+  'medium': 'statusMedium',
   'high': 'high',
   'elevated': 'statusElevated',
   'critical': 'critical',

@@ -39,6 +39,7 @@ const getBmiPercentage = (bmi: number, normalMax: number, overweightMax: number)
 
 import { getAgentCalibration } from '../utils/agentCalibration';
 import { translations } from '../utils/translations';
+import { displayEthnicityOption, displayStatusLabel, interpolate } from '../utils/i18n';
 
 export default function BiomarkerCalculationPanel({
   biomarkerKey,
@@ -52,6 +53,7 @@ export default function BiomarkerCalculationPanel({
   language,
 }: BiomarkerCalculationPanelProps & { baseDescription?: string }) {
   const t = translations[language || "en"] || translations.en;
+  const lang = language || "en";
   const isBmi = biomarkerKey === 'bmi';
 
   // Profile fields with defaults
@@ -88,6 +90,7 @@ export default function BiomarkerCalculationPanel({
   const roundedBmi = Math.round(currentBmiNum * 10) / 10;
 
   const isMale = gender.startsWith('m');
+  const genderDisplay = isMale ? t.male : (gender.startsWith('f') || gender.startsWith('w')) ? t.female : (profile.gender || t.notSet);
   const mifflinResult = calculateMifflinStJeor(profile, { weight, height, age, gender, ethnicity });
   const { normalMax, overweightMax, targetBmi, targetWeight, estimatedCalories, bmr: bmrBase } = mifflinResult.values as any;
   const limits = { underweight: 18.5, normal: normalMax, overweight: overweightMax, obese: overweightMax };
@@ -97,11 +100,16 @@ export default function BiomarkerCalculationPanel({
 
   const handleApply = () => {
     if (onApplyRecommendations) {
-      const descriptionExplain = mifflinResult.recommendations?.descriptionExplain || `Target calories calculated using Mifflin-St Jeor equation: BMR (${bmrBase} kcal) * 1.375 (light activity multiplier) - 300 kcal calorie deficit to support ideal target weight of ${targetWeight} kg (BMI: ${targetBmi} ${isAsianUser ? 'Asian standard' : 'Global standard'}).`;
+      const descriptionExplain = interpolate(t.targetCaloriesMifflinExplain, {
+        bmr: bmrBase,
+        targetWeight,
+        targetBmi,
+        standard: isAsianUser ? t.asianStandard : t.globalStandard,
+      });
       onApplyRecommendations({
         targetCalories: estimatedCalories,
         targetWeight,
-        addedBenefit: mifflinResult.recommendations?.activityAdvice || 'Walking 30 min a day',
+        addedBenefit: t.walking30MinADay,
         descriptionExplain,
       });
       setApplied(true);
@@ -129,7 +137,7 @@ export default function BiomarkerCalculationPanel({
                 {agentCalibration.rangeBrackets && agentCalibration.rangeBrackets.length > 0 && (
                   <div className="space-y-1.5 pt-1">
                     <span className="block text-[8.5px] text-slate-400 font-bold uppercase tracking-wider">
-                      Reference Range Thresholds{agentCalibration.specificRiskContext?.toLowerCase().includes('asian') ? ' (adjusted for asian population)' : ''}
+                      {t.referenceRangeThresholds}{agentCalibration.specificRiskContext?.toLowerCase().includes('asian') ? t.adjustedForAsianPopulation : ''}
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       {agentCalibration.rangeBrackets.map((br: any, brIdx: number) => {
@@ -162,7 +170,7 @@ export default function BiomarkerCalculationPanel({
                 )}
                 
                 <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-normal pt-1 border-t border-theme-border/60">
-                  * Uses demographically adjusted reference ranges calibrated specifically for your profile. Active Calibrated Range: <strong className="font-mono text-slate-700 dark:text-slate-350">{agentCalibration.profileAdjustedNormalRange}</strong>.
+                  {interpolate(t.usesCalibratedRanges, { range: agentCalibration.profileAdjustedNormalRange })}
                 </p>
               </div>
             ) : (
@@ -174,7 +182,7 @@ export default function BiomarkerCalculationPanel({
                   type="text" 
                   value={editRangeValue} 
                   onChange={(e) => setEditRangeValue(e.target.value)}
-                  placeholder="e.g. 20 - 41 mmol/mol"
+                  placeholder={t.rangeExamplePlaceholder}
                   className="form-input-styled text-xs font-mono py-1 px-2 w-48"
                 />
                 <button 
@@ -186,19 +194,19 @@ export default function BiomarkerCalculationPanel({
                   }}
                   className="px-2 py-1 bg-indigo-600 text-white rounded text-[10px] font-bold"
                 >
-                  Save
+                  {t.save}
                 </button>
                 <button 
                   onClick={() => setIsEditingRange(false)}
                   className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-theme-text-secondary rounded text-[10px] font-bold"
                 >
-                  Cancel
+                  {t.cancel}
                 </button>
               </div>
             ) : (
               <p className="flex items-center gap-2 mt-1">
-                Custom normal range: 
-                <strong className="text-theme-neutral font-mono">{profile.customBiomarkers?.[biomarkerKey]?.normalRange || 'Standard reference'}</strong>
+                {t.customNormalRangeLabel}{' '}
+                <strong className="text-theme-neutral font-mono">{profile.customBiomarkers?.[biomarkerKey]?.normalRange || t.standardReference}</strong>
                 {onEditBiomarkerDef && (
                   <button 
                     onClick={() => {
@@ -207,7 +215,7 @@ export default function BiomarkerCalculationPanel({
                     }}
                     className="text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-[10px] font-bold uppercase tracking-wider"
                   >
-                    Edit
+                    {t.edit}
                   </button>
                 )}
               </p>
@@ -218,7 +226,7 @@ export default function BiomarkerCalculationPanel({
 
         {isDetailsExpanded && (
           <div className="mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-800/50 space-y-2 text-[11px] text-theme-text-secondary font-mono leading-relaxed">
-            <p>• Biomarker Key: <span className="text-theme-neutral">{biomarkerKey}</span></p>
+            <p>{t.biomarkerKeyLabel} <span className="text-theme-neutral">{biomarkerKey}</span></p>
             {agentCalibration ? (
               <>
                 <p>{t.calibrationSourceAI}</p>
@@ -228,7 +236,7 @@ export default function BiomarkerCalculationPanel({
               <>
                 <p>{t.ruleStrategyStandard}</p>
                 <p className="text-[10px] text-slate-400 font-sans leading-normal pt-1">
-                  * Clinical researchers can customize these diagnostic thresholds using medical history notes to adapt to patient profiles.
+                  {t.clinicalResearchersCustomize}
                 </p>
               </>
             )}
@@ -251,13 +259,13 @@ export default function BiomarkerCalculationPanel({
             &lt;18.5
           </div>
           <div className="h-full bg-emerald-500/85 flex items-center justify-center border-l border-white/20" style={{ width: isAsianUser ? '20%' : '30%' }}>
-            Normal
+            {t.normal}
           </div>
           <div className="h-full bg-amber-500/85 flex items-center justify-center border-l border-white/20" style={{ width: isAsianUser ? '15%' : '15%' }}>
-            Overweight
+            {t.statusOverweight}
           </div>
           <div className="h-full bg-rose-500/85 flex items-center justify-center border-l border-white/20 rounded-r-full" style={{ width: isAsianUser ? '30%' : '20%' }}>
-            Obese
+            {t.statusObese}
           </div>
 
           {/* Current Weight dotted line and label (left aligned if on right, right aligned if on left) */}
@@ -266,7 +274,7 @@ export default function BiomarkerCalculationPanel({
             style={{ left: `${currentPercent}%` }}
           >
             <div className={`absolute top-0 bg-indigo-600/95 dark:bg-indigo-500/95 text-white text-[8px] px-1.5 py-0.5 rounded-md font-sans font-black whitespace-nowrap shadow-md ${targetIsLeft ? 'left-1.5 text-left' : 'right-1.5 text-right'}`}>
-              current weight: {weight} kg
+              {interpolate(t.currentWeightKg, { weight })}
             </div>
           </div>
 
@@ -276,7 +284,7 @@ export default function BiomarkerCalculationPanel({
             style={{ left: `${targetPercent}%` }}
           >
             <div className={`absolute top-0 bg-indigo-600/95 dark:bg-indigo-500/95 text-white text-[8px] px-1.5 py-0.5 rounded-md font-sans font-black whitespace-nowrap shadow-md ${targetIsLeft ? 'right-1.5 text-right' : 'left-1.5 text-left'}`}>
-              Target weight: {targetWeight} kg
+              {interpolate(t.targetWeightKg, { weight: targetWeight })}
             </div>
           </div>
         </div>
@@ -288,7 +296,7 @@ export default function BiomarkerCalculationPanel({
           onClick={() => setIsDetailsExpanded(!isDetailsExpanded)}
           className="text-indigo-600 dark:text-indigo-400 hover:underline text-[11px] flex items-center gap-0.5 font-semibold cursor-pointer"
         >
-          <span>{isDetailsExpanded ? 'Hide Logic & Details' : 'Show Logic & Details'}</span>
+          <span>{isDetailsExpanded ? t.hideLogicDetails : t.showLogicDetails}</span>
           {isDetailsExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
       </div>
@@ -313,25 +321,25 @@ export default function BiomarkerCalculationPanel({
           {/* Warning Banner if there is a pending profile update */}
           {hasPendingAlert && (
             <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-150 dark:border-amber-900/30 rounded-xl text-xs font-semibold text-amber-800 dark:text-amber-400">
-              Your profile has changed (such as weight updates). Would you like to apply the newly calculated recommendations, or keep your targets as is?
+              {t.profileChangedApplyRecs}
             </div>
           )}
 
           <div className="p-3.5 bg-white dark:bg-slate-950 border border-slate-150 dark:border-slate-800 rounded-xl space-y-3 text-xs font-mono leading-relaxed text-theme-text-secondary">
             <div className="space-y-1.5 border-b border-theme-border pb-2.5">
               <span className="block text-[10px] font-extrabold uppercase text-slate-400 font-sans">{t.plainLogicCalculations}</span>
-              <p>• Matched Profile Ethnicity: <span className="text-slate-800 dark:text-white font-semibold">{profile.ethnicity || 'Not set'}</span></p>
-              <p>• Matched Profile Gender: <span className="text-slate-800 dark:text-white font-semibold">{profile.gender || 'Not set'}</span></p>
-              <p>• Active Diagnostic Standard: <span className="text-slate-800 dark:text-white font-semibold">{isAsianUser ? `Asian Bracket (Normal: 18.5 - ${normalMax}, Overweight: up to ${overweightMax})` : `Global Bracket (Normal: 18.5 - ${normalMax}, Overweight: up to ${overweightMax})`}</span></p>
-              <p>• Flagged Status for Profile: <span className="text-amber-600 font-bold">{diagnostic}</span></p>
+              <p>{t.matchedProfileEthnicity} <span className="text-slate-800 dark:text-white font-semibold">{displayEthnicityOption(lang, profile.ethnicity) || t.notSet}</span></p>
+              <p>{t.matchedProfileGender} <span className="text-slate-800 dark:text-white font-semibold">{genderDisplay}</span></p>
+              <p>{t.activeDiagnosticStandard} <span className="text-slate-800 dark:text-white font-semibold">{interpolate(isAsianUser ? t.asianBracketDetail : t.globalBracketDetail, { normalMax, overweightMax })}</span></p>
+              <p>{t.flaggedStatusProfile} <span className="text-amber-600 font-bold">{diagnostic === 'Missing height or weight in profile' ? t.missingHeightWeightProfile : displayStatusLabel(lang, diagnostic)}</span></p>
             </div>
 
             <div className="space-y-1">
               <span className="block text-[10px] font-extrabold uppercase text-slate-400 font-sans">{t.mifflinStJeorDetails}</span>
-              <p>• BMR = (10 * {weight}kg) + (6.25 * {height}cm) - (5 * {age}yo) {isMale ? '+ 5' : '- 161'}</p>
-              <p>• Base BMR = {bmrBase} kcal / day</p>
-              <p>• Active TDEE = {Math.round(bmrBase * 1.375)} kcal / day (Multiplier 1.375)</p>
-              <p>• Deficit Calorie Intake Target = Active TDEE - 300 kcal (Deficit) = <strong className="text-indigo-600 dark:text-indigo-400">{estimatedCalories} kcal / day</strong></p>
+              <p>{interpolate(t.bmrEquationLine, { weight, height, age, yo: t.yearsOldAbbrev, genderAdj: isMale ? '+ 5' : '- 161' })}</p>
+              <p>{interpolate(t.baseBmrLine, { bmr: bmrBase })}</p>
+              <p>{interpolate(t.activeTdeeLine, { tdee: Math.round(bmrBase * 1.375) })}</p>
+              <p>{t.deficitCalorieTarget} <strong className="text-indigo-600 dark:text-indigo-400">{estimatedCalories} kcal / day</strong></p>
             </div>
           </div>
 
@@ -343,7 +351,7 @@ export default function BiomarkerCalculationPanel({
                 onClick={handleKeepAsIs}
                 className="py-2.5 rounded-xl text-xs font-bold bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-750 text-theme-neutral transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
-                Keep as is
+                {t.keepAsIs}
               </button>
               <button
                 type="button"
@@ -377,7 +385,7 @@ export default function BiomarkerCalculationPanel({
           {/* Benefits checklist notes */}
           <div className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center justify-center gap-1 pt-1 font-sans">
             <Shield className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Clicking Apply adds <strong>"Walking 30 min a day"</strong> to daily benefit checklist.</span>
+            <span>{interpolate(t.applyAddsWalking, { activity: `"${t.walking30MinADay}"` })}</span>
           </div>
         </div>
       )}

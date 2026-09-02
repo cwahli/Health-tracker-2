@@ -22,6 +22,7 @@ import {
 import { parseMenuNutritionPaste, parseMenuNutritionBulkPaste, cleanDescriptionText } from '../utils/parseMenuNutritionPaste';
 import { ComprehensiveNutrientsTable } from './chat-cards/ComprehensiveNutrientsTable';
 import { defaultServingSizeFor } from '../utils/servingSizeDefaults';
+import { translations } from '../utils/translations';
 
 const renderNutrientSummaryLine = (nutrients: any) => {
   if (!nutrients || typeof nutrients !== 'object') return 'kcal —';
@@ -137,6 +138,7 @@ type TabId = 'chains' | 'base' | 'unfetched' | 'catalog';
 interface NutritionDataBrowserModalProps {
   isOpen: boolean;
   onClose: () => void;
+  language?: string;
 }
 
 /** Force readable copy: white on dark */
@@ -149,7 +151,8 @@ const card =
   'border border-white/15 rounded-xl p-3 space-y-1.5 bg-slate-800/90 text-white';
 const inputCls = 'bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-indigo-500';
 
-export default function NutritionDataBrowserModal({ isOpen, onClose }: NutritionDataBrowserModalProps) {
+export default function NutritionDataBrowserModal({ isOpen, onClose, language }: NutritionDataBrowserModalProps) {
+  const t = translations[language || 'en'] || translations.en;
   const [tab, setTab] = useState<TabId>('chains');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -959,9 +962,9 @@ export default function NutritionDataBrowserModal({ isOpen, onClose }: Nutrition
                         <div className="flex items-center justify-between gap-2 min-w-0">
                           <span className="font-bold text-white flex items-center gap-1 truncate min-w-0">
                             {item._source === 'supabase' ? (
-                              <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" aria-label="Synced to Supabase" />
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" aria-label={t.syncedToSupabase} />
                             ) : (
-                              <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" aria-label="Not synced — local only" />
+                              <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" aria-label={t.notSyncedLocalOnly} />
                             )}
                             <span className="truncate group-hover:text-indigo-300 transition-colors">{item.dish_name}</span>
                             <span className="text-white/40 font-normal">· {item.chain_key}</span>
@@ -990,7 +993,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose }: Nutrition
                                 });
                               }}
                               className="p-1 rounded hover:bg-white/10 text-white/80 hover:text-white disabled:opacity-30"
-                              title="Edit item"
+                              title={t.editItem}
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
@@ -1402,9 +1405,9 @@ export default function NutritionDataBrowserModal({ isOpen, onClose }: Nutrition
                                 <div className="flex items-center justify-between gap-2 min-w-0">
                                   <span className="font-bold text-white flex items-center gap-1 truncate min-w-0">
                                     {item._source === 'supabase' ? (
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" aria-label="Synced to Supabase" />
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" aria-label={t.syncedToSupabase} />
                                     ) : (
-                                      <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" aria-label="Not synced — local only, may be lost" />
+                                      <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" aria-label={t.notSyncedLocalMayBeLost} />
                                     )}
                                     <span className="truncate">{item.dish_name}</span>
                                   </span>
@@ -1432,7 +1435,7 @@ export default function NutritionDataBrowserModal({ isOpen, onClose }: Nutrition
                                         });
                                       }}
                                       className="p-1 rounded hover:bg-white/10 text-white/80 hover:text-white disabled:opacity-30"
-                                      title="Edit item"
+                                      title={t.editItem}
                                     >
                                       <Pencil className="w-3.5 h-3.5" />
                                     </button>
