@@ -163,10 +163,10 @@ export default function HomeTab({
   const [isFoodIdeaChatOpen, setIsFoodIdeaChatOpen] = React.useState(false);
   const [isDailyRecommendationChatOpen, setIsDailyRecommendationChatOpen] = React.useState(false);
 
-  const [jobs, setJobs] = React.useState(() => JobStore.getAllJobs().filter(j => j.kind === 'food_log' || j.kind === 'food_compare' || j.kind === 'medical'));
+  const [jobs, setJobs] = React.useState(() => JobStore.getAllJobs().filter(j => j.kind === 'food_log' || j.kind === 'food_compare' || j.kind === 'medical' || j.kind === 'front_desk'));
   React.useEffect(() => {
     const unsubscribe = JobStore.subscribe(() => {
-      setJobs(JobStore.getAllJobs().filter(j => j.kind === 'food_log' || j.kind === 'food_compare' || j.kind === 'medical'));
+      setJobs(JobStore.getAllJobs().filter(j => j.kind === 'food_log' || j.kind === 'food_compare' || j.kind === 'medical' || j.kind === 'front_desk'));
     });
     return () => { unsubscribe(); };
   }, []);

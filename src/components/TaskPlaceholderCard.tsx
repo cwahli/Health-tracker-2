@@ -392,6 +392,8 @@ export default function TaskPlaceholderCard({
           ? 'Meal Comparison Request'
           : job.kind === 'medical'
           ? 'Medical Data Request'
+          : job.kind === 'front_desk'
+          ? 'Health Preparation Chat'
           : (job.status === 'succeeded' ? 'Meal Analysis Complete' : job.status === 'failed' ? 'Analysis failed' : 'Analyzing Meal Photo...')));
 
   return (
@@ -461,7 +463,7 @@ export default function TaskPlaceholderCard({
                   </p>
                 ) : !job.statusMessage ? (
                   <p className="text-xs text-theme-text-secondary font-medium">
-                    {job.kind === 'medical' ? 'Analyzing medical data...' : 'Analyzing your meal...'}
+                    {job.kind === 'medical' ? 'Analyzing medical data...' : job.kind === 'front_desk' ? 'Chatting...' : 'Analyzing your meal...'}
                   </p>
                 ) : null}
                 {isJobSafeToLeave(job) ? (

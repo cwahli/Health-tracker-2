@@ -1273,7 +1273,7 @@ ${logsText}`);
   }, [jobId, isOpen, type, messages.length]);
   // Load messages from background job if jobId is set, or auto-bind to latest unlogged food job if opened on another device
   useEffect(() => {
-    if ((type !== 'food' && type !== 'medical') || !isOpen) return;
+    if ((type !== 'food' && type !== 'medical' && type !== 'front_desk') || !isOpen) return;
     let targetJobId = jobId;
     if (!targetJobId && type === 'food') {
       const isLocalSessionEmpty = messages.length <= 1 || (messages.length === 1 && messages[0].id?.startsWith('welcome_'));
@@ -2594,8 +2594,15 @@ ${logsText}`);
             m.id === inPlaceMsgId ? inPlaceLive : m
           );
           setMessages(msgsWithInPlace, false);
+          if (currentJobId) {
+            JobStore.updateJob(currentJobId, { messages: msgsWithInPlace });
+          }
         } else {
-          setMessages([...existingMsgs, userMsg, liveMsg], false);
+          const newMsgs = [...existingMsgs, userMsg, liveMsg];
+          setMessages(newMsgs, false);
+          if (currentJobId) {
+            JobStore.updateJob(currentJobId, { messages: newMsgs });
+          }
         }
         // Clear input compose dock
         setInputText('');
@@ -3086,7 +3093,13 @@ ${logsText}`);
         }
       }
     };
-    setMessages(prev => [...prev, userMsg, liveMsg]);
+    setMessages(prev => {
+      const newMsgs = [...prev, userMsg, liveMsg];
+      if (jobId) {
+        JobStore.updateJob(jobId, { messages: newMsgs, status: 'running' });
+      }
+      return newMsgs;
+    });
     if (typeof overrideText !== 'string') {
       setInputText('');
     }
@@ -4263,9 +4276,17 @@ ${logsText}`);
           if (migratedAssistantMsg.data) {
             migratedAssistantMsg.data.pendingFoodLog = null;
           }
-          return [...newPrev, migratedAssistantMsg];
+          const finalArray = [...newPrev, migratedAssistantMsg];
+          if (jobId) {
+            JobStore.updateJob(jobId, { messages: finalArray, status: 'succeeded' });
+          }
+          return finalArray;
         }
-        return [...filteredPrev, migratedAssistantMsg];
+        const finalArray = [...filteredPrev, migratedAssistantMsg];
+        if (jobId) {
+          JobStore.updateJob(jobId, { messages: finalArray, status: 'succeeded' });
+        }
+        return finalArray;
       });
 
       if (isAgent('front_desk') && (resData.status === 'ready_for_handoff' || resData.handoffPayload)) {

@@ -101,10 +101,10 @@ export default function MedicalHistoryTab({
 }: MedicalHistoryTabProps) {
   const t = translations[profile.language] || translations.en;
   
-  const [jobs, setJobs] = useState(() => JobStore.getAllJobs().filter(j => j.kind === 'medical' && !isJobBlank(j)));
+  const [jobs, setJobs] = useState(() => JobStore.getAllJobs().filter(j => (j.kind === 'medical' || j.kind === 'front_desk') && !isJobBlank(j)));
   useEffect(() => {
     const unsubscribe = JobStore.subscribe(() => {
-      setJobs(JobStore.getAllJobs().filter(j => j.kind === 'medical' && !isJobBlank(j)));
+      setJobs(JobStore.getAllJobs().filter(j => (j.kind === 'medical' || j.kind === 'front_desk') && !isJobBlank(j)));
     });
     return () => { unsubscribe(); };
   }, []);
