@@ -4267,14 +4267,36 @@ ${logsText}`);
       } else if (isQuota) {
         displayErr = "The AI agent hit a rate limit (quota exceeded). Please wait a few moments or switch to a different model from the top-left model selector.";
       }
+      const errorReqId = currentReqId || `err_${Date.now()}`;
+      const effectiveAgentType = agentType || type || 'front_desk';
+      try {
+        saveAgentRequestLog({
+          id: errorReqId,
+          timestamp: new Date().toISOString(),
+          summary: `Error (${effectiveAgentType}): ${displayErr.slice(0, 35)}`,
+          logs: [
+            { timestamp: new Date().toISOString(), message: `[${effectiveAgentType}] Execution error: ${displayErr}` },
+            ...(err.message ? [{ timestamp: new Date().toISOString(), message: `[error_message] ${err.message}` }] : []),
+            ...(err.stack ? [{ timestamp: new Date().toISOString(), message: `[error_stack] ${err.stack}` }] : [])
+          ]
+        });
+      } catch (logSaveErr) {
+        console.warn('Failed to save error request log:', logSaveErr);
+      }
+
       if (isAgent('food')) {
         const errMsg: any = {
           id: `msg_err_${Date.now()}`,
           role: 'assistant',
           content: displayErr,
           timestamp: new Date().toISOString(),
+          isError: true,
           agentUnavailable: true,
+          agentType: effectiveAgentType || 'food',
           data: {
+            requestId: errorReqId,
+            error: err.message || displayErr,
+            originalError: err.stack || err.message,
             userSelectedMode: mappedMode,
             ...(err.scoutItems && err.scoutItems.length > 0 ? {
               scoutItems: err.scoutItems,
@@ -4292,14 +4314,24 @@ ${logsText}`);
           }, 800);
         }
       } else {
+        const errMsg: any = {
+          id: `msg_err_${Date.now()}`,
+          role: 'assistant',
+          content: displayErr,
+          timestamp: new Date().toISOString(),
+          isError: true,
+          agentUnavailable: true,
+          agentType: effectiveAgentType,
+          data: {
+            requestId: errorReqId,
+            error: err.message || displayErr,
+            originalError: err.stack || err.message,
+            userSelectedMode: mappedMode
+          }
+        };
         setMessages(prev => [
           ...prev.filter(m => !m.isLive && !m.isError && !m.agentUnavailable && !/Failed to process your request|Analysis failed|Vision Scout Failed|Gemini unavailable|rate limit|quota exceeded|quota \(\d+\)|503|429|Service Unavailable/i.test(m.content || '')),
-          {
-            id: `msg_err_${Date.now()}`,
-            role: 'assistant',
-            content: displayErr,
-            timestamp: new Date().toISOString()
-          }
+          errMsg
         ]);
       }
     } finally {
@@ -5509,19 +5541,28 @@ ${logsText}`);
                                 <ChevronDown className="w-3 h-3" />
                               </button>
                             )}
-                            {(debugUrl || targetJobId) && (
+                            {(debugUrl || targetJobId || isErrorMsg) && (
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (targetJobId) {
-                                    handleDownloadDebug(targetJobId, msg);
-                                  }
+                                  handleDownloadDebug(targetJobId || msg.data?.requestId || msg.id || 'error_turn', msg);
                                 }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
-                                title="Download complete raw debug logs from Cloudflare R2"
+                                title="Download complete raw debug logs and diagnostics"
                               >
                                 <Download className="w-3.5 h-3.5 text-indigo-500" />
                                 <span>Download Debug Logs</span>
+                              </button>
+                            )}
+                            {isErrorMsg && (
+                              <button
+                                type="button"
+                                onClick={() => setShowFullScreenDebugLogs(true)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/40 transition-all cursor-pointer"
+                                title="View full system and agent logs in unified modal"
+                              >
+                                <Terminal className="w-3.5 h-3.5" />
+                                <span>View Diagnostic Logs</span>
                               </button>
                             )}
                           </div>

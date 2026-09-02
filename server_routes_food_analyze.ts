@@ -250,7 +250,11 @@ foodAnalyzeRouter.post("/api/gemini/front-desk", async (req, res) => {
     });
   } catch (err: any) {
     console.error("Front Desk Error:", err);
-    res.status(500).json({ error: err.message });
+    addDebugLog(`[FrontDesk-Error] Receptionist execution failed: ${err.message || String(err)}`);
+    if (err.stack) {
+      addDebugLog(`[FrontDesk-Error-Stack] ${err.stack}`);
+    }
+    res.status(500).json({ error: err.message, stack: err.stack, agentType: 'front_desk' });
   }
 });
 

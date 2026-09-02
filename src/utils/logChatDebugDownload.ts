@@ -174,18 +174,35 @@ export async function downloadJobDebugReport(args: {
     }
   }
 
+  if (!finalBackendLogs || finalBackendLogs.length < 50) {
+    try {
+      const res = await fetch(`/api/gemini/debug-logs?sessionId=${encodeURIComponent(w.__activeSessionId || 'global')}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.logs) && data.logs.length > 0) {
+          const fetchedLogs = data.logs.map((l: any) => typeof l === 'string' ? l : (l.timestamp ? `[${l.timestamp}] ${l.message}` : (l.message || JSON.stringify(l)))).join('\n');
+          if (fetchedLogs.trim()) {
+            finalBackendLogs = (finalBackendLogs ? finalBackendLogs + '\n\n' : '') + fetchedLogs;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[LogChat] Failed fetching live backend debug logs:', e);
+    }
+  }
+
   if (format === 'markdown') {
     const mdContent = buildDebugMarkdownReport({
       jobId: resolvedJobId,
-      status: job?.status,
+      status: job?.status || (msg?.isError || msg?.agentUnavailable ? 'failed' : 'unknown'),
       mode: job?.result?.mode,
-      agentType: job?.result?.agentType || msg?.data?.agentResult?.agentType || msg?.data?.agentType,
+      agentType: job?.result?.agentType || msg?.data?.agentResult?.agentType || msg?.data?.agentType || msg?.agentType || 'front_desk',
       message: job?.result?.message || msg?.content,
       backendLogs: finalBackendLogs,
       pendingFoodLog,
       scoutItems,
       receiptTable,
-      error: job?.error?.message,
+      error: job?.error?.message || msg?.data?.error || msg?.data?.originalError || (msg?.isError || msg?.agentUnavailable ? msg?.content : undefined),
       lastUserAction: lastUserAction || job?.result?.lastUserAction || w.__lastUserAction,
       sessionEvents: getSessionLog(resolvedJobId).length > 0
         ? getSessionLog(resolvedJobId)

@@ -6304,43 +6304,7 @@ export default function App() {
           </button>
         </div>
       )}
-      {profile?.userType === 'Demo' && (
-        <div className="bg-gradient-to-r from-slate-100 to-indigo-50/50 dark:from-slate-900/90 dark:to-indigo-950/20 border-b border-theme-border py-2 px-4 flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left z-20 shadow-sm shrink-0">
-          <div className="flex flex-wrap items-center gap-2 justify-center md:justify-start">
-            <span className="inline-block px-2 py-0.5 text-[9px] font-bold text-indigo-600 bg-indigo-100/60 dark:text-indigo-400 dark:bg-indigo-950/40 rounded-full uppercase tracking-wider">
-              Demo Sandbox
-            </span>
-            <p className="text-xs font-bold text-theme-neutral">
-              Active Profile: <span className="text-indigo-600 dark:text-indigo-400">{profile.nickname}</span> {profile.age ? `(${profile.age}-yo)` : '(Empty)'}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-1.5">
-            <span className="text-[10px] text-theme-text-secondary font-semibold">Switch Demo Profile:</span>
-            {[
-              { id: 'empty', label: '1. Initial Start (Empty)', desc: 'Completely empty sandbox account' },
-              { id: 'average', label: '2. Average Person (Standard)', desc: 'Alex (28-yo, lipids/vitamin D deficiency)' },
-              { id: 'complex', label: '3. 50-yo with Chronic Issues', desc: 'Arthur (52-yo, Type 2 diabetes & Hypertension)' }
-            ].map((d) => {
-              const currentDemoType = localStorage.getItem('demo_profile_type') || 'average';
-              const isActive = currentDemoType === d.id;
-              return (
-                <button
-                  key={d.id}
-                  onClick={() => handleSwitchDemoProfile(d.id as DemoProfileType)}
-                  title={d.desc}
-                  className={`px-3 py-1 text-[10px] font-semibold rounded-lg transition-all shadow-sm shrink-0 cursor-pointer ${
-                    isActive 
-                      ? 'bg-indigo-600 text-white font-bold scale-[1.02]' 
-                      : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-theme-border text-slate-700 dark:text-slate-200'
-                  }`}
-                >
-                  {d.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+
       {syncState === 'conflict' && conflictData && (
         <div className="bg-indigo-600 text-white py-2 px-4 shadow-md transition-all duration-300 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left z-20 border-b border-indigo-700/30">
           <div className="flex items-center gap-3">
