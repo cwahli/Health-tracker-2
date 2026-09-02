@@ -2,7 +2,7 @@ import { trackApiCall } from './apiTracker';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { collection, getDocs, getDoc, doc, writeBatch } from 'firebase/firestore';
-import { db, auth, googleProvider } from '../firebase';
+import { db, auth } from '../firebase';
 import { ZipWriter, BlobWriter, BlobReader, TextReader, ZipReader, TextWriter } from '@zip.js/zip.js';
 import { sanitizeForFirestore } from './firestoreUtils';
 
@@ -17,6 +17,7 @@ export const getGoogleAccessToken = async (forcePrompt = false): Promise<string>
     return cachedGoogleToken;
   }
 
+  const googleProvider = new GoogleAuthProvider();
   // Request required scopes
   googleProvider.addScope('https://www.googleapis.com/auth/drive');
   googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets');

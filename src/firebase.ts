@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, FacebookAuthProvider, TwitterAuthProvider, signInWithPopup, signOut as fbSignOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getAuth, signOut as fbSignOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, initializeFirestore, memoryLocalCache, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -13,15 +13,8 @@ export const db = initializeFirestore(app, {
 setLogLevel('silent');
 
 export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
-export const facebookProvider = new FacebookAuthProvider();
-export const twitterProvider = new TwitterAuthProvider();
 
 setPersistence(auth, browserLocalPersistence).catch(console.error);
-
-googleProvider.setCustomParameters({
-  prompt: 'select_account'
-});
 
 export enum OperationType {
   CREATE = 'create',

@@ -3,8 +3,6 @@ import { UserProfile } from '../types';
 import { translations } from '../utils/translations';
 import { Activity, Mail, AlertCircle, RefreshCw, KeyRound, CheckCircle } from 'lucide-react';
 import { supabase, isSupabaseConfigured, getAuthRedirectTo, cleanupAuthUrlParams } from '../utils/supabaseClient';
-import { auth, googleProvider, facebookProvider, twitterProvider } from '../firebase';
-import { signInWithPopup } from 'firebase/auth';
 
 interface AuthScreenProps {
   onLogin: (profile: UserProfile) => void;
@@ -593,60 +591,6 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
     setErrorMsg('');
     setStatus('sending');
 
-    if (provider === 'Google') {
-      try {
-        const result = await signInWithPopup(auth, googleProvider);
-        if (result?.user) {
-          handleSuccessfulLogin(result.user);
-          setStatus('idle');
-          return;
-        }
-      } catch (fbErr: any) {
-        console.warn('Firebase Google Auth error:', fbErr);
-        if (fbErr.code === 'auth/popup-closed-by-user' || fbErr.code === 'auth/cancelled-popup-request') {
-          setStatus('idle');
-          return;
-        }
-        setErrorMsg(fbErr.message || 'Failed to sign in with Google');
-        setStatus('idle');
-        return;
-      }
-    }
-
-    if (provider === 'Facebook') {
-      try {
-        const result = await signInWithPopup(auth, facebookProvider);
-        if (result?.user) {
-          handleSuccessfulLogin(result.user);
-          setStatus('idle');
-          return;
-        }
-      } catch (fbErr: any) {
-        console.warn('Firebase Facebook Auth error:', fbErr);
-        if (fbErr.code === 'auth/popup-closed-by-user' || fbErr.code === 'auth/cancelled-popup-request') {
-          setStatus('idle');
-          return;
-        }
-      }
-    }
-
-    if (provider === 'X') {
-      try {
-        const result = await signInWithPopup(auth, twitterProvider);
-        if (result?.user) {
-          handleSuccessfulLogin(result.user);
-          setStatus('idle');
-          return;
-        }
-      } catch (fbErr: any) {
-        console.warn('Firebase Twitter Auth error:', fbErr);
-        if (fbErr.code === 'auth/popup-closed-by-user' || fbErr.code === 'auth/cancelled-popup-request') {
-          setStatus('idle');
-          return;
-        }
-      }
-    }
-
     if (isSupabaseConfigured) {
       try {
         const providerMap: Record<string, string> = { Google: 'google', X: 'twitter', Facebook: 'facebook' };
@@ -654,7 +598,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: sbProvider as any,
           options: {
-            redirectTo: getAuthRedirectTo()
+            redirectTo: window.location.origin
           }
         });
         if (error) throw error;
