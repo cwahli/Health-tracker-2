@@ -1,6 +1,6 @@
 # AI Handover (WIP board)
 
-**Updated:** 2026-09-01  
+**Updated:** 2026-09-02  
 **Execute:** `plan/ROADMAP.md` only. There is no `studio/` folder. Root `ROADMAP.md` / `ACTIVE_STATUS.md` are stubs.  
 **Laws:** `AGENTS.md` · `docs/agent/` (read is free; named gates only).
 
@@ -13,6 +13,7 @@
 | **Q-7** | Policy in QUALITY.md §1.4. | Fold `golden_g1` later. Do not `npm test`. |
 | **Track B** | B0 Apply smoke & Modal wiring COMPLETE. | B8.2/8.3 or next open Track B. |
 | **F-1/F-2 USDA** | Parked. | Do not reopen. |
+| **Track L** Localisation | EN/ID chrome shipped. Leftover (meal-log proof, seeded content, catalogs, admin chrome, more languages) parked. | Do not start until the human reopens Track L. |
 
 **Do not:** USDA · critic LLM · LLM `calories` on create schema · `npm test` as COMPLETE · ask to approve **reads** · edit files when the user asked a question · recreate `studio/`.
 

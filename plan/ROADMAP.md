@@ -13,7 +13,7 @@
 Laws: `docs/agent/domains/{biomarkers,food-calc,sync}.md`  
 WIP: `AI_HANDOVER.md` (header only) · Completed: `archive/` · `plan/archive/`
 
-**As of 2026-09-01.** F-8.1–F-8.9 and F-9 PR1–PR4 bulk are in tree. F-10.1 expand gate is in tree. Production create still Scout→Dietitian. Do not reopen USDA/curator or Q-1.
+**As of 2026-09-02.** F-8.1–F-8.9 and F-9 PR1–PR4 bulk are in tree. F-10.1 expand gate is in tree. Production create still Scout→Dietitian. EN/ID chrome shipped; leftover localisation is **Track L (parked)**. Do not reopen USDA/curator or Q-1.
 
 ---
 
@@ -99,8 +99,9 @@ Locked converts never change: `1.293` / `1.411` / `3.362` / `79.56` / `13.68`.
 | Biomarkers | **B0** Apply smoke, then B2 leftover hygiene, then real G-B2. Chat UX = fill-template (one agent + TS batch), not 10 personas. |
 | Site is slow | **R-8** measure (Q-1 is already green). Then R-9 defer. Not FoodCard/App splits first |
 | Quota / egress spike | **R-1** measure, then only the matching R-id |
+| Localisation leftover | **Parked.** Track L below. Do not start until the human reopens it. |
 
-Do **not** start: USDA/FDC workstream, curator rebuild, B7.4/B7.5, Track R D1, god-file rewrite to look done, more NHS aliases before G-B2 lexer + G-B4 green, a Commercial Cooking Critic LLM, production wiring of fill-template before C1–C7 green.  
+Do **not** start: USDA/FDC workstream, curator rebuild, B7.4/B7.5, Track R D1, god-file rewrite to look done, more NHS aliases before G-B2 lexer + G-B4 green, a Commercial Cooking Critic LLM, production wiring of fill-template before C1–C7 green, **Track L** (parked).  
 Do **not** add a sixth plan file. F-10 lives here + [FOOD.md](./FOOD.md) Process.
 
 ---
@@ -330,6 +331,29 @@ Do **not** open Q-4 or a Dictionary/FoodCard/`App.tsx` breakup unless Q-1 is red
 | Do not | `App.tsx` poller; `npm test`; critic LLM; USDA; invent a pack file | Mix F-10 into an open F-9.5 edit |
 
 ---
+
+## Track L — Localisation (parked)
+
+**Parked 2026-09-02.** Human said park remaining localisation. Do **not** start L-* while Current work is F-10, or until the human reopens this track.
+
+**Architecture:** `src/utils/translations.ts` (`en` source of truth, `id` key-parity) · `src/utils/i18n.ts` (`t()`, English fallback, `withAgentLanguage` / `withScoutLanguage`) · named gates `src/utils/i18n.test.ts` and `agents/dietitianInstructions.i18n.test.ts`.
+**Scope:** English + Indonesian only. `fr` / `zh` stay incomplete and fall back to English. More languages later.
+
+### Landed — do not redo
+
+EN/ID UI chrome for login, home, chat, food history, insights, trends/health, profile menu; status badges; nutrient display names; health category headings; BMI/BMR panel; Insights step blurbs; job Ready/Active/Queued chip; chat empty-state; demo/credits; skip-dietitian verdict/advice templates; agent instructions follow `profile.language`. Food identity names stay untranslated. Native file-picker chrome cannot be translated.
+
+### Still to do (parked)
+
+- **L-1 Live Indonesian meal-log proof.** One demo meal on id UI: verdict/advice is Indonesian, not English Supports Sustained Metabolic Energy. Food names may stay English. Do not treat old saved analyses as a chrome bug.
+- **L-2 Seeded / demo content.** Clinical-action item texts, daily-benefit item texts, Insights literature card titles/blurbs, outlier preciseCause sentences follow profile.language or are stored per-locale. Do not translate food names or expand fr/zh.
+- **L-3 Catalog display names.** Biomarker catalog names and medical-condition names have en+id display labels; stored keys stay English. Do not change catalog keys or enums.
+- **L-4 Admin / leftover widgets.** Theme editor titles; nutrition-browser admin; audit FilterPills labels; ImageSlider / BatchNavigator / AgentResultTable Previous; AppModal callers pass language. Patient chrome already shipped.
+- **L-5 More languages.** New locale in SUPPORTED_LOCALES; pack in translations.ts; add to REQUIRED_COMPLETE_LOCALES only when that language is a milestone. Do not make fr/zh complete as a side quest.
+
+**Out of Track L:** dish/brand names, JSON keys / nutrient codes / biomarker keys, native Choose File, old saved meal-analysis sentences (re-log to refresh).
+
+**Gates when reopened:** named i18n vitest only (i18n.test.ts and dietitianInstructions.i18n.test.ts).
 
 ## Gates (named rows, not a pile)
 
