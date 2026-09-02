@@ -6723,7 +6723,7 @@ export default function App() {
       {/* Slide-over interactive dialogs */}
       
       {(() => {
-        const handleOpenAgentFromFrontDesk = (agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | null) => {
+        const handleOpenAgentFromFrontDesk = (agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'medical' | null) => {
           setIsFrontDeskOpen(false);
           setActiveAgentType(resolveAgentDestination(agentType) as any);
           setPrefillMessage(null);

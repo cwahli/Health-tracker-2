@@ -417,9 +417,9 @@ interface LogChatProps {
   report?: any;
   actions?: any[];
   googleSteps?: number | null;
-  agentType?: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'biomarker_review' | null;
+  agentType?: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'biomarker_review' | 'medical' | null;
   reviewBiomarkerKey?: string;
-  onOpenAgentFromFrontDesk?: (agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | null) => void;
+  onOpenAgentFromFrontDesk?: (agentType: 'agent1' | 'agent2' | 'agent3' | 'agent4' | 'agent5' | 'agent7' | 'data_review' | 'health_baseline' | 'medical' | null) => void;
   biomarkerHistory?: any[];
   onAgentFinish?: (agentType: string, agentResult: any, extraActions?: any) => Promise<void>;
   onAgentAnalysisSaved?: (agentType: string, agentResult: any, existingId?: string) => Promise<string>;
@@ -5892,24 +5892,10 @@ ${logsText}`);
                   </button>
                   <button
                     type="button"
-                    onClick={() => onOpenAgentFromFrontDesk?.(null)}
+                    onClick={() => onOpenAgentFromFrontDesk?.('medical')}
                     className="whitespace-nowrap px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-theme-neutral text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
-                    <span>➕ Add health data</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenAgentFromFrontDesk?.('data_review')}
-                    className="whitespace-nowrap px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-theme-neutral text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span>🩺 Review biomarkers</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenAgentFromFrontDesk?.('agent1')}
-                    className="whitespace-nowrap px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-theme-neutral text-xs font-bold rounded-full transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span>📋 Clinical review</span>
+                    <span>➕ Add medical data</span>
                   </button>
                   <button
                     type="button"
