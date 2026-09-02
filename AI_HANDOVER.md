@@ -8,7 +8,7 @@
 
 | Track | State | Next |
 |-------|--------|------|
-| **F-10** Meal Agent | F-10.2 finished. F-10.1–F-10.5 & F-10.7 shipped. | F-10.6 (Grok constants) / F-10.8 Soak (Grok reviews). |
+| **F-10** Meal Agent | F-10.2 verified (`calculateDerivedNutrients` + Atwater law). F-10.1–F-10.5 & F-10.7 shipped. | F-10.6 (Grok constants) / F-10.8 Soak (Grok reviews). |
 | **F-9.5** | PR1–PR4 bulk shipped. App poller still `updateJob`. | Grok only. |
 | **Q-7** | Policy in QUALITY.md §1.4. | Fold `golden_g1` later. Do not `npm test`. |
 | **Track B** | Ingest code in tree; v1 not shipped. | B0 Apply smoke. Fill-template C1–C7 before modal wiring. |

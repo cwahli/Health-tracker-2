@@ -4,95 +4,70 @@ import { parseLabelCalories } from "./server_budget_reconcile";
 import { isStandaloneCondimentPacket, reconcileContainerVolumeBudget } from "./server_dish_classify";
 import { computeSolubleFibre } from "./server_derivation";
 export const ScoutNutrientsSchema = z.object({
-  calories: z.number().nullable().optional(),
-  protein: z.number().nullable().optional(),
-  totalFat: z.number().nullable().optional(),
-  saturatedFat: z.number().nullable().optional(),
-  transFat: z.number().nullable().optional(),
-  addedSugar: z.number().nullable().optional(),
-  totalSugar: z.number().nullable().optional(),
-  totalFibre: z.number().nullable().optional(),
-  sodium: z.number().nullable().optional(),
-  carbohydrates: z.number().nullable().optional(),
-  potassium: z.number().nullable().optional(),
-  omega3: z.number().nullable().optional(),
-  calcium: z.number().nullable().optional(),
-  iron: z.number().nullable().optional(),
-  magnesium: z.number().nullable().optional(),
-  vitaminD: z.number().nullable().optional(),
+  calories: z.number().nullable().optional(), protein: z.number().nullable().optional(),
+  totalFat: z.number().nullable().optional(), saturatedFat: z.number().nullable().optional(),
+  transFat: z.number().nullable().optional(), addedSugar: z.number().nullable().optional(),
+  totalSugar: z.number().nullable().optional(), totalFibre: z.number().nullable().optional(),
+  sodium: z.number().nullable().optional(), carbohydrates: z.number().nullable().optional(),
+  potassium: z.number().nullable().optional(), omega3: z.number().nullable().optional(),
+  calcium: z.number().nullable().optional(), iron: z.number().nullable().optional(),
+  magnesium: z.number().nullable().optional(), vitaminD: z.number().nullable().optional(),
 }).passthrough();
 export const ScoutFoodSchema = z.object({
-  foodName: z.string().nullable().optional(),
-  genericEnglishName: z.string().nullable().optional(),
+  foodName: z.string().nullable().optional(), genericEnglishName: z.string().nullable().optional(),
   packageLabelText: z.string().nullable().optional(),
   weightGrams: z.number().finite().nonnegative().nullable().optional(),
   packGrams: z.number().finite().nonnegative().nullable().optional(),
   sourceImageIndex: z.number().nullable().optional(),
   rawNutritionLabel: z.record(z.string(), z.any()).nullable().optional(),
   nutrients: z.object({
-    protein: z.number().nullable().optional(),
-    saturatedFat: z.number().nullable().optional(),
-    addedSugar: z.number().nullable().optional(),
-    totalFibre: z.number().nullable().optional(),
-    sodium: z.number().nullable().optional(),
-    carbohydrates: z.number().nullable().optional(),
+    protein: z.number().nullable().optional(), saturatedFat: z.number().nullable().optional(),
+    addedSugar: z.number().nullable().optional(), totalFibre: z.number().nullable().optional(),
+    sodium: z.number().nullable().optional(), carbohydrates: z.number().nullable().optional(),
   }).passthrough().nullable().optional(),
 }).passthrough();
 export const ScoutDishSchema = z.object({
-  dishName: z.string().nullable().optional(),
-  genericEnglishName: z.string().nullable().optional(),
-  chainName: z.string().nullable().optional(),
-  packageLabelText: z.string().nullable().optional(),
+  dishName: z.string().nullable().optional(), genericEnglishName: z.string().nullable().optional(),
+  chainName: z.string().nullable().optional(), packageLabelText: z.string().nullable().optional(),
   estimatedWeightGrams: z.number().finite().nonnegative().nullable().optional(),
   packGrams: z.number().finite().nonnegative().nullable().optional(),
-  cookingMethod: z.string().nullable().optional(),
-  sourceImageIndex: z.number().nullable().optional(),
+  cookingMethod: z.string().nullable().optional(), sourceImageIndex: z.number().nullable().optional(),
   boundingBox2D: z.array(z.number()).nullable().optional(),
   isStandaloneCondimentPacket: z.boolean().nullable().optional(),
   foods: z.array(ScoutFoodSchema).nullable().optional(),
   dishNutrients: z.object({
-    saturatedFat: z.number().nullable().optional(),
-    totalFat: z.number().nullable().optional(),
-    totalSugar: z.number().nullable().optional(),
-    potassium: z.number().nullable().optional(),
-    omega3: z.number().nullable().optional(),
-    calcium: z.number().nullable().optional(),
-    iron: z.number().nullable().optional(),
-    magnesium: z.number().nullable().optional(),
+    saturatedFat: z.number().nullable().optional(), totalFat: z.number().nullable().optional(),
+    totalSugar: z.number().nullable().optional(), potassium: z.number().nullable().optional(),
+    omega3: z.number().nullable().optional(), calcium: z.number().nullable().optional(),
+    iron: z.number().nullable().optional(), magnesium: z.number().nullable().optional(),
     vitaminD: z.number().nullable().optional(),
   }).passthrough().nullable().optional(),
 }).passthrough();
 export const ScoutItemComponentSchema = z.object({
-  name: z.string().nullable().optional(),
-  searchQuery: z.string().nullable().optional(),
+  name: z.string().nullable().optional(), searchQuery: z.string().nullable().optional(),
   weightGrams: z.number().finite().nonnegative().nullable().optional(),
   packGrams: z.number().finite().nonnegative().nullable().optional(),
   volumePercentage: z.number().finite().positive().nullable().optional(),
   visualSheen: z.number().min(0.0).max(1.0).nullable().optional(),
   visualCoating: z.number().min(0.0).max(1.0).nullable().optional(),
-  pieceCount: z.number().nullable().optional(),
-  suggestedFdcId: z.string().nullable().optional(),
+  pieceCount: z.number().nullable().optional(), suggestedFdcId: z.string().nullable().optional(),
   rawNutritionLabel: z.record(z.string(), z.any()).nullable().optional(),
   nutrients: z.record(z.string(), z.any()).nullable().optional(),
   calories: z.number().nullable().optional(),
 });
 export const ScoutItemSchema = z.object({
-  originalName: z.string().nullable().optional(),
-  genericEnglishName: z.string().nullable().optional(),
-  keyword: z.string().nullable().optional(),
-  itemConfidence: z.string().nullable().optional(),
+  originalName: z.string().nullable().optional(), genericEnglishName: z.string().nullable().optional(),
+  keyword: z.string().nullable().optional(), itemConfidence: z.string().nullable().optional(),
   weightGrams: z.number().finite().nonnegative().nullable().optional(),
   packGrams: z.number().finite().nonnegative().nullable().optional(),
   estimatedWeightGrams: z.number().finite().nonnegative().nullable().optional(),
   nutrientBasisWeight: z.number().finite().nonnegative().nullable().optional(),
-  portionRatio: z.number().nullable().optional(),
-  portionAccepted: z.boolean().nullable().optional(),
+  portionRatio: z.number().nullable().optional(), portionAccepted: z.boolean().nullable().optional(),
   portionDescription: z.string().nullable().optional(),
   /** Soft visual calorie estimate for the WHOLE item portion (legacy mirror of nutrients.calories). */
   estimatedCalories: z.number().finite().nonnegative().nullable().optional(),
   isStandaloneCondimentPacket: z.boolean().nullable().optional(),
-  cookingMethod: z.string().nullable().optional(),
-  ingredients: z.array(z.string()).nullable().optional(),
+  cookingMethod: z.string().nullable().optional(), ingredients: z.array(z.string()).nullable().optional(),
   chainName: z.string().nullable().optional(),
   rawNutritionLabel: z.record(z.string(), z.any()).nullable().optional(),
   nutrients: ScoutNutrientsSchema.nullable().optional(),
@@ -176,42 +151,8 @@ export const scoutSystemInstruction = `- HIERARCHY: Group distinct physical plat
 
 === REQUIRED OUTPUT JSON SCHEMA ===
 Output exactly ONE JSON object matching this schema:
-{
-  "_internalReasoning": "string (<15 words)",
-  "contentType": "visual | menu_or_poster | label | text",
-  "diningEnvironment": "home_cooked | casual_restaurant | fast_food_chain | fine_dining | airline | unknown",
-  "verdict": {
-    "label": "Supports Gut Health with Added Sugar",
-    "level": "neutral"
-  },
-  "clinicalAdvice": "Personalized clinical guidance regarding glycemic, protein, and micronutrient balance.",
-  "dishes": [
-    {
-      "dishName": "Vegetable and Beef Hotpot",
-      "genericEnglishName": "beef and vegetable stew",
-      "chainName": null,
-      "estimatedWeightGrams": 650,
-      "packGrams": 650,
-      "cookingMethod": "raw | baked | grilled | boiled | steamed | deep_fried | pan_fried | stir_fried",
-      "boundingBox2D": [300, 200, 850, 900],
-      "sourceImageIndex": 1,
-      "isStandaloneCondimentPacket": false,
-      "foods": [
-        {
-          "foodName": "Beef Blade",
-          "genericEnglishName": "beef",
-          "packageLabelText": "BEEF BLADE - Berat 0.110",
-          "weightGrams": 110,
-          "packGrams": 110,
-          "sourceImageIndex": 0,
-          "rawNutritionLabel": null,
-          "nutrients": { "protein": 24.0, "saturatedFat": 2.5, "addedSugar": 0, "totalFibre": 0, "sodium": 65, "carbohydrates": 0 }
-        }
-      ],
-      "dishNutrients": { "saturatedFat": 5.8, "totalFat": 18.2, "totalSugar": 5.0, "potassium": 1450, "omega3": 0.15, "calcium": 190, "iron": 5.5, "magnesium": 120, "vitaminD": 0 }
-    }
-  ]
-}`;
+{"_internalReasoning": "string (<15 words)", "contentType": "visual | menu_or_poster | label | text", "diningEnvironment": "home_cooked | casual_restaurant | fast_food_chain | fine_dining | airline | unknown", "verdict": {"label": "Supports Gut Health with Added Sugar", "level": "neutral"}, "clinicalAdvice": "Personalized clinical guidance regarding glycemic, protein, and micronutrient balance.", "dishes": [{"dishName": "Vegetable and Beef Hotpot", "genericEnglishName": "beef and vegetable stew", "chainName": null, "estimatedWeightGrams": 650, "packGrams": 650, "cookingMethod": "raw | baked | grilled | boiled | steamed | deep_fried | pan_fried | stir_fried", "boundingBox2D": [300, 200, 850, 900], "sourceImageIndex": 1, "isStandaloneCondimentPacket": false, "foods": [{"foodName": "Beef Blade", "genericEnglishName": "beef", "packageLabelText": "BEEF BLADE - Berat 0.110", "weightGrams": 110, "packGrams": 110, "sourceImageIndex": 0, "rawNutritionLabel": null, "nutrients": {"protein": 24.0, "saturatedFat": 2.5, "addedSugar": 0, "totalFibre": 0, "sodium": 65, "carbohydrates": 0}}], "dishNutrients": {"saturatedFat": 5.8, "totalFat": 18.2, "totalSugar": 5.0, "potassium": 1450, "omega3": 0.15, "calcium": 190, "iron": 5.5, "magnesium": 120, "vitaminD": 0}}]}
+`;
 function validateOrFallback<T>(
   schema: z.ZodType<T>,
   parsed: any,
