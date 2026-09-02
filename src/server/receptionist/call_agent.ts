@@ -11,11 +11,11 @@ export const userProfileSchema = {
   type: Type.OBJECT,
   properties: {
     name: { type: Type.STRING, nullable: true },
-    age: { type: Type.NUMBER, nullable: true },
+    age: { type: Type.INTEGER, nullable: true },
     gender: { type: Type.STRING, nullable: true },
     ethnicity: { type: Type.STRING, nullable: true },
     bloodType: { type: Type.STRING, nullable: true },
-    heightCm: { type: Type.NUMBER, nullable: true },
+    heightCm: { type: Type.INTEGER, nullable: true },
     weightKg: { type: Type.NUMBER, nullable: true },
     activityLevel: { type: Type.STRING, nullable: true },
     medicalHistory: {
@@ -295,6 +295,21 @@ export function formatReceptionistInput(input: ReceptionistInputPayload): string
   return parts.join("\n");
 }
 
+/** Repair model JSON that emits runaway decimals (e.g. 74.0000... x thousands) which JSON.parse cannot load. */
+export function sanitizeReceptionistJson(raw: string): string {
+  if (!raw) return "{}";
+  let s = raw.length > 200_000 ? raw.slice(0, 200_000) : raw;
+  s = s.replace(/-?\d+\.\d{6,}/g, (m) => {
+    const n = Number(m);
+    return Number.isFinite(n) ? String(Math.round(n * 1000) / 1000) : "null";
+  });
+  s = s.replace(/-?\d{12,}/g, (m) => {
+    const n = Number(m);
+    return Number.isFinite(n) ? String(n) : "null";
+  });
+  return s;
+}
+
 export async function callReceptionistAgent(
   ai: GoogleGenAI,
   payload: ReceptionistInputPayload,
@@ -311,33 +326,38 @@ export async function callReceptionistAgent(
       responseMimeType: "application/json",
       responseSchema: receptionistOutputSchema,
       temperature: 0.1,
+      maxOutputTokens: 2048,
     },
   });
 
   const durationMs = Date.now() - started;
-  const rawText = response.text || "{}";
+  const rawText = sanitizeReceptionistJson(response.text || "{}");
   let output: ReceptionistOutput;
 
   try {
     output = JSON.parse(rawText);
   } catch (err) {
-    console.error("Failed to parse receptionist JSON:", rawText, err);
+    const head = rawText.slice(0, 240).replace(/\s+/g, " ");
+    console.error("Failed to parse receptionist JSON:", err instanceof Error ? err.message : err, "rawLen=", rawText.length, "head=", head);
+    const msg = String(payload.currentUserMessage || "").toLowerCase();
+    const wantsWeight = /lose weight|loose weight|weight loss/.test(msg);
     output = {
-      intent: "general_inquiry",
-      targetAgent: "general_receptionist",
+      intent: wantsWeight ? "weight_loss" : "general_inquiry",
+      targetAgent: wantsWeight ? "health_coach" : "general_receptionist",
       status: "needs_info",
-      missingFields: [],
+      missingFields: wantsWeight ? ["gender", "age", "height", "weight", "medical_history"] : [],
       collectedData: {},
       memory: {
-        goalSummary: "Inquiry received",
+        goalSummary: wantsWeight ? "User wants to lose weight." : "Inquiry received",
         userProfileSnapshot: payload.existingUserProfile || {},
         preferencesAndConstraints: {},
         conversationState: "onboarding_gather_info",
-        pendingItems: [],
+        pendingItems: wantsWeight ? ["gender", "age", "height", "weight"] : [],
         keyInsights: [],
       },
-      userResponse:
-        "Hello! I am your Health Preparation Specialist. How can I help you today?",
+      userResponse: wantsWeight
+        ? "I can help you lose weight safely. To build a calorie plan I need your gender, age, height, current weight, activity level, and any medical conditions."
+        : "Hello! I am your Health Preparation Specialist. How can I help you today?",
       isDisambiguationRequired: false,
       disambiguationContext: null,
       uiForm: null,
