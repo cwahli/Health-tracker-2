@@ -644,12 +644,23 @@ export async function upsertJobToSupabase(
       }
     }
 
-    // 3. Firebase Firestore mirror (guarantees cross-network sync between mobile & desktop)
-    if (effectiveUserId && effectiveUserId !== 'anonymous' && db) {
+    // 3. Firebase Firestore mirror — LAST-RESORT FALLBACK ONLY.
+    // Only attempt this if both the backend push (Step 1) and the direct
+    // Supabase client fallback (Step 2) failed to save the job. When either
+    // already succeeded, writing to Firestore here is redundant and only
+    // burns free-tier Firestore quota, so we skip it.
+    if (!serverUpsertSuccess && effectiveUserId && effectiveUserId !== 'anonymous' && db) {
+      const diag4FsStart = Date.now();
+      console.log(`[DIAG4] upsertJobToSupabase: Step 1/2 failed, attempting Firestore mirror for job ${job.id}`);
       try {
         const cleanPayload = sanitizeForFirestore(payload);
-        await setDoc(doc(db, 'users', effectiveUserId, 'inbox_jobs', payload.id), cleanPayload, { merge: true });
+        await Promise.race([
+          setDoc(doc(db, 'users', effectiveUserId, 'inbox_jobs', payload.id), cleanPayload, { merge: true }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore mirror write timed out after 8000ms')), 8000))
+        ]);
+        console.log(`[DIAG4] upsertJobToSupabase: Firestore mirror for job ${job.id} finished in ${Date.now() - diag4FsStart}ms`);
       } catch (fsErr) {
+        console.debug(`[DIAG4] upsertJobToSupabase: Firestore mirror for job ${job.id} failed/timed out after ${Date.now() - diag4FsStart}ms:`, fsErr);
         console.debug('[SupabaseJobSync] Firestore inbox_jobs write skipped/failed:', fsErr);
       }
     }
