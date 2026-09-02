@@ -5487,6 +5487,14 @@ ${logsText}`);
                   const isLastFoodMsg = lastFoodMsg && msg.id === lastFoodMsg.id;
                   const isAss = msg.role === 'assistant';
                   if (isAss) {
+                    const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                    if (prevMsg && prevMsg.role === 'user') {
+                      const prevFormatted = formatMessageContent(prevMsg.content, prevMsg);
+                      const prevHasImages = prevMsg.imageUrl || (prevMsg.imageUrls && prevMsg.imageUrls.length > 0);
+                      if ((!prevFormatted || !prevFormatted.trim()) && !prevHasImages) {
+                        return null;
+                      }
+                    }
                   return (
                 <div
                   key={msg.id ? `${msg.id}_${idx}` : idx}
@@ -5776,6 +5784,11 @@ ${logsText}`);
             }
             else {
               if (msg.content === 'Surprise me') return null;
+              const formattedUserText = formatMessageContent(msg.content, msg);
+              const hasUserImages = msg.imageUrl || (msg.imageUrls && msg.imageUrls.length > 0);
+              if ((!formattedUserText || !formattedUserText.trim()) && !hasUserImages) {
+                return null;
+              }
               return (
                 <div
                   key={msg.id ? `${msg.id}_${idx}` : idx}
@@ -5814,11 +5827,9 @@ ${logsText}`);
                           </div>
                           {String(msg.content).split('\n\nCould you please')[1] ? 'Could you please' + String(msg.content).split('\n\nCould you please')[1] : ''}
                         </div>
-                      ) : (() => {
-                        const formatted = formatMessageContent(msg.content, msg);
-                        if (!formatted || !formatted.trim()) return null;
-                        return <p className="whitespace-pre-line break-words">{formatted}</p>;
-                      })()}
+                      ) : (
+                        <p className="whitespace-pre-line break-words">{formattedUserText}</p>
+                      )}
                     </div>
                   </div>
                 </div>

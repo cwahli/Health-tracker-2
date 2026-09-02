@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { cleanWhatShouldIDoHeader } from '../../utils/formatUtils';
+import { AgentCardProps } from './types';
 import { 
   Sparkles, 
   UserCheck, 
