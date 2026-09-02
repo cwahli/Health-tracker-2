@@ -1,35 +1,96 @@
 {
-  "systemInstruction": [
-    "You are an expert clinical laboratory AI reviewing a patient's biomarker panel.",
-    "Patient Profile: 43-year-old Chinese male, Unit Preference: SI.",
-    "",
-    "For each biomarker:",
-    "- id: matching id",
-    "- medicalInsight: Provide a concise, clinically accurate insight for every row (including optimal/normal baseline markers). Cite trend if previous values exist. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).",
-    "- customRangeOverlay: If agreeing with range, return \"\". If missing thresholds or ethnic demographics, provide FULL multi-bracket range specifying the profile source and clinical names. Format MUST be \"[Profile] Clinical Name: Range; Clinical Name: Range\". Example: \"[Chinese Ethnicity] Elevated (Diabetes): >=48; Elevated: >=39; Optimal: <39\" or \"[Western Standard] High: >104; Normal: 64-104; Low: <64\". If multiple demographic profiles exist, provide all of them.",
-    "- optimalValue: If existing is accurate, return \"\". Otherwise provide 1 single ideal target value without inequalities or ranges (e.g. \"33 mmol/mol\", \"80 umol/L\", \"95 mL/min/1.73m2\"; note 60 for eGFR is naive CKD G2, correct it).",
-    "- editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise \"\".",
-    "- logs: Extract all logs with standardized \"YYYY-MM-DD\" dates, labName if mentioned (e.g. \"US lab\", \"GP Clinic\"), and comments. Convert US units to patient's unitPreference with standard clinical integer rounding (e.g. 1.1 mg/dL creatinine → 97 umol/L, not decimals like 97.24). Standardize scientific units (e.g. 10^9/L).",
-    "- DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.",
-    "- UNCATALOGED (MISS): If not in dictionary, output match=\"none\", writeTarget=\"pending\", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }. NOTE: normalRange MUST follow the same bracketed profile format with clinical names, e.g., \"[Western Standard] High: >1.4; Optimal: 0.5-1.4; Low: <0.5\".",
-    "",
-    "JSON { \"rows\": [...] }."
-  ],
-  "userPayload": {
-    "promptText": [
-      "<user_upload>",
-      "I'm a 43 year old Chinese male, 178 cm, 78 kg. Here are my results: HbA1c 5.7, LDL 130, eGFR 80, ALT 41.",
-      "</user_upload>",
-      "",
-      "Biomarkers to review (hits - in catalog):"
-    ],
-    "jsonPayload": {
-      "biomarkers": [
+  "id": "C4",
+  "dry": false,
+  "insightSize": 20,
+  "draftSize": 12,
+  "instruction": "You are an expert clinical laboratory AI reviewing a patient's biomarker panel.\nPatient Profile: 43-year-old Chinese male, Unit Preference: SI.\n\nFor each biomarker:\n- id: matching id\n- medicalInsight: Provide a concise, clinically accurate insight for every row (including optimal/normal baseline markers). Cite trend if previous values exist. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).\n- customRangeOverlay: If agreeing with range, return \"\". If missing thresholds or ethnic demographics, provide FULL multi-bracket range specifying the profile source and clinical names. Format MUST be \"[Profile] Clinical Name: Range; Clinical Name: Range\". Example: \"[Chinese Ethnicity] Elevated (Diabetes): >=48; Elevated: >=39; Optimal: <39\" or \"[Western Standard] High: >104; Normal: 64-104; Low: <64\". If multiple demographic profiles exist, provide all of them.\n- optimalValue: If existing is accurate, return \"\". Otherwise provide 1 single ideal target value without inequalities or ranges (e.g. \"33 mmol/mol\", \"80 umol/L\", \"95 mL/min/1.73m2\"; note 60 for eGFR is naive CKD G2, correct it).\n- editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise \"\".\n- logs: Extract all logs with standardized \"YYYY-MM-DD\" dates, labName if mentioned (e.g. \"US lab\", \"GP Clinic\"), and comments. Convert US units to patient's unitPreference with standard clinical integer rounding (e.g. 1.1 mg/dL creatinine → 97 umol/L, not decimals like 97.24). Standardize scientific units (e.g. 10^9/L).\n- DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.\n- UNCATALOGED (MISS): If not in dictionary, output match=\"none\", writeTarget=\"pending\", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }. NOTE: normalRange MUST follow the same bracketed profile format with clinical names, e.g., \"[Western Standard] High: >1.4; Optimal: 0.5-1.4; Low: <0.5\".\n\nJSON { \"rows\": [...] }.",
+  "turns": [
+    {
+      "turn": 1,
+      "kind": "hit",
+      "ids": [
+        "r01",
+        "r02",
+        "r03",
+        "r04"
+      ],
+      "ms": 3029,
+      "n": 4,
+      "raw": "{\n  \"rows\": [\n    {\n      \"id\": \"r01\",\n      \"medicalInsight\": \"HbA1c of 39 mmol/mol (5.7%) is at the threshold for elevated prediabetes risk according to specific ethnic criteria for Chinese adults, warranting lifestyle modifications.\",\n      \"optimalValue\": \"34 mmol/mol\",\n      \"editReason\": \"Added optimal target and highlighted Chinese-specific prediabetes risk threshold.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 39,\n          \"unit\": \"mmol/mol\",\n          \"comment\": \"Converted from user entry 5.7%\"\n        }\n      ],\n      \"customRangeOverlay\": \"[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39; [Standard] Normal: 20-41\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r02\",\n      \"medicalInsight\": \"LDL-C of 3.36 mmol/L (130 mg/dL) is elevated and increases cardiovascular risk, particularly for male adults, requiring dietary and potentially pharmacological interventions.\",\n      \"optimalValue\": \"2.0 mmol/L\",\n      \"editReason\": \"Added optimal target for cardiovascular health and accurate SI unit conversion.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 3.36,\n          \"unit\": \"mmol/L\",\n          \"comment\": \"Converted from user entry 130 mg/dL\"\n        }\n      ],\n      \"customRangeOverlay\": \"[All patients] Very High: >3.4; Elevated: 2.6-3.4; Optimal: <2.6\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r03\",\n      \"medicalInsight\": \"eGFR of 80 mL/min/1.73m2 indicates mildly decreased renal function (CKD G2 if persistent), which should be monitored alongside metabolic and cardiovascular markers.\",\n      \"optimalValue\": \"95 mL/min/1.73m2\",\n      \"editReason\": \"Corrected naive 60 mL/min/1.73m2 threshold to reflect proper optimal physiological target.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 80,\n          \"unit\": \"mL/min/1.73m2\",\n          \"comment\": null\n        }\n      ],\n      \"customRangeOverlay\": \"[Standard] Normal: >=90; Mildly Decreased: 60-89; Low: <60\",\n      \"dictionaryCorrection\": null\n    },\n    {\n      \"id\": \"r04\",\n      \"medicalInsight\": \"ALT of 41 U/L is mildly elevated above the standard upper limit of normal, suggesting possible mild hepatocellular injury or early non-alcoholic fatty liver disease (NAFLD).\",\n      \"optimalValue\": \"25 U/L\",\n      \"editReason\": \"Added optimal target and updated clinical insight for mild elevation.\",\n      \"logs\": [\n        {\n          \"date\": \"2026-06-05\",\n          \"value\": 41,\n          \"unit\": \"U/L\",\n          \"comment\": null\n        }\n      ],\n      \"customRangeOverlay\": \"[Standard] High: >40; Optimal: 10-40\",\n      \"dictionaryCorrection\": null\n    }\n  ]\n}",
+      "rows": [
+        {
+          "id": "r01",
+          "medicalInsight": "HbA1c of 39 mmol/mol (5.7%) is at the threshold for elevated prediabetes risk according to specific ethnic criteria for Chinese adults, warranting lifestyle modifications.",
+          "optimalValue": "34 mmol/mol",
+          "editReason": "Added optimal target and highlighted Chinese-specific prediabetes risk threshold.",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 39,
+              "unit": "mmol/mol",
+              "comment": "Converted from user entry 5.7%"
+            }
+          ],
+          "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39; [Standard] Normal: 20-41",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r02",
+          "medicalInsight": "LDL-C of 3.36 mmol/L (130 mg/dL) is elevated and increases cardiovascular risk, particularly for male adults, requiring dietary and potentially pharmacological interventions.",
+          "optimalValue": "2.0 mmol/L",
+          "editReason": "Added optimal target for cardiovascular health and accurate SI unit conversion.",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 3.36,
+              "unit": "mmol/L",
+              "comment": "Converted from user entry 130 mg/dL"
+            }
+          ],
+          "customRangeOverlay": "[All patients] Very High: >3.4; Elevated: 2.6-3.4; Optimal: <2.6",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r03",
+          "medicalInsight": "eGFR of 80 mL/min/1.73m2 indicates mildly decreased renal function (CKD G2 if persistent), which should be monitored alongside metabolic and cardiovascular markers.",
+          "optimalValue": "95 mL/min/1.73m2",
+          "editReason": "Corrected naive 60 mL/min/1.73m2 threshold to reflect proper optimal physiological target.",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 80,
+              "unit": "mL/min/1.73m2",
+              "comment": null
+            }
+          ],
+          "customRangeOverlay": "[Standard] Normal: >=90; Mildly Decreased: 60-89; Low: <60",
+          "dictionaryCorrection": null
+        },
+        {
+          "id": "r04",
+          "medicalInsight": "ALT of 41 U/L is mildly elevated above the standard upper limit of normal, suggesting possible mild hepatocellular injury or early non-alcoholic fatty liver disease (NAFLD).",
+          "optimalValue": "25 U/L",
+          "editReason": "Added optimal target and updated clinical insight for mild elevation.",
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 41,
+              "unit": "U/L",
+              "comment": null
+            }
+          ],
+          "customRangeOverlay": "[Standard] High: >40; Optimal: 10-40",
+          "dictionaryCorrection": null
+        }
+      ],
+      "user": "<user_upload>\nI'm a 43 year old Chinese male, 178 cm, 78 kg. Here are my results: HbA1c 5.7, LDL 130, eGFR 80, ALT 41.\n</user_upload>\n\nBiomarkers to review (hits - in catalog):\n{\n  \"biomarkers\": [\n    {\n      \"id\": \"r01\",\n      \"name\": \"HbA1c\",\n      \"value\": 39,\n      \"unit\": \"mmol/mol\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"20 - 41\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"20 - 41\",\n        \"unit\": \"mmol/mol\",\n        \"description\": \"Average blood glucose levels over the past 2-3 months.\"\n      }\n    },\n    {\n      \"id\": \"r02\",\n      \"name\": \"LDL-C\",\n      \"value\": 3.36,\n      \"unit\": \"mmol/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"< 2.6\",\n        \"unit\": \"mmol/L\",\n        \"description\": \"Low-Density Lipoprotein, the \\\"bad\\\" cholesterol driving plaque.\"\n      }\n    },\n    {\n      \"id\": \"r03\",\n      \"name\": \"eGFR\",\n      \"value\": 80,\n      \"unit\": \"mL/min/1.73m2\",\n      \"date\": \"2026-06-05\",\n      \"range\": \">= 60 mL/min/1.73m2\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"over 90\",\n        \"unit\": \"mL/min/1.73m²\",\n        \"description\": \"Estimated Glomerular Filtration Rate, showing kidney health.\"\n      }\n    },\n    {\n      \"id\": \"r04\",\n      \"name\": \"ALT (SGPT)\",\n      \"value\": 41,\n      \"unit\": \"U/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"10 - 40\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"10 - 40\",\n        \"unit\": \"U/L\",\n        \"description\": \"Alanine Aminotransferase, an enzyme found mostly in the liver.\"\n      }\n    }\n  ]\n}",
+      "payload": [
         {
           "id": "r01",
           "name": "HbA1c",
           "value": 39,
           "unit": "mmol/mol",
+          "date": "2026-06-05",
           "range": "20 - 41",
           "optimalValue": null,
           "existingInsight": null,
@@ -45,6 +106,7 @@
           "name": "LDL-C",
           "value": 3.36,
           "unit": "mmol/L",
+          "date": "2026-06-05",
           "range": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
           "optimalValue": null,
           "existingInsight": null,
@@ -60,6 +122,7 @@
           "name": "eGFR",
           "value": 80,
           "unit": "mL/min/1.73m2",
+          "date": "2026-06-05",
           "range": ">= 60 mL/min/1.73m2",
           "optimalValue": null,
           "existingInsight": null,
@@ -75,6 +138,7 @@
           "name": "ALT (SGPT)",
           "value": 41,
           "unit": "U/L",
+          "date": "2026-06-05",
           "range": "10 - 40",
           "optimalValue": null,
           "existingInsight": null,
@@ -87,74 +151,207 @@
         }
       ]
     }
-  },
-  "agentOutput": [
+  ],
+  "classified": [
     {
       "id": "r01",
-      "medicalInsight": "HbA1c of 39 mmol/mol (5.7%) places this 43-year-old Chinese male at elevated prediabetes risk according to ethnicity-specific clinical thresholds.",
-      "optimalValue": "33 mmol/mol",
-      "editReason": "Applied ethnicity-specific prediabetes threshold for Chinese patients where HbA1c >=39 indicates elevated risk.",
-      "logs": [
-        {
-          "date": "2023-10-24",
-          "value": 39,
-          "unit": "mmol/mol",
-          "comment": "Converted from 5.7%"
-        }
-      ],
-      "customRangeOverlay": "Elevated (Prediabetes): >=39; Normal: <39",
-      "dictionaryCorrection": null
+      "printed": "HbA1c",
+      "match": "key",
+      "writeTarget": "observation",
+      "key": "hba1c",
+      "status": "Elevated"
     },
     {
       "id": "r02",
-      "medicalInsight": "LDL cholesterol is 3.36 mmol/L (130 mg/dL), which is elevated and increases long-term cardiovascular risk, requiring dietary and lifestyle optimization.",
-      "optimalValue": "2.5 mmol/L",
-      "editReason": "Set optimal target below 2.6 mmol/L for cardiovascular health.",
-      "logs": [
-        {
-          "date": "2023-10-24",
-          "value": 3.36,
-          "unit": "mmol/L",
-          "comment": "Converted from 130 mg/dL"
-        }
-      ],
-      "customRangeOverlay": null,
-      "dictionaryCorrection": null
+      "printed": "LDL",
+      "match": "key",
+      "writeTarget": "observation",
+      "key": "ldl",
+      "status": "Elevated"
     },
     {
       "id": "r03",
-      "medicalInsight": "eGFR of 80 mL/min/1.73m2 reflects mild reduction but must be interpreted cautiously; 60 is naive for CKD G2 and optimal should reflect robust filtration.",
-      "optimalValue": "95 mL/min/1.73m2",
-      "editReason": "Corrected naive optimal/normal range to reflect true optimal youthful renal function.",
-      "logs": [
+      "printed": "eGFR",
+      "match": "key",
+      "writeTarget": "observation",
+      "key": "egfr",
+      "status": "Mildly Decreased (CKD G2)"
+    },
+    {
+      "id": "r04",
+      "printed": "ALT",
+      "match": "key",
+      "writeTarget": "observation",
+      "key": "alt",
+      "status": "Elevated"
+    }
+  ],
+  "templates": [
+    {
+      "id": "r01",
+      "printed": "HbA1c",
+      "match": "key",
+      "writeTarget": "observation",
+      "biomarkerName": "HbA1c",
+      "key": "hba1c",
+      "alias": [
+        "hba1cc",
+        "glycatedhaemoglobin",
+        "hemoglobin_a1c_mmol_mol",
+        "hba1c_mmol_mol",
+        "hemoglobin_a1c"
+      ],
+      "normalRange": "20 - 41",
+      "unit": "mmol/mol",
+      "description": "Average blood glucose levels over the past 2-3 months.",
+      "riskCategories": [
+        "Metabolic"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "[All patients] Elevated (Diabetes): >= 48; Elevated: >= 39; Normal: >= 20; Elevated (Diabetes): >= 6.5; Elevated: >= 5.7",
+      "printedRange": "",
+      "assignedRange": "20 - 41",
+      "optimalValue": "34 mmol/mol",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": "Added optimal target and highlighted Chinese-specific prediabetes risk threshold.",
+      "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39; [Standard] Normal: 20-41",
+      "medicalInsight": "HbA1c of 39 mmol/mol (5.7%) is at the threshold for elevated prediabetes risk according to specific ethnic criteria for Chinese adults, warranting lifestyle modifications.",
+      "historicalLogs": [
         {
-          "date": "2023-10-24",
+          "date": "2026-06-05",
+          "value": 39,
+          "unit": "mmol/mol",
+          "comment": "Converted from user entry 5.7%"
+        }
+      ],
+      "currentEvaluationStatus": "Elevated",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r02",
+      "printed": "LDL",
+      "match": "key",
+      "writeTarget": "observation",
+      "biomarkerName": "LDL-C",
+      "key": "ldl",
+      "alias": [
+        "ldlc",
+        "ldlcholesterol",
+        "calculatedldlcholesterol",
+        "calculatedldl",
+        "calculated_ldl_cholesterol_mmol_l",
+        "calculated_ldl_cholesterol"
+      ],
+      "normalRange": "< 2.6",
+      "unit": "mmol/L",
+      "description": "Low-Density Lipoprotein, the \"bad\" cholesterol driving plaque.",
+      "riskCategories": [
+        "Cardiovascular"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "[All patients] Very High: > 3.4; Elevated: > 2.6; Optimal: <= 2.6",
+      "printedRange": "",
+      "assignedRange": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
+      "optimalValue": "2.0 mmol/L",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": "Added optimal target for cardiovascular health and accurate SI unit conversion.",
+      "customRangeOverlay": "[All patients] Very High: >3.4; Elevated: 2.6-3.4; Optimal: <2.6",
+      "medicalInsight": "LDL-C of 3.36 mmol/L (130 mg/dL) is elevated and increases cardiovascular risk, particularly for male adults, requiring dietary and potentially pharmacological interventions.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 3.36,
+          "unit": "mmol/L",
+          "comment": "Converted from user entry 130 mg/dL"
+        }
+      ],
+      "currentEvaluationStatus": "Elevated",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r03",
+      "printed": "eGFR",
+      "match": "key",
+      "writeTarget": "observation",
+      "biomarkerName": "eGFR",
+      "key": "egfr",
+      "alias": [
+        "egfrmlmin173m2",
+        "egfrmlmin173",
+        "egfr_ml_min_1_73m2",
+        "egfr_mlmin173m2"
+      ],
+      "normalRange": "over 90",
+      "unit": "mL/min/1.73m²",
+      "description": "Estimated Glomerular Filtration Rate, showing kidney health.",
+      "riskCategories": [
+        "Kidney"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "[All patients] Decreased (CKD G3): < 60; Mildly Decreased (CKD G2): < 90; Optimal: >= 90",
+      "printedRange": "",
+      "assignedRange": ">= 60 mL/min/1.73m2",
+      "optimalValue": "95 mL/min/1.73m2",
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": "Corrected naive 60 mL/min/1.73m2 threshold to reflect proper optimal physiological target.",
+      "customRangeOverlay": "[Standard] Normal: >=90; Mildly Decreased: 60-89; Low: <60",
+      "medicalInsight": "eGFR of 80 mL/min/1.73m2 indicates mildly decreased renal function (CKD G2 if persistent), which should be monitored alongside metabolic and cardiovascular markers.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
           "value": 80,
           "unit": "mL/min/1.73m2",
           "comment": null
         }
       ],
-      "customRangeOverlay": null,
-      "dictionaryCorrection": null
+      "currentEvaluationStatus": "Mildly Decreased (CKD G2)",
+      "newCatalogDraft": null
     },
     {
       "id": "r04",
-      "medicalInsight": "ALT is slightly elevated at 41 U/L, suggesting mild hepatocellular stress which warrants monitoring of metabolic health and liver enzymes.",
+      "printed": "ALT",
+      "match": "key",
+      "writeTarget": "observation",
+      "biomarkerName": "ALT (SGPT)",
+      "key": "alt",
+      "alias": [
+        "sgpt",
+        "alanine_aminotransferase",
+        "serum_alt_level_u_l",
+        "serum_alt_level"
+      ],
+      "normalRange": "10 - 40",
+      "unit": "U/L",
+      "description": "Alanine Aminotransferase, an enzyme found mostly in the liver.",
+      "riskCategories": [
+        "Liver"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "",
+      "assignedRange": "10 - 40",
       "optimalValue": "25 U/L",
-      "editReason": "Set optimal ALT target within lower normal range.",
-      "logs": [
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": "Added optimal target and updated clinical insight for mild elevation.",
+      "customRangeOverlay": "[Standard] High: >40; Optimal: 10-40",
+      "medicalInsight": "ALT of 41 U/L is mildly elevated above the standard upper limit of normal, suggesting possible mild hepatocellular injury or early non-alcoholic fatty liver disease (NAFLD).",
+      "historicalLogs": [
         {
-          "date": "2023-10-24",
+          "date": "2026-06-05",
           "value": 41,
           "unit": "U/L",
           "comment": null
         }
       ],
-      "customRangeOverlay": null,
-      "dictionaryCorrection": null
+      "currentEvaluationStatus": "Elevated",
+      "newCatalogDraft": null
     }
   ],
-  "finalMergedRows": [
+  "filled": [
     {
       "id": "r01",
       "op": "add",
@@ -164,20 +361,19 @@
       "date": "2026-06-05",
       "printedRange": "",
       "assignedRange": "20 - 41",
-      "optimalValue": "33 mmol/mol",
-      "editReason": "Applied ethnicity-specific prediabetes threshold for Chinese patients where HbA1c >=39 indicates elevated risk.",
+      "optimalValue": "34 mmol/mol",
+      "editReason": "Added optimal target and highlighted Chinese-specific prediabetes risk threshold.",
       "match": "key",
       "key": "hba1c",
       "writeTarget": "observation",
-      "status": "Elevated",
-      "medicalInsight": "HbA1c of 39 mmol/mol (5.7%) places this 43-year-old Chinese male at elevated prediabetes risk according to ethnicity-specific clinical thresholds.",
-      "customRangeOverlay": "Elevated (Prediabetes): >=39; Normal: <39",
+      "medicalInsight": "HbA1c of 39 mmol/mol (5.7%) is at the threshold for elevated prediabetes risk according to specific ethnic criteria for Chinese adults, warranting lifestyle modifications.",
+      "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39; [Standard] Normal: 20-41",
       "logs": [
         {
-          "date": "2023-10-24",
+          "date": "2026-06-05",
           "value": 39,
           "unit": "mmol/mol",
-          "comment": "Converted from 5.7%"
+          "comment": "Converted from user entry 5.7%"
         }
       ],
       "newCatalogDraft": null
@@ -191,20 +387,19 @@
       "date": "2026-06-05",
       "printedRange": "",
       "assignedRange": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
-      "optimalValue": "2.5 mmol/L",
-      "editReason": "Set optimal target below 2.6 mmol/L for cardiovascular health.",
+      "optimalValue": "2.0 mmol/L",
+      "editReason": "Added optimal target for cardiovascular health and accurate SI unit conversion.",
       "match": "key",
       "key": "ldl",
       "writeTarget": "observation",
-      "status": "Elevated",
-      "medicalInsight": "LDL cholesterol is 3.36 mmol/L (130 mg/dL), which is elevated and increases long-term cardiovascular risk, requiring dietary and lifestyle optimization.",
-      "customRangeOverlay": null,
+      "medicalInsight": "LDL-C of 3.36 mmol/L (130 mg/dL) is elevated and increases cardiovascular risk, particularly for male adults, requiring dietary and potentially pharmacological interventions.",
+      "customRangeOverlay": "[All patients] Very High: >3.4; Elevated: 2.6-3.4; Optimal: <2.6",
       "logs": [
         {
-          "date": "2023-10-24",
+          "date": "2026-06-05",
           "value": 3.36,
           "unit": "mmol/L",
-          "comment": "Converted from 130 mg/dL"
+          "comment": "Converted from user entry 130 mg/dL"
         }
       ],
       "newCatalogDraft": null
@@ -219,16 +414,15 @@
       "printedRange": "",
       "assignedRange": ">= 60 mL/min/1.73m2",
       "optimalValue": "95 mL/min/1.73m2",
-      "editReason": "Corrected naive optimal/normal range to reflect true optimal youthful renal function.",
+      "editReason": "Corrected naive 60 mL/min/1.73m2 threshold to reflect proper optimal physiological target.",
       "match": "key",
       "key": "egfr",
       "writeTarget": "observation",
-      "status": "Mildly Decreased (CKD G2)",
-      "medicalInsight": "eGFR of 80 mL/min/1.73m2 reflects mild reduction but must be interpreted cautiously; 60 is naive for CKD G2 and optimal should reflect robust filtration.",
-      "customRangeOverlay": null,
+      "medicalInsight": "eGFR of 80 mL/min/1.73m2 indicates mildly decreased renal function (CKD G2 if persistent), which should be monitored alongside metabolic and cardiovascular markers.",
+      "customRangeOverlay": "[Standard] Normal: >=90; Mildly Decreased: 60-89; Low: <60",
       "logs": [
         {
-          "date": "2023-10-24",
+          "date": "2026-06-05",
           "value": 80,
           "unit": "mL/min/1.73m2",
           "comment": null
@@ -246,16 +440,15 @@
       "printedRange": "",
       "assignedRange": "10 - 40",
       "optimalValue": "25 U/L",
-      "editReason": "Set optimal ALT target within lower normal range.",
+      "editReason": "Added optimal target and updated clinical insight for mild elevation.",
       "match": "key",
       "key": "alt",
       "writeTarget": "observation",
-      "status": "Elevated",
-      "medicalInsight": "ALT is slightly elevated at 41 U/L, suggesting mild hepatocellular stress which warrants monitoring of metabolic health and liver enzymes.",
-      "customRangeOverlay": null,
+      "medicalInsight": "ALT of 41 U/L is mildly elevated above the standard upper limit of normal, suggesting possible mild hepatocellular injury or early non-alcoholic fatty liver disease (NAFLD).",
+      "customRangeOverlay": "[Standard] High: >40; Optimal: 10-40",
       "logs": [
         {
-          "date": "2023-10-24",
+          "date": "2026-06-05",
           "value": 41,
           "unit": "U/L",
           "comment": null
@@ -263,5 +456,12 @@
       ],
       "newCatalogDraft": null
     }
-  ]
+  ],
+  "score": {
+    "pass": true,
+    "fails": [],
+    "known": 4,
+    "unknown": 0,
+    "turns": 1
+  }
 }

@@ -111,7 +111,7 @@ function applyAgentRow(classified: ClassifiedRow[], row: FillRow) {
     cls.template.dictionaryCorrection = row.dictionaryCorrection;
   }
   if (row.newCatalogDraft) cls.template.newCatalogDraft = row.newCatalogDraft;
-  if (row.status) cls.template.currentEvaluationStatus = row.status;
+  
   if (row.logs && row.logs.length) cls.template.historicalLogs = row.logs;
 }
 
@@ -251,7 +251,9 @@ async function runBiomarkersCase(caseId: string): Promise<boolean> {
     filled,
     score: scored,
   };
-  const reportPath = path.join(reportDir, dry ? `${caseId}.dry.json` : `${caseId}.json`);
+  const benchmarkDir = path.join(HERE, "benchmark");
+  if (!fs.existsSync(benchmarkDir)) fs.mkdirSync(benchmarkDir, { recursive: true });
+  const reportPath = path.join(benchmarkDir, dry ? `${caseId}.dry.json` : `${caseId}.json`);
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 
   const mdPath = path.join(reportDir, dry ? `${caseId}.dry.md` : `${caseId}_live.md`);
@@ -380,7 +382,7 @@ function renderCaseMarkdown(opts: {
     const exp = expected.rows.find((r) => r.printed.toLowerCase() === f.printed.toLowerCase());
     const fail = scored.fails.filter((x) => x.id === f.id || x.printed?.toLowerCase() === f.printed.toLowerCase()).map((x) => x.check).join(", ") || "—";
     lines.push(
-      `| ${f.id} | ${f.printed} | ${f.match} | ${f.writeTarget} | ${f.status || "—"} | ${f.key || "—"} | ${f.newCatalogDraft ? f.newCatalogDraft.suggestedKey : "—"} | ${fail} |`
+      `| ${f.id} | ${f.printed} | ${f.match} | ${f.writeTarget} | — | ${f.key || "—"} | ${f.newCatalogDraft ? f.newCatalogDraft.suggestedKey : "—"} | ${fail} |`
     );
   }
   lines.push("");
@@ -399,9 +401,9 @@ export const renderC2Markdown = renderCaseMarkdown;
 async function rebuildCaseReport(caseId = "C2") {
   const casePath = path.join(HERE, `fixtures/cases/${caseId}.json`);
   const expectPath = path.join(HERE, `fixtures/cases/${caseId}.expected.json`);
-  const jsonPath = path.join(HERE, `reports/${caseId}.json`);
+  const jsonPath = path.join(HERE, `benchmark/${caseId}.json`);
   if (!fs.existsSync(jsonPath)) {
-    console.error(`No reports/${caseId}.json — run live ${caseId} first.`);
+    console.error(`No benchmark/${caseId}.json — run live ${caseId} first.`);
     process.exit(2);
   }
   const caseFile = loadJson<CaseFile>(casePath);

@@ -14,6 +14,6 @@
     { "printed": "Serum calcium", "value": 2.47, "unit": "mmol/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "serum_calcium" },
     { "printed": "Serum adjusted calcium conc", "value": 2.37, "unit": "mmol/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "adjusted_calcium" },
     { "printed": "Serum inorganic phosphate", "value": 1.12, "unit": "mmol/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "phosphate" },
-    { "printed": "Red blood cell distribut width", "value": 11.8, "unit": "%", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "rdw" }
+    { "printed": "Homocysteine", "value": 10.2, "unit": "umol/L", "key": null, "match": "none", "writeTarget": "pending", "draftSuggestedKey": "homocysteine" }
   ]
 }

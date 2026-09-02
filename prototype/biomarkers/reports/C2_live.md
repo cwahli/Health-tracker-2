@@ -17,12 +17,12 @@ Patient Profile: 43-year-old Chinese male, Unit Preference: SI.
 For each biomarker:
 - id: matching id
 - medicalInsight: Provide a concise, clinically accurate insight for every row (including optimal/normal baseline markers). Cite trend if previous values exist. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).
-- customRangeOverlay: If agreeing with range, return "". If missing ethnic thresholds (e.g. HbA1c for Chinese patients), provide FULL multi-bracket range: "Elevated (Diabetes): >=48; Elevated: >=39; Normal: >=20".
+- customRangeOverlay: If agreeing with range, return "". If missing thresholds or ethnic demographics, provide FULL multi-bracket range specifying the profile source and clinical names. Format MUST be "[Profile] Clinical Name: Range; Clinical Name: Range". Example: "[Chinese Ethnicity] Elevated (Diabetes): >=48; Elevated: >=39; Optimal: <39" or "[Western Standard] High: >104; Normal: 64-104; Low: <64". If multiple demographic profiles exist, provide all of them.
 - optimalValue: If existing is accurate, return "". Otherwise provide 1 single ideal target value without inequalities or ranges (e.g. "33 mmol/mol", "80 umol/L", "95 mL/min/1.73m2"; note 60 for eGFR is naive CKD G2, correct it).
 - editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise "".
 - logs: Extract all logs with standardized "YYYY-MM-DD" dates, labName if mentioned (e.g. "US lab", "GP Clinic"), and comments. Convert US units to patient's unitPreference with standard clinical integer rounding (e.g. 1.1 mg/dL creatinine → 97 umol/L, not decimals like 97.24). Standardize scientific units (e.g. 10^9/L).
 - DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.
-- UNCATALOGED (MISS): If not in dictionary, output match="none", writeTarget="pending", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }.
+- UNCATALOGED (MISS): If not in dictionary, output match="none", writeTarget="pending", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }. NOTE: normalRange MUST follow the same bracketed profile format with clinical names, e.g., "[Western Standard] High: >1.4; Optimal: 0.5-1.4; Low: <0.5".
 
 JSON { "rows": [...] }.
 ```
@@ -87,7 +87,7 @@ Mean corpusc. Hb. conc. (MCHC)  346 g/L
 
 ## Agent turns (full payload sent + model output)
 
-### Turn 1 (hit) — r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12, r13, r14 (14 rows, 6848ms)
+### Turn 1 (hit) — r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12, r13, r14 (14 rows, 6982ms)
 
 **User contents sent to the model** (system instruction is above; this is the user turn):
 
@@ -353,15 +353,15 @@ Biomarkers to review (hits - in catalog):
 [
   {
     "id": "r01",
-    "medicalInsight": "Your HbA1c is 40 mmol/mol, indicating an elevated prediabetes risk for a Chinese male, showing an upward trend from 39 mmol/mol on 2024-04-04.",
-    "optimalValue": "33 mmol/mol",
-    "editReason": "Correcting optimal target to standard healthy clinical threshold for Chinese ethnicity.",
+    "medicalInsight": "HbA1c is 40 mmol/mol, indicating an elevated prediabetes risk for a Chinese male (>=39 mmol/mol threshold), showing a slight upward trend from 39 mmol/mol on 2024-04-04.",
+    "optimalValue": "35 mmol/mol",
+    "editReason": "Corrected optimal target to reflect lower prediabetes risk for Chinese ethnicity.",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 40,
         "unit": "mmol/mol",
-        "comment": "Satisfactory - No Action"
+        "comment": "AlyssaFRS - Satisfactory - No Action"
       },
       {
         "date": "2024-04-04",
@@ -370,12 +370,12 @@ Biomarkers to review (hits - in catalog):
         "comment": "Annual GP checkup"
       }
     ],
-    "customRangeOverlay": "Elevated (Diabetes): >=48; Elevated: >=39; Normal: <39",
+    "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39",
     "dictionaryCorrection": null
   },
   {
     "id": "r02",
-    "medicalInsight": "Serum creatinine is 100 umol/L, stable compared to 95 umol/L on 2025-12-10 and 97 umol/L on 2024-10-15.",
+    "medicalInsight": "Serum creatinine is 100 umol/L, remaining within normal limits, comparable to previous results of 97 umol/L (1.1 mg/dL) on 2024-10-15 and 95 umol/L on 2025-12-10.",
     "optimalValue": "80 umol/L",
     "editReason": "",
     "logs": [
@@ -395,7 +395,7 @@ Biomarkers to review (hits - in catalog):
         "date": "2024-10-15",
         "value": 97,
         "unit": "umol/L",
-        "comment": "Annual routine check, US lab"
+        "comment": "US lab annual routine check"
       }
     ],
     "customRangeOverlay": "",
@@ -403,23 +403,23 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r03",
-    "medicalInsight": "Your eGFR is 80 mL/min/1.73m2, indicating normal renal function without overt CKD stage 2 categorization based on optimal filtration rate targets.",
+    "medicalInsight": "eGFR of 80 mL/min/1.73m2 indicates mild reduction below optimal filtering capacity, placing it in CKD Stage G2.",
     "optimalValue": "95 mL/min/1.73m2",
-    "editReason": "Correcting naive CKD G2 threshold of 60 to an actual optimal physiological target.",
+    "editReason": "Corrected optimalValue from naive CKD G2 threshold (60) to a true optimal healthy target.",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 80,
         "unit": "mL/min/1.73m2",
-        "comment": "eGFR calculated using the CKD-EPI (2009 without ethnicity) equation"
+        "comment": "Calculated using CKD-EPI (2009 without ethnicity) equation."
       }
     ],
-    "customRangeOverlay": "",
+    "customRangeOverlay": "[Western Standard] Normal: >=60; Low: <60",
     "dictionaryCorrection": null
   },
   {
     "id": "r04",
-    "medicalInsight": "Serum albumin is 46 g/L, slightly above the standard reference range, reflecting normal or concentrated high protein status.",
+    "medicalInsight": "Serum albumin is 46 g/L, which is slightly above the standard reference range, reflecting normal physiological protein levels.",
     "optimalValue": "43 g/L",
     "editReason": "",
     "logs": [
@@ -435,7 +435,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r05",
-    "medicalInsight": "Serum ALT is 41 U/L, showing a slight increase compared to 35 U/L on 2025-06-01.",
+    "medicalInsight": "Serum ALT is 41 U/L, showing a slight increase compared to 35 U/L on 2025-06-01, but remains within acceptable limits.",
     "optimalValue": "25 U/L",
     "editReason": "",
     "logs": [
@@ -457,7 +457,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r06",
-    "medicalInsight": "AST serum level is 27 U/L, well within the normal healthy range.",
+    "medicalInsight": "AST serum level is 27 U/L, well within the normal reference range, indicating healthy liver cell integrity.",
     "optimalValue": "22 U/L",
     "editReason": "",
     "logs": [
@@ -473,9 +473,9 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r07",
-    "medicalInsight": "Serum total protein is 81 g/L, marginally above the upper limit, likely indicating mild dehydration or normal variant.",
+    "medicalInsight": "Serum total protein is 81 g/L, marginally above the standard upper limit, warranting continued observation.",
     "optimalValue": "70 g/L",
-    "editReason": "",
+    "editReason": "Correcting dictionary error where normal range was stored as 6-8 g/L instead of 60-80 g/L.",
     "logs": [
       {
         "date": "2026-06-05",
@@ -484,17 +484,17 @@ Biomarkers to review (hits - in catalog):
         "comment": null
       }
     ],
-    "customRangeOverlay": "",
+    "customRangeOverlay": "[Standard Laboratory] High: >80; Normal: 60-80; Low: <60",
     "dictionaryCorrection": {
       "field": "normalRange",
-      "correctedValue": "60 - 80 g/L",
-      "reason": "Correcting dictionary typo showing 6-8 g/L instead of physiological 60-80 g/L."
+      "correctedValue": "60 - 80",
+      "reason": "Total protein reference range is standardly reported in g/L as 60-80, not 6-8."
     }
   },
   {
     "id": "r08",
-    "medicalInsight": "Total white cell count is 5.7 10*9/L, well within the normal immune parameter range.",
-    "optimalValue": "6.0 10*9/L",
+    "medicalInsight": "Total white cell count is 5.7 10^9/L, falling comfortably within the normal range for immune function.",
+    "optimalValue": "6.5 10^9/L",
     "editReason": "",
     "logs": [
       {
@@ -509,8 +509,8 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r09",
-    "medicalInsight": "Red blood cell count is 5.47 10*12/L, indicating normal erythropoiesis.",
-    "optimalValue": "5.00 10*12/L",
+    "medicalInsight": "Red blood cell count is 5.47 10^12/L, indicating normal erythroid mass and oxygen-carrying capacity.",
+    "optimalValue": "5.00 10^12/L",
     "editReason": "",
     "logs": [
       {
@@ -525,7 +525,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r10",
-    "medicalInsight": "Haemoglobin estimation is 166 g/L, within the normal range for an adult male.",
+    "medicalInsight": "Haemoglobin estimation is 166 g/L, which is normal and optimal for an adult male.",
     "optimalValue": "150 g/L",
     "editReason": "",
     "logs": [
@@ -541,7 +541,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r11",
-    "medicalInsight": "Haematocrit is 0.48 L/L, normal and proportionate to red cell indices.",
+    "medicalInsight": "Haematocrit is 0.48 L/L, well within the normal proportion for red blood cells in circulation.",
     "optimalValue": "0.45 L/L",
     "editReason": "",
     "logs": [
@@ -557,7 +557,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r12",
-    "medicalInsight": "Mean corpuscular volume (MCV) is 88 fL, indicating normocytic red blood cells.",
+    "medicalInsight": "Mean corpuscular volume (MCV) is 88 fL, reflecting normal normocytic red blood cell morphology.",
     "optimalValue": "90 fL",
     "editReason": "",
     "logs": [
@@ -573,7 +573,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r13",
-    "medicalInsight": "Mean corpuscular haemoglobin (MCH) is 30.3 pg, normal.",
+    "medicalInsight": "Mean corpuscular hemoglobin (MCH) is 30.3 pg, normal for hemoglobin content per red blood cell.",
     "optimalValue": "30.0 pg",
     "editReason": "",
     "logs": [
@@ -589,7 +589,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r14",
-    "medicalInsight": "Mean corpuscular Hb concentration (MCHC) is 346 g/L, completely normal.",
+    "medicalInsight": "Mean corpuscular hemoglobin concentration (MCHC) is 346 g/L, within the normal physiological range.",
     "optimalValue": "340 g/L",
     "editReason": "",
     "logs": [

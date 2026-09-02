@@ -17,12 +17,12 @@ Patient Profile: 43-year-old Chinese male, Unit Preference: SI.
 For each biomarker:
 - id: matching id
 - medicalInsight: Provide a concise, clinically accurate insight for every row (including optimal/normal baseline markers). Cite trend if previous values exist. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).
-- customRangeOverlay: If agreeing with range, return "". If missing ethnic thresholds (e.g. HbA1c for Chinese patients), provide FULL multi-bracket range: "Elevated (Diabetes): >=48; Elevated: >=39; Normal: >=20".
+- customRangeOverlay: If agreeing with range, return "". If missing thresholds or ethnic demographics, provide FULL multi-bracket range specifying the profile source and clinical names. Format MUST be "[Profile] Clinical Name: Range; Clinical Name: Range". Example: "[Chinese Ethnicity] Elevated (Diabetes): >=48; Elevated: >=39; Optimal: <39" or "[Western Standard] High: >104; Normal: 64-104; Low: <64". If multiple demographic profiles exist, provide all of them.
 - optimalValue: If existing is accurate, return "". Otherwise provide 1 single ideal target value without inequalities or ranges (e.g. "33 mmol/mol", "80 umol/L", "95 mL/min/1.73m2"; note 60 for eGFR is naive CKD G2, correct it).
 - editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise "".
 - logs: Extract all logs with standardized "YYYY-MM-DD" dates, labName if mentioned (e.g. "US lab", "GP Clinic"), and comments. Convert US units to patient's unitPreference with standard clinical integer rounding (e.g. 1.1 mg/dL creatinine → 97 umol/L, not decimals like 97.24). Standardize scientific units (e.g. 10^9/L).
 - DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.
-- UNCATALOGED (MISS): If not in dictionary, output match="none", writeTarget="pending", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }.
+- UNCATALOGED (MISS): If not in dictionary, output match="none", writeTarget="pending", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }. NOTE: normalRange MUST follow the same bracketed profile format with clinical names, e.g., "[Western Standard] High: >1.4; Optimal: 0.5-1.4; Low: <0.5".
 
 JSON { "rows": [...] }.
 ```
@@ -44,7 +44,7 @@ LDL cholesterol  4.3 mmol/L
 
 ## Agent turns (full payload sent + model output)
 
-### Turn 1 (hit) — r01, r02 (2 rows, 1722ms)
+### Turn 1 (hit) — r01, r02 (2 rows, 1809ms)
 
 **User contents sent to the model** (system instruction is above; this is the user turn):
 
@@ -98,31 +98,31 @@ Biomarkers to review (hits - in catalog):
 [
   {
     "id": "r01",
-    "medicalInsight": "For Chinese patients, an HbA1c of 40 mmol/mol indicates an elevated prediabetes risk requiring lifestyle intervention and monitoring.",
-    "optimalValue": "34 mmol/mol",
-    "editReason": "Applied ethnicity-specific prediabetes risk thresholds for Chinese individuals.",
+    "medicalInsight": "For a 43-year-old Chinese male, an HbA1c of 40 mmol/mol falls into the prediabetes risk zone, as Chinese populations show elevated cardiometabolic risk at lower glycemic thresholds (>=39 mmol/mol). Lifestyle and dietary modifications are recommended.",
+    "optimalValue": "33 mmol/mol",
+    "editReason": "",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 40,
         "unit": "mmol/mol",
-        "comment": null
+        "comment": "Initial result provided"
       }
     ],
-    "customRangeOverlay": "Elevated (Diabetes): >=48; Elevated (Prediabetes): >=39; Normal: <39",
+    "customRangeOverlay": "[Chinese Ethnicity] Elevated (Prediabetes Risk): >=39; Optimal: <39; [Standard Clinical] Normal: 20-41",
     "dictionaryCorrection": null
   },
   {
     "id": "r02",
-    "medicalInsight": "LDL-C of 4.3 mmol/L is significantly elevated, increasing cardiovascular risk and warranting clinical evaluation.",
+    "medicalInsight": "Your LDL cholesterol is elevated at 4.3 mmol/L, which increases cardiovascular risk. For optimal health, particularly with concurrent prediabetes risk, this should be reduced below 2.6 mmol/L.",
     "optimalValue": "2.0 mmol/L",
-    "editReason": "Provided optimal target for primary cardiovascular prevention.",
+    "editReason": "",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 4.3,
         "unit": "mmol/L",
-        "comment": null
+        "comment": "Initial result provided"
       }
     ],
     "customRangeOverlay": "",
@@ -135,8 +135,8 @@ Biomarkers to review (hits - in catalog):
 
 | id | printed | match | writeTarget | status | key | draft | fail |
 |---|---|---|---|---|---|---|---|
-| r01 | Haemoglobin A1c (IFCC) | alias | observation | Elevated | hba1c | — | — |
-| r02 | LDL cholesterol | alias | observation | Very High | ldl | — | — |
+| r01 | Haemoglobin A1c (IFCC) | alias | observation | — | hba1c | — | — |
+| r02 | LDL cholesterol | alias | observation | — | ldl | — | — |
 
 ## Contract checks
 

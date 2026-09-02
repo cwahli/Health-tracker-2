@@ -79,8 +79,8 @@
     },
     {
       "printed": "BUN (Blood Urea Nitrogen)",
-      "value": 13.5,
-      "unit": "mg/dL",
+      "value": 4.82,
+      "unit": "mmol/L",
       "key": "bun",
       "match": "key",
       "writeTarget": "observation"

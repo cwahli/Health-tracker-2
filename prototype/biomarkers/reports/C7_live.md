@@ -17,12 +17,12 @@ Patient Profile: 43-year-old Chinese male, Unit Preference: SI.
 For each biomarker:
 - id: matching id
 - medicalInsight: Provide a concise, clinically accurate insight for every row (including optimal/normal baseline markers). Cite trend if previous values exist. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).
-- customRangeOverlay: If agreeing with range, return "". If missing ethnic thresholds (e.g. HbA1c for Chinese patients), provide FULL multi-bracket range: "Elevated (Diabetes): >=48; Elevated: >=39; Normal: >=20".
+- customRangeOverlay: If agreeing with range, return "". If missing thresholds or ethnic demographics, provide FULL multi-bracket range specifying the profile source and clinical names. Format MUST be "[Profile] Clinical Name: Range; Clinical Name: Range". Example: "[Chinese Ethnicity] Elevated (Diabetes): >=48; Elevated: >=39; Optimal: <39" or "[Western Standard] High: >104; Normal: 64-104; Low: <64". If multiple demographic profiles exist, provide all of them.
 - optimalValue: If existing is accurate, return "". Otherwise provide 1 single ideal target value without inequalities or ranges (e.g. "33 mmol/mol", "80 umol/L", "95 mL/min/1.73m2"; note 60 for eGFR is naive CKD G2, correct it).
 - editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise "".
 - logs: Extract all logs with standardized "YYYY-MM-DD" dates, labName if mentioned (e.g. "US lab", "GP Clinic"), and comments. Convert US units to patient's unitPreference with standard clinical integer rounding (e.g. 1.1 mg/dL creatinine → 97 umol/L, not decimals like 97.24). Standardize scientific units (e.g. 10^9/L).
 - DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.
-- UNCATALOGED (MISS): If not in dictionary, output match="none", writeTarget="pending", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }.
+- UNCATALOGED (MISS): If not in dictionary, output match="none", writeTarget="pending", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }. NOTE: normalRange MUST follow the same bracketed profile format with clinical names, e.g., "[Western Standard] High: >1.4; Optimal: 0.5-1.4; Low: <0.5".
 
 JSON { "rows": [...] }.
 ```
@@ -44,7 +44,7 @@ LDL  100 mg/dL
 
 ## Agent turns (full payload sent + model output)
 
-### Turn 1 (hit) — r01, r02 (2 rows, 1736ms)
+### Turn 1 (hit) — r01, r02 (2 rows, 8608ms)
 
 **User contents sent to the model** (system instruction is above; this is the user turn):
 
@@ -98,8 +98,8 @@ Biomarkers to review (hits - in catalog):
 [
   {
     "id": "r01",
-    "medicalInsight": "BUN is within normal limits at 5 mmol/L (converted from 15 mg/dL), indicating normal renal urea clearance and protein metabolism.",
-    "optimalValue": "5.0 mmol/L",
+    "medicalInsight": "BUN is 5.35 mmol/L (15 mg/dL), which falls comfortably within the normal range, indicating good renal filtration and protein metabolism.",
+    "optimalValue": "4.5 mmol/L",
     "editReason": "",
     "logs": [
       {
@@ -109,16 +109,16 @@ Biomarkers to review (hits - in catalog):
         "comment": null
       }
     ],
-    "customRangeOverlay": null,
+    "customRangeOverlay": "[Western Standard] High: >7.1; Normal: 2.5-7.1; Low: <2.5",
     "dictionaryCorrection": {
-      "field": "unit",
-      "correctedValue": "mmol/L",
-      "reason": "Patient preference is SI units, converting mg/dL to mmol/L for standardized clinical tracking."
+      "field": "normalRange",
+      "correctedValue": "2.5 - 7.1",
+      "reason": "Standardize dictionary values to SI mmol/L for BUN."
     }
   },
   {
     "id": "r02",
-    "medicalInsight": "LDL cholesterol is at an optimal level of 2.6 mmol/L (100 mg/dL), reflecting well-controlled cardiovascular risk for a 43-year-old male.",
+    "medicalInsight": "LDL-C is 2.59 mmol/L, which is optimal for a 43-year-old male without known cardiovascular disease, reflecting well-managed lipid status.",
     "optimalValue": "2.0 mmol/L",
     "editReason": "",
     "logs": [
@@ -129,8 +129,7 @@ Biomarkers to review (hits - in catalog):
         "comment": null
       }
     ],
-    "customRangeOverlay": null,
-    "dictionaryCorrection": null
+    "customRangeOverlay": ""
   }
 ]
 ```
@@ -139,8 +138,8 @@ Biomarkers to review (hits - in catalog):
 
 | id | printed | match | writeTarget | status | key | draft | fail |
 |---|---|---|---|---|---|---|---|
-| r01 | BUN | key | observation | Low | bun | — | — |
-| r02 | LDL | key | observation | Optimal | ldl | — | — |
+| r01 | BUN | key | observation | — | bun | — | — |
+| r02 | LDL | key | observation | — | ldl | — | — |
 
 ## Contract checks
 
