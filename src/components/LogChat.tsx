@@ -2624,7 +2624,13 @@ ${logsText}`);
           // Only fall back to the last Firestore food log as activeMeal when we are
           // already in edit mode — never for review/compare sessions (avoids bleeding
           // a prior confirmed log into a brand-new scan as if it were the active meal).
-          (submissionMode === 'edit' && !extraOptions?.portionChoices && finalImages.length === 0 && foodLogs && foodLogs.length > 0 ? foodLogs[foodLogs.length - 1] : null);
+          // NOTE: this previously also required finalImages.length === 0, which dropped
+          // activeMeal whenever an edit was submitted while images were still staged in
+          // the composer (e.g. after reopening "View Analysis", which restages the
+          // original photos). submissionMode === 'edit' already scopes this fallback
+          // correctly, so gating on image count is unnecessary and causes edits to be
+          // silently rejected server-side with "No active meal exists in Firestore".
+          (submissionMode === 'edit' && !extraOptions?.portionChoices && foodLogs && foodLogs.length > 0 ? foodLogs[foodLogs.length - 1] : null);
         let prunedMealForJob = null;
         if (lastFoodLogForJob) {
           try {

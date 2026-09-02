@@ -3465,7 +3465,7 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       addDebugLog(`[Mode Routing] MODIFY mode triggered (Math Fallback).`);
       let activeMeal = req.body.activeMeal;
       if (!activeMeal) {
-        addDebugLog(`[Modify Math Error] No active meal exists in Firestore to modify.`);
+        addDebugLog(`[Modify Math Error] No active meal exists in Firestore to modify. jobId=${req.body.jobId || 'n/a'} imageCount=${(imagePayloads && imagePayloads.length) || 0} message="${(message || '').substring(0, 80)}"`);
         return res.json({
           text: rawParsed.message || "I couldn't modify the meal because there's no active meal currently logged. Please log a meal first!",
           message: rawParsed.message || "I couldn't modify the meal because there's no active meal currently logged. Please log a meal first!",
