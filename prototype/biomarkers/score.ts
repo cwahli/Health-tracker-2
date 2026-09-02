@@ -48,7 +48,7 @@ export function scoreBiomarkersCase(opts: {
     });
   }
 
-  if (opts.filled.length !== opts.expected.expectRowCount) {
+  if (opts.expected.expectRowCount !== -1 && opts.filled.length !== opts.expected.expectRowCount) {
     fails.push({
       id: "count",
       printed: "",

@@ -1,0 +1,27 @@
+{
+  "id": "C6",
+  "date": "2026-06-05",
+  "expectRowCount": -1,
+  "expectKnown": -1,
+  "expectUnknown": -1,
+  "rows": [
+    {
+      "printed": "HbA1c levl - IFCC standardised",
+      "value": 40,
+      "unit": "mmol/mol",
+      "date": "2026-06-05",
+      "key": "hba1c",
+      "match": "alias",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "QRISK2 cardiovascular disease 10 year risk score",
+      "value": 1.2,
+      "unit": "%",
+      "date": "2026-06-04",
+      "key": null,
+      "match": "none",
+      "writeTarget": "pending"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "C6",
+  "date": "2026-06-05",
+  "batchSize": 20,
+  "history": {},
+  "message": "Log these GP results",
+  "images": [
+    "prototype/biomarkers/image/nhs_gp_results_p1_hba1c_renal_lft.png",
+    "prototype/biomarkers/image/nhs_gp_results_p2_bone_fbc.png",
+    "prototype/biomarkers/image/nhs_gp_results_p3_qrisk_lipids.png"
+  ],
+  "rows": []
+}

@@ -1,0 +1,58 @@
+{
+  "rows": [
+    {
+      "id": "r01",
+      "op": "add",
+      "printed": "Haemoglobin A1c (IFCC)",
+      "value": 40,
+      "unit": "mmol/mol",
+      "date": "2026-06-05",
+      "printedRange": "20 - 41 mmol/mol",
+      "assignedRange": "20 - 41 mmol/mol",
+      "optimalValue": "34 mmol/mol",
+      "editReason": "Applied ethnicity-specific prediabetes risk thresholds for Chinese individuals.",
+      "match": "alias",
+      "key": "hba1c",
+      "writeTarget": "observation",
+      "status": "Elevated",
+      "medicalInsight": "For Chinese patients, an HbA1c of 40 mmol/mol indicates an elevated prediabetes risk requiring lifestyle intervention and monitoring.",
+      "customRangeOverlay": "Elevated (Diabetes): >=48; Elevated (Prediabetes): >=39; Normal: <39",
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 40,
+          "unit": "mmol/mol",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r02",
+      "op": "add",
+      "printed": "LDL cholesterol",
+      "value": 4.3,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "1.5 - 3.0 mmol/L",
+      "assignedRange": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
+      "optimalValue": "2.0 mmol/L",
+      "editReason": "Provided optimal target for primary cardiovascular prevention.",
+      "match": "alias",
+      "key": "ldl",
+      "writeTarget": "observation",
+      "status": "Very High",
+      "medicalInsight": "LDL-C of 4.3 mmol/L is significantly elevated, increasing cardiovascular risk and warranting clinical evaluation.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 4.3,
+          "unit": "mmol/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    }
+  ]
+}

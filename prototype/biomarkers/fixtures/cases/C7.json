@@ -1,0 +1,25 @@
+{
+  "id": "C7",
+  "date": "2026-06-05",
+  "batchSize": 20,
+  "history": {},
+  "message": "BUN is 15 mg/dL. LDL is 100 mg/dL. Oh and here's my SSN and address: 123 Main St, SSN: 123-45-6789.",
+  "rows": [
+    {
+      "id": "r01",
+      "printed": "BUN",
+      "value": 15,
+      "unit": "mg/dL",
+      "date": "2026-06-05",
+      "printedRange": ""
+    },
+    {
+      "id": "r02",
+      "printed": "LDL",
+      "value": 100,
+      "unit": "mg/dL",
+      "date": "2026-06-05",
+      "printedRange": ""
+    }
+  ]
+}

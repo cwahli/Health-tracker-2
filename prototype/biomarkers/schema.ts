@@ -84,6 +84,8 @@ export interface ClassifiedRow {
   printed: string;
   value: number;
   unit: string;
+  rawValue?: number;
+  rawUnit?: string;
   date: string;
   printedRange?: string;
   assignedRange?: string;
@@ -112,7 +114,6 @@ export interface FillRow {
   match: MatchKind;
   key: string | null;
   writeTarget: WriteTarget;
-  status?: string;
   medicalInsight?: string;
   customRangeOverlay?: string | null;
   logs?: LogPoint[];
@@ -144,6 +145,7 @@ export interface CaseFile {
   message: string;
   date: string;
   batchSize?: number;
+  images?: string[];
   rows: IntakeRow[];
   history?: Record<string, LogPoint[]>;
 }

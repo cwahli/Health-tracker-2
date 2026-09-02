@@ -3,6 +3,7 @@ import { extractBalancedJson } from "./server_pure_helpers";
 import { parseLabelCalories } from "./server_budget_reconcile";
 import { isStandaloneCondimentPacket, reconcileContainerVolumeBudget } from "./server_dish_classify";
 import { computeSolubleFibre } from "./server_derivation";
+import { deduceSugarBreakdown } from "./server_sugar_engine";
 export const ScoutNutrientsSchema = z.object({
   calories: z.number().nullable().optional(), protein: z.number().nullable().optional(),
   totalFat: z.number().nullable().optional(), saturatedFat: z.number().nullable().optional(),
@@ -945,11 +946,20 @@ export function parseAndHealVisionScout(
           });
         }
 
-        const totalSugar = Number(dNuts.totalSugar) || sumAddedSugar;
+        const explicitTotalSugar = dNuts.totalSugar != null && !isNaN(Number(dNuts.totalSugar)) ? Number(dNuts.totalSugar) : null;
+        const sugarResult = deduceSugarBreakdown({
+          totalSugar: explicitTotalSugar,
+          addedSugarPrinted: sumAddedSugar > 0 ? sumAddedSugar : null,
+          carbohydrates: sumC,
+          totalFibre: sumFibre,
+          foodName: d.dishName || d.genericEnglishName,
+          ingredientsList: components.map(c => c.name || c.genericEnglishName).filter(Boolean).join(', '),
+        });
+
         const convertedNutrients: Record<string, number> = {
           protein: Math.round(sumP * 10) / 10, carbohydrates: Math.round(sumC * 10) / 10,
           totalFat: Math.round(totalFat * 10) / 10, saturatedFat: Math.round(satFat * 10) / 10, transFat: 0,
-          sugar: Math.round(totalSugar * 10) / 10, addedSugar: Math.round(sumAddedSugar * 10) / 10,
+          sugar: sugarResult.sugar, addedSugar: sugarResult.addedSugar,
           totalFibre: Math.round(sumFibre * 10) / 10, sodium: Math.round(sumNa),
           potassium: Number(dNuts.potassium) || 0, omega3: Number(dNuts.omega3) || 0,
           calcium: Number(dNuts.calcium) || 0, iron: Number(dNuts.iron) || 0,

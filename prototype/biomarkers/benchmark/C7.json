@@ -1,0 +1,63 @@
+{
+  "rows": [
+    {
+      "id": "r01",
+      "op": "add",
+      "printed": "BUN",
+      "value": 5.35,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "",
+      "assignedRange": "7 - 20",
+      "optimalValue": "5.0 mmol/L",
+      "editReason": null,
+      "dictionaryCorrection": {
+        "field": "unit",
+        "correctedValue": "mmol/L",
+        "reason": "Patient preference is SI units, converting mg/dL to mmol/L for standardized clinical tracking."
+      },
+      "match": "key",
+      "key": "bun",
+      "writeTarget": "observation",
+      "status": "Low",
+      "medicalInsight": "BUN is within normal limits at 5 mmol/L (converted from 15 mg/dL), indicating normal renal urea clearance and protein metabolism.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 5.35,
+          "unit": "mmol/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r02",
+      "op": "add",
+      "printed": "LDL",
+      "value": 2.59,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "",
+      "assignedRange": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
+      "optimalValue": "2.0 mmol/L",
+      "editReason": null,
+      "match": "key",
+      "key": "ldl",
+      "writeTarget": "observation",
+      "status": "Optimal",
+      "medicalInsight": "LDL cholesterol is at an optimal level of 2.6 mmol/L (100 mg/dL), reflecting well-controlled cardiovascular risk for a 43-year-old male.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 2.59,
+          "unit": "mmol/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    }
+  ]
+}

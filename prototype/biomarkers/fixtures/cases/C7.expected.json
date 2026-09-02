@@ -1,0 +1,25 @@
+{
+  "id": "C7",
+  "date": "2026-06-05",
+  "expectRowCount": 2,
+  "expectKnown": 2,
+  "expectUnknown": 0,
+  "rows": [
+    {
+      "printed": "BUN",
+      "value": 5.35,
+      "unit": "mmol/L",
+      "key": "bun",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "LDL",
+      "value": 2.59,
+      "unit": "mmol/L",
+      "key": "ldl",
+      "match": "key",
+      "writeTarget": "observation"
+    }
+  ]
+}

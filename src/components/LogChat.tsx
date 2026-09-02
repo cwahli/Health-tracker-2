@@ -1401,7 +1401,29 @@ ${logsText}`);
         } catch (err) {
           console.warn('[loadJobMessages] Failed to restore images from ImageStore for job', activeJobId, err);
         }
-        const lastMsg = baseMsgs[baseMsgs.length - 1];
+        // Deduplicate consecutive assistant messages in baseMsgs to prevent duplicate meal cards
+        const dedupedBaseMsgs: ChatMessage[] = [];
+        for (let i = 0; i < baseMsgs.length; i++) {
+          const curr = baseMsgs[i];
+          const prev = dedupedBaseMsgs[dedupedBaseMsgs.length - 1];
+          if (prev && prev.role === 'assistant' && curr.role === 'assistant') {
+            dedupedBaseMsgs[dedupedBaseMsgs.length - 1] = {
+              ...prev,
+              ...curr,
+              data: {
+                ...(prev.data || {}),
+                ...(curr.data || {}),
+                agentResult: {
+                  ...(prev.data?.agentResult || {}),
+                  ...(curr.data?.agentResult || {})
+                }
+              }
+            };
+          } else {
+            dedupedBaseMsgs.push(curr);
+          }
+        }
+        const lastMsg = dedupedBaseMsgs[dedupedBaseMsgs.length - 1];
         if (job.status === 'awaiting_user') {
           const rawResult = job.result?.clean_result || job.result || (job as any).clean_result || {};
           const portionClarify =
@@ -1412,7 +1434,7 @@ ${logsText}`);
             (Array.isArray(rawResult.scoutItems) && rawResult.scoutItems.length > 0)
               ? rawResult.scoutItems
               : (Array.isArray(portionClarify?.scoutItems) ? portionClarify.scoutItems : []);
-          let assistantClarifyMsg = baseMsgs.find((m: any) => m.id === `msg_assistant_clarify_${activeJobId}` || (m.role === 'assistant' && (m.data?.portionClarify || m.data?.needsPortionClarify)));
+          let assistantClarifyMsg = dedupedBaseMsgs.find((m: any) => m.id === `msg_assistant_clarify_${activeJobId}` || (m.role === 'assistant' && (m.data?.portionClarify || m.data?.needsPortionClarify)));
           if (!assistantClarifyMsg) {
             assistantClarifyMsg = {
               id: `msg_assistant_clarify_${activeJobId}`,
@@ -1435,13 +1457,13 @@ ${logsText}`);
                 }
               }
             };
-            baseMsgs.push(assistantClarifyMsg);
+            dedupedBaseMsgs.push(assistantClarifyMsg);
           } else if (assistantClarifyMsg.data) {
             assistantClarifyMsg.data.portionClarify = assistantClarifyMsg.data.portionClarify || portionClarify;
             assistantClarifyMsg.data.needsPortionClarify = true;
             assistantClarifyMsg.data.scoutItems = assistantClarifyMsg.data.scoutItems?.length ? assistantClarifyMsg.data.scoutItems : scoutItems;
           }
-          setMessages(baseMsgs, false);
+          setMessages(dedupedBaseMsgs, false);
         } else if ((job.status === 'queued' || job.status === 'running' || (typeof job.inFlightTurnAt === 'number' && (!job.finishedAt || new Date(job.finishedAt).getTime() < job.inFlightTurnAt))) && lastMsg?.role === 'user') {
           const liveMsg: ChatMessage = {
             id: `msg_live_${activeJobId}`,
@@ -1462,7 +1484,7 @@ ${logsText}`);
               }
             }
           };
-          setMessages([...baseMsgs, liveMsg], false);
+          setMessages([...dedupedBaseMsgs, liveMsg], false);
         } else if (job.status === 'succeeded' && lastMsg?.role === 'user') {
           const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
           const latestFoodLog = resolvePendingFoodLog(job);
@@ -1477,7 +1499,7 @@ ${logsText}`);
             ? enrichReviewModificationCommands(Array.isArray(reviewCmds) ? reviewCmds : [], biomarkerHistory || [], unitMap)
             : reviewCmds;
           const assistantMsg: ChatMessage = {
-            id: `msg_assistant_${activeJobId}_${baseMsgs.length}`,
+            id: `msg_assistant_${activeJobId}_${dedupedBaseMsgs.length}`,
             role: 'assistant',
             content: isReview ? sanitizeReviewReply(rawContent, cmds, biomarkerHistory || [], unitMap) : rawContent,
             timestamp: job.updatedAt || new Date().toISOString(),
@@ -1514,40 +1536,40 @@ ${logsText}`);
             mode: job.mode,
             inputMode: (job.inputSnapshot as any)?.mode,
             cleanMode: raw.mode,
-            messages: baseMsgs,
+            messages: dedupedBaseMsgs,
           })) {
-            setMessages(mergeFoodEditMessages(baseMsgs, assistantMsg), false);
+            setMessages(mergeFoodEditMessages(dedupedBaseMsgs, assistantMsg), false);
           } else {
-            setMessages([...baseMsgs, assistantMsg], false);
+            setMessages([...dedupedBaseMsgs, assistantMsg], false);
           }
         } else if (job.status === 'succeeded') {
           const latestFoodLog = resolvePendingFoodLog(job);
           const raw = job.result?.raw || (job.result as any)?.clean_result || job.result || {};
-          const lastAssistantIdx = baseMsgs.map((m: any) => m.role).lastIndexOf('assistant');
+          const lastAssistantIdx = dedupedBaseMsgs.map((m: any) => m.role).lastIndexOf('assistant');
           if (lastAssistantIdx !== -1 && latestFoodLog) {
             const rawContent = raw.message || raw.reply || raw.text || raw.globalSummary;
-            baseMsgs[lastAssistantIdx] = {
-              ...baseMsgs[lastAssistantIdx],
-              content: rawContent || baseMsgs[lastAssistantIdx].content,
-              agentResult: raw.agentResult ? { ...baseMsgs[lastAssistantIdx].agentResult, ...raw.agentResult } : (raw || baseMsgs[lastAssistantIdx].agentResult),
+            dedupedBaseMsgs[lastAssistantIdx] = {
+              ...dedupedBaseMsgs[lastAssistantIdx],
+              content: rawContent || dedupedBaseMsgs[lastAssistantIdx].content,
+              agentResult: raw.agentResult ? { ...dedupedBaseMsgs[lastAssistantIdx].agentResult, ...raw.agentResult } : (raw || dedupedBaseMsgs[lastAssistantIdx].agentResult),
               pendingFoodLog: latestFoodLog,
               data: {
-                ...baseMsgs[lastAssistantIdx].data,
+                ...dedupedBaseMsgs[lastAssistantIdx].data,
                 pendingFoodLog: latestFoodLog,
-                photoUrl: job.photoUrl || raw.photoUrl || latestFoodLog?.imageUrl || baseMsgs[lastAssistantIdx].data?.photoUrl,
-                debugUrl: job.debugUrl || raw.debugUrl || baseMsgs[lastAssistantIdx].data?.debugUrl,
-                scoutItems: job.result?.scoutItems || raw.scoutItems || baseMsgs[lastAssistantIdx].data?.scoutItems || [],
+                photoUrl: job.photoUrl || raw.photoUrl || latestFoodLog?.imageUrl || dedupedBaseMsgs[lastAssistantIdx].data?.photoUrl,
+                debugUrl: job.debugUrl || raw.debugUrl || dedupedBaseMsgs[lastAssistantIdx].data?.debugUrl,
+                scoutItems: job.result?.scoutItems || raw.scoutItems || dedupedBaseMsgs[lastAssistantIdx].data?.scoutItems || [],
                 agentResult: {
-                  ...(baseMsgs[lastAssistantIdx].data?.agentResult || {}),
+                  ...(dedupedBaseMsgs[lastAssistantIdx].data?.agentResult || {}),
                   ...raw,
                   ...(raw.agentResult || {})
                 }
               }
             };
           }
-          setMessages(baseMsgs, false);
+          setMessages(dedupedBaseMsgs, false);
         } else {
-          setMessages(baseMsgs, false);
+          setMessages(dedupedBaseMsgs, false);
         }
       } else {
         const welcome = getWelcomeMessage();

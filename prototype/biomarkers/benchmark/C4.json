@@ -1,0 +1,112 @@
+{
+  "rows": [
+    {
+      "id": "r01",
+      "op": "add",
+      "printed": "HbA1c",
+      "value": 39,
+      "unit": "mmol/mol",
+      "date": "2026-06-05",
+      "printedRange": "",
+      "assignedRange": "20 - 41",
+      "optimalValue": "33 mmol/mol",
+      "editReason": "Applied ethnicity-specific prediabetes threshold for Chinese patients where HbA1c >=39 indicates elevated risk.",
+      "match": "key",
+      "key": "hba1c",
+      "writeTarget": "observation",
+      "status": "Elevated",
+      "medicalInsight": "HbA1c of 39 mmol/mol (5.7%) places this 43-year-old Chinese male at elevated prediabetes risk according to ethnicity-specific clinical thresholds.",
+      "customRangeOverlay": "Elevated (Prediabetes): >=39; Normal: <39",
+      "logs": [
+        {
+          "date": "2023-10-24",
+          "value": 39,
+          "unit": "mmol/mol",
+          "comment": "Converted from 5.7%"
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r02",
+      "op": "add",
+      "printed": "LDL",
+      "value": 3.36,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "",
+      "assignedRange": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
+      "optimalValue": "2.5 mmol/L",
+      "editReason": "Set optimal target below 2.6 mmol/L for cardiovascular health.",
+      "match": "key",
+      "key": "ldl",
+      "writeTarget": "observation",
+      "status": "Elevated",
+      "medicalInsight": "LDL cholesterol is 3.36 mmol/L (130 mg/dL), which is elevated and increases long-term cardiovascular risk, requiring dietary and lifestyle optimization.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2023-10-24",
+          "value": 3.36,
+          "unit": "mmol/L",
+          "comment": "Converted from 130 mg/dL"
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r03",
+      "op": "add",
+      "printed": "eGFR",
+      "value": 80,
+      "unit": "mL/min/1.73m2",
+      "date": "2026-06-05",
+      "printedRange": "",
+      "assignedRange": ">= 60 mL/min/1.73m2",
+      "optimalValue": "95 mL/min/1.73m2",
+      "editReason": "Corrected naive optimal/normal range to reflect true optimal youthful renal function.",
+      "match": "key",
+      "key": "egfr",
+      "writeTarget": "observation",
+      "status": "Mildly Decreased (CKD G2)",
+      "medicalInsight": "eGFR of 80 mL/min/1.73m2 reflects mild reduction but must be interpreted cautiously; 60 is naive for CKD G2 and optimal should reflect robust filtration.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2023-10-24",
+          "value": 80,
+          "unit": "mL/min/1.73m2",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r04",
+      "op": "add",
+      "printed": "ALT",
+      "value": 41,
+      "unit": "U/L",
+      "date": "2026-06-05",
+      "printedRange": "",
+      "assignedRange": "10 - 40",
+      "optimalValue": "25 U/L",
+      "editReason": "Set optimal ALT target within lower normal range.",
+      "match": "key",
+      "key": "alt",
+      "writeTarget": "observation",
+      "status": "Elevated",
+      "medicalInsight": "ALT is slightly elevated at 41 U/L, suggesting mild hepatocellular stress which warrants monitoring of metabolic health and liver enzymes.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2023-10-24",
+          "value": 41,
+          "unit": "U/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": null
+    }
+  ]
+}

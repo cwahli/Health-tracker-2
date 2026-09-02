@@ -149,7 +149,7 @@ import { isDishEstimateEnabled } from './server_food_flags.js';
 import { finalizeDishLedger } from './server_dish_finalize.js';
 import { evaluateMealGate } from './server_meal_gate.js';
 import { buildMealFromFinalizeLedgers } from './server_meal_from_finalize.js';
-import { applyMealEdits } from './server_meal_edit.js';
+import { applyMealEdits, applyModifierToItemName } from './server_meal_edit.js';
 import { matchBrandMenu, isPackagedBindItem, inferChainNameFromPackageLabel } from './server_brand_match.js';
 import { classifyDishAtomic } from './server_dish_classify.js';
 import {
@@ -721,6 +721,8 @@ export async function runFoodAnalyze(req: any, res: any) {
             estimatedWeightGrams: Number(it.weightGrams) || 100,
             nutrientBasisWeight: Number(it.weightGrams) || 100,
             nutrients: it.nutrients || it.truthNutrients || null,
+            lockedNutrientKeys: it.lockedNutrientKeys || [],
+            _alreadyFinalized: Boolean(it.nutrients && (it.lockedNutrientKeys?.length || it.dbSource === 'label' || it.dbSource === 'usda_direct_hint')),
             cookingMethod: it.cookingMethod || 'raw',
             ingredients: it.ingredients || (it.ingredientsList ? String(it.ingredientsList).split(',').map((s: string) => s.trim()) : []),
             visualIngredients: it.visualIngredients || [],
@@ -2868,7 +2870,8 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
       const totalP = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.protein) || 0), 0);
       const totalC = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.carbohydrates) || 0), 0);
       const totalF = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.totalFat) || 0), 0);
-      const totalSugar = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.sugar || it.nutrients?.addedSugar) || 0), 0);
+      const totalSugar = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.sugar ?? it.nutrients?.totalSugar ?? it.nutrients?.addedSugar) || 0), 0);
+      const totalAddedSugar = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.addedSugar) || 0), 0);
       const totalSatFat = preCalculatedItems.reduce((sum: number, it: any) => sum + (Number(it.nutrients?.saturatedFat) || 0), 0);
 
       let scoutVerdict = rawScoutData?.verdict;
@@ -3538,7 +3541,19 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         if (result.items.length > 1) {
           const isMultiItemTitle = incomingTitle && (incomingTitle.includes(',') || /\b(and|with)\b/i.test(incomingTitle));
           if (incomingTitle && isMultiItemTitle) {
-            activeMeal.name = incomingTitle;
+            let updatedTitle = incomingTitle;
+            // Synchronize any renamed items in incomingTitle from editCommands
+            if (Array.isArray(editCommands)) {
+              for (const cmd of editCommands) {
+                const oldName = cmd.itemName;
+                const newName = cmd.newItemName || (cmd.action === 'update_modifier' || cmd.action === 'set_modifier' ? applyModifierToItemName(oldName, cmd.modifier) : null);
+                if (oldName && newName && oldName !== newName) {
+                  const reg = new RegExp(`\\b${oldName.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\b`, 'gi');
+                  updatedTitle = updatedTitle.replace(reg, newName);
+                }
+              }
+            }
+            activeMeal.name = updatedTitle;
           } else {
             activeMeal.name = formatMultiItemMealTitle(result.items);
           }
@@ -3593,9 +3608,24 @@ Current User Input: "${message}"`) + modeDPromptSuffix;
         activeMeal.scoutItems = syncedScoutItemsForEdit;
         addDebugLog(`[ScoutSync] edit-path renamed scoutItems -> ${JSON.stringify(syncedScoutItemsForEdit.map((s: any) => s.originalName))}`);
         
-        const finalMessage = result.qa
+        const rawMessage = result.qa
           ? (rawParsed.message || 'Here is the detail on this meal.')
           : (rawParsed.message || 'I have updated your meal.');
+
+        const postEditSummary: any = {
+          mealName: activeMeal.name,
+          weightGrams: result.weightGrams,
+          calories: result.nutrients.calories,
+          protein: result.nutrients.protein,
+          carbohydrates: result.nutrients.carbohydrates,
+          totalFat: result.nutrients.totalFat,
+          saturatedFat: result.nutrients.saturatedFat,
+          addedSugar: result.nutrients.addedSugar,
+          sugar: result.nutrients.sugar,
+          sodium: result.nutrients.sodium,
+          salt: result.nutrients.salt,
+        };
+        const finalMessage = reconcileMessageWithLedger(rawMessage, postEditSummary);
           
         activeMeal.message = finalMessage;
         activeMeal.healthImpact = finalMessage;

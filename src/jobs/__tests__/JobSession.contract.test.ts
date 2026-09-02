@@ -131,4 +131,59 @@ describe('JobSession contract (STALE_TURN)', () => {
     const merged = mergeFoodEditMessages([original, user], assistant);
     expect(merged.filter((m: any) => m.data?.pendingFoodLog || m.pendingFoodLog)).toHaveLength(1);
   });
+
+  it('prevents duplicate assistant messages when multiple completion events arrive for same job', () => {
+    JobStore.createJob({
+      id: 'job-multi-event',
+      status: 'queued',
+      inFlightTurnAt: Date.now(),
+      messages: [
+        { role: 'user', content: 'Analyze this meal photo.' }
+      ],
+      inputSnapshot: { text: 'Analyze this meal photo.', imageRefs: [], mode: 'review' },
+    });
+
+    const assistantMsg1 = {
+      id: 'msg_assistant_1',
+      role: 'assistant',
+      content: 'Meal analyzed: 650 kcal',
+      pendingFoodLog: next.pendingFoodLog,
+    };
+
+    JobStore.apply({
+      type: 'AnalyzeFinished',
+      id: 'job-multi-event',
+      status: 'succeeded',
+      inFlightTurnAt: undefined,
+      finishedAt: new Date().toISOString(),
+      result: next,
+      messages: [assistantMsg1],
+    });
+
+    const assistantMsg2 = {
+      id: 'msg_assistant_2',
+      role: 'assistant',
+      content: 'Meal analyzed: 650 kcal (updated)',
+      pendingFoodLog: next.pendingFoodLog,
+    };
+
+    JobStore.apply({
+      type: 'PollerPayload',
+      id: 'job-multi-event',
+      status: 'succeeded',
+      result: next,
+      messages: [assistantMsg2],
+    });
+
+    JobStore.apply({
+      type: 'RealtimeRow',
+      id: 'job-multi-event',
+      status: 'succeeded',
+    });
+
+    const job = JobStore.getJob('job-multi-event')!;
+    const assistantMessages = (job.messages || []).filter((m: any) => m.role === 'assistant');
+    expect(assistantMessages).toHaveLength(1);
+    expect(assistantMessages[0].content).toBe('Meal analyzed: 650 kcal (updated)');
+  });
 });

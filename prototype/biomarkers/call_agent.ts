@@ -119,6 +119,7 @@ export function hitPayload(rows: ClassifiedRow[]) {
       name: r.template.biomarkerName,
       value: r.value,
       unit: r.unit,
+      date: r.date,
       range: effectiveRange,
       optimalValue: r.template.optimalValue ?? null,
       existingInsight: r.template.existingInsight ?? null,
@@ -139,6 +140,7 @@ export function missPayload(rows: ClassifiedRow[]) {
     name: r.printed,
     value: r.value,
     unit: r.unit,
+    date: r.date,
     range: r.printedRange || "",
   }));
 }

@@ -648,12 +648,12 @@ export function aggregateItemsNutrients(
       itemNutrients.totalFat = parseFloat((itemNutrients.saturatedFat + itemNutrients.transFat).toFixed(2));
     }
     itemNutrients.unsaturatedFat = parseFloat(Math.max(0, itemNutrients.totalFat - itemNutrients.saturatedFat - itemNutrients.transFat).toFixed(2));
-    if (itemNutrients.sugar || itemNutrients.addedSugar) {
+    if (itemNutrients.sugar || itemNutrients.addedSugar || (itemNutrients.carbohydrates && itemNutrients.carbohydrates > 0)) {
       const existingAddedSugar = (itemNutrients.addedSugar !== undefined && itemNutrients.addedSugar !== null && Number(itemNutrients.addedSugar) > 0)
         ? Number(itemNutrients.addedSugar)
         : null;
       const sugarResult = deduceSugarBreakdown({
-        totalSugar: itemNutrients.sugar || itemNutrients.addedSugar || 0,
+        totalSugar: itemNutrients.sugar != null && Number(itemNutrients.sugar) > 0 ? Number(itemNutrients.sugar) : (existingAddedSugar || null),
         addedSugarPrinted: labelData?.addedSugar != null ? (Number(labelData.addedSugar) * (servingSizeGrams > 0 ? itemWeight / servingSizeGrams : 1)) : existingAddedSugar,
         carbohydrates: itemNutrients.carbohydrates,
         totalFibre: itemNutrients.totalFibre,
@@ -661,8 +661,12 @@ export function aggregateItemsNutrients(
         ingredientsList: item.ingredientsList,
         foodName: canonicalName || item.keyword || item.originalName,
       });
-      itemNutrients.sugar = sugarResult.sugar;
-      itemNutrients.addedSugar = existingAddedSugar ?? sugarResult.addedSugar;
+      if (!itemLockedKeys.has('sugar')) {
+        itemNutrients.sugar = sugarResult.sugar;
+      }
+      if (!itemLockedKeys.has('addedSugar')) {
+        itemNutrients.addedSugar = existingAddedSugar ?? sugarResult.addedSugar;
+      }
     }
     itemNutrients.addedSugar = itemNutrients.addedSugar || 0;
     itemNutrients.sugar = itemNutrients.sugar || 0;

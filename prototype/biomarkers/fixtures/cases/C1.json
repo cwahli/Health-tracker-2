@@ -1,0 +1,11 @@
+{
+  "id": "C1",
+  "date": "2026-06-05",
+  "batchSize": 20,
+  "history": {},
+  "message": "Hi, I got my bloods back. Haemoglobin A1c (IFCC) on 5 June 2026 was 40, and LDL 4.3. What does that mean for me?",
+  "rows": [
+    { "id": "r01", "printed": "Haemoglobin A1c (IFCC)", "value": 40, "unit": "mmol/mol", "date": "2026-06-05", "printedRange": "20 - 41 mmol/mol" },
+    { "id": "r02", "printed": "LDL cholesterol", "value": 4.3, "unit": "mmol/L", "date": "2026-06-05", "printedRange": "1.5 - 3.0 mmol/L" }
+  ]
+}

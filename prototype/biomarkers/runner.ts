@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import { batchRows, classifyRows } from "./backoffice.ts";
 import { buildTurnUserMessage, fillBatch } from "./call_agent.ts";
+import { parseLabImages } from "./vision_parser.ts";
 import { fillTemplateInstruction } from "./instruction.ts";
 import { scoreBiomarkersCase, scoreC2 } from "./score.ts";
 import { DRAFT_BATCH_SIZE, INSIGHT_BATCH_SIZE } from "./template.ts";
@@ -84,7 +85,6 @@ function toFillRow(c: ClassifiedRow): FillRow {
     match: c.match,
     key: c.template.key,
     writeTarget: c.writeTarget,
-    status: c.template.currentEvaluationStatus,
     medicalInsight: c.template.medicalInsight,
     customRangeOverlay: c.template.customRangeOverlay,
     logs: c.template.historicalLogs,
@@ -120,7 +120,10 @@ async function runBiomarkersCase(caseId: string): Promise<boolean> {
   const expectPath = path.join(HERE, `fixtures/cases/${caseId}.expected.json`);
   const caseFile = loadJson<CaseFile>(casePath);
   const expected = loadJson<ExpectedFile>(expectPath);
-  const profile = loadJson<ProfileFixture>(path.join(HERE, "fixtures/profile.json"));
+  
+  // Use case-specific profile if present, else fallback to default profile.json
+  const profile = (caseFile as any).profile || loadJson<ProfileFixture>(path.join(HERE, "fixtures/profile.json"));
+  
   const insightSize = Number(arg("--insight-batch", String(INSIGHT_BATCH_SIZE)));
   const draftSize = Number(arg("--draft-batch", String(DRAFT_BATCH_SIZE)));
   const dry = hasFlag("--dry-run");
@@ -129,7 +132,24 @@ async function runBiomarkersCase(caseId: string): Promise<boolean> {
   console.log(`${caseId} — hits=insight only, misses=draft; TS continuation`);
   console.log(`Model: gemini-3.5-flash-lite | insightBatch=${insightSize} draftBatch=${draftSize} | dry=${dry} | env=${envPath || "none"}`);
   console.log(`User: ${caseFile.message}`);
+  let ai: GoogleGenAI | null = null;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY || process.env.GEMINI_API_KEYS?.split(",")[0]?.trim();
+  if (apiKey) {
+    ai = new GoogleGenAI({ apiKey });
+  }
+
   console.log("==========================================================================================");
+
+  if (caseFile.images && caseFile.images.length > 0) {
+    if (!ai) {
+      console.error("\nNo GEMINI_API_KEY available for OCR. Cannot process images.");
+      process.exit(2);
+    }
+    console.log(`\nFront-door OCR: Extracting from ${caseFile.images.length} images...`);
+    const ocrRows = await parseLabImages(ai, caseFile.images.map(p => path.join(ROOT, p)));
+    caseFile.rows = ocrRows;
+    console.log(`Extracted ${ocrRows.length} rows from OCR.\n`);
+  }
 
   const classified = classifyRows(caseFile.rows, caseFile.history || {}, profile);
   printClassified(classified);
@@ -163,16 +183,10 @@ async function runBiomarkersCase(caseId: string): Promise<boolean> {
     }
     turnLogs.push({ turn: 0, kind: "dry", ids: classified.map((r) => r.id), ms: 0, n: classified.length, raw: "", rows: classified.map(toFillRow) });
   } else {
-    const apiKey =
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      process.env.API_KEY ||
-      process.env.GEMINI_API_KEYS?.split(",")[0]?.trim();
-    if (!apiKey) {
+    if (!ai) {
       console.error("\nNo GEMINI_API_KEY / GOOGLE_API_KEY / API_KEY. Export one and re-run without --dry-run.");
       process.exit(2);
     }
-    const ai = new GoogleGenAI({ apiKey });
     let turn = 0;
     const runKind = async (kind: "hit" | "miss", batches: ClassifiedRow[][]) => {
       for (let i = 0; i < batches.length; i++) {
@@ -264,6 +278,7 @@ async function runBiomarkersCase(caseId: string): Promise<boolean> {
   return scored.pass;
 }
 
+export const runC1 = () => runBiomarkersCase("C1");
 export const runC2 = () => runBiomarkersCase("C2");
 export const runC3 = () => runBiomarkersCase("C3");
 
@@ -434,21 +449,16 @@ if (hasFlag("--rebuild-report")) {
     process.exit(1);
   });
 } else {
-  if (only === "all") {
-    (async () => {
-      const p2 = await runBiomarkersCase("C2");
-      const p3 = await runBiomarkersCase("C3");
-      process.exit(p2 && p3 ? 0 : 1);
-    })().catch((err) => {
-      console.error(err);
-      process.exit(1);
-    });
-  } else {
-    runBiomarkersCase(only || "C2")
-      .then((pass) => process.exit(pass ? 0 : 1))
-      .catch((err) => {
-        console.error(err);
-        process.exit(1);
-      });
-  }
+  const caseList = only === "all" ? ["C1", "C2", "C3", "C4", "C5"] : only.split(",").map((s) => s.trim());
+  (async () => {
+    let allPass = true;
+    for (const cId of caseList) {
+      const pass = await runBiomarkersCase(cId);
+      if (!pass) allPass = false;
+    }
+    process.exit(allPass ? 0 : 1);
+  })().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }

@@ -1,0 +1,397 @@
+{
+  "rows": [
+    {
+      "id": "r01",
+      "op": "add",
+      "printed": "Se prostate specific Ag level",
+      "value": 1.41,
+      "unit": "ug/L",
+      "date": "2026-06-05",
+      "printedRange": "- 2.49 ug/L",
+      "assignedRange": "- 2.49 ug/L",
+      "optimalValue": "1.0 ug/L",
+      "editReason": "Providing standard target value.",
+      "match": "none",
+      "key": null,
+      "writeTarget": "pending",
+      "status": "",
+      "medicalInsight": "PSA is within the normal reference range for a 43-year-old male.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 1.41,
+          "unit": "ug/L",
+          "comment": "Satisfactory - No Action"
+        }
+      ],
+      "newCatalogDraft": {
+        "suggestedKey": "psa",
+        "name": "Prostate Specific Antigen",
+        "unit": "ug/L",
+        "aliases": [
+          "Se prostate specific Ag level",
+          "PSA"
+        ],
+        "normalRange": "< 2.49 ug/L",
+        "description": "Blood test used primarily to screen for prostate cancer.",
+        "riskCategories": [
+          "Prostate Health"
+        ]
+      }
+    },
+    {
+      "id": "r02",
+      "op": "add",
+      "printed": "Serum sodium",
+      "value": 143,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "133 - 146 mmol/L",
+      "assignedRange": "133 - 146 mmol/L",
+      "optimalValue": "140 mmol/L",
+      "editReason": "Providing standard mid-range target.",
+      "match": "none",
+      "key": null,
+      "writeTarget": "pending",
+      "status": "",
+      "medicalInsight": "Serum sodium level is normal, indicating good hydration and electrolyte balance.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 143,
+          "unit": "mmol/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": {
+        "suggestedKey": "sodium",
+        "name": "Serum Sodium",
+        "unit": "mmol/L",
+        "aliases": [
+          "Serum sodium"
+        ],
+        "normalRange": "133 - 146 mmol/L",
+        "description": "Electrolyte and mineral that helps keep water and electrolyte balance of the body.",
+        "riskCategories": [
+          "Electrolytes"
+        ]
+      }
+    },
+    {
+      "id": "r03",
+      "op": "add",
+      "printed": "Serum potassium",
+      "value": 4.3,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "3.5 - 5.3 mmol/L",
+      "assignedRange": "3.5 - 5.3 mmol/L",
+      "optimalValue": "4.4 mmol/L",
+      "editReason": "Providing standard mid-range target.",
+      "match": "none",
+      "key": null,
+      "writeTarget": "pending",
+      "status": "",
+      "medicalInsight": "Serum potassium is within optimal limits.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 4.3,
+          "unit": "mmol/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": {
+        "suggestedKey": "potassium",
+        "name": "Serum Potassium",
+        "unit": "mmol/L",
+        "aliases": [
+          "Serum potassium"
+        ],
+        "normalRange": "3.5 - 5.3 mmol/L",
+        "description": "Crucial electrolyte for nerve and muscle function, especially the heart.",
+        "riskCategories": [
+          "Electrolytes"
+        ]
+      }
+    },
+    {
+      "id": "r04",
+      "op": "add",
+      "printed": "Serum alkaline phosphatase",
+      "value": 39,
+      "unit": "U/L",
+      "date": "2026-06-05",
+      "printedRange": "30 - 130 U/L",
+      "assignedRange": "30 - 130 U/L",
+      "optimalValue": "70 U/L",
+      "editReason": "Providing standard mid-range target.",
+      "match": "none",
+      "key": null,
+      "writeTarget": "pending",
+      "status": "",
+      "medicalInsight": "Alkaline phosphatase activity is normal.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 39,
+          "unit": "U/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": {
+        "suggestedKey": "alp",
+        "name": "Serum Alkaline Phosphatase",
+        "unit": "U/L",
+        "aliases": [
+          "Serum alkaline phosphatase"
+        ],
+        "normalRange": "30 - 130 U/L",
+        "description": "Enzyme related to the liver, biliary tract, and bones.",
+        "riskCategories": [
+          "Liver Function"
+        ]
+      }
+    },
+    {
+      "id": "r05",
+      "op": "add",
+      "printed": "Serum total bilirubin level",
+      "value": 16,
+      "unit": "umol/L",
+      "date": "2026-06-05",
+      "printedRange": "- 21 umol/L",
+      "assignedRange": "- 21 umol/L",
+      "optimalValue": "10 umol/L",
+      "editReason": "Providing standard optimal target.",
+      "match": "none",
+      "key": null,
+      "writeTarget": "pending",
+      "status": "",
+      "medicalInsight": "Total bilirubin is within normal limits.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 16,
+          "unit": "umol/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": {
+        "suggestedKey": "total_bilirubin",
+        "name": "Serum Total Bilirubin",
+        "unit": "umol/L",
+        "aliases": [
+          "Serum total bilirubin level"
+        ],
+        "normalRange": "< 21 umol/L",
+        "description": "Yellow breakdown product of normal heme catabolism.",
+        "riskCategories": [
+          "Liver Function"
+        ]
+      }
+    },
+    {
+      "id": "r06",
+      "op": "add",
+      "printed": "Serum globulin",
+      "value": 35,
+      "unit": "g/L",
+      "date": "2026-06-05",
+      "printedRange": "22 - 38 g/L",
+      "assignedRange": "22 - 38 g/L",
+      "optimalValue": "30 g/L",
+      "editReason": "Providing standard mid-range target.",
+      "match": "none",
+      "key": null,
+      "writeTarget": "pending",
+      "status": "",
+      "medicalInsight": "Serum globulin is normal.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 35,
+          "unit": "g/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": {
+        "suggestedKey": "globulin",
+        "name": "Serum Globulin",
+        "unit": "g/L",
+        "aliases": [
+          "Serum globulin"
+        ],
+        "normalRange": "22 - 38 g/L",
+        "description": "Group of proteins in the blood, including antibodies.",
+        "riskCategories": [
+          "Liver Function",
+          "Proteins"
+        ]
+      }
+    },
+    {
+      "id": "r07",
+      "op": "add",
+      "printed": "Serum calcium",
+      "value": 2.47,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "- mmol/L",
+      "assignedRange": "- mmol/L",
+      "optimalValue": "2.35 mmol/L",
+      "editReason": "Providing standard optimal target.",
+      "match": "none",
+      "key": null,
+      "writeTarget": "pending",
+      "status": "",
+      "medicalInsight": "Serum calcium is within normal physiological range.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 2.47,
+          "unit": "mmol/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": {
+        "suggestedKey": "calcium",
+        "name": "Serum Calcium",
+        "unit": "mmol/L",
+        "aliases": [
+          "Serum calcium"
+        ],
+        "normalRange": "2.10 - 2.55 mmol/L",
+        "description": "Essential mineral for bone health and cellular signaling.",
+        "riskCategories": [
+          "Minerals"
+        ]
+      }
+    },
+    {
+      "id": "r08",
+      "op": "add",
+      "printed": "Serum adjusted calcium conc",
+      "value": 2.37,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "2.08 - 2.48 mmol/L",
+      "assignedRange": "2.08 - 2.48 mmol/L",
+      "optimalValue": "2.30 mmol/L",
+      "editReason": "Providing standard optimal target.",
+      "match": "none",
+      "key": null,
+      "writeTarget": "pending",
+      "status": "",
+      "medicalInsight": "Adjusted calcium is within the expected reference interval.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 2.37,
+          "unit": "mmol/L",
+          "comment": "Please note new adjusted calcium equation and new adjusted calcium Abbott Alinity reference ranges in use from 22/09/25."
+        }
+      ],
+      "newCatalogDraft": {
+        "suggestedKey": "adjusted_calcium",
+        "name": "Serum Adjusted Calcium Concentration",
+        "unit": "mmol/L",
+        "aliases": [
+          "Serum adjusted calcium conc"
+        ],
+        "normalRange": "2.08 - 2.48 mmol/L",
+        "description": "Calcium level adjusted for serum albumin concentration.",
+        "riskCategories": [
+          "Minerals"
+        ]
+      }
+    },
+    {
+      "id": "r09",
+      "op": "add",
+      "printed": "Serum inorganic phosphate",
+      "value": 1.12,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "0.80 - 1.50 mmol/L",
+      "assignedRange": "0.80 - 1.50 mmol/L",
+      "optimalValue": "1.15 mmol/L",
+      "editReason": "Providing standard mid-range target.",
+      "match": "none",
+      "key": null,
+      "writeTarget": "pending",
+      "status": "",
+      "medicalInsight": "Inorganic phosphate is normal.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 1.12,
+          "unit": "mmol/L",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": {
+        "suggestedKey": "phosphate",
+        "name": "Serum Inorganic Phosphate",
+        "unit": "mmol/L",
+        "aliases": [
+          "Serum inorganic phosphate"
+        ],
+        "normalRange": "0.80 - 1.50 mmol/L",
+        "description": "Electrolyte playing an important role in bone formation and energy storage.",
+        "riskCategories": [
+          "Minerals"
+        ]
+      }
+    },
+    {
+      "id": "r10",
+      "op": "add",
+      "printed": "Red blood cell distribut width",
+      "value": 11.8,
+      "unit": "%",
+      "date": "2026-06-05",
+      "printedRange": "10.5 - 16.0 %",
+      "assignedRange": "10.5 - 16.0 %",
+      "optimalValue": "13.0 %",
+      "editReason": "Providing standard mid-range target.",
+      "match": "none",
+      "key": null,
+      "writeTarget": "pending",
+      "status": "",
+      "medicalInsight": "Red blood cell distribution width (RDW) is normal, indicating uniform red blood cell size.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 11.8,
+          "unit": "%",
+          "comment": null
+        }
+      ],
+      "newCatalogDraft": {
+        "suggestedKey": "rdw",
+        "name": "Red Blood Cell Distribution Width",
+        "unit": "%",
+        "aliases": [
+          "Red blood cell distribut width",
+          "RDW"
+        ],
+        "normalRange": "10.5 - 16.0 %",
+        "description": "Measure of variation in red blood cell width and volume.",
+        "riskCategories": [
+          "Hematology"
+        ]
+      }
+    }
+  ]
+}

@@ -10,6 +10,8 @@
  * - rebalanceNutrientProfile: Ensures 100% thermodynamic consistency and physical density clamping
  */
 
+import { deduceSugarBreakdown } from './server_sugar_engine';
+
 export function computeCaloriesFromMacros(
   protein?: number | null,
   carbohydrates?: number | null,
@@ -259,11 +261,26 @@ export function applyNutrientModifiers(
   // 1. Zero-Sugar / Unsweetened Modifier
   const isZeroSugar = /\b(unsweetened|unsweatened|no sugar|sugar free|zero sugar|without sugar|tanpa gula|tawar|diet|zero calorie)\b/i.test(msg);
   if (isZeroSugar && isBeverage && beverageMatchesIntent) {
-    n.sugar = 0;
-    n.addedSugar = 0;
-    n.carbohydrates = 0;
-    n.calories = computeCaloriesFromMacros(n.protein, 0, n.totalFat);
-    lockedKeys.push('sugar', 'addedSugar', 'carbohydrates', 'calories');
+    const isFruitOrDairyBeverage = /\b(juice|jus|orange|jeruk|lemon|lime|fruit|apple|coconut|kelapa|milk|latte|susu|smoothie|berry|melon)\b/i.test(name);
+    if (!isFruitOrDairyBeverage) {
+      n.sugar = 0;
+      n.addedSugar = 0;
+      n.carbohydrates = 0;
+      n.calories = computeCaloriesFromMacros(n.protein, 0, n.totalFat);
+      lockedKeys.push('sugar', 'addedSugar', 'carbohydrates', 'calories');
+    } else {
+      n.addedSugar = 0;
+      const sugarResult = deduceSugarBreakdown({
+        carbohydrates: n.carbohydrates,
+        totalFibre: n.totalFibre,
+        physicalForm: options.physicalForm || 'LIQUID_BEVERAGE',
+        foodType: options.foodType || 'beverage',
+        foodName: options.name,
+      });
+      n.sugar = sugarResult.sugar;
+      n.calories = computeCaloriesFromMacros(n.protein, n.carbohydrates, n.totalFat);
+      lockedKeys.push('sugar', 'addedSugar', 'calories');
+    }
   }
 
   // 2. Zero-Sodium / Unsalted Modifier

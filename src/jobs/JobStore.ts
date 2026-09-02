@@ -380,11 +380,11 @@ class JobStoreImpl {
         messages: nonLive,
       })) {
         patch.messages = mergeFoodEditMessages(nonLive, assistantMsg);
-      } else if (isNewTurn) {
-        patch.messages = [...nonLive, assistantMsg];
       } else {
+        const lastUserIdx = nonLive.map((m: any) => m.role).lastIndexOf('user');
         const lastAsstIdx = nonLive.map((m: any) => m.role).lastIndexOf('assistant');
-        if (lastAsstIdx !== -1) {
+        // If an assistant message exists for this turn (after the latest user prompt), update it in place
+        if (lastAsstIdx !== -1 && (lastUserIdx === -1 || lastAsstIdx > lastUserIdx)) {
           nonLive[lastAsstIdx] = assistantMsg;
           patch.messages = [...nonLive];
         } else {

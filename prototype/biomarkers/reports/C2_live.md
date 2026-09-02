@@ -5,7 +5,7 @@
 - Insight batch: 20 · draft batch: 12 → 1 agent turns
 - Flow: hits lock dictionary; agent writes medicalInsight only. Misses get pending drafts.
 - Template: `prototype/biomarkers/TEMPLATE.md`
-- Env file: Health-tracker/.env
+- Env file: (none)
 - Score: **PASS** (14 known / 0 unknown)
 
 ## System instruction (verbatim)
@@ -16,11 +16,11 @@ Patient Profile: 43-year-old Chinese male, Unit Preference: SI.
 
 For each biomarker:
 - id: matching id
-- medicalInsight: Provide a concise, clinically accurate insight. (If an accurate existingInsight is already provided in the input, return "" to save tokens). If previous value exists, cite the trend. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).
+- medicalInsight: Provide a concise, clinically accurate insight for every row (including optimal/normal baseline markers). Cite trend if previous values exist. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).
 - customRangeOverlay: If agreeing with range, return "". If missing ethnic thresholds (e.g. HbA1c for Chinese patients), provide FULL multi-bracket range: "Elevated (Diabetes): >=48; Elevated: >=39; Normal: >=20".
 - optimalValue: If existing is accurate, return "". Otherwise provide 1 single ideal target value without inequalities or ranges (e.g. "33 mmol/mol", "80 umol/L", "95 mL/min/1.73m2"; note 60 for eGFR is naive CKD G2, correct it).
 - editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise "".
-- logs: Extract all logs with standardized "YYYY-MM-DD" dates and comments. Convert US units to patient's unitPreference (e.g. 1.1 mg/dL creatinine → 97 umol/L).
+- logs: Extract all logs with standardized "YYYY-MM-DD" dates, labName if mentioned (e.g. "US lab", "GP Clinic"), and comments. Convert US units to patient's unitPreference with standard clinical integer rounding (e.g. 1.1 mg/dL creatinine → 97 umol/L, not decimals like 97.24). Standardize scientific units (e.g. 10^9/L).
 - DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.
 - UNCATALOGED (MISS): If not in dictionary, output match="none", writeTarget="pending", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }.
 
@@ -87,7 +87,7 @@ Mean corpusc. Hb. conc. (MCHC)  346 g/L
 
 ## Agent turns (full payload sent + model output)
 
-### Turn 1 (hit) — r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12, r13, r14 (14 rows, 7401ms)
+### Turn 1 (hit) — r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12, r13, r14 (14 rows, 6848ms)
 
 **User contents sent to the model** (system instruction is above; this is the user turn):
 
@@ -123,6 +123,7 @@ Biomarkers to review (hits - in catalog):
       "name": "HbA1c",
       "value": 40,
       "unit": "mmol/mol",
+      "date": "2026-06-05",
       "range": "20 - 41 mmol/mol",
       "optimalValue": null,
       "existingInsight": null,
@@ -139,6 +140,7 @@ Biomarkers to review (hits - in catalog):
       "name": "Creatinine",
       "value": 100,
       "unit": "umol/L",
+      "date": "2026-06-05",
       "range": "64 - 104 umol/L",
       "optimalValue": "80 umol/L",
       "existingInsight": "Serum creatinine is 100 umol/L, within the normal laboratory range.",
@@ -154,6 +156,7 @@ Biomarkers to review (hits - in catalog):
       "name": "eGFR",
       "value": 80,
       "unit": "mL/min/1.73m2",
+      "date": "2026-06-05",
       "range": ">= 60 mL/min/1.73m2",
       "optimalValue": "60 mL/min/1.73m2",
       "existingInsight": "Your eGFR of 80 is normal.",
@@ -169,6 +172,7 @@ Biomarkers to review (hits - in catalog):
       "name": "Serum Albumin",
       "value": 46,
       "unit": "g/L",
+      "date": "2026-06-05",
       "range": "31 - 45 g/L",
       "optimalValue": null,
       "existingInsight": null,
@@ -184,6 +188,7 @@ Biomarkers to review (hits - in catalog):
       "name": "ALT (SGPT)",
       "value": 41,
       "unit": "U/L",
+      "date": "2026-06-05",
       "range": "0 - 45 U/L",
       "optimalValue": null,
       "existingInsight": null,
@@ -199,6 +204,7 @@ Biomarkers to review (hits - in catalog):
       "name": "AST (SGOT)",
       "value": 27,
       "unit": "U/L",
+      "date": "2026-06-05",
       "range": "5 - 34 U/L",
       "optimalValue": null,
       "existingInsight": null,
@@ -214,6 +220,7 @@ Biomarkers to review (hits - in catalog):
       "name": "Total Protein",
       "value": 81,
       "unit": "g/L",
+      "date": "2026-06-05",
       "range": "6 - 8 g/L",
       "optimalValue": null,
       "existingInsight": null,
@@ -229,6 +236,7 @@ Biomarkers to review (hits - in catalog):
       "name": "White Blood Cell (WBC)",
       "value": 5.7,
       "unit": "10*9/L",
+      "date": "2026-06-05",
       "range": "2.9 - 9.6 10*9/L",
       "optimalValue": null,
       "existingInsight": null,
@@ -244,6 +252,7 @@ Biomarkers to review (hits - in catalog):
       "name": "Red Blood Cell (RBC)",
       "value": 5.47,
       "unit": "10*12/L",
+      "date": "2026-06-05",
       "range": "4.20 - 5.80 10*12/L",
       "optimalValue": null,
       "existingInsight": null,
@@ -259,6 +268,7 @@ Biomarkers to review (hits - in catalog):
       "name": "Hemoglobin",
       "value": 166,
       "unit": "g/L",
+      "date": "2026-06-05",
       "range": "125 - 170 g/L",
       "optimalValue": null,
       "existingInsight": null,
@@ -274,6 +284,7 @@ Biomarkers to review (hits - in catalog):
       "name": "Hematocrit",
       "value": 0.48,
       "unit": "L/L",
+      "date": "2026-06-05",
       "range": "0.390 - 0.510 L/L",
       "optimalValue": null,
       "existingInsight": null,
@@ -289,6 +300,7 @@ Biomarkers to review (hits - in catalog):
       "name": "Mean Corpuscular Volume (MCV)",
       "value": 88,
       "unit": "fL",
+      "date": "2026-06-05",
       "range": "81 - 100 fL",
       "optimalValue": null,
       "existingInsight": null,
@@ -304,6 +316,7 @@ Biomarkers to review (hits - in catalog):
       "name": "Mean Corpuscular Hemoglobin (MCH)",
       "value": 30.3,
       "unit": "pg",
+      "date": "2026-06-05",
       "range": "27.0 - 33.3 pg",
       "optimalValue": null,
       "existingInsight": null,
@@ -319,6 +332,7 @@ Biomarkers to review (hits - in catalog):
       "name": "Mean Corpuscular Hemoglobin Concentration (MCHC)",
       "value": 346,
       "unit": "g/L",
+      "date": "2026-06-05",
       "range": "310 - 350 g/L",
       "optimalValue": null,
       "existingInsight": null,
@@ -339,21 +353,21 @@ Biomarkers to review (hits - in catalog):
 [
   {
     "id": "r01",
-    "medicalInsight": "HbA1c is 40 mmol/mol, showing a slight increase compared to 39 mmol/mol on 2024-04-04. For Chinese individuals, this level indicates an elevated prediabetes risk.",
+    "medicalInsight": "Your HbA1c is 40 mmol/mol, indicating an elevated prediabetes risk for a Chinese male, showing an upward trend from 39 mmol/mol on 2024-04-04.",
     "optimalValue": "33 mmol/mol",
-    "editReason": "Correct optimal target for Chinese patient risk profile.",
+    "editReason": "Correcting optimal target to standard healthy clinical threshold for Chinese ethnicity.",
     "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 40,
+        "unit": "mmol/mol",
+        "comment": "Satisfactory - No Action"
+      },
       {
         "date": "2024-04-04",
         "value": 39,
         "unit": "mmol/mol",
         "comment": "Annual GP checkup"
-      },
-      {
-        "date": "2026-06-05",
-        "value": 40,
-        "unit": "mmol/mol",
-        "comment": "IFCC standardised"
       }
     ],
     "customRangeOverlay": "Elevated (Diabetes): >=48; Elevated: >=39; Normal: <39",
@@ -361,15 +375,15 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r02",
-    "medicalInsight": "Serum creatinine is 100 umol/L, stable compared to 95 umol/L on 2025-12-10 and 97 umol/L on 2024-10-15, remaining within normal limits.",
+    "medicalInsight": "Serum creatinine is 100 umol/L, stable compared to 95 umol/L on 2025-12-10 and 97 umol/L on 2024-10-15.",
     "optimalValue": "80 umol/L",
     "editReason": "",
     "logs": [
       {
-        "date": "2024-10-15",
-        "value": 97,
+        "date": "2026-06-05",
+        "value": 100,
         "unit": "umol/L",
-        "comment": "US clinic visit routine check (converted from 1.1 mg/dL)"
+        "comment": null
       },
       {
         "date": "2025-12-10",
@@ -378,10 +392,10 @@ Biomarkers to review (hits - in catalog):
         "comment": "Fasting morning sample"
       },
       {
-        "date": "2026-06-05",
-        "value": 100,
+        "date": "2024-10-15",
+        "value": 97,
         "unit": "umol/L",
-        "comment": "Serum creatinine"
+        "comment": "Annual routine check, US lab"
       }
     ],
     "customRangeOverlay": "",
@@ -389,15 +403,15 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r03",
-    "medicalInsight": "eGFR of 80 mL/min/1.73m2 indicates mildly reduced kidney function, remaining stable for renal clearance.",
+    "medicalInsight": "Your eGFR is 80 mL/min/1.73m2, indicating normal renal function without overt CKD stage 2 categorization based on optimal filtration rate targets.",
     "optimalValue": "95 mL/min/1.73m2",
-    "editReason": "Replace naive CKD G2 threshold with normal physiological target for age 43.",
+    "editReason": "Correcting naive CKD G2 threshold of 60 to an actual optimal physiological target.",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 80,
         "unit": "mL/min/1.73m2",
-        "comment": "CKD-EPI equation without ethnicity"
+        "comment": "eGFR calculated using the CKD-EPI (2009 without ethnicity) equation"
       }
     ],
     "customRangeOverlay": "",
@@ -405,7 +419,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r04",
-    "medicalInsight": "Serum albumin is slightly elevated at 46 g/L, which can occasionally reflect mild hemoconcentration or hydration status.",
+    "medicalInsight": "Serum albumin is 46 g/L, slightly above the standard reference range, reflecting normal or concentrated high protein status.",
     "optimalValue": "43 g/L",
     "editReason": "",
     "logs": [
@@ -413,7 +427,7 @@ Biomarkers to review (hits - in catalog):
         "date": "2026-06-05",
         "value": 46,
         "unit": "g/L",
-        "comment": "Serum albumin"
+        "comment": null
       }
     ],
     "customRangeOverlay": "",
@@ -421,21 +435,21 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r05",
-    "medicalInsight": "ALT level is 41 U/L, showing a slight increase compared to 35 U/L on 2025-06-01, remaining just at the upper margin of normal.",
+    "medicalInsight": "Serum ALT is 41 U/L, showing a slight increase compared to 35 U/L on 2025-06-01.",
     "optimalValue": "25 U/L",
     "editReason": "",
     "logs": [
+      {
+        "date": "2026-06-05",
+        "value": 41,
+        "unit": "U/L",
+        "comment": null
+      },
       {
         "date": "2025-06-01",
         "value": 35,
         "unit": "U/L",
         "comment": "Baseline health check"
-      },
-      {
-        "date": "2026-06-05",
-        "value": 41,
-        "unit": "U/L",
-        "comment": "Serum ALT level"
       }
     ],
     "customRangeOverlay": "",
@@ -443,7 +457,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r06",
-    "medicalInsight": "AST serum level is 27 U/L, well within the normal range and indicating healthy hepatic cellular integrity.",
+    "medicalInsight": "AST serum level is 27 U/L, well within the normal healthy range.",
     "optimalValue": "22 U/L",
     "editReason": "",
     "logs": [
@@ -451,7 +465,7 @@ Biomarkers to review (hits - in catalog):
         "date": "2026-06-05",
         "value": 27,
         "unit": "U/L",
-        "comment": "AST serum level"
+        "comment": null
       }
     ],
     "customRangeOverlay": "",
@@ -459,7 +473,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r07",
-    "medicalInsight": "Total protein is 81 g/L, slightly above the standard reference range, often correlated with the high albumin level.",
+    "medicalInsight": "Serum total protein is 81 g/L, marginally above the upper limit, likely indicating mild dehydration or normal variant.",
     "optimalValue": "70 g/L",
     "editReason": "",
     "logs": [
@@ -467,27 +481,27 @@ Biomarkers to review (hits - in catalog):
         "date": "2026-06-05",
         "value": 81,
         "unit": "g/L",
-        "comment": "Serum total protein"
+        "comment": null
       }
     ],
     "customRangeOverlay": "",
     "dictionaryCorrection": {
       "field": "normalRange",
       "correctedValue": "60 - 80 g/L",
-      "reason": "Dictionary had a typographical error listing 6 - 8 g/L instead of standard 60 - 80 g/L."
+      "reason": "Correcting dictionary typo showing 6-8 g/L instead of physiological 60-80 g/L."
     }
   },
   {
     "id": "r08",
-    "medicalInsight": "Total white cell count is 5.7 10*9/L, representing a normal immune cell profile.",
-    "optimalValue": "6.5 10*9/L",
+    "medicalInsight": "Total white cell count is 5.7 10*9/L, well within the normal immune parameter range.",
+    "optimalValue": "6.0 10*9/L",
     "editReason": "",
     "logs": [
       {
         "date": "2026-06-05",
         "value": 5.7,
         "unit": "10*9/L",
-        "comment": "Total white cell count"
+        "comment": null
       }
     ],
     "customRangeOverlay": "",
@@ -495,7 +509,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r09",
-    "medicalInsight": "Red blood cell count is 5.47 10*12/L, within normal physiological limits.",
+    "medicalInsight": "Red blood cell count is 5.47 10*12/L, indicating normal erythropoiesis.",
     "optimalValue": "5.00 10*12/L",
     "editReason": "",
     "logs": [
@@ -503,7 +517,7 @@ Biomarkers to review (hits - in catalog):
         "date": "2026-06-05",
         "value": 5.47,
         "unit": "10*12/L",
-        "comment": "Red blood cell count"
+        "comment": null
       }
     ],
     "customRangeOverlay": "",
@@ -511,7 +525,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r10",
-    "medicalInsight": "Hemoglobin estimation is 166 g/L, indicating robust oxygen-carrying capacity within the normal range.",
+    "medicalInsight": "Haemoglobin estimation is 166 g/L, within the normal range for an adult male.",
     "optimalValue": "150 g/L",
     "editReason": "",
     "logs": [
@@ -519,7 +533,7 @@ Biomarkers to review (hits - in catalog):
         "date": "2026-06-05",
         "value": 166,
         "unit": "g/L",
-        "comment": "Haemoglobin estimation"
+        "comment": null
       }
     ],
     "customRangeOverlay": "",
@@ -527,7 +541,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r11",
-    "medicalInsight": "Haematocrit is 0.48 L/L, showing normal proportion of red blood cells in circulation.",
+    "medicalInsight": "Haematocrit is 0.48 L/L, normal and proportionate to red cell indices.",
     "optimalValue": "0.45 L/L",
     "editReason": "",
     "logs": [
@@ -535,7 +549,7 @@ Biomarkers to review (hits - in catalog):
         "date": "2026-06-05",
         "value": 0.48,
         "unit": "L/L",
-        "comment": "Haematocrit"
+        "comment": null
       }
     ],
     "customRangeOverlay": "",
@@ -543,7 +557,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r12",
-    "medicalInsight": "Mean corpuscular volume (MCV) is 88 fL, confirming normocytic red blood cells.",
+    "medicalInsight": "Mean corpuscular volume (MCV) is 88 fL, indicating normocytic red blood cells.",
     "optimalValue": "90 fL",
     "editReason": "",
     "logs": [
@@ -551,7 +565,7 @@ Biomarkers to review (hits - in catalog):
         "date": "2026-06-05",
         "value": 88,
         "unit": "fL",
-        "comment": "Mean corpuscular volume"
+        "comment": null
       }
     ],
     "customRangeOverlay": "",
@@ -559,7 +573,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r13",
-    "medicalInsight": "Mean corpuscular hemoglobin (MCH) is 30.3 pg, normal average mass of hemoglobin per red blood cell.",
+    "medicalInsight": "Mean corpuscular haemoglobin (MCH) is 30.3 pg, normal.",
     "optimalValue": "30.0 pg",
     "editReason": "",
     "logs": [
@@ -567,7 +581,7 @@ Biomarkers to review (hits - in catalog):
         "date": "2026-06-05",
         "value": 30.3,
         "unit": "pg",
-        "comment": "Mean corpusc. haemoglobin"
+        "comment": null
       }
     ],
     "customRangeOverlay": "",
@@ -575,7 +589,7 @@ Biomarkers to review (hits - in catalog):
   },
   {
     "id": "r14",
-    "medicalInsight": "Mean corpuscular hemoglobin concentration (MCHC) is 346 g/L, reflecting normal hemoglobin concentration within erythrocytes.",
+    "medicalInsight": "Mean corpuscular Hb concentration (MCHC) is 346 g/L, completely normal.",
     "optimalValue": "340 g/L",
     "editReason": "",
     "logs": [
@@ -583,7 +597,7 @@ Biomarkers to review (hits - in catalog):
         "date": "2026-06-05",
         "value": 346,
         "unit": "g/L",
-        "comment": "Mean corpusc. Hb. conc."
+        "comment": null
       }
     ],
     "customRangeOverlay": "",
@@ -596,20 +610,20 @@ Biomarkers to review (hits - in catalog):
 
 | id | printed | match | writeTarget | status | key | draft | fail |
 |---|---|---|---|---|---|---|---|
-| r01 | HbA1c levl - IFCC standardised | alias | observation | Elevated | hba1c | — | — |
-| r02 | Serum creatinine | alias | observation | Optimal | creatinine | — | — |
-| r03 | eGFRcreat (CKD-EPI)/1.73 m*2 | alias | observation | Mildly Decreased (CKD G2) | egfr | — | — |
-| r04 | Serum albumin | key | observation | Optimal | serum_albumin | — | — |
-| r05 | Serum ALT level | alias | observation | Elevated | alt | — | — |
-| r06 | AST serum level | alias | observation | Optimal | ast | — | — |
-| r07 | Serum total protein | alias | observation | Elevated | total_protein | — | — |
-| r08 | Total white cell count | alias | observation | Optimal | wbc | — | — |
-| r09 | Red blood cell (RBC) count | alias | observation | Optimal | rbc | — | — |
-| r10 | Haemoglobin estimation | alias | observation | Optimal | hemoglobin | — | — |
-| r11 | Haematocrit | alias | observation | Optimal | hematocrit | — | — |
-| r12 | Mean corpuscular volume (MCV) | alias | observation | Optimal | mean_corpuscular_volume | — | — |
-| r13 | Mean corpusc. haemoglobin(MCH) | alias | observation | Optimal | mean_corpuscular_hemoglobin | — | — |
-| r14 | Mean corpusc. Hb. conc. (MCHC) | alias | observation | Optimal | mean_corpuscular_hemoglobin_concentration | — | — |
+| r01 | HbA1c levl - IFCC standardised | alias | observation | — | hba1c | — | — |
+| r02 | Serum creatinine | alias | observation | — | creatinine | — | — |
+| r03 | eGFRcreat (CKD-EPI)/1.73 m*2 | alias | observation | — | egfr | — | — |
+| r04 | Serum albumin | key | observation | — | serum_albumin | — | — |
+| r05 | Serum ALT level | alias | observation | — | alt | — | — |
+| r06 | AST serum level | alias | observation | — | ast | — | — |
+| r07 | Serum total protein | alias | observation | — | total_protein | — | — |
+| r08 | Total white cell count | alias | observation | — | wbc | — | — |
+| r09 | Red blood cell (RBC) count | alias | observation | — | rbc | — | — |
+| r10 | Haemoglobin estimation | alias | observation | — | hemoglobin | — | — |
+| r11 | Haematocrit | alias | observation | — | hematocrit | — | — |
+| r12 | Mean corpuscular volume (MCV) | alias | observation | — | mean_corpuscular_volume | — | — |
+| r13 | Mean corpusc. haemoglobin(MCH) | alias | observation | — | mean_corpuscular_hemoglobin | — | — |
+| r14 | Mean corpusc. Hb. conc. (MCHC) | alias | observation | — | mean_corpuscular_hemoglobin_concentration | — | — |
 
 ## Contract checks
 

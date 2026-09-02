@@ -35,4 +35,16 @@ describe('narration (F-10.4)', () => {
     const custom = 'Great balance of omega-3 fats and slow-digesting carbohydrates.';
     expect(reconcileMessageWithLedger(custom, summary)).toBe(custom);
   });
+
+  it('reconciles cited protein and added sugar metrics with finalized ledger values', () => {
+    const draft = 'You got 72.7g of quality protein from the salmon. Sweetened drinks contribute 80g of added sugar to your meal.';
+    const updatedSummary: FinalizeLedgerSummary = {
+      ...summary,
+      protein: 69.7,
+      addedSugar: 34,
+    };
+    const reconciled = reconcileMessageWithLedger(draft, updatedSummary);
+    expect(reconciled).toContain('69.7g of quality protein');
+    expect(reconciled).toContain('34g of added sugar');
+  });
 });

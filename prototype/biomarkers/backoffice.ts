@@ -170,15 +170,48 @@ export function assembleTemplate(
   };
 }
 
-const UNCATALOGED_KEYS_OVERRIDE = new Set(["rdw"]);
+export function convertViaTable(row: IntakeRow, mappedKey: string): IntakeRow {
+  let { value, unit } = row;
+  const unitLower = (unit || "").trim().toLowerCase();
+
+  // 1. Infer missing units based on key and typical values
+  if (!unitLower) {
+    if (mappedKey === "hba1c" && value < 20) {
+      unit = "%";
+    } else if (["ldl", "hdl", "total_cholesterol", "triglycerides"].includes(mappedKey) && value > 30) {
+      unit = "mg/dL";
+    }
+  }
+
+  // 2. Convert to catalog SI units if needed
+  const newUnitLower = (unit || "").trim().toLowerCase();
+  if (mappedKey === "hba1c" && (newUnitLower === "%" || newUnitLower === "percent")) {
+    value = Math.round((value - 2.15) * 10.929);
+    unit = "mmol/mol";
+  } else if (["ldl", "hdl", "total_cholesterol", "triglycerides"].includes(mappedKey) && newUnitLower === "mg/dl") {
+    value = Number((value * 0.02586).toFixed(2));
+    unit = "mmol/L";
+  } else if (mappedKey === "creatinine" && newUnitLower === "mg/dl") {
+    value = Math.round(value * 88.42);
+    unit = "umol/L";
+  } else if (mappedKey === "bun" && newUnitLower === "mg/dl") {
+    value = Number((value * 0.357).toFixed(2));
+    unit = "mmol/L";
+  }
+
+  return { ...row, value, unit };
+}
 
 export function classifyRow(
-  row: IntakeRow,
+  rawRow: IntakeRow,
   historyByKey: Record<string, LogPoint[]> = {},
   profile?: ProfileFixture
 ): ClassifiedRow {
-  const mapped = getMappedBiomarkerKey(row.printed, normalizeBiomarkerName(row.printed) || row.printed);
-  const known = !UNCATALOGED_KEYS_OVERRIDE.has(mapped) && isCatalogKey(mapped);
+  const mapped = getMappedBiomarkerKey(rawRow.printed, normalizeBiomarkerName(rawRow.printed) || rawRow.printed);
+  const row = convertViaTable(rawRow, mapped);
+
+  const known = isCatalogKey(mapped);
+
   const catalog = known ? catalogSnapshot(mapped) : null;
   const match = known ? matchKind(row.printed, mapped) : "none";
   const writeTarget = known ? "observation" : "pending";
@@ -196,6 +229,8 @@ export function classifyRow(
     printed: row.printed,
     value: row.value,
     unit: row.unit,
+    rawValue: rawRow.value,
+    rawUnit: rawRow.unit,
     date: row.date,
     printedRange: row.printedRange,
     assignedRange: template.assignedRange,

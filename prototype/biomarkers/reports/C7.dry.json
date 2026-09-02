@@ -1,0 +1,263 @@
+{
+  "id": "C7",
+  "dry": true,
+  "insightSize": 20,
+  "draftSize": 12,
+  "instruction": "You are an expert clinical laboratory AI reviewing a patient's biomarker panel.\nPatient Profile: 43-year-old Chinese male, Unit Preference: SI.\n\nFor each biomarker:\n- id: matching id\n- medicalInsight: Provide a concise, clinically accurate insight for every row (including optimal/normal baseline markers). Cite trend if previous values exist. Consider patient ethnography (e.g. for Chinese patients, HbA1c >=39 indicates elevated prediabetes risk).\n- customRangeOverlay: If agreeing with range, return \"\". If missing ethnic thresholds (e.g. HbA1c for Chinese patients), provide FULL multi-bracket range: \"Elevated (Diabetes): >=48; Elevated: >=39; Normal: >=20\".\n- optimalValue: If existing is accurate, return \"\". Otherwise provide 1 single ideal target value without inequalities or ranges (e.g. \"33 mmol/mol\", \"80 umol/L\", \"95 mL/min/1.73m2\"; note 60 for eGFR is naive CKD G2, correct it).\n- editReason: If replacing/correcting existing user values or suboptimal optimalValue, explain why. Otherwise \"\".\n- logs: Extract all logs with standardized \"YYYY-MM-DD\" dates, labName if mentioned (e.g. \"US lab\", \"GP Clinic\"), and comments. Convert US units to patient's unitPreference with standard clinical integer rounding (e.g. 1.1 mg/dL creatinine → 97 umol/L, not decimals like 97.24). Standardize scientific units (e.g. 10^9/L).\n- DICTIONARY CORRECTION: If dictionary info has typos/errors (e.g. Total Protein 6-8 g/L instead of 60-80 g/L), output dictionaryCorrection: { field, correctedValue, reason }. Otherwise null.\n- UNCATALOGED (MISS): If not in dictionary, output match=\"none\", writeTarget=\"pending\", key=null, and newCatalogDraft: { suggestedKey, name, unit, aliases, normalRange, description, riskCategories }.\n\nJSON { \"rows\": [...] }.",
+  "turns": [
+    {
+      "turn": 0,
+      "kind": "dry",
+      "ids": [
+        "r01",
+        "r02"
+      ],
+      "ms": 0,
+      "n": 2,
+      "raw": "",
+      "rows": [
+        {
+          "id": "r01",
+          "op": "add",
+          "printed": "BUN",
+          "value": 5.35,
+          "unit": "mmol/L",
+          "date": "2026-06-05",
+          "printedRange": "",
+          "assignedRange": "7 - 20",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "key",
+          "key": "bun",
+          "writeTarget": "observation",
+          "status": "Low",
+          "medicalInsight": "Your BUN (Blood Urea Nitrogen) is Low.",
+          "customRangeOverlay": null,
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 5.35,
+              "unit": "mmol/L"
+            }
+          ],
+          "newCatalogDraft": null
+        },
+        {
+          "id": "r02",
+          "op": "add",
+          "printed": "LDL",
+          "value": 2.59,
+          "unit": "mmol/L",
+          "date": "2026-06-05",
+          "printedRange": "",
+          "assignedRange": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
+          "optimalValue": null,
+          "editReason": null,
+          "match": "key",
+          "key": "ldl",
+          "writeTarget": "observation",
+          "status": "Optimal",
+          "medicalInsight": "Your LDL-C is Optimal.",
+          "customRangeOverlay": null,
+          "logs": [
+            {
+              "date": "2026-06-05",
+              "value": 2.59,
+              "unit": "mmol/L"
+            }
+          ],
+          "newCatalogDraft": null
+        }
+      ],
+      "user": "<user_upload>\nBUN is 15 mg/dL. LDL is 100 mg/dL. Oh and here's my SSN and address: 123 Main St, SSN: 123-45-6789.\n</user_upload>\n\nBiomarkers to review (hits - in catalog):\n{\n  \"biomarkers\": [\n    {\n      \"id\": \"r01\",\n      \"name\": \"BUN (Blood Urea Nitrogen)\",\n      \"value\": 5.35,\n      \"unit\": \"mmol/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"7 - 20\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"7 - 20\",\n        \"unit\": \"mg/dL\",\n        \"description\": \"Urea nitrogen levels; high levels can show kidney load.\"\n      }\n    },\n    {\n      \"id\": \"r02\",\n      \"name\": \"LDL-C\",\n      \"value\": 2.59,\n      \"unit\": \"mmol/L\",\n      \"date\": \"2026-06-05\",\n      \"range\": \"[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6\",\n      \"optimalValue\": null,\n      \"existingInsight\": null,\n      \"existingCustomRange\": null,\n      \"dictionary\": {\n        \"normalRange\": \"< 2.6\",\n        \"unit\": \"mmol/L\",\n        \"description\": \"Low-Density Lipoprotein, the \\\"bad\\\" cholesterol driving plaque.\"\n      }\n    }\n  ]\n}",
+      "payload": [
+        {
+          "id": "r01",
+          "name": "BUN (Blood Urea Nitrogen)",
+          "value": 5.35,
+          "unit": "mmol/L",
+          "date": "2026-06-05",
+          "range": "7 - 20",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "7 - 20",
+            "unit": "mg/dL",
+            "description": "Urea nitrogen levels; high levels can show kidney load."
+          }
+        },
+        {
+          "id": "r02",
+          "name": "LDL-C",
+          "value": 2.59,
+          "unit": "mmol/L",
+          "date": "2026-06-05",
+          "range": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
+          "optimalValue": null,
+          "existingInsight": null,
+          "existingCustomRange": null,
+          "dictionary": {
+            "normalRange": "< 2.6",
+            "unit": "mmol/L",
+            "description": "Low-Density Lipoprotein, the \"bad\" cholesterol driving plaque."
+          }
+        }
+      ]
+    }
+  ],
+  "classified": [
+    {
+      "id": "r01",
+      "printed": "BUN",
+      "match": "key",
+      "writeTarget": "observation",
+      "key": "bun",
+      "status": "Low"
+    },
+    {
+      "id": "r02",
+      "printed": "LDL",
+      "match": "key",
+      "writeTarget": "observation",
+      "key": "ldl",
+      "status": "Optimal"
+    }
+  ],
+  "templates": [
+    {
+      "id": "r01",
+      "printed": "BUN",
+      "match": "key",
+      "writeTarget": "observation",
+      "biomarkerName": "BUN (Blood Urea Nitrogen)",
+      "key": "bun",
+      "alias": [],
+      "normalRange": "7 - 20",
+      "unit": "mg/dL",
+      "description": "Urea nitrogen levels; high levels can show kidney load.",
+      "riskCategories": [],
+      "notUsed": false,
+      "customRangePopulation": "",
+      "printedRange": "",
+      "assignedRange": "7 - 20",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "Your BUN (Blood Urea Nitrogen) is Low.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 5.35,
+          "unit": "mmol/L"
+        }
+      ],
+      "currentEvaluationStatus": "Low",
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r02",
+      "printed": "LDL",
+      "match": "key",
+      "writeTarget": "observation",
+      "biomarkerName": "LDL-C",
+      "key": "ldl",
+      "alias": [
+        "ldlc",
+        "ldlcholesterol",
+        "calculatedldlcholesterol",
+        "calculatedldl",
+        "calculated_ldl_cholesterol_mmol_l",
+        "calculated_ldl_cholesterol"
+      ],
+      "normalRange": "< 2.6",
+      "unit": "mmol/L",
+      "description": "Low-Density Lipoprotein, the \"bad\" cholesterol driving plaque.",
+      "riskCategories": [
+        "Cardiovascular"
+      ],
+      "notUsed": false,
+      "customRangePopulation": "[All patients] Very High: > 3.4; Elevated: > 2.6; Optimal: <= 2.6",
+      "printedRange": "",
+      "assignedRange": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
+      "optimalValue": null,
+      "existingInsight": null,
+      "existingCustomRange": null,
+      "editReason": null,
+      "customRangeOverlay": null,
+      "medicalInsight": "Your LDL-C is Optimal.",
+      "historicalLogs": [
+        {
+          "date": "2026-06-05",
+          "value": 2.59,
+          "unit": "mmol/L"
+        }
+      ],
+      "currentEvaluationStatus": "Optimal",
+      "newCatalogDraft": null
+    }
+  ],
+  "filled": [
+    {
+      "id": "r01",
+      "op": "add",
+      "printed": "BUN",
+      "value": 5.35,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "",
+      "assignedRange": "7 - 20",
+      "optimalValue": null,
+      "editReason": null,
+      "match": "key",
+      "key": "bun",
+      "writeTarget": "observation",
+      "status": "Low",
+      "medicalInsight": "Your BUN (Blood Urea Nitrogen) is Low.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 5.35,
+          "unit": "mmol/L"
+        }
+      ],
+      "newCatalogDraft": null
+    },
+    {
+      "id": "r02",
+      "op": "add",
+      "printed": "LDL",
+      "value": 2.59,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "",
+      "assignedRange": "[All patients] Very High: >3.4; Elevated: >2.6; Optimal: <=2.6",
+      "optimalValue": null,
+      "editReason": null,
+      "match": "key",
+      "key": "ldl",
+      "writeTarget": "observation",
+      "status": "Optimal",
+      "medicalInsight": "Your LDL-C is Optimal.",
+      "customRangeOverlay": null,
+      "logs": [
+        {
+          "date": "2026-06-05",
+          "value": 2.59,
+          "unit": "mmol/L"
+        }
+      ],
+      "newCatalogDraft": null
+    }
+  ],
+  "score": {
+    "pass": true,
+    "fails": [],
+    "known": 2,
+    "unknown": 0,
+    "turns": 0
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "C1",
+  "date": "2026-06-05",
+  "expectRowCount": 2,
+  "expectKnown": 2,
+  "expectUnknown": 0,
+  "rows": [
+    { "printed": "Haemoglobin A1c (IFCC)", "value": 40, "unit": "mmol/mol", "key": "hba1c", "match": "alias", "writeTarget": "observation" },
+    { "printed": "LDL cholesterol", "value": 4.3, "unit": "mmol/L", "key": "ldl", "match": "alias", "writeTarget": "observation" }
+  ]
+}

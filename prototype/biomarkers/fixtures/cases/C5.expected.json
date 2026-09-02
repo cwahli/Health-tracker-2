@@ -1,0 +1,409 @@
+{
+  "id": "C5",
+  "date": "2026-06-05",
+  "expectRowCount": 50,
+  "expectKnown": 50,
+  "expectUnknown": 0,
+  "rows": [
+    {
+      "printed": "HbA1c",
+      "value": 30.5,
+      "unit": "mmol/mol",
+      "key": "hba1c",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Fasting Glucose",
+      "value": 84.5,
+      "unit": "mg/dL",
+      "key": "fasting_glucose",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Fasting Insulin",
+      "value": 13.75,
+      "unit": "mIU/L",
+      "key": "insulin",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "LDL-C",
+      "value": 2.08,
+      "unit": "mmol/L",
+      "key": "ldl",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "ApoB",
+      "value": 10,
+      "unit": "mg/dL",
+      "key": "apob",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Total Cholesterol",
+      "value": 10,
+      "unit": "mmol/L",
+      "key": "total_cholesterol",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "HDL-C",
+      "value": 1.3,
+      "unit": "mmol/L",
+      "key": "hdl",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Triglycerides",
+      "value": 1.36,
+      "unit": "mmol/L",
+      "key": "triglycerides",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "eGFR",
+      "value": 10,
+      "unit": "mL/min/1.73m²",
+      "key": "egfr",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "BUN (Blood Urea Nitrogen)",
+      "value": 13.5,
+      "unit": "mg/dL",
+      "key": "bun",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Red Blood Cell (RBC)",
+      "value": 5.2,
+      "unit": "M/uL",
+      "key": "rbc",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Platelets",
+      "value": 300,
+      "unit": "K/uL",
+      "key": "platelets",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "hs-CRP",
+      "value": 1,
+      "unit": "mg/L",
+      "key": "hscrp",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Testosterone (Total)",
+      "value": 650,
+      "unit": "ng/dL",
+      "key": "testosterone",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Vitamin D (25-OH)",
+      "value": 65,
+      "unit": "ng/mL",
+      "key": "vitamin_d",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Vitamin B12",
+      "value": 550,
+      "unit": "pg/mL",
+      "key": "vitamin_b12",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Body Mass Index (BMI)",
+      "value": 21.7,
+      "unit": "kg/m2",
+      "key": "bmi",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Creatinine",
+      "value": 75,
+      "unit": "umol/L",
+      "key": "creatinine",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Hematocrit",
+      "value": 0.43,
+      "unit": "L/L",
+      "key": "hematocrit",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Hemoglobin",
+      "value": 147.5,
+      "unit": "g/L",
+      "key": "hemoglobin",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Mean Corpuscular Hemoglobin (MCH)",
+      "value": 30,
+      "unit": "pg",
+      "key": "mean_corpuscular_hemoglobin",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Mean Corpuscular Volume (MCV)",
+      "value": 90,
+      "unit": "fL",
+      "key": "mean_corpuscular_volume",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Mean Corpuscular Hemoglobin Concentration (MCHC)",
+      "value": 340,
+      "unit": "g/L",
+      "key": "mean_corpuscular_hemoglobin_concentration",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Red Cell Distribution Width (RDW)",
+      "value": 13,
+      "unit": "%",
+      "key": "rdw",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Serum Albumin",
+      "value": 42.5,
+      "unit": "g/L",
+      "key": "serum_albumin",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Total Protein",
+      "value": 70,
+      "unit": "g/L",
+      "key": "total_protein",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "AUDIT Total Score",
+      "value": 3.5,
+      "unit": "points",
+      "key": "audit_total_score",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "White Blood Cell (WBC)",
+      "value": 7.75,
+      "unit": "K/uL",
+      "key": "wbc",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Neutrophils",
+      "value": 4.75,
+      "unit": "10^9/L",
+      "key": "neutrophil_count",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Lymphocytes",
+      "value": 2.25,
+      "unit": "10^9/L",
+      "key": "lymphocyte_count",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Monocyte Count",
+      "value": 0.35,
+      "unit": "10^9/L",
+      "key": "monocyte_count",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Eosinophils",
+      "value": 0.26,
+      "unit": "10^9/L",
+      "key": "eosinophil_count",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Basophils",
+      "value": 0.05,
+      "unit": "10^9/L",
+      "key": "basophil_count",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "ALT (SGPT)",
+      "value": 25,
+      "unit": "U/L",
+      "key": "alt",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "AST (SGOT)",
+      "value": 25,
+      "unit": "U/L",
+      "key": "ast",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Daily Steps",
+      "value": 10,
+      "unit": "steps",
+      "key": "steps",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Body Weight",
+      "value": 75,
+      "unit": "kg",
+      "key": "weight",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Hemorrhoidal Disease Symptom Score (HDSS)",
+      "value": 0,
+      "unit": "score",
+      "key": "hemorrhoidal_symptom_score",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Gastroesophageal Reflux Symptom Score (GERD-SS)",
+      "value": 0,
+      "unit": "score",
+      "key": "gerd_symptom_score",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Joint Pain Severity Score",
+      "value": 0,
+      "unit": "score",
+      "key": "joint_pain_severity_score",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Blood Pressure",
+      "value": 96,
+      "unit": "mmHg",
+      "key": "blood_pressure",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Systolic Blood Pressure",
+      "value": 96,
+      "unit": "mmHg",
+      "key": "systolic_blood_pressure",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Diastolic Blood Pressure",
+      "value": 64,
+      "unit": "mmHg",
+      "key": "diastolic_blood_pressure",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "AUDIT-C Alcohol Consumption Score",
+      "value": 1.5,
+      "unit": "score",
+      "key": "audit_c_total_score",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Ideal Body Weight (Target)",
+      "value": 70,
+      "unit": "kg",
+      "key": "ideal_body_weight",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "ApoA1",
+      "value": 1.79,
+      "unit": "g/L",
+      "key": "apoa1",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Gamma GT (GGT)",
+      "value": 28.5,
+      "unit": "U/L",
+      "key": "gamma_gt",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "Mean Platelet Volume (MPV)",
+      "value": 9.5,
+      "unit": "fL",
+      "key": "mpv",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "QRISK2 10-Year Cardiovascular Risk",
+      "value": 8,
+      "unit": "%",
+      "key": "qrisk2",
+      "match": "key",
+      "writeTarget": "observation"
+    },
+    {
+      "printed": "AUDIT Score (Total)",
+      "value": 3.5,
+      "unit": "score",
+      "key": "audit_score",
+      "match": "key",
+      "writeTarget": "observation"
+    }
+  ]
+}

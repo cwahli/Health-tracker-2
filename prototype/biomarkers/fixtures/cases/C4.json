@@ -1,0 +1,21 @@
+{
+  "id": "C4",
+  "date": "2026-06-05",
+  "batchSize": 20,
+  "history": {},
+  "message": "I'm a 43 year old Chinese male, 178 cm, 78 kg. Here are my results: HbA1c 5.7, LDL 130, eGFR 80, ALT 41.",
+  "profile": {
+    "age": 43,
+    "gender": "male",
+    "ethnicity": "Chinese",
+    "heightCm": 178,
+    "weightKg": 78,
+    "unitPreference": "SI"
+  },
+  "rows": [
+    { "id": "r01", "printed": "HbA1c", "value": 5.7, "unit": "", "date": "2026-06-05", "printedRange": "" },
+    { "id": "r02", "printed": "LDL", "value": 130, "unit": "", "date": "2026-06-05", "printedRange": "" },
+    { "id": "r03", "printed": "eGFR", "value": 80, "unit": "mL/min/1.73m2", "date": "2026-06-05", "printedRange": "" },
+    { "id": "r04", "printed": "ALT", "value": 41, "unit": "U/L", "date": "2026-06-05", "printedRange": "" }
+  ]
+}

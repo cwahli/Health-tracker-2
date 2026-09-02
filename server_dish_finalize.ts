@@ -20,6 +20,7 @@ import {
 } from './server_derivation';
 import { backfillSparseMicronutrients } from './server_pure_helpers';
 import { deduceSugarBreakdown } from './server_sugar_engine';
+import { classifyUniversalPhysicalFormV3 } from './server_matching_engine';
 
 export interface FinalizeInput {
   item: any;
@@ -552,10 +553,10 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
   }
 
   // 8. Sugar and Added Sugar Breakdown
-  if (!lockedNutrientKeys.includes('addedSugar')) {
-    const candidateAdded = nutrients.addedSugar != null && !isNaN(Number(nutrients.addedSugar)) && Number(nutrients.addedSugar) > 0 ? Number(nutrients.addedSugar) : null;
-    let rawSugar = Number(nutrients.sugar ?? nutrients.totalSugar ?? 0);
-    if (candidateAdded != null && candidateAdded > rawSugar) {
+  if (!lockedNutrientKeys.includes('addedSugar') || !lockedNutrientKeys.includes('sugar')) {
+    const candidateAdded = nutrients.addedSugar != null && !isNaN(Number(nutrients.addedSugar)) && Number(nutrients.addedSugar) >= 0 ? Number(nutrients.addedSugar) : null;
+    let rawSugar = nutrients.sugar != null && !isNaN(Number(nutrients.sugar)) ? Number(nutrients.sugar) : (nutrients.totalSugar != null && !isNaN(Number(nutrients.totalSugar)) ? Number(nutrients.totalSugar) : null);
+    if (candidateAdded != null && rawSugar != null && candidateAdded > rawSugar) {
       rawSugar = candidateAdded;
     }
     const componentNames = [
@@ -563,16 +564,33 @@ export async function finalizeDishLedger(input: FinalizeInput): Promise<DishLedg
       ...(Array.isArray(item.components) ? item.components.map((c: any) => (typeof c === 'string' ? c : c.searchQuery || c.name || '')) : []),
       ...(Array.isArray(componentsDetailList) ? componentsDetailList.map((c: any) => c.name || c.searchQuery || '') : []),
     ].filter(Boolean).join(', ');
+
+    const physicalFormObj = item.physicalFormClassification || classifyUniversalPhysicalFormV3({
+      name: originalName,
+      canonicalDbName: originalName,
+      originalLocalName: originalName,
+      keyword: keyword || originalName,
+      visualIngredients,
+      components: item.components || componentsDetailList,
+      foodType: item.foodType,
+    });
+
     const sugarResult = deduceSugarBreakdown({
       totalSugar: rawSugar,
       addedSugarPrinted: candidateAdded,
       carbohydrates: nutrients.carbohydrates,
       totalFibre: nutrients.totalFibre,
+      physicalForm: physicalFormObj?.physicalForm,
+      foodType: item.foodType,
       ingredientsList: componentNames || item.ingredientsList,
       foodName: originalName || keyword,
     });
-    nutrients.sugar = sugarResult.sugar;
-    nutrients.addedSugar = sugarResult.addedSugar;
+    if (!lockedNutrientKeys.includes('sugar')) {
+      nutrients.sugar = sugarResult.sugar;
+    }
+    if (!lockedNutrientKeys.includes('addedSugar')) {
+      nutrients.addedSugar = sugarResult.addedSugar;
+    }
   }
 
   const finalIngredientsList = ingredients.length > 0 ? ingredients.join(', ') : (item.ingredientsList || (componentsDetailList ? componentsDetailList.map((c: any) => c.name).join(', ') : null));

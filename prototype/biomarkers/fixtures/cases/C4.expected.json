@@ -1,0 +1,13 @@
+{
+  "id": "C4",
+  "date": "2026-06-05",
+  "expectRowCount": 4,
+  "expectKnown": 4,
+  "expectUnknown": 0,
+  "rows": [
+    { "printed": "HbA1c", "value": 39, "unit": "mmol/mol", "key": "hba1c", "match": "key", "writeTarget": "observation" },
+    { "printed": "LDL", "value": 3.36, "unit": "mmol/L", "key": "ldl", "match": "key", "writeTarget": "observation" },
+    { "printed": "eGFR", "value": 80, "unit": "mL/min/1.73m2", "key": "egfr", "match": "key", "writeTarget": "observation" },
+    { "printed": "ALT", "value": 41, "unit": "U/L", "key": "alt", "match": "key", "writeTarget": "observation" }
+  ]
+}

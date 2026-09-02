@@ -1,0 +1,409 @@
+{
+  "id": "C5",
+  "date": "2026-06-05",
+  "batchSize": 20,
+  "history": {},
+  "message": "Here are my comprehensive panel results.",
+  "rows": [
+    {
+      "id": "r01",
+      "printed": "HbA1c",
+      "value": 30.5,
+      "unit": "mmol/mol",
+      "date": "2026-06-05",
+      "printedRange": "20 - 41"
+    },
+    {
+      "id": "r02",
+      "printed": "Fasting Glucose",
+      "value": 84.5,
+      "unit": "mg/dL",
+      "date": "2026-06-05",
+      "printedRange": "70 - 99"
+    },
+    {
+      "id": "r03",
+      "printed": "Fasting Insulin",
+      "value": 13.75,
+      "unit": "mIU/L",
+      "date": "2026-06-05",
+      "printedRange": "2.6 - 24.9"
+    },
+    {
+      "id": "r04",
+      "printed": "LDL-C",
+      "value": 2.08,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "< 2.6"
+    },
+    {
+      "id": "r05",
+      "printed": "ApoB",
+      "value": 10,
+      "unit": "mg/dL",
+      "date": "2026-06-05",
+      "printedRange": "under 90"
+    },
+    {
+      "id": "r06",
+      "printed": "Total Cholesterol",
+      "value": 10,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "Aim under 5.0"
+    },
+    {
+      "id": "r07",
+      "printed": "HDL-C",
+      "value": 1.3,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "0.9 - 1.7"
+    },
+    {
+      "id": "r08",
+      "printed": "Triglycerides",
+      "value": 1.36,
+      "unit": "mmol/L",
+      "date": "2026-06-05",
+      "printedRange": "< 1.7"
+    },
+    {
+      "id": "r09",
+      "printed": "eGFR",
+      "value": 10,
+      "unit": "mL/min/1.73m²",
+      "date": "2026-06-05",
+      "printedRange": "over 90"
+    },
+    {
+      "id": "r10",
+      "printed": "BUN (Blood Urea Nitrogen)",
+      "value": 13.5,
+      "unit": "mg/dL",
+      "date": "2026-06-05",
+      "printedRange": "7 - 20"
+    },
+    {
+      "id": "r11",
+      "printed": "Red Blood Cell (RBC)",
+      "value": 5.2,
+      "unit": "M/uL",
+      "date": "2026-06-05",
+      "printedRange": "4.5 - 5.9"
+    },
+    {
+      "id": "r12",
+      "printed": "Platelets",
+      "value": 300,
+      "unit": "K/uL",
+      "date": "2026-06-05",
+      "printedRange": "150 - 450"
+    },
+    {
+      "id": "r13",
+      "printed": "hs-CRP",
+      "value": 1,
+      "unit": "mg/L",
+      "date": "2026-06-05",
+      "printedRange": "under 1.0"
+    },
+    {
+      "id": "r14",
+      "printed": "Testosterone (Total)",
+      "value": 650,
+      "unit": "ng/dL",
+      "date": "2026-06-05",
+      "printedRange": "300 - 1000"
+    },
+    {
+      "id": "r15",
+      "printed": "Vitamin D (25-OH)",
+      "value": 65,
+      "unit": "ng/mL",
+      "date": "2026-06-05",
+      "printedRange": "30 - 100"
+    },
+    {
+      "id": "r16",
+      "printed": "Vitamin B12",
+      "value": 550,
+      "unit": "pg/mL",
+      "date": "2026-06-05",
+      "printedRange": "200 - 900"
+    },
+    {
+      "id": "r17",
+      "printed": "Body Mass Index (BMI)",
+      "value": 21.7,
+      "unit": "kg/m2",
+      "date": "2026-06-05",
+      "printedRange": "18.5 - 24.9"
+    },
+    {
+      "id": "r18",
+      "printed": "Creatinine",
+      "value": 75,
+      "unit": "umol/L",
+      "date": "2026-06-05",
+      "printedRange": "44 - 106"
+    },
+    {
+      "id": "r19",
+      "printed": "Hematocrit",
+      "value": 0.43,
+      "unit": "L/L",
+      "date": "2026-06-05",
+      "printedRange": "0.36 - 0.50"
+    },
+    {
+      "id": "r20",
+      "printed": "Hemoglobin",
+      "value": 147.5,
+      "unit": "g/L",
+      "date": "2026-06-05",
+      "printedRange": "120 - 175"
+    },
+    {
+      "id": "r21",
+      "printed": "Mean Corpuscular Hemoglobin (MCH)",
+      "value": 30,
+      "unit": "pg",
+      "date": "2026-06-05",
+      "printedRange": "27 - 33"
+    },
+    {
+      "id": "r22",
+      "printed": "Mean Corpuscular Volume (MCV)",
+      "value": 90,
+      "unit": "fL",
+      "date": "2026-06-05",
+      "printedRange": "80 - 100"
+    },
+    {
+      "id": "r23",
+      "printed": "Mean Corpuscular Hemoglobin Concentration (MCHC)",
+      "value": 340,
+      "unit": "g/L",
+      "date": "2026-06-05",
+      "printedRange": "320 - 360"
+    },
+    {
+      "id": "r24",
+      "printed": "Red Cell Distribution Width (RDW)",
+      "value": 13,
+      "unit": "%",
+      "date": "2026-06-05",
+      "printedRange": "11.5 - 14.5"
+    },
+    {
+      "id": "r25",
+      "printed": "Serum Albumin",
+      "value": 42.5,
+      "unit": "g/L",
+      "date": "2026-06-05",
+      "printedRange": "35 - 50"
+    },
+    {
+      "id": "r26",
+      "printed": "Total Protein",
+      "value": 70,
+      "unit": "g/L",
+      "date": "2026-06-05",
+      "printedRange": "60 - 80"
+    },
+    {
+      "id": "r27",
+      "printed": "AUDIT Total Score",
+      "value": 3.5,
+      "unit": "points",
+      "date": "2026-06-05",
+      "printedRange": "0 - 7"
+    },
+    {
+      "id": "r28",
+      "printed": "White Blood Cell (WBC)",
+      "value": 7.75,
+      "unit": "K/uL",
+      "date": "2026-06-05",
+      "printedRange": "4.5 - 11.0"
+    },
+    {
+      "id": "r29",
+      "printed": "Neutrophils",
+      "value": 4.75,
+      "unit": "10^9/L",
+      "date": "2026-06-05",
+      "printedRange": "2.0 - 7.5"
+    },
+    {
+      "id": "r30",
+      "printed": "Lymphocytes",
+      "value": 2.25,
+      "unit": "10^9/L",
+      "date": "2026-06-05",
+      "printedRange": "1.0 - 3.5"
+    },
+    {
+      "id": "r31",
+      "printed": "Monocyte Count",
+      "value": 0.35,
+      "unit": "10^9/L",
+      "date": "2026-06-05",
+      "printedRange": "0.1 - 0.6"
+    },
+    {
+      "id": "r32",
+      "printed": "Eosinophils",
+      "value": 0.26,
+      "unit": "10^9/L",
+      "date": "2026-06-05",
+      "printedRange": "0.02 - 0.50"
+    },
+    {
+      "id": "r33",
+      "printed": "Basophils",
+      "value": 0.05,
+      "unit": "10^9/L",
+      "date": "2026-06-05",
+      "printedRange": "0.0 - 0.1"
+    },
+    {
+      "id": "r34",
+      "printed": "ALT (SGPT)",
+      "value": 25,
+      "unit": "U/L",
+      "date": "2026-06-05",
+      "printedRange": "10 - 40"
+    },
+    {
+      "id": "r35",
+      "printed": "AST (SGOT)",
+      "value": 25,
+      "unit": "U/L",
+      "date": "2026-06-05",
+      "printedRange": "10 - 40"
+    },
+    {
+      "id": "r36",
+      "printed": "Daily Steps",
+      "value": 10,
+      "unit": "steps",
+      "date": "2026-06-05",
+      "printedRange": "Aim over 8000"
+    },
+    {
+      "id": "r37",
+      "printed": "Body Weight",
+      "value": 75,
+      "unit": "kg",
+      "date": "2026-06-05",
+      "printedRange": "Varies"
+    },
+    {
+      "id": "r38",
+      "printed": "Hemorrhoidal Disease Symptom Score (HDSS)",
+      "value": 0,
+      "unit": "score",
+      "date": "2026-06-05",
+      "printedRange": "0"
+    },
+    {
+      "id": "r39",
+      "printed": "Gastroesophageal Reflux Symptom Score (GERD-SS)",
+      "value": 0,
+      "unit": "score",
+      "date": "2026-06-05",
+      "printedRange": "0"
+    },
+    {
+      "id": "r40",
+      "printed": "Joint Pain Severity Score",
+      "value": 0,
+      "unit": "score",
+      "date": "2026-06-05",
+      "printedRange": "0"
+    },
+    {
+      "id": "r41",
+      "printed": "Blood Pressure",
+      "value": 96,
+      "unit": "mmHg",
+      "date": "2026-06-05",
+      "printedRange": "< 120 / < 80"
+    },
+    {
+      "id": "r42",
+      "printed": "Systolic Blood Pressure",
+      "value": 96,
+      "unit": "mmHg",
+      "date": "2026-06-05",
+      "printedRange": "< 120"
+    },
+    {
+      "id": "r43",
+      "printed": "Diastolic Blood Pressure",
+      "value": 64,
+      "unit": "mmHg",
+      "date": "2026-06-05",
+      "printedRange": "< 80"
+    },
+    {
+      "id": "r44",
+      "printed": "AUDIT-C Alcohol Consumption Score",
+      "value": 1.5,
+      "unit": "score",
+      "date": "2026-06-05",
+      "printedRange": "0 - 3"
+    },
+    {
+      "id": "r45",
+      "printed": "Ideal Body Weight (Target)",
+      "value": 70,
+      "unit": "kg",
+      "date": "2026-06-05",
+      "printedRange": "Varies"
+    },
+    {
+      "id": "r46",
+      "printed": "ApoA1",
+      "value": 1.79,
+      "unit": "g/L",
+      "date": "2026-06-05",
+      "printedRange": "1.19 - 2.40"
+    },
+    {
+      "id": "r47",
+      "printed": "Gamma GT (GGT)",
+      "value": 28.5,
+      "unit": "U/L",
+      "date": "2026-06-05",
+      "printedRange": "9 - 48"
+    },
+    {
+      "id": "r48",
+      "printed": "Mean Platelet Volume (MPV)",
+      "value": 9.5,
+      "unit": "fL",
+      "date": "2026-06-05",
+      "printedRange": "7.5 - 11.5"
+    },
+    {
+      "id": "r49",
+      "printed": "QRISK2 10-Year Cardiovascular Risk",
+      "value": 8,
+      "unit": "%",
+      "date": "2026-06-05",
+      "printedRange": "< 10"
+    },
+    {
+      "id": "r50",
+      "printed": "AUDIT Score (Total)",
+      "value": 3.5,
+      "unit": "score",
+      "date": "2026-06-05",
+      "printedRange": "0 - 7"
+    }
+  ]
+}

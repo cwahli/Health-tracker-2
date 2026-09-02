@@ -27,12 +27,12 @@ export function eventToPatch(event: JobEvent): Partial<AgentJob> {
   if ('photoUrl' in event && event.photoUrl !== undefined) patch.photoUrl = event.photoUrl;
   if ('debugUrl' in event && event.debugUrl !== undefined) patch.debugUrl = event.debugUrl;
   if ('mealBuild' in event && event.mealBuild !== undefined) patch.mealBuild = event.mealBuild;
-  if ('inFlightTurnAt' in event && event.inFlightTurnAt !== undefined) patch.inFlightTurnAt = event.inFlightTurnAt as any;
+  if ('inFlightTurnAt' in event) patch.inFlightTurnAt = event.inFlightTurnAt as any;
   if ('attemptByStep' in event && event.attemptByStep !== undefined) patch.attemptByStep = event.attemptByStep;
   if ('abortController' in event && event.abortController !== undefined) patch.abortController = event.abortController;
   if ('startedAt' in event && event.startedAt !== undefined) patch.startedAt = event.startedAt;
-  if ('finishedAt' in event && event.finishedAt !== undefined) patch.finishedAt = event.finishedAt;
-  if ('retryNotBefore' in event && event.retryNotBefore !== undefined) patch.retryNotBefore = event.retryNotBefore;
+  if ('finishedAt' in event) patch.finishedAt = event.finishedAt;
+  if ('retryNotBefore' in event) patch.retryNotBefore = event.retryNotBefore;
   if ('attemptCount' in (event as any) && (event as any).attemptCount !== undefined) patch.attemptCount = (event as any).attemptCount;
   if ('resumeStage' in (event as any) && (event as any).resumeStage !== undefined) patch.resumeStage = (event as any).resumeStage;
   
